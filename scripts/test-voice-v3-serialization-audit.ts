@@ -10,16 +10,12 @@ import {
 import { VOICE_V3_BOOKING_TEST_CONFIG } from "./voice-v3-booking-test-config";
 import { handleDelegatedAstraResponseEvent } from "../src/lib/voice-v3/intake/handle-delegated-meaning";
 import { clearVoiceV3LiveResponseCoordinator } from "../src/lib/voice-v3/delegation/live-response-coordinator";
-import {
-  clearSemanticTurnWatchdog,
-  drainQueuedSemanticTurns,
-} from "../src/lib/voice-v3/conversation/semantic-turn-watchdog";
+import { clearSemanticTurnWatchdog } from "../src/lib/voice-v3/conversation/semantic-turn-watchdog";
 import {
   clearCallerTurnManager,
   getCallerTurns,
 } from "../src/lib/voice-v3/conversation/caller-turn-manager";
 import { setCallerUtteranceForTests } from "./voice-v3-test-helpers";
-import { clearSemanticExtractionRetryState } from "../src/lib/voice-v3/intake/semantic-extraction-retry";
 
 const SESSION = "live_serialization_audit";
 const NOW = new Date("2026-09-18T20:00:00.000Z");
@@ -64,7 +60,6 @@ async function testNoDelegationDrainedOnFunctionTool(): Promise<void> {
   clearVoiceV3CallRuntimeStore();
   clearCallerTurnManager(SESSION);
   clearSemanticTurnWatchdog(SESSION);
-  clearSemanticExtractionRetryState(SESSION);
   const runtime = createVoiceV3CallRuntime({
     liveSessionId: SESSION,
     callId: "v3:serialization_drain",
@@ -98,7 +93,6 @@ async function testNoDelegationDrainedOnFunctionTool(): Promise<void> {
     delegationId: "del_audit",
   });
 
-  drainQueuedSemanticTurns({ liveSessionId: SESSION, send });
   await new Promise((r) => setTimeout(r, 80));
 
   assert.equal(

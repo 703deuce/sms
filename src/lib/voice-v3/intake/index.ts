@@ -16,10 +16,6 @@ export {
   validateCallerMeaningFromRaw,
   type DecodeCallerMeaningLogContext,
 } from "./decode-delegated-caller-meaning";
-export {
-  buildEmitCallerMeaningLiveFunctionTool,
-  EMIT_CALLER_MEANING_TOOL_NAME,
-} from "./emit-caller-meaning-tool";
 export { resolveVoiceV3IntakeTransport, type VoiceV3IntakeTransport } from "./intake-transport";
 export {
   assertLiveDelegationAcceptPayloadCompatible,
@@ -31,4 +27,3 @@ export {
   clearDelegatedMeaningSessionState,
   handleDelegatedAstraResponseEvent,
 } from "./handle-delegated-meaning";
-export { extractCallerMeaningFromAstraResponseEvent } from "./parse-astra-meaning-response";

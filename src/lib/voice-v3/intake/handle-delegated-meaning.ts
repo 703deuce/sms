@@ -9,16 +9,14 @@ import {
   clearCallerTurnManager,
 } from "../conversation/caller-turn-manager";
 import { clearCallerTurnSemanticProgress } from "../conversation/caller-turn-semantic-progress";
-import { clearSemanticTurnWatchdog } from "../conversation/semantic-turn-watchdog";
-import { clearLiveSpeakSync } from "../agent/live-speak-sync";
+import {
+  clearSemanticTurnWatchdog,
+  markSemanticInterpretationEnded,
+} from "../conversation/semantic-turn-watchdog";
 import {
   clearDelegatedVoiceToolSessionState,
   handleDelegatedVoiceToolCall,
 } from "../tools/handle-delegated-voice-tools";
-import {
-  markSemanticInterpretationEnded,
-} from "../conversation/semantic-turn-watchdog";
-import { drainQueuedSemanticTurns } from "../conversation/semantic-turn-watchdog";
 import { getCallerEvidenceTurnId } from "./caller-evidence";
 import {
   noteTurnDelegationContinued,
@@ -47,7 +45,6 @@ export function handleDelegatedAstraResponseEvent(input: {
   );
 
   if (nestedType === "response.completed") {
-    drainQueuedSemanticTurns({ liveSessionId: sessionId, send: input.send });
     const turnId = getCallerEvidenceTurnId(sessionId);
     if (turnId) {
       noteTurnDelegationContinued(sessionId, turnId);
@@ -124,7 +121,6 @@ export function clearDelegatedMeaningSessionState(liveSessionId: string): void {
   clearCallerTurnManager(liveSessionId);
   clearSemanticTurnWatchdog(liveSessionId);
   clearCallerTurnSemanticProgress(liveSessionId);
-  clearLiveSpeakSync(liveSessionId);
   clearGreetingTurnState(liveSessionId);
   clearVoiceV3LiveResponseCoordinator(liveSessionId);
   clearDelegatedVoiceToolSessionState(liveSessionId);

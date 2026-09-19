@@ -22,7 +22,7 @@ export function buildFindAvailabilityOpenAiTool(_config: VoiceV3AgentConfig): Fu
     name: "find_availability",
     parameters: findArgsSchema,
     description:
-      "Search Microsoft calendar for available appointment times when the caller wants availability and enough scheduling information is known. Does not book. Returns when search is started or completed.",
+      "Use when the caller wants to know which appointment times are actually available. Provide date_expression and optional time_expression; Transovo resolves timezone and queries Microsoft. Does not book. Do not use update_intake instead of this for availability questions.",
   });
   return {
     type: "function",

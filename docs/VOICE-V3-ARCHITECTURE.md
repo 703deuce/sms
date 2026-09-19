@@ -52,11 +52,22 @@ Per completed function call: `response.item.create` with `function_call_output` 
 
 Application `response.create` for ordinary turns is **blocked** except documented initial greeting bootstrap.
 
-## Removed from healthy path
+## Removed from healthy path (deleted, not gated)
 
-- `emit_caller_meaning` action gateway
-- Planner-driven speech and `nextConversationAction` → `response.create`
-- `CALLER_TURN_COMMITTED` as conversation authority (telemetry only; watchdog off unless `VOICE_V3_SEMANTIC_WATCHDOG=1`)
+Production code removed — not feature-flagged:
+
+- `emit_caller_meaning` / `emit-caller-meaning-tool.ts`
+- `apply-extracted-meaning.ts` (meaning gateway + planner speak side effects)
+- `direct-caller-meaning-extraction.ts`, `semantic-extraction-retry.ts`
+- `live-speak-sync.ts` / `syncPlannerSpeakToLive`
+- `parse-astra-meaning-response.ts`, `extract-raw-meaning-arguments.ts`
+
+`semantic-turn-watchdog.ts` is timing telemetry only (no direct extraction).
+
+Still used internally (not Astra-facing): `caller-meaning-schema`, `apply-caller-meaning.ts` behind `update_intake` / calendar tools.
+
+- Planner-driven speech and `nextConversationAction` → `response.create` (diagnostics only; action forced to `NONE`)
+- `CALLER_TURN_COMMITTED` has zero conversational authority
 - Recovery → ordinary speak orchestration
 
 ## Preserved execution safety

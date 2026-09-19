@@ -46,6 +46,25 @@ const toolsJson = JSON.stringify(delegation.tools ?? []);
 for (const banned of VOICE_V3_PROHIBITED_LIVE_TOOL_NAMES) {
   assert.ok(!toolsJson.includes(banned), `delegation must not expose legacy tool "${banned}"`);
 }
+const LEGACY_REMOVED_MARKERS = [
+  "apply-extracted-meaning",
+  "emit-caller-meaning-tool",
+  "live-speak-sync",
+  "semantic-extraction-retry",
+  "direct-caller-meaning-extraction",
+  "parse-astra-meaning-response",
+];
+for (const root of VOICE_V3_PIPELINE_SCAN_ROOTS) {
+  const abs = join(SRC, root);
+  for (const file of walkTsFiles(abs)) {
+    const rel = relative(process.cwd(), file).replace(/\\/g, "/");
+    const content = readFileSync(file, "utf8");
+    for (const marker of LEGACY_REMOVED_MARKERS) {
+      assert.ok(!content.includes(marker), `${rel} must not import removed legacy module "${marker}"`);
+    }
+  }
+}
+
 for (const required of [
   "update_intake",
   "find_availability",

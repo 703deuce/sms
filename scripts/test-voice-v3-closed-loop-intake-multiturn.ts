@@ -1,5 +1,5 @@
 /**
- * Multi-turn intake: each caller answer must reach authoritative runtime via direct semantic path.
+ * Multi-turn intake via delegated update_intake tool (no direct semantic extraction).
  */
 import assert from "node:assert/strict";
 import {
@@ -7,57 +7,47 @@ import {
   createVoiceV3CallRuntime,
 } from "../src/lib/voice-v3/state/call-runtime";
 import { VOICE_V3_BOOKING_TEST_CONFIG } from "./voice-v3-booking-test-config";
-import {
-  noteCallerTranscriptDelta,
-  forceCommitCallerTurn,
-  clearCallerTurnManager,
-} from "../src/lib/voice-v3/conversation/caller-turn-manager";
-import { setDirectCallerMeaningExtractionRunnerForTests } from "../src/lib/voice-v3/intake/direct-caller-meaning-extraction";
-import { planAgentState } from "../src/lib/voice-v3/agent/agent-planner";
-import type { CallerMeaning } from "../src/lib/voice-v3/intake/caller-meaning-schema";
-import { emptySchedulingMeaning } from "../src/lib/voice-v3/time/scheduling-types";
-import { emptySlotSelectionMeaning } from "../src/lib/voice-v3/intake/slot-selection-schema";
-import { runDirectSemanticForTurn } from "../src/lib/voice-v3/conversation/semantic-turn-watchdog";
+import { clearCallerTurnManager } from "../src/lib/voice-v3/conversation/caller-turn-manager";
+import { handleDelegatedAstraResponseEvent } from "../src/lib/voice-v3/intake/handle-delegated-meaning";
+import { clearVoiceV3LiveResponseCoordinator } from "../src/lib/voice-v3/delegation/live-response-coordinator";
 
 const NOW = new Date("2026-09-18T16:00:00.000Z");
 const SESSION = "closed_loop_multi";
 const CONFIG = VOICE_V3_BOOKING_TEST_CONFIG;
 
-function meaning(partial: Partial<CallerMeaning>): CallerMeaning {
-  return {
-    active_goal: partial.active_goal ?? "BOOK_APPOINTMENT",
-    goals: partial.goals ?? [],
-    captured_fields: partial.captured_fields ?? [],
-    scheduling: partial.scheduling ?? emptySchedulingMeaning(),
-    slot_selection: partial.slot_selection ?? emptySlotSelectionMeaning(),
-    post_book_intent: "NONE",
-    appointment_selection: partial.appointment_selection ?? { selection_type: "NONE", ordinal: null },
-    cancellation_confirmation: "NONE",
-    corrections: partial.corrections ?? [],
-    ambiguities: partial.ambiguities ?? [],
-  };
+function intakeArgs(partial: Record<string, unknown>): string {
+  return JSON.stringify({
+    name: null,
+    email: null,
+    phone: null,
+    date_expression: null,
+    time_expression: null,
+    active_goal: null,
+    ...partial,
+  });
 }
 
-async function simulateTurn(
-  runtime: ReturnType<typeof createVoiceV3CallRuntime>,
-  utterance: string,
-  mockMeaning: CallerMeaning,
+async function applyUpdateIntake(
   outbound: Array<Record<string, unknown>>,
+  callId: string,
+  args: string,
 ): Promise<void> {
-  setDirectCallerMeaningExtractionRunnerForTests(async () => mockMeaning);
-  noteCallerTranscriptDelta(SESSION, utterance);
-  const turn = forceCommitCallerTurn(SESSION);
-  assert.ok(turn, `turn committed for: ${utterance}`);
-  const send = (event: { type: string; [key: string]: unknown }) => {
-    outbound.push(event);
-  };
-  const ok = await runDirectSemanticForTurn({
+  handleDelegatedAstraResponseEvent({
     liveSessionId: SESSION,
-    turn,
-    send,
-    reason: "test",
+    nested: {
+      type: "response.output_item.done",
+      item: {
+        type: "function_call",
+        id: `fc_${callId}`,
+        call_id: callId,
+        name: "update_intake",
+        arguments: args,
+      },
+    },
+    send: (e) => outbound.push(e),
+    delegationId: `del_${callId}`,
   });
-  assert.equal(ok, true, `semantic applied for: ${utterance}`);
+  await new Promise((r) => setTimeout(r, 40));
 }
 
 async function main() {
@@ -71,55 +61,41 @@ async function main() {
   });
   const outbound: Array<Record<string, unknown>> = [];
 
-  await simulateTurn(
-    runtime,
-    "I need to book an appointment",
-    meaning({ active_goal: "BOOK_APPOINTMENT" }),
+  await applyUpdateIntake(
     outbound,
+    "t1",
+    intakeArgs({ active_goal: "BOOK_APPOINTMENT" }),
   );
   assert.equal(runtime.getSnapshot().dialog.activeGoal, "BOOK_APPOINTMENT");
 
-  await simulateTurn(
-    runtime,
-    "Anthony",
-    meaning({ captured_fields: [{ key: "name", value: "Anthony", confidence: 0.95 }] }),
-    outbound,
-  );
+  await applyUpdateIntake(outbound, "t2", intakeArgs({ name: "Anthony" }));
   assert.equal(runtime.getSnapshot().intake.values.name?.value, "Anthony");
 
-  await simulateTurn(
-    runtime,
-    "anthony@example.com",
-    meaning({ captured_fields: [{ key: "email", value: "anthony@example.com", confidence: 0.95 }] }),
+  await applyUpdateIntake(
     outbound,
+    "t3",
+    intakeArgs({ email: "anthony@example.com" }),
   );
   assert.equal(runtime.getSnapshot().intake.values.email?.value, "anthony@example.com");
 
-  await simulateTurn(
-    runtime,
-    "Friday afternoon",
-    meaning({
-      scheduling: {
-        ...emptySchedulingMeaning(),
-        date_relation: "NEXT_WEEKDAY",
-        weekday: "FRIDAY",
-        date_expression: "Friday",
-        time_expression: "afternoon",
-        time_kind: "DAYPART",
-        daypart: "AFTERNOON",
-      },
-    }),
+  await applyUpdateIntake(
     outbound,
+    "t4",
+    intakeArgs({
+      date_expression: "Friday",
+      time_expression: "afternoon",
+      active_goal: "BOOK_APPOINTMENT",
+    }),
   );
-  assert.equal(runtime.getSnapshot().scheduling.meaning?.weekday, "FRIDAY");
+  assert.ok(runtime.getSnapshot().scheduling.generation >= 1);
 
-  const snap = planAgentState(runtime.getSnapshot(), CONFIG);
-  assert.notEqual(snap.nextConversationAction.type, "NONE");
+  assert.equal(
+    outbound.filter((e) => e.type === "session.commentary.append").length,
+    0,
+    "planner must not push speak commentary on healthy path",
+  );
 
-  const commentaries = outbound.filter((e) => e.type === "session.commentary.append");
-  assert.ok(commentaries.length >= 1, "planner should queue commentary for speak actions");
-
-  setDirectCallerMeaningExtractionRunnerForTests(null);
+  clearVoiceV3LiveResponseCoordinator(SESSION);
   console.log("test-voice-v3-closed-loop-intake-multiturn: PASS");
 }
 

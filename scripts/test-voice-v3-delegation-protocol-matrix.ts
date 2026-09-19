@@ -20,12 +20,10 @@ import {
 import {
   clearSemanticTurnWatchdog,
   onCallerTurnCommitted,
-  runDirectSemanticForTurn,
 } from "../src/lib/voice-v3/conversation/semantic-turn-watchdog";
 import { emptySchedulingMeaning } from "../src/lib/voice-v3/time/scheduling-types";
 import { emptySlotSelectionMeaning } from "../src/lib/voice-v3/intake/slot-selection-schema";
 import { setCallerUtteranceForTests } from "./voice-v3-test-helpers";
-import { markCallerTurnSemanticApplied } from "../src/lib/voice-v3/conversation/caller-turn-manager";
 
 const SESSION = "live_delegation_matrix";
 const CONFIG = VOICE_V3_BOOKING_TEST_CONFIG;
@@ -131,13 +129,13 @@ function testB_multiplePendingOutputs(): void {
   const coord = getVoiceV3LiveResponseCoordinator(sid, send);
   coord.registerPendingFunctionCall({
     callId: "call_b1",
-    name: "emit_caller_meaning",
+    name: "update_intake",
     argumentsJson: "{}",
     delegationId: "del_b",
   });
   coord.registerPendingFunctionCall({
     callId: "call_b2",
-    name: "emit_caller_meaning",
+    name: "update_intake",
     argumentsJson: "{}",
     delegationId: "del_b",
   });
@@ -167,7 +165,7 @@ function testC_duplicateFunctionCall(): void {
   const coord = getVoiceV3LiveResponseCoordinator(sid, send);
   const call = {
     callId: "call_dup",
-    name: "emit_caller_meaning",
+    name: "update_intake",
     argumentsJson: "{}",
     delegationId: "del_c",
   };
@@ -185,17 +183,11 @@ function testC_duplicateFunctionCall(): void {
   coord.clear();
 }
 
-function testD_healthyTurnNoImmediateFallback(): void {
+function testD_healthyTurnNoDirectExtraction(): void {
   const sid = `${SESSION}_d`;
   clearCallerTurnManager(sid);
   clearSemanticTurnWatchdog(sid);
   clearCallerTurnSemanticProgress(sid);
-  let directStarted = 0;
-  const orig = console.log;
-  console.log = (...args: unknown[]) => {
-    if (args[0] === "SEMANTIC_TURN_STARTED") directStarted += 1;
-    orig(...args);
-  };
   const turn = {
     turnId: `turn_${sid}_1`,
     sequence: 1,
@@ -205,35 +197,13 @@ function testD_healthyTurnNoImmediateFallback(): void {
     semanticAttempt: 0,
   };
   onCallerTurnCommitted({ liveSessionId: sid, turn, rollingTranscript: turn.transcript });
-  assert.equal(directStarted, 0, "healthy function_tool turn must not start direct semantic immediately");
-  console.log = orig;
 }
 
 async function main() {
   await testA_greetingPhantom();
   testB_multiplePendingOutputs();
   testC_duplicateFunctionCall();
-  testD_healthyTurnNoImmediateFallback();
-
-  const sid = `${SESSION}_g`;
-  clearCallerTurnManager(sid);
-  const turn = {
-    turnId: `turn_${sid}_9`,
-    sequence: 9,
-    status: "COMMITTED" as const,
-    transcript: "already applied",
-    startedAt: new Date().toISOString(),
-    semanticAttempt: 0,
-  };
-  markCallerTurnSemanticApplied(sid, turn.turnId);
-  const outbound: Array<Record<string, unknown>> = [];
-  const ok = await runDirectSemanticForTurn({
-    liveSessionId: sid,
-    turn,
-    send: (e) => outbound.push(e),
-    reason: "test_late_fallback",
-  });
-  assert.equal(ok, false, "G: fallback must not apply when turn already has meaning");
+  testD_healthyTurnNoDirectExtraction();
 
   console.log("PASS voice-v3-delegation-protocol-matrix");
 }

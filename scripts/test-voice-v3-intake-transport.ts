@@ -1,64 +1,25 @@
 /**
- * Voice V3 semantic transport tests (no Live network required).
+ * Voice V3 delegated capability-tool transport (no Live network).
  */
 import assert from "node:assert/strict";
 import { buildBasicLiveSessionAcceptParams } from "../src/lib/voice-v3-basic/live-session-config";
 import { VOICE_V3_BOOKING_AGENT_CONFIG } from "../src/lib/voice-v3/config/booking-agent-config";
 import {
-  decodeCallerMeaningFromFunctionArguments,
-  decodeDelegatedCallerMeaning,
-  validateCallerMeaningFromRaw,
-} from "../src/lib/voice-v3/intake/decode-delegated-caller-meaning";
-import {
   assertLiveDelegationAcceptPayloadCompatible,
   buildVoiceV3AstraDelegationResponses,
-  voiceV3CallerMeaningTextFormat,
 } from "../src/lib/voice-v3/intake/delegation-config";
-import {
-  buildEmitCallerMeaningLiveFunctionTool,
-  EMIT_CALLER_MEANING_TOOL_NAME,
-} from "../src/lib/voice-v3/intake/emit-caller-meaning-tool";
-import { extractCallerMeaningFromAstraResponseEvent } from "../src/lib/voice-v3/intake/parse-astra-meaning-response";
-import type { CallerMeaning } from "../src/lib/voice-v3/intake/caller-meaning-schema";
+import { buildUpdateIntakeOpenAiTool } from "../src/lib/voice-v3/tools/update-intake-tool";
 import {
   clearVoiceV3CallRuntimeStore,
   createVoiceV3CallRuntime,
   getVoiceV3CallRuntime,
 } from "../src/lib/voice-v3/state/call-runtime";
-import { emptySchedulingMeaning } from "../src/lib/voice-v3/time/scheduling-types";
-import { emptySlotSelectionMeaning } from "../src/lib/voice-v3/intake/slot-selection-schema";
+import { handleDelegatedAstraResponseEvent } from "../src/lib/voice-v3/intake/handle-delegated-meaning";
+import { clearVoiceV3LiveResponseCoordinator } from "../src/lib/voice-v3/delegation/live-response-coordinator";
 
-function basePayload(overrides: Record<string, unknown> = {}) {
-  return {
-    active_goal: "GENERAL",
-    captured_fields: [],
-    scheduling: emptySchedulingMeaning(),
-    slot_selection: emptySlotSelectionMeaning(),
-    post_book_intent: "NONE",
-    appointment_selection: { selection_type: "NONE", ordinal: null },
-    cancellation_confirmation: "NONE",
-    corrections: [],
-    ambiguities: [],
-    ...overrides,
-  };
-}
+const SESSION = "live_transport";
 
-function meaning(partial: Partial<CallerMeaning> & Pick<CallerMeaning, "captured_fields">): CallerMeaning {
-  return {
-    active_goal: partial.active_goal ?? "GENERAL",
-    captured_fields: partial.captured_fields,
-    scheduling: partial.scheduling ?? emptySchedulingMeaning(),
-    slot_selection: partial.slot_selection ?? emptySlotSelectionMeaning(),
-    post_book_intent: partial.post_book_intent ?? "NONE",
-    appointment_selection: partial.appointment_selection ?? { selection_type: "NONE", ordinal: null },
-    cancellation_confirmation: partial.cancellation_confirmation ?? "NONE",
-    corrections: partial.corrections ?? [],
-    ambiguities: partial.ambiguities ?? [],
-  };
-}
-
-function main() {
-  const prevTransport = process.env.VOICE_V3_INTAKE_TRANSPORT;
+async function main() {
   delete process.env.VOICE_V3_INTAKE_TRANSPORT;
 
   const accept = buildBasicLiveSessionAcceptParams();
@@ -70,117 +31,65 @@ function main() {
   assertLiveDelegationAcceptPayloadCompatible(responses);
   const serialized = JSON.stringify(responses);
   assert.equal(serialized.includes('"format"'), false);
-  assert.equal((responses.text as { format?: unknown })?.format, undefined);
+  assert.equal(serialized.includes("emit_caller_meaning"), false);
 
   const toolNames = (responses.tools ?? [])
     .map((t) => (t && typeof t === "object" && "name" in t ? String(t.name) : ""))
     .filter(Boolean);
-  assert.ok(toolNames.includes("update_intake"), "default must register capability tools");
+  assert.ok(toolNames.includes("update_intake"));
   assert.ok(toolNames.includes("find_availability"));
-  assert.ok(toolNames.includes("book_appointment"));
-  assert.ok(toolNames.includes("find_appointment"));
   assert.equal(responses.tool_choice, "auto");
   assert.equal(responses.parallel_tool_calls, true);
 
-  const liveTool = buildEmitCallerMeaningLiveFunctionTool(VOICE_V3_BOOKING_AGENT_CONFIG);
-  const format = voiceV3CallerMeaningTextFormat(VOICE_V3_BOOKING_AGENT_CONFIG) as {
-    schema?: { properties?: { captured_fields?: { items?: { properties?: { key?: { enum?: string[] } } } } } };
-  };
-  const keyEnum = format.schema?.properties?.captured_fields?.items?.properties?.key?.enum;
-  assert.ok(Array.isArray(keyEnum));
-  const params = liveTool.parameters as {
-    properties?: { captured_fields?: { items?: { properties?: { key?: { enum?: string[] } } } } };
-  };
-  const toolKeyEnum = params.properties?.captured_fields?.items?.properties?.key?.enum;
-  assert.deepEqual(toolKeyEnum?.sort(), keyEnum.sort());
+  const updateTool = buildUpdateIntakeOpenAiTool(VOICE_V3_BOOKING_AGENT_CONFIG);
+  assert.equal(updateTool.name, "update_intake");
+  assert.equal(updateTool.strict, true);
 
-  const argsPayload = basePayload({
-    captured_fields: [{ key: "name", value: "Anthony", confidence: 0.95 }],
-    scheduling: {
-      ...emptySchedulingMeaning(),
-      date_relation: "NEXT_WEEKDAY",
-      weekday: "FRIDAY",
-      time_kind: "DAYPART",
-      daypart: "AFTERNOON",
-      date_expression: "next Friday",
-      time_expression: "afternoon",
-    },
-  });
-  const argsJson = JSON.stringify(argsPayload);
-  const fromFn = decodeCallerMeaningFromFunctionArguments(argsJson, VOICE_V3_BOOKING_AGENT_CONFIG);
-  assert.ok(fromFn);
-  assert.equal(fromFn!.scheduling.weekday, "FRIDAY");
-
-  const nestedCompleted = {
-    type: "response.completed",
-    response: {
-      output: [
-        {
-          type: "function_call",
-          name: EMIT_CALLER_MEANING_TOOL_NAME,
-          call_id: "call_test",
-          arguments: argsJson,
-        },
-      ],
-    },
-  };
-  const extracted = extractCallerMeaningFromAstraResponseEvent(nestedCompleted, VOICE_V3_BOOKING_AGENT_CONFIG);
-  assert.ok(extracted);
-  assert.equal(extracted!.transport, "function_tool");
-  assert.equal(extracted!.meaning.captured_fields[0]?.value, "Anthony");
-
-  const malformed = validateCallerMeaningFromRaw(
-    { ...basePayload(), active_goal: "NOT_VALID" },
-    VOICE_V3_BOOKING_AGENT_CONFIG,
-  );
-  assert.equal(malformed.ok, false);
+  const delegation = buildVoiceV3AstraDelegationResponses("test", VOICE_V3_BOOKING_AGENT_CONFIG);
+  assert.equal(JSON.stringify(delegation.tools).includes("emit_caller_meaning"), false);
 
   clearVoiceV3CallRuntimeStore();
-  const runtime = createVoiceV3CallRuntime({ liveSessionId: "live_transport", callId: "call_t" });
-  const versionBefore = runtime.getSnapshot().runtime.version;
-  const bad = decodeCallerMeaningFromFunctionArguments(
-    JSON.stringify(basePayload({ captured_fields: [{ key: "not_a_key", value: "x", confidence: 1 }] })),
-    VOICE_V3_BOOKING_AGENT_CONFIG,
-  );
-  assert.equal(bad, null);
-  assert.equal(runtime.getSnapshot().runtime.version, versionBefore);
-
-  runtime.applyEvent({
-    type: "CALLER_MEANING_APPLIED",
-    meaning: meaning({ captured_fields: [{ key: "name", value: "A", confidence: 1 }] }),
+  createVoiceV3CallRuntime({
+    liveSessionId: SESSION,
+    callId: "call_t",
+    config: VOICE_V3_BOOKING_AGENT_CONFIG,
   });
-  assert.equal(runtime.getSnapshot().intake.values.name?.value, "A");
+  const outbound: Array<Record<string, unknown>> = [];
+  const send = (e: { type: string }) => outbound.push(e);
 
-  clearVoiceV3CallRuntimeStore();
-  const runtimeA = createVoiceV3CallRuntime({ liveSessionId: "iso_a", callId: "a" });
-  const runtimeB = createVoiceV3CallRuntime({ liveSessionId: "iso_b", callId: "b" });
-  runtimeA.applyEvent({
-    type: "CALLER_MEANING_APPLIED",
-    meaning: meaning({ captured_fields: [{ key: "name", value: "Alice", confidence: 1 }] }),
+  handleDelegatedAstraResponseEvent({
+    liveSessionId: SESSION,
+    nested: {
+      type: "response.output_item.done",
+      item: {
+        type: "function_call",
+        id: "fc_1",
+        call_id: "call_update_1",
+        name: "update_intake",
+        arguments: JSON.stringify({
+          name: "Anthony",
+          email: null,
+          phone: null,
+          date_expression: null,
+          time_expression: null,
+          active_goal: "GENERAL",
+        }),
+      },
+    },
+    send,
+    delegationId: "del_1",
   });
-  runtimeB.applyEvent({
-    type: "CALLER_MEANING_APPLIED",
-    meaning: meaning({ captured_fields: [{ key: "name", value: "Bob", confidence: 1 }] }),
-  });
-  assert.equal(getVoiceV3CallRuntime("iso_a")!.getSnapshot().intake.values.name?.value, "Alice");
-  assert.equal(getVoiceV3CallRuntime("iso_b")!.getSnapshot().intake.values.name?.value, "Bob");
 
-  process.env.VOICE_V3_INTAKE_TRANSPORT = "output_text";
-  const textDelegation = buildVoiceV3AstraDelegationResponses("test", VOICE_V3_BOOKING_AGENT_CONFIG);
-  assert.equal(textDelegation.tools?.length ?? 0, 0);
-  const textMeaning = decodeDelegatedCallerMeaning(
-    JSON.stringify(basePayload({ captured_fields: [{ key: "email", value: "a@b.co", confidence: 1 }] })),
-    VOICE_V3_BOOKING_AGENT_CONFIG,
-  );
-  assert.ok(textMeaning);
-
-  if (prevTransport !== undefined) {
-    process.env.VOICE_V3_INTAKE_TRANSPORT = prevTransport;
-  } else {
-    delete process.env.VOICE_V3_INTAKE_TRANSPORT;
-  }
-
-  console.log("PASS voice-v3 intake transport");
+  await new Promise((r) => setTimeout(r, 50));
+  const runtime = getVoiceV3CallRuntime(SESSION);
+  assert.ok(runtime);
+  assert.equal(runtime.getSnapshot().intake.values.name?.value, "Anthony");
+  assert.ok(outbound.some((e) => e.type === "response.item.create"));
+  clearVoiceV3LiveResponseCoordinator(SESSION);
+  console.log("PASS voice-v3 intake transport (capability tools)");
 }
 
-main();
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

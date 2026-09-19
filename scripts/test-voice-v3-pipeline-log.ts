@@ -16,7 +16,7 @@ function main() {
   const summary = summarizeAstraNestedEvent({
     type: "response.function_call_arguments.done",
     response_id: "resp_1",
-    name: "emit_caller_meaning",
+    name: "update_intake",
     arguments: '{"active_goal":"BOOK_APPOINTMENT"}',
   });
   assert.equal(summary.nested_type, "response.function_call_arguments.done");

@@ -53,7 +53,7 @@ export function buildUpdateIntakeOpenAiTool(config: VoiceV3AgentConfig): Functio
     name: "update_intake",
     parameters: buildUpdateIntakeZod(config),
     description:
-      "Update authoritative customer intake fields and optional scheduling hints when the caller provides or corrects information. Do not call for small talk. Does not book or check availability by itself.",
+      "Update authoritative customer intake fields (name, email, phone) and active goal when the caller provides or corrects contact information. Do not call for availability-only questions — use find_availability. Does not book or search the calendar by itself.",
   });
   return {
     type: "function",

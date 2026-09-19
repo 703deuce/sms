@@ -167,7 +167,7 @@ function testEmptySemanticSubmitsOutputAndProtocolContinuation(): void {
   const coord = getVoiceV3LiveResponseCoordinator(`${SESSION}_empty`, send);
   coord.registerPendingFunctionCall({
     callId: "call_empty_sem",
-    name: "emit_caller_meaning",
+    name: "update_intake",
     argumentsJson: emptyMeaningJson(),
     delegationId: "del_empty",
   });
@@ -222,7 +222,7 @@ function testStaleSpeakSupersededOnBookingConfirm(): void {
   const coord = getVoiceV3LiveResponseCoordinator(sid, send);
   coord.registerPendingFunctionCall({
     callId: "pending_fc_stale",
-    name: "emit_caller_meaning",
+    name: "update_intake",
     argumentsJson: "{}",
     delegationId: "del_stale",
   });

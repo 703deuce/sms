@@ -20,7 +20,7 @@ export function buildFindAppointmentOpenAiTool(_config: VoiceV3AgentConfig): Fun
     name: "find_appointment",
     parameters: findApptArgsSchema,
     description:
-      "Look up an existing appointment for this caller when they want to reschedule or cancel. Requires phone or email from intake or arguments. Does not mutate calendar.",
+      "Use when the caller wants to reschedule, cancel, or change an existing appointment. Call this first to locate the appointment in Microsoft calendar. Provide phone or email when known. Does not mutate calendar.",
   });
   return {
     type: "function",
