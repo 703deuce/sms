@@ -8,6 +8,7 @@ export type VoiceOperationName =
   | "find_appointment"
   | "reschedule_appointment"
   | "cancel_appointment"
+  | "send_booking_link"
   | "transfer_call"
   | "update_intake"
   | "end_call";

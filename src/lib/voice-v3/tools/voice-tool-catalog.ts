@@ -14,6 +14,11 @@ import { buildRescheduleAppointmentOpenAiTool, rescheduleAppointmentTool } from 
 import { buildCancelAppointmentOpenAiTool, cancelAppointmentTool } from "./cancel-appointment-tool";
 import { buildTransferCallOpenAiTool, transferCallTool } from "./transfer-call-tool";
 import { buildEndCallOpenAiTool, endCallTool } from "./end-call-tool";
+import {
+  buildSendBookingLinkOpenAiTool,
+  sendBookingLinkTool,
+} from "./send-booking-link-tool";
+import { isSendBookingLinkAuthorized } from "./authorize-tool-for-config";
 
 export type VoiceToolCatalogEntry = {
   name: string;
@@ -87,28 +92,42 @@ export const VOICE_TOOL_CATALOG: VoiceToolCatalogEntry[] = [
     definition: endCallTool as VoiceToolDefinition<unknown>,
     buildOpenAiTool: buildEndCallOpenAiTool,
   },
+  {
+    name: "send_booking_link",
+    kind: "mutation",
+    telemetryName: "send_booking_link",
+    definition: sendBookingLinkTool as VoiceToolDefinition<unknown>,
+    buildOpenAiTool: buildSendBookingLinkOpenAiTool,
+  },
 ];
+
+function isMicrosoftDirectStrategy(config: VoiceV3AgentConfig): boolean {
+  return config.scheduling?.bookingStrategy === "MICROSOFT_365";
+}
 
 function isToolEnabledForConfig(entry: VoiceToolCatalogEntry, config: VoiceV3AgentConfig): boolean {
   const caps = config.capabilities;
   switch (entry.name) {
     case "book_appointment":
-      return caps.bookAppointments && config.scheduling?.bookingStrategy === "MICROSOFT_365";
+      return caps.bookAppointments && isMicrosoftDirectStrategy(config);
     case "find_availability":
-      return caps.checkAvailability && config.scheduling?.bookingStrategy === "MICROSOFT_365";
+      return caps.checkAvailability && isMicrosoftDirectStrategy(config);
     case "find_appointment":
-      return caps.findAppointments;
+      return caps.findAppointments && isMicrosoftDirectStrategy(config);
     case "reschedule_appointment":
-      return caps.rescheduleAppointments;
+      return caps.rescheduleAppointments && isMicrosoftDirectStrategy(config);
     case "cancel_appointment":
-      return caps.cancelAppointments;
+      return caps.cancelAppointments && isMicrosoftDirectStrategy(config);
+    case "send_booking_link":
+      return isSendBookingLinkAuthorized(config);
+    case "set_scheduling_preference":
+      return isMicrosoftDirectStrategy(config);
     case "transfer_call":
       return (
         caps.transferCalls &&
         (config.transferDestinations?.some((d) => d.enabled !== false) ?? false)
       );
     case "update_intake":
-    case "set_scheduling_preference":
     case "end_call":
       return true;
     default:

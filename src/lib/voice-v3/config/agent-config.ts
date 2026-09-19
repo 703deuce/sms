@@ -47,6 +47,7 @@ export type VoiceOperationRequirementKey =
   | "find_appointment"
   | "reschedule_appointment"
   | "cancel_appointment"
+  | "send_booking_link"
   | "transfer_call";
 
 export interface VoiceV3ServiceConfig {
@@ -218,6 +219,7 @@ export interface VoiceV3BookingStrategyConfig {
   executionStatus: "ACTIVE_EXECUTION" | "CONFIGURED_NOT_IMPLEMENTED";
   bookingLinkUrl: string | null;
   bookingLinkLabel: string | null;
+  sendLinkConsentRequired?: boolean;
   calendlyEventTypeUri: string | null;
   calendlyEventTypeName: string | null;
   calendlyEventTypeDurationMin: number | null;

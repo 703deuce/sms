@@ -16,6 +16,20 @@ export type AstraBackendPromptContext = {
   transferDestinations?: VoiceV3AgentConfig["transferDestinations"];
 };
 
+function bookingStrategyAppend(
+  strategy: VoiceV3AgentConfig["scheduling"]["bookingStrategy"] | undefined,
+): string {
+  if (strategy === "SEND_LINK") {
+    return `
+Send booking link mode (published):
+- When the caller wants to schedule, obtain explicit SMS consent with the required verbal disclosure, then call send_booking_link with confirmed=true.
+- Do not call set_scheduling_preference, find_availability, or book_appointment for new booking intent.
+- Do not collect booking intake fields (name, email, service, date, time) solely to send the link.
+- Do not invent booking URLs or sender numbers.`.trim();
+  }
+  return "";
+}
+
 export function buildAstraBackendInstructions(
   context: AstraBackendPromptContext = {},
 ): string {
@@ -45,6 +59,8 @@ Bookable services (use id for booking_service_id / match service_reason by name)
 ${context.serviceCatalog ?? "(single default service)"}
 
 Booking strategy: ${context.bookingStrategy ?? "MICROSOFT_365"}
+
+${bookingStrategyAppend(context.bookingStrategy)}
 
 ${intake}
 

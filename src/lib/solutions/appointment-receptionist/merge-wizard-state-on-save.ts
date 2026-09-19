@@ -53,6 +53,7 @@ const STEP_OWNED_FIELDS: Record<
     "bookingStrategy",
     "bookingLinkUrl",
     "bookingLinkLabel",
+    "bookingLinkSmsConsentRequired",
     "calendlyEventTypeUri",
     "calendlyEventTypeName",
     "calendlyEventTypeDurationMin",

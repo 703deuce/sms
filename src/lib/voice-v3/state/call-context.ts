@@ -29,6 +29,7 @@ import type { GoalManagerState } from "../agent/goal-manager";
 import type { VoiceV3OperationsMap } from "../operations/types";
 import type { EscalationCounters, VoiceV3EscalationPolicy } from "../agent/escalation";
 import type { VoiceV3Capabilities } from "../agent/capability-state";
+import type { VoiceV3BookingLinkCallState } from "../booking-link/types";
 
 export type VoiceV3Goal =
   | "UNKNOWN"
@@ -125,6 +126,7 @@ export interface VoiceV3CallContext {
     lastFailure: BookingFailure | null;
     postBookChangeRequested: boolean;
   };
+  bookingLink?: VoiceV3BookingLinkCallState;
   appointmentManagement: {
     verifiedExisting: ExistingAppointment | null;
     candidateSet: ExistingAppointmentCandidateSet | null;

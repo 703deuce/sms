@@ -169,6 +169,8 @@ export type AppointmentReceptionistWizardState = {
   /** Trusted booking URL when bookingStrategy is SEND_LINK. */
   bookingLinkUrl?: string | null;
   bookingLinkLabel?: string | null;
+  /** When true (default), Amy must obtain verbal SMS consent before send_booking_link. */
+  bookingLinkSmsConsentRequired?: boolean | null;
   /** Calendly event type for bookingStrategy CALENDLY */
   calendlyEventTypeUri?: string | null;
   calendlyEventTypeName?: string | null;

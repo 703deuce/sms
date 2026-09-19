@@ -62,6 +62,10 @@ export function AppointmentsStep({
     Array<{ uri: string; name: string; durationMinutes: number }>
   >([]);
   const [calendlyEventTypesError, setCalendlyEventTypesError] = useState<string | null>(null);
+  const [smsNumbers, setSmsNumbers] = useState<
+    Array<{ id: string; e164: string; friendlyName: string | null; status: string }>
+  >([]);
+
   const [calendlyCapabilities, setCalendlyCapabilities] = useState<{
     directBookingPreflightOk?: boolean;
     planBlocked?: boolean;
@@ -143,6 +147,30 @@ export function AppointmentsStep({
       }
     })();
   }, [state.bookingStrategy, state.calendarConnected, state.calendarProvider]);
+
+  useEffect(() => {
+    if ((state.bookingStrategy || "MICROSOFT_365") !== "SEND_LINK") return;
+    void fetch("/api/phone/numbers")
+      .then((r) => r.json())
+      .then((j) => {
+        const rows = (j.data || []) as Array<{
+          id: string;
+          e164: string;
+          friendlyName: string | null;
+          status: string;
+        }>;
+        setSmsNumbers(rows.filter((n) => n.status === "Active"));
+        if (!state.outboundSmsPhoneNumberId && rows[0]) {
+          patch({
+            outboundSmsPhoneNumberId: rows[0].id,
+            outboundSmsE164: rows[0].e164,
+            outboundSmsMode: "explicit_number",
+          });
+        }
+      })
+      .catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.bookingStrategy]);
 
   async function connectCalendar(providerId: string) {
     setBusyProvider(providerId);
@@ -432,18 +460,73 @@ export function AppointmentsStep({
             </div>
           ) : null}
           {(state.bookingStrategy || "MICROSOFT_365") === "SEND_LINK" ? (
-            <div className="mt-4 space-y-3 border-t border-border pt-4">
+            <div className="mt-4 space-y-4 border-t border-border pt-4">
+              <p className="text-sm font-medium">Send a booking link</p>
               <label className="block text-sm font-medium" htmlFor="booking-link-url">
-                Booking link URL
+                Booking URL <span className="text-destructive">*</span>
               </label>
               <input
                 id="booking-link-url"
                 type="url"
+                required
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-                placeholder="https://calendly.com/your-business"
+                placeholder="https://example.com/book"
                 value={state.bookingLinkUrl || ""}
                 onChange={(e) => patch({ bookingLinkUrl: e.target.value })}
               />
+              <p className="text-[12px] text-muted-foreground">
+                This is the page callers will receive when they ask to schedule an appointment.
+              </p>
+              <label className="block text-sm font-medium" htmlFor="booking-link-sms-sender">
+                Text message sender <span className="text-destructive">*</span>
+              </label>
+              <select
+                id="booking-link-sms-sender"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                value={state.outboundSmsPhoneNumberId || ""}
+                onChange={(e) => {
+                  const row = smsNumbers.find((n) => n.id === e.target.value);
+                  patch({
+                    outboundSmsPhoneNumberId: row?.id ?? null,
+                    outboundSmsE164: row?.e164 ?? null,
+                    outboundSmsMode: "explicit_number",
+                  });
+                }}
+              >
+                <option value="">Select SMS-enabled number…</option>
+                {smsNumbers.map((n) => (
+                  <option key={n.id} value={n.id}>
+                    {n.e164}
+                    {n.friendlyName ? ` — ${n.friendlyName}` : ""}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[12px] text-muted-foreground">
+                The booking link will be sent from this SMS-enabled number.
+              </p>
+              <div className="flex items-start gap-2">
+                <input
+                  id="booking-link-sms-consent"
+                  type="checkbox"
+                  className="mt-1"
+                  checked={state.bookingLinkSmsConsentRequired !== false}
+                  onChange={(e) => patch({ bookingLinkSmsConsentRequired: e.target.checked })}
+                />
+                <label htmlFor="booking-link-sms-consent" className="text-sm">
+                  Ask for permission before sending
+                  <span className="mt-0.5 block text-[12px] font-normal text-muted-foreground">
+                    Caller receives the link only after explicitly agreeing to receive the text.
+                  </span>
+                </label>
+              </div>
+              <div className="rounded-lg border border-border bg-muted/30 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Message preview
+                </p>
+                <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">
+                  {`${state.businessName || state.solutionName || "Your business"}: Book your appointment here:\n${state.bookingLinkUrl?.trim() || "https://example.com/book"}\nMsg & data rates may apply. Reply STOP to opt out, HELP for help.`}
+                </p>
+              </div>
               <label className="block text-sm font-medium" htmlFor="booking-link-label">
                 Link label (optional)
               </label>
@@ -455,10 +538,6 @@ export function AppointmentsStep({
                 value={state.bookingLinkLabel || ""}
                 onChange={(e) => patch({ bookingLinkLabel: e.target.value })}
               />
-              <p className="text-[12px] text-muted-foreground">
-                Amy texts this exact link after the caller agrees to receive it by SMS. Use https://
-                for production.
-              </p>
             </div>
           ) : null}
         </div>

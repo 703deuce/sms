@@ -180,9 +180,12 @@ function bookingStrategyDetailFromWizard(
     ...DEFAULT_V3_BOOKING_STRATEGY,
     strategy,
     executionStatus:
-      strategy === "MICROSOFT_365" ? "ACTIVE_EXECUTION" : "CONFIGURED_NOT_IMPLEMENTED",
+      strategy === "MICROSOFT_365" || strategy === "SEND_LINK"
+        ? "ACTIVE_EXECUTION"
+        : "CONFIGURED_NOT_IMPLEMENTED",
     bookingLinkUrl: wizard.bookingLinkUrl?.trim() || null,
     bookingLinkLabel: wizard.bookingLinkLabel?.trim() || null,
+    sendLinkConsentRequired: wizard.bookingLinkSmsConsentRequired !== false,
     calendlyEventTypeUri: wizard.calendlyEventTypeUri?.trim() || null,
     calendlyEventTypeName: wizard.calendlyEventTypeName?.trim() || null,
     calendlyEventTypeDurationMin: wizard.calendlyEventTypeDurationMin ?? null,
