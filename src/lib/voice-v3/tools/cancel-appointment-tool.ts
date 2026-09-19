@@ -63,6 +63,9 @@ function prepareCancelContext(
   ) {
     return null;
   }
+  const verified = ctx.appointmentManagement.verifiedExisting;
+  const boundEventId = verified?.providerEventId ?? null;
+
   if (!args.confirmed) {
     return {
       ...ctx,
@@ -72,19 +75,33 @@ function prepareCancelContext(
         cancellation: {
           ...ctx.appointmentManagement.cancellation,
           awaitingConfirmation: true,
+          boundProviderEventId: boundEventId,
         },
       },
     };
   }
+
+  // Tool-confirmed cancellation (PSTN path): mirror apply-caller-meaning CONFIRM so
+  // evaluateVoiceV3Rules cancelReady arms dispatchCancellationIfRequired.
+  if (!boundEventId) return null;
+
+  console.log("CANCELLATION_CONFIRMED_BY_TOOL", {
+    call_id: ctx.callId,
+    provider_event_id: boundEventId,
+  });
+
   return {
     ...ctx,
     dialog: { ...ctx.dialog, activeGoal: "CANCEL_APPOINTMENT" },
     appointmentManagement: {
       ...ctx.appointmentManagement,
-        cancellation: {
-          ...ctx.appointmentManagement.cancellation,
-          awaitingConfirmation: false,
-        },
+      lastCancellationConfirmation: "CONFIRM",
+      cancellation: {
+        ...ctx.appointmentManagement.cancellation,
+        phase: "CANCELLATION_READY",
+        awaitingConfirmation: true,
+        boundProviderEventId: boundEventId,
+      },
     },
   };
 }

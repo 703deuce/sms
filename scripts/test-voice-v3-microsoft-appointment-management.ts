@@ -174,6 +174,67 @@ async function main() {
   });
   assert.equal(cancelNoConfirm.ok, false);
 
+  // PSTN regression: after find_appointment, cancel_appointment(confirmed=true) must arm cancelReady
+  clearVoiceV3CallRuntimeStore();
+  const postFindRuntime = createVoiceV3CallRuntime({
+    liveSessionId: "live_post_find_cancel",
+    callId: "post_find_cancel",
+    config: VOICE_V3_BOOKING_TEST_CONFIG,
+  });
+  const postFindCtx = createInitialVoiceV3CallContext({
+    callId: "post_find_cancel",
+    liveSessionId: "live_post_find_cancel",
+    timezone: TZ,
+    clock,
+  });
+  postFindRuntime.replaceContext({
+    ...postFindCtx,
+    dialog: { activeGoal: "CANCEL_APPOINTMENT" },
+    appointmentManagement: {
+      ...postFindCtx.appointmentManagement,
+      verifiedExisting: existing,
+      lookupCompleted: true,
+      lastCancellationConfirmation: "NONE",
+      cancellation: {
+        phase: "CANCELLATION_CONFIRMATION_REQUIRED",
+        cancellationAttemptId: null,
+        awaitingConfirmation: true,
+        boundProviderEventId: existing.providerEventId,
+      },
+    },
+  });
+  const rulesPreTool = evaluateVoiceV3Rules(
+    postFindRuntime.getSnapshot(),
+    VOICE_V3_BOOKING_TEST_CONFIG,
+  );
+  assert.equal(rulesPreTool.requiredAction, null);
+
+  const postFindToolCtx = {
+    callId: "post_find_cancel",
+    liveSessionId: "live_post_find_cancel",
+    delegationId: null,
+    functionCallId: "fc_post_find_cancel",
+    runtime: postFindRuntime,
+    tenantId: "post_find_cancel",
+    sendContext: () => {},
+  };
+  const cancelViaTool = await executeVoiceTool(postFindToolCtx, "cancel_appointment", {
+    appointment_selection_id: appointmentSelectionId(existing),
+    confirmed: true,
+  });
+  const afterTool = postFindRuntime.getSnapshot();
+  assert.equal(afterTool.appointmentManagement.lastCancellationConfirmation, "CONFIRM");
+  assert.notEqual(
+    afterTool.appointmentManagement.cancellation.phase,
+    "NONE",
+    "cancel_appointment must attempt Graph dispatch (not leave cancellation at NONE)",
+  );
+  assert.notEqual(
+    cancelViaTool.ok && cancelViaTool.status === "pending",
+    true,
+    "cancel_appointment must not return ok/pending after confirmed=true",
+  );
+
   await dispatchCancellationIfRequired(rt, {
     cancelBooking: async () => {
       deleteCalled += 1;
