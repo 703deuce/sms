@@ -147,7 +147,15 @@ async function loadMicrosoftCandidates(
     rangeEndUtc: window.rangeEndUtc,
     timezone,
   });
-  if (!graph.ok) return [];
+  if (!graph.ok) {
+    console.log("APPOINTMENT_DISCOVERY_GRAPH_FAILED", {
+      call_id: request.callId,
+      reason: graph.reason,
+      message: graph.message,
+      duration_ms: graph.durationMs,
+    });
+    return [];
+  }
   return graph.candidates;
 }
 
