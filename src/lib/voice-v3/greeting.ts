@@ -1,13 +1,24 @@
+import type { VoiceV3AgentConfig } from "@/lib/voice-v3/config/agent-config";
 import { buildLiveFrontendGreetingLine } from "@/lib/voice-v3/prompts/live-frontend-instructions";
 import { resolveVoiceV3DefaultPromptInput } from "@/lib/voice-v3/prompts/build-voice-v3-prompts";
 import { getVoiceV3LiveResponseCoordinator } from "./delegation/live-response-coordinator";
+import { getVoiceV3CallRuntime } from "./state/call-runtime";
 import type { VoiceV3CallTrace } from "./telemetry/call-trace";
 
-export function resolveVoiceV3InitialGreetingText(): string {
-  const ctx = resolveVoiceV3DefaultPromptInput();
+export function resolveVoiceV3InitialGreetingText(
+  agentConfig?: VoiceV3AgentConfig,
+  liveSessionId?: string,
+): string {
+  const config =
+    agentConfig ?? (liveSessionId ? getVoiceV3CallRuntime(liveSessionId)?.config : undefined);
+  if (config?.conversation.speaksFirst === "caller") {
+    return "";
+  }
+  const ctx = resolveVoiceV3DefaultPromptInput(new Date(), config ?? undefined);
   return buildLiveFrontendGreetingLine({
     agentName: ctx.agentName,
     businessName: ctx.businessName,
+    agentConfig: config ?? ctx.agentConfig,
   });
 }
 
@@ -40,6 +51,17 @@ export function requestInitialLiveGreeting(input: {
     return;
   }
 
+  const runtime = getVoiceV3CallRuntime(input.sessionId);
+  const config = runtime?.config;
+  if (config?.conversation.speaksFirst === "caller") {
+    return;
+  }
+
+  const greetingText = resolveVoiceV3InitialGreetingText(config);
+  if (!greetingText.trim()) {
+    return;
+  }
+
   console.log("LIVE_GREETING_REQUESTED", {
     sessionId: input.sessionId,
     ts: new Date().toISOString(),
@@ -48,7 +70,7 @@ export function requestInitialLiveGreeting(input: {
 
   input.send({
     type: "session.commentary.append",
-    content: `Speak to the caller now. Say exactly: "${resolveVoiceV3InitialGreetingText()}"`,
+    content: `Speak to the caller now. Say exactly: "${greetingText}"`,
     delegation_id: null,
   });
   const coordinator = getVoiceV3LiveResponseCoordinator(input.sessionId, input.send);

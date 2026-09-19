@@ -89,8 +89,43 @@ export const VOICE_TOOL_CATALOG: VoiceToolCatalogEntry[] = [
   },
 ];
 
+function isToolEnabledForConfig(entry: VoiceToolCatalogEntry, config: VoiceV3AgentConfig): boolean {
+  const caps = config.capabilities;
+  switch (entry.name) {
+    case "book_appointment":
+      return caps.bookAppointments && config.scheduling?.bookingStrategy === "MICROSOFT_365";
+    case "find_availability":
+      return caps.checkAvailability && config.scheduling?.bookingStrategy === "MICROSOFT_365";
+    case "find_appointment":
+      return caps.findAppointments;
+    case "reschedule_appointment":
+      return caps.rescheduleAppointments;
+    case "cancel_appointment":
+      return caps.cancelAppointments;
+    case "transfer_call":
+      return (
+        caps.transferCalls &&
+        (config.transferDestinations?.some((d) => d.enabled !== false) ?? false)
+      );
+    case "update_intake":
+    case "set_scheduling_preference":
+    case "end_call":
+      return true;
+    default:
+      return true;
+  }
+}
+
 export function buildVoiceV3AstraFunctionToolsFromCatalog(
   config: VoiceV3AgentConfig,
 ): FunctionTool[] {
-  return VOICE_TOOL_CATALOG.map((entry) => entry.buildOpenAiTool(config));
+  return VOICE_TOOL_CATALOG.filter((entry) => isToolEnabledForConfig(entry, config)).map(
+    (entry) => entry.buildOpenAiTool(config),
+  );
+}
+
+export function listVoiceV3AstraToolNamesForConfig(config: VoiceV3AgentConfig): string[] {
+  return VOICE_TOOL_CATALOG.filter((entry) => isToolEnabledForConfig(entry, config)).map(
+    (e) => e.name,
+  );
 }

@@ -3,16 +3,17 @@ import "server-only";
 import { getPrisma } from "@/lib/db";
 import { loadVoiceAgentRuntimeConfig } from "@/lib/voice/load-agent-config";
 import type { VoiceAgentConfig } from "@/lib/voice/types";
-import { compileVoiceV2IntakeSchema } from "@/lib/voice-receptionist-wizard/intake/compile-schema";
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
-import type { IntakeFieldType, VoiceV3AgentConfig } from "./agent-config";
+import type { VoiceV3AgentConfig } from "./agent-config";
 import { VOICE_V3_BOOKING_AGENT_CONFIG } from "./booking-agent-config";
-
-function mapValueType(t: string): IntakeFieldType {
-  if (t === "email") return "email";
-  if (t === "phone") return "phone";
-  return "text";
-}
+import {
+  compileVoiceV3AgentConfig,
+  type VoiceV3ProviderConnections,
+} from "./compile-voice-v3-agent-config";
+import {
+  logVoiceV3AgentConfigResolved,
+  logVoiceV3ConfigFallbackUsed,
+} from "./config-observability";
 
 function wizardFromConfig(config: VoiceAgentConfig): AppointmentReceptionistWizardState | null {
   const advanced = (config.advanced || {}) as Record<string, unknown>;
@@ -32,89 +33,88 @@ export function appointmentReceptionistUsesVoiceV3Runtime(config: VoiceAgentConf
   return isAppointmentReceptionistAgent(config);
 }
 
+async function resolveMicrosoftProviderConnections(
+  workspaceId: string,
+  wizard: AppointmentReceptionistWizardState | null,
+): Promise<VoiceV3ProviderConnections> {
+  const prisma = getPrisma();
+  const provider = wizard?.calendarProvider?.trim() || "microsoft";
+  if (provider !== "microsoft") {
+    return {};
+  }
+
+  const calendars = await prisma.voiceCalendarConnection.findMany({
+    where: {
+      workspaceId,
+      provider: "microsoft",
+      status: { in: ["connected", "active", "ok"] },
+    },
+    orderBy: { updatedAt: "desc" },
+  });
+
+  if (calendars.length === 0) {
+    return {
+      microsoftConnectionId:
+        process.env.VOICE_V3_MICROSOFT_CONNECTION_ID?.trim() || null,
+      microsoftCalendarIds: [
+        process.env.VOICE_V3_CALENDAR_ID?.trim() || "primary",
+      ],
+    };
+  }
+
+  const preferred =
+    calendars.find(
+      (c: { id: string; name: string | null }) =>
+        wizard?.calendarEmail && c.name === wizard.calendarEmail,
+    ) || calendars[0];
+
+  return {
+    microsoftConnectionId: preferred.id,
+    microsoftCalendarIds: [process.env.VOICE_V3_CALENDAR_ID?.trim() || "primary"],
+    microsoftSmtp: null,
+  };
+}
+
 export async function resolveVoiceV3AgentConfigForAgent(input: {
   workspaceId: string;
   agentId: string;
+  publishedVersionId?: string | null;
 }): Promise<VoiceV3AgentConfig> {
   const envFallback = VOICE_V3_BOOKING_AGENT_CONFIG;
   try {
     const config = await loadVoiceAgentRuntimeConfig(input.workspaceId, input.agentId);
     const wizard = wizardFromConfig(config);
-    const schema = compileVoiceV2IntakeSchema(config);
-    const intakeFields =
-      schema.fields.length > 0
-        ? schema.fields.map((f) => {
-            const type = mapValueType(f.valueType);
-            const description =
-              f.description?.trim() ||
-              f.label?.trim() ||
-              `Caller ${f.label || f.key}.`;
-            return {
-              key: f.key,
-              label: f.label,
-              type,
-              required: f.requirementLevel !== "OPTIONAL",
-              description,
-              collectionStrategy: type === "email" ? "voice_email" : "standard",
-              verificationRequired: type === "email" ? false : undefined,
-            };
-          })
-        : envFallback.intakeFields;
+    if (!wizard) {
+      logVoiceV3ConfigFallbackUsed("wizard", "appointmentReceptionistWizard_missing");
+      return envFallback;
+    }
 
-    const enabledType =
-      wizard?.appointmentTypes?.find((t) => t.enabled) || wizard?.appointmentTypes?.[0];
-    const service = {
-      id: enabledType?.id || envFallback.service.id,
-      name: enabledType?.name?.trim() || envFallback.service.name,
-      durationMinutes: enabledType?.durationMinutes || envFallback.service.durationMinutes,
-      slotStepMinutes: envFallback.service.slotStepMinutes,
-    };
+    const providerConnections = await resolveMicrosoftProviderConnections(
+      input.workspaceId,
+      wizard,
+    );
 
-    const prisma = getPrisma();
-    const calendar = await prisma.voiceCalendarConnection.findFirst({
-      where: {
-        workspaceId: input.workspaceId,
-        provider: "microsoft",
-        status: { in: ["connected", "active", "ok"] },
-      },
-      orderBy: { updatedAt: "desc" },
+    const compiled = compileVoiceV3AgentConfig({
+      wizard,
+      providerConnections,
+      envFallback,
     });
 
-    const connectionId =
-      calendar?.id?.trim() ||
-      process.env.VOICE_V3_MICROSOFT_CONNECTION_ID?.trim() ||
-      envFallback.calendar?.connectionId ||
-      "";
+    logVoiceV3AgentConfigResolved({
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+      publishedVersionId: input.publishedVersionId,
+      config: compiled,
+    });
 
-    const timezone =
-      wizard?.timezone?.trim() ||
-      config.timezone?.trim() ||
-      envFallback.timezone;
-
-    return {
-      businessName:
-        wizard?.businessName?.trim() ||
-        config.businessName?.trim() ||
-        envFallback.businessName,
-      timezone,
-      intake: envFallback.intake,
-      intakeFields,
-      operationRequirements: envFallback.operationRequirements,
-      service,
-      businessHours: envFallback.businessHours,
-      calendar: {
-        provider: "microsoft",
-        connectionId,
-        calendarIds: [process.env.VOICE_V3_CALENDAR_ID?.trim() || "primary"],
-        smtp: envFallback.calendar?.smtp ?? null,
-      },
-    };
+    return compiled;
   } catch (err) {
     console.error("VOICE_V3_RESOLVE_AGENT_CONFIG_FAILED", {
       workspaceId: input.workspaceId,
       agentId: input.agentId,
       err,
     });
+    logVoiceV3ConfigFallbackUsed("resolve", "exception");
     return envFallback;
   }
 }

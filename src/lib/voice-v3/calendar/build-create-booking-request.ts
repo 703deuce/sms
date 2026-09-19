@@ -1,4 +1,5 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
+import { resolveBookingServiceForRuntime } from "../config/resolve-booking-service";
 import type { VoiceV3CallContext } from "../state/call-context";
 import type { CreateBookingRequest } from "./booking-types";
 import { isSelectedSlotAuthoritative } from "./selected-slot";
@@ -30,6 +31,8 @@ export function buildCreateBookingRequest(
   const slot = offer.slots.find((s) => s.slotId === selected.slotId);
   if (!slot) return null;
 
+  const service = resolveBookingServiceForRuntime(config, ctx);
+
   return {
     callId: ctx.callId,
     bookingAttemptId,
@@ -46,9 +49,9 @@ export function buildCreateBookingRequest(
       phone: ctx.intake.values.phone?.value?.trim() || undefined,
     },
     service: {
-      id: config.service.id,
-      name: config.service.name,
-      durationMinutes: config.service.durationMinutes,
+      id: service.id,
+      name: service.name,
+      durationMinutes: service.durationMinutes,
     },
   };
 }

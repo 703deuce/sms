@@ -1,21 +1,45 @@
+import type { VoiceV3AgentConfig } from "../config/agent-config";
+
 /**
  * Canonical GPT-Live (Amy) delegation policy — backend capabilities and when to delegate.
  * Amy does not receive Astra function schemas; only this capability contract.
  */
 
-export function buildLiveDelegationPolicySection(): string {
+export function buildLiveDelegationPolicySection(
+  config?: VoiceV3AgentConfig,
+): string {
+  const caps = config?.capabilities;
+  const backendCaps: string[] = [];
+  if (!caps || caps.collectIntake) {
+    backendCaps.push("- Save or correct caller information required by the business.");
+  }
+  if (!caps || caps.checkAvailability) {
+    backendCaps.push("- Check real appointment availability.");
+  }
+  if (!caps || caps.bookAppointments) {
+    backendCaps.push("- Create new appointments.");
+  }
+  if (!caps || caps.findAppointments) {
+    backendCaps.push("- Find existing appointments.");
+  }
+  if (!caps || caps.rescheduleAppointments) {
+    backendCaps.push("- Reschedule existing appointments.");
+  }
+  if (!caps || caps.cancelAppointments) {
+    backendCaps.push("- Cancel existing appointments.");
+  }
+  if (!caps || caps.transferCalls) {
+    backendCaps.push("- Transfer the live call to an authorized human or destination.");
+  }
+  backendCaps.push(
+    "- End the telephone call through the telephony/application layer when appropriate.",
+  );
+
   return `
 # DELEGATION POLICY
 
 Backend capabilities:
-- Save or correct caller information required by the business.
-- Check real appointment availability.
-- Create new appointments.
-- Find existing appointments.
-- Reschedule existing appointments.
-- Cancel existing appointments.
-- Transfer the live call to an authorized human or destination.
-- End the telephone call through the telephony/application layer when appropriate.
+${backendCaps.join("\n")}
 
 Delegate to the backend when:
 - The caller asks what appointment dates or times are available.

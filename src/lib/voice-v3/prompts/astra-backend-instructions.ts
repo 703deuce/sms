@@ -1,3 +1,4 @@
+import type { VoiceV3AgentConfig } from "../config/agent-config";
 import { buildAstraBackendCoreInstructions } from "./astra-backend-core-instructions";
 import { buildAstraCrossToolInstructions } from "./astra-cross-tool-instructions";
 import { buildAstraIntakeInstructions } from "./astra-intake-instructions";
@@ -8,6 +9,11 @@ export type AstraBackendPromptContext = {
   currentLocalDateTime?: string;
   intakeFieldCatalog?: string;
   toolSurface?: "capability_tools" | "output_text";
+  intakeTransport?: string;
+  serviceCatalog?: string;
+  bookingStrategy?: VoiceV3AgentConfig["scheduling"]["bookingStrategy"];
+  capabilities?: VoiceV3AgentConfig["capabilities"];
+  transferDestinations?: VoiceV3AgentConfig["transferDestinations"];
 };
 
 export function buildAstraBackendInstructions(
@@ -34,6 +40,11 @@ Current business-local date/time: ${currentLocalDateTime}
 
 Configured intake fields (update_intake only — one key per schema property):
 ${context.intakeFieldCatalog ?? "(see update_intake tool schema)"}
+
+Bookable services (use id for booking_service_id / match service_reason by name):
+${context.serviceCatalog ?? "(single default service)"}
+
+Booking strategy: ${context.bookingStrategy ?? "MICROSOFT_365"}
 
 ${intake}
 

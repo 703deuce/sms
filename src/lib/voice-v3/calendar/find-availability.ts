@@ -1,5 +1,6 @@
 import type { NormalizedSchedulingPreference } from "../time/scheduling-types";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
+import { resolveBookingServiceForRuntime } from "../config/resolve-booking-service";
 import type { VoiceV3CallContext } from "../state/call-context";
 import type { FindAvailabilityRequest, RequiredRuntimeAction } from "./types";
 import { parseVoiceV3LocalIsoToDate } from "./microsoft/microsoft-time-adapter";
@@ -68,10 +69,11 @@ export function buildFindAvailabilityRequest(
   const normalized = ctx.scheduling.normalized;
   if (!normalized) return null;
 
+  const service = resolveBookingServiceForRuntime(config, ctx);
   const window = resolveSearchWindowFromNormalized(
     normalized,
     ctx.business.timezone,
-    config.service.durationMinutes,
+    service.durationMinutes,
   );
   if (!window) return null;
 
@@ -84,7 +86,7 @@ export function buildFindAvailabilityRequest(
     timezone: ctx.business.timezone,
     rangeStartUtc: window.rangeStartUtc,
     rangeEndUtc: window.rangeEndUtc,
-    durationMinutes: config.service.durationMinutes,
+    durationMinutes: service.durationMinutes,
     calendarIds: [...calendar.calendarIds],
     requestKey: "",
   };

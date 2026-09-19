@@ -11,6 +11,7 @@ import {
 } from "@/lib/voice-v3/prompts/build-voice-v3-prompts";
 import { formatBusinessLocalDateTime } from "@/lib/voice-v3/prompts/business-local-time";
 import { resolveVoiceV3AgentConfig } from "@/lib/voice-v3/state/call-runtime";
+import { listVoiceV3AstraToolNamesForConfig } from "@/lib/voice-v3/tools/voice-tool-catalog";
 
 export const VOICE_V3_BASIC_LIVE_MODEL = "gpt-live-1";
 export const VOICE_V3_BASIC_BACKEND_MODEL = "gpt-6-astra";
@@ -38,16 +39,19 @@ export function buildBasicLiveSession(
 ): SessionAcceptParams.Session {
   logVoiceV3BasicConfigOnce();
   const config = agentConfig ?? resolveVoiceV3AgentConfig();
-  const promptInput = resolveVoiceV3DefaultPromptInput(at);
+  const promptInput = resolveVoiceV3DefaultPromptInput(at, config);
+  const toolNames = listVoiceV3AstraToolNamesForConfig(config);
   const prompts = buildVoiceV3Prompts({
     ...promptInput,
-    businessName: promptInput.businessName ?? config.businessName,
+    businessName: config.businessName ?? promptInput.businessName,
     timezone: config.timezone ?? promptInput.timezone,
+    agentName: config.identity?.agentName ?? promptInput.agentName,
     currentLocalDateTime: formatBusinessLocalDateTime(
       config.timezone ?? promptInput.timezone,
       at,
     ),
     agentConfig: config,
+    toolNames,
   });
 
   const responses = buildVoiceV3AstraDelegationResponses(
@@ -63,7 +67,7 @@ export function buildBasicLiveSession(
     instructions: prompts.liveInstructions,
     audio: {
       output: {
-        voice: "marin",
+        voice: config.telephony?.liveVoiceId?.trim() || "marin",
       },
     },
     delegation: {

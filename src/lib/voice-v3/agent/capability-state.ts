@@ -14,13 +14,17 @@ export function deriveVoiceV3Capabilities(config: VoiceV3AgentConfig): VoiceV3Ca
   const calendarConnected = Boolean(
     config.calendar?.connectionId?.trim() && config.calendar.calendarIds.length > 0,
   );
+  const caps = config.capabilities;
+  const microsoftBooking =
+    config.scheduling?.bookingStrategy === "MICROSOFT_365" && calendarConnected;
   return {
-    canBook: calendarConnected && config.service.durationMinutes > 0,
-    canReschedule: calendarConnected,
-    canCancel: calendarConnected,
-    canTransfer: true,
+    canBook:
+      microsoftBooking && caps.bookAppointments && config.service.durationMinutes > 0,
+    canReschedule: microsoftBooking && caps.rescheduleAppointments,
+    canCancel: microsoftBooking && caps.cancelAppointments,
+    canTransfer: caps.transferCalls,
     canTakeCallback: true,
-    canTakeMessage: true,
+    canTakeMessage: caps.takeMessages,
     calendarConnected,
   };
 }
