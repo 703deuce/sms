@@ -37,8 +37,8 @@ const SCENARIOS: Scenario[] = [
   {
     label: "case5_scheduling_only",
     history: "Caller: Tuesday afternoon works best.",
-    expectTools: ["find_availability"],
-    forbiddenTools: ["update_intake"],
+    expectTools: ["set_scheduling_preference"],
+    forbiddenTools: ["update_intake", "find_availability"],
   },
   {
     label: "case6_intake_plus_find",

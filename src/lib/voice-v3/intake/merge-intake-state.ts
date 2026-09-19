@@ -1,17 +1,7 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { CapturedField, VoiceV3CallContext, VoiceV3Goal } from "../state/call-context";
-import { deriveSchedulingClarification } from "../time/scheduling-clarification";
-import {
-  normalizeSchedulingMeaning,
-  schedulingMeaningHasSignal,
-} from "../time/scheduling-normalizer";
-import { parseSchedulingExpressionsToMeaning } from "../time/parse-scheduling-expressions";
-import {
-  normalizedSchedulingEquals,
-  type SchedulingMeaning,
-} from "../time/scheduling-types";
-import { invalidateSelectionForSchedulingChange } from "../calendar/apply-slot-selection";
-import { markOperationsStaleForScheduling } from "../operations/registry";
+import { mergeSchedulingMeaningIntoContext } from "./merge-scheduling-meaning";
+import type { SchedulingMeaning } from "../time/scheduling-types";
 
 export type IntakeMergeResult = {
   context: VoiceV3CallContext;
@@ -62,98 +52,13 @@ export function mergeDialogActiveGoalFromTool(
   };
 }
 
-function schedulingMeaningFromExpressions(
-  dateExpression: string | null | undefined,
-  timeExpression: string | null | undefined,
-): SchedulingMeaning {
-  return parseSchedulingExpressionsToMeaning({
-    dateExpression,
-    timeExpression,
-  });
-}
-
+/** @deprecated Use mergeSchedulingMeaningIntoContext with structured SchedulingMeaning. */
 export function mergeSchedulingNaturalLanguage(
   ctx: VoiceV3CallContext,
-  input: { dateExpression?: string | null; timeExpression?: string | null },
-  at: Date = new Date(),
+  _input: { dateExpression?: string | null; timeExpression?: string | null },
+  _at: Date = new Date(),
 ): { context: VoiceV3CallContext; schedulingGenerationChanged: boolean } {
-  const schedMeaning = schedulingMeaningFromExpressions(input.dateExpression, input.timeExpression);
-  if (!schedulingMeaningHasSignal(schedMeaning)) {
-    return { context: ctx, schedulingGenerationChanged: false };
-  }
-
-  const scheduling = { ...ctx.scheduling };
-  let schedulingGenerationChanged = false;
-  let workingCtx = ctx;
-
-  const normStarted = Date.now();
-  console.log("SCHEDULING_MEANING_RECEIVED", {
-    call_id: ctx.callId,
-    live_session_id: ctx.liveSessionId,
-    timezone: ctx.clock.timezone,
-    scheduling_generation: scheduling.generation ?? 0,
-    date_relation: schedMeaning.date_relation,
-    time_kind: schedMeaning.time_kind,
-  });
-
-  const normalized = normalizeSchedulingMeaning(schedMeaning, ctx.clock);
-  const latency = Date.now() - normStarted;
-  const priorNormalized = scheduling.normalized;
-  const changed = !normalizedSchedulingEquals(priorNormalized, normalized);
-
-  scheduling.meaning = schedMeaning;
-  scheduling.normalized = normalized;
-  scheduling.clarification = deriveSchedulingClarification({
-    meaning: schedMeaning,
-    normalized,
-    clock: ctx.clock,
-  });
-
-  if (scheduling.clarification.required) {
-    console.log("SCHEDULING_CLARIFICATION_REQUIRED", {
-      call_id: ctx.callId,
-      live_session_id: ctx.liveSessionId,
-      timezone: ctx.clock.timezone,
-      scheduling_generation: scheduling.generation ?? 0,
-      reason: scheduling.clarification.reason,
-      normalization_latency_ms: latency,
-    });
-  }
-
-  if (changed) {
-    scheduling.generation = (scheduling.generation ?? 0) + 1;
-    schedulingGenerationChanged = true;
-    workingCtx = { ...workingCtx, scheduling: { ...scheduling } };
-    workingCtx = invalidateSelectionForSchedulingChange(workingCtx, "scheduling_generation_changed");
-    workingCtx = markOperationsStaleForScheduling(workingCtx, workingCtx.scheduling.generation);
-    scheduling.generation = workingCtx.scheduling.generation;
-    console.log("SCHEDULING_GENERATION_CHANGED", {
-      call_id: ctx.callId,
-      live_session_id: ctx.liveSessionId,
-      timezone: ctx.clock.timezone,
-      scheduling_generation: scheduling.generation,
-      normalization_latency_ms: latency,
-    });
-  }
-
-  console.log("SCHEDULING_NORMALIZED", {
-    call_id: ctx.callId,
-    live_session_id: ctx.liveSessionId,
-    timezone: ctx.clock.timezone,
-    scheduling_generation: scheduling.generation ?? 0,
-    precision: normalized.precision,
-    local_date: normalized.localDate,
-    normalization_latency_ms: latency,
-  });
-
-  const context: VoiceV3CallContext = {
-    ...workingCtx,
-    updatedAt: at.toISOString(),
-    scheduling,
-    runtime: { version: workingCtx.runtime.version + 1 },
-  };
-
-  return { context, schedulingGenerationChanged };
+  return { context: ctx, schedulingGenerationChanged: false };
 }
 
 export function mergeIntakeFieldValues(
@@ -211,8 +116,7 @@ export function applyIntakeToolPatch(
   config: VoiceV3AgentConfig,
   args: {
     active_goal?: string | null;
-    date_expression?: string | null;
-    time_expression?: string | null;
+    scheduling?: SchedulingMeaning | null;
     fieldValues: Array<Pick<CapturedField, "key" | "value">>;
   },
   at: Date = new Date(),
@@ -223,15 +127,19 @@ export function applyIntakeToolPatch(
 
   working = mergeDialogActiveGoalFromTool(working, args.active_goal ?? null);
 
-  const sched = mergeSchedulingNaturalLanguage(working, {
-    dateExpression: args.date_expression,
-    timeExpression: args.time_expression,
-  }, at);
-  working = sched.context;
+  if (args.scheduling) {
+    const sched = mergeSchedulingMeaningIntoContext(working, args.scheduling, at);
+    working = sched.context;
+    return {
+      context: working,
+      fieldsChanged: mergedFields.fieldsChanged,
+      schedulingGenerationChanged: sched.schedulingGenerationChanged,
+    };
+  }
 
   return {
     context: working,
     fieldsChanged: mergedFields.fieldsChanged,
-    schedulingGenerationChanged: sched.schedulingGenerationChanged,
+    schedulingGenerationChanged: false,
   };
 }

@@ -5,26 +5,16 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { CapturedField, VoiceV3CallContext } from "../state/call-context";
 import type { CallerMeaning } from "./caller-meaning-schema";
-import { deriveSchedulingClarification } from "../time/scheduling-clarification";
-import {
-  normalizeSchedulingMeaning,
-  schedulingMeaningHasSignal,
-} from "../time/scheduling-normalizer";
-import {
-  normalizedSchedulingEquals,
-  type SchedulingMeaning,
-} from "../time/scheduling-types";
-import {
-  applySlotSelectionFromMeaning,
-  invalidateSelectionForSchedulingChange,
-} from "../calendar/apply-slot-selection";
+import { schedulingMeaningHasSignal } from "../time/scheduling-normalizer";
+import type { SchedulingMeaning } from "../time/scheduling-types";
+import { mergeSchedulingMeaningIntoContext } from "./merge-scheduling-meaning";
+import { applySlotSelectionFromMeaning } from "../calendar/apply-slot-selection";
 import { emptySlotSelectionMeaning } from "./slot-selection-schema";
 import {
   appointmentSelectionHasSignal,
   emptyAppointmentSelectionMeaning,
 } from "./appointment-selection-schema";
 import { applyGoalLifecycleFromMeaning } from "../agent/goal-manager";
-import { markOperationsStaleForScheduling } from "../operations/registry";
 import { recordExplicitHandoff } from "../agent/escalation";
 import { normalizeCallerGoals } from "./normalize-caller-goals";
 
@@ -119,105 +109,27 @@ export function applyCallerMeaningToContext(
   }
 
   let workingCtx = ctx;
-  const scheduling = { ...ctx.scheduling };
   let schedulingGenerationChanged = false;
   const schedMeaning = toSchedulingMeaning(meaning.scheduling);
 
   if (schedulingMeaningHasSignal(schedMeaning)) {
-    const normStarted = Date.now();
-    console.log("SCHEDULING_MEANING_RECEIVED", {
-      call_id: ctx.callId,
-      live_session_id: ctx.liveSessionId,
-      timezone: ctx.clock.timezone,
-      scheduling_generation: scheduling.generation ?? 0,
-      date_relation: schedMeaning.date_relation,
-      time_kind: schedMeaning.time_kind,
-    });
-
-    const normalized = normalizeSchedulingMeaning(schedMeaning, ctx.clock);
-    const latency = Date.now() - normStarted;
-
-    if (normalized.precision === "UNRESOLVED" && schedMeaning.date_relation !== "UNSPECIFIED") {
-      console.log("SCHEDULING_AMBIGUOUS", {
-        call_id: ctx.callId,
-        live_session_id: ctx.liveSessionId,
-        timezone: ctx.clock.timezone,
-        scheduling_generation: scheduling.generation ?? 0,
-        normalization_latency_ms: latency,
-      });
-    }
-
-    const priorNormalized = scheduling.normalized;
-    const changed = !normalizedSchedulingEquals(priorNormalized, normalized);
-
-    scheduling.meaning = schedMeaning;
-    scheduling.normalized = normalized;
-    scheduling.clarification = deriveSchedulingClarification({
-      meaning: schedMeaning,
-      normalized,
-      clock: ctx.clock,
-    });
-
-    if (scheduling.clarification.required) {
-      console.log("SCHEDULING_CLARIFICATION_REQUIRED", {
-        call_id: ctx.callId,
-        live_session_id: ctx.liveSessionId,
-        timezone: ctx.clock.timezone,
-        scheduling_generation: scheduling.generation ?? 0,
-        reason: scheduling.clarification.reason,
-        normalization_latency_ms: latency,
-      });
-    }
-
-    if (changed) {
-      scheduling.generation = (scheduling.generation ?? 0) + 1;
-      schedulingGenerationChanged = true;
-      workingCtx = {
-        ...workingCtx,
-        scheduling: { ...scheduling },
-      };
-      workingCtx = invalidateSelectionForSchedulingChange(
-        workingCtx,
-        "scheduling_generation_changed",
-      );
-      workingCtx = markOperationsStaleForScheduling(workingCtx, workingCtx.scheduling.generation);
-      scheduling.generation = workingCtx.scheduling.generation;
-      if (correctionCount > 0 || priorNormalized) {
-        console.log("SCHEDULING_CORRECTED", {
-          call_id: ctx.callId,
-          live_session_id: ctx.liveSessionId,
-          timezone: ctx.clock.timezone,
-          scheduling_generation: scheduling.generation,
-          normalization_latency_ms: latency,
-        });
-      }
-      console.log("SCHEDULING_GENERATION_CHANGED", {
-        call_id: ctx.callId,
-        live_session_id: ctx.liveSessionId,
-        timezone: ctx.clock.timezone,
-        scheduling_generation: scheduling.generation,
-        normalization_latency_ms: latency,
-      });
-    }
-
-    console.log("SCHEDULING_NORMALIZED", {
-      call_id: ctx.callId,
-      live_session_id: ctx.liveSessionId,
-      timezone: ctx.clock.timezone,
-      scheduling_generation: scheduling.generation ?? 0,
-      precision: normalized.precision,
-      local_date: normalized.localDate,
-      normalization_latency_ms: latency,
-    });
+    const schedMerge = mergeSchedulingMeaningIntoContext(
+      { ...workingCtx, intake: { values }, updatedAt },
+      schedMeaning,
+      at,
+    );
+    workingCtx = schedMerge.context;
+    schedulingGenerationChanged = schedMerge.schedulingGenerationChanged;
+  } else {
+    workingCtx = {
+      ...workingCtx,
+      updatedAt,
+      intake: { values },
+      runtime: { version: workingCtx.runtime.version + 1 },
+    };
   }
 
-  let preGoalCtx: VoiceV3CallContext = {
-    ...workingCtx,
-    updatedAt,
-    intake: { values },
-    scheduling,
-    runtime: { version: workingCtx.runtime.version + 1 },
-  };
+  let preGoalCtx: VoiceV3CallContext = workingCtx;
   for (const g of normalizeCallerGoals(meaning)) {
     if (g.type === "TRANSFER" && (g.disposition === "START" || g.disposition === "CHANGE")) {
       preGoalCtx = recordExplicitHandoff(preGoalCtx);

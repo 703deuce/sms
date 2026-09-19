@@ -67,6 +67,7 @@ for (const root of VOICE_V3_PIPELINE_SCAN_ROOTS) {
 
 for (const required of [
   "update_intake",
+  "set_scheduling_preference",
   "find_availability",
   "book_appointment",
   "find_appointment",

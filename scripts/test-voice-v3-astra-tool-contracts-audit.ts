@@ -9,6 +9,7 @@ import { buildVoiceV3Prompts, resolveVoiceV3DefaultPromptInput } from "../src/li
 const tools = buildVoiceV3AstraFunctionTools(VOICE_V3_BOOKING_TEST_CONFIG);
 const names = [
   "update_intake",
+  "set_scheduling_preference",
   "find_availability",
   "book_appointment",
   "find_appointment",
@@ -49,11 +50,20 @@ assert.ok(!("date_expression" in updateProps), "update_intake must not expose da
 assert.ok(!("time_expression" in updateProps), "update_intake must not expose time_expression");
 assert.ok(!("active_goal" in updateProps), "update_intake must not expose active_goal");
 
+const find = tools.find((t) => t.name === "find_availability")!;
+const findProps = (find.parameters as { properties?: Record<string, unknown> }).properties ?? {};
+assert.ok(!("date_expression" in findProps), "find_availability must not expose date_expression");
+assert.ok(!("time_expression" in findProps), "find_availability must not expose time_expression");
+
+const setSched = tools.find((t) => t.name === "set_scheduling_preference")!;
+assert.ok(setSched.description && setSched.description.includes("Do not calculate UTC"), "set_scheduling_preference description must forbid UTC calculation");
+
 const prompts = buildVoiceV3Prompts({
   ...resolveVoiceV3DefaultPromptInput(new Date()),
   agentConfig: VOICE_V3_BOOKING_TEST_CONFIG,
 });
 assert.ok(prompts.astraInstructions.includes("New booking path"));
 assert.ok(prompts.astraInstructions.includes("update_intake"));
+assert.ok(prompts.astraInstructions.includes("set_scheduling_preference"));
 
 console.log("PASS voice-v3 astra tool contracts audit");

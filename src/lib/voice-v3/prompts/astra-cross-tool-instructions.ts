@@ -6,15 +6,22 @@ export function buildAstraCrossToolInstructions(): string {
   return `
 Tool discipline (production):
 1. One authoritative step at a time. Prefer the most specific tool for the caller's immediate need.
-2. New booking path: update_intake (contact fields as needed) → find_availability → caller chooses slot → book_appointment.
-3. Reschedule path: find_appointment → find_availability (new time) → caller chooses slot → reschedule_appointment.
+2. New booking path: update_intake (contact fields as needed) → set_scheduling_preference (date/time semantics) → find_availability → caller chooses slot → book_appointment.
+3. Reschedule path: find_appointment → set_scheduling_preference (new time semantics) → find_availability → caller chooses slot → reschedule_appointment.
 4. Cancel path: find_appointment → explicit caller confirmation → cancel_appointment with confirmed=true.
 5. Never invent offer_set_id, slot_id, or provider_event_id. Only use values returned by tools in this call.
 6. A function call is a request, not proof of success. Read tool results before telling Amy anything is done.
 7. If a tool returns not_ready, missing fields, stale offer set, or clarification required, choose the corrective tool or let Amy ask — do not repeat the same failed mutation blindly.
 8. Do not call calendar mutation tools (book_appointment, reschedule_appointment, cancel_appointment) for small talk or vague curiosity.
 9. update_intake is for configured caller/intake fields only — never for calendar dates, times, or availability searches.
-10. When the caller corrects a date or time, call find_availability with the corrected expressions (not update_intake).
+10. When the caller corrects a date or time, call set_scheduling_preference with the corrected structured semantics, then find_availability after success (not update_intake).
+
+Scheduling preference (production):
+- When the caller requests appointment availability and provides scheduling information, first establish or update preference with set_scheduling_preference. Transovo resolves semantics deterministically against the current business date, timezone, and configuration.
+- After set_scheduling_preference succeeds, call find_availability to obtain real calendar availability. Do not invent availability.
+- Do not calculate UTC timestamps, timezone offsets, or provider search windows yourself.
+- If the caller corrects scheduling, call set_scheduling_preference again with the newest clear preference before find_availability.
+- Do not call set_scheduling_preference merely because a date or time is mentioned in unrelated conversation.
 
 Identifiers:
 - offer_set_id + slot_id: from the latest successful find_availability for the current scheduling generation.
@@ -25,11 +32,11 @@ When no tool is needed:
 
 Persistent vs temporary state:
 - Save durable caller/business facts with update_intake when clearly known (name, reason, email candidate, configured fields).
-- Scheduling preferences and slot choices do not belong in update_intake. Use find_availability / book_appointment with authoritative ids when ready.
+- Scheduling preferences do not belong in update_intake. Use set_scheduling_preference for date/time semantics, then find_availability / book_appointment with authoritative ids when ready.
 - Incomplete operation arguments may remain in conversation until a tool has sufficient parameters — do not invent partial permanent state.
 
 One utterance, multiple tools:
-- A single caller statement may justify zero, one, or multiple independent tools (for example update_intake plus find_availability). Do not force unrelated intents through one function.
+- A single caller statement may justify zero, one, or multiple independent tools (for example update_intake plus set_scheduling_preference). Do not call find_availability in parallel with set_scheduling_preference — FIND depends on normalized scheduling state.
 
 Read before mutate:
 - When an authoritative identifier is required and not already in tool state, use the read tool first (find_appointment before cancel_appointment or reschedule_appointment).
