@@ -1,6 +1,9 @@
 # Voice V3 SEND_LINK — production freeze gate
 
-**Freeze parity:** same bar as Microsoft direct booking — do not mark SEND_LINK production-frozen until **one real PSTN call** passes **all four gates** on the deployed commit that includes dedicated SMS transport (`sendVoiceV3BookingLinkSms`).
+**Status: FROZEN / PRODUCTION CERTIFIED** (2026-09-19).  
+Do not modify the SEND_LINK execution graph unless fixing a **demonstrated SEND_LINK defect** (new freeze gate + PSTN re-cert required).
+
+**Freeze parity:** same bar as Microsoft direct booking — certification requires **one real PSTN call** passing **all four gates** on a commit that includes dedicated SMS transport (`sendVoiceV3BookingLinkSms`).
 
 ## Required production commit
 
@@ -53,8 +56,49 @@ PSTN `v3:w5bmTLPUAd8U54mZRkmCrWTRrUS4QziT_1PGEFL8mvqU6g0buIuAPQ` @ 2026-09-19 ~1
 - **Failed gates A, B, C** (wrong From, `/r/` append, CRM enqueued)
 - See `docs/VOICE-V3-PSTN-CALL-FORENSICS-2026-09-19-live_u7.md` pattern
 
-## When all four pass
+## Production certification record (PASSED)
 
-1. Record call control id, message id, commit SHA, timestamp in this doc (append table).
-2. Mark SEND_LINK **FROZEN** in `docs/VOICE-V3-SEND-BOOKING-LINK-IMPLEMENTATION-REPORT.md`.
+| Field | Value |
+|-------|--------|
+| **Deployed SHA** | `848935bb81fa61f6f2084d96f234673a1b09b9e0` (`848935bb`) |
+| **Call control ID** | `v3:y8dG-Dreu9VRSwilAHGbozyoOB5C40rZMNzzDP5W4UcQhxXnGpU0Pw` |
+| **Telnyx message ID** | `4031a0ba-fe0d-4113-8249-bc7eeccf5ff5` |
+| **DB Message id** | `cmu8qo4ux00090k554g3a4e37` |
+| **SMS timestamp (UTC)** | ~`2026-09-19T18:46:45.657Z` |
+| **Web container image** | `ds8s3hjin60qs6g7s0iqkixs:848935bb...` |
+
+### Gate results
+
+| Gate | Result | Evidence |
+|------|--------|----------|
+| **A — From** | **PASS** | `Message.from` = **+15717491060**; logs `VOICE_V3_BOOKING_LINK_SMS_REQUESTED` `from: '+15717491060'` |
+| **B — URL** | **PASS** | Exact wizard booking URL in body; **no** `/r/`; `trackingToken` = null, `destinationUrl` = null |
+| **C — CRM / legacy SMS** | **PASS** | Path `VOICE_V3_BOOKING_LINK_SMS_*`; **no** `sendQuickSms` / `sendAppointmentSms`; **no** `bullmq_job_enqueued` for `crm-*` `sms.sent-sms-*` on web for this send |
+| **D — Delivery** | **PASS** | `status` / `providerStatus` = **delivered**; Telnyx `providerId` present |
+
+### Verified production execution graph (LOCKED)
+
+```
+send_booking_link (Astra tool)
+  → execute-send-booking-link.ts
+  → sendVoiceV3BookingLinkSms
+  → sendViaRegistration (authorized wizard Telnyx sender)
+  → Telnyx
+```
+
+**Not in graph:** `sendQuickSms`, `sendAppointmentSms`, scheduler CRM enqueue for this send.
+
+Supporting logs: `SEND_BOOKING_LINK_PROVIDER_ACCEPTED`, `VOICE_TOOL_EXECUTION_SUCCEEDED` (`send_booking_link`).
+
+### Regression requirement for all future Voice V3 PRs
+
+- `scripts/test-voice-v3-send-booking-link-matrix.ts`
+- `scripts/test-voice-v3-booking-link-sms-isolation.ts`
+
+Do not refactor SEND_LINK transport to share code with other features unless fixing a certified defect.
+
+## When all four pass (checklist — completed 2026-09-19)
+
+1. Record call control id, message id, commit SHA, timestamp in this doc — **done** (table above).
+2. Mark SEND_LINK **FROZEN** in `docs/VOICE-V3-SEND-BOOKING-LINK-IMPLEMENTATION-REPORT.md` — **done**.
 3. No further SEND_LINK transport changes without new freeze gate + PSTN re-cert.

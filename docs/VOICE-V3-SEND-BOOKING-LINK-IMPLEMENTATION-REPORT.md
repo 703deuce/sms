@@ -1,6 +1,6 @@
 # Voice V3 — SEND_BOOKING_LINK implementation report
 
-**SEND_LINK freeze:** **NOT FROZEN** until PSTN passes all four gates on dedicated transport — see `docs/VOICE-V3-SEND-LINK-FREEZE-GATE.md`.  
+**SEND_LINK freeze:** **FROZEN / PRODUCTION CERTIFIED** (2026-09-19, SHA `848935bb`) — see `docs/VOICE-V3-SEND-LINK-FREEZE-GATE.md`.  
 **Legacy reuse rule:** `docs/VOICE-V3-LEGACY-REUSE-STANDARD.md`.
 
 ## Git
@@ -100,7 +100,9 @@ Script: `scripts/inspect-telnyx-voice-v3-sms-number.ts`
 | ASTRA_TOOL_CONTRACTS (Microsoft config) | **PASS** |
 | REAL_ASTRA_SELECTION_CERT | **NOT RUN** (requires live gpt-6-astra) |
 | REAL_SMS_PRECERT | **NOT_RUN_NO_DESTINATION** |
-| READY_FOR_DEPLOY_AND_REAL_PSTN_SEND_LINK_CERT | **NO** |
+| READY_FOR_DEPLOY_AND_REAL_PSTN_SEND_LINK_CERT | **YES** (PSTN certified 2026-09-19) |
+| PSTN_CERT_CALL_CONTROL_ID | `v3:y8dG-Dreu9VRSwilAHGbozyoOB5C40rZMNzzDP5W4UcQhxXnGpU0Pw` |
+| PSTN_CERT_MESSAGE_ID | `cmu8qo4ux00090k554g3a4e37` |
 
 ## Changed files (why)
 
@@ -117,6 +119,5 @@ Script: `scripts/inspect-telnyx-voice-v3-sms-number.ts`
 
 ## Remaining limitations
 
-- Telnyx 10DLC campaign assignment for +15717491060 not applied (needs target campaign id + assignment polling).
-- Live Astra selection cert and real PSTN/SMS certification not executed in cloud agent.
-- Consent ledger insert requires real `workspaceId` on production calls (FK).
+- Telnyx 10DLC campaign assignment for +15717491060 — monitor in portal if needed; PSTN send **delivered** on certified call.
+- Further SEND_LINK code changes require defect-driven re-cert per freeze gate doc.
