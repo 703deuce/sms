@@ -62,9 +62,9 @@ Production code removed — not feature-flagged:
 - `live-speak-sync.ts` / `syncPlannerSpeakToLive`
 - `parse-astra-meaning-response.ts`, `extract-raw-meaning-arguments.ts`
 
-`semantic-turn-watchdog.ts` is timing telemetry only (no direct extraction).
+`delegation-timing.ts` (legacy import path `semantic-turn-watchdog.ts`) is delegation timing only — no conversational authority.
 
-Still used internally (not Astra-facing): `caller-meaning-schema`, `apply-caller-meaning.ts` behind `update_intake` / calendar tools.
+Production tools use `merge-intake-state.ts` (`applyIntakeToolPatch`, scheduling/goal merge). `apply-caller-meaning.ts` and `caller-meaning-schema` remain for scripts/tests and standalone decoder tests only — not imported from `src/lib/voice-v3/tools/` or `call-runtime`.
 
 - Planner-driven speech and `nextConversationAction` → `response.create` (diagnostics only; action forced to `NONE`)
 - `CALLER_TURN_COMMITTED` has zero conversational authority
