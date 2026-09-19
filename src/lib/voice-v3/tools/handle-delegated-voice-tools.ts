@@ -13,6 +13,7 @@ import { noteSemanticTimingEvent } from "../telemetry/caller-turn-timing";
 import { getCurrentConversationRevision } from "../conversation/conversation-revision";
 import {
   buildSemanticSupersededToolResult,
+  classifyVoiceToolFreshness,
   shouldBlockStaleToolPreDispatch,
 } from "../delegation/conversation-freshness";
 import type { VoiceToolResult } from "./types";
@@ -94,6 +95,19 @@ export async function handleDelegatedVoiceToolCall(input: {
       completed.name,
       delegationSemanticallyFresh ? "FRESH" : "STALE",
     );
+
+  const toolClass = classifyVoiceToolFreshness(completed.name);
+  console.log("FRESHNESS_TOOL_AUTHORIZATION_DECISION", {
+    live_session_id: input.liveSessionId,
+    delegation_id: delegationId,
+    function_call_id: completed.callId,
+    tool_name: completed.name,
+    tool_class: toolClass,
+    based_on_conversation_revision: basedOnConversationRevision,
+    current_conversation_revision: currentConversationRevision,
+    semantic_freshness: delegationSemanticallyFresh ? "FRESH" : "STALE",
+    dispatch_authorized: !staleBlocked,
+  });
 
   if (staleBlocked) {
     console.log("STALE_TOOL_DISPATCH_BLOCKED", {

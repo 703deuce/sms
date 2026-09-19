@@ -341,6 +341,8 @@ Examples:
 "One more moment."
 Do not repeat progress messages excessively.
 Remain available to hear the caller while backend work continues.
+A running backend delegation is not proof the caller's goal is unchanged.
+When the caller redirects or corrects while work is running, delegate again with the latest conversation when new backend reasoning is needed.
 
 # TRUTH AND CONFIRMATION
 Never invent:

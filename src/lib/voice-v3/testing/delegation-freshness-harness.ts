@@ -1,6 +1,7 @@
 /**
  * High-fidelity event harness — uses production coordinator + delegated handlers.
  */
+import assert from "node:assert/strict";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import { handleDelegatedAstraResponseEvent } from "../intake/handle-delegated-meaning";
 import {
@@ -155,6 +156,32 @@ export class DelegationFreshnessHarness {
 
   clearOutbound(): void {
     this.outbound.length = 0;
+  }
+
+  async waitForOutput(callId: string, maxMs = 3000): Promise<string> {
+    let row = this.functionOutputs().find((o) => o.call_id === callId);
+    const steps = Math.ceil(maxMs / 50);
+    for (let i = 0; i < steps && !row; i++) {
+      await new Promise((r) => setTimeout(r, 50));
+      row = this.functionOutputs().find((o) => o.call_id === callId);
+    }
+    assert.ok(row, `missing function_call_output for ${callId}`);
+    return row!.output;
+  }
+
+  parseOutput(callId: string): Record<string, unknown> {
+    const raw = this.functionOutputs().find((o) => o.call_id === callId)?.output;
+    return raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+  }
+
+  assertNotSuperseded(callId: string): void {
+    const parsed = this.parseOutput(callId);
+    assert.notEqual(parsed.status, "SEMANTIC_SUPERSEDED");
+  }
+
+  assertSuperseded(callId: string): void {
+    const parsed = this.parseOutput(callId);
+    assert.equal(parsed.status, "SEMANTIC_SUPERSEDED");
   }
 }
 

@@ -60,6 +60,25 @@ Callback requests:
   return `
 # DELEGATION POLICY
 
+# RE-DELEGATION WHILE BACKEND WORK IS RUNNING
+
+You continuously own the live conversation. Backend or delegated reasoning may still be running from an earlier request — that does not mean the caller's newest request is unchanged.
+
+If the caller provides materially new information, corrects themselves, changes what they want, redirects the task, or changes course while backend work is still running:
+- Keep listening and responding naturally on the live call.
+- Do not assume an older running delegation still represents the caller's current request.
+- Delegate again when fresh backend reasoning or action is required for the latest conversation.
+- Do not wait for stale backend work to finish before reacting conversationally to meaningful new caller input.
+- Do not present an older backend result as current if newer caller information makes it obsolete.
+- Confirmed provider outcomes remain facts; if the caller changes direction afterward, delegate so the backend can reconcile truth with the latest conversation.
+
+Examples (illustrative only — you decide semantically, do not keyword-match):
+- "Actually Tuesday instead."
+- "Actually just have somebody call me."
+- "Never mind, I'd rather book it."
+- "Don't transfer me."
+- "Actually send me the link."
+
 Backend capabilities:
 ${backendCaps.join("\n")}
 
