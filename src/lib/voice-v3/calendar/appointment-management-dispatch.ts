@@ -67,13 +67,18 @@ export async function dispatchAppointmentManagementIfRequired(
       console.log("EXISTING_APPOINTMENT_LOOKUP_STARTED", { call_id: ctx.callId });
       const phone = ctx.intake.values.phone?.value;
       const email = ctx.intake.values.email?.value;
-      const result = findExistingAppointment({
-        callId: ctx.callId,
-        phone,
-        email,
-        customerName: ctx.intake.values.name?.value,
-        dateHint: ctx.scheduling.normalized,
-      });
+      const result = await findExistingAppointment(
+        {
+          callId: ctx.callId,
+          phone,
+          email,
+          customerName: ctx.intake.values.name?.value,
+          dateHint: ctx.scheduling.normalized,
+          timezone: ctx.business.timezone,
+          microsoftLookup: true,
+        },
+        runtime.config,
+      );
 
       if (result.status === "FOUND") {
         console.log("EXISTING_APPOINTMENT_FOUND", {

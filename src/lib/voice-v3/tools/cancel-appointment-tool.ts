@@ -3,6 +3,10 @@ import { zodResponsesFunction } from "openai/helpers/zod";
 import type { FunctionTool } from "openai/resources/live/live";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import { dispatchCancellationIfRequired } from "../calendar/cancel-dispatch";
+import {
+  appointmentSelectionId,
+  resolveVerifiedAppointmentBySelectionId,
+} from "../calendar/find-existing-appointment";
 import type { VoiceV3CallContext } from "../state/call-context";
 import type { VoiceToolDefinition } from "./types";
 import { toolOk, voiceToolError } from "./types";
@@ -10,11 +14,11 @@ import { CANCEL_APPOINTMENT_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 import { authorizeVoiceV3ToolOrError } from "./authorize-tool-for-config";
 
 const cancelArgsSchema = z.object({
-  appointment_id: z
+  appointment_selection_id: z
     .string()
     .nullable()
     .describe(
-      "Stable identifier of the existing appointment to cancel (from find_appointment). Null to use verified appointment in call state. Never invent.",
+      "appointment_selection_id from find_appointment. Null to use verified appointment in call state. Never invent provider event ids.",
     ),
   confirmed: z
     .boolean()
@@ -46,7 +50,17 @@ function prepareCancelContext(
 ): VoiceV3CallContext | null {
   const existing = ctx.appointmentManagement.verifiedExisting;
   if (!existing) return null;
-  if (args.appointment_id && args.appointment_id !== existing.providerEventId) {
+  if (
+    args.appointment_selection_id &&
+    appointmentSelectionId(existing) !== args.appointment_selection_id.trim() &&
+    existing.providerEventId === args.appointment_selection_id.trim()
+  ) {
+    return null;
+  }
+  if (
+    args.appointment_selection_id &&
+    appointmentSelectionId(existing) !== args.appointment_selection_id.trim()
+  ) {
     return null;
   }
   if (!args.confirmed) {
@@ -93,7 +107,32 @@ export const cancelAppointmentTool: VoiceToolDefinition<CancelAppointmentArgs> =
     }
 
     const snap = ctx.runtime.getSnapshot();
-    const next = prepareCancelContext(snap, args);
+    const selected = resolveVerifiedAppointmentBySelectionId(
+      args.appointment_selection_id,
+      snap.appointmentManagement.verifiedExisting,
+      snap.appointmentManagement.candidateSet,
+    );
+    if (args.appointment_selection_id?.trim() && !selected) {
+      return voiceToolError(
+        "INVALID_IDENTIFIER",
+        "appointment_selection_id is not authorized for this call.",
+        {},
+        "invalid_selection",
+      );
+    }
+    let working = snap;
+    if (selected && selected !== snap.appointmentManagement.verifiedExisting) {
+      working = {
+        ...snap,
+        appointmentManagement: {
+          ...snap.appointmentManagement,
+          verifiedExisting: selected,
+          candidateSet: null,
+        },
+      };
+      ctx.runtime.replaceContext(working);
+    }
+    const next = prepareCancelContext(working, args);
     if (!next?.appointmentManagement.verifiedExisting) {
       return voiceToolError(
         "APPOINTMENT_NOT_FOUND",

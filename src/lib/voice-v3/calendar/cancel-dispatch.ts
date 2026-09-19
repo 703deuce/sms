@@ -89,10 +89,53 @@ export async function dispatchCancellationIfRequired(
           cancellation_attempt_id: attemptId,
           provider_event_id: existing.providerEventId,
         });
-        if (!hooks.cancelBooking) {
-          return { ok: true, value: { durationMs: 0 } };
-        }
-        const r = await hooks.cancelBooking({ request, config: runtime.config });
+
+        const runCancel = async (): Promise<
+          | { ok: true; durationMs: number }
+          | { ok: false; message: string; outcomeUncertain?: boolean }
+        > => {
+          if (hooks.cancelBooking) {
+            return hooks.cancelBooking({ request, config: runtime.config });
+          }
+          const { resolveVoiceV3MicrosoftCalendar } = await import(
+            "./microsoft/resolve-voice-v3-microsoft-calendar"
+          );
+          const resolved = await resolveVoiceV3MicrosoftCalendar(runtime.config);
+          if (!resolved.ok) {
+            return { ok: false, message: resolved.message };
+          }
+          const { validateMicrosoftAppointmentBeforeMutation } = await import(
+            "./microsoft/validate-microsoft-appointment"
+          );
+          const validation = await validateMicrosoftAppointmentBeforeMutation({
+            appointment: existing,
+            connectionId: resolved.connectionId,
+            calendarConfig: resolved.calendarConfig,
+          });
+          if (!validation.ok) {
+            return {
+              ok: false,
+              message: validation.message,
+              outcomeUncertain: validation.reason === "error",
+            };
+          }
+          const { executeMicrosoftCancelBooking } = await import(
+            "./microsoft/microsoft-cancel-booking"
+          );
+          const ms = await executeMicrosoftCancelBooking({
+            request,
+            connectionId: resolved.connectionId,
+            calendarConfig: resolved.calendarConfig,
+          });
+          if (ms.ok) return { ok: true, durationMs: ms.durationMs };
+          return {
+            ok: false,
+            message: ms.message,
+            outcomeUncertain: ms.outcomeUncertain,
+          };
+        };
+
+        const r = await runCancel();
         if (r.ok) return { ok: true, value: { durationMs: r.durationMs } };
         return {
           ok: false,

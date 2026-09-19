@@ -50,7 +50,6 @@ export async function executeMicrosoftUpdateBooking(
         token,
         request.providerEventId,
         {
-          summary: request.summary,
           start,
           end,
           timezone: request.timezone,

@@ -3,6 +3,10 @@ import { zodResponsesFunction } from "openai/helpers/zod";
 import type { FunctionTool } from "openai/resources/live/live";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import { dispatchRescheduleIfRequired } from "../calendar/reschedule-dispatch";
+import {
+  appointmentSelectionId,
+  resolveVerifiedAppointmentBySelectionId,
+} from "../calendar/find-existing-appointment";
 import type { VoiceV3CallContext } from "../state/call-context";
 import { authorizeVoiceV3ToolOrError } from "./authorize-tool-for-config";
 import type { AvailabilityOfferSet } from "../calendar/offer-set";
@@ -13,11 +17,11 @@ import { toolOk, voiceToolError } from "./types";
 import { RESCHEDULE_APPOINTMENT_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 
 const rescheduleArgsSchema = z.object({
-  appointment_id: z
+  appointment_selection_id: z
     .string()
     .nullable()
     .describe(
-      "Stable identifier of the existing appointment to move (provider_event_id from find_appointment). Null to use verified appointment in call state. Never invent.",
+      "appointment_selection_id from find_appointment. Null to use verified appointment in call state. Never invent provider event ids.",
     ),
   offer_set_id: z
     .string()
@@ -80,7 +84,33 @@ export const rescheduleAppointmentTool: VoiceToolDefinition<RescheduleAppointmen
     const denied = authorizeVoiceV3ToolOrError(ctx.runtime.config, "reschedule_appointment");
     if (denied) return denied;
     const snap = ctx.runtime.getSnapshot();
-    const existing = snap.appointmentManagement.verifiedExisting;
+    let existing = snap.appointmentManagement.verifiedExisting;
+    const selected = resolveVerifiedAppointmentBySelectionId(
+      args.appointment_selection_id,
+      existing,
+      snap.appointmentManagement.candidateSet,
+    );
+    if (args.appointment_selection_id?.trim() && !selected) {
+      return voiceToolError(
+        "INVALID_IDENTIFIER",
+        "appointment_selection_id is not authorized for this call.",
+        {},
+        "invalid_selection",
+      );
+    }
+    if (selected) {
+      existing = selected;
+      if (selected !== snap.appointmentManagement.verifiedExisting) {
+        ctx.runtime.replaceContext({
+          ...snap,
+          appointmentManagement: {
+            ...snap.appointmentManagement,
+            verifiedExisting: selected,
+            candidateSet: null,
+          },
+        });
+      }
+    }
     if (!existing) {
       return voiceToolError(
         "APPOINTMENT_NOT_FOUND",
@@ -89,11 +119,14 @@ export const rescheduleAppointmentTool: VoiceToolDefinition<RescheduleAppointmen
         "not_ready",
       );
     }
-    if (args.appointment_id && args.appointment_id !== existing.providerEventId) {
+    if (
+      args.appointment_selection_id?.trim() &&
+      appointmentSelectionId(existing) !== args.appointment_selection_id.trim()
+    ) {
       return voiceToolError(
         "INVALID_IDENTIFIER",
-        "appointment_id does not match verified appointment.",
-        { expected: existing.providerEventId },
+        "appointment_selection_id does not match verified appointment.",
+        {},
         "invalid_selection",
       );
     }

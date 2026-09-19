@@ -42,7 +42,7 @@ async function main() {
   }
 
   const cancel = await executeVoiceTool(ctx, "cancel_appointment", {
-    appointment_id: "fake_appt",
+    appointment_selection_id: "fake_appt",
     confirmed: true,
   });
   assert.equal(cancel.ok, false);

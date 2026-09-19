@@ -32,6 +32,8 @@ export interface ExistingAppointment {
   provider: "microsoft";
   providerEventId: string;
   providerCalendarId: string;
+  /** Same Microsoft connection as certified FIND/BOOK. */
+  providerConnectionId?: string;
   startUtc: string;
   endUtc: string;
   localStart: string;
@@ -60,6 +62,11 @@ export interface FindExistingAppointmentRequest {
   email?: string;
   customerName?: string;
   dateHint?: NormalizedSchedulingPreference | null;
+  /** Raw YYYY-MM-DD from tool when provided. */
+  dateExpression?: string | null;
+  timezone?: string;
+  /** When set, also searches configured Microsoft calendar (same connection as BOOK). */
+  microsoftLookup?: boolean;
 }
 
 export type FindExistingAppointmentResult =

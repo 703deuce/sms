@@ -4,6 +4,7 @@ import type { VoiceV3CallContext } from "../state/call-context";
 import { evaluateVoiceV3Rules } from "../state/call-rules";
 import { isSelectedSlotAuthoritative } from "./selected-slot";
 import { evaluateSlotRevalidation, revalidationBusyWindow } from "./revalidate-selected-slot";
+import { filterBusyForReschedule } from "./slot-generator";
 import { updateDurableBookingTimes } from "./durable-booking-store";
 import { buildLiveRescheduleConfirmedAppend } from "./live-management-context";
 import type { VoiceV3LiveRuntimeHooks } from "../live-runtime-hooks";
@@ -88,14 +89,52 @@ export async function dispatchRescheduleIfRequired(
         return;
       }
       busy = r.busy;
+    } else {
+      const { fetchMicrosoftBusyIntervals } = await import("./microsoft/microsoft-find-availability");
+      const { resolveVoiceV3MicrosoftCalendar } = await import(
+        "./microsoft/resolve-voice-v3-microsoft-calendar"
+      );
+      const resolved = await resolveVoiceV3MicrosoftCalendar(runtime.config);
+      if (!resolved.ok) {
+        runtime.replaceContext({
+          ...runtime.getSnapshot(),
+          appointmentManagement: {
+            ...runtime.getSnapshot().appointmentManagement,
+            reschedule: { phase: "RESCHEDULE_FAILED", attemptId },
+          },
+        });
+        return;
+      }
+      const graphResult = await fetchMicrosoftBusyIntervals({
+        request: {
+          callId: ctx.callId,
+          schedulingGeneration: ctx.scheduling.generation,
+          timezone: ctx.business.timezone,
+          rangeStartUtc: window.rangeStartUtc,
+          rangeEndUtc: window.rangeEndUtc,
+          durationMinutes: runtime.config.service.durationMinutes,
+          calendarIds: resolved.calendarIds,
+          requestKey: `reschedule_revalidate|${attemptId}`,
+        },
+        connectionId: resolved.connectionId,
+        calendarConfig: resolved.calendarConfig,
+      });
+      if (!graphResult.ok) {
+        runtime.replaceContext({
+          ...runtime.getSnapshot(),
+          appointmentManagement: {
+            ...runtime.getSnapshot().appointmentManagement,
+            reschedule: { phase: "RESCHEDULE_FAILED", attemptId },
+          },
+        });
+        return;
+      }
+      busy = graphResult.busy;
     }
 
-    const filtered = busy.filter((b) => {
-      const bs = new Date(b.startUtc).getTime();
-      const be = new Date(b.endUtc).getTime();
-      const es = new Date(existing.startUtc).getTime();
-      const ee = new Date(existing.endUtc).getTime();
-      return !(bs === es && be === ee);
+    const filtered = filterBusyForReschedule(busy, {
+      startUtc: existing.startUtc,
+      endUtc: existing.endUtc,
     });
 
     const reval = evaluateSlotRevalidation(selected, filtered);
@@ -141,18 +180,68 @@ export async function dispatchRescheduleIfRequired(
           provider_event_id: existing.providerEventId,
           attempt_id: attemptId,
         });
-        if (!hooks.updateBooking) {
-          return { ok: true, value: { durationMs: 0 } };
-        }
-        const u = await hooks.updateBooking({
-          providerEventId: existing.providerEventId,
-          providerCalendarId: existing.providerCalendarId,
-          startUtc: slotSnapshot.startUtc,
-          endUtc: slotSnapshot.endUtc,
-          timezone: slotSnapshot.timezone,
-          summary,
-          config: runtime.config,
-        });
+
+        const runUpdate = async (): Promise<
+          | { ok: true; durationMs: number }
+          | { ok: false; message: string; outcomeUncertain?: boolean }
+        > => {
+          if (hooks.updateBooking) {
+            return hooks.updateBooking({
+              providerEventId: existing.providerEventId,
+              providerCalendarId: existing.providerCalendarId,
+              startUtc: slotSnapshot.startUtc,
+              endUtc: slotSnapshot.endUtc,
+              timezone: slotSnapshot.timezone,
+              summary,
+              config: runtime.config,
+            });
+          }
+          const { resolveVoiceV3MicrosoftCalendar } = await import(
+            "./microsoft/resolve-voice-v3-microsoft-calendar"
+          );
+          const resolved = await resolveVoiceV3MicrosoftCalendar(runtime.config);
+          if (!resolved.ok) {
+            return { ok: false, message: resolved.message };
+          }
+          const { validateMicrosoftAppointmentBeforeMutation } = await import(
+            "./microsoft/validate-microsoft-appointment"
+          );
+          const validation = await validateMicrosoftAppointmentBeforeMutation({
+            appointment: existing,
+            connectionId: resolved.connectionId,
+            calendarConfig: resolved.calendarConfig,
+          });
+          if (!validation.ok) {
+            return {
+              ok: false,
+              message: validation.message,
+              outcomeUncertain: validation.reason === "error",
+            };
+          }
+          const { executeMicrosoftUpdateBooking } = await import(
+            "./microsoft/microsoft-update-booking"
+          );
+          const ms = await executeMicrosoftUpdateBooking(
+            {
+              connectionId: resolved.connectionId,
+              providerEventId: existing.providerEventId,
+              providerCalendarId: existing.providerCalendarId,
+              startUtc: slotSnapshot.startUtc,
+              endUtc: slotSnapshot.endUtc,
+              timezone: slotSnapshot.timezone,
+              summary,
+            },
+            resolved.calendarConfig,
+          );
+          if (ms.ok) return { ok: true, durationMs: ms.durationMs };
+          return {
+            ok: false,
+            message: ms.message,
+            outcomeUncertain: ms.outcomeUncertain,
+          };
+        };
+
+        const u = await runUpdate();
         if (u.ok) return { ok: true, value: { durationMs: u.durationMs } };
         return {
           ok: false,

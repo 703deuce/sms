@@ -25,7 +25,7 @@ Scheduling preference (production):
 
 Identifiers:
 - offer_set_id + slot_id: from the latest successful find_availability for the current scheduling generation.
-- provider_event_id: from find_appointment or a prior verified management result.
+- appointment_selection_id: from find_appointment (never raw Microsoft event ids).
 
 When no tool is needed:
 - Pleasantries, hold, or clarification that does not require external data or state mutation — no function call.

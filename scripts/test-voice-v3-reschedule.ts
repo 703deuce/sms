@@ -10,7 +10,7 @@ import { evaluateVoiceV3Rules } from "../src/lib/voice-v3/state/call-rules";
 import { applySlotSelectionFromMeaning } from "../src/lib/voice-v3/calendar/apply-slot-selection";
 import type { AvailabilityOfferSet } from "../src/lib/voice-v3/calendar/offer-set";
 import { dispatchRescheduleIfRequired } from "../src/lib/voice-v3/calendar/reschedule-dispatch";
-import { findExistingAppointment } from "../src/lib/voice-v3/calendar/find-existing-appointment";
+import { findExistingAppointmentFromStore } from "../src/lib/voice-v3/calendar/find-existing-appointment";
 
 const TZ = "America/New_York";
 
@@ -43,7 +43,7 @@ async function main() {
     phone: "+15551234567",
   });
 
-  const found = findExistingAppointment({
+  const found = findExistingAppointmentFromStore({
     callId: "c1",
     email: "a@b.co",
     phone: "+15551234567",

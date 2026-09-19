@@ -2,7 +2,10 @@ import { z } from "zod";
 import { zodResponsesFunction } from "openai/helpers/zod";
 import type { FunctionTool } from "openai/resources/live/live";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
-import { findExistingAppointment } from "../calendar/find-existing-appointment";
+import {
+  appointmentSelectionId,
+  findExistingAppointment,
+} from "../calendar/find-existing-appointment";
 import { applyVerifiedExisting } from "../calendar/appointment-management-dispatch";
 import type { VoiceToolDefinition } from "./types";
 import { toolOk, voiceToolError } from "./types";
@@ -60,15 +63,20 @@ export const findAppointmentTool: VoiceToolDefinition<FindAppointmentArgs> = {
       );
     }
 
-    const result = findExistingAppointment({
-      callId: snap.callId,
-      phone,
-      email,
-      customerName: snap.intake.values.name?.value,
-      dateHint: args.date_expression?.trim()
-        ? { localDate: args.date_expression.trim() }
-        : snap.scheduling.normalized,
-    });
+    const dateExpr = args.date_expression?.trim() || null;
+    const result = await findExistingAppointment(
+      {
+        callId: snap.callId,
+        phone,
+        email,
+        customerName: snap.intake.values.name?.value,
+        dateHint: snap.scheduling.normalized,
+        dateExpression: dateExpr,
+        timezone: snap.business.timezone,
+        microsoftLookup: true,
+      },
+      ctx.runtime.config,
+    );
 
     if (result.status === "VERIFICATION_FAILED") {
       return voiceToolError("VERIFICATION_FAILED", "Could not verify caller for appointment lookup.", {
@@ -82,15 +90,15 @@ export const findAppointmentTool: VoiceToolDefinition<FindAppointmentArgs> = {
       return toolOk("ambiguous", {
         appointments: result.candidateSet.candidates.map((c) => ({
           candidate_id: c.candidateId,
+          appointment_selection_id: appointmentSelectionId(c.appointment),
           display_time: c.appointment.localStart,
-          provider_event_id: c.appointment.providerEventId,
         })),
       });
     }
 
     ctx.runtime.replaceContext(applyVerifiedExisting(snap, result.appointment));
     return toolOk("found", {
-      provider_event_id: result.appointment.providerEventId,
+      appointment_selection_id: appointmentSelectionId(result.appointment),
       display_time: result.appointment.localStart,
       local_start: result.appointment.localStart,
     });

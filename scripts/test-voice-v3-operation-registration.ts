@@ -17,7 +17,7 @@ import {
 } from "../src/lib/voice-v3/calendar/booking-attempt-registry";
 import { registerDurableBooking } from "../src/lib/voice-v3/calendar/durable-booking-store";
 import type { ConfirmedBooking } from "../src/lib/voice-v3/calendar/booking-types";
-import { findExistingAppointment } from "../src/lib/voice-v3/calendar/find-existing-appointment";
+import { findExistingAppointmentFromStore } from "../src/lib/voice-v3/calendar/find-existing-appointment";
 import { clearDurableBookingStore } from "../src/lib/voice-v3/calendar/durable-booking-store";
 
 const TZ = "America/New_York";
@@ -209,7 +209,7 @@ async function testRescheduleRegistersBeforeProvider() {
     email: "a@b.co",
     phone: "+15551234567",
   });
-  const found = findExistingAppointment({
+  const found = findExistingAppointmentFromStore({
     callId: "c1",
     email: "a@b.co",
     phone: "+15551234567",
