@@ -7,17 +7,23 @@ import {
   intakeFieldStatusFromCapture,
   verificationRequiredForField,
 } from "./validate-intake-value";
+import {
+  configuredRequiredKeysForActiveOperation,
+  getMissingFieldsForOperation,
+  resolveActiveIntakeOperation,
+} from "./operation-requirements";
 
 export function deriveIntakeObjective(
   config: VoiceV3AgentConfig,
   context: VoiceV3CallContext,
 ): IntakeObjectiveState {
   const values = context.intake?.values ?? {};
-  const requiredFields = config.intakeFields
-    .filter((f) => f.required)
-    .map((f) => f.key);
+  const operation = resolveActiveIntakeOperation(config, context);
+  const requiredKeys = configuredRequiredKeysForActiveOperation(config, context);
+  const requiredSet = new Set(requiredKeys);
+
   const optionalFields = config.intakeFields
-    .filter((f) => !f.required)
+    .filter((f) => !requiredSet.has(f.key))
     .map((f) => f.key);
 
   const fields: IntakeFieldState[] = config.intakeFields.map((field) => {
@@ -25,7 +31,7 @@ export function deriveIntakeObjective(
     return {
       key: field.key,
       label: field.label,
-      required: field.required,
+      required: requiredSet.has(field.key),
       collectionStrategy: defaultCollectionStrategy(field),
       verificationRequired: verificationRequiredForField(field),
       status: intakeFieldStatusFromCapture(field, captured),
@@ -38,10 +44,7 @@ export function deriveIntakeObjective(
     .filter((f) => f.status !== "MISSING" && f.status !== "DECLINED")
     .map((f) => f.key);
 
-  const missingRequiredFields = config.intakeFields
-    .filter((f) => f.required)
-    .filter((f) => !fieldSatisfiesObjectiveRequirement(f, values[f.key]))
-    .map((f) => f.key);
+  const missingRequiredFields = getMissingFieldsForOperation(operation, config, context);
 
   const status =
     missingRequiredFields.length === 0
@@ -52,7 +55,7 @@ export function deriveIntakeObjective(
 
   return {
     status,
-    requiredFields,
+    requiredFields: requiredKeys,
     optionalFields,
     collectedFields,
     missingRequiredFields,

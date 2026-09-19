@@ -3,6 +3,7 @@ import type { VoiceV3CallContext } from "../state/call-context";
 import { deriveIntakeObjective } from "./derive-intake-objective";
 import { intakeFieldObjectiveLabel } from "./validate-intake-value";
 import { fieldDefinitionByKey } from "./types";
+import { resolveActiveIntakeOperation } from "./operation-requirements";
 
 /** Compact objective projection for Astra/Live thinking context — not conversational commands. */
 export function buildIntakeObjectiveContext(
@@ -10,19 +11,22 @@ export function buildIntakeObjectiveContext(
   context: VoiceV3CallContext,
 ): string {
   const objective = deriveIntakeObjective(config, context);
+  const operation = resolveActiveIntakeOperation(config, context);
   const objectiveDescription =
     config.intake?.objectiveDescription?.trim() ||
     "Collect enough caller information to service and schedule the request.";
 
+  const requiredKeySet = new Set(objective.requiredFields);
+
   const requiredLines = config.intakeFields
-    .filter((f) => f.required)
+    .filter((f) => requiredKeySet.has(f.key))
     .map((f) => {
       const def = fieldDefinitionByKey(config, f.key)!;
       return `- ${f.label}: ${intakeFieldObjectiveLabel(def, context.intake.values[f.key])}`;
     });
 
   const optionalLines = config.intakeFields
-    .filter((f) => !f.required)
+    .filter((f) => !requiredKeySet.has(f.key))
     .map((f) => {
       const def = fieldDefinitionByKey(config, f.key)!;
       return `- ${f.label}: ${intakeFieldObjectiveLabel(def, context.intake.values[f.key])}`;
@@ -31,12 +35,15 @@ export function buildIntakeObjectiveContext(
   return `
 INTAKE OBJECTIVE
 Purpose: ${objectiveDescription}
+Active operation: ${operation}
 Status: ${objective.status}
-Required information:
+Required information (for this operation only):
 ${requiredLines.join("\n") || "(none configured)"}
 Optional information:
 ${optionalLines.join("\n") || "(none configured)"}
 Rules:
+- Caller facts are shared for the whole call; only missing fields for the active operation need collection.
+- When the caller changes intent (for example booking to callback), stop requiring fields that belong only to the previous operation.
 - Persistent caller facts belong in intake state; incomplete scheduling preferences may stay conversational until find_availability has enough to search.
 - Preserve already collected information.
 - Collect missing required information naturally (model decides how to ask — no scripted next question from Transovo).

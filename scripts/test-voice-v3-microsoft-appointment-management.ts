@@ -370,7 +370,8 @@ async function main() {
   }).context;
   assert.equal(
     deriveIntakeObjective(VOICE_V3_BOOKING_TEST_CONFIG, ctxPartialIntake).status,
-    "IN_PROGRESS",
+    "COMPLETE",
+    "reschedule intake follows operation requirements (verified appointment), not full booking fields",
   );
   const partialRules = evaluateVoiceV3Rules(ctxPartialIntake, VOICE_V3_BOOKING_TEST_CONFIG);
   assert.equal(partialRules.rescheduleReady, true);

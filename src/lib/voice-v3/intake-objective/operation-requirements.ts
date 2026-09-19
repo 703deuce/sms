@@ -1,6 +1,10 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { VoiceV3CallContext } from "../state/call-context";
-import { getMissingCallbackRequirementKeys } from "../callback/callback-requirements";
+import type { VoiceV3Goal } from "../state/call-context";
+import {
+  getMissingCallbackRequirementKeys,
+  resolveConfiguredCallbackRequiredKeys,
+} from "../callback/callback-requirements";
 import { fieldSatisfiesObjectiveRequirement } from "./validate-intake-value";
 
 export type VoiceOperationName =
@@ -33,11 +37,52 @@ function configuredRequiredForOperation(
 ): string[] {
   const overrides = config.operationRequirements?.[operation];
   if (overrides !== undefined) return [...overrides];
+  if (operation === "request_callback") {
+    return resolveConfiguredCallbackRequiredKeys(config);
+  }
   if (READ_OPERATIONS.includes(operation)) return [];
   if (MUTATION_INTAKE_OPERATIONS.includes(operation)) {
     return defaultRequiredIntakeKeys(config);
   }
   return [];
+}
+
+/** Intake requirements follow the active dialog goal — shared facts, operation-specific gaps. */
+export function resolveActiveIntakeOperation(
+  config: VoiceV3AgentConfig,
+  context: VoiceV3CallContext,
+): VoiceOperationName {
+  const goal: VoiceV3Goal = context.dialog.activeGoal;
+  switch (goal) {
+    case "REQUEST_CALLBACK":
+      return "request_callback";
+    case "RESCHEDULE_APPOINTMENT":
+      return "reschedule_appointment";
+    case "CANCEL_APPOINTMENT":
+      return "cancel_appointment";
+    case "REQUEST_TRANSFER":
+      return "transfer_call";
+    case "BOOK_APPOINTMENT":
+      if (config.scheduling?.bookingStrategy === "SEND_LINK") {
+        return "send_booking_link";
+      }
+      return "book_appointment";
+    case "UNKNOWN":
+    case "GENERAL":
+    default:
+      if (config.scheduling?.bookingStrategy === "SEND_LINK") {
+        return "send_booking_link";
+      }
+      return "book_appointment";
+  }
+}
+
+export function configuredRequiredKeysForActiveOperation(
+  config: VoiceV3AgentConfig,
+  context: VoiceV3CallContext,
+): string[] {
+  const operation = resolveActiveIntakeOperation(config, context);
+  return configuredRequiredForOperation(config, operation);
 }
 
 export function getMissingFieldsForOperation(

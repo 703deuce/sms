@@ -135,6 +135,7 @@ const MODEL_TO_TABLE: Record<string, string> = {
   voiceAppointment: "voice_appointments",
   voiceV2OfferSet: "voice_v2_offer_sets",
   voiceV2BookingIdempotency: "voice_v2_booking_idempotency",
+  callbackRequest: "callback_requests",
   meetingSession: "meeting_sessions",
   meetingTranscriptSegment: "meeting_transcript_segments",
   meetingActionItem: "meeting_action_items",
@@ -380,6 +381,7 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
   workspacePhoneSettings: { workspace: { table: "Workspace", fk: "workspaceId" } },
   creditLedgerEntry: { workspace: { table: "Workspace", fk: "workspaceId" } },
   senderPool: { workspace: { table: "Workspace", fk: "workspaceId" } },
+  callbackRequest: { workspace: { table: "Workspace", fk: "workspaceId" } },
   phoneNumberAssignment: {
     phoneNumber: { table: "PhoneNumber", fk: "phoneNumberId" },
     user: { table: "User", fk: "userId" },
