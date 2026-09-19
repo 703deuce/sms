@@ -20,7 +20,10 @@ type VoiceRuntimeAction =
   | "business_answer"
   | "send_sms"
   | "emit_event"
-  | "record_call_telemetry";
+  | "record_call_telemetry"
+  | "resolve_voice_v3_livekit_session"
+  | "execute_voice_v3_livekit_tool"
+  | "commit_voice_v3_livekit_caller_utterance";
 
 function logInternalVoice(
   event: string,
@@ -222,6 +225,30 @@ export async function POST(request: Request) {
           "@/lib/voice/python-runtime-bridge/record-call-telemetry-for-python"
         );
         result = await recordCallTelemetryForPython(payload as never);
+        break;
+      }
+
+      case "resolve_voice_v3_livekit_session": {
+        const { resolveVoiceV3LiveKitSession } = await import(
+          "@/lib/voice/python-runtime-bridge/voice-v3-livekit"
+        );
+        result = await resolveVoiceV3LiveKitSession(payload as never);
+        break;
+      }
+
+      case "execute_voice_v3_livekit_tool": {
+        const { executeVoiceV3ToolForLiveKit } = await import(
+          "@/lib/voice/python-runtime-bridge/voice-v3-livekit"
+        );
+        result = await executeVoiceV3ToolForLiveKit(payload as never);
+        break;
+      }
+
+      case "commit_voice_v3_livekit_caller_utterance": {
+        const { commitVoiceV3CallerUtteranceForLiveKit } = await import(
+          "@/lib/voice/python-runtime-bridge/voice-v3-livekit"
+        );
+        result = commitVoiceV3CallerUtteranceForLiveKit(payload as never);
         break;
       }
 

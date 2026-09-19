@@ -10,7 +10,7 @@ import { resolveVoiceV3IntakeTransport } from "./intake-transport";
 import { buildVoiceV3AstraFunctionTools } from "../tools/build-openai-tools";
 import { voiceV3DelegationParallelToolCallsEnabled } from "../tools/concurrency-policy";
 
-const VOICE_V3_ASTRA_MODEL = "gpt-6-astra";
+export const VOICE_V3_ASTRA_MODEL = "gpt-6-astra";
 
 /**
  * Live `sessions.accept` delegation config (PSTN/SIP).

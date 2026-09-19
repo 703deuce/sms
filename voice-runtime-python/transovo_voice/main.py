@@ -17,6 +17,7 @@ load_dotenv()
 
 logger = logging.getLogger("transovo-voice")
 AGENT_NAME = os.getenv("LIVEKIT_AGENT_NAME", "transovo-voice-runtime")
+VOICE_V3_AGENT_NAME = os.getenv("VOICE_V3_LIVEKIT_AGENT_NAME", "").strip() or "transovo-voice-v3"
 _worker_registered = False
 
 
@@ -80,6 +81,20 @@ async def entrypoint(ctx: JobContext) -> None:
         logger.warning("Outbound jobs are disabled — inbound template testing only")
         return
     await run_inbound_session(ctx)
+
+
+@server.rtc_session(agent_name=VOICE_V3_AGENT_NAME)
+async def voice_v3_entrypoint(ctx: JobContext) -> None:
+    _ensure_worker_registered()
+    ctx.log_context_fields = {
+        "service": "transovo-voice",
+        "room": ctx.room.name,
+        "impl": "python",
+        "profile": "voice_v3_gpt_live",
+    }
+    from transovo_voice.voice_v3.session import run_voice_v3_livekit_session
+
+    await run_voice_v3_livekit_session(ctx)
 
 
 def main() -> None:

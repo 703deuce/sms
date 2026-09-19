@@ -82,6 +82,21 @@ export function noteCallerTranscriptDelta(liveSessionId: string, delta: string):
   }, COMMIT_QUIET_MS);
 }
 
+/** LiveKit final transcript → committed caller turn (conversation revision). */
+export function commitFinalCallerUtterance(
+  liveSessionId: string,
+  utterance: string,
+): CallerTurn | null {
+  const id = liveSessionId.trim();
+  const s = state(id);
+  if (s.commitTimer) {
+    clearTimeout(s.commitTimer);
+    s.commitTimer = null;
+  }
+  s.partial = utterance.trim();
+  return commitCapturingTurn(id);
+}
+
 /** Force commit (e.g. when Live starts a delegation). */
 export function forceCommitCallerTurn(liveSessionId: string): CallerTurn | null {
   const id = liveSessionId.trim();
