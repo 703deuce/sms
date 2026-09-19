@@ -404,9 +404,24 @@ Straight callback; straight availability; **booking → callback during FIND**; 
 
 ---
 
-## PHASE 42 — Failure classification
+## PHASE 42 — If a test fails, classify the first failing boundary
 
-First failing boundary only: A SIP → L spoken behavior (see directive full list). No compensating routers.
+Do **not** immediately add code. Classify:
+
+- **A** — SIP/participant  
+- **B** — LiveKit AgentSession  
+- **C** — GPT-Live conversational behavior  
+- **D** — GPT-Live → Responses delegation  
+- **E** — Astra semantic/tool selection  
+- **F** — LiveKit tool execution/lifecycle  
+- **G** — Python → Transovo adapter  
+- **H** — Transovo authorization/state  
+- **I** — provider executor  
+- **J** — result → Astra  
+- **K** — Astra result → GPT-Live claim  
+- **L** — spoken conversation behavior  
+
+Fix the **first** failing boundary. No compensating keyword routers, full coordinator rewrites, or prompt fixes for provider bugs.
 
 ---
 
