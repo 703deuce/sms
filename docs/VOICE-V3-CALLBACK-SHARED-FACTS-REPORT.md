@@ -66,8 +66,15 @@ npx tsx scripts/test-voice-v3-astra-callback-selection.ts
 
 Ready for **one** supervised PSTN callback certification call after merge approval; not certified on this branch in Cloud Agent environment.
 
+## Wizard UI (completion)
+
+Call handling step → **Callback requests** card: toggle + checkboxes on existing `collectFields`; `callbackRequiredCollectFieldIds` round-trips to `operationRequirements.request_callback`.
+
+## Astra selection (gpt-6-astra)
+
+`test-voice-v3-astra-callback-selection.ts` — **10/10 PASS**.
+
 ## Remaining risks
 
-- Wizard UI for `callbackRequiredCollectFieldIds` is compile-time only (defaults: name, phone, reason field); optional field picker UI not added in this pass.
-- `CallbackRequest.status` remains `new` at row level; V3 lifecycle `REQUESTED` lives under `metadata.voiceV3.lifecycleStatus`.
-- Real GPT-6 Astra selection cert requires `OPENAI_API_KEY` locally.
+- PSTN callback-only and abandon-booking → callback not yet certified on production.
+- `CallbackRequest.status` = `new` with `metadata.voiceV3.lifecycleStatus` = `REQUESTED` (intentional).
