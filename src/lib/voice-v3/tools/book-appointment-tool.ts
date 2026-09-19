@@ -9,6 +9,7 @@ import type { VoiceToolDefinition } from "./types";
 import { toolOk, voiceToolError } from "./types";
 import type { VoiceV3CallContext } from "../state/call-context";
 import { BOOK_APPOINTMENT_TOOL_DESCRIPTION } from "./astra-tool-contracts";
+import { authorizeVoiceV3ToolOrError } from "./authorize-tool-for-config";
 import type { AvailabilityOfferSet } from "../calendar/offer-set";
 import type { AvailabilitySlot } from "../calendar/slot-generator";
 import type { SelectedAvailabilitySlot } from "../calendar/selected-slot";
@@ -74,6 +75,8 @@ export const bookAppointmentTool: VoiceToolDefinition<BookAppointmentArgs> = {
   validate: (raw) => bookArgsSchema.parse(raw),
   execute: async (ctx, args) => {
     const config = ctx.runtime.config;
+    const denied = authorizeVoiceV3ToolOrError(config, "book_appointment");
+    if (denied) return denied;
     const snap = ctx.runtime.getSnapshot();
     const offer = snap.availability.activeOfferSet;
     if (!offer || offer.offerSetId !== args.offer_set_id) {

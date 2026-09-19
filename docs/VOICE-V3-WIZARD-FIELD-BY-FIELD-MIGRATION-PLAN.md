@@ -1,56 +1,63 @@
 # VOICE V3 WIZARD FIELD-BY-FIELD MIGRATION PLAN
 
-This plan is the authoritative worksheet for Appointment Receptionist Wizard → Voice V3 wiring.
+**Machine-readable manifest:** `src/lib/voice-v3/config/wizard-v3-field-manifest.ts` (generated from `wizard-v3-manifest-builder.ts`)  
+**Compiler:** `compileVoiceV3AgentConfig(wizard, providerConnections, { source })`  
+**Production entry:** `resolveVoiceV3AgentConfigForAgent`  
+**Invariant:** `assertWizardManifestComplete()` — **UNMAPPED = 0**
 
-**Machine-readable core:** `src/lib/voice-v3/config/wizard-v3-field-manifest.ts`  
-**Compiler:** `compileVoiceV3AgentConfig(wizard, providerConnections)`  
-**Production entry:** `resolveVoiceV3AgentConfigForAgent` (PSTN accept path)
+## Manifest columns
 
-## Column legend
+Each row includes: `step`, `uiLabel`, `statePath`, `valueType`, `v3ConfigPath`, `destinations`, `executionStatus`, `scope`, `compilerFunction`, `runtimeConsumer`, `republishBehavior`, `testCoverage`.
 
-| Column | Meaning |
-|--------|---------|
-| Step | Wizard step 1–8 |
-| State path | `AppointmentReceptionistWizardState` path or UI-derived path |
-| V3 config path | Target in `VoiceV3AgentConfig` |
-| Destinations | LIVE / ASTRA / DETERMINISTIC / PROVIDER / RAG / CONTROL_PLANE |
-| Status | WIRED \| PARTIAL \| NOT_WIRED \| FUTURE |
-| Scope | YES_MICROSOFT_BOOKING \| YES_GENERAL \| FUTURE_* \| CONTROL_PLANE |
+## Totals (current branch)
 
-## Representative rows (full manifest in TS)
+| | Count |
+|--|------:|
+| Controls discovered | 146 |
+| WIRED V3 config | 146 |
+| ACTIVE_EXECUTION | 65 |
+| CONFIGURED_NOT_IMPLEMENTED | 61 |
+| CONTROL_PLANE_ONLY | 17 |
+| UNSUPPORTED_BY_CURRENT_LIVE_API | 3 |
+| **UNMAPPED** | **0** |
 
-| Step | UI label | State path | V3 path | Amy | Astra | Runtime | Status | Scope |
-|------|----------|------------|---------|-----|-------|---------|--------|-------|
-| 1 | Capability toggles | `capabilities[]` | `capabilities.*` | delegation summary | tool gating | `deriveVoiceV3Capabilities` | WIRED | YES_GENERAL |
-| 1 | Solution name | `solutionName` | `controlPlane.solutionName` | — | — | — | WIRED | CONTROL_PLANE |
-| 1 | Answer when | `answerWhen` | telephony (partial) | — | — | PSTN routing | PARTIAL | YES_GENERAL |
-| 2 | Phone number | `phoneNumberId` | `telephony.phoneNumberId` | — | — | provisioning | WIRED | PROVIDER |
-| 2 | Call recording | `callRecording` | `telephony.callRecording` | — | — | Telnyx record | PARTIAL | PROVIDER |
-| 3 | Business name | `businessName` | `businessName` | yes | yes | yes | WIRED | YES_GENERAL |
-| 3 | Guided hours textarea | `knowledgeItems[hours].summary` | `business.hoursDisplay` | yes | — | `businessHours` | WIRED | YES_MICROSOFT_BOOKING |
-| 3 | Weekly hours editor | `operatingMaturity.businessSchedule.weekly.*` | `businessHours` + Amy hours | yes | — | scheduling | WIRED | YES_MICROSOFT_BOOKING |
-| 3 | Website URL | `websiteUrl` | `knowledge.retrieval.websiteUrl` | — | — | RAG config | WIRED | FUTURE_RAG_EXECUTION |
-| 4 | Booking strategy | `bookingStrategy` | `scheduling.bookingStrategy` | — | yes | tool gating | WIRED | YES_MICROSOFT_BOOKING |
-| 4 | Appointment type duration | `appointmentTypes[].durationMin` | `services[].durationMinutes` | yes | yes | FIND/BOOK | WIRED | YES_MICROSOFT_BOOKING |
-| 4 | Collect field required | `collectFields[].required` | `intakeFields[].required` | — | yes | BOOK precondition | WIRED | YES_MICROSOFT_BOOKING |
-| 4 | Custom collect field | `collectFields[].id` (custom_*) | `intakeFields[].key` | — | `update_intake` schema | dynamic | WIRED | YES_MICROSOFT_BOOKING |
-| 5 | Transfer destination | `transferDestinations[]` | `transferDestinations[]` | names only | enum ids | executor | WIRED | YES_GENERAL |
-| 6 | Agent name | `agentName` | `identity.agentName` | yes | — | — | WIRED | YES_GENERAL |
-| 6 | Opening greeting | `openingGreeting` | `conversation.openingGreeting` | yes | — | sideband greeting | WIRED | YES_GENERAL |
-| 6 | Voice | `voiceId` | `telephony.liveVoiceId` | — | — | Live accept | WIRED | YES_GENERAL |
-| 6 | Speaking speed slider | `speakingSpeed` | — | — | — | — | PARTIAL | INTENTIONALLY_UNSUPPORTED |
-| 7 | Test scenario | `testScenario` | `controlPlane.testScenario` | — | — | QA | WIRED | CONTROL_PLANE |
-| 8 | Activation mode | `activationMode` | `controlPlane.activationMode` | — | — | publish | WIRED | CONTROL_PLANE |
+## Business hours (locked semantics)
 
-## Proof requirements (current Microsoft milestone)
+| Source | Amy (`hoursDisplay`) | FIND/BOOK (`businessHours`) |
+|--------|----------------------|-----------------------------|
+| `operatingMaturity.businessSchedule.weekly` | yes (formatted) | **authoritative** |
+| `knowledgeItems[hours].summary` (prose) | fallback only if no structured schedule | **never** |
 
-1. Republish changes `intakeFields` without code deploy — certified in `test-voice-v3-wizard-compiler.ts`.
-2. Multiple enabled appointment types — `services[]` + `selectedAppointmentTypeId` primary + `resolveBookingServiceForRuntime` for caller-selected service.
-3. Amy hot context includes hours/services from `knowledgeItems` and operating schedule.
-4. Env vars (`VOICE_V3_AGENT_NAME`, etc.) used only when published wizard unavailable.
+Conflict flag: `business.hoursStructuredMeta.hoursProseConflictsWithStructured`.
 
-## Next tranches (not blocking compiler)
+## Hours row correction (vs earlier draft)
 
-- Per-control expansion for call-handling recovery, CRM, qualification rules (manifest FUTURE rows).
-- V3 test harness using same compiler as PSTN accept (wizard test step).
-- RAG retrieval tool wired to `knowledge.retrieval` when pipeline ships.
+| Step | UI | State path | V3 path | Runtime |
+|------|-----|------------|---------|---------|
+| 3 | Weekly hours editor | `operatingMaturity.businessSchedule.weekly` | `businessHours` + Amy `hoursDisplay` | FIND/BOOK |
+| 3 | Guided hours textarea | `knowledgeItems[].summary` (id=hours) | hot context only | not scheduling |
+
+## OpenAI Live sliders
+
+| Wizard | V3 | Live accept |
+|--------|-----|-------------|
+| `voiceId` | `telephony.liveVoiceId` | `audio.output.voice` |
+| `speakingSpeed`, `responsiveness`, `interruptionSensitivity` | `telephony.liveAudioControls.*` | stored; `UNSUPPORTED_BY_CURRENT_LIVE_API` |
+
+Evidence: `docs/VOICE-V3-OPENAI-LIVE-AUDIO-CONTROLS-EVIDENCE.md`.
+
+## Proof scripts
+
+| Scenario | Script |
+|----------|--------|
+| Manifest complete | `test-voice-v3-wizard-manifest-coverage.ts` |
+| Hours prose ≠ scheduling | `test-voice-v3-business-hours-invariant.ts` |
+| Microsoft A vs B | `test-voice-v3-microsoft-connection-resolve.ts` |
+| Republish intake A/B/C | `test-voice-v3-wizard-republish-intake.ts` |
+| Full matrix | `test-voice-v3-wizard-cert-matrix.ts` |
+| Custom required field + tools | `test-voice-v3-wizard-compiler.ts` |
+| No V2 intake in resolver | `test-voice-v3-wizard-architecture-invariants.ts` |
+
+## Configuration vs execution
+
+All wizard controls map to typed V3 configuration. Execution for non-Microsoft strategies, RAG retrieval, qualification, CRM, and recovery remains **CONFIGURED_NOT_IMPLEMENTED** until dedicated executors attach to existing config sections.

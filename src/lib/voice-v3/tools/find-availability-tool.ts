@@ -6,6 +6,7 @@ import { dispatchFindAvailabilityIfRequired } from "../calendar/find-dispatch";
 import { mergeDialogActiveGoalFromTool } from "../intake/merge-intake-state";
 import { evaluateVoiceV3Rules } from "../state/call-rules";
 import type { VoiceToolDefinition } from "./types";
+import { authorizeVoiceV3ToolOrError } from "./authorize-tool-for-config";
 import { toolOk, voiceToolError } from "./types";
 import { FIND_AVAILABILITY_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 
@@ -40,6 +41,8 @@ export const findAvailabilityTool: VoiceToolDefinition<FindAvailabilityArgs> = {
   validate: (raw) => findArgsSchema.parse(raw),
   execute: async (ctx, _args) => {
     const config = ctx.runtime.config;
+    const denied = authorizeVoiceV3ToolOrError(config, "find_availability");
+    if (denied) return denied;
     let snap = ctx.runtime.getSnapshot();
     snap = mergeDialogActiveGoalFromTool(snap, "BOOK_APPOINTMENT");
     ctx.runtime.replaceContext(snap);

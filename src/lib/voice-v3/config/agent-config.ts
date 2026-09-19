@@ -96,6 +96,7 @@ export interface VoiceV3ConversationConfig {
 export interface VoiceV3HotBusinessContext {
   companyDescription?: string;
   hoursDisplay?: string;
+  hoursStructuredMeta?: VoiceV3StructuredBusinessHoursMeta;
   location?: string;
   serviceArea?: string;
   servicesSummary?: string;
@@ -113,6 +114,7 @@ export interface VoiceV3KnowledgeConfig {
     knowledgeBaseIds: string[];
     websiteUrl?: string | null;
     documentSourceIds: string[];
+    revision?: string | null;
   };
 }
 
@@ -133,13 +135,101 @@ export interface AppointmentReceptionistBookingBehavior {
   distinguishNewExisting: boolean;
 }
 
+export interface VoiceV3LiveAudioControlsConfig {
+  speakingSpeed: number;
+  responsiveness: number;
+  interruptionSensitivity: number;
+  /** OpenAI Live SessionAcceptParams only supports audio.output.voice at startup (openai@7.17). */
+  executionSupport: "voice_id_only" | "UNSUPPORTED_BY_CURRENT_LIVE_API";
+}
+
 export interface VoiceV3TelephonyConfig {
   phoneNumberId: string | null;
   phoneNumberE164: string | null;
+  answerWhen?: string;
+  numberSource?: string;
+  ringBehavior?: string;
+  ringTeamSeconds?: number;
+  outboundSmsMode?: string;
+  outboundSmsPhoneNumberId?: string | null;
+  outboundSmsE164?: string | null;
   callRecording: "off" | "all" | "inbound_only";
   connectionGreetingMode: string;
+  connectionGreetingText?: string;
+  connectionGreetingAudioUrl?: string;
   liveVoiceId: string;
+  voiceLabel?: string;
   speaksFirst: "ai" | "caller";
+  liveAudioControls?: VoiceV3LiveAudioControlsConfig;
+}
+
+export interface VoiceV3CallHandlingConfig {
+  transferTriggers: string[];
+  transferRingSeconds: number;
+  transferFallback: string;
+  warmTransfer: boolean;
+  detectVoicemailOnTransfer: boolean;
+  voiceV2HumanTransferEnabled: boolean;
+  allowCallerRequestedTransfer: boolean;
+  transferRouting: "single" | "waterfall";
+  defaultTransferPlanId: string | null;
+  transferPlanSteps: Array<{
+    order?: number;
+    destinationId: string;
+    transferMode?: "BASIC" | "WARM";
+    timeoutSeconds?: number;
+  }>;
+  urgencyEnabled: boolean;
+  callbackRequestsEnabled: boolean;
+  callbackUseAniByDefault: boolean;
+  callbackAskPreferredTime: boolean;
+  callbackConfirmNumber: boolean;
+  salesSolicitationEnabled: boolean;
+  salesSolicitationAction: string | null;
+}
+
+export interface VoiceV3QualificationConfig {
+  enabled: boolean;
+  requiredBeforePrimaryAction: boolean;
+  revision: string | null;
+  supportedZipCodes: string[];
+  rulesMatchMode: "ALL" | "ANY" | null;
+  notQualifiedFallback: string | null;
+  needsReviewFallback: string | null;
+  rules: unknown[];
+}
+
+export interface VoiceV3RecoveryConfig {
+  aiCallRecoveryEnabled: boolean;
+  consentMode: string | null;
+  sendingPhoneNumberId: string | null;
+  continueOverSms: boolean;
+  delaySeconds: number | null;
+  sendWhenCallbackCreated: boolean;
+}
+
+export interface VoiceV3IntegrationsConfig {
+  crmEnabled: boolean;
+  longTermMemory: boolean;
+  calendarProvider: string | null;
+  calendarConnected: boolean;
+  calendarEmail: string | null;
+}
+
+export interface VoiceV3BookingStrategyConfig {
+  strategy: VoiceWizardBookingStrategy;
+  executionStatus: "ACTIVE_EXECUTION" | "CONFIGURED_NOT_IMPLEMENTED";
+  bookingLinkUrl: string | null;
+  bookingLinkLabel: string | null;
+  calendlyEventTypeUri: string | null;
+  calendlyEventTypeName: string | null;
+  calendlyEventTypeDurationMin: number | null;
+  calendlyTimezone: string | null;
+}
+
+export interface VoiceV3StructuredBusinessHoursMeta {
+  source: "operatingMaturity.businessSchedule.weekly";
+  hoursProseConflictsWithStructured: boolean;
 }
 
 export interface VoiceV3ControlPlaneMeta {
@@ -173,8 +263,13 @@ export interface VoiceV3AgentConfig {
   knowledge: VoiceV3KnowledgeConfig;
   telephony: VoiceV3TelephonyConfig;
   controlPlane: VoiceV3ControlPlaneMeta;
+  callHandling: VoiceV3CallHandlingConfig;
+  qualification: VoiceV3QualificationConfig;
+  recovery: VoiceV3RecoveryConfig;
+  integrations: VoiceV3IntegrationsConfig;
+  bookingStrategyDetail: VoiceV3BookingStrategyConfig;
 
   /** Hash / version for observability at accept time. */
   configVersion?: string;
-  source?: "wizard_published" | "env_fallback";
+  source?: "wizard_published" | "env_fallback" | "wizard_draft_test";
 }

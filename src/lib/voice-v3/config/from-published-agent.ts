@@ -10,6 +10,7 @@ import {
   compileVoiceV3AgentConfig,
   type VoiceV3ProviderConnections,
 } from "./compile-voice-v3-agent-config";
+import { resolveMicrosoftConnectionForWizard } from "./resolve-microsoft-connection";
 import {
   logVoiceV3AgentConfigResolved,
   logVoiceV3ConfigFallbackUsed,
@@ -62,14 +63,10 @@ async function resolveMicrosoftProviderConnections(
     };
   }
 
-  const preferred =
-    calendars.find(
-      (c: { id: string; name: string | null }) =>
-        wizard?.calendarEmail && c.name === wizard.calendarEmail,
-    ) || calendars[0];
+  const preferred = resolveMicrosoftConnectionForWizard(calendars, wizard?.calendarEmail);
 
   return {
-    microsoftConnectionId: preferred.id,
+    microsoftConnectionId: preferred?.id ?? calendars[0]?.id,
     microsoftCalendarIds: [process.env.VOICE_V3_CALENDAR_ID?.trim() || "primary"],
     microsoftSmtp: null,
   };

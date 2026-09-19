@@ -1,83 +1,126 @@
-# VOICE V3 WIZARD MIGRATION REPORT (draft — pre-production review)
+# VOICE V3 WIZARD MIGRATION REPORT (completion pass — pre-merge review)
 
-## 1. Files changed (core)
+**Branch:** `cursor/voice-v3-wizard-compiler-2304` · **PR:** #433  
+**Status:** Not merged · Not deployed
 
-- `src/lib/voice-v3/config/compile-voice-v3-agent-config.ts` — canonical wizard → `VoiceV3AgentConfig`
-- `src/lib/voice-v3/config/from-published-agent.ts` — loads published wizard, calls compiler (no V2 intake)
-- `src/lib/voice-v3/config/agent-config.ts` — nested sections (identity, capabilities, conversation, business, scheduling, knowledge, telephony, controlPlane)
-- `src/lib/voice-v3/config/wizard-collect-fields-v3.ts` — dynamic `collectFields` → `intakeFields`
-- `src/lib/voice-v3/config/wizard-v3-field-manifest.ts` — testable field worksheet
-- `src/lib/voice-v3/prompts/live-frontend-instructions.ts` — static foundation + compiled Amy context
-- `src/lib/voice-v3/prompts/build-voice-v3-prompts.ts` — config-driven Amy/Astra assembly
-- `src/lib/voice-v3/tools/voice-tool-catalog.ts` — capability-driven tool surface
-- `src/lib/voice-v3-basic/live-session-config.ts` — wizard voice + compiled prompts on accept
-- `scripts/test-voice-v3-wizard-compiler.ts` — certification fixture
-- `scripts/test-voice-v3-wizard-architecture-invariants.ts` — no V2 intake in resolver
+## Manifest totals
 
-## 2. New V3 config structure
+| Metric | Count |
+|--------|------:|
+| Wizard controls discovered (manifest rows) | **146** |
+| WIRED V3 config | **146** |
+| ACTIVE_EXECUTION | **65** |
+| CONFIGURED_NOT_IMPLEMENTED | **61** |
+| CONTROL_PLANE_ONLY | **17** |
+| UNSUPPORTED_BY_CURRENT_LIVE_API | **3** |
+| **UNMAPPED** | **0** |
 
-Published wizard compiles to `VoiceV3AgentConfig` with typed sections plus legacy top-level fields (`businessName`, `timezone`, `intakeFields`, `service`, `services[]`, `businessHours`, `calendar`, `transferDestinations`) for runtime compatibility.
+Source: `buildWizardV3FieldManifest()` in `src/lib/voice-v3/config/wizard-v3-manifest-builder.ts`, verified by `scripts/test-voice-v3-wizard-manifest-coverage.ts` + `assertWizardManifestComplete()`.
 
-## 3. Field → destination table
-
-See `src/lib/voice-v3/config/wizard-v3-field-manifest.ts` and `docs/VOICE-V3-WIZARD-FIELD-BY-FIELD-MIGRATION-PLAN.md`.
-
-## 4. V2 dependencies removed from production V3 path
-
-- `resolveVoiceV3AgentConfigForAgent` no longer calls `compileVoiceV2IntakeSchema`.
-
-## 5. V2 dependencies intentionally retained
-
-- `buildWizardAgentConfig` still writes `voiceV2Intake`, Telnyx workflow, etc. for legacy/V2 surfaces and provisioning.
-- Wizard snapshot still stored under `advanced.appointmentReceptionistWizard`.
-
-## 6–8. Amy / Astra / deterministic
-
-- **Amy:** identity, persona, business facts (hours, services, knowledge items), capabilities summary, delegation policy filtered by capabilities, custom greeting.
-- **Astra:** business, timezone, local time, intake catalog, service catalog, booking strategy — not tone/voice/greeting prose.
-- **Runtime:** `intakeFields`, `operationRequirements.book_appointment`, `businessHours`, `services[]`, `resolveBookingServiceForRuntime`, capability gates in `deriveVoiceV3Capabilities`.
-
-## 9. Provider mappings
-
-- Microsoft: `providerConnections.microsoftConnectionId` from workspace calendar rows (prefer `calendarEmail` match).
-- Telnyx PSTN: `telephony.phoneNumberId`, `callRecording`, `liveVoiceId` on Live accept.
-
-## 10. RAG configuration mappings
-
-- `knowledge.retrieval.{enabled, knowledgeBaseIds, websiteUrl}` — plumbing only; retrieval tool not added in this pass.
-
-## 11. Unsupported / partial wizard features
-
-- `speakingSpeed`, `responsiveness`, `interruptionSensitivity` — no OpenAI Live equivalent mapped (manifest: PARTIAL).
-- `answerWhen` / ring behavior — represented in wizard; V3 PSTN routing mapping partial.
-- Calendly / SEND_LINK / REQUEST_ONLY — compiled in `scheduling.bookingStrategy`; Microsoft tools gated off when not `MICROSOFT_365`.
-
-## 12. Tests added
-
-- `scripts/test-voice-v3-wizard-compiler.ts`
-- `scripts/test-voice-v3-wizard-architecture-invariants.ts`
-
-## 13. Test results
+## Architecture (unchanged, confirmed)
 
 ```
-VOICE_V3_WIZARD_COMPILER_CERT: PASS
-VOICE_V3_WIZARD_ARCHITECTURE_INVARIANTS: PASS
+Published wizard snapshot (advanced.appointmentReceptionistWizard)
+  → compileVoiceV3AgentConfig(...)
+  → VoiceV3AgentConfig (canonical)
+  → Amy (Live instructions) / Astra (delegation) / tools / runtime / providers
 ```
 
-## 14. Typecheck
+Production V3 does **not** call `compileVoiceV2IntakeSchema`. V2 `buildWizardAgentConfig` remains for legacy/Telnyx surfaces only.
 
-Project-wide `tsc` has pre-existing errors outside this work; voice-v3 compiler files pass targeted check after duplicate-key fix.
+## Files changed (this pass)
 
-## 15. Production path proof
+### Compiler & config
+
+- `src/lib/voice-v3/config/compile-voice-v3-agent-config.ts` — full Step 1–8 sections; structured hours authority
+- `src/lib/voice-v3/config/agent-config.ts` — `callHandling`, `qualification`, `recovery`, `integrations`, `bookingStrategyDetail`, `liveAudioControls`
+- `src/lib/voice-v3/config/wizard-v3-manifest-builder.ts` — exhaustive manifest generator
+- `src/lib/voice-v3/config/wizard-v3-field-manifest.ts` — exported manifest + summary
+- `src/lib/voice-v3/config/wizard-manifest-invariant.ts` — top-level wizard key coverage
+- `src/lib/voice-v3/config/business-hours-display.ts` — prose vs structured hours invariant
+- `src/lib/voice-v3/config/resolve-microsoft-connection.ts` — deterministic calendar pick
+- `src/lib/voice-v3/config/wizard-test-compilation.ts` — draft test probe (same compiler)
+- `src/lib/voice-v3/config/from-published-agent.ts` — uses connection resolver
+- `src/lib/voice-v3/config/default-nested-config.ts` — defaults for new sections
+
+### Runtime authorization
+
+- `src/lib/voice-v3/tools/authorize-tool-for-config.ts`
+- `book-appointment-tool.ts`, `find-availability-tool.ts`, `cancel-appointment-tool.ts`, `reschedule-appointment-tool.ts`, `transfer-call-tool.ts` — executor rejects when capability off
+
+### Wizard test
+
+- `src/lib/voice/agent-service.ts` — `build_for_test` attaches `voiceV3WizardTestCompilation` via `compileVoiceV3AgentConfig({ source: wizard_draft_test })`
+
+### Docs
+
+- `docs/VOICE-V3-OPENAI-LIVE-AUDIO-CONTROLS-EVIDENCE.md`
+- `docs/VOICE-V3-WIZARD-FIELD-BY-FIELD-MIGRATION-PLAN.md` (updated)
+- This report
+
+### Tests
+
+- `scripts/test-voice-v3-wizard-manifest-coverage.ts`
+- `scripts/test-voice-v3-business-hours-invariant.ts`
+- `scripts/test-voice-v3-microsoft-connection-resolve.ts`
+- `scripts/test-voice-v3-wizard-republish-intake.ts`
+- `scripts/test-voice-v3-wizard-cert-matrix.ts`
+- (existing) `test-voice-v3-wizard-compiler.ts`, `test-voice-v3-wizard-architecture-invariants.ts`
+
+## Business hours rule (implemented)
+
+- **FIND/BOOK:** `operatingMaturity.businessSchedule.weekly` → `businessHours` only (`businessHoursWindowFromWeeklySchedule`).
+- **Amy hot context:** `hoursDisplay` generated from structured schedule when present; free-form `knowledgeItems[hours].summary` never overrides scheduling.
+- **Conflict:** `business.hoursStructuredMeta.hoursProseConflictsWithStructured` when prose differs from structured display.
+
+## OpenAI Live audio controls
+
+Evidence: `docs/VOICE-V3-OPENAI-LIVE-AUDIO-CONTROLS-EVIDENCE.md` (`SessionAcceptParams.Session.audio.output.voice` only at startup). Wizard sliders stored under `telephony.liveAudioControls` with `UNSUPPORTED_BY_CURRENT_LIVE_API`.
+
+## Certification matrix (20 items)
+
+| # | Requirement | Test |
+|---|-------------|------|
+| 1–20 | See `scripts/test-voice-v3-wizard-cert-matrix.ts` + republish/hours/microsoft scripts | PASS |
+
+## Tests run (exact)
+
+```bash
+npx tsx scripts/test-voice-v3-wizard-manifest-coverage.ts
+npx tsx scripts/test-voice-v3-business-hours-invariant.ts
+npx tsx scripts/test-voice-v3-microsoft-connection-resolve.ts
+npx tsx scripts/test-voice-v3-wizard-republish-intake.ts
+npx tsx scripts/test-voice-v3-wizard-compiler.ts
+npx tsx scripts/test-voice-v3-wizard-architecture-invariants.ts
+npx tsx scripts/test-voice-v3-wizard-cert-matrix.ts
+```
+
+All exited **0** with `PASS` on 2026-09-19.
+
+## Production path proof
 
 `/api/openai/live/incoming` → `resolveVoiceV3AgentConfigForAgent` → `compileVoiceV3AgentConfig` → `createVoiceV3CallRuntime({ config })` → `buildBasicLiveSessionAcceptParams(config)` → `sessions.accept`.
 
-## 16. Env fallback
+Telemetry: `configVersion` on compiled config; active call retains `VoiceV3CallRuntime.config` snapshot at creation (republish intake test).
 
-`VOICE_V3_BOOKING_AGENT_CONFIG` when wizard missing or resolve throws; telemetry `VOICE_V3_CONFIG_FALLBACK_USED`.
+## Draft / test / publish
 
-## 17. Remaining unwired UI fields
+| Mode | Compiler source |
+|------|-----------------|
+| Production PSTN | Published wizard via `resolveVoiceV3AgentConfigForAgent` |
+| Wizard Test `build_for_test` | Draft wizard → `compileVoiceV3AgentConfig({ source: wizard_draft_test })` probe on version config |
+| Env fallback | `VOICE_V3_BOOKING_AGENT_CONFIG` when wizard missing |
 
-See migration plan for per-control rows marked PARTIAL/FUTURE (phone ring seconds, sliders, full call-handling recovery matrix).
+## Future execution (configuration already compiled)
 
-**Do not deploy to production until this report and field plan are reviewed.**
+- Calendly, SEND_LINK, REQUEST_ONLY (`bookingStrategyDetail`)
+- RAG retrieval (`knowledge.retrieval`)
+- Qualification rules executor (`qualification`)
+- CRM / long-term memory (`integrations`)
+- AI call recovery SMS (`recovery`)
+- Waterfall transfer plans (`callHandling.transferPlanSteps`)
+- Live audio sliders (pending OpenAI API fields)
+
+## Certified V3 booking architecture
+
+No changes to OfferSets, scheduling generations, Microsoft adapters, idempotent BOOK, or nine-tool delegation model — configuration compiler migration only.

@@ -7,6 +7,7 @@ import type { VoiceV3CallContext } from "../state/call-context";
 import type { VoiceToolDefinition } from "./types";
 import { toolOk, voiceToolError } from "./types";
 import { CANCEL_APPOINTMENT_TOOL_DESCRIPTION } from "./astra-tool-contracts";
+import { authorizeVoiceV3ToolOrError } from "./authorize-tool-for-config";
 
 const cancelArgsSchema = z.object({
   appointment_id: z
@@ -80,6 +81,8 @@ export const cancelAppointmentTool: VoiceToolDefinition<CancelAppointmentArgs> =
   parameters: {},
   validate: (raw) => cancelArgsSchema.parse(raw),
   execute: async (ctx, args) => {
+    const denied = authorizeVoiceV3ToolOrError(ctx.runtime.config, "cancel_appointment");
+    if (denied) return denied;
     if (!args.confirmed) {
       return voiceToolError(
         "CANCELLATION_CONFIRMATION_REQUIRED",

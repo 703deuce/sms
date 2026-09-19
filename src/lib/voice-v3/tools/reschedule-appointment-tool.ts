@@ -4,6 +4,7 @@ import type { FunctionTool } from "openai/resources/live/live";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import { dispatchRescheduleIfRequired } from "../calendar/reschedule-dispatch";
 import type { VoiceV3CallContext } from "../state/call-context";
+import { authorizeVoiceV3ToolOrError } from "./authorize-tool-for-config";
 import type { AvailabilityOfferSet } from "../calendar/offer-set";
 import type { AvailabilitySlot } from "../calendar/slot-generator";
 import type { SelectedAvailabilitySlot } from "../calendar/selected-slot";
@@ -76,6 +77,8 @@ export const rescheduleAppointmentTool: VoiceToolDefinition<RescheduleAppointmen
   parameters: {},
   validate: (raw) => rescheduleArgsSchema.parse(raw),
   execute: async (ctx, args) => {
+    const denied = authorizeVoiceV3ToolOrError(ctx.runtime.config, "reschedule_appointment");
+    if (denied) return denied;
     const snap = ctx.runtime.getSnapshot();
     const existing = snap.appointmentManagement.verifiedExisting;
     if (!existing) {

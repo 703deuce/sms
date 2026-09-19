@@ -147,7 +147,10 @@ function run(): void {
   assert.equal(config.telephony.liveVoiceId, "coral");
   assert.equal(config.scheduling.bookingStrategy, "MICROSOFT_365");
   assert.equal(config.calendar?.connectionId, "ms_conn_test");
-  assert.ok(config.business.hoursDisplay?.includes("Mon"));
+  assert.ok(
+    config.business.hoursDisplay?.includes("Monday") ||
+      config.business.hoursDisplay?.includes("Mon"),
+  );
 
   const prompts = buildVoiceV3Prompts({
     agentConfig: config,
@@ -155,7 +158,9 @@ function run(): void {
   });
   assert.ok(prompts.liveInstructions.includes("Jessica"));
   assert.ok(prompts.liveInstructions.includes("Johnson Home Remodeling"));
-  assert.ok(prompts.liveInstructions.includes("Mon–Fri"));
+  assert.ok(
+    prompts.liveInstructions.includes("Monday") || prompts.liveInstructions.includes("Mon–Fri"),
+  );
   assert.ok(!prompts.astraInstructions.includes("Warm and professional"));
 
   const schema = buildUpdateIntakeZodSchema(config);

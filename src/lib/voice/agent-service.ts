@@ -298,7 +298,11 @@ export async function buildVoiceAgentForTest(
     strict: false,
   });
   const { recompileReceptionistFromDraft } = await import("./receptionist/recompile");
-  const config = recompileReceptionistFromDraft(applied.config);
+  let config = recompileReceptionistFromDraft(applied.config);
+  const { attachVoiceV3WizardTestCompilation } = await import(
+    "@/lib/voice-v3/config/wizard-test-compilation"
+  );
+  config = attachVoiceV3WizardTestCompilation(config);
   const issues = validateAgentForPublish(agent.name, config, {
     requirePhone: false,
     phoneNumberId: agent.phoneNumberId,

@@ -5,6 +5,7 @@ import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { VoiceToolDefinition } from "./types";
 import { toolOk, voiceToolError } from "./types";
 import { TRANSFER_CALL_TOOL_DESCRIPTION } from "./astra-tool-contracts";
+import { authorizeVoiceV3ToolOrError } from "./authorize-tool-for-config";
 
 function buildTransferArgsSchema(config: VoiceV3AgentConfig) {
   const ids = config.transferDestinations?.map((d) => d.id).filter(Boolean) ?? [];
@@ -59,6 +60,8 @@ export const transferCallTool: VoiceToolDefinition<{
   validate: (raw) => looseTransferArgsSchema.parse(raw),
   execute: async (ctx, args) => {
     const config = ctx.runtime.config;
+    const denied = authorizeVoiceV3ToolOrError(config, "transfer_call");
+    if (denied) return denied;
     const strict = buildTransferArgsSchema(config).safeParse(args);
     if (!strict.success) {
       return voiceToolError(

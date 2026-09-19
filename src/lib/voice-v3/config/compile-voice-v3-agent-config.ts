@@ -5,10 +5,15 @@ import { deriveBookingStrategyFromWizard } from "@/lib/voice-receptionist-wizard
 import { normalizeRealtimeNativeVoice } from "@/lib/voice/outbound/realtime-native-voices";
 import type { VoiceV3AgentConfig, VoiceV3ServiceConfig } from "./agent-config";
 import { VOICE_V3_BOOKING_AGENT_CONFIG } from "./booking-agent-config";
+import { compileBusinessHoursAmyDisplay } from "./business-hours-display";
+import { businessHoursWindowFromWeeklySchedule } from "./business-hours-from-wizard";
 import {
-  businessHoursWindowFromWeeklySchedule,
-  formatWeeklyHoursForAmy,
-} from "./business-hours-from-wizard";
+  DEFAULT_V3_BOOKING_STRATEGY,
+  DEFAULT_V3_CALL_HANDLING,
+  DEFAULT_V3_INTEGRATIONS,
+  DEFAULT_V3_QUALIFICATION,
+  DEFAULT_V3_RECOVERY,
+} from "./default-nested-config";
 import { defaultNestedFromFlat, mergeNestedConfig } from "./default-nested-config";
 import {
   bookingRequiredIntakeKeys,
@@ -84,13 +89,16 @@ function capabilityFlagsFromWizard(
 
 function hotContextFromWizard(wizard: AppointmentReceptionistWizardState): VoiceV3AgentConfig["business"] {
   const maturity = ensureWizardOperatingMaturity(wizard);
-  const scheduleHours = formatWeeklyHoursForAmy(maturity.businessSchedule);
+  const hoursItem = (wizard.knowledgeItems || []).find((k) => k.id === "hours")?.summary;
+  const hoursCompile = compileBusinessHoursAmyDisplay({
+    structuredSchedule: maturity.businessSchedule,
+    hoursKnowledgeProse: hoursItem,
+  });
 
   const knowledgeSummaries = (wizard.knowledgeItems || [])
     .filter((k) => k.status !== "rejected" && k.summary?.trim())
     .map((k) => ({ id: k.id, label: k.label, summary: k.summary }));
 
-  const hoursItem = knowledgeSummaries.find((k) => k.id === "hours")?.summary;
   const businessItem = knowledgeSummaries.find((k) => k.id === "business")?.summary;
   const servicesItem = knowledgeSummaries.find((k) => k.id === "services")?.summary;
   const pricing = knowledgeSummaries.find((k) => k.id === "pricing")?.summary;
@@ -114,7 +122,11 @@ function hotContextFromWizard(wizard: AppointmentReceptionistWizardState): Voice
   return {
     companyDescription,
     location,
-    hoursDisplay: hoursItem?.trim() || scheduleHours || undefined,
+    hoursDisplay: hoursCompile.hoursDisplay,
+    hoursStructuredMeta: {
+      source: "operatingMaturity.businessSchedule.weekly",
+      hoursProseConflictsWithStructured: hoursCompile.hoursProseConflictsWithStructured,
+    },
     servicesSummary:
       servicesItem?.trim() ||
       (enabledServices.length ? enabledServices.join(", ") : undefined),
@@ -154,9 +166,95 @@ function transferDestinationsFromWizard(
 
 function configVersionHash(wizard: AppointmentReceptionistWizardState): string {
   return createHash("sha256")
-    .update(JSON.stringify({ agentName: wizard.agentName, businessName: wizard.businessName }))
+    .update(JSON.stringify(wizard))
     .digest("hex")
     .slice(0, 16);
+}
+
+function bookingStrategyDetailFromWizard(
+  wizard: AppointmentReceptionistWizardState,
+): VoiceV3AgentConfig["bookingStrategyDetail"] {
+  const strategy = deriveBookingStrategyFromWizard(wizard);
+  return {
+    ...DEFAULT_V3_BOOKING_STRATEGY,
+    strategy,
+    executionStatus:
+      strategy === "MICROSOFT_365" ? "ACTIVE_EXECUTION" : "CONFIGURED_NOT_IMPLEMENTED",
+    bookingLinkUrl: wizard.bookingLinkUrl?.trim() || null,
+    bookingLinkLabel: wizard.bookingLinkLabel?.trim() || null,
+    calendlyEventTypeUri: wizard.calendlyEventTypeUri?.trim() || null,
+    calendlyEventTypeName: wizard.calendlyEventTypeName?.trim() || null,
+    calendlyEventTypeDurationMin: wizard.calendlyEventTypeDurationMin ?? null,
+    calendlyTimezone: wizard.calendlyTimezone?.trim() || null,
+  };
+}
+
+function callHandlingFromWizard(
+  wizard: AppointmentReceptionistWizardState,
+): VoiceV3AgentConfig["callHandling"] {
+  return {
+    ...DEFAULT_V3_CALL_HANDLING,
+    transferTriggers: wizard.transferTriggers ?? [],
+    transferRingSeconds: wizard.transferRingSeconds ?? DEFAULT_V3_CALL_HANDLING.transferRingSeconds,
+    transferFallback: wizard.transferFallback ?? DEFAULT_V3_CALL_HANDLING.transferFallback,
+    warmTransfer: wizard.warmTransfer ?? false,
+    detectVoicemailOnTransfer: wizard.detectVoicemailOnTransfer ?? false,
+    voiceV2HumanTransferEnabled: wizard.voiceV2HumanTransferEnabled === true,
+    allowCallerRequestedTransfer: wizard.allowCallerRequestedTransfer !== false,
+    transferRouting: wizard.transferRouting === "waterfall" ? "waterfall" : "single",
+    defaultTransferPlanId: wizard.defaultTransferPlanId?.trim() || null,
+    transferPlanSteps: wizard.transferPlanSteps ?? [],
+    urgencyEnabled: wizard.urgencyEnabled === true,
+    callbackRequestsEnabled: wizard.callbackRequestsEnabled !== false,
+    callbackUseAniByDefault: wizard.callbackUseAniByDefault !== false,
+    callbackAskPreferredTime: wizard.callbackAskPreferredTime !== false,
+    callbackConfirmNumber: wizard.callbackConfirmNumber !== false,
+    salesSolicitationEnabled: wizard.salesSolicitationEnabled === true,
+    salesSolicitationAction: wizard.salesSolicitationAction ?? null,
+  };
+}
+
+function qualificationFromWizard(
+  wizard: AppointmentReceptionistWizardState,
+): VoiceV3AgentConfig["qualification"] {
+  return {
+    ...DEFAULT_V3_QUALIFICATION,
+    enabled: wizard.qualificationEnabled === true,
+    requiredBeforePrimaryAction: wizard.qualificationRequiredBeforePrimaryAction === true,
+    revision: wizard.qualificationRevision ?? null,
+    supportedZipCodes: wizard.qualificationSupportedZipCodes ?? [],
+    rulesMatchMode: wizard.qualificationRulesMatchMode ?? null,
+    notQualifiedFallback: wizard.qualificationNotQualifiedFallback ?? null,
+    needsReviewFallback: wizard.qualificationNeedsReviewFallback ?? null,
+    rules: wizard.qualificationRules ?? [],
+  };
+}
+
+function recoveryFromWizard(
+  wizard: AppointmentReceptionistWizardState,
+): VoiceV3AgentConfig["recovery"] {
+  return {
+    ...DEFAULT_V3_RECOVERY,
+    aiCallRecoveryEnabled: wizard.aiCallRecoveryEnabled === true,
+    consentMode: wizard.aiCallRecoveryConsentMode ?? null,
+    sendingPhoneNumberId: wizard.aiCallRecoverySendingPhoneNumberId ?? null,
+    continueOverSms: wizard.aiCallRecoveryContinueOverSms === true,
+    delaySeconds: wizard.aiCallRecoveryDelaySeconds ?? null,
+    sendWhenCallbackCreated: wizard.aiCallRecoverySendWhenCallbackCreated === true,
+  };
+}
+
+function integrationsFromWizard(
+  wizard: AppointmentReceptionistWizardState,
+): VoiceV3AgentConfig["integrations"] {
+  return {
+    ...DEFAULT_V3_INTEGRATIONS,
+    crmEnabled: wizard.crmEnabled === true,
+    longTermMemory: wizard.longTermMemory === true,
+    calendarProvider: wizard.calendarProvider,
+    calendarConnected: wizard.calendarConnected === true,
+    calendarEmail: wizard.calendarEmail?.trim() || null,
+  };
 }
 
 /**
@@ -166,6 +264,7 @@ export function compileVoiceV3AgentConfig(input: {
   wizard: AppointmentReceptionistWizardState;
   providerConnections?: VoiceV3ProviderConnections;
   envFallback?: VoiceV3AgentConfig;
+  source?: VoiceV3AgentConfig["source"];
 }): VoiceV3AgentConfig {
   const envFallback = input.envFallback ?? VOICE_V3_BOOKING_AGENT_CONFIG;
   const wizard = input.wizard;
@@ -238,8 +337,13 @@ export function compileVoiceV3AgentConfig(input: {
         : envFallback.calendar,
     ...nested,
     services: services.length ? services : [service],
-    source: "wizard_published",
+    source: input.source ?? "wizard_published",
     configVersion: configVersionHash(wizard),
+    callHandling: callHandlingFromWizard(wizard),
+    qualification: qualificationFromWizard(wizard),
+    recovery: recoveryFromWizard(wizard),
+    integrations: integrationsFromWizard(wizard),
+    bookingStrategyDetail: bookingStrategyDetailFromWizard(wizard),
   };
 
   return mergeNestedConfig(base, {
@@ -276,15 +380,32 @@ export function compileVoiceV3AgentConfig(input: {
           : [],
         websiteUrl: wizard.websiteUrl?.trim() || null,
         documentSourceIds: [],
+        revision: wizard.knowledgeBaseRevision ?? null,
       },
     },
     telephony: {
       phoneNumberId: wizard.phoneNumberId,
       phoneNumberE164: wizard.phoneNumberE164,
+      answerWhen: wizard.answerWhen,
+      numberSource: wizard.numberSource,
+      ringBehavior: wizard.ringBehavior,
+      ringTeamSeconds: wizard.ringTeamSeconds,
+      outboundSmsMode: wizard.outboundSmsMode,
+      outboundSmsPhoneNumberId: wizard.outboundSmsPhoneNumberId ?? null,
+      outboundSmsE164: wizard.outboundSmsE164 ?? null,
       callRecording: wizard.callRecording ?? "off",
       connectionGreetingMode: wizard.connectionGreeting ?? "none",
+      connectionGreetingText: wizard.connectionGreetingText,
+      connectionGreetingAudioUrl: wizard.connectionGreetingAudioUrl,
       liveVoiceId: safeLiveVoice(wizard.voiceId, envFallback.telephony.liveVoiceId),
+      voiceLabel: wizard.voiceLabel,
       speaksFirst: wizard.speaksFirst === "caller" ? "caller" : "ai",
+      liveAudioControls: {
+        speakingSpeed: wizard.speakingSpeed,
+        responsiveness: wizard.responsiveness,
+        interruptionSensitivity: wizard.interruptionSensitivity,
+        executionSupport: "UNSUPPORTED_BY_CURRENT_LIVE_API" as const,
+      },
     },
     controlPlane: {
       solutionName: wizard.solutionName,
