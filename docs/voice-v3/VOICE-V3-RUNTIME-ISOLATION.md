@@ -34,10 +34,18 @@ Caller → Telnyx Call Control → SIP forward → OpenAI Live
 
 FIND → OfferSet → SELECT → **revalidate** → BOOK → `BOOKING_CONFIRMED`. Reschedule/cancel reuse the same machinery.
 
+## Legacy reuse (mandatory)
+
+Before any V3 tool imports shared send/helpers: read `docs/VOICE-V3-LEGACY-REUSE-STANDARD.md`.  
+**Names are not contracts** — trace side effects (CRM, tracking URLs, sender override, campaigns).
+
+SEND_LINK freeze: `docs/VOICE-V3-SEND-LINK-FREEZE-GATE.md` + `scripts/verify-voice-v3-send-link-freeze-gate.ts`.
+
 ## Regression
 
 - `tsx scripts/test-voice-v3-runtime-isolation.ts` (in `test:voice-v3-intake`)
 - `npm run test:voice-v3-booking` / `reschedule` / `cancellation`
+- `tsx scripts/test-voice-v3-booking-link-sms-isolation.ts`
 
 ## Manual certification
 

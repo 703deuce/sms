@@ -1,6 +1,7 @@
 # Voice V3 — SEND_BOOKING_LINK implementation report
 
-**STOP:** Do not merge or deploy without explicit approval. Real PSTN/SMS certification remains manual.
+**SEND_LINK freeze:** **NOT FROZEN** until PSTN passes all four gates on dedicated transport — see `docs/VOICE-V3-SEND-LINK-FREEZE-GATE.md`.  
+**Legacy reuse rule:** `docs/VOICE-V3-LEGACY-REUSE-STANDARD.md`.
 
 ## Git
 

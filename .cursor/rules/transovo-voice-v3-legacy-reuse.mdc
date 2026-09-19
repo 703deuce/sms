@@ -1,0 +1,17 @@
+---
+description: Voice V3 — no blind reuse of legacy helpers; trace side effects before wiring tools
+globs:
+  - src/lib/voice-v3/**
+  - src/lib/voice-v3-basic/**
+  - scripts/test-voice-v3-*
+  - scripts/verify-voice-v3-*
+alwaysApply: false
+---
+
+# Voice V3 legacy reuse (mandatory for V3 changes)
+
+Read **`docs/VOICE-V3-LEGACY-REUSE-STANDARD.md`** before importing anything outside `src/lib/voice-v3/**` into a V3 tool or executor.
+
+- Do not use `sendQuickSms`, `sendAppointmentSms`, or inbox/campaign helpers in V3 tool hot paths unless the full downstream graph is documented and approved.
+- Prefer a **dedicated module** under `src/lib/voice-v3/<feature>/` + an **isolation script** that fails on forbidden imports.
+- SEND_LINK transport: **`sendVoiceV3BookingLinkSms` only** — freeze gates in `docs/VOICE-V3-SEND-LINK-FREEZE-GATE.md`.
