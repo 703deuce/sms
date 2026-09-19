@@ -410,15 +410,71 @@ First failing boundary only: A SIP → L spoken behavior (see directive full lis
 
 ---
 
-## PHASE 43–48 — Remaining tools, transfer cert, Microsoft/callback/SEND_LINK regression, torture matrix
+## PHASE 43 — Then connect remaining existing tools
 
-Expose remaining tools through same adapter after initial set passes. LiveKit duplicate/cancel **supplements** Transovo idempotency/reconciliation — never replaces.
+After the first concurrency set passes, expose through the **same** adapter:
+
+- `book_appointment`
+- `find_appointment`
+- `reschedule_appointment`
+- `cancel_appointment`
+- `send_booking_link`
+- `transfer_call`
+- `end_call`
+
+Do not create separate adapter architecture for each.
 
 ---
 
-## PHASE 49–51 — Idempotency, reconciliation, activeGoal
+## PHASE 44 — Transfer certification
 
-Keep both framework and business layers. Do not use `activeGoal` as Python speech router.
+After LiveKit SIP transfer implementation, test: straight transfer; booking → transfer; callback → transfer; transfer failure/unanswered; caller interruption immediately before transfer.
+
+Ensure: destination authorized by Transovo; actual SIP participant identity used; LiveKit transfer API succeeds before success claim; session ends on successful cold transfer; caller remains with Amy if transfer fails; no Telnyx Call Control on a call LiveKit owns.
+
+---
+
+## PHASE 45 — Full Microsoft regression
+
+Run existing certified regression suite. Real flows: availability, booking, find appointment, ambiguous appointment, manual Microsoft event without DB row, reschedule, cancel. No business-layer diff caused by LiveKit.
+
+---
+
+## PHASE 46 — Callback regression
+
+Straight callback; booking → callback; callback → booking; ANI; alternate number; missing name; missing service reason; duplicate callback. Same persistence and IDs.
+
+---
+
+## PHASE 47 — SEND_LINK regression
+
+Existing 14-case SEND_LINK matrix. LiveKit flow: scheduling → SEND_LINK tool → consent → existing SMS executor → success only after provider accepted. No Python SMS.
+
+---
+
+## PHASE 48 — Complete concurrency torture matrix
+
+Before production certification, run (at minimum): caller interrupts Amy; speaks while Astra reasons; during READ; during WRITE; objective change during READ; before WRITE; after WRITE commit begins; after provider success before Amy confirms; duplicate same READ; two READs different args; duplicate same WRITE; provider timeout; backend timeout; provider success lost HTTP; hangup during READ/WRITE; rapid three-turn correction; old read after newer read; malformed args; needs_information loop; ambiguous lookup; no results; OpenAI error; LiveKit session close; SIP disconnect; transfer success/failure.
+
+Do not mark migration complete merely because straight booking works.
+
+---
+
+## PHASE 49 — LiveKit duplicate policy must not replace Transovo idempotency
+
+LiveKit duplicate handling protects concurrent framework calls. Transovo idempotency protects business effects. **Keep both.** Never remove backend idempotency because LiveKit has duplicate handling.
+
+---
+
+## PHASE 50 — LiveKit cancellation must not replace Transovo reconciliation
+
+Cancellable READ: LiveKit may cancel. Committed WRITE: Transovo reconciles. Caller interruption ≠ provider operation did not happen.
+
+---
+
+## PHASE 51 — Do not reintroduce activeGoal as a framework router
+
+Backend may retain `activeGoal` where business code uses it. Do **not** use Python `activeGoal` to decide which tool Astra may select from inferred speech. Astra tool selection establishes semantic operation; Transovo validates.
 
 ---
 
