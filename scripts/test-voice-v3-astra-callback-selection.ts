@@ -1,12 +1,18 @@
 /**
- * Real GPT Astra tool-selection cert for request_callback (requires OPENAI_API_KEY).
+ * Real GPT-6 Astra tool-selection certification for request_callback.
+ * Requires OPENAI_API_KEY. Uses production Astra model (gpt-6-astra).
  */
 import assert from "node:assert/strict";
 import OpenAI from "openai";
 import { VOICE_V3_BOOKING_TEST_CONFIG } from "./voice-v3-booking-test-config";
 import { VOICE_V3_SEND_LINK_TEST_CONFIG } from "./voice-v3-send-link-test-config";
 import { buildVoiceV3AstraFunctionTools } from "../src/lib/voice-v3/tools/build-openai-tools";
-import { buildVoiceV3Prompts, resolveVoiceV3DefaultPromptInput } from "../src/lib/voice-v3/prompts/build-voice-v3-prompts";
+import {
+  buildVoiceV3Prompts,
+  resolveVoiceV3DefaultPromptInput,
+} from "../src/lib/voice-v3/prompts/build-voice-v3-prompts";
+
+const MODEL = process.env.VOICE_V3_ASTRA_MODEL?.trim() || "gpt-6-astra";
 
 type Scenario = {
   label: string;
@@ -24,18 +30,35 @@ const CALLBACK_ON_BOOKING = {
   },
 };
 
+const TRANSFER_ON = {
+  ...CALLBACK_ON_BOOKING,
+  capabilities: {
+    ...CALLBACK_ON_BOOKING.capabilities,
+    transferCalls: true,
+  },
+  transferDestinations: [
+    { id: "front_desk", label: "Front desk", phoneE164: "+15559876543", enabled: true },
+  ],
+};
+
 const SCENARIOS: Scenario[] = [
   {
-    label: "callback_direct",
+    label: "callback_direct_1",
     config: CALLBACK_ON_BOOKING,
     history: "Caller: Can somebody call me back about my water heater?",
+    expectTool: "request_callback",
+  },
+  {
+    label: "callback_direct_2",
+    config: CALLBACK_ON_BOOKING,
+    history: "Caller: Have someone give me a call when you get a chance.",
     expectTool: "request_callback",
   },
   {
     label: "abandon_booking_for_callback",
     config: CALLBACK_ON_BOOKING,
     history:
-      "Caller began booking and gave their name. Caller now says: I don't want to schedule anymore. Just have somebody contact me.",
+      "Caller started booking and gave their name. Caller now says: I don't want to schedule anymore. Just have somebody contact me.",
     expectTool: "request_callback",
     forbiddenTools: ["book_appointment"],
   },
@@ -49,9 +72,16 @@ const SCENARIOS: Scenario[] = [
       },
     },
     history:
-      "Caller asked to book. Before any SMS, caller says: Never mind, just have someone call me.",
+      "Caller asked to book online. Before any text, caller says: Never mind, just have someone call me.",
     expectTool: "request_callback",
     forbiddenTools: ["send_booking_link"],
+  },
+  {
+    label: "callback_later_human",
+    config: CALLBACK_ON_BOOKING,
+    history:
+      "Caller: I need to speak to someone but they can call me later this afternoon.",
+    expectTool: "request_callback",
   },
   {
     label: "hours_not_callback",
@@ -63,29 +93,59 @@ const SCENARIOS: Scenario[] = [
   {
     label: "book_not_callback",
     config: CALLBACK_ON_BOOKING,
-    history: "Caller: I want to make an appointment for next Tuesday.",
+    history: "Caller: I want to make an appointment for next Tuesday afternoon.",
     expectTool: "set_scheduling_preference",
+    forbiddenTools: ["request_callback"],
+  },
+  {
+    label: "send_link_not_callback",
+    config: {
+      ...VOICE_V3_SEND_LINK_TEST_CONFIG,
+      callHandling: {
+        ...VOICE_V3_SEND_LINK_TEST_CONFIG.callHandling,
+        callbackRequestsEnabled: true,
+      },
+    },
+    history:
+      "Amy already read the SMS disclosure and the caller said yes to receiving the booking link by text. Caller: Great — please send the booking link text now.",
+    expectTool: "send_booking_link",
+    forbiddenTools: ["request_callback"],
+  },
+  {
+    label: "cancel_not_callback",
+    config: CALLBACK_ON_BOOKING,
+    history: "Caller: I want to cancel my appointment tomorrow.",
+    expectTool: "find_appointment",
+    forbiddenTools: ["request_callback"],
+  },
+  {
+    label: "transfer_not_callback",
+    config: TRANSFER_ON,
+    history: "Caller: Can you transfer me to someone right now?",
+    expectTool: "transfer_call",
     forbiddenTools: ["request_callback"],
   },
 ];
 
 async function pickTool(scenario: Scenario): Promise<string | null> {
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
-  if (!apiKey) {
-    console.log("SKIP voice-v3 astra callback selection (no OPENAI_API_KEY)");
-    process.exit(0);
-  }
-  const client = new OpenAI({ apiKey });
-  const tools = buildVoiceV3AstraFunctionTools(scenario.config);
-  const prompts = buildVoiceV3Prompts(resolveVoiceV3DefaultPromptInput(scenario.config));
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const tools = buildVoiceV3AstraFunctionTools(scenario.config).map((t) => ({
+    type: "function" as const,
+    name: t.name,
+    description: t.description ?? undefined,
+    parameters: t.parameters ?? {},
+    strict: t.strict ?? true,
+  }));
+  const { astraInstructions } = buildVoiceV3Prompts({
+    ...resolveVoiceV3DefaultPromptInput(new Date(), scenario.config),
+  });
   const response = await client.responses.create({
-    model: process.env.VOICE_V3_ASTRA_MODEL?.trim() || "gpt-4.1",
-    input: [
-      { role: "system", content: prompts.astraSystem },
-      { role: "user", content: scenario.history },
-    ],
+    model: MODEL,
+    instructions: astraInstructions,
+    input: [{ role: "user", content: scenario.history }],
     tools,
     tool_choice: "auto",
+    parallel_tool_calls: false,
   });
   for (const item of response.output) {
     if (item.type === "function_call") return item.name;
@@ -94,19 +154,42 @@ async function pickTool(scenario: Scenario): Promise<string | null> {
 }
 
 async function main() {
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) {
+    console.error("FAIL: OPENAI_API_KEY required for Astra callback selection cert");
+    process.exit(1);
+  }
+
+  console.log(`ASTRA_CALLBACK_SELECTION model=${MODEL}`);
+  const results: Array<{ label: string; picked: string | null; ok: boolean }> = [];
+
   for (const scenario of SCENARIOS) {
     const picked = await pickTool(scenario);
+    let ok = true;
     if (scenario.expectTool) {
-      assert.equal(picked, scenario.expectTool, `${scenario.label} expected ${scenario.expectTool}`);
+      ok = picked === scenario.expectTool;
     }
     if (scenario.forbiddenTools?.length && picked) {
-      assert.ok(
-        !scenario.forbiddenTools.includes(picked),
-        `${scenario.label} forbids ${scenario.forbiddenTools.join(",")} but got ${picked}`,
-      );
+      ok = ok && !scenario.forbiddenTools.includes(picked);
     }
-    console.log(`PASS astra_callback_selection:${scenario.label}:${picked ?? "none"}`);
+    if (scenario.expectTool === null && scenario.forbiddenTools?.includes("request_callback")) {
+      ok = picked !== "request_callback";
+    }
+    results.push({ label: scenario.label, picked, ok });
+    console.log(
+      `${ok ? "PASS" : "FAIL"} ${scenario.label} picked=${picked ?? "none"} expected=${scenario.expectTool ?? "none/forbidden"}`,
+    );
+    if (!ok) {
+      process.exitCode = 1;
+    }
   }
+
+  const failed = results.filter((r) => !r.ok);
+  if (failed.length) {
+    console.error(`ASTRA_CALLBACK_SELECTION failed=${failed.length}/${results.length}`);
+    process.exit(1);
+  }
+  console.log(`ASTRA_CALLBACK_SELECTION_PASS ${results.length}/${results.length}`);
 }
 
 main().catch((err) => {

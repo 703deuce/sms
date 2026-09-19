@@ -226,6 +226,7 @@ export const WIZARD_SCALAR_CONTROL_PATHS: readonly string[] = [
   "callbackUseAniByDefault",
   "callbackAskPreferredTime",
   "callbackConfirmNumber",
+  "callbackRequiredCollectFieldIds",
   "salesSolicitationEnabled",
   "salesSolicitationAction",
   "aiCallRecoveryEnabled",

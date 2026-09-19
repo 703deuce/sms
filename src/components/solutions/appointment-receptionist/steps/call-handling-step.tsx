@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import { InfoCallout, RadioRow, SidePanel, StatusPill } from "../ui";
 import { UrgencyRulesEditor } from "../urgency-rules-editor";
+import { CallbackRequiredFieldsEditor } from "../callback-required-fields-editor";
+import { defaultCallbackRequiredCollectFieldIds } from "@/lib/solutions/appointment-receptionist/callback-required-field-defaults";
 import {
   AfterHoursBehaviorEditor,
   CallbackSlaEditor,
@@ -273,15 +275,6 @@ export function CallHandlingStep({
                   <input
                     type="checkbox"
                     className="mt-1"
-                    checked={state.callbackRequestsEnabled !== false}
-                    onChange={(e) => patch({ callbackRequestsEnabled: e.target.checked })}
-                  />
-                  <span className="font-medium">Callback requests</span>
-                </label>
-                <label className="flex items-start gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="mt-1"
                     checked={state.salesSolicitationEnabled === true}
                     onChange={(e) => patch({ salesSolicitationEnabled: e.target.checked })}
                   />
@@ -289,6 +282,45 @@ export function CallHandlingStep({
                 </label>
               </div>
             ) : null}
+          </div>
+
+          <div className="rounded-xl border border-border bg-card p-4">
+            <h3 className="text-sm font-semibold">Callback requests</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Let callers ask your team to call them back. Uses shared caller fields — not a
+              separate callback intake form.
+            </p>
+            <div className="mt-3 space-y-3">
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={state.callbackRequestsEnabled !== false}
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    if (on && !state.callbackRequiredCollectFieldIds?.length) {
+                      patch({
+                        callbackRequestsEnabled: true,
+                        callbackRequiredCollectFieldIds: defaultCallbackRequiredCollectFieldIds(
+                          state.collectFields,
+                        ),
+                      });
+                    } else {
+                      patch({ callbackRequestsEnabled: on });
+                    }
+                  }}
+                />
+                <span>
+                  <span className="font-medium">Allow callers to request a callback</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    Independent of appointment booking strategy (Microsoft, send link, or none).
+                  </span>
+                </span>
+              </label>
+              {state.callbackRequestsEnabled !== false ? (
+                <CallbackRequiredFieldsEditor state={state} patch={patch} />
+              ) : null}
+            </div>
           </div>
 
           <div className="rounded-xl border border-border bg-card p-4">

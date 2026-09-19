@@ -1,4 +1,5 @@
 import type { AppointmentReceptionistWizardState } from "./types";
+import { defaultCallbackRequiredCollectFieldIds } from "./callback-required-field-defaults";
 import {
   VOICE_V3_WIZARD_LIVE_VOICES,
 } from "@/lib/voice-v3/config/voice-v3-live-built-in-voices";
@@ -405,6 +406,14 @@ export function createDefaultWizardState(): AppointmentReceptionistWizardState {
       { id: "address", label: "Address", required: false, enabled: false },
       { id: "notes", label: "Additional notes", required: false, enabled: true },
     ],
+    callbackRequiredCollectFieldIds: defaultCallbackRequiredCollectFieldIds([
+      { id: "full_name", label: "Full name", required: true, enabled: true },
+      { id: "phone", label: "Phone number", required: true, enabled: true },
+      { id: "email", label: "Email", required: true, enabled: true },
+      { id: "service", label: "Service requested", required: true, enabled: true },
+      { id: "address", label: "Address", required: false, enabled: false },
+      { id: "notes", label: "Additional notes", required: false, enabled: true },
+    ]),
     transferTriggers: [
       "Caller asks for a person",
       "Caller is frustrated",
