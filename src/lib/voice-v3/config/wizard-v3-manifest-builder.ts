@@ -322,6 +322,130 @@ export function buildWizardV3FieldManifest(): WizardV3FieldManifestRow[] {
     );
   }
 
+  const weekDays = [
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+  ] as const;
+  for (const day of weekDays) {
+    for (const [suffix, label] of [
+      [".closed", `${day} closed`],
+      [".ranges[].start", `${day} range start`],
+      [".ranges[].end", `${day} range end`],
+    ] as const) {
+      rows.push(
+        row({
+          step: 3,
+          uiLabel: `Business schedule ${label}`,
+          statePath: `operatingMaturity.businessSchedule.weekly.${day}${suffix}`,
+          valueType: "varies",
+          v3ConfigPath: "businessHours + business.hoursDisplay",
+          destinations: ["DETERMINISTIC_CONFIG", "LIVE_FRONTEND_CONTEXT"],
+          executionStatus: "ACTIVE_EXECUTION",
+          scope: "YES_MICROSOFT_BOOKING",
+          compilerFunction: "businessHoursWindowFromWeeklySchedule",
+          runtimeConsumer: "FIND/BOOK",
+          republishBehavior: "next_call",
+        }),
+      );
+    }
+  }
+
+  rows.push(
+    row({
+      step: 3,
+      uiLabel: "After-hours use operating state",
+      statePath: "operatingMaturity.afterHoursBehavior.useOperatingStateDuringCalls",
+      valueType: "boolean",
+      v3ConfigPath: "callHandling / scheduling (future)",
+      destinations: ["DETERMINISTIC_CONFIG"],
+      executionStatus: "CONFIGURED_NOT_IMPLEMENTED",
+      scope: "YES_GENERAL",
+      compilerFunction: "ensureWizardOperatingMaturity",
+      runtimeConsumer: "future after-hours executor",
+      republishBehavior: "next_call",
+    }),
+  );
+  for (const key of [
+    "allowLiveBooking",
+    "allowCallbackRequest",
+    "allowMessageTaking",
+    "allowOnCallEscalation",
+    "allowOfficeTransfer",
+    "allowNormalTransferDestinations",
+  ] as const) {
+    rows.push(
+      row({
+        step: 3,
+        uiLabel: `After-hours when closed: ${key}`,
+        statePath: `operatingMaturity.afterHoursBehavior.whenClosed.${key}`,
+        valueType: "boolean",
+        v3ConfigPath: "callHandling (future)",
+        destinations: ["DETERMINISTIC_CONFIG"],
+        executionStatus: "CONFIGURED_NOT_IMPLEMENTED",
+        scope: "YES_GENERAL",
+        compilerFunction: "ensureWizardOperatingMaturity",
+        runtimeConsumer: "future after-hours executor",
+        republishBehavior: "next_call",
+      }),
+    );
+  }
+
+  for (const field of ["id", "name", "startDate", "endDate", "closedAllDay"] as const) {
+    rows.push(
+      row({
+        step: 3,
+        uiLabel: `Holiday ${field}`,
+        statePath: `operatingMaturity.businessSchedule.holidays[].${field}`,
+        valueType: "varies",
+        v3ConfigPath: "scheduling (future)",
+        destinations: ["DETERMINISTIC_CONFIG"],
+        executionStatus: "CONFIGURED_NOT_IMPLEMENTED",
+        scope: "YES_GENERAL",
+        compilerFunction: "ensureWizardOperatingMaturity",
+        runtimeConsumer: "future holiday closure",
+        republishBehavior: "next_call",
+      }),
+    );
+  }
+
+  rows.push(
+    row({
+      step: 3,
+      uiLabel: "On-call schedule enabled",
+      statePath: "operatingMaturity.onCallSchedule.enabled",
+      valueType: "boolean",
+      v3ConfigPath: "callHandling (future)",
+      destinations: ["DETERMINISTIC_CONFIG"],
+      executionStatus: "CONFIGURED_NOT_IMPLEMENTED",
+      scope: "YES_GENERAL",
+      compilerFunction: "ensureWizardOperatingMaturity",
+      runtimeConsumer: "future on-call routing",
+      republishBehavior: "next_call",
+    }),
+  );
+  for (const field of ["id", "label", "phoneE164"] as const) {
+    rows.push(
+      row({
+        step: 3,
+        uiLabel: `On-call entry ${field}`,
+        statePath: `operatingMaturity.onCallSchedule.entries[].${field}`,
+        valueType: "varies",
+        v3ConfigPath: "callHandling (future)",
+        destinations: ["DETERMINISTIC_CONFIG"],
+        executionStatus: "CONFIGURED_NOT_IMPLEMENTED",
+        scope: "YES_GENERAL",
+        compilerFunction: "ensureWizardOperatingMaturity",
+        runtimeConsumer: "future on-call routing",
+        republishBehavior: "next_call",
+      }),
+    );
+  }
+
   rows.push(
     row({
       step: 4,

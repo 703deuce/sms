@@ -2,7 +2,7 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { loadVoiceAgentRuntimeConfig } from "@/lib/voice/load-agent-config";
-import type { VoiceAgentConfig } from "@/lib/voice/types";
+import { parseVoiceAgentConfig, type VoiceAgentConfig } from "@/lib/voice/types";
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
 import type { VoiceV3AgentConfig } from "./agent-config";
 import { VOICE_V3_BOOKING_AGENT_CONFIG } from "./booking-agent-config";
@@ -15,13 +15,7 @@ import {
   logVoiceV3AgentConfigResolved,
   logVoiceV3ConfigFallbackUsed,
 } from "./config-observability";
-
-function wizardFromConfig(config: VoiceAgentConfig): AppointmentReceptionistWizardState | null {
-  const advanced = (config.advanced || {}) as Record<string, unknown>;
-  const w = advanced.appointmentReceptionistWizard;
-  if (!w || typeof w !== "object") return null;
-  return w as AppointmentReceptionistWizardState;
-}
+import { resolveWizardSnapshotForVoiceV3 } from "./resolve-wizard-snapshot-for-v3";
 
 /** Appointment receptionist wizard agents use Voice V3 PSTN only — no optional flag. */
 export function isAppointmentReceptionistAgent(config: VoiceAgentConfig): boolean {
@@ -79,8 +73,20 @@ export async function resolveVoiceV3AgentConfigForAgent(input: {
 }): Promise<VoiceV3AgentConfig> {
   const envFallback = VOICE_V3_BOOKING_AGENT_CONFIG;
   try {
-    const config = await loadVoiceAgentRuntimeConfig(input.workspaceId, input.agentId);
-    const wizard = wizardFromConfig(config);
+    const prisma = getPrisma();
+    const agent = await prisma.voiceAgent.findFirst({
+      where: { id: input.agentId, workspaceId: input.workspaceId },
+      select: { status: true, draftConfig: true },
+    });
+    const publishedRuntimeConfig = await loadVoiceAgentRuntimeConfig(
+      input.workspaceId,
+      input.agentId,
+    );
+    const { wizard, source } = resolveWizardSnapshotForVoiceV3({
+      agentStatus: agent?.status ?? "ACTIVE",
+      draftConfig: agent?.draftConfig,
+      publishedRuntimeConfig,
+    });
     if (!wizard) {
       logVoiceV3ConfigFallbackUsed("wizard", "appointmentReceptionistWizard_missing");
       return envFallback;
@@ -95,6 +101,7 @@ export async function resolveVoiceV3AgentConfigForAgent(input: {
       wizard,
       providerConnections,
       envFallback,
+      source,
     });
 
     logVoiceV3AgentConfigResolved({

@@ -2,7 +2,7 @@
 
 **Package:** `openai` (installed `^7.17.0`)  
 **Types:** `node_modules/openai/resources/live/sessions.d.ts`  
-**API:** [OpenAI Live API](https://platform.openai.com/docs/api-reference/realtime)
+**API:** [OpenAI Live TypeScript API reference](https://platform.openai.com/docs/api-reference/live)
 
 ## Session accept (startup) — supported fields
 

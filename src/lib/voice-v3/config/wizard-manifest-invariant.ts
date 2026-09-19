@@ -1,5 +1,6 @@
 import { createDefaultWizardState } from "@/lib/solutions/appointment-receptionist/defaults";
 import { WIZARD_V3_FIELD_MANIFEST } from "./wizard-v3-field-manifest";
+import { WIZARD_REQUIRED_CONTROL_PATHS } from "./wizard-required-control-paths";
 
 function manifestCoversStatePath(statePath: string, manifestPath: string): boolean {
   if (manifestPath === statePath) return true;
@@ -31,11 +32,24 @@ export function findUnmappedWizardStateKeys(): string[] {
   return unmapped;
 }
 
+/** Nested customer-editable paths must have an exact manifest row. */
+export function findUnmappedRequiredControlPaths(): string[] {
+  const manifestPaths = new Set(WIZARD_V3_FIELD_MANIFEST.map((r) => r.statePath));
+  return WIZARD_REQUIRED_CONTROL_PATHS.filter((p) => !manifestPaths.has(p));
+}
+
 export function assertWizardManifestComplete(): void {
-  const unmapped = findUnmappedWizardStateKeys();
-  if (unmapped.length > 0) {
+  const topUnmapped = findUnmappedWizardStateKeys();
+  if (topUnmapped.length > 0) {
     throw new Error(
-      `WIZARD_V3_MANIFEST_INCOMPLETE: unmapped top-level keys: ${unmapped.join(", ")}`,
+      `WIZARD_V3_MANIFEST_INCOMPLETE: unmapped top-level keys: ${topUnmapped.join(", ")}`,
+    );
+  }
+
+  const nestedUnmapped = findUnmappedRequiredControlPaths();
+  if (nestedUnmapped.length > 0) {
+    throw new Error(
+      `WIZARD_V3_MANIFEST_INCOMPLETE: unmapped nested controls: ${nestedUnmapped.slice(0, 8).join(", ")}${nestedUnmapped.length > 8 ? ` (+${nestedUnmapped.length - 8} more)` : ""}`,
     );
   }
 }
