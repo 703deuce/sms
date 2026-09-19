@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-19 (UTC)  
 **Branch:** `cursor/voice-v3-conversation-freshness-architecture-2304`  
-**Merge/deploy:** **Not ready** — deterministic gate expanded; **PSTN Amy re-delegation** still required  
+**Merge/deploy:** See **`docs/VOICE-V3-CONVERSATION-FRESHNESS-PRE-MERGE-REPORT.md`** — **CODE MERGE READY: YES**; **PRODUCTION CERTIFIED: NO** (PSTN re-delegation)  
 
 **Architecture:** `docs/VOICE-V3-CONVERSATION-FRESHNESS-ARCHITECTURE.md` (CURRENT PRODUCTION DESIGN + HISTORICAL INVESTIGATION)
 
