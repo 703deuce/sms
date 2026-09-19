@@ -38,12 +38,20 @@ export type VoiceV3Goal =
   | "REQUEST_CALLBACK"
   | "REQUEST_TRANSFER";
 
+export type IntakeFieldVerificationStatus =
+  | "candidate"
+  | "collected"
+  | "verified"
+  | "declined";
+
 export interface CapturedField {
   value: string;
   source: "caller" | "business" | "runtime";
   confidence?: number;
   utteranceId?: string;
   updatedAt: string;
+  revision?: number;
+  verificationStatus?: IntakeFieldVerificationStatus;
 }
 
 export interface VoiceV3CallContext {

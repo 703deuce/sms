@@ -5,6 +5,8 @@ import { isSelectedSlotAuthoritative } from "../calendar/selected-slot";
 import type { VoiceV3CallContext } from "./call-context";
 import type { BookingPhase } from "../calendar/booking-types";
 import type { CancellationPhase } from "../calendar/appointment-management-types";
+import { deriveIntakeObjective } from "../intake-objective";
+import { getMissingFieldsForOperation } from "../intake-objective/operation-requirements";
 
 export interface VoiceV3RuleEvaluation {
   missingRequiredFields: string[];
@@ -29,13 +31,8 @@ export function evaluateVoiceV3Rules(
   ctx: VoiceV3CallContext,
   config: VoiceV3AgentConfig,
 ): VoiceV3RuleEvaluation {
-  const missingRequiredFields = config.intakeFields
-    .filter((field) => field.required)
-    .filter((field) => {
-      const value = ctx.intake.values[field.key]?.value;
-      return !value || !value.trim();
-    })
-    .map((field) => field.key);
+  const intakeObjective = deriveIntakeObjective(config, ctx);
+  const missingRequiredFields = intakeObjective.missingRequiredFields;
 
   const normalized = ctx.scheduling.normalized;
   const hasSchedulingPreference = Boolean(
@@ -76,7 +73,8 @@ export function evaluateVoiceV3Rules(
       }),
   );
 
-  const intakeComplete = missingRequiredFields.length === 0;
+  const intakeComplete = intakeObjective.status === "COMPLETE";
+  const missingForBook = getMissingFieldsForOperation("book_appointment", config, ctx);
   const bookingConfirmed = ctx.booking.phase === "BOOKING_CONFIRMED" && Boolean(ctx.booking.confirmed);
   const bookingInProgress =
     ctx.booking.phase === "BOOKING_REVALIDATING" ||
@@ -87,7 +85,7 @@ export function evaluateVoiceV3Rules(
   const bookingReady =
     isBookGoal &&
     slotSelected &&
-    intakeComplete &&
+    missingForBook.length === 0 &&
     durationKnown &&
     serviceKnown &&
     calendarConfigured &&

@@ -7,11 +7,40 @@ import type { VoiceV3AgentConfig } from "./agent-config";
 export const VOICE_V3_BOOKING_AGENT_CONFIG: VoiceV3AgentConfig = {
   businessName: process.env.VOICE_V3_BUSINESS_NAME?.trim() || "Transovo",
   timezone: process.env.VOICE_V3_BUSINESS_TIMEZONE?.trim() || "America/New_York",
+  intake: {
+    objectiveDescription:
+      "Collect enough caller information to service and schedule the request.",
+  },
   intakeFields: [
-    { key: "name", label: "Name", type: "text", required: true },
-    { key: "email", label: "Email", type: "email", required: true },
-    { key: "phone", label: "Phone", type: "phone", required: true },
+    {
+      key: "name",
+      label: "Name",
+      type: "text",
+      required: true,
+      description: "The caller's full name for the appointment.",
+    },
+    {
+      key: "email",
+      label: "Email",
+      type: "email",
+      required: true,
+      description: "The caller's email address for appointment communication.",
+      collectionStrategy: "voice_email",
+      verificationRequired: false,
+    },
+    {
+      key: "phone",
+      label: "Phone",
+      type: "phone",
+      required: true,
+      description: "The caller's phone number for appointment contact.",
+      collectionStrategy: "voice_phone",
+    },
   ],
+  operationRequirements: {
+    find_availability: [],
+    book_appointment: ["name", "email", "phone"],
+  },
   service: {
     id: process.env.VOICE_V3_SERVICE_ID?.trim() || "consultation",
     name: process.env.VOICE_V3_SERVICE_NAME?.trim() || "Consultation",

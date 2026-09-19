@@ -16,9 +16,27 @@ const AGENT_B: VoiceV3AgentConfig = {
   ...ODD_INTAKE_HARNESS_AGENT_CONFIG,
   businessName: "Agent B",
   intakeFields: [
-    { key: "name", label: "Name", type: "text", required: true },
-    { key: "phone", label: "Phone", type: "phone", required: true },
-    { key: "pet_name", label: "Pet", type: "text", required: false },
+    {
+      key: "name",
+      label: "Name",
+      type: "text",
+      required: true,
+      description: "Caller name.",
+    },
+    {
+      key: "phone",
+      label: "Phone",
+      type: "phone",
+      required: true,
+      description: "Caller phone.",
+    },
+    {
+      key: "pet_name",
+      label: "Pet",
+      type: "text",
+      required: false,
+      description: "Pet name.",
+    },
   ],
 };
 

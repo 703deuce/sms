@@ -1,5 +1,6 @@
 import { buildAstraBackendCoreInstructions } from "./astra-backend-core-instructions";
 import { buildAstraCrossToolInstructions } from "./astra-cross-tool-instructions";
+import { buildAstraIntakeInstructions } from "./astra-intake-instructions";
 
 export type AstraBackendPromptContext = {
   businessName?: string;
@@ -22,6 +23,7 @@ export function buildAstraBackendInstructions(
 
   const core = buildAstraBackendCoreInstructions();
   const crossTool = buildAstraCrossToolInstructions();
+  const intake = buildAstraIntakeInstructions();
 
   return `
 ${core}
@@ -32,6 +34,8 @@ Current business-local date/time: ${currentLocalDateTime}
 
 Configured intake fields (update_intake only — one key per schema property):
 ${context.intakeFieldCatalog ?? "(see update_intake tool schema)"}
+
+${intake}
 
 ${crossTool}
 

@@ -4,6 +4,7 @@ import type { FunctionTool } from "openai/resources/live/live";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import { dispatchBookingIfRequired } from "../calendar/book-dispatch";
 import { evaluateVoiceV3Rules } from "../state/call-rules";
+import { getMissingFieldsForOperation } from "../intake-objective/operation-requirements";
 import type { VoiceToolDefinition } from "./types";
 import { toolOk, voiceToolError } from "./types";
 import type { VoiceV3CallContext } from "../state/call-context";
@@ -100,15 +101,22 @@ export const bookAppointmentTool: VoiceToolDefinition<BookAppointmentArgs> = {
     const withSelection = bindAuthoritativeSlotSelection(withOffer, offer, slot);
     ctx.runtime.replaceContext(withSelection);
 
-    const rules = evaluateVoiceV3Rules(ctx.runtime.getSnapshot(), config);
-    if (rules.missingRequiredFields.length > 0) {
+    const snapAfterSelect = ctx.runtime.getSnapshot();
+    const missingForBook = getMissingFieldsForOperation(
+      "book_appointment",
+      config,
+      snapAfterSelect,
+    );
+    if (missingForBook.length > 0) {
       return voiceToolError(
         "MISSING_REQUIRED_INFORMATION",
         "Required intake is incomplete.",
-        { missing: rules.missingRequiredFields },
+        { missing_fields: missingForBook },
         "not_ready",
       );
     }
+
+    const rules = evaluateVoiceV3Rules(snapAfterSelect, config);
     if (!rules.bookingReady) {
       return voiceToolError(
         "NOT_READY",

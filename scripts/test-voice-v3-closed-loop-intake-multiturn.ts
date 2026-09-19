@@ -16,15 +16,15 @@ const SESSION = "closed_loop_multi";
 const CONFIG = VOICE_V3_BOOKING_TEST_CONFIG;
 
 function intakeArgs(partial: Record<string, unknown>): string {
-  return JSON.stringify({
+  const base: Record<string, unknown> = {
     name: null,
     email: null,
     phone: null,
-    date_expression: null,
-    time_expression: null,
-    active_goal: null,
-    ...partial,
-  });
+  };
+  for (const f of CONFIG.intakeFields) {
+    if (!(f.key in base)) base[f.key] = null;
+  }
+  return JSON.stringify({ ...base, ...partial });
 }
 
 async function applyUpdateIntake(
@@ -64,35 +64,27 @@ async function main() {
   await applyUpdateIntake(
     outbound,
     "t1",
-    intakeArgs({ active_goal: "BOOK_APPOINTMENT" }),
-  );
-  assert.equal(runtime.getSnapshot().dialog.activeGoal, "BOOK_APPOINTMENT");
-
-  await applyUpdateIntake(outbound, "t2", intakeArgs({ name: "Anthony" }));
-  assert.equal(runtime.getSnapshot().intake.values.name?.value, "Anthony");
-
-  await applyUpdateIntake(
-    outbound,
-    "t3",
-    intakeArgs({ email: "anthony@example.com" }),
-  );
-  assert.equal(runtime.getSnapshot().intake.values.email?.value, "anthony@example.com");
-
-  await applyUpdateIntake(
-    outbound,
-    "t4",
     intakeArgs({
-      date_expression: "Friday",
-      time_expression: "afternoon",
-      active_goal: "BOOK_APPOINTMENT",
+      name: "Anthony",
+      email: "anthony@example.com",
+      phone: "+15550100123",
     }),
   );
-  assert.ok(runtime.getSnapshot().scheduling.generation >= 1);
+  const snap = runtime.getSnapshot();
+  assert.equal(snap.intake.values.name?.value, "Anthony");
+  assert.equal(snap.intake.values.email?.value, "anthony@example.com");
 
+  await applyUpdateIntake(outbound, "t2", intakeArgs({ name: "Anthony Johnson" }));
+  assert.equal(runtime.getSnapshot().intake.values.name?.value, "Anthony Johnson");
+
+  assert.ok(
+    outbound.some((e) => e.type === "session.thinking.append"),
+    "intake objective should publish thinking context",
+  );
   assert.equal(
     outbound.filter((e) => e.type === "session.commentary.append").length,
     0,
-    "planner must not push speak commentary on healthy path",
+    "intake must not push speak commentary",
   );
 
   clearVoiceV3LiveResponseCoordinator(SESSION);

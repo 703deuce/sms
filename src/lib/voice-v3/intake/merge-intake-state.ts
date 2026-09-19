@@ -216,7 +216,9 @@ export function mergeIntakeFieldValues(
   };
 }
 
-/** Production update_intake path — no CallerMeaning, goals queue, or planner side effects. */
+/**
+ * @deprecated Tests/legacy only — production uses intake-objective mergeIntakeUpdate via update_intake tool.
+ */
 export function applyIntakeToolPatch(
   ctx: VoiceV3CallContext,
   config: VoiceV3AgentConfig,

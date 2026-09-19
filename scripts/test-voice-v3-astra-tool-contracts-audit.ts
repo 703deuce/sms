@@ -47,6 +47,7 @@ const update = tools.find((t) => t.name === "update_intake")!;
 const updateProps = (update.parameters as { properties?: Record<string, unknown> }).properties ?? {};
 assert.ok(!("date_expression" in updateProps), "update_intake must not expose date_expression");
 assert.ok(!("time_expression" in updateProps), "update_intake must not expose time_expression");
+assert.ok(!("active_goal" in updateProps), "update_intake must not expose active_goal");
 
 const prompts = buildVoiceV3Prompts({
   ...resolveVoiceV3DefaultPromptInput(new Date()),
