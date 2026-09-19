@@ -192,6 +192,14 @@ PR #100 (`continue_workflow` timeout/fillers) does **not** fix zero tool transpo
 
 **Known TeXML-direct failure mode:** Telnyx may invoke `get_runtime_context` before a `VoiceCall` row exists (only hangup status_callback created the call). Fix: `ensureVoiceCallForToolWebhook` on `/api/telnyx/voice/tools` + early TeXML lifecycle — see PR #102.
 
+## After-Hours AI Receptionist — master acceptance checklist (mandatory)
+
+**Source of truth:** `docs/TRANSOVO-AFTER-HOURS-AI-RECEPTIONIST-MASTER-ACCEPTANCE-CHECKLIST.md`
+
+Single definition of “the product works” for the After-Hours AI Receptionist (Voice V3 + wizard). Check items only when wired through V3 and **proven end-to-end** — not wizard save, compiler map, or UI alone. All new receptionist scope maps to sections 1–27 in that doc.
+
+Architecture (one Amy, capabilities by config): `docs/VOICE-V2-AFTER-HOURS-PRODUCT-CONTRACT.md`.
+
 ## Voice V2 after-hours product (mandatory)
 
 **Source of truth:** `docs/VOICE-V2-AFTER-HOURS-PRODUCT-CONTRACT.md` — locked architecture, capability checklist, regression and certification rules. Read before any Voice V2 after-hours feature work.

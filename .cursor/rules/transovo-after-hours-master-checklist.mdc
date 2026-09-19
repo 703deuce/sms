@@ -1,0 +1,33 @@
+---
+description: MANDATORY — After-Hours AI Receptionist master functional acceptance. Read before scoping, implementing, or declaring complete any receptionist/wizard/V3 voice feature.
+globs:
+  - src/lib/voice-v3/**
+  - src/lib/voice-v3-basic/**
+  - src/lib/voice-receptionist-wizard/**
+  - src/app/**/voice/**
+  - docs/VOICE-V3*
+  - docs/VOICE-V2-AFTER-HOURS*
+alwaysApply: false
+---
+
+# MANDATORY: After-Hours AI Receptionist — master acceptance checklist
+
+**Source of truth:** `docs/TRANSOVO-AFTER-HOURS-AI-RECEPTIONIST-MASTER-ACCEPTANCE-CHECKLIST.md`
+
+## When this rule activates
+
+Before **scoping**, **implementing**, or **declaring complete** any After-Hours AI Receptionist capability (wizard, Voice V3, GPT-Live, Astra, PSTN, booking, transfer, messages, after-hours rules).
+
+## Hard requirements
+
+1. **No scope invention** — New work maps to a section (1–27) in the master checklist. Do not open parallel “done” lists.
+2. **✅ WORKING bar** — A checkbox is checked only when the **full real-world path** is proven (typically PSTN or production-equivalent E2E), not when UI saves, compiler maps, or a unit test passes alone.
+3. **Wizard ≠ runtime** — Propagation/compiler tests are necessary but **insufficient** for marking checklist items complete.
+4. **Update the doc** — When certifying a item, edit the master checklist in the same change set (check the box, add proof reference/date if useful).
+
+## Authority order (after-hours)
+
+1. This master acceptance checklist (functional completeness)
+2. `docs/VOICE-V2-AFTER-HOURS-PRODUCT-CONTRACT.md` (architecture / one Amy)
+3. Frozen pipelines where applicable (e.g. `docs/VOICE-V3-PSTN-BOOKING-PIPELINE-FROZEN.md`)
+4. Implementation code
