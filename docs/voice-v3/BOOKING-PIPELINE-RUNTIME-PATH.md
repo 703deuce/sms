@@ -1,5 +1,7 @@
 # Voice V3 PSTN booking — runtime path (top to bottom)
 
+**FROZEN:** `docs/VOICE-V3-PSTN-BOOKING-PIPELINE-FROZEN.md` (`voice_v3_pstn_booking_microsoft_v1`). Verify: `npm run verify:voice-v3-booking-pipeline-frozen`.
+
 This is the **only** path used when a call hits Voice V3 Basic + booking. It does **not** use Voice V2 booking tools, Agent John, or the scripts-only odd-intake harness (`mothers_name`, etc.).
 
 ## 1. Telnyx → OpenAI SIP

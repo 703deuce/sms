@@ -11,6 +11,7 @@ import { afterVoiceV3StateChange, type LiveSendFn } from "../agent/after-state-c
 import { deriveVoiceV3Capabilities } from "../agent/capability-state";
 import { DEFAULT_VOICE_V3_ESCALATION_POLICY, initialEscalationCounters } from "../agent/escalation";
 import { logVoiceV3ContractVersions } from "../telemetry/contract-versions";
+import { VOICE_V3_BOOKING_PIPELINE_ID } from "../frozen-booking-pipeline";
 
 const liveSendBySession = new Map<string, LiveSendFn>();
 
@@ -132,6 +133,7 @@ export function createVoiceV3CallRuntime(input: {
   });
 
   console.log("VOICE_V3_BOOKING_PIPELINE_ACTIVE", {
+    pipeline_id: VOICE_V3_BOOKING_PIPELINE_ID,
     live_session_id: input.liveSessionId,
     call_id: callId,
     intake_field_keys: intakeKeys,

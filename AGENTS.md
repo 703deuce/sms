@@ -98,6 +98,17 @@ PSTN-certified TeXML ingress for CFNA. **Do not change** these behaviors without
 - **`existing_consent`:** `<Play>` voicemail greeting → `<Hangup>` → auto SMS on `texml-status`
 
 Do not route certified MCTB DIDs back to LiveKit FQDN, Call Control-only ingress, or AI assistant TeXML. Guards: `isMctbTexmlIngressLocked()`. Verify: `npm run verify:mctb-final-pipeline`.
+
+### Voice V3 PSTN Microsoft booking (FROZEN — `voice_v3_pstn_booking_microsoft_v1`)
+
+**Read:** `docs/VOICE-V3-PSTN-BOOKING-PIPELINE-FROZEN.md`
+
+PSTN-certified 2026-09-19 on ws_1 / `+15717491060` (wizard → `set_scheduling_preference` → `find_availability` → intake → `book_appointment` → Microsoft Graph). **Do not change** FIND/BOOK dispatch, revalidation, or tool wiring without revision bump + PSTN re-cert.
+
+- **Not in this pipeline:** Voice V2 Telnyx FIND/BOOK webhooks, `book_offered_slot`, `emit_caller_meaning`, MCTB TeXML booking
+- **Verify:** `npm run verify:voice-v3-booking-pipeline-frozen`
+- **Constants:** `src/lib/voice-v3/frozen-booking-pipeline.ts` — runtime logs `pipeline_id` on `VOICE_V3_BOOKING_PIPELINE_ACTIVE`
+
 - **Smart Routing** is a standalone purchasable product as well as a bundle with MCTB. Do not require MCTB to use Smart Routing.
 - Customer keeps their **existing business number** — inbound layer only; no port-required launch.
 - Do not turn this into a PBX, softphone, CRM, SMS marketing platform, AI receptionist, or vanity-number marketplace.
