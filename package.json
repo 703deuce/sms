@@ -123,6 +123,7 @@
     "test:voice-v3-reschedule": "tsx scripts/test-voice-v3-reschedule.ts",
     "test:voice-v3-cancellation": "tsx scripts/test-voice-v3-cancellation.ts",
     "test:voice-v3-microsoft-appointment-management": "tsx scripts/test-voice-v3-microsoft-appointment-management.ts",
+    "test:voice-v3-appointment-discovery": "tsx scripts/test-voice-v3-appointment-discovery.ts",
     "test:voice-v3-recovery": "tsx scripts/test-voice-v3-order-permutation.ts && tsx scripts/test-voice-v3-recovery.ts",
     "test:voice-v3-pstn-hardening": "tsx scripts/test-voice-v3-pstn-hardening.ts",
     "test:voice-v3-async-architecture": "tsx scripts/test-voice-v3-async-architecture.ts && tsx scripts/test-voice-v3-serialization-audit.ts",
