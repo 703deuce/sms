@@ -7,6 +7,7 @@ import { mergeDialogActiveGoalFromTool } from "../intake/merge-intake-state";
 import { evaluateVoiceV3Rules } from "../state/call-rules";
 import type { VoiceToolDefinition } from "./types";
 import { authorizeVoiceV3ToolOrError } from "./authorize-tool-for-config";
+import { shouldApplySemanticSteeringToActiveGoal } from "../delegation/conversation-freshness";
 import { toolOk, voiceToolError } from "./types";
 import { FIND_AVAILABILITY_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 
@@ -44,8 +45,15 @@ export const findAvailabilityTool: VoiceToolDefinition<FindAvailabilityArgs> = {
     const denied = authorizeVoiceV3ToolOrError(config, "find_availability");
     if (denied) return denied;
     let snap = ctx.runtime.getSnapshot();
-    snap = mergeDialogActiveGoalFromTool(snap, "BOOK_APPOINTMENT");
-    ctx.runtime.replaceContext(snap);
+    if (
+      shouldApplySemanticSteeringToActiveGoal(
+        "find_availability",
+        ctx.delegationSemanticallyFresh !== false ? "FRESH" : "STALE",
+      )
+    ) {
+      snap = mergeDialogActiveGoalFromTool(snap, "BOOK_APPOINTMENT");
+      ctx.runtime.replaceContext(snap);
+    }
     snap = ctx.runtime.getSnapshot();
 
     const rules = evaluateVoiceV3Rules(snap, config);

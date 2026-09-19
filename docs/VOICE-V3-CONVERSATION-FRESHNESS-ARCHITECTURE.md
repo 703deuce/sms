@@ -1,13 +1,14 @@
 # Voice V3 — Conversation freshness architecture (investigation only)
 
 **Date:** 2026-09-19 (UTC)  
-**Status:** Architecture investigation — **no implementation**, no runtime deploy  
+**Status:** Investigation + **implementation foundation** (branch `cursor/voice-v3-conversation-freshness-architecture-2304`) — **stop before merge/deploy** until PSTN matrix certified  
 **Evidence:** Production Call 2 (`v3:Pr6y46…`, deploy `ea2114d9`), installed OpenAI Live SDK types, Voice V3 production code paths  
 
 **Companion documents:**
 
 - `docs/VOICE-V3-CALLBACK-CALL-2-BOOKING-TO-CALLBACK-FORENSIC-REPORT.md`
 - `docs/VOICE-V3-TURN-REVISION-AND-OPERATION-LIFECYCLE-BENCHMARK.md`
+- `docs/VOICE-V3-CONVERSATION-FRESHNESS-IMPLEMENTATION-REPORT.md` — what shipped, telemetry, test matrix status
 
 ---
 
@@ -21,9 +22,11 @@ Call 2’s **first failing boundary** is **session orchestration**, not callback
 4. Transovo **never** obtained a **fresh** `session.delegation.created` / Astra semantic pass for the updated conversation.
 5. Transovo **continued** the old chain via **`response.item.create` (function_call_output)** + **`response.create`** (delegated protocol continuation).
 
-**Target fix (design only):** **Freshness orchestration** — deterministic conversation revision vs delegation revision — **not** intent classification (no keyword router, CallerMeaning revival, or Transovo “callback means X”).
+**Target fix:** **Freshness orchestration** — deterministic conversation revision vs delegation revision — **not** intent classification (no keyword router, CallerMeaning revival, or Transovo “callback means X”).
 
-**OpenAI protocol certainty:** The **Live API `ClientEvent` union** documents **`response.item.create`** and **`response.create`** only. There is **no** `response.cancel` (or equivalent) on the Live client surface in the installed SDK. Legacy **Realtime** APIs document `response.cancel` for **in-session Live generation**, which is a **different** surface than **Responses delegation continuation**. The safest documented lever for stopping **stale semantic chaining** is likely **withholding the continuation `response.create`** while still **satisfying open `function_call` protocol** via `response.item.create` — but **behavior when continuation is withheld** (delegation hang vs timeout vs new Live delegation) is **not fully specified** in the types and must be validated in a controlled experiment before implementation.
+**Authorization model (implementation):** A delegation is authorized for **semantic decisions** against the conversation revision snapshotted at `session.delegation.created`. When `currentConversationRevision > basedOnConversationRevision`, that delegation is **semantically stale**: it must not launch **new** consequential tools (steering, writes, terminal), but may still complete OpenAI protocol (`response.item.create` + `response.create`) and in-flight provider commits. **Withholding `response.create` is not documented as cancellation** and is **not** the production supersession mechanism.
+
+**OpenAI protocol facts (verified):** Live documents **`response.item.create`** (including `function_call_output`) and **`response.create`** (request or continue delegated Responses work). **`response.cancel` is not** on the GPT-Live delegation surface. Caller interruption does **not** imply backend cancellation; Live and delegated backend work are separate timelines (`session.delegation.created` carries its own `delegation.id`, `response_id`, `offset_ms`).
 
 ---
 

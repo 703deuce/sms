@@ -124,9 +124,23 @@ async function attachVoiceV3LiveSidebandInner(input: {
 
     if (type === "session.delegation.created") {
       commitCallerTranscript(sessionId);
-      const delegation = serverEvent.delegation as { id?: string; response_id?: string } | undefined;
+      const delegation = serverEvent.delegation as {
+        id?: string;
+        response_id?: string;
+      } | undefined;
+      const offset_ms =
+        typeof serverEvent.offset_ms === "number" ? serverEvent.offset_ms : undefined;
       if (delegation) {
-        getVoiceV3LiveResponseCoordinator(sessionId, send).onDelegationCreated(delegation);
+        getVoiceV3LiveResponseCoordinator(sessionId, send).onDelegationCreated({
+          ...delegation,
+          offset_ms,
+        });
+        console.log("FRESH_DELEGATION_CREATED", {
+          live_session_id: sessionId,
+          delegation_id: delegation.id,
+          response_id: delegation.response_id ?? null,
+          offset_ms: offset_ms ?? null,
+        });
       }
       trace.onDelegationCreated();
       console.log("ASTRA_DELEGATION_STARTED", { sessionId, delegation: serverEvent.delegation });

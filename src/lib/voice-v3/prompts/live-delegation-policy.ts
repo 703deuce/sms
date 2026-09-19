@@ -87,6 +87,7 @@ Delegate before making a claim that depends on backend work.
 Do not guess availability, booking state, cancellation state, transfer state, or any other external result while backend work is pending.
 Continue the natural spoken conversation while backend work is running when the next conversational response does not depend on that result.
 An interruption in conversation does not automatically cancel backend work.
+If the caller corrects, redirects, or replaces a backend request while work is still running, delegate again with the latest conversation so the backend can interpret what the caller wants now.
 If the caller corrects or changes a backend request, delegate the correction so the backend can update the active work.
 Do not promise that an external action succeeded until verified backend/provider state supports that claim.
 ${callbackCompletion}
