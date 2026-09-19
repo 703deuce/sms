@@ -101,11 +101,13 @@ export function evaluateVoiceV3Rules(
   const verifiedExisting = ctx.appointmentManagement.verifiedExisting;
   const rescheduleConfirmed =
     ctx.appointmentManagement.reschedule.phase === "RESCHEDULE_CONFIRMED";
+  const rescheduleIntakeSatisfied =
+    getMissingFieldsForOperation("reschedule_appointment", config, ctx).length === 0;
   const rescheduleReady =
     goal === "RESCHEDULE_APPOINTMENT" &&
     Boolean(verifiedExisting) &&
     slotSelected &&
-    intakeComplete &&
+    rescheduleIntakeSatisfied &&
     !schedulingRequiresClarification &&
     !rescheduleConfirmed &&
     ctx.appointmentManagement.reschedule.phase !== "RESCHEDULE_REVALIDATING" &&

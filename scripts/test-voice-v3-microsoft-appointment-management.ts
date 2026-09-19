@@ -24,6 +24,7 @@ import { existingAppointmentFromConfirmed } from "../src/lib/voice-v3/calendar/a
 import type { AvailabilityOfferSet } from "../src/lib/voice-v3/calendar/offer-set";
 import { applySlotSelectionFromMeaning } from "../src/lib/voice-v3/calendar/apply-slot-selection";
 import { evaluateVoiceV3Rules } from "../src/lib/voice-v3/state/call-rules";
+import { deriveIntakeObjective } from "../src/lib/voice-v3/intake-objective";
 import { executeVoiceTool } from "../src/lib/voice-v3/tools/execute-voice-tool";
 import {
   clearVoiceV3CallRuntimeStore,
@@ -322,6 +323,91 @@ async function main() {
   assert.equal(patchCalled, 1);
   assert.equal(ctx.appointmentManagement.reschedule.phase, "RESCHEDULE_CONFIRMED");
   assert.equal(ctx.appointmentManagement.verifiedExisting?.providerEventId, existing.providerEventId);
+
+  // PSTN regression (ws_1): reschedule after find must not require full new-booking intake
+  let ctxPartialIntake = {
+    ...createInitialVoiceV3CallContext({
+      callId: "rsc_partial",
+      liveSessionId: "live_rsc_partial",
+      timezone: TZ,
+      clock,
+    }),
+    dialog: { activeGoal: "RESCHEDULE_APPOINTMENT" },
+    scheduling: {
+      generation: 2,
+      normalized: { precision: "DATE_ONLY", localDate: "2026-09-25" } as never,
+    },
+    intake: {
+      values: {
+        name: { value: "Anthony", source: "caller", updatedAt: new Date().toISOString() },
+        phone: { value: "+15551234567", source: "caller", updatedAt: new Date().toISOString() },
+      },
+    },
+    appointmentManagement: {
+      ...createInitialVoiceV3CallContext({
+        callId: "rsc_partial",
+        liveSessionId: "live_rsc_partial",
+        timezone: TZ,
+        clock,
+      }).appointmentManagement,
+      verifiedExisting: existing,
+      lookupCompleted: true,
+    },
+    availability: {
+      status: "ready",
+      activeOfferSet: offer,
+      lastDispatchedRequestKey: null,
+      inFlightGeneration: null,
+      lastFailure: null,
+      findStartedAt: null,
+    },
+    selection: { selected: null, lastResolutionStatus: null },
+  };
+  ctxPartialIntake = applySlotSelectionFromMeaning(ctxPartialIntake, {
+    selection_type: "ORDINAL",
+    spoken_time: null,
+    ordinal: 1,
+  }).context;
+  assert.equal(
+    deriveIntakeObjective(VOICE_V3_BOOKING_TEST_CONFIG, ctxPartialIntake).status,
+    "IN_PROGRESS",
+  );
+  const partialRules = evaluateVoiceV3Rules(ctxPartialIntake, VOICE_V3_BOOKING_TEST_CONFIG);
+  assert.equal(partialRules.rescheduleReady, true);
+  assert.equal(partialRules.requiredAction, "RESCHEDULE_APPOINTMENT");
+
+  clearVoiceV3CallRuntimeStore();
+  const partialRuntime = createVoiceV3CallRuntime({
+    liveSessionId: "live_rsc_partial_tool",
+    callId: "rsc_partial_tool",
+    config: VOICE_V3_BOOKING_TEST_CONFIG,
+  });
+  partialRuntime.replaceContext(ctxPartialIntake);
+  const partialToolCtx = {
+    callId: "rsc_partial_tool",
+    liveSessionId: "live_rsc_partial_tool",
+    delegationId: null,
+    functionCallId: "fc_rsc_partial",
+    runtime: partialRuntime,
+    tenantId: "rsc_partial_tool",
+    sendContext: () => {},
+  };
+  const rescheduleViaTool = await executeVoiceTool(partialToolCtx, "reschedule_appointment", {
+    appointment_selection_id: appointmentSelectionId(existing),
+    offer_set_id: offer.offerSetId,
+    slot_id: "slot_1",
+  });
+  const afterRescheduleTool = partialRuntime.getSnapshot();
+  assert.notEqual(
+    afterRescheduleTool.appointmentManagement.reschedule.phase,
+    "NONE",
+    "reschedule_appointment must attempt Graph dispatch",
+  );
+  assert.notEqual(
+    rescheduleViaTool.ok && rescheduleViaTool.status === "pending",
+    true,
+    "reschedule_appointment must not return ok/pending when slot is bound",
+  );
 
   console.log("PASS voice-v3 microsoft appointment management");
 }

@@ -17,10 +17,8 @@ const READ_OPERATIONS: VoiceOperationName[] = [
   "find_appointment",
 ];
 
-const MUTATION_INTAKE_OPERATIONS: VoiceOperationName[] = [
-  "book_appointment",
-  "reschedule_appointment",
-];
+/** New bookings require configured intake; reschedule uses verified-appointment identity from find_appointment. */
+const MUTATION_INTAKE_OPERATIONS: VoiceOperationName[] = ["book_appointment"];
 
 function defaultRequiredIntakeKeys(config: VoiceV3AgentConfig): string[] {
   return config.intakeFields.filter((f) => f.required).map((f) => f.key);

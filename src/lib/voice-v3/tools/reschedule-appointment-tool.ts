@@ -56,6 +56,13 @@ function bindSlot(
     dialog: { ...ctx.dialog, activeGoal: "RESCHEDULE_APPOINTMENT" },
     selection: { selected: nextSelected, lastResolutionStatus: "RESOLVED" },
     availability: { ...ctx.availability, activeOfferSet: offer, status: "ready" },
+    appointmentManagement: {
+      ...ctx.appointmentManagement,
+      reschedule: {
+        ...ctx.appointmentManagement.reschedule,
+        phase: "RESCHEDULE_READY",
+      },
+    },
     runtime: { version: ctx.runtime.version + 1 },
   };
 }
