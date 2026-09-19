@@ -1,8 +1,10 @@
 # Voice V3 → LiveKit migration — infrastructure discovery report
 
-**Status:** Discovery only — no new LiveKit projects, credentials, trunks, or deploys were created.  
+**Status:** Discovery complete — implementation follows **`docs/VOICE-V3-LIVEKIT-IMPLEMENTATION-DIRECTIVE.md`** (supersedes earlier migration notes).  
 **Date:** 2026-09-19  
 **Policy:** SEARCH FIRST. REUSE SECOND. CREATE ONLY IF ACTUALLY MISSING. Never print API secrets in logs, commits, or this document.
+
+**Related:** `docs/VOICE-V3-LIVEKIT-CUTOVER-STATE.md` (Phase 0 rollback boundary).
 
 ---
 
