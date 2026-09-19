@@ -10,11 +10,16 @@ import { mergeIntakeUpdate } from "../src/lib/voice-v3/intake-objective";
 import { VOICE_V3_BOOKING_TEST_CONFIG } from "./voice-v3-booking-test-config";
 
 // Verbal acknowledgment is not authoritative completion.
+assert.match(REQUEST_CALLBACK_TOOL_DESCRIPTION, /callback_requested/i);
 assert.match(
   REQUEST_CALLBACK_TOOL_DESCRIPTION,
-  /Do not tell the caller.*until this tool returns callback_requested/i,
+  /Only then may the caller be told the callback was recorded/i,
 );
-assert.match(REQUEST_CALLBACK_TOOL_DESCRIPTION, /conversational reassurance alone does not record/i);
+assert.match(REQUEST_CALLBACK_TOOL_DESCRIPTION, /conversational reassurance/i);
+assert.match(REQUEST_CALLBACK_TOOL_DESCRIPTION, /needs_information/i);
+assert.match(REQUEST_CALLBACK_TOOL_DESCRIPTION, /missingFields/i);
+assert.match(REQUEST_CALLBACK_TOOL_DESCRIPTION, /Do NOT need to wait/i);
+assert.match(REQUEST_CALLBACK_TOOL_DESCRIPTION, /callback_requested/i);
 
 // Facts belong to the call — switching operation does not erase compatible values.
 const clock = buildVoiceV3CallClock("America/New_York");

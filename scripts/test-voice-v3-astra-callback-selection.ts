@@ -43,24 +43,24 @@ const TRANSFER_ON = {
 
 const SCENARIOS: Scenario[] = [
   {
-    label: "callback_direct_1",
+    label: "A_can_somebody_call_me_back",
     config: CALLBACK_ON_BOOKING,
-    history: "Caller: Can somebody call me back about my water heater?",
+    history: "Caller: Can you have somebody call me back?",
     expectTool: "request_callback",
   },
   {
-    label: "callback_direct_2",
+    label: "B_office_give_me_a_call",
     config: CALLBACK_ON_BOOKING,
-    history: "Caller: Have someone give me a call when you get a chance.",
+    history: "Caller: I need someone from the office to give me a call.",
     expectTool: "request_callback",
   },
   {
-    label: "abandon_booking_for_callback",
+    label: "C_forget_appointment_callback",
     config: CALLBACK_ON_BOOKING,
     history:
-      "Caller started booking and gave their name. Caller now says: I don't want to schedule anymore. Just have somebody contact me.",
+      "Caller was booking an appointment and gave their name. Caller now says: Actually forget the appointment. Just have someone call me.",
     expectTool: "request_callback",
-    forbiddenTools: ["book_appointment"],
+    forbiddenTools: ["book_appointment", "find_availability"],
   },
   {
     label: "abandon_send_link",
@@ -84,21 +84,21 @@ const SCENARIOS: Scenario[] = [
     expectTool: "request_callback",
   },
   {
-    label: "hours_not_callback",
+    label: "G_hours_not_callback",
     config: CALLBACK_ON_BOOKING,
-    history: "Caller: What time do you close today?",
+    history: "Caller: What time do you close?",
     expectTool: null,
     forbiddenTools: ["request_callback"],
   },
   {
-    label: "book_not_callback",
+    label: "D_book_monday_not_callback",
     config: CALLBACK_ON_BOOKING,
-    history: "Caller: I want to make an appointment for next Tuesday afternoon.",
+    history: "Caller: Can I book something for Monday?",
     expectTool: "set_scheduling_preference",
     forbiddenTools: ["request_callback"],
   },
   {
-    label: "send_link_not_callback",
+    label: "E_text_booking_link_not_callback",
     config: {
       ...VOICE_V3_SEND_LINK_TEST_CONFIG,
       callHandling: {
@@ -107,9 +107,16 @@ const SCENARIOS: Scenario[] = [
       },
     },
     history:
-      "Amy already read the SMS disclosure and the caller said yes to receiving the booking link by text. Caller: Great — please send the booking link text now.",
+      "Amy read the required SMS disclosure for the booking link. Caller agreed to receive the text. Caller: Can you text me the booking link?",
     expectTool: "send_booking_link",
     forbiddenTools: ["request_callback"],
+  },
+  {
+    label: "H_callback_insufficient_facts_still_select",
+    config: CALLBACK_ON_BOOKING,
+    history:
+      "Caller: Please have someone call me back about my issue. They have not given their name or any other details yet.",
+    expectTool: "request_callback",
   },
   {
     label: "cancel_not_callback",
@@ -119,9 +126,9 @@ const SCENARIOS: Scenario[] = [
     forbiddenTools: ["request_callback"],
   },
   {
-    label: "transfer_not_callback",
+    label: "F_transfer_now_not_callback",
     config: TRANSFER_ON,
-    history: "Caller: Can you transfer me to someone right now?",
+    history: "Caller: Can you transfer me to somebody right now?",
     expectTool: "transfer_call",
     forbiddenTools: ["request_callback"],
   },

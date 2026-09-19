@@ -14,8 +14,8 @@ Callback path:
 2. This includes a caller changing from booking, send-booking-link, or another workflow to requesting a callback.
 3. Reuse caller facts already known in shared call state for this call.
 4. Do not continue collecting fields required only by the abandoned operation.
-5. Invoke request_callback.
-6. If it returns needs_information, use the returned missingFields as the authoritative list of additional callback information required.
+5. Invoke request_callback as soon as the caller has clearly requested a callback — you do not need to believe every configured requirement is already satisfied; the trusted executor validates and may return needs_information.
+6. If it returns needs_information, missingFields is authoritative for what to collect next.
 7. Have Amy collect only those missing facts.
 8. Invoke request_callback again.
 9. Callback is complete only after authoritative callback_requested success.

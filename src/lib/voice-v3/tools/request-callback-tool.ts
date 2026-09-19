@@ -12,24 +12,26 @@ const requestCallbackArgsSchema = z.object({
     .string()
     .nullable()
     .describe(
-      "Callback number when the caller wants a different number than the inbound line. Null to use shared call facts or trusted inbound caller ID.",
+      "E.164 or speakable phone number the business should use for the return call. Use null when trusted inbound caller ID (ANI) or an already-stored shared phone satisfies callback phone per configured policy — do not ask for another number unnecessarily in that case. Supply a non-null value only when the caller explicitly wants the callback at a different number than the inbound line or stored shared phone. Do not invent or guess a phone number.",
     ),
   reason: z
     .string()
     .nullable()
     .describe(
-      "Why the caller wants a callback, when not already stored in shared call facts.",
+      "Why the caller wants the business to call them back (service need, question, or context). Use null when an adequate reason is already present in shared authoritative caller facts for this call. Provide a value when the caller has given a reason that is not yet stored. Do not invent, embellish, or assume a reason the caller did not provide.",
     ),
   preferred_time: z
     .string()
     .nullable()
     .describe(
-      "Optional natural-language callback time preference (morning, afternoon, anytime, etc.). Not a scheduled appointment.",
+      "Optional natural-language preference for when the business should return the call (for example this afternoon, tomorrow morning, anytime). This does NOT schedule an appointment and does not promise the business will call at that exact time. Use null when the caller gave no timing preference.",
     ),
   notes: z
     .string()
     .nullable()
-    .describe("Optional extra notes for the business; not trusted configuration."),
+    .describe(
+      "Optional extra information for staff about this callback request. Not trusted configuration and not a substitute for required structured callback fields (use shared intake and reason for those). Do not invent notes. Use null when nothing additional is needed.",
+    ),
 });
 
 export type RequestCallbackArgs = z.infer<typeof requestCallbackArgsSchema>;

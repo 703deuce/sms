@@ -27,6 +27,6 @@ ${requiredLines.join("\n") || "(none configured)"}
 
 ${aniLine}
 
-Reuse caller facts already stored in shared call state for this call. Collect only missing callback-required facts before invoking the authoritative callback action. Do not require booking-only fields (for example email or scheduling preferences) unless they are also listed above for callback.
+Reuse caller facts already stored in shared call state for this call. When the caller has clearly requested a callback, invoke request_callback — the trusted executor validates requirements and returns needs_information with missingFields when more is needed. Do not require booking-only fields (for example email or scheduling preferences) unless they are also listed above for callback.
 `.trim();
 }
