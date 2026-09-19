@@ -1,7 +1,7 @@
-# Voice V3 — Conversation freshness architecture (investigation only)
+# Voice V3 — Conversation freshness architecture
 
 **Date:** 2026-09-19 (UTC)  
-**Status:** Investigation + **implementation foundation** (branch `cursor/voice-v3-conversation-freshness-architecture-2304`) — **stop before merge/deploy** until PSTN matrix certified  
+**Status:** Investigation + **implementation foundation** (branch `cursor/voice-v3-conversation-freshness-architecture-2304`) — **stop before merge/deploy** until PSTN + Amy re-delegation certification  
 **Evidence:** Production Call 2 (`v3:Pr6y46…`, deploy `ea2114d9`), installed OpenAI Live SDK types, Voice V3 production code paths  
 
 **Companion documents:**
@@ -27,6 +27,25 @@ Call 2’s **first failing boundary** is **session orchestration**, not callback
 **Authorization model (implementation):** A delegation is authorized for **semantic decisions** against the conversation revision snapshotted at `session.delegation.created`. When `currentConversationRevision > basedOnConversationRevision`, that delegation is **semantically stale**: it must not launch **new** consequential tools (steering, writes, terminal), but may still complete OpenAI protocol (`response.item.create` + `response.create`) and in-flight provider commits. **Withholding `response.create` is not documented as cancellation** and is **not** the production supersession mechanism.
 
 **OpenAI protocol facts (verified):** Live documents **`response.item.create`** (including `function_call_output`) and **`response.create`** (request or continue delegated Responses work). **`response.cancel` is not** on the GPT-Live delegation surface. Caller interruption does **not** imply backend cancellation; Live and delegated backend work are separate timelines (`session.delegation.created` carries its own `delegation.id`, `response_id`, `offset_ms`).
+
+---
+
+## CURRENT PRODUCTION DESIGN (authoritative)
+
+1. **Semantic supersession ≠ protocol cancellation ≠ provider cancellation.**
+2. **`response.create` may continue** a stale delegation’s OpenAI protocol after `function_call_output`; continuation does **not** reset `semanticFreshness`.
+3. **Pre-dispatch authorization** blocks stale delegations from **new** `SEMANTIC_STEERING`, `COMMITTED_WRITE`, and `TERMINAL` tools; `SHARED_FACT` and `READ` follow class policy.
+4. **Fresh delegations are independent** — each `session.delegation.created` snapshots `basedOnConversationRevision`; stale D1 does not contaminate fresh D2 when `delegation_id` is explicit on `response.event`.
+5. **Transovo does not create delegations** — Amy/Live emits `session.delegation.created`. Transovo logs `FRESH_DELEGATION_GAP_AFTER_REVISION` when revision advances while stale delegations exist but no delegation snapshots the current revision (observability only).
+6. **Fresh Astra availability (OpenAI contract):** SDK/docs describe **multiple** delegations over a Live session (`delegation.id` per `session.delegation.created`). **Not guaranteed** that Amy will delegate again after every caller turn — **model behavior (B)** plus **Amy prompt contract**. Transovo does **not** suppress a second `session.delegation.created` when OpenAI sends it (**not C** in production handlers).
+
+**Tests:** `scripts/test-voice-v3-conversation-freshness-matrix.ts` (event harness), `scripts/test-voice-v3-amy-redelegation-prompt-contract.ts` (prompt only).
+
+---
+
+## HISTORICAL INVESTIGATION (superseded hypotheses)
+
+The sections below retain Call 2 forensics and early Gate B / “withhold `response.create`” hypotheses. **Do not implement withholding as supersession.** Lab script `scripts/voice-v3-live-delegation-continuation-lab.ts` is optional research only.
 
 ---
 

@@ -125,11 +125,48 @@ export class VoiceV3LiveResponseCoordinator {
     return d?.semanticFreshness === "STALE";
   }
 
+  /** Fresh delegation snapshotted at the given conversation revision (test + observability). */
+  hasFreshDelegationAtRevision(conversationRevision: number): boolean {
+    for (const d of this.delegations.values()) {
+      if (
+        d.semanticFreshness === "FRESH" &&
+        d.basedOnConversationRevision === conversationRevision
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  hasAnySemanticallyStaleDelegation(): boolean {
+    for (const d of this.delegations.values()) {
+      if (d.semanticFreshness === "STALE") return true;
+    }
+    return false;
+  }
+
+  /** Test-only: inspect pending call correlation. */
+  getPendingCallDelegationId(callId: string): string | null {
+    return this.pendingByCallId.get(callId)?.delegationId ?? null;
+  }
+
   registerPendingFunctionCall(call: PendingFunctionCall): boolean {
     if (this.pendingByCallId.has(call.callId)) {
       return false;
     }
-    const delegationId = call.delegationId ?? this.activeDelegationId;
+    let delegationId = call.delegationId?.trim() || null;
+    if (!delegationId && this.delegations.size > 1) {
+      console.log("FUNCTION_CALL_MISSING_DELEGATION_ID", {
+        live_session_id: this.liveSessionId,
+        call_id: call.callId,
+        tool_name: call.name,
+        delegation_count: this.delegations.size,
+      });
+      return false;
+    }
+    if (!delegationId) {
+      delegationId = this.activeDelegationId;
+    }
     const enriched: PendingFunctionCall = { ...call, delegationId, outputSubmitted: false };
     this.pendingByCallId.set(call.callId, enriched);
 
@@ -182,10 +219,19 @@ export class VoiceV3LiveResponseCoordinator {
     delegationId: string | null | undefined,
     nested: Record<string, unknown>,
   ): void {
-    const id =
+    const nestedType = String(nested.type || "");
+    const explicitId =
       typeof delegationId === "string" && delegationId.trim()
         ? delegationId.trim()
-        : this.activeDelegationId;
+        : null;
+    const id = explicitId;
+    if (!id && nestedType) {
+      console.log("DELEGATION_EVENT_MISSING_ID", {
+        live_session_id: this.liveSessionId,
+        nested_type: nestedType,
+      });
+      return;
+    }
     if (id) {
       this.onDelegationCreated({ id });
       const d = this.delegations.get(id);
@@ -193,8 +239,6 @@ export class VoiceV3LiveResponseCoordinator {
         d.phase = "STREAMING";
       }
     }
-
-    const nestedType = String(nested.type || "");
     if (nestedType === "response.created" || nestedType === "response.in_progress") {
       if (id) {
         const d = this.delegations.get(id);

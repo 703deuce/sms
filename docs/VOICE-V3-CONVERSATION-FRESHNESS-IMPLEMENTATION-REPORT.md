@@ -2,149 +2,113 @@
 
 **Date:** 2026-09-19 (UTC)  
 **Branch:** `cursor/voice-v3-conversation-freshness-architecture-2304`  
-**Status:** Foundation implemented — **do not merge or deploy** until full switching/race matrix + PSTN certification  
+**Merge/deploy:** **Not ready** — deterministic gate expanded; **PSTN Amy re-delegation** still required  
 
-**Architecture:** `docs/VOICE-V3-CONVERSATION-FRESHNESS-ARCHITECTURE.md`
-
----
-
-## Objective
-
-Generic **semantic supersession** without Transovo intent classification:
-
-- **Amy** owns the Live conversation.
-- **Astra** delegations snapshot `basedOnConversationRevision` at `session.delegation.created`.
-- New committed caller turns advance revision and mark older delegations **STALE** for new consequential work.
-- **Physical** provider/protocol work may continue; **authorization** gates new steering/writes/terminal from stale delegations.
-
-**Not used:** withheld `response.create` as a cancellation API, keyword routing, CallerMeaning, pre-Astra classifiers.
+**Architecture:** `docs/VOICE-V3-CONVERSATION-FRESHNESS-ARCHITECTURE.md` (CURRENT PRODUCTION DESIGN + HISTORICAL INVESTIGATION)
 
 ---
 
-## Implemented components
+## 1. Code changes (this pass)
 
-| # | Spec item | Implementation |
-|---|-----------|----------------|
-| 1 | Conversation revision | `src/lib/voice-v3/conversation/conversation-revision.ts` — `getCurrentConversationRevision()` = last committed caller turn `sequence`; `CONVERSATION_REVISION_ADVANCED` via `delegation-timing.onCallerTurnCommitted` (wired from `caller-turn-manager.ts`) |
-| 2 | Delegation snapshot | `live-response-coordinator.onDelegationCreated` — `basedOnConversationRevision`, `delegationCreatedOffsetMs`, `responseId`, `semanticFreshness: FRESH`; `DELEGATION_REVISION_SNAPSHOTTED`, `FRESH_DELEGATION_CREATED` |
-| 3 | Semantic stale on new turn | `markDelegationsSemanticallyStale` when revision advances; `DELEGATION_SEMANTICALLY_STALE` |
-| 4 | Tool classes | `delegation/conversation-freshness.ts` — SHARED_FACT, SEMANTIC_STEERING, READ, COMMITTED_WRITE, TERMINAL |
-| 5 | Pre-dispatch gate | `handle-delegated-voice-tools.ts` — `shouldBlockStaleToolPreDispatch` → `STALE_TOOL_DISPATCH_BLOCKED` + `SEMANTIC_SUPERSEDED` tool output (protocol-safe) |
-| 6 | Tool output protocol | `buildSemanticSupersededToolResult` — `status: superseded`, `reason: conversation_advanced`, revision fields |
-| 7 | Delegated continuation | `requestDelegatedProtocolContinuation` still sends `response.create`; logs `STALE_DELEGATION_PROTOCOL_CONTINUED` when delegation stale (`note: protocol_completion_not_semantic_authorization`) |
-| 8 | Amy re-delegate policy | `live-delegation-policy.ts` — explicit re-delegate when caller redirects during in-flight backend work |
-| 9 | Coalesce rapid turns | **Partial** — revision is O(1) latest sequence; no extra Astra pass per fragment (Live transcript preserved). No new coalescing scheduler beyond existing turn commit quiet window. |
-| 10 | activeGoal protection | `set-scheduling-preference-tool.ts`, `find-availability-tool.ts` — skip `BOOK_APPOINTMENT` goal merge when delegation semantically stale |
-| 11 | Committed write reconciliation | `book-dispatch.ts` — `COMMITTED_WRITE_RECONCILED_AFTER_REVISION` when Graph confirm succeeds after revision advanced during commit |
-| 12 | Stale read grounding | `find-dispatch.ts` — `STALE_READ_RESULT_IGNORED` when current revision > revision at FIND dispatch |
-| 13 | Correlation | Pending function calls carry `delegationId`; coordinator map per delegation; `activeDelegationId` still used as fallback when Live omits id — **full cross-delegation race audit not complete** |
-| 14 | Telemetry | See table below |
-| 15 | Test matrix | Unit/integration subset — see below |
-| 16 | Protected regressions | Microsoft/callback executors unchanged; scheduling hardening scripts re-run |
+| Area | Change |
+|------|--------|
+| Coordinator correlation | `onDelegatedNestedResponseEvent` no longer falls back to `activeDelegationId` (missing `delegation_id` → log + skip). `registerPendingFunctionCall` rejects missing `delegationId` when **>1** delegation exists. |
+| Observability | `hasFreshDelegationAtRevision`, `FRESH_DELEGATION_GAP_AFTER_REVISION`, `getPendingCallDelegationId` (test). |
+| Event harness | `src/lib/voice-v3/testing/delegation-freshness-harness.ts` |
+| Matrix tests | `scripts/test-voice-v3-conversation-freshness-matrix.ts` |
+| Amy contract | `scripts/test-voice-v3-amy-redelegation-prompt-contract.ts` (prompt only; **not** Live model cert) |
+| Helpers | `seedConversationRevisionForTests` in `scripts/voice-v3-test-helpers.ts` |
+| Docs | Architecture split CURRENT vs HISTORICAL |
+
+Prior foundation (unchanged intent): revision snapshot, stale gate, tool classes, stale read, book reconciliation telemetry, delegation policy text.
 
 ---
 
-## Telemetry events
+## 2. `activeDelegationId` audit
 
-| Event | Where |
+| Location | Class | Notes |
+|----------|-------|-------|
+| `onDelegationCreated` → `this.activeDelegationId = delegationId` | **A** | Convenience “latest delegation” pointer only. |
+| `registerPendingFunctionCall` → fallback when `delegations.size ≤ 1` | **B** | Safe when only one delegation; explicit `delegationId` preferred. |
+| `registerPendingFunctionCall` → reject if `>1` delegation and no `delegationId` | **C fixed** | Prevents ambient mis-attachment during overlap. |
+| `onDelegatedNestedResponseEvent` → ~~`activeDelegationId` fallback~~ | **C fixed** | Requires explicit `delegation_id` on nested events. |
+| `submitDelegatedFunctionCallOutput` → `input.delegationId ?? row.delegationId` | **Safe** | Pending row carries originating delegation. |
+| `requestDelegatedProtocolContinuation` → `input.delegationId ?? activeDelegationId` | **B** | Input should carry delegation from submit path; fallback only when single-delegation sessions. |
+| `requestResponseCreate` → updates phase on `activeDelegationId` | **A** | Conversational speak path only; not delegated tool protocol. |
+| `hasOpenDelegationAwaitingTool` / speak queue | **A** | Session-level gating; does not block new `session.delegation.created`. |
+
+Production `live-sideband-session.ts` passes `serverEvent.delegation_id` on every `response.event`.
+
+---
+
+## 3. Primary question: fresh delegation after stale
+
+| Layer | Status |
 |-------|--------|
-| `CONVERSATION_REVISION_ADVANCED` | `conversation-revision.ts` |
-| `DELEGATION_REVISION_SNAPSHOTTED` | `live-response-coordinator.ts` |
-| `DELEGATION_SEMANTICALLY_STALE` | `live-response-coordinator.ts` |
-| `FRESH_DELEGATION_CREATED` | `live-sideband-session.ts` |
-| `STALE_TOOL_DISPATCH_BLOCKED` | `handle-delegated-voice-tools.ts` |
-| `STALE_READ_RESULT_IGNORED` | `find-dispatch.ts` |
-| `STALE_DELEGATION_PROTOCOL_CONTINUED` | `live-response-coordinator.ts` |
-| `COMMITTED_WRITE_RECONCILED_AFTER_REVISION` | `book-dispatch.ts` |
+| **Transovo blocks stale consequential tools** | **Proven** (matrix + unit tests). |
+| **Transovo accepts overlapping delegations** | **Proven** — D2 stale + D3 fresh Call 2 structural replay; overlap correlation test. |
+| **Transovo creates `session.delegation.created`** | **No** — OpenAI/Live emits; handlers do not suppress second delegation. |
+| **Amy guarantees re-delegate after revision advance** | **Not proven** — OpenAI contract is **B** (permitted, model-dependent). Prompt contract tested; Live audio cert **NOT_RUN**. |
+| **Gap observability** | `FRESH_DELEGATION_GAP_AFTER_REVISION` when stale exists without delegation at current revision. |
 
-Existing pipeline logs (`DELEGATED_CONTINUATION_REQUESTED`, `ASTRA_FUNCTION_CALL_RECEIVED`, booking/callback logs) unchanged.
+**Call 2 fix requires:** stale gates **plus** production PSTN proof that Amy issues a new delegation after meaningful redirect (or documented OpenAI limitation + product follow-up).
 
 ---
 
-## Tool class behavior (stale delegation)
+## 4. Test results
 
-| Class | Pre-dispatch block? | Notes |
-|-------|---------------------|--------|
-| SHARED_FACT (`update_intake`) | No | Facts may still merge |
-| READ (`find_*`) | No | May run; apply path may ignore stale conversation reads |
-| SEMANTIC_STEERING (`set_scheduling_preference`) | Yes | No stale `BOOK_APPOINTMENT` goal |
-| COMMITTED_WRITE | Yes | Superseded output unless commit already in flight |
-| TERMINAL | Yes | |
+### Commands
 
----
+```bash
+npx tsx scripts/test-voice-v3-conversation-freshness.ts
+NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-voice-v3-conversation-freshness-matrix.ts
+npx tsx scripts/test-voice-v3-amy-redelegation-prompt-contract.ts
+npx tsx scripts/test-voice-v3-pstn-hardening.ts
+npx tsx scripts/test-voice-v3-scheduling-tool-integration.ts
+```
 
-## Automated tests
+### Matrix (implemented PASS ids)
 
-**Script:** `npx tsx scripts/test-voice-v3-conversation-freshness.ts`
+`01`, `02`, `04`, `05`, `06`, `07`, `08`, `15`, `16`, `18`, `20`, `21`, `22`, `23`, `24` — see matrix script output line `VOICE_V3_CONVERSATION_FRESHNESS_MATRIX`.
 
-Covers:
+### 25-case spec mapping
 
-- Tool classification and stale block rules
-- Delegation revision snapshot + manual stale mark
-- Turn commit → auto stale via `onCallerTurnCommitted`
-- Stale `set_scheduling_preference` does not set `activeGoal`
-- Stale steering + `book_appointment` → superseded tool output (no provider dispatch)
-
-**Also run (regression):**
-
-- `npx tsx scripts/test-voice-v3-pstn-hardening.ts`
-- `npx tsx scripts/test-voice-v3-scheduling-tool-integration.ts`
-
-### Spec §15 matrix — status
-
-| Scenario | Automated | Notes |
-|----------|-----------|--------|
-| 1–5 Straight paths | Partial | Covered by existing PSTN hardening / scheduling integration, not freshness-specific |
-| 6–12 Operation switching | **Not yet** | Needs multi-step delegation simulation or recorded PSTN replay |
-| 13–14 Day change / rapid revisions during FIND | Partial | Stale read ignore unit path only |
-| 15 Pre-write revision | Partial | Stale `book_appointment` block test |
-| 16 Write during revision | **Not yet** | Telemetry hook only (`COMMITTED_WRITE_RECONCILED_AFTER_REVISION`) |
-| 17 Post-success before spoken confirm | **Not yet** | |
-| 18–19 Delegation overlap / correlation | **Not yet** | Requires coordinator integration tests |
+| Spec # | Status |
+|--------|--------|
+| 1–2 straight booking/callback (orchestration) | **PASS** (matrix 01–02) |
+| 3–6 straight transfer/cancel/reschedule/SEND_LINK | **Not in matrix yet** — use existing product cert scripts |
+| 7–14 switching | **Partial** — **07**, **08** event replay; others need same harness pattern |
+| 15 rapid revision | **PASS** |
+| 16 FIND race | **PASS** |
+| 17 pre-write revision | **Partial** (stale book block in unit test) |
+| 18 write during commit | **PASS** |
+| 19 post-success before claim | **Not automated** |
+| 20–23 overlap / interleave | **PASS** (20, 21, 22, 23) |
+| 24–25 duplicate continuation / write | **24 PASS**; **25** needs dedicated idempotency scenario |
 
 ---
 
-## Out of scope / deferred
+## 5. OpenAI / model uncertainty (post-deploy PSTN)
 
-- Microsoft provider executors, callback persistence modules (unchanged)
-- Full 19-case switching matrix as dedicated CI suite
-- PSTN manual certification (Call 2 replay, booking→callback)
-- Optional lab: `scripts/voice-v3-live-delegation-continuation-lab.ts` (research only; not production gate)
+1. **Amy re-delegation timing** after barge-in / redirect while stale backend work runs.  
+2. Whether Live coalesces multiple caller turns into **one** new delegation vs several.  
+3. Conversational UX when `FRESH_DELEGATION_GAP_AFTER_REVISION` fires in production logs.
 
----
+**Recommended PSTN calls after deploy**
 
-## Success condition (remaining)
-
-Before merge/deploy:
-
-1. PSTN or high-fidelity simulation proving booking→callback (and reverse) with fresh delegation after turn advance.
-2. Automated tests for overlapping delegations (18–19).
-3. Confirm no duplicate provider writes / duplicate `function_call_output` under race (idempotency paths).
+1. Call 2 replay: book phrasing → mid-FIND redirect to callback → confirm `session.delegation.created` D3+ and `request_callback` from fresh delegation.  
+2. Reverse: callback → book mid-chain.  
+3. Monday → Tuesday during FIND (single fresh FIND on D2).  
+4. Straight callback + SEND_LINK regression on production build.
 
 ---
 
-## Files touched (implementation)
+## 6. Ready for merge?
 
-**New**
+**No.** Stale authorization and overlap correlation are substantially better, but **Amy re-delegation on real PSTN** remains the gating item for Call 2 class failures.
 
-- `src/lib/voice-v3/conversation/conversation-revision.ts`
-- `src/lib/voice-v3/delegation/conversation-freshness.ts`
-- `scripts/test-voice-v3-conversation-freshness.ts`
-- `scripts/voice-v3-live-delegation-continuation-lab.ts` (optional)
-- `docs/VOICE-V3-CONVERSATION-FRESHNESS-IMPLEMENTATION-REPORT.md`
+---
 
-**Modified**
+## 7. Files touched
 
-- `src/lib/voice-v3/delegation/types.ts`
-- `src/lib/voice-v3/delegation/live-response-coordinator.ts`
-- `src/lib/voice-v3/conversation/delegation-timing.ts`
-- `src/lib/voice-v3/live-sideband-session.ts`
-- `src/lib/voice-v3/tools/handle-delegated-voice-tools.ts`
-- `src/lib/voice-v3/tools/execute-voice-tool.ts`
-- `src/lib/voice-v3/tools/types.ts`
-- `src/lib/voice-v3/tools/set-scheduling-preference-tool.ts`
-- `src/lib/voice-v3/tools/find-availability-tool.ts`
-- `src/lib/voice-v3/calendar/find-dispatch.ts`
-- `src/lib/voice-v3/calendar/book-dispatch.ts`
-- `src/lib/voice-v3/prompts/live-delegation-policy.ts`
-- `docs/VOICE-V3-CONVERSATION-FRESHNESS-ARCHITECTURE.md`
+See git history on branch; key additions: `delegation-freshness-harness.ts`, `test-voice-v3-conversation-freshness-matrix.ts`, `test-voice-v3-amy-redelegation-prompt-contract.ts`, coordinator correlation fixes, architecture/report updates.

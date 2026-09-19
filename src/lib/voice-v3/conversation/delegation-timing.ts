@@ -37,6 +37,13 @@ export function onCallerTurnCommitted(input: {
   });
   const coord = peekVoiceV3LiveResponseCoordinator(id);
   coord?.markDelegationsSemanticallyStale(current);
+  if (coord && !coord.hasFreshDelegationAtRevision(current) && coord.hasAnySemanticallyStaleDelegation()) {
+    console.log("FRESH_DELEGATION_GAP_AFTER_REVISION", {
+      live_session_id: id,
+      current_conversation_revision: current,
+      note: "stale_delegation_exists_no_fresh_delegation_at_current_revision",
+    });
+  }
 }
 
 export function cancelDirectSemanticDefer(_liveSessionId: string): void {}
