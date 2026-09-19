@@ -11,7 +11,7 @@
 | Item | Value |
 |------|--------|
 | Implementation branch | `cursor/voice-v3-livekit-implementation-2304` |
-| Branch HEAD (record at report) | `6be8c6144f5cb70e6b8cd15dd67a5d8471b1e204` |
+| Branch HEAD (record at report) | `e8cd539f52514d2756dfe85f2517b760e3916ea5` |
 | Master at Phase 0 record | `1aef0e0fd5d4b9b7de3f39a34341c542718e4ab0` |
 | Freshness-certified direct path | `3d3d14eeabdee819329559b1016a1c5a43aad783` |
 
