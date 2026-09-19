@@ -6,6 +6,7 @@ export {
   hasOAuthTokens,
   insertGoogleEvent,
   insertMicrosoftEvent,
+  listMicrosoftCalendarEventsForAppointmentDiscovery,
   resolveBlockingCalendarIds,
   resolveWriteCalendarId,
   type BusyInterval,
