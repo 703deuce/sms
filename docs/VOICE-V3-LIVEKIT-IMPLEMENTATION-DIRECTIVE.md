@@ -2,7 +2,10 @@
 
 **Status:** Authoritative implementation spec (supersedes earlier LiveKit migration instructions).  
 **Supersedes:** informal migration notes; complements `docs/VOICE-V3-LIVEKIT-INFRA-DISCOVERY.md` (discovery complete).  
-**Phase 0 rollback record:** `docs/VOICE-V3-LIVEKIT-CUTOVER-STATE.md`
+**Phase 0 rollback record:** `docs/VOICE-V3-LIVEKIT-CUTOVER-STATE.md`  
+**Why this boundary (strategy):** `docs/VOICE-V3-LIVEKIT-WHY-THIS-BOUNDARY.md`
+
+**Active gate (2026-09):** After first LiveKit PSTN calls with zero FunctionTool execution, do **not** classify the failure as “no delegation” without wire evidence. Deploy **observability-only** (`docs/VOICE-V3-GPT-LIVE-DELEGATION-OBSERVABILITY.md`, PR #448), run one diagnostic call, classify first failed boundary **A–F**, then **STOP** before prompt/orchestration/tool_choice changes.
 
 ---
 
