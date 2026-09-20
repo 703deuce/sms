@@ -9,7 +9,9 @@ run_profile() {
   VOICE_WORKER_PROFILE="${profile}" python -m transovo_voice.main start
 }
 
-if [[ "${VOICE_ENABLE_V3_PROFILE:-1}" == "1" ]] && [[ -z "${VOICE_WORKER_PROFILE:-}" ]]; then
+# Default: one process (legacy) on :8081 — matches historical transovo-voice Coolify deploy.
+# Set VOICE_ENABLE_V3_PROFILE=1 to run legacy + v3 (requires distinct health ports / second app).
+if [[ "${VOICE_ENABLE_V3_PROFILE:-0}" == "1" ]] && [[ -z "${VOICE_WORKER_PROFILE:-}" ]]; then
   run_profile "legacy" &
   legacy_pid=$!
   run_profile "v3" &
