@@ -1,7 +1,6 @@
 import type { AppointmentReceptionistWizardState } from "./types";
-import { compileVoiceV3TransferPolicyFromWizard } from "@/lib/voice-v3/transfer/compile-transfer-config";
-import { validateVoiceV3TransferPolicyForPublish } from "@/lib/voice-v3/transfer/validate-transfer-publish";
 import { normalizeWizardTransferPhone } from "./transfer-utils";
+import { transferWizardValidationIssues } from "./transfer-wizard-state";
 
 export type ActivationIssue = {
   id: string;
@@ -105,15 +104,12 @@ export function getWizardActivationIssues(
         message: "Add at least one valid transfer destination, or turn off Transfer calls.",
       });
     }
-    if (hasDestRow || legacyPhone) {
-      const policy = compileVoiceV3TransferPolicyFromWizard(state);
-      for (const issue of validateVoiceV3TransferPolicyForPublish(policy, true)) {
-        issues.push({
-          id: issue.id,
-          severity: "blocking",
-          message: issue.message,
-        });
-      }
+    for (const issue of transferWizardValidationIssues(state)) {
+      issues.push({
+        id: issue.id,
+        severity: issue.id === "transfer_ui_warm_requires_platform" ? "warning" : "blocking",
+        message: issue.message,
+      });
     }
   }
 

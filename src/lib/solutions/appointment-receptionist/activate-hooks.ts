@@ -16,6 +16,7 @@ import {
   hasBlockingActivationIssues,
   type ActivationIssue,
 } from "./capability-checklist";
+import { transferActivationIssues } from "./transfer-activation-validation";
 import { parseNoticeMinutes, parseDaysAhead } from "./notice-utils";
 import { resolveServiceRequiredFields } from "./required-fields";
 
@@ -419,6 +420,21 @@ export async function runAppointmentReceptionistActivateHooks(input: {
     hasCalendarConnection: hasCalendarConnection || Boolean(input.state.calendarConnected),
     hasKnowledgeText: Boolean(input.state.businessName?.trim()),
   });
+
+  if (input.state.capabilities.includes("transfer_calls")) {
+    for (const serverIssue of transferActivationIssues(input.state)) {
+      const existing = issues.find((i) => i.id === serverIssue.id);
+      if (!existing) {
+        issues.push(serverIssue);
+      } else if (
+        serverIssue.severity === "blocking" &&
+        existing.severity === "warning"
+      ) {
+        existing.severity = "blocking";
+        existing.message = serverIssue.message;
+      }
+    }
+  }
 
   if (input.mode === "activate" && hasBlockingActivationIssues(issues)) {
     return {
