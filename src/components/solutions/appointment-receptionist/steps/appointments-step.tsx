@@ -362,9 +362,9 @@ export function AppointmentsStep({
                   "Check live calendar availability and book on the call (Microsoft 365).",
                 ],
                 [
-                  "CALENDLY",
-                  "Book appointments with Calendly",
-                  "Check real Calendly availability and book on the call (paid Calendly plan).",
+                  "GOOGLE_CALENDAR",
+                  "Book an appointment with Google Calendar",
+                  "Check live Google Calendar availability and book on the call.",
                 ],
                 [
                   "REQUEST_ONLY",
@@ -398,12 +398,12 @@ export function AppointmentsStep({
                     bookingStrategy: id,
                     capabilities: [...caps],
                   };
-                  if (id === "CALENDLY") {
-                    next.calendarProvider = "calendly";
+                  if (id === "GOOGLE_CALENDAR") {
+                    next.calendarProvider = "google";
                   }
                   if (id === "MICROSOFT_365") {
                     next.calendarProvider =
-                      state.calendarProvider === "calendly" ? "microsoft" : state.calendarProvider;
+                      state.calendarProvider === "google" ? "microsoft" : state.calendarProvider;
                   }
                   patch(next);
                 }}
@@ -412,7 +412,15 @@ export function AppointmentsStep({
               />
             ))}
           </div>
-          {(state.bookingStrategy || "MICROSOFT_365") === "CALENDLY" ? (
+          {(state.bookingStrategy || "MICROSOFT_365") === "GOOGLE_CALENDAR" ? (
+            <div className="mt-4 space-y-2 border-t border-border pt-4">
+              <p className="text-sm text-muted-foreground">
+                Connect Google Calendar above, then publish. Amy uses your connected Google account
+                for live availability and booking on calls.
+              </p>
+            </div>
+          ) : null}
+          {state.bookingStrategy === "CALENDLY" ? (
             <div className="mt-4 space-y-3 border-t border-border pt-4">
               {calendlyCapabilities?.planBlocked ? (
                 <InfoCallout>

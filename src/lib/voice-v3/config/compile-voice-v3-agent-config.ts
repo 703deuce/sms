@@ -29,6 +29,8 @@ export type VoiceV3ProviderConnections = {
   microsoftConnectionId?: string | null;
   microsoftCalendarIds?: string[];
   microsoftSmtp?: string | null;
+  googleConnectionId?: string | null;
+  googleCalendarIds?: string[];
 };
 
 function interpolateGreeting(
@@ -184,7 +186,9 @@ function bookingStrategyDetailFromWizard(
     ...DEFAULT_V3_BOOKING_STRATEGY,
     strategy,
     executionStatus:
-      strategy === "MICROSOFT_365" || strategy === "SEND_LINK"
+      strategy === "MICROSOFT_365" ||
+      strategy === "GOOGLE_CALENDAR" ||
+      strategy === "SEND_LINK"
         ? "ACTIVE_EXECUTION"
         : "CONFIGURED_NOT_IMPLEMENTED",
     bookingLinkUrl: wizard.bookingLinkUrl?.trim() || null,
@@ -303,13 +307,20 @@ export function compileVoiceV3AgentConfig(input: {
 
   const bookingStrategy = deriveBookingStrategyFromWizard(wizard);
 
-  const connectionId =
-    input.providerConnections?.microsoftConnectionId?.trim() ||
-    envFallback.calendar?.connectionId ||
-    "";
+  const isGoogle = bookingStrategy === "GOOGLE_CALENDAR";
+  const connectionId = isGoogle
+    ? input.providerConnections?.googleConnectionId?.trim() ||
+      envFallback.calendar?.connectionId ||
+      ""
+    : input.providerConnections?.microsoftConnectionId?.trim() ||
+      envFallback.calendar?.connectionId ||
+      "";
 
-  const calendarIds =
-    input.providerConnections?.microsoftCalendarIds?.length
+  const calendarIds = isGoogle
+    ? input.providerConnections?.googleCalendarIds?.length
+      ? input.providerConnections.googleCalendarIds
+      : envFallback.calendar?.calendarIds ?? ["primary"]
+    : input.providerConnections?.microsoftCalendarIds?.length
       ? input.providerConnections.microsoftCalendarIds
       : envFallback.calendar?.calendarIds ?? ["primary"];
 
@@ -344,7 +355,14 @@ export function compileVoiceV3AgentConfig(input: {
               envFallback.calendar?.smtp ??
               null,
           }
-        : envFallback.calendar,
+        : bookingStrategy === "GOOGLE_CALENDAR"
+          ? {
+              provider: "google",
+              connectionId,
+              calendarIds,
+              smtp: null,
+            }
+          : envFallback.calendar,
     ...nested,
     services: services.length ? services : [service],
     source: input.source ?? "wizard_published",

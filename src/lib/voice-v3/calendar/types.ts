@@ -37,6 +37,10 @@ export type FindAvailabilityFailureReason =
   | "microsoft_throttled"
   | "microsoft_malformed"
   | "microsoft_error"
+  | "google_token"
+  | "google_timeout"
+  | "google_throttled"
+  | "google_error"
   | "configuration_missing";
 
 export interface FindAvailabilityFailure {

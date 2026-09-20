@@ -11,6 +11,7 @@ import {
   type VoiceV3ProviderConnections,
 } from "./compile-voice-v3-agent-config";
 import { resolveMicrosoftConnectionForWizard } from "./resolve-microsoft-connection";
+import { deriveBookingStrategyFromWizard } from "@/lib/voice-receptionist-wizard/booking-strategy";
 import {
   logVoiceV3AgentConfigResolved,
   logVoiceV3ConfigFallbackUsed,
@@ -28,13 +29,37 @@ export function appointmentReceptionistUsesVoiceV3Runtime(config: VoiceAgentConf
   return isAppointmentReceptionistAgent(config);
 }
 
-async function resolveMicrosoftProviderConnections(
+async function resolveProviderConnectionsForWizard(
   workspaceId: string,
   wizard: AppointmentReceptionistWizardState | null,
 ): Promise<VoiceV3ProviderConnections> {
   const prisma = getPrisma();
-  const provider = wizard?.calendarProvider?.trim() || "microsoft";
-  if (provider !== "microsoft") {
+  const bookingStrategy = wizard ? deriveBookingStrategyFromWizard(wizard) : null;
+  const calendarProvider = wizard?.calendarProvider?.trim() || "microsoft";
+
+  if (bookingStrategy === "GOOGLE_CALENDAR" || calendarProvider === "google") {
+    const calendars = await prisma.voiceCalendarConnection.findMany({
+      where: {
+        workspaceId,
+        provider: "google",
+        status: { in: ["connected", "active", "ok"] },
+      },
+      orderBy: { updatedAt: "desc" },
+    });
+    if (calendars.length === 0) {
+      return {
+        googleConnectionId: process.env.VOICE_V3_GOOGLE_CONNECTION_ID?.trim() || null,
+        googleCalendarIds: ["primary"],
+      };
+    }
+    const preferred = resolveMicrosoftConnectionForWizard(calendars, wizard?.calendarEmail);
+    return {
+      googleConnectionId: preferred?.id ?? calendars[0]?.id,
+      googleCalendarIds: ["primary"],
+    };
+  }
+
+  if (calendarProvider !== "microsoft" && bookingStrategy !== "MICROSOFT_365") {
     return {};
   }
 
@@ -92,7 +117,7 @@ export async function resolveVoiceV3AgentConfigForAgent(input: {
       return envFallback;
     }
 
-    const providerConnections = await resolveMicrosoftProviderConnections(
+    const providerConnections = await resolveProviderConnectionsForWizard(
       input.workspaceId,
       wizard,
     );
