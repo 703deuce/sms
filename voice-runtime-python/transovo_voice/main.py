@@ -20,7 +20,18 @@ AGENT_NAME = os.getenv("LIVEKIT_AGENT_NAME", "[REDACTED]")
 VOICE_V3_AGENT_NAME = os.getenv("VOICE_V3_LIVEKIT_AGENT_NAME", "").strip() or "transovo-voice-v3"
 WORKER_PROFILE = os.getenv("VOICE_WORKER_PROFILE", "legacy").strip().lower()
 
-server = AgentServer()
+
+def _worker_http_port() -> int:
+    """LiveKit AgentServer health HTTP port (one per worker process)."""
+    raw = (
+        os.getenv("VOICE_WORKER_HTTP_PORT", "").strip()
+        or os.getenv("LIVEKIT_WORKER_HTTP_PORT", "").strip()
+        or "8081"
+    )
+    return int(raw, 10)
+
+
+server = AgentServer(port=_worker_http_port())
 
 
 def _ensure_worker_registered(agent_name: str) -> None:
