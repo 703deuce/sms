@@ -51,7 +51,13 @@ async function main() {
     expectedWizardTools: expectedNames,
     voice: session.liveVoiceId,
     astraModel: session.astraModel,
+    speaksFirst: session.speaksFirst,
+    initialGreetingChars: session.initialGreetingText.length,
   });
+
+  if (session.speaksFirst === "ai" && !session.initialGreetingText.trim()) {
+    throw new Error("speaksFirst=ai but initialGreetingText is empty");
+  }
 
   if (session.toolNames.length !== expectedNames.length) {
     throw new Error(
