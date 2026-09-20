@@ -18,7 +18,13 @@ import { commitFinalCallerUtterance } from "@/lib/voice-v3/conversation/caller-t
 import { getCurrentConversationRevision } from "@/lib/voice-v3/conversation/conversation-revision";
 import type { FunctionTool } from "openai/resources/live/live";
 
-/** Initial LiveKit PSTN certification tool surface (directive Phase 40). */
+/** Tools executed natively in the LiveKit Python worker (not Astra FunctionTools). */
+export const VOICE_V3_LIVEKIT_NATIVE_TOOL_NAMES = ["end_call"] as const;
+
+/**
+ * @deprecated Certification-only subset — production uses wizard capability list.
+ * Kept for historical tests referencing the first PSTN cert slice.
+ */
 export const VOICE_V3_LIVEKIT_INITIAL_TOOL_NAMES = [
   "update_intake",
   "set_scheduling_preference",
@@ -60,20 +66,15 @@ function liveSessionIdForRoom(roomName: string): string {
   return room.startsWith("lk_") ? room : `lk_${room}`;
 }
 
-function filterToolsForLiveKitCert(
-  tools: FunctionTool[],
-  allowedNames: readonly string[],
-): FunctionTool[] {
-  const allowed = new Set(allowedNames);
-  return tools.filter((t) => {
-    const name =
-      typeof t.name === "string"
-        ? t.name
-        : typeof (t as { function?: { name?: string } }).function?.name === "string"
-          ? (t as { function: { name: string } }).function.name
-          : "";
-    return allowed.has(name);
-  });
+function toolSchemaName(tool: FunctionTool): string {
+  if (typeof tool.name === "string") return tool.name;
+  const fn = (tool as { function?: { name?: string } }).function;
+  return typeof fn?.name === "string" ? fn.name : "";
+}
+
+function filterToolsForLiveKitSession(tools: FunctionTool[]): FunctionTool[] {
+  const native = new Set<string>(VOICE_V3_LIVEKIT_NATIVE_TOOL_NAMES);
+  return tools.filter((t) => !native.has(toolSchemaName(t)));
 }
 
 export async function resolveVoiceV3LiveKitSession(
@@ -113,7 +114,7 @@ export async function resolveVoiceV3LiveKitSession(
   });
 
   const allTools = buildVoiceV3AstraFunctionToolsFromCatalog(agentConfig);
-  const toolSchemas = filterToolsForLiveKitCert(allTools, VOICE_V3_LIVEKIT_INITIAL_TOOL_NAMES);
+  const toolSchemas = filterToolsForLiveKitSession(allTools);
 
   const liveVoiceId = agentConfig.telephony?.liveVoiceId?.trim() || "marin";
 

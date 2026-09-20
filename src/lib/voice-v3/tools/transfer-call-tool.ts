@@ -86,9 +86,13 @@ export const transferCallTool: VoiceToolDefinition<{
           "error",
         );
       }
+      const configured = row.phoneE164?.trim();
+      if (configured) {
+        destination = configured;
+      }
     }
 
-    if (destId && mapRaw) {
+    if (destId && mapRaw && !destination) {
       try {
         const map = JSON.parse(mapRaw) as Record<string, string>;
         destination = map[destId] ?? destination;
@@ -114,7 +118,7 @@ export const transferCallTool: VoiceToolDefinition<{
     return toolOk("transfer_requested", {
       destination,
       destination_id: destId ?? null,
-      note: "Telnyx transfer must be executed by voice transport integration.",
+      note: "LiveKit worker performs SIP transfer after authorization.",
     });
   },
 };

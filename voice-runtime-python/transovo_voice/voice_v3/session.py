@@ -6,13 +6,14 @@ from typing import Any
 
 from livekit import rtc
 from livekit.agents import Agent, AgentSession, JobContext, room_io
+from livekit.agents.beta.tools import EndCallTool
 from livekit.plugins.openai.realtime import GPTLiveModel
 
 from transovo_voice.integrations.backend_client import TransovoBackend
 from transovo_voice.session.dispatch_resolver import extract_call_numbers
 from transovo_voice.telemetry import log_event
 from transovo_voice.voice_v3.tool_client import TransovoV3ToolClient, VoiceV3CallContext
-from transovo_voice.voice_v3.tools import build_livekit_tools
+from transovo_voice.voice_v3.tools import LiveKitTelephonyBridge, build_livekit_tools
 
 logger = logging.getLogger("transovo-voice.voice_v3")
 
@@ -105,7 +106,18 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
 
         raw_tools = config.get("toolSchemas") or []
         tool_dicts = [_openai_tool_to_dict(t) for t in raw_tools if _openai_tool_to_dict(t).get("name")]
-        lk_tools = build_livekit_tools(tool_dicts, client)
+        telephony = LiveKitTelephonyBridge(
+            job_ctx=ctx,
+            sip_participant_identity=sip_participant.identity,
+        )
+        lk_tools = build_livekit_tools(tool_dicts, client, telephony=telephony)
+
+        end_call_toolset = EndCallTool(
+            ignore_on_enter=True,
+            delete_room=True,
+            extra_description=str(config.get("endCallToolHint") or "").strip(),
+        )
+        session_tools = [*lk_tools, *end_call_toolset.tools]
 
         responses_options: dict[str, Any] = {
             "model": config.get("astraModel") or "gpt-6-astra",
@@ -126,7 +138,7 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
         )
 
         max_tool_steps = int(config.get("maxToolSteps") or 5)
-        session = AgentSession(llm=gpt_live, tools=lk_tools, max_tool_steps=max_tool_steps)
+        session = AgentSession(llm=gpt_live, tools=session_tools, max_tool_steps=max_tool_steps)
         agent = Agent(instructions=str(config.get("amyInstructions") or ""))
 
         @session.on("user_input_transcribed")
@@ -153,7 +165,7 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             room=ctx.room.name,
             extra={
                 "liveSessionId": live_session_id,
-                "toolCount": len(lk_tools),
+                "toolCount": len(session_tools),
                 "workspaceId": call_ctx.workspace_id,
                 "agentId": call_ctx.agent_id,
             },
