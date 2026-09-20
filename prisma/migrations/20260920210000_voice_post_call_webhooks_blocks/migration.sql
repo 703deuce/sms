@@ -1,4 +1,4 @@
--- Webhook signing + voice webhook deliveries + caller blocks
+-- Webhook signing + voice webhook deliveries + caller blocks (idempotent for shared DBs)
 ALTER TABLE "Webhook" ADD COLUMN IF NOT EXISTS "signingSecretPrefix" TEXT;
 ALTER TABLE "Webhook" ADD COLUMN IF NOT EXISTS "signingSecretHash" TEXT;
 ALTER TABLE "Webhook" ADD COLUMN IF NOT EXISTS "metadata" JSONB;
@@ -26,8 +26,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS "voice_webhook_deliveries_eventId_key" ON "voi
 CREATE INDEX IF NOT EXISTS "voice_webhook_deliveries_webhookId_createdAt_idx" ON "voice_webhook_deliveries"("webhookId", "createdAt");
 CREATE INDEX IF NOT EXISTS "voice_webhook_deliveries_workspaceId_status_idx" ON "voice_webhook_deliveries"("workspaceId", "status");
 
-ALTER TABLE "voice_webhook_deliveries" ADD CONSTRAINT "voice_webhook_deliveries_webhookId_fkey" FOREIGN KEY ("webhookId") REFERENCES "Webhook"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "voice_webhook_deliveries" ADD CONSTRAINT "voice_webhook_deliveries_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "voice_webhook_deliveries" ADD CONSTRAINT "voice_webhook_deliveries_webhookId_fkey" FOREIGN KEY ("webhookId") REFERENCES "Webhook"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE "voice_webhook_deliveries" ADD CONSTRAINT "voice_webhook_deliveries_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 CREATE TABLE IF NOT EXISTS "voice_caller_blocks" (
     "id" TEXT NOT NULL,
@@ -42,4 +49,7 @@ CREATE TABLE IF NOT EXISTS "voice_caller_blocks" (
 CREATE UNIQUE INDEX IF NOT EXISTS "voice_caller_blocks_workspaceId_callerE164_key" ON "voice_caller_blocks"("workspaceId", "callerE164");
 CREATE INDEX IF NOT EXISTS "voice_caller_blocks_workspaceId_idx" ON "voice_caller_blocks"("workspaceId");
 
-ALTER TABLE "voice_caller_blocks" ADD CONSTRAINT "voice_caller_blocks_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "voice_caller_blocks" ADD CONSTRAINT "voice_caller_blocks_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
