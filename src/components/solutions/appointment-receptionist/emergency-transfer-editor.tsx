@@ -1,0 +1,358 @@
+"use client";
+
+import { useEffect, useMemo, useRef } from "react";
+import type { AppointmentReceptionistWizardState, FallbackAction } from "@/lib/solutions/appointment-receptionist/types";
+import {
+  TRANSFER_RING_SECONDS_OPTIONS,
+  addTransferDestination,
+  ensureEmergencyTransferWizardState,
+  moveTransferPlanStep,
+  removeTransferDestination,
+  syncLegacyTransferFieldsFromDestinations,
+  transferWizardValidationIssues,
+  updateTransferDestination,
+  updateTransferPlanStep,
+} from "@/lib/solutions/appointment-receptionist/transfer-wizard-state";
+import { normalizeWizardTransferPhone } from "@/lib/solutions/appointment-receptionist/transfer-utils";
+import { Input, Label } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
+
+const FALLBACK_OPTIONS: Array<[FallbackAction, string, string]> = [
+  ["return_to_ai", "Return caller to AI receptionist", "Amy keeps helping when nobody answers."],
+  ["take_message", "Take a message", "Capture details for your team to follow up."],
+  ["notify_staff", "Notify staff", "Alert your team that a caller needs help."],
+];
+
+export function EmergencyTransferEditor({
+  state,
+  patch,
+}: {
+  state: AppointmentReceptionistWizardState;
+  patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
+}) {
+  const transferCapability = state.capabilities.includes("transfer_calls");
+  const hydrated = useRef(false);
+
+  useEffect(() => {
+    if (!transferCapability || hydrated.current) return;
+    const next = syncLegacyTransferFieldsFromDestinations(state);
+    if (
+      next.transferDestinations?.length &&
+      (!state.transferDestinations?.length || state.transferPlanSteps?.length === 0)
+    ) {
+      patch(next);
+    }
+    hydrated.current = true;
+  }, [transferCapability, state, patch]);
+
+  const normalized = useMemo(
+    () => ensureEmergencyTransferWizardState(state),
+    [state],
+  );
+
+  const issues = useMemo(() => transferWizardValidationIssues(state), [state]);
+
+  if (!transferCapability) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Turn on <span className="font-medium">Transfer calls</span> in Goals to configure emergency
+        and human escalation.
+      </p>
+    );
+  }
+
+  const enabled =
+    normalized.voiceV2HumanTransferEnabled !== false && normalized.voiceV2HumanTransferEnabled !== null;
+  const routing = normalized.transferRouting === "waterfall" ? "waterfall" : "single";
+  const defaultRing = normalized.transferRingSeconds ?? 30;
+  const destinations = (normalized.transferDestinations ?? []).filter((d) => d.enabled !== false);
+  const steps = [...(normalized.transferPlanSteps ?? [])].sort(
+    (a, b) => (a.order ?? 0) - (b.order ?? 0),
+  );
+
+  const apply = (partial: Partial<AppointmentReceptionistWizardState>) => {
+    patch(syncLegacyTransferFieldsFromDestinations({ ...state, ...partial }));
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-muted-foreground">
+        After-hours escalation: when policy allows, Amy can transfer urgent or emergency callers to
+        your team. Transfer is not automatic for every call — triggers and your instructions still
+        apply.
+      </p>
+
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          className="mt-1 h-4 w-4 rounded border-border"
+          checked={enabled}
+          onChange={(e) =>
+            patch({
+              voiceV2HumanTransferEnabled: e.target.checked,
+            })
+          }
+        />
+        <span>
+          <span className="font-medium">Enable emergency &amp; human transfer</span>
+          <span className="mt-0.5 block text-xs text-muted-foreground">
+            Authorized contacts only — callers are never transferred to numbers you have not
+            configured here.
+          </span>
+        </span>
+      </label>
+
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          className="mt-1 h-4 w-4 rounded border-border"
+          checked={state.allowCallerRequestedTransfer !== false}
+          onChange={(e) => patch({ allowCallerRequestedTransfer: e.target.checked })}
+        />
+        <span className="font-medium">Allow caller-requested human</span>
+      </label>
+
+      <div className={enabled ? "" : "pointer-events-none opacity-50"}>
+        <Label>Routing</Label>
+        <select
+          className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
+          value={routing}
+          onChange={(e) =>
+            apply({
+              transferRouting: e.target.value as "single" | "waterfall",
+            })
+          }
+        >
+          <option value="single">Single destination</option>
+          <option value="waterfall">Waterfall (try contacts in order)</option>
+        </select>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {routing === "waterfall"
+            ? "Transovo tries the configured contacts in order until someone answers. If nobody answers, the selected fallback is used."
+            : "The caller is transferred to the first contact in your list below."}
+        </p>
+
+        <div className="mt-3">
+          <Label>Default ring timeout</Label>
+          <select
+            className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
+            value={defaultRing}
+            onChange={(e) => apply({ transferRingSeconds: Number(e.target.value) })}
+          >
+            {TRANSFER_RING_SECONDS_OPTIONS.map((s) => (
+              <option key={s} value={s}>
+                {s} seconds
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Used when a contact does not set its own ring timeout below.
+          </p>
+        </div>
+
+        <div className="mt-4 flex items-center justify-between gap-2">
+          <Label>Transfer contacts</Label>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1"
+            onClick={() => patch(addTransferDestination(state))}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add contact
+          </Button>
+        </div>
+
+        {destinations.length === 0 ? (
+          <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+            Add at least one contact with a valid phone number.
+          </p>
+        ) : null}
+
+        <ul className="mt-2 space-y-3">
+          {steps.map((step, stepIndex) => {
+            const dest = destinations.find((d) => d.id === step.destinationId);
+            if (!dest) return null;
+            const phoneOk = Boolean(normalizeWizardTransferPhone(dest.phoneE164));
+            const mode = step.transferMode === "WARM" ? "WARM" : "BASIC";
+            const stepTimeout = step.timeoutSeconds ?? defaultRing;
+            const usesDefaultTimeout = step.timeoutSeconds == null;
+
+            return (
+              <li
+                key={dest.id}
+                className="rounded-lg border border-border bg-muted/20 p-3 space-y-2"
+              >
+                <div className="flex items-start gap-2">
+                  {routing === "waterfall" ? (
+                    <div className="flex flex-col gap-0.5 pt-1">
+                      <button
+                        type="button"
+                        className="rounded border border-border bg-card p-0.5 disabled:opacity-30"
+                        disabled={stepIndex === 0}
+                        aria-label={`Move ${dest.label} up`}
+                        onClick={() => patch(moveTransferPlanStep(state, dest.id, "up"))}
+                      >
+                        <ChevronUp className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded border border-border bg-card p-0.5 disabled:opacity-30"
+                        disabled={stepIndex === steps.length - 1}
+                        aria-label={`Move ${dest.label} down`}
+                        onClick={() => patch(moveTransferPlanStep(state, dest.id, "down"))}
+                      >
+                        <ChevronDown className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="mt-2 text-xs font-semibold text-muted-foreground w-6">
+                      {stepIndex === 0 ? "1" : "—"}
+                    </span>
+                  )}
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="flex gap-2">
+                      <Input
+                        className="h-9"
+                        placeholder="Display name"
+                        value={dest.label}
+                        onChange={(e) =>
+                          patch(updateTransferDestination(state, dest.id, { label: e.target.value }))
+                        }
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 shrink-0 text-destructive"
+                        aria-label={`Remove ${dest.label}`}
+                        onClick={() => patch(removeTransferDestination(state, dest.id))}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <Input
+                      className="h-9"
+                      placeholder="+1 (555) 000-0000"
+                      value={dest.phoneE164}
+                      onChange={(e) =>
+                        patch(
+                          updateTransferDestination(state, dest.id, { phoneE164: e.target.value }),
+                        )
+                      }
+                      aria-invalid={!phoneOk}
+                    />
+                    {!phoneOk ? (
+                      <p className="text-xs text-destructive">Enter a valid phone number.</p>
+                    ) : null}
+
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div>
+                        <Label className="text-xs">Transfer mode</Label>
+                        <select
+                          className="mt-1 h-9 w-full rounded-lg border border-border bg-card px-2 text-sm"
+                          value={mode}
+                          onChange={(e) =>
+                            patch(
+                              updateTransferPlanStep(state, dest.id, {
+                                transferMode: e.target.value as "BASIC" | "WARM",
+                              }),
+                            )
+                          }
+                        >
+                          <option value="BASIC">Direct</option>
+                          <option value="WARM">Warm</option>
+                        </select>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Ring timeout</Label>
+                        <select
+                          className="mt-1 h-9 w-full rounded-lg border border-border bg-card px-2 text-sm"
+                          value={usesDefaultTimeout ? "default" : String(stepTimeout)}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            if (v === "default") {
+                              patch(
+                                updateTransferPlanStep(state, dest.id, {
+                                  timeoutSeconds: undefined,
+                                }),
+                              );
+                            } else {
+                              patch(
+                                updateTransferPlanStep(state, dest.id, {
+                                  timeoutSeconds: Number(v),
+                                }),
+                              );
+                            }
+                          }}
+                        >
+                          <option value="default">Default ({defaultRing}s)</option>
+                          {TRANSFER_RING_SECONDS_OPTIONS.map((s) => (
+                            <option key={s} value={s}>
+                              {s} seconds
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {mode === "WARM"
+                        ? "Warm: the receptionist calls this contact first, shares a brief summary, and connects the caller after they accept."
+                        : "Direct: the caller is transferred straight to this number."}
+                    </p>
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+
+        <label className="mt-3 flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={state.detectVoicemailOnTransfer}
+            onChange={(e) => patch({ detectVoicemailOnTransfer: e.target.checked })}
+          />
+          <span>
+            <span className="font-medium">Detect voicemail on transfer</span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">
+              Return to the receptionist if the transfer reaches voicemail.
+            </span>
+          </span>
+        </label>
+
+        <div className="mt-4 border-t border-border pt-3">
+          <Label>If nobody answers (waterfall exhausted or transfer fails)</Label>
+          <div className="mt-2 space-y-2">
+            {FALLBACK_OPTIONS.map(([id, label, desc]) => (
+              <label key={id} className="flex cursor-pointer items-start gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="transfer-fallback"
+                  className="mt-1"
+                  checked={state.transferFallback === id}
+                  onChange={() => patch({ transferFallback: id })}
+                />
+                <span>
+                  <span className="font-medium">{label}</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">{desc}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {issues.length > 0 ? (
+          <ul className="mt-4 space-y-1 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-100">
+            {issues.map((i) => (
+              <li key={i.id}>{i.message}</li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+    </div>
+  );
+}

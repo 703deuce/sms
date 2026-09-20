@@ -1,18 +1,17 @@
 "use client";
 
-import type {
-  AppointmentReceptionistWizardState,
-  FallbackAction,
-} from "@/lib/solutions/appointment-receptionist/types";
+import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
 import { hasBookingCapability } from "@/lib/solutions/appointment-receptionist/wizard-presets";
-import { Input, Label } from "@/components/ui/input";
+import { Label } from "@/components/ui/input";
 import {
   ArrowRight,
   AlertTriangle,
   CheckCircle2,
-  UserRound,
 } from "lucide-react";
-import { InfoCallout, RadioRow, SidePanel, StatusPill } from "../ui";
+import { EmergencyTransferEditor } from "../emergency-transfer-editor";
+import { ensureEmergencyTransferWizardState } from "@/lib/solutions/appointment-receptionist/transfer-wizard-state";
+import { normalizeWizardTransferPhone } from "@/lib/solutions/appointment-receptionist/transfer-utils";
+import { InfoCallout, SidePanel, StatusPill } from "../ui";
 import { UrgencyRulesEditor } from "../urgency-rules-editor";
 import { CallbackRequiredFieldsEditor } from "../callback-required-fields-editor";
 import { defaultCallbackRequiredCollectFieldIds } from "@/lib/solutions/appointment-receptionist/callback-required-field-defaults";
@@ -52,6 +51,12 @@ export function CallHandlingStep({
 }) {
   const b = state.bookingBehavior;
   const booking = hasBookingCapability(state.capabilities);
+  const transferReady = (() => {
+    const n = ensureEmergencyTransferWizardState(state);
+    return (n.transferDestinations ?? []).some(
+      (d) => d.enabled !== false && normalizeWizardTransferPhone(d.phoneE164),
+    );
+  })();
 
   return (
     <div className="flex gap-6">
@@ -135,125 +140,17 @@ export function CallHandlingStep({
           </div>
           ) : null}
 
-          <div className="rounded-xl border border-border bg-card p-4">
-              <h3 className="text-sm font-semibold">Human transfer</h3>
-              <p className="mt-1 text-xs text-muted-foreground">Transfer triggers</p>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {state.transferTriggers.map((t) => (
-                  <span
-                    key={t}
-                    className="rounded-full bg-muted px-2 py-1 text-[11px] font-medium"
-                  >
-                    {t}
-                  </span>
-                ))}
-              </div>
-              <div className="mt-4 space-y-2">
-                <Label>Transfer destination</Label>
-                <div className="flex items-center gap-2 rounded-lg border border-border p-2">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <UserRound className="h-4 w-4" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <Input
-                      className="h-8 border-0 bg-transparent px-0 shadow-none"
-                      placeholder="Name"
-                      value={state.transferDestinationName}
-                      onChange={(e) => patch({ transferDestinationName: e.target.value })}
-                    />
-                    <Input
-                      className="h-8 border-0 bg-transparent px-0 shadow-none"
-                      placeholder="+1 (555) 000-0000"
-                      value={state.transferDestinationPhone}
-                      onChange={(e) => patch({ transferDestinationPhone: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <Label>Ring for</Label>
-                <select
-                  className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
-                  value={state.transferRingSeconds}
-                  onChange={(e) => patch({ transferRingSeconds: Number(e.target.value) })}
-                >
-                  {[10, 15, 20, 30, 45].map((s) => (
-                    <option key={s} value={s}>
-                      {s} seconds
-                    </option>
-                  ))}
-                </select>
-                <label className="mt-3 flex items-start gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="mt-1"
-                    checked={state.warmTransfer}
-                    onChange={(e) => patch({ warmTransfer: e.target.checked })}
-                  />
-                  <span>
-                    <span className="font-medium">Warm transfer</span>
-                    <span className="mt-0.5 block text-xs text-muted-foreground">
-                      Hold the caller and introduce them before connecting.
-                    </span>
-                  </span>
-                </label>
-                <label className="mt-2 flex items-start gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="mt-1"
-                    checked={state.detectVoicemailOnTransfer}
-                    onChange={(e) =>
-                      patch({ detectVoicemailOnTransfer: e.target.checked })
-                    }
-                  />
-                  <span>
-                    <span className="font-medium">Detect voicemail on transfer</span>
-                    <span className="mt-0.5 block text-xs text-muted-foreground">
-                      Return to AI if the transfer lands in voicemail.
-                    </span>
-                  </span>
-                </label>
-              </div>
+          <div className="rounded-xl border border-border bg-card p-4 lg:col-span-3">
+            <h3 className="text-sm font-semibold">Emergency &amp; human transfer</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Policy triggers (when Amy may offer a transfer):{" "}
+              {state.transferTriggers.join(" · ")}
+            </p>
+            <div className="mt-4">
+              <EmergencyTransferEditor state={state} patch={patch} />
+            </div>
             {presentation === "mctb" ? (
               <div className="mt-4 space-y-3 border-t border-border pt-3">
-                <label className="flex items-start gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="mt-1"
-                    checked={state.voiceV2HumanTransferEnabled === true}
-                    onChange={(e) =>
-                      patch({ voiceV2HumanTransferEnabled: e.target.checked })
-                    }
-                  />
-                  <span>
-                    <span className="font-medium">Enable Voice V2 human transfer</span>
-                    <span className="mt-0.5 block text-xs text-muted-foreground">
-                      Uses trusted destinations on the One-Amy PSTN path (not legacy workflow handoff).
-                    </span>
-                  </span>
-                </label>
-                <label className="flex items-start gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="mt-1"
-                    checked={state.allowCallerRequestedTransfer !== false}
-                    onChange={(e) =>
-                      patch({ allowCallerRequestedTransfer: e.target.checked })
-                    }
-                  />
-                  <span className="font-medium">Allow caller-requested human</span>
-                </label>
-                <Label>Routing</Label>
-                <select
-                  className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
-                  value={state.transferRouting || "single"}
-                  onChange={(e) =>
-                    patch({
-                      transferRouting: e.target.value as "single" | "waterfall",
-                    })
-                  }
-                >
-                  <option value="single">Single destination</option>
-                  <option value="waterfall">Waterfall (sequential)</option>
-                </select>
                 <label className="flex items-start gap-2 text-sm">
                   <input
                     type="checkbox"
@@ -399,27 +296,10 @@ export function CallHandlingStep({
           </div>
 
           <div className="rounded-xl border border-border bg-card p-4">
-            <h3 className="text-sm font-semibold">Fallbacks</h3>
+            <h3 className="text-sm font-semibold">Other call handling</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              What happens if transfer or booking fails
+              Transfer fallback is configured under Emergency &amp; human transfer above.
             </p>
-            <div className="mt-3 space-y-2">
-              {(
-                [
-                  ["return_to_ai", "Return to AI", "Retry request or offer alternatives."],
-                  ["take_message", "Take a message", "Capture details for your team."],
-                  ["notify_staff", "Send staff notification", "Alert staff immediately."],
-                ] as Array<[FallbackAction, string, string]>
-              ).map(([id, label, desc]) => (
-                <RadioRow
-                  key={id}
-                  selected={state.transferFallback === id}
-                  onClick={() => patch({ transferFallback: id })}
-                  label={label}
-                  description={desc}
-                />
-              ))}
-            </div>
             <div className="mt-4 space-y-2 border-t border-border pt-3">
               <label className="flex items-start gap-2 text-sm">
                 <input
@@ -479,9 +359,9 @@ export function CallHandlingStep({
         </ol>
         <div className="space-y-2 text-xs">
           <div className="flex items-center justify-between">
-            <span>Transfer destination</span>
-            <StatusPill tone={state.transferDestinationPhone ? "success" : "warning"}>
-              {state.transferDestinationPhone ? "Ready" : "Needed"}
+            <span>Emergency transfer</span>
+            <StatusPill tone={transferReady ? "success" : "warning"}>
+              {transferReady ? "Ready" : "Needed"}
             </StatusPill>
           </div>
           <div className="flex items-center justify-between">
