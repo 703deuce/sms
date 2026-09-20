@@ -204,6 +204,7 @@ const MODEL_TO_TABLE: Record<string, string> = {
   voiceTestRun: "voice_test_runs",
   voiceComplianceProfile: "voice_compliance_profiles",
   voiceUsageRecord: "voice_usage_records",
+  voiceCallerBlock: "voice_caller_blocks",
   voiceIntegrationSecret: "voice_integration_secrets",
   // Telnyx AI Voice platform tables (supabase/voice-ai-platform-fields.sql)
   voiceRemoteAssistantVersion: "voice_remote_assistant_versions",

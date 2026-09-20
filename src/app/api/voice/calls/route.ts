@@ -278,6 +278,7 @@ export async function GET(request: Request) {
           spamLikely: projected.spamLikely,
           solicitor: projected.solicitor,
           postCallStatus: postCall?.pipelineCompletedAt ? "ready" : postCall ? "processing" : null,
+          metadata: c.metadata,
         };
       }),
       analytics: metrics,

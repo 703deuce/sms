@@ -10,6 +10,7 @@ import {
   fmtCallPhone,
   type CallListFilter,
 } from "@/lib/voice/calls/display";
+import { buildCallScreeningUi } from "@/lib/voice/calls/screening-display";
 import { cn } from "@/lib/utils";
 import {
   AudioWaveform,
@@ -47,6 +48,7 @@ type CallRow = {
   solicitor?: boolean;
   v3Outcome?: string | null;
   postCallStatus?: string | null;
+  metadata?: unknown;
 };
 
 type Analytics = {
@@ -265,6 +267,10 @@ export default function VoiceCallsPage() {
             const callerName = c.contactName?.trim() || "Unknown Caller";
             const dt = fmtCallDateTable(c.startedAt);
             const outcome = deriveCallOutcomeBadge(c);
+            const screeningUi = buildCallScreeningUi({
+              metadata: c.metadata,
+              outcome: c.outcome,
+            });
             const reasonLine = c.reasonForCall || c.summary || "No summary yet.";
             const processing = c.postCallStatus === "processing";
 
@@ -293,8 +299,21 @@ export default function VoiceCallsPage() {
                   {fmtCallDurationTable(c.durationSeconds)}
                 </p>
 
-                <div className="mt-2 md:mt-0">
+                <div className="mt-2 flex max-w-[10rem] flex-wrap gap-1 md:mt-0">
                   <CallOutcomeBadge outcome={outcome} />
+                  {screeningUi.extraBadges.map((badge) => (
+                    <span
+                      key={badge}
+                      className={cn(
+                        "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset",
+                        badge === "Spam Likely"
+                          ? "bg-rose-50 text-rose-700 ring-rose-200"
+                          : "bg-amber-50 text-amber-800 ring-amber-200",
+                      )}
+                    >
+                      {badge}
+                    </span>
+                  ))}
                 </div>
 
                 <p className="mt-2 line-clamp-2 text-sm leading-snug text-[#4b5563] md:mt-0">

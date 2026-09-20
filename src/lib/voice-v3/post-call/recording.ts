@@ -1,6 +1,6 @@
 import "server-only";
 
-import { EncodedFileOutput, EncodedFileType } from "@livekit/protocol";
+import { AudioMixing, EncodedFileOutput, EncodedFileType } from "@livekit/protocol";
 import { EgressClient } from "livekit-server-sdk";
 import { getPrisma } from "@/lib/db";
 import { getActiveMediaBackend } from "@/lib/voice/media-backend/resolver";
@@ -68,7 +68,10 @@ export async function startVoiceV3LiveKitRecording(input: {
     const info = await api.startRoomCompositeEgress(
       input.roomName,
       { file: egressFileOutputForCall(input.callId) },
-      { audioOnly: true },
+      {
+        audioOnly: true,
+        audioMixing: AudioMixing.DUAL_CHANNEL_AGENT,
+      },
     );
     const egressId = info.egressId;
     await prisma.voiceRecording.updateMany({

@@ -229,6 +229,17 @@ export async function ensureNumberProvisioned(
     const { trunk, actions: trunkActions } = await ensureInboundTrunkForNumber(phone.e164);
     actions.push(...trunkActions);
 
+    try {
+      const { ensureTelnyxSpamHeaderMappingOnInboundTrunk } = await import(
+        "./livekit/telnyx-spam-header-trunk"
+      );
+      const headerSync = await ensureTelnyxSpamHeaderMappingOnInboundTrunk(phone.e164);
+      actions.push(...headerSync.actions);
+    } catch (headerErr) {
+      const msg = headerErr instanceof Error ? headerErr.message : String(headerErr);
+      actions.push(`telnyx_spam_header_trunk_skipped:${msg}`);
+    }
+
     const trunkId = trunk.sipTrunkId || "";
     if (!trunkId) throw new Error("LiveKit inbound trunk id missing after ensure");
 

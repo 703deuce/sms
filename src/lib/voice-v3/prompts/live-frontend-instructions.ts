@@ -6,11 +6,13 @@ import {
 } from "./live-prompt-controls";
 import { buildAmyEndCallInstructions } from "./amy-end-call-instructions";
 import { buildAmyTransferInstructions } from "./amy-transfer-instructions";
+import { buildAmySpamSolicitorInstructions } from "../spam-protection/prompt-sections";
 
 export type LiveFrontendPromptContext = {
   agentName?: string;
   businessName?: string;
   agentConfig?: VoiceV3AgentConfig;
+  suspectedSpamLikely?: boolean;
 };
 
 function buildAmyCapabilitySummary(config: VoiceV3AgentConfig): string {
@@ -118,6 +120,12 @@ export function buildLiveFrontendInstructions(
     : "";
   const transferBehavior = config ? buildAmyTransferInstructions(config) : "";
   const endCallBehavior = buildAmyEndCallInstructions();
+  const spamSection =
+    config?.spamProtection
+      ? buildAmySpamSolicitorInstructions(config.spamProtection, {
+          suspectedSpamLikely: context.suspectedSpamLikely,
+        })
+      : "";
 
   const greetingHint =
     config?.conversation.openingGreeting?.trim() ||
@@ -141,6 +149,7 @@ ${persona ? `${persona}\n` : ""}
 ${liveTuning ? `${liveTuning}\n` : ""}
 ${transferBehavior ? `${transferBehavior}\n` : ""}
 ${endCallBehavior ? `${endCallBehavior}\n` : ""}
+${spamSection ? `${spamSection}\n` : ""}
 
 ${delegationPolicy}
 

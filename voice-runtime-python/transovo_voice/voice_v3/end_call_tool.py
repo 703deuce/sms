@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
+
 from livekit.agents.beta.tools import EndCallTool
 from livekit.agents.llm.tool_context import Toolset
 
@@ -29,12 +31,15 @@ def build_voice_v3_end_call_toolset(
     agent_id: str,
     room: str,
     extra_hint: str = "",
+    before_end_call: Callable[[], Awaitable[None]] | None = None,
 ) -> EndCallTool:
     extra = END_CALL_EXTRA_DESCRIPTION
     if extra_hint.strip():
         extra = f"{extra}\n{extra_hint.strip()}"
 
     async def on_tool_called(_ev: Toolset.ToolCalledEvent) -> None:
+        if before_end_call is not None:
+            await before_end_call()
         log_event(
             "VOICE_V3_END_CALL_REQUESTED",
             call_id=call_id or None,

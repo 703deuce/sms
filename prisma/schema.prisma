@@ -374,6 +374,7 @@ model Workspace {
   voiceTestRuns                     VoiceTestRun[]
   voiceComplianceProfile            VoiceComplianceProfile?
   voiceUsageRecords                 VoiceUsageRecord[]
+  voiceCallerBlocks                 VoiceCallerBlock[]
   voiceIntegrationSecrets           VoiceIntegrationSecret[]
   providerWebhookEvents             ProviderWebhookEvent[]
   linkClickEvents                   LinkClickEvent[]
@@ -2763,6 +2764,22 @@ model VoiceCall {
   @@index([telnyxCallControlId])
   @@index([agentId])
   @@map("voice_calls")
+}
+
+model VoiceCallerBlock {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  callerE164      String
+  displayName     String?
+  blockedByUserId String?
+  sourceCallId    String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, callerE164])
+  @@index([workspaceId, createdAt])
+  @@map("voice_caller_blocks")
 }
 
 model VoiceCallLeg {

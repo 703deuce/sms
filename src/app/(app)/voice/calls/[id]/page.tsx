@@ -8,6 +8,8 @@ import {
 } from "@/lib/voice/calls/detail";
 import { deriveCallOutcomeBadge, fmtCallDuration, fmtCallPhone } from "@/lib/voice/calls/display";
 import { CallTranscript } from "@/components/voice/calls/call-transcript";
+import { CallScreeningSection } from "@/components/voice/call-screening-section";
+import { buildCallScreeningUi } from "@/lib/voice/calls/screening-display";
 import {
   getMockCallById,
   isDemoCallId,
@@ -48,7 +50,9 @@ export default function VoiceCallDetailPage() {
   const [data, setData] = useState<Record<string, unknown> | null>(null);
   const [apiLoaded, setApiLoaded] = useState(false);
   const [showTranscriptDetails, setShowTranscriptDetails] = useState(true);
-  const [blockBusy, setBlockBusy] = useState(false);
+  const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
+  const [blockStatus, setBlockStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [blockError, setBlockError] = useState<string | null>(null);
   const [transcriptRetrying, setTranscriptRetrying] = useState(false);
   const demo = isDemoCallId(id);
   const mock = demo ? getMockCallById(id) : undefined;
@@ -155,6 +159,11 @@ export default function VoiceCallDetailPage() {
     insightSummary: insight?.summary,
   });
   const voiceV3Analytics = (data?.voiceV3Analytics as Record<string, unknown> | undefined) || {};
+  const callMetadata = (call.metadata as unknown) ?? (data?.call as { metadata?: unknown })?.metadata;
+  const screeningUi = buildCallScreeningUi({
+    metadata: callMetadata,
+    outcome: call.outcome as string | null,
+  });
   const outcomeBadges = deriveOutcomeBadges({
     outcome: call.outcome as string | null,
     appointmentBooked: Boolean(call.appointmentBooked),
@@ -176,21 +185,19 @@ export default function VoiceCallDetailPage() {
     insight?.summary ||
     "";
 
-  async function blockCaller() {
-    if (demo || blockBusy) return;
-    setBlockBusy(true);
+  async function confirmBlockCaller() {
+    if (demo) return;
+    setBlockStatus("loading");
+    setBlockError(null);
     try {
-      await fetch("/api/voice/blocked-callers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          callerE164: callerPhone,
-          reason: "Blocked from call detail",
-          sourceCallId: id,
-        }),
-      });
-    } finally {
-      setBlockBusy(false);
+      const res = await fetch(`/api/voice/calls/${id}/block-caller`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not block caller");
+      setBlockStatus("done");
+      setBlockConfirmOpen(false);
+    } catch (e) {
+      setBlockStatus("error");
+      setBlockError(e instanceof Error ? e.message : "Could not block caller");
     }
   }
 
@@ -206,21 +213,6 @@ export default function VoiceCallDetailPage() {
       setTranscriptRetrying(false);
     }
   }
-
-  const screeningOutcome =
-    typeof voiceV3Analytics.screeningOutcome === "string"
-      ? voiceV3Analytics.screeningOutcome
-      : null;
-  const primaryBadge = deriveCallOutcomeBadge({
-    outcome: call.outcome as string | null,
-    appointmentBooked: Boolean(call.appointmentBooked),
-    transferred: Boolean(call.transferred),
-    voicemailDetected: Boolean(call.voicemailDetected),
-    needsAttention: voiceV3Analytics.actionRequired === true,
-    spamLikely: voiceV3Analytics.outcome === "SPAM",
-    solicitor: voiceV3Analytics.outcome === "SOLICITOR",
-    v3Outcome: typeof voiceV3Analytics.outcome === "string" ? voiceV3Analytics.outcome : null,
-  });
 
   const actionItems = buildActionItems({
     call: {
@@ -274,6 +266,19 @@ export default function VoiceCallDetailPage() {
                 {badge}
               </span>
             ))}
+            {screeningUi.extraBadges.map((badge) => (
+              <span
+                key={badge}
+                className={cn(
+                  "rounded-full px-2.5 py-0.5 text-xs font-semibold tracking-wide ring-1 ring-inset",
+                  badge === "Spam Likely"
+                    ? "bg-rose-50 text-rose-700 ring-rose-200"
+                    : "bg-amber-50 text-amber-800 ring-amber-200",
+                )}
+              >
+                {badge}
+              </span>
+            ))}
           </div>
           <p className="mt-2 text-sm text-[#6b7280]">
             {dateLabel} at {timeLabel}
@@ -282,14 +287,14 @@ export default function VoiceCallDetailPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {!demo && (primaryBadge === "Spam Likely" || primaryBadge === "Solicitor" || primaryBadge === "Spam") ? (
+          {!demo && callerPhone && callerPhone !== "unknown" ? (
             <button
               type="button"
-              disabled={blockBusy}
-              onClick={blockCaller}
-              className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-900 shadow-sm hover:bg-rose-100 disabled:opacity-60"
+              className="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2 text-sm font-medium text-[#374151] shadow-sm hover:bg-[#f9fafb] disabled:opacity-60"
+              disabled={blockStatus === "done"}
+              onClick={() => setBlockConfirmOpen(true)}
             >
-              {blockBusy ? "Blocking…" : "Block caller"}
+              {blockStatus === "done" ? "Caller blocked" : "Block caller"}
             </button>
           ) : null}
           <button
@@ -399,14 +404,10 @@ export default function VoiceCallDetailPage() {
                 </ul>
               </div>
 
-              {screeningOutcome ? (
-                <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
-                  <h2 className="text-sm font-semibold text-[#111827]">Screening</h2>
-                  <p className="mt-2 text-sm text-[#374151]">
-                    Outcome: <span className="font-medium">{screeningOutcome}</span>
-                  </p>
-                </div>
-              ) : null}
+              <CallScreeningSection
+                metadata={callMetadata}
+                outcome={call.outcome as string | null}
+              />
 
               <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
                 <h2 className="text-sm font-semibold text-[#111827]">AI Summary</h2>
@@ -610,6 +611,44 @@ export default function VoiceCallDetailPage() {
           </div>
         </aside>
       </div>
+
+      {blockConfirmOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="block-caller-title"
+        >
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-lg">
+            <h2 id="block-caller-title" className="text-lg font-semibold text-[#111827]">
+              Block this caller?
+            </h2>
+            <p className="mt-2 text-sm text-[#6b7280]">
+              Future calls from {fmtCallPhone(callerPhone)} will be rejected for this workspace.
+            </p>
+            {blockError ? (
+              <p className="mt-2 text-sm text-rose-700" role="alert">{blockError}</p>
+            ) : null}
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-[#e5e7eb] px-4 py-2 text-sm font-medium"
+                onClick={() => setBlockConfirmOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                disabled={blockStatus === "loading"}
+                onClick={confirmBlockCaller}
+              >
+                {blockStatus === "loading" ? "Blocking…" : "Block caller"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

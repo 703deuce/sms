@@ -9,6 +9,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { EmergencyTransferEditor } from "../emergency-transfer-editor";
+import { SpamUnwantedCallsEditor } from "../spam-unwanted-calls-editor";
 import { ensureEmergencyTransferWizardState } from "@/lib/solutions/appointment-receptionist/transfer-wizard-state";
 import { normalizeWizardTransferPhone } from "@/lib/solutions/appointment-receptionist/transfer-utils";
 import { InfoCallout, SidePanel, StatusPill } from "../ui";
@@ -149,6 +150,9 @@ export function CallHandlingStep({
             </p>
             <div className="mt-4">
               <EmergencyTransferEditor state={state} patch={patch} />
+            </div>
+            <div className="mt-4">
+              <SpamUnwantedCallsEditor state={state} patch={patch} />
             </div>
             {presentation === "mctb" ? (
               <div className="mt-4 space-y-3 border-t border-border pt-3">

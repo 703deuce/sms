@@ -13,6 +13,10 @@ from transovo_voice.session.dispatch_resolver import extract_call_numbers
 from transovo_voice.telemetry import log_event
 from transovo_voice.voice_v3.tool_client import TransovoV3ToolClient, VoiceV3CallContext
 from transovo_voice.voice_v3.end_call_tool import build_voice_v3_end_call_toolset
+from transovo_voice.voice_v3.solicitor_outcome import (
+    SolicitorOutcomeState,
+    build_report_unwanted_solicitor_tool,
+)
 from transovo_voice.voice_v3.tools import LiveKitTelephonyBridge, build_livekit_tools
 
 logger = logging.getLogger("transovo-voice.voice_v3")
@@ -22,9 +26,60 @@ def _attrs_dict(participant: rtc.RemoteParticipant) -> dict[str, str]:
     return {str(k): str(v) for k, v in (participant.attributes or {}).items()}
 
 
+def _telnyx_screening_from_attrs(attrs: dict[str, str]) -> str | None:
+    for key in (
+        "transovo.telnyx.call_screening",
+        "sip.h.X-Telnyx-Call-Screening",
+        "X-Telnyx-Call-Screening",
+    ):
+        raw = (attrs.get(key) or "").strip()
+        if raw:
+            return raw
+    return None
+
+
 async def _wait_for_sip_participant(ctx: JobContext) -> rtc.RemoteParticipant:
     participant = await asyncio.wait_for(ctx.wait_for_participant(), timeout=20.0)
     return participant
+
+
+async def _try_immediate_telnyx_screening_header(
+    ctx: JobContext,
+    sip_identity: str,
+) -> str | None:
+    """Best-effort SIP header read via participant RPC (no sleep)."""
+    local = ctx.room.local_participant
+    if local is None or not hasattr(local, "perform_rpc"):
+        return None
+    try:
+        raw = await asyncio.wait_for(
+            local.perform_rpc(
+                destination_identity=sip_identity,
+                method="lk.sip.GetRemoteHeaders",
+                payload="",
+                response_timeout=0.35,
+            ),
+            timeout=0.4,
+        )
+        if not raw:
+            return None
+        import json
+
+        parsed = json.loads(raw) if isinstance(raw, str) else raw
+        if isinstance(parsed, dict):
+            for key in ("X-Telnyx-Call-Screening", "x-telnyx-call-screening"):
+                val = parsed.get(key)
+                if val:
+                    return str(val).strip()
+            headers = parsed.get("headers")
+            if isinstance(headers, dict):
+                for key in ("X-Telnyx-Call-Screening", "x-telnyx-call-screening"):
+                    val = headers.get(key)
+                    if val:
+                        return str(val).strip()
+    except Exception:
+        logger.debug("voice_v3_get_remote_headers_unavailable", exc_info=True)
+    return None
 
 
 def _openai_tool_to_dict(tool: dict[str, Any] | Any) -> dict[str, Any]:
@@ -64,6 +119,13 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
     try:
         sip_participant = await _wait_for_sip_participant(ctx)
         attrs = _attrs_dict(sip_participant)
+        telnyx_screening = _telnyx_screening_from_attrs(attrs)
+        if not telnyx_screening:
+            immediate = await _try_immediate_telnyx_screening_header(
+                ctx, sip_participant.identity
+            )
+            if immediate:
+                telnyx_screening = immediate
         caller_e164, dialed_e164 = extract_call_numbers(
             attrs,
             ctx.room.metadata,
@@ -79,6 +141,7 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             provider_call_id=attrs.get("sip.callIDFull"),
             trunk_id=attrs.get("sip.trunkID"),
             rule_id=attrs.get("sip.ruleID"),
+            telnyx_call_screening=telnyx_screening,
             live_session_id="",
             call_id="",
             workspace_id="",
@@ -86,6 +149,15 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
         )
         client = TransovoV3ToolClient(backend, provisional_ctx)
         config = await client.resolve_session_config()
+
+        if config.get("preCallReject") == "blocklist":
+            log_event(
+                "VOICE_V3_BLOCKLIST_CALL_REJECTED",
+                room=ctx.room.name,
+                extra={"callerE164": caller_e164},
+            )
+            await ctx.room.disconnect()
+            return
 
         live_session_id = str(config.get("liveSessionId") or "")
         call_ctx = VoiceV3CallContext(
@@ -97,6 +169,7 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             provider_call_id=attrs.get("sip.callIDFull"),
             trunk_id=attrs.get("sip.trunkID"),
             rule_id=attrs.get("sip.ruleID"),
+            telnyx_call_screening=telnyx_screening,
             live_session_id=live_session_id,
             call_id=str(config.get("callId") or live_session_id),
             workspace_id=str(config.get("workspaceId") or ""),
@@ -118,14 +191,30 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             intake_fields=intake_fields if isinstance(intake_fields, list) else [],
         )
 
+        solicitor_policy = str(config.get("solicitorPolicy") or "ALLOW")
+        solicitor_state = SolicitorOutcomeState()
+        session_tools = list(lk_tools)
+        if solicitor_policy == "DECLINE":
+            session_tools.append(
+                build_report_unwanted_solicitor_tool(client, solicitor_state)
+            )
+
+        async def _before_end_call() -> None:
+            if not solicitor_state.recorded:
+                return
+            from transovo_voice.voice_v3.solicitor_outcome import _record_solicitor_outcome
+
+            await _record_solicitor_outcome(client, solicitor_state)
+
         end_call_toolset = build_voice_v3_end_call_toolset(
             call_id=call_ctx.call_id,
             workspace_id=call_ctx.workspace_id,
             agent_id=call_ctx.agent_id,
             room=ctx.room.name,
             extra_hint=str(config.get("endCallToolHint") or "").strip(),
+            before_end_call=_before_end_call,
         )
-        session_tools = [*lk_tools, *end_call_toolset.tools]
+        session_tools = [*session_tools, *end_call_toolset.tools]
 
         def _on_participant_disconnected(participant: rtc.RemoteParticipant) -> None:
             if participant.identity != sip_participant.identity:
@@ -190,7 +279,14 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
                 "toolCount": len(session_tools),
                 "workspaceId": call_ctx.workspace_id,
                 "agentId": call_ctx.agent_id,
-                "amyNativeTools": ["end_call"],
+                "amyNativeTools": [
+                    t
+                    for t in (
+                        "report_unwanted_solicitor" if solicitor_policy == "DECLINE" else None,
+                        "end_call",
+                    )
+                    if t
+                ],
                 "amyToolNames": [n for n in amy_tool_names if n],
             },
         )

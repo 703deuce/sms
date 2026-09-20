@@ -1,21 +1,28 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
-import { getPrisma } from "@/lib/db";
-import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+import {
+  blockCallerForWorkspace,
+  listBlockedCallers,
+  unblockCallerForWorkspace,
+} from "@/lib/voice-v3/spam-protection/blocklist";
 
 export async function GET() {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
-    const prisma = getPrisma();
-    const rows = await prisma.voiceCallerBlock.findMany({
-      where: { workspaceId: auth.workspaceId },
-      orderBy: { createdAt: "desc" },
-      take: 200,
+    const rows = await listBlockedCallers(auth.workspaceId);
+    return NextResponse.json({
+      data: rows.map((r) => ({
+        id: r.id,
+        callerE164: r.callerE164,
+        displayName: r.displayName,
+        createdAt: r.createdAt.toISOString(),
+        sourceCallId: r.sourceCallId,
+      })),
+      count: rows.length,
     });
-    return NextResponse.json({ data: rows });
   } catch (err) {
-    return jsonError(err, 500);
+    return jsonError(err);
   }
 }
 
@@ -23,25 +30,20 @@ export async function POST(request: Request) {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
-    const body = (await request.json()) as { callerE164?: string; reason?: string; sourceCallId?: string };
-    const raw = body.callerE164?.trim();
-    if (!raw) return NextResponse.json({ error: "callerE164 required" }, { status: 400 });
-    const callerE164 = normalizeE164(raw);
-    const prisma = getPrisma();
-    const row = await prisma.voiceCallerBlock.upsert({
-      where: { workspaceId_callerE164: { workspaceId: auth.workspaceId, callerE164 } },
-      create: {
-        workspaceId: auth.workspaceId,
-        callerE164,
-        reason: body.reason?.trim() || null,
-        sourceCallId: body.sourceCallId?.trim() || null,
-      },
-      update: {
-        reason: body.reason?.trim() || undefined,
-        sourceCallId: body.sourceCallId?.trim() || undefined,
-      },
+    const body = await request.json();
+    const phone = String(body.phoneE164 || body.callerE164 || "");
+    if (!phone) return jsonError(new Error("callerE164 required"), 400);
+    const result = await blockCallerForWorkspace({
+      workspaceId: auth.workspaceId,
+      callerE164: phone,
+      blockedByUserId: auth.session.userId,
+      displayName: body.displayName ? String(body.displayName) : null,
+      sourceCallId: body.sourceCallId ? String(body.sourceCallId) : null,
     });
-    return NextResponse.json({ data: row }, { status: 201 });
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: 400 });
+    }
+    return NextResponse.json({ ok: true, callerE164: result.callerE164 });
   } catch (err) {
     return jsonError(err, 400);
   }
@@ -52,11 +54,11 @@ export async function DELETE(request: Request) {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
     const url = new URL(request.url);
-    const callerE164 = url.searchParams.get("callerE164");
-    if (!callerE164) return NextResponse.json({ error: "callerE164 required" }, { status: 400 });
-    const prisma = getPrisma();
-    await prisma.voiceCallerBlock.deleteMany({
-      where: { workspaceId: auth.workspaceId, callerE164: normalizeE164(callerE164) },
+    const phone = url.searchParams.get("callerE164") || url.searchParams.get("phoneE164") || "";
+    if (!phone) return jsonError(new Error("callerE164 required"), 400);
+    await unblockCallerForWorkspace({
+      workspaceId: auth.workspaceId,
+      callerE164: phone,
     });
     return NextResponse.json({ ok: true });
   } catch (err) {
