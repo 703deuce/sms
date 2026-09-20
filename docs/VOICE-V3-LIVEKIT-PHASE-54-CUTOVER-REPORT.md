@@ -149,6 +149,24 @@ Cloud agent **cannot** place PSTN; user/operator must call.
 
 ---
 
+## Incident: call answers but tools fail (2026-09-20 ~03:23 UTC)
+
+| Layer | Evidence |
+|-------|----------|
+| SIP / pickup | **OK** — job `AJ_Ai9vVmzcFatU`, `voice_v3_session_starting`, **4 tools** registered |
+| Voice worker | `update_intake`, `set_scheduling_preference` invoked → **`RuntimeError: Cannot send a request, as the client has been closed`** |
+| Utterance commits | Same error on every `commit_voice_v3_livekit_caller_utterance` |
+
+**Cause:** `run_voice_v3_livekit_session` closed `TransovoBackend` in a `finally` block immediately after `session.start()`. LiveKit’s `session.start()` returns once the agent is running, not when the SIP participant disconnects — so the HTTP client was torn down ~10s into a ~90s call.
+
+**Fix:** `69dc7f6d` — register `ctx.add_shutdown_callback` to close the backend when the job ends (same pattern as `run_inbound_session`). Deploy **transovo-voice** (App 2) only; web unchanged.
+
+**Tools (already wired, not missing):** `update_intake`, `set_scheduling_preference`, `find_availability`, `request_callback` via `execute_voice_v3_livekit_tool` → `executeVoiceTool`.
+
+**Retry PSTN** after App 2 image includes `69dc7f6d`.
+
+---
+
 ## Rollback (not executed)
 
 - Git: direct-OpenAI path unchanged.
