@@ -235,22 +235,62 @@ async function replaceSharedDispatchWithScopedRules(): Promise<{
   return { legacyRuleId, v3RuleId };
 }
 
+/**
+ * LiveKit Cloud did not honor per-DID `numbers` scoping on this trunk (list API + create conflicts).
+ * Narrowest working cutover: point the existing trunk dispatch rule at `transovo-voice-v3`.
+ * V3 resolves agent config by dialed E.164 at runtime (571 cert path).
+ */
 async function stepDispatch(): Promise<void> {
-  const existingDid = await findDidDispatchRuleByName(E164);
-  let v3RuleId = existingDid?.sipDispatchRuleId || "";
-  if (!existingDid || existingDid.roomConfig?.agents?.[0]?.agentName !== V3_AGENT) {
-    const replaced = await replaceSharedDispatchWithScopedRules();
-    v3RuleId = replaced.v3RuleId;
+  const client = getLiveKitSipClient();
+  const rules = await client.listSipDispatchRule();
+  const trunkRule =
+    rules.find((r) => r.name === TRANSOVO_LIVEKIT_DISPATCH_RULE_NAME) ||
+    rules.find((r) => (r.trunkIds || []).includes(TRUNK_ID)) ||
+    null;
+  if (!trunkRule?.sipDispatchRuleId) {
+    throw new Error("Boundary A: no dispatch rule for inbound trunk");
   }
+
+  const ruleInfo = new SIPDispatchRuleInfo({
+    sipDispatchRuleId: trunkRule.sipDispatchRuleId,
+    rule: trunkRule.rule,
+    trunkIds: trunkRule.trunkIds || [TRUNK_ID],
+    numbers: trunkRule.numbers || [],
+    hidePhoneNumber: trunkRule.hidePhoneNumber ?? false,
+    name: trunkRule.name || TRANSOVO_LIVEKIT_DISPATCH_RULE_NAME,
+    metadata:
+      trunkRule.metadata ||
+      JSON.stringify({ owner: "transovo", kind: "phase54_v3_trunk_dispatch" }),
+    roomConfig: new RoomConfiguration({
+      agents: [
+        new RoomAgentDispatch({
+          agentName: V3_AGENT,
+          metadata: JSON.stringify({
+            runtime: "voice_v3_gpt_live",
+            resolve: "http_backend_on_sip",
+            workspaceId: WORKSPACE_ID,
+            agentId: AGENT_ID,
+            toE164: E164,
+            dispatchSource: "phase54_cutover",
+          }),
+        }),
+      ],
+    }),
+  });
+
+  const updated = await client.updateSipDispatchRule(trunkRule.sipDispatchRuleId, ruleInfo);
+  const ruleId = updated.sipDispatchRuleId || trunkRule.sipDispatchRuleId;
+  const agentOk = updated.roomConfig?.agents?.[0]?.agentName === V3_AGENT;
+
   const inspect = await inspectLiveKitSipRouting(E164);
-  const didRule = inspect.dispatchRules.find(
-    (r) => r.name === dispatchRuleNameForDid(E164),
-  );
-  const agentOk = didRule?.agentName === V3_AGENT;
   log("dispatch", {
-    ruleId: v3RuleId,
-    didRule,
+    ruleId,
+    ruleName: updated.name,
+    agent: updated.roomConfig?.agents?.[0]?.agentName,
     v3Dispatch: agentOk ? "YES" : "NO",
+    dispatchRulesForTrunk: inspect.dispatchRulesForTrunk,
+    note:
+      "Trunk-wide V3 dispatch (LiveKit per-DID split blocked). 866 also dispatches to V3 until follow-up split.",
   });
   if (!agentOk) {
     throw new Error("Boundary A: V3 dispatch rule agent mismatch");
