@@ -1,0 +1,41 @@
+---
+description: Google Calendar API v3 — OAuth, scopes, provider adapter (read before any Calendar integration work)
+globs:
+  - src/lib/calendar/**
+  - src/lib/voice/calendar/**
+  - src/lib/auth/google-oauth.ts
+  - src/lib/integrations/oauth.ts
+  - src/features/integrations/**/calendars/**
+  - src/components/solutions/appointment-receptionist/**/appointments*
+  - src/lib/voice-v3/**/scheduling/**
+  - src/lib/voice-v3/**/book*
+  - docs/GOOGLE-CALENDAR-INTEGRATION-ENGINEERING-GUIDE.md
+alwaysApply: false
+---
+
+# MANDATORY: Google Calendar integration engineering guide
+
+**Source of truth:** `docs/GOOGLE-CALENDAR-INTEGRATION-ENGINEERING-GUIDE.md`
+
+## When this rule activates
+
+**Before implementing, changing, debugging, or reviewing** anything that touches Google Calendar OAuth, scopes, credentials, Calendar API calls, Voice V3 scheduling via Google, integrations UI for Google Calendar, or wizard scheduling provider selection for Google.
+
+## Hard requirements
+
+1. **Read the full guide first** — do not rediscover Google API design from blogs or stale code comments.
+2. **V1 scope:** `https://www.googleapis.com/auth/calendar.events.owned` only unless product explicitly broadens (see guide §3–4).
+3. **V1 calendar:** `calendarId = "primary"` — no CalendarList scope for a selector unless product requires it.
+4. **No Google-specific Astra tools** — normalize at the existing scheduling provider boundary (same contracts as Microsoft 365).
+5. **Find availability:** `events.list` with `singleEvents=true`, correct `timeMin`/`timeMax` overlap semantics, pagination — not FreeBusy for V1 (guide §10).
+6. **Reschedule:** preferred path is **GET + UPDATE**, not PATCH (Google quota guidance — guide §21).
+7. **Extend existing Google OAuth** — offline refresh tokens, preserve refresh token on re-auth, existing encryption/storage.
+8. **Microsoft is the blueprint** — trace Microsoft end-to-end before adding Google (guide §41).
+
+## Prohibited without explicit product approval
+
+Broad `calendar` scope, FreeBusy-only scope expansion, ACL/calendar management, Meet auto-generation, full calendar sync, domain-wide delegation, exposing raw Google errors or tokens to Amy/Astra.
+
+## On conflict
+
+Official Google documentation wins for API facts; then installed client types; then existing Transovo provider architecture; then this guide. Update the guide when Google changes behavior.
