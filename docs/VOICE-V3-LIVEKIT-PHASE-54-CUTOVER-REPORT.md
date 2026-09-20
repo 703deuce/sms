@@ -101,6 +101,38 @@ Cloud agent **cannot** place PSTN; user/operator must call.
 
 ---
 
+## Repair 2 — API-backed Telnyx × LiveKit (2026-09-20, canonical provisioning)
+
+**References (authoritative, not guessed):**
+
+| Source | Requirement |
+|--------|-------------|
+| [Telnyx LiveKit quickstart](https://developers.telnyx.com/docs/livekit/quickstart) | Inbound trunk: explicit `numbers` (+E.164), `allowed_addresses: ["192.76.120.0/22"]` |
+| [LiveKit Telnyx provider](https://docs.livekit.io/telephony/start/providers/telnyx/) | Telnyx FQDN connection → project `*.sip.livekit.cloud`, `dnis_number_format` +e164 |
+| [Telnyx signaling IPs](https://support.telnyx.com/en/articles/1130687-whitelisting-telnyx-ip-addresses) | US primary `192.76.120.10`, secondary **`64.16.250.10`** (not inside `/22` alone) |
+| Transovo `number-assignment.ts` | `ensureTelnyxLiveKitFqdnConnection` → `ensureInboundTrunkForNumber` → `ensureSharedDispatchRule` |
+
+**Note:** Telnyx **hosted** LiveKit (`nyc1.sip.livekit-telnyx.com`) is a different product path. This project uses **LiveKit Cloud** (`sms-6w01zoya.sip.livekit.cloud`) — correct per LiveKit’s Telnyx provider doc, not the Telnyx regional `livekit-telnyx.com` FQDN.
+
+**Root cause of persistent 404:** `fullResetLiveKitSipIngress` left a **wildcard trunk** (`numbers: []`, two host IPs only). LiveKit accepts the INVITE only when the called DID is on the trunk (or allowlist/auth rules match). Empty `numbers` + incomplete allowlist → `UNALLOCATED_NUMBER` / SIP 404 at LiveKit.
+
+**Script:** `scripts/repair-571-livekit-sip-canonical.ts` (+ `scripts/inspect-571-telnyx-livekit.ts` read-only)
+
+**LiveKit after repair (read-back):**
+
+| Resource | Value |
+|----------|--------|
+| Trunk | `ST_vewjyLgDxVda` — `+15717491060`, `15717491060`, `+18663464256` |
+| Allowlist | `192.76.120.0/22`, `192.76.120.10`, `64.16.250.10` |
+| Dispatch | `SDR_SbGq4QxWDGSx` → **`transovo-voice-v3`**, `trunkIds: [ST_vewjyLgDxVda]` |
+| Telnyx | `+15717491060` → **Transovo LiveKit Inbound** → `sms-6w01zoya.sip.livekit.cloud:5060` |
+
+**Code:** `telnyx-ips.ts` / `telnyx-allowlist.ts` now align allowlist with Telnyx US primary + secondary signaling.
+
+**Retry PSTN** — Telnyx CDR should show `NORMAL_CLEARING` or LiveKit hangup, not `sip_invite_failure_status=404`.
+
+---
+
 ## Rollback (not executed)
 
 - Git: direct-OpenAI path unchanged.
