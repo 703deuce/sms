@@ -56,6 +56,11 @@ export async function GET(
 
     const meta = asRecord(call.metadata);
     const feedback = asRecord(meta.callFeedback);
+    const voiceV3PostCall = asRecord(meta.voiceV3PostCall);
+    const voiceV3Analytics = asRecord(meta.voiceV3Analytics);
+    const structuredSummary = insights[0]?.customFields
+      ? asRecord((insights[0].customFields as Record<string, unknown>).voiceV3StructuredSummary)
+      : {};
 
     return NextResponse.json({
       data: {
@@ -89,6 +94,9 @@ export async function GET(
               requestedAt: callbackRequest.requestedAt.toISOString(),
             }
           : null,
+        voiceV3PostCall,
+        voiceV3Analytics,
+        voiceV3StructuredSummary: structuredSummary,
       },
     });
   } catch (err) {

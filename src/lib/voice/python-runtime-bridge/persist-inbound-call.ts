@@ -100,5 +100,16 @@ export async function persistInboundCallForPython(
     },
   });
 
+  if (input.livekitRoomName) {
+    const { maybeStartVoiceV3LiveKitRecording } = await import(
+      "@/lib/voice-v3/post-call/recording"
+    );
+    await maybeStartVoiceV3LiveKitRecording({
+      workspaceId: input.workspaceId,
+      callId,
+      roomName: input.livekitRoomName,
+    }).catch(() => undefined);
+  }
+
   return { ok: true, callId };
 }

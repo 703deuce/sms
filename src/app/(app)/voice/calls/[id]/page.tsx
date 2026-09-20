@@ -177,6 +177,14 @@ export default function VoiceCallDetailPage() {
     transferred: Boolean(call.transferred),
     voicemailDetected: Boolean(call.voicemailDetected),
   });
+  const voiceV3PostCall = (data?.voiceV3PostCall as Record<string, unknown> | undefined) || {};
+  const voiceV3StructuredSummary = (data?.voiceV3StructuredSummary as Record<string, unknown> | undefined) || {};
+  const postCallProcessing = Boolean(call.endedAt) && !voiceV3PostCall.pipelineCompletedAt;
+  const summaryText =
+    (voiceV3StructuredSummary.summary as string | undefined) ||
+    insight?.summary ||
+    "";
+
   const actionItems = buildActionItems({
     call: {
       appointmentBooked: Boolean(call.appointmentBooked),
@@ -204,6 +212,16 @@ export default function VoiceCallDetailPage() {
         <ChevronRight className="h-3.5 w-3.5" />
         <span className="text-[#374151]">Call from {callerName}</span>
       </nav>
+
+      {postCallProcessing ? (
+        <div
+          className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+          role="status"
+        >
+          Processing recording, transcript, and summary… This usually takes a minute after the call
+          ends.
+        </div>
+      ) : null}
 
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
@@ -343,7 +361,7 @@ export default function VoiceCallDetailPage() {
               <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
                 <h2 className="text-sm font-semibold text-[#111827]">AI Summary</h2>
                 <p className="mt-3 text-sm leading-relaxed text-[#374151]">
-                  {insight?.summary ||
+                  {summaryText ||
                     mockCall?.summary ||
                     "No AI summary available for this call."}
                 </p>

@@ -153,10 +153,18 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       });
     }
     case "voice_post_call": {
-      const { processPostCall } = await import("@/lib/voice/post-call");
+      const { routeVoicePostCallJob } = await import("@/lib/voice-v3/post-call/post-call-router");
       const callId = String(payload.callId || "");
       if (!callId) throw new Error("callId required");
-      return processPostCall(callId);
+      return routeVoicePostCallJob(callId);
+    }
+    case "voice_v3_post_call": {
+      const { processVoiceV3CompletedCall } = await import(
+        "@/lib/voice-v3/post-call/process-completed-call"
+      );
+      const callId = String(payload.callId || "");
+      if (!callId) throw new Error("callId required");
+      return processVoiceV3CompletedCall(callId);
     }
     case "mctb_worker_smoke": {
       const issuedAt = Date.parse(String(payload.issuedAt || ""));
@@ -365,18 +373,38 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       const workspaceId = String(payload.workspaceId || "");
       if (!callId) throw new Error("callId required");
       const urls = payload.recordingUrl as Record<string, string> | undefined;
-      const storageUrl = urls?.mp3 || urls?.wav || null;
-      const recording = await prisma.voiceRecording.create({
-        data: {
-          workspaceId,
-          callId,
-          provider: "telnyx",
-          status: "ready",
-          storageUrl,
-          providerRecordingId: String(payload.providerRecordingId || ""),
-          channels: 2,
-        },
-      });
+      const storageUrl =
+        urls?.mp3 || urls?.wav || urls?.ogg || (payload.storageUrl as string | undefined) || null;
+      const provider = String(payload.provider || "telnyx");
+      const providerRecordingId = String(payload.providerRecordingId || "");
+
+      const existing = providerRecordingId
+        ? await prisma.voiceRecording.findFirst({
+            where: { callId, providerRecordingId },
+          })
+        : await prisma.voiceRecording.findFirst({ where: { callId }, orderBy: { createdAt: "desc" } });
+
+      const recording = existing
+        ? await prisma.voiceRecording.update({
+            where: { id: existing.id },
+            data: {
+              status: storageUrl ? "ready" : existing.status,
+              storageUrl: storageUrl || existing.storageUrl,
+              provider,
+              channels: existing.channels || 2,
+            },
+          })
+        : await prisma.voiceRecording.create({
+            data: {
+              workspaceId,
+              callId,
+              provider,
+              status: "ready",
+              storageUrl,
+              providerRecordingId,
+              channels: 2,
+            },
+          });
       if (storageUrl) {
         const call = await prisma.voiceCall.findUnique({ where: { id: callId } });
         const { publishRecordingReady } = await import("@/lib/crm/events");
@@ -390,16 +418,10 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
               ? "outbound"
               : "inbound",
         }).catch(() => undefined);
-        const { enqueueVoiceV2PostCallTranscription } = await import(
-          "@/lib/voice-receptionist-wizard/post-call/transcription-pipeline"
+        const { enqueueVoiceV3PostCallJob } = await import("@/lib/voice-v3/post-call/enqueue");
+        await enqueueVoiceV3PostCallJob({ workspaceId, callId, delaySeconds: 5 }).catch(
+          () => undefined,
         );
-        await enqueueVoiceV2PostCallTranscription({
-          workspaceId,
-          callId,
-          recordingId: recording.id,
-          recordingUrl: storageUrl,
-          channels: recording.channels,
-        }).catch(() => undefined);
       }
       return { ok: true };
     }

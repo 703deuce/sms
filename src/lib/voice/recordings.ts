@@ -33,6 +33,18 @@ export function verifyRecordingAccessToken(token: string): { recordingId: string
   return { recordingId, workspaceId };
 }
 
+/** URL Deepgram can fetch (gated stream endpoint with long-lived token). */
+export function createDeepgramAccessibleRecordingUrl(
+  recordingId: string,
+  workspaceId: string,
+  ttlSec = 7200,
+): string | null {
+  const recUrl = process.env.APP_URL?.replace(/\/$/, "") || process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
+  if (!recUrl) return null;
+  const { token } = createRecordingAccessToken(recordingId, workspaceId, ttlSec);
+  return `${recUrl}/api/voice/recordings/${recordingId}/stream?token=${encodeURIComponent(token)}`;
+}
+
 export async function getSignedRecordingUrl(
   workspaceId: string,
   recordingId: string,

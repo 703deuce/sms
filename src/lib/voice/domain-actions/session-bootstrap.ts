@@ -193,10 +193,36 @@ export async function finalizeLiveKitCall(callId: string): Promise<void> {
     })
     .catch(() => undefined);
 
-  await enqueueLiveKitPostCallJob({
-    workspaceId: call.workspaceId,
-    callId,
+  const fullCall = await prisma.voiceCall.findUnique({
+    where: { id: callId },
+    select: { metadata: true, workspaceId: true, agentId: true, telnyxConversationId: true },
   });
+  const meta =
+    fullCall?.metadata && typeof fullCall.metadata === "object" && !Array.isArray(fullCall.metadata)
+      ? (fullCall.metadata as Record<string, unknown>)
+      : {};
+  const roomName = typeof meta.livekitRoomName === "string" ? meta.livekitRoomName : null;
+  if (roomName) {
+    const { maybeStartVoiceV3LiveKitRecording } = await import("@/lib/voice-v3/post-call/recording");
+    await maybeStartVoiceV3LiveKitRecording({
+      workspaceId: call.workspaceId,
+      callId,
+      roomName,
+    }).catch(() => undefined);
+  }
+
+  const { isVoiceV3PostCallEligible } = await import(
+    "@/lib/voice-v3/post-call/is-voice-v3-livekit-call"
+  );
+  if (fullCall && isVoiceV3PostCallEligible(fullCall)) {
+    const { enqueueVoiceV3PostCallJob } = await import("@/lib/voice-v3/post-call/enqueue");
+    await enqueueVoiceV3PostCallJob({ workspaceId: call.workspaceId, callId, delaySeconds: 10 });
+  } else {
+    await enqueueLiveKitPostCallJob({
+      workspaceId: call.workspaceId,
+      callId,
+    });
+  }
 }
 
 function activeFieldPayload(session: AmyRealtimeSession): Record<string, unknown> | null {

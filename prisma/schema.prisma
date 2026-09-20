@@ -299,6 +299,7 @@ model Workspace {
   voiceKnowledgeBases               VoiceKnowledgeBase[]
   voiceKnowledgeSources             VoiceKnowledgeSource[]
   voiceAgentKnowledgeBases          VoiceAgentKnowledgeBase[]
+  voiceKnowledgeGaps                VoiceKnowledgeGap[]
   voiceTools                        VoiceTool[]
   voiceAgentTools                   VoiceAgentTool[]
   voiceCalendarConnections          VoiceCalendarConnection[]
@@ -2450,6 +2451,26 @@ model VoiceKnowledgeSource {
   @@index([knowledgeBaseId])
   @@index([workspaceId])
   @@map("voice_knowledge_sources")
+}
+
+model VoiceKnowledgeGap {
+  id                 String    @id @default(cuid())
+  workspaceId        String
+  normalizedQuestion String
+  displayQuestion    String
+  status             String    @default("OPEN")
+  timesAsked         Int       @default(1)
+  firstAskedAt       DateTime  @default(now())
+  lastAskedAt        DateTime  @default(now())
+  sourceCallIds      Json      @default("[]")
+  recentWording      String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  workspace          Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, normalizedQuestion])
+  @@index([workspaceId, status])
+  @@map("voice_knowledge_gaps")
 }
 
 model VoiceAgentKnowledgeBase {

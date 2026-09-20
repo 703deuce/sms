@@ -67,6 +67,7 @@ function isPublicPath(pathname: string) {
   if (pathname.startsWith("/api/jobs/")) return true;
   if (pathname.startsWith("/api/integrations/webhooks/incoming/")) return true;
   if (pathname.startsWith("/api/public/")) return true;
+  if (pathname.startsWith("/api/webhooks/livekit")) return true;
   if (pathname.startsWith("/api/webhooks/stripe")) return true;
   if (pathname.startsWith("/api/webhooks/square")) return true;
   if (pathname.startsWith("/api/payments/stripe/webhook")) return true;
