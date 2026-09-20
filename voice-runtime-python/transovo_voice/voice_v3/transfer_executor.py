@@ -113,7 +113,7 @@ async def _warm_transfer(
         sip_trunk_id=sip_trunk_id,
         sip_number=sip_number or "",
         ringing_timeout=float(ringing_timeout_seconds),
-        extra_instructions=handoff_instructions,
+        instructions=handoff_instructions,
         chat_ctx=context.session.history,
     )
 
@@ -129,9 +129,9 @@ async def _warm_transfer(
             return "VOICEMAIL"
         if "dial" in msg or "could not" in msg:
             return "PROVIDER_ERROR"
-        return "TIMEOUT"
+        return "NO_ANSWER"
     except asyncio.TimeoutError:
-        return "TIMEOUT"
+        return "NO_ANSWER"
     except Exception:
         logger.exception("voice_v3_transfer_warm_failed")
         return "PROVIDER_ERROR"
@@ -156,8 +156,11 @@ async def execute_authorized_transfer_plan(
         return _strip_execution_payload(result)
 
     targets = plan.get("targets")
-    if not isinstance(targets, list) or not targets:
-        return _strip_execution_payload(result)
+    skipped = plan.get("skipped_targets")
+    if not isinstance(targets, list):
+        targets = []
+    if not isinstance(skipped, list):
+        skipped = []
 
     transfer_request_id = str(plan.get("transfer_request_id") or "")
     route_id = str(plan.get("route_id") or "")
@@ -174,6 +177,81 @@ async def execute_authorized_transfer_plan(
 
     attempts: list[dict[str, Any]] = []
     started = time.monotonic()
+
+    for skip_index, skip_row in enumerate(skipped):
+        if not isinstance(skip_row, dict):
+            continue
+        dest_id = str(skip_row.get("destination_id") or "")
+        outcome = str(skip_row.get("outcome") or "SKIPPED_OUTSIDE_SCHEDULE")
+        mode = str(skip_row.get("mode") or "WARM").upper()
+        attempts.append(
+            {
+                "destination_id": dest_id,
+                "mode": mode,
+                "outcome": outcome,
+                "duration_ms": 0,
+                "attempt_index": skip_index,
+                "skipped": True,
+            },
+        )
+        log_event(
+            "VOICE_V3_TRANSFER_DESTINATION_SKIPPED",
+            extra={
+                "transfer_request_id": transfer_request_id,
+                "destination_id": dest_id,
+                "outcome": outcome,
+            },
+        )
+
+    if not targets:
+        route_hint = str(plan.get("route_outcome_hint") or "")
+        status = (
+            "transfer_no_eligible_destinations"
+            if route_hint == "NO_ELIGIBLE_DESTINATIONS"
+            else "transfer_exhausted"
+        )
+        log_event(
+            "VOICE_V3_TRANSFER_NO_ELIGIBLE_DESTINATIONS"
+            if status == "transfer_no_eligible_destinations"
+            else "VOICE_V3_TRANSFER_EXHAUSTED",
+            extra={
+                "transfer_request_id": transfer_request_id,
+                "route_id": route_id,
+                "fallback": fallback,
+                "attempt_count": len(attempts),
+            },
+        )
+        sanitized = _strip_execution_payload(result)
+        if isinstance(sanitized.get("data"), dict):
+            sanitized["data"] = {
+                **sanitized["data"],
+                "status": status,
+                "fallback": fallback,
+                "attempts": attempts,
+            }
+            sanitized["status"] = status
+        asyncio.create_task(
+            _report_transfer_outcome_to_backend(
+                client,
+                transfer_request_id=transfer_request_id,
+                route_id=route_id,
+                status=status,
+                reason=transfer_reason,
+                attempts=attempts,
+                connected_destination_id=None,
+            ),
+        )
+        return sanitized
+
+    log_event(
+        "VOICE_V3_TRANSFER_ROUTE_STARTED",
+        extra={
+            "transfer_request_id": transfer_request_id,
+            "route_id": route_id,
+            "target_count": len(targets),
+            "skipped_count": len(skipped),
+        },
+    )
 
     for index, target in enumerate(targets):
         if not isinstance(target, dict):
@@ -215,7 +293,7 @@ async def execute_authorized_transfer_plan(
                     ringing_timeout_seconds=timeout,
                 )
         except asyncio.TimeoutError:
-            outcome = "TIMEOUT"
+            outcome = "NO_ANSWER"
         except Exception:
             logger.exception("voice_v3_transfer_attempt_failed")
             outcome = "PROVIDER_ERROR"

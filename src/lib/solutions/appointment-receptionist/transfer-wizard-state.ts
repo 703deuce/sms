@@ -4,6 +4,11 @@ import {
   normalizeWizardTransferPhone,
   wizardTransferDestinationName,
 } from "./transfer-utils";
+import {
+  normalizeDestinationAvailability,
+  validateScheduledAvailability,
+} from "@/lib/voice-v3/transfer/evaluate-destination-eligibility";
+import { defaultTransferDestinationAvailability } from "@/lib/voice-v3/transfer/destination-availability-types";
 
 export const TRANSFER_RING_SECONDS_OPTIONS = [5, 10, 15, 20, 30, 45, 60, 90, 120] as const;
 
@@ -250,7 +255,18 @@ export function transferWizardValidationIssues(
       message: "Add at least one emergency transfer contact with a valid phone number.",
     });
   }
+  const businessTz = normalized.timezone?.trim() || "America/New_York";
   for (const d of dests) {
+    const avail = normalizeDestinationAvailability(
+      d.availability ?? defaultTransferDestinationAvailability(businessTz),
+      businessTz,
+    );
+    for (const msg of validateScheduledAvailability(avail)) {
+      local.push({
+        id: `transfer_ui_schedule_${d.id}`,
+        message: `"${d.label || "Contact"}": ${msg}`,
+      });
+    }
     if (!normalizeWizardTransferPhone(d.phoneE164)) {
       local.push({
         id: `transfer_ui_bad_phone_${d.id}`,

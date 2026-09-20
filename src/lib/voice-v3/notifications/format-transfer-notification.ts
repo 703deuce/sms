@@ -13,6 +13,7 @@ export function formatTransferSms(input: {
   connectedLabel?: string | null;
   attempts?: TransferAttemptLine[];
   exhausted?: boolean;
+  noEligibleDestinations?: boolean;
   receivedAt: Date;
 }): string {
   const brand = input.businessLabel?.trim() || "Transovo";
@@ -23,6 +24,10 @@ export function formatTransferSms(input: {
     hour: "numeric",
     minute: "2-digit",
   });
+
+  if (input.noEligibleDestinations) {
+    return `${brand} — No on-call team scheduled\n${name}\n${phone}\n${reason}\nNobody was on call at this time.\nCaller returned to Amy.`;
+  }
 
   if (input.exhausted) {
     const tried =

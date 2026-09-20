@@ -5,11 +5,17 @@ import { buildWarmTransferHandoffInstructions } from "./build-handoff-summary";
 import { logVoiceV3TransferBillingUsage, logVoiceV3TransferEvent } from "./telemetry";
 import type {
   VoiceV3AuthorizedTransferPlan,
+  VoiceV3AuthorizedTransferSkippedTarget,
   VoiceV3TransferPolicyCompiled,
   VoiceV3TransferToolSurfaceResult,
 } from "./types";
 import { voiceToolError, toolOk } from "../tools/types";
 import type { VoiceToolResult } from "../tools/types";
+import {
+  eligibilityToAttemptOutcome,
+  evaluateTransferDestinationEligibility,
+} from "./evaluate-destination-eligibility";
+const DEFAULT_BUSINESS_TIMEZONE = "America/New_York";
 
 export type TransferCallArgs = {
   route_id?: string | null;
@@ -37,8 +43,12 @@ export function authorizeVoiceV3Transfer(input: {
   policy: VoiceV3TransferPolicyCompiled;
   callContext: VoiceV3CallContext;
   args: TransferCallArgs;
+  now?: Date;
 }): VoiceToolResult<{ execution: VoiceV3AuthorizedTransferPlan; surface: VoiceV3TransferToolSurfaceResult }> {
   const { policy, config, callContext, args } = input;
+  const evaluatedAt = input.now ?? new Date();
+  const businessTimezone = config.timezone?.trim() || DEFAULT_BUSINESS_TIMEZONE;
+
   if (!policy.enabled) {
     return voiceToolError(
       "TRANSFER_NOT_CONFIGURED",
@@ -81,24 +91,54 @@ export function authorizeVoiceV3Transfer(input: {
   }
 
   const authorizedTargets: VoiceV3AuthorizedTransferPlan["targets"] = [];
+  const skippedTargets: VoiceV3AuthorizedTransferSkippedTarget[] = [];
+
   for (const t of targets) {
     const dest = destMap.get(t.destinationId);
     if (!dest?.enabled || !dest.phoneE164) continue;
+
+    const eligibility = evaluateTransferDestinationEligibility({
+      availability: dest.availability,
+      enabled: dest.enabled,
+      now: evaluatedAt,
+      businessTimezone,
+    });
+
+    logVoiceV3TransferEvent("VOICE_V3_TRANSFER_DESTINATION_EVALUATED", {
+      call_id: callContext.callId,
+      destination_id: dest.id,
+      eligible: eligibility.eligible,
+      reason: eligibility.reason,
+      timezone: dest.availability?.timezone ?? businessTimezone,
+    });
+
+    if (!eligibility.eligible) {
+      const skipOutcome = eligibilityToAttemptOutcome(eligibility.reason);
+      if (skipOutcome) {
+        skippedTargets.push({
+          destination_id: dest.id,
+          destination_label: dest.label,
+          mode: t.mode,
+          outcome: skipOutcome,
+          eligibility_reason: eligibility.reason,
+        });
+        logVoiceV3TransferEvent("VOICE_V3_TRANSFER_DESTINATION_SKIPPED", {
+          call_id: callContext.callId,
+          destination_id: dest.id,
+          outcome: skipOutcome,
+          reason: eligibility.reason,
+        });
+      }
+      continue;
+    }
+
     authorizedTargets.push({
       destination_id: dest.id,
       mode: t.mode,
       dial_target: dest.phoneE164,
       ringing_timeout_seconds: t.ringingTimeoutSeconds,
+      destination_label: dest.label,
     });
-  }
-
-  if (!authorizedTargets.length) {
-    return voiceToolError(
-      "TRANSFER_NOT_CONFIGURED",
-      "No authorized transfer targets are available.",
-      { route_id: route.id },
-      "not_ready",
-    );
   }
 
   const transferRequestId = `tr_${createId()}`;
@@ -107,14 +147,56 @@ export function authorizeVoiceV3Transfer(input: {
     agentName: config.identity.agentName ?? "Amy",
     reason: args.reason ?? null,
     callContext,
+    detectVoicemailOnTransfer: config.detectVoicemailOnTransfer === true,
   });
+
+  if (!authorizedTargets.length) {
+    const execution: VoiceV3AuthorizedTransferPlan = {
+      transfer_request_id: transferRequestId,
+      route_id: route.id,
+      fallback: route.fallback,
+      targets: [],
+      skipped_targets: skippedTargets,
+      route_outcome_hint: "NO_ELIGIBLE_DESTINATIONS",
+      handoff_instructions: handoff,
+      detect_voicemail_on_transfer: config.detectVoicemailOnTransfer === true,
+      evaluation_timezone: businessTimezone,
+      outbound_sip_trunk_id: policy.telephony.outboundSipTrunkId,
+      outbound_caller_id_e164: policy.telephony.outboundCallerIdE164,
+    };
+
+    logVoiceV3TransferEvent("VOICE_V3_TRANSFER_NO_ELIGIBLE_DESTINATIONS", {
+      call_id: callContext.callId,
+      transfer_request_id: transferRequestId,
+      route_id: route.id,
+      skipped_count: skippedTargets.length,
+    });
+
+    const surface: VoiceV3TransferToolSurfaceResult = {
+      transfer_request_id: transferRequestId,
+      route_id: route.id,
+      destination_id: destId,
+      status: "no_eligible_destinations",
+      fallback: route.fallback,
+      attempts: skippedTargets.map((s) => ({
+        destination_id: s.destination_id,
+        mode: s.mode,
+        outcome: s.outcome,
+      })),
+    };
+
+    return toolOk("transfer_no_eligible_destinations", { execution, surface });
+  }
 
   const execution: VoiceV3AuthorizedTransferPlan = {
     transfer_request_id: transferRequestId,
     route_id: route.id,
     fallback: route.fallback,
     targets: authorizedTargets,
+    skipped_targets: skippedTargets.length ? skippedTargets : undefined,
     handoff_instructions: handoff,
+    detect_voicemail_on_transfer: config.detectVoicemailOnTransfer === true,
+    evaluation_timezone: businessTimezone,
     outbound_sip_trunk_id: policy.telephony.outboundSipTrunkId,
     outbound_caller_id_e164: policy.telephony.outboundCallerIdE164,
   };
@@ -126,6 +208,7 @@ export function authorizeVoiceV3Transfer(input: {
     route_id: route.id,
     destination_id: destId,
     target_count: authorizedTargets.length,
+    skipped_count: skippedTargets.length,
     modes: authorizedTargets.map((t) => t.mode),
     waterfall: policy.routing === "waterfall",
   });

@@ -17,6 +17,9 @@ import { normalizeWizardTransferPhone } from "@/lib/solutions/appointment-recept
 import { Input, Label } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
+import { TransferDestinationAvailabilityControls } from "./transfer-destination-availability-controls";
+import { describeDaySchedule } from "@/lib/voice-v3/transfer/evaluate-destination-eligibility";
+import { defaultTransferDestinationAvailability } from "@/lib/voice-v3/transfer/destination-availability-types";
 
 const FALLBACK_OPTIONS: Array<[FallbackAction, string, string]> = [
   ["return_to_ai", "Return caller to AI receptionist", "Amy keeps helping when nobody answers."],
@@ -132,6 +135,35 @@ export function EmergencyTransferEditor({
             ? "Transovo tries the configured contacts in order until someone answers. If nobody answers, the selected fallback is used."
             : "The caller is transferred to the first contact in your list below."}
         </p>
+
+        {routing === "waterfall" && steps.length > 0 ? (
+          <div className="mt-3 rounded-lg border border-border bg-muted/10 p-3">
+            <p className="text-xs font-medium">Emergency escalation order</p>
+            <ol className="mt-2 space-y-1 text-xs text-muted-foreground">
+              {steps.map((step, i) => {
+                const dest = destinations.find((d) => d.id === step.destinationId);
+                if (!dest) return null;
+                const mode = step.transferMode === "WARM" ? "Warm" : "Direct";
+                const ring = step.timeoutSeconds ?? defaultRing;
+                const avail = dest.availability ?? defaultTransferDestinationAvailability(
+                  state.timezone || "America/New_York",
+                );
+                const sched =
+                  avail.mode === "SCHEDULED"
+                    ? Object.entries(avail.weekly || {})
+                        .filter(([, d]) => d?.enabled)
+                        .map(([k, d]) => `${k.slice(0, 3)} ${describeDaySchedule(d)}`)
+                        .join("; ") || "Schedule not set"
+                    : "Always available";
+                return (
+                  <li key={dest.id}>
+                    {i + 1}. {dest.label} — {mode} • {sched} • {ring}s
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+        ) : null}
 
         <div className="mt-3">
           <Label>Default ring timeout</Label>
@@ -302,6 +334,15 @@ export function EmergencyTransferEditor({
                         ? "Warm: the receptionist calls this contact first, shares a brief summary, and connects the caller after they accept."
                         : "Direct: the caller is transferred straight to this number."}
                     </p>
+
+                    <TransferDestinationAvailabilityControls
+                      state={state}
+                      availability={dest.availability}
+                      enabled={dest.enabled !== false}
+                      onChange={(next) =>
+                        patch(updateTransferDestination(state, dest.id, { availability: next }))
+                      }
+                    />
                   </div>
                 </div>
               </li>

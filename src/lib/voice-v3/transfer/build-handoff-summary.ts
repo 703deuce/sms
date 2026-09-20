@@ -16,13 +16,20 @@ export function buildWarmTransferHandoffInstructions(input: {
   agentName: string;
   reason: string | null;
   callContext: VoiceV3CallContext;
+  detectVoicemailOnTransfer?: boolean;
 }): string {
   const lines: string[] = [];
   lines.push(
     `You are ${input.agentName} with ${input.businessName}. Briefly summarize the caller for the human agent.`,
   );
   lines.push("Keep it to 2–4 short sentences. Do not mention tools, software, or internal IDs.");
-  lines.push("Ask whether they are available to take the call, then use connect_to_caller if they accept.");
+  lines.push("Ask whether they are available to take the call, then use connect_to_caller only after a human accepts.");
+  if (input.detectVoicemailOnTransfer) {
+    lines.push(
+      "If you hear a voicemail greeting or automated message instead of a live person, call voicemail_detected — do not use connect_to_caller.",
+    );
+  }
+  lines.push("If the person declines, use decline_transfer.");
 
   const intake = input.callContext.intake?.values ?? {};
   const facts: string[] = [];

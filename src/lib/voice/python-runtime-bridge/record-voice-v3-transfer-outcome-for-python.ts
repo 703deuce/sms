@@ -17,6 +17,11 @@ function outcomeLabel(outcome: string): string {
   if (o === "TIMEOUT") return "no answer";
   if (o === "DECLINED") return "declined";
   if (o === "VOICEMAIL") return "voicemail";
+  if (o.startsWith("SKIPPED")) {
+    if (o.includes("OUTSIDE")) return "off schedule";
+    if (o.includes("TEMPORARILY")) return "temporarily unavailable";
+    return "skipped";
+  }
   return "unavailable";
 }
 
@@ -26,7 +31,7 @@ export async function recordVoiceV3TransferOutcomeForPython(input: {
   agentId?: string | null;
   transferRequestId: string;
   routeId: string;
-  status: "transfer_connected" | "transfer_exhausted";
+  status: "transfer_connected" | "transfer_exhausted" | "transfer_no_eligible_destinations";
   reason?: string | null;
   attempts: Array<{
     destination_id: string;
@@ -63,7 +68,13 @@ export async function recordVoiceV3TransferOutcomeForPython(input: {
 
   const transferred = input.status === "transfer_connected";
   const outcome =
-    input.status === "transfer_exhausted" ? "transfer_exhausted" : transferred ? "transferred" : null;
+    input.status === "transfer_exhausted"
+      ? "transfer_exhausted"
+      : input.status === "transfer_no_eligible_destinations"
+        ? "transfer_no_eligible_destinations"
+        : transferred
+          ? "transferred"
+          : null;
   await prisma.voiceCall.update({
     where: { id: call.id },
     data: {

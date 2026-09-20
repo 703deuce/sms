@@ -1,3 +1,5 @@
+import type { TransferDestinationAvailability } from "./destination-availability-types";
+
 export type VoiceV3TransferMode = "DIRECT" | "WARM";
 
 export type VoiceV3TransferFallback =
@@ -16,7 +18,18 @@ export type VoiceV3TransferAttemptOutcome =
   | "PROVIDER_ERROR"
   | "CONFIGURATION_ERROR"
   | "CALLER_GONE"
-  | "INVALID_SELECTION";
+  | "INVALID_SELECTION"
+  | "SKIPPED_OUTSIDE_SCHEDULE"
+  | "SKIPPED_TEMPORARILY_UNAVAILABLE"
+  | "SKIPPED_DISABLED"
+  | "FAILED";
+
+export type VoiceV3TransferRouteOutcome =
+  | "CONNECTED"
+  | "EXHAUSTED"
+  | "NO_ELIGIBLE_DESTINATIONS"
+  | "CALLER_HUNG_UP"
+  | "FAILED";
 
 /** Server-side compiled destination (includes dial target). */
 export interface VoiceV3TransferDestinationCompiled {
@@ -28,6 +41,7 @@ export interface VoiceV3TransferDestinationCompiled {
   defaultMode: VoiceV3TransferMode;
   ringingTimeoutSeconds: number;
   enabled: boolean;
+  availability?: TransferDestinationAvailability;
 }
 
 export interface VoiceV3TransferRouteTargetCompiled {
@@ -66,6 +80,18 @@ export interface VoiceV3AuthorizedTransferTarget {
   mode: VoiceV3TransferMode;
   dial_target: string;
   ringing_timeout_seconds: number;
+  destination_label?: string;
+}
+
+export interface VoiceV3AuthorizedTransferSkippedTarget {
+  destination_id: string;
+  destination_label?: string;
+  mode: VoiceV3TransferMode;
+  outcome:
+    | "SKIPPED_OUTSIDE_SCHEDULE"
+    | "SKIPPED_TEMPORARILY_UNAVAILABLE"
+    | "SKIPPED_DISABLED";
+  eligibility_reason: string;
 }
 
 export interface VoiceV3AuthorizedTransferPlan {
@@ -73,7 +99,11 @@ export interface VoiceV3AuthorizedTransferPlan {
   route_id: string;
   fallback: VoiceV3TransferFallback;
   targets: VoiceV3AuthorizedTransferTarget[];
+  skipped_targets?: VoiceV3AuthorizedTransferSkippedTarget[];
+  route_outcome_hint?: VoiceV3TransferRouteOutcome;
   handoff_instructions: string;
+  detect_voicemail_on_transfer?: boolean;
+  evaluation_timezone?: string;
   outbound_sip_trunk_id: string | null;
   outbound_caller_id_e164: string | null;
 }
