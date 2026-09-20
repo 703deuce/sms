@@ -10,6 +10,10 @@ import {
   listVoiceV3AstraToolNamesForConfig,
 } from "@/lib/voice-v3/tools/voice-tool-catalog";
 import {
+  buildLiveKitIntakeFieldMetadata,
+  buildLiveKitIntakeFunctionTools,
+} from "@/lib/voice-v3/tools/livekit-intake-tool-schemas";
+import {
   createVoiceV3CallRuntime,
   getVoiceV3CallRuntime,
 } from "@/lib/voice-v3/state/call-runtime";
@@ -55,6 +59,7 @@ export type VoiceV3LiveKitSessionConfig = {
   liveVoiceId: string;
   toolSchemas: FunctionTool[];
   toolNames: string[];
+  intakeFields: ReturnType<typeof buildLiveKitIntakeFieldMetadata>;
   parallelToolCalls: boolean;
   maxToolSteps: number;
   reasoningEffort: "low" | "medium" | "high" | null;
@@ -113,8 +118,17 @@ export async function resolveVoiceV3LiveKitSession(
     config: agentConfig,
   });
 
-  const allTools = buildVoiceV3AstraFunctionToolsFromCatalog(agentConfig);
-  const toolSchemas = filterToolsForLiveKitSession(allTools);
+  const catalogTools = buildVoiceV3AstraFunctionToolsFromCatalog(agentConfig);
+  const intakeTools = buildLiveKitIntakeFunctionTools(agentConfig);
+  const mergedByName = new Map<string, FunctionTool>();
+  for (const t of filterToolsForLiveKitSession(catalogTools)) {
+    mergedByName.set(toolSchemaName(t), t);
+  }
+  for (const t of intakeTools) {
+    mergedByName.set(toolSchemaName(t), t);
+  }
+  const toolSchemas = [...mergedByName.values()];
+  const intakeFields = buildLiveKitIntakeFieldMetadata(agentConfig);
 
   const liveVoiceId = agentConfig.telephony?.liveVoiceId?.trim() || "marin";
 
@@ -130,6 +144,7 @@ export async function resolveVoiceV3LiveKitSession(
     liveVoiceId,
     toolSchemas,
     toolNames: toolSchemas.map((t) => String(t.name)),
+    intakeFields,
     parallelToolCalls: false,
     maxToolSteps: 5,
     reasoningEffort: "low",

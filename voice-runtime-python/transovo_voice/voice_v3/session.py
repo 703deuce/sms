@@ -110,7 +110,13 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             job_ctx=ctx,
             sip_participant_identity=sip_participant.identity,
         )
-        lk_tools = build_livekit_tools(tool_dicts, client, telephony=telephony)
+        intake_fields = config.get("intakeFields") or []
+        lk_tools = build_livekit_tools(
+            tool_dicts,
+            client,
+            telephony=telephony,
+            intake_fields=intake_fields if isinstance(intake_fields, list) else [],
+        )
 
         end_call_toolset = EndCallTool(
             ignore_on_enter=True,

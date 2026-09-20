@@ -36,9 +36,14 @@ async function main() {
     workspaceId: routing.workspaceId,
     agentId: routing.agentId,
   });
-  const expectedNames = listVoiceV3AstraToolNamesForConfig(agentConfig).filter(
+  const { buildLiveKitIntakeFunctionTools } = await import(
+    "../src/lib/voice-v3/tools/livekit-intake-tool-schemas"
+  );
+  const catalogNames = listVoiceV3AstraToolNamesForConfig(agentConfig).filter(
     (n) => !VOICE_V3_LIVEKIT_NATIVE_TOOL_NAMES.includes(n as "end_call"),
   );
+  const intakeNames = buildLiveKitIntakeFunctionTools(agentConfig).map((t) => String(t.name));
+  const expectedNames = [...new Set([...catalogNames, ...intakeNames])];
 
   console.log("RESOLVED_SESSION", {
     liveSessionId: session.liveSessionId,

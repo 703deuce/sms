@@ -11,7 +11,11 @@ from livekit.agents.llm.tool_context import DuplicateScope, ToolError, ToolFlag
 from livekit.agents.voice.events import RunContext
 
 from transovo_voice.telemetry import log_event
+from transovo_voice.voice_v3.intake_active_collection import run_active_intake_collection
 from transovo_voice.voice_v3.tool_client import TransovoV3ToolClient
+
+COLLECT_INTAKE_FIELD_TOOL = "collect_intake_field"
+_SET_INTAKE_PREFIX = "set_intake_"
 
 logger = logging.getLogger("transovo-voice.voice_v3.tools")
 
@@ -121,11 +125,56 @@ async def _maybe_execute_livekit_transfer(
         raise ToolError(f"Transfer failed: {exc}") from exc
 
 
+def _intake_field_key_from_set_tool(tool_name: str, intake_fields: list[dict[str, Any]]) -> str | None:
+    if not tool_name.startswith(_SET_INTAKE_PREFIX):
+        return None
+    for row in intake_fields:
+        if str(row.get("liveKitToolName") or "") == tool_name:
+            return str(row.get("key") or "")
+    suffix = tool_name[len(_SET_INTAKE_PREFIX) :]
+    for row in intake_fields:
+        key = str(row.get("key") or "")
+        safe = "".join(c if c.isalnum() or c == "_" else "_" for c in key).strip("_")
+        if safe == suffix:
+            return key
+    return None
+
+
+async def _dispatch_intake_tool(
+    *,
+    tool_name: str,
+    args: dict[str, Any],
+    context: RunContext,
+    client: TransovoV3ToolClient,
+    intake_fields: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if tool_name == COLLECT_INTAKE_FIELD_TOOL:
+        field_key = str(args.get("field_key") or "").strip()
+        if not field_key:
+            raise ToolError("field_key is required for collect_intake_field.")
+        collected = await run_active_intake_collection(
+            context,
+            field_key=field_key,
+            intake_fields=intake_fields,
+        )
+        return await client.execute(tool_name="update_intake", arguments=collected)
+
+    field_key = _intake_field_key_from_set_tool(tool_name, intake_fields)
+    if field_key:
+        value = args.get("value")
+        payload: dict[str, Any] = {field_key: value}
+        return await client.execute(tool_name="update_intake", arguments=payload)
+
+    raise ToolError(f"Unknown intake tool: {tool_name}")
+
+
 def build_livekit_tools(
     tool_schemas: list[dict[str, Any]],
     client: TransovoV3ToolClient,
     telephony: LiveKitTelephonyBridge | None = None,
+    intake_fields: list[dict[str, Any]] | None = None,
 ) -> list[Any]:
+    intake_meta = intake_fields or []
     tools: list[Any] = []
 
     for schema in tool_schemas:
@@ -161,13 +210,24 @@ def build_livekit_tools(
                 args = {}
 
             try:
-                result = await _execute_transovo_tool(
-                    tool_name=_tool_name,
-                    raw_arguments=args,
-                    context=context,
-                    client=_client,
-                    telephony=_telephony if _tool_name == "transfer_call" else None,
-                )
+                if _tool_name == COLLECT_INTAKE_FIELD_TOOL or _tool_name.startswith(
+                    _SET_INTAKE_PREFIX,
+                ):
+                    result = await _dispatch_intake_tool(
+                        tool_name=_tool_name,
+                        args=args,
+                        context=context,
+                        client=_client,
+                        intake_fields=intake_meta,
+                    )
+                else:
+                    result = await _execute_transovo_tool(
+                        tool_name=_tool_name,
+                        raw_arguments=args,
+                        context=context,
+                        client=_client,
+                        telephony=_telephony if _tool_name == "transfer_call" else None,
+                    )
             except asyncio.CancelledError:
                 log_event(
                     "voice_v3_tool_cancelled",
