@@ -12,6 +12,11 @@ from livekit.plugins.openai.realtime import GPTLiveModel
 from transovo_voice.integrations.backend_client import TransovoBackend
 from transovo_voice.session.dispatch_resolver import extract_call_numbers
 from transovo_voice.telemetry import log_event
+from transovo_voice.voice_v3.gpt_live_observability import (
+    VoiceV3GptLiveObservabilityContext,
+    attach_voice_v3_gpt_live_observability,
+    log_voice_v3_delegation_expected,
+)
 from transovo_voice.voice_v3.tool_client import TransovoV3ToolClient, VoiceV3CallContext
 from transovo_voice.voice_v3.tools import LiveKitTelephonyBridge, build_livekit_tools
 
@@ -145,7 +150,24 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
 
         max_tool_steps = int(config.get("maxToolSteps") or 5)
         session = AgentSession(llm=gpt_live, tools=session_tools, max_tool_steps=max_tool_steps)
-        agent = Agent(instructions=str(config.get("amyInstructions") or ""))
+        amy_instructions = str(config.get("amyInstructions") or "")
+        astra_instructions = str(config.get("astraInstructions") or "")
+        agent = Agent(instructions=amy_instructions)
+        expected_tool_names = sorted(
+            str(t.get("name") or "").strip() for t in tool_dicts if str(t.get("name") or "").strip()
+        )
+        obs_ctx = VoiceV3GptLiveObservabilityContext(
+            call_id=call_ctx.call_id,
+            workspace_id=call_ctx.workspace_id,
+            agent_id=call_ctx.agent_id,
+            room=ctx.room.name,
+            job_id=str(ctx.job.id) if getattr(ctx, "job", None) else None,
+            amy_instruction_chars=len(amy_instructions),
+            astra_instruction_chars=len(astra_instructions),
+            expected_tool_count=len(session_tools),
+            expected_tool_names=expected_tool_names,
+        )
+        log_voice_v3_delegation_expected(obs_ctx)
 
         @session.on("user_input_transcribed")
         def on_user_input_transcribed(ev: Any) -> None:
@@ -189,6 +211,13 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             agent=agent,
             room=ctx.room,
             room_options=room_options,
+        )
+
+        attach_voice_v3_gpt_live_observability(
+            job_ctx=ctx,
+            agent_session=session,
+            agent=session.current_agent,
+            obs=obs_ctx,
         )
     except Exception:
         await shutdown_backend()
