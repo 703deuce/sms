@@ -33,6 +33,7 @@ ENV LIVEKIT_AGENT_NAME=[REDACTED]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/', timeout=3)"
 
-EXPOSE 8081
+# 8081 = legacy health (Coolify probe); 8083 = V3 worker health (in-container only).
+EXPOSE 8081 8083
 
 CMD ["./scripts/start-transovo-voice-worker.sh"]

@@ -14,7 +14,7 @@
 | Base directory | `/` (repo root) |
 | **Build pack** | **`dockerfile`** — not Nixpacks |
 | **Dockerfile location** | `voice-runtime-python/Dockerfile` (Coolify DB: `/voice-runtime-python/Dockerfile`) |
-| **Start command** | *(empty in Coolify)* — image `CMD`: `voice-runtime-python/scripts/start-transovo-voice-worker.sh` (default: **one** legacy process on `8081`; optional `VOICE_ENABLE_V3_PROFILE=1` for legacy+v3 in one container — not used in production Coolify until health ports are split) |
+| **Start command** | *(empty in Coolify)* — image `CMD`: `start-transovo-voice-worker.sh` (default: **two processes** — legacy `8081` + V3 `8083`; set `VOICE_ENABLE_V3_PROFILE=0` for legacy-only) |
 | Public domain | **None** (worker connects outbound to LiveKit WebSocket only) |
 | **Ports exposes** | **`8081`** only (LiveKit agent health HTTP server) |
 | **Health check** | Enabled, port `8081`, path `/` |
