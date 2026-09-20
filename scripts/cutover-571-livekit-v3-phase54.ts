@@ -120,14 +120,26 @@ async function narrowSharedDispatchToLegacy866(): Promise<void> {
   const legacyNumbers = [
     ...new Set(liveKitDidLookupVariants(LEGACY_866_E164).map(toLiveKitInboundDid)),
   ];
+  const roomPrefix =
+    TRANSOVO_LIVEKIT_ROOM_PREFIX.replace(/-+$/, "") || "transovo-call";
   const ruleInfo = new SIPDispatchRuleInfo({
     sipDispatchRuleId: shared.sipDispatchRuleId,
-    rule: shared.rule,
+    rule: new SIPDispatchRule({
+      rule: {
+        case: "dispatchRuleCallee",
+        value: new SIPDispatchRuleCallee({
+          roomPrefix,
+          randomize: true,
+        }),
+      },
+    }),
     trunkIds: shared.trunkIds || [TRUNK_ID],
     numbers: legacyNumbers,
-    hidePhoneNumber: shared.hidePhoneNumber,
+    hidePhoneNumber: shared.hidePhoneNumber ?? false,
     name: shared.name || TRANSOVO_LIVEKIT_DISPATCH_RULE_NAME,
-    metadata: shared.metadata,
+    metadata:
+      shared.metadata ||
+      JSON.stringify({ owner: "transovo", kind: "shared_inbound_dispatch" }),
     roomConfig: new RoomConfiguration({
       agents: [
         new RoomAgentDispatch({
