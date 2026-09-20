@@ -46,7 +46,8 @@ export function isVoiceV3ToolAuthorized(
     case "transfer_call":
       return (
         caps.transferCalls &&
-        (config.transferDestinations?.some((d) => d.enabled !== false) ?? false)
+        (config.transfer?.enabled === true ||
+          (config.transferDestinations?.some((d) => d.enabled !== false) ?? false))
       );
     case "request_callback":
       return isRequestCallbackAuthorized(config);

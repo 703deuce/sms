@@ -37,6 +37,8 @@ export interface VoiceV3TransferDestination {
   enabled?: boolean;
 }
 
+export type { VoiceV3TransferPolicyCompiled as VoiceV3TransferPolicy } from "../transfer/types";
+
 export interface VoiceV3IntakeConfig {
   objectiveDescription?: string;
 }
@@ -250,6 +252,8 @@ export interface VoiceV3AgentConfig {
   operationRequirements?: Partial<Record<VoiceOperationRequirementKey, string[]>>;
   /** When set, transfer_call.destination is constrained to these ids. */
   transferDestinations?: VoiceV3TransferDestination[];
+  /** Compiled transfer policy (destinations, routes, telephony hints). */
+  transfer?: import("../transfer/types").VoiceV3TransferPolicyCompiled;
   /** Active default service (wizard primary selection). */
   service: VoiceV3ServiceConfig;
   /** All enabled bookable services from wizard appointment types. */

@@ -1,4 +1,6 @@
 import type { AppointmentReceptionistWizardState } from "./types";
+import { compileVoiceV3TransferPolicyFromWizard } from "@/lib/voice-v3/transfer/compile-transfer-config";
+import { validateVoiceV3TransferPolicyForPublish } from "@/lib/voice-v3/transfer/validate-transfer-publish";
 import { normalizeWizardTransferPhone } from "./transfer-utils";
 
 export type ActivationIssue = {
@@ -92,13 +94,26 @@ export function getWizardActivationIssues(
   }
 
   if (state.capabilities.includes("transfer_calls")) {
-    const phone = normalizeWizardTransferPhone(state.transferDestinationPhone);
-    if (!phone) {
+    const hasDestRow = (state.transferDestinations ?? []).some(
+      (d) => d.enabled !== false && Boolean(d.phoneE164?.trim()),
+    );
+    const legacyPhone = normalizeWizardTransferPhone(state.transferDestinationPhone);
+    if (!hasDestRow && !legacyPhone) {
       issues.push({
         id: "transfer",
         severity: "blocking",
-        message: "Add a valid transfer phone number, or turn off Transfer calls.",
+        message: "Add at least one valid transfer destination, or turn off Transfer calls.",
       });
+    }
+    if (hasDestRow || legacyPhone) {
+      const policy = compileVoiceV3TransferPolicyFromWizard(state);
+      for (const issue of validateVoiceV3TransferPolicyForPublish(policy, true)) {
+        issues.push({
+          id: issue.id,
+          severity: "blocking",
+          message: issue.message,
+        });
+      }
     }
   }
 

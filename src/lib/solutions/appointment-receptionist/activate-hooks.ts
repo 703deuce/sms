@@ -516,7 +516,10 @@ export async function runAppointmentReceptionistActivateHooks(input: {
 
     const transferRequired =
       input.state.capabilities.includes("transfer_calls") &&
-      Boolean(input.state.transferDestinationPhone?.trim());
+      (Boolean(input.state.transferDestinationPhone?.trim()) ||
+        (input.state.transferDestinations ?? []).some(
+          (d) => d.enabled !== false && Boolean(d.phoneE164?.trim()),
+        ));
     // Don't wipe/replace live routing if a required transfer sync already failed.
     if (!(transferRequired && !transferSynced)) {
       const routing = await syncWizardRoutingRules({
@@ -585,7 +588,10 @@ export async function runAppointmentReceptionistActivateHooks(input: {
   if (input.mode === "activate") {
     if (
       input.state.capabilities.includes("transfer_calls") &&
-      input.state.transferDestinationPhone?.trim() &&
+      (input.state.transferDestinationPhone?.trim() ||
+        (input.state.transferDestinations ?? []).some(
+          (d) => d.enabled !== false && Boolean(d.phoneE164?.trim()),
+        )) &&
       !transferSynced
     ) {
       issues.push({

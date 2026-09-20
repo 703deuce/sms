@@ -3,16 +3,17 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from dataclasses import dataclass
 from typing import Any
 
-from livekit.agents import JobContext, function_tool
+from livekit.agents import function_tool
 from livekit.agents.llm.tool_context import DuplicateScope, ToolError, ToolFlag
 from livekit.agents.voice.events import RunContext
 
 from transovo_voice.telemetry import log_event
 from transovo_voice.voice_v3.intake_active_collection import run_active_intake_collection
 from transovo_voice.voice_v3.tool_client import TransovoV3ToolClient
+from transovo_voice.voice_v3.telephony_bridge import LiveKitTelephonyBridge
+from transovo_voice.voice_v3.transfer_executor import execute_authorized_transfer_plan
 
 COLLECT_INTAKE_FIELD_TOOL = "collect_intake_field"
 _SET_INTAKE_PREFIX = "set_intake_"
@@ -24,12 +25,6 @@ _READ_TOOLS = frozenset({"find_availability", "find_appointment"})
 # RunContext.disallow_interruptions() on GPT-Live — see docs/VOICE-V3-LIVEKIT-GPT-LIVE-INTERRUPTION-POLICY.md.
 # end_call is LiveKit EndCallTool — not built here.
 _SKIP_SCHEMA_TOOLS = frozenset({"end_call"})
-
-
-@dataclass(frozen=True)
-class LiveKitTelephonyBridge:
-    job_ctx: JobContext
-    sip_participant_identity: str
 
 
 def _tool_flags(name: str) -> ToolFlag:
@@ -46,15 +41,6 @@ def _on_duplicate(name: str) -> str:
     if name in _READ_TOOLS:
         return "replace"
     return "reject"
-
-
-def _normalize_transfer_to(destination: str) -> str:
-    dest = destination.strip()
-    if dest.startswith("tel:") or dest.startswith("sip:"):
-        return dest
-    if dest.startswith("+") or (dest and dest[0].isdigit()):
-        return f"tel:{dest}"
-    return dest
 
 
 async def _execute_transovo_tool(
@@ -77,52 +63,9 @@ async def _execute_transovo_tool(
     )
 
     if tool_name == "transfer_call" and telephony is not None:
-        await _maybe_execute_livekit_transfer(result, telephony)
+        result = await execute_authorized_transfer_plan(result, telephony, context)
 
     return result
-
-
-async def _maybe_execute_livekit_transfer(
-    result: dict[str, Any],
-    telephony: LiveKitTelephonyBridge,
-) -> None:
-    if not result.get("ok"):
-        return
-    status = str(result.get("status") or "")
-    if status not in ("transfer_requested", "ok"):
-        data = result.get("data")
-        if isinstance(data, dict) and data.get("destination"):
-            status = "transfer_requested"
-        else:
-            return
-    data = result.get("data") if isinstance(result.get("data"), dict) else {}
-    destination = str(data.get("destination") or "").strip()
-    if not destination:
-        return
-
-    transfer_to = _normalize_transfer_to(destination)
-    log_event(
-        "voice_v3_livekit_transfer_starting",
-        extra={
-            "participant": telephony.sip_participant_identity,
-            "transfer_to": transfer_to,
-            "destination_id": data.get("destination_id"),
-        },
-    )
-    try:
-        fut = telephony.job_ctx.transfer_sip_participant(
-            telephony.sip_participant_identity,
-            transfer_to,
-            play_dialtone=False,
-        )
-        await asyncio.wait_for(fut, timeout=45.0)
-        log_event("voice_v3_livekit_transfer_completed", extra={"transfer_to": transfer_to})
-    except asyncio.TimeoutError:
-        logger.exception("voice_v3_livekit_transfer_timeout")
-        raise ToolError("Transfer timed out. Offer callback or try again.") from None
-    except Exception as exc:
-        logger.exception("voice_v3_livekit_transfer_failed")
-        raise ToolError(f"Transfer failed: {exc}") from exc
 
 
 def _intake_field_key_from_set_tool(tool_name: str, intake_fields: list[dict[str, Any]]) -> str | None:

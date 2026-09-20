@@ -16,7 +16,13 @@ export const RESCHEDULE_APPOINTMENT_TOOL_DESCRIPTION = `Move an existing appoint
 
 export const CANCEL_APPOINTMENT_TOOL_DESCRIPTION = `Cancel the exact appointment already identified through find_appointment (confirm_selection). Use only after the caller explicitly confirms they want that appointment cancelled — identity confirmation alone is not cancellation authorization. Do not use this to search for appointments. Do not pass Microsoft Graph event ids. Provide appointment_selection_id when required and confirmed true only after explicit cancel consent. Treat cancellation as complete only when this function returns verified success.`;
 
-export const TRANSFER_CALL_TOOL_DESCRIPTION = `Transfer the current live telephone call to an authorized configured human, team, department, or destination. Use this when the caller asks to speak with a person or appropriate department, when configured escalation policy requires a human transfer, or when the caller accepts a transfer that has been offered. This performs a real telephony action. Do not use it merely to tell the caller that transfer is possible. Only configured destinations may be used.`;
+export const TRANSFER_CALL_TOOL_DESCRIPTION = `Transfer the caller to an authorized human, department, or configured transfer route.
+Use when the caller asks to speak with a configured person or department, or when published business policy requires human escalation.
+Choose only authorized route_id and/or destination_id values from the published transfer catalog in your instructions.
+Do not invent phone numbers, SIP addresses, transfer destinations, or transfer modes (direct vs warm).
+Do not reorder waterfall targets — for a waterfall route, call this tool once with the route_id; Transovo executes the configured sequence.
+Do not claim the caller was connected until the tool/runtime confirms connection.
+If transfer cannot complete and the caller remains with the agent, continue naturally using the returned result and configured fallback.`;
 
 export const END_CALL_TOOL_DESCRIPTION = `End the current live telephone call when the conversation is genuinely complete and the caller has no remaining request, or when an applicable business policy requires the call to terminate. This performs a real call-ending action. Do not use it simply because one task has completed if the caller may still be interacting. Do not use it as a substitute for a natural conversational goodbye.`;
 

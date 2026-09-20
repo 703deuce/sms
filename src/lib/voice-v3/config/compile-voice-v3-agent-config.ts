@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { compileVoiceV3TransferPolicyFromWizard } from "../transfer/compile-transfer-config";
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
 import { ensureWizardOperatingMaturity } from "@/lib/solutions/appointment-receptionist/operating-maturity-wizard";
 import { deriveBookingStrategyFromWizard } from "@/lib/voice-receptionist-wizard/booking-strategy";
@@ -426,6 +427,7 @@ export function compileVoiceV3AgentConfig(input: {
       activationMode: wizard.activationMode,
     },
     transferDestinations: transferDestinationsFromWizard(wizard),
+    transfer: compileVoiceV3TransferPolicyFromWizard(wizard),
   });
 }
 

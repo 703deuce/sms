@@ -170,6 +170,9 @@ function run(): void {
   assert.ok(tools.includes("book_appointment"));
   assert.ok(tools.includes("transfer_call"));
   assert.ok(!tools.includes("cancel_appointment"));
+  assert.ok(config.transfer?.enabled);
+  assert.equal(config.transfer?.routing, "single");
+  assert.ok(config.transfer?.destinations.some((d) => d.id === "sales"));
 
   const accept = buildBasicLiveSessionAcceptParams(new Date(), config);
   const session = accept.session as { audio?: { output?: { voice?: string } } };

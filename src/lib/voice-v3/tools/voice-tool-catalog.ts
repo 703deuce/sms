@@ -144,7 +144,8 @@ function isToolEnabledForConfig(entry: VoiceToolCatalogEntry, config: VoiceV3Age
     case "transfer_call":
       return (
         caps.transferCalls &&
-        (config.transferDestinations?.some((d) => d.enabled !== false) ?? false)
+        (config.transfer?.enabled === true ||
+          (config.transferDestinations?.some((d) => d.enabled !== false) ?? false))
       );
     case "update_intake":
     case "end_call":

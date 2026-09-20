@@ -3,6 +3,7 @@ import { buildAstraBackendCoreInstructions } from "./astra-backend-core-instruct
 import { buildAstraCallbackInstructions } from "./astra-callback-instructions";
 import { buildAstraCrossToolInstructions } from "./astra-cross-tool-instructions";
 import { buildAstraIntakeInstructions } from "./astra-intake-instructions";
+import { buildAstraTransferInstructions } from "./astra-transfer-instructions";
 
 export type AstraBackendPromptContext = {
   businessName?: string;
@@ -48,6 +49,7 @@ export function buildAstraBackendInstructions(
   const callback = agentConfig ? buildAstraCallbackInstructions(agentConfig) : "";
   const crossTool = buildAstraCrossToolInstructions(agentConfig);
   const intake = buildAstraIntakeInstructions();
+  const transfer = agentConfig ? buildAstraTransferInstructions(agentConfig) : "";
 
   return `
 ${core}
@@ -68,7 +70,7 @@ ${bookingStrategyAppend(context.bookingStrategy)}
 
 ${callback ? `${callback}\n\n` : ""}${intake}
 
-${crossTool}
+${transfer ? `${transfer}\n\n` : ""}${crossTool}
 
 Each function tool description defines when to call, when not to call, side effects, and parameters. Follow those contracts exactly.
 `.trim();
