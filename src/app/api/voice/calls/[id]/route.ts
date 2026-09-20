@@ -27,6 +27,14 @@ export async function GET(
     });
     if (!call) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+    const callbackRequest = await prisma.callbackRequest.findFirst({
+      where: {
+        workspaceId: auth.workspaceId,
+        metadata: { path: ["voiceV3", "callId"], equals: id },
+      },
+      orderBy: { requestedAt: "desc" },
+    });
+
     const [events, transcripts, recordings, insights, transfers, toolExecutions] =
       await Promise.all([
         prisma.voiceCallEvent.findMany({
@@ -73,6 +81,14 @@ export async function GET(
         insights,
         transfers,
         toolExecutions,
+        callbackRequest: callbackRequest
+          ? {
+              id: callbackRequest.id,
+              status: callbackRequest.status,
+              reason: callbackRequest.reason,
+              requestedAt: callbackRequest.requestedAt.toISOString(),
+            }
+          : null,
       },
     });
   } catch (err) {

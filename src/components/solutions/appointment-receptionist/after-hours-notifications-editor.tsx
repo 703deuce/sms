@@ -3,8 +3,7 @@
 import { createId } from "@/lib/supabase/id";
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Input, Label } from "@/components/ui/input";
 
 type Patch = (partial: Partial<AppointmentReceptionistWizardState>) => void;
 

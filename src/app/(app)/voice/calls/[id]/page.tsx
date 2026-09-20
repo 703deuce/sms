@@ -1,7 +1,11 @@
 "use client";
 
 import { WaveformRecordingPlayer } from "@/components/calls/waveform-recording-player";
-import { fmtCallDuration, fmtCallPhone } from "@/lib/voice/calls/display";
+import {
+  buildActionItems,
+  buildCapturedFields,
+} from "@/lib/voice/calls/detail";
+import { deriveOutcomeBadges, fmtCallDuration, fmtCallPhone } from "@/lib/voice/calls/display";
 import {
   getMockCallById,
   isDemoCallId,
@@ -150,21 +154,46 @@ export default function VoiceCallDetailPage() {
     hour: "numeric",
     minute: "2-digit",
   });
-  const shortId = id.slice(0, 12);
-
   const mockCall = demo ? mock : undefined;
-  const infoFields = [
-    { label: "Name", value: callerName },
-    { label: "Email", value: mockCall?.contactEmail || "—" },
-    { label: "Phone", value: fmtCallPhone(callerPhone) },
-    { label: "Policy/Account Number", value: mockCall ? "849302-39" : "—" },
-    { label: "Interest Level", value: mockCall ? "Interested (High)" : "—" },
-    {
-      label: "Next Steps Identified",
-      value: mockCall ? "Send quote, schedule follow-up" : "—",
+  const callbackRequest = data?.callbackRequest as
+    | { id: string; status: string; reason?: string | null; requestedAt: string }
+    | null
+    | undefined;
+  const structuredMessage = call.structuredMessage;
+  const insightCustom =
+    (data?.insights as Array<{ customFields?: Record<string, unknown> }>)?.[0]?.customFields ??
+    null;
+  const infoFields = buildCapturedFields({
+    contactName: call.contactName as string | null,
+    contactEmail: (call.contactEmail as string | null) ?? mockCall?.contactEmail,
+    fromE164: callerPhone,
+    structuredMessage,
+    insightCustomFields: insightCustom,
+    insightSummary: insight?.summary,
+  });
+  const outcomeBadges = deriveOutcomeBadges({
+    outcome: call.outcome as string | null,
+    appointmentBooked: Boolean(call.appointmentBooked),
+    transferred: Boolean(call.transferred),
+    voicemailDetected: Boolean(call.voicemailDetected),
+  });
+  const actionItems = buildActionItems({
+    call: {
+      appointmentBooked: Boolean(call.appointmentBooked),
+      transferred: Boolean(call.transferred),
+      outcome: call.outcome as string | null,
+      endedAt: call.endedAt as string | null,
     },
-    { label: "Goal", value: mockCall?.reason || insight?.intent || "—" },
-  ];
+    structuredMessage,
+    toolExecutions:
+      (data?.toolExecutions as Array<{
+        toolType?: string | null;
+        status?: string | null;
+        createdAt?: string;
+        error?: string | null;
+      }>) || [],
+    transfers: (data?.transfers as Array<{ status?: string; destination?: string; summary?: string; createdAt?: string }>) || [],
+  });
 
   return (
     <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-8">
@@ -182,13 +211,16 @@ export default function VoiceCallDetailPage() {
             <h1 className="font-display text-[26px] font-semibold tracking-tight text-[#111827]">
               Call from {callerName}
             </h1>
-            <span className="rounded-full bg-violet-50 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-violet-700 ring-1 ring-inset ring-violet-200">
-              Incoming
-            </span>
+            {outcomeBadges.map((badge) => (
+              <span
+                key={badge}
+                className="rounded-full bg-violet-50 px-2.5 py-0.5 text-xs font-semibold tracking-wide text-violet-700 ring-1 ring-inset ring-violet-200"
+              >
+                {badge}
+              </span>
+            ))}
           </div>
           <p className="mt-2 text-sm text-[#6b7280]">
-            <span className="font-mono text-xs">{shortId}…</span>
-            {" · "}
             {dateLabel} at {timeLabel}
             {" · "}
             {fmtCallDuration(call.durationSeconds as number)}
@@ -280,6 +312,33 @@ export default function VoiceCallDetailPage() {
                   </div>
                 </div>
               )}
+
+              {callbackRequest ? (
+                <div className="rounded-xl border border-indigo-200 bg-indigo-50/40 p-5 shadow-sm">
+                  <h2 className="text-sm font-semibold text-[#111827]">Callback requested</h2>
+                  <p className="mt-2 text-sm text-[#374151]">
+                    {callbackRequest.reason || "Message / callback request recorded for follow-up."}
+                  </p>
+                  <p className="mt-1 text-xs text-[#6b7280]">
+                    Status: {callbackRequest.status} ·{" "}
+                    {new Date(callbackRequest.requestedAt).toLocaleString()}
+                  </p>
+                </div>
+              ) : null}
+
+              <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
+                <h2 className="text-sm font-semibold text-[#111827]">Outcomes</h2>
+                <ul className="mt-3 space-y-2 text-sm text-[#374151]">
+                  {actionItems
+                    .filter((item) => item.status !== "skipped")
+                    .map((item) => (
+                      <li key={item.id}>
+                        <span className="font-medium">{item.label}</span>
+                        {item.detail ? ` — ${item.detail}` : ""}
+                      </li>
+                    ))}
+                </ul>
+              </div>
 
               <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
                 <h2 className="text-sm font-semibold text-[#111827]">AI Summary</h2>

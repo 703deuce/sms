@@ -47,6 +47,44 @@ export async function markVoiceCallBooked(input: {
       externalId: input.externalId || null,
     },
   }).catch(() => undefined);
+
+  void (async () => {
+    try {
+      const { loadVoiceV3NotificationsConfigForCall } = await import(
+        "@/lib/voice-v3/notifications/load-config-for-call"
+      );
+      const { notifyVoiceV3AppointmentBooked } = await import(
+        "@/lib/voice-v3/notifications/notify-appointment-booked"
+      );
+      const loaded = await loadVoiceV3NotificationsConfigForCall(input.callId);
+      if (!loaded) return;
+      const prisma = getPrisma();
+      const call = await prisma.voiceCall.findUnique({
+        where: { id: input.callId },
+        select: {
+          fromE164: true,
+          contact: { select: { firstName: true, lastName: true } },
+        },
+      });
+      if (!call) return;
+      const callerName = call.contact
+        ? [call.contact.firstName, call.contact.lastName].filter(Boolean).join(" ")
+        : null;
+      await notifyVoiceV3AppointmentBooked({
+        config: loaded.config,
+        workspaceId: input.workspaceId,
+        callId: input.callId,
+        appointmentId: input.appointmentId || input.externalId || input.callId,
+        callerName,
+        callerPhone: call.fromE164,
+      });
+    } catch (err) {
+      console.error("VOICE_V3_APPOINTMENT_NOTIFICATION_HOOK_FAILED", {
+        callId: input.callId,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  })();
 }
 
 export async function recordLiveKitBuiltinToolExecution<T>(input: {

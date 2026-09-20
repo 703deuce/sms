@@ -13,8 +13,38 @@ from livekit.agents.voice.events import RunContext
 
 from transovo_voice.telemetry import log_event
 from transovo_voice.voice_v3.telephony_bridge import LiveKitTelephonyBridge
+from transovo_voice.voice_v3.tool_client import TransovoV3ToolClient
 
 logger = logging.getLogger("transovo-voice.voice_v3.transfer")
+
+
+async def _report_transfer_outcome_to_backend(
+    client: TransovoV3ToolClient | None,
+    *,
+    transfer_request_id: str,
+    route_id: str,
+    status: str,
+    reason: str | None,
+    attempts: list[dict[str, Any]],
+    connected_destination_id: str | None,
+) -> None:
+    if client is None:
+        return
+    payload = {
+        "workspaceId": client._ctx.workspace_id,
+        "callId": client._ctx.call_id,
+        "agentId": client._ctx.agent_id,
+        "transferRequestId": transfer_request_id,
+        "routeId": route_id,
+        "status": status,
+        "reason": reason,
+        "attempts": attempts,
+        "connectedDestinationId": connected_destination_id,
+    }
+    try:
+        await client._backend.call("record_voice_v3_transfer_outcome", payload)
+    except Exception:
+        logger.exception("voice_v3_transfer_outcome_report_failed")
 
 
 def _normalize_transfer_to(destination: str) -> str:
@@ -112,6 +142,7 @@ async def execute_authorized_transfer_plan(
     result: dict[str, Any],
     telephony: LiveKitTelephonyBridge,
     context: RunContext | None,
+    client: TransovoV3ToolClient | None = None,
 ) -> dict[str, Any]:
     if not result.get("ok"):
         return result
@@ -132,6 +163,12 @@ async def execute_authorized_transfer_plan(
     route_id = str(plan.get("route_id") or "")
     fallback = plan.get("fallback")
     handoff = str(plan.get("handoff_instructions") or "")
+    transfer_reason: str | None = None
+    surface = data.get("surface")
+    if isinstance(surface, dict):
+        raw_reason = surface.get("reason")
+        if isinstance(raw_reason, str) and raw_reason.strip():
+            transfer_reason = raw_reason.strip()
     trunk_id = plan.get("outbound_sip_trunk_id")
     caller_id = plan.get("outbound_caller_id_e164")
 
@@ -239,6 +276,17 @@ async def execute_authorized_transfer_plan(
                     "attempts": attempts,
                 }
                 sanitized["status"] = "transfer_connected"
+            asyncio.create_task(
+                _report_transfer_outcome_to_backend(
+                    client,
+                    transfer_request_id=transfer_request_id,
+                    route_id=route_id,
+                    status="transfer_connected",
+                    reason=transfer_reason,
+                    attempts=attempts,
+                    connected_destination_id=dest_id,
+                ),
+            )
             return sanitized
 
         log_event(
@@ -280,4 +328,15 @@ async def execute_authorized_transfer_plan(
             "attempts": attempts,
         }
         sanitized["status"] = "transfer_exhausted"
+    asyncio.create_task(
+        _report_transfer_outcome_to_backend(
+            client,
+            transfer_request_id=transfer_request_id,
+            route_id=route_id,
+            status="transfer_exhausted",
+            reason=transfer_reason,
+            attempts=attempts,
+            connected_destination_id=None,
+        ),
+    )
     return sanitized

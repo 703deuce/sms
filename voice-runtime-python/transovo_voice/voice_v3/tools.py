@@ -63,7 +63,7 @@ async def _execute_transovo_tool(
     )
 
     if tool_name == "transfer_call" and telephony is not None:
-        result = await execute_authorized_transfer_plan(result, telephony, context)
+        result = await execute_authorized_transfer_plan(result, telephony, context, client)
 
     return result
 

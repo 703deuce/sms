@@ -8,6 +8,8 @@ export type CallOutcomeBadge =
   | "Booking Link Sent"
   | "Appointment Booked"
   | "Transferred"
+  | "Transfer Failed"
+  | "Emergency"
   | "FAQ"
   | "Information Provided"
   | "Completed"
@@ -119,6 +121,10 @@ export function deriveCallOutcomeBadge(call: CallRowLike): CallOutcomeBadge {
   if (call.transferred) return "Transferred";
   if (call.appointmentBooked) return "Appointment Booked";
   const outcome = String(call.outcome || "").toLowerCase();
+  if (outcome.includes("transfer_exhausted") || outcome.includes("transfer_failed")) {
+    return "Transfer Failed";
+  }
+  if (outcome.includes("emergency")) return "Emergency";
   if (outcome.includes("callback")) return "Callback Requested";
   if (outcome.includes("spam")) return "Spam";
   if (outcome.includes("booking_link_sent")) {
@@ -166,6 +172,8 @@ export const OUTCOME_BADGE_STYLES: Record<CallOutcomeBadge, string> = {
   "Booking Link Sent": "bg-teal-50 text-teal-800 ring-teal-200",
   "Appointment Booked": "bg-amber-50 text-amber-800 ring-amber-200",
   Transferred: "bg-violet-50 text-violet-700 ring-violet-200",
+  "Transfer Failed": "bg-rose-50 text-rose-800 ring-rose-200",
+  Emergency: "bg-rose-50 text-rose-900 ring-rose-300",
   FAQ: "bg-slate-100 text-slate-700 ring-slate-200",
   "Information Provided": "bg-orange-50 text-orange-800 ring-orange-200",
   Completed: "bg-primary/10 text-primary ring-primary/20",

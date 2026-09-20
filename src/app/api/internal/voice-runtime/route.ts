@@ -23,7 +23,8 @@ type VoiceRuntimeAction =
   | "record_call_telemetry"
   | "resolve_voice_v3_livekit_session"
   | "execute_voice_v3_livekit_tool"
-  | "commit_voice_v3_livekit_caller_utterance";
+  | "commit_voice_v3_livekit_caller_utterance"
+  | "record_voice_v3_transfer_outcome";
 
 function logInternalVoice(
   event: string,
@@ -249,6 +250,14 @@ export async function POST(request: Request) {
           "@/lib/voice/python-runtime-bridge/voice-v3-livekit"
         );
         result = commitVoiceV3CallerUtteranceForLiveKit(payload as never);
+        break;
+      }
+
+      case "record_voice_v3_transfer_outcome": {
+        const { recordVoiceV3TransferOutcomeForPython } = await import(
+          "@/lib/voice/python-runtime-bridge/record-voice-v3-transfer-outcome-for-python"
+        );
+        result = await recordVoiceV3TransferOutcomeForPython(payload as never);
         break;
       }
 

@@ -401,6 +401,50 @@ export async function processPostCall(callId: string) {
     // CRM push is optional
   }
 
+  void (async () => {
+    try {
+      if (!agent?.id) return;
+      const { isAppointmentReceptionistAgent } = await import(
+        "@/lib/voice-v3/config/from-published-agent"
+      );
+      const runtimeCfg =
+        config ||
+        (agent.draftConfig ? parseVoiceAgentConfig(agent.draftConfig) : parseVoiceAgentConfig({}));
+      if (!isAppointmentReceptionistAgent(runtimeCfg)) return;
+      const { loadVoiceV3NotificationsConfigForCall } = await import(
+        "@/lib/voice-v3/notifications/load-config-for-call"
+      );
+      const { notifyVoiceV3CallCompleted } = await import(
+        "@/lib/voice-v3/notifications/notify-call-completed"
+      );
+      const loaded = await loadVoiceV3NotificationsConfigForCall(call.id);
+      if (!loaded) return;
+      const contact = call.contactId
+        ? await prisma.contact.findFirst({
+            where: { id: call.contactId, workspaceId: call.workspaceId },
+            select: { firstName: true, lastName: true },
+          })
+        : null;
+      const callerName = contact
+        ? [contact.firstName, contact.lastName].filter(Boolean).join(" ")
+        : null;
+      await notifyVoiceV3CallCompleted({
+        config: loaded.config,
+        workspaceId: call.workspaceId,
+        callId: call.id,
+        callerName,
+        callerPhone: call.fromE164 || call.toE164,
+        durationSeconds: duration,
+        summary: insight?.summary || null,
+      });
+    } catch (err) {
+      console.error("VOICE_V3_CALL_COMPLETED_NOTIFICATION_HOOK_FAILED", {
+        callId: call.id,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  })();
+
   return { ok: true, callId, missed: isMissed };
 }
 
