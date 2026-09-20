@@ -106,70 +106,19 @@ async function stepTrunk(): Promise<void> {
 
 const LEGACY_866_E164 = (process.env.LEGACY_866_E164 || "+18663464256").trim();
 
-/** Shared trunk rule must not claim 571 — scope legacy rule to 866 only. */
-async function narrowSharedDispatchToLegacy866(): Promise<void> {
+const LEGACY_DISPATCH_RULE_ID = "SDR_VjjkrrgEjiR3";
+
+async function createCalleeDispatchRule(input: {
+  name: string;
+  numbers: string[];
+  agentName: string;
+  agentMetadata: string;
+  metadata: Record<string, unknown>;
+}): Promise<string> {
   const client = getLiveKitSipClient();
-  const rules = await client.listSipDispatchRule();
-  const shared =
-    rules.find((r) => r.name === TRANSOVO_LIVEKIT_DISPATCH_RULE_NAME) ||
-    rules.find((r) => r.sipDispatchRuleId === "SDR_VjjkrrgEjiR3") ||
-    null;
-  if (!shared?.sipDispatchRuleId) {
-    throw new Error("Shared dispatch rule not found for legacy 866 scoping");
-  }
-  const legacyNumbers = [
-    ...new Set(liveKitDidLookupVariants(LEGACY_866_E164).map(toLiveKitInboundDid)),
-  ];
   const roomPrefix =
     TRANSOVO_LIVEKIT_ROOM_PREFIX.replace(/-+$/, "") || "transovo-call";
   const ruleInfo = new SIPDispatchRuleInfo({
-    sipDispatchRuleId: shared.sipDispatchRuleId,
-    rule: new SIPDispatchRule({
-      rule: {
-        case: "dispatchRuleCallee",
-        value: new SIPDispatchRuleCallee({
-          roomPrefix,
-          randomize: true,
-        }),
-      },
-    }),
-    trunkIds: shared.trunkIds || [TRUNK_ID],
-    numbers: legacyNumbers,
-    hidePhoneNumber: shared.hidePhoneNumber ?? false,
-    name: shared.name || TRANSOVO_LIVEKIT_DISPATCH_RULE_NAME,
-    metadata:
-      shared.metadata ||
-      JSON.stringify({ owner: "transovo", kind: "shared_inbound_dispatch" }),
-    roomConfig: new RoomConfiguration({
-      agents: [
-        new RoomAgentDispatch({
-          agentName:
-            shared.roomConfig?.agents?.[0]?.agentName || TRANSOVO_LIVEKIT_AGENT_NAME,
-          metadata: shared.roomConfig?.agents?.[0]?.metadata || "",
-        }),
-      ],
-    }),
-  });
-  await client.updateSipDispatchRule(shared.sipDispatchRuleId, ruleInfo);
-  log("shared_dispatch_scoped_866", {
-    ruleId: shared.sipDispatchRuleId,
-    numbers: legacyNumbers,
-    agent: TRANSOVO_LIVEKIT_AGENT_NAME,
-  });
-}
-
-async function upsertV3DidDispatchRule(): Promise<string> {
-  const client = getLiveKitSipClient();
-  const existing = await findDidDispatchRuleByName(E164);
-  const ruleName = dispatchRuleNameForDid(E164);
-  const dispatchNumbers = [
-    ...new Set(liveKitDidLookupVariants(E164).map(toLiveKitInboundDid)),
-  ];
-  const roomPrefix =
-    TRANSOVO_LIVEKIT_ROOM_PREFIX.replace(/-+$/, "") || "transovo-call";
-
-  const ruleInfo = new SIPDispatchRuleInfo({
-    sipDispatchRuleId: existing?.sipDispatchRuleId || "",
     rule: new SIPDispatchRule({
       rule: {
         case: "dispatchRuleCallee",
@@ -180,46 +129,24 @@ async function upsertV3DidDispatchRule(): Promise<string> {
       },
     }),
     trunkIds: [TRUNK_ID],
-    numbers: dispatchNumbers,
+    numbers: input.numbers,
     hidePhoneNumber: false,
-    name: ruleName,
-    metadata: JSON.stringify({
-      owner: "transovo",
-      kind: "did_dispatch_voice_v3",
-      e164: toLiveKitInboundDid(E164),
-      agentId: AGENT_ID,
-      workspaceId: WORKSPACE_ID,
-      livekitAgent: V3_AGENT,
-    }),
+    name: input.name,
+    metadata: JSON.stringify(input.metadata),
     roomConfig: new RoomConfiguration({
       agents: [
         new RoomAgentDispatch({
-          agentName: V3_AGENT,
-          metadata: JSON.stringify({
-            runtime: "voice_v3_gpt_live",
-            resolve: "http_backend_on_sip",
-            workspaceId: WORKSPACE_ID,
-            agentId: AGENT_ID,
-            toE164: E164,
-            dispatchSource: "phase54_cutover",
-          }),
+          agentName: input.agentName,
+          metadata: input.agentMetadata,
         }),
       ],
     }),
   });
 
-  if (existing?.sipDispatchRuleId) {
-    const updated = await client.updateSipDispatchRule(
-      existing.sipDispatchRuleId,
-      ruleInfo,
-    );
-    return updated.sipDispatchRuleId || existing.sipDispatchRuleId;
-  }
-
   const created = await client.createSipDispatchRule(
     { type: "callee", roomPrefix, randomize: true },
     {
-      name: ruleName,
+      name: input.name,
       trunkIds: [TRUNK_ID],
       hidePhoneNumber: false,
       metadata: ruleInfo.metadata,
@@ -227,22 +154,101 @@ async function upsertV3DidDispatchRule(): Promise<string> {
     },
   );
   const createdId = created.sipDispatchRuleId || "";
-  if (!createdId) throw new Error("dispatch rule id missing after create");
+  if (!createdId) throw new Error(`dispatch rule id missing after create (${input.name})`);
   ruleInfo.sipDispatchRuleId = createdId;
-  await client.updateSipDispatchRule(createdId, ruleInfo);
-  return createdId;
+  const updated = await client.updateSipDispatchRule(createdId, ruleInfo);
+  return updated.sipDispatchRuleId || createdId;
+}
+
+/**
+ * LiveKit Cloud rejects a second per-DID rule while a trunk-wide rule exists.
+ * Replace the legacy shared rule with two callee-scoped rules (866 legacy, 571 V3).
+ */
+async function replaceSharedDispatchWithScopedRules(): Promise<{
+  legacyRuleId: string;
+  v3RuleId: string;
+}> {
+  const client = getLiveKitSipClient();
+  const rules = await client.listSipDispatchRule();
+  const shared =
+    rules.find((r) => r.name === TRANSOVO_LIVEKIT_DISPATCH_RULE_NAME) ||
+    rules.find((r) => r.sipDispatchRuleId === LEGACY_DISPATCH_RULE_ID) ||
+    null;
+
+  const legacyAgent =
+    shared?.roomConfig?.agents?.[0]?.agentName || TRANSOVO_LIVEKIT_AGENT_NAME;
+  const legacyMeta = shared?.roomConfig?.agents?.[0]?.metadata || "";
+
+  if (shared?.sipDispatchRuleId) {
+    await client.deleteSipDispatchRule(shared.sipDispatchRuleId);
+    log("deleted_shared_dispatch", { ruleId: shared.sipDispatchRuleId });
+  }
+
+  const legacyNumbers = [
+    ...new Set(liveKitDidLookupVariants(LEGACY_866_E164).map(toLiveKitInboundDid)),
+  ];
+  const legacyRuleId = await createCalleeDispatchRule({
+    name: TRANSOVO_LIVEKIT_DISPATCH_RULE_NAME,
+    numbers: legacyNumbers,
+    agentName: legacyAgent,
+    agentMetadata: legacyMeta,
+    metadata: {
+      owner: "transovo",
+      kind: "shared_inbound_dispatch",
+      numbers: legacyNumbers,
+    },
+  });
+
+  const v3Numbers = [
+    ...new Set(liveKitDidLookupVariants(E164).map(toLiveKitInboundDid)),
+  ];
+  const v3RuleId = await createCalleeDispatchRule({
+    name: dispatchRuleNameForDid(E164),
+    numbers: v3Numbers,
+    agentName: V3_AGENT,
+    agentMetadata: JSON.stringify({
+      runtime: "voice_v3_gpt_live",
+      resolve: "http_backend_on_sip",
+      workspaceId: WORKSPACE_ID,
+      agentId: AGENT_ID,
+      toE164: E164,
+      dispatchSource: "phase54_cutover",
+    }),
+    metadata: {
+      owner: "transovo",
+      kind: "did_dispatch_voice_v3",
+      e164: toLiveKitInboundDid(E164),
+      agentId: AGENT_ID,
+      workspaceId: WORKSPACE_ID,
+      livekitAgent: V3_AGENT,
+    },
+  });
+
+  log("replaced_shared_dispatch", {
+    legacyRuleId,
+    v3RuleId,
+    legacyNumbers,
+    v3Numbers,
+    legacyAgent,
+    v3Agent: V3_AGENT,
+  });
+  return { legacyRuleId, v3RuleId };
 }
 
 async function stepDispatch(): Promise<void> {
-  await narrowSharedDispatchToLegacy866();
-  const ruleId = await upsertV3DidDispatchRule();
+  const existingDid = await findDidDispatchRuleByName(E164);
+  let v3RuleId = existingDid?.sipDispatchRuleId || "";
+  if (!existingDid || existingDid.roomConfig?.agents?.[0]?.agentName !== V3_AGENT) {
+    const replaced = await replaceSharedDispatchWithScopedRules();
+    v3RuleId = replaced.v3RuleId;
+  }
   const inspect = await inspectLiveKitSipRouting(E164);
   const didRule = inspect.dispatchRules.find(
     (r) => r.name === dispatchRuleNameForDid(E164),
   );
   const agentOk = didRule?.agentName === V3_AGENT;
   log("dispatch", {
-    ruleId,
+    ruleId: v3RuleId,
     didRule,
     v3Dispatch: agentOk ? "YES" : "NO",
   });
