@@ -10,6 +10,10 @@
 
 **Official references:** See [§62 Official Google references](#62-official-google-references).
 
+**Related (implementation):** End-to-end build steps, frozen Microsoft rule, wizard/UI, and definition of done — `docs/GOOGLE-CALENDAR-VOICE-V3-IMPLEMENTATION-DIRECTIVE.md`. OAuth verification checklist — `docs/GOOGLE-CALENDAR-OAUTH-VERIFICATION.md`.
+
+**Division of labor:** This file = **what Google’s API/OAuth expects**. The implementation directive = **how to wire Google into Transovo without new Astra tools or Microsoft refactors**.
+
 ---
 
 ## 1. Product requirement
