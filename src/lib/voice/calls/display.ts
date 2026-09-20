@@ -14,6 +14,9 @@ export type CallOutcomeBadge =
   | "Information Provided"
   | "Completed"
   | "Spam"
+  | "Spam Likely"
+  | "Solicitor"
+  | "Needs attention"
   | "No Action"
   | "Resolved"
   | "Lead Captured"
@@ -23,10 +26,13 @@ export type CallOutcomeBadge =
 
 export type CallListFilter =
   | "all"
-  | "leads"
+  | "attention"
   | "appointments"
   | "messages"
   | "transferred"
+  | "emergencies"
+  | "spam"
+  | "leads"
   | "voicemails"
   | "no_answer";
 
@@ -41,6 +47,10 @@ export type CallRowLike = {
   summary?: string | null;
   intent?: string | null;
   mockOutcome?: MockCallOutcome | string | null;
+  spamLikely?: boolean;
+  solicitor?: boolean;
+  needsAttention?: boolean;
+  v3Outcome?: string | null;
 };
 
 export function fmtCallDuration(sec?: number | null): string {
@@ -106,6 +116,9 @@ export function fmtCallDateTable(iso: string): { date: string; time: string } {
 }
 
 export function deriveCallOutcomeBadge(call: CallRowLike): CallOutcomeBadge {
+  if (call.needsAttention) return "Needs attention";
+  if (call.solicitor || call.v3Outcome === "SOLICITOR") return "Solicitor";
+  if (call.spamLikely || call.v3Outcome === "SPAM") return "Spam Likely";
   if (call.mockOutcome) {
     const m = String(call.mockOutcome);
     if (m === "Lead Captured") return "Lead Captured";
@@ -181,6 +194,9 @@ export const OUTCOME_BADGE_STYLES: Record<CallOutcomeBadge, string> = {
   Voice: "bg-slate-100 text-slate-600 ring-slate-200",
   Voicemail: "bg-slate-100 text-slate-600 ring-slate-200",
   Spam: "bg-rose-50 text-rose-700 ring-rose-200",
+  "Spam Likely": "bg-rose-50 text-rose-700 ring-rose-200",
+  Solicitor: "bg-amber-50 text-amber-900 ring-amber-200",
+  "Needs attention": "bg-rose-50 text-rose-900 ring-rose-300",
   "No Action": "bg-slate-100 text-slate-600 ring-slate-200",
   "No Answer": "bg-slate-100 text-slate-600 ring-slate-200",
 };
@@ -188,12 +204,16 @@ export const OUTCOME_BADGE_STYLES: Record<CallOutcomeBadge, string> = {
 export function filterMatchesOutcome(filter: CallListFilter, call: CallRowLike): boolean {
   if (filter === "all") return true;
   const badge = deriveCallOutcomeBadge(call);
+  if (filter === "attention") return badge === "Needs attention";
   if (filter === "leads")
     return badge === "New Lead" || badge === "Lead Captured";
   if (filter === "appointments") return badge === "Appointment Booked";
   if (filter === "messages")
     return badge === "Message Taken" || badge === "Callback Requested";
-  if (filter === "transferred") return badge === "Transferred";
+  if (filter === "transferred")
+    return badge === "Transferred" || badge === "Transfer Failed";
+  if (filter === "emergencies") return badge === "Emergency";
+  if (filter === "spam") return badge === "Spam" || badge === "Spam Likely" || badge === "Solicitor";
   if (filter === "voicemails") return badge === "Voicemail";
   if (filter === "no_answer") return badge === "No Answer" || badge === "No Action";
   return true;

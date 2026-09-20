@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { initiateOutboundCall } from "@/lib/voice/call-service";
+import { projectCallListFields } from "@/lib/voice/calls/list-projection";
 
 function rangeStart(dateRange: string): Date | null {
   const now = new Date();
@@ -35,12 +36,24 @@ function applyListFilter(where: Record<string, unknown>, filter: string): void {
       { outcome: { contains: "callback", mode: "insensitive" } },
       { outcome: { contains: "follow_up", mode: "insensitive" } },
     ];
-  } else if (filter === "booked") {
+  } else if (filter === "appointments" || filter === "booked") {
     where.appointmentBooked = true;
   } else if (filter === "transferred") {
     where.transferred = true;
+  } else if (filter === "emergencies") {
+    where.OR = [
+      { outcome: { contains: "emergency", mode: "insensitive" } },
+      { metadata: { path: ["voiceV3Analytics", "outcome"], equals: "EMERGENCY_ESCALATED" } },
+    ];
+  } else if (filter === "attention") {
+    where.metadata = { path: ["voiceV3Analytics", "actionRequired"], equals: true };
   } else if (filter === "spam") {
-    where.outcome = { contains: "spam", mode: "insensitive" };
+    where.OR = [
+      { outcome: { contains: "spam", mode: "insensitive" } },
+      { outcome: { contains: "solicit", mode: "insensitive" } },
+      { metadata: { path: ["voiceV3Analytics", "outcome"], equals: "SPAM" } },
+      { metadata: { path: ["voiceV3Analytics", "outcome"], equals: "SOLICITOR" } },
+    ];
   } else if (filter === "no_action") {
     where.AND = [
       { appointmentBooked: false },
@@ -225,6 +238,12 @@ export async function GET(request: Request) {
           ? [contact.firstName, contact.lastName].filter(Boolean).join(" ")
           : null;
         const recordingId = c.recordings?.[0]?.id ?? null;
+        const projected = projectCallListFields(c);
+        const meta =
+          c.metadata && typeof c.metadata === "object" && !Array.isArray(c.metadata)
+            ? (c.metadata as Record<string, unknown>)
+            : {};
+        const postCall = meta.voiceV3PostCall as Record<string, unknown> | undefined;
         return {
           id: c.id,
           direction: c.direction,
@@ -253,6 +272,12 @@ export async function GET(request: Request) {
           hasRecording: Boolean(recordingId),
           recordingId,
           hasTranscript: (c.transcripts?.length || 0) > 0,
+          reasonForCall: projected.reasonForCall,
+          needsAttention: projected.needsAttention,
+          v3Outcome: projected.v3Outcome,
+          spamLikely: projected.spamLikely,
+          solicitor: projected.solicitor,
+          postCallStatus: postCall?.pipelineCompletedAt ? "ready" : postCall ? "processing" : null,
         };
       }),
       analytics: metrics,

@@ -6,7 +6,10 @@ import { Input, Label } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { VoiceSubNav } from "@/components/voice/voice-subnav";
+import { KnowledgeGapsPanel } from "@/components/voice/knowledge/knowledge-gaps-panel";
+import { cn } from "@/lib/utils";
 import { Plus, RefreshCw, Search, Trash2, Upload } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 type Source = {
@@ -26,7 +29,13 @@ type KbDetail = {
   sources: Source[];
 };
 
+type TabId = "bases" | "gaps";
+
 export default function VoiceKnowledgePage() {
+  const searchParams = useSearchParams();
+  const [tab, setTab] = useState<TabId>(() =>
+    searchParams.get("tab") === "gaps" ? "gaps" : "bases",
+  );
   const [rows, setRows] = useState<Array<{ id: string; name: string; status: string }>>([]);
   const [name, setName] = useState("Business FAQ");
   const [selectedId, setSelectedId] = useState("");
@@ -55,7 +64,13 @@ export default function VoiceKnowledgePage() {
       });
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    setTab(searchParams.get("tab") === "gaps" ? "gaps" : "bases");
+  }, [searchParams]);
+
+  useEffect(() => {
+    load();
+  }, []);
 
   async function create() {
     const res = await fetch("/api/voice/knowledge", {
@@ -145,6 +160,35 @@ export default function VoiceKnowledgePage() {
     <div>
       <PageHeader title="Knowledge bases" description="Documents, FAQs, and structured facts for agent retrieval." />
       <VoiceSubNav />
+      <div className="mb-6 flex gap-6 border-b border-border">
+        {(
+          [
+            { id: "bases" as TabId, label: "Knowledge bases" },
+            { id: "gaps" as TabId, label: "Unanswered questions" },
+          ] as const
+        ).map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setTab(t.id)}
+            className={cn(
+              "pb-3 text-sm font-medium",
+              tab === t.id
+                ? "border-b-2 border-primary text-primary"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "gaps" ? (
+        <KnowledgeGapsPanel />
+      ) : null}
+
+      {tab === "bases" ? (
+      <>
       <Card className="mb-6 flex flex-wrap items-end gap-3 p-5">
         <div className="flex-1">
           <Label>Name</Label>
@@ -299,6 +343,8 @@ export default function VoiceKnowledgePage() {
           </Card>
         </div>
       )}
+      </>
+      ) : null}
     </div>
   );
 }

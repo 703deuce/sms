@@ -34,7 +34,13 @@ export function compileAfterHoursNotificationsFromWizard(
       enabled: true,
     }));
 
+  const primaryEmail = recipients.find((r) => r.emailEnabled && r.email)?.email ?? null;
+
   return {
+    dailyDigest: {
+      enabled: Boolean(wizard.afterHoursDailySummaryEnabled),
+      recipientEmail: wizard.afterHoursDailySummaryEmail?.trim() || primaryEmail,
+    },
     events: {
       "callback.requested": eventFlags(wizard, "callback.requested"),
       emergency: eventFlags(wizard, "emergency"),

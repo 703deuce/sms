@@ -4,29 +4,25 @@ import { CallOutcomeBadge } from "@/components/calls/call-outcome-badge";
 import { CallsMetrics } from "@/components/calls/calls-metrics";
 import {
   deriveCallOutcomeBadge,
+  filterMatchesOutcome,
   fmtCallDateTable,
   fmtCallDurationTable,
   fmtCallPhone,
   type CallListFilter,
 } from "@/lib/voice/calls/display";
-import {
-  MOCK_CALL_ROWS,
-  MOCK_CALLS_METRICS,
-  type MockCallRow,
-} from "@/lib/voice/calls/mock-data";
 import { cn } from "@/lib/utils";
 import {
   AudioWaveform,
-  Calendar,
   ChevronLeft,
   ChevronRight,
-  Download,
   MessageSquare,
   Search,
 } from "lucide-react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+
+type DateRangeKey = "today" | "7d" | "30d";
 
 type CallRow = {
   id: string;
@@ -39,15 +35,18 @@ type CallRow = {
   startedAt: string;
   contactName?: string | null;
   summary?: string | null;
+  reasonForCall?: string | null;
   appointmentBooked?: boolean;
   transferred?: boolean;
   voicemailDetected?: boolean;
   isLead?: boolean | null;
   leadScore?: number | null;
   hasRecording?: boolean;
-  recordingId?: string | null;
-  avatarUrl?: string;
-  mockOutcome?: string | null;
+  needsAttention?: boolean;
+  spamLikely?: boolean;
+  solicitor?: boolean;
+  v3Outcome?: string | null;
+  postCallStatus?: string | null;
 };
 
 type Analytics = {
@@ -62,94 +61,64 @@ type Analytics = {
 };
 
 const FILTERS: { id: CallListFilter; label: string }[] = [
-  { id: "all", label: "All Calls" },
-  { id: "leads", label: "Leads" },
+  { id: "all", label: "All" },
+  { id: "attention", label: "Needs attention" },
   { id: "appointments", label: "Appointments" },
   { id: "messages", label: "Messages" },
   { id: "transferred", label: "Transfers" },
+  { id: "emergencies", label: "Emergencies" },
+  { id: "spam", label: "Spam / solicitors" },
+  { id: "leads", label: "Leads" },
   { id: "voicemails", label: "Voicemails" },
-  { id: "no_answer", label: "No Answer" },
+  { id: "no_answer", label: "No answer" },
 ];
 
-function mockToRow(m: MockCallRow): CallRow {
-  return {
-    id: m.id,
-    direction: m.direction,
-    status: m.status,
-    outcome: m.outcome,
-    fromE164: m.fromE164,
-    toE164: m.toE164,
-    durationSeconds: m.durationSeconds,
-    startedAt: m.startedAt,
-    contactName: m.contactName,
-    summary: m.summary,
-    appointmentBooked: m.appointmentBooked,
-    transferred: m.transferred,
-    voicemailDetected: m.voicemailDetected,
-    isLead: m.isLead,
-    leadScore: m.leadScore,
-    hasRecording: m.hasRecording,
-    recordingId: m.recordingId,
-    avatarUrl: m.avatarUrl,
-    mockOutcome: m.outcome,
-  };
-}
-
-function filterRow(filter: CallListFilter, row: CallRow): boolean {
-  const badge = deriveCallOutcomeBadge({
-    outcome: row.outcome,
-    appointmentBooked: row.appointmentBooked,
-    transferred: row.transferred,
-    voicemailDetected: row.voicemailDetected,
-    isLead: row.isLead,
-    leadScore: row.leadScore,
-    status: row.status,
-    mockOutcome: row.mockOutcome,
-  });
-  if (filter === "all") return true;
-  if (filter === "leads") return badge === "New Lead" || badge === "Lead Captured";
-  if (filter === "appointments") return badge === "Appointment Booked";
-  if (filter === "messages") return badge === "Message Taken";
-  if (filter === "transferred") return badge === "Transferred";
-  if (filter === "voicemails") return badge === "Voicemail";
-  if (filter === "no_answer") return badge === "No Answer" || badge === "No Action";
-  return true;
-}
+const DATE_RANGES: { id: DateRangeKey; label: string }[] = [
+  { id: "today", label: "Today" },
+  { id: "7d", label: "Last 7 days" },
+  { id: "30d", label: "Last 30 days" },
+];
 
 function parseUrlFilter(raw: string | null): CallListFilter {
-  const valid: CallListFilter[] = [
-    "all",
-    "leads",
-    "appointments",
-    "messages",
-    "transferred",
-    "voicemails",
-    "no_answer",
-  ];
+  const valid = FILTERS.map((f) => f.id);
   if (raw && valid.includes(raw as CallListFilter)) return raw as CallListFilter;
   return "all";
 }
 
+function parseDateRange(raw: string | null): DateRangeKey {
+  if (raw === "today" || raw === "30d") return raw;
+  return "7d";
+}
+
 export default function VoiceCallsPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [apiRows, setApiRows] = useState<CallRow[]>([]);
   const [apiMetrics, setApiMetrics] = useState<Analytics | null>(null);
   const [filter, setFilter] = useState<CallListFilter>(() =>
     parseUrlFilter(searchParams.get("filter")),
   );
-  const [q, setQ] = useState("");
+  const [dateRange, setDateRange] = useState<DateRangeKey>(() =>
+    parseDateRange(searchParams.get("dateRange")),
+  );
+  const [q, setQ] = useState(searchParams.get("q") || "");
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const perPage = 10;
-  const useDemo = false;
 
   useEffect(() => {
     setFilter(parseUrlFilter(searchParams.get("filter")));
+    setDateRange(parseDateRange(searchParams.get("dateRange")));
   }, [searchParams]);
 
   useEffect(() => {
     setLoading(true);
-    const params = new URLSearchParams({ limit: "100", filter: "all", dateRange: "7d" });
+    const params = new URLSearchParams({
+      limit: "200",
+      filter: filter === "voicemails" || filter === "no_answer" ? "all" : filter,
+      dateRange,
+    });
+    if (q.trim()) params.set("q", q.trim());
     fetch(`/api/voice/calls?${params}`)
       .then((r) => r.json())
       .then((j) => {
@@ -158,35 +127,46 @@ export default function VoiceCallsPage() {
       })
       .catch(() => undefined)
       .finally(() => setLoading(false));
-  }, []);
+  }, [filter, dateRange, q]);
+
+  function syncUrl(next: { filter?: CallListFilter; dateRange?: DateRangeKey; q?: string }) {
+    const params = new URLSearchParams();
+    const f = next.filter ?? filter;
+    const d = next.dateRange ?? dateRange;
+    const query = next.q ?? q;
+    if (f !== "all") params.set("filter", f);
+    if (d !== "7d") params.set("dateRange", d);
+    if (query.trim()) params.set("q", query.trim());
+    const qs = params.toString();
+    router.replace(qs ? `/voice/calls?${qs}` : "/voice/calls", { scroll: false });
+  }
 
   const allRows = useMemo(() => {
-    const source = useDemo ? MOCK_CALL_ROWS.map(mockToRow) : apiRows;
     const needle = q.trim().toLowerCase();
-    return source.filter((row) => {
-      if (!filterRow(filter, row)) return false;
+    return apiRows.filter((row) => {
+      if (!filterMatchesOutcome(filter, row)) return false;
       if (!needle) return true;
       const phone = row.direction === "INBOUND" ? row.fromE164 : row.toE164;
       return (
         row.contactName?.toLowerCase().includes(needle) ||
         phone.includes(needle) ||
-        row.summary?.toLowerCase().includes(needle)
+        row.summary?.toLowerCase().includes(needle) ||
+        row.reasonForCall?.toLowerCase().includes(needle)
       );
     });
-  }, [apiRows, useDemo, filter, q]);
+  }, [apiRows, filter, q]);
 
-  const metrics = useDemo
-    ? MOCK_CALLS_METRICS
-    : apiMetrics ?? {
-        answered: 0,
-        leads: 0,
-        appointments: 0,
-        talkTimeSeconds: 0,
-        answeredChangePct: null,
-        leadsChangePct: null,
-        appointmentsChangePct: null,
-        talkTimeChangePct: null,
-      };
+  const metrics =
+    apiMetrics ?? {
+      answered: 0,
+      leads: 0,
+      appointments: 0,
+      talkTimeSeconds: 0,
+      answeredChangePct: null,
+      leadsChangePct: null,
+      appointmentsChangePct: null,
+      talkTimeChangePct: null,
+    };
 
   const totalPages = Math.max(1, Math.ceil(allRows.length / perPage));
   const pageRows = allRows.slice((page - 1) * perPage, page * perPage);
@@ -201,7 +181,7 @@ export default function VoiceCallsPage() {
       <div className="mb-6">
         <h1 className="font-display text-[28px] font-semibold tracking-tight text-[#111827]">Calls</h1>
         <p className="mt-1 text-sm text-[#6b7280]">
-          Track and manage all calls handled by your AI receptionist.
+          After-hours and receptionist calls with outcomes, summaries, and recordings.
         </p>
       </div>
 
@@ -212,34 +192,36 @@ export default function VoiceCallsPage() {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]" />
           <input
             type="search"
-            placeholder="Search calls..."
+            placeholder="Search calls…"
             value={q}
             onChange={(e) => {
               setPage(1);
               setQ(e.target.value);
+              syncUrl({ q: e.target.value });
             }}
             className="h-10 w-full rounded-lg border border-[#e5e7eb] bg-white pl-9 pr-3 text-sm shadow-sm placeholder:text-[#9ca3af] focus:border-[#6366f1] focus:outline-none focus:ring-2 focus:ring-[#6366f1]/20"
           />
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#e5e7eb] bg-white px-3 text-sm text-[#374151] shadow-sm"
+        <label className="inline-flex items-center gap-2 text-sm text-[#374151]">
+          <span className="text-[#6b7280]">Range</span>
+          <select
+            value={dateRange}
+            onChange={(e) => {
+              const d = e.target.value as DateRangeKey;
+              setPage(1);
+              setDateRange(d);
+              syncUrl({ dateRange: d });
+            }}
+            className="h-10 rounded-lg border border-[#e5e7eb] bg-white px-3 shadow-sm"
           >
-            <Calendar className="h-4 w-4 text-[#6b7280]" />
-            Mar 12 – Mar 18, 2024
-          </button>
-          <button
-            type="button"
-            className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#e5e7eb] bg-white px-3 text-sm font-medium text-[#374151] shadow-sm hover:bg-[#f9fafb]"
-          >
-            <Download className="h-4 w-4" />
-            Export
-          </button>
-        </div>
+            {DATE_RANGES.map((r) => (
+              <option key={r.id} value={r.id}>{r.label}</option>
+            ))}
+          </select>
+        </label>
       </div>
 
-      <div className="mb-4 flex flex-wrap gap-6 border-b border-[#e5e7eb]">
+      <div className="mb-4 flex flex-wrap gap-4 border-b border-[#e5e7eb]">
         {FILTERS.map((f) => (
           <button
             key={f.id}
@@ -247,6 +229,7 @@ export default function VoiceCallsPage() {
             onClick={() => {
               setPage(1);
               setFilter(f.id);
+              syncUrl({ filter: f.id });
             }}
             className={cn(
               "pb-3 text-sm font-medium transition",
@@ -261,16 +244,16 @@ export default function VoiceCallsPage() {
       </div>
 
       <div className="overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-sm">
-        <div className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_auto_auto_minmax(0,2fr)_auto] gap-4 border-b border-[#e5e7eb] bg-[#f9fafb] px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-[#6b7280]">
+        <div className="hidden gap-4 border-b border-[#e5e7eb] bg-[#f9fafb] px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-[#6b7280] md:grid md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto_auto_minmax(0,1.6fr)_auto]">
           <span>Caller</span>
-          <span>Call Date & Time</span>
+          <span>Time</span>
           <span>Duration</span>
           <span>Outcome</span>
-          <span>AI Summary</span>
-          <span className="w-24 text-right"> </span>
+          <span>Reason / summary</span>
+          <span className="w-20 text-right"> </span>
         </div>
 
-        {loading && !useDemo ? (
+        {loading ? (
           <div className="px-5 py-14 text-center text-sm text-[#6b7280]">Loading calls…</div>
         ) : pageRows.length === 0 ? (
           <div className="px-5 py-14 text-center text-sm text-[#6b7280]">
@@ -281,64 +264,52 @@ export default function VoiceCallsPage() {
             const callerPhone = c.direction === "INBOUND" ? c.fromE164 : c.toE164;
             const callerName = c.contactName?.trim() || "Unknown Caller";
             const dt = fmtCallDateTable(c.startedAt);
-            const outcome = deriveCallOutcomeBadge({
-              outcome: c.outcome,
-              appointmentBooked: c.appointmentBooked,
-              transferred: c.transferred,
-              voicemailDetected: c.voicemailDetected,
-              isLead: c.isLead,
-              leadScore: c.leadScore,
-              status: c.status,
-              mockOutcome: c.mockOutcome,
-            });
+            const outcome = deriveCallOutcomeBadge(c);
+            const reasonLine = c.reasonForCall || c.summary || "No summary yet.";
+            const processing = c.postCallStatus === "processing";
 
             return (
               <Link
                 key={c.id}
                 href={`/voice/calls/${c.id}`}
-                className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_auto_auto_minmax(0,2fr)_auto] items-center gap-4 border-b border-[#f3f4f6] px-5 py-4 transition hover:bg-[#fafafa] last:border-b-0"
+                className="block border-b border-[#f3f4f6] px-5 py-4 transition hover:bg-[#fafafa] last:border-b-0 md:grid md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto_auto_minmax(0,1.6fr)_auto] md:items-center md:gap-4"
               >
                 <div className="flex min-w-0 items-center gap-3">
-                  {c.avatarUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={c.avatarUrl}
-                      alt=""
-                      className="h-9 w-9 shrink-0 rounded-full bg-[#f3f4f6] object-cover ring-1 ring-[#e5e7eb]"
-                    />
-                  ) : (
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#eef2ff] text-xs font-semibold text-[#6366f1]">
-                      {callerName.slice(0, 1)}
-                    </div>
-                  )}
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#eef2ff] text-xs font-semibold text-[#6366f1]">
+                    {callerName.slice(0, 1)}
+                  </div>
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-[#111827]">{callerName}</p>
                     <p className="truncate text-xs text-[#6b7280]">{fmtCallPhone(callerPhone)}</p>
                   </div>
                 </div>
 
-                <div>
+                <div className="mt-2 md:mt-0">
                   <p className="text-sm text-[#111827]">{dt.date}</p>
                   <p className="text-xs text-[#6b7280]">{dt.time}</p>
                 </div>
 
-                <p className="text-sm tabular-nums text-[#374151]">
+                <p className="mt-1 text-sm tabular-nums text-[#374151] md:mt-0">
                   {fmtCallDurationTable(c.durationSeconds)}
                 </p>
 
-                <CallOutcomeBadge outcome={outcome} />
+                <div className="mt-2 md:mt-0">
+                  <CallOutcomeBadge outcome={outcome} />
+                </div>
 
-                <p className="line-clamp-2 text-sm leading-snug text-[#4b5563]">
-                  {c.summary || "No summary yet."}
+                <p className="mt-2 line-clamp-2 text-sm leading-snug text-[#4b5563] md:mt-0">
+                  {processing ? "Processing transcript and summary…" : reasonLine}
                 </p>
 
-                <div className="flex w-24 items-center justify-end gap-2">
-                  <span
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white text-[#6366f1]"
-                    title="Play recording"
-                  >
-                    <AudioWaveform className="h-4 w-4" />
-                  </span>
+                <div className="mt-3 flex items-center justify-end gap-2 md:mt-0">
+                  {c.hasRecording ? (
+                    <span
+                      className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white text-[#6366f1]"
+                      title="Recording available"
+                    >
+                      <AudioWaveform className="h-4 w-4" />
+                    </span>
+                  ) : null}
                   <button
                     type="button"
                     onClick={(e) => {
@@ -397,7 +368,6 @@ export default function VoiceCallsPage() {
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
-        <div className="text-sm text-[#6b7280]">Rows per page: 10</div>
       </div>
     </div>
   );

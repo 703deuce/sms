@@ -166,6 +166,24 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       if (!callId) throw new Error("callId required");
       return processVoiceV3CompletedCall(callId);
     }
+    case "voice_webhook_deliver": {
+      const { executeVoiceWebhookDeliverJob } = await import("@/lib/voice-v3/webhooks/delivery");
+      return executeVoiceWebhookDeliverJob(payload);
+    }
+    case "voice_after_hours_digest": {
+      const { sendAfterHoursDigestForWorkspace } = await import(
+        "@/lib/voice-v3/post-call/digest-email"
+      );
+      const workspaceId = String(payload.workspaceId || "");
+      if (!workspaceId) throw new Error("workspaceId required");
+      return sendAfterHoursDigestForWorkspace(workspaceId);
+    }
+    case "voice_after_hours_digest_scan": {
+      const { scanAndEnqueueAfterHoursDigests } = await import(
+        "@/lib/voice-v3/post-call/digest-scheduler"
+      );
+      return scanAndEnqueueAfterHoursDigests();
+    }
     case "mctb_worker_smoke": {
       const issuedAt = Date.parse(String(payload.issuedAt || ""));
       if (!issuedAt || Date.now() - issuedAt > 5 * 60 * 1000) {
@@ -1256,6 +1274,12 @@ export async function processDueJobs(limit = 25) {
     queueName: "maintenance",
     payload: { dayKey, frequency: "daily" },
     idempotencyKey: `notification-digest:daily:${dayKey}`,
+  });
+  await enqueueJob({
+    jobType: "voice_after_hours_digest_scan",
+    queueName: "maintenance",
+    payload: { dayKey },
+    idempotencyKey: `voice-after-hours-digest-scan:${dayKey}`,
   });
   await enqueueJob({
     jobType: "campaign_recurrence_tick",

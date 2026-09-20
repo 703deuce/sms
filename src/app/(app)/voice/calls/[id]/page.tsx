@@ -4,8 +4,10 @@ import { WaveformRecordingPlayer } from "@/components/calls/waveform-recording-p
 import {
   buildActionItems,
   buildCapturedFields,
+  deriveOutcomeBadges,
 } from "@/lib/voice/calls/detail";
-import { deriveOutcomeBadges, fmtCallDuration, fmtCallPhone } from "@/lib/voice/calls/display";
+import { deriveCallOutcomeBadge, fmtCallDuration, fmtCallPhone } from "@/lib/voice/calls/display";
+import { CallTranscript } from "@/components/voice/calls/call-transcript";
 import {
   getMockCallById,
   isDemoCallId,
@@ -14,14 +16,12 @@ import {
 } from "@/lib/voice/calls/mock-data";
 import { cn } from "@/lib/utils";
 import {
-  Bot,
   ChevronRight,
   Download,
   Link2,
   MoreHorizontal,
   Share2,
   Trash2,
-  User,
 } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -41,25 +41,6 @@ type CallInsight = {
   sentiment?: string | null;
 };
 
-function fmtSegmentTime(ms?: number | null) {
-  if (ms == null) return "0:00";
-  const total = Math.round(ms / 1000);
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
-
-function speakerLabel(speaker: string, agentName: string, callerName: string) {
-  const s = speaker.toLowerCase();
-  if (s.includes("agent") || s.includes("assistant") || s.includes("ai")) return agentName;
-  return callerName;
-}
-
-function isAgent(speaker: string) {
-  const s = speaker.toLowerCase();
-  return s.includes("agent") || s.includes("assistant") || s.includes("ai");
-}
-
 export default function VoiceCallDetailPage() {
   const params = useParams();
   const id = String(params.id || "");
@@ -67,6 +48,8 @@ export default function VoiceCallDetailPage() {
   const [data, setData] = useState<Record<string, unknown> | null>(null);
   const [apiLoaded, setApiLoaded] = useState(false);
   const [showTranscriptDetails, setShowTranscriptDetails] = useState(true);
+  const [blockBusy, setBlockBusy] = useState(false);
+  const [transcriptRetrying, setTranscriptRetrying] = useState(false);
   const demo = isDemoCallId(id);
   const mock = demo ? getMockCallById(id) : undefined;
 
@@ -171,19 +154,73 @@ export default function VoiceCallDetailPage() {
     insightCustomFields: insightCustom,
     insightSummary: insight?.summary,
   });
+  const voiceV3Analytics = (data?.voiceV3Analytics as Record<string, unknown> | undefined) || {};
   const outcomeBadges = deriveOutcomeBadges({
     outcome: call.outcome as string | null,
     appointmentBooked: Boolean(call.appointmentBooked),
     transferred: Boolean(call.transferred),
     voicemailDetected: Boolean(call.voicemailDetected),
+    needsAttention: voiceV3Analytics.actionRequired === true,
+    spamLikely: voiceV3Analytics.outcome === "SPAM",
+    solicitor: voiceV3Analytics.outcome === "SOLICITOR",
+    v3Outcome: typeof voiceV3Analytics.outcome === "string" ? voiceV3Analytics.outcome : null,
   });
   const voiceV3PostCall = (data?.voiceV3PostCall as Record<string, unknown> | undefined) || {};
   const voiceV3StructuredSummary = (data?.voiceV3StructuredSummary as Record<string, unknown> | undefined) || {};
   const postCallProcessing = Boolean(call.endedAt) && !voiceV3PostCall.pipelineCompletedAt;
+  const transcriptStatus =
+    (voiceV3PostCall.transcriptStatus as string | undefined) ||
+    ((data?.transcripts as Array<{ status?: string }>)?.[0]?.status ?? null);
   const summaryText =
     (voiceV3StructuredSummary.summary as string | undefined) ||
     insight?.summary ||
     "";
+
+  async function blockCaller() {
+    if (demo || blockBusy) return;
+    setBlockBusy(true);
+    try {
+      await fetch("/api/voice/blocked-callers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          callerE164: callerPhone,
+          reason: "Blocked from call detail",
+          sourceCallId: id,
+        }),
+      });
+    } finally {
+      setBlockBusy(false);
+    }
+  }
+
+  async function retryTranscript() {
+    if (demo || transcriptRetrying) return;
+    setTranscriptRetrying(true);
+    try {
+      await fetch(`/api/voice/calls/${id}/retry-transcript`, { method: "POST" });
+      const r = await fetch(`/api/voice/calls/${id}`);
+      const j = await r.json();
+      setData(j.data ?? null);
+    } finally {
+      setTranscriptRetrying(false);
+    }
+  }
+
+  const screeningOutcome =
+    typeof voiceV3Analytics.screeningOutcome === "string"
+      ? voiceV3Analytics.screeningOutcome
+      : null;
+  const primaryBadge = deriveCallOutcomeBadge({
+    outcome: call.outcome as string | null,
+    appointmentBooked: Boolean(call.appointmentBooked),
+    transferred: Boolean(call.transferred),
+    voicemailDetected: Boolean(call.voicemailDetected),
+    needsAttention: voiceV3Analytics.actionRequired === true,
+    spamLikely: voiceV3Analytics.outcome === "SPAM",
+    solicitor: voiceV3Analytics.outcome === "SOLICITOR",
+    v3Outcome: typeof voiceV3Analytics.outcome === "string" ? voiceV3Analytics.outcome : null,
+  });
 
   const actionItems = buildActionItems({
     call: {
@@ -245,12 +282,16 @@ export default function VoiceCallDetailPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            className="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2 text-sm font-medium text-[#374151] shadow-sm hover:bg-[#f9fafb]"
-          >
-            Transfer
-          </button>
+          {!demo && (primaryBadge === "Spam Likely" || primaryBadge === "Solicitor" || primaryBadge === "Spam") ? (
+            <button
+              type="button"
+              disabled={blockBusy}
+              onClick={blockCaller}
+              className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-900 shadow-sm hover:bg-rose-100 disabled:opacity-60"
+            >
+              {blockBusy ? "Blocking…" : "Block caller"}
+            </button>
+          ) : null}
           <button
             type="button"
             className="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2 text-sm font-medium text-[#374151] shadow-sm hover:bg-[#f9fafb]"
@@ -358,13 +399,35 @@ export default function VoiceCallDetailPage() {
                 </ul>
               </div>
 
+              {screeningOutcome ? (
+                <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
+                  <h2 className="text-sm font-semibold text-[#111827]">Screening</h2>
+                  <p className="mt-2 text-sm text-[#374151]">
+                    Outcome: <span className="font-medium">{screeningOutcome}</span>
+                  </p>
+                </div>
+              ) : null}
+
               <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
                 <h2 className="text-sm font-semibold text-[#111827]">AI Summary</h2>
+                {voiceV3StructuredSummary.headline ? (
+                  <p className="mt-2 text-sm font-medium text-[#111827]">
+                    {String(voiceV3StructuredSummary.headline)}
+                  </p>
+                ) : null}
                 <p className="mt-3 text-sm leading-relaxed text-[#374151]">
                   {summaryText ||
                     mockCall?.summary ||
                     "No AI summary available for this call."}
                 </p>
+                {Array.isArray(voiceV3StructuredSummary.actionItems) &&
+                voiceV3StructuredSummary.actionItems.length > 0 ? (
+                  <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-[#374151]">
+                    {(voiceV3StructuredSummary.actionItems as string[]).map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                ) : null}
               </div>
 
               <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
@@ -397,25 +460,21 @@ export default function VoiceCallDetailPage() {
                     Show details
                   </label>
                 </div>
-                <div className="mt-4 space-y-4">
-                  {segments.slice(0, 4).map((seg) => (
-                    <div key={seg.id} className="flex gap-3">
-                      {showTranscriptDetails ? (
-                        <span className="w-10 shrink-0 text-xs tabular-nums text-[#9ca3af]">
-                          {fmtSegmentTime(seg.startMs)}
-                        </span>
-                      ) : null}
-                      <div>
-                        <p className="text-xs font-semibold text-[#6b7280]">
-                          {speakerLabel(seg.speaker, agentName, callerName)}
-                        </p>
-                        <p className="mt-1 text-sm leading-relaxed text-[#374151]">{seg.text}</p>
-                      </div>
-                    </div>
-                  ))}
-                  {segments.length > 4 ? (
-                    <button type="button" className="text-sm font-medium text-[#6366f1] hover:underline">
-                      See more
+                <div className="mt-4">
+                  <CallTranscript
+                    segments={segments.slice(0, showTranscriptDetails ? segments.length : 4)}
+                    agentName={agentName}
+                    callerName={callerName}
+                    status={transcriptStatus}
+                    onRetry={!demo ? retryTranscript : undefined}
+                  />
+                  {segments.length > 4 && !showTranscriptDetails ? (
+                    <button
+                      type="button"
+                      className="mt-3 text-sm font-medium text-[#6366f1] hover:underline"
+                      onClick={() => setTab("transcript")}
+                    >
+                      See full transcript
                     </button>
                   ) : null}
                 </div>
@@ -423,29 +482,14 @@ export default function VoiceCallDetailPage() {
             </>
           ) : (
             <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
-              <div className="max-h-[32rem] space-y-4 overflow-auto">
-                {segments.map((seg) => {
-                  const agent = isAgent(seg.speaker);
-                  return (
-                    <div key={seg.id} className="flex gap-3">
-                      <div
-                        className={cn(
-                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
-                          agent ? "bg-[#eef2ff] text-[#6366f1]" : "bg-[#f3f4f6] text-[#6b7280]",
-                        )}
-                      >
-                        {agent ? <Bot className="h-4 w-4" /> : <User className="h-4 w-4" />}
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-[#6b7280]">
-                          {fmtSegmentTime(seg.startMs)} ·{" "}
-                          {speakerLabel(seg.speaker, agentName, callerName)}
-                        </p>
-                        <p className="mt-1 text-sm leading-relaxed text-[#374151]">{seg.text}</p>
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="max-h-[32rem] overflow-auto">
+                <CallTranscript
+                  segments={segments}
+                  agentName={agentName}
+                  callerName={callerName}
+                  status={transcriptStatus}
+                  onRetry={!demo ? retryTranscript : undefined}
+                />
               </div>
             </div>
           )}
@@ -497,7 +541,16 @@ export default function VoiceCallDetailPage() {
           <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
             <h2 className="text-sm font-semibold text-[#111827]">Activity Feed</h2>
             <ol className="mt-4 space-y-0">
-              {(demo ? MOCK_ACTIVITY_EVENTS : MOCK_ACTIVITY_EVENTS).map((e, idx, arr) => (
+              {(demo
+                ? MOCK_ACTIVITY_EVENTS
+                : ((data?.events as Array<{ id: string; eventType: string; createdAt: string }>) || []).map(
+                    (e) => ({
+                      id: e.id,
+                      label: e.eventType.replace(/_/g, " "),
+                      at: new Date(e.createdAt).toLocaleString(),
+                    }),
+                  )
+              ).map((e, idx, arr) => (
                 <li key={e.id} className="flex gap-3">
                   <div className="flex flex-col items-center">
                     <span className="mt-1.5 h-2 w-2 rounded-full bg-[#6366f1]" />

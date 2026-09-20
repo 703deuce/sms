@@ -67,6 +67,34 @@ export function AfterHoursNotificationsEditor({
 
   return (
     <div className="space-y-4">
+      <div className="rounded-lg border border-border p-4">
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={Boolean(state.afterHoursDailySummaryEnabled)}
+            onChange={(e) => patch({ afterHoursDailySummaryEnabled: e.target.checked })}
+          />
+          <span>
+            <span className="font-medium">Daily after-hours summary</span>
+            <span className="mt-1 block text-xs text-muted-foreground">
+              Send one digest email with overnight call totals and items needing attention.
+            </span>
+          </span>
+        </label>
+        {state.afterHoursDailySummaryEnabled ? (
+          <label className="mt-3 block text-xs text-muted-foreground">
+            Send to
+            <Input
+              className="mt-1"
+              type="email"
+              value={state.afterHoursDailySummaryEmail ?? ""}
+              onChange={(e) => patch({ afterHoursDailySummaryEmail: e.target.value })}
+              placeholder="owner@business.com"
+            />
+          </label>
+        ) : null}
+      </div>
       <div>
         <h4 className="text-sm font-semibold">Send notifications for</h4>
         <ul className="mt-2 space-y-2">

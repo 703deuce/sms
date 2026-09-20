@@ -413,6 +413,19 @@ export function PhoneStep({
                 <option value="inbound_only">Inbound only</option>
                 <option value="off">Off</option>
               </select>
+              <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+                Record calls handled by your after-hours receptionist. You are responsible for using
+                call recording in accordance with applicable laws.
+              </p>
+            </label>
+            <label className="mt-3 flex items-start gap-2 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={Boolean(state.recordingDisclosureEnabled)}
+                onChange={(e) => patch({ recordingDisclosureEnabled: e.target.checked })}
+              />
+              <span>Amy should tell callers this call may be recorded</span>
             </label>
           </div>
         </div>

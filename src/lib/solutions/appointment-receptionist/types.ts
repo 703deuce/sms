@@ -264,6 +264,11 @@ export type AppointmentReceptionistWizardState = {
     emailEnabled?: boolean;
     enabled?: boolean;
   }> | null;
+  /** Email a daily after-hours summary when the business opens (digest job). */
+  afterHoursDailySummaryEnabled?: boolean | null;
+  afterHoursDailySummaryEmail?: string | null;
+  /** When enabled, Amy should disclose that calls may be recorded. */
+  recordingDisclosureEnabled?: boolean | null;
   salesSolicitationEnabled?: boolean | null;
   salesSolicitationAction?:
     | import("@/lib/voice-receptionist-wizard/after-hours-handling-types").VoiceV2SalesSolicitationAction
