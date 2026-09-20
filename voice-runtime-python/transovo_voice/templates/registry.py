@@ -28,7 +28,7 @@ class AgentTemplateRecord:
     status: TemplateStatus
 
 
-LIVEKIT_SDK = "livekit-agents[openai]>=1.2,<2"
+LIVEKIT_SDK = "livekit-agents[openai]~=1.8"
 IMPORT_DATE = "2026-08-21"
 
 AGENT_TEMPLATES: dict[str, AgentTemplateRecord] = {

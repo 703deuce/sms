@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -209,6 +210,21 @@ def build_livekit_tools(
             else:
                 args = {}
 
+            fc_meta = getattr(context, "function_call", None)
+            function_call_id = None
+            if fc_meta is not None:
+                function_call_id = getattr(fc_meta, "call_id", None) or getattr(fc_meta, "id", None)
+            tool_started = time.perf_counter()
+            log_event(
+                "VOICE_V3_LIVEKIT_FUNCTION_TOOL_STARTED",
+                call_id=_client.ctx.call_id or None,
+                workspace_id=_client.ctx.workspace_id or None,
+                agent_id=_client.ctx.agent_id or None,
+                extra={
+                    "toolName": _tool_name,
+                    "functionCallId": str(function_call_id) if function_call_id else None,
+                },
+            )
             try:
                 if _tool_name == COLLECT_INTAKE_FIELD_TOOL or _tool_name.startswith(
                     _SET_INTAKE_PREFIX,
@@ -228,15 +244,53 @@ def build_livekit_tools(
                         client=_client,
                         telephony=_telephony if _tool_name == "transfer_call" else None,
                     )
+                log_event(
+                    "VOICE_V3_LIVEKIT_FUNCTION_TOOL_COMPLETED",
+                    call_id=_client.ctx.call_id or None,
+                    workspace_id=_client.ctx.workspace_id or None,
+                    agent_id=_client.ctx.agent_id or None,
+                    extra={
+                        "toolName": _tool_name,
+                        "functionCallId": str(function_call_id) if function_call_id else None,
+                        "durationMs": int((time.perf_counter() - tool_started) * 1000),
+                        "ok": bool(result.get("ok")),
+                        "status": result.get("status"),
+                        "operationId": result.get("operationId") or result.get("correlationId"),
+                    },
+                )
             except asyncio.CancelledError:
                 log_event(
                     "voice_v3_tool_cancelled",
                     extra={"tool": _tool_name},
                 )
                 raise
-            except ToolError:
+            except ToolError as exc:
+                log_event(
+                    "VOICE_V3_LIVEKIT_FUNCTION_TOOL_FAILED",
+                    call_id=_client.ctx.call_id or None,
+                    workspace_id=_client.ctx.workspace_id or None,
+                    agent_id=_client.ctx.agent_id or None,
+                    extra={
+                        "toolName": _tool_name,
+                        "functionCallId": str(function_call_id) if function_call_id else None,
+                        "durationMs": int((time.perf_counter() - tool_started) * 1000),
+                        "errorType": type(exc).__name__,
+                    },
+                )
                 raise
-            except Exception:
+            except Exception as exc:
+                log_event(
+                    "VOICE_V3_LIVEKIT_FUNCTION_TOOL_FAILED",
+                    call_id=_client.ctx.call_id or None,
+                    workspace_id=_client.ctx.workspace_id or None,
+                    agent_id=_client.ctx.agent_id or None,
+                    extra={
+                        "toolName": _tool_name,
+                        "functionCallId": str(function_call_id) if function_call_id else None,
+                        "durationMs": int((time.perf_counter() - tool_started) * 1000),
+                        "errorType": type(exc).__name__,
+                    },
+                )
                 logger.exception("voice_v3_tool_unexpected_error tool=%s", _tool_name)
                 raise ToolError("Tool execution failed. Try again or offer callback.") from None
 
