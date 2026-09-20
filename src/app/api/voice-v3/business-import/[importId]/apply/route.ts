@@ -9,6 +9,7 @@ import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appoint
 import { updateVoiceAgentDraft } from "@/lib/voice/agent-service";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import { emitBusinessImportEvent } from "@/lib/voice-v3/business-import/events";
+import { upsertAppointmentReceptionistSetup } from "@/lib/solutions/appointment-receptionist/save-setup";
 
 export async function POST(
   request: Request,
@@ -59,12 +60,20 @@ export async function POST(
       ...((prevConfig.advanced || {}) as Record<string, unknown>),
       appointmentReceptionistWizard: nextState,
     };
+    const draftConfig = {
+      ...prevConfig,
+      advanced,
+    };
     await updateVoiceAgentDraft(auth.workspaceId, row.voiceAgentId, {
-      draftConfig: {
-        ...prevConfig,
-        advanced,
-      },
+      draftConfig,
     });
+
+    await upsertAppointmentReceptionistSetup({
+      workspaceId: auth.workspaceId,
+      agentId: row.voiceAgentId,
+      state: { ...nextState, agentId: row.voiceAgentId },
+      published: false,
+    }).catch(() => undefined);
 
     await prisma.voiceV3BusinessKnowledgeImport.update({
       where: { id: importId },

@@ -4,7 +4,7 @@ import { getPrisma } from "@/lib/db";
 import {
   upsertBusinessKnowledgeSource,
 } from "@/lib/voice-v3/business-import/service";
-import type { GoogleMapsSearchResult } from "@/lib/scrapingdog/client";
+import type { GoogleMapsSearchResult } from "@/lib/voice-v3/business-import/google-types";
 
 export async function GET(request: Request) {
   try {

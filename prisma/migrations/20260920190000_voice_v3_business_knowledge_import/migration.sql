@@ -57,13 +57,13 @@ CREATE INDEX "voice_v3_business_knowledge_imports_voiceAgentId_status_idx" ON "v
 ALTER TABLE "voice_v3_business_knowledge_sources" ADD CONSTRAINT "voice_v3_business_knowledge_sources_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "voice_v3_business_knowledge_sources" ADD CONSTRAINT "voice_v3_business_knowledge_sources_voiceAgentId_fkey" FOREIGN KEY ("voiceAgentId") REFERENCES "VoiceAgent"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "voice_v3_business_knowledge_sources" ADD CONSTRAINT "voice_v3_business_knowledge_sources_voiceAgentId_fkey" FOREIGN KEY ("voiceAgentId") REFERENCES "voice_agents"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "voice_v3_business_knowledge_imports" ADD CONSTRAINT "voice_v3_business_knowledge_imports_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "voice_v3_business_knowledge_imports" ADD CONSTRAINT "voice_v3_business_knowledge_imports_voiceAgentId_fkey" FOREIGN KEY ("voiceAgentId") REFERENCES "VoiceAgent"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "voice_v3_business_knowledge_imports" ADD CONSTRAINT "voice_v3_business_knowledge_imports_voiceAgentId_fkey" FOREIGN KEY ("voiceAgentId") REFERENCES "voice_agents"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "voice_v3_business_knowledge_imports" ADD CONSTRAINT "voice_v3_business_knowledge_imports_sourceRecordId_fkey" FOREIGN KEY ("sourceRecordId") REFERENCES "voice_v3_business_knowledge_sources"("id") ON DELETE SET NULL ON UPDATE CASCADE;

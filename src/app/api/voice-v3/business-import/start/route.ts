@@ -21,6 +21,12 @@ export async function POST(request: Request) {
       trigger: body.trigger || "refresh",
       sourceTypes: body.sourceTypes,
     });
+    try {
+      const { scheduleJobDrain } = await import("@/lib/jobs/inprocess-worker");
+      scheduleJobDrain();
+    } catch {
+      // worker optional
+    }
     return NextResponse.json({ data: { importId: row.id, status: row.status } });
   } catch (err) {
     return jsonError(err, 500);

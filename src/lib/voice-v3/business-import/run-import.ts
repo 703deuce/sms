@@ -10,6 +10,8 @@ import type { BusinessExtractionCandidate, BusinessImportTelemetry } from "./typ
 import { emitBusinessImportEvent } from "./events";
 import { loadAppointmentReceptionistSetup } from "@/lib/solutions/appointment-receptionist/save-setup";
 import { createDefaultWizardState } from "@/lib/solutions/appointment-receptionist/defaults";
+import { allWebsitePagesUnchanged } from "./page-hash";
+import type { ImportPageSnapshot } from "./types";
 
 export async function runBusinessKnowledgeImport(importId: string): Promise<void> {
   const prisma = getPrisma();
@@ -112,9 +114,36 @@ export async function runBusinessKnowledgeImport(importId: string): Promise<void
     });
 
     const googleText = googleSnapshot ? JSON.stringify(googleSnapshot).slice(0, 8000) : "";
-    const { candidate, llmCalls } = await extractBusinessCandidatesLLM(pages, googleText, merged);
-    telemetry.llmCalls += llmCalls;
-    merged = candidate;
+
+    const previousImport = await prisma.voiceV3BusinessKnowledgeImport.findFirst({
+      where: {
+        voiceAgentId: row.voiceAgentId,
+        status: { in: ["REVIEW_READY", "APPLIED"] },
+        NOT: { id: importId },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    const previousPages = (previousImport?.pagesJson || null) as ImportPageSnapshot[] | null;
+    const skipLlm =
+      pages.length > 0 &&
+      allWebsitePagesUnchanged(pages, previousPages) &&
+      previousImport?.candidatesJson;
+
+    if (skipLlm && previousImport?.candidatesJson) {
+      merged = {
+        ...(previousImport.candidatesJson as BusinessExtractionCandidate),
+        ...merged,
+        business: {
+          ...((previousImport.candidatesJson as BusinessExtractionCandidate).business || {}),
+          ...(merged.business || {}),
+        },
+      };
+      telemetry.llmCalls = 0;
+    } else {
+      const { candidate, llmCalls } = await extractBusinessCandidatesLLM(pages, googleText, merged);
+      telemetry.llmCalls += llmCalls;
+      merged = candidate;
+    }
 
     emitBusinessImportEvent("VOICE_V3_BUSINESS_IMPORT_EXTRACTION_COMPLETED", row.workspaceId, {
       importId,

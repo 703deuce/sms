@@ -5,8 +5,8 @@ import {
   getGoogleMapsPlaceDetails,
   isScrapingDogConfigured,
   searchGoogleMapsBusinesses,
-  type GoogleMapsSearchResult,
 } from "@/lib/scrapingdog/client";
+import type { GoogleMapsSearchResult } from "@/lib/voice-v3/business-import/google-types";
 import { normalizeWebsiteInput } from "./url-normalize";
 import type { BusinessImportTrigger } from "./types";
 

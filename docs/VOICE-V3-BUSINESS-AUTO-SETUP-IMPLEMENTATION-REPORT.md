@@ -78,15 +78,22 @@ Approved items use `owner_approved` / `complete` status → existing `buildBusin
 
 ```bash
 npx tsx scripts/test-voice-v3-business-import-diff.ts
+npx tsx scripts/test-voice-v3-business-import-scrapingdog.ts
+DEV_AUTH_BYPASS=1 DEV_AUTH_BYPASS_EMAIL=<user-with-workspace> npx tsx scripts/capture-voice-v3-business-auto-setup.ts
+bash scripts/audit-coolify-scrapingdog-env.sh  # requires COOLIFY_SSH_KEY
 ```
+
+## Production / ops
+
+- **Migration:** `20260920190000_voice_v3_business_knowledge_import` (FK → `voice_agents`). Apply via `npm run db:deploy`.
+- **Coolify:** `SCRAPINGDOG_API_KEY` present on web + scheduler containers (audit script lists env names only).
 
 ## Not completed in this pass (follow-up)
 
-- Full browser certification (§69–80), PSTN knowledge calls (§85–88).
-- Deletion detection (§31), content-hash skip for unchanged pages on re-import (§32).
-- Persist apply into `SolutionSetup.configJson.wizard` (draft-only apply today; full save path still via wizard Save).
-- Wire `service_area` default knowledge item in wizard defaults.
-- Production deployment / PSTN call IDs.
+- Full import → apply → wizard save browser certification with live agent draft, PSTN knowledge calls (§85–88).
+- Deletion detection (§31).
+- Persist apply into `SolutionSetup.configJson.wizard` on every path (draft apply + `upsertAppointmentReceptionistSetup` on apply route today).
+- Production deploy of branch (transovo.ai health SHA until merged).
 
 ## Hard stops honored
 

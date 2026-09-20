@@ -3,12 +3,32 @@
  * Env: SCRAPINGDOG_API_KEY — align with Local SEO Express when that code lands in-repo.
  */
 
+import type { GoogleMapsSearchResult } from "@/lib/voice-v3/business-import/google-types";
+
+export type { GoogleMapsSearchResult };
+
 const BASE = "https://api.scrapingdog.com";
 const DEFAULT_TIMEOUT_MS = 25_000;
 
+/** Resolve ScrapingDog key — production may use SCRAPINGDOG_API_KEY (canonical). */
 export function getScrapingDogApiKey(): string | null {
-  const key = process.env.SCRAPINGDOG_API_KEY?.trim();
-  return key || null;
+  const candidates = [
+    process.env.SCRAPINGDOG_API_KEY,
+    process.env.SCRAPING_DOG_API_KEY,
+    process.env.SCRAPINGDOG_KEY,
+  ];
+  for (const raw of candidates) {
+    const key = raw?.trim();
+    if (key) return key;
+  }
+  return null;
+}
+
+export function scrapingDogEnvKeyName(): string | null {
+  if (process.env.SCRAPINGDOG_API_KEY?.trim()) return "SCRAPINGDOG_API_KEY";
+  if (process.env.SCRAPING_DOG_API_KEY?.trim()) return "SCRAPING_DOG_API_KEY";
+  if (process.env.SCRAPINGDOG_KEY?.trim()) return "SCRAPINGDOG_KEY";
+  return null;
 }
 
 export function isScrapingDogConfigured(): boolean {
@@ -41,19 +61,6 @@ export async function scrapingDogGet(
   return res.json();
 }
 
-export type GoogleMapsSearchResult = {
-  title?: string;
-  address?: string;
-  phone?: string;
-  website?: string;
-  rating?: number;
-  reviews?: number;
-  place_id?: string;
-  data_id?: string;
-  ludocid?: string;
-  hours?: unknown;
-};
-
 function normalizeSearchRow(row: Record<string, unknown>): GoogleMapsSearchResult {
   return {
     title: typeof row.title === "string" ? row.title : typeof row.name === "string" ? row.name : undefined,
@@ -81,16 +88,28 @@ export async function searchGoogleMapsBusinesses(query: string, opts?: {
     location: opts?.location,
     type: "search",
   });
+  const obj = raw as Record<string, unknown>;
   const rows = Array.isArray(raw)
     ? raw
-    : Array.isArray((raw as { results?: unknown }).results)
-      ? (raw as { results: unknown[] }).results
-      : Array.isArray((raw as { data?: unknown }).data)
-        ? (raw as { data: unknown[] }).data
-        : [];
+    : Array.isArray(obj.search_results)
+      ? obj.search_results
+      : Array.isArray(obj.results)
+        ? obj.results
+        : Array.isArray(obj.data)
+          ? obj.data
+          : [];
   return rows
     .filter((r): r is Record<string, unknown> => r !== null && typeof r === "object")
-    .map(normalizeSearchRow);
+    .map((row) => {
+      const normalized = normalizeSearchRow(row);
+      if (!normalized.ludocid && typeof row.data_cid === "string") {
+        normalized.ludocid = row.data_cid;
+      }
+      if (!normalized.hours && typeof row.open_state === "string") {
+        normalized.hours = row.open_state;
+      }
+      return normalized;
+    });
 }
 
 export async function getGoogleMapsPlaceDetails(identifier: {
