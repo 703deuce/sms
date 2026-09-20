@@ -83,6 +83,24 @@ Cloud agent **cannot** place PSTN; user/operator must call.
 
 ---
 
+## Incident: “Cannot be completed as dialed” (2026-09-20 ~02:15 UTC)
+
+| Evidence | Value |
+|----------|--------|
+| Telnyx SIP CDR | `hangup=UNALLOCATED_NUMBER`, `sip_invite_failure_status=404` on inbound to `+15717491060` |
+| **First failing boundary** | **A** — Telnyx reached LiveKit SIP; LiveKit rejected INVITE (404) |
+
+**Cause:** During cutover, the shared dispatch rule was briefly recreated as **`dispatchRuleCallee`**. Telnyx + this trunk had been certified with **`dispatchRuleIndividual`**. That mismatch produced LiveKit SIP 404 (same class as historical 866 `UNALLOCATED_NUMBER`).
+
+**Repair applied (production):**
+
+1. Restored **`dispatchRuleIndividual`** on `SDR_Vnzi2bUUohRh` (agent remains **`transovo-voice-v3`**).
+2. Set trunk numbers to **±E.164 variants** for both `+18663464256` and `+15717491060`.
+
+**Retry:** Place another PSTN call to `+15717491060` and confirm Telnyx SIP CDR no longer shows 404.
+
+---
+
 ## Rollback (not executed)
 
 - Git: direct-OpenAI path unchanged.
