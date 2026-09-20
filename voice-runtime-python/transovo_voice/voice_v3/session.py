@@ -18,6 +18,29 @@ from transovo_voice.voice_v3.tools import LiveKitTelephonyBridge, build_livekit_
 logger = logging.getLogger("transovo-voice.voice_v3")
 
 
+class VoiceV3AmyAgent(Agent):
+    """LiveKit V3 agent — proactive greeting on connect (GPT-Live waits for user audio otherwise)."""
+
+    def __init__(self, instructions: str, initial_greeting: str | None = None) -> None:
+        super().__init__(instructions=instructions)
+        self._initial_greeting = (initial_greeting or "").strip()
+
+    async def on_enter(self) -> None:
+        if not self._initial_greeting:
+            return
+        log_event(
+            "voice_v3_greeting_generate_reply_begin",
+            extra={"greeting_chars": len(self._initial_greeting)},
+        )
+        await self.session.generate_reply(
+            instructions=(
+                "Say exactly this greeting to the caller (warm and natural): "
+                f"{self._initial_greeting}"
+            ),
+        )
+        log_event("voice_v3_greeting_generate_reply_complete")
+
+
 def _attrs_dict(participant: rtc.RemoteParticipant) -> dict[str, str]:
     return {str(k): str(v) for k, v in (participant.attributes or {}).items()}
 
@@ -145,7 +168,14 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
 
         max_tool_steps = int(config.get("maxToolSteps") or 5)
         session = AgentSession(llm=gpt_live, tools=session_tools, max_tool_steps=max_tool_steps)
-        agent = Agent(instructions=str(config.get("amyInstructions") or ""))
+        initial_greeting = str(config.get("initialGreetingText") or "").strip()
+        speaks_first = str(config.get("speaksFirst") or "ai").strip().lower()
+        if speaks_first == "caller":
+            initial_greeting = ""
+        agent = VoiceV3AmyAgent(
+            instructions=str(config.get("amyInstructions") or ""),
+            initial_greeting=initial_greeting or None,
+        )
 
         @session.on("user_input_transcribed")
         def on_user_input_transcribed(ev: Any) -> None:
@@ -174,6 +204,8 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
                 "toolCount": len(session_tools),
                 "workspaceId": call_ctx.workspace_id,
                 "agentId": call_ctx.agent_id,
+                "speaksFirst": speaks_first,
+                "hasInitialGreeting": bool(initial_greeting),
             },
         )
 

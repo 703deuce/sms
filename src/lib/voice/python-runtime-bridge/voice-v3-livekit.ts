@@ -20,6 +20,7 @@ import {
 import { executeVoiceTool } from "@/lib/voice-v3/tools/execute-voice-tool";
 import { commitFinalCallerUtterance } from "@/lib/voice-v3/conversation/caller-turn-manager";
 import { getCurrentConversationRevision } from "@/lib/voice-v3/conversation/conversation-revision";
+import { resolveVoiceV3InitialGreetingText } from "@/lib/voice-v3/greeting";
 import type { FunctionTool } from "openai/resources/live/live";
 
 /** Tools executed natively in the LiveKit Python worker (not Astra FunctionTools). */
@@ -64,6 +65,9 @@ export type VoiceV3LiveKitSessionConfig = {
   maxToolSteps: number;
   reasoningEffort: "low" | "medium" | "high" | null;
   textVerbosity: "low" | "medium" | "high" | null;
+  /** When non-empty, LiveKit worker must call generate_reply on session enter (AI speaks first). */
+  initialGreetingText: string;
+  speaksFirst: "ai" | "caller";
 };
 
 function liveSessionIdForRoom(roomName: string): string {
@@ -131,6 +135,11 @@ export async function resolveVoiceV3LiveKitSession(
   const intakeFields = buildLiveKitIntakeFieldMetadata(agentConfig);
 
   const liveVoiceId = agentConfig.telephony?.liveVoiceId?.trim() || "marin";
+  const speaksFirst = agentConfig.conversation.speaksFirst === "caller" ? "caller" : "ai";
+  const initialGreetingText =
+    speaksFirst === "caller"
+      ? ""
+      : resolveVoiceV3InitialGreetingText(agentConfig, liveSessionId);
 
   return {
     liveSessionId,
@@ -149,6 +158,8 @@ export async function resolveVoiceV3LiveKitSession(
     maxToolSteps: 5,
     reasoningEffort: "low",
     textVerbosity: "low",
+    initialGreetingText,
+    speaksFirst,
   };
 }
 
