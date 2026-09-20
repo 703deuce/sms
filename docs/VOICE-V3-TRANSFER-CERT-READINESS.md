@@ -26,24 +26,22 @@
 
 ---
 
-## 2. Call Handling UI vs backend (code audit — manual browser proof still required)
+## 2. Call Handling UI (Appointment Receptionist — browser proof still required)
 
-**Route:** Appointment Receptionist wizard → **Call handling** (`CallHandlingStep` in `call-handling-step.tsx`).
+**Route:** Call handling → **Emergency & human transfer** (`EmergencyTransferEditor` + `transfer-wizard-state.ts`).
 
-| Capability | UI today | Compiles to `config.transfer` |
-|------------|----------|-------------------------------|
-| Human transfer (legacy) | Single **name** + **phone** (`transferDestinationName` / `transferDestinationPhone`) | Yes — `compile-transfer-config` builds `destinations[]` from legacy phone when `transferDestinations` empty |
-| Ring timeout | `transferRingSeconds` select (10–45s) | `defaultRingingTimeoutSeconds` + per-step timeout |
-| Global warm default | `warmTransfer` checkbox | Default mode WARM on destinations; plan steps use `BASIC`/`WARM` |
-| Voicemail on transfer | `detectVoicemailOnTransfer` | Preserved on agent config (runtime wiring outside this doc) |
-| Fallback | `transferFallback` radio (`return_to_ai`, `take_message`, `notify_staff`) | `mapWizardTransferFallback` → `RETURN_TO_AGENT` / `TAKE_MESSAGE` / etc. |
-| Enable human transfer (V3 path) | **Only when `presentation === "mctb"`:** `voiceV2HumanTransferEnabled` | Gates `transfer.enabled` with capability |
-| Single vs waterfall routing | **Only `presentation === "mctb"`:** `transferRouting` | `routing: "single" \| "waterfall"` |
-| Multi destination CRUD | **No React editor** for `transferDestinations[]` | Supported in wizard **state** + compiler if present in saved JSON |
-| Per-step DIRECT/WARM + reorder | **No React editor** for `transferPlanSteps[]` | Supported in state + compiler; synthesized from destinations when steps empty |
-| Publish validation errors | Activate step uses `getWizardActivationIssues` + `validateVoiceV3TransferPolicyForPublish` | Warm without trunk → blocking issue |
+When **Transfer calls** capability is enabled (normal Appointment Receptionist, not MCTB-only):
 
-**Appointment Receptionist default wizard** uses `presentation = "legacy"` (not MCTB). So **routing / waterfall / V3 human-transfer toggles are hidden** unless the wizard runs in MCTB presentation.
+- Enable/disable emergency & human transfer (`voiceV2HumanTransferEnabled`)
+- Single vs waterfall routing (`transferRouting`)
+- Multi-destination CRUD (`transferDestinations`)
+- Waterfall reorder + per-step Direct/Warm + ring timeout (`transferPlanSteps`)
+- Default ring timeout (`transferRingSeconds`) with per-contact override
+- Transfer fallback (`transferFallback`)
+- Inline validation via `transferWizardValidationIssues` + `validateVoiceV3TransferPolicyForPublish`
+- Legacy `transferDestinationName` / `transferDestinationPhone` migrated on load and kept in sync on save
+
+MCTB-only blocks retained: urgency rules, sales/solicitation (not transfer).
 
 ### Manual browser checklist (owner)
 
@@ -51,7 +49,7 @@ Use saved draft → reload → publish → inspect compiled agent / logs:
 
 1. Enable **Transfer calls** capability (Goals).
 2. Call handling: set destination phone, ring seconds, warm, fallback.
-3. If testing waterfall in UI: confirm whether your workspace uses **MCTB presentation** for routing; otherwise configure `transferDestinations` + `transferPlanSteps` via existing saved state/API (no multi-dest UI yet).
+3. Configure waterfall with three contacts (On-call WARM 20s, Manager DIRECT 20s, Owner DIRECT 30s), reorder, edit, delete, restore, publish — verify compiled `config.transfer` matches UI (see user certification script in task brief).
 4. Activate/publish; confirm blocking message if warm enabled without outbound trunk.
 5. Compare published Voice V3 config: `transfer.enabled`, `transfer.routing`, `transfer.routes[0].targets`, no dial targets in Astra prompts.
 
@@ -61,7 +59,7 @@ Use saved draft → reload → publish → inspect compiled agent / logs:
 |----------|---------------------|
 | **DIRECT** | Legacy single destination + `warmTransfer: false` |
 | **WARM** | Legacy single destination + `warmTransfer: true` + outbound trunk configured |
-| **WATERFALL (2 targets)** | `transferDestinations` (≥2) + `transferRouting: "waterfall"` + `transferPlanSteps` order — **may require draft JSON** until multi-dest UI exists |
+| **WATERFALL (2+ targets)** | Call Handling UI: waterfall + ≥2 contacts + order/modes/timeouts |
 | **WATERFALL exhausted** | Same + targets that will not answer; verify `transferFallback` behavior and Amy copy |
 
 ---
