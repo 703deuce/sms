@@ -2,6 +2,8 @@
 
 **Purpose:** Single copy/download reference for what is **built in the repo** today — completed or **mostly complete** — versus what still needs **live PSTN/SMS/provider QA** only.
 
+**Voice-only status (Appointment Receptionist / Voice V3):** `docs/AI-VOICE-AGENT-FEATURE-STATUS.md`
+
 **Generated:** 2026-09-20 (Cloud Agent pass)  
 **Primary codebases:** `master` + in-flight Voice V3 work on branch `cursor/voice-v3-after-hours-post-call-2304` (PR #457, includes merged spam/solicitor protection)
 
