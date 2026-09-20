@@ -101,10 +101,13 @@ export async function resolveVoiceV3LiveKitSession(
   });
 
   const promptInput = resolveVoiceV3DefaultPromptInput(new Date(), agentConfig);
-  const toolNames = listVoiceV3AstraToolNamesForConfig(agentConfig);
+  const nativeAmy = new Set<string>(VOICE_V3_LIVEKIT_NATIVE_TOOL_NAMES);
+  const astraDelegationToolNames = listVoiceV3AstraToolNamesForConfig(agentConfig).filter(
+    (n) => !nativeAmy.has(n),
+  );
   const { liveInstructions, astraInstructions } = buildVoiceV3Prompts({
     ...promptInput,
-    toolNames,
+    toolNames: astraDelegationToolNames,
   });
 
   const liveSessionId = liveSessionIdForRoom(payload.roomName);

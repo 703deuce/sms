@@ -4,6 +4,7 @@ import {
   buildLivePromptControlsInstructionBlock,
   livePromptControlsFromAgentConfig,
 } from "./live-prompt-controls";
+import { buildAmyEndCallInstructions } from "./amy-end-call-instructions";
 import { buildAmyTransferInstructions } from "./amy-transfer-instructions";
 
 export type LiveFrontendPromptContext = {
@@ -116,6 +117,7 @@ export function buildLiveFrontendInstructions(
     ? buildLivePromptControlsInstructionBlock(livePromptControlsFromAgentConfig(config))
     : "";
   const transferBehavior = config ? buildAmyTransferInstructions(config) : "";
+  const endCallBehavior = buildAmyEndCallInstructions();
 
   const greetingHint =
     config?.conversation.openingGreeting?.trim() ||
@@ -138,6 +140,7 @@ ${businessFacts ? `${businessFacts}\n` : ""}
 ${persona ? `${persona}\n` : ""}
 ${liveTuning ? `${liveTuning}\n` : ""}
 ${transferBehavior ? `${transferBehavior}\n` : ""}
+${endCallBehavior ? `${endCallBehavior}\n` : ""}
 
 ${delegationPolicy}
 

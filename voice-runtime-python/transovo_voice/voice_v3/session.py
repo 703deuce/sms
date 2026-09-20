@@ -6,13 +6,13 @@ from typing import Any
 
 from livekit import rtc
 from livekit.agents import Agent, AgentSession, JobContext, room_io
-from livekit.agents.beta.tools import EndCallTool
 from livekit.plugins.openai.realtime import GPTLiveModel
 
 from transovo_voice.integrations.backend_client import TransovoBackend
 from transovo_voice.session.dispatch_resolver import extract_call_numbers
 from transovo_voice.telemetry import log_event
 from transovo_voice.voice_v3.tool_client import TransovoV3ToolClient, VoiceV3CallContext
+from transovo_voice.voice_v3.end_call_tool import build_voice_v3_end_call_toolset
 from transovo_voice.voice_v3.tools import LiveKitTelephonyBridge, build_livekit_tools
 
 logger = logging.getLogger("transovo-voice.voice_v3")
@@ -118,12 +118,27 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             intake_fields=intake_fields if isinstance(intake_fields, list) else [],
         )
 
-        end_call_toolset = EndCallTool(
-            ignore_on_enter=True,
-            delete_room=True,
-            extra_description=str(config.get("endCallToolHint") or "").strip(),
+        end_call_toolset = build_voice_v3_end_call_toolset(
+            call_id=call_ctx.call_id,
+            workspace_id=call_ctx.workspace_id,
+            agent_id=call_ctx.agent_id,
+            room=ctx.room.name,
+            extra_hint=str(config.get("endCallToolHint") or "").strip(),
         )
         session_tools = [*lk_tools, *end_call_toolset.tools]
+
+        def _on_participant_disconnected(participant: rtc.RemoteParticipant) -> None:
+            if participant.identity != sip_participant.identity:
+                return
+            log_event(
+                "VOICE_V3_CALLER_DISCONNECTED",
+                call_id=call_ctx.call_id or None,
+                workspace_id=call_ctx.workspace_id or None,
+                agent_id=call_ctx.agent_id or None,
+                room=ctx.room.name,
+            )
+
+        ctx.room.on("participant_disconnected", _on_participant_disconnected)
 
         responses_options: dict[str, Any] = {
             "model": config.get("astraModel") or "gpt-6-astra",
@@ -166,6 +181,7 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
                 extra={"result": result, "utterance_chars": len(utterance)},
             )
 
+        amy_tool_names = [getattr(t, "name", None) or "" for t in session_tools]
         log_event(
             "voice_v3_session_starting",
             room=ctx.room.name,
@@ -174,6 +190,8 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
                 "toolCount": len(session_tools),
                 "workspaceId": call_ctx.workspace_id,
                 "agentId": call_ctx.agent_id,
+                "amyNativeTools": ["end_call"],
+                "amyToolNames": [n for n in amy_tool_names if n],
             },
         )
 
