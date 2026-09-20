@@ -1,41 +1,55 @@
 ---
-description: Google Calendar API v3 — OAuth, scopes, provider adapter (read before any Calendar integration work)
+description: Google Calendar — API guide + Voice V3 build directive (provider behind existing tools; Microsoft frozen)
 globs:
   - src/lib/calendar/**
   - src/lib/voice/calendar/**
+  - src/lib/voice-v3/**
   - src/lib/auth/google-oauth.ts
   - src/lib/integrations/oauth.ts
   - src/features/integrations/**/calendars/**
-  - src/components/solutions/appointment-receptionist/**/appointments*
-  - src/lib/voice-v3/**/scheduling/**
-  - src/lib/voice-v3/**/book*
-  - docs/GOOGLE-CALENDAR-INTEGRATION-ENGINEERING-GUIDE.md
+  - src/components/solutions/appointment-receptionist/**
+  - src/app/**/integrations/**
+  - docs/GOOGLE-CALENDAR-*.md
 alwaysApply: false
 ---
 
-# MANDATORY: Google Calendar integration engineering guide
+# MANDATORY: Google Calendar (Voice V3 provider)
 
-**Source of truth:** `docs/GOOGLE-CALENDAR-INTEGRATION-ENGINEERING-GUIDE.md`
+Read **both** before any Google Calendar work:
+
+1. **`docs/GOOGLE-CALENDAR-INTEGRATION-ENGINEERING-GUIDE.md`** — Google Calendar API v3, OAuth, `calendar.events.owned`, events CRUD, normalization, errors.
+2. **`docs/GOOGLE-CALENDAR-VOICE-V3-IMPLEMENTATION-DIRECTIVE.md`** — end-to-end wiring, UI, wizard, compile/runtime, definition of done.
+
+OAuth scope review template: **`docs/GOOGLE-CALENDAR-OAUTH-VERIFICATION.md`**
 
 ## When this rule activates
 
-**Before implementing, changing, debugging, or reviewing** anything that touches Google Calendar OAuth, scopes, credentials, Calendar API calls, Voice V3 scheduling via Google, integrations UI for Google Calendar, or wizard scheduling provider selection for Google.
+Implementing, changing, debugging, or reviewing Google Calendar OAuth, Integrations UI, Appointment Receptionist wizard scheduling provider, Voice V3 scheduling executors, or Google provider adapter code.
 
-## Hard requirements
+## Architecture (locked)
 
-1. **Read the full guide first** — do not rediscover Google API design from blogs or stale code comments.
-2. **V1 scope:** `https://www.googleapis.com/auth/calendar.events.owned` only unless product explicitly broadens (see guide §3–4).
-3. **V1 calendar:** `calendarId = "primary"` — no CalendarList scope for a selector unless product requires it.
-4. **No Google-specific Astra tools** — normalize at the existing scheduling provider boundary (same contracts as Microsoft 365).
-5. **Find availability:** `events.list` with `singleEvents=true`, correct `timeMin`/`timeMax` overlap semantics, pagination — not FreeBusy for V1 (guide §10).
-6. **Reschedule:** preferred path is **GET + UPDATE**, not PATCH (Google quota guidance — guide §21).
-7. **Extend existing Google OAuth** — offline refresh tokens, preserve refresh token on re-auth, existing encryption/storage.
-8. **Microsoft is the blueprint** — trace Microsoft end-to-end before adding Google (guide §41).
+- **ADD GOOGLE. DO NOT REBUILD SCHEDULING.**
+- Google is a **provider behind existing tools** — `find_availability`, `book_appointment`, `find_appointment`, `reschedule_appointment`, `cancel_appointment`.
+- **Do NOT** add `google_*` FunctionTools or Google-specific Astra tools if Microsoft does not work that way.
+- **Astra does NOT choose Microsoft vs Google** — published wizard config selects provider; Astra calls the same Transovo scheduling tools.
+- **Microsoft 365 is FROZEN** — trace as read-only behavioral reference; copy contracts/patterns; **do not refactor Microsoft** while adding Google. Microsoft tests must stay green.
 
-## Prohibited without explicit product approval
+## Wizard / Calendly
 
-Broad `calendar` scope, FreeBusy-only scope expansion, ACL/calendar management, Meet auto-generation, full calendar sync, domain-wide delegation, exposing raw Google errors or tokens to Amy/Astra.
+- Replace **visible** Calendly choice in Appointment Receptionist wizard with **Google Calendar** (Microsoft · Google · Send booking link).
+- **Do NOT** delete Calendly platform code (MCTB, legacy configs).
+
+## API / OAuth (summary — full detail in engineering guide)
+
+- Scope: `https://www.googleapis.com/auth/calendar.events.owned` only for V1.
+- Calendar: `primary`; availability via paginated `events.list` (not FreeBusy for V1).
+- Reschedule: **GET + UPDATE**, not default PATCH.
+- Extend existing Google OAuth; offline refresh; never overwrite stored refresh token with null.
+
+## Prohibited without explicit approval
+
+Broad `calendar` scope, new scheduling framework, Google logic in Amy/Astra prompts, LLM appointment matching, refactoring Microsoft executors, MCTB pipeline changes, purging Calendly from repo.
 
 ## On conflict
 
-Official Google documentation wins for API facts; then installed client types; then existing Transovo provider architecture; then this guide. Update the guide when Google changes behavior.
+Official Google docs → client types → existing Transovo provider architecture → engineering guide → implementation directive.
