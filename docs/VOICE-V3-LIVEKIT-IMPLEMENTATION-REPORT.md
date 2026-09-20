@@ -8,7 +8,7 @@
 | API | Installed 1.8.2 | Used |
 |-----|-----------------|------|
 | `function_tool(..., raw_schema=...)` | Yes | Transovo business tools |
-| `RunContext.disallow_interruptions()` | Yes | Mutation tools |
+| `RunContext.disallow_interruptions()` | Yes | **Not used** on GPT-Live writes (see `VOICE-V3-LIVEKIT-GPT-LIVE-INTERRUPTION-POLICY.md`) |
 | `ToolFlag.CANCELLABLE` | Yes | `find_availability`, `find_appointment` |
 | `on_duplicate` / `duplicate_scope` | `"replace"` / `"reject"`, `"name_and_args"` | Per tool class |
 | `EndCallTool(ignore_on_enter=True)` | `livekit.agents.beta.tools` | Session hangup |

@@ -16,16 +16,8 @@ from transovo_voice.voice_v3.tool_client import TransovoV3ToolClient
 logger = logging.getLogger("transovo-voice.voice_v3.tools")
 
 _READ_TOOLS = frozenset({"find_availability", "find_appointment"})
-_MUTATION_TOOLS = frozenset(
-    {
-        "book_appointment",
-        "reschedule_appointment",
-        "cancel_appointment",
-        "request_callback",
-        "send_booking_link",
-        "transfer_call",
-    },
-)
+# Writes are non-cancellable by default (no ToolFlag.CANCELLABLE). We do NOT call
+# RunContext.disallow_interruptions() on GPT-Live — see docs/VOICE-V3-LIVEKIT-GPT-LIVE-INTERRUPTION-POLICY.md.
 # end_call is LiveKit EndCallTool — not built here.
 _SKIP_SCHEMA_TOOLS = frozenset({"end_call"})
 
@@ -73,9 +65,6 @@ async def _execute_transovo_tool(
     function_call_id = None
     if fc_meta is not None:
         function_call_id = getattr(fc_meta, "call_id", None) or getattr(fc_meta, "id", None)
-
-    if tool_name in _MUTATION_TOOLS:
-        context.disallow_interruptions()
 
     result = await client.execute(
         tool_name=tool_name,

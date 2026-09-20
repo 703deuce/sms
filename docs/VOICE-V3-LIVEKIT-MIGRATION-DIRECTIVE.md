@@ -55,7 +55,7 @@ Record for every API: **DOCUMENTED API | INSTALLED 1.8.2 API | DIFFERENCE | DECI
 | 1 | Intake (was `update_intake`) | **A + B hybrid** | Prebuilt Tasks + programmatic FunctionTools + optional bulk raw-schema tool | Persistence, validation, wizard fields |
 | 2 | `set_scheduling_preference` | **B** | FunctionTool + `raw_schema` | Semantics, generation, normalization |
 | 3 | `find_availability` | **B** | FunctionTool, `ToolFlag.CANCELLABLE` | Microsoft READ, OfferSets |
-| 4 | `book_appointment` | **B** | FunctionTool + `disallow_interruptions` at commit | Microsoft WRITE, idempotency |
+| 4 | `book_appointment` | **B** | FunctionTool; idempotency at commit (no blanket `disallow_interruptions` on GPT-Live) | Microsoft WRITE |
 | 5 | `find_appointment` | **B** | FunctionTool, cancellable READ if safe | Lookup, selection |
 | 6 | `reschedule_appointment` | **B** | FunctionTool + interruption guard | Microsoft WRITE |
 | 7 | `cancel_appointment` | **B** | FunctionTool + interruption guard | Microsoft WRITE |
@@ -181,7 +181,7 @@ livekit_tool = function_tool(
 
 **HTTP:** Prefer `utils.http_context.http_session()` if job-scoped session works with auth; else bind custom client to **JobContext shutdown only** (never `finally` after `session.start()`).
 
-**RunContext required** on all custom handlers: userdata refresh, `disallow_interruptions()`, optional `ctx.update()` for long READs.
+**RunContext required** on all custom handlers: userdata refresh, optional `ctx.update()` for long READs. **GPT-Live write safety:** idempotency/reconciliation — not blanket `disallow_interruptions()` (see `VOICE-V3-LIVEKIT-GPT-LIVE-INTERRUPTION-POLICY.md`).
 
 ### Per-tool notes
 
@@ -190,7 +190,7 @@ livekit_tool = function_tool(
 | `set_scheduling_preference` | No | conservative | N/A |
 | `find_availability` | Yes (if HTTP cancel safe) | consider `replace` for READ | N/A |
 | `find_appointment` | Yes if safe | conservative | N/A |
-| `book_appointment` | No | conservative + idempotency | `disallow_interruptions` before commit |
+| `book_appointment` | No | idempotency + reconciliation | No blanket `disallow_interruptions` on GPT-Live |
 | `reschedule_appointment` | No | conservative | before commit |
 | `cancel_appointment` | No | conservative | before commit |
 | `send_booking_link` | No | conservative | before send |
@@ -247,7 +247,7 @@ Examples:
 - Booking → callback during FIND: cancel READ (`ToolFlag.CANCELLABLE` + LiveKit cancel tools); `request_callback`.
 - Tuesday → Wednesday during FIND: new `set_scheduling_preference` (generation++); new FIND; stale OfferSet ignored.
 - Callback → booking: reuse intake; scheduling tools when authorized.
-- During BOOK commit: `disallow_interruptions`; reconcile; Astra reasons over **actual** book outcome + new callback ask.
+- During BOOK: write non-cancellable; reconcile; Astra reasons over **actual** book outcome + new callback ask (GPT-Live stays duplex).
 
 **Layers:** LiveKit cancellation = efficiency; Transovo generation = correctness.
 
