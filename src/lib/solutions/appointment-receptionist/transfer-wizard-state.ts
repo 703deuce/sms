@@ -1,9 +1,4 @@
 import { createId } from "@/lib/supabase/id";
-import { compileVoiceV3TransferPolicyFromWizard } from "@/lib/voice-v3/transfer/compile-transfer-config";
-import {
-  validateVoiceV3TransferPolicyForPublish,
-  type TransferPublishIssue,
-} from "@/lib/voice-v3/transfer/validate-transfer-publish";
 import type { AppointmentReceptionistWizardState } from "./types";
 import {
   normalizeWizardTransferPhone,
@@ -11,6 +6,9 @@ import {
 } from "./transfer-utils";
 
 export const TRANSFER_RING_SECONDS_OPTIONS = [5, 10, 15, 20, 30, 45, 60, 90, 120] as const;
+
+/** Client-safe validation messages (no server-only compile / LiveKit imports). */
+export type TransferWizardValidationIssue = { id: string; message: string };
 
 export type WizardTransferDestinationRow = NonNullable<
   AppointmentReceptionistWizardState["transferDestinations"]
@@ -239,12 +237,12 @@ export function updateTransferPlanStep(
 
 export function transferWizardValidationIssues(
   state: AppointmentReceptionistWizardState,
-): TransferPublishIssue[] {
+): TransferWizardValidationIssue[] {
   if (!state.capabilities.includes("transfer_calls")) return [];
   const normalized = ensureEmergencyTransferWizardState(state);
   if (normalized.voiceV2HumanTransferEnabled === false) return [];
 
-  const local: TransferPublishIssue[] = [];
+  const local: TransferWizardValidationIssue[] = [];
   const dests = (normalized.transferDestinations ?? []).filter((d) => d.enabled !== false);
   if (!dests.length) {
     local.push({
@@ -286,14 +284,31 @@ export function transferWizardValidationIssues(
     });
   }
 
-  const policy = compileVoiceV3TransferPolicyFromWizard(normalized);
-  const publish = validateVoiceV3TransferPolicyForPublish(
-    policy,
-    state.capabilities.includes("transfer_calls"),
-  );
-  const merged = [...local];
-  for (const p of publish) {
-    if (!merged.some((m) => m.id === p.id)) merged.push(p);
+  const defaultRing = clampRingSeconds(normalized.transferRingSeconds ?? 30);
+  if (defaultRing < 5 || defaultRing > 120) {
+    local.push({
+      id: "transfer_ui_bad_default_timeout",
+      message: "Default ring timeout must be between 5 and 120 seconds.",
+    });
   }
-  return merged;
+  for (const s of normalized.transferPlanSteps ?? []) {
+    const t = s.timeoutSeconds;
+    if (t != null && (t < 5 || t > 120)) {
+      local.push({
+        id: `transfer_ui_bad_timeout_${s.destinationId}`,
+        message: "Ring timeout for each contact must be between 5 and 120 seconds.",
+      });
+    }
+  }
+
+  const hasWarmStep = (normalized.transferPlanSteps ?? []).some((s) => s.transferMode === "WARM");
+  if (hasWarmStep) {
+    local.push({
+      id: "transfer_ui_warm_requires_platform",
+      message:
+        "Warm transfer requires outbound telephony on your account. Activation will block if platform warm transfer is not configured.",
+    });
+  }
+
+  return local;
 }
