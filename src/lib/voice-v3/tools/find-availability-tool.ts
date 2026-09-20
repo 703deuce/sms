@@ -8,6 +8,7 @@ import { evaluateVoiceV3Rules } from "../state/call-rules";
 import type { VoiceToolDefinition } from "./types";
 import { authorizeVoiceV3ToolOrError } from "./authorize-tool-for-config";
 import { shouldApplySemanticSteeringToActiveGoal } from "../delegation/conversation-freshness";
+import { buildToolIntakeProjection } from "../intake-objective/tool-intake-projection";
 import { toolOk, voiceToolError } from "./types";
 import { FIND_AVAILABILITY_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 
@@ -100,9 +101,12 @@ export const findAvailabilityTool: VoiceToolDefinition<FindAvailabilityArgs> = {
         "failed",
       );
     }
+    const intakeProjection = buildToolIntakeProjection(config, after);
+
     if (!offer || offer.slots.length === 0) {
       return toolOk("none_available", {
         scheduling_generation: after.scheduling.generation,
+        ...intakeProjection,
       });
     }
 
@@ -114,6 +118,7 @@ export const findAvailabilityTool: VoiceToolDefinition<FindAvailabilityArgs> = {
         local_start: s.localStart,
         display: s.displayLabel,
       })),
+      ...intakeProjection,
     });
   },
 };

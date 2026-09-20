@@ -3,6 +3,7 @@ import type { FunctionTool } from "openai/resources/live/live";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import {
   buildIntakeObjectiveContext,
+  buildToolIntakeProjection,
   buildUpdateIntakeZodSchema,
   deriveIntakeObjective,
   mergeIntakeUpdate,
@@ -160,6 +161,8 @@ export const updateIntakeTool: VoiceToolDefinition<UpdateIntakeArgs> = {
       );
     }
 
+    const intakeProjection = buildToolIntakeProjection(config, after);
+
     return toolOk("INTAKE_UPDATED", {
       updated_fields: merged.updatedFields,
       rejected_fields: merged.rejectedFields.map((r) => ({
@@ -171,6 +174,7 @@ export const updateIntakeTool: VoiceToolDefinition<UpdateIntakeArgs> = {
         status: objective.status,
         missing_required_fields: objective.missingRequiredFields,
       },
+      ...intakeProjection,
       state_version: after.runtime.version,
     });
   },
