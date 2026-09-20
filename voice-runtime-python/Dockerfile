@@ -16,7 +16,7 @@ COPY voice-runtime-python/transovo_voice ./transovo_voice
 
 RUN pip install --no-cache-dir --upgrade pip \
   && pip install --no-cache-dir \
-    "livekit-agents[openai]>=1.2.0,<2" \
+    "livekit-agents[openai]~=1.8" \
     "livekit-plugins-noise-cancellation>=0.2,<0.4" \
     "httpx>=0.27,<0.29" \
     "pydantic>=2.7,<3" \
