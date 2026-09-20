@@ -228,6 +228,9 @@ async function stepTelnyx(): Promise<void> {
 }
 
 async function main() {
+  // Web app defaults to self_hosted; cutover must use LiveKit Cloud (App 2 project).
+  process.env.MEDIA_BACKEND_MODE = "livekit_cloud";
+
   const steps = STEP === "all"
     ? ["record", "trunk", "dispatch", "telnyx", "verify"]
     : STEP.split(",").map((s) => s.trim());
