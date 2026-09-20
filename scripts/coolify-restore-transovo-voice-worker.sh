@@ -105,7 +105,7 @@ ensure_sms_application() {
 configure_voice_application() {
   ensure_sms_application
 
-  local voice_branch="${VOICE_GIT_BRANCH:-master}"
+  local voice_branch="${VOICE_GIT_BRANCH:-cursor/voice-v3-livekit-implementation-2304}"
   echo "[coolify-voice-restore] configuring voice app id=${VOICE_APP_ID} branch=${voice_branch}"
 
   psql_exec "
