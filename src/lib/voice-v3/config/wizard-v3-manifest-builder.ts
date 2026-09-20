@@ -813,6 +813,7 @@ export function buildWizardV3FieldManifest(): WizardV3FieldManifestRow[] {
     ["defaultTransferPlanId", "Default transfer plan id"],
     ["urgencyEnabled", "Urgency rules enabled"],
     ["callbackRequestsEnabled", "Callback requests enabled"],
+    ["callbackRequiredCollectFieldIds", "Callback required collect field ids"],
     ["callbackUseAniByDefault", "Callback use ANI"],
     ["callbackAskPreferredTime", "Callback ask preferred time"],
     ["callbackConfirmNumber", "Callback confirm number"],
@@ -828,12 +829,23 @@ export function buildWizardV3FieldManifest(): WizardV3FieldManifestRow[] {
         valueType: "varies",
         v3ConfigPath: `callHandling.* + transferDestinations[]`,
         destinations: ["DETERMINISTIC_CONFIG", "PROVIDER_CONFIG", "ASTRA_BACKEND_CONTEXT"],
-        executionStatus: path.startsWith("transfer") ? "ACTIVE_EXECUTION" : "CONFIGURED_NOT_IMPLEMENTED",
+        executionStatus:
+          path.startsWith("transfer") ||
+          path === "callbackRequestsEnabled" ||
+          path === "callbackRequiredCollectFieldIds"
+            ? "ACTIVE_EXECUTION"
+            : "CONFIGURED_NOT_IMPLEMENTED",
         scope: "YES_GENERAL",
         compilerFunction: "compileVoiceV3AgentConfig.callHandling",
-        runtimeConsumer: "transfer_call executor",
+        runtimeConsumer:
+          path === "callbackRequiredCollectFieldIds"
+            ? "request_callback requirements"
+            : "transfer_call executor",
         republishBehavior: "next_call",
-        testCoverage: path === "transferDestinations" ? "test-voice-v3-wizard-compiler" : undefined,
+        testCoverage:
+          path === "transferDestinations" || path === "callbackRequiredCollectFieldIds"
+            ? "test-voice-v3-wizard-compiler"
+            : undefined,
       }),
     );
   }

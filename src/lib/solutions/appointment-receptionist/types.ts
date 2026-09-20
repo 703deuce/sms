@@ -246,6 +246,24 @@ export type AppointmentReceptionistWizardState = {
   callbackConfirmNumber?: boolean | null;
   /** Collect field ids (wizard) required for Voice V3 request_callback. */
   callbackRequiredCollectFieldIds?: string[] | null;
+  afterHoursNotificationEvents?: Partial<
+    Record<
+      string,
+      {
+        sms?: boolean;
+        email?: boolean;
+      }
+    >
+  > | null;
+  afterHoursNotificationRecipients?: Array<{
+    id: string;
+    label: string;
+    smsE164?: string | null;
+    email?: string | null;
+    smsEnabled?: boolean;
+    emailEnabled?: boolean;
+    enabled?: boolean;
+  }> | null;
   salesSolicitationEnabled?: boolean | null;
   salesSolicitationAction?:
     | import("@/lib/voice-receptionist-wizard/after-hours-handling-types").VoiceV2SalesSolicitationAction

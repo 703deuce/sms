@@ -204,6 +204,41 @@ export async function executeRequestCallback(
     callbackRequestId: persistResult.callbackRequestId,
   });
 
+  if (!persistResult.duplicate && persistResult.callbackRequestId) {
+    void (async () => {
+      try {
+        const { projectVoiceV3CallbackOntoCall } = await import("./project-call-outcome");
+        const { notifyVoiceV3CallbackRequested } = await import(
+          "../notifications/notify-callback-requested"
+        );
+        await projectVoiceV3CallbackOntoCall({
+          callId: ctx.callId,
+          callbackRequestId: persistResult.callbackRequestId!,
+          reason,
+        });
+        const snapshot = intakeSnapshot(ctx);
+        const collectedLines = Object.entries(snapshot).map(
+          ([k, v]) => `${k}: ${String(v)}`,
+        );
+        await notifyVoiceV3CallbackRequested({
+          config,
+          workspaceId: input.workspaceId,
+          callId: ctx.callId,
+          callbackRequestId: persistResult.callbackRequestId!,
+          callerName,
+          callerPhone: callbackPhone,
+          reason,
+          collectedLines,
+        });
+      } catch (err) {
+        console.error("VOICE_V3_CALLBACK_POST_PERSIST_HOOK_FAILED", {
+          callId: ctx.callId,
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
+    })();
+  }
+
   return {
     result: toolOk("callback_requested", {
       status: "callback_requested",

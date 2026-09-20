@@ -21,6 +21,7 @@ import {
   callbackRequiredIntakeKeys,
   compileWizardCollectFieldsToV3Intake,
 } from "./wizard-collect-fields-v3";
+import { compileAfterHoursNotificationsFromWizard } from "../notifications/compile-from-wizard";
 import { resolveLivePromptControlsFromWizard } from "../prompts/live-prompt-controls";
 
 export type VoiceV3ProviderConnections = {
@@ -348,6 +349,7 @@ export function compileVoiceV3AgentConfig(input: {
     source: input.source ?? "wizard_published",
     configVersion: configVersionHash(wizard),
     callHandling: callHandlingFromWizard(wizard),
+    afterHoursNotifications: compileAfterHoursNotificationsFromWizard(wizard),
     qualification: qualificationFromWizard(wizard),
     recovery: recoveryFromWizard(wizard),
     integrations: integrationsFromWizard(wizard),

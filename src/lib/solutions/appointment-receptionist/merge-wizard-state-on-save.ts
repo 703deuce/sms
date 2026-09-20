@@ -90,6 +90,8 @@ const STEP_OWNED_FIELDS: Record<
     "callbackAskPreferredTime",
     "callbackConfirmNumber",
     "callbackRequiredCollectFieldIds",
+    "afterHoursNotificationEvents",
+    "afterHoursNotificationRecipients",
     "salesSolicitationEnabled",
     "salesSolicitationAction",
   ],

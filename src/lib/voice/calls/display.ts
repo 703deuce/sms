@@ -3,6 +3,7 @@ import type { MockCallOutcome } from "./mock-data";
 export type CallOutcomeBadge =
   | "New Lead"
   | "Message Taken"
+  | "Callback Requested"
   | "Appointment Requested"
   | "Booking Link Sent"
   | "Appointment Booked"
@@ -118,6 +119,7 @@ export function deriveCallOutcomeBadge(call: CallRowLike): CallOutcomeBadge {
   if (call.transferred) return "Transferred";
   if (call.appointmentBooked) return "Appointment Booked";
   const outcome = String(call.outcome || "").toLowerCase();
+  if (outcome.includes("callback")) return "Callback Requested";
   if (outcome.includes("spam")) return "Spam";
   if (outcome.includes("booking_link_sent")) {
     return "Booking Link Sent";
@@ -159,6 +161,7 @@ export const OUTCOME_BADGE_STYLES: Record<CallOutcomeBadge, string> = {
   "New Lead": "bg-violet-50 text-violet-700 ring-violet-200",
   "Lead Captured": "bg-violet-50 text-violet-700 ring-violet-200",
   "Message Taken": "bg-indigo-50 text-indigo-700 ring-indigo-200",
+  "Callback Requested": "bg-indigo-50 text-indigo-800 ring-indigo-200",
   "Appointment Requested": "bg-sky-50 text-sky-800 ring-sky-200",
   "Booking Link Sent": "bg-teal-50 text-teal-800 ring-teal-200",
   "Appointment Booked": "bg-amber-50 text-amber-800 ring-amber-200",
@@ -180,7 +183,8 @@ export function filterMatchesOutcome(filter: CallListFilter, call: CallRowLike):
   if (filter === "leads")
     return badge === "New Lead" || badge === "Lead Captured";
   if (filter === "appointments") return badge === "Appointment Booked";
-  if (filter === "messages") return badge === "Message Taken";
+  if (filter === "messages")
+    return badge === "Message Taken" || badge === "Callback Requested";
   if (filter === "transferred") return badge === "Transferred";
   if (filter === "voicemails") return badge === "Voicemail";
   if (filter === "no_answer") return badge === "No Answer" || badge === "No Action";

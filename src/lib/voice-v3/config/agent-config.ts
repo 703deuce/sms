@@ -1,5 +1,6 @@
 import type { BusinessHoursWindow, VoiceV3CalendarConfig } from "../calendar/types";
 import type { VoiceWizardBookingStrategy } from "@/lib/solutions/appointment-receptionist/types";
+import type { VoiceV3AfterHoursNotificationsConfig } from "../notifications/types";
 
 export type IntakeFieldType =
   | "text"
@@ -270,6 +271,7 @@ export interface VoiceV3AgentConfig {
   telephony: VoiceV3TelephonyConfig;
   controlPlane: VoiceV3ControlPlaneMeta;
   callHandling: VoiceV3CallHandlingConfig;
+  afterHoursNotifications?: VoiceV3AfterHoursNotificationsConfig;
   qualification: VoiceV3QualificationConfig;
   recovery: VoiceV3RecoveryConfig;
   integrations: VoiceV3IntegrationsConfig;

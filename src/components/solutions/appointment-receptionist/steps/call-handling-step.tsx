@@ -13,6 +13,7 @@ import { ensureEmergencyTransferWizardState } from "@/lib/solutions/appointment-
 import { normalizeWizardTransferPhone } from "@/lib/solutions/appointment-receptionist/transfer-utils";
 import { InfoCallout, SidePanel, StatusPill } from "../ui";
 import { UrgencyRulesEditor } from "../urgency-rules-editor";
+import { AfterHoursNotificationsEditor } from "../after-hours-notifications-editor";
 import { CallbackRequiredFieldsEditor } from "../callback-required-fields-editor";
 import { defaultCallbackRequiredCollectFieldIds } from "@/lib/solutions/appointment-receptionist/callback-required-field-defaults";
 import {
@@ -182,10 +183,11 @@ export function CallHandlingStep({
           </div>
 
           <div className="rounded-xl border border-border bg-card p-4">
-            <h3 className="text-sm font-semibold">Callback requests</h3>
+            <h3 className="text-sm font-semibold">Messages &amp; callbacks</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              Let callers ask your team to call them back. Uses shared caller fields — not a
-              separate callback intake form.
+              Let your receptionist take a message when a caller needs someone from your business to
+              follow up. Uses shared intake fields — one callback operation, not a separate message
+              tool.
             </p>
             <div className="mt-3 space-y-3">
               <label className="flex items-start gap-2 text-sm">
@@ -208,7 +210,7 @@ export function CallHandlingStep({
                   }}
                 />
                 <span>
-                  <span className="font-medium">Allow callers to request a callback</span>
+                  <span className="font-medium">Take messages and callback requests</span>
                   <span className="mt-0.5 block text-xs text-muted-foreground">
                     Independent of appointment booking strategy (Microsoft, send link, or none).
                   </span>
@@ -217,6 +219,17 @@ export function CallHandlingStep({
               {state.callbackRequestsEnabled !== false ? (
                 <CallbackRequiredFieldsEditor state={state} patch={patch} />
               ) : null}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border bg-card p-4">
+            <h3 className="text-sm font-semibold">After-hours notifications</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Send SMS or email when important call outcomes occur. Notifications never change what
+              was saved on the call — they only alert your team.
+            </p>
+            <div className="mt-3">
+              <AfterHoursNotificationsEditor state={state} patch={patch} />
             </div>
           </div>
 

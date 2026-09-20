@@ -141,7 +141,7 @@ export default function VoiceCallsPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const perPage = 10;
-  const useDemo = apiRows.length === 0;
+  const useDemo = false;
 
   useEffect(() => {
     setFilter(parseUrlFilter(searchParams.get("filter")));
@@ -190,7 +190,7 @@ export default function VoiceCallsPage() {
 
   const totalPages = Math.max(1, Math.ceil(allRows.length / perPage));
   const pageRows = allRows.slice((page - 1) * perPage, page * perPage);
-  const totalCount = useDemo ? 47 : allRows.length;
+  const totalCount = allRows.length;
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
