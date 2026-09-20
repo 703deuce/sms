@@ -128,10 +128,7 @@ configure_voice_application() {
 
   echo "[coolify-voice-restore] ensure VOICE_V3_LIVEKIT_AGENT_NAME via Coolify tinker (encrypted env — do not raw-SQL insert)"
 
-  psql_exec "
-    UPDATE environment_variables SET value = 'livekit_cloud'
-    WHERE resourceable_type='App\\Models\\Application' AND resourceable_id=${VOICE_APP_ID} AND key='MEDIA_BACKEND_MODE';
-  "
+  echo "[coolify-voice-restore] set MEDIA_BACKEND_MODE=livekit_cloud via Coolify tinker (encrypted env — do not raw-SQL update)"
 
   psql_exec "DELETE FROM environment_variables WHERE resourceable_type='App\\Models\\Application' AND resourceable_id=${VOICE_APP_ID} AND key='COOLIFY_SKIP_NEXT_BUILD';"
 }
