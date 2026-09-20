@@ -479,6 +479,15 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       if (!sourceId) throw new Error("sourceId required");
       return processKnowledgeSource(sourceId);
     }
+    case "voice_v3_business_import": {
+      const { runBusinessKnowledgeImport } = await import(
+        "@/lib/voice-v3/business-import/run-import"
+      );
+      const importId = String(payload.importId || "");
+      if (!importId) throw new Error("importId required");
+      await runBusinessKnowledgeImport(importId);
+      return { ok: true, importId };
+    }
     case "phone_queue_overflow": {
       const { handleQueueOverflowJob } = await import("@/lib/phone/queue-runtime");
       return handleQueueOverflowJob({
