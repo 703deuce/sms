@@ -10,11 +10,13 @@
  *   npx tsx scripts/cutover-571-livekit-v3-phase54.ts
  */
 import { writeFileSync } from "node:fs";
+import { ListUpdate } from "@livekit/protocol";
 import {
   RoomAgentDispatch,
   RoomConfiguration,
   SIPDispatchRule,
   SIPDispatchRuleCallee,
+  SIPDispatchRuleIndividual,
   SIPDispatchRuleInfo,
 } from "@livekit/protocol";
 import { telnyxRequest } from "../src/lib/messaging/telnyx/client";
@@ -251,9 +253,20 @@ async function stepDispatch(): Promise<void> {
     throw new Error("Boundary A: no dispatch rule for inbound trunk");
   }
 
+  const roomPrefix =
+    TRANSOVO_LIVEKIT_ROOM_PREFIX.replace(/-+$/, "") || "transovo-call-";
   const ruleInfo = new SIPDispatchRuleInfo({
     sipDispatchRuleId: trunkRule.sipDispatchRuleId,
-    rule: trunkRule.rule,
+    rule: new SIPDispatchRule({
+      rule: {
+        case: "dispatchRuleIndividual",
+        value: new SIPDispatchRuleIndividual({
+          roomPrefix: `${roomPrefix}-`,
+          pin: "",
+          noRandomness: false,
+        }),
+      },
+    }),
     trunkIds: trunkRule.trunkIds || [TRUNK_ID],
     numbers: trunkRule.numbers || [],
     hidePhoneNumber: trunkRule.hidePhoneNumber ?? false,
@@ -279,6 +292,17 @@ async function stepDispatch(): Promise<void> {
   });
 
   const updated = await client.updateSipDispatchRule(trunkRule.sipDispatchRuleId, ruleInfo);
+  const trunkNumbers = [
+    ...new Set([
+      ...liveKitDidLookupVariants(LEGACY_866_E164).map(toLiveKitInboundDid),
+      ...liveKitDidLookupVariants(LEGACY_866_E164).map((n) => n.replace(/^\+/, "")),
+      ...liveKitDidLookupVariants(E164).map(toLiveKitInboundDid),
+      ...liveKitDidLookupVariants(E164).map((n) => n.replace(/^\+/, "")),
+    ]),
+  ];
+  await client.updateSipInboundTrunkFields(TRUNK_ID, {
+    numbers: new ListUpdate({ set: trunkNumbers }),
+  });
   const ruleId = updated.sipDispatchRuleId || trunkRule.sipDispatchRuleId;
   const agentOk = updated.roomConfig?.agents?.[0]?.agentName === V3_AGENT;
 
