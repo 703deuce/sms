@@ -16,6 +16,7 @@
 | **MANUAL SIGN-OFF** | You must validate on a real phone / production workspace (not “missing code”). |
 
 **Combined inventory (Voice + MCTB):** `docs/TRANSOVO-V1-AI-AGENT-AND-MCTB-FEATURE-INVENTORY.md`  
+**All gaps (wizard vs runtime, P0–P2):** `docs/AI-VOICE-AGENT-GAP-REGISTER.md`  
 **Google Calendar detail only:** `docs/GOOGLE-CALENDAR-INTEGRATION-STATUS.md`
 
 ---
@@ -260,11 +261,17 @@ Loaded per call: `load-config-for-call.ts`
 
 ## 13. Known gaps & honest limits
 
+**Full gap-by-gap list (104 wizard controls not implemented, RAG, after-hours policy, qualification, transfers, booking behavior, etc.):** `docs/AI-VOICE-AGENT-GAP-REGISTER.md`
+
 | Item | Status |
 |------|--------|
 | Full PSTN certification for **every** booking mode × edge case | **MANUAL SIGN-OFF** |
 | Google Calendar on `master` | **NOT DONE** until PR #459 merges |
 | Calendly live scheduling in V3 | **NOT DONE** |
+| In-call linked KB / website RAG on PSTN | **NOT DONE** (hot context only) |
+| After-hours `whenClosed.*` policy enforcement | **NOT DONE** |
+| Qualification / urgency rules enforcement | **NOT DONE** |
+| `bookingBehavior` toggles in FIND/BOOK executors | **NOT DONE** (compile only) |
 | Multi-calendar picker (beyond `primary` / env calendar id) | **NOT DONE** |
 | On-call rotation routing in wizard | **NOT DONE** (manifest future) |
 | Website crawl auto-fill wizard | **NOT DONE** / needs re-audit |
