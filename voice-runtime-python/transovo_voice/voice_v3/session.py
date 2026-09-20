@@ -49,6 +49,17 @@ def _openai_tool_to_dict(tool: dict[str, Any] | Any) -> dict[str, Any]:
 
 async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
     backend = TransovoBackend()
+    backend_closed = False
+
+    async def shutdown_backend() -> None:
+        nonlocal backend_closed
+        if backend_closed:
+            return
+        backend_closed = True
+        await backend.close()
+
+    ctx.add_shutdown_callback(shutdown_backend)
+
     try:
         sip_participant = await _wait_for_sip_participant(ctx)
         attrs = _attrs_dict(sip_participant)
@@ -161,5 +172,6 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             room=ctx.room,
             room_options=room_options,
         )
-    finally:
-        await backend.close()
+    except Exception:
+        await shutdown_backend()
+        raise
