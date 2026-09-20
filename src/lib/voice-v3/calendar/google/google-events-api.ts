@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { ProviderCalendarEvent } from "@/lib/calendar/providers";
+import { googleWireToUtcInstant } from "./google-datetime-adapter";
 
 type GoogleEventItem = {
   id: string;
@@ -16,16 +17,36 @@ type GoogleEventItem = {
   extendedProperties?: { private?: Record<string, string> };
 };
 
-function mapGoogleItem(item: GoogleEventItem): ProviderCalendarEvent {
+function mapGoogleItem(
+  item: GoogleEventItem,
+  fallbackIanaTimeZone = "UTC",
+): ProviderCalendarEvent {
   const isAllDay = Boolean(item.start?.date && !item.start?.dateTime);
-  const startRaw = item.start?.dateTime || item.start?.date;
-  const endRaw = item.end?.dateTime || item.end?.date;
-  const start = startRaw
-    ? new Date(isAllDay ? `${startRaw}T00:00:00Z` : startRaw)
-    : new Date();
-  const end = endRaw
-    ? new Date(isAllDay ? `${endRaw}T00:00:00Z` : endRaw)
-    : new Date(start.getTime() + 30 * 60_000);
+  const tz = item.start?.timeZone || item.end?.timeZone || fallbackIanaTimeZone;
+  const startInstant =
+    item.start
+      ? googleWireToUtcInstant(
+          {
+            dateTime: item.start.dateTime,
+            date: item.start.date,
+            timeZone: item.start.timeZone,
+          },
+          tz,
+        )
+      : null;
+  const endInstant =
+    item.end
+      ? googleWireToUtcInstant(
+          {
+            dateTime: item.end.dateTime,
+            date: item.end.date,
+            timeZone: item.end.timeZone,
+          },
+          tz,
+        )
+      : null;
+  const start = startInstant ?? new Date();
+  const end = endInstant ?? new Date(start.getTime() + 30 * 60_000);
   return {
     id: item.id,
     summary: item.summary || "Calendar event",
@@ -46,11 +67,7 @@ function mapGoogleItem(item: GoogleEventItem): ProviderCalendarEvent {
   };
 }
 
-export function googleEventBlocksAvailability(event: GoogleEventItem): boolean {
-  if (event.status === "cancelled") return false;
-  if (event.transparency === "transparent") return false;
-  return true;
-}
+export { googleEventBlocksAvailability } from "./google-event-interval-normalizer";
 
 export async function listGoogleCalendarEventsPaginated(input: {
   accessToken: string;

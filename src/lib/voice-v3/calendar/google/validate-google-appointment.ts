@@ -7,6 +7,7 @@ import {
 } from "@/lib/voice/calendar/providers";
 import type { ExistingAppointment } from "../appointment-management-types";
 import { getGoogleCalendarEventRaw } from "./google-events-api";
+import { googleWireToUtcInstant } from "./google-datetime-adapter";
 
 export type GoogleAppointmentValidation =
   | { ok: true; startUtc: string; endUtc: string }
@@ -42,21 +43,31 @@ export async function validateGoogleAppointmentBeforeMutation(input: {
     if (!raw) {
       return { ok: false, reason: "not_found", message: "event not found" };
     }
-    const status = (raw as { status?: string }).status;
-    if (status === "cancelled") {
+    const event = raw as {
+      status?: string;
+      start?: { dateTime?: string; date?: string; timeZone?: string };
+      end?: { dateTime?: string; date?: string; timeZone?: string };
+    };
+    if (event.status === "cancelled") {
       return { ok: false, reason: "cancelled", message: "event already cancelled" };
     }
-    const start = (raw as { start?: { dateTime?: string; date?: string } }).start;
-    const end = (raw as { end?: { dateTime?: string; date?: string } }).end;
-    const startRaw = start?.dateTime || start?.date;
-    const endRaw = end?.dateTime || end?.date;
-    if (!startRaw || !endRaw) {
+    const tz =
+      event.start?.timeZone ||
+      event.end?.timeZone ||
+      input.calendarConfig.mailboxTimezone ||
+      "UTC";
+    const startInstant = event.start
+      ? googleWireToUtcInstant(event.start, tz)
+      : null;
+    const endInstant = event.end ? googleWireToUtcInstant(event.end, tz) : null;
+    if (!startInstant || !endInstant) {
       return { ok: false, reason: "error", message: "event missing start/end" };
     }
-    const isAllDay = Boolean(start?.date && !start?.dateTime);
-    const startUtc = new Date(isAllDay ? `${startRaw}T00:00:00Z` : startRaw).toISOString();
-    const endUtc = new Date(isAllDay ? `${endRaw}T00:00:00Z` : endRaw).toISOString();
-    return { ok: true, startUtc, endUtc };
+    return {
+      ok: true,
+      startUtc: startInstant.toISOString(),
+      endUtc: endInstant.toISOString(),
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (message.includes("401") || message.toLowerCase().includes("token")) {

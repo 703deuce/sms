@@ -7,6 +7,7 @@ import {
 } from "@/lib/voice/calendar/providers";
 import type { CreateBookingRequest } from "../booking-types";
 import { insertGoogleCalendarEvent } from "./google-events-api";
+import { canonicalUtcIntervalToGoogleTimedEventBounds } from "./google-datetime-adapter";
 
 export type GoogleCreateBookingResult =
   | {
@@ -83,9 +84,12 @@ export async function executeGoogleCreateBooking(input: {
       ),
     ]);
 
-    const start = new Date(input.request.startUtc);
-    const end = new Date(input.request.endUtc);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+    const bounds = canonicalUtcIntervalToGoogleTimedEventBounds({
+      startUtc: input.request.startUtc,
+      endUtc: input.request.endUtc,
+      timeZone: input.request.timezone,
+    });
+    if (!bounds) {
       return {
         ok: false,
         reason: "BOOKING_VALIDATION_FAILED",
@@ -111,14 +115,8 @@ export async function executeGoogleCreateBooking(input: {
         body: {
           summary,
           description: buildGoogleDescription(input.request),
-          start: {
-            dateTime: input.request.startUtc,
-            timeZone: input.request.timezone,
-          },
-          end: {
-            dateTime: input.request.endUtc,
-            timeZone: input.request.timezone,
-          },
+          start: bounds.start,
+          end: bounds.end,
           attendees: input.request.customer.email
             ? [{ email: input.request.customer.email }]
             : undefined,

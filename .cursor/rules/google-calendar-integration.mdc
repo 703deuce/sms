@@ -19,6 +19,7 @@ Read **both** before any Google Calendar work:
 
 1. **`docs/GOOGLE-CALENDAR-INTEGRATION-ENGINEERING-GUIDE.md`** — Google Calendar API v3, OAuth, `calendar.events.owned`, events CRUD, normalization, errors.
 2. **`docs/GOOGLE-CALENDAR-VOICE-V3-IMPLEMENTATION-DIRECTIVE.md`** — end-to-end wiring, UI, wizard, compile/runtime, definition of done.
+3. **`docs/GOOGLE-CALENDAR-DATETIME-PROVIDER-BOUNDARY.md`** — **date/time provider boundary** (canonical Transovo time → Google serializer/normalizer; Microsoft frozen).
 
 OAuth scope review template: **`docs/GOOGLE-CALENDAR-OAUTH-VERIFICATION.md`**
 
@@ -38,6 +39,14 @@ Implementing, changing, debugging, or reviewing Google Calendar OAuth, Integrati
 
 - Replace **visible** Calendly choice in Appointment Receptionist wizard with **Google Calendar** (Microsoft · Google · Send booking link).
 - **Do NOT** delete Calendly platform code (MCTB, legacy configs).
+
+## Date/time (locked)
+
+- Caller language is normalized **only** upstream (`scheduling-normalizer` / `set_scheduling_preference`).
+- Google code consumes **canonical UTC instants + IANA business timezone** from the scheduling engine.
+- Use `google-datetime-adapter.ts` for writes; `google-event-interval-normalizer.ts` for reads.
+- **Never** pass Microsoft Graph payloads or raw `...Z` strings as Google `dateTime` when `timeZone` is IANA.
+- Availability reads must handle **timed and all-day** Google events (exclusive all-day `end.date`).
 
 ## API / OAuth (summary — full detail in engineering guide)
 

@@ -7,10 +7,8 @@ import {
 } from "@/lib/voice/calendar/providers";
 import type { FindAvailabilityRequest } from "../types";
 import type { CalendarBusyInterval } from "../types";
-import {
-  googleEventBlocksAvailability,
-  listGoogleCalendarEventsPaginated,
-} from "./google-events-api";
+import { listGoogleCalendarEventsPaginated } from "./google-events-api";
+import { normalizeGoogleEventToBusyInterval } from "./google-event-interval-normalizer";
 
 export type GoogleFindAvailabilityResult =
   | { ok: true; busy: CalendarBusyInterval[]; durationMs: number }
@@ -85,18 +83,12 @@ export async function fetchGoogleBusyIntervals(input: {
       });
 
       for (const event of events) {
-        if (!googleEventBlocksAvailability(event)) continue;
-        const startRaw = event.start?.dateTime || event.start?.date;
-        const endRaw = event.end?.dateTime || event.end?.date;
-        if (!startRaw || !endRaw) continue;
-        const isAllDay = Boolean(event.start?.date && !event.start?.dateTime);
-        const start = new Date(isAllDay ? `${startRaw}T00:00:00Z` : startRaw);
-        const end = new Date(isAllDay ? `${endRaw}T00:00:00Z` : endRaw);
-        allBusy.push({
+        const busy = normalizeGoogleEventToBusyInterval({
+          event,
           calendarId,
-          startUtc: start.toISOString(),
-          endUtc: end.toISOString(),
+          fallbackIanaTimeZone: input.request.timezone,
         });
+        if (busy) allBusy.push(busy);
       }
     }
 

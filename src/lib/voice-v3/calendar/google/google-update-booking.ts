@@ -9,6 +9,7 @@ import {
   getGoogleCalendarEventRaw,
   replaceGoogleCalendarEvent,
 } from "./google-events-api";
+import { canonicalUtcIntervalToGoogleTimedEventBounds } from "./google-datetime-adapter";
 
 export type GoogleUpdateBookingRequest = {
   connectionId: string;
@@ -32,13 +33,19 @@ export type GoogleUpdateBookingResult =
 function sanitizeEventForUpdate(
   raw: Record<string, unknown>,
   patch: { startUtc: string; endUtc: string; timezone: string },
-): Record<string, unknown> {
+): Record<string, unknown> | null {
+  const bounds = canonicalUtcIntervalToGoogleTimedEventBounds({
+    startUtc: patch.startUtc,
+    endUtc: patch.endUtc,
+    timeZone: patch.timezone,
+  });
+  if (!bounds) return null;
   const copy = { ...raw };
   for (const key of ["kind", "etag", "id", "htmlLink", "created", "updated", "creator", "organizer"]) {
     delete copy[key];
   }
-  copy.start = { dateTime: patch.startUtc, timeZone: patch.timezone };
-  copy.end = { dateTime: patch.endUtc, timeZone: patch.timezone };
+  copy.start = bounds.start;
+  copy.end = bounds.end;
   return copy;
 }
 
@@ -76,6 +83,14 @@ export async function executeGoogleUpdateBooking(
       endUtc: request.endUtc,
       timezone: request.timezone,
     });
+    if (!body) {
+      return {
+        ok: false,
+        reason: "GOOGLE_TEMPORARY_FAILURE",
+        message: "Invalid reschedule interval",
+        durationMs: Date.now() - started,
+      };
+    }
 
     await Promise.race([
       replaceGoogleCalendarEvent({

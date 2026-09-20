@@ -122,7 +122,7 @@ export async function fetchGoogleAppointmentDiscoveryCandidates(input: {
 
       for (const raw of rawEvents) {
         if (raw.status === "cancelled") continue;
-        const event = mapGoogleEventToProvider(raw);
+        const event = mapGoogleEventToProvider(raw, input.timezone);
         const localStart = formatLocalIsoForZone(event.start, input.timezone);
         const localEnd = formatLocalIsoForZone(event.end, input.timezone);
         out.push(

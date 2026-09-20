@@ -10,6 +10,7 @@
 
 1. **No Google-specific Astra tool** if Microsoft does not work that way. Google is **another provider behind the existing scheduling tools** (`find_availability`, `book_appointment`, `find_appointment`, `reschedule_appointment`, `cancel_appointment`). The **published agent** is configured for Google; the deterministic runtime resolves those tools to Google. That prevents Google from becoming a **parallel booking system** and keeps provider choice out of Astra.
 2. **Microsoft 365 is frozen.** Trace the Microsoft path as a **read-only behavioral reference** — copy contracts and patterns, implement Google at the narrowest extension points. **Do not refactor Microsoft** while adding Google. Microsoft tests must stay green.
+3. **Date/time is a provider boundary.** Caller language is normalized once upstream; Google gets a **dedicated serializer/normalizer** (`docs/GOOGLE-CALENDAR-DATETIME-PROVIDER-BOUNDARY.md`). Never feed Google Microsoft wire shapes or unresolved natural-language dates.
 
 ---
 
