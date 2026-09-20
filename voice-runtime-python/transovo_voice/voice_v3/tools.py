@@ -26,8 +26,9 @@ def _tool_flags(name: str) -> ToolFlag:
     return ToolFlag.NONE
 
 
-def _duplicate_scope(name: str) -> DuplicateScope:
-    return DuplicateScope.NAME_AND_ARGS
+def _duplicate_scope(_name: str) -> DuplicateScope:
+    # livekit-agents 1.8.x: DuplicateScope is Literal["name", "name_and_args"], not an enum.
+    return "name_and_args"
 
 
 def build_livekit_tools(
