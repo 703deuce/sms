@@ -19,6 +19,8 @@ import {
 } from "@livekit/protocol";
 import { telnyxRequest } from "../src/lib/messaging/telnyx/client";
 import {
+  TRANSOVO_LIVEKIT_AGENT_NAME,
+  TRANSOVO_LIVEKIT_DISPATCH_RULE_NAME,
   TRANSOVO_LIVEKIT_ROOM_PREFIX,
   TRANSOVO_TELNYX_FQDN_CONNECTION_NAME,
   resolveTelnyxIngressLiveKitSipHost,
@@ -102,6 +104,48 @@ async function stepTrunk(): Promise<void> {
   }
 }
 
+const LEGACY_866_E164 = (process.env.LEGACY_866_E164 || "+18663464256").trim();
+
+/** Shared trunk rule must not claim 571 — scope legacy rule to 866 only. */
+async function narrowSharedDispatchToLegacy866(): Promise<void> {
+  const client = getLiveKitSipClient();
+  const rules = await client.listSipDispatchRule();
+  const shared =
+    rules.find((r) => r.name === TRANSOVO_LIVEKIT_DISPATCH_RULE_NAME) ||
+    rules.find((r) => r.sipDispatchRuleId === "SDR_VjjkrrgEjiR3") ||
+    null;
+  if (!shared?.sipDispatchRuleId) {
+    throw new Error("Shared dispatch rule not found for legacy 866 scoping");
+  }
+  const legacyNumbers = [
+    ...new Set(liveKitDidLookupVariants(LEGACY_866_E164).map(toLiveKitInboundDid)),
+  ];
+  const ruleInfo = new SIPDispatchRuleInfo({
+    sipDispatchRuleId: shared.sipDispatchRuleId,
+    rule: shared.rule,
+    trunkIds: shared.trunkIds || [TRUNK_ID],
+    numbers: legacyNumbers,
+    hidePhoneNumber: shared.hidePhoneNumber,
+    name: shared.name || TRANSOVO_LIVEKIT_DISPATCH_RULE_NAME,
+    metadata: shared.metadata,
+    roomConfig: new RoomConfiguration({
+      agents: [
+        new RoomAgentDispatch({
+          agentName:
+            shared.roomConfig?.agents?.[0]?.agentName || TRANSOVO_LIVEKIT_AGENT_NAME,
+          metadata: shared.roomConfig?.agents?.[0]?.metadata || "",
+        }),
+      ],
+    }),
+  });
+  await client.updateSipDispatchRule(shared.sipDispatchRuleId, ruleInfo);
+  log("shared_dispatch_scoped_866", {
+    ruleId: shared.sipDispatchRuleId,
+    numbers: legacyNumbers,
+    agent: TRANSOVO_LIVEKIT_AGENT_NAME,
+  });
+}
+
 async function upsertV3DidDispatchRule(): Promise<string> {
   const client = getLiveKitSipClient();
   const existing = await findDidDispatchRuleByName(E164);
@@ -178,6 +222,7 @@ async function upsertV3DidDispatchRule(): Promise<string> {
 }
 
 async function stepDispatch(): Promise<void> {
+  await narrowSharedDispatchToLegacy866();
   const ruleId = await upsertV3DidDispatchRule();
   const inspect = await inspectLiveKitSipRouting(E164);
   const didRule = inspect.dispatchRules.find(
