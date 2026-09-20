@@ -1,6 +1,18 @@
 # Coolify — transovo-voice (Python LiveKit worker)
 
-**Authoritative source:** `docs/deployment-transovo-web-voice-split.md` (Application 2).  
+**Authoritative source:** `docs/deployment-transovo-web-voice-split.md` (Application 2).
+
+## Three Coolify apps — do not mix logs
+
+| App ID | Name | Container runs | Realtime logs show |
+|--------|------|----------------|-------------------|
+| **1** | `sms:master-ds8s3hjin60qs6g7s0iqkixs` | Next.js `transovo-web` | HTTP, internal voice API, provisioning |
+| **2** | `transovo-voice` | Python `./scripts/start-transovo-voice-worker.sh` | `livekit.agents`, `transovo-voice-v3`, `voice_v3_*` only — **no BullMQ** |
+| **3** | `transovo-sms-worker` | `npm run worker:sms` | **BullMQ**: calendar, reminders, `crm_push_event`, Zoho/Salesforce, missed-call side effects |
+
+CRM / Zoho / “call.missed” queue lines in Coolify **always** come from **Application 3** (`transovo-sms-worker`), not from the voice worker. That is expected when a workspace has CRM integrations enabled — it is unrelated to LiveKit PSTN pickup.
+
+MCTB SIP is a **fourth** app (`transovo-mctb-sip`) when deployed — see `docs/deployment-mctb-sip-adapter.md`.  
 **Repo implementation:** `voice-runtime-python/` + `voice-runtime-python/Dockerfile`.  
 **SMS worker moved off this slot:** `docs/SMS_WORKER_CONTAINER_SETUP.md` → separate Coolify app (`Dockerfile.sms-worker`, port `8082`).
 
