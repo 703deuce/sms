@@ -1,6 +1,10 @@
 # AI Voice Agent (Voice V3) — gap register
 
-**Purpose:** Every known gap between **what the Appointment Receptionist wizard implies** and **what Voice V3 actually does on a live PSTN call**, plus ops/product gaps. Use with `docs/AI-VOICE-AGENT-FEATURE-STATUS.md` (done vs not done summary).
+**Purpose:** Narrative gap analysis between wizard and Voice V3 runtime.  
+
+**Exhaustive checklist (second audit):** `docs/AI-VOICE-AGENT-INCOMPLETE-MASTER-LIST.md` — **§1–§8 must be closed to ship** (104 manifest NI rows + false-active + sign-offs + Google + infra).  
+
+Use with `docs/AI-VOICE-AGENT-FEATURE-STATUS.md` (done vs not done summary).
 
 **Last updated:** 2026-09-20  
 **Evidence sources:** `wizard-v3-manifest-builder.ts` (216 controls), `VOICE-V3-PROMPT-WIZARD-MAPPING-AUDIT.md`, `VOICE-V3-TRANSFER-PREFLIGHT-AUDIT.md`, calendar/knowledge/runtime code search.

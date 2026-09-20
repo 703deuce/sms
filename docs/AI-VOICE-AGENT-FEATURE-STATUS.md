@@ -17,6 +17,7 @@
 
 **Combined inventory (Voice + MCTB):** `docs/TRANSOVO-V1-AI-AGENT-AND-MCTB-FEATURE-INVENTORY.md`  
 **All gaps (wizard vs runtime, P0–P2):** `docs/AI-VOICE-AGENT-GAP-REGISTER.md`  
+**Master incomplete checklist (exhaustive, §1–§8):** `docs/AI-VOICE-AGENT-INCOMPLETE-MASTER-LIST.md`  
 **Google Calendar detail only:** `docs/GOOGLE-CALENDAR-INTEGRATION-STATUS.md`
 
 ---
