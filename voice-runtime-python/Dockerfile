@@ -8,7 +8,7 @@ WORKDIR /app
 
 # Build deps for livekit-agents / audio stack wheels when needed.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends gcc ffmpeg \
+  && apt-get install -y --no-install-recommends gcc ffmpeg curl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
 COPY voice-runtime-python/pyproject.toml voice-runtime-python/README.md ./
