@@ -819,6 +819,8 @@ export function buildWizardV3FieldManifest(): WizardV3FieldManifestRow[] {
     ["callbackConfirmNumber", "Callback confirm number"],
     ["salesSolicitationEnabled", "Sales solicitation enabled"],
     ["salesSolicitationAction", "Sales solicitation action"],
+    ["spamLikelyPolicy", "Spam Likely policy"],
+    ["solicitorPolicy", "Solicitor policy"],
   ];
   for (const [path, label] of callHandlingScalars) {
     rows.push(

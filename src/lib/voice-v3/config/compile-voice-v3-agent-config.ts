@@ -23,6 +23,7 @@ import {
 } from "./wizard-collect-fields-v3";
 import { compileAfterHoursNotificationsFromWizard } from "../notifications/compile-from-wizard";
 import { resolveLivePromptControlsFromWizard } from "../prompts/live-prompt-controls";
+import { wizardSpamProtectionFromState } from "../spam-protection/types";
 
 export type VoiceV3ProviderConnections = {
   microsoftConnectionId?: string | null;
@@ -349,6 +350,7 @@ export function compileVoiceV3AgentConfig(input: {
     source: input.source ?? "wizard_published",
     configVersion: configVersionHash(wizard),
     callHandling: callHandlingFromWizard(wizard),
+    spamProtection: wizardSpamProtectionFromState(wizard),
     afterHoursNotifications: compileAfterHoursNotificationsFromWizard(wizard),
     qualification: qualificationFromWizard(wizard),
     recovery: recoveryFromWizard(wizard),

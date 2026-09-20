@@ -16,6 +16,7 @@ import type {
   VoiceV3IntegrationsConfig,
   VoiceV3BookingStrategyConfig,
 } from "./agent-config";
+import { VOICE_V3_DEFAULT_SPAM_PROTECTION } from "../spam-protection/types";
 
 export const DEFAULT_V3_CALL_HANDLING: VoiceV3CallHandlingConfig = {
   transferTriggers: [],
@@ -169,6 +170,7 @@ export function defaultNestedFromFlat(input: {
     },
     controlPlane: {},
     callHandling: { ...DEFAULT_V3_CALL_HANDLING },
+    spamProtection: { ...VOICE_V3_DEFAULT_SPAM_PROTECTION },
     qualification: { ...DEFAULT_V3_QUALIFICATION },
     recovery: { ...DEFAULT_V3_RECOVERY },
     integrations: { ...DEFAULT_V3_INTEGRATIONS },
@@ -192,6 +194,7 @@ export function mergeNestedConfig(
       | "services"
       | "transferDestinations"
       | "callHandling"
+      | "spamProtection"
       | "qualification"
       | "recovery"
       | "integrations"
@@ -216,6 +219,7 @@ export function mergeNestedConfig(
     services: patch.services ?? base.services,
     transferDestinations: patch.transferDestinations ?? base.transferDestinations,
     callHandling: { ...base.callHandling, ...patch.callHandling },
+    spamProtection: { ...base.spamProtection, ...patch.spamProtection },
     qualification: { ...base.qualification, ...patch.qualification },
     recovery: { ...base.recovery, ...patch.recovery },
     integrations: { ...base.integrations, ...patch.integrations },

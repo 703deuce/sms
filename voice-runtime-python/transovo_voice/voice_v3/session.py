@@ -22,6 +22,18 @@ def _attrs_dict(participant: rtc.RemoteParticipant) -> dict[str, str]:
     return {str(k): str(v) for k, v in (participant.attributes or {}).items()}
 
 
+def _telnyx_screening_from_attrs(attrs: dict[str, str]) -> str | None:
+    for key in (
+        "transovo.telnyx.call_screening",
+        "sip.h.X-Telnyx-Call-Screening",
+        "X-Telnyx-Call-Screening",
+    ):
+        raw = (attrs.get(key) or "").strip()
+        if raw:
+            return raw
+    return None
+
+
 async def _wait_for_sip_participant(ctx: JobContext) -> rtc.RemoteParticipant:
     participant = await asyncio.wait_for(ctx.wait_for_participant(), timeout=20.0)
     return participant
@@ -64,6 +76,7 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
     try:
         sip_participant = await _wait_for_sip_participant(ctx)
         attrs = _attrs_dict(sip_participant)
+        telnyx_screening = _telnyx_screening_from_attrs(attrs)
         caller_e164, dialed_e164 = extract_call_numbers(
             attrs,
             ctx.room.metadata,
@@ -79,6 +92,7 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             provider_call_id=attrs.get("sip.callIDFull"),
             trunk_id=attrs.get("sip.trunkID"),
             rule_id=attrs.get("sip.ruleID"),
+            telnyx_call_screening=telnyx_screening,
             live_session_id="",
             call_id="",
             workspace_id="",
@@ -86,6 +100,15 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
         )
         client = TransovoV3ToolClient(backend, provisional_ctx)
         config = await client.resolve_session_config()
+
+        if config.get("preCallReject") == "blocklist":
+            log_event(
+                "VOICE_V3_BLOCKLIST_CALL_REJECTED",
+                room=ctx.room.name,
+                extra={"callerE164": caller_e164},
+            )
+            await ctx.room.disconnect()
+            return
 
         live_session_id = str(config.get("liveSessionId") or "")
         call_ctx = VoiceV3CallContext(
@@ -97,6 +120,7 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             provider_call_id=attrs.get("sip.callIDFull"),
             trunk_id=attrs.get("sip.trunkID"),
             rule_id=attrs.get("sip.ruleID"),
+            telnyx_call_screening=telnyx_screening,
             live_session_id=live_session_id,
             call_id=str(config.get("callId") or live_session_id),
             workspace_id=str(config.get("workspaceId") or ""),

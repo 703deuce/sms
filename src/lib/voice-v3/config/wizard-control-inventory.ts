@@ -229,6 +229,8 @@ export const WIZARD_SCALAR_CONTROL_PATHS: readonly string[] = [
   "callbackRequiredCollectFieldIds",
   "salesSolicitationEnabled",
   "salesSolicitationAction",
+  "spamLikelyPolicy",
+  "solicitorPolicy",
   "aiCallRecoveryEnabled",
   "aiCallRecoveryConsentMode",
   "aiCallRecoverySendingPhoneNumberId",

@@ -28,6 +28,7 @@ export function buildVoiceV3Prompts(input: {
   currentLocalDateTime?: string;
   agentConfig?: VoiceV3AgentConfig;
   toolNames?: string[];
+  suspectedSpamLikely?: boolean;
 }) {
   const agentConfig = input.agentConfig ?? resolveVoiceV3AgentConfig();
   const timezone =
@@ -50,6 +51,7 @@ export function buildVoiceV3Prompts(input: {
     agentName,
     businessName,
     agentConfig,
+    suspectedSpamLikely: input.suspectedSpamLikely,
   });
 
   const astraInstructions = buildAstraBackendInstructions({

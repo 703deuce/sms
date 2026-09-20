@@ -511,13 +511,22 @@ export async function diagnoseAndRepairInboundNumber(input: {
       if (voiceSettings) {
         const screening = String(voiceSettings.inbound_call_screening || "disabled");
         if (screening === "reject_calls") {
+          const meta =
+            row?.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+              ? (row.metadata as Record<string, unknown>)
+              : {};
+          const sync = meta.voiceV3SpamScreeningSync as
+            | { desiredTelnyxMode?: string }
+            | undefined;
+          const intentionalBlock = sync?.desiredTelnyxMode === "reject_calls";
           issues.push({
             code: "inbound_screening_reject",
-            severity: "error",
-            message:
-              "inbound_call_screening is reject_calls — inbound calls are rejected before your app",
+            severity: intentionalBlock ? "info" : "error",
+            message: intentionalBlock
+              ? "inbound_call_screening is reject_calls (Voice V3 Spam Likely block — expected)"
+              : "inbound_call_screening is reject_calls — inbound calls are rejected before your app",
           });
-          if (input.repair) {
+          if (input.repair && !intentionalBlock) {
             await telnyxRequest(
               `/phone_numbers/${encodeURIComponent(providerNumberId)}/voice`,
               {

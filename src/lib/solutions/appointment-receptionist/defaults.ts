@@ -426,6 +426,8 @@ export function createDefaultWizardState(): AppointmentReceptionistWizardState {
     transferFallback: "return_to_ai",
     warmTransfer: false,
     detectVoicemailOnTransfer: false,
+    spamLikelyPolicy: "BLOCK",
+    solicitorPolicy: "DECLINE",
 
     agentName: "Amy",
     businessName: "",

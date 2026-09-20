@@ -261,6 +261,14 @@ export async function POST(request: Request) {
         break;
       }
 
+      case "record_voice_v3_solicitor_outcome": {
+        const { recordVoiceV3SolicitorOutcomeForLiveKit } = await import(
+          "@/lib/voice/python-runtime-bridge/voice-v3-livekit"
+        );
+        result = await recordVoiceV3SolicitorOutcomeForLiveKit(payload as never);
+        break;
+      }
+
       default:
         logInternalVoice("internal_voice_response", {
           action,

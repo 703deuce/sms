@@ -94,6 +94,8 @@ const STEP_OWNED_FIELDS: Record<
     "afterHoursNotificationRecipients",
     "salesSolicitationEnabled",
     "salesSolicitationAction",
+    "spamLikelyPolicy",
+    "solicitorPolicy",
   ],
   voice: [
     "voiceId",

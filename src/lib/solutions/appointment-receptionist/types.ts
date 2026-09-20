@@ -268,6 +268,14 @@ export type AppointmentReceptionistWizardState = {
   salesSolicitationAction?:
     | import("@/lib/voice-receptionist-wizard/after-hours-handling-types").VoiceV2SalesSolicitationAction
     | null;
+  /** Voice V3 — Telnyx Spam Likely handling (null = legacy, no carrier sync until set). */
+  spamLikelyPolicy?:
+    | import("@/lib/voice-v3/spam-protection/types").VoiceV3SpamLikelyPolicy
+    | null;
+  /** Voice V3 — Amy solicitor handling when sales intent is detected. */
+  solicitorPolicy?:
+    | import("@/lib/voice-v3/spam-protection/types").VoiceV3SolicitorPolicy
+    | null;
 
   /** Voice V2 — AI Call Recovery (unresolved AI voice → SMS text-agent continuation). */
   aiCallRecoveryEnabled?: boolean | null;
