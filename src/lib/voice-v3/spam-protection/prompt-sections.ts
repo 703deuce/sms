@@ -22,7 +22,7 @@ export function buildAmySpamSolicitorInstructions(
   const policy = spam.solicitorPolicy ?? "ALLOW";
   if (policy === "DECLINE") {
     lines.push(
-      "Solicitor policy DECLINE: politely say you are not accepting sales solicitations, then use end_call. Do not debate, transfer to the owner, or continue qualification.",
+      "Solicitor policy DECLINE: when you are confident the caller is an unsolicited salesperson, call report_unwanted_solicitor once, then politely say you are not accepting sales solicitations, then use end_call. Never use end_call for a confirmed solicitor without calling report_unwanted_solicitor first. Do not debate, transfer to the owner, or continue qualification.",
     );
   } else if (policy === "TAKE_MESSAGE") {
     lines.push(
@@ -38,7 +38,7 @@ export function buildAmySpamSolicitorInstructions(
 export function buildAstraSolicitorHint(spam: VoiceV3SpamProtectionConfig): string {
   if (spam.solicitorPolicy !== "DECLINE") return "";
   return `
-When Amy ends a confirmed unsolicited sales call, persist outcome UNWANTED_SOLICITATION via normal post-call metadata if available.
+When Amy confirms an unsolicited sales call under DECLINE policy, she must call report_unwanted_solicitor before end_call.
 Do not run extra classification tools on every turn.
 `.trim();
 }

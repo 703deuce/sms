@@ -5,7 +5,8 @@ import type {
   VoiceV3SolicitorPolicy,
   VoiceV3SpamLikelyPolicy,
 } from "@/lib/voice-v3/spam-protection/types";
-import { useState } from "react";
+import { BlockedCallersManageDialog } from "@/components/voice/blocked-callers-manage-dialog";
+import { useCallback, useEffect, useState } from "react";
 
 const SPAM_OPTIONS: Array<{
   value: VoiceV3SpamLikelyPolicy;
@@ -108,6 +109,21 @@ export function SpamUnwantedCallsEditor({
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
 }) {
   const [manageOpen, setManageOpen] = useState(false);
+  const [blockedCount, setBlockedCount] = useState<number | null>(null);
+
+  const refreshBlockedCount = useCallback(async () => {
+    try {
+      const res = await fetch("/api/voice/blocked-callers");
+      const json = await res.json();
+      if (res.ok) setBlockedCount(typeof json.count === "number" ? json.count : (json.data?.length ?? 0));
+    } catch {
+      setBlockedCount(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshBlockedCount();
+  }, [refreshBlockedCount]);
 
   return (
     <div className="rounded-xl border border-border bg-card p-4">
@@ -165,21 +181,31 @@ export function SpamUnwantedCallsEditor({
           calls may not be identified, and legitimate calls can occasionally be flagged.
         </p>
 
-        {manageOpen ? (
-          <p className="text-xs text-muted-foreground">
-            Blocked callers are managed from Call detail after a call is received. Workspace blocklist
-            applies on the next call from that number.
-          </p>
-        ) : (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
+          <div className="text-sm">
+            <span className="font-medium text-foreground">Blocked callers</span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">
+              {blockedCount == null
+                ? "…"
+                : `${blockedCount} number${blockedCount === 1 ? "" : "s"} blocked`}
+            </span>
+          </div>
           <button
             type="button"
-            className="text-xs font-medium text-primary underline-offset-2 hover:underline"
+            className="rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted"
             onClick={() => setManageOpen(true)}
           >
-            About blocked callers
+            Manage
           </button>
-        )}
+        </div>
       </div>
+      <BlockedCallersManageDialog
+        open={manageOpen}
+        onClose={() => {
+          setManageOpen(false);
+          void refreshBlockedCount();
+        }}
+      />
     </div>
   );
 }

@@ -17,4 +17,4 @@ CREATE UNIQUE INDEX "voice_caller_blocks_workspaceId_callerE164_key" ON "voice_c
 
 CREATE INDEX "voice_caller_blocks_workspaceId_createdAt_idx" ON "voice_caller_blocks"("workspaceId", "createdAt");
 
-ALTER TABLE "voice_caller_blocks" ADD CONSTRAINT "voice_caller_blocks_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "workspaces"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "voice_caller_blocks" ADD CONSTRAINT "voice_caller_blocks_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;

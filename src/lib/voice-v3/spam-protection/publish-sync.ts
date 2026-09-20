@@ -6,7 +6,10 @@ import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import { compileVoiceV3AgentConfig } from "../config/compile-voice-v3-agent-config";
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
 import { syncTelnyxInboundCallScreeningForPhone } from "./sync-telnyx-inbound-screening";
-import { ensureTelnyxSpamHeaderMappingOnInboundTrunk } from "@/lib/telephony/provisioning/livekit/telnyx-spam-header-trunk";
+import {
+  ensureTelnyxSpamHeaderMappingOnInboundTrunk,
+  reconcileAllManagedInboundTrunksSpamHeaderMapping,
+} from "@/lib/telephony/provisioning/livekit/telnyx-spam-header-trunk";
 import { isLiveKitVoiceRuntime } from "@/lib/voice/runtime-provider/config";
 
 export async function syncVoiceV3SpamProtectionOnPublish(input: {
@@ -47,7 +50,18 @@ export async function syncVoiceV3SpamProtectionOnPublish(input: {
       select: { e164: true },
     });
     if (phone?.e164) {
-      livekitTrunk = await ensureTelnyxSpamHeaderMappingOnInboundTrunk(phone.e164);
+      const perDid = await ensureTelnyxSpamHeaderMappingOnInboundTrunk(phone.e164);
+      const reconcile = await reconcileAllManagedInboundTrunksSpamHeaderMapping();
+      livekitTrunk = { perDid, reconcile };
+      if (!reconcile.ok) {
+        return {
+          ok: false,
+          error:
+            "Spam screening could not be updated on your LiveKit phone trunk. Try publishing again.",
+          telnyx,
+          livekitTrunk,
+        };
+      }
     }
   }
 

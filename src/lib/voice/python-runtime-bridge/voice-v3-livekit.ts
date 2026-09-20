@@ -28,7 +28,10 @@ import { getCurrentConversationRevision } from "@/lib/voice-v3/conversation/conv
 import type { FunctionTool } from "openai/resources/live/live";
 
 /** Tools executed natively in the LiveKit Python worker (not Astra FunctionTools). */
-export const VOICE_V3_LIVEKIT_NATIVE_TOOL_NAMES = ["end_call"] as const;
+export const VOICE_V3_LIVEKIT_NATIVE_TOOL_NAMES = [
+  "end_call",
+  "report_unwanted_solicitor",
+] as const;
 
 /**
  * @deprecated Certification-only subset — production uses wizard capability list.
@@ -73,6 +76,7 @@ export type VoiceV3LiveKitSessionConfig = {
   preCallReject?: "blocklist" | null;
   suspectedSpamLikely?: boolean;
   endCallToolHint?: string;
+  solicitorPolicy?: string;
 };
 
 function liveSessionIdForRoom(roomName: string): string {
@@ -180,6 +184,27 @@ export async function resolveVoiceV3LiveKitSession(
     config: agentConfig,
   });
 
+  if (screeningRaw || screeningNormalized !== "unknown") {
+    const { mergeVoiceV3ScreeningOnCall } = await import(
+      "@/lib/voice-v3/spam-protection/call-metadata"
+    );
+    void mergeVoiceV3ScreeningOnCall({
+      workspaceId: routing.workspaceId,
+      callId,
+      patch: {
+        carrierScreeningRaw: screeningRaw || null,
+        carrierScreeningNormalized: screeningNormalized,
+        suspectedSpamLikely,
+        spamLikelyPolicy: agentConfig.spamProtection?.spamLikelyPolicy ?? null,
+      },
+    }).catch((err) => {
+      console.warn("VOICE_V3_SCREENING_METADATA_MERGE_FAILED", {
+        callId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+  }
+
   const catalogTools = buildVoiceV3AstraFunctionToolsFromCatalog(agentConfig);
   const intakeTools = buildLiveKitIntakeFunctionTools(agentConfig);
   const mergedByName = new Map<string, FunctionTool>();
@@ -196,7 +221,7 @@ export async function resolveVoiceV3LiveKitSession(
   const solicitorPolicy = agentConfig.spamProtection?.solicitorPolicy ?? "ALLOW";
   const endCallToolHint =
     solicitorPolicy === "DECLINE"
-      ? "When ending a confirmed unsolicited sales call, close politely and use end_call."
+      ? "For a confirmed unsolicited sales call: call report_unwanted_solicitor first, give a brief polite decline, then end_call."
       : "";
 
   return {
@@ -218,6 +243,7 @@ export async function resolveVoiceV3LiveKitSession(
     textVerbosity: "low",
     suspectedSpamLikely,
     endCallToolHint,
+    solicitorPolicy,
   };
 }
 
@@ -229,7 +255,7 @@ export async function recordVoiceV3SolicitorOutcomeForLiveKit(payload: {
   const { applyUnwantedSolicitorCustomerBilling } = await import(
     "@/lib/voice-v3/spam-protection/billing"
   );
-  await applyUnwantedSolicitorCustomerBilling({
+  const billing = await applyUnwantedSolicitorCustomerBilling({
     workspaceId: payload.workspaceId,
     callId: payload.callId,
   });
@@ -237,8 +263,10 @@ export async function recordVoiceV3SolicitorOutcomeForLiveKit(payload: {
     workspaceId: payload.workspaceId,
     callId: payload.callId,
     liveSessionId: payload.liveSessionId,
+    alreadyApplied: billing.alreadyApplied,
+    applied: billing.applied,
   });
-  return { ok: true };
+  return { ok: true, alreadyApplied: billing.alreadyApplied, applied: billing.applied };
 }
 
 export type VoiceV3LiveKitExecuteToolPayload = {

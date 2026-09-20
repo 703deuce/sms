@@ -253,6 +253,7 @@ export async function GET(request: Request) {
           hasRecording: Boolean(recordingId),
           recordingId,
           hasTranscript: (c.transcripts?.length || 0) > 0,
+          metadata: c.metadata,
         };
       }),
       analytics: metrics,

@@ -9,6 +9,7 @@ import {
   fmtCallPhone,
   type CallListFilter,
 } from "@/lib/voice/calls/display";
+import { buildCallScreeningUi } from "@/lib/voice/calls/screening-display";
 import {
   MOCK_CALL_ROWS,
   MOCK_CALLS_METRICS,
@@ -48,6 +49,7 @@ type CallRow = {
   recordingId?: string | null;
   avatarUrl?: string;
   mockOutcome?: string | null;
+  metadata?: unknown;
 };
 
 type Analytics = {
@@ -291,6 +293,10 @@ export default function VoiceCallsPage() {
               status: c.status,
               mockOutcome: c.mockOutcome,
             });
+            const screeningUi = buildCallScreeningUi({
+              metadata: c.metadata,
+              outcome: c.outcome,
+            });
 
             return (
               <Link
@@ -326,7 +332,22 @@ export default function VoiceCallsPage() {
                   {fmtCallDurationTable(c.durationSeconds)}
                 </p>
 
-                <CallOutcomeBadge outcome={outcome} />
+                <div className="flex max-w-[10rem] flex-wrap gap-1">
+                  <CallOutcomeBadge outcome={outcome} />
+                  {screeningUi.extraBadges.map((badge) => (
+                    <span
+                      key={badge}
+                      className={cn(
+                        "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset",
+                        badge === "Spam Likely"
+                          ? "bg-rose-50 text-rose-700 ring-rose-200"
+                          : "bg-amber-50 text-amber-800 ring-amber-200",
+                      )}
+                    >
+                      {badge}
+                    </span>
+                  ))}
+                </div>
 
                 <p className="line-clamp-2 text-sm leading-snug text-[#4b5563]">
                   {c.summary || "No summary yet."}
