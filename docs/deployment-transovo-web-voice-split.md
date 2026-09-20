@@ -41,7 +41,7 @@ Legacy fallbacks for internal auth: `VOICE_RUNTIME_INTERNAL_SECRET`, `INTEGRATIO
 |---------|--------|
 | Dockerfile | `voice-runtime-python/Dockerfile` |
 | Coolify | Set **Base Directory** repo root; **Dockerfile Location** `voice-runtime-python/Dockerfile` |
-| Start | `python -m transovo_voice.main start` (Dockerfile CMD) |
+| Start | `voice-runtime-python/scripts/start-transovo-voice-worker.sh` (Dockerfile CMD — legacy + V3 profiles, one `rtc_session` per process) |
 | Public domain | **None** — outbound WebSocket to LiveKit only |
 | Health | Internal port `8081` (LiveKit agent health server) |
 
