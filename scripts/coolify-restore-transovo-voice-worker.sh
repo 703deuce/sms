@@ -99,12 +99,7 @@ ensure_sms_application() {
     SELECT is_static, is_git_submodules_enabled, is_git_lfs_enabled, false, is_force_https_enabled, is_debug_enabled, is_preview_deployments_enabled, ${SMS_APP_ID}, NOW(), NOW(), is_log_drain_enabled, is_gpu_enabled, gpu_driver, is_include_timestamps, is_swarm_only_worker_nodes, is_raw_compose_deployment_enabled, is_build_server_enabled, is_consistent_container_name_enabled, is_gzip_enabled, is_stripprefix_enabled, connect_to_docker_network, is_container_label_escape_enabled, is_env_sorting_enabled, is_container_label_readonly_enabled, is_preserve_repository_enabled, disable_build_cache, is_spa, is_git_shallow_clone_enabled, is_pr_deployments_public_enabled, use_build_secrets, inject_build_args_to_dockerfile, include_source_commit_in_build, docker_images_to_keep
     FROM application_settings WHERE application_id=${VOICE_APP_ID};"
 
-  psql_exec "
-    INSERT INTO environment_variables (key, value, is_preview, is_shown_once, is_multiline, version, is_literal, uuid, is_required, is_shared, resourceable_type, resourceable_id, is_runtime, is_buildtime, created_at, updated_at)
-    SELECT key, value, is_preview, is_shown_once, is_multiline, version, is_literal, md5(random()::text || key), is_required, is_shared, resourceable_type, ${SMS_APP_ID}, is_runtime, is_buildtime, NOW(), NOW()
-    FROM environment_variables
-    WHERE resourceable_type='App\\Models\\Application' AND resourceable_id=${VOICE_APP_ID};
-  "
+  echo "[coolify-voice-restore] copy SMS env via: docker exec coolify php artisan tinker (replicate from app ${VOICE_APP_ID})"
 }
 
 configure_voice_application() {
@@ -131,14 +126,7 @@ configure_voice_application() {
     WHERE id = ${VOICE_APP_ID};
   "
 
-  psql_exec "
-    INSERT INTO environment_variables (key, value, is_preview, is_shown_once, is_multiline, version, is_literal, uuid, is_required, is_shared, resourceable_type, resourceable_id, is_runtime, is_buildtime, created_at, updated_at)
-    SELECT 'VOICE_V3_LIVEKIT_AGENT_NAME', 'transovo-voice-v3', false, false, false, version, false, md5('v3agent'), false, false, 'App\\Models\\Application', ${VOICE_APP_ID}, true, true, NOW(), NOW()
-    WHERE NOT EXISTS (
-      SELECT 1 FROM environment_variables
-      WHERE resourceable_type='App\\Models\\Application' AND resourceable_id=${VOICE_APP_ID} AND key='VOICE_V3_LIVEKIT_AGENT_NAME'
-    );
-  "
+  echo "[coolify-voice-restore] ensure VOICE_V3_LIVEKIT_AGENT_NAME via Coolify tinker (encrypted env — do not raw-SQL insert)"
 
   psql_exec "
     UPDATE environment_variables SET value = 'livekit_cloud'

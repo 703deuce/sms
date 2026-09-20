@@ -12,7 +12,10 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 COPY voice-runtime-python/pyproject.toml voice-runtime-python/README.md ./
+COPY voice-runtime-python/scripts/start-transovo-voice-worker.sh ./scripts/start-transovo-voice-worker.sh
 COPY voice-runtime-python/transovo_voice ./transovo_voice
+
+RUN chmod +x ./scripts/start-transovo-voice-worker.sh
 
 RUN pip install --no-cache-dir --upgrade pip \
   && pip install --no-cache-dir \
@@ -32,4 +35,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
 
 EXPOSE 8081
 
-CMD ["python", "-m", "transovo_voice.main", "start"]
+CMD ["./scripts/start-transovo-voice-worker.sh"]
