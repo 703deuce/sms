@@ -375,6 +375,7 @@ export function buildWizardAgentConfig(
   const bookingStrategy = deriveBookingStrategyFromWizard(state);
   const useOpenAiRealtimeTelnyxTransport =
     bookingStrategy === "MICROSOFT_365" ||
+    bookingStrategy === "GOOGLE_CALENDAR" ||
     bookingStrategy === "CALENDLY" ||
     bookingStrategy === "SEND_LINK";
 
