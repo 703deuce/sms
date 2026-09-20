@@ -133,6 +133,22 @@ Cloud agent **cannot** place PSTN; user/operator must call.
 
 ---
 
+## Incident: rings forever, agent never answers (2026-09-20 ~02:32 UTC)
+
+| Layer | Evidence |
+|-------|----------|
+| SIP / dispatch | **OK** — LiveKit dispatched job `AJ_wWxbv7Kq59RJ` to **`transovo-voice-v3`** (`transovo-call-*` room) |
+| Voice worker (App 2) | Job entered `run_voice_v3_livekit_session` then **crashed** |
+| Web (App 1) | `POST resolve_voice_v3_livekit_session` → **400** `Unknown action` (web image `21748516` — handlers not deployed) |
+
+**Fix:** Merge `8995f1b0` to `master` and deploy **transovo-web** (Coolify app 1). After deploy, action returns real validation/errors (e.g. `dialedE164 is required`), not `unknown_action`.
+
+**Coolify note:** First web deploy attempt failed on stale `coolify-helper` container name conflict — remove orphan helper containers and redeploy.
+
+**Retry PSTN** after web `commitSha` = `8995f1b0…`.
+
+---
+
 ## Rollback (not executed)
 
 - Git: direct-OpenAI path unchanged.
