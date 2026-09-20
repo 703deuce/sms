@@ -2,7 +2,11 @@ import { ListUpdate } from "@livekit/protocol";
 import type { SIPInboundTrunkInfo } from "livekit-server-sdk";
 import type { MediaBackend } from "@/lib/voice/media-backend/types";
 import { getLiveKitSipClient } from "./client";
-import { TELNYX_US_SIGNALING_IPS } from "./telnyx-ips";
+import {
+  TELNYX_LIVEKIT_INBOUND_ALLOWED_ADDRESSES,
+  TELNYX_US_SIGNALING_CIDR,
+  TELNYX_US_SIGNALING_IPS,
+} from "./telnyx-ips";
 
 function readAllowedAddresses(trunk: SIPInboundTrunkInfo): string[] {
   return (
@@ -50,16 +54,57 @@ export async function ensureTelnyxSignalingAllowlist(input: {
   }
 
   const current = readAllowedAddresses(trunk);
+  const hasTelnyxCidr = current.some(
+    (entry) => entry === TELNYX_US_SIGNALING_CIDR || entry === "192.76.120.0/22",
+  );
+  const hasExplicitIps =
+    current.length > 0 &&
+    TELNYX_US_SIGNALING_IPS.every((ip) => telnyxSignalingIpAllowed(ip, current));
+
   if (!current.length) {
-    return { patched: false, allowedAddresses: [], actions: ["telnyx_allowlist_open"] };
+    await client.updateSipInboundTrunkFields(input.trunkId, {
+      allowedAddresses: new ListUpdate({
+        set: [...TELNYX_LIVEKIT_INBOUND_ALLOWED_ADDRESSES],
+      }),
+    });
+    return {
+      patched: true,
+      allowedAddresses: [...TELNYX_LIVEKIT_INBOUND_ALLOWED_ADDRESSES],
+      actions: ["telnyx_allowlist_set_cidr"],
+    };
   }
 
-  const missing = missingTelnyxSignalingIps(current);
-  if (!missing.length) {
+  const coversAllSignalingIps = TELNYX_US_SIGNALING_IPS.every((ip) =>
+    telnyxSignalingIpAllowed(ip, current),
+  );
+
+  if (hasTelnyxCidr && coversAllSignalingIps) {
     return { patched: false, allowedAddresses: current, actions: ["telnyx_allowlist_ok"] };
   }
 
-  const next = [...new Set([...current, ...TELNYX_US_SIGNALING_IPS])];
+  if (!coversAllSignalingIps) {
+    await client.updateSipInboundTrunkFields(input.trunkId, {
+      allowedAddresses: new ListUpdate({
+        set: [...TELNYX_LIVEKIT_INBOUND_ALLOWED_ADDRESSES],
+      }),
+    });
+    return {
+      patched: true,
+      allowedAddresses: [...TELNYX_LIVEKIT_INBOUND_ALLOWED_ADDRESSES],
+      actions: [
+        hasTelnyxCidr
+          ? "telnyx_allowlist_completed_us_signaling"
+          : "telnyx_allowlist_upgraded_to_cidr",
+      ],
+    };
+  }
+
+  if (hasTelnyxCidr || hasExplicitIps) {
+    return { patched: false, allowedAddresses: current, actions: ["telnyx_allowlist_ok"] };
+  }
+
+  const missing = missingTelnyxSignalingIps(current);
+  const next = [...new Set([...current, ...TELNYX_US_SIGNALING_IPS, TELNYX_US_SIGNALING_CIDR])];
   await client.updateSipInboundTrunkFields(input.trunkId, {
     allowedAddresses: new ListUpdate({ set: next }),
   });
