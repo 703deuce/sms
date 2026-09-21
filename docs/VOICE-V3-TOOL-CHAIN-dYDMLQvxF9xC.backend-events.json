@@ -1,0 +1,1847 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-21T14:43:54.898Z",
+  "callId": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+  "roomSuffix": "dYDMLQvxF9xC",
+  "callStartedAt": "2026-09-21T14:37:20.856Z",
+  "callEndedAt": "2026-09-21T14:39:21.114Z",
+  "gptLiveSessionId": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP",
+  "toolPairs": [
+    {
+      "tool": "update_intake",
+      "fcId": "",
+      "startMs": 36646,
+      "endMs": 36673,
+      "durationMs": 27,
+      "status": "INTAKE_UPDATED",
+      "startUtc": "2026-09-21T14:37:57.502Z",
+      "endUtc": "2026-09-21T14:37:57.529Z"
+    },
+    {
+      "tool": "update_intake",
+      "fcId": "",
+      "startMs": 62694,
+      "endMs": 62726,
+      "durationMs": 32,
+      "status": "INTAKE_UPDATED",
+      "startUtc": "2026-09-21T14:38:23.550Z",
+      "endUtc": "2026-09-21T14:38:23.582Z"
+    },
+    {
+      "tool": "set_scheduling_preference",
+      "fcId": "",
+      "startMs": 69022,
+      "endMs": 69057,
+      "durationMs": 35,
+      "status": "SCHEDULING_PREFERENCE_SET",
+      "startUtc": "2026-09-21T14:38:29.878Z",
+      "endUtc": "2026-09-21T14:38:29.913Z"
+    },
+    {
+      "tool": "find_availability",
+      "fcId": "",
+      "startMs": 71050,
+      "endMs": 72522,
+      "durationMs": 1472,
+      "status": "available",
+      "startUtc": "2026-09-21T14:38:31.906Z",
+      "endUtc": "2026-09-21T14:38:33.378Z"
+    },
+    {
+      "tool": "book_appointment",
+      "fcId": "",
+      "startMs": 85359,
+      "endMs": 87221,
+      "durationMs": 1862,
+      "status": "confirmed",
+      "startUtc": "2026-09-21T14:38:46.215Z",
+      "endUtc": "2026-09-21T14:38:48.077Z"
+    }
+  ],
+  "nodePairs": [
+    {
+      "tool": "update_intake",
+      "durationMs": 13,
+      "status": "INTAKE_UPDATED",
+      "startUtc": "2026-09-21T14:37:54.607Z",
+      "endUtc": "2026-09-21T14:37:54.620Z"
+    },
+    {
+      "tool": "update_intake",
+      "durationMs": 4,
+      "status": "INTAKE_UPDATED",
+      "startUtc": "2026-09-21T14:38:20.670Z",
+      "endUtc": "2026-09-21T14:38:20.674Z"
+    },
+    {
+      "tool": "set_scheduling_preference",
+      "durationMs": 3,
+      "status": "SCHEDULING_PREFERENCE_SET",
+      "startUtc": "2026-09-21T14:38:27.001Z",
+      "endUtc": "2026-09-21T14:38:27.004Z"
+    },
+    {
+      "tool": "find_availability",
+      "durationMs": 1452,
+      "status": "available",
+      "startUtc": "2026-09-21T14:38:29.018Z",
+      "endUtc": "2026-09-21T14:38:30.470Z"
+    },
+    {
+      "tool": "book_appointment",
+      "durationMs": 1854,
+      "status": "confirmed",
+      "startUtc": "2026-09-21T14:38:43.315Z",
+      "endUtc": "2026-09-21T14:38:45.169Z"
+    }
+  ],
+  "phase": {
+    "infoDumpEndMonotonicMs": 30447,
+    "schedulingQuestionMonotonicMs": 56696
+  },
+  "toolEvents": [
+    {
+      "kind": "NODE_TOOL_EXECUTION_STARTED",
+      "detail": {
+        "tool_name": "update_intake",
+        "function_call_id": "call_hNd9X6VpgNvBZgYyG46Tmiz4"
+      },
+      "source": "node",
+      "occurred_at_ms": [REDACTED],
+      "occurred_at_utc": "2026-09-21T14:37:54.797Z",
+      "monotonic_ms_from_call_start": 33751
+    },
+    {
+      "kind": "NODE_TOOL_EXECUTION_COMPLETED",
+      "detail": {
+        "ok": true,
+        "status": "INTAKE_UPDATED",
+        "tool_name": "update_intake",
+        "elapsed_ms": 13,
+        "function_call_id": "call_hNd9X6VpgNvBZgYyG46Tmiz4"
+      },
+      "source": "node",
+      "occurred_at_ms": [REDACTED],
+      "occurred_at_utc": "2026-09-21T14:37:54.810Z",
+      "monotonic_ms_from_call_start": 33764
+    },
+    {
+      "kind": "FUNCTION_TOOL_STARTED",
+      "detail": {
+        "tool": "update_intake",
+        "call_id": "call_hNd9X6VpgNvBZgYyG46Tmiz4"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:37:54.788Z",
+      "monotonic_ms_from_call_start": 36646
+    },
+    {
+      "kind": "FUNCTION_TOOL_COMPLETED",
+      "detail": {
+        "ok": true,
+        "code": null,
+        "tool": "update_intake",
+        "status": "INTAKE_UPDATED",
+        "call_id": "call_hNd9X6VpgNvBZgYyG46Tmiz4",
+        "elapsed_ms": 26
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:37:54.814Z",
+      "monotonic_ms_from_call_start": 36673
+    },
+    {
+      "kind": "BACKEND_LLM_METRICS_COLLECTED",
+      "detail": {
+        "ttft": -1,
+        "type": "llm_metrics",
+        "label": "livekit.plugins.openai.realtime.gpt_live_model.GPTLiveModel",
+        "duration": 0,
+        "metadata": {
+          "model_name": "gpt-5.6-sol",
+          "model_provider": "api.openai.com"
+        },
+        "cancelled": false,
+        "speech_id": null,
+        "timestamp": [REDACTED].042935,
+        "request_id": "resp_0f9e0702774de336006ab1413f205487d1a16c[REDACTED]b7",
+        "total_tokens": "[redacted]",
+        "metrics_label": "LLMMetrics",
+        "prompt_tokens": "[redacted]",
+        "reasoning_tokens": "[redacted]",
+        "completion_tokens": "[redacted]",
+        "tokens_per_second": "[redacted]",
+        "prompt_cached_tokens": "[redacted]",
+        "cache_creation_tokens": "[redacted]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:37:55.047Z",
+      "monotonic_ms_from_call_start": 36905
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_TOOL_RESULT_QUEUED",
+      "detail": {
+        "call_id": "call_hNd9X6VpgNvBZgYyG46Tmiz4",
+        "direction": "client",
+        "item_type": "function_call_output",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "client_event_id": "tool_output_f0e736eba47d",
+        "client_event_type": "response.item.create",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:37:57.284Z",
+      "monotonic_ms_from_call_start": 39142
+    },
+    {
+      "kind": "BACKEND_LLM_METRICS_COLLECTED",
+      "detail": {
+        "ttft": -1,
+        "type": "llm_metrics",
+        "label": "livekit.plugins.openai.realtime.gpt_live_model.GPTLiveModel",
+        "duration": 0,
+        "metadata": {
+          "model_name": "gpt-5.6-sol",
+          "model_provider": "api.openai.com"
+        },
+        "cancelled": false,
+        "speech_id": null,
+        "timestamp": [REDACTED].9906168,
+        "request_id": "resp_0f9e0702774de336006ab[REDACTED]d1a0b166b551c6b5d2",
+        "total_tokens": "[redacted]",
+        "metrics_label": "LLMMetrics",
+        "prompt_tokens": "[redacted]",
+        "reasoning_tokens": "[redacted]",
+        "completion_tokens": "[redacted]",
+        "tokens_per_second": "[redacted]",
+        "prompt_cached_tokens": "[redacted]",
+        "cache_creation_tokens": "[redacted]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:00.990Z",
+      "monotonic_ms_from_call_start": 42849
+    },
+    {
+      "kind": "BACKEND_LLM_METRICS_COLLECTED",
+      "detail": {
+        "ttft": -1,
+        "type": "llm_metrics",
+        "label": "livekit.plugins.openai.realtime.gpt_live_model.GPTLiveModel",
+        "duration": 0,
+        "metadata": {
+          "model_name": "gpt-5.6-sol",
+          "model_provider": "api.openai.com"
+        },
+        "cancelled": false,
+        "speech_id": null,
+        "timestamp": [REDACTED].1821935,
+        "request_id": "resp_0f9e0702774de336006ab[REDACTED]d182d2a7094d9ed641",
+        "total_tokens": "[redacted]",
+        "metrics_label": "LLMMetrics",
+        "prompt_tokens": "[redacted]",
+        "reasoning_tokens": "[redacted]",
+        "completion_tokens": "[redacted]",
+        "tokens_per_second": "[redacted]",
+        "prompt_cached_tokens": "[redacted]",
+        "cache_creation_tokens": "[redacted]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:04.182Z",
+      "monotonic_ms_from_call_start": 46041
+    },
+    {
+      "kind": "NODE_TOOL_EXECUTION_STARTED",
+      "detail": {
+        "tool_name": "update_intake",
+        "function_call_id": "call_1nHnAFUEWDym91qsQ54wWIRs"
+      },
+      "source": "node",
+      "occurred_at_ms": [REDACTED],
+      "occurred_at_utc": "2026-09-21T14:38:20.860Z",
+      "monotonic_ms_from_call_start": 59814
+    },
+    {
+      "kind": "NODE_TOOL_EXECUTION_COMPLETED",
+      "detail": {
+        "ok": true,
+        "status": "INTAKE_UPDATED",
+        "tool_name": "update_intake",
+        "elapsed_ms": 4,
+        "function_call_id": "call_1nHnAFUEWDym91qsQ54wWIRs"
+      },
+      "source": "node",
+      "occurred_at_ms": [REDACTED],
+      "occurred_at_utc": "2026-09-21T14:38:20.864Z",
+      "monotonic_ms_from_call_start": 59818
+    },
+    {
+      "kind": "FUNCTION_TOOL_STARTED",
+      "detail": {
+        "tool": "update_intake",
+        "call_id": "call_1nHnAFUEWDym91qsQ54wWIRs"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:20.835Z",
+      "monotonic_ms_from_call_start": 62694
+    },
+    {
+      "kind": "FUNCTION_TOOL_COMPLETED",
+      "detail": {
+        "ok": true,
+        "code": null,
+        "tool": "update_intake",
+        "status": "INTAKE_UPDATED",
+        "call_id": "call_1nHnAFUEWDym91qsQ54wWIRs",
+        "elapsed_ms": 32
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:20.867Z",
+      "monotonic_ms_from_call_start": 62726
+    },
+    {
+      "kind": "BACKEND_LLM_METRICS_COLLECTED",
+      "detail": {
+        "ttft": -1,
+        "type": "llm_metrics",
+        "label": "livekit.plugins.openai.realtime.gpt_live_model.GPTLiveModel",
+        "duration": 0,
+        "metadata": {
+          "model_name": "gpt-5.6-sol",
+          "model_provider": "api.openai.com"
+        },
+        "cancelled": false,
+        "speech_id": null,
+        "timestamp": [REDACTED].1164167,
+        "request_id": "resp_0f9e0702774de336006ab1415ab5e087d1a76d6935c4a20e7e",
+        "total_tokens": "[redacted]",
+        "metrics_label": "LLMMetrics",
+        "prompt_tokens": "[redacted]",
+        "reasoning_tokens": "[redacted]",
+        "completion_tokens": "[redacted]",
+        "tokens_per_second": "[redacted]",
+        "prompt_cached_tokens": "[redacted]",
+        "cache_creation_tokens": "[redacted]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:21.116Z",
+      "monotonic_ms_from_call_start": 62975
+    },
+    {
+      "kind": "NODE_TOOL_EXECUTION_STARTED",
+      "detail": {
+        "tool_name": "set_scheduling_preference",
+        "function_call_id": "call_GpvLmEqqn9DUHQXvsRNRBsoQ"
+      },
+      "source": "node",
+      "occurred_at_ms": [REDACTED],
+      "occurred_at_utc": "2026-09-21T14:38:27.191Z",
+      "monotonic_ms_from_call_start": 66145
+    },
+    {
+      "kind": "NODE_TOOL_EXECUTION_COMPLETED",
+      "detail": {
+        "ok": true,
+        "status": "SCHEDULING_PREFERENCE_SET",
+        "tool_name": "set_scheduling_preference",
+        "elapsed_ms": 3,
+        "function_call_id": "call_GpvLmEqqn9DUHQXvsRNRBsoQ"
+      },
+      "source": "node",
+      "occurred_at_ms": [REDACTED],
+      "occurred_at_utc": "2026-09-21T14:38:27.194Z",
+      "monotonic_ms_from_call_start": 66148
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_TOOL_RESULT_QUEUED",
+      "detail": {
+        "call_id": "call_1nHnAFUEWDym91qsQ54wWIRs",
+        "direction": "client",
+        "item_type": "function_call_output",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "client_event_id": "tool_output_dceccfda2d56",
+        "client_event_type": "response.item.create",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:24.765Z",
+      "monotonic_ms_from_call_start": 66624
+    },
+    {
+      "kind": "NODE_TOOL_EXECUTION_STARTED",
+      "detail": {
+        "tool_name": "find_availability",
+        "function_call_id": "call_J7hPxuMlJDhaLsYPmHOZD0Ed"
+      },
+      "source": "node",
+      "occurred_at_ms": [REDACTED],
+      "occurred_at_utc": "2026-09-21T14:38:29.208Z",
+      "monotonic_ms_from_call_start": 68162
+    },
+    {
+      "kind": "FUNCTION_TOOL_STARTED",
+      "detail": {
+        "tool": "set_scheduling_preference",
+        "call_id": "call_GpvLmEqqn9DUHQXvsRNRBsoQ"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:27.164Z",
+      "monotonic_ms_from_call_start": 69022
+    },
+    {
+      "kind": "FUNCTION_TOOL_COMPLETED",
+      "detail": {
+        "ok": true,
+        "code": null,
+        "tool": "set_scheduling_preference",
+        "status": "SCHEDULING_PREFERENCE_SET",
+        "call_id": "call_GpvLmEqqn9DUHQXvsRNRBsoQ",
+        "elapsed_ms": 34
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:27.198Z",
+      "monotonic_ms_from_call_start": 69057
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_TOOL_RESULT_QUEUED",
+      "detail": {
+        "call_id": "call_GpvLmEqqn9DUHQXvsRNRBsoQ",
+        "direction": "client",
+        "item_type": "function_call_output",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "client_event_id": "tool_output_41907b0bbd9d",
+        "client_event_type": "response.item.create",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:27.202Z",
+      "monotonic_ms_from_call_start": 69061
+    },
+    {
+      "kind": "BACKEND_LLM_METRICS_COLLECTED",
+      "detail": {
+        "ttft": -1,
+        "type": "llm_metrics",
+        "label": "livekit.plugins.openai.realtime.gpt_live_model.GPTLiveModel",
+        "duration": 0,
+        "metadata": {
+          "model_name": "gpt-5.6-sol",
+          "model_provider": "api.openai.com"
+        },
+        "cancelled": false,
+        "speech_id": null,
+        "timestamp": [REDACTED].4039102,
+        "request_id": "resp_0f9e0702774de336006ab14160e16c87d1abe011308c61827c",
+        "total_tokens": "[redacted]",
+        "metrics_label": "LLMMetrics",
+        "prompt_tokens": "[redacted]",
+        "reasoning_tokens": "[redacted]",
+        "completion_tokens": "[redacted]",
+        "tokens_per_second": "[redacted]",
+        "prompt_cached_tokens": "[redacted]",
+        "cache_creation_tokens": "[redacted]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:27.404Z",
+      "monotonic_ms_from_call_start": 69263
+    },
+    {
+      "kind": "NODE_TOOL_EXECUTION_COMPLETED",
+      "detail": {
+        "ok": true,
+        "status": "available",
+        "tool_name": "find_availability",
+        "elapsed_ms": 1452,
+        "function_call_id": "call_J7hPxuMlJDhaLsYPmHOZD0Ed"
+      },
+      "source": "node",
+      "occurred_at_ms": [REDACTED],
+      "occurred_at_utc": "2026-09-21T14:38:30.660Z",
+      "monotonic_ms_from_call_start": 69614
+    },
+    {
+      "kind": "FUNCTION_TOOL_STARTED",
+      "detail": {
+        "tool": "find_availability",
+        "call_id": "call_J7hPxuMlJDhaLsYPmHOZD0Ed"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:29.191Z",
+      "monotonic_ms_from_call_start": 71050
+    },
+    {
+      "kind": "BACKEND_LLM_METRICS_COLLECTED",
+      "detail": {
+        "ttft": -1,
+        "type": "llm_metrics",
+        "label": "livekit.plugins.openai.realtime.gpt_live_model.GPTLiveModel",
+        "duration": 0,
+        "metadata": {
+          "model_name": "gpt-5.6-sol",
+          "model_provider": "api.openai.com"
+        },
+        "cancelled": false,
+        "speech_id": null,
+        "timestamp": [REDACTED].484144,
+        "request_id": "resp_0f9e0702774de336006ab141637df487d1a5171d8542c8a120",
+        "total_tokens": "[redacted]",
+        "metrics_label": "LLMMetrics",
+        "prompt_tokens": "[redacted]",
+        "reasoning_tokens": "[redacted]",
+        "completion_tokens": "[redacted]",
+        "tokens_per_second": "[redacted]",
+        "prompt_cached_tokens": "[redacted]",
+        "cache_creation_tokens": "[redacted]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:29.484Z",
+      "monotonic_ms_from_call_start": 71343
+    },
+    {
+      "kind": "FUNCTION_TOOL_COMPLETED",
+      "detail": {
+        "ok": true,
+        "code": null,
+        "tool": "find_availability",
+        "status": "available",
+        "call_id": "call_J7hPxuMlJDhaLsYPmHOZD0Ed",
+        "elapsed_ms": 1471
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:30.664Z",
+      "monotonic_ms_from_call_start": 72522
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_TOOL_RESULT_QUEUED",
+      "detail": {
+        "call_id": "call_J7hPxuMlJDhaLsYPmHOZD0Ed",
+        "direction": "client",
+        "item_type": "function_call_output",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "client_event_id": "tool_output_1ec7d1b8dc56",
+        "client_event_type": "response.item.create",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:30.666Z",
+      "monotonic_ms_from_call_start": 72525
+    },
+    {
+      "kind": "BACKEND_LLM_METRICS_COLLECTED",
+      "detail": {
+        "ttft": -1,
+        "type": "llm_metrics",
+        "label": "livekit.plugins.openai.realtime.gpt_live_model.GPTLiveModel",
+        "duration": 0,
+        "metadata": {
+          "model_name": "gpt-5.6-sol",
+          "model_provider": "api.openai.com"
+        },
+        "cancelled": false,
+        "speech_id": null,
+        "timestamp": [REDACTED].2780006,
+        "request_id": "resp_0f9e0702774de336006ab14166c1cc87d197b65e39946c2245",
+        "total_tokens": "[redacted]",
+        "metrics_label": "LLMMetrics",
+        "prompt_tokens": "[redacted]",
+        "reasoning_tokens": "[redacted]",
+        "completion_tokens": "[redacted]",
+        "tokens_per_second": "[redacted]",
+        "prompt_cached_tokens": "[redacted]",
+        "cache_creation_tokens": "[redacted]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:33.278Z",
+      "monotonic_ms_from_call_start": 75137
+    },
+    {
+      "kind": "NODE_TOOL_EXECUTION_STARTED",
+      "detail": {
+        "tool_name": "book_appointment",
+        "function_call_id": "call_nVhbFI0yfBtqwmtnDodxuYst"
+      },
+      "source": "node",
+      "occurred_at_ms": [REDACTED],
+      "occurred_at_utc": "2026-09-21T14:38:43.505Z",
+      "monotonic_ms_from_call_start": 82459
+    },
+    {
+      "kind": "NODE_TOOL_EXECUTION_COMPLETED",
+      "detail": {
+        "ok": true,
+        "status": "confirmed",
+        "tool_name": "book_appointment",
+        "elapsed_ms": 1854,
+        "function_call_id": "call_nVhbFI0yfBtqwmtnDodxuYst"
+      },
+      "source": "node",
+      "occurred_at_ms": [REDACTED],
+      "occurred_at_utc": "2026-09-21T14:38:45.359Z",
+      "monotonic_ms_from_call_start": 84313
+    },
+    {
+      "kind": "FUNCTION_TOOL_STARTED",
+      "detail": {
+        "tool": "book_appointment",
+        "call_id": "call_nVhbFI0yfBtqwmtnDodxuYst"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:43.500Z",
+      "monotonic_ms_from_call_start": 85359
+    },
+    {
+      "kind": "BACKEND_LLM_METRICS_COLLECTED",
+      "detail": {
+        "ttft": -1,
+        "type": "llm_metrics",
+        "label": "livekit.plugins.openai.realtime.gpt_live_model.GPTLiveModel",
+        "duration": 0,
+        "metadata": {
+          "model_name": "gpt-5.6-sol",
+          "model_provider": "api.openai.com"
+        },
+        "cancelled": false,
+        "speech_id": null,
+        "timestamp": [REDACTED].752787,
+        "request_id": "resp_0f9e0702774de336006ab[REDACTED]d18e7d8ab1cc8bebe1",
+        "total_tokens": "[redacted]",
+        "metrics_label": "LLMMetrics",
+        "prompt_tokens": "[redacted]",
+        "reasoning_tokens": "[redacted]",
+        "completion_tokens": "[redacted]",
+        "tokens_per_second": "[redacted]",
+        "prompt_cached_tokens": "[redacted]",
+        "cache_creation_tokens": "[redacted]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:43.753Z",
+      "monotonic_ms_from_call_start": 85611
+    },
+    {
+      "kind": "FUNCTION_TOOL_COMPLETED",
+      "detail": {
+        "ok": true,
+        "code": null,
+        "tool": "book_appointment",
+        "status": "confirmed",
+        "call_id": "call_nVhbFI0yfBtqwmtnDodxuYst",
+        "elapsed_ms": 1861
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:45.362Z",
+      "monotonic_ms_from_call_start": 87221
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_TOOL_RESULT_QUEUED",
+      "detail": {
+        "call_id": "call_nVhbFI0yfBtqwmtnDodxuYst",
+        "direction": "client",
+        "item_type": "function_call_output",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "client_event_id": "tool_output_6f3c42b7425e",
+        "client_event_type": "response.item.create",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:45.365Z",
+      "monotonic_ms_from_call_start": 87223
+    },
+    {
+      "kind": "BACKEND_LLM_METRICS_COLLECTED",
+      "detail": {
+        "ttft": -1,
+        "type": "llm_metrics",
+        "label": "livekit.plugins.openai.realtime.gpt_live_model.GPTLiveModel",
+        "duration": 0,
+        "metadata": {
+          "model_name": "gpt-5.6-sol",
+          "model_provider": "api.openai.com"
+        },
+        "cancelled": false,
+        "speech_id": null,
+        "timestamp": [REDACTED].3880317,
+        "request_id": "resp_0f9e0702774de336006ab[REDACTED]d18d5bde321ca636e5",
+        "total_tokens": "[redacted]",
+        "metrics_label": "LLMMetrics",
+        "prompt_tokens": "[redacted]",
+        "reasoning_tokens": "[redacted]",
+        "completion_tokens": "[redacted]",
+        "tokens_per_second": "[redacted]",
+        "prompt_cached_tokens": "[redacted]",
+        "cache_creation_tokens": "[redacted]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:47.388Z",
+      "monotonic_ms_from_call_start": 89247
+    }
+  ],
+  "delegationLifecycleRows": [
+    {
+      "responseId": "resp_0f9e0702774de336006ab1413f205487d1a16c[REDACTED]b7",
+      "delegationId": "item_EQZRPUrf52qjtwDsUVZFn",
+      "createdUtc": "",
+      "functionCallEmittedUtc": "",
+      "callId": "",
+      "toolName": "",
+      "functionToolStartUtc": "",
+      "functionToolEndUtc": "",
+      "toolResultQueuedUtc": "",
+      "continuationCreateUtc": "",
+      "completedUtc": "",
+      "metricsCompletedUtc": ""
+    },
+    {
+      "responseId": "resp_0f9e0702774de336006ab[REDACTED]d1a0b166b551c6b5d2",
+      "delegationId": "item_EQZRPUrf52qjtwDsUVZFn",
+      "createdUtc": "",
+      "functionCallEmittedUtc": "",
+      "callId": "",
+      "toolName": "",
+      "functionToolStartUtc": "",
+      "functionToolEndUtc": "",
+      "toolResultQueuedUtc": "",
+      "continuationCreateUtc": "",
+      "completedUtc": "",
+      "metricsCompletedUtc": ""
+    },
+    {
+      "responseId": "resp_0f9e0702774de336006ab[REDACTED]d182d2a7094d9ed641",
+      "delegationId": "item_EQZRYR5ozB9RlojFGMEQ0",
+      "createdUtc": "",
+      "functionCallEmittedUtc": "",
+      "callId": "",
+      "toolName": "",
+      "functionToolStartUtc": "",
+      "functionToolEndUtc": "",
+      "toolResultQueuedUtc": "",
+      "continuationCreateUtc": "",
+      "completedUtc": "",
+      "metricsCompletedUtc": ""
+    },
+    {
+      "responseId": "resp_0f9e0702774de336006ab1415ab5e087d1a76d6935c4a20e7e",
+      "delegationId": "item_EQZRq6Onwi8rw4TMBfOkh",
+      "createdUtc": "",
+      "functionCallEmittedUtc": "",
+      "callId": "",
+      "toolName": "",
+      "functionToolStartUtc": "",
+      "functionToolEndUtc": "",
+      "toolResultQueuedUtc": "",
+      "continuationCreateUtc": "",
+      "completedUtc": "",
+      "metricsCompletedUtc": ""
+    },
+    {
+      "responseId": "resp_0f9e0702774de336006ab14160e16c87d1abe011308c61827c",
+      "delegationId": "item_EQZRq6Onwi8rw4TMBfOkh",
+      "createdUtc": "",
+      "functionCallEmittedUtc": "",
+      "callId": "",
+      "toolName": "",
+      "functionToolStartUtc": "",
+      "functionToolEndUtc": "",
+      "toolResultQueuedUtc": "",
+      "continuationCreateUtc": "",
+      "completedUtc": "",
+      "metricsCompletedUtc": ""
+    },
+    {
+      "responseId": "resp_0f9e0702774de336006ab141637df487d1a5171d8542c8a120",
+      "delegationId": "item_EQZRq6Onwi8rw4TMBfOkh",
+      "createdUtc": "",
+      "functionCallEmittedUtc": "",
+      "callId": "",
+      "toolName": "",
+      "functionToolStartUtc": "",
+      "functionToolEndUtc": "",
+      "toolResultQueuedUtc": "",
+      "continuationCreateUtc": "",
+      "completedUtc": "",
+      "metricsCompletedUtc": ""
+    },
+    {
+      "responseId": "resp_0f9e0702774de336006ab14166c1cc87d197b65e39946c2245",
+      "delegationId": "item_EQZRq6Onwi8rw4TMBfOkh",
+      "createdUtc": "",
+      "functionCallEmittedUtc": "",
+      "callId": "",
+      "toolName": "",
+      "functionToolStartUtc": "",
+      "functionToolEndUtc": "",
+      "toolResultQueuedUtc": "",
+      "continuationCreateUtc": "",
+      "completedUtc": "",
+      "metricsCompletedUtc": ""
+    },
+    {
+      "responseId": "resp_0f9e0702774de336006ab[REDACTED]d18e7d8ab1cc8bebe1",
+      "delegationId": "item_EQZSDOerk9GCaq5479QIx",
+      "createdUtc": "",
+      "functionCallEmittedUtc": "",
+      "callId": "",
+      "toolName": "",
+      "functionToolStartUtc": "",
+      "functionToolEndUtc": "",
+      "toolResultQueuedUtc": "",
+      "continuationCreateUtc": "",
+      "completedUtc": "",
+      "metricsCompletedUtc": ""
+    },
+    {
+      "responseId": "resp_0f9e0702774de336006ab[REDACTED]d18d5bde321ca636e5",
+      "delegationId": "item_EQZSDOerk9GCaq5479QIx",
+      "createdUtc": "",
+      "functionCallEmittedUtc": "",
+      "callId": "",
+      "toolName": "",
+      "functionToolStartUtc": "",
+      "functionToolEndUtc": "",
+      "toolResultQueuedUtc": "",
+      "continuationCreateUtc": "",
+      "completedUtc": "",
+      "metricsCompletedUtc": ""
+    }
+  ],
+  "allBackendRelatedEvents": [
+    {
+      "kind": "GPT_LIVE_DELEGATION_TELEMETRY_ATTACHED",
+      "detail": {},
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:37:21.653Z",
+      "monotonic_ms_from_call_start": 3512
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_RESPONSE_CREATED",
+      "detail": {
+        "direction": "server",
+        "inner_type": "response.created",
+        "response_id": "resp_0f9e0702774de336006ab1413f205487d1a16c[REDACTED]b7",
+        "delegation_id": "item_EQZRPUrf52qjtwDsUVZFn",
+        "envelope_type": "response.event",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP",
+        "provider_created_at": "[REDACTED]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:37:51.334Z",
+      "monotonic_ms_from_call_start": 33192
+    },
+    {
+      "kind": "NODE_TOOL_EXECUTION_STARTED",
+      "detail": {
+        "tool_name": "update_intake",
+        "function_call_id": "call_hNd9X6VpgNvBZgYyG46Tmiz4"
+      },
+      "source": "node",
+      "occurred_at_ms": [REDACTED],
+      "occurred_at_utc": "2026-09-21T14:37:54.797Z",
+      "monotonic_ms_from_call_start": 33751
+    },
+    {
+      "kind": "NODE_TOOL_EXECUTION_COMPLETED",
+      "detail": {
+        "ok": true,
+        "status": "INTAKE_UPDATED",
+        "tool_name": "update_intake",
+        "elapsed_ms": 13,
+        "function_call_id": "call_hNd9X6VpgNvBZgYyG46Tmiz4"
+      },
+      "source": "node",
+      "occurred_at_ms": [REDACTED],
+      "occurred_at_utc": "2026-09-21T14:37:54.810Z",
+      "monotonic_ms_from_call_start": 33764
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_FUNCTION_CALL_EMITTED",
+      "detail": {
+        "call_id": "call_hNd9X6VpgNvBZgYyG46Tmiz4",
+        "item_id": "fc_0f9e0702774de336006ab141418e8c87d19b0658e75c765be5",
+        "direction": "server",
+        "item_type": "function_call",
+        "inner_type": "response.output_item.done",
+        "item_status": "completed",
+        "response_id": null,
+        "delegation_id": "item_EQZRPUrf52qjtwDsUVZFn",
+        "envelope_type": "response.event",
+        "function_name": "update_intake",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:37:54.778Z",
+      "monotonic_ms_from_call_start": 36637
+    },
+    {
+      "kind": "FUNCTION_TOOL_STARTED",
+      "detail": {
+        "tool": "update_intake",
+        "call_id": "call_hNd9X6VpgNvBZgYyG46Tmiz4"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:37:54.788Z",
+      "monotonic_ms_from_call_start": 36646
+    },
+    {
+      "kind": "FUNCTION_TOOL_COMPLETED",
+      "detail": {
+        "ok": true,
+        "code": null,
+        "tool": "update_intake",
+        "status": "INTAKE_UPDATED",
+        "call_id": "call_hNd9X6VpgNvBZgYyG46Tmiz4",
+        "elapsed_ms": 26
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:37:54.814Z",
+      "monotonic_ms_from_call_start": 36673
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_RESPONSE_COMPLETED",
+      "detail": {
+        "direction": "server",
+        "inner_type": "response.completed",
+        "response_id": "resp_0f9e0702774de336006ab1413f205487d1a16c[REDACTED]b7",
+        "delegation_id": "item_EQZRPUrf52qjtwDsUVZFn",
+        "envelope_type": "response.event",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP",
+        "provider_created_at": "[REDACTED]",
+        "provider_completed_at": "[REDACTED]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:37:55.041Z",
+      "monotonic_ms_from_call_start": 36900
+    },
+    {
+      "kind": "BACKEND_LLM_METRICS_COLLECTED",
+      "detail": {
+        "ttft": -1,
+        "type": "llm_metrics",
+        "label": "livekit.plugins.openai.realtime.gpt_live_model.GPTLiveModel",
+        "duration": 0,
+        "metadata": {
+          "model_name": "gpt-5.6-sol",
+          "model_provider": "api.openai.com"
+        },
+        "cancelled": false,
+        "speech_id": null,
+        "timestamp": [REDACTED].042935,
+        "request_id": "resp_0f9e0702774de336006ab1413f205487d1a16c[REDACTED]b7",
+        "total_tokens": "[redacted]",
+        "metrics_label": "LLMMetrics",
+        "prompt_tokens": "[redacted]",
+        "reasoning_tokens": "[redacted]",
+        "completion_tokens": "[redacted]",
+        "tokens_per_second": "[redacted]",
+        "prompt_cached_tokens": "[redacted]",
+        "cache_creation_tokens": "[redacted]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:37:55.047Z",
+      "monotonic_ms_from_call_start": 36905
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_TOOL_RESULT_QUEUED",
+      "detail": {
+        "call_id": "call_hNd9X6VpgNvBZgYyG46Tmiz4",
+        "direction": "client",
+        "item_type": "function_call_output",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "client_event_id": "tool_output_f0e736eba47d",
+        "client_event_type": "response.item.create",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:37:57.284Z",
+      "monotonic_ms_from_call_start": 39142
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_RESPONSE_CREATE",
+      "detail": {
+        "direction": "client",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "client_event_id": "response_create_dc16f40872a4",
+        "client_event_type": "response.create",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:37:57.284Z",
+      "monotonic_ms_from_call_start": 39143
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_RESPONSE_CREATED",
+      "detail": {
+        "direction": "server",
+        "inner_type": "response.created",
+        "response_id": "resp_0f9e0702774de336006ab[REDACTED]d1a0b166b551c6b5d2",
+        "delegation_id": "item_EQZRPUrf52qjtwDsUVZFn",
+        "envelope_type": "response.event",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP",
+        "provider_created_at": "[REDACTED]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:37:57.564Z",
+      "monotonic_ms_from_call_start": 39423
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_RESPONSE_COMPLETED",
+      "detail": {
+        "direction": "server",
+        "inner_type": "response.completed",
+        "response_id": "resp_0f9e0702774de336006ab[REDACTED]d1a0b166b551c6b5d2",
+        "delegation_id": "item_EQZRPUrf52qjtwDsUVZFn",
+        "envelope_type": "response.event",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP",
+        "provider_created_at": "[REDACTED]",
+        "provider_completed_at": "[REDACTED]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:00.990Z",
+      "monotonic_ms_from_call_start": 42849
+    },
+    {
+      "kind": "BACKEND_LLM_METRICS_COLLECTED",
+      "detail": {
+        "ttft": -1,
+        "type": "llm_metrics",
+        "label": "livekit.plugins.openai.realtime.gpt_live_model.GPTLiveModel",
+        "duration": 0,
+        "metadata": {
+          "model_name": "gpt-5.6-sol",
+          "model_provider": "api.openai.com"
+        },
+        "cancelled": false,
+        "speech_id": null,
+        "timestamp": [REDACTED].9906168,
+        "request_id": "resp_0f9e0702774de336006ab[REDACTED]d1a0b166b551c6b5d2",
+        "total_tokens": "[redacted]",
+        "metrics_label": "LLMMetrics",
+        "prompt_tokens": "[redacted]",
+        "reasoning_tokens": "[redacted]",
+        "completion_tokens": "[redacted]",
+        "tokens_per_second": "[redacted]",
+        "prompt_cached_tokens": "[redacted]",
+        "cache_creation_tokens": "[redacted]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:00.990Z",
+      "monotonic_ms_from_call_start": 42849
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_RESPONSE_CREATED",
+      "detail": {
+        "direction": "server",
+        "inner_type": "response.created",
+        "response_id": "resp_0f9e0702774de336006ab[REDACTED]d182d2a7094d9ed641",
+        "delegation_id": "item_EQZRYR5ozB9RlojFGMEQ0",
+        "envelope_type": "response.event",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP",
+        "provider_created_at": "[REDACTED]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:01.295Z",
+      "monotonic_ms_from_call_start": 43154
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_RESPONSE_COMPLETED",
+      "detail": {
+        "direction": "server",
+        "inner_type": "response.completed",
+        "response_id": "resp_0f9e0702774de336006ab[REDACTED]d182d2a7094d9ed641",
+        "delegation_id": "item_EQZRYR5ozB9RlojFGMEQ0",
+        "envelope_type": "response.event",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP",
+        "provider_created_at": "[REDACTED]",
+        "provider_completed_at": "[REDACTED]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:04.181Z",
+      "monotonic_ms_from_call_start": 46040
+    },
+    {
+      "kind": "BACKEND_LLM_METRICS_COLLECTED",
+      "detail": {
+        "ttft": -1,
+        "type": "llm_metrics",
+        "label": "livekit.plugins.openai.realtime.gpt_live_model.GPTLiveModel",
+        "duration": 0,
+        "metadata": {
+          "model_name": "gpt-5.6-sol",
+          "model_provider": "api.openai.com"
+        },
+        "cancelled": false,
+        "speech_id": null,
+        "timestamp": [REDACTED].1821935,
+        "request_id": "resp_0f9e0702774de336006ab[REDACTED]d182d2a7094d9ed641",
+        "total_tokens": "[redacted]",
+        "metrics_label": "LLMMetrics",
+        "prompt_tokens": "[redacted]",
+        "reasoning_tokens": "[redacted]",
+        "completion_tokens": "[redacted]",
+        "tokens_per_second": "[redacted]",
+        "prompt_cached_tokens": "[redacted]",
+        "cache_creation_tokens": "[redacted]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:04.182Z",
+      "monotonic_ms_from_call_start": 46041
+    },
+    {
+      "kind": "NODE_TOOL_EXECUTION_STARTED",
+      "detail": {
+        "tool_name": "update_intake",
+        "function_call_id": "call_1nHnAFUEWDym91qsQ54wWIRs"
+      },
+      "source": "node",
+      "occurred_at_ms": [REDACTED],
+      "occurred_at_utc": "2026-09-21T14:38:20.860Z",
+      "monotonic_ms_from_call_start": 59814
+    },
+    {
+      "kind": "NODE_TOOL_EXECUTION_COMPLETED",
+      "detail": {
+        "ok": true,
+        "status": "INTAKE_UPDATED",
+        "tool_name": "update_intake",
+        "elapsed_ms": 4,
+        "function_call_id": "call_1nHnAFUEWDym91qsQ54wWIRs"
+      },
+      "source": "node",
+      "occurred_at_ms": [REDACTED],
+      "occurred_at_utc": "2026-09-21T14:38:20.864Z",
+      "monotonic_ms_from_call_start": 59818
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_RESPONSE_CREATED",
+      "detail": {
+        "direction": "server",
+        "inner_type": "response.created",
+        "response_id": "resp_0f9e0702774de336006ab1415ab5e087d1a76d6935c4a20e7e",
+        "delegation_id": "item_EQZRq6Onwi8rw4TMBfOkh",
+        "envelope_type": "response.event",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP",
+        "provider_created_at": "[REDACTED]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:18.899Z",
+      "monotonic_ms_from_call_start": 60757
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_FUNCTION_CALL_EMITTED",
+      "detail": {
+        "call_id": "call_1nHnAFUEWDym91qsQ54wWIRs",
+        "item_id": "fc_0f9e0702774de336006ab1415c1d9487d190fbe3cde53c3f78",
+        "direction": "server",
+        "item_type": "function_call",
+        "inner_type": "response.output_item.done",
+        "item_status": "completed",
+        "response_id": null,
+        "delegation_id": "item_EQZRq6Onwi8rw4TMBfOkh",
+        "envelope_type": "response.event",
+        "function_name": "update_intake",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:20.833Z",
+      "monotonic_ms_from_call_start": 62692
+    },
+    {
+      "kind": "FUNCTION_TOOL_STARTED",
+      "detail": {
+        "tool": "update_intake",
+        "call_id": "call_1nHnAFUEWDym91qsQ54wWIRs"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:20.835Z",
+      "monotonic_ms_from_call_start": 62694
+    },
+    {
+      "kind": "FUNCTION_TOOL_COMPLETED",
+      "detail": {
+        "ok": true,
+        "code": null,
+        "tool": "update_intake",
+        "status": "INTAKE_UPDATED",
+        "call_id": "call_1nHnAFUEWDym91qsQ54wWIRs",
+        "elapsed_ms": 32
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:20.867Z",
+      "monotonic_ms_from_call_start": 62726
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_RESPONSE_COMPLETED",
+      "detail": {
+        "direction": "server",
+        "inner_type": "response.completed",
+        "response_id": "resp_0f9e0702774de336006ab1415ab5e087d1a76d6935c4a20e7e",
+        "delegation_id": "item_EQZRq6Onwi8rw4TMBfOkh",
+        "envelope_type": "response.event",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP",
+        "provider_created_at": "[REDACTED]",
+        "provider_completed_at": "[REDACTED]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:21.116Z",
+      "monotonic_ms_from_call_start": 62974
+    },
+    {
+      "kind": "BACKEND_LLM_METRICS_COLLECTED",
+      "detail": {
+        "ttft": -1,
+        "type": "llm_metrics",
+        "label": "livekit.plugins.openai.realtime.gpt_live_model.GPTLiveModel",
+        "duration": 0,
+        "metadata": {
+          "model_name": "gpt-5.6-sol",
+          "model_provider": "api.openai.com"
+        },
+        "cancelled": false,
+        "speech_id": null,
+        "timestamp": [REDACTED].1164167,
+        "request_id": "resp_0f9e0702774de336006ab1415ab5e087d1a76d6935c4a20e7e",
+        "total_tokens": "[redacted]",
+        "metrics_label": "LLMMetrics",
+        "prompt_tokens": "[redacted]",
+        "reasoning_tokens": "[redacted]",
+        "completion_tokens": "[redacted]",
+        "tokens_per_second": "[redacted]",
+        "prompt_cached_tokens": "[redacted]",
+        "cache_creation_tokens": "[redacted]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:21.116Z",
+      "monotonic_ms_from_call_start": 62975
+    },
+    {
+      "kind": "NODE_TOOL_EXECUTION_STARTED",
+      "detail": {
+        "tool_name": "set_scheduling_preference",
+        "function_call_id": "call_GpvLmEqqn9DUHQXvsRNRBsoQ"
+      },
+      "source": "node",
+      "occurred_at_ms": [REDACTED],
+      "occurred_at_utc": "2026-09-21T14:38:27.191Z",
+      "monotonic_ms_from_call_start": 66145
+    },
+    {
+      "kind": "NODE_TOOL_EXECUTION_COMPLETED",
+      "detail": {
+        "ok": true,
+        "status": "SCHEDULING_PREFERENCE_SET",
+        "tool_name": "set_scheduling_preference",
+        "elapsed_ms": 3,
+        "function_call_id": "call_GpvLmEqqn9DUHQXvsRNRBsoQ"
+      },
+      "source": "node",
+      "occurred_at_ms": [REDACTED],
+      "occurred_at_utc": "2026-09-21T14:38:27.194Z",
+      "monotonic_ms_from_call_start": 66148
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_TOOL_RESULT_QUEUED",
+      "detail": {
+        "call_id": "call_1nHnAFUEWDym91qsQ54wWIRs",
+        "direction": "client",
+        "item_type": "function_call_output",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "client_event_id": "tool_output_dceccfda2d56",
+        "client_event_type": "response.item.create",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:24.765Z",
+      "monotonic_ms_from_call_start": 66624
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_RESPONSE_CREATE",
+      "detail": {
+        "direction": "client",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "client_event_id": "response_create_63e3d3c1a59c",
+        "client_event_type": "response.create",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:24.767Z",
+      "monotonic_ms_from_call_start": 66626
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_RESPONSE_CREATED",
+      "detail": {
+        "direction": "server",
+        "inner_type": "response.created",
+        "response_id": "resp_0f9e0702774de336006ab14160e16c87d1abe011308c61827c",
+        "delegation_id": "item_EQZRq6Onwi8rw4TMBfOkh",
+        "envelope_type": "response.event",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP",
+        "provider_created_at": "[REDACTED]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:25.157Z",
+      "monotonic_ms_from_call_start": 67016
+    },
+    {
+      "kind": "NODE_TOOL_EXECUTION_STARTED",
+      "detail": {
+        "tool_name": "find_availability",
+        "function_call_id": "call_J7hPxuMlJDhaLsYPmHOZD0Ed"
+      },
+      "source": "node",
+      "occurred_at_ms": [REDACTED],
+      "occurred_at_utc": "2026-09-21T14:38:29.208Z",
+      "monotonic_ms_from_call_start": 68162
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_FUNCTION_CALL_EMITTED",
+      "detail": {
+        "call_id": "call_GpvLmEqqn9DUHQXvsRNRBsoQ",
+        "item_id": "fc_0f9e0702774de336006ab[REDACTED]d1a891e269c45ff6d5",
+        "direction": "server",
+        "item_type": "function_call",
+        "inner_type": "response.output_item.done",
+        "item_status": "completed",
+        "response_id": null,
+        "delegation_id": "item_EQZRq6Onwi8rw4TMBfOkh",
+        "envelope_type": "response.event",
+        "function_name": "set_scheduling_preference",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:27.160Z",
+      "monotonic_ms_from_call_start": 69019
+    },
+    {
+      "kind": "FUNCTION_TOOL_STARTED",
+      "detail": {
+        "tool": "set_scheduling_preference",
+        "call_id": "call_GpvLmEqqn9DUHQXvsRNRBsoQ"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:27.164Z",
+      "monotonic_ms_from_call_start": 69022
+    },
+    {
+      "kind": "FUNCTION_TOOL_COMPLETED",
+      "detail": {
+        "ok": true,
+        "code": null,
+        "tool": "set_scheduling_preference",
+        "status": "SCHEDULING_PREFERENCE_SET",
+        "call_id": "call_GpvLmEqqn9DUHQXvsRNRBsoQ",
+        "elapsed_ms": 34
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:27.198Z",
+      "monotonic_ms_from_call_start": 69057
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_TOOL_RESULT_QUEUED",
+      "detail": {
+        "call_id": "call_GpvLmEqqn9DUHQXvsRNRBsoQ",
+        "direction": "client",
+        "item_type": "function_call_output",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "client_event_id": "tool_output_41907b0bbd9d",
+        "client_event_type": "response.item.create",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:27.202Z",
+      "monotonic_ms_from_call_start": 69061
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_RESPONSE_COMPLETED",
+      "detail": {
+        "direction": "server",
+        "inner_type": "response.completed",
+        "response_id": "resp_0f9e0702774de336006ab14160e16c87d1abe011308c61827c",
+        "delegation_id": "item_EQZRq6Onwi8rw4TMBfOkh",
+        "envelope_type": "response.event",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP",
+        "provider_created_at": "[REDACTED]",
+        "provider_completed_at": "[REDACTED]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:27.403Z",
+      "monotonic_ms_from_call_start": 69262
+    },
+    {
+      "kind": "BACKEND_LLM_METRICS_COLLECTED",
+      "detail": {
+        "ttft": -1,
+        "type": "llm_metrics",
+        "label": "livekit.plugins.openai.realtime.gpt_live_model.GPTLiveModel",
+        "duration": 0,
+        "metadata": {
+          "model_name": "gpt-5.6-sol",
+          "model_provider": "api.openai.com"
+        },
+        "cancelled": false,
+        "speech_id": null,
+        "timestamp": [REDACTED].4039102,
+        "request_id": "resp_0f9e0702774de336006ab14160e16c87d1abe011308c61827c",
+        "total_tokens": "[redacted]",
+        "metrics_label": "LLMMetrics",
+        "prompt_tokens": "[redacted]",
+        "reasoning_tokens": "[redacted]",
+        "completion_tokens": "[redacted]",
+        "tokens_per_second": "[redacted]",
+        "prompt_cached_tokens": "[redacted]",
+        "cache_creation_tokens": "[redacted]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:27.404Z",
+      "monotonic_ms_from_call_start": 69263
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_RESPONSE_CREATE",
+      "detail": {
+        "direction": "client",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "client_event_id": "response_create_28c20aaa6aac",
+        "client_event_type": "response.create",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:27.404Z",
+      "monotonic_ms_from_call_start": 69263
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_RESPONSE_CREATED",
+      "detail": {
+        "direction": "server",
+        "inner_type": "response.created",
+        "response_id": "resp_0f9e0702774de336006ab141637df487d1a5171d8542c8a120",
+        "delegation_id": "item_EQZRq6Onwi8rw4TMBfOkh",
+        "envelope_type": "response.event",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP",
+        "provider_created_at": "[REDACTED]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:27.706Z",
+      "monotonic_ms_from_call_start": 69564
+    },
+    {
+      "kind": "NODE_TOOL_EXECUTION_COMPLETED",
+      "detail": {
+        "ok": true,
+        "status": "available",
+        "tool_name": "find_availability",
+        "elapsed_ms": 1452,
+        "function_call_id": "call_J7hPxuMlJDhaLsYPmHOZD0Ed"
+      },
+      "source": "node",
+      "occurred_at_ms": [REDACTED],
+      "occurred_at_utc": "2026-09-21T14:38:30.660Z",
+      "monotonic_ms_from_call_start": 69614
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_FUNCTION_CALL_EMITTED",
+      "detail": {
+        "call_id": "call_J7hPxuMlJDhaLsYPmHOZD0Ed",
+        "item_id": "fc_0f9e0702774de336006ab14164ef7887d1a34b46628238c7fa",
+        "direction": "server",
+        "item_type": "function_call",
+        "inner_type": "response.output_item.done",
+        "item_status": "completed",
+        "response_id": null,
+        "delegation_id": "item_EQZRq6Onwi8rw4TMBfOkh",
+        "envelope_type": "response.event",
+        "function_name": "find_availability",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:29.186Z",
+      "monotonic_ms_from_call_start": 71045
+    },
+    {
+      "kind": "FUNCTION_TOOL_STARTED",
+      "detail": {
+        "tool": "find_availability",
+        "call_id": "call_J7hPxuMlJDhaLsYPmHOZD0Ed"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:29.191Z",
+      "monotonic_ms_from_call_start": 71050
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_RESPONSE_COMPLETED",
+      "detail": {
+        "direction": "server",
+        "inner_type": "response.completed",
+        "response_id": "resp_0f9e0702774de336006ab141637df487d1a5171d8542c8a120",
+        "delegation_id": "item_EQZRq6Onwi8rw4TMBfOkh",
+        "envelope_type": "response.event",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP",
+        "provider_created_at": "[REDACTED]",
+        "provider_completed_at": "[REDACTED]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:29.483Z",
+      "monotonic_ms_from_call_start": 71342
+    },
+    {
+      "kind": "BACKEND_LLM_METRICS_COLLECTED",
+      "detail": {
+        "ttft": -1,
+        "type": "llm_metrics",
+        "label": "livekit.plugins.openai.realtime.gpt_live_model.GPTLiveModel",
+        "duration": 0,
+        "metadata": {
+          "model_name": "gpt-5.6-sol",
+          "model_provider": "api.openai.com"
+        },
+        "cancelled": false,
+        "speech_id": null,
+        "timestamp": [REDACTED].484144,
+        "request_id": "resp_0f9e0702774de336006ab141637df487d1a5171d8542c8a120",
+        "total_tokens": "[redacted]",
+        "metrics_label": "LLMMetrics",
+        "prompt_tokens": "[redacted]",
+        "reasoning_tokens": "[redacted]",
+        "completion_tokens": "[redacted]",
+        "tokens_per_second": "[redacted]",
+        "prompt_cached_tokens": "[redacted]",
+        "cache_creation_tokens": "[redacted]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:29.484Z",
+      "monotonic_ms_from_call_start": 71343
+    },
+    {
+      "kind": "FUNCTION_TOOL_COMPLETED",
+      "detail": {
+        "ok": true,
+        "code": null,
+        "tool": "find_availability",
+        "status": "available",
+        "call_id": "call_J7hPxuMlJDhaLsYPmHOZD0Ed",
+        "elapsed_ms": 1471
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:30.664Z",
+      "monotonic_ms_from_call_start": 72522
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_TOOL_RESULT_QUEUED",
+      "detail": {
+        "call_id": "call_J7hPxuMlJDhaLsYPmHOZD0Ed",
+        "direction": "client",
+        "item_type": "function_call_output",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "client_event_id": "tool_output_1ec7d1b8dc56",
+        "client_event_type": "response.item.create",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:30.666Z",
+      "monotonic_ms_from_call_start": 72525
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_RESPONSE_CREATE",
+      "detail": {
+        "direction": "client",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "client_event_id": "response_create_2e1c02dc7ca1",
+        "client_event_type": "response.create",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:30.667Z",
+      "monotonic_ms_from_call_start": 72526
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_RESPONSE_CREATED",
+      "detail": {
+        "direction": "server",
+        "inner_type": "response.created",
+        "response_id": "resp_0f9e0702774de336006ab14166c1cc87d197b65e39946c2245",
+        "delegation_id": "item_EQZRq6Onwi8rw4TMBfOkh",
+        "envelope_type": "response.event",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP",
+        "provider_created_at": "[REDACTED]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:30.978Z",
+      "monotonic_ms_from_call_start": 72836
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_RESPONSE_COMPLETED",
+      "detail": {
+        "direction": "server",
+        "inner_type": "response.completed",
+        "response_id": "resp_0f9e0702774de336006ab14166c1cc87d197b65e39946c2245",
+        "delegation_id": "item_EQZRq6Onwi8rw4TMBfOkh",
+        "envelope_type": "response.event",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP",
+        "provider_created_at": "[REDACTED]",
+        "provider_completed_at": "[REDACTED]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:33.277Z",
+      "monotonic_ms_from_call_start": 75136
+    },
+    {
+      "kind": "BACKEND_LLM_METRICS_COLLECTED",
+      "detail": {
+        "ttft": -1,
+        "type": "llm_metrics",
+        "label": "livekit.plugins.openai.realtime.gpt_live_model.GPTLiveModel",
+        "duration": 0,
+        "metadata": {
+          "model_name": "gpt-5.6-sol",
+          "model_provider": "api.openai.com"
+        },
+        "cancelled": false,
+        "speech_id": null,
+        "timestamp": [REDACTED].2780006,
+        "request_id": "resp_0f9e0702774de336006ab14166c1cc87d197b65e39946c2245",
+        "total_tokens": "[redacted]",
+        "metrics_label": "LLMMetrics",
+        "prompt_tokens": "[redacted]",
+        "reasoning_tokens": "[redacted]",
+        "completion_tokens": "[redacted]",
+        "tokens_per_second": "[redacted]",
+        "prompt_cached_tokens": "[redacted]",
+        "cache_creation_tokens": "[redacted]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:33.278Z",
+      "monotonic_ms_from_call_start": 75137
+    },
+    {
+      "kind": "NODE_TOOL_EXECUTION_STARTED",
+      "detail": {
+        "tool_name": "book_appointment",
+        "function_call_id": "call_nVhbFI0yfBtqwmtnDodxuYst"
+      },
+      "source": "node",
+      "occurred_at_ms": [REDACTED],
+      "occurred_at_utc": "2026-09-21T14:38:43.505Z",
+      "monotonic_ms_from_call_start": 82459
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_RESPONSE_CREATED",
+      "detail": {
+        "direction": "server",
+        "inner_type": "response.created",
+        "response_id": "resp_0f9e0702774de336006ab[REDACTED]d18e7d8ab1cc8bebe1",
+        "delegation_id": "item_EQZSDOerk9GCaq5479QIx",
+        "envelope_type": "response.event",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP",
+        "provider_created_at": "[REDACTED]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:41.453Z",
+      "monotonic_ms_from_call_start": 83312
+    },
+    {
+      "kind": "NODE_TOOL_EXECUTION_COMPLETED",
+      "detail": {
+        "ok": true,
+        "status": "confirmed",
+        "tool_name": "book_appointment",
+        "elapsed_ms": 1854,
+        "function_call_id": "call_nVhbFI0yfBtqwmtnDodxuYst"
+      },
+      "source": "node",
+      "occurred_at_ms": [REDACTED],
+      "occurred_at_utc": "2026-09-21T14:38:45.359Z",
+      "monotonic_ms_from_call_start": 84313
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_FUNCTION_CALL_EMITTED",
+      "detail": {
+        "call_id": "call_nVhbFI0yfBtqwmtnDodxuYst",
+        "item_id": "fc_0f9e0702774de336006ab141730f7087d19392489c4fd470ce",
+        "direction": "server",
+        "item_type": "function_call",
+        "inner_type": "response.output_item.done",
+        "item_status": "completed",
+        "response_id": null,
+        "delegation_id": "item_EQZSDOerk9GCaq5479QIx",
+        "envelope_type": "response.event",
+        "function_name": "book_appointment",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:43.500Z",
+      "monotonic_ms_from_call_start": 85358
+    },
+    {
+      "kind": "FUNCTION_TOOL_STARTED",
+      "detail": {
+        "tool": "book_appointment",
+        "call_id": "call_nVhbFI0yfBtqwmtnDodxuYst"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:43.500Z",
+      "monotonic_ms_from_call_start": 85359
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_RESPONSE_COMPLETED",
+      "detail": {
+        "direction": "server",
+        "inner_type": "response.completed",
+        "response_id": "resp_0f9e0702774de336006ab[REDACTED]d18e7d8ab1cc8bebe1",
+        "delegation_id": "item_EQZSDOerk9GCaq5479QIx",
+        "envelope_type": "response.event",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP",
+        "provider_created_at": "[REDACTED]",
+        "provider_completed_at": "[REDACTED]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:43.752Z",
+      "monotonic_ms_from_call_start": 85611
+    },
+    {
+      "kind": "BACKEND_LLM_METRICS_COLLECTED",
+      "detail": {
+        "ttft": -1,
+        "type": "llm_metrics",
+        "label": "livekit.plugins.openai.realtime.gpt_live_model.GPTLiveModel",
+        "duration": 0,
+        "metadata": {
+          "model_name": "gpt-5.6-sol",
+          "model_provider": "api.openai.com"
+        },
+        "cancelled": false,
+        "speech_id": null,
+        "timestamp": [REDACTED].752787,
+        "request_id": "resp_0f9e0702774de336006ab[REDACTED]d18e7d8ab1cc8bebe1",
+        "total_tokens": "[redacted]",
+        "metrics_label": "LLMMetrics",
+        "prompt_tokens": "[redacted]",
+        "reasoning_tokens": "[redacted]",
+        "completion_tokens": "[redacted]",
+        "tokens_per_second": "[redacted]",
+        "prompt_cached_tokens": "[redacted]",
+        "cache_creation_tokens": "[redacted]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:43.753Z",
+      "monotonic_ms_from_call_start": 85611
+    },
+    {
+      "kind": "FUNCTION_TOOL_COMPLETED",
+      "detail": {
+        "ok": true,
+        "code": null,
+        "tool": "book_appointment",
+        "status": "confirmed",
+        "call_id": "call_nVhbFI0yfBtqwmtnDodxuYst",
+        "elapsed_ms": 1861
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:45.362Z",
+      "monotonic_ms_from_call_start": 87221
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_TOOL_RESULT_QUEUED",
+      "detail": {
+        "call_id": "call_nVhbFI0yfBtqwmtnDodxuYst",
+        "direction": "client",
+        "item_type": "function_call_output",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "client_event_id": "tool_output_6f3c42b7425e",
+        "client_event_type": "response.item.create",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:45.365Z",
+      "monotonic_ms_from_call_start": 87223
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_RESPONSE_CREATE",
+      "detail": {
+        "direction": "client",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "client_event_id": "response_create_c34dab14155f",
+        "client_event_type": "response.create",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:45.365Z",
+      "monotonic_ms_from_call_start": 87224
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_RESPONSE_CREATED",
+      "detail": {
+        "direction": "server",
+        "inner_type": "response.created",
+        "response_id": "resp_0f9e0702774de336006ab[REDACTED]d18d5bde321ca636e5",
+        "delegation_id": "item_EQZSDOerk9GCaq5479QIx",
+        "envelope_type": "response.event",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP",
+        "provider_created_at": "[REDACTED]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:45.769Z",
+      "monotonic_ms_from_call_start": 87628
+    },
+    {
+      "kind": "GPT_LIVE_DELEGATION_RESPONSE_COMPLETED",
+      "detail": {
+        "direction": "server",
+        "inner_type": "response.completed",
+        "response_id": "resp_0f9e0702774de336006ab[REDACTED]d18d5bde321ca636e5",
+        "delegation_id": "item_EQZSDOerk9GCaq5479QIx",
+        "envelope_type": "response.event",
+        "voice_call_id": "lk_transovo-call-_+1[REDACTED]_dYDMLQvxF9xC",
+        "gpt_live_session_id": "live_u0_EQZQwp3oMYnGThe4JGeEjiI0ypQPSGKP",
+        "provider_created_at": "[REDACTED]",
+        "provider_completed_at": "[REDACTED]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:47.387Z",
+      "monotonic_ms_from_call_start": 89246
+    },
+    {
+      "kind": "BACKEND_LLM_METRICS_COLLECTED",
+      "detail": {
+        "ttft": -1,
+        "type": "llm_metrics",
+        "label": "livekit.plugins.openai.realtime.gpt_live_model.GPTLiveModel",
+        "duration": 0,
+        "metadata": {
+          "model_name": "gpt-5.6-sol",
+          "model_provider": "api.openai.com"
+        },
+        "cancelled": false,
+        "speech_id": null,
+        "timestamp": [REDACTED].3880317,
+        "request_id": "resp_0f9e0702774de336006ab[REDACTED]d18d5bde321ca636e5",
+        "total_tokens": "[redacted]",
+        "metrics_label": "LLMMetrics",
+        "prompt_tokens": "[redacted]",
+        "reasoning_tokens": "[redacted]",
+        "completion_tokens": "[redacted]",
+        "tokens_per_second": "[redacted]",
+        "prompt_cached_tokens": "[redacted]",
+        "cache_creation_tokens": "[redacted]"
+      },
+      "source": "python",
+      "occurred_at_utc": "2026-09-21T14:38:47.388Z",
+      "monotonic_ms_from_call_start": 89247
+    }
+  ]
+}

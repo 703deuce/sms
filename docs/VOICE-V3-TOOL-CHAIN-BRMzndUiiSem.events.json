@@ -1,0 +1,574 @@
+[
+  {
+    "kind": "NODE_TOOL_EXECUTION_STARTED",
+    "detail": {
+      "tool_name": "update_intake",
+      "function_call_id": "call_3PUIkjmR2JPrpgoCYCEE9KtP"
+    },
+    "source": "node",
+    "occurred_at_ms": [REDACTED],
+    "occurred_at_utc": "2026-09-21T14:39:42.276Z",
+    "monotonic_ms_from_call_start": 38716
+  },
+  {
+    "kind": "NODE_TOOL_EXECUTION_COMPLETED",
+    "detail": {
+      "ok": true,
+      "status": "INTAKE_UPDATED",
+      "tool_name": "update_intake",
+      "elapsed_ms": 5,
+      "function_call_id": "call_3PUIkjmR2JPrpgoCYCEE9KtP"
+    },
+    "source": "node",
+    "occurred_at_ms": [REDACTED],
+    "occurred_at_utc": "2026-09-21T14:39:42.281Z",
+    "monotonic_ms_from_call_start": 38721
+  },
+  {
+    "kind": "FUNCTION_TOOL_STARTED",
+    "detail": {
+      "tool": "update_intake",
+      "call_id": "call_3PUIkjmR2JPrpgoCYCEE9KtP"
+    },
+    "source": "python",
+    "occurred_at_utc": "2026-09-21T14:39:42.265Z",
+    "monotonic_ms_from_call_start": 41078
+  },
+  {
+    "kind": "FUNCTION_TOOL_COMPLETED",
+    "detail": {
+      "ok": true,
+      "code": null,
+      "tool": "update_intake",
+      "status": "INTAKE_UPDATED",
+      "call_id": "call_3PUIkjmR2JPrpgoCYCEE9KtP",
+      "elapsed_ms": 19
+    },
+    "source": "python",
+    "occurred_at_utc": "2026-09-21T14:39:42.284Z",
+    "monotonic_ms_from_call_start": 41098
+  },
+  {
+    "kind": "BACKEND_LLM_METRICS_COLLECTED",
+    "detail": {
+      "ttft": -1,
+      "type": "llm_metrics",
+      "label": "livekit.plugins.openai.realtime.gpt_live_model.GPTLiveModel",
+      "duration": 0,
+      "metadata": {
+        "model_name": "gpt-5.6-sol",
+        "model_provider": "api.openai.com"
+      },
+      "cancelled": false,
+      "speech_id": null,
+      "timestamp": [REDACTED].5636091,
+      "request_id": "resp_031ee92aa6e89cff006ab141ab197c87d1b16788556b5f2266",
+      "total_tokens": "[redacted]",
+      "metrics_label": "LLMMetrics",
+      "prompt_tokens": "[redacted]",
+      "reasoning_tokens": "[redacted]",
+      "completion_tokens": "[redacted]",
+      "tokens_per_second": "[redacted]",
+      "prompt_cached_tokens": "[redacted]",
+      "cache_creation_tokens": "[redacted]"
+    },
+    "source": "python",
+    "occurred_at_utc": "2026-09-21T14:39:42.564Z",
+    "monotonic_ms_from_call_start": 41377
+  },
+  {
+    "kind": "GPT_LIVE_DELEGATION_TOOL_RESULT_QUEUED",
+    "detail": {
+      "call_id": "call_3PUIkjmR2JPrpgoCYCEE9KtP",
+      "direction": "client",
+      "item_type": "function_call_output",
+      "voice_call_id": "lk_transovo-call-_+1[REDACTED]_BRMzndUiiSem",
+      "client_event_id": "tool_output_8a504174673d",
+      "client_event_type": "response.item.create",
+      "gpt_live_session_id": "live_u2_EQZSap3oMmjtYOA4nt91xWHedBNOY2f3"
+    },
+    "source": "python",
+    "occurred_at_utc": "2026-09-21T14:39:42.884Z",
+    "monotonic_ms_from_call_start": 41698
+  },
+  {
+    "kind": "BACKEND_LLM_METRICS_COLLECTED",
+    "detail": {
+      "ttft": -1,
+      "type": "llm_metrics",
+      "label": "livekit.plugins.openai.realtime.gpt_live_model.GPTLiveModel",
+      "duration": 0,
+      "metadata": {
+        "model_name": "gpt-5.6-sol",
+        "model_provider": "api.openai.com"
+      },
+      "cancelled": false,
+      "speech_id": null,
+      "timestamp": [REDACTED].174044,
+      "request_id": "resp_031ee92aa6e89cff006ab141aefbc087d1ac2c18585177fada",
+      "total_tokens": "[redacted]",
+      "metrics_label": "LLMMetrics",
+      "prompt_tokens": "[redacted]",
+      "reasoning_tokens": "[redacted]",
+      "completion_tokens": "[redacted]",
+      "tokens_per_second": "[redacted]",
+      "prompt_cached_tokens": "[redacted]",
+      "cache_creation_tokens": "[redacted]"
+    },
+    "source": "python",
+    "occurred_at_utc": "2026-09-21T14:39:45.174Z",
+    "monotonic_ms_from_call_start": 43987
+  },
+  {
+    "kind": "NODE_TOOL_EXECUTION_STARTED",
+    "detail": {
+      "tool_name": "set_scheduling_preference",
+      "function_call_id": "call_pNpBmka3KGWdKs0mOIzAfvnF"
+    },
+    "source": "node",
+    "occurred_at_ms": [REDACTED],
+    "occurred_at_utc": "2026-09-21T14:39:59.096Z",
+    "monotonic_ms_from_call_start": 55536
+  },
+  {
+    "kind": "NODE_TOOL_EXECUTION_COMPLETED",
+    "detail": {
+      "ok": false,
+      "status": "not_ready",
+      "tool_name": "set_scheduling_preference",
+      "elapsed_ms": 2,
+      "function_call_id": "call_pNpBmka3KGWdKs0mOIzAfvnF"
+    },
+    "source": "node",
+    "occurred_at_ms": [REDACTED],
+    "occurred_at_utc": "2026-09-21T14:39:59.098Z",
+    "monotonic_ms_from_call_start": 55538
+  },
+  {
+    "kind": "FUNCTION_TOOL_STARTED",
+    "detail": {
+      "tool": "set_scheduling_preference",
+      "call_id": "call_pNpBmka3KGWdKs0mOIzAfvnF"
+    },
+    "source": "python",
+    "occurred_at_utc": "2026-09-21T14:39:59.085Z",
+    "monotonic_ms_from_call_start": 57898
+  },
+  {
+    "kind": "BACKEND_LLM_METRICS_COLLECTED",
+    "detail": {
+      "ttft": -1,
+      "type": "llm_metrics",
+      "label": "livekit.plugins.openai.realtime.gpt_live_model.GPTLiveModel",
+      "duration": 0,
+      "metadata": {
+        "model_name": "gpt-5.6-sol",
+        "model_provider": "api.openai.com"
+      },
+      "cancelled": false,
+      "speech_id": null,
+      "timestamp": [REDACTED].087977,
+      "request_id": "resp_031ee92aa6e89cff006ab141ba534c87d1bbe7a6c6989048a5",
+      "total_tokens": "[redacted]",
+      "metrics_label": "LLMMetrics",
+      "prompt_tokens": "[redacted]",
+      "reasoning_tokens": "[redacted]",
+      "completion_tokens": "[redacted]",
+      "tokens_per_second": "[redacted]",
+      "prompt_cached_tokens": "[redacted]",
+      "cache_creation_tokens": "[redacted]"
+    },
+    "source": "python",
+    "occurred_at_utc": "2026-09-21T14:39:59.088Z",
+    "monotonic_ms_from_call_start": 57901
+  },
+  {
+    "kind": "FUNCTION_TOOL_COMPLETED",
+    "detail": {
+      "ok": false,
+      "code": "SCHEDULING_CLARIFICATION_REQUIRED",
+      "tool": "set_scheduling_preference",
+      "status": "not_ready",
+      "call_id": "call_pNpBmka3KGWdKs0mOIzAfvnF",
+      "elapsed_ms": 19
+    },
+    "source": "python",
+    "occurred_at_utc": "2026-09-21T14:39:59.104Z",
+    "monotonic_ms_from_call_start": 57917
+  },
+  {
+    "kind": "GPT_LIVE_DELEGATION_TOOL_RESULT_QUEUED",
+    "detail": {
+      "call_id": "call_pNpBmka3KGWdKs0mOIzAfvnF",
+      "direction": "client",
+      "item_type": "function_call_output",
+      "voice_call_id": "lk_transovo-call-_+1[REDACTED]_BRMzndUiiSem",
+      "client_event_id": "tool_output_74482e2b58a7",
+      "client_event_type": "response.item.create",
+      "gpt_live_session_id": "live_u2_EQZSap3oMmjtYOA4nt91xWHedBNOY2f3"
+    },
+    "source": "python",
+    "occurred_at_utc": "2026-09-21T14:39:59.107Z",
+    "monotonic_ms_from_call_start": 57920
+  },
+  {
+    "kind": "BACKEND_LLM_METRICS_COLLECTED",
+    "detail": {
+      "ttft": -1,
+      "type": "llm_metrics",
+      "label": "livekit.plugins.openai.realtime.gpt_live_model.GPTLiveModel",
+      "duration": 0,
+      "metadata": {
+        "model_name": "gpt-5.6-sol",
+        "model_provider": "api.openai.com"
+      },
+      "cancelled": false,
+      "speech_id": null,
+      "timestamp": [REDACTED].2553437,
+      "request_id": "resp_031ee92aa6e89cff006ab141bf351487d1bed869f9e71afddd",
+      "total_tokens": "[redacted]",
+      "metrics_label": "LLMMetrics",
+      "prompt_tokens": "[redacted]",
+      "reasoning_tokens": "[redacted]",
+      "completion_tokens": "[redacted]",
+      "tokens_per_second": "[redacted]",
+      "prompt_cached_tokens": "[redacted]",
+      "cache_creation_tokens": "[redacted]"
+    },
+    "source": "python",
+    "occurred_at_utc": "2026-09-21T14:40:02.255Z",
+    "monotonic_ms_from_call_start": 61069
+  },
+  {
+    "kind": "NODE_TOOL_EXECUTION_STARTED",
+    "detail": {
+      "tool_name": "set_scheduling_preference",
+      "function_call_id": "call_wDfWxOLN0UcB45wpaj2YGhOY"
+    },
+    "source": "node",
+    "occurred_at_ms": [REDACTED],
+    "occurred_at_utc": "2026-09-21T14:40:11.115Z",
+    "monotonic_ms_from_call_start": 67555
+  },
+  {
+    "kind": "NODE_TOOL_EXECUTION_COMPLETED",
+    "detail": {
+      "ok": true,
+      "status": "SCHEDULING_PREFERENCE_SET",
+      "tool_name": "set_scheduling_preference",
+      "elapsed_ms": 4,
+      "function_call_id": "call_wDfWxOLN0UcB45wpaj2YGhOY"
+    },
+    "source": "node",
+    "occurred_at_ms": [REDACTED],
+    "occurred_at_utc": "2026-09-21T14:40:11.119Z",
+    "monotonic_ms_from_call_start": 67559
+  },
+  {
+    "kind": "FUNCTION_TOOL_STARTED",
+    "detail": {
+      "tool": "set_scheduling_preference",
+      "call_id": "call_wDfWxOLN0UcB45wpaj2YGhOY"
+    },
+    "source": "python",
+    "occurred_at_utc": "2026-09-21T14:40:11.106Z",
+    "monotonic_ms_from_call_start": 69920
+  },
+  {
+    "kind": "FUNCTION_TOOL_COMPLETED",
+    "detail": {
+      "ok": true,
+      "code": null,
+      "tool": "set_scheduling_preference",
+      "status": "SCHEDULING_PREFERENCE_SET",
+      "call_id": "call_wDfWxOLN0UcB45wpaj2YGhOY",
+      "elapsed_ms": 20
+    },
+    "source": "python",
+    "occurred_at_utc": "2026-09-21T14:40:11.126Z",
+    "monotonic_ms_from_call_start": 69940
+  },
+  {
+    "kind": "GPT_LIVE_DELEGATION_TOOL_RESULT_QUEUED",
+    "detail": {
+      "call_id": "call_wDfWxOLN0UcB45wpaj2YGhOY",
+      "direction": "client",
+      "item_type": "function_call_output",
+      "voice_call_id": "lk_transovo-call-_+1[REDACTED]_BRMzndUiiSem",
+      "client_event_id": "tool_output_4e91bf5c91aa",
+      "client_event_type": "response.item.create",
+      "gpt_live_session_id": "live_u2_EQZSap3oMmjtYOA4nt91xWHedBNOY2f3"
+    },
+    "source": "python",
+    "occurred_at_utc": "2026-09-21T14:40:11.130Z",
+    "monotonic_ms_from_call_start": 69943
+  },
+  {
+    "kind": "BACKEND_LLM_METRICS_COLLECTED",
+    "detail": {
+      "ttft": -1,
+      "type": "llm_metrics",
+      "label": "livekit.plugins.openai.realtime.gpt_live_model.GPTLiveModel",
+      "duration": 0,
+      "metadata": {
+        "model_name": "gpt-5.6-sol",
+        "model_provider": "api.openai.com"
+      },
+      "cancelled": false,
+      "speech_id": null,
+      "timestamp": [REDACTED].3933954,
+      "request_id": "resp_031ee92aa6e89cff006ab141c7fb3c87d180e8609ef13ac301",
+      "total_tokens": "[redacted]",
+      "metrics_label": "LLMMetrics",
+      "prompt_tokens": "[redacted]",
+      "reasoning_tokens": "[redacted]",
+      "completion_tokens": "[redacted]",
+      "tokens_per_second": "[redacted]",
+      "prompt_cached_tokens": "[redacted]",
+      "cache_creation_tokens": "[redacted]"
+    },
+    "source": "python",
+    "occurred_at_utc": "2026-09-21T14:40:11.393Z",
+    "monotonic_ms_from_call_start": 70207
+  },
+  {
+    "kind": "NODE_TOOL_EXECUTION_STARTED",
+    "detail": {
+      "tool_name": "find_availability",
+      "function_call_id": "call_oaVFtKIQYlQntFos0W5uVsN6"
+    },
+    "source": "node",
+    "occurred_at_ms": [REDACTED],
+    "occurred_at_utc": "2026-09-21T14:40:24.709Z",
+    "monotonic_ms_from_call_start": 81149
+  },
+  {
+    "kind": "NODE_TOOL_EXECUTION_COMPLETED",
+    "detail": {
+      "ok": true,
+      "status": "available",
+      "tool_name": "find_availability",
+      "elapsed_ms": 806,
+      "function_call_id": "call_oaVFtKIQYlQntFos0W5uVsN6"
+    },
+    "source": "node",
+    "occurred_at_ms": [REDACTED],
+    "occurred_at_utc": "2026-09-21T14:40:25.515Z",
+    "monotonic_ms_from_call_start": 81955
+  },
+  {
+    "kind": "FUNCTION_TOOL_STARTED",
+    "detail": {
+      "tool": "find_availability",
+      "call_id": "call_oaVFtKIQYlQntFos0W5uVsN6"
+    },
+    "source": "python",
+    "occurred_at_utc": "2026-09-21T14:40:24.505Z",
+    "monotonic_ms_from_call_start": 83318
+  },
+  {
+    "kind": "BACKEND_LLM_METRICS_COLLECTED",
+    "detail": {
+      "ttft": -1,
+      "type": "llm_metrics",
+      "label": "livekit.plugins.openai.realtime.gpt_live_model.GPTLiveModel",
+      "duration": 0,
+      "metadata": {
+        "model_name": "gpt-5.6-sol",
+        "model_provider": "api.openai.com"
+      },
+      "cancelled": false,
+      "speech_id": null,
+      "timestamp": [REDACTED].766397,
+      "request_id": "resp_031ee92aa6e89cff006ab141cb8fb487d1a9f5ef408a59c42c",
+      "total_tokens": "[redacted]",
+      "metrics_label": "LLMMetrics",
+      "prompt_tokens": "[redacted]",
+      "reasoning_tokens": "[redacted]",
+      "completion_tokens": "[redacted]",
+      "tokens_per_second": "[redacted]",
+      "prompt_cached_tokens": "[redacted]",
+      "cache_creation_tokens": "[redacted]"
+    },
+    "source": "python",
+    "occurred_at_utc": "2026-09-21T14:40:24.767Z",
+    "monotonic_ms_from_call_start": 83580
+  },
+  {
+    "kind": "FUNCTION_TOOL_COMPLETED",
+    "detail": {
+      "ok": true,
+      "code": null,
+      "tool": "find_availability",
+      "status": "available",
+      "call_id": "call_oaVFtKIQYlQntFos0W5uVsN6",
+      "elapsed_ms": 1013
+    },
+    "source": "python",
+    "occurred_at_utc": "2026-09-21T14:40:25.518Z",
+    "monotonic_ms_from_call_start": 84331
+  },
+  {
+    "kind": "GPT_LIVE_DELEGATION_TOOL_RESULT_QUEUED",
+    "detail": {
+      "call_id": "call_oaVFtKIQYlQntFos0W5uVsN6",
+      "direction": "client",
+      "item_type": "function_call_output",
+      "voice_call_id": "lk_transovo-call-_+1[REDACTED]_BRMzndUiiSem",
+      "client_event_id": "tool_output_45bdd3cd65c7",
+      "client_event_type": "response.item.create",
+      "gpt_live_session_id": "live_u2_EQZSap3oMmjtYOA4nt91xWHedBNOY2f3"
+    },
+    "source": "python",
+    "occurred_at_utc": "2026-09-21T14:40:25.521Z",
+    "monotonic_ms_from_call_start": 84334
+  },
+  {
+    "kind": "BACKEND_LLM_METRICS_COLLECTED",
+    "detail": {
+      "ttft": -1,
+      "type": "llm_metrics",
+      "label": "livekit.plugins.openai.realtime.gpt_live_model.GPTLiveModel",
+      "duration": 0,
+      "metadata": {
+        "model_name": "gpt-5.6-sol",
+        "model_provider": "api.openai.com"
+      },
+      "cancelled": false,
+      "speech_id": null,
+      "timestamp": [REDACTED].8369157,
+      "request_id": "resp_031ee92aa6e89cff006ab141d99bb887d193337cdaa70e225f",
+      "total_tokens": "[redacted]",
+      "metrics_label": "LLMMetrics",
+      "prompt_tokens": "[redacted]",
+      "reasoning_tokens": "[redacted]",
+      "completion_tokens": "[redacted]",
+      "tokens_per_second": "[redacted]",
+      "prompt_cached_tokens": "[redacted]",
+      "cache_creation_tokens": "[redacted]"
+    },
+    "source": "python",
+    "occurred_at_utc": "2026-09-21T14:40:30.837Z",
+    "monotonic_ms_from_call_start": 89650
+  },
+  {
+    "kind": "NODE_TOOL_EXECUTION_STARTED",
+    "detail": {
+      "tool_name": "book_appointment",
+      "function_call_id": "call_IGDmjzdE6hNug9fxK6iKwLAe"
+    },
+    "source": "node",
+    "occurred_at_ms": [REDACTED],
+    "occurred_at_utc": "2026-09-21T14:40:43.109Z",
+    "monotonic_ms_from_call_start": 99549
+  },
+  {
+    "kind": "NODE_TOOL_EXECUTION_COMPLETED",
+    "detail": {
+      "ok": true,
+      "status": "confirmed",
+      "tool_name": "book_appointment",
+      "elapsed_ms": 1325,
+      "function_call_id": "call_IGDmjzdE6hNug9fxK6iKwLAe"
+    },
+    "source": "node",
+    "occurred_at_ms": [REDACTED],
+    "occurred_at_utc": "2026-09-21T14:40:44.434Z",
+    "monotonic_ms_from_call_start": 100874
+  },
+  {
+    "kind": "FUNCTION_TOOL_STARTED",
+    "detail": {
+      "tool": "book_appointment",
+      "call_id": "call_IGDmjzdE6hNug9fxK6iKwLAe"
+    },
+    "source": "python",
+    "occurred_at_utc": "2026-09-21T14:40:43.067Z",
+    "monotonic_ms_from_call_start": 101880
+  },
+  {
+    "kind": "BACKEND_LLM_METRICS_COLLECTED",
+    "detail": {
+      "ttft": -1,
+      "type": "llm_metrics",
+      "label": "livekit.plugins.openai.realtime.gpt_live_model.GPTLiveModel",
+      "duration": 0,
+      "metadata": {
+        "model_name": "gpt-5.6-sol",
+        "model_provider": "api.openai.com"
+      },
+      "cancelled": false,
+      "speech_id": null,
+      "timestamp": [REDACTED].3928182,
+      "request_id": "resp_031ee92aa6e89cff006ab141e567ac87d1a8ca87ab65904e13",
+      "total_tokens": "[redacted]",
+      "metrics_label": "LLMMetrics",
+      "prompt_tokens": "[redacted]",
+      "reasoning_tokens": "[redacted]",
+      "completion_tokens": "[redacted]",
+      "tokens_per_second": "[redacted]",
+      "prompt_cached_tokens": "[redacted]",
+      "cache_creation_tokens": "[redacted]"
+    },
+    "source": "python",
+    "occurred_at_utc": "2026-09-21T14:40:43.393Z",
+    "monotonic_ms_from_call_start": 102206
+  },
+  {
+    "kind": "FUNCTION_TOOL_COMPLETED",
+    "detail": {
+      "ok": true,
+      "code": null,
+      "tool": "book_appointment",
+      "status": "confirmed",
+      "call_id": "call_IGDmjzdE6hNug9fxK6iKwLAe",
+      "elapsed_ms": 1369
+    },
+    "source": "python",
+    "occurred_at_utc": "2026-09-21T14:40:44.437Z",
+    "monotonic_ms_from_call_start": 103250
+  },
+  {
+    "kind": "GPT_LIVE_DELEGATION_TOOL_RESULT_QUEUED",
+    "detail": {
+      "call_id": "call_IGDmjzdE6hNug9fxK6iKwLAe",
+      "direction": "client",
+      "item_type": "function_call_output",
+      "voice_call_id": "lk_transovo-call-_+1[REDACTED]_BRMzndUiiSem",
+      "client_event_id": "tool_output_1c6ecd2a1e99",
+      "client_event_type": "response.item.create",
+      "gpt_live_session_id": "live_u2_EQZSap3oMmjtYOA4nt91xWHedBNOY2f3"
+    },
+    "source": "python",
+    "occurred_at_utc": "2026-09-21T14:40:44.440Z",
+    "monotonic_ms_from_call_start": 103253
+  },
+  {
+    "kind": "BACKEND_LLM_METRICS_COLLECTED",
+    "detail": {
+      "ttft": -1,
+      "type": "llm_metrics",
+      "label": "livekit.plugins.openai.realtime.gpt_live_model.GPTLiveModel",
+      "duration": 0,
+      "metadata": {
+        "model_name": "gpt-5.6-sol",
+        "model_provider": "api.openai.com"
+      },
+      "cancelled": false,
+      "speech_id": null,
+      "timestamp": [REDACTED].0024598,
+      "request_id": "resp_031ee92aa6e89cff006ab141ec899c87d194ac724d6d41706f",
+      "total_tokens": "[redacted]",
+      "metrics_label": "LLMMetrics",
+      "prompt_tokens": "[redacted]",
+      "reasoning_tokens": "[redacted]",
+      "completion_tokens": "[redacted]",
+      "tokens_per_second": "[redacted]",
+      "prompt_cached_tokens": "[redacted]",
+      "cache_creation_tokens": "[redacted]"
+    },
+    "source": "python",
+    "occurred_at_utc": "2026-09-21T14:40:48.002Z",
+    "monotonic_ms_from_call_start": 106816
+  }
+]
