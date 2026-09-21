@@ -1,5 +1,5 @@
-import type { VoiceV3ScreeningCallMetadata } from "@/lib/voice-v3/spam-protection/call-metadata";
-import { readVoiceV3ScreeningFromCallMetadata } from "@/lib/voice-v3/spam-protection/call-metadata";
+import type { VoiceV3ScreeningCallMetadata } from "@/lib/voice-v3/spam-protection/screening-call-metadata";
+import { readVoiceV3ScreeningFromCallMetadata } from "@/lib/voice-v3/spam-protection/screening-call-metadata";
 
 export type CallScreeningUi = {
   showSection: boolean;
