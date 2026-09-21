@@ -209,7 +209,7 @@ See `git diff` on branch (REQUEST_ONLY, crawler, knowledge/OpenAI, prisma, Pytho
 
 ## 21. Commit SHA
 
-See branch tip after push (`git log -1`).
+`26c2f897` — `feat(voice-v3): REQUEST_ONLY, website crawl, and OpenAI FileSearch ingestion`
 
 ---
 
