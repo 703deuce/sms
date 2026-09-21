@@ -73,6 +73,8 @@ export type VoiceV3LiveKitSessionConfig = {
   maxToolSteps: number;
   reasoningEffort: "none" | "low" | "medium" | "high" | null;
   textVerbosity: "low" | "medium" | "high" | null;
+  /** OpenAI vector stores for LiveKit GPT-Live FileSearch provider tool. */
+  openaiFileSearchVectorStoreIds: string[];
 };
 
 function liveSessionIdForRoom(roomName: string): string {
@@ -180,6 +182,11 @@ export async function resolveVoiceV3LiveKitSession(
     tool_count: toolSchemas.length,
   });
 
+  const openaiFileSearchVectorStoreIds =
+    agentConfig.knowledge?.retrieval?.enabled === true
+      ? (agentConfig.knowledge.retrieval.openaiVectorStoreIds ?? []).filter(Boolean)
+      : [];
+
   return {
     liveSessionId,
     callId,
@@ -197,6 +204,7 @@ export async function resolveVoiceV3LiveKitSession(
     maxToolSteps: 5,
     reasoningEffort: VOICE_V3_ASTRA_REASONING_EFFORT,
     textVerbosity: "low",
+    openaiFileSearchVectorStoreIds,
   };
 }
 

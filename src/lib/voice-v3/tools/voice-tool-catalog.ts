@@ -23,6 +23,10 @@ import {
   requestCallbackTool,
 } from "./request-callback-tool";
 import {
+  buildSubmitAppointmentRequestOpenAiTool,
+  submitAppointmentRequestTool,
+} from "./submit-appointment-request-tool";
+import {
   isRequestCallbackAuthorized,
   isSendBookingLinkAuthorized,
 } from "./authorize-tool-for-config";
@@ -113,6 +117,13 @@ export const VOICE_TOOL_CATALOG: VoiceToolCatalogEntry[] = [
     definition: requestCallbackTool as VoiceToolDefinition<unknown>,
     buildOpenAiTool: buildRequestCallbackOpenAiTool,
   },
+  {
+    name: "submit_appointment_request",
+    kind: "mutation",
+    telemetryName: "submit_appointment_request",
+    definition: submitAppointmentRequestTool as VoiceToolDefinition<unknown>,
+    buildOpenAiTool: buildSubmitAppointmentRequestOpenAiTool,
+  },
 ];
 
 function isMicrosoftDirectStrategy(config: VoiceV3AgentConfig): boolean {
@@ -139,6 +150,8 @@ function isToolEnabledForConfig(entry: VoiceToolCatalogEntry, config: VoiceV3Age
       return isSendBookingLinkAuthorized(config);
     case "request_callback":
       return isRequestCallbackAuthorized(config);
+    case "submit_appointment_request":
+      return config.scheduling?.bookingStrategy === "REQUEST_ONLY";
     case "set_scheduling_preference":
       return isMicrosoftDirectStrategy(config);
     case "transfer_call":

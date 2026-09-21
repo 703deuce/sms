@@ -4,6 +4,7 @@ import { buildAstraCallbackInstructions } from "./astra-callback-instructions";
 import { buildAstraCrossToolInstructions } from "./astra-cross-tool-instructions";
 import { buildAstraIntakeInstructions } from "./astra-intake-instructions";
 import { buildAstraTransferInstructions } from "./astra-transfer-instructions";
+import { buildAstraKnowledgeInstructions } from "../knowledge/astra-knowledge-instructions";
 
 export type AstraBackendPromptContext = {
   businessName?: string;
@@ -22,6 +23,13 @@ export type AstraBackendPromptContext = {
 function bookingStrategyAppend(
   strategy: VoiceV3AgentConfig["scheduling"]["bookingStrategy"] | undefined,
 ): string {
+  if (strategy === "REQUEST_ONLY") {
+    return `
+Request-only booking mode (published):
+- Collect required intake naturally, then call submit_appointment_request when the caller wants an appointment.
+- Do not call find_availability or book_appointment — staff will review the request.
+- Do not promise a confirmed calendar time unless the business has already confirmed it outside this call.`.trim();
+  }
   if (strategy === "SEND_LINK") {
     return `
 Send booking link mode (published):
@@ -50,6 +58,7 @@ export function buildAstraBackendInstructions(
   const crossTool = buildAstraCrossToolInstructions(agentConfig);
   const intake = buildAstraIntakeInstructions();
   const transfer = agentConfig ? buildAstraTransferInstructions(agentConfig) : "";
+  const knowledge = agentConfig ? buildAstraKnowledgeInstructions(agentConfig) : null;
 
   return `
 ${core}
@@ -70,7 +79,7 @@ ${bookingStrategyAppend(context.bookingStrategy)}
 
 ${callback ? `${callback}\n\n` : ""}${intake}
 
-${transfer ? `${transfer}\n\n` : ""}${crossTool}
+${transfer ? `${transfer}\n\n` : ""}${knowledge ? `${knowledge}\n\n` : ""}${crossTool}
 
 Each function tool description defines when to call, when not to call, side effects, and parameters. Follow those contracts exactly.
 `.trim();

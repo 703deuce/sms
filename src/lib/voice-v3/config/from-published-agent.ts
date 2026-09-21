@@ -16,6 +16,7 @@ import {
   logVoiceV3ConfigFallbackUsed,
 } from "./config-observability";
 import { resolveWizardSnapshotForVoiceV3 } from "./resolve-wizard-snapshot-for-v3";
+import { resolveAgentKnowledgeRetrieval } from "../knowledge/resolve-agent-knowledge-retrieval";
 
 /** Appointment receptionist wizard agents use Voice V3 PSTN only — no optional flag. */
 export function isAppointmentReceptionistAgent(config: VoiceAgentConfig): boolean {
@@ -89,6 +90,12 @@ export async function resolveVoiceV3AgentConfigForAgent(input: {
     });
     if (!wizard) {
       logVoiceV3ConfigFallbackUsed("wizard", "appointmentReceptionistWizard_missing");
+      if (agent?.status === "ACTIVE") {
+        console.error("VOICE_V3_ACTIVE_AGENT_MISSING_WIZARD_SNAPSHOT", {
+          workspaceId: input.workspaceId,
+          agentId: input.agentId,
+        });
+      }
       return envFallback;
     }
 
@@ -97,11 +104,18 @@ export async function resolveVoiceV3AgentConfigForAgent(input: {
       wizard,
     );
 
+    const retrieval = await resolveAgentKnowledgeRetrieval({
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+      wizard,
+    });
+
     const compiled = compileVoiceV3AgentConfig({
       wizard,
       providerConnections,
       envFallback,
       source,
+      knowledgeRetrieval: retrieval,
     });
 
     const withTenant: VoiceV3AgentConfig = {

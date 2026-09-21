@@ -11,7 +11,8 @@ export type VoiceV3AuthorizedToolName =
   | "cancel_appointment"
   | "transfer_call"
   | "send_booking_link"
-  | "request_callback";
+  | "request_callback"
+  | "submit_appointment_request";
 
 export function isRequestCallbackAuthorized(config: VoiceV3AgentConfig): boolean {
   return config.callHandling.callbackRequestsEnabled === true;
@@ -53,6 +54,8 @@ export function isVoiceV3ToolAuthorizedBase(
       );
     case "request_callback":
       return isRequestCallbackAuthorized(config);
+    case "submit_appointment_request":
+      return config.scheduling?.bookingStrategy === "REQUEST_ONLY";
     default:
       return false;
   }
