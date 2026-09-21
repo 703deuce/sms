@@ -1,4 +1,5 @@
 import { LegalShell } from "@/components/landing/legal-shell";
+import optInFlowDiagram from "@/components/landing/mctb/mctb-opt-in-flow-diagram.jpg";
 import Image from "next/image";
 import type { Metadata } from "next";
 
@@ -29,21 +30,16 @@ export default function OptInDocumentationPage() {
 
       <figure className="my-6 overflow-hidden rounded-lg border border-slate-200 bg-slate-950">
         <Image
-          src="/images/mctb-opt-in-flow-diagram.jpg"
+          src={optInFlowDiagram}
           alt="MCTB Opt-In Flow Diagram for Transovo: caller dials business, call is unanswered, forwards to Transovo IVR with consent disclosure, Press 1 to consent, opt-in SMS sent, subsequent conversational messages, and STOP or HELP handling."
-          width={2400}
-          height={1350}
           className="h-auto w-full"
+          sizes="(max-width: 768px) 100vw, 768px"
           priority
         />
       </figure>
 
       <h2>Summary</h2>
       <ul>
-        <li>
-          <strong>Sender of record:</strong> Transovo. Messages are sent with a &ldquo;Transovo:&rdquo;
-          prefix, not the business name.
-        </li>
         <li>
           <strong>Consent:</strong> Obtained only when the caller presses 1 after the IVR disclosure.
           No Press 1 / hang up → no SMS, no consent recorded.
