@@ -11,6 +11,12 @@ import {
   type VoiceV3ProviderConnections,
 } from "./compile-voice-v3-agent-config";
 import { resolveMicrosoftConnectionForWizard } from "./resolve-microsoft-connection";
+import { resolveGoogleConnectionForWizard } from "./resolve-google-connection";
+import {
+  resolveBlockingCalendarIds,
+  resolveWriteCalendarId,
+  type CalendarConfig,
+} from "@/lib/calendar/providers";
 import {
   logVoiceV3AgentConfigResolved,
   logVoiceV3ConfigFallbackUsed,
@@ -66,6 +72,44 @@ async function resolveMicrosoftProviderConnections(
   };
 }
 
+async function resolveGoogleProviderConnections(
+  workspaceId: string,
+  wizard: AppointmentReceptionistWizardState | null,
+): Promise<VoiceV3ProviderConnections> {
+  const prisma = getPrisma();
+  const provider = wizard?.calendarProvider?.trim();
+  if (provider !== "google") {
+    return {};
+  }
+
+  const calendars = await prisma.voiceCalendarConnection.findMany({
+    where: {
+      workspaceId,
+      provider: "google",
+      status: { in: ["connected", "active", "ok"] },
+    },
+    orderBy: { updatedAt: "desc" },
+  });
+
+  if (calendars.length === 0) {
+    return {};
+  }
+
+  const preferred = resolveGoogleConnectionForWizard(calendars, wizard?.calendarEmail);
+  const row = preferred ?? calendars[0];
+  if (!row) return {};
+
+  const config = (row.config || {}) as CalendarConfig;
+  const blocking = resolveBlockingCalendarIds(config, "google");
+  const calendarIds =
+    blocking.length > 0 ? blocking : [resolveWriteCalendarId(config)];
+
+  return {
+    googleConnectionId: row.id,
+    googleCalendarIds: calendarIds,
+  };
+}
+
 export async function resolveVoiceV3AgentConfigForAgent(input: {
   workspaceId: string;
   agentId: string;
@@ -92,10 +136,14 @@ export async function resolveVoiceV3AgentConfigForAgent(input: {
       return envFallback;
     }
 
-    const providerConnections = await resolveMicrosoftProviderConnections(
-      input.workspaceId,
-      wizard,
-    );
+    const [microsoftConnections, googleConnections] = await Promise.all([
+      resolveMicrosoftProviderConnections(input.workspaceId, wizard),
+      resolveGoogleProviderConnections(input.workspaceId, wizard),
+    ]);
+    const providerConnections: VoiceV3ProviderConnections = {
+      ...microsoftConnections,
+      ...googleConnections,
+    };
 
     const compiled = compileVoiceV3AgentConfig({
       wizard,

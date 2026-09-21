@@ -21,6 +21,9 @@ export type BookingFailureReason =
   | "MICROSOFT_AUTH_FAILED"
   | "MICROSOFT_THROTTLED"
   | "MICROSOFT_TEMPORARY_FAILURE"
+  | "GOOGLE_AUTH_FAILED"
+  | "GOOGLE_THROTTLED"
+  | "GOOGLE_TEMPORARY_FAILURE"
   | "BOOKING_VALIDATION_FAILED"
   | "BOOKING_OUTCOME_UNKNOWN"
   | "BOOKING_ATTEMPT_STALE"
@@ -50,7 +53,7 @@ export interface CreateBookingRequest {
 
 export interface ConfirmedBooking {
   bookingAttemptId: string;
-  provider: "microsoft";
+  provider: "microsoft" | "google";
   providerEventId: string;
   providerCalendarId: string;
   startUtc: string;

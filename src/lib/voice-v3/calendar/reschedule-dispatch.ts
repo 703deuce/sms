@@ -90,22 +90,8 @@ export async function dispatchRescheduleIfRequired(
       }
       busy = r.busy;
     } else {
-      const { fetchMicrosoftBusyIntervals } = await import("./microsoft/microsoft-find-availability");
-      const { resolveVoiceV3MicrosoftCalendar } = await import(
-        "./microsoft/resolve-voice-v3-microsoft-calendar"
-      );
-      const resolved = await resolveVoiceV3MicrosoftCalendar(runtime.config);
-      if (!resolved.ok) {
-        runtime.replaceContext({
-          ...runtime.getSnapshot(),
-          appointmentManagement: {
-            ...runtime.getSnapshot().appointmentManagement,
-            reschedule: { phase: "RESCHEDULE_FAILED", attemptId },
-          },
-        });
-        return;
-      }
-      const graphResult = await fetchMicrosoftBusyIntervals({
+      const { fetchV3ProviderBusyIntervals } = await import("./fetch-v3-provider-busy");
+      const providerResult = await fetchV3ProviderBusyIntervals({
         request: {
           callId: ctx.callId,
           schedulingGeneration: ctx.scheduling.generation,
@@ -113,13 +99,12 @@ export async function dispatchRescheduleIfRequired(
           rangeStartUtc: window.rangeStartUtc,
           rangeEndUtc: window.rangeEndUtc,
           durationMinutes: runtime.config.service.durationMinutes,
-          calendarIds: resolved.calendarIds,
+          calendarIds: runtime.config.calendar!.calendarIds,
           requestKey: `reschedule_revalidate|${attemptId}`,
         },
-        connectionId: resolved.connectionId,
-        calendarConfig: resolved.calendarConfig,
+        config: runtime.config,
       });
-      if (!graphResult.ok) {
+      if (!providerResult.ok) {
         runtime.replaceContext({
           ...runtime.getSnapshot(),
           appointmentManagement: {
@@ -129,7 +114,7 @@ export async function dispatchRescheduleIfRequired(
         });
         return;
       }
-      busy = graphResult.busy;
+      busy = providerResult.busy;
     }
 
     const filtered = filterBusyForReschedule(busy, {
@@ -196,6 +181,52 @@ export async function dispatchRescheduleIfRequired(
               config: runtime.config,
             });
           }
+          if (runtime.config.calendar?.provider === "google") {
+            const { resolveVoiceV3GoogleCalendar } = await import(
+              "./google/resolve-voice-v3-google-calendar"
+            );
+            const resolved = await resolveVoiceV3GoogleCalendar(runtime.config);
+            if (!resolved.ok) {
+              return { ok: false, message: resolved.message };
+            }
+            const { validateGoogleAppointmentBeforeMutation } = await import(
+              "./google/validate-google-appointment"
+            );
+            const validation = await validateGoogleAppointmentBeforeMutation({
+              appointment: existing,
+              connectionId: resolved.connectionId,
+              calendarConfig: resolved.calendarConfig,
+            });
+            if (!validation.ok) {
+              return {
+                ok: false,
+                message: validation.message,
+                outcomeUncertain: validation.reason === "error",
+              };
+            }
+            const { executeGoogleUpdateBooking } = await import(
+              "./google/google-update-booking"
+            );
+            const g = await executeGoogleUpdateBooking(
+              {
+                connectionId: resolved.connectionId,
+                providerEventId: existing.providerEventId,
+                providerCalendarId: existing.providerCalendarId,
+                startUtc: slotSnapshot.startUtc,
+                endUtc: slotSnapshot.endUtc,
+                timezone: slotSnapshot.timezone,
+                summary,
+              },
+              resolved.calendarConfig,
+            );
+            if (g.ok) return { ok: true, durationMs: g.durationMs };
+            return {
+              ok: false,
+              message: g.message,
+              outcomeUncertain: g.outcomeUncertain,
+            };
+          }
+
           const { resolveVoiceV3MicrosoftCalendar } = await import(
             "./microsoft/resolve-voice-v3-microsoft-calendar"
           );
@@ -244,17 +275,32 @@ export async function dispatchRescheduleIfRequired(
         const u = await runUpdate();
         if (u.ok) return { ok: true, value: { durationMs: u.durationMs } };
         if (u.outcomeUncertain) {
-          const { reconcileMicrosoftRescheduleOutcome } = await import(
-            "./microsoft/microsoft-reconcile-mutation-outcome"
-          );
-          const verdict = await reconcileMicrosoftRescheduleOutcome({
-            appointment: existing,
-            requestedStartUtc: slotSnapshot.startUtc,
-            requestedEndUtc: slotSnapshot.endUtc,
-            config: runtime.config,
-          });
-          if (verdict === "NEW_TIME") {
-            return { ok: true, value: { durationMs: u.durationMs } };
+          if (runtime.config.calendar?.provider === "google") {
+            const { reconcileGoogleRescheduleOutcome } = await import(
+              "./google/google-reconcile-mutation-outcome"
+            );
+            const verdict = await reconcileGoogleRescheduleOutcome({
+              appointment: existing,
+              requestedStartUtc: slotSnapshot.startUtc,
+              requestedEndUtc: slotSnapshot.endUtc,
+              config: runtime.config,
+            });
+            if (verdict === "NEW_TIME") {
+              return { ok: true, value: { durationMs: u.durationMs } };
+            }
+          } else {
+            const { reconcileMicrosoftRescheduleOutcome } = await import(
+              "./microsoft/microsoft-reconcile-mutation-outcome"
+            );
+            const verdict = await reconcileMicrosoftRescheduleOutcome({
+              appointment: existing,
+              requestedStartUtc: slotSnapshot.startUtc,
+              requestedEndUtc: slotSnapshot.endUtc,
+              config: runtime.config,
+            });
+            if (verdict === "NEW_TIME") {
+              return { ok: true, value: { durationMs: u.durationMs } };
+            }
           }
         }
         return {

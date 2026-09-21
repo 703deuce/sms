@@ -7,6 +7,7 @@ export type VoiceV2BookingStrategy =
   | "REQUEST_ONLY"
   | "SEND_LINK"
   | "MICROSOFT_365"
+  | "GOOGLE_CALENDAR"
   | "CALENDLY";
 
 const STRATEGIES: VoiceV2BookingStrategy[] = [
@@ -14,6 +15,7 @@ const STRATEGIES: VoiceV2BookingStrategy[] = [
   "REQUEST_ONLY",
   "SEND_LINK",
   "MICROSOFT_365",
+  "GOOGLE_CALENDAR",
   "CALENDLY",
 ];
 
@@ -48,6 +50,13 @@ export function deriveBookingStrategyFromWizard(
     (wizard.calendarProvider === "microsoft" || wizard.calendarProvider === "outlook")
   ) {
     return "MICROSOFT_365";
+  }
+  if (
+    perm === "book_directly" &&
+    wizard.calendarConnected &&
+    wizard.calendarProvider === "google"
+  ) {
+    return "GOOGLE_CALENDAR";
   }
   if (
     perm === "book_directly" &&
@@ -93,11 +102,11 @@ export function isVoiceV2PstnLiveBookingMode(
   config?: VoiceAgentConfig | { advanced?: Record<string, unknown> } | null,
 ): boolean {
   const strategy = resolveVoiceV2BookingStrategy(config);
-  return strategy === "MICROSOFT_365" || strategy === "CALENDLY";
+  return strategy === "MICROSOFT_365" || strategy === "GOOGLE_CALENDAR" || strategy === "CALENDLY";
 }
 
 export function voiceV2StrategyAllowsFindBook(strategy: VoiceV2BookingStrategy): boolean {
-  return strategy === "MICROSOFT_365" || strategy === "CALENDLY";
+  return strategy === "MICROSOFT_365" || strategy === "GOOGLE_CALENDAR" || strategy === "CALENDLY";
 }
 
 export function voiceV2StrategyRequiresSchedulingPreference(
@@ -105,6 +114,7 @@ export function voiceV2StrategyRequiresSchedulingPreference(
 ): boolean {
   return (
     strategy === "MICROSOFT_365" ||
+    strategy === "GOOGLE_CALENDAR" ||
     strategy === "CALENDLY" ||
     strategy === "REQUEST_ONLY"
   );

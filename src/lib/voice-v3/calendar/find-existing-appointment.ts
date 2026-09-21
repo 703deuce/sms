@@ -116,19 +116,10 @@ function finalizeFromNarrowed(
   };
 }
 
-async function loadMicrosoftCandidates(
+async function loadProviderCalendarCandidates(
   request: FindExistingAppointmentRequest,
   config: VoiceV3AgentConfig,
 ): Promise<AppointmentDiscoveryRecord[]> {
-  const { resolveVoiceV3MicrosoftCalendar } = await import(
-    "./microsoft/resolve-voice-v3-microsoft-calendar"
-  );
-  const { fetchMicrosoftAppointmentDiscoveryCandidates } = await import(
-    "./microsoft/microsoft-find-existing-appointments"
-  );
-  const resolved = await resolveVoiceV3MicrosoftCalendar(config);
-  if (!resolved.ok) return [];
-
   const timezone = request.timezone ?? config.timezone ?? "America/New_York";
   const when = mergeAppointmentWhen(request);
   const window = buildFindExistingAppointmentWindow({
@@ -138,6 +129,45 @@ async function loadMicrosoftCandidates(
     dateExpression: request.dateExpression ?? request.lookupState?.localDate,
     durationMinutes: config.service.durationMinutes,
   });
+
+  if (config.calendar?.provider === "google") {
+    const { resolveVoiceV3GoogleCalendar } = await import(
+      "./google/resolve-voice-v3-google-calendar"
+    );
+    const { fetchGoogleAppointmentDiscoveryCandidates } = await import(
+      "./google/google-find-existing-appointments"
+    );
+    const resolved = await resolveVoiceV3GoogleCalendar(config);
+    if (!resolved.ok) return [];
+
+    const result = await fetchGoogleAppointmentDiscoveryCandidates({
+      connectionId: resolved.connectionId,
+      calendarConfig: resolved.calendarConfig,
+      calendarIds: resolved.calendarIds,
+      rangeStartUtc: window.rangeStartUtc,
+      rangeEndUtc: window.rangeEndUtc,
+      timezone,
+    });
+    if (!result.ok) {
+      console.log("APPOINTMENT_DISCOVERY_GOOGLE_FAILED", {
+        call_id: request.callId,
+        reason: result.reason,
+        message: result.message,
+        duration_ms: result.durationMs,
+      });
+      return [];
+    }
+    return result.candidates;
+  }
+
+  const { resolveVoiceV3MicrosoftCalendar } = await import(
+    "./microsoft/resolve-voice-v3-microsoft-calendar"
+  );
+  const { fetchMicrosoftAppointmentDiscoveryCandidates } = await import(
+    "./microsoft/microsoft-find-existing-appointments"
+  );
+  const resolved = await resolveVoiceV3MicrosoftCalendar(config);
+  if (!resolved.ok) return [];
 
   const graph = await fetchMicrosoftAppointmentDiscoveryCandidates({
     connectionId: resolved.connectionId,
@@ -187,9 +217,12 @@ export async function findExistingAppointment(
   const timezone = request.timezone ?? config?.timezone ?? "America/New_York";
   let pool: AppointmentDiscoveryRecord[] = loadStoreCandidates(request, timezone);
 
-  const shouldQueryMicrosoft = request.microsoftLookup !== false && config?.calendar?.connectionId;
-  if (shouldQueryMicrosoft && config) {
-    pool = dedupeDiscoveryRecords([...pool, ...(await loadMicrosoftCandidates(request, config))]);
+  const shouldQueryProvider = request.microsoftLookup !== false && config?.calendar?.connectionId;
+  if (shouldQueryProvider && config) {
+    pool = dedupeDiscoveryRecords([
+      ...pool,
+      ...(await loadProviderCalendarCandidates(request, config)),
+    ]);
   }
 
   const narrowed = narrowAppointmentCandidates(pool, constraints);

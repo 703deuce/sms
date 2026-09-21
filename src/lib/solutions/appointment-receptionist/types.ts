@@ -71,6 +71,7 @@ export type VoiceWizardBookingStrategy =
   | "REQUEST_ONLY"
   | "SEND_LINK"
   | "MICROSOFT_365"
+  | "GOOGLE_CALENDAR"
   | "CALENDLY";
 
 export type FallbackAction =

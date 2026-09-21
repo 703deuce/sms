@@ -1,5 +1,6 @@
 import type { FunctionTool } from "openai/resources/live/live";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
+import { isDirectCalendarBookingStrategy } from "../calendar/direct-calendar-strategy";
 import type { VoiceToolDefinition } from "./types";
 import type { VoiceToolKind } from "./concurrency-policy";
 import { buildUpdateIntakeOpenAiTool, updateIntakeTool } from "./update-intake-tool";
@@ -115,8 +116,8 @@ export const VOICE_TOOL_CATALOG: VoiceToolCatalogEntry[] = [
   },
 ];
 
-function isMicrosoftDirectStrategy(config: VoiceV3AgentConfig): boolean {
-  return config.scheduling?.bookingStrategy === "MICROSOFT_365";
+function isDirectCalendarStrategy(config: VoiceV3AgentConfig): boolean {
+  return isDirectCalendarBookingStrategy(config.scheduling?.bookingStrategy);
 }
 
 function isToolEnabledForConfig(entry: VoiceToolCatalogEntry, config: VoiceV3AgentConfig): boolean {
@@ -126,21 +127,21 @@ function isToolEnabledForConfig(entry: VoiceToolCatalogEntry, config: VoiceV3Age
   }
   switch (entry.name) {
     case "book_appointment":
-      return caps.bookAppointments && isMicrosoftDirectStrategy(config);
+      return caps.bookAppointments && isDirectCalendarStrategy(config);
     case "find_availability":
-      return caps.checkAvailability && isMicrosoftDirectStrategy(config);
+      return caps.checkAvailability && isDirectCalendarStrategy(config);
     case "find_appointment":
-      return caps.findAppointments && isMicrosoftDirectStrategy(config);
+      return caps.findAppointments && isDirectCalendarStrategy(config);
     case "reschedule_appointment":
-      return caps.rescheduleAppointments && isMicrosoftDirectStrategy(config);
+      return caps.rescheduleAppointments && isDirectCalendarStrategy(config);
     case "cancel_appointment":
-      return caps.cancelAppointments && isMicrosoftDirectStrategy(config);
+      return caps.cancelAppointments && isDirectCalendarStrategy(config);
     case "send_booking_link":
       return isSendBookingLinkAuthorized(config);
     case "request_callback":
       return isRequestCallbackAuthorized(config);
     case "set_scheduling_preference":
-      return isMicrosoftDirectStrategy(config);
+      return isDirectCalendarStrategy(config);
     case "transfer_call":
       return (
         caps.transferCalls &&

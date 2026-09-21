@@ -1,4 +1,5 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
+import { isDirectCalendarBookingStrategy } from "../calendar/direct-calendar-strategy";
 import { voiceToolError } from "./types";
 
 export type VoiceV3AuthorizedToolName =
@@ -15,8 +16,8 @@ export function isRequestCallbackAuthorized(config: VoiceV3AgentConfig): boolean
   return config.callHandling.callbackRequestsEnabled === true;
 }
 
-function isMicrosoftDirectStrategy(config: VoiceV3AgentConfig): boolean {
-  return config.scheduling?.bookingStrategy === "MICROSOFT_365";
+function isDirectCalendarStrategy(config: VoiceV3AgentConfig): boolean {
+  return isDirectCalendarBookingStrategy(config.scheduling?.bookingStrategy);
 }
 
 export function isSendBookingLinkAuthorized(config: VoiceV3AgentConfig): boolean {
@@ -32,15 +33,15 @@ export function isVoiceV3ToolAuthorized(
   const caps = config.capabilities;
   switch (toolName) {
     case "book_appointment":
-      return caps.bookAppointments && isMicrosoftDirectStrategy(config);
+      return caps.bookAppointments && isDirectCalendarStrategy(config);
     case "find_availability":
-      return caps.checkAvailability && isMicrosoftDirectStrategy(config);
+      return caps.checkAvailability && isDirectCalendarStrategy(config);
     case "find_appointment":
-      return caps.findAppointments && isMicrosoftDirectStrategy(config);
+      return caps.findAppointments && isDirectCalendarStrategy(config);
     case "reschedule_appointment":
-      return caps.rescheduleAppointments && isMicrosoftDirectStrategy(config);
+      return caps.rescheduleAppointments && isDirectCalendarStrategy(config);
     case "cancel_appointment":
-      return caps.cancelAppointments && isMicrosoftDirectStrategy(config);
+      return caps.cancelAppointments && isDirectCalendarStrategy(config);
     case "send_booking_link":
       return isSendBookingLinkAuthorized(config);
     case "transfer_call":
@@ -61,7 +62,7 @@ export function authorizeVoiceV3ToolOrError(
   toolName: VoiceV3AuthorizedToolName,
 ) {
   if (isVoiceV3ToolAuthorized(config, toolName)) return null;
-  if (toolName === "send_booking_link" && isMicrosoftDirectStrategy(config)) {
+  if (toolName === "send_booking_link" && isDirectCalendarStrategy(config)) {
     return voiceToolError(
       "BOOKING_STRATEGY_MISMATCH",
       "send_booking_link is not available for Microsoft direct booking.",
