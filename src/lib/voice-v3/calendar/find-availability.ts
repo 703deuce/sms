@@ -7,6 +7,18 @@ import type { FindAvailabilityRequest, RequiredRuntimeAction } from "./types";
 import { parseVoiceV3LocalIsoToDate } from "./microsoft/microsoft-time-adapter";
 import { wallTimeInZoneToUtc } from "../time/timezone";
 
+/** Wizard per-service calendar "default" means agent-level calendarIds — not a provider id. */
+export function resolveFindAvailabilityCalendarIds(
+  serviceCalendarId: string | undefined,
+  agentCalendarIds: string[],
+): string[] {
+  const perService = serviceCalendarId?.trim();
+  if (!perService || perService === "default") {
+    return [...agentCalendarIds];
+  }
+  return [perService];
+}
+
 export function buildFindAvailabilityRequestKey(req: FindAvailabilityRequest): string {
   return [
     req.callId,
@@ -87,9 +99,10 @@ export function buildFindAvailabilityRequest(
 
   const calendar = config.calendar;
   if (!calendar?.calendarIds?.length) return null;
-  const calendarIds = service.calendarId?.trim()
-    ? [service.calendarId.trim()]
-    : [...calendar.calendarIds];
+  const calendarIds = resolveFindAvailabilityCalendarIds(
+    service.calendarId,
+    calendar.calendarIds,
+  );
 
   const req: FindAvailabilityRequest = {
     callId: ctx.callId,

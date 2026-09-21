@@ -684,7 +684,9 @@ export async function getMicrosoftBusy(
   const rawCalendarId = opts?.calendarId?.trim();
   // Voice config uses Google-style "primary"; Graph expects /me/calendar/calendarView or getSchedule.
   const calendarId =
-    rawCalendarId && rawCalendarId !== "primary" ? rawCalendarId : undefined;
+    rawCalendarId && rawCalendarId !== "primary" && rawCalendarId !== "default"
+      ? rawCalendarId
+      : undefined;
 
   if (calendarId) {
     return getMicrosoftBusyViaCalendarView(accessToken, timeMin, timeMax, calendarId, ctx);

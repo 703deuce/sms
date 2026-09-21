@@ -118,7 +118,8 @@ export async function fetchMicrosoftAppointmentDiscoveryCandidates(input: {
     const { formatLocalIsoForZone } = await import("../format-local-iso");
 
     for (const calendarId of input.calendarIds) {
-      const graphCalendarId = calendarId === "primary" ? undefined : calendarId;
+      const graphCalendarId =
+        calendarId === "primary" || calendarId === "default" ? undefined : calendarId;
       const events = await listMicrosoftCalendarEventsForAppointmentDiscovery(
         token,
         timeMin,
