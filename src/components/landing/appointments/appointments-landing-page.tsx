@@ -579,6 +579,7 @@ export function AppointmentsLandingPage() {
                 <h4>Product</h4>
                 <Link href="#features">Features</Link>
                 <Link href="#how-it-works">How it works</Link>
+                <Link href="/">Missed Call Text Back</Link>
                 <Link href="/signup?next=/appointments/overview">Start Free</Link>
                 <Link href="/login?next=/appointments/overview">Login</Link>
               </div>
@@ -599,6 +600,7 @@ export function AppointmentsLandingPage() {
                 <h4>Legal</h4>
                 <Link href="/terms">Terms</Link>
                 <Link href="/privacy">Privacy</Link>
+                <Link href="/acceptable-use">Acceptable Use</Link>
               </div>
             </div>
           </div>

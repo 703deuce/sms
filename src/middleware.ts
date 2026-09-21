@@ -13,6 +13,7 @@ import {
 import { isSmsMarketingHiddenAtLaunch, isPortInHiddenAtLaunch, isNumbersPlatformOnlyLaunch } from "@/lib/workspace/platform-launch";
 import { isVerifyLaunchEnabled } from "@/lib/products/v1-product-status";
 import { isDevAuthBypassEnabled } from "@/lib/auth/dev-auth-bypass";
+import { shouldRedirectAppointmentsRootToOverview } from "@/lib/products/appointments-home-redirect";
 
 function isInternalRequestHost(request: NextRequest): boolean {
   const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
@@ -128,6 +129,24 @@ function isPublicPath(pathname: string) {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const sessionEarly = request.cookies.get("transovo_session")?.value;
+
+  // Public Appointments marketing at /appointments; authenticated users use app subroutes.
+  if (pathname === "/appointments") {
+    if (!sessionEarly) {
+      return NextResponse.next();
+    }
+    const params = Object.fromEntries(request.nextUrl.searchParams.entries());
+    if (shouldRedirectAppointmentsRootToOverview(params)) {
+      return siteRedirect(request, "/appointments/overview");
+    }
+    if (request.nextUrl.search) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/appointments/list";
+      return NextResponse.redirect(url);
+    }
+    return siteRedirect(request, "/appointments/overview");
+  }
 
   if (!isVerifyLaunchEnabled()) {
     if (pathname === "/phone-verification" || pathname.startsWith("/verify")) {
