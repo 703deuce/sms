@@ -2,7 +2,7 @@
 
 **Starting SHA (branch base):** `a26ccff5` (on `cursor/voice-v3-call-history-2304`, production baseline reference `4f5e99e4c566190e98f43c39fab781d0417c4311`)
 
-**Final candidate SHA:** _(set at commit push — see branch tip)_
+**Final candidate SHA:** `33531dee`
 
 **Production deployment:** NOT performed (per instruction).
 
