@@ -17,7 +17,6 @@ import {
 import type { AvailabilityOfferSet } from "../calendar/offer-set";
 import type { AvailabilitySlot } from "../calendar/slot-generator";
 import type { SelectedAvailabilitySlot } from "../calendar/selected-slot";
-import { buildVoiceV3ToolLiveHooks } from "../live-runtime-hooks";
 
 const bookArgsSchema = z.object({
   offer_set_id: z
@@ -177,12 +176,13 @@ export const bookAppointmentTool: VoiceToolDefinition<BookAppointmentArgs> = {
       );
     }
 
-    const liveHooks = buildVoiceV3ToolLiveHooks({
-      liveSessionId: ctx.liveSessionId,
-      sendContext: ctx.sendContext,
-    });
+    const silentHooks = {
+      onLiveContext: (event: { type: string; [key: string]: unknown }) => {
+        ctx.sendContext(event);
+      },
+    };
 
-    await dispatchBookingIfRequired(ctx.runtime, liveHooks);
+    await dispatchBookingIfRequired(ctx.runtime, silentHooks);
 
     const after = ctx.runtime.getSnapshot();
     if (after.booking.phase === "BOOKING_CONFIRMED" && after.booking.confirmed) {

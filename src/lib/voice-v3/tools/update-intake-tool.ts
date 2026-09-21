@@ -10,9 +10,6 @@ import {
 } from "../intake-objective";
 import { logIntakeTelemetry } from "../intake-objective/telemetry";
 import { LiveContextPublisher } from "../live/live-context-publisher";
-import { pushLiveThinkingContext } from "../live-runtime-hooks";
-import { requestLiveSpeakContinuation } from "../live-response-trigger";
-import type { LiveSidebandSend } from "../greeting";
 import { UPDATE_INTAKE_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 import type { VoiceToolDefinition } from "./types";
 import { toolOk, voiceToolError } from "./types";
@@ -147,25 +144,8 @@ export const updateIntakeTool: VoiceToolDefinition<UpdateIntakeArgs> = {
       );
     }
 
-    const intakeContext = buildIntakeObjectiveContext(config, after);
-    if (merged.updatedFields.length > 0) {
-      pushLiveThinkingContext(
-        {
-          onLiveContext: (event) => ctx.sendContext(event),
-          requestSpeak: (reason) =>
-            requestLiveSpeakContinuation({
-              send: ctx.sendContext as LiveSidebandSend,
-              liveSessionId: ctx.liveSessionId,
-              reason,
-            }),
-        },
-        intakeContext,
-        "intake_updated",
-      );
-    } else {
-      const publisher = new LiveContextPublisher(ctx.sendContext);
-      publisher.appendThinking(intakeContext, ctx.delegationId);
-    }
+    const publisher = new LiveContextPublisher(ctx.sendContext);
+    publisher.appendThinking(buildIntakeObjectiveContext(config, after), ctx.delegationId);
 
     if (merged.updatedFields.length === 0 && merged.rejectedFields.length > 0) {
       return voiceToolError(

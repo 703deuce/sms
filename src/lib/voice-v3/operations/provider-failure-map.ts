@@ -1,8 +1,32 @@
 import type { VoiceV3RecoveryCode } from "../recovery/types";
 
+const INTERNAL_BOOKING_FAILURE_CODES = new Set([
+  "BOOKING_VALIDATION_FAILED",
+  "CONFIGURATION_MISSING",
+  "configuration_missing",
+  "STALE_SCHEDULING_GENERATION",
+  "STALE_OFFER_SET",
+  "INVALID_SLOT",
+  "INTAKE_INCOMPLETE",
+  "BOOKING_CONFIRMATION_REQUIRED",
+  "OPERATING_POLICY_BLOCKED",
+  "STALE_CONVERSATION_REVISION",
+  "BOOKING_ATTEMPT_STALE",
+  "SLOT_NO_LONGER_AVAILABLE",
+]);
+
+/** Preserve internal pre-provider / auth failure codes for ASYNC_ACTION_FAILED telemetry. */
+export function mapBookingOperationFailureCode(reason: string): string {
+  const normalized = reason.trim();
+  if (INTERNAL_BOOKING_FAILURE_CODES.has(normalized)) {
+    return normalized === "configuration_missing" ? "CONFIGURATION_MISSING" : normalized;
+  }
+  return mapProviderFailureToRecoveryCode(normalized);
+}
+
 /** Map provider / transport failure tokens to recovery codes (FIND/BOOK/RESCHEDULE/CANCEL). */
 export function mapProviderFailureToRecoveryCode(reason: string): VoiceV3RecoveryCode {
-  const r = reason.toLowerCase();
+  const r = reason.trim().toLowerCase();
   if (
     r.includes("auth") ||
     r.includes("401") ||
@@ -40,7 +64,16 @@ export function mapProviderFailureToRecoveryCode(reason: string): VoiceV3Recover
   if (r.includes("409") || r.includes("conflict")) {
     return "SLOT_NOT_AVAILABLE";
   }
-  if (r.includes("400") || r.includes("validation") || r.includes("malformed")) {
+  if (r.includes("booking_validation_failed")) {
+    return "SEMANTIC_EXTRACTION_FAILED";
+  }
+  if (r.includes("configuration_missing")) {
+    return "SEMANTIC_TRANSPORT_FAILED";
+  }
+  if (r.includes("400") || r.includes("malformed")) {
+    return "MICROSOFT_TEMPORARY_FAILURE";
+  }
+  if (r.includes("validation") && !r.includes("booking_validation")) {
     return "MICROSOFT_TEMPORARY_FAILURE";
   }
   if (r.includes("outcome_unknown") || r.includes("outcome uncertain")) {

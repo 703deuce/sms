@@ -7,7 +7,6 @@ import {
   isBookingVerbalConfirmationSatisfied,
 } from "../booking/verbal-confirmation";
 import { getMissingFieldsForOperation } from "../intake-objective/operation-requirements";
-import { getCurrentConversationRevision } from "../conversation/conversation-revision";
 
 export type BookingMutationAuthorization =
   | { allowed: true }
@@ -17,8 +16,6 @@ export function authorizeVoiceV3BookingMutation(input: {
   config: VoiceV3AgentConfig;
   ctx: VoiceV3CallContext;
   selected: SelectedAvailabilitySlot;
-  conversationRevisionAtStart: number;
-  liveSessionId: string;
 }): BookingMutationAuthorization {
   if (
     !isVoiceV3ToolAuthorizedEffective(input.config, "book_appointment", undefined, input.ctx)
@@ -71,15 +68,6 @@ export function authorizeVoiceV3BookingMutation(input: {
       allowed: false,
       code: "BOOKING_CONFIRMATION_REQUIRED",
       message: "Caller must explicitly confirm the appointment before booking.",
-    };
-  }
-
-  const currentRevision = getCurrentConversationRevision(input.liveSessionId);
-  if (currentRevision > input.conversationRevisionAtStart) {
-    return {
-      allowed: false,
-      code: "STALE_CONVERSATION_REVISION",
-      message: "Caller changed the request; booking was not applied.",
     };
   }
 

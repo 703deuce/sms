@@ -30,7 +30,10 @@ import { registerDurableBooking } from "./durable-booking-store";
 import type { VoiceV3LiveRuntimeHooks } from "../live-runtime-hooks";
 import { pushLiveThinkingEvent } from "../live-runtime-hooks";
 import { finishMutatingOperation } from "../operations/dispatch-mutations";
-import { mapProviderFailureToRecoveryCode } from "../operations/provider-failure-map";
+import {
+  mapBookingOperationFailureCode,
+  mapProviderFailureToRecoveryCode,
+} from "../operations/provider-failure-map";
 import { runAuthoritativeOperation } from "../operations/run-authoritative-operation";
 import { getCurrentConversationRevision } from "../conversation/conversation-revision";
 import { calendarProviderForConfig } from "./direct-booking-strategy";
@@ -342,7 +345,9 @@ export async function dispatchBookingIfRequired(
 
     updateBookingAttemptPhase(latest.liveSessionId, attempt.bookingAttemptId, "READY_TO_COMMIT");
 
-    let conversationRevisionAtCommitStart = getCurrentConversationRevision(latest.liveSessionId);
+    const conversationRevisionAtCommitStart = getCurrentConversationRevision(
+      latest.liveSessionId,
+    );
     const commitProvider = calendarProviderForConfig(runtime.config) ?? "microsoft";
 
     const commitResult = await runAuthoritativeOperation({
@@ -353,7 +358,6 @@ export async function dispatchBookingIfRequired(
       prepareStart: (c) => applyBookingPhase(c, "BOOKING_CREATING"),
       isStillAuthoritative: (c) => attemptStillValid(c, attempt),
       execute: async () => {
-        conversationRevisionAtCommitStart = getCurrentConversationRevision(latest.liveSessionId);
         const { authorizeVoiceV3BookingMutation } = await import(
           "../policy/authorize-booking-mutation"
         );
@@ -361,13 +365,12 @@ export async function dispatchBookingIfRequired(
           config: runtime.config,
           ctx: runtime.getSnapshot(),
           selected,
-          conversationRevisionAtStart: conversationRevisionAtCommitStart,
-          liveSessionId: latest.liveSessionId,
         });
         if (!auth.allowed) {
-          console.log("BOOKING_MUTATION_DENIED", {
+          console.log("BOOKING_PRE_PROVIDER_FAILURE", {
             call_id: latest.callId,
             booking_attempt_id: attempt.bookingAttemptId,
+            stage: "AUTHORIZATION",
             code: auth.code,
             message: auth.message,
           });
@@ -377,6 +380,11 @@ export async function dispatchBookingIfRequired(
             outcomeUncertain: false,
           };
         }
+        console.log("BOOKING_PROVIDER_REQUEST_STARTED", {
+          call_id: latest.callId,
+          booking_attempt_id: attempt.bookingAttemptId,
+          provider: commitProvider,
+        });
         console.log("BOOKING_COMMIT_STARTED", {
           call_id: latest.callId,
           scheduling_generation: latest.scheduling.generation,
@@ -417,12 +425,25 @@ export async function dispatchBookingIfRequired(
         }
 
         if (!createResult.ok) {
+          console.log("BOOKING_PROVIDER_FAILURE", {
+            call_id: latest.callId,
+            booking_attempt_id: attempt.bookingAttemptId,
+            reason: createResult.failure.reason,
+            message: createResult.failure.message,
+            duration_ms: createResult.durationMs,
+            outcome_uncertain: createResult.outcomeUncertain ?? false,
+          });
           return {
             ok: false,
-            failureCode: mapProviderFailureToRecoveryCode(createResult.failure.reason),
+            failureCode: mapBookingOperationFailureCode(createResult.failure.reason),
             outcomeUncertain: createResult.outcomeUncertain,
           };
         }
+        console.log("BOOKING_PROVIDER_SUCCESS", {
+          call_id: latest.callId,
+          booking_attempt_id: attempt.bookingAttemptId,
+          duration_ms: createResult.durationMs,
+        });
         return {
           ok: true,
           value: {
