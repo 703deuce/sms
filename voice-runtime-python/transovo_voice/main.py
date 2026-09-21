@@ -108,9 +108,20 @@ else:
     server.rtc_session(agent_name=AGENT_NAME)(legacy_entrypoint)
 
 
+def _prewarm_voice_v3_observability_modules() -> None:
+    """Import heavy Voice V3 observability modules at worker boot (not on first call)."""
+    if WORKER_PROFILE != "v3":
+        return
+    import anyio  # noqa: F401
+    import transovo_voice.voice_v3.forensics  # noqa: F401
+    import transovo_voice.voice_v3.gpt_live_delegation_telemetry  # noqa: F401
+
+
 def main() -> None:
     active_backend = apply_media_backend_env()
     from transovo_voice.build_identity import get_voice_build_identity
+
+    _prewarm_voice_v3_observability_modules()
 
     active_agent = VOICE_V3_AGENT_NAME if WORKER_PROFILE == "v3" else AGENT_NAME
     log_event(

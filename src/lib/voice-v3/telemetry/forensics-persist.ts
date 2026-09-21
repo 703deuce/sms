@@ -80,6 +80,7 @@ export type VoiceV3ForensicsPersistInput = {
   sessionReport?: unknown;
   gptLiveUsage?: unknown;
   backendLlmUsage?: unknown;
+  sessionUsage?: unknown;
   gptLiveSessionId?: string | null;
   liveKitJobId?: string | null;
   roomName?: string | null;
@@ -234,6 +235,7 @@ export async function persistVoiceV3ForensicsPackage(
     sessionReport: input.sessionReport ?? prevForensics.sessionReport,
     gptLiveUsage: input.gptLiveUsage ?? prevForensics.gptLiveUsage,
     backendLlmUsage: input.backendLlmUsage ?? prevForensics.backendLlmUsage,
+    sessionUsage: input.sessionUsage ?? prevForensics.sessionUsage,
     gptLiveSessionId: input.gptLiveSessionId ?? prevForensics.gptLiveSessionId,
     liveKitJobId: input.liveKitJobId ?? prevForensics.liveKitJobId,
     roomName: input.roomName ?? prevForensics.roomName,

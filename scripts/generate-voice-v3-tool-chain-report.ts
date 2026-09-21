@@ -67,12 +67,39 @@ const PHASE_MARKERS = new Set([
 
 const DELEGATION_KINDS = new Set([
   "GPT_LIVE_DELEGATION_TELEMETRY_ATTACHED",
+  "GPT_LIVE_BACKEND_DELEGATION_CREATED",
+  "GPT_LIVE_BACKEND_RESPONSE_CREATED",
+  "GPT_LIVE_BACKEND_FUNCTION_CALL_EMITTED",
+  "GPT_LIVE_BACKEND_RESPONSE_COMPLETED",
+  "GPT_LIVE_BACKEND_RESPONSE_FAILED",
+  "GPT_LIVE_BACKEND_RESPONSE_INCOMPLETE",
+  "GPT_LIVE_BACKEND_CONTINUATION_QUEUED",
   "GPT_LIVE_DELEGATION_RESPONSE_CREATED",
   "GPT_LIVE_DELEGATION_FUNCTION_CALL_EMITTED",
   "GPT_LIVE_DELEGATION_RESPONSE_COMPLETED",
   "GPT_LIVE_DELEGATION_RESPONSE_FAILED",
   "GPT_LIVE_DELEGATION_RESPONSE_INCOMPLETE",
   "GPT_LIVE_DELEGATION_TOOL_RESULT_QUEUED",
+  "GPT_LIVE_DELEGATION_RESPONSE_CREATE",
+]);
+
+const RESPONSE_CREATED_KINDS = new Set([
+  "GPT_LIVE_BACKEND_RESPONSE_CREATED",
+  "GPT_LIVE_DELEGATION_RESPONSE_CREATED",
+]);
+const FUNCTION_CALL_EMITTED_KINDS = new Set([
+  "GPT_LIVE_BACKEND_FUNCTION_CALL_EMITTED",
+  "GPT_LIVE_DELEGATION_FUNCTION_CALL_EMITTED",
+]);
+const RESPONSE_COMPLETED_KINDS = new Set([
+  "GPT_LIVE_BACKEND_RESPONSE_COMPLETED",
+  "GPT_LIVE_DELEGATION_RESPONSE_COMPLETED",
+]);
+const TOOL_RESULT_QUEUED_KINDS = new Set([
+  "GPT_LIVE_DELEGATION_TOOL_RESULT_QUEUED",
+]);
+const CONTINUATION_QUEUED_KINDS = new Set([
+  "GPT_LIVE_BACKEND_CONTINUATION_QUEUED",
   "GPT_LIVE_DELEGATION_RESPONSE_CREATE",
 ]);
 
@@ -106,29 +133,80 @@ type DelegationResponseRow = {
   continuationCreateUtc: string;
   completedUtc: string;
   metricsCompletedUtc: string;
+  nextCreatedObservedUtc: string;
 };
 
+function eventUtcMs(e: ForensicsEvent): number {
+  const wall = eventWallUtc(e);
+  if (!wall) return Number.NaN;
+  const t = Date.parse(wall);
+  return Number.isNaN(t) ? Number.NaN : t;
+}
+
+function pickNextAfterUtc<T extends ForensicsEvent>(
+  pool: T[],
+  afterUtc: string,
+  predicate: (e: T) => boolean,
+): T | undefined {
+  const afterMs = Date.parse(afterUtc);
+  if (Number.isNaN(afterMs)) return pool.find(predicate);
+  let best: T | undefined;
+  let bestMs = Number.POSITIVE_INFINITY;
+  for (const e of pool) {
+    if (!predicate(e)) continue;
+    const ms = eventUtcMs(e);
+    if (Number.isNaN(ms) || ms < afterMs) continue;
+    if (ms < bestMs) {
+      bestMs = ms;
+      best = e;
+    }
+  }
+  return best;
+}
+
 function buildDelegationResponseRows(events: ForensicsEvent[]): DelegationResponseRow[] {
-  const delegationEvents = events.filter((e) => DELEGATION_KINDS.has(e.kind));
+  const delegationEvents = events
+    .filter((e) => DELEGATION_KINDS.has(e.kind))
+    .sort((a, b) => eventUtcMs(a) - eventUtcMs(b));
   const toolStarts = events.filter((e) => e.kind === "FUNCTION_TOOL_STARTED");
   const toolEnds = events.filter((e) => e.kind === "FUNCTION_TOOL_COMPLETED");
   const metricsDone = events.filter((e) => e.kind === "BACKEND_LLM_METRICS_COLLECTED");
 
-  const created = delegationEvents.filter((e) => e.kind === "GPT_LIVE_DELEGATION_RESPONSE_CREATED");
+  const created = delegationEvents.filter((e) => RESPONSE_CREATED_KINDS.has(e.kind));
   const rows: DelegationResponseRow[] = [];
+  const usedEmitted = new Set<ForensicsEvent>();
+  const usedContinuations = new Set<ForensicsEvent>();
 
-  for (const c of created) {
+  for (let i = 0; i < created.length; i++) {
+    const c = created[i];
     const d = c.detail ?? {};
     const responseId = String(d.response_id ?? "");
     if (!responseId) continue;
     const createdUtc = eventWallUtc(c);
-    const delegationId = String(d.delegation_id ?? "");
+    const delegationId = String(d.delegation_id ?? "unassigned");
 
-    const emitted = delegationEvents.find(
+    const nextCreatedUtc =
+      i + 1 < created.length ? eventWallUtc(created[i + 1]) : "";
+
+    const emittedCandidates = delegationEvents.filter(
       (e) =>
-        e.kind === "GPT_LIVE_DELEGATION_FUNCTION_CALL_EMITTED" &&
-        String((e.detail ?? {}).response_id ?? "") === responseId,
+        FUNCTION_CALL_EMITTED_KINDS.has(e.kind) &&
+        !usedEmitted.has(e) &&
+        String((e.detail ?? {}).delegation_id ?? "unassigned") === delegationId &&
+        eventUtcMs(e) >= eventUtcMs(c) &&
+        (!nextCreatedUtc || eventUtcMs(e) < Date.parse(nextCreatedUtc)),
     );
+    let emitted = emittedCandidates.find(
+      (e) => String((e.detail ?? {}).response_id ?? "") === responseId,
+    );
+    if (!emitted && emittedCandidates.length === 1) {
+      emitted = emittedCandidates[0];
+    }
+    if (!emitted && emittedCandidates.length > 0) {
+      emitted = emittedCandidates[0];
+    }
+    if (emitted) usedEmitted.add(emitted);
+
     const callId = emitted ? String((emitted.detail ?? {}).call_id ?? "") : "";
     const toolName = emitted ? String((emitted.detail ?? {}).function_name ?? "") : "";
     const functionCallEmittedUtc = emitted ? eventWallUtc(emitted) : "";
@@ -143,32 +221,38 @@ function buildDelegationResponseRows(events: ForensicsEvent[]): DelegationRespon
     const functionToolEndUtc = fnEnd ? eventWallUtc(fnEnd) : "";
 
     const toolResult = callId
-      ? delegationEvents.find(
-          (e) =>
-            e.kind === "GPT_LIVE_DELEGATION_TOOL_RESULT_QUEUED" &&
-            String((e.detail ?? {}).call_id ?? "") === callId &&
-            (!functionToolEndUtc || eventWallUtc(e) >= functionToolEndUtc),
+      ? pickNextAfterUtc(
+          delegationEvents.filter((e) => TOOL_RESULT_QUEUED_KINDS.has(e.kind)),
+          functionToolEndUtc || functionCallEmittedUtc || createdUtc,
+          (e) => String((e.detail ?? {}).call_id ?? "") === callId,
         )
       : undefined;
     const toolResultQueuedUtc = toolResult ? eventWallUtc(toolResult) : "";
 
-    const continuation = delegationEvents.find(
-      (e) =>
-        e.kind === "GPT_LIVE_DELEGATION_RESPONSE_CREATE" &&
-        (!toolResultQueuedUtc || eventWallUtc(e) >= toolResultQueuedUtc),
+    const continuation = pickNextAfterUtc(
+      delegationEvents.filter(
+        (e) => CONTINUATION_QUEUED_KINDS.has(e.kind) && !usedContinuations.has(e),
+      ),
+      toolResultQueuedUtc || functionToolEndUtc || createdUtc,
+      () => true,
     );
+    if (continuation) usedContinuations.add(continuation);
     const continuationCreateUtc = continuation ? eventWallUtc(continuation) : "";
+
+    const nextCreated = i + 1 < created.length ? created[i + 1] : undefined;
+    const nextCreatedObservedUtc = nextCreated ? eventWallUtc(nextCreated) : "";
 
     const completed = delegationEvents.find(
       (e) =>
-        e.kind === "GPT_LIVE_DELEGATION_RESPONSE_COMPLETED" &&
+        RESPONSE_COMPLETED_KINDS.has(e.kind) &&
         String((e.detail ?? {}).response_id ?? "") === responseId,
     );
     const completedUtc = completed ? eventWallUtc(completed) : "";
 
-    const metrics = metricsDone.find(
-      (e) => String((e.detail ?? {}).request_id ?? "") === responseId,
-    );
+    const metrics = metricsDone.find((e) => {
+      const rid = String((e.detail ?? {}).request_id ?? (e.detail ?? {}).response_id ?? "");
+      return rid === responseId;
+    });
     const metricsCompletedUtc = metrics ? eventWallUtc(metrics) : "";
 
     rows.push({
@@ -184,6 +268,7 @@ function buildDelegationResponseRows(events: ForensicsEvent[]): DelegationRespon
       continuationCreateUtc,
       completedUtc,
       metricsCompletedUtc,
+      nextCreatedObservedUtc,
     });
   }
   return rows;
@@ -198,9 +283,7 @@ async function main() {
   if (!call) throw new Error(`No call matching ${suffix}`);
 
   const redactPhones = (s: string) =>
-    s.replace(/\+1\d{10}/g, "+1[REDACTED]").replace(/\d{3,}/g, (m) =>
-      m.length >= 10 ? "[REDACTED]" : m,
-    );
+    s.replace(/\+1\d{10}/g, "+1[REDACTED]").replace(/\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g, "[REDACTED]");
 
   const safeCallId = redactPhones(call.id);
 
@@ -210,6 +293,7 @@ async function main() {
     callerTurns?: unknown[];
     gptLiveSessionId?: string;
     liveSessionId?: string;
+    sessionUsage?: unknown;
   };
 
   const raw = forensics?.events ?? [];
@@ -481,43 +565,108 @@ async function main() {
   } else if (delegationRows.length === 0) {
     lines.push("_Delegation telemetry attached but no `response.created` rows with `response_id` were captured._");
   } else {
-    for (const [i, row] of delegationRows.entries()) {
-      lines.push(`### Delegated response ${i + 1}: \`${row.responseId}\``);
+    const byDelegation = new Map<string, DelegationResponseRow[]>();
+    for (const row of delegationRows) {
+      const key = row.delegationId || "unassigned";
+      const list = byDelegation.get(key) ?? [];
+      list.push(row);
+      byDelegation.set(key, list);
+    }
+    for (const [delegationId, group] of byDelegation.entries()) {
+      lines.push(`### DELEGATION \`${delegationId}\``);
       lines.push("");
-      lines.push("| Boundary | UTC |");
-      lines.push("|----------|-----|");
-      lines.push(`| delegation_id | \`${row.delegationId || "N/A"}\` |`);
-      lines.push(`| response.created (observed) | ${row.createdUtc || "N/A"} |`);
-      lines.push(`| output_item.done (function_call) | ${row.functionCallEmittedUtc || "N/A"} |`);
-      lines.push(`| call_id / tool | \`${row.callId || "N/A"}\` / ${row.toolName || "N/A"} |`);
-      lines.push(`| FUNCTION_TOOL_STARTED | ${row.functionToolStartUtc || "N/A"} |`);
-      lines.push(`| FUNCTION_TOOL_COMPLETED | ${row.functionToolEndUtc || "N/A"} |`);
-      lines.push(`| response.item.create (tool result queued) | ${row.toolResultQueuedUtc || "N/A"} |`);
-      lines.push(`| response.create (continuation) | ${row.continuationCreateUtc || "N/A"} |`);
-      lines.push(`| response.completed (observed) | ${row.completedUtc || "N/A"} |`);
-      lines.push(`| BACKEND_LLM_METRICS (resp complete) | ${row.metricsCompletedUtc || "N/A"} |`);
+      for (const [i, row] of group.entries()) {
+        lines.push(`#### Response ${i + 1}: \`${row.responseId}\``);
+        lines.push("");
+        lines.push("| Boundary | UTC |");
+        lines.push("|----------|-----|");
+        lines.push(`| response.created (observed) | ${row.createdUtc || "N/A"} |`);
+        lines.push(`| output_item.done (function_call) | ${row.functionCallEmittedUtc || "N/A"} |`);
+        lines.push(`| call_id / tool | \`${row.callId || "N/A"}\` / ${row.toolName || "N/A"} |`);
+        lines.push(`| FUNCTION_TOOL_STARTED | ${row.functionToolStartUtc || "N/A"} |`);
+        lines.push(`| FUNCTION_TOOL_COMPLETED | ${row.functionToolEndUtc || "N/A"} |`);
+        lines.push(`| response.item.create (tool result queued) | ${row.toolResultQueuedUtc || "N/A"} |`);
+        lines.push(`| response.create (continuation) | ${row.continuationCreateUtc || "N/A"} |`);
+        lines.push(`| next response.created (observed) | ${row.nextCreatedObservedUtc || "N/A"} |`);
+        lines.push(`| response.completed (observed) | ${row.completedUtc || "N/A"} |`);
+        lines.push(`| BACKEND_LLM_METRICS (legacy resp complete) | ${row.metricsCompletedUtc || "N/A"} |`);
+        lines.push("");
+        lines.push("| Interval (UTC cross-process) | ms |");
+        lines.push("|----------|-----|");
+        lines.push(
+          `| backend response created observed → function call emitted | ${msBetweenUtc(row.createdUtc, row.functionCallEmittedUtc)} |`,
+        );
+        lines.push(
+          `| function call emitted → FUNCTION_TOOL_STARTED | ${msBetweenUtc(row.functionCallEmittedUtc, row.functionToolStartUtc)} |`,
+        );
+        lines.push(
+          `| FUNCTION_TOOL duration | ${msBetweenUtc(row.functionToolStartUtc, row.functionToolEndUtc)} |`,
+        );
+        lines.push(
+          `| FUNCTION_TOOL_COMPLETED → tool result queued | ${msBetweenUtc(row.functionToolEndUtc, row.toolResultQueuedUtc)} |`,
+        );
+        lines.push(
+          `| tool result queued → continuation response.create | ${msBetweenUtc(row.toolResultQueuedUtc, row.continuationCreateUtc)} |`,
+        );
+        lines.push(
+          `| continuation response.create → next response.created observed | ${msBetweenUtc(row.continuationCreateUtc, row.nextCreatedObservedUtc)} |`,
+        );
+        lines.push(
+          `| response.created observed → response.completed observed | ${msBetweenUtc(row.createdUtc, row.completedUtc)} |`,
+        );
+        lines.push("");
+      }
+      const first = group[0]?.createdUtc;
+      const last = group[group.length - 1]?.completedUtc || group[group.length - 1]?.createdUtc;
+      lines.push(
+        `**Delegation-chain elapsed (first created → last completed):** ${msBetweenUtc(first, last)} ms`,
+      );
       lines.push("");
-      lines.push("| Interval | ms |");
-      lines.push("|----------|-----|");
+    }
+  }
+  lines.push("");
+
+  lines.push("## Native LiveKit per-turn latency");
+  lines.push("");
+  const chatMetrics = events.filter((e) => e.kind === "VOICE_V3_CHAT_MESSAGE_METRICS");
+  if (chatMetrics.length === 0) {
+    lines.push("_No `VOICE_V3_CHAT_MESSAGE_METRICS` events (upgrade voice worker + place a new call)._");
+  } else {
+    lines.push("| role | message id | started_speaking_at | stopped_speaking_at | e2e_latency | playback_latency | transcription_delay | end_of_turn_delay | provider_request_ids |");
+    lines.push("|------|------------|---------------------|---------------------|-------------|------------------|---------------------|-------------------|----------------------|");
+    for (const e of chatMetrics) {
+      const d = e.detail ?? {};
+      const m = (d.metrics ?? {}) as Record<string, unknown>;
+      const fmt = (v: unknown) => (v == null || v === "" ? "N/A" : String(v));
       lines.push(
-        `| created → function_call emitted | ${msBetweenUtc(row.createdUtc, row.functionCallEmittedUtc)} |`,
+        `| ${fmt(d.role)} | \`${fmt(d.message_id)}\` | ${fmt(m.started_speaking_at)} | ${fmt(m.stopped_speaking_at)} | ${fmt(m.e2e_latency)} | ${fmt(m.playback_latency)} | ${fmt(m.transcription_delay)} | ${fmt(m.end_of_turn_delay)} | ${fmt(m.provider_request_ids)} |`,
       );
-      lines.push(
-        `| function_call emitted → FUNCTION_TOOL_STARTED | ${msBetweenUtc(row.functionCallEmittedUtc, row.functionToolStartUtc)} |`,
-      );
-      lines.push(
-        `| FUNCTION_TOOL duration | ${msBetweenUtc(row.functionToolStartUtc, row.functionToolEndUtc)} |`,
-      );
-      lines.push(
-        `| FUNCTION_TOOL_COMPLETED → tool result queued | ${msBetweenUtc(row.functionToolEndUtc, row.toolResultQueuedUtc)} |`,
-      );
-      lines.push(
-        `| tool result queued → continuation response.create | ${msBetweenUtc(row.toolResultQueuedUtc, row.continuationCreateUtc)} |`,
-      );
-      lines.push(
-        `| created → response.completed | ${msBetweenUtc(row.createdUtc, row.completedUtc)} |`,
-      );
+    }
+  }
+  lines.push("");
+
+  lines.push("## Session usage (LiveKit native)");
+  lines.push("");
+  const usageEvents = events.filter((e) => e.kind === "SESSION_USAGE_UPDATED");
+  const lastUsage = usageEvents[usageEvents.length - 1];
+  const sessionUsage = forensics?.sessionUsage;
+  if (!lastUsage && !sessionUsage) {
+    lines.push("_No session usage captured._");
+  } else {
+    if (lastUsage) {
+      lines.push(`Last \`SESSION_USAGE_UPDATED\` at ${eventWallUtc(lastUsage)}:`);
       lines.push("");
+      lines.push("```json");
+      lines.push(JSON.stringify((lastUsage.detail ?? {}).usage ?? {}, null, 2).slice(0, 8000));
+      lines.push("```");
+      lines.push("");
+    }
+    if (sessionUsage) {
+      lines.push("Final `session.usage` at flush:");
+      lines.push("");
+      lines.push("```json");
+      lines.push(JSON.stringify(sessionUsage, null, 2).slice(0, 8000));
+      lines.push("```");
     }
   }
   lines.push("");
