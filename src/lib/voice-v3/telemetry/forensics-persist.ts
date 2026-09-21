@@ -9,6 +9,61 @@ import type { VoiceV3CanonicalTurn, VoiceV3ForensicEvent } from "./call-forensic
 const FORENSICS_META_KEY = "voiceV3Forensics";
 const SCHEMA_VERSION = 1;
 const MAX_STORED_EVENTS = 4_000;
+/** Postgres `integer` max — segment offsets must stay within this range. */
+const PG_INT_MAX = 2_147_483_647;
+
+/** Wall-clock epoch seconds (LiveKit metrics) are ~1e9; call-relative seconds are small. */
+const EPOCH_SECONDS_MIN = 1_000_000_000;
+
+function isEpochSeconds(value: number): boolean {
+  return value >= EPOCH_SECONDS_MIN && value < 10_000_000_000;
+}
+
+/**
+ * Map LiveKit speech timestamps to call-relative segment ms for `VoiceTranscriptSegment`.
+ * Metrics may be relative seconds, relative ms, or wall-clock epoch seconds — never epoch ms.
+ */
+export function speechTimestampToSegmentMs(
+  raw: unknown,
+  anchorEpochSec: number | null,
+): number | null {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return null;
+  const v = raw;
+
+  if (isEpochSeconds(v)) {
+    if (anchorEpochSec == null) return null;
+    const ms = Math.round((v - anchorEpochSec) * 1000);
+    return ms >= 0 && ms <= PG_INT_MAX ? ms : null;
+  }
+
+  /** Call-relative offset in seconds (LiveKit tests / short calls). */
+  const maxRelativeSeconds = 604_800;
+  if (v >= 0 && v < maxRelativeSeconds) {
+    const ms = Math.round(v * 1000);
+    return ms >= 0 && ms <= PG_INT_MAX ? ms : null;
+  }
+
+  if (v >= 0 && v <= PG_INT_MAX) {
+    return Math.round(v);
+  }
+
+  return null;
+}
+
+function resolveSpeechAnchorEpochSec(turns: VoiceV3CanonicalTurn[]): number | null {
+  let anchor: number | null = null;
+  for (const t of turns) {
+    const speech = t.speech;
+    if (!speech || typeof speech !== "object") continue;
+    for (const key of ["started_speaking_at", "stopped_speaking_at"] as const) {
+      const raw = speech[key];
+      if (typeof raw === "number" && isEpochSeconds(raw)) {
+        anchor = anchor == null ? raw : Math.min(anchor, raw);
+      }
+    }
+  }
+  return anchor;
+}
 
 export type VoiceV3ForensicsPersistInput = {
   callId: string;
@@ -90,21 +145,31 @@ async function upsertTranscriptSegments(input: {
     where: { transcriptId: transcript.id },
   });
 
-  const segments = input.turns.map((t, idx) => ({
-    transcriptId: transcript.id,
-    workspaceId: input.workspaceId,
-    speaker: t.role === "assistant" ? "agent" : t.role === "user" ? "caller" : "system",
-    text: t.text,
-    startMs:
-      typeof t.speech?.started_speaking_at === "number"
-        ? Math.round(Number(t.speech.started_speaking_at) * 1000)
-        : idx * 1000,
-    endMs:
-      typeof t.speech?.stopped_speaking_at === "number"
-        ? Math.round(Number(t.speech.stopped_speaking_at) * 1000)
-        : idx * 1000 + 500,
-    confidence: null as number | null,
-  }));
+  const anchorEpochSec = resolveSpeechAnchorEpochSec(input.turns);
+
+  const segments = input.turns.map((t, idx) => {
+    const speech =
+      t.speech && typeof t.speech === "object"
+        ? (t.speech as Record<string, unknown>)
+        : {};
+    const startMs =
+      speechTimestampToSegmentMs(speech.started_speaking_at, anchorEpochSec) ??
+      idx * 1000;
+    const endMs =
+      speechTimestampToSegmentMs(speech.stopped_speaking_at, anchorEpochSec) ??
+      startMs + 500;
+    const safeEnd = endMs > startMs ? endMs : startMs + 500;
+    return {
+      transcriptId: transcript.id,
+      workspaceId: input.workspaceId,
+      speaker:
+        t.role === "assistant" ? "agent" : t.role === "user" ? "caller" : "system",
+      text: t.text,
+      startMs: Math.min(startMs, PG_INT_MAX),
+      endMs: Math.min(safeEnd, PG_INT_MAX),
+      confidence: null as number | null,
+    };
+  });
 
   if (segments.length) {
     await prisma.voiceTranscriptSegment.createMany({ data: segments });
