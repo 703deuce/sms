@@ -10,6 +10,10 @@ import { toolOk, voiceToolError } from "./types";
 import type { VoiceV3CallContext } from "../state/call-context";
 import { BOOK_APPOINTMENT_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 import { authorizeVoiceV3ToolOrError } from "./authorize-tool-for-config";
+import {
+  isBookingVerbalConfirmationRequired,
+  isCallerVerbalConfirmationSatisfied,
+} from "../booking/verbal-confirmation";
 import type { AvailabilityOfferSet } from "../calendar/offer-set";
 import type { AvailabilitySlot } from "../calendar/slot-generator";
 import type { SelectedAvailabilitySlot } from "../calendar/selected-slot";
@@ -23,6 +27,12 @@ const bookArgsSchema = z.object({
     .string()
     .min(1)
     .describe("slot_id from that offer set matching the slot the caller chose."),
+  caller_verbal_confirmed: z
+    .boolean()
+    .nullable()
+    .describe(
+      "When confirm-before-booking is enabled, set true only after the caller explicitly agrees to the exact appointment time being booked. Use null when not applicable.",
+    ),
 });
 
 export type BookAppointmentArgs = z.infer<typeof bookArgsSchema>;
@@ -75,9 +85,9 @@ export const bookAppointmentTool: VoiceToolDefinition<BookAppointmentArgs> = {
   validate: (raw) => bookArgsSchema.parse(raw),
   execute: async (ctx, args) => {
     const config = ctx.runtime.config;
-    const denied = authorizeVoiceV3ToolOrError(config, "book_appointment");
-    if (denied) return denied;
     const snap = ctx.runtime.getSnapshot();
+    const denied = authorizeVoiceV3ToolOrError(config, "book_appointment", snap);
+    if (denied) return denied;
     const offer = snap.availability.activeOfferSet;
     if (!offer || offer.offerSetId !== args.offer_set_id) {
       return voiceToolError(
@@ -115,6 +125,18 @@ export const bookAppointmentTool: VoiceToolDefinition<BookAppointmentArgs> = {
         "MISSING_REQUIRED_INFORMATION",
         "Required intake is incomplete.",
         { missing_fields: missingForBook },
+        "not_ready",
+      );
+    }
+
+    if (
+      isBookingVerbalConfirmationRequired(config) &&
+      !isCallerVerbalConfirmationSatisfied(config, args.caller_verbal_confirmed)
+    ) {
+      return voiceToolError(
+        "BOOKING_CONFIRMATION_REQUIRED",
+        "Obtain explicit verbal confirmation before booking.",
+        { requiresConfirmation: true },
         "not_ready",
       );
     }

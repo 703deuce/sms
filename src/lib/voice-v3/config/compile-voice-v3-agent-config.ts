@@ -5,6 +5,8 @@ import { ensureWizardOperatingMaturity } from "@/lib/solutions/appointment-recep
 import { deriveBookingStrategyFromWizard } from "@/lib/voice-receptionist-wizard/booking-strategy";
 import { tryNormalizeVoiceV3LiveBuiltInVoice } from "./voice-v3-live-built-in-voices";
 import type { VoiceV3AgentConfig, VoiceV3ServiceConfig } from "./agent-config";
+import { servicePolicyFromWizardType } from "../policy/service-policy";
+import type { ResolvedAgentKnowledgeRetrieval } from "../knowledge/resolve-agent-knowledge-retrieval";
 import { VOICE_V3_BOOKING_AGENT_CONFIG } from "./booking-agent-config";
 import { compileBusinessHoursAmyDisplay } from "./business-hours-display";
 import { businessHoursWindowFromWeeklySchedule } from "./business-hours-from-wizard";
@@ -46,14 +48,7 @@ function wizardServices(
 ): VoiceV3ServiceConfig[] {
   return (wizard.appointmentTypes || [])
     .filter((t) => t.enabled)
-    .map((t) => ({
-      id: t.id,
-      name: t.name?.trim() || t.id,
-      durationMinutes: t.durationMin > 0 ? t.durationMin : 30,
-      slotStepMinutes,
-      description: t.description?.trim() || undefined,
-      enabled: true,
-    }));
+    .map((t) => servicePolicyFromWizardType(t, slotStepMinutes));
 }
 
 function resolvePrimaryService(
@@ -212,6 +207,7 @@ function callHandlingFromWizard(
     defaultTransferPlanId: wizard.defaultTransferPlanId?.trim() || null,
     transferPlanSteps: wizard.transferPlanSteps ?? [],
     urgencyEnabled: wizard.urgencyEnabled === true,
+    urgencyRules: wizard.urgencyRules ?? [],
     callbackRequestsEnabled: wizard.callbackRequestsEnabled !== false,
     callbackUseAniByDefault: wizard.callbackUseAniByDefault !== false,
     callbackAskPreferredTime: wizard.callbackAskPreferredTime !== false,
@@ -273,6 +269,8 @@ export function compileVoiceV3AgentConfig(input: {
   providerConnections?: VoiceV3ProviderConnections;
   envFallback?: VoiceV3AgentConfig;
   source?: VoiceV3AgentConfig["source"];
+  /** Resolved at publish/call time (agent KB links + indexed sources). */
+  knowledgeRetrieval?: ResolvedAgentKnowledgeRetrieval;
 }): VoiceV3AgentConfig {
   const envFallback = input.envFallback ?? VOICE_V3_BOOKING_AGENT_CONFIG;
   const wizard = input.wizard;
@@ -301,6 +299,28 @@ export function compileVoiceV3AgentConfig(input: {
   const agentName = wizard.agentName?.trim() || envFallback.identity.agentName;
 
   const bookingStrategy = deriveBookingStrategyFromWizard(wizard);
+
+  const resolvedRetrieval = input.knowledgeRetrieval;
+  const kbIds =
+    resolvedRetrieval?.knowledgeBaseIds?.length
+      ? resolvedRetrieval.knowledgeBaseIds
+      : wizard.linkedKnowledgeBaseId
+        ? [wizard.linkedKnowledgeBaseId]
+        : [];
+  const retrievalEnabled =
+    resolvedRetrieval?.enabled === true ||
+    (resolvedRetrieval === undefined &&
+      wizard.knowledgeBaseEnabled !== false &&
+      kbIds.length > 0 &&
+      (Boolean(wizard.linkedKnowledgeBaseId) ||
+        wizard.knowledgeSource === "upload_docs" ||
+        wizard.knowledgeSource === "website" ||
+        wizard.knowledgeSource === "connect_data"));
+  const documentSourceIds = resolvedRetrieval?.documentSourceIds?.filter(Boolean) ?? [];
+  const openaiVectorStoreIds =
+    resolvedRetrieval?.openaiVectorStoreIds?.filter(Boolean) ?? [];
+  const retrievalRevision =
+    resolvedRetrieval?.revision ?? wizard.knowledgeBaseRevision ?? null;
 
   const connectionId =
     input.providerConnections?.microsoftConnectionId?.trim() ||
@@ -392,13 +412,15 @@ export function compileVoiceV3AgentConfig(input: {
     knowledge: {
       hotContext: hotContextFromWizard(wizard),
       retrieval: {
-        enabled: wizard.knowledgeBaseEnabled === true,
-        knowledgeBaseIds: wizard.linkedKnowledgeBaseId
-          ? [wizard.linkedKnowledgeBaseId]
-          : [],
-        websiteUrl: wizard.websiteUrl?.trim() || null,
-        documentSourceIds: [],
-        revision: wizard.knowledgeBaseRevision ?? null,
+        enabled: retrievalEnabled,
+        knowledgeBaseIds: kbIds,
+        websiteUrl:
+          resolvedRetrieval?.websiteUrl?.trim() ||
+          wizard.websiteUrl?.trim() ||
+          null,
+        documentSourceIds,
+        openaiVectorStoreIds,
+        revision: retrievalRevision,
       },
     },
     telephony: {

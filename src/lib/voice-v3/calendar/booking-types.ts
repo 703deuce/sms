@@ -48,9 +48,11 @@ export interface CreateBookingRequest {
   };
 }
 
+export type VoiceV3CalendarBookingProvider = "microsoft" | "google";
+
 export interface ConfirmedBooking {
   bookingAttemptId: string;
-  provider: "microsoft";
+  provider: VoiceV3CalendarBookingProvider;
   providerEventId: string;
   providerCalendarId: string;
   startUtc: string;

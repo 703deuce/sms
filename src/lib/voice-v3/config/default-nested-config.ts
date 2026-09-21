@@ -29,6 +29,7 @@ export const DEFAULT_V3_CALL_HANDLING: VoiceV3CallHandlingConfig = {
   defaultTransferPlanId: null,
   transferPlanSteps: [],
   urgencyEnabled: false,
+  urgencyRules: [],
   callbackRequestsEnabled: true,
   callbackUseAniByDefault: true,
   callbackAskPreferredTime: true,

@@ -298,6 +298,8 @@ model Workspace {
   voiceAgentPhoneNumbers            VoiceAgentPhoneNumber[]
   voiceKnowledgeBases               VoiceKnowledgeBase[]
   voiceKnowledgeSources             VoiceKnowledgeSource[]
+  voiceWebsiteCrawlJobs             VoiceWebsiteCrawlJob[]
+  voiceWebsiteCrawlPages            VoiceWebsiteCrawlPage[]
   voiceAgentKnowledgeBases          VoiceAgentKnowledgeBase[]
   voiceTools                        VoiceTool[]
   voiceAgentTools                   VoiceAgentTool[]
@@ -2415,11 +2417,14 @@ model VoiceKnowledgeBase {
   telnyxEmbeddingStatus String?
   telnyxEmbeddingTaskId String?
   lastEmbeddedAt        DateTime?
+  openaiVectorStoreId   String?
+  openaiVectorStoreStatus String?
   createdAt             DateTime                  @default(now())
   updatedAt             DateTime                  @updatedAt
   workspace             Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   sources               VoiceKnowledgeSource[]
   agentLinks            VoiceAgentKnowledgeBase[]
+  websiteCrawlJobs      VoiceWebsiteCrawlJob[]
 
   @@index([workspaceId])
   @@map("voice_knowledge_bases")
@@ -2440,6 +2445,7 @@ model VoiceKnowledgeSource {
   chunkCount       Int                @default(0)
   /// Object key inside the Telnyx storage bucket (for file/text uploads).
   telnyxObjectKey  String?
+  openaiFileId     String?
   lastSyncedAt     DateTime?
   errorMessage     String?
   createdAt        DateTime           @default(now())
@@ -2450,6 +2456,51 @@ model VoiceKnowledgeSource {
   @@index([knowledgeBaseId])
   @@index([workspaceId])
   @@map("voice_knowledge_sources")
+}
+
+model VoiceWebsiteCrawlJob {
+  id              String                 @id @default(cuid())
+  workspaceId     String
+  knowledgeBaseId String
+  rootUrl         String
+  status          String                 @default("DISCOVERING")
+  stats           Json?
+  errorSummary    String?
+  suggestions     Json?
+  startedAt       DateTime               @default(now())
+  completedAt     DateTime?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  workspace       Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  knowledgeBase   VoiceKnowledgeBase     @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  pages           VoiceWebsiteCrawlPage[]
+
+  @@index([workspaceId, knowledgeBaseId])
+  @@index([workspaceId, status])
+  @@map("voice_website_crawl_jobs")
+}
+
+model VoiceWebsiteCrawlPage {
+  id                String              @id @default(cuid())
+  workspaceId       String
+  crawlJobId        String
+  knowledgeSourceId String?
+  sourceUrl         String
+  canonicalUrl      String?
+  pageTitle         String?
+  status            String              @default("pending")
+  contentHash       String?
+  skipReason        String?
+  errorMessage      String?
+  lastIndexedAt     DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  crawlJob          VoiceWebsiteCrawlJob @relation(fields: [crawlJobId], references: [id], onDelete: Cascade)
+  workspace         Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([crawlJobId, sourceUrl])
+  @@index([workspaceId, crawlJobId])
+  @@map("voice_website_crawl_pages")
 }
 
 model VoiceAgentKnowledgeBase {

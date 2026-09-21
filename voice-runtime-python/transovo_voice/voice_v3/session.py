@@ -8,6 +8,7 @@ from typing import Any
 from livekit import rtc
 from livekit.agents import Agent, AgentSession, JobContext, room_io
 from livekit.plugins.openai.realtime import GPTLiveModel
+from livekit.plugins.openai.tools import FileSearch
 
 from transovo_voice.integrations.backend_client import TransovoBackend
 from transovo_voice.session.dispatch_resolver import extract_call_numbers
@@ -169,7 +170,14 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             room=ctx.room.name,
             extra_hint=str(config.get("endCallToolHint") or "").strip(),
         )
-        session_tools = [*lk_tools, *end_call_toolset.tools]
+        session_tools: list[Any] = list(lk_tools)
+        vector_store_ids = config.get("openaiFileSearchVectorStoreIds") or []
+        cleaned_vs: list[str] = []
+        if isinstance(vector_store_ids, list):
+            cleaned_vs = [str(v).strip() for v in vector_store_ids if str(v).strip()]
+            if cleaned_vs:
+                session_tools.append(FileSearch(vector_store_ids=cleaned_vs))
+        session_tools.extend(end_call_toolset.tools)
 
         def _on_participant_disconnected(participant: rtc.RemoteParticipant) -> None:
             if participant.identity != sip_participant.identity:

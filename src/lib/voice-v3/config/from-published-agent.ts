@@ -16,6 +16,12 @@ import {
   logVoiceV3ConfigFallbackUsed,
 } from "./config-observability";
 import { resolveWizardSnapshotForVoiceV3 } from "./resolve-wizard-snapshot-for-v3";
+import { resolveAgentKnowledgeRetrieval } from "../knowledge/resolve-agent-knowledge-retrieval";
+import {
+  assertActiveAgentMayUseDemoConfigFallback,
+  VoiceV3AgentConfigResolutionError,
+  voiceV3AllowsDemoConfigFallback,
+} from "./demo-config-fallback";
 
 /** Appointment receptionist wizard agents use Voice V3 PSTN only — no optional flag. */
 export function isAppointmentReceptionistAgent(config: VoiceAgentConfig): boolean {
@@ -89,6 +95,19 @@ export async function resolveVoiceV3AgentConfigForAgent(input: {
     });
     if (!wizard) {
       logVoiceV3ConfigFallbackUsed("wizard", "appointmentReceptionistWizard_missing");
+      if (agent?.status === "ACTIVE") {
+        console.error("VOICE_V3_ACTIVE_AGENT_MISSING_WIZARD_SNAPSHOT", {
+          workspaceId: input.workspaceId,
+          agentId: input.agentId,
+          demo_fallback_allowed: voiceV3AllowsDemoConfigFallback(),
+        });
+      }
+      assertActiveAgentMayUseDemoConfigFallback({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        agentStatus: agent?.status,
+        reason: "appointmentReceptionistWizard_missing",
+      });
       return envFallback;
     }
 
@@ -97,11 +116,18 @@ export async function resolveVoiceV3AgentConfigForAgent(input: {
       wizard,
     );
 
+    const retrieval = await resolveAgentKnowledgeRetrieval({
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+      wizard,
+    });
+
     const compiled = compileVoiceV3AgentConfig({
       wizard,
       providerConnections,
       envFallback,
       source,
+      knowledgeRetrieval: retrieval,
     });
 
     const withTenant: VoiceV3AgentConfig = {
@@ -119,12 +145,26 @@ export async function resolveVoiceV3AgentConfigForAgent(input: {
 
     return withTenant;
   } catch (err) {
+    if (err instanceof VoiceV3AgentConfigResolutionError) {
+      throw err;
+    }
     console.error("VOICE_V3_RESOLVE_AGENT_CONFIG_FAILED", {
       workspaceId: input.workspaceId,
       agentId: input.agentId,
       err,
     });
     logVoiceV3ConfigFallbackUsed("resolve", "exception");
+    const prisma = getPrisma();
+    const agent = await prisma.voiceAgent.findFirst({
+      where: { id: input.agentId, workspaceId: input.workspaceId },
+      select: { status: true },
+    });
+    assertActiveAgentMayUseDemoConfigFallback({
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+      agentStatus: agent?.status,
+      reason: "resolve_exception",
+    });
     return envFallback;
   }
 }

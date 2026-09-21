@@ -42,9 +42,9 @@ export const findAvailabilityTool: VoiceToolDefinition<FindAvailabilityArgs> = {
   validate: (raw) => findArgsSchema.parse(raw),
   execute: async (ctx, _args) => {
     const config = ctx.runtime.config;
-    const denied = authorizeVoiceV3ToolOrError(config, "find_availability");
-    if (denied) return denied;
     let snap = ctx.runtime.getSnapshot();
+    const denied = authorizeVoiceV3ToolOrError(config, "find_availability", snap);
+    if (denied) return denied;
     if (
       shouldApplySemanticSteeringToActiveGoal(
         "find_availability",

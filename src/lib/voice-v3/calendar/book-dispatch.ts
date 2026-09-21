@@ -27,6 +27,7 @@ import { invalidateSelectionForSchedulingChange } from "./apply-slot-selection";
 import { dispatchFindAvailabilityIfRequired } from "./find-dispatch";
 import { logVoiceV3Pipeline } from "../telemetry/pipeline-log";
 import { registerDurableBooking } from "./durable-booking-store";
+import { persistVoiceV3BookingAfterConfirmation } from "./persist-booking-after-confirmation";
 import type { VoiceV3LiveRuntimeHooks } from "../live-runtime-hooks";
 import { pushLiveThinkingEvent } from "../live-runtime-hooks";
 import { finishMutatingOperation } from "../operations/dispatch-mutations";
@@ -484,6 +485,29 @@ export async function dispatchBookingIfRequired(
           email: request.customer.email,
           phone: request.customer.phone,
         });
+
+        const workspaceId = runtime.config.workspaceId?.trim();
+        if (workspaceId) {
+          void persistVoiceV3BookingAfterConfirmation({
+            workspaceId,
+            callId: afterCommit.callId,
+            confirmed,
+            serviceName: request.service.name,
+            customerEmail: request.customer.email,
+            customerPhone: request.customer.phone,
+          }).catch((err) => {
+            console.error("VOICE_V3_BOOKING_PERSIST_FAILED", {
+              call_id: afterCommit.callId,
+              booking_attempt_id: attempt.bookingAttemptId,
+              message: err instanceof Error ? err.message : String(err),
+            });
+          });
+        } else {
+          console.warn("VOICE_V3_BOOKING_PERSIST_SKIPPED", {
+            call_id: afterCommit.callId,
+            reason: "missing_workspace_id_on_config",
+          });
+        }
 
         console.log("BOOKING_CONFIRMED", {
           call_id: afterCommit.callId,
