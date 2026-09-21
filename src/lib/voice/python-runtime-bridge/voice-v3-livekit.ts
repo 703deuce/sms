@@ -30,6 +30,7 @@ import {
 } from "@/lib/voice-v3/telemetry/call-forensics";
 import { ensureVoiceV3LiveKitVoiceCall } from "@/lib/voice/python-runtime-bridge/ensure-voice-v3-livekit-voice-call";
 import type { FunctionTool } from "openai/resources/live/live";
+import type { VoiceV3AgentConfig } from "@/lib/voice-v3/config/agent-config";
 
 /** Tools executed natively in the LiveKit Python worker (not Astra FunctionTools). */
 export const VOICE_V3_LIVEKIT_NATIVE_TOOL_NAMES = ["end_call"] as const;
@@ -86,6 +87,14 @@ function toolSchemaName(tool: FunctionTool): string {
   if (typeof tool.name === "string") return tool.name;
   const fn = (tool as { function?: { name?: string } }).function;
   return typeof fn?.name === "string" ? fn.name : "";
+}
+
+/** Vector store IDs passed to the Python worker for native FileSearch (cert-tested). */
+export function resolveOpenAiFileSearchVectorStoreIdsForSession(
+  agentConfig: VoiceV3AgentConfig,
+): string[] {
+  if (agentConfig.knowledge?.retrieval?.enabled !== true) return [];
+  return (agentConfig.knowledge.retrieval.openaiVectorStoreIds ?? []).filter(Boolean);
 }
 
 function filterToolsForLiveKitSession(tools: FunctionTool[]): FunctionTool[] {
@@ -183,9 +192,7 @@ export async function resolveVoiceV3LiveKitSession(
   });
 
   const openaiFileSearchVectorStoreIds =
-    agentConfig.knowledge?.retrieval?.enabled === true
-      ? (agentConfig.knowledge.retrieval.openaiVectorStoreIds ?? []).filter(Boolean)
-      : [];
+    resolveOpenAiFileSearchVectorStoreIdsForSession(agentConfig);
 
   return {
     liveSessionId,

@@ -56,7 +56,9 @@ async function waitForVectorStoreFileReady(
   const client = getVoiceV3BasicOpenAiClient();
   const started = Date.now();
   while (Date.now() - started < maxWaitMs) {
-    const row = await client.vectorStores.files.retrieve(vectorStoreId, fileId);
+    const row = await client.vectorStores.files.retrieve(fileId, {
+      vector_store_id: vectorStoreId,
+    });
     const status = String(row.status || "").toLowerCase();
     if (status === "completed") return true;
     if (status === "failed" || status === "cancelled") return false;
@@ -102,7 +104,9 @@ export async function syncTextSourceToOpenAiVectorStore(input: {
   const priorFileId = source?.openaiFileId?.trim();
   if (priorFileId) {
     try {
-      await client.vectorStores.files.delete(vectorStoreId, priorFileId);
+      await client.vectorStores.files.delete(priorFileId, {
+        vector_store_id: vectorStoreId,
+      });
     } catch {
       // stale id — continue with fresh upload
     }
@@ -162,7 +166,9 @@ export async function waitForOpenAiKnowledgeBaseVectorStore(input: {
     const fileId = src.openaiFileId?.trim();
     if (!fileId) continue;
     while (Date.now() - started < maxWaitMs) {
-      const row = await client.vectorStores.files.retrieve(kb.openaiVectorStoreId, fileId);
+      const row = await client.vectorStores.files.retrieve(fileId, {
+        vector_store_id: kb.openaiVectorStoreId,
+      });
       const status = String(row.status || "").toLowerCase();
       if (status === "completed") {
         await prisma.voiceKnowledgeBase.update({
