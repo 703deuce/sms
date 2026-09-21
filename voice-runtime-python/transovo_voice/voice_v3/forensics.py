@@ -31,6 +31,10 @@ def _metrics_to_dict(metrics: Any) -> dict[str, Any]:
         "stopped_speaking_at",
         "e2e_latency",
         "playback_latency",
+        "transcription_delay",
+        "end_of_turn_delay",
+        "on_user_turn_completed_delay",
+        "provider_request_ids",
         "llm_node_ttft",
         "tts_node_ttfb",
     ):
@@ -88,6 +92,8 @@ class VoiceV3CallForensics:
     _gpt_live_session_id: str | None = None
     _gpt_live_usage: dict[str, Any] | None = None
     _backend_llm_usage: list[dict[str, Any]] = field(default_factory=list)
+    _delegation_active_response: dict[str, str] = field(default_factory=dict)
+    _session_usage_latest: dict[str, Any] | None = None
     _checkpoint_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     _last_checkpoint_at: float = 0.0
 
@@ -172,6 +178,15 @@ class VoiceV3CallForensics:
                     return
                 metrics = _metrics_to_dict(getattr(item, "metrics", None))
                 item_id = getattr(item, "id", None)
+                if metrics or item_id:
+                    self.append(
+                        "VOICE_V3_CHAT_MESSAGE_METRICS",
+                        message_id=item_id,
+                        role=role,
+                        metrics=metrics,
+                        gpt_live_session_id=self._gpt_live_session_id,
+                        voice_call_id=self.ctx.call_id,
+                    )
                 kind = "AGENT_TURN_COMMITTED" if role == "assistant" else "USER_TURN_COMMITTED"
                 self.append(
                     kind,
@@ -206,12 +221,26 @@ class VoiceV3CallForensics:
                     dumped = dict(metrics)
                 else:
                     dumped = {"repr": str(metrics)[:400]}
+                legacy_note = {
+                    "deprecated_session_metrics_collected": True,
+                    "note": "Prefer session_usage_updated and VOICE_V3_CHAT_MESSAGE_METRICS for GPT-Live",
+                }
                 if "Realtime" in label or "GPT" in label:
                     self._gpt_live_usage = dumped
-                    self.append("GPT_LIVE_METRICS_COLLECTED", metrics_label=label, **dumped)
+                    self.append(
+                        "GPT_LIVE_METRICS_COLLECTED",
+                        metrics_label=label,
+                        **legacy_note,
+                        **dumped,
+                    )
                 else:
                     self._backend_llm_usage.append(dumped)
-                    self.append("BACKEND_LLM_METRICS_COLLECTED", metrics_label=label, **dumped)
+                    self.append(
+                        "BACKEND_LLM_METRICS_COLLECTED",
+                        metrics_label=label,
+                        **legacy_note,
+                        **dumped,
+                    )
             except Exception:
                 log_event("voice_v3_forensics_metrics_failed", room=self.room_name)
 
@@ -222,6 +251,8 @@ class VoiceV3CallForensics:
                 if usage is None:
                     return
                 dumped = usage.model_dump() if hasattr(usage, "model_dump") else usage
+                if isinstance(dumped, dict):
+                    self._session_usage_latest = dumped
                 self.append("SESSION_USAGE_UPDATED", usage=dumped)
             except Exception:
                 log_event("voice_v3_forensics_usage_failed", room=self.room_name)
@@ -359,7 +390,7 @@ class VoiceV3CallForensics:
             "sessionReport": report,
             "gptLiveUsage": self._gpt_live_usage,
             "backendLlmUsage": self._backend_llm_usage,
-            "sessionUsage": usage,
+            "sessionUsage": usage or self._session_usage_latest,
             "gptLiveSessionId": self._gpt_live_session_id,
             "liveKitJobId": self.job_id,
             "roomName": self.room_name,
