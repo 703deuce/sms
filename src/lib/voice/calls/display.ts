@@ -105,6 +105,16 @@ export function fmtCallDateTable(iso: string): { date: string; time: string } {
   };
 }
 
+/** Primary outcome badge plus optional secondary tags for detail headers. */
+export function deriveOutcomeBadges(call: CallRowLike): CallOutcomeBadge[] {
+  const primary = deriveCallOutcomeBadge(call);
+  const badges: CallOutcomeBadge[] = [primary];
+  if (call.voicemailDetected && primary !== "Voicemail") {
+    badges.push("Voicemail");
+  }
+  return badges;
+}
+
 export function deriveCallOutcomeBadge(call: CallRowLike): CallOutcomeBadge {
   if (call.mockOutcome) {
     const m = String(call.mockOutcome);

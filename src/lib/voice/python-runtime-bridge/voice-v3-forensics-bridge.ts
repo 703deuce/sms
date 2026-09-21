@@ -148,5 +148,13 @@ export async function flushVoiceV3ForensicsForPython(input: {
     flushed_from: "python",
   });
 
+  const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
+  await enqueueJob({
+    jobType: "voice_v3_call_history",
+    queueName: "voice-calls",
+    payload: { callId: input.callId, workspaceId: input.workspaceId },
+    idempotencyKey: `voice-v3-call-history:${input.callId}`,
+  }).catch(() => undefined);
+
   return { ok: true };
 }

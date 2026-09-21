@@ -359,49 +359,46 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       return completeMockCall(callId);
     }
     case "voice_recording_ingest": {
-      const { getPrisma } = await import("@/lib/db");
-      const prisma = getPrisma();
       const callId = String(payload.callId || "");
       const workspaceId = String(payload.workspaceId || "");
-      if (!callId) throw new Error("callId required");
-      const urls = payload.recordingUrl as Record<string, string> | undefined;
-      const storageUrl = urls?.mp3 || urls?.wav || null;
-      const recording = await prisma.voiceRecording.create({
-        data: {
-          workspaceId,
-          callId,
-          provider: "telnyx",
-          status: "ready",
-          storageUrl,
-          providerRecordingId: String(payload.providerRecordingId || ""),
-          channels: 2,
-        },
+      if (!callId || !workspaceId) throw new Error("callId and workspaceId required");
+      const { ingestTelnyxVoiceCallRecording } = await import("@/lib/voice/call-recording-ingest");
+      const result = await ingestTelnyxVoiceCallRecording({
+        workspaceId,
+        callId,
+        recordingUrl: payload.recordingUrl,
+        providerRecordingId: payload.providerRecordingId
+          ? String(payload.providerRecordingId)
+          : null,
       });
-      if (storageUrl) {
-        const call = await prisma.voiceCall.findUnique({ where: { id: callId } });
-        const { publishRecordingReady } = await import("@/lib/crm/events");
-        await publishRecordingReady({
-          workspaceId,
-          contactId: call?.contactId || null,
-          callId,
-          recordingUrl: storageUrl,
-          direction:
-            call?.direction === "OUTBOUND" || call?.direction === "outbound"
-              ? "outbound"
-              : "inbound",
-        }).catch(() => undefined);
-        const { enqueueVoiceV2PostCallTranscription } = await import(
-          "@/lib/voice-receptionist-wizard/post-call/transcription-pipeline"
-        );
+      if (!result.ok) {
+        return { ok: false, reason: result.reason };
+      }
+      const { enqueueVoiceV2PostCallTranscription } = await import(
+        "@/lib/voice-receptionist-wizard/post-call/transcription-pipeline"
+      );
+      const { getPrisma } = await import("@/lib/db");
+      const rec = await getPrisma().voiceRecording.findUnique({
+        where: { id: result.recordingId },
+      });
+      if (rec?.storageUrl) {
         await enqueueVoiceV2PostCallTranscription({
           workspaceId,
           callId,
-          recordingId: recording.id,
-          recordingUrl: storageUrl,
-          channels: recording.channels,
+          recordingId: rec.id,
+          recordingUrl: rec.storageUrl,
+          channels: rec.channels,
         }).catch(() => undefined);
       }
-      return { ok: true };
+      return { ok: true, recordingId: result.recordingId };
+    }
+    case "voice_v3_call_history": {
+      const callId = String(payload.callId || "");
+      if (!callId) throw new Error("callId required");
+      const { runVoiceV3CallHistoryPostProcess } = await import(
+        "@/lib/voice-v3/call-history/post-call-pipeline"
+      );
+      return runVoiceV3CallHistoryPostProcess(callId);
     }
     case "voice_v2_post_call_transcription": {
       const { executeVoiceV2PostCallTranscriptionJob } = await import(

@@ -116,12 +116,14 @@ async function upsertTranscriptSegments(input: {
   turns: VoiceV3CanonicalTurn[];
 }): Promise<void> {
   if (!input.turns.length) return;
+  const conversationTurns = input.turns.filter((t) => t.role === "user" || t.role === "assistant");
+  if (!conversationTurns.length) return;
   const prisma = getPrisma();
   const existing = await prisma.voiceTranscript.findFirst({
     where: { callId: input.callId, workspaceId: input.workspaceId },
     select: { id: true },
   });
-  const fullText = input.turns.map((t) => `${t.role}: ${t.text}`).join("\n");
+  const fullText = conversationTurns.map((t) => `${t.role}: ${t.text}`).join("\n");
   const transcript =
     existing ??
     (await prisma.voiceTranscript.create({
@@ -146,9 +148,9 @@ async function upsertTranscriptSegments(input: {
     where: { transcriptId: transcript.id },
   });
 
-  const anchorEpochSec = resolveSpeechAnchorEpochSec(input.turns);
+  const anchorEpochSec = resolveSpeechAnchorEpochSec(conversationTurns);
 
-  const segments = input.turns.map((t, idx) => {
+  const segments = conversationTurns.map((t, idx) => {
     const speech =
       t.speech && typeof t.speech === "object"
         ? (t.speech as Record<string, unknown>)

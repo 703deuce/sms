@@ -171,6 +171,14 @@ export default function VoiceCallDetailPage() {
     insightCustomFields: insightCustom,
     insightSummary: insight?.summary,
   });
+  const callHistoryMeta = (() => {
+    const meta = (call.metadata as Record<string, unknown> | undefined) ?? {};
+    const ch = meta.callHistory;
+    return ch && typeof ch === "object" && !Array.isArray(ch)
+      ? (ch as Record<string, unknown>)
+      : null;
+  })();
+
   const outcomeBadges = deriveOutcomeBadges({
     outcome: call.outcome as string | null,
     appointmentBooked: Boolean(call.appointmentBooked),
@@ -274,42 +282,12 @@ export default function VoiceCallDetailPage() {
                 <WaveformRecordingPlayer recordingId={recordings[0].id} />
               ) : (
                 <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
-                  <div className="flex h-16 items-center gap-3 rounded-lg bg-[#f9fafb] px-4">
-                    <button
-                      type="button"
-                      className="flex h-10 w-10 items-center justify-center rounded-full bg-[#6366f1] text-white"
-                    >
-                      ▶
-                    </button>
-                    <div className="flex-1">
-                      <div className="flex h-8 items-end gap-0.5">
-                        {Array.from({ length: 48 }).map((_, i) => (
-                          <div
-                            key={i}
-                            className="w-1 rounded-full bg-[#6366f1]"
-                            style={{ height: `${20 + Math.abs(Math.sin(i * 0.4)) * 24}px` }}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                    <span className="text-sm tabular-nums text-[#6b7280]">
-                      0:45 / {fmtCallDuration(call.durationSeconds as number)}
-                    </span>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-4 text-sm text-[#6366f1]">
-                    <button type="button" className="inline-flex items-center gap-1.5 hover:underline">
-                      <Download className="h-4 w-4" /> Download
-                    </button>
-                    <button type="button" className="inline-flex items-center gap-1.5 hover:underline">
-                      <Share2 className="h-4 w-4" /> Share
-                    </button>
-                    <button type="button" className="inline-flex items-center gap-1.5 hover:underline">
-                      <Trash2 className="h-4 w-4" /> Delete
-                    </button>
-                    <button type="button" className="inline-flex items-center gap-1.5 hover:underline">
-                      <Link2 className="h-4 w-4" /> Copy link
-                    </button>
-                  </div>
+                  <p className="text-sm text-[#374151]">
+                    {callHistoryMeta?.recordingStatus === "recording" ||
+                    callHistoryMeta?.recordingStatus === "processing"
+                      ? "Recording is being processed…"
+                      : "Recording unavailable for this call."}
+                  </p>
                 </div>
               )}
 

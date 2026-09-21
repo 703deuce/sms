@@ -13,6 +13,18 @@ export async function processPostCall(callId: string) {
   const call = await prisma.voiceCall.findUnique({ where: { id: callId } });
   if (!call) return { ok: false };
 
+  try {
+    const { runVoiceV3CallHistoryPostProcess } = await import(
+      "@/lib/voice-v3/call-history/post-call-pipeline"
+    );
+    await runVoiceV3CallHistoryPostProcess(callId);
+  } catch (err) {
+    console.warn("VOICE_V3_CALL_HISTORY_POSTPROCESS_FAILED", {
+      callId,
+      message: err instanceof Error ? err.message : String(err),
+    });
+  }
+
   if (call.telnyxConversationId) {
     const { syncTranscriptFromTelnyxConversation } = await import("@/lib/voice/transcript-sync");
     await syncTranscriptFromTelnyxConversation({

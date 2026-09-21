@@ -20,6 +20,17 @@ export async function GET(
     return NextResponse.json({ error: "Recording not found" }, { status: 404 });
   }
 
-  // Redirect to Telnyx/storage URL (signed access gate fulfilled)
+  const { parseVoicemailStorageRecordingUrl } = await import(
+    "@/lib/voice/python-runtime-bridge/mctb-sip-voicemail-storage"
+  );
+  const { createSignedRecordingUrl } = await import(
+    "@/lib/smart-routing/call-recording-storage"
+  );
+  const parsed = parseVoicemailStorageRecordingUrl(rec.storageUrl);
+  if (parsed) {
+    const signed = await createSignedRecordingUrl(parsed.bucket, parsed.path, 3600);
+    return NextResponse.redirect(signed);
+  }
+
   return NextResponse.redirect(rec.storageUrl);
 }

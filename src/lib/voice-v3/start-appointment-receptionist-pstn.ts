@@ -26,6 +26,17 @@ export async function startAppointmentReceptionistVoiceV3OnCall(input: {
     workspaceId: input.workspaceId,
     agentId: input.agentId,
   });
+  const { maybeStartVoiceV3TelnyxRecording } = await import(
+    "@/lib/voice-v3/call-history/start-telnyx-recording"
+  );
+  void maybeStartVoiceV3TelnyxRecording({
+    workspaceId: input.workspaceId,
+    callId: input.callId,
+    agentId: input.agentId,
+    telnyxCallControlId: input.telnyxCallControlId,
+    direction: "INBOUND",
+  });
+
   try {
     await forwardInboundCallToOpenAiLiveSip(input.telnyxCallControlId);
   } catch (err) {
