@@ -366,6 +366,12 @@ export async function dispatchBookingIfRequired(
           liveSessionId: latest.liveSessionId,
         });
         if (!auth.allowed) {
+          console.log("BOOKING_MUTATION_DENIED", {
+            call_id: latest.callId,
+            booking_attempt_id: attempt.bookingAttemptId,
+            code: auth.code,
+            message: auth.message,
+          });
           return {
             ok: false,
             failureCode: auth.code,

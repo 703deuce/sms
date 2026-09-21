@@ -46,5 +46,14 @@ export function mapProviderFailureToRecoveryCode(reason: string): VoiceV3Recover
   if (r.includes("outcome_unknown") || r.includes("outcome uncertain")) {
     return "BOOKING_OUTCOME_UNKNOWN";
   }
+  if (r.includes("stale_conversation_revision") || r.includes("stale_offer")) {
+    return "STALE_CONVERSATION_REVISION";
+  }
+  if (r.includes("booking_confirmation_required")) {
+    return "BOOKING_CONFIRMATION_REQUIRED";
+  }
+  if (r.includes("intake_incomplete") || r.includes("missing_required")) {
+    return "MISSING_REQUIRED_INFORMATION";
+  }
   return "MICROSOFT_TEMPORARY_FAILURE";
 }

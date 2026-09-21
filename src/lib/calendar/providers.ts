@@ -1218,7 +1218,13 @@ export async function insertMicrosoftEvent(
       ...(transactionId ? { transactionId } : {}),
     }),
   }, ctx);
-  if (!res.ok) throw new Error(`Microsoft events.insert ${res.status}`);
+  if (!res.ok) {
+    const graphError = await parseMicrosoftGraphError(res);
+    const detail = graphError.graphMessage || graphError.graphCode || res.statusText;
+    throw new Error(
+      `Microsoft events.insert ${res.status}${detail ? `: ${detail}` : ""}`,
+    );
+  }
   const json = await res.json();
   return (json.id as string) || null;
 }

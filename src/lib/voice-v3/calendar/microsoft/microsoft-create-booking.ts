@@ -7,6 +7,7 @@ import {
   type CalendarConfig,
 } from "@/lib/voice/calendar/providers";
 import type { CreateBookingRequest } from "../booking-types";
+import { resolveMicrosoftGraphCalendarId } from "../resolve-provider-calendar-id";
 
 export type MicrosoftCreateBookingResult =
   | {
@@ -46,7 +47,11 @@ function classifyCreateError(err: unknown): MicrosoftCreateBookingResult {
   } else if (lower.includes("timeout") || lower.includes("etimedout") || lower.includes("econnreset")) {
     reason = "BOOKING_OUTCOME_UNKNOWN";
     outcomeUncertain = true;
-  } else if (lower.includes("validation") || lower.includes("malformed")) {
+  } else if (
+    lower.includes("validation") ||
+    lower.includes("malformed") ||
+    lower.includes(" 400")
+  ) {
     reason = "BOOKING_VALIDATION_FAILED";
   }
 
@@ -112,8 +117,7 @@ export async function executeMicrosoftCreateBooking(input: {
           start,
           end,
           timezone: input.request.timezone,
-          calendarId:
-            input.request.calendarId !== "primary" ? input.request.calendarId : undefined,
+          calendarId: resolveMicrosoftGraphCalendarId(input.request.calendarId),
           transactionId: input.request.bookingAttemptId,
           transovoAppointmentId: input.request.bookingAttemptId,
         },
@@ -142,6 +146,14 @@ export async function executeMicrosoftCreateBooking(input: {
   } catch (err) {
     const classified = classifyCreateError(err);
     classified.durationMs = Date.now() - started;
+    console.error("MICROSOFT_BOOK_CREATE_FAILED", {
+      booking_attempt_id: input.request.bookingAttemptId,
+      call_id: input.request.callId,
+      calendar_id: input.request.calendarId,
+      reason: classified.reason,
+      message: classified.message,
+      duration_ms: classified.durationMs,
+    });
     return classified;
   }
 }
