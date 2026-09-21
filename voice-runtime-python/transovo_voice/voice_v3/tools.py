@@ -16,6 +16,7 @@ from transovo_voice.voice_v3.tool_client import TransovoV3ToolClient
 from transovo_voice.voice_v3.telephony_bridge import LiveKitTelephonyBridge
 from transovo_voice.voice_v3.forensics import VoiceV3CallForensics
 from transovo_voice.voice_v3.transfer_executor import execute_authorized_transfer_plan
+from transovo_voice.voice_v3.tool_idle_filler import execute_with_idle_filler
 
 COLLECT_INTAKE_FIELD_TOOL = "collect_intake_field"
 _SET_INTAKE_PREFIX = "set_intake_"
@@ -166,26 +167,39 @@ def build_livekit_tools(
             else:
                 args = {}
 
-            try:
+            fc_meta = getattr(context, "function_call", None)
+            function_call_id = None
+            if fc_meta is not None:
+                function_call_id = getattr(fc_meta, "call_id", None) or getattr(fc_meta, "id", None)
+            fc_id_str = str(function_call_id) if function_call_id else None
+
+            async def _run_tool() -> dict[str, Any]:
                 if _tool_name == COLLECT_INTAKE_FIELD_TOOL or _tool_name.startswith(
                     _SET_INTAKE_PREFIX,
                 ):
-                    result = await _dispatch_intake_tool(
+                    return await _dispatch_intake_tool(
                         tool_name=_tool_name,
                         args=args,
                         context=context,
                         client=_client,
                         intake_fields=intake_meta,
                     )
-                else:
-                    result = await _execute_transovo_tool(
-                        tool_name=_tool_name,
-                        raw_arguments=args,
-                        context=context,
-                        client=_client,
-                        telephony=_telephony if _tool_name == "transfer_call" else None,
-                        forensics=_forensics,
-                    )
+                return await _execute_transovo_tool(
+                    tool_name=_tool_name,
+                    raw_arguments=args,
+                    context=context,
+                    client=_client,
+                    telephony=_telephony if _tool_name == "transfer_call" else None,
+                    forensics=_forensics,
+                )
+
+            try:
+                result = await execute_with_idle_filler(
+                    context,
+                    tool_name=_tool_name,
+                    function_call_id=fc_id_str,
+                    execute=_run_tool,
+                )
             except asyncio.CancelledError:
                 log_event(
                     "voice_v3_tool_cancelled",
