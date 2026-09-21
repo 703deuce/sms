@@ -211,7 +211,7 @@ This pass treats the reuse audit as authoritative: **restore/port proven V3 code
 
 ## 19. Commit SHA
 
-_Pending git commit on branch `cursor/voice-v3-restore-reconnect-2304` — fill after push._
+**`bf89fa2b`** on branch `cursor/voice-v3-restore-reconnect-2304`
 
 ---
 
