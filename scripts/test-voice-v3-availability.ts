@@ -144,7 +144,7 @@ function testDefaultServiceCalendarUsesAgentIds() {
     ["AAQkAGI1", "primary"],
   );
   assert.deepEqual(resolveFindAvailabilityCalendarIds(undefined, ["primary"]), ["primary"]);
-  assert.deepEqual(resolveFindAvailabilityCalendarIds("  cal-1  ", ["primary"]), ["cal-1"]);
+  assert.deepEqual(resolveFindAvailabilityCalendarIds("  cal-1  ", ["primary"]), ["primary"]);
 
   let base = ctx();
   const applied = applyCallerMeaningToContext(base, config(), fridayAfternoonMeaning(), FROZEN);

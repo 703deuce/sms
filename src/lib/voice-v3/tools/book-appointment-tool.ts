@@ -17,6 +17,7 @@ import {
 import type { AvailabilityOfferSet } from "../calendar/offer-set";
 import type { AvailabilitySlot } from "../calendar/slot-generator";
 import type { SelectedAvailabilitySlot } from "../calendar/selected-slot";
+import { buildVoiceV3ToolLiveHooks } from "../live-runtime-hooks";
 
 const bookArgsSchema = z.object({
   offer_set_id: z
@@ -176,13 +177,12 @@ export const bookAppointmentTool: VoiceToolDefinition<BookAppointmentArgs> = {
       );
     }
 
-    const silentHooks = {
-      onLiveContext: (event: { type: string; [key: string]: unknown }) => {
-        ctx.sendContext(event);
-      },
-    };
+    const liveHooks = buildVoiceV3ToolLiveHooks({
+      liveSessionId: ctx.liveSessionId,
+      sendContext: ctx.sendContext,
+    });
 
-    await dispatchBookingIfRequired(ctx.runtime, silentHooks);
+    await dispatchBookingIfRequired(ctx.runtime, liveHooks);
 
     const after = ctx.runtime.getSnapshot();
     if (after.booking.phase === "BOOKING_CONFIRMED" && after.booking.confirmed) {
@@ -193,8 +193,8 @@ export const bookAppointmentTool: VoiceToolDefinition<BookAppointmentArgs> = {
     }
     if (after.booking.lastFailure) {
       return voiceToolError(
-        after.booking.lastFailure.code,
-        "Booking did not complete.",
+        after.booking.lastFailure.reason,
+        after.booking.lastFailure.message || "Booking did not complete.",
         { failure: after.booking.lastFailure },
         "failed",
       );

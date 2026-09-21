@@ -3,6 +3,9 @@
  * Thinking append alone does not request speech — pair with requestSpeak when the caller should hear an update.
  */
 
+import { requestLiveSpeakContinuation } from "./live-response-trigger";
+import type { LiveSidebandSend } from "./greeting";
+
 export type VoiceV3ThinkingAppendEvent = {
   type: "session.thinking.append";
   content: string;
@@ -36,4 +39,20 @@ export function pushLiveThinkingEvent(
 ): void {
   hooks.onLiveContext?.(event);
   hooks.requestSpeak?.(speakReason);
+}
+
+/** Wire tool sideband context + speak continuation (FIND/BOOK/intake acks). */
+export function buildVoiceV3ToolLiveHooks(input: {
+  liveSessionId: string;
+  sendContext: (event: { type: string; [key: string]: unknown }) => void;
+}): VoiceV3LiveRuntimeHooks {
+  const send = input.sendContext as LiveSidebandSend;
+  const liveSessionId = input.liveSessionId.trim();
+  return {
+    onLiveContext: (event) => input.sendContext(event),
+    requestSpeak: (reason) => {
+      if (!liveSessionId) return;
+      requestLiveSpeakContinuation({ send, liveSessionId, reason });
+    },
+  };
 }

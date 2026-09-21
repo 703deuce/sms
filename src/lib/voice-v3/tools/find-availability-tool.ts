@@ -10,6 +10,7 @@ import { authorizeVoiceV3ToolOrError } from "./authorize-tool-for-config";
 import { shouldApplySemanticSteeringToActiveGoal } from "../delegation/conversation-freshness";
 import { toolOk, voiceToolError } from "./types";
 import { FIND_AVAILABILITY_TOOL_DESCRIPTION } from "./astra-tool-contracts";
+import { buildVoiceV3ToolLiveHooks } from "../live-runtime-hooks";
 
 const findArgsSchema = z.object({
   service_id: z
@@ -79,14 +80,13 @@ export const findAvailabilityTool: VoiceToolDefinition<FindAvailabilityArgs> = {
       );
     }
 
-    const silentHooks = {
-      onLiveContext: (event: { type: string; [key: string]: unknown }) => {
-        ctx.sendContext(event);
-      },
-    };
+    const liveHooks = buildVoiceV3ToolLiveHooks({
+      liveSessionId: ctx.liveSessionId,
+      sendContext: ctx.sendContext,
+    });
 
     await dispatchFindAvailabilityIfRequired(ctx.runtime, {
-      ...silentHooks,
+      ...liveHooks,
       awaitCompletion: true,
     });
 

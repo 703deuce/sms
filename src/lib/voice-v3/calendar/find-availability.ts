@@ -7,16 +7,15 @@ import type { FindAvailabilityRequest, RequiredRuntimeAction } from "./types";
 import { parseVoiceV3LocalIsoToDate } from "./microsoft/microsoft-time-adapter";
 import { wallTimeInZoneToUtc } from "../time/timezone";
 
-/** Wizard per-service calendar "default" means agent-level calendarIds — not a provider id. */
+/**
+ * Voice V3 always books on the agent's connected calendar list.
+ * Per-service calendar ids are legacy wizard UI only — never sent to FIND/BOOK.
+ */
 export function resolveFindAvailabilityCalendarIds(
-  serviceCalendarId: string | undefined,
+  _serviceCalendarId: string | undefined,
   agentCalendarIds: string[],
 ): string[] {
-  const perService = serviceCalendarId?.trim();
-  if (!perService || perService === "default") {
-    return [...agentCalendarIds];
-  }
-  return [perService];
+  return [...agentCalendarIds];
 }
 
 export function buildFindAvailabilityRequestKey(req: FindAvailabilityRequest): string {

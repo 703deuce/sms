@@ -342,9 +342,7 @@ export async function dispatchBookingIfRequired(
 
     updateBookingAttemptPhase(latest.liveSessionId, attempt.bookingAttemptId, "READY_TO_COMMIT");
 
-    const conversationRevisionAtCommitStart = getCurrentConversationRevision(
-      latest.liveSessionId,
-    );
+    let conversationRevisionAtCommitStart = getCurrentConversationRevision(latest.liveSessionId);
     const commitProvider = calendarProviderForConfig(runtime.config) ?? "microsoft";
 
     const commitResult = await runAuthoritativeOperation({
@@ -355,6 +353,7 @@ export async function dispatchBookingIfRequired(
       prepareStart: (c) => applyBookingPhase(c, "BOOKING_CREATING"),
       isStillAuthoritative: (c) => attemptStillValid(c, attempt),
       execute: async () => {
+        conversationRevisionAtCommitStart = getCurrentConversationRevision(latest.liveSessionId);
         const { authorizeVoiceV3BookingMutation } = await import(
           "../policy/authorize-booking-mutation"
         );

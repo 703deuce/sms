@@ -1,5 +1,7 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
+
 import {
   getValidAccessToken,
   hasOAuthTokens,
@@ -91,13 +93,26 @@ export async function executeMicrosoftCreateBooking(input: {
     const start = new Date(input.request.startUtc);
     const end = new Date(input.request.endUtc);
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+      const message = "Invalid booking interval";
+      console.error("MICROSOFT_BOOK_CREATE_FAILED", {
+        booking_attempt_id: input.request.bookingAttemptId,
+        call_id: input.request.callId,
+        calendar_id: input.request.calendarId,
+        reason: "BOOKING_VALIDATION_FAILED",
+        message,
+        start_utc: input.request.startUtc,
+        end_utc: input.request.endUtc,
+        duration_ms: Date.now() - started,
+      });
       return {
         ok: false,
         reason: "BOOKING_VALIDATION_FAILED",
-        message: "Invalid booking interval",
+        message,
         durationMs: Date.now() - started,
       };
     }
+
+    const graphTransactionId = randomUUID();
 
     const summary = `${input.request.service.name} — ${input.request.customer.name}`;
     const description = [
@@ -118,7 +133,7 @@ export async function executeMicrosoftCreateBooking(input: {
           end,
           timezone: input.request.timezone,
           calendarId: resolveMicrosoftGraphCalendarId(input.request.calendarId),
-          transactionId: input.request.bookingAttemptId,
+          transactionId: graphTransactionId,
           transovoAppointmentId: input.request.bookingAttemptId,
         },
         { connectionId: input.connectionId, config: input.calendarConfig },

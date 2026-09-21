@@ -113,7 +113,7 @@ export function servicePolicyFromWizardType(t: {
     slotStepMinutes,
     description: t.description?.trim() || undefined,
     enabled: t.enabled,
-    calendarId: t.calendar?.trim() || undefined,
+    calendarId: undefined,
     status: t.status,
     location: t.location,
     modality: t.modality,
