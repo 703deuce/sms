@@ -1,0 +1,349 @@
+#!/usr/bin/env tsx
+/**
+ * Tool + backend forensics report (no transcript segment timestamps).
+ */
+import { writeFileSync } from "node:fs";
+import { getPrisma } from "../src/lib/db";
+
+const suffix = process.argv[2]?.trim() ?? "vcrbyQoJ7aLi";
+const outPath =
+  process.argv[3]?.trim() ??
+  `docs/VOICE-V3-LAST-CALL-TOOL-CHAIN-${suffix}.md`;
+
+type ForensicsEvent = {
+  kind: string;
+  occurred_at_utc?: string;
+  monotonic_ms_from_call_start?: number;
+  source?: string;
+  detail?: Record<string, unknown>;
+};
+
+function dedupeKey(e: ForensicsEvent): string {
+  const d = e.detail ?? {};
+  return [
+    e.kind,
+    e.monotonic_ms_from_call_start,
+    e.source,
+    d.tool_name ?? d.tool,
+    d.function_call_id,
+    d.status,
+    d.elapsed_ms,
+  ].join("|");
+}
+
+function msLabel(ms: number | undefined): string {
+  if (ms == null) return "—";
+  const sec = (ms / 1000).toFixed(3);
+  return `${ms} ms (+${sec}s from call start)`;
+}
+
+const TOOL_KINDS = new Set([
+  "FUNCTION_TOOL_STARTED",
+  "FUNCTION_TOOL_COMPLETED",
+  "NODE_TOOL_EXECUTION_STARTED",
+  "NODE_TOOL_EXECUTION_COMPLETED",
+  "VOICE_TOOL_REQUESTED",
+  "VOICE_TOOL_VALIDATED",
+  "VOICE_TOOL_EXECUTION_STARTED",
+  "VOICE_TOOL_EXECUTION_SUCCEEDED",
+  "VOICE_TOOL_EXECUTION_FAILED",
+  "BACKEND_LLM_METRICS_COLLECTED",
+  "ASYNC_ACTION_ENQUEUED",
+  "ASYNC_ACTION_SUCCEEDED",
+  "ASYNC_ACTION_FAILED",
+  "BOOKING_COMMIT_SENT",
+  "MICROSOFT_EVENT_CREATED",
+  "BOOKING_CONFIRMED",
+  "FIND_AVAILABILITY_STARTED",
+  "FIND_AVAILABILITY_COMPLETED",
+  "LIVE_BOOKING_CONFIRMATION_SENT",
+]);
+
+const PHASE_MARKERS = new Set([
+  "CALLER_UTTERANCE_COMMITTED",
+  "AGENT_TURN_COMMITTED",
+]);
+
+async function main() {
+  const prisma = getPrisma();
+  const call = await prisma.voiceCall.findFirst({
+    where: { id: { contains: suffix } },
+    select: { id: true, startedAt: true, endedAt: true, metadata: true, appointmentBooked: true },
+  });
+  if (!call) throw new Error(`No call matching ${suffix}`);
+
+  const redactPhones = (s: string) =>
+    s.replace(/\+1\d{10}/g, "+1[REDACTED]").replace(/\d{3,}/g, (m) =>
+      m.length >= 10 ? "[REDACTED]" : m,
+    );
+
+  const safeCallId = redactPhones(call.id);
+
+  const meta = (call.metadata || {}) as Record<string, unknown>;
+  const forensics = meta.voiceV3Forensics as {
+    events?: ForensicsEvent[];
+    callerTurns?: unknown[];
+    gptLiveSessionId?: string;
+    liveSessionId?: string;
+  };
+
+  const raw = forensics?.events ?? [];
+  const seen = new Set<string>();
+  const events: ForensicsEvent[] = [];
+  for (const e of raw) {
+    const k = dedupeKey(e);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    events.push(e);
+  }
+  events.sort(
+    (a, b) =>
+      (a.monotonic_ms_from_call_start ?? 0) - (b.monotonic_ms_from_call_start ?? 0),
+  );
+
+  const toolEvents = events.filter((e) => TOOL_KINDS.has(e.kind));
+  const markers = events.filter((e) => PHASE_MARKERS.has(e.kind));
+
+  // Info-dump phase: last caller utterance mentioning Harriet / mom before scheduling question
+  const dumpEndMarker = markers
+    .filter((e) => e.kind === "CALLER_UTTERANCE_COMMITTED")
+    .filter((e) => {
+      const t = String((e.detail as { text?: string })?.text ?? "").toLowerCase();
+      return t.includes("harriet") || t.includes("yahoo");
+    })
+    .pop();
+
+  const schedulingQuestion = markers
+    .filter((e) => e.kind === "AGENT_TURN_COMMITTED")
+    .find((e) => {
+      const t = String((e.detail as { text?: string })?.text ?? "").toLowerCase();
+      return t.includes("day and time") || t.includes("what day");
+    });
+
+  const dumpEndMs = dumpEndMarker?.monotonic_ms_from_call_start ?? null;
+  const schedQMs = schedulingQuestion?.monotonic_ms_from_call_start ?? null;
+
+  const callStartMs = call.startedAt?.getTime() ?? 0;
+  const monoToUtc = (mono: number) =>
+    callStartMs ? new Date(callStartMs + mono).toISOString() : "—";
+
+  const lines: string[] = [];
+  lines.push(`# Voice V3 — tool & backend chain (last call)`);
+  lines.push("");
+  lines.push(`**Generated:** ${new Date().toISOString()}`);
+  lines.push(`**Room suffix:** \`${suffix}\``);
+  lines.push(`**Call id:** \`${safeCallId}\``);
+  lines.push(`**Wall clock:** ${call.startedAt?.toISOString()} → ${call.endedAt?.toISOString()}`);
+  lines.push(`**GPT-Live session:** ${forensics?.gptLiveSessionId ?? "—"}`);
+  lines.push(`**appointmentBooked flag:** ${call.appointmentBooked}`);
+  lines.push("");
+  lines.push("> This report lists **tool and backend events only**. It does **not** include per-line transcript timestamps.");
+  lines.push("");
+
+  lines.push("## Phase: after info-dump → until scheduling question");
+  lines.push("");
+  const fmtUtc = (e: ForensicsEvent | undefined) => {
+    const u = e?.occurred_at_utc;
+    if (typeof u === "string" && u.includes("T")) return u;
+    const ms = (e?.detail as { occurred_at_ms?: number })?.occurred_at_ms;
+    if (typeof ms === "number") return new Date(ms).toISOString();
+    return "—";
+  };
+
+  if (dumpEndMarker) {
+    const mono = dumpEndMarker.monotonic_ms_from_call_start ?? 0;
+    lines.push(
+      `- **Info-dump end (caller utterance committed — Harriet/yahoo marker, no per-line transcript log):** monotonic ${msLabel(dumpEndMarker.monotonic_ms_from_call_start)} · wall **${monoToUtc(mono)}**`,
+    );
+  } else {
+    lines.push("- Info-dump end marker: not found in forensics (Harriet/yahoo utterance).");
+  }
+  if (schedulingQuestion) {
+    const mono = schedulingQuestion.monotonic_ms_from_call_start ?? 0;
+    lines.push(
+      `- **Amy asks day/time (agent turn committed — content omitted here):** monotonic ${msLabel(schedulingQuestion.monotonic_ms_from_call_start)} · wall **${monoToUtc(mono)}**`,
+    );
+  }
+  if (dumpEndMs != null && schedQMs != null) {
+    lines.push(`- **Gap (monotonic):** ${schedQMs - dumpEndMs} ms between those two markers.`);
+  }
+  lines.push("");
+
+  const windowEvents = events.filter((e) => {
+    const ms = e.monotonic_ms_from_call_start ?? 0;
+    if (dumpEndMs == null || schedQMs == null) return false;
+    return ms >= dumpEndMs && ms <= schedQMs && (TOOL_KINDS.has(e.kind) || e.kind.includes("TOOL"));
+  });
+
+  lines.push(`### Tool/backend events in that window (${windowEvents.length})`);
+  lines.push("");
+  if (windowEvents.length === 0) {
+    lines.push("_No tool executions logged between info-dump end and scheduling question — model may have been thinking/speaking without tools._");
+  } else {
+    for (const e of windowEvents) {
+      lines.push(formatEvent(e));
+    }
+  }
+  lines.push("");
+
+  lines.push("## Tool order (summary)");
+  lines.push("");
+  lines.push("1. **`update_intake`** — after info-dump (intake persisted on Node).");
+  lines.push("2. *(caller answers day/time — no tools)*");
+  lines.push("3. **`set_scheduling_preference`** — preference captured.");
+  lines.push("4. **`find_availability`** — Microsoft calendar query (~1.5 s Node).");
+  lines.push("5. *(offer slot, caller confirms)*");
+  lines.push("6. **`book_appointment`** — Microsoft Graph create (~1.6 s Node) → **`confirmed`**.");
+  lines.push("");
+  lines.push("### Microsoft book pipeline (web runtime logs, same call)");
+  lines.push("");
+  lines.push("| Wall UTC (approx) | Event | Notes |");
+  lines.push("|-------------------|-------|-------|");
+  lines.push("| `2026-09-21T13:06:19.330Z` | `BOOKING_COMMIT_SENT` | `provider: microsoft` |");
+  lines.push("| `2026-09-21T13:06:20.027Z` | `ASYNC_ACTION_SUCCEEDED` | `BOOK_APPOINTMENT`, `bka_cmub9e14x0d6m243i4m201q6g` |");
+  lines.push("| `2026-09-21T13:06:20.961Z` | `MICROSOFT_EVENT_CREATED` | Graph create **810 ms** |");
+  lines.push("| `2026-09-21T13:06:20.962Z` | `BOOKING_CONFIRMED` | `offer_set_b76853bdd0ca`, `slot_1` |");
+  lines.push("");
+  lines.push("*(Pulled from Coolify web container during earlier forensics; current container log buffer may have rotated.)*");
+  lines.push("");
+
+  lines.push("## Full tool chain (deduped, call order)");
+  lines.push("");
+  lines.push("| # | Monotonic | Wall UTC | Source | Kind | Detail |");
+  lines.push("|---|-----------|----------|--------|------|--------|");
+  let n = 0;
+  const toolOnly = events.filter(
+    (e) =>
+      TOOL_KINDS.has(e.kind) ||
+      e.kind.includes("TOOL") ||
+      e.kind.startsWith("BOOKING") ||
+      e.kind.startsWith("FIND_") ||
+      e.kind.startsWith("MICROSOFT"),
+  );
+  for (const e of toolOnly) {
+    n++;
+    const d = e.detail ?? {};
+    const detailStr = JSON.stringify(d).slice(0, 500);
+    const mono = e.monotonic_ms_from_call_start ?? 0;
+    const wall = mono ? monoToUtc(mono) : fmtUtc(e);
+    lines.push(
+      `| ${n} | ${e.monotonic_ms_from_call_start ?? ""} | ${wall} | ${e.source ?? ""} | ${e.kind} | \`${detailStr}\` |`,
+    );
+  }
+  lines.push("");
+
+  // Pair FUNCTION_TOOL started/completed for latency table
+  lines.push("## Per-tool latency (worker `FUNCTION_TOOL_*` pairs)");
+  lines.push("");
+  const started = new Map<string, ForensicsEvent>();
+  const pairs: {
+    tool: string;
+    fcId: string;
+    startMs: number;
+    endMs: number;
+    durationMs: number;
+    status: string;
+    startUtc: string;
+    endUtc: string;
+  }[] = [];
+
+  for (const e of events) {
+    const d = e.detail ?? {};
+    if (e.kind === "FUNCTION_TOOL_STARTED") {
+      const fc = String(d.function_call_id ?? d.fc_id ?? "");
+      started.set(fc, e);
+    }
+    if (e.kind === "FUNCTION_TOOL_COMPLETED") {
+      const fc = String(d.function_call_id ?? d.fc_id ?? "");
+      const s = started.get(fc);
+      if (s && s.monotonic_ms_from_call_start != null && e.monotonic_ms_from_call_start != null) {
+        pairs.push({
+          tool: String(d.tool ?? d.tool_name ?? ""),
+          fcId: fc,
+          startMs: s.monotonic_ms_from_call_start,
+          endMs: e.monotonic_ms_from_call_start,
+          durationMs: e.monotonic_ms_from_call_start - s.monotonic_ms_from_call_start,
+          status: String(d.status ?? ""),
+          startUtc: monoToUtc(s.monotonic_ms_from_call_start),
+          endUtc: monoToUtc(e.monotonic_ms_from_call_start),
+        });
+      }
+    }
+  }
+
+  lines.push("| Order | Tool | function_call_id | Start (mono) | End (mono) | Duration | Status | Start UTC | End UTC |");
+  lines.push("|-------|------|------------------|--------------|------------|----------|--------|-----------|---------|");
+  pairs.sort((a, b) => a.startMs - b.startMs);
+  pairs.forEach((p, i) => {
+    lines.push(
+      `| ${i + 1} | ${p.tool} | \`${p.fcId.slice(0, 24)}…\` | ${p.startMs} | ${p.endMs} | **${p.durationMs} ms** | ${p.status} | ${p.startUtc} | ${p.endUtc} |`,
+    );
+  });
+  lines.push("");
+
+  // NODE tool pairs
+  lines.push("## Node execution timing (`NODE_TOOL_EXECUTION_*`)");
+  lines.push("");
+  const nodeStart = new Map<string, ForensicsEvent>();
+  const nodePairs: { tool: string; durationMs: number; status: string; startUtc: string; endUtc: string }[] =
+    [];
+  for (const e of events) {
+    const d = e.detail ?? {};
+    const fc = String(d.function_call_id ?? "");
+    if (e.kind === "NODE_TOOL_EXECUTION_STARTED") nodeStart.set(fc, e);
+    if (e.kind === "NODE_TOOL_EXECUTION_COMPLETED") {
+      const s = nodeStart.get(fc);
+      if (s?.monotonic_ms_from_call_start != null && e.monotonic_ms_from_call_start != null) {
+        nodePairs.push({
+          tool: String(d.tool_name ?? ""),
+          durationMs: e.monotonic_ms_from_call_start - s.monotonic_ms_from_call_start,
+          status: String(d.status ?? ""),
+          startUtc: monoToUtc(s.monotonic_ms_from_call_start),
+          endUtc: monoToUtc(e.monotonic_ms_from_call_start),
+        });
+      }
+    }
+  }
+  for (const p of nodePairs) {
+    lines.push(
+      `- **${p.tool}** — node slice **${p.durationMs} ms** (${p.status}) · ${p.startUtc} → ${p.endUtc}`,
+    );
+  }
+  lines.push("");
+
+  lines.push("## Backend LLM (delegation) metrics snapshots");
+  lines.push("");
+  for (const e of events.filter((e) => e.kind === "BACKEND_LLM_METRICS_COLLECTED")) {
+    const d = e.detail ?? {};
+    lines.push(
+      `- ${monoToUtc(e.monotonic_ms_from_call_start ?? 0)} · mono ${e.monotonic_ms_from_call_start} ms · ${JSON.stringify(d).slice(0, 400)}`,
+    );
+  }
+  lines.push("");
+
+  lines.push("## Raw tool-related event list (copy-friendly)");
+  lines.push("");
+  lines.push("```json");
+  lines.push(redactPhones(JSON.stringify(toolOnly, null, 2)));
+  lines.push("```");
+
+  writeFileSync(outPath, lines.join("\n"), "utf8");
+  console.log("Wrote", outPath, "tool rows:", toolOnly.length, "pairs:", pairs.length);
+  const p = getPrisma();
+  if (typeof p.$disconnect === "function") await p.$disconnect();
+}
+
+function formatEvent(e: ForensicsEvent): string {
+  const wall =
+    typeof e.occurred_at_utc === "string" && e.occurred_at_utc.includes("T")
+      ? e.occurred_at_utc
+      : typeof (e.detail as { occurred_at_ms?: number })?.occurred_at_ms === "number"
+        ? new Date((e.detail as { occurred_at_ms: number }).occurred_at_ms).toISOString()
+        : String(e.occurred_at_utc ?? "—");
+  return `- **${e.kind}** · ${wall} · mono ${e.monotonic_ms_from_call_start} ms · ${JSON.stringify(e.detail ?? {})}`;
+}
+
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
