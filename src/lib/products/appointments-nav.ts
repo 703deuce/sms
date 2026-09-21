@@ -32,7 +32,7 @@ export type AppointmentsNavOptions = {
 function calendarChildren(): NavItem["children"] {
   return [
     { label: "Calendar", href: "/appointments/calendar" },
-    { label: "Appointments", href: "/appointments" },
+    { label: "Appointments", href: "/appointments/overview" },
     { label: "Clients", href: "/appointments/clients" },
     { label: "Waitlist", href: "/appointments/waitlist" },
     { label: "Recalls", href: "/appointments/recalls" },

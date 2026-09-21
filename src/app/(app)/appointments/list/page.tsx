@@ -1,10 +1,7 @@
 import { redirect } from "next/navigation";
 import { AppointmentsListClient } from "@/components/appointments/list-client";
 import { mctbShellHome } from "@/lib/products/product-shell";
-import {
-  APPOINTMENTS_V1_HOME_PATH,
-  shouldRedirectAppointmentsRootToOverview,
-} from "@/lib/products/appointments-home-redirect";
+import { shouldRedirectAppointmentsRootToOverview } from "@/lib/products/appointments-home-redirect";
 import { isMctbV1Primary } from "@/lib/workspace/platform-launch";
 
 export default async function AppointmentsListPage({
@@ -17,7 +14,7 @@ export default async function AppointmentsListPage({
   }
   const params = await searchParams;
   if (shouldRedirectAppointmentsRootToOverview(params)) {
-    redirect(APPOINTMENTS_V1_HOME_PATH);
+    redirect("/appointments/overview");
   }
 
   return (
