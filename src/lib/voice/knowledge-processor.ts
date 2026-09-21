@@ -1,6 +1,7 @@
 import { getPrisma } from "@/lib/db";
 import type { VoiceKnowledgeSource } from "@prisma/client";
 import {
+  getEmbeddingTaskStatus,
   isTelnyxRagConfigured,
   similaritySearch,
   syncFileSourceToTelnyx,
@@ -269,6 +270,44 @@ export async function searchKnowledge(
       snippet: extractSnippet(s.contentText || s.extractedPreview || "", q),
       provider: "local" as const,
     }));
+}
+
+/** Best-effort wait for Telnyx bucket embed after URL/file sync (wizard website import). */
+export async function waitForKnowledgeBaseEmbedding(input: {
+  knowledgeBaseId: string;
+  maxWaitMs?: number;
+}): Promise<{ ready: boolean; status?: string }> {
+  const maxWaitMs = input.maxWaitMs ?? 45_000;
+  const prisma = getPrisma();
+  const kb = await prisma.voiceKnowledgeBase.findUnique({
+    where: { id: input.knowledgeBaseId },
+    select: { telnyxEmbeddingTaskId: true, telnyxEmbeddingStatus: true },
+  });
+  const taskId = kb?.telnyxEmbeddingTaskId?.trim();
+  if (!taskId || !isTelnyxRagConfigured()) {
+    return { ready: true, status: kb?.telnyxEmbeddingStatus || "local" };
+  }
+  const started = Date.now();
+  while (Date.now() - started < maxWaitMs) {
+    try {
+      const res = await getEmbeddingTaskStatus(taskId);
+      const status = String(res.data?.status || "").toLowerCase();
+      if (status === "completed" || status === "complete" || status === "success") {
+        await prisma.voiceKnowledgeBase.update({
+          where: { id: input.knowledgeBaseId },
+          data: { telnyxEmbeddingStatus: "ready", lastEmbeddedAt: new Date() },
+        });
+        return { ready: true, status };
+      }
+      if (status === "failed" || status === "error") {
+        return { ready: false, status };
+      }
+    } catch {
+      // retry
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  return { ready: false, status: "timeout" };
 }
 
 function extractSnippet(text: string, q: string): string {

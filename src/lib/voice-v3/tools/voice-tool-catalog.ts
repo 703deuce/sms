@@ -180,7 +180,10 @@ function isToolEnabledForConfig(entry: VoiceToolCatalogEntry, config: VoiceV3Age
           (config.transferDestinations?.some((d) => d.enabled !== false) ?? false))
       );
     case "search_business_knowledge":
-      return config.knowledge?.retrieval?.enabled === true;
+      return (
+        config.knowledge?.retrieval?.enabled === true &&
+        (config.capabilities?.answerQuestions !== false)
+      );
     case "submit_appointment_request":
       return config.scheduling?.bookingStrategy === "REQUEST_ONLY";
     case "take_message":

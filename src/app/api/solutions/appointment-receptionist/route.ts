@@ -176,11 +176,33 @@ export async function POST(request: Request) {
       );
     }
 
+    const mergedKbIds = [
+      ...new Set(
+        [
+          hooks.knowledgeBaseId,
+          state.linkedKnowledgeBaseId,
+          ...(draftConfig.knowledgeBaseIds || []),
+        ].filter(Boolean) as string[],
+      ),
+    ];
+    const adv = (draftConfig.advanced || {}) as Record<string, unknown>;
+    const wiz = (adv.appointmentReceptionistWizard || {}) as Record<string, unknown>;
     const configWithKb = {
       ...draftConfig,
-      knowledgeBaseIds: hooks.knowledgeBaseId
-        ? [hooks.knowledgeBaseId]
-        : draftConfig.knowledgeBaseIds || [],
+      knowledgeBaseIds: mergedKbIds.length ? mergedKbIds : draftConfig.knowledgeBaseIds || [],
+      advanced: {
+        ...adv,
+        appointmentReceptionistWizard: {
+          ...wiz,
+          ...state,
+          linkedKnowledgeBaseId:
+            hooks.knowledgeBaseId || state.linkedKnowledgeBaseId || wiz.linkedKnowledgeBaseId,
+          knowledgeBaseEnabled:
+            state.knowledgeBaseEnabled !== false
+              ? true
+              : state.knowledgeBaseEnabled,
+        },
+      },
     };
 
     // Scheduling must not demote an already-live ACTIVE agent to DRAFT (that

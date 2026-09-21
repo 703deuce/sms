@@ -25,6 +25,7 @@ import { compileAfterHoursNotificationsFromWizard } from "../notifications/compi
 import { resolveLivePromptControlsFromWizard } from "../prompts/live-prompt-controls";
 import { wizardSpamProtectionFromState } from "../spam-protection/types";
 import { servicePolicyFromWizardType } from "../policy/service-policy";
+import type { ResolvedAgentKnowledgeRetrieval } from "../knowledge/resolve-agent-knowledge-retrieval";
 
 export type VoiceV3ProviderConnections = {
   microsoftConnectionId?: string | null;
@@ -275,8 +276,8 @@ export function compileVoiceV3AgentConfig(input: {
   providerConnections?: VoiceV3ProviderConnections;
   envFallback?: VoiceV3AgentConfig;
   source?: VoiceV3AgentConfig["source"];
-  /** Indexed voice_knowledge_sources ids (publish/resolve time). */
-  documentSourceIds?: string[];
+  /** Resolved at publish/call time (agent KB links + indexed sources). */
+  knowledgeRetrieval?: ResolvedAgentKnowledgeRetrieval;
 }): VoiceV3AgentConfig {
   const envFallback = input.envFallback ?? VOICE_V3_BOOKING_AGENT_CONFIG;
   const wizard = input.wizard;
@@ -330,17 +331,25 @@ export function compileVoiceV3AgentConfig(input: {
     agentName,
   });
 
-  const kbIds = wizard.linkedKnowledgeBaseId
-    ? [wizard.linkedKnowledgeBaseId]
-    : [];
+  const resolvedRetrieval = input.knowledgeRetrieval;
+  const kbIds =
+    resolvedRetrieval?.knowledgeBaseIds?.length
+      ? resolvedRetrieval.knowledgeBaseIds
+      : wizard.linkedKnowledgeBaseId
+        ? [wizard.linkedKnowledgeBaseId]
+        : [];
   const retrievalEnabled =
-    wizard.knowledgeBaseEnabled === true ||
-    (wizard.knowledgeBaseEnabled !== false &&
+    resolvedRetrieval?.enabled === true ||
+    (resolvedRetrieval === undefined &&
+      wizard.knowledgeBaseEnabled !== false &&
+      kbIds.length > 0 &&
       (Boolean(wizard.linkedKnowledgeBaseId) ||
         wizard.knowledgeSource === "upload_docs" ||
         wizard.knowledgeSource === "website" ||
         wizard.knowledgeSource === "connect_data"));
-  const documentSourceIds = input.documentSourceIds?.filter(Boolean) ?? [];
+  const documentSourceIds = resolvedRetrieval?.documentSourceIds?.filter(Boolean) ?? [];
+  const retrievalRevision =
+    resolvedRetrieval?.revision ?? wizard.knowledgeBaseRevision ?? null;
 
   const base: VoiceV3AgentConfig = {
     ...envFallback,
@@ -429,11 +438,14 @@ export function compileVoiceV3AgentConfig(input: {
     knowledge: {
       hotContext: hotContextFromWizard(wizard),
       retrieval: {
-        enabled: retrievalEnabled && kbIds.length > 0,
+        enabled: retrievalEnabled,
         knowledgeBaseIds: kbIds,
-        websiteUrl: wizard.websiteUrl?.trim() || null,
+        websiteUrl:
+          resolvedRetrieval?.websiteUrl ??
+          wizard.websiteUrl?.trim() ??
+          null,
         documentSourceIds,
-        revision: wizard.knowledgeBaseRevision ?? null,
+        revision: retrievalRevision,
       },
     },
     telephony: {

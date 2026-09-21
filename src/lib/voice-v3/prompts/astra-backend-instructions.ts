@@ -6,6 +6,7 @@ import { buildAstraIntakeInstructions } from "./astra-intake-instructions";
 import { buildAstraTransferInstructions } from "./astra-transfer-instructions";
 import { buildAstraSolicitorHint } from "../spam-protection/prompt-sections";
 import { buildAstraBookingBehaviorInstructions } from "./astra-booking-behavior-instructions";
+import { buildAstraKnowledgeInstructions } from "../knowledge/astra-knowledge-instructions";
 
 export type AstraBackendPromptContext = {
   businessName?: string;
@@ -53,6 +54,7 @@ export function buildAstraBackendInstructions(
   const intake = buildAstraIntakeInstructions();
   const transfer = agentConfig ? buildAstraTransferInstructions(agentConfig) : "";
   const bookingBehavior = agentConfig ? buildAstraBookingBehaviorInstructions(agentConfig) : "";
+  const knowledge = agentConfig ? buildAstraKnowledgeInstructions(agentConfig) : null;
   const solicitorHint =
     agentConfig?.spamProtection ? buildAstraSolicitorHint(agentConfig.spamProtection) : "";
 
@@ -75,7 +77,7 @@ ${bookingStrategyAppend(context.bookingStrategy)}
 
 ${callback ? `${callback}\n\n` : ""}${intake}
 
-${bookingBehavior ? `${bookingBehavior}\n\n` : ""}${transfer ? `${transfer}\n\n` : ""}${crossTool}
+${bookingBehavior ? `${bookingBehavior}\n\n` : ""}${knowledge ? `${knowledge}\n\n` : ""}${transfer ? `${transfer}\n\n` : ""}${crossTool}
 ${solicitorHint ? `\n\n${solicitorHint}` : ""}
 
 Each function tool description defines when to call, when not to call, side effects, and parameters. Follow those contracts exactly.

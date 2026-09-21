@@ -270,6 +270,12 @@ export function InformationStep({
       patch({
         businessName,
         websiteUrl: url,
+        knowledgeSource: "website",
+        knowledgeBaseEnabled: true,
+        knowledgeBaseRevision:
+          payload.knowledgeBaseRevision ||
+          state.knowledgeBaseRevision ||
+          `scan:${Date.now()}`,
         linkedKnowledgeBaseId:
           payload.knowledgeBaseId || state.linkedKnowledgeBaseId || null,
         knowledgeItems: itemsForScanResult({

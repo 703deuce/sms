@@ -18,7 +18,14 @@ export type LiveFrontendPromptContext = {
 function buildAmyCapabilitySummary(config: VoiceV3AgentConfig): string {
   const c = config.capabilities;
   const lines: string[] = ["You can help callers with:"];
-  if (c.answerQuestions) lines.push("- Answering common business questions from configured facts below.");
+  if (c.answerQuestions) {
+    lines.push("- Answering common business questions from configured facts below.");
+    if (config.knowledge?.retrieval?.enabled) {
+      lines.push(
+        "- For detailed business facts not in this prompt, delegate to the backend to search the indexed knowledge base (search_business_knowledge).",
+      );
+    }
+  }
   if (c.bookAppointments) lines.push("- Booking new appointments when calendar booking is enabled.");
   if (c.rescheduleAppointments) lines.push("- Rescheduling existing appointments.");
   if (c.cancelAppointments) lines.push("- Cancelling appointments when allowed.");

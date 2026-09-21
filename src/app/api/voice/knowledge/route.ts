@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
-import { processKnowledgeSource } from "@/lib/voice/knowledge-processor";
+import {
+  processKnowledgeSource,
+  waitForKnowledgeBaseEmbedding,
+} from "@/lib/voice/knowledge-processor";
+import { computeKnowledgeRevisionFingerprint } from "@/lib/voice-receptionist-wizard/knowledge-config";
 
 export async function GET() {
   try {
@@ -89,9 +93,18 @@ export async function POST(request: Request) {
         );
       }
 
+      const embedWait = await waitForKnowledgeBaseEmbedding({
+        knowledgeBaseId: kb.id,
+        maxWaitMs: 60_000,
+      });
+
       const indexed = await prisma.voiceKnowledgeSource.findUnique({
         where: { id: source.id },
       });
+      const revision = computeKnowledgeRevisionFingerprint(
+        { knowledgeItems: [], knowledgeBaseEnabled: true },
+        [kb.id],
+      );
       return NextResponse.json({
         data: {
           knowledgeBaseId: kb.id,
@@ -101,6 +114,9 @@ export async function POST(request: Request) {
           extractedPreview: indexed?.extractedPreview || indexed?.contentText,
           contentText: indexed?.contentText,
           errorMessage: indexed?.errorMessage,
+          knowledgeBaseRevision: revision,
+          embeddingReady: embedWait.ready,
+          embeddingStatus: embedWait.status,
         },
       });
     }
