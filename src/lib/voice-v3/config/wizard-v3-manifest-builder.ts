@@ -546,10 +546,10 @@ export function buildWizardV3FieldManifest(): WizardV3FieldManifestRow[] {
       valueType: "string",
       v3ConfigPath: "bookingStrategyDetail.bookingLinkUrl",
       destinations: ["DETERMINISTIC_CONFIG"],
-      executionStatus: "CONFIGURED_NOT_IMPLEMENTED",
-      scope: "FUTURE_BOOKING_LINK",
+      executionStatus: "ACTIVE_EXECUTION",
+      scope: "YES_SEND_LINK",
       compilerFunction: "compileVoiceV3AgentConfig.bookingStrategyDetail",
-      runtimeConsumer: "future SEND_LINK executor",
+      runtimeConsumer: "send_booking_link + execute-send-booking-link",
       republishBehavior: "next_call",
     }),
     row({
@@ -559,10 +559,10 @@ export function buildWizardV3FieldManifest(): WizardV3FieldManifestRow[] {
       valueType: "string",
       v3ConfigPath: "bookingStrategyDetail.bookingLinkLabel",
       destinations: ["DETERMINISTIC_CONFIG"],
-      executionStatus: "CONFIGURED_NOT_IMPLEMENTED",
-      scope: "FUTURE_BOOKING_LINK",
+      executionStatus: "ACTIVE_EXECUTION",
+      scope: "YES_SEND_LINK",
       compilerFunction: "compileVoiceV3AgentConfig.bookingStrategyDetail",
-      runtimeConsumer: "future SEND_LINK executor",
+      runtimeConsumer: "send_booking_link + execute-send-booking-link",
       republishBehavior: "next_call",
     }),
     row({
@@ -663,8 +663,10 @@ export function buildWizardV3FieldManifest(): WizardV3FieldManifestRow[] {
         executionStatus: "ACTIVE_EXECUTION",
         scope: "YES_MICROSOFT_BOOKING",
         compilerFunction: "compileVoiceV3AgentConfig.scheduling",
-        runtimeConsumer: "Astra instructions",
+        runtimeConsumer:
+          "booking-presentation + verbal-confirmation + Astra booking behavior instructions",
         republishBehavior: "next_call",
+        testCoverage: "test-voice-v3-booking-behavior-policy",
       }),
     );
   }
@@ -831,12 +833,33 @@ export function buildWizardV3FieldManifest(): WizardV3FieldManifestRow[] {
         valueType: "varies",
         v3ConfigPath: `callHandling.* + transferDestinations[]`,
         destinations: ["DETERMINISTIC_CONFIG", "PROVIDER_CONFIG", "ASTRA_BACKEND_CONTEXT"],
-        executionStatus:
-          path.startsWith("transfer") ||
-          path === "callbackRequestsEnabled" ||
-          path === "callbackRequiredCollectFieldIds"
-            ? "ACTIVE_EXECUTION"
-            : "CONFIGURED_NOT_IMPLEMENTED",
+        executionStatus: (() => {
+          const activePaths = new Set([
+            "transferDestinationName",
+            "transferDestinationPhone",
+            "transferRingSeconds",
+            "transferFallback",
+            "warmTransfer",
+            "detectVoicemailOnTransfer",
+            "voiceV2HumanTransferEnabled",
+            "allowCallerRequestedTransfer",
+            "transferRouting",
+            "defaultTransferPlanId",
+            "callbackRequestsEnabled",
+            "callbackRequiredCollectFieldIds",
+            "callbackUseAniByDefault",
+            "callbackAskPreferredTime",
+            "callbackConfirmNumber",
+            "salesSolicitationEnabled",
+            "salesSolicitationAction",
+            "spamLikelyPolicy",
+            "solicitorPolicy",
+          ]);
+          if (path.startsWith("transfer") || activePaths.has(path)) {
+            return "ACTIVE_EXECUTION";
+          }
+          return "CONFIGURED_NOT_IMPLEMENTED";
+        })(),
         scope: "YES_GENERAL",
         compilerFunction: "compileVoiceV3AgentConfig.callHandling",
         runtimeConsumer:
@@ -879,10 +902,10 @@ export function buildWizardV3FieldManifest(): WizardV3FieldManifestRow[] {
         valueType: "varies",
         v3ConfigPath: `callHandling.transferPlanSteps[].${field}`,
         destinations: ["DETERMINISTIC_CONFIG", "PROVIDER_CONFIG"],
-        executionStatus: "CONFIGURED_NOT_IMPLEMENTED",
+        executionStatus: "ACTIVE_EXECUTION",
         scope: "YES_GENERAL",
-        compilerFunction: "compileVoiceV3AgentConfig.callHandling",
-        runtimeConsumer: "future waterfall transfer",
+        compilerFunction: "compileTransferConfig + transfer_executor",
+        runtimeConsumer: "transfer_call waterfall + LiveKit warm/cold",
         republishBehavior: "next_call",
       }),
     );

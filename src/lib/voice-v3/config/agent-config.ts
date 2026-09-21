@@ -2,6 +2,10 @@ import type { BusinessHoursWindow, VoiceV3CalendarConfig } from "../calendar/typ
 import type { VoiceWizardBookingStrategy } from "@/lib/solutions/appointment-receptionist/types";
 import type { VoiceV3AfterHoursNotificationsConfig } from "../notifications/types";
 import type { VoiceV3SpamProtectionConfig } from "../spam-protection/types";
+import type {
+  VoiceV2AfterHoursBehaviorConfig,
+  VoiceV2BusinessScheduleConfig,
+} from "@/lib/voice-receptionist-wizard/operating-maturity/types";
 
 export type IntakeFieldType =
   | "text"
@@ -131,6 +135,12 @@ export interface VoiceV3SchedulingConfig {
   primaryServiceId: string;
   services: VoiceV3ServiceConfig[];
   bookingBehavior: AppointmentReceptionistBookingBehavior;
+}
+
+/** Weekly schedule + after-hours behavior for deterministic operating-state gating. */
+export interface VoiceV3OperatingPolicyConfig {
+  businessSchedule: VoiceV2BusinessScheduleConfig;
+  afterHoursBehavior: VoiceV2AfterHoursBehaviorConfig;
 }
 
 /** Mirrors wizard bookingBehavior without importing wizard state in hot paths. */
@@ -274,6 +284,7 @@ export interface VoiceV3AgentConfig {
   callHandling: VoiceV3CallHandlingConfig;
   spamProtection: VoiceV3SpamProtectionConfig;
   afterHoursNotifications?: VoiceV3AfterHoursNotificationsConfig;
+  operatingPolicy?: VoiceV3OperatingPolicyConfig;
   qualification: VoiceV3QualificationConfig;
   recovery: VoiceV3RecoveryConfig;
   integrations: VoiceV3IntegrationsConfig;

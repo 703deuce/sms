@@ -374,6 +374,10 @@ export function compileVoiceV3AgentConfig(input: {
     recovery: recoveryFromWizard(wizard),
     integrations: integrationsFromWizard(wizard),
     bookingStrategyDetail: bookingStrategyDetailFromWizard(wizard),
+    operatingPolicy: {
+      businessSchedule: maturity.businessSchedule,
+      afterHoursBehavior: maturity.afterHoursBehavior,
+    },
   };
 
   return mergeNestedConfig(base, {

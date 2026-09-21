@@ -31,6 +31,7 @@ import type { EscalationCounters, VoiceV3EscalationPolicy } from "../agent/escal
 import type { VoiceV3Capabilities } from "../agent/capability-state";
 import type { VoiceV3BookingLinkCallState } from "../booking-link/types";
 import type { VoiceV3CallbackCallState } from "../callback/types";
+import type { BookingVerbalConfirmationStatus } from "../booking/verbal-confirmation";
 
 export type VoiceV3Goal =
   | "UNKNOWN"
@@ -126,6 +127,7 @@ export interface VoiceV3CallContext {
     confirmed: ConfirmedBooking | null;
     lastFailure: BookingFailure | null;
     postBookChangeRequested: boolean;
+    verbalConfirmation: BookingVerbalConfirmationStatus;
   };
   bookingLink?: VoiceV3BookingLinkCallState;
   callback?: VoiceV3CallbackCallState;
@@ -201,6 +203,7 @@ export function createInitialVoiceV3CallContext(input: {
       confirmed: null,
       lastFailure: null,
       postBookChangeRequested: false,
+      verbalConfirmation: "NOT_REQUIRED",
     },
     appointmentManagement: {
       verifiedExisting: null,

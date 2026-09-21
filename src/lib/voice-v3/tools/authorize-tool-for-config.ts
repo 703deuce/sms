@@ -1,5 +1,6 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import { isDirectCalendarBookingConfig } from "../calendar/direct-booking-strategy";
+import { isVoiceV3ToolAuthorizedEffective } from "../policy/effective-tool-authorization";
 import { voiceToolError } from "./types";
 
 export type VoiceV3AuthorizedToolName =
@@ -26,7 +27,7 @@ export function isSendBookingLinkAuthorized(config: VoiceV3AgentConfig): boolean
   return Boolean(url);
 }
 
-export function isVoiceV3ToolAuthorized(
+export function isVoiceV3ToolAuthorizedBase(
   config: VoiceV3AgentConfig,
   toolName: VoiceV3AuthorizedToolName,
 ): boolean {
@@ -55,6 +56,16 @@ export function isVoiceV3ToolAuthorized(
     default:
       return false;
   }
+}
+
+export function isVoiceV3ToolAuthorized(
+  config: VoiceV3AgentConfig,
+  toolName: VoiceV3AuthorizedToolName,
+): boolean {
+  if (!isVoiceV3ToolAuthorizedBase(config, toolName)) {
+    return false;
+  }
+  return isVoiceV3ToolAuthorizedEffective(config, toolName);
 }
 
 export function authorizeVoiceV3ToolOrError(

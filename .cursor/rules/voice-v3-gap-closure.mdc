@@ -1,0 +1,14 @@
+---
+description: Voice V3 Appointment Receptionist gap-closure implementation (single pass)
+alwaysApply: false
+---
+
+# Voice V3 gap closure
+
+When implementing or certifying **Appointment Receptionist Voice V3** wizard→runtime truth:
+
+1. Read `docs/VOICE-V3-COMPLETE-GAP-CLOSURE-IMPLEMENTATION-DIRECTIVE.md` (Parts I–II + addendum §87–147).
+2. Reconcile with `docs/AI-VOICE-AGENT-INCOMPLETE-MASTER-LIST.md`, gap register, feature status, and `buildWizardV3FieldManifest()`.
+3. **Do not** duplicate §A systems (spam, booking link, warm transfer, transfer plan steps) — fix manifest after tracing runtime.
+4. **Frozen architecture:** GPT-Live/Astra → FunctionTools → `/api/internal/voice-runtime` → deterministic executors; LiveKit native warm/cold transfer; function-tool RAG (not `livekit.plugins.rag`).
+5. **Definition of done:** no inert active V1 controls; reconciliation matrix #1–#184 with five dispositions only.

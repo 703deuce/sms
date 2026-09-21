@@ -12,6 +12,8 @@ export type RequestCallbackToolArgs = {
   reason: string | null;
   preferred_time: string | null;
   notes: string | null;
+  /** When callback number confirmation is required, set true after caller confirms ANI/stored number. */
+  phone_confirmed?: boolean | null;
 };
 
 export type VoiceV3CallbackPersistInput = {

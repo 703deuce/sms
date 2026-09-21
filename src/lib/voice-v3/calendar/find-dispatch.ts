@@ -7,7 +7,8 @@ import { buildAvailabilityOfferSet } from "./offer-set";
 import { generateAvailabilitySlots } from "./slot-generator";
 import type { CalendarBusyInterval, FindAvailabilityFailure } from "./types";
 import { buildLiveAvailabilitySessionAppend } from "./live-availability-context";
-import { deriveDefaultPresentedSlotIds, recordPresentedOffer } from "./presentation";
+import { recordPresentedOffer } from "./presentation";
+import { derivePresentedSlotIdsForBookingBehavior } from "../policy/booking-presentation";
 import type { VoiceV3LiveRuntimeHooks } from "../live-runtime-hooks";
 import { pushLiveThinkingEvent } from "../live-runtime-hooks";
 import { logVoiceV3Pipeline } from "../telemetry/pipeline-log";
@@ -393,7 +394,7 @@ async function completeFindAvailabilityAfterDispatch(input: {
 
   let presentedSlotIds: string[] | undefined;
   if (offerSet) {
-    presentedSlotIds = deriveDefaultPresentedSlotIds(offerSet);
+    presentedSlotIds = derivePresentedSlotIdsForBookingBehavior(offerSet, runtime.config);
     const presented = recordPresentedOffer({ offerSet, presentedSlotIds });
     updated = {
       ...updated,

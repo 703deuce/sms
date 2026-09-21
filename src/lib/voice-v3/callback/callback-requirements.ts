@@ -37,6 +37,11 @@ function reasonSatisfied(
   return false;
 }
 
+function phoneConfirmationSatisfied(context: VoiceV3CallContext): boolean {
+  const flag = context.intake.values.callback_phone_confirmed?.value?.trim().toLowerCase();
+  return flag === "true" || flag === "yes" || flag === "confirmed";
+}
+
 function phoneSatisfied(
   config: VoiceV3AgentConfig,
   context: VoiceV3CallContext,
@@ -52,9 +57,28 @@ function phoneSatisfied(
 
   if (config.callHandling.callbackUseAniByDefault !== false) {
     const ani = context.telephony.inboundCallerE164?.trim();
-    if (ani && normalizePhoneE164(ani)) return true;
+    if (ani && normalizePhoneE164(ani)) {
+      return true;
+    }
   }
   return false;
+}
+
+function needsCallbackPhoneConfirmation(
+  config: VoiceV3AgentConfig,
+  context: VoiceV3CallContext,
+  supplemental?: Partial<RequestCallbackToolArgs>,
+): boolean {
+  if (!config.callHandling.callbackConfirmNumber) return false;
+  if (supplemental?.phone_confirmed === true) return false;
+  if (phoneConfirmationSatisfied(context)) return false;
+  const explicit = supplemental?.callback_phone?.trim();
+  if (explicit && normalizePhoneE164(explicit)) return false;
+  const captured = context.intake.values.phone?.value?.trim();
+  if (captured && normalizePhoneE164(captured)) return false;
+  if (config.callHandling.callbackUseAniByDefault === false) return false;
+  const ani = context.telephony.inboundCallerE164?.trim();
+  return Boolean(ani && normalizePhoneE164(ani));
 }
 
 export function getMissingCallbackRequirementKeys(
@@ -65,6 +89,18 @@ export function getMissingCallbackRequirementKeys(
   const requiredKeys = resolveConfiguredCallbackRequiredKeys(config);
   const missing: string[] = [];
   const values = context.intake.values;
+
+  if (
+    config.callHandling.callbackAskPreferredTime &&
+    !supplemental?.preferred_time?.trim() &&
+    !context.callback?.preferredTime?.trim()
+  ) {
+    missing.push("preferred_callback_time");
+  }
+
+  if (needsCallbackPhoneConfirmation(config, context, supplemental)) {
+    missing.push("phone_number_confirmation");
+  }
 
   for (const key of requiredKeys) {
     if (key === "phone") {

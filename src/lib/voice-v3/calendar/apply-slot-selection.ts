@@ -1,6 +1,8 @@
 import type { SlotSelectionMeaning } from "../intake/slot-selection-schema";
 import { slotSelectionMeaningHasSignal } from "../intake/slot-selection-schema";
 import type { VoiceV3CallContext } from "../state/call-context";
+import type { VoiceV3AgentConfig } from "../config/agent-config";
+import { initialVerbalConfirmationStatus } from "../booking/verbal-confirmation";
 import { resolveSlotSelection, type SlotSelectionResolution } from "./resolve-slot-selection";
 import type { SelectedAvailabilitySlot } from "./selected-slot";
 
@@ -56,8 +58,27 @@ export function invalidateSelectionForSchedulingChange(
           ...ctx.booking,
           phase: ctx.booking.phase === "BOOKING_CONFIRMED" ? "BOOKING_CONFIRMED" : "NONE",
           activeAttempt: null,
+          verbalConfirmation: "NOT_REQUIRED",
         },
   };
+}
+
+function verbalConfirmationAfterSlotSelect(
+  config: VoiceV3AgentConfig | undefined,
+  priorSlotId: string | null,
+  nextSlotId: string,
+  priorStatus: VoiceV3CallContext["booking"]["verbalConfirmation"],
+): VoiceV3CallContext["booking"]["verbalConfirmation"] {
+  if (!config) return priorStatus;
+  const base = initialVerbalConfirmationStatus(config);
+  if (base === "NOT_REQUIRED") return "NOT_REQUIRED";
+  if (priorSlotId && priorSlotId !== nextSlotId) {
+    return "AWAITING";
+  }
+  if (priorStatus === "CONFIRMED" && priorSlotId === nextSlotId) {
+    return "CONFIRMED";
+  }
+  return "AWAITING";
 }
 
 function selectedFromSlot(
@@ -88,6 +109,7 @@ export function applySlotSelectionFromMeaning(
   ctx: VoiceV3CallContext,
   meaning: SlotSelectionMeaning,
   at: Date = new Date(),
+  config?: VoiceV3AgentConfig,
 ): ApplySlotSelectionResult {
   if (!slotSelectionMeaningHasSignal(meaning)) {
     return { context: ctx, resolution: null, selectionChanged: false, selectionInvalidated: false };
@@ -142,6 +164,7 @@ export function applySlotSelectionFromMeaning(
       slot_id: resolution.slotId,
     });
 
+    const priorSlotId = prior?.slotId ?? null;
     return {
       context: {
         ...ctx,
@@ -149,6 +172,15 @@ export function applySlotSelectionFromMeaning(
         selection: {
           selected: nextSelected,
           lastResolutionStatus: "RESOLVED",
+        },
+        booking: {
+          ...ctx.booking,
+          verbalConfirmation: verbalConfirmationAfterSlotSelect(
+            config,
+            priorSlotId,
+            nextSelected.slotId,
+            ctx.booking.verbalConfirmation,
+          ),
         },
         runtime: { version: ctx.runtime.version + 1 },
       },

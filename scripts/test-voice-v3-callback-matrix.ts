@@ -89,7 +89,12 @@ pass("10_callback_disabled_absent");
 const clock = buildVoiceV3CallClock(TZ);
 const config = {
   ...VOICE_V3_BOOKING_TEST_CONFIG,
-  callHandling: { ...VOICE_V3_BOOKING_TEST_CONFIG.callHandling, callbackRequestsEnabled: true },
+  callHandling: {
+    ...VOICE_V3_BOOKING_TEST_CONFIG.callHandling,
+    callbackRequestsEnabled: true,
+    callbackConfirmNumber: false,
+    callbackAskPreferredTime: false,
+  },
   intakeFields: [
     ...VOICE_V3_BOOKING_TEST_CONFIG.intakeFields,
     {
@@ -148,6 +153,7 @@ async function runPersistence() {
         reason: null,
         preferred_time: null,
         notes: null,
+        phone_confirmed: null,
       },
       deps: {
         persist: async () => {

@@ -20,6 +20,7 @@ export function invalidateBookingStateForGoalAbandon(ctx: VoiceV3CallContext): V
       confirmed: ctx.booking.confirmed,
       lastFailure: null,
       postBookChangeRequested: false,
+      verbalConfirmation: "NOT_REQUIRED",
     },
     runtime: { version: ctx.runtime.version + 1 },
   };

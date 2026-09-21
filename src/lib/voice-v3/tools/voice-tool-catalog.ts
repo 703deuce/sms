@@ -23,6 +23,10 @@ import {
   requestCallbackTool,
 } from "./request-callback-tool";
 import {
+  buildSearchBusinessKnowledgeOpenAiTool,
+  searchBusinessKnowledgeTool,
+} from "./search-business-knowledge-tool";
+import {
   isRequestCallbackAuthorized,
   isSendBookingLinkAuthorized,
 } from "./authorize-tool-for-config";
@@ -114,6 +118,13 @@ export const VOICE_TOOL_CATALOG: VoiceToolCatalogEntry[] = [
     definition: requestCallbackTool as VoiceToolDefinition<unknown>,
     buildOpenAiTool: buildRequestCallbackOpenAiTool,
   },
+  {
+    name: "search_business_knowledge",
+    kind: "read",
+    telemetryName: "search_business_knowledge",
+    definition: searchBusinessKnowledgeTool as VoiceToolDefinition<unknown>,
+    buildOpenAiTool: buildSearchBusinessKnowledgeOpenAiTool,
+  },
 ];
 
 function isDirectCalendarStrategy(config: VoiceV3AgentConfig): boolean {
@@ -148,6 +159,8 @@ function isToolEnabledForConfig(entry: VoiceToolCatalogEntry, config: VoiceV3Age
         (config.transfer?.enabled === true ||
           (config.transferDestinations?.some((d) => d.enabled !== false) ?? false))
       );
+    case "search_business_knowledge":
+      return config.knowledge?.retrieval?.enabled === true;
     case "update_intake":
     case "end_call":
       return true;
