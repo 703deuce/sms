@@ -1,6 +1,6 @@
 # Voice Agent (Appointment Receptionist / Voice V3) — NOT COMPLETED inventory
 
-**Copy-paste reference.** Generated from repo state on branch `cursor/voice-v3-gap-closure-2304` (post gap-closure, commit `3e16d2b5`).
+**Copy-paste reference.** Generated from repo state on branch `cursor/voice-v3-gap-closure-2304` (commit `3e3c6255` + OpenAI vector-store migration deployed).
 
 **Product scope:** After-hours **Appointment Receptionist** wizard → LiveKit + GPT-Live (Amy) + Astra tools.  
 **Not this list:** MCTB, Mass SMS, Smart Routing, Fax (separate products).
@@ -87,7 +87,7 @@ You must still run on **real PSTN / production workspace** (code can be DONE in 
 | **transfer_call** to real handset | Warm/cold, failure paths |
 | **request_callback** + staff notifications | Required fields |
 | **take_message** | Message recorded for staff |
-| **search_business_knowledge** | Linked KB indexed and enabled |
+| **Knowledge / RAG** | Website/KB indexed to OpenAI vector store; live call uses LiveKit **`file_search`** (not Telnyx RAG). Legacy `search_business_knowledge` only if no vector store ids. |
 | Post-call **recording, transcript, summary, email/webhook** | Egress + Deepgram + Brevo |
 | Spam/solicitor + blocklist on real carrier labels | `spam_likely` header when available |
 | After-hours matrix (closed → callback only, etc.) | Real calls outside business hours |
