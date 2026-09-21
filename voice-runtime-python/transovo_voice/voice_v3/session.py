@@ -13,6 +13,7 @@ from transovo_voice.integrations.backend_client import TransovoBackend
 from transovo_voice.session.dispatch_resolver import extract_call_numbers
 from transovo_voice.telemetry import log_event
 from transovo_voice.voice_v3.forensics import VoiceV3CallForensics
+from transovo_voice.voice_v3.gpt_live_delegation_telemetry import attach_gpt_live_delegation_telemetry
 from transovo_voice.voice_v3.tool_client import TransovoV3ToolClient, VoiceV3CallContext
 from transovo_voice.voice_v3.end_call_tool import build_voice_v3_end_call_toolset
 from transovo_voice.voice_v3.tools import LiveKitTelephonyBridge, build_livekit_tools
@@ -274,6 +275,10 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
         )
         if forensics:
             forensics.append("AGENTSESSION_START_COMPLETED")
+            try:
+                attach_gpt_live_delegation_telemetry(forensics, agent.duplex_session)
+            except Exception:
+                logger.exception("voice_v3_gpt_live_delegation_telemetry_attach_failed")
     except Exception as err:
         bootstrap_error = str(err)[:500]
         if forensics:
