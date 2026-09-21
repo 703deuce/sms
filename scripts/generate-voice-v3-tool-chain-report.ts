@@ -3,6 +3,7 @@
  * Tool + backend forensics report (no transcript segment timestamps).
  */
 import { writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { getPrisma } from "../src/lib/db";
 
 const suffix = process.argv[2]?.trim() ?? "vcrbyQoJ7aLi";
@@ -128,9 +129,34 @@ async function main() {
     callStartMs ? new Date(callStartMs + mono).toISOString() : "—";
 
   const lines: string[] = [];
+  const reportBase = outPath.replace(/\.md$/i, "");
+  const reportDir = dirname(outPath);
+  const reportBaseName = reportBase.slice(reportDir.length + 1);
+  const eventsJsonName = `${reportBaseName}.events.json`;
+  const backendJsonName = `${reportBaseName}.backend-events.json`;
+  const eventsJsonPath = join(reportDir, eventsJsonName);
+  const backendJsonPath = join(reportDir, backendJsonName);
+
   lines.push(`# Voice V3 — tool & backend chain (last call)`);
   lines.push("");
   lines.push(`**Generated:** ${new Date().toISOString()}`);
+  lines.push("");
+  lines.push("## Files (click on GitHub to open)");
+  lines.push("");
+  lines.push("| Artifact | Link |");
+  lines.push("|----------|------|");
+  lines.push(`| Summary (this page) | [\`${reportBaseName}.md\`](./${reportBaseName}.md) |`);
+  lines.push(
+    `| Tool events JSON blob | [\`${eventsJsonName}\`](./${eventsJsonName}) |`,
+  );
+  lines.push(
+    `| All backend/tool forensics JSON | [\`${backendJsonName}\`](./${backendJsonName}) |`,
+  );
+  lines.push("");
+  lines.push(
+    "> On GitHub: open the `.json` files from the repo tree (syntax-highlighted), or use **Raw** on that file to copy/download the full blob.",
+  );
+  lines.push("");
   lines.push(`**Room suffix:** \`${suffix}\``);
   lines.push(`**Call id:** \`${safeCallId}\``);
   lines.push(`**Wall clock:** ${call.startedAt?.toISOString()} → ${call.endedAt?.toISOString()}`);
@@ -321,14 +347,57 @@ async function main() {
   }
   lines.push("");
 
-  lines.push("## Raw tool-related event list (copy-friendly)");
+  const backendRelated = events.filter(
+    (e) =>
+      TOOL_KINDS.has(e.kind) ||
+      e.kind.includes("TOOL") ||
+      e.kind.startsWith("BOOKING") ||
+      e.kind.startsWith("FIND_") ||
+      e.kind.startsWith("MICROSOFT") ||
+      e.kind === "BACKEND_LLM_METRICS_COLLECTED",
+  );
+
+  lines.push("## Raw JSON blobs");
   lines.push("");
-  lines.push("```json");
-  lines.push(redactPhones(JSON.stringify(toolOnly, null, 2)));
-  lines.push("```");
+  lines.push(
+    `Full machine-readable payloads are **not** inlined here (too large for one page). Use the linked files:`,
+  );
+  lines.push("");
+  lines.push(`- [\`${eventsJsonName}\`](./${eventsJsonName}) — ${toolOnly.length} tool-related forensics events`);
+  lines.push(
+    `- [\`${backendJsonName}\`](./${backendJsonName}) — structured export (${backendRelated.length} backend/tool events, pairs, phase markers)`,
+  );
+  lines.push("");
+
+  const toolJson = redactPhones(JSON.stringify(toolOnly, null, 2));
+  writeFileSync(eventsJsonPath, toolJson + "\n", "utf8");
+
+  const backendBlob = {
+    schemaVersion: 1,
+    generatedAt: new Date().toISOString(),
+    callId: safeCallId,
+    roomSuffix: suffix,
+    callStartedAt: call.startedAt?.toISOString(),
+    callEndedAt: call.endedAt?.toISOString(),
+    gptLiveSessionId: forensics?.gptLiveSessionId,
+    toolPairs: pairs,
+    nodePairs,
+    phase: {
+      infoDumpEndMonotonicMs: dumpEndMarker?.monotonic_ms_from_call_start,
+      schedulingQuestionMonotonicMs: schedulingQuestion?.monotonic_ms_from_call_start,
+    },
+    toolEvents: toolOnly,
+    allBackendRelatedEvents: backendRelated,
+  };
+  writeFileSync(
+    backendJsonPath,
+    redactPhones(JSON.stringify(backendBlob, null, 2)) + "\n",
+    "utf8",
+  );
 
   writeFileSync(outPath, lines.join("\n"), "utf8");
-  console.log("Wrote", outPath, "tool rows:", toolOnly.length, "pairs:", pairs.length);
+  console.log("Wrote", outPath, eventsJsonPath, backendJsonPath);
+  console.log("tool rows:", toolOnly.length, "pairs:", pairs.length);
   const p = getPrisma();
   if (typeof p.$disconnect === "function") await p.$disconnect();
 }
