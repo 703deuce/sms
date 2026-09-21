@@ -27,6 +27,10 @@ import {
   searchBusinessKnowledgeTool,
 } from "./search-business-knowledge-tool";
 import {
+  buildSubmitAppointmentRequestOpenAiTool,
+  submitAppointmentRequestTool,
+} from "./submit-appointment-request-tool";
+import {
   isRequestCallbackAuthorized,
   isSendBookingLinkAuthorized,
 } from "./authorize-tool-for-config";
@@ -125,6 +129,13 @@ export const VOICE_TOOL_CATALOG: VoiceToolCatalogEntry[] = [
     definition: searchBusinessKnowledgeTool as VoiceToolDefinition<unknown>,
     buildOpenAiTool: buildSearchBusinessKnowledgeOpenAiTool,
   },
+  {
+    name: "submit_appointment_request",
+    kind: "mutation",
+    telemetryName: "submit_appointment_request",
+    definition: submitAppointmentRequestTool as VoiceToolDefinition<unknown>,
+    buildOpenAiTool: buildSubmitAppointmentRequestOpenAiTool,
+  },
 ];
 
 function isDirectCalendarStrategy(config: VoiceV3AgentConfig): boolean {
@@ -161,6 +172,8 @@ function isToolEnabledForConfig(entry: VoiceToolCatalogEntry, config: VoiceV3Age
       );
     case "search_business_knowledge":
       return config.knowledge?.retrieval?.enabled === true;
+    case "submit_appointment_request":
+      return config.scheduling?.bookingStrategy === "REQUEST_ONLY";
     case "update_intake":
     case "end_call":
       return true;

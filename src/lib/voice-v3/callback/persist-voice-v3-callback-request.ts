@@ -2,6 +2,7 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import type { VoiceV3CallbackPersistInput, VoiceV3CallbackPersistResult } from "./types";
+import { callbackSlaMetadataPatch } from "@/lib/voice-receptionist-wizard/operating-maturity/callback-sla";
 
 const V3_METADATA_SOURCE = "VOICE_V3";
 
@@ -29,6 +30,16 @@ export async function persistVoiceV3CallbackRequest(
   }
 
   try {
+    const slaPatch =
+      input.callbackSlaPolicy
+        ? callbackSlaMetadataPatch({
+            policy: input.callbackSlaPolicy,
+            urgency: input.urgencySeverity,
+            sourceVoiceCallId: input.callId,
+            preferredWindow: input.preferredTime ?? undefined,
+          })
+        : {};
+
     const row = await prisma.callbackRequest.create({
       data: {
         workspaceId: input.workspaceId,
@@ -41,6 +52,7 @@ export async function persistVoiceV3CallbackRequest(
         sourceRoute: "voice_v3_request_callback",
         metadata: {
           source: V3_METADATA_SOURCE,
+          ...slaPatch,
           voiceV3: {
             idempotencyKey: input.idempotencyKey,
             lifecycleStatus: "REQUESTED",

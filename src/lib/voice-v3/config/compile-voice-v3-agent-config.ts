@@ -24,6 +24,7 @@ import {
 import { compileAfterHoursNotificationsFromWizard } from "../notifications/compile-from-wizard";
 import { resolveLivePromptControlsFromWizard } from "../prompts/live-prompt-controls";
 import { wizardSpamProtectionFromState } from "../spam-protection/types";
+import { servicePolicyFromWizardType } from "../policy/service-policy";
 
 export type VoiceV3ProviderConnections = {
   microsoftConnectionId?: string | null;
@@ -49,14 +50,7 @@ function wizardServices(
 ): VoiceV3ServiceConfig[] {
   return (wizard.appointmentTypes || [])
     .filter((t) => t.enabled)
-    .map((t) => ({
-      id: t.id,
-      name: t.name?.trim() || t.id,
-      durationMinutes: t.durationMin > 0 ? t.durationMin : 30,
-      slotStepMinutes,
-      description: t.description?.trim() || undefined,
-      enabled: true,
-    }));
+    .map((t) => servicePolicyFromWizardType(t, slotStepMinutes));
 }
 
 function resolvePrimaryService(
@@ -188,7 +182,9 @@ function bookingStrategyDetailFromWizard(
     executionStatus:
       strategy === "MICROSOFT_365" ||
       strategy === "GOOGLE_CALENDAR" ||
-      strategy === "SEND_LINK"
+      strategy === "SEND_LINK" ||
+      strategy === "REQUEST_ONLY" ||
+      strategy === "NONE"
         ? "ACTIVE_EXECUTION"
         : "CONFIGURED_NOT_IMPLEMENTED",
     bookingLinkUrl: wizard.bookingLinkUrl?.trim() || null,
@@ -224,6 +220,7 @@ function callHandlingFromWizard(
     callbackRequiredCollectFieldIds: wizard.callbackRequiredCollectFieldIds ?? undefined,
     salesSolicitationEnabled: wizard.salesSolicitationEnabled === true,
     salesSolicitationAction: wizard.salesSolicitationAction ?? null,
+    urgencyRules: wizard.urgencyRules ?? [],
   };
 }
 
@@ -377,6 +374,8 @@ export function compileVoiceV3AgentConfig(input: {
     operatingPolicy: {
       businessSchedule: maturity.businessSchedule,
       afterHoursBehavior: maturity.afterHoursBehavior,
+      onCallSchedule: maturity.onCallSchedule,
+      callbackSla: maturity.callbackSla,
     },
   };
 

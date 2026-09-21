@@ -6,6 +6,9 @@ import {
   type VoiceV3AuthorizedToolName,
 } from "../tools/authorize-tool-for-config";
 import { isDirectCalendarBookingConfig } from "../calendar/direct-booking-strategy";
+import { isQualificationBlockingCalendarActions } from "../qualification/evaluate-qualification";
+import { resolveActiveServicePolicy, serviceAllowsLiveBooking } from "./service-policy";
+import type { VoiceV3CallContext } from "../state/call-context";
 
 type OperatingGatingContext = Parameters<typeof gateCapabilitiesForOperatingState>[0]["ctx"];
 
@@ -34,9 +37,32 @@ export function isVoiceV3ToolAuthorizedEffective(
   config: VoiceV3AgentConfig,
   toolName: VoiceV3AuthorizedToolName,
   at?: string,
+  callContext?: VoiceV3CallContext,
 ): boolean {
   if (!isVoiceV3ToolAuthorizedBase(config, toolName)) {
     return false;
+  }
+
+  if (callContext && isQualificationBlockingCalendarActions(config, callContext)) {
+    if (
+      toolName === "book_appointment" ||
+      toolName === "find_availability" ||
+      toolName === "find_appointment" ||
+      toolName === "reschedule_appointment" ||
+      toolName === "cancel_appointment"
+    ) {
+      return false;
+    }
+  }
+
+  if (callContext) {
+    const service = resolveActiveServicePolicy(config, callContext);
+    if (
+      !serviceAllowsLiveBooking(service) &&
+      (toolName === "book_appointment" || toolName === "find_availability")
+    ) {
+      return false;
+    }
   }
 
   if (toolName === "transfer_call" && config.callHandling.voiceV2HumanTransferEnabled === false) {

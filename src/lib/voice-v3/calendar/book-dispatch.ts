@@ -480,6 +480,28 @@ export async function dispatchBookingIfRequired(
           booking_attempt_id: attempt.bookingAttemptId,
         });
 
+        const callerE164 = afterCommit.telephony.inboundCallerE164?.trim();
+        const workspaceId = runtime.config.workspaceId?.trim();
+        if (callerE164 && workspaceId) {
+          void import("../sms/send-booking-confirmation-sms")
+            .then(({ sendVoiceV3BookingConfirmationSms }) =>
+              sendVoiceV3BookingConfirmationSms({
+                workspaceId,
+                agentId: runtime.config.agentId ?? null,
+                config: runtime.config,
+                callId: afterCommit.callId,
+                callerE164,
+                booking: confirmed,
+              }),
+            )
+            .catch((err) =>
+              console.error("VOICE_V3_BOOKING_CONFIRMATION_SMS_FAILED", {
+                call_id: afterCommit.callId,
+                message: err instanceof Error ? err.message : String(err),
+              }),
+            );
+        }
+
         return applyBookingPhase(afterCommit, "BOOKING_CONFIRMED", {
           confirmed,
           activeAttempt: null,

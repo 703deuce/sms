@@ -20,6 +20,8 @@ export interface SlotGenerationInput {
   busyIntervals: CalendarBusyInterval[];
   /** Busy intervals to ignore (e.g. appointment being rescheduled). */
   freeBusyOverrides?: Array<{ startUtc: string; endUtc: string }>;
+  /** YYYY-MM-DD dates fully closed (business holidays). */
+  closedHolidayDates?: string[];
   maxSlots?: number;
 }
 
@@ -143,7 +145,12 @@ export function generateAvailabilitySlots(input: SlotGenerationInput): Availabil
     const start = new Date(cursor);
     const end = new Date(cursor + durationMs);
 
+    const parts = zonedDateParts(start, input.timezone);
+    const dateKey = `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
+    const holidayClosed = input.closedHolidayDates?.includes(dateKey);
+
     if (
+      !holidayClosed &&
       withinBusinessHours(start, end, input.timezone, input.businessHours) &&
       !intersectsBusy(start, end, busyIntervals)
     ) {

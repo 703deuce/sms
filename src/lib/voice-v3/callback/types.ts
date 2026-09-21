@@ -31,6 +31,8 @@ export type VoiceV3CallbackPersistInput = {
   idempotencyKey: string;
   businessE164: string | null;
   phoneNumberId: string | null;
+  callbackSlaPolicy?: import("@/lib/voice-receptionist-wizard/operating-maturity/types").VoiceV2CallbackSlaPolicy;
+  urgencySeverity?: "NORMAL" | "URGENT" | "CRITICAL";
 };
 
 export type VoiceV3CallbackPersistResult =

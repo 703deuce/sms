@@ -5,7 +5,11 @@ import type { VoiceV3SpamProtectionConfig } from "../spam-protection/types";
 import type {
   VoiceV2AfterHoursBehaviorConfig,
   VoiceV2BusinessScheduleConfig,
+  VoiceV2CallbackSlaPolicy,
+  VoiceV2OnCallScheduleConfig,
 } from "@/lib/voice-receptionist-wizard/operating-maturity/types";
+import type { VoiceV2QualificationRuleRow } from "@/lib/voice-receptionist-wizard/qualification-types";
+import type { VoiceV2UrgencyRuleRow } from "@/lib/voice-receptionist-wizard/after-hours-handling-types";
 
 export type IntakeFieldType =
   | "text"
@@ -66,6 +70,15 @@ export interface VoiceV3ServiceConfig {
   slotStepMinutes: number;
   description?: string;
   enabled?: boolean;
+  calendarId?: string;
+  status?: "ready" | "needs_rules";
+  location?: string;
+  modality?: "in_person" | "phone" | "video";
+  bookingPermission?: import("@/lib/solutions/appointment-receptionist/types").BookingPermission;
+  minimumBookingNoticeMinutes?: number;
+  maximumBookingDaysAhead?: number;
+  requiredIntakeKeys?: string[];
+  bookingHoursProse?: string;
 }
 
 export interface VoiceV3CapabilityFlags {
@@ -141,6 +154,8 @@ export interface VoiceV3SchedulingConfig {
 export interface VoiceV3OperatingPolicyConfig {
   businessSchedule: VoiceV2BusinessScheduleConfig;
   afterHoursBehavior: VoiceV2AfterHoursBehaviorConfig;
+  onCallSchedule?: VoiceV2OnCallScheduleConfig;
+  callbackSla?: VoiceV2CallbackSlaPolicy;
 }
 
 /** Mirrors wizard bookingBehavior without importing wizard state in hot paths. */
@@ -201,6 +216,7 @@ export interface VoiceV3CallHandlingConfig {
   callbackRequiredCollectFieldIds?: string[];
   salesSolicitationEnabled: boolean;
   salesSolicitationAction: string | null;
+  urgencyRules?: VoiceV2UrgencyRuleRow[];
 }
 
 export interface VoiceV3QualificationConfig {
@@ -211,7 +227,7 @@ export interface VoiceV3QualificationConfig {
   rulesMatchMode: "ALL" | "ANY" | null;
   notQualifiedFallback: string | null;
   needsReviewFallback: string | null;
-  rules: unknown[];
+  rules: VoiceV2QualificationRuleRow[];
 }
 
 export interface VoiceV3RecoveryConfig {
