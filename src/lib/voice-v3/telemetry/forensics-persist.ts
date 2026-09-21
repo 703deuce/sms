@@ -110,7 +110,7 @@ function mergeEvents(
   return merged;
 }
 
-async function upsertTranscriptSegments(input: {
+export async function upsertTranscriptSegments(input: {
   workspaceId: string;
   callId: string;
   turns: VoiceV3CanonicalTurn[];

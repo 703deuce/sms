@@ -1,0 +1,153 @@
+================================================================================
+VOICE V3 — POST-DEPLOY PSTN CALL VERIFICATION (copy/paste report)
+Generated: 2026-09-21 ~21:48 UTC
+Verified via: SSH coolify-server → transovo-voice + transovo-web containers
+================================================================================
+
+OVERALL VERDICT FOR THIS CALL: PASS (Microsoft booking path on deployed SHA)
+
+This report covers the most recent real PSTN call found in production logs
+(~21:42–21:46 UTC). It is a smoke verification, not the full 6-scenario cert
+matrix (Google, REQUEST_ONLY, FileSearch, SEND_LINK, transfer still separate).
+
+--------------------------------------------------------------------------------
+1) PRODUCTION BUILD / HEALTH (at verification time)
+--------------------------------------------------------------------------------
+Deployed immutable SHA: 4f5e99e4c566190e98f43c39fab781d0417c4311
+
+Web (transovo-web):
+  Container: ds8s3hjin60qs6g7s0iqkixs-212403600478
+  Image:     ds8s3hjin60qs6g7s0iqkixs:4f5e99e4c566190e98f43c39fab781d0417c4311
+  Health:    GET /api/health → ok:true, commitSha matches deploy SHA
+
+Voice (transovo-voice):
+  Container: tgjridm6vrmrgljkfrr0rpjn-212403630170
+  Image:     tgjridm6vrmrgljkfrr0rpjn:4f5e99e4c566190e98f43c39fab781d0417c4311
+  Status:    healthy; transovo-voice-v3 registered with LiveKit
+
+--------------------------------------------------------------------------------
+2) CALL IDENTIFIERS (use these in DB / log grep)
+--------------------------------------------------------------------------------
+Room suffix:        oATFW5UYHFah
+LiveKit room id:    RM_S7hSVvJhKjBJ
+LiveKit job id:     AJ_qsZdNxwa8Vfe
+Live session / call: lk_transovo-call-*_oATFW5UYHFah  (full id in DB; redacted in logs)
+Workspace:          ws_1
+Agent:              cmshz2lc25c622c4i58303501
+Agent dispatch:     transovo-voice-v3 (GPT-Live profile)
+
+Call window (UTC):
+  Job received:     2026-09-21 21:42:29
+  Session start:    2026-09-21 21:42:33
+  Caller hangup:    2026-09-21 21:45:37
+  Forensics flush:  2026-09-21 21:46:05
+
+--------------------------------------------------------------------------------
+3) VOICE WORKER — WHAT HAPPENED (transovo-voice container logs)
+--------------------------------------------------------------------------------
+[PASS] Inbound job accepted on transovo-voice-v3
+[PASS] resolve_session_config → backend HTTP 200
+[PASS] Session started with toolCount: 17 (Transovo FunctionTools + native tools)
+[PASS] Caller utterances committed (sequences 1–18)
+[PASS] Tool executions (all backend HTTP 200 on execute_voice_v3_livekit_tool):
+       - update_intake
+       - set_scheduling_preference
+       - find_availability  (idle filler fired while FIND ran ~2s)
+       - set_intake_phone
+       - set_intake_email
+       - set_intake_mother_s_name
+       - book_appointment     (~1.8s tool duration)
+[PASS] Clean disconnect: VOICE_V3_CALLER_DISCONNECTED (CLIENT_INITIATED)
+[PASS] flush_voice_v3_forensics → HTTP 200
+
+Non-fatal warnings (expected / optimization later):
+  - event loop blocked 100–350ms during cold import / pydantic schema (call start)
+  - event loop blocked ~146ms during realtime_generation (mid-call)
+  - livekit "dropping pass-through signal" after hangup (teardown)
+  - metrics_collected deprecated (LiveKit SDK notice)
+
+No FileSearch-specific activity on this call (booking-focused smoke; KB question not asked).
+
+--------------------------------------------------------------------------------
+4) WEB / NODE — BOOKING PIPELINE (transovo-web container logs)
+--------------------------------------------------------------------------------
+[PASS] BOOKING_READY
+[PASS] BOOKING_CONFIRMED
+       provider: microsoft
+       booking_attempt_id: bka_cmubrxgfm2p4z0j6y0l3f480b
+       offer_set_id: offer_set_0f37afdff3ea
+       slot_id: slot_1
+       duration_ms: 945
+
+[PASS] VOICE_V3_BOOKING_PERSISTED
+       appointment_id: cmubrxi1y6w403j170z6p3s2n
+       provider: microsoft
+       booking_attempt_id: bka_cmubrxgfm2p4z0j6y0l3f480b
+       created: true
+       (Microsoft Graph event id present in logs — redacted here)
+
+[PASS] VOICE_V3_AGENT_CONFIG_RESOLVED for session (wizard-backed agent; no
+       VOICE_V3_CONFIG_FALLBACK / demo Amy path observed for this call)
+
+--------------------------------------------------------------------------------
+5) DATABASE TRUTH (production DATABASE_URL query)
+--------------------------------------------------------------------------------
+voice_calls row:
+  id:                  lk_transovo-call-*_oATFW5UYHFah
+  status:              COMPLETED
+  outcome:             appointment_booked
+  appointmentBooked:   true
+  direction:           INBOUND
+  metadata.source:     voice_v3_livekit
+  metadata.transport:  voice_v3_livekit_gpt_live
+  startedAt / endedAt: ~21:42:33 – 21:46:03 UTC
+
+voice_appointments row:
+  id:                  cmubrxi1y6w403j170z6p3s2n
+  callId:              (same live session id)
+  status:              confirmed
+  provider (metadata): microsoft
+  startsAt:            2026-09-22T14:00:00.000Z (America/New_York context)
+  bookingAttemptId:    bka_cmubrxgfm2p4z0j6y0l3f480b
+  providerEventId:     (Microsoft Graph id — present in DB)
+
+--------------------------------------------------------------------------------
+6) ARCHITECTURE CHECK (this call)
+--------------------------------------------------------------------------------
+[PASS] Telnyx/SIP → LiveKit → transovo-voice-v3 (Python GPT-Live)
+[PASS] GPT-Live / Responses → Sol delegation path (tool calls observed)
+[PASS] Transovo FunctionTools → Node executors (all 200)
+[PASS] Microsoft calendar book + durable persistence on deployed code
+
+Not exercised on THIS call:
+  - Google booking
+  - REQUEST_ONLY / submit_appointment_request
+  - Website FileSearch / vector-store RAG question
+  - SEND_LINK
+  - Transfer
+
+--------------------------------------------------------------------------------
+7) QUICK RE-GREP COMMANDS (on Coolify host)
+--------------------------------------------------------------------------------
+# Voice container logs for this room:
+docker logs tgjridm6vrmrgljkfrr0rpjn-212403630170 2>&1 | grep oATFW5UYHFah
+
+# Web booking + persist:
+docker logs ds8s3hjin60qs6g7s0iqkixs-212403600478 2>&1 | grep oATFW5UYHFah
+
+# Health + commit:
+docker exec ds8s3hjin60qs6g7s0iqkixs-212403600478 curl -sf http://127.0.0.1:3000/api/health
+
+--------------------------------------------------------------------------------
+8) SUMMARY FOR STAKEHOLDERS
+--------------------------------------------------------------------------------
+The new phone call after deploy completed a full Microsoft booking on SHA
+4f5e99e4: conversation, intake, FIND, BOOK, Graph confirmation, durable
+voice_appointments row, and appointmentBooked=true on the voice call.
+
+System looks good for this path. Schedule separate calls for the remaining
+cert scenarios when ready.
+
+================================================================================
+END OF REPORT
+================================================================================

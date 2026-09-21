@@ -3,7 +3,7 @@ import "server-only";
 const DEEPGRAM_MODEL = "nova-3";
 
 export type DeepgramPrerecordedOptions = {
-  /** Enable speaker diarization for multi-party call recordings. */
+  /** Enable speaker diarization for single-channel/mono recordings (uses diarize_model=latest). */
   diarize?: boolean;
   /** Dual-channel Telnyx recordings — separate transcript per channel. */
   multichannel?: boolean;
@@ -51,6 +51,7 @@ export async function transcribeAudioUrlWithDeepgram(
   });
   if (options?.diarize) {
     params.set("diarize", "true");
+    params.set("diarize_model", "latest");
     params.set("utterances", "true");
   }
   if (options?.multichannel) {

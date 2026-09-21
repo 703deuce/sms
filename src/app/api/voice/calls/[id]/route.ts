@@ -35,16 +35,17 @@ export async function GET(
       orderBy: { requestedAt: "desc" },
     });
 
+    const { loadTranscriptsWithSegmentsForCall } = await import(
+      "@/lib/voice/calls/load-transcript-segments"
+    );
+
     const [events, transcripts, recordings, insights, transfers, toolExecutions] =
       await Promise.all([
         prisma.voiceCallEvent.findMany({
           where: { callId: id },
           orderBy: { createdAt: "asc" },
         }),
-        prisma.voiceTranscript.findMany({
-          where: { callId: id },
-          include: { segments: { orderBy: { startMs: "asc" } } },
-        }),
+        loadTranscriptsWithSegmentsForCall(id),
         prisma.voiceRecording.findMany({ where: { callId: id } }),
         prisma.voiceConversationInsight.findMany({ where: { callId: id } }),
         prisma.voiceTransfer.findMany({ where: { callId: id } }),

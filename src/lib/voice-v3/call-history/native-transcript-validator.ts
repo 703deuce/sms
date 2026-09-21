@@ -52,11 +52,6 @@ export function validateNativeCustomerTranscript(input: {
   if (callerTurns < 1) reasons.push("missing_caller_turn");
   if (agentTurns < 1) reasons.push("missing_agent_turn");
 
-  const duration = input.durationSeconds ?? 0;
-  if (duration >= 30 && customerSegments.length < 2) {
-    reasons.push("too_sparse_for_duration");
-  }
-
   let lastStart = -1;
   for (const seg of customerSegments) {
     if (seg.startMs != null && seg.startMs < lastStart) {

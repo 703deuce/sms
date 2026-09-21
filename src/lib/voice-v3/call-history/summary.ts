@@ -23,33 +23,46 @@ export async function loadDeterministicCallFacts(
   const prisma = getPrisma();
   const call = await prisma.voiceCall.findFirst({
     where: { id: callId, workspaceId },
-    include: {
-      contact: { select: { firstName: true, lastName: true, phone: true } },
-      appointments: {
-        orderBy: { createdAt: "desc" },
-        take: 1,
-        select: {
-          serviceName: true,
-          startsAt: true,
-          status: true,
-          provider: true,
-        },
-      },
-      transfers: { orderBy: { createdAt: "desc" }, take: 1 },
+    select: {
+      fromE164: true,
+      outcome: true,
+      appointmentBooked: true,
+      transferred: true,
+      contactId: true,
     },
   });
   if (!call) return {};
 
-  const callerName = call.contact
-    ? [call.contact.firstName, call.contact.lastName].filter(Boolean).join(" ")
+  const contact = call.contactId
+    ? await prisma.contact.findFirst({
+        where: { id: call.contactId, workspaceId },
+        select: { firstName: true, lastName: true, phone: true },
+      })
     : null;
-  const appt = call.appointments[0];
-  const transfer = call.transfers[0];
+  const appointments =
+    (await prisma.voiceAppointment.findMany({
+      where: { callId, workspaceId },
+      orderBy: { createdAt: "desc" },
+      take: 1,
+      select: { serviceName: true, startsAt: true, status: true },
+    })) ?? [];
+  const transfers =
+    (await prisma.voiceTransfer.findMany({
+      where: { callId, workspaceId },
+      orderBy: { createdAt: "desc" },
+      take: 1,
+    })) ?? [];
+
+  const callerName = contact
+    ? [contact.firstName, contact.lastName].filter(Boolean).join(" ")
+    : null;
+  const appt = appointments[0];
+  const transfer = transfers[0];
   const outcome = String(call.outcome || "").toLowerCase();
 
   return {
     callerName,
-    callerPhone: call.fromE164 || call.contact?.phone || null,
+    callerPhone: call.fromE164 || contact?.phone || null,
     appointmentBooked: call.appointmentBooked,
     appointmentService: appt?.serviceName ?? null,
     appointmentStart: appt?.startsAt?.toISOString() ?? null,

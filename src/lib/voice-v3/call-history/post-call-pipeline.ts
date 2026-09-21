@@ -68,16 +68,28 @@ export async function runVoiceV3CallHistoryPostProcess(
   const forensics = asRecord(meta.voiceV3Forensics);
   const forensicsFinal = forensics.final === true;
 
-  const [transcripts, recording] = await Promise.all([
-    prisma.voiceTranscript.findMany({
-      where: { callId },
-      include: { segments: { orderBy: { startMs: "asc" } } },
-    }),
+  await import("@/lib/voice-v3/call-history/materialize-native-transcript").then((m) =>
+    m.materializeNativeTranscriptFromForensicsIfNeeded(callId, call.workspaceId),
+  );
+
+  const [transcriptRows, recording] = await Promise.all([
+    prisma.voiceTranscript.findMany({ where: { callId } }),
     prisma.voiceRecording.findFirst({
       where: { callId },
       orderBy: { createdAt: "desc" },
     }),
   ]);
+
+  const transcripts = await Promise.all(
+    (transcriptRows ?? []).map(async (t) => ({
+      ...t,
+      segments:
+        (await prisma.voiceTranscriptSegment.findMany({
+          where: { transcriptId: t.id },
+          orderBy: { startMs: "asc" },
+        })) ?? [],
+    })),
+  );
 
   let chosen = pickCustomerTranscript(transcripts);
   let segments = chosen?.segments ?? [];

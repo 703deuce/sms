@@ -11,6 +11,20 @@ import {
 } from "../src/lib/voice/recordings";
 import { buildDeterministicSummary } from "../src/lib/voice-v3/call-history/summary";
 import { deriveOutcomeBadges } from "../src/lib/voice/calls/display";
+import { resolveDualChannelSpeakerMap } from "../src/lib/voice-v3/call-history/channel-semantics";
+
+const overlapMap = resolveDualChannelSpeakerMap({
+  channelTexts: [
+    { channel: 0, text: "Caller recording channel verification please" },
+    { channel: 1, text: "Happy to help you schedule today" },
+  ],
+  nativeCallerText: "Caller recording channel verification",
+  nativeAgentText: "Happy to help you schedule",
+  callDirection: "INBOUND",
+});
+assert.equal(overlapMap.byChannel[0], "caller");
+assert.equal(overlapMap.byChannel[1], "agent");
+assert.equal(overlapMap.source, "native_overlap");
 
 // Native transcript validator
 const good = validateNativeCustomerTranscript({
@@ -32,6 +46,21 @@ const bad = validateNativeCustomerTranscript({
 });
 assert.equal(bad.valid, false, "missing caller rejected");
 assert.ok(bad.reasons.includes("missing_caller_turn"));
+
+const silentCallerLongCall = validateNativeCustomerTranscript({
+  segments: [
+    { speaker: "caller", text: "I need an appointment.", startMs: 1000, endMs: 3000 },
+    { speaker: "agent", text: "Sure, one moment.", startMs: 120000, endMs: 122000 },
+  ],
+  durationSeconds: 180,
+  forensicsFinal: true,
+});
+assert.equal(
+  silentCallerLongCall.valid,
+  true,
+  "long silence between turns must not reject native transcript",
+);
+assert.ok(!silentCallerLongCall.reasons.includes("too_sparse_for_duration"));
 
 const withLeak = validateNativeCustomerTranscript({
   segments: [

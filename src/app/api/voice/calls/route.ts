@@ -217,6 +217,11 @@ export async function GET(request: Request) {
       // Analytics best-effort
     }
 
+    const { callIdsWithTranscripts } = await import("@/lib/voice/calls/load-transcript-segments");
+    const transcriptCallIds = await callIdsWithTranscripts(
+      rows.map((c: (typeof rows)[number]) => c.id),
+    );
+
     return NextResponse.json({
       data: rows.map((c: (typeof rows)[number]) => {
         const insight = c.insights?.[0] || null;
@@ -252,7 +257,7 @@ export async function GET(request: Request) {
           isLead: insight?.isLead ?? (c.leadScore != null && c.leadScore >= 40),
           hasRecording: Boolean(recordingId),
           recordingId,
-          hasTranscript: (c.transcripts?.length || 0) > 0,
+          hasTranscript: transcriptCallIds.has(c.id),
         };
       }),
       analytics: metrics,
