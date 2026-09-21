@@ -26,6 +26,9 @@ export function LegalShell({
             <Link href="/acceptable-use" className="text-slate-600 hover:text-indigo-600">
               Acceptable Use
             </Link>
+            <Link href="/opt-in-documentation" className="text-slate-600 hover:text-indigo-600">
+              Opt-In Docs
+            </Link>
             <Link href="/contact" className="text-slate-600 hover:text-indigo-600">
               Contact
             </Link>
