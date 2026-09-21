@@ -110,14 +110,20 @@ Microsoft code paths in `microsoft/*` modules are **not modified**. Dispatch use
 
 | Command | Result |
 |---------|--------|
-| `npx tsx scripts/test-voice-v3-google-calendar-provider.ts` | **PASS** |
-| `npx tsx scripts/test-voice-v3-microsoft-connection-resolve.ts` | **PASS** (regression) |
+| `npx tsx scripts/test-voice-v3-google-calendar-provider.ts` | **PASS** (A config, B authorization, C slot path, G discovery id, connection resolve) |
+| `npx tsx scripts/test-voice-v3-microsoft-connection-resolve.ts` | **PASS** |
+| `npx tsx scripts/test-voice-v3-microsoft-appointment-management.ts` | **PASS** (Microsoft regression — FIND existing / cancel / reschedule flows) |
+| `npx tsx scripts/test-voice-v3-scheduling-architecture-guards.ts` | **PASS** |
 
-Live Google API / token refresh / PSTN E2E: **not run** (requires connected workspace + manual call).
+Not run in CI on this branch (requires live Google + workspace):
 
-## 17. Typecheck
+- D–F Google BOOK / RESCHEDULE / CANCEL against real Calendar API
+- H token refresh with expired access token (relies on existing `getValidAccessToken` at runtime)
+- PSTN E2E FIND→BOOK→RESCHEDULE→CANCEL on Google-connected agent
 
-`npx tsc -p tsconfig.json --noEmit` — **no errors** under `src/lib/voice-v3/calendar/google/**` after fixing imports to `@/lib/calendar/providers`.
+## 17. Typecheck / build
+
+`npx tsc -p tsconfig.json --noEmit` — **fails** with hundreds of pre-existing errors elsewhere in the repo (exit 1); no new errors were introduced in the Voice V3 Google adapter paths validated by the scripts above. Full production build was **not** run for this task.
 
 ## 18. Remaining Google-specific gaps
 
@@ -128,4 +134,4 @@ Live Google API / token refresh / PSTN E2E: **not run** (requires connected work
 
 ## 19. Commit SHA
 
-*(filled at commit time)*
+`02fc3415` — `feat(voice-v3): wire Google Calendar to V3 scheduling provider boundary`
