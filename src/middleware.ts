@@ -46,6 +46,7 @@ const publicExact = new Set([
   "/terms",
   "/acceptable-use",
   "/contact",
+  "/opt-in-documentation",
   "/mass-texting",
   "/sms-marketing",
   "/maintenance",
