@@ -18,11 +18,11 @@ class VoiceV3CallContext:
     provider_call_id: str | None
     trunk_id: str | None
     rule_id: str | None
-    telnyx_call_screening: str | None = None
     live_session_id: str
     call_id: str
     workspace_id: str
     agent_id: str
+    telnyx_call_screening: str | None = None
 
 
 class TransovoV3ToolClient:
