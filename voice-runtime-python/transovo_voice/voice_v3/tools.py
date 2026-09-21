@@ -3,7 +3,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Any
+import time
+from typing import Any, TYPE_CHECKING
 
 from livekit.agents import function_tool
 from livekit.agents.llm.tool_context import DuplicateScope, ToolError, ToolFlag
@@ -19,6 +20,9 @@ COLLECT_INTAKE_FIELD_TOOL = "collect_intake_field"
 _SET_INTAKE_PREFIX = "set_intake_"
 
 logger = logging.getLogger("transovo-voice.voice_v3.tools")
+
+if TYPE_CHECKING:
+    from transovo_voice.voice_v3.forensics import VoiceV3CallForensics
 
 _READ_TOOLS = frozenset({"find_availability", "find_appointment"})
 # Writes are non-cancellable by default (no ToolFlag.CANCELLABLE). We do NOT call
@@ -50,17 +54,27 @@ async def _execute_transovo_tool(
     context: RunContext,
     client: TransovoV3ToolClient,
     telephony: LiveKitTelephonyBridge | None,
+    forensics: "VoiceV3CallForensics | None" = None,
 ) -> dict[str, Any]:
     fc_meta = getattr(context, "function_call", None)
     function_call_id = None
     if fc_meta is not None:
         function_call_id = getattr(fc_meta, "call_id", None) or getattr(fc_meta, "id", None)
+    fc_id_str = str(function_call_id) if function_call_id else None
+    if forensics:
+        forensics.note_tool_started(tool_name, fc_id_str)
+    started = time.perf_counter()
 
     result = await client.execute(
         tool_name=tool_name,
         arguments=raw_arguments,
-        function_call_id=str(function_call_id) if function_call_id else None,
+        function_call_id=fc_id_str,
     )
+
+    if forensics:
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        forensics.note_tool_completed(tool_name, fc_id_str, elapsed_ms, result)
+        asyncio.create_task(forensics.maybe_checkpoint(client))
 
     if tool_name == "transfer_call" and telephony is not None:
         result = await execute_authorized_transfer_plan(result, telephony, context, client)
@@ -116,6 +130,7 @@ def build_livekit_tools(
     client: TransovoV3ToolClient,
     telephony: LiveKitTelephonyBridge | None = None,
     intake_fields: list[dict[str, Any]] | None = None,
+    forensics: "VoiceV3CallForensics | None" = None,
 ) -> list[Any]:
     intake_meta = intake_fields or []
     tools: list[Any] = []
@@ -139,6 +154,7 @@ def build_livekit_tools(
             _tool_name: str = name,
             _client: TransovoV3ToolClient = client,
             _telephony: LiveKitTelephonyBridge | None = telephony,
+            _forensics: "VoiceV3CallForensics | None" = forensics,
         ) -> str:
             args: dict[str, Any]
             if isinstance(raw_arguments, str):
@@ -170,6 +186,7 @@ def build_livekit_tools(
                         context=context,
                         client=_client,
                         telephony=_telephony if _tool_name == "transfer_call" else None,
+                        forensics=_forensics,
                     )
             except asyncio.CancelledError:
                 log_event(

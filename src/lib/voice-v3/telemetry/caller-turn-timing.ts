@@ -287,3 +287,9 @@ export function logCallerTurnTimingSummary(liveSessionId: string, turnId: string
 export function clearCallerTurnTiming(liveSessionId: string): void {
   sessions.delete(liveSessionId.trim());
 }
+
+export function exportAllCallerTurnTimingForSession(liveSessionId: string): CallerTurnTiming[] {
+  const s = sessions.get(liveSessionId.trim());
+  if (!s) return [];
+  return [...s.byTurnId.values()].sort((a, b) => a.turnSequence - b.turnSequence);
+}

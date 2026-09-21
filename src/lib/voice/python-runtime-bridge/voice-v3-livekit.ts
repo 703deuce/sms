@@ -3,7 +3,10 @@ import "server-only";
 import { resolveAgentByCalledNumber } from "@/lib/telephony/provisioning/agent-routing";
 import { resolveVoiceV3AgentConfigForAgent } from "@/lib/voice-v3/config/from-published-agent";
 import { buildVoiceV3Prompts, resolveVoiceV3DefaultPromptInput } from "@/lib/voice-v3/prompts/build-voice-v3-prompts";
-import { VOICE_V3_ASTRA_MODEL } from "@/lib/voice-v3/intake/delegation-config";
+import {
+  VOICE_V3_ASTRA_MODEL,
+  VOICE_V3_ASTRA_REASONING_EFFORT,
+} from "@/lib/voice-v3/intake/delegation-config";
 import {
   VOICE_TOOL_CATALOG,
   buildVoiceV3AstraFunctionToolsFromCatalog,
@@ -20,6 +23,12 @@ import {
 import { executeVoiceTool } from "@/lib/voice-v3/tools/execute-voice-tool";
 import { commitFinalCallerUtterance } from "@/lib/voice-v3/conversation/caller-turn-manager";
 import { getCurrentConversationRevision } from "@/lib/voice-v3/conversation/conversation-revision";
+import {
+  appendVoiceV3ForensicEvent,
+  initVoiceV3CallForensics,
+  mergeCanonicalConversationTurn,
+} from "@/lib/voice-v3/telemetry/call-forensics";
+import { ensureVoiceV3LiveKitVoiceCall } from "@/lib/voice/python-runtime-bridge/ensure-voice-v3-livekit-voice-call";
 import type { FunctionTool } from "openai/resources/live/live";
 
 /** Tools executed natively in the LiveKit Python worker (not Astra FunctionTools). */
@@ -62,7 +71,7 @@ export type VoiceV3LiveKitSessionConfig = {
   intakeFields: ReturnType<typeof buildLiveKitIntakeFieldMetadata>;
   parallelToolCalls: boolean;
   maxToolSteps: number;
-  reasoningEffort: "low" | "medium" | "high" | null;
+  reasoningEffort: "none" | "low" | "medium" | "high" | null;
   textVerbosity: "low" | "medium" | "high" | null;
 };
 
@@ -121,6 +130,31 @@ export async function resolveVoiceV3LiveKitSession(
     config: agentConfig,
   });
 
+  await ensureVoiceV3LiveKitVoiceCall({
+    callId,
+    liveSessionId,
+    workspaceId: routing.workspaceId,
+    agentId: routing.agentId,
+    phoneNumberId: routing.phoneNumberId,
+    fromE164: caller,
+    toE164: dialed,
+    roomName: payload.roomName,
+    sipParticipantIdentity: payload.sipParticipantIdentity,
+  }).catch((err) => {
+    console.error("VOICE_V3_ENSURE_LIVEKIT_CALL_FAILED", {
+      callId,
+      liveSessionId,
+      message: err instanceof Error ? err.message : String(err),
+    });
+  });
+
+  initVoiceV3CallForensics({
+    callId,
+    liveSessionId,
+    workspaceId: routing.workspaceId,
+    agentId: routing.agentId,
+  });
+
   const catalogTools = buildVoiceV3AstraFunctionToolsFromCatalog(agentConfig);
   const intakeTools = buildLiveKitIntakeFunctionTools(agentConfig);
   const mergedByName = new Map<string, FunctionTool>();
@@ -134,6 +168,17 @@ export async function resolveVoiceV3LiveKitSession(
   const intakeFields = buildLiveKitIntakeFieldMetadata(agentConfig);
 
   const liveVoiceId = agentConfig.telephony?.liveVoiceId?.trim() || "marin";
+
+  appendVoiceV3ForensicEvent(liveSessionId, "VOICE_V3_SESSION_BOOTSTRAP_START", {
+    room_name: payload.roomName,
+    dialed_e164: dialed,
+    caller_present: Boolean(caller),
+    backend_model: VOICE_V3_ASTRA_MODEL,
+    live_voice_id: liveVoiceId,
+  });
+  appendVoiceV3ForensicEvent(liveSessionId, "VOICE_V3_SESSION_CONFIG_RESOLVED", {
+    tool_count: toolSchemas.length,
+  });
 
   return {
     liveSessionId,
@@ -150,7 +195,7 @@ export async function resolveVoiceV3LiveKitSession(
     intakeFields,
     parallelToolCalls: false,
     maxToolSteps: 5,
-    reasoningEffort: "low",
+    reasoningEffort: VOICE_V3_ASTRA_REASONING_EFFORT,
     textVerbosity: "low",
   };
 }
@@ -177,6 +222,11 @@ export async function executeVoiceV3ToolForLiveKit(
   }
 
   const currentRevision = getCurrentConversationRevision(liveSessionId);
+  const toolStarted = Date.now();
+  appendVoiceV3ForensicEvent(liveSessionId, "NODE_TOOL_EXECUTION_STARTED", {
+    tool_name: payload.toolName,
+    function_call_id: payload.functionCallId,
+  });
 
   const result = await executeVoiceTool(
     {
@@ -197,6 +247,14 @@ export async function executeVoiceV3ToolForLiveKit(
     payload.arguments,
   );
 
+  appendVoiceV3ForensicEvent(liveSessionId, "NODE_TOOL_EXECUTION_COMPLETED", {
+    tool_name: payload.toolName,
+    function_call_id: payload.functionCallId,
+    elapsed_ms: Date.now() - toolStarted,
+    ok: (result as { ok?: boolean }).ok ?? null,
+    status: (result as { status?: string }).status ?? null,
+  });
+
   return result as Record<string, unknown>;
 }
 
@@ -208,6 +266,22 @@ export function commitVoiceV3CallerUtteranceForLiveKit(input: {
   if (!turn) {
     return { committed: false, sequence: null, turnId: null };
   }
+
+  appendVoiceV3ForensicEvent(input.liveSessionId, "CALLER_UTTERANCE_COMMITTED", {
+    turn_id: turn.turnId,
+    sequence: turn.sequence,
+    utterance_chars: turn.transcript.length,
+    text: turn.transcript,
+    committed_at: turn.committedAt,
+  });
+  mergeCanonicalConversationTurn(input.liveSessionId, {
+    role: "user",
+    text: turn.transcript,
+    committedVia: "commit_voice_v3_livekit_caller_utterance",
+    turnKey: turn.turnId,
+    textAvailableAt: turn.committedAt,
+  });
+
   return { committed: true, sequence: turn.sequence, turnId: turn.turnId };
 }
 

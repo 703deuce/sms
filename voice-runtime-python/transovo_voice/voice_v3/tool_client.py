@@ -69,6 +69,34 @@ class TransovoV3ToolClient:
         result = await self._backend.call("commit_voice_v3_livekit_caller_utterance", payload)
         return result if isinstance(result, dict) else {"committed": False}
 
+    async def append_forensic_events(
+        self,
+        *,
+        events: list[dict[str, Any]],
+        canonical_turns: list[dict[str, Any]] | None = None,
+        checkpoint: bool = False,
+    ) -> None:
+        payload = {
+            "liveSessionId": self._ctx.live_session_id,
+            "callId": self._ctx.call_id,
+            "workspaceId": self._ctx.workspace_id,
+            "agentId": self._ctx.agent_id,
+            "events": events,
+            "canonicalTurns": canonical_turns or [],
+            "checkpoint": checkpoint,
+        }
+        await self._backend.call("append_voice_v3_forensic_events", payload)
+
+    async def flush_forensics(self, **payload: Any) -> None:
+        body = {
+            "liveSessionId": self._ctx.live_session_id,
+            "callId": self._ctx.call_id,
+            "workspaceId": self._ctx.workspace_id,
+            "agentId": self._ctx.agent_id,
+            **payload,
+        }
+        await self._backend.call("flush_voice_v3_forensics", body)
+
     @staticmethod
     def serialize_tool_result(result: dict[str, Any]) -> str:
         return json.dumps(result, separators=(",", ":"), ensure_ascii=False)

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
+import { VOICE_V3_ASTRA_MODEL } from "../intake/delegation-config";
 import { VOICE_TOOL_CATALOG, buildVoiceV3AstraFunctionToolsFromCatalog } from "../tools/voice-tool-catalog";
 import { buildAstraBackendInstructions } from "../prompts/astra-backend-instructions";
 import { buildLiveFrontendInstructions } from "../prompts/live-frontend-instructions";
@@ -42,7 +43,7 @@ export function resolveVoiceV3ContractVersions(config: VoiceV3AgentConfig): {
     }),
     deployed_commit_sha: process.env.SOURCE_COMMIT?.trim() || process.env.VERCEL_GIT_COMMIT_SHA?.trim() || null,
     live_model: process.env.VOICE_V3_BASIC_LIVE_MODEL?.trim() || "gpt-live-1",
-    backend_model: "gpt-6-astra",
+    backend_model: VOICE_V3_ASTRA_MODEL,
   };
 }
 

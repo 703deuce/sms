@@ -38,7 +38,7 @@ export function redactVoiceV3PipelineString(value: string, maxLen = 240): string
   return s;
 }
 
-function redactValue(value: unknown, depth = 0): unknown {
+export function redactValue(value: unknown, depth = 0): unknown {
   if (depth > 4) return "[max_depth]";
   if (value === null || value === undefined) return value;
   if (typeof value === "string") return redactVoiceV3PipelineString(value);

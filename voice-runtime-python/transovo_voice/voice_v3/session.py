@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import Any
 
 from livekit import rtc
@@ -11,6 +12,7 @@ from livekit.plugins.openai.realtime import GPTLiveModel
 from transovo_voice.integrations.backend_client import TransovoBackend
 from transovo_voice.session.dispatch_resolver import extract_call_numbers
 from transovo_voice.telemetry import log_event
+from transovo_voice.voice_v3.forensics import VoiceV3CallForensics
 from transovo_voice.voice_v3.tool_client import TransovoV3ToolClient, VoiceV3CallContext
 from transovo_voice.voice_v3.end_call_tool import build_voice_v3_end_call_toolset
 from transovo_voice.voice_v3.tools import LiveKitTelephonyBridge, build_livekit_tools
@@ -51,6 +53,10 @@ def _openai_tool_to_dict(tool: dict[str, Any] | Any) -> dict[str, Any]:
 async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
     backend = TransovoBackend()
     backend_closed = False
+    forensics: VoiceV3CallForensics | None = None
+    session: AgentSession | None = None
+    client: TransovoV3ToolClient | None = None
+    bootstrap_error: str | None = None
 
     async def shutdown_backend() -> None:
         nonlocal backend_closed
@@ -59,9 +65,43 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
         backend_closed = True
         await backend.close()
 
+    async def flush_forensics() -> None:
+        if forensics is None or client is None:
+            return
+        try:
+            await forensics.flush(
+                client,
+                ctx,
+                session,
+                error_message=bootstrap_error,
+            )
+        except Exception:
+            logger.exception("voice_v3_forensics_shutdown_flush_failed")
+
+    ctx.add_shutdown_callback(flush_forensics)
     ctx.add_shutdown_callback(shutdown_backend)
 
     try:
+        forensics = VoiceV3CallForensics(
+            ctx=VoiceV3CallContext(
+                room_name=ctx.room.name,
+                sip_participant_identity="",
+                caller_e164=None,
+                dialed_e164=None,
+                sip_call_id=None,
+                provider_call_id=None,
+                trunk_id=None,
+                rule_id=None,
+                live_session_id="",
+                call_id="",
+                workspace_id="",
+                agent_id="",
+            ),
+            job_id=ctx.job.id,
+            room_name=ctx.room.name,
+        )
+        forensics.append("VOICE_V3_SESSION_BOOTSTRAP_START", room=ctx.room.name)
+
         sip_participant = await _wait_for_sip_participant(ctx)
         attrs = _attrs_dict(sip_participant)
         caller_e164, dialed_e164 = extract_call_numbers(
@@ -85,6 +125,7 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             agent_id="",
         )
         client = TransovoV3ToolClient(backend, provisional_ctx)
+        forensics.append("AGENTSESSION_START_REQUESTED")
         config = await client.resolve_session_config()
 
         live_session_id = str(config.get("liveSessionId") or "")
@@ -103,6 +144,7 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             agent_id=str(config.get("agentId") or ""),
         )
         client = TransovoV3ToolClient(backend, call_ctx)
+        forensics.ctx = call_ctx
 
         raw_tools = config.get("toolSchemas") or []
         tool_dicts = [_openai_tool_to_dict(t) for t in raw_tools if _openai_tool_to_dict(t).get("name")]
@@ -116,6 +158,7 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             client,
             telephony=telephony,
             intake_fields=intake_fields if isinstance(intake_fields, list) else [],
+            forensics=forensics,
         )
 
         end_call_toolset = build_voice_v3_end_call_toolset(
@@ -130,6 +173,8 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
         def _on_participant_disconnected(participant: rtc.RemoteParticipant) -> None:
             if participant.identity != sip_participant.identity:
                 return
+            if forensics:
+                forensics.append("VOICE_V3_CALLER_DISCONNECTED")
             log_event(
                 "VOICE_V3_CALLER_DISCONNECTED",
                 call_id=call_ctx.call_id or None,
@@ -141,13 +186,14 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
         ctx.room.on("participant_disconnected", _on_participant_disconnected)
 
         responses_options: dict[str, Any] = {
-            "model": config.get("astraModel") or "gpt-6-astra",
+            "model": config.get("astraModel") or "gpt-5.6-sol",
             "instructions": config.get("astraInstructions") or "",
             "tool_choice": "auto",
             "parallel_tool_calls": bool(config.get("parallelToolCalls", False)),
         }
-        if config.get("reasoningEffort"):
-            responses_options["reasoning"] = {"effort": config["reasoningEffort"]}
+        responses_options["reasoning"] = {
+            "effort": str(config.get("reasoningEffort") or "none"),
+        }
         if config.get("textVerbosity"):
             responses_options["text"] = {"verbosity": config["textVerbosity"]}
 
@@ -162,6 +208,9 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
         session = AgentSession(llm=gpt_live, tools=session_tools, max_tool_steps=max_tool_steps)
         agent = Agent(instructions=str(config.get("amyInstructions") or ""))
 
+        if forensics:
+            forensics.attach_session(session, agent)
+
         @session.on("user_input_transcribed")
         def on_user_input_transcribed(ev: Any) -> None:
             try:
@@ -169,12 +218,25 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
                 transcript = str(getattr(ev, "transcript", "") or "").strip()
                 if not is_final or not transcript:
                     return
+                if forensics:
+                    forensics.append(
+                        "CALLER_UTTERANCE_TRANSCRIBED",
+                        utterance_chars=len(transcript),
+                        item_id=getattr(ev, "item_id", None),
+                    )
                 asyncio.create_task(_commit_utterance(client, transcript))
             except Exception:
                 logger.exception("voice_v3_transcript_handler_failed")
 
         async def _commit_utterance(tool_client: TransovoV3ToolClient, utterance: str) -> None:
             result = await tool_client.commit_caller_utterance(utterance)
+            if forensics:
+                forensics.append(
+                    "CALLER_UTTERANCE_COMMITTED",
+                    utterance_chars=len(utterance),
+                    result=result,
+                )
+                asyncio.create_task(forensics.maybe_checkpoint(tool_client))
             log_event(
                 "voice_v3_caller_utterance_committed",
                 room=ctx.room.name,
@@ -194,6 +256,8 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
                 "amyToolNames": [n for n in amy_tool_names if n],
             },
         )
+        if forensics:
+            forensics.append("AGENTSESSION_STARTED")
 
         room_options = room_io.RoomOptions(
             audio_input=True,
@@ -208,6 +272,12 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             room=ctx.room,
             room_options=room_options,
         )
-    except Exception:
+        if forensics:
+            forensics.append("AGENTSESSION_START_COMPLETED")
+    except Exception as err:
+        bootstrap_error = str(err)[:500]
+        if forensics:
+            forensics.append("VOICE_V3_SESSION_BOOTSTRAP_FAILED", message=bootstrap_error)
+        await flush_forensics()
         await shutdown_backend()
         raise

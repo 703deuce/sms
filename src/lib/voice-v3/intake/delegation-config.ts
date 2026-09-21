@@ -10,7 +10,10 @@ import { resolveVoiceV3IntakeTransport } from "./intake-transport";
 import { buildVoiceV3AstraFunctionTools } from "../tools/build-openai-tools";
 import { voiceV3DelegationParallelToolCallsEnabled } from "../tools/concurrency-policy";
 
-export const VOICE_V3_ASTRA_MODEL = "gpt-6-astra";
+export const VOICE_V3_ASTRA_MODEL = "gpt-5.6-sol";
+
+/** Sol test: none (Astra minimum was low). LiveKit responses_options + sideband delegation. */
+export const VOICE_V3_ASTRA_REASONING_EFFORT = "none" as const;
 
 /**
  * Live `sessions.accept` delegation config (PSTN/SIP).
@@ -41,7 +44,7 @@ export function buildVoiceV3AstraDelegationResponses(
     model: VOICE_V3_ASTRA_MODEL,
     instructions: astraInstructions,
     reasoning: {
-      effort: "low",
+      effort: VOICE_V3_ASTRA_REASONING_EFFORT,
     },
     text: {
       verbosity: "low",
