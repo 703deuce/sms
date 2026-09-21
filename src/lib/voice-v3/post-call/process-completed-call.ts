@@ -117,6 +117,15 @@ export async function processVoiceV3CompletedCall(callId: string): Promise<{ ok:
     }
   })();
 
+  if (!postCallState.billableCallRecorded) {
+    const { recordVoiceV3BillableCallIfEligible } = await import("../billing/record-billable-call");
+    const billing = await recordVoiceV3BillableCallIfEligible(callId);
+    postCallState.billableCallRecorded = billing.recorded;
+    if (billing.recorded) {
+      postCallState.billableUsageEventId = billing.usageEventId;
+    }
+  }
+
   postCallState.pipelineCompletedAt = new Date().toISOString();
   postCallState.recording = "ready";
   postCallState.transcript = transcript?.status || "unknown";

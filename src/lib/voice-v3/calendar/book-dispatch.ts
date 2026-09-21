@@ -355,6 +355,23 @@ export async function dispatchBookingIfRequired(
       prepareStart: (c) => applyBookingPhase(c, "BOOKING_CREATING"),
       isStillAuthoritative: (c) => attemptStillValid(c, attempt),
       execute: async () => {
+        const { authorizeVoiceV3BookingMutation } = await import(
+          "../policy/authorize-booking-mutation"
+        );
+        const auth = authorizeVoiceV3BookingMutation({
+          config: runtime.config,
+          ctx: runtime.getSnapshot(),
+          selected,
+          conversationRevisionAtStart: conversationRevisionAtCommitStart,
+          liveSessionId: latest.liveSessionId,
+        });
+        if (!auth.allowed) {
+          return {
+            ok: false,
+            failureCode: auth.code,
+            outcomeUncertain: false,
+          };
+        }
         console.log("BOOKING_COMMIT_STARTED", {
           call_id: latest.callId,
           scheduling_generation: latest.scheduling.generation,

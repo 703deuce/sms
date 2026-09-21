@@ -519,6 +519,23 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       if (!sourceId) throw new Error("sourceId required");
       return processKnowledgeSource(sourceId);
     }
+    case "voice_website_crawl": {
+      const { runVoiceWebsiteCrawlJob } = await import(
+        "@/lib/voice-v3/knowledge/website-crawl/run-crawl-job"
+      );
+      const crawlJobId = String(payload.crawlJobId || "");
+      if (!crawlJobId) throw new Error("crawlJobId required");
+      await runVoiceWebsiteCrawlJob(crawlJobId);
+      return { ok: true };
+    }
+    case "voice_v3_billing_dispatch": {
+      const { dispatchVoiceV3BillableCallUsage } = await import(
+        "@/lib/voice-v3/billing/dispatch-stripe-usage"
+      );
+      const usageEventId = String(payload.usageEventId || "");
+      if (!usageEventId) throw new Error("usageEventId required");
+      return dispatchVoiceV3BillableCallUsage(usageEventId);
+    }
     case "phone_queue_overflow": {
       const { handleQueueOverflowJob } = await import("@/lib/phone/queue-runtime");
       return handleQueueOverflowJob({

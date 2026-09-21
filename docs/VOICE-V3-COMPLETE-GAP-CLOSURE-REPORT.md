@@ -1,6 +1,6 @@
 # Voice V3 — complete gap-closure report (code pass)
 
-**Branch:** `cursor/voice-v3-gap-closure-2304`  
+**Branch:** `cursor/voice-v3-final-completion-2304` (final four-area pass)  
 **Date:** 2026-09-21 (final manifest + runtime pass)  
 **Authority:** `docs/VOICE-V3-COMPLETE-GAP-CLOSURE-IMPLEMENTATION-DIRECTIVE.md`, `docs/AI-VOICE-AGENT-INCOMPLETE-MASTER-LIST.md`
 
@@ -45,7 +45,7 @@ Regenerate NI list: `docs/AI-VOICE-AGENT-INCOMPLETE-MASTER-LIST.md` § regenerat
 - **IMPLEMENTED:** All rows above; manifest `CONFIGURED_NOT_IMPLEMENTED` = 0.
 - **INTENTIONALLY_UNSUPPORTED (V1):** Calendly V3 executor fields (compiled for legacy state only); `crmEnabled`.
 - **MANUAL PRODUCTION CERTIFICATION:** §5 PSTN gates, full §6 Google prod OAuth/PSTN, §7 certification matrix, transfer PSTN waterfall handset tests.
-- **OUT OF V1 CODE SCOPE (billing):** Stripe voice-usage meter for V3 LiveKit minutes — no SKU wiring in this pass; does not block wizard→runtime truth.
+- **MANUAL (billing):** Stripe meter event API wiring on tenant — ledger + idempotent dispatch in code; production meter ID in Stripe config.
 
 ## Automated tests (final pass)
 
@@ -58,5 +58,20 @@ NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-v
 NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-voice-v3-operating-policy-gating.ts
 NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-voice-v3-callback-matrix.ts
 ```
+
+## Final completion pass (four areas)
+
+See `docs/VOICE-V3-FINAL-READINESS.md` and `docs/VOICE-V3-FINAL-PRODUCT-COMPLETION-DIRECTIVE.md`.
+
+| Item | Status |
+|------|--------|
+| Website crawler | DONE (async job + capped multi-page) |
+| Business auto-import | DONE (suggestions on crawl job) |
+| OpenAI vector-store ingest | DONE (existing pipeline) |
+| Per-call billing | DONE (`VoiceV3UsageEvent` + dispatch job) |
+| Call forensics | DONE (tool + `VoiceCallEvent` telemetry) |
+| Hard-action guards | DONE (`authorizeVoiceV3BookingMutation`) |
+| Objective-pivot safety | DONE (existing + regression scripts) |
+| Wizard manifest NI | 0 |
 
 **End of report.**

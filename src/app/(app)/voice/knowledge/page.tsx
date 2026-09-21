@@ -46,6 +46,23 @@ export default function VoiceKnowledgePage() {
   const [searchHits, setSearchHits] = useState<Array<{ name: string; snippet: string }>>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [websiteScanUrl, setWebsiteScanUrl] = useState("");
+  const [crawlJob, setCrawlJob] = useState<{
+    id: string;
+    status: string;
+    rootUrl: string;
+    stats?: Record<string, number>;
+    errorSummary?: string | null;
+    completedAt?: string | null;
+    pages?: Array<{
+      sourceUrl: string;
+      pageTitle: string | null;
+      status: string;
+      lastIndexedAt: string | null;
+    }>;
+  } | null>(null);
+  const [scanningWebsite, setScanningWebsite] = useState(false);
+  const [showCrawlPages, setShowCrawlPages] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function load() {
@@ -101,6 +118,52 @@ export default function VoiceKnowledgePage() {
       body: JSON.stringify({ name: sourceUrl, sourceType: "url", crawlUrl: sourceUrl }),
     });
     loadDetail(selectedId);
+  }
+
+  async function pollCrawlJob(jobId: string) {
+    const deadline = Date.now() + 180_000;
+    while (Date.now() < deadline) {
+      const res = await fetch(`/api/voice/knowledge/crawl/${jobId}`);
+      const json = await res.json();
+      const job = json.data;
+      if (!job) break;
+      setCrawlJob(job);
+      if (job.status === "READY" || job.status === "PARTIAL" || job.status === "FAILED") {
+        loadDetail(selectedId);
+        return;
+      }
+      await new Promise((r) => setTimeout(r, 2500));
+    }
+  }
+
+  async function scanWebsite() {
+    if (!selectedId || !websiteScanUrl.trim()) return;
+    setScanningWebsite(true);
+    setCrawlJob(null);
+    try {
+      const res = await fetch("/api/voice/knowledge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "scan_website",
+          url: websiteScanUrl.trim(),
+          knowledgeBaseId: selectedId,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Scan failed");
+      const jobId = json.data?.crawlJobId as string;
+      if (jobId) {
+        setCrawlJob({
+          id: jobId,
+          status: json.data?.crawlStatus || "DISCOVERING",
+          rootUrl: websiteScanUrl.trim(),
+        });
+        await pollCrawlJob(jobId);
+      }
+    } finally {
+      setScanningWebsite(false);
+    }
   }
 
   async function uploadFile(file: File) {
@@ -227,8 +290,82 @@ export default function VoiceKnowledgePage() {
               ) : null}
             </div>
             <p className="text-xs text-muted-foreground">
-              Long documents and files are indexed with Telnyx RAG embeddings — content is retrieved at runtime, not stuffed into the prompt.
+              Website and documents are indexed into the OpenAI vector store for LiveKit FileSearch at runtime.
             </p>
+          </Card>
+
+          <Card className="space-y-4 p-5 lg:col-span-2">
+            <h2 className="font-medium">Website</h2>
+            <Label htmlFor="kb-website-scan">Business website</Label>
+            <div className="flex flex-wrap gap-2">
+              <Input
+                id="kb-website-scan"
+                value={websiteScanUrl}
+                onChange={(e) => setWebsiteScanUrl(e.target.value)}
+                placeholder="https://acmeplumbing.com"
+                className="max-w-md flex-1"
+              />
+              <Button onClick={scanWebsite} disabled={scanningWebsite || !websiteScanUrl.trim()}>
+                {scanningWebsite ? "Scanning…" : "Scan website"}
+              </Button>
+              {crawlJob && (crawlJob.status === "READY" || crawlJob.status === "PARTIAL") ? (
+                <Button variant="outline" onClick={() => scanWebsite()} disabled={scanningWebsite}>
+                  Rescan
+                </Button>
+              ) : null}
+            </div>
+            {crawlJob ? (
+              <div className="rounded-lg border border-border p-4 text-sm">
+                <p className="font-medium">{crawlJob.rootUrl.replace(/^https?:\/\//, "")}</p>
+                {scanningWebsite || !["READY", "PARTIAL", "FAILED"].includes(crawlJob.status) ? (
+                  <p className="mt-1 text-muted-foreground">
+                    Scanning website…{" "}
+                    {crawlJob.stats?.pagesAttempted
+                      ? `${crawlJob.stats.pagesSuccessful ?? 0} of ${crawlJob.stats.pagesAttempted} pages processed`
+                      : crawlJob.status}
+                  </p>
+                ) : crawlJob.status === "FAILED" ? (
+                  <p className="mt-1 text-danger">
+                    Website scan needs attention. {crawlJob.errorSummary || ""}
+                  </p>
+                ) : (
+                  <p className="mt-1 text-muted-foreground">
+                    {crawlJob.status === "READY" ? "✓ Ready" : "Partial"} —{" "}
+                    {crawlJob.stats?.pagesIndexed ?? 0} pages indexed
+                  </p>
+                )}
+                {crawlJob.pages?.length ? (
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="mt-2 h-auto p-0"
+                    onClick={() => setShowCrawlPages((v) => !v)}
+                  >
+                    {showCrawlPages ? "Hide pages" : "View pages"}
+                  </Button>
+                ) : null}
+                {showCrawlPages && crawlJob.pages ? (
+                  <Table className="mt-3">
+                    <THead>
+                      <TR>
+                        <TH>Page</TH>
+                        <TH>Status</TH>
+                        <TH>Last indexed</TH>
+                      </TR>
+                    </THead>
+                    <TBody>
+                      {crawlJob.pages.map((p) => (
+                        <TR key={p.sourceUrl}>
+                          <TD>{p.pageTitle || p.sourceUrl}</TD>
+                          <TD>{p.status}</TD>
+                          <TD>{p.lastIndexedAt ? new Date(p.lastIndexedAt).toLocaleString() : "—"}</TD>
+                        </TR>
+                      ))}
+                    </TBody>
+                  </Table>
+                ) : null}
+              </div>
+            ) : null}
           </Card>
 
           <Card className="space-y-4 p-5">
@@ -252,7 +389,7 @@ export default function VoiceKnowledgePage() {
             <div className="border-t border-border pt-4">
               <Label>Upload file (PDF, DOCX, TXT, CSV)</Label>
               <p className="mt-1 text-xs text-muted-foreground">
-                Files are embedded via Telnyx RAG — not added verbatim to agent instructions.
+                Files are indexed into the vector store — not added verbatim to agent instructions.
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <input

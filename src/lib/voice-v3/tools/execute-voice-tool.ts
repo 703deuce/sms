@@ -76,6 +76,22 @@ export async function executeVoiceTool(
 
   try {
     const result = await tool.execute(executionCtx, args);
+    const snap = executionCtx.runtime.getSnapshot();
+    void import("../forensics/record-forensic-event").then(({ persistVoiceV3ToolForensics }) =>
+      persistVoiceV3ToolForensics({
+        workspaceId: executionCtx.tenantId,
+        callId: executionCtx.callId,
+        toolName: name,
+        operationId: executionCtx.functionCallId,
+        conversationRevision: currentConversationRevision,
+        schedulingGeneration: snap.scheduling.generation,
+        startedAt: new Date(started).toISOString(),
+        completedAt: new Date().toISOString(),
+        durationMs: Date.now() - started,
+        outcome: result.ok ? "success" : result.code === "STALE_OFFER_SET" ? "stale" : "error",
+        normalizedErrorCode: result.ok ? null : result.code,
+      }),
+    );
     const finalized =
       result.ok || result.retryable != null
         ? result

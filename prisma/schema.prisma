@@ -302,6 +302,9 @@ model Workspace {
   voiceKnowledgeSources             VoiceKnowledgeSource[]
   voiceAgentKnowledgeBases          VoiceAgentKnowledgeBase[]
   voiceKnowledgeGaps                VoiceKnowledgeGap[]
+  voiceWebsiteCrawlJobs             VoiceWebsiteCrawlJob[]
+  voiceWebsiteCrawlPages            VoiceWebsiteCrawlPage[]
+  voiceV3UsageEvents                VoiceV3UsageEvent[]
   voiceTools                        VoiceTool[]
   voiceAgentTools                   VoiceAgentTool[]
   voiceCalendarConnections          VoiceCalendarConnection[]
@@ -2455,6 +2458,7 @@ model VoiceKnowledgeBase {
   workspace             Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   sources               VoiceKnowledgeSource[]
   agentLinks            VoiceAgentKnowledgeBase[]
+  websiteCrawlJobs      VoiceWebsiteCrawlJob[]
 
   @@index([workspaceId])
   @@map("voice_knowledge_bases")
@@ -2507,6 +2511,74 @@ model VoiceKnowledgeGap {
   @@unique([workspaceId, normalizedQuestion])
   @@index([workspaceId, status])
   @@map("voice_knowledge_gaps")
+}
+
+model VoiceWebsiteCrawlJob {
+  id              String                 @id @default(cuid())
+  workspaceId     String
+  knowledgeBaseId String
+  rootUrl         String
+  status          String                 @default("DISCOVERING")
+  stats           Json?
+  errorSummary    String?
+  suggestions     Json?
+  startedAt       DateTime               @default(now())
+  completedAt     DateTime?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  workspace       Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  knowledgeBase   VoiceKnowledgeBase     @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  pages           VoiceWebsiteCrawlPage[]
+
+  @@index([workspaceId, knowledgeBaseId])
+  @@index([workspaceId, status])
+  @@map("voice_website_crawl_jobs")
+}
+
+model VoiceWebsiteCrawlPage {
+  id                String              @id @default(cuid())
+  workspaceId       String
+  crawlJobId        String
+  knowledgeSourceId String?
+  sourceUrl         String
+  canonicalUrl      String?
+  pageTitle         String?
+  status            String              @default("pending")
+  contentHash       String?
+  skipReason        String?
+  errorMessage      String?
+  lastIndexedAt     DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  crawlJob          VoiceWebsiteCrawlJob @relation(fields: [crawlJobId], references: [id], onDelete: Cascade)
+  workspace         Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([crawlJobId, sourceUrl])
+  @@index([workspaceId, crawlJobId])
+  @@map("voice_website_crawl_pages")
+}
+
+model VoiceV3UsageEvent {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  voiceCallId     String
+  product         String    @default("voice_v3")
+  metric          String    @default("billable_call")
+  quantity        Int       @default(1)
+  occurredAt      DateTime  @default(now())
+  billingStatus   String    @default("pending")
+  externalEventId String?
+  attemptCount    Int       @default(0)
+  lastAttemptAt   DateTime?
+  lastError       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([product, metric, voiceCallId])
+  @@index([workspaceId, billingStatus])
+  @@index([voiceCallId])
+  @@map("voice_v3_usage_events")
 }
 
 model VoiceAgentKnowledgeBase {

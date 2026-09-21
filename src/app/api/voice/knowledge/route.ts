@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
-import {
-  processKnowledgeSource,
-  waitForKnowledgeBaseEmbedding,
-} from "@/lib/voice/knowledge-processor";
+import { enqueueVoiceWebsiteCrawlJob } from "@/lib/voice-v3/knowledge/website-crawl/run-crawl-job";
 import { computeKnowledgeRevisionFingerprint } from "@/lib/voice-receptionist-wizard/knowledge-config";
 
 export async function GET() {
@@ -59,64 +56,24 @@ export async function POST(request: Request) {
         });
       }
 
-      let source = await prisma.voiceKnowledgeSource.findFirst({
-        where: {
-          workspaceId: auth.workspaceId,
-          knowledgeBaseId: kb.id,
-          crawlUrl: normalized,
-        },
-      });
-      if (!source) {
-        source = await prisma.voiceKnowledgeSource.create({
-          data: {
-            workspaceId: auth.workspaceId,
-            knowledgeBaseId: kb.id,
-            sourceType: "url",
-            name: kbName,
-            status: "pending",
-            crawlUrl: normalized,
-          },
-        });
-      } else {
-        source = await prisma.voiceKnowledgeSource.update({
-          where: { id: source.id },
-          data: { status: "pending", errorMessage: null, crawlUrl: normalized },
-        });
-      }
-
-      try {
-        await processKnowledgeSource(source.id);
-      } catch (err) {
-        console.warn(
-          "[voice/knowledge] scan_website process failed",
-          err instanceof Error ? err.message : err,
-        );
-      }
-
-      const embedWait = await waitForKnowledgeBaseEmbedding({
+      const { crawlJobId } = await enqueueVoiceWebsiteCrawlJob({
+        workspaceId: auth.workspaceId,
         knowledgeBaseId: kb.id,
-        maxWaitMs: 60_000,
+        rootUrl: normalized,
       });
 
-      const indexed = await prisma.voiceKnowledgeSource.findUnique({
-        where: { id: source.id },
-      });
       const revision = computeKnowledgeRevisionFingerprint(
-        { knowledgeItems: [], knowledgeBaseEnabled: true },
+        { knowledgeItems: [], knowledgeBaseEnabled: true, websiteUrl: normalized },
         [kb.id],
       );
       return NextResponse.json({
         data: {
           knowledgeBaseId: kb.id,
-          source: indexed,
-          sourceStatus: indexed?.status,
-          chunkCount: indexed?.chunkCount,
-          extractedPreview: indexed?.extractedPreview || indexed?.contentText,
-          contentText: indexed?.contentText,
-          errorMessage: indexed?.errorMessage,
+          crawlJobId,
+          crawlStatus: "DISCOVERING",
           knowledgeBaseRevision: revision,
-          embeddingReady: embedWait.ready,
-          embeddingStatus: embedWait.status,
+          embeddingReady: false,
+          embeddingStatus: "crawl_queued",
         },
       });
     }
