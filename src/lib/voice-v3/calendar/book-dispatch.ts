@@ -217,24 +217,8 @@ export async function dispatchBookingIfRequired(
       }
       busy = result.busy;
     } else {
-      const { fetchMicrosoftBusyIntervals } = await import("./microsoft/microsoft-find-availability");
-      const { getPrisma } = await import("@/lib/db");
-      const prisma = getPrisma();
-      const connection = await prisma.voiceCalendarConnection.findFirst({
-        where: { id: runtime.config.calendar!.connectionId, provider: "microsoft" },
-      });
-      if (!connection || connection.status !== "connected") {
-        await failBooking(runtime, hooks, {
-          reason: "configuration_missing",
-          message: "Microsoft calendar connection not available",
-          at: new Date().toISOString(),
-          bookingAttemptId: attempt.bookingAttemptId,
-          schedulingGeneration: ctx.scheduling.generation,
-        }, attempt.bookingAttemptId);
-        return;
-      }
-      const calendarConfig = (connection.config || {}) as import("@/lib/voice/calendar/providers").CalendarConfig;
-      const graphResult = await fetchMicrosoftBusyIntervals({
+      const { fetchV3ProviderBusyIntervals } = await import("./fetch-v3-provider-busy");
+      const revalResult = await fetchV3ProviderBusyIntervals({
         request: {
           callId: ctx.callId,
           schedulingGeneration: ctx.scheduling.generation,
@@ -245,27 +229,34 @@ export async function dispatchBookingIfRequired(
           calendarIds: runtime.config.calendar!.calendarIds,
           requestKey: `revalidate|${attempt.bookingAttemptId}`,
         },
-        connectionId: connection.id,
-        calendarConfig,
+        config: runtime.config,
       });
-      revalDuration = graphResult.durationMs;
-      if (!graphResult.ok) {
+      revalDuration = revalResult.durationMs;
+      if (!revalResult.ok) {
+        const r = revalResult.failure.reason;
+        const isGoogle = runtime.config.calendar?.provider === "google";
         const reason =
-          graphResult.reason === "microsoft_token"
-            ? "MICROSOFT_AUTH_FAILED"
-            : graphResult.reason === "microsoft_throttled"
-              ? "MICROSOFT_THROTTLED"
-              : "MICROSOFT_TEMPORARY_FAILURE";
+          r === "microsoft_token" || r === "google_token"
+            ? isGoogle
+              ? "GOOGLE_AUTH_FAILED"
+              : "MICROSOFT_AUTH_FAILED"
+            : r === "microsoft_throttled" || r === "google_throttled"
+              ? isGoogle
+                ? "GOOGLE_THROTTLED"
+                : "MICROSOFT_THROTTLED"
+              : isGoogle
+                ? "GOOGLE_TEMPORARY_FAILURE"
+                : "MICROSOFT_TEMPORARY_FAILURE";
         await failBooking(runtime, hooks, {
           reason,
-          message: graphResult.message,
+          message: revalResult.failure.message,
           at: new Date().toISOString(),
           bookingAttemptId: attempt.bookingAttemptId,
           schedulingGeneration: ctx.scheduling.generation,
         }, attempt.bookingAttemptId);
         return;
       }
-      busy = graphResult.busy;
+      busy = revalResult.busy;
     }
 
     const latest = runtime.getSnapshot();
@@ -376,11 +367,12 @@ export async function dispatchBookingIfRequired(
           booking_attempt_id: attempt.bookingAttemptId,
         });
         updateBookingAttemptPhase(latest.liveSessionId, attempt.bookingAttemptId, "COMMIT_SENT");
+        const calendarProvider = runtime.config.calendar?.provider ?? "microsoft";
         console.log("BOOKING_COMMIT_SENT", {
           call_id: latest.callId,
           scheduling_generation: latest.scheduling.generation,
           booking_attempt_id: attempt.bookingAttemptId,
-          provider: "microsoft",
+          provider: calendarProvider,
         });
 
         let createResult:
@@ -390,11 +382,13 @@ export async function dispatchBookingIfRequired(
         if (hooks.createBooking) {
           createResult = await hooks.createBooking({ request, config: runtime.config });
         } else {
-          const { executeMicrosoftCreateBooking } = await import("./microsoft/microsoft-create-booking");
           const { getPrisma } = await import("@/lib/db");
           const prisma = getPrisma();
           const connection = await prisma.voiceCalendarConnection.findFirst({
-            where: { id: runtime.config.calendar!.connectionId, provider: "microsoft" },
+            where: {
+              id: runtime.config.calendar!.connectionId,
+              provider: calendarProvider,
+            },
           });
           if (!connection) {
             createResult = {
@@ -410,26 +404,52 @@ export async function dispatchBookingIfRequired(
             };
           } else {
             const calendarConfig = (connection.config || {}) as import("@/lib/voice/calendar/providers").CalendarConfig;
-            const ms = await executeMicrosoftCreateBooking({
-              request,
-              connectionId: connection.id,
-              calendarConfig,
-            });
-            if (ms.ok) {
-              createResult = ms;
+            if (calendarProvider === "google") {
+              const { executeGoogleCreateBooking } = await import("./google/google-create-booking");
+              const g = await executeGoogleCreateBooking({
+                request,
+                connectionId: connection.id,
+                calendarConfig,
+              });
+              if (g.ok) {
+                createResult = g;
+              } else {
+                createResult = {
+                  ok: false,
+                  durationMs: g.durationMs,
+                  outcomeUncertain: g.outcomeUncertain,
+                  failure: {
+                    reason: g.reason,
+                    message: g.message,
+                    at: new Date().toISOString(),
+                    bookingAttemptId: attempt.bookingAttemptId,
+                    schedulingGeneration: latest.scheduling.generation,
+                  },
+                };
+              }
             } else {
-              createResult = {
-                ok: false,
-                durationMs: ms.durationMs,
-                outcomeUncertain: ms.outcomeUncertain,
-                failure: {
-                  reason: ms.reason,
-                  message: ms.message,
-                  at: new Date().toISOString(),
-                  bookingAttemptId: attempt.bookingAttemptId,
-                  schedulingGeneration: latest.scheduling.generation,
-                },
-              };
+              const { executeMicrosoftCreateBooking } = await import("./microsoft/microsoft-create-booking");
+              const ms = await executeMicrosoftCreateBooking({
+                request,
+                connectionId: connection.id,
+                calendarConfig,
+              });
+              if (ms.ok) {
+                createResult = ms;
+              } else {
+                createResult = {
+                  ok: false,
+                  durationMs: ms.durationMs,
+                  outcomeUncertain: ms.outcomeUncertain,
+                  failure: {
+                    reason: ms.reason,
+                    message: ms.message,
+                    at: new Date().toISOString(),
+                    bookingAttemptId: attempt.bookingAttemptId,
+                    schedulingGeneration: latest.scheduling.generation,
+                  },
+                };
+              }
             }
           }
         }
@@ -451,17 +471,18 @@ export async function dispatchBookingIfRequired(
         };
       },
       applySuccess: (afterCommit, value) => {
+        const commitProvider = runtime.config.calendar?.provider ?? "microsoft";
         console.log("MICROSOFT_EVENT_CREATED", {
           call_id: afterCommit.callId,
           scheduling_generation: afterCommit.scheduling.generation,
           booking_attempt_id: attempt.bookingAttemptId,
-          provider: "microsoft",
+          provider: commitProvider,
           duration_ms: value.durationMs,
         });
 
         const confirmed: ConfirmedBooking = {
           bookingAttemptId: attempt.bookingAttemptId,
-          provider: "microsoft",
+          provider: commitProvider,
           providerEventId: value.providerEventId,
           providerCalendarId: value.providerCalendarId,
           startUtc: selected.startUtc,
@@ -491,7 +512,7 @@ export async function dispatchBookingIfRequired(
           offer_set_id: selected.offerSetId,
           slot_id: selected.slotId,
           booking_attempt_id: attempt.bookingAttemptId,
-          provider: "microsoft",
+          provider: commitProvider,
           duration_ms: value.durationMs,
         });
 

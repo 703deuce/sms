@@ -37,6 +37,11 @@ export type FindAvailabilityFailureReason =
   | "microsoft_throttled"
   | "microsoft_malformed"
   | "microsoft_error"
+  | "google_token"
+  | "google_timeout"
+  | "google_throttled"
+  | "google_malformed"
+  | "google_error"
   | "configuration_missing";
 
 export interface FindAvailabilityFailure {
@@ -54,7 +59,7 @@ export interface BusinessHoursWindow {
 }
 
 export interface VoiceV3CalendarConfig {
-  provider: "microsoft";
+  provider: "microsoft" | "google";
   connectionId: string;
   calendarIds: string[];
   smtp?: string | null;

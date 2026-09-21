@@ -3,10 +3,17 @@ import type { VoiceV3RecoveryCode } from "../recovery/types";
 /** Map provider / transport failure tokens to recovery codes (FIND/BOOK/RESCHEDULE/CANCEL). */
 export function mapProviderFailureToRecoveryCode(reason: string): VoiceV3RecoveryCode {
   const r = reason.toLowerCase();
-  if (r.includes("auth") || r.includes("401") || r.includes("403") || r.includes("microsoft_token")) {
+  if (
+    r.includes("auth") ||
+    r.includes("401") ||
+    r.includes("403") ||
+    r.includes("microsoft_token") ||
+    r.includes("google_token") ||
+    r.includes("google_auth_failed")
+  ) {
     return "MICROSOFT_AUTH_FAILED";
   }
-  if (r.includes("429") || r.includes("throttl")) {
+  if (r.includes("429") || r.includes("throttl") || r.includes("google_throttled")) {
     return "MICROSOFT_THROTTLED";
   }
   if (r.includes("5xx") || r.includes("500") || r.includes("502") || r.includes("503")) {

@@ -30,7 +30,7 @@ export interface ExistingAppointmentCustomerIdentity {
 
 export interface ExistingAppointment {
   internalBookingId: string;
-  provider: "microsoft";
+  provider: "microsoft" | "google";
   providerEventId: string;
   providerCalendarId: string;
   /** Same Microsoft connection as certified FIND/BOOK. */
@@ -153,7 +153,7 @@ export function existingAppointmentFromConfirmed(booking: ConfirmedBooking, iden
   const durationMinutes = Math.round((end.getTime() - start.getTime()) / 60_000);
   return {
     internalBookingId: booking.bookingAttemptId,
-    provider: "microsoft",
+    provider: booking.provider,
     providerEventId: booking.providerEventId,
     providerCalendarId: booking.providerCalendarId,
     startUtc: booking.startUtc,
