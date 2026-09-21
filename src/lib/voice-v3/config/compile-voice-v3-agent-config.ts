@@ -348,6 +348,8 @@ export function compileVoiceV3AgentConfig(input: {
         wizard.knowledgeSource === "website" ||
         wizard.knowledgeSource === "connect_data"));
   const documentSourceIds = resolvedRetrieval?.documentSourceIds?.filter(Boolean) ?? [];
+  const openaiVectorStoreIds =
+    resolvedRetrieval?.openaiVectorStoreIds?.filter(Boolean) ?? [];
   const retrievalRevision =
     resolvedRetrieval?.revision ?? wizard.knowledgeBaseRevision ?? null;
 
@@ -445,6 +447,7 @@ export function compileVoiceV3AgentConfig(input: {
           wizard.websiteUrl?.trim() ??
           null,
         documentSourceIds,
+        openaiVectorStoreIds,
         revision: retrievalRevision,
       },
     },

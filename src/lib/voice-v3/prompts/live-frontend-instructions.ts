@@ -21,8 +21,11 @@ function buildAmyCapabilitySummary(config: VoiceV3AgentConfig): string {
   if (c.answerQuestions) {
     lines.push("- Answering common business questions from configured facts below.");
     if (config.knowledge?.retrieval?.enabled) {
+      const nativeFs = (config.knowledge.retrieval.openaiVectorStoreIds?.length ?? 0) > 0;
       lines.push(
-        "- For detailed business facts not in this prompt, delegate to the backend to search the indexed knowledge base (search_business_knowledge).",
+        nativeFs
+          ? "- For detailed business facts not in this prompt, delegate to the backend; it can search indexed business documents (file_search)."
+          : "- For detailed business facts not in this prompt, delegate to the backend to search the indexed knowledge base (search_business_knowledge).",
       );
     }
   }

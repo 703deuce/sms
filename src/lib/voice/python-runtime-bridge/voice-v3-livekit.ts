@@ -77,6 +77,8 @@ export type VoiceV3LiveKitSessionConfig = {
   suspectedSpamLikely?: boolean;
   endCallToolHint?: string;
   solicitorPolicy?: string;
+  /** OpenAI vector stores for LiveKit `FileSearch` on GPT Live delegation backend. */
+  openaiFileSearchVectorStoreIds: string[];
 };
 
 function liveSessionIdForRoom(roomName: string): string {
@@ -143,6 +145,7 @@ export async function resolveVoiceV3LiveKitSession(
       reasoningEffort: null,
       textVerbosity: null,
       preCallReject: "blocklist",
+      openaiFileSearchVectorStoreIds: [],
     };
   }
 
@@ -224,6 +227,11 @@ export async function resolveVoiceV3LiveKitSession(
       ? "For a confirmed unsolicited sales call: call report_unwanted_solicitor first, give a brief polite decline, then end_call."
       : "";
 
+  const openaiFileSearchVectorStoreIds =
+    agentConfig.knowledge?.retrieval?.enabled === true
+      ? (agentConfig.knowledge.retrieval.openaiVectorStoreIds ?? []).filter(Boolean)
+      : [];
+
   return {
     liveSessionId,
     callId,
@@ -244,6 +252,7 @@ export async function resolveVoiceV3LiveKitSession(
     suspectedSpamLikely,
     endCallToolHint,
     solicitorPolicy,
+    openaiFileSearchVectorStoreIds,
   };
 }
 

@@ -19,26 +19,45 @@ const wizard = {
   collectFields: [],
 } as import("../src/lib/solutions/appointment-receptionist/types").AppointmentReceptionistWizardState;
 
-const compiled = compileVoiceV3AgentConfig({
+const compiledGptLive = compileVoiceV3AgentConfig({
   wizard,
   envFallback: VOICE_V3_BOOKING_AGENT_CONFIG,
   knowledgeRetrieval: {
     knowledgeBaseIds: ["kb_test_1"],
     documentSourceIds: ["src_1"],
+    openaiVectorStoreIds: ["vs_test_abc"],
     enabled: true,
     revision: "kb:kb_test_1:",
     websiteUrl: "https://example.com",
   },
 });
 
-assert.equal(compiled.knowledge.retrieval.enabled, true);
-assert.deepEqual(compiled.knowledge.retrieval.knowledgeBaseIds, ["kb_test_1"]);
-assert.deepEqual(compiled.knowledge.retrieval.documentSourceIds, ["src_1"]);
+assert.equal(compiledGptLive.knowledge.retrieval.enabled, true);
+assert.deepEqual(compiledGptLive.knowledge.retrieval.openaiVectorStoreIds, ["vs_test_abc"]);
 
-const tools = buildVoiceV3AstraFunctionToolsFromCatalog(compiled).map((t) => t.name);
-assert.ok(tools.includes("search_business_knowledge"), `tools: ${tools.join(",")}`);
+const gptLiveTools = buildVoiceV3AstraFunctionToolsFromCatalog(compiledGptLive).map((t) => t.name);
+assert.ok(
+  !gptLiveTools.includes("search_business_knowledge"),
+  `search_business_knowledge should be off when file_search vector stores are set: ${gptLiveTools.join(",")}`,
+);
 
-const knowledgePrompt = buildAstraKnowledgeInstructions(compiled);
-assert.ok(knowledgePrompt?.includes("search_business_knowledge"));
+const gptLivePrompt = buildAstraKnowledgeInstructions(compiledGptLive);
+assert.ok(gptLivePrompt?.includes("file_search"));
+
+const compiledLegacy = compileVoiceV3AgentConfig({
+  wizard,
+  envFallback: VOICE_V3_BOOKING_AGENT_CONFIG,
+  knowledgeRetrieval: {
+    knowledgeBaseIds: ["kb_test_1"],
+    documentSourceIds: ["src_1"],
+    openaiVectorStoreIds: [],
+    enabled: true,
+    revision: "kb:kb_test_1:",
+    websiteUrl: "https://example.com",
+  },
+});
+
+const legacyTools = buildVoiceV3AstraFunctionToolsFromCatalog(compiledLegacy).map((t) => t.name);
+assert.ok(legacyTools.includes("search_business_knowledge"), `tools: ${legacyTools.join(",")}`);
 
 console.log("test-voice-v3-knowledge-retrieval: PASS");

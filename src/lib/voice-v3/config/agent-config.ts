@@ -139,6 +139,8 @@ export interface VoiceV3KnowledgeConfig {
     knowledgeBaseIds: string[];
     websiteUrl?: string | null;
     documentSourceIds: string[];
+    /** GPT Live + LiveKit native file_search (OpenAI vector stores). */
+    openaiVectorStoreIds: string[];
     revision?: string | null;
   };
 }

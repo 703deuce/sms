@@ -6,11 +6,17 @@ import {
   computeKnowledgeRevisionFingerprint,
   knowledgeConfigFromWizard,
 } from "@/lib/voice-receptionist-wizard/knowledge-config";
+import {
+  listOpenAiVectorStoreIdsForKnowledgeBases,
+  useGptLiveFileSearchRag,
+} from "@/lib/voice/gpt-live-file-search-rag";
 import { resolveDocumentSourceIdsForKnowledgeBases } from "./resolve-document-source-ids";
 
 export type ResolvedAgentKnowledgeRetrieval = {
   knowledgeBaseIds: string[];
   documentSourceIds: string[];
+  /** OpenAI vector store ids for LiveKit GPT Live `FileSearch` provider tool. */
+  openaiVectorStoreIds: string[];
   enabled: boolean;
   revision: string;
   websiteUrl: string | null;
@@ -89,14 +95,20 @@ export async function resolveAgentKnowledgeRetrieval(input: {
   );
 
   const indexed = await hasIndexedKnowledgeSources(input.workspaceId, knowledgeBaseIds);
+  const openaiVectorStoreIds = await listOpenAiVectorStoreIdsForKnowledgeBases(
+    input.workspaceId,
+    knowledgeBaseIds,
+  );
   const wizardAllows =
     input.wizard.knowledgeBaseEnabled !== false &&
     (kbConfig.knowledgeBaseEnabled || indexed || knowledgeBaseIds.length > 0);
 
+  const hasRetrievalIndex = useGptLiveFileSearchRag()
+    ? openaiVectorStoreIds.length > 0 && indexed
+    : indexed || documentSourceIds.length > 0;
+
   const enabled =
-    wizardAllows &&
-    knowledgeBaseIds.length > 0 &&
-    (indexed || documentSourceIds.length > 0);
+    wizardAllows && knowledgeBaseIds.length > 0 && hasRetrievalIndex;
 
   const revision =
     input.wizard.knowledgeBaseRevision?.trim() ||
@@ -105,6 +117,7 @@ export async function resolveAgentKnowledgeRetrieval(input: {
   return {
     knowledgeBaseIds,
     documentSourceIds,
+    openaiVectorStoreIds,
     enabled,
     revision,
     websiteUrl: input.wizard.websiteUrl?.trim() || null,

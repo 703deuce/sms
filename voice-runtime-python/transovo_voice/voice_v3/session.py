@@ -7,6 +7,7 @@ from typing import Any
 from livekit import rtc
 from livekit.agents import Agent, AgentSession, JobContext, room_io
 from livekit.plugins.openai.realtime import GPTLiveModel
+from livekit.plugins.openai.tools import FileSearch
 
 from transovo_voice.integrations.backend_client import TransovoBackend
 from transovo_voice.session.dispatch_resolver import extract_call_numbers
@@ -194,6 +195,12 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
         solicitor_policy = str(config.get("solicitorPolicy") or "ALLOW")
         solicitor_state = SolicitorOutcomeState()
         session_tools = list(lk_tools)
+        vector_store_ids = config.get("openaiFileSearchVectorStoreIds") or []
+        cleaned_vs: list[str] = []
+        if isinstance(vector_store_ids, list):
+            cleaned_vs = [str(v).strip() for v in vector_store_ids if str(v).strip()]
+            if cleaned_vs:
+                session_tools.append(FileSearch(vector_store_ids=cleaned_vs))
         if solicitor_policy == "DECLINE":
             session_tools.append(
                 build_report_unwanted_solicitor_tool(client, solicitor_state)
@@ -288,6 +295,7 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
                     if t
                 ],
                 "amyToolNames": [n for n in amy_tool_names if n],
+                "openaiFileSearchVectorStoreIds": cleaned_vs,
             },
         )
 

@@ -2461,6 +2461,9 @@ model VoiceKnowledgeBase {
   telnyxBucketName      String?
   telnyxEmbeddingStatus String?
   telnyxEmbeddingTaskId String?
+  /// OpenAI vector store for GPT Live `file_search` (LiveKit FileSearch provider tool).
+  openaiVectorStoreId     String?
+  openaiVectorStoreStatus String?
   lastEmbeddedAt        DateTime?
   createdAt             DateTime                  @default(now())
   updatedAt             DateTime                  @updatedAt
@@ -2487,6 +2490,8 @@ model VoiceKnowledgeSource {
   chunkCount       Int                @default(0)
   /// Object key inside the Telnyx storage bucket (for file/text uploads).
   telnyxObjectKey  String?
+  /// OpenAI Files API id attached to the KB vector store.
+  openaiFileId     String?
   lastSyncedAt     DateTime?
   errorMessage     String?
   createdAt        DateTime           @default(now())

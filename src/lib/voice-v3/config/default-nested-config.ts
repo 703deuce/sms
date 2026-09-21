@@ -159,7 +159,12 @@ export function defaultNestedFromFlat(input: {
     services: [input.service],
     knowledge: {
       hotContext: {},
-      retrieval: { enabled: false, knowledgeBaseIds: [], documentSourceIds: [] },
+      retrieval: {
+        enabled: false,
+        knowledgeBaseIds: [],
+        documentSourceIds: [],
+        openaiVectorStoreIds: [],
+      },
     },
     telephony: {
       phoneNumberId: null,

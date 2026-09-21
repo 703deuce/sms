@@ -182,7 +182,8 @@ function isToolEnabledForConfig(entry: VoiceToolCatalogEntry, config: VoiceV3Age
     case "search_business_knowledge":
       return (
         config.knowledge?.retrieval?.enabled === true &&
-        (config.capabilities?.answerQuestions !== false)
+        (config.capabilities?.answerQuestions !== false) &&
+        (config.knowledge?.retrieval?.openaiVectorStoreIds?.length ?? 0) === 0
       );
     case "submit_appointment_request":
       return config.scheduling?.bookingStrategy === "REQUEST_ONLY";
