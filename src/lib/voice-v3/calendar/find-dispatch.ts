@@ -7,7 +7,9 @@ import { buildAvailabilityOfferSet } from "./offer-set";
 import { generateAvailabilitySlots } from "./slot-generator";
 import type { CalendarBusyInterval, FindAvailabilityFailure } from "./types";
 import { buildLiveAvailabilitySessionAppend } from "./live-availability-context";
-import { deriveDefaultPresentedSlotIds, recordPresentedOffer } from "./presentation";
+import { recordPresentedOffer } from "./presentation";
+import { derivePresentedSlotIdsForBookingBehavior } from "../policy/booking-presentation";
+import { resolveBookingServiceForRuntime } from "../config/resolve-booking-service";
 import type { VoiceV3LiveRuntimeHooks } from "../live-runtime-hooks";
 import { pushLiveThinkingEvent } from "../live-runtime-hooks";
 import { logVoiceV3Pipeline } from "../telemetry/pipeline-log";
@@ -303,37 +305,21 @@ async function completeFindAvailabilityAfterDispatch(input: {
       schedulingGeneration: request.schedulingGeneration,
     };
   } else {
-    const { fetchMicrosoftBusyIntervals } = await import("./microsoft/microsoft-find-availability");
-    const { getPrisma } = await import("@/lib/db");
-    const prisma = getPrisma();
-    const connection = await prisma.voiceCalendarConnection.findFirst({
-      where: { id: runtime.config.calendar!.connectionId, provider: "microsoft" },
+    const { fetchVoiceV3BusyIntervals } = await import("./calendar-provider-runtime");
+    const graphResult = await fetchVoiceV3BusyIntervals({
+      config: runtime.config,
+      request,
     });
-    if (!connection || connection.status !== "connected") {
+    graphDurationMs = graphResult.durationMs;
+    if (graphResult.ok) {
+      busy = graphResult.busy;
+    } else {
       failure = {
-        reason: "configuration_missing",
-        message: "Microsoft calendar connection not found or not connected",
+        reason: graphResult.reason as import("./types").FindAvailabilityFailureReason,
+        message: graphResult.message,
         at: new Date().toISOString(),
         schedulingGeneration: request.schedulingGeneration,
       };
-    } else {
-      const calendarConfig = (connection.config || {}) as import("@/lib/voice/calendar/providers").CalendarConfig;
-      const graphResult = await fetchMicrosoftBusyIntervals({
-        request,
-        connectionId: connection.id,
-        calendarConfig,
-      });
-      graphDurationMs = graphResult.durationMs;
-      if (graphResult.ok) {
-        busy = graphResult.busy;
-      } else {
-        failure = {
-          reason: graphResult.reason,
-          message: graphResult.message,
-          at: new Date().toISOString(),
-          schedulingGeneration: request.schedulingGeneration,
-        };
-      }
     }
   }
 
@@ -363,17 +349,33 @@ async function completeFindAvailabilityAfterDispatch(input: {
   let offerSet = null;
   if (!failure) {
     const existing = latest.appointmentManagement?.verifiedExisting;
+    const service = resolveBookingServiceForRuntime(runtime.config, latest);
+    const holidays = runtime.config.operatingPolicy?.businessSchedule?.holidays ?? [];
+    const closedHolidayDates = holidays
+      .filter((h) => h.closedAllDay)
+      .flatMap((h) => {
+        const dates: string[] = [];
+        const start = Date.parse(h.startDate);
+        const end = Date.parse(h.endDate);
+        if (Number.isNaN(start) || Number.isNaN(end)) return dates;
+        for (let t = start; t <= end; t += 24 * 60 * 60_000) {
+          dates.push(new Date(t).toISOString().slice(0, 10));
+        }
+        return dates;
+      });
+
     const slots = generateAvailabilitySlots({
       timezone: request.timezone,
       rangeStartUtc: request.rangeStartUtc,
       rangeEndUtc: request.rangeEndUtc,
       durationMinutes: request.durationMinutes,
-      slotStepMinutes: runtime.config.service.slotStepMinutes,
+      slotStepMinutes: service.slotStepMinutes,
       businessHours: runtime.config.businessHours,
       busyIntervals: busy,
       freeBusyOverrides: existing
         ? [{ startUtc: existing.startUtc, endUtc: existing.endUtc }]
         : undefined,
+      closedHolidayDates,
     });
     offerSet = buildAvailabilityOfferSet({
       schedulingGeneration: request.schedulingGeneration,
@@ -409,7 +411,7 @@ async function completeFindAvailabilityAfterDispatch(input: {
 
   let presentedSlotIds: string[] | undefined;
   if (offerSet) {
-    presentedSlotIds = deriveDefaultPresentedSlotIds(offerSet);
+    presentedSlotIds = derivePresentedSlotIdsForBookingBehavior(offerSet, runtime.config);
     const presented = recordPresentedOffer({ offerSet, presentedSlotIds });
     updated = {
       ...updated,

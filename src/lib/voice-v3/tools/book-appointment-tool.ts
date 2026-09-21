@@ -10,6 +10,10 @@ import { toolOk, voiceToolError } from "./types";
 import type { VoiceV3CallContext } from "../state/call-context";
 import { BOOK_APPOINTMENT_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 import { authorizeVoiceV3ToolOrError } from "./authorize-tool-for-config";
+import {
+  isBookingVerbalConfirmationRequired,
+  isBookingVerbalConfirmationSatisfied,
+} from "../booking/verbal-confirmation";
 import type { AvailabilityOfferSet } from "../calendar/offer-set";
 import type { AvailabilitySlot } from "../calendar/slot-generator";
 import type { SelectedAvailabilitySlot } from "../calendar/selected-slot";
@@ -23,6 +27,12 @@ const bookArgsSchema = z.object({
     .string()
     .min(1)
     .describe("slot_id from that offer set matching the slot the caller chose."),
+  caller_verbal_confirmed: z
+    .boolean()
+    .nullable()
+    .describe(
+      "When confirm-before-booking is enabled, set true only after the caller explicitly agrees to the exact appointment time being booked. Use null when not applicable.",
+    ),
 });
 
 export type BookAppointmentArgs = z.infer<typeof bookArgsSchema>;
@@ -102,7 +112,18 @@ export const bookAppointmentTool: VoiceToolDefinition<BookAppointmentArgs> = {
       availability: { ...snap.availability, activeOfferSet: offer, status: "ready" as const },
     };
     const withSelection = bindAuthoritativeSlotSelection(withOffer, offer, slot);
-    ctx.runtime.replaceContext(withSelection);
+    const withVerbal = {
+      ...withSelection,
+      booking: {
+        ...withSelection.booking,
+        verbalConfirmation:
+          isBookingVerbalConfirmationRequired(config) &&
+          withSelection.booking.verbalConfirmation !== "CONFIRMED"
+            ? "AWAITING"
+            : withSelection.booking.verbalConfirmation,
+      },
+    };
+    ctx.runtime.replaceContext(withVerbal);
 
     const snapAfterSelect = ctx.runtime.getSnapshot();
     const missingForBook = getMissingFieldsForOperation(
@@ -119,7 +140,33 @@ export const bookAppointmentTool: VoiceToolDefinition<BookAppointmentArgs> = {
       );
     }
 
-    const rules = evaluateVoiceV3Rules(snapAfterSelect, config);
+    let snapForBook = snapAfterSelect;
+    if (args.caller_verbal_confirmed === true) {
+      snapForBook = {
+        ...snapAfterSelect,
+        booking: {
+          ...snapAfterSelect.booking,
+          verbalConfirmation: "CONFIRMED",
+        },
+        updatedAt: new Date().toISOString(),
+        runtime: { version: snapAfterSelect.runtime.version + 1 },
+      };
+      ctx.runtime.replaceContext(snapForBook);
+    }
+
+    if (
+      isBookingVerbalConfirmationRequired(config) &&
+      !isBookingVerbalConfirmationSatisfied(config, snapForBook.booking.verbalConfirmation)
+    ) {
+      return voiceToolError(
+        "BOOKING_CONFIRMATION_REQUIRED",
+        "Obtain explicit verbal confirmation before booking.",
+        { requiresConfirmation: true },
+        "not_ready",
+      );
+    }
+
+    const rules = evaluateVoiceV3Rules(snapForBook, config);
     if (!rules.bookingReady) {
       return voiceToolError(
         "NOT_READY",
@@ -146,8 +193,8 @@ export const bookAppointmentTool: VoiceToolDefinition<BookAppointmentArgs> = {
     }
     if (after.booking.lastFailure) {
       return voiceToolError(
-        after.booking.lastFailure.code,
-        "Booking did not complete.",
+        after.booking.lastFailure.reason,
+        after.booking.lastFailure.message || "Booking did not complete.",
         { failure: after.booking.lastFailure },
         "failed",
       );

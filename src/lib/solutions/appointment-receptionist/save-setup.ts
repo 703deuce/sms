@@ -109,6 +109,17 @@ function isUniqueViolation(err: unknown): boolean {
 export async function upsertAppointmentReceptionistSetup(
   input: UpsertAppointmentReceptionistSetupInput,
 ): Promise<UpsertAppointmentReceptionistSetupResult> {
+  if (input.published) {
+    const { validateVoiceV3WizardPublishQuality, hasBlockingVoiceV3PublishQualityIssues } =
+      await import("@/lib/voice-v3/config/validate-publish-quality");
+    const qualityIssues = validateVoiceV3WizardPublishQuality(input.state);
+    if (hasBlockingVoiceV3PublishQualityIssues(qualityIssues)) {
+      const err = new Error(qualityIssues.map((i) => i.message).join(" "));
+      (err as Error & { issues: typeof qualityIssues }).issues = qualityIssues;
+      throw err;
+    }
+  }
+
   const prisma = getPrisma();
   const now = new Date().toISOString();
   const outcomeSlug = outcomeSlugFromWizard(input.state);

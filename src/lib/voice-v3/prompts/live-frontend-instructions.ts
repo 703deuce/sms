@@ -6,17 +6,29 @@ import {
 } from "./live-prompt-controls";
 import { buildAmyEndCallInstructions } from "./amy-end-call-instructions";
 import { buildAmyTransferInstructions } from "./amy-transfer-instructions";
+import { buildAmySpamSolicitorInstructions } from "../spam-protection/prompt-sections";
 
 export type LiveFrontendPromptContext = {
   agentName?: string;
   businessName?: string;
   agentConfig?: VoiceV3AgentConfig;
+  suspectedSpamLikely?: boolean;
 };
 
 function buildAmyCapabilitySummary(config: VoiceV3AgentConfig): string {
   const c = config.capabilities;
   const lines: string[] = ["You can help callers with:"];
-  if (c.answerQuestions) lines.push("- Answering common business questions from configured facts below.");
+  if (c.answerQuestions) {
+    lines.push("- Answering common business questions from configured facts below.");
+    if (config.knowledge?.retrieval?.enabled) {
+      const nativeFs = (config.knowledge.retrieval.openaiVectorStoreIds?.length ?? 0) > 0;
+      lines.push(
+        nativeFs
+          ? "- For detailed business facts not in this prompt, delegate to the backend; it can search indexed business documents (file_search)."
+          : "- For detailed business facts not in this prompt, delegate to the backend to search the indexed knowledge base (search_business_knowledge).",
+      );
+    }
+  }
   if (c.bookAppointments) lines.push("- Booking new appointments when calendar booking is enabled.");
   if (c.rescheduleAppointments) lines.push("- Rescheduling existing appointments.");
   if (c.cancelAppointments) lines.push("- Cancelling appointments when allowed.");
@@ -118,6 +130,12 @@ export function buildLiveFrontendInstructions(
     : "";
   const transferBehavior = config ? buildAmyTransferInstructions(config) : "";
   const endCallBehavior = buildAmyEndCallInstructions();
+  const spamSection =
+    config?.spamProtection
+      ? buildAmySpamSolicitorInstructions(config.spamProtection, {
+          suspectedSpamLikely: context.suspectedSpamLikely,
+        })
+      : "";
 
   const greetingHint =
     config?.conversation.openingGreeting?.trim() ||
@@ -141,6 +159,7 @@ ${persona ? `${persona}\n` : ""}
 ${liveTuning ? `${liveTuning}\n` : ""}
 ${transferBehavior ? `${transferBehavior}\n` : ""}
 ${endCallBehavior ? `${endCallBehavior}\n` : ""}
+${spamSection ? `${spamSection}\n` : ""}
 
 ${delegationPolicy}
 

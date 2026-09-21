@@ -9,6 +9,7 @@ import { pushLiveThinkingEvent } from "../live-runtime-hooks";
 import type { CancelBookingRequest } from "./cancel-booking-types";
 import { runAuthoritativeOperation } from "../operations/run-authoritative-operation";
 import { mapProviderFailureToRecoveryCode } from "../operations/provider-failure-map";
+import { calendarProviderForConfig } from "./direct-booking-strategy";
 
 export type CancelBookingExecutor = (input: {
   request: CancelBookingRequest;
@@ -97,6 +98,46 @@ export async function dispatchCancellationIfRequired(
           if (hooks.cancelBooking) {
             return hooks.cancelBooking({ request, config: runtime.config });
           }
+
+          const provider =
+            existing.provider === "google" || existing.provider === "microsoft"
+              ? existing.provider
+              : calendarProviderForConfig(runtime.config);
+
+          if (provider === "google") {
+            const { resolveVoiceV3GoogleCalendar } = await import(
+              "./google/resolve-voice-v3-google-calendar"
+            );
+            const resolved = await resolveVoiceV3GoogleCalendar(runtime.config);
+            if (!resolved.ok) {
+              return { ok: false, message: resolved.message };
+            }
+            const { validateGoogleAppointmentBeforeMutation } = await import(
+              "./google/validate-google-appointment"
+            );
+            const validation = await validateGoogleAppointmentBeforeMutation({
+              appointment: existing,
+              connectionId: resolved.connectionId,
+              calendarConfig: resolved.calendarConfig,
+            });
+            if (!validation.ok) {
+              return {
+                ok: false,
+                message: validation.message,
+                outcomeUncertain: validation.reason === "error",
+              };
+            }
+            const { executeGoogleCancelBooking } = await import("./google/google-cancel-booking");
+            const ms = await executeGoogleCancelBooking({
+              connectionId: resolved.connectionId,
+              providerEventId: existing.providerEventId,
+              providerCalendarId: existing.providerCalendarId,
+              calendarConfig: resolved.calendarConfig,
+            });
+            if (ms.ok) return { ok: true, durationMs: ms.durationMs };
+            return { ok: false, message: ms.message };
+          }
+
           const { resolveVoiceV3MicrosoftCalendar } = await import(
             "./microsoft/resolve-voice-v3-microsoft-calendar"
           );
@@ -138,15 +179,32 @@ export async function dispatchCancellationIfRequired(
         const r = await runCancel();
         if (r.ok) return { ok: true, value: { durationMs: r.durationMs } };
         if (r.outcomeUncertain) {
-          const { reconcileMicrosoftCancelOutcome } = await import(
-            "./microsoft/microsoft-reconcile-mutation-outcome"
-          );
-          const verdict = await reconcileMicrosoftCancelOutcome({
-            appointment: existing,
-            config: runtime.config,
-          });
-          if (verdict === "CANCELLED") {
-            return { ok: true, value: { durationMs: r.durationMs } };
+          const provider =
+            existing.provider === "google" || existing.provider === "microsoft"
+              ? existing.provider
+              : calendarProviderForConfig(runtime.config);
+          if (provider === "google") {
+            const { reconcileGoogleCancelOutcome } = await import(
+              "./google/google-reconcile-mutation-outcome"
+            );
+            const verdict = await reconcileGoogleCancelOutcome({
+              appointment: existing,
+              config: runtime.config,
+            });
+            if (verdict === "CANCELLED") {
+              return { ok: true, value: { durationMs: r.durationMs } };
+            }
+          } else {
+            const { reconcileMicrosoftCancelOutcome } = await import(
+              "./microsoft/microsoft-reconcile-mutation-outcome"
+            );
+            const verdict = await reconcileMicrosoftCancelOutcome({
+              appointment: existing,
+              config: runtime.config,
+            });
+            if (verdict === "CANCELLED") {
+              return { ok: true, value: { durationMs: r.durationMs } };
+            }
           }
         }
         return {

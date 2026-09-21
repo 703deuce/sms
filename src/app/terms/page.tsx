@@ -119,33 +119,86 @@ export default function TermsPage() {
         consent, pricing, and service delivery.
       </p>
 
-      <h2>6. SMS and messaging terms</h2>
+      <h2 id="sms-messaging-terms">6. SMS Messaging Terms</h2>
+
+      <h3>Transovo SMS Messaging Program</h3>
       <p>
-        When a person affirmatively opts in to receive SMS through a disclosed use case, they may
-        receive appointment-related or other specifically disclosed messages from the applicable
-        business using Transovo&apos;s platform, or from Transovo for account verification and
-        service-related notices as described in these Terms and our Privacy Policy.
-      </p>
-      <ul>
-        <li>Message frequency may vary.</li>
-        <li>Message and data rates may apply.</li>
-        <li>Reply STOP to opt out of the applicable messaging program.</li>
-        <li>Reply HELP for help.</li>
-        <li>
-          Consent to SMS is not a condition of purchasing goods or services unless permitted or
-          required by law for a specific disclosed program.
-        </li>
-      </ul>
-      <p>
-        SMS consent is limited to the use case disclosed at opt-in. Promotional or marketing SMS
-        requires the appropriate consent and disclosures. Businesses using Transovo must comply with
-        applicable messaging laws, carrier rules, CTIA and provider requirements, and Transovo
-        policies.
+        Transovo provides conversational and customer-care SMS messaging related to consumer
+        inquiries. As part of Transovo&apos;s Missed Call Text Back service, a consumer may call a
+        business and, if the call is unanswered and forwarded to Transovo, be offered the option to
+        receive a text message from Transovo regarding that inquiry.
       </p>
       <p>
-        You may not use the Services for spam, purchased lists, unlawful unsolicited messaging, or
-        messaging without valid consent. Providing a phone number alone does not automatically
-        constitute consent to marketing or other non-disclosed messaging.
+        Participation in the Transovo SMS messaging program is optional. Consent to receive SMS
+        messages is not a condition of purchasing any goods or services.
+      </p>
+
+      <h3>Consent and Opt-In</h3>
+      <p>
+        When prompted by the Transovo IVR, you may consent to receive SMS messages by pressing 1 after
+        hearing the SMS consent disclosure.
+      </p>
+      <p>
+        By pressing 1, you consent to receive conversational and customer-care SMS messages from
+        Transovo concerning your inquiry.
+      </p>
+      <p>
+        If you do not press 1 or you hang up, you will not be enrolled in the SMS messaging program
+        and no opt-in SMS message will be sent. Your Press-1 consent is recorded and stored.
+      </p>
+      <p>
+        Acceptance of these Terms and Conditions or our Privacy Policy does not by itself constitute
+        consent to receive SMS messages. SMS consent is obtained separately through the opt-in
+        process described above. See <a href="/opt-in-documentation">opt-in documentation</a> for the
+        flow diagram.
+      </p>
+
+      <h3>Message Frequency</h3>
+      <p>
+        Message frequency may vary depending on your inquiry and your interaction with the messaging
+        service.
+      </p>
+
+      <h3>Message and Data Rates</h3>
+      <p>Standard message and data rates may apply.</p>
+
+      <h3>Opt-Out</h3>
+      <p>You may opt out of receiving SMS messages at any time by replying STOP.</p>
+      <p>
+        After you opt out, you will receive confirmation that you have been unsubscribed and no further
+        SMS messages will be sent unless you subsequently provide new consent where permitted.
+      </p>
+
+      <h3>Help and Customer Care</h3>
+      <p>Reply HELP for help.</p>
+      <p>
+        You may also contact Transovo at <a href="mailto:support@transovo.ai">support@transovo.ai</a>{" "}
+        or through the contact information provided on the Transovo website for assistance.
+      </p>
+
+      <h3>Supported Carriers and Message Delivery</h3>
+      <p>
+        Wireless carriers are not liable for delayed or undelivered messages. Message delivery is
+        subject to your wireless carrier&apos;s network availability and other factors outside
+        Transovo&apos;s control.
+      </p>
+
+      <h3>Privacy</h3>
+      <p>
+        Your participation in the Transovo SMS messaging program is subject to the Transovo{" "}
+        <a href="/privacy#sms-messaging-privacy">Privacy Policy</a>.
+      </p>
+      <p>
+        Mobile information will not be sold or shared with third parties for promotional or marketing
+        purposes. SMS opt-in data and consent will not be shared with third parties for purposes
+        unrelated to providing the messaging service.
+      </p>
+      <p>
+        Promotional or marketing SMS sent by businesses through other Transovo features requires the
+        appropriate consent and disclosures. Businesses using Transovo must comply with applicable
+        messaging laws, carrier rules, CTIA and provider requirements, and Transovo policies. You may
+        not use the Services for spam, purchased lists, unlawful unsolicited messaging, or messaging
+        without valid consent.
       </p>
 
       <h3>Account phone verification and one-time SMS codes</h3>

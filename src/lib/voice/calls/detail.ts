@@ -182,15 +182,7 @@ export function buildActionItems(input: {
   return items;
 }
 
-export function deriveOutcomeBadges(call: {
-  outcome?: string | null;
-  appointmentBooked?: boolean;
-  transferred?: boolean;
-  voicemailDetected?: boolean;
-  isLead?: boolean | null;
-  leadScore?: number | null;
-  status?: string;
-}): CallOutcomeBadge[] {
+export function deriveOutcomeBadges(call: import("./display").CallRowLike): CallOutcomeBadge[] {
   const primary = deriveCallOutcomeBadge(call);
   const badges: CallOutcomeBadge[] = [primary];
   if (primary === "New Lead" && call.outcome?.toLowerCase().includes("message")) {

@@ -289,6 +289,8 @@ model Workspace {
   integrationWebhookEvents          IntegrationWebhookEvent[]
   apiKeys                           ApiKey[]
   webhooks                          Webhook[]
+  voiceWebhookDeliveries            VoiceWebhookDelivery[]
+  voiceCallerBlocks                 VoiceCallerBlock[]
   auditLogs                         AuditLog[]
   usageRecords                      UsageRecord[]
   automationExecutions              AutomationExecution[]
@@ -299,6 +301,10 @@ model Workspace {
   voiceKnowledgeBases               VoiceKnowledgeBase[]
   voiceKnowledgeSources             VoiceKnowledgeSource[]
   voiceAgentKnowledgeBases          VoiceAgentKnowledgeBase[]
+  voiceKnowledgeGaps                VoiceKnowledgeGap[]
+  voiceWebsiteCrawlJobs             VoiceWebsiteCrawlJob[]
+  voiceWebsiteCrawlPages            VoiceWebsiteCrawlPage[]
+  voiceV3UsageEvents                VoiceV3UsageEvent[]
   voiceTools                        VoiceTool[]
   voiceAgentTools                   VoiceAgentTool[]
   voiceCalendarConnections          VoiceCalendarConnection[]
@@ -2224,12 +2230,41 @@ model ApiKey {
 }
 
 model Webhook {
-  id          String    @id @default(cuid())
-  workspaceId String
-  url         String
-  events      String[]
-  active      Boolean   @default(true)
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id                   String                @id @default(cuid())
+  workspaceId          String
+  url                  String
+  events               String[]
+  active               Boolean               @default(true)
+  signingSecretPrefix  String?
+  signingSecretHash    String?
+  metadata             Json?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  workspace            Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  voiceWebhookDelivery VoiceWebhookDelivery[]
+}
+
+model VoiceWebhookDelivery {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  webhookId       String
+  eventId         String
+  eventType       String
+  status          String    @default("pending")
+  attempt         Int       @default(0)
+  httpStatus      Int?
+  errorMessage    String?
+  responseExcerpt String?
+  nextRetryAt     DateTime?
+  attemptedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  webhook         Webhook   @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId])
+  @@index([webhookId, createdAt])
+  @@index([workspaceId, status])
+  @@map("voice_webhook_deliveries")
 }
 
 model AuditLog {
@@ -2414,12 +2449,16 @@ model VoiceKnowledgeBase {
   telnyxBucketName      String?
   telnyxEmbeddingStatus String?
   telnyxEmbeddingTaskId String?
+  /// OpenAI vector store for GPT Live `file_search` (LiveKit FileSearch provider tool).
+  openaiVectorStoreId     String?
+  openaiVectorStoreStatus String?
   lastEmbeddedAt        DateTime?
   createdAt             DateTime                  @default(now())
   updatedAt             DateTime                  @updatedAt
   workspace             Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   sources               VoiceKnowledgeSource[]
   agentLinks            VoiceAgentKnowledgeBase[]
+  websiteCrawlJobs      VoiceWebsiteCrawlJob[]
 
   @@index([workspaceId])
   @@map("voice_knowledge_bases")
@@ -2440,6 +2479,8 @@ model VoiceKnowledgeSource {
   chunkCount       Int                @default(0)
   /// Object key inside the Telnyx storage bucket (for file/text uploads).
   telnyxObjectKey  String?
+  /// OpenAI Files API id attached to the KB vector store.
+  openaiFileId     String?
   lastSyncedAt     DateTime?
   errorMessage     String?
   createdAt        DateTime           @default(now())
@@ -2450,6 +2491,94 @@ model VoiceKnowledgeSource {
   @@index([knowledgeBaseId])
   @@index([workspaceId])
   @@map("voice_knowledge_sources")
+}
+
+model VoiceKnowledgeGap {
+  id                 String    @id @default(cuid())
+  workspaceId        String
+  normalizedQuestion String
+  displayQuestion    String
+  status             String    @default("OPEN")
+  timesAsked         Int       @default(1)
+  firstAskedAt       DateTime  @default(now())
+  lastAskedAt        DateTime  @default(now())
+  sourceCallIds      Json      @default("[]")
+  recentWording      String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  workspace          Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, normalizedQuestion])
+  @@index([workspaceId, status])
+  @@map("voice_knowledge_gaps")
+}
+
+model VoiceWebsiteCrawlJob {
+  id              String                 @id @default(cuid())
+  workspaceId     String
+  knowledgeBaseId String
+  rootUrl         String
+  status          String                 @default("DISCOVERING")
+  stats           Json?
+  errorSummary    String?
+  suggestions     Json?
+  startedAt       DateTime               @default(now())
+  completedAt     DateTime?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  workspace       Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  knowledgeBase   VoiceKnowledgeBase     @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  pages           VoiceWebsiteCrawlPage[]
+
+  @@index([workspaceId, knowledgeBaseId])
+  @@index([workspaceId, status])
+  @@map("voice_website_crawl_jobs")
+}
+
+model VoiceWebsiteCrawlPage {
+  id                String              @id @default(cuid())
+  workspaceId       String
+  crawlJobId        String
+  knowledgeSourceId String?
+  sourceUrl         String
+  canonicalUrl      String?
+  pageTitle         String?
+  status            String              @default("pending")
+  contentHash       String?
+  skipReason        String?
+  errorMessage      String?
+  lastIndexedAt     DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  crawlJob          VoiceWebsiteCrawlJob @relation(fields: [crawlJobId], references: [id], onDelete: Cascade)
+  workspace         Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([crawlJobId, sourceUrl])
+  @@index([workspaceId, crawlJobId])
+  @@map("voice_website_crawl_pages")
+}
+
+model VoiceV3UsageEvent {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  voiceCallId     String
+  product         String    @default("voice_v3")
+  metric          String    @default("billable_call")
+  quantity        Int       @default(1)
+  occurredAt      DateTime  @default(now())
+  billingStatus   String    @default("pending")
+  externalEventId String?
+  attemptCount    Int       @default(0)
+  lastAttemptAt   DateTime?
+  lastError       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([product, metric, voiceCallId])
+  @@index([workspaceId, billingStatus])
+  @@index([voiceCallId])
+  @@map("voice_v3_usage_events")
 }
 
 model VoiceAgentKnowledgeBase {
@@ -2697,6 +2826,23 @@ model VoiceCall {
   @@index([telnyxCallControlId])
   @@index([agentId])
   @@map("voice_calls")
+}
+
+model VoiceCallerBlock {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  callerE164      String
+  displayName     String?
+  reason          String?
+  blockedByUserId String?
+  sourceCallId    String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, callerE164])
+  @@index([workspaceId, createdAt])
+  @@map("voice_caller_blocks")
 }
 
 model VoiceCallLeg {

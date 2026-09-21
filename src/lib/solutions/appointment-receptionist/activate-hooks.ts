@@ -230,6 +230,10 @@ async function ensureWizardKnowledgeBase(input: {
     }
   }
 
+  if (!input.state.linkedKnowledgeBaseId?.trim()) {
+    input.state.linkedKnowledgeBaseId = kb.id;
+  }
+
   return kb.id;
 }
 

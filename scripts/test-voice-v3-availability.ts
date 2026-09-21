@@ -5,7 +5,10 @@ import {
   applyFindAvailabilityResult,
   dispatchFindAvailabilityIfRequired,
 } from "../src/lib/voice-v3/calendar/find-dispatch";
-import { buildFindAvailabilityRequest } from "../src/lib/voice-v3/calendar/find-availability";
+import {
+  buildFindAvailabilityRequest,
+  resolveFindAvailabilityCalendarIds,
+} from "../src/lib/voice-v3/calendar/find-availability";
 import { generateAvailabilitySlots } from "../src/lib/voice-v3/calendar/slot-generator";
 import { applyCallerMeaningToContext } from "../src/lib/voice-v3/intake/apply-caller-meaning";
 import type { CallerMeaning } from "../src/lib/voice-v3/intake/caller-meaning-schema";
@@ -133,6 +136,30 @@ function testRulesDispatch() {
   const req = buildFindAvailabilityRequest(base, config());
   assert.ok(req);
   assert.equal(req!.durationMinutes, 60);
+}
+
+function testDefaultServiceCalendarUsesAgentIds() {
+  assert.deepEqual(
+    resolveFindAvailabilityCalendarIds("default", ["AAQkAGI1", "primary"]),
+    ["AAQkAGI1", "primary"],
+  );
+  assert.deepEqual(resolveFindAvailabilityCalendarIds(undefined, ["primary"]), ["primary"]);
+  assert.deepEqual(resolveFindAvailabilityCalendarIds("  cal-1  ", ["primary"]), ["primary"]);
+
+  let base = ctx();
+  const applied = applyCallerMeaningToContext(base, config(), fridayAfternoonMeaning(), FROZEN);
+  base = { ...applied.context, dialog: { activeGoal: "BOOK_APPOINTMENT" } };
+  const cfg = config({
+    service: { ...config().service, calendarId: "default" },
+    calendar: {
+      ...config().calendar!,
+      calendarIds: ["AAQkAGI1-real-id"],
+    },
+  });
+  const req = buildFindAvailabilityRequest(base, cfg);
+  assert.ok(req);
+  assert.deepEqual(req!.calendarIds, ["AAQkAGI1-real-id"]);
+  assert.ok(!req!.requestKey.includes("|default|"), req!.requestKey);
 }
 
 async function testStaleRace() {
@@ -308,6 +335,7 @@ async function main() {
   testExactTimeSearchWindow();
   await testSlotGeneration();
   testRulesDispatch();
+  testDefaultServiceCalendarUsesAgentIds();
   await testStaleRace();
   await testSpeakContinuationAfterFind();
   await testDuplicateDispatch();

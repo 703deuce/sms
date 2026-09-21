@@ -10,6 +10,7 @@ import {
 } from "@/lib/microsoft/oauth-config";
 import { createHmac, randomBytes } from "crypto";
 import type { CalendarConfig } from "@/lib/calendar/providers";
+import { googleCalendarOAuthScopes } from "@/lib/calendar/google-calendar-scope";
 
 import {
   CALENDAR_INTEGRATIONS_PATH,
@@ -79,8 +80,9 @@ export function getGoogleOAuthStartUrl(
     client_id: clientId,
     redirect_uri: redirect,
     response_type: "code",
-    scope: "https://www.googleapis.com/auth/calendar",
+    scope: googleCalendarOAuthScopes(),
     access_type: "offline",
+    include_granted_scopes: "true",
     prompt: "consent",
     state: oauthState(connectionId, workspaceId, returnTo),
   });
@@ -133,20 +135,61 @@ export async function completeGoogleOAuth(
   const tokens = await res.json();
   if (!res.ok) throw new Error(tokens.error_description || tokens.error || "Token exchange failed");
 
+  const existing = await getPrisma().voiceCalendarConnection.findUnique({
+    where: { id: parsed.connectionId },
+  });
+  const priorConfig = (existing?.config || {}) as CalendarConfig;
+  const refreshToken = tokens.refresh_token || priorConfig.refreshToken;
+  if (!refreshToken) {
+    throw new Error(
+      "Google did not return a refresh token. Reconnect with consent to grant offline access.",
+    );
+  }
+
+  const config: CalendarConfig = {
+    ...priorConfig,
+    provider: "google",
+    accessToken: tokens.access_token,
+    refreshToken,
+    expiresAt: Date.now() + (tokens.expires_in || 3600) * 1000,
+    calendarId: priorConfig.calendarId || "primary",
+    grantedScopes: tokens.scope || priorConfig.grantedScopes,
+  };
+
+  await validateGooglePrimaryCalendarList({
+    accessToken: tokens.access_token as string,
+  });
+
   await getPrisma().voiceCalendarConnection.update({
     where: { id: parsed.connectionId },
     data: {
       status: "connected",
-      config: {
-        provider: "google",
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
-        expiresAt: Date.now() + (tokens.expires_in || 3600) * 1000,
-        calendarId: "primary",
-      },
+      config: config as object,
     },
   });
   return parsed;
+}
+
+async function validateGooglePrimaryCalendarList(input: { accessToken: string }): Promise<void> {
+  const now = new Date();
+  const timeMax = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const url = new URL(
+    "https://www.googleapis.com/calendar/v3/calendars/primary/events",
+  );
+  url.searchParams.set("timeMin", now.toISOString());
+  url.searchParams.set("timeMax", timeMax.toISOString());
+  url.searchParams.set("maxResults", "1");
+  url.searchParams.set("singleEvents", "true");
+
+  const res = await fetch(url.toString(), {
+    headers: { Authorization: `Bearer ${input.accessToken}` },
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(
+      `Google Calendar validation failed (${res.status})${body ? `: ${body.slice(0, 200)}` : ""}`,
+    );
+  }
 }
 
 export async function completeMicrosoftOAuth(code: string, state: string) {

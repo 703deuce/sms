@@ -137,6 +137,7 @@ export function compileVoiceV3TransferPolicyFromWizard(
 
   return {
     enabled: enabled && destinations.length > 0 && routes.length > 0,
+    detectVoicemailOnTransfer: wizard.detectVoicemailOnTransfer === true,
     defaultRingingTimeoutSeconds: defaultTimeout,
     defaultFallback: fallback,
     routing,

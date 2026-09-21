@@ -684,7 +684,9 @@ export async function getMicrosoftBusy(
   const rawCalendarId = opts?.calendarId?.trim();
   // Voice config uses Google-style "primary"; Graph expects /me/calendar/calendarView or getSchedule.
   const calendarId =
-    rawCalendarId && rawCalendarId !== "primary" ? rawCalendarId : undefined;
+    rawCalendarId && rawCalendarId !== "primary" && rawCalendarId !== "default"
+      ? rawCalendarId
+      : undefined;
 
   if (calendarId) {
     return getMicrosoftBusyViaCalendarView(accessToken, timeMin, timeMax, calendarId, ctx);
@@ -1216,7 +1218,13 @@ export async function insertMicrosoftEvent(
       ...(transactionId ? { transactionId } : {}),
     }),
   }, ctx);
-  if (!res.ok) throw new Error(`Microsoft events.insert ${res.status}`);
+  if (!res.ok) {
+    const graphError = await parseMicrosoftGraphError(res);
+    const detail = graphError.graphMessage || graphError.graphCode || res.statusText;
+    throw new Error(
+      `Microsoft events.insert ${res.status}${detail ? `: ${detail}` : ""}`,
+    );
+  }
   const json = await res.json();
   return (json.id as string) || null;
 }

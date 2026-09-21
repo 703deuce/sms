@@ -1,4 +1,5 @@
 import { WebhooksPanel } from "@/components/integrations/webhooks-panel";
+import { VoiceOutboundWebhooksPanel } from "@/components/voice/voice-outbound-webhooks-panel";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { Tabs } from "@/components/ui/tabs";
@@ -71,6 +72,7 @@ export default async function IntegrationsWebhooksPage() {
       <Tabs items={integrationTabs} />
 
       <WebhooksPanel endpoints={endpointRows} outbound={outboundRows} />
+      <VoiceOutboundWebhooksPanel />
     </div>
   );
 }

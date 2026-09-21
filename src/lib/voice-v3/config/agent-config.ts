@@ -1,6 +1,15 @@
 import type { BusinessHoursWindow, VoiceV3CalendarConfig } from "../calendar/types";
 import type { VoiceWizardBookingStrategy } from "@/lib/solutions/appointment-receptionist/types";
 import type { VoiceV3AfterHoursNotificationsConfig } from "../notifications/types";
+import type { VoiceV3SpamProtectionConfig } from "../spam-protection/types";
+import type {
+  VoiceV2AfterHoursBehaviorConfig,
+  VoiceV2BusinessScheduleConfig,
+  VoiceV2CallbackSlaPolicy,
+  VoiceV2OnCallScheduleConfig,
+} from "@/lib/voice-receptionist-wizard/operating-maturity/types";
+import type { VoiceV2QualificationRuleRow } from "@/lib/voice-receptionist-wizard/qualification-types";
+import type { VoiceV2UrgencyRuleRow } from "@/lib/voice-receptionist-wizard/after-hours-handling-types";
 
 export type IntakeFieldType =
   | "text"
@@ -61,6 +70,15 @@ export interface VoiceV3ServiceConfig {
   slotStepMinutes: number;
   description?: string;
   enabled?: boolean;
+  calendarId?: string;
+  status?: "ready" | "needs_rules";
+  location?: string;
+  modality?: "in_person" | "phone" | "video";
+  bookingPermission?: import("@/lib/solutions/appointment-receptionist/types").BookingPermission;
+  minimumBookingNoticeMinutes?: number;
+  maximumBookingDaysAhead?: number;
+  requiredIntakeKeys?: string[];
+  bookingHoursProse?: string;
 }
 
 export interface VoiceV3CapabilityFlags {
@@ -121,6 +139,8 @@ export interface VoiceV3KnowledgeConfig {
     knowledgeBaseIds: string[];
     websiteUrl?: string | null;
     documentSourceIds: string[];
+    /** GPT Live + LiveKit native file_search (OpenAI vector stores). */
+    openaiVectorStoreIds: string[];
     revision?: string | null;
   };
 }
@@ -130,6 +150,14 @@ export interface VoiceV3SchedulingConfig {
   primaryServiceId: string;
   services: VoiceV3ServiceConfig[];
   bookingBehavior: AppointmentReceptionistBookingBehavior;
+}
+
+/** Weekly schedule + after-hours behavior for deterministic operating-state gating. */
+export interface VoiceV3OperatingPolicyConfig {
+  businessSchedule: VoiceV2BusinessScheduleConfig;
+  afterHoursBehavior: VoiceV2AfterHoursBehaviorConfig;
+  onCallSchedule?: VoiceV2OnCallScheduleConfig;
+  callbackSla?: VoiceV2CallbackSlaPolicy;
 }
 
 /** Mirrors wizard bookingBehavior without importing wizard state in hot paths. */
@@ -190,6 +218,7 @@ export interface VoiceV3CallHandlingConfig {
   callbackRequiredCollectFieldIds?: string[];
   salesSolicitationEnabled: boolean;
   salesSolicitationAction: string | null;
+  urgencyRules?: VoiceV2UrgencyRuleRow[];
 }
 
 export interface VoiceV3QualificationConfig {
@@ -200,7 +229,7 @@ export interface VoiceV3QualificationConfig {
   rulesMatchMode: "ALL" | "ANY" | null;
   notQualifiedFallback: string | null;
   needsReviewFallback: string | null;
-  rules: unknown[];
+  rules: VoiceV2QualificationRuleRow[];
 }
 
 export interface VoiceV3RecoveryConfig {
@@ -271,7 +300,9 @@ export interface VoiceV3AgentConfig {
   telephony: VoiceV3TelephonyConfig;
   controlPlane: VoiceV3ControlPlaneMeta;
   callHandling: VoiceV3CallHandlingConfig;
+  spamProtection: VoiceV3SpamProtectionConfig;
   afterHoursNotifications?: VoiceV3AfterHoursNotificationsConfig;
+  operatingPolicy?: VoiceV3OperatingPolicyConfig;
   qualification: VoiceV3QualificationConfig;
   recovery: VoiceV3RecoveryConfig;
   integrations: VoiceV3IntegrationsConfig;

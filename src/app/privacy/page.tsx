@@ -127,54 +127,53 @@ export default function PrivacyPage() {
         first about your contact information, appointment details, or messaging preferences.
       </p>
 
-      <h2 id="sms-mobile-data">4. SMS, mobile information, and messaging data</h2>
+      <h2 id="sms-messaging-privacy">4. SMS Messaging Privacy</h2>
+      <p>
+        Transovo may collect your mobile telephone number, SMS messaging consent, opt-in and opt-out
+        records, message content, and related messaging information when you participate in a
+        Transovo text messaging program.
+      </p>
+      <p>
+        We use this information to provide the text messaging services you request, respond to your
+        inquiries, provide customer-care and conversational communications, maintain records of your
+        consent, process opt-out and help requests, prevent abuse, and comply with applicable legal
+        and telecommunications requirements.
+      </p>
       <p>
         <strong>
-          Mobile information and SMS opt-in data and consent will not be sold, rented, or shared with
-          third parties for their own marketing or promotional purposes.
+          No mobile information will be sold or shared with third parties for promotional or marketing
+          purposes.
         </strong>
       </p>
       <p>
-        This includes phone numbers collected for SMS opt-in, consent records, opt-out status, and
-        related mobile messaging information. We do not sell personal information.
+        All the above categories exclude text messaging originator opt-in data and consent; this
+        information won&apos;t be shared with any third parties.
       </p>
       <p>
-        To deliver and support messaging services, we may share information — including phone numbers,
-        message content as needed for delivery, delivery status, and SMS consent or opt-out status —
-        with service providers, telecommunications carriers, messaging platforms, phone companies, and
-        other vendors solely as necessary to provide and support the messaging services. That sharing
-        is limited to operating, securing, and supporting messaging functionality and is not for those
-        parties&apos; independent marketing or promotional use.
+        We will not share your opt-in to an SMS messaging program with any third party for purposes
+        unrelated to providing you with the services of that program. We may share information,
+        including your SMS opt-in or consent status, with service providers that help us provide our
+        messaging services, such as telecommunications carriers, messaging platform providers, and
+        other vendors involved in delivering or supporting the requested messaging service. These
+        service providers may use the information only as necessary to provide those services and not
+        for their own marketing or promotional purposes.
       </p>
       <p>
-        Businesses using Transovo are responsible for collecting, documenting, and maintaining valid
-        consent before sending marketing or other commercial text messages. Having a phone number alone
-        is not consent to receive marketing or other non-disclosed messaging.
+        You may opt out of SMS messages at any time by replying STOP. You may reply HELP for assistance
+        or contact us at <a href="mailto:support@transovo.ai">support@transovo.ai</a>.
+      </p>
+      <p>
+        Businesses using Transovo for their own messaging programs remain responsible for collecting,
+        documenting, and maintaining valid consent before sending marketing or other commercial text
+        messages where applicable. Having a phone number alone is not consent to receive marketing or
+        other non-disclosed messaging.
+      </p>
+      <p>
+        See also our <a href="/opt-in-documentation">SMS opt-in documentation</a> for the Missed Call
+        Text Back consent flow.
       </p>
 
-      <h2>5. SMS consent and program disclosures</h2>
-      <p>
-        When a person affirmatively opts in to receive SMS through a disclosed use case, they may
-        receive appointment-related or other specifically disclosed messages from the applicable
-        business using Transovo&apos;s platform, or from Transovo for account verification and
-        service-related notices as described in this policy.
-      </p>
-      <ul>
-        <li>Message frequency may vary.</li>
-        <li>Message and data rates may apply.</li>
-        <li>Reply STOP to opt out of the applicable messaging program.</li>
-        <li>Reply HELP for help.</li>
-        <li>
-          Consent to SMS is not a condition of purchasing goods or services unless permitted or
-          required by law for a specific disclosed program.
-        </li>
-      </ul>
-      <p>
-        We may store consent records, timestamps, and opt-out requests for compliance, audit, and
-        operational purposes. Opt-out requests should be honored for the applicable messaging program.
-      </p>
-
-      <h3>Account phone verification and one-time SMS codes (2FA)</h3>
+      <h2>5. Account phone verification and one-time SMS codes (2FA)</h2>
       <p>
         {BRAND_NAME} sends one-time verification codes to users who request them when signing in,
         verifying their phone number, or resetting their password. You may enter your mobile number
@@ -292,11 +291,11 @@ export default function PrivacyPage() {
         </li>
       </ul>
       <p>
-        <strong>SMS and mobile-data reminder:</strong> Mobile information and SMS opt-in data and
-        consent are not sold, rented, or shared with third parties for their own marketing or
-        promotional purposes. We may share this information with service providers, telecommunications
-        carriers, messaging platforms, and other vendors solely as necessary to provide and support
-        the messaging services.
+        <strong>SMS and mobile-data reminder:</strong> No mobile information will be sold or shared
+        with third parties for promotional or marketing purposes. All the above categories exclude text
+        messaging originator opt-in data and consent; this information won&apos;t be shared with any
+        third parties, except with service providers as necessary to deliver the messaging services
+        (see <a href="#sms-messaging-privacy">SMS Messaging Privacy</a>).
       </p>
 
       <h2>11. Selling or sharing personal information</h2>

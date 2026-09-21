@@ -1,4 +1,5 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
+import { isDirectCalendarBookingConfig } from "../calendar/direct-booking-strategy";
 
 export interface VoiceV3Capabilities {
   canBook: boolean;
@@ -15,13 +16,13 @@ export function deriveVoiceV3Capabilities(config: VoiceV3AgentConfig): VoiceV3Ca
     config.calendar?.connectionId?.trim() && config.calendar.calendarIds.length > 0,
   );
   const caps = config.capabilities;
-  const microsoftBooking =
-    config.scheduling?.bookingStrategy === "MICROSOFT_365" && calendarConnected;
+  const directCalendarBooking =
+    isDirectCalendarBookingConfig(config) && calendarConnected;
   return {
     canBook:
-      microsoftBooking && caps.bookAppointments && config.service.durationMinutes > 0,
-    canReschedule: microsoftBooking && caps.rescheduleAppointments,
-    canCancel: microsoftBooking && caps.cancelAppointments,
+      directCalendarBooking && caps.bookAppointments && config.service.durationMinutes > 0,
+    canReschedule: directCalendarBooking && caps.rescheduleAppointments,
+    canCancel: directCalendarBooking && caps.cancelAppointments,
     canTransfer: caps.transferCalls,
     canTakeCallback: true,
     canTakeMessage: caps.takeMessages,

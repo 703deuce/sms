@@ -23,11 +23,16 @@ import {
 } from "./wizard-collect-fields-v3";
 import { compileAfterHoursNotificationsFromWizard } from "../notifications/compile-from-wizard";
 import { resolveLivePromptControlsFromWizard } from "../prompts/live-prompt-controls";
+import { wizardSpamProtectionFromState } from "../spam-protection/types";
+import { servicePolicyFromWizardType } from "../policy/service-policy";
+import type { ResolvedAgentKnowledgeRetrieval } from "../knowledge/resolve-agent-knowledge-retrieval";
 
 export type VoiceV3ProviderConnections = {
   microsoftConnectionId?: string | null;
   microsoftCalendarIds?: string[];
   microsoftSmtp?: string | null;
+  googleConnectionId?: string | null;
+  googleCalendarIds?: string[];
 };
 
 function interpolateGreeting(
@@ -46,14 +51,7 @@ function wizardServices(
 ): VoiceV3ServiceConfig[] {
   return (wizard.appointmentTypes || [])
     .filter((t) => t.enabled)
-    .map((t) => ({
-      id: t.id,
-      name: t.name?.trim() || t.id,
-      durationMinutes: t.durationMin > 0 ? t.durationMin : 30,
-      slotStepMinutes,
-      description: t.description?.trim() || undefined,
-      enabled: true,
-    }));
+    .map((t) => servicePolicyFromWizardType(t, slotStepMinutes));
 }
 
 function resolvePrimaryService(
@@ -183,7 +181,11 @@ function bookingStrategyDetailFromWizard(
     ...DEFAULT_V3_BOOKING_STRATEGY,
     strategy,
     executionStatus:
-      strategy === "MICROSOFT_365" || strategy === "SEND_LINK"
+      strategy === "MICROSOFT_365" ||
+      strategy === "GOOGLE_CALENDAR" ||
+      strategy === "SEND_LINK" ||
+      strategy === "REQUEST_ONLY" ||
+      strategy === "NONE"
         ? "ACTIVE_EXECUTION"
         : "CONFIGURED_NOT_IMPLEMENTED",
     bookingLinkUrl: wizard.bookingLinkUrl?.trim() || null,
@@ -219,6 +221,7 @@ function callHandlingFromWizard(
     callbackRequiredCollectFieldIds: wizard.callbackRequiredCollectFieldIds ?? undefined,
     salesSolicitationEnabled: wizard.salesSolicitationEnabled === true,
     salesSolicitationAction: wizard.salesSolicitationAction ?? null,
+    urgencyRules: wizard.urgencyRules ?? [],
   };
 }
 
@@ -273,6 +276,8 @@ export function compileVoiceV3AgentConfig(input: {
   providerConnections?: VoiceV3ProviderConnections;
   envFallback?: VoiceV3AgentConfig;
   source?: VoiceV3AgentConfig["source"];
+  /** Resolved at publish/call time (agent KB links + indexed sources). */
+  knowledgeRetrieval?: ResolvedAgentKnowledgeRetrieval;
 }): VoiceV3AgentConfig {
   const envFallback = input.envFallback ?? VOICE_V3_BOOKING_AGENT_CONFIG;
   const wizard = input.wizard;
@@ -302,13 +307,20 @@ export function compileVoiceV3AgentConfig(input: {
 
   const bookingStrategy = deriveBookingStrategyFromWizard(wizard);
 
-  const connectionId =
-    input.providerConnections?.microsoftConnectionId?.trim() ||
-    envFallback.calendar?.connectionId ||
-    "";
+  const isGoogle = bookingStrategy === "GOOGLE_CALENDAR";
+  const connectionId = isGoogle
+    ? input.providerConnections?.googleConnectionId?.trim() ||
+      envFallback.calendar?.connectionId ||
+      ""
+    : input.providerConnections?.microsoftConnectionId?.trim() ||
+      envFallback.calendar?.connectionId ||
+      "";
 
-  const calendarIds =
-    input.providerConnections?.microsoftCalendarIds?.length
+  const calendarIds = isGoogle
+    ? input.providerConnections?.googleCalendarIds?.length
+      ? input.providerConnections.googleCalendarIds
+      : envFallback.calendar?.calendarIds ?? ["primary"]
+    : input.providerConnections?.microsoftCalendarIds?.length
       ? input.providerConnections.microsoftCalendarIds
       : envFallback.calendar?.calendarIds ?? ["primary"];
 
@@ -318,6 +330,28 @@ export function compileVoiceV3AgentConfig(input: {
     service,
     agentName,
   });
+
+  const resolvedRetrieval = input.knowledgeRetrieval;
+  const kbIds =
+    resolvedRetrieval?.knowledgeBaseIds?.length
+      ? resolvedRetrieval.knowledgeBaseIds
+      : wizard.linkedKnowledgeBaseId
+        ? [wizard.linkedKnowledgeBaseId]
+        : [];
+  const retrievalEnabled =
+    resolvedRetrieval?.enabled === true ||
+    (resolvedRetrieval === undefined &&
+      wizard.knowledgeBaseEnabled !== false &&
+      kbIds.length > 0 &&
+      (Boolean(wizard.linkedKnowledgeBaseId) ||
+        wizard.knowledgeSource === "upload_docs" ||
+        wizard.knowledgeSource === "website" ||
+        wizard.knowledgeSource === "connect_data"));
+  const documentSourceIds = resolvedRetrieval?.documentSourceIds?.filter(Boolean) ?? [];
+  const openaiVectorStoreIds =
+    resolvedRetrieval?.openaiVectorStoreIds?.filter(Boolean) ?? [];
+  const retrievalRevision =
+    resolvedRetrieval?.revision ?? wizard.knowledgeBaseRevision ?? null;
 
   const base: VoiceV3AgentConfig = {
     ...envFallback,
@@ -343,17 +377,31 @@ export function compileVoiceV3AgentConfig(input: {
               envFallback.calendar?.smtp ??
               null,
           }
-        : envFallback.calendar,
+        : bookingStrategy === "GOOGLE_CALENDAR"
+          ? {
+              provider: "google",
+              connectionId,
+              calendarIds,
+              smtp: null,
+            }
+          : envFallback.calendar,
     ...nested,
     services: services.length ? services : [service],
     source: input.source ?? "wizard_published",
     configVersion: configVersionHash(wizard),
     callHandling: callHandlingFromWizard(wizard),
+    spamProtection: wizardSpamProtectionFromState(wizard),
     afterHoursNotifications: compileAfterHoursNotificationsFromWizard(wizard),
     qualification: qualificationFromWizard(wizard),
     recovery: recoveryFromWizard(wizard),
     integrations: integrationsFromWizard(wizard),
     bookingStrategyDetail: bookingStrategyDetailFromWizard(wizard),
+    operatingPolicy: {
+      businessSchedule: maturity.businessSchedule,
+      afterHoursBehavior: maturity.afterHoursBehavior,
+      onCallSchedule: maturity.onCallSchedule,
+      callbackSla: maturity.callbackSla,
+    },
   };
 
   return mergeNestedConfig(base, {
@@ -392,13 +440,15 @@ export function compileVoiceV3AgentConfig(input: {
     knowledge: {
       hotContext: hotContextFromWizard(wizard),
       retrieval: {
-        enabled: wizard.knowledgeBaseEnabled === true,
-        knowledgeBaseIds: wizard.linkedKnowledgeBaseId
-          ? [wizard.linkedKnowledgeBaseId]
-          : [],
-        websiteUrl: wizard.websiteUrl?.trim() || null,
-        documentSourceIds: [],
-        revision: wizard.knowledgeBaseRevision ?? null,
+        enabled: retrievalEnabled,
+        knowledgeBaseIds: kbIds,
+        websiteUrl:
+          resolvedRetrieval?.websiteUrl ??
+          wizard.websiteUrl?.trim() ??
+          null,
+        documentSourceIds,
+        openaiVectorStoreIds,
+        revision: retrievalRevision,
       },
     },
     telephony: {

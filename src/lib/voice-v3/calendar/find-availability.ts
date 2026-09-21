@@ -1,10 +1,22 @@
 import type { NormalizedSchedulingPreference } from "../time/scheduling-types";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import { resolveBookingServiceForRuntime } from "../config/resolve-booking-service";
+import { clampFindWindowToServiceHorizon, serviceAllowsLiveBooking } from "../policy/service-policy";
 import type { VoiceV3CallContext } from "../state/call-context";
 import type { FindAvailabilityRequest, RequiredRuntimeAction } from "./types";
 import { parseVoiceV3LocalIsoToDate } from "./microsoft/microsoft-time-adapter";
 import { wallTimeInZoneToUtc } from "../time/timezone";
+
+/**
+ * Voice V3 always books on the agent's connected calendar list.
+ * Per-service calendar ids are legacy wizard UI only — never sent to FIND/BOOK.
+ */
+export function resolveFindAvailabilityCalendarIds(
+  _serviceCalendarId: string | undefined,
+  agentCalendarIds: string[],
+): string[] {
+  return [...agentCalendarIds];
+}
 
 export function buildFindAvailabilityRequestKey(req: FindAvailabilityRequest): string {
   return [
@@ -70,15 +82,26 @@ export function buildFindAvailabilityRequest(
   if (!normalized) return null;
 
   const service = resolveBookingServiceForRuntime(config, ctx);
-  const window = resolveSearchWindowFromNormalized(
+  if (!serviceAllowsLiveBooking(service)) return null;
+
+  const windowRaw = resolveSearchWindowFromNormalized(
     normalized,
     ctx.business.timezone,
     service.durationMinutes,
   );
-  if (!window) return null;
+  if (!windowRaw) return null;
+  const window = clampFindWindowToServiceHorizon({
+    service,
+    rangeStartUtc: windowRaw.rangeStartUtc,
+    rangeEndUtc: windowRaw.rangeEndUtc,
+  });
 
   const calendar = config.calendar;
   if (!calendar?.calendarIds?.length) return null;
+  const calendarIds = resolveFindAvailabilityCalendarIds(
+    service.calendarId,
+    calendar.calendarIds,
+  );
 
   const req: FindAvailabilityRequest = {
     callId: ctx.callId,
@@ -87,7 +110,7 @@ export function buildFindAvailabilityRequest(
     rangeStartUtc: window.rangeStartUtc,
     rangeEndUtc: window.rangeEndUtc,
     durationMinutes: service.durationMinutes,
-    calendarIds: [...calendar.calendarIds],
+    calendarIds,
     requestKey: "",
   };
   req.requestKey = buildFindAvailabilityRequestKey(req);

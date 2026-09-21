@@ -1,19 +1,25 @@
-import { AppointmentsLandingPage } from "@/components/landing/appointments/appointments-landing-page";
+import { MctbLandingPage } from "@/components/landing/mctb/mctb-landing-page";
 import type { Metadata } from "next";
 
 export async function generateMetadata(): Promise<Metadata> {
   return {
     title: {
-      absolute: "Book More Appointments, Reduce No-Shows | Transovo",
+      absolute: "Missed Call Text Back for Small Business | Transovo",
     },
     description:
-      "AI-assisted booking, automatic SMS and email reminders, appointment workflows, team scheduling, and payments — Transovo manages the full appointment lifecycle for service businesses.",
+      "When you miss a call, Transovo lets callers press 1 to continue by text on your existing business number. Free plan available. Set up in minutes.",
     alternates: {
       canonical: "/",
+    },
+    openGraph: {
+      title: "Missed Call Text Back | Transovo",
+      description:
+        "Missed call → caller chooses text → conversation continues. Keep your existing business number.",
+      url: "/",
     },
   };
 }
 
 export default function HomePage() {
-  return <AppointmentsLandingPage />;
+  return <MctbLandingPage />;
 }

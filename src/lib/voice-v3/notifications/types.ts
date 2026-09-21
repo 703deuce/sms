@@ -25,6 +25,10 @@ export type VoiceV3AfterHoursNotificationRecipient = {
 export type VoiceV3AfterHoursNotificationsConfig = {
   events: Record<VoiceV3NotificationEventKey, VoiceV3NotificationChannelFlags>;
   recipients: VoiceV3AfterHoursNotificationRecipient[];
+  dailyDigest?: {
+    enabled: boolean;
+    recipientEmail?: string | null;
+  };
 };
 
 export type VoiceV3NotificationDispatchInput = {

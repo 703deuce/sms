@@ -52,6 +52,7 @@ export interface VoiceV3TransferTelephonyCompiled {
 
 export interface VoiceV3TransferPolicyCompiled {
   enabled: boolean;
+  detectVoicemailOnTransfer?: boolean;
   defaultRingingTimeoutSeconds: number;
   defaultFallback: VoiceV3TransferFallback;
   routing: "single" | "waterfall";
@@ -76,6 +77,7 @@ export interface VoiceV3AuthorizedTransferPlan {
   handoff_instructions: string;
   outbound_sip_trunk_id: string | null;
   outbound_caller_id_e164: string | null;
+  detect_voicemail_on_transfer?: boolean;
 }
 
 /** Model-safe tool result (no dial targets). */

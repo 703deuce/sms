@@ -2,6 +2,7 @@ import type { VoiceV3CallContext } from "../state/call-context";
 
 /** Invalidate booking-specific state when abandoning BOOK — preserve intake facts. */
 export function invalidateBookingStateForGoalAbandon(ctx: VoiceV3CallContext): VoiceV3CallContext {
+  const bumpedGeneration = ctx.scheduling.generation + 1;
   return {
     ...ctx,
     availability: {
@@ -20,6 +21,11 @@ export function invalidateBookingStateForGoalAbandon(ctx: VoiceV3CallContext): V
       confirmed: ctx.booking.confirmed,
       lastFailure: null,
       postBookChangeRequested: false,
+      verbalConfirmation: "NOT_REQUIRED",
+    },
+    scheduling: {
+      ...ctx.scheduling,
+      generation: bumpedGeneration,
     },
     runtime: { version: ctx.runtime.version + 1 },
   };

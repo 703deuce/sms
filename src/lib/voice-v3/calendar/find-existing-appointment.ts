@@ -116,6 +116,47 @@ function finalizeFromNarrowed(
   };
 }
 
+async function loadGoogleCandidates(
+  request: FindExistingAppointmentRequest,
+  config: VoiceV3AgentConfig,
+): Promise<AppointmentDiscoveryRecord[]> {
+  const { resolveVoiceV3GoogleCalendar } = await import("./google/resolve-voice-v3-google-calendar");
+  const { fetchGoogleAppointmentDiscoveryCandidates } = await import(
+    "./google/google-find-existing-appointments"
+  );
+  const resolved = await resolveVoiceV3GoogleCalendar(config);
+  if (!resolved.ok) return [];
+
+  const timezone = request.timezone ?? config.timezone ?? "America/New_York";
+  const when = mergeAppointmentWhen(request);
+  const window = buildFindExistingAppointmentWindow({
+    timezone,
+    dateHint: request.dateHint,
+    appointmentWhen: when,
+    dateExpression: request.dateExpression ?? request.lookupState?.localDate,
+    durationMinutes: config.service.durationMinutes,
+  });
+
+  const graph = await fetchGoogleAppointmentDiscoveryCandidates({
+    connectionId: resolved.connectionId,
+    calendarConfig: resolved.calendarConfig,
+    calendarIds: resolved.calendarIds,
+    rangeStartUtc: window.rangeStartUtc,
+    rangeEndUtc: window.rangeEndUtc,
+    timezone,
+  });
+  if (!graph.ok) {
+    console.log("APPOINTMENT_DISCOVERY_GOOGLE_FAILED", {
+      call_id: request.callId,
+      reason: graph.reason,
+      message: graph.message,
+      duration_ms: graph.durationMs,
+    });
+    return [];
+  }
+  return graph.candidates;
+}
+
 async function loadMicrosoftCandidates(
   request: FindExistingAppointmentRequest,
   config: VoiceV3AgentConfig,
@@ -187,9 +228,15 @@ export async function findExistingAppointment(
   const timezone = request.timezone ?? config?.timezone ?? "America/New_York";
   let pool: AppointmentDiscoveryRecord[] = loadStoreCandidates(request, timezone);
 
-  const shouldQueryMicrosoft = request.microsoftLookup !== false && config?.calendar?.connectionId;
-  if (shouldQueryMicrosoft && config) {
-    pool = dedupeDiscoveryRecords([...pool, ...(await loadMicrosoftCandidates(request, config))]);
+  const shouldQueryCalendar =
+    request.microsoftLookup !== false && config?.calendar?.connectionId;
+  if (shouldQueryCalendar && config) {
+    const provider = config.calendar?.provider;
+    const calendarCandidates =
+      provider === "google"
+        ? await loadGoogleCandidates(request, config)
+        : await loadMicrosoftCandidates(request, config);
+    pool = dedupeDiscoveryRecords([...pool, ...calendarCandidates]);
   }
 
   const narrowed = narrowAppointmentCandidates(pool, constraints);

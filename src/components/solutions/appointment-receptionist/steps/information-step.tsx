@@ -266,22 +266,45 @@ export function InformationStep({
         throw new Error(json?.error || "Website scan failed");
       }
       const payload = json?.data || {};
-      const source = payload?.source || payload;
+      const crawlJobId = payload.crawlJobId as string | undefined;
+      let crawlPayload = payload;
+      if (crawlJobId) {
+        const deadline = Date.now() + 120_000;
+        while (Date.now() < deadline) {
+          const statusRes = await fetch(`/api/voice/knowledge/crawl/${crawlJobId}`);
+          const statusJson = await statusRes.json().catch(() => ({}));
+          const job = statusJson?.data;
+          if (job?.status === "READY" || job?.status === "PARTIAL" || job?.status === "FAILED") {
+            crawlPayload = { ...payload, ...job, suggestions: job.suggestions };
+            break;
+          }
+          await new Promise((r) => setTimeout(r, 2500));
+        }
+      }
+      const stats = (crawlPayload.stats || {}) as Record<string, unknown>;
+      const pagesIndexed = Number(stats.pagesIndexed || 0);
+      const suggestions = crawlPayload.suggestions as Record<string, unknown> | undefined;
+      const suggestedName = suggestions?.businessName as string | undefined;
       patch({
-        businessName,
+        businessName: state.businessName?.trim() || suggestedName || businessName,
         websiteUrl: url,
+        knowledgeSource: "website",
+        knowledgeBaseEnabled: true,
+        knowledgeBaseRevision:
+          payload.knowledgeBaseRevision ||
+          state.knowledgeBaseRevision ||
+          `scan:${Date.now()}`,
         linkedKnowledgeBaseId:
           payload.knowledgeBaseId || state.linkedKnowledgeBaseId || null,
         knowledgeItems: itemsForScanResult({
-          businessName,
+          businessName: (suggestions?.businessName as string) || businessName,
           url,
-          sourceStatus: source?.status || payload.sourceStatus,
-          chunkCount: source?.chunkCount ?? payload.chunkCount,
+          sourceStatus: crawlPayload.status || payload.crawlStatus || "processing",
+          chunkCount: pagesIndexed || undefined,
           preview:
-            source?.extractedPreview ||
-            source?.contentText ||
-            payload.extractedPreview,
-          errorMessage: source?.errorMessage || payload.errorMessage,
+            (suggestions?.description as string) ||
+            (pagesIndexed ? `${pagesIndexed} pages indexed from website crawl.` : undefined),
+          errorMessage: crawlPayload.errorSummary as string | undefined,
         }),
       });
     } catch (err) {

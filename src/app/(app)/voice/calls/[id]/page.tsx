@@ -4,8 +4,12 @@ import { WaveformRecordingPlayer } from "@/components/calls/waveform-recording-p
 import {
   buildActionItems,
   buildCapturedFields,
+  deriveOutcomeBadges,
 } from "@/lib/voice/calls/detail";
-import { deriveOutcomeBadges, fmtCallDuration, fmtCallPhone } from "@/lib/voice/calls/display";
+import { deriveCallOutcomeBadge, fmtCallDuration, fmtCallPhone } from "@/lib/voice/calls/display";
+import { CallTranscript } from "@/components/voice/calls/call-transcript";
+import { CallScreeningSection } from "@/components/voice/call-screening-section";
+import { buildCallScreeningUi } from "@/lib/voice/calls/screening-display";
 import {
   getMockCallById,
   isDemoCallId,
@@ -14,14 +18,12 @@ import {
 } from "@/lib/voice/calls/mock-data";
 import { cn } from "@/lib/utils";
 import {
-  Bot,
   ChevronRight,
   Download,
   Link2,
   MoreHorizontal,
   Share2,
   Trash2,
-  User,
 } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -41,25 +43,6 @@ type CallInsight = {
   sentiment?: string | null;
 };
 
-function fmtSegmentTime(ms?: number | null) {
-  if (ms == null) return "0:00";
-  const total = Math.round(ms / 1000);
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
-
-function speakerLabel(speaker: string, agentName: string, callerName: string) {
-  const s = speaker.toLowerCase();
-  if (s.includes("agent") || s.includes("assistant") || s.includes("ai")) return agentName;
-  return callerName;
-}
-
-function isAgent(speaker: string) {
-  const s = speaker.toLowerCase();
-  return s.includes("agent") || s.includes("assistant") || s.includes("ai");
-}
-
 export default function VoiceCallDetailPage() {
   const params = useParams();
   const id = String(params.id || "");
@@ -67,6 +50,10 @@ export default function VoiceCallDetailPage() {
   const [data, setData] = useState<Record<string, unknown> | null>(null);
   const [apiLoaded, setApiLoaded] = useState(false);
   const [showTranscriptDetails, setShowTranscriptDetails] = useState(true);
+  const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
+  const [blockStatus, setBlockStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [blockError, setBlockError] = useState<string | null>(null);
+  const [transcriptRetrying, setTranscriptRetrying] = useState(false);
   const demo = isDemoCallId(id);
   const mock = demo ? getMockCallById(id) : undefined;
 
@@ -171,12 +158,62 @@ export default function VoiceCallDetailPage() {
     insightCustomFields: insightCustom,
     insightSummary: insight?.summary,
   });
+  const voiceV3Analytics = (data?.voiceV3Analytics as Record<string, unknown> | undefined) || {};
+  const callMetadata = (call.metadata as unknown) ?? (data?.call as { metadata?: unknown })?.metadata;
+  const screeningUi = buildCallScreeningUi({
+    metadata: callMetadata,
+    outcome: call.outcome as string | null,
+  });
   const outcomeBadges = deriveOutcomeBadges({
     outcome: call.outcome as string | null,
     appointmentBooked: Boolean(call.appointmentBooked),
     transferred: Boolean(call.transferred),
     voicemailDetected: Boolean(call.voicemailDetected),
+    needsAttention: voiceV3Analytics.actionRequired === true,
+    spamLikely: voiceV3Analytics.outcome === "SPAM",
+    solicitor: voiceV3Analytics.outcome === "SOLICITOR",
+    v3Outcome: typeof voiceV3Analytics.outcome === "string" ? voiceV3Analytics.outcome : null,
   });
+  const voiceV3PostCall = (data?.voiceV3PostCall as Record<string, unknown> | undefined) || {};
+  const voiceV3StructuredSummary = (data?.voiceV3StructuredSummary as Record<string, unknown> | undefined) || {};
+  const postCallProcessing = Boolean(call.endedAt) && !voiceV3PostCall.pipelineCompletedAt;
+  const transcriptStatus =
+    (voiceV3PostCall.transcriptStatus as string | undefined) ||
+    ((data?.transcripts as Array<{ status?: string }>)?.[0]?.status ?? null);
+  const summaryText =
+    (voiceV3StructuredSummary.summary as string | undefined) ||
+    insight?.summary ||
+    "";
+
+  async function confirmBlockCaller() {
+    if (demo) return;
+    setBlockStatus("loading");
+    setBlockError(null);
+    try {
+      const res = await fetch(`/api/voice/calls/${id}/block-caller`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not block caller");
+      setBlockStatus("done");
+      setBlockConfirmOpen(false);
+    } catch (e) {
+      setBlockStatus("error");
+      setBlockError(e instanceof Error ? e.message : "Could not block caller");
+    }
+  }
+
+  async function retryTranscript() {
+    if (demo || transcriptRetrying) return;
+    setTranscriptRetrying(true);
+    try {
+      await fetch(`/api/voice/calls/${id}/retry-transcript`, { method: "POST" });
+      const r = await fetch(`/api/voice/calls/${id}`);
+      const j = await r.json();
+      setData(j.data ?? null);
+    } finally {
+      setTranscriptRetrying(false);
+    }
+  }
+
   const actionItems = buildActionItems({
     call: {
       appointmentBooked: Boolean(call.appointmentBooked),
@@ -205,6 +242,16 @@ export default function VoiceCallDetailPage() {
         <span className="text-[#374151]">Call from {callerName}</span>
       </nav>
 
+      {postCallProcessing ? (
+        <div
+          className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+          role="status"
+        >
+          Processing recording, transcript, and summary… This usually takes a minute after the call
+          ends.
+        </div>
+      ) : null}
+
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-3">
@@ -219,6 +266,19 @@ export default function VoiceCallDetailPage() {
                 {badge}
               </span>
             ))}
+            {screeningUi.extraBadges.map((badge) => (
+              <span
+                key={badge}
+                className={cn(
+                  "rounded-full px-2.5 py-0.5 text-xs font-semibold tracking-wide ring-1 ring-inset",
+                  badge === "Spam Likely"
+                    ? "bg-rose-50 text-rose-700 ring-rose-200"
+                    : "bg-amber-50 text-amber-800 ring-amber-200",
+                )}
+              >
+                {badge}
+              </span>
+            ))}
           </div>
           <p className="mt-2 text-sm text-[#6b7280]">
             {dateLabel} at {timeLabel}
@@ -227,12 +287,16 @@ export default function VoiceCallDetailPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            className="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2 text-sm font-medium text-[#374151] shadow-sm hover:bg-[#f9fafb]"
-          >
-            Transfer
-          </button>
+          {!demo && callerPhone && callerPhone !== "unknown" ? (
+            <button
+              type="button"
+              className="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2 text-sm font-medium text-[#374151] shadow-sm hover:bg-[#f9fafb] disabled:opacity-60"
+              disabled={blockStatus === "done"}
+              onClick={() => setBlockConfirmOpen(true)}
+            >
+              {blockStatus === "done" ? "Caller blocked" : "Block caller"}
+            </button>
+          ) : null}
           <button
             type="button"
             className="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2 text-sm font-medium text-[#374151] shadow-sm hover:bg-[#f9fafb]"
@@ -340,13 +404,31 @@ export default function VoiceCallDetailPage() {
                 </ul>
               </div>
 
+              <CallScreeningSection
+                metadata={callMetadata}
+                outcome={call.outcome as string | null}
+              />
+
               <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
                 <h2 className="text-sm font-semibold text-[#111827]">AI Summary</h2>
+                {voiceV3StructuredSummary.headline ? (
+                  <p className="mt-2 text-sm font-medium text-[#111827]">
+                    {String(voiceV3StructuredSummary.headline)}
+                  </p>
+                ) : null}
                 <p className="mt-3 text-sm leading-relaxed text-[#374151]">
-                  {insight?.summary ||
+                  {summaryText ||
                     mockCall?.summary ||
                     "No AI summary available for this call."}
                 </p>
+                {Array.isArray(voiceV3StructuredSummary.actionItems) &&
+                voiceV3StructuredSummary.actionItems.length > 0 ? (
+                  <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-[#374151]">
+                    {(voiceV3StructuredSummary.actionItems as string[]).map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                ) : null}
               </div>
 
               <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
@@ -379,25 +461,21 @@ export default function VoiceCallDetailPage() {
                     Show details
                   </label>
                 </div>
-                <div className="mt-4 space-y-4">
-                  {segments.slice(0, 4).map((seg) => (
-                    <div key={seg.id} className="flex gap-3">
-                      {showTranscriptDetails ? (
-                        <span className="w-10 shrink-0 text-xs tabular-nums text-[#9ca3af]">
-                          {fmtSegmentTime(seg.startMs)}
-                        </span>
-                      ) : null}
-                      <div>
-                        <p className="text-xs font-semibold text-[#6b7280]">
-                          {speakerLabel(seg.speaker, agentName, callerName)}
-                        </p>
-                        <p className="mt-1 text-sm leading-relaxed text-[#374151]">{seg.text}</p>
-                      </div>
-                    </div>
-                  ))}
-                  {segments.length > 4 ? (
-                    <button type="button" className="text-sm font-medium text-[#6366f1] hover:underline">
-                      See more
+                <div className="mt-4">
+                  <CallTranscript
+                    segments={segments.slice(0, showTranscriptDetails ? segments.length : 4)}
+                    agentName={agentName}
+                    callerName={callerName}
+                    status={transcriptStatus}
+                    onRetry={!demo ? retryTranscript : undefined}
+                  />
+                  {segments.length > 4 && !showTranscriptDetails ? (
+                    <button
+                      type="button"
+                      className="mt-3 text-sm font-medium text-[#6366f1] hover:underline"
+                      onClick={() => setTab("transcript")}
+                    >
+                      See full transcript
                     </button>
                   ) : null}
                 </div>
@@ -405,29 +483,14 @@ export default function VoiceCallDetailPage() {
             </>
           ) : (
             <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
-              <div className="max-h-[32rem] space-y-4 overflow-auto">
-                {segments.map((seg) => {
-                  const agent = isAgent(seg.speaker);
-                  return (
-                    <div key={seg.id} className="flex gap-3">
-                      <div
-                        className={cn(
-                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
-                          agent ? "bg-[#eef2ff] text-[#6366f1]" : "bg-[#f3f4f6] text-[#6b7280]",
-                        )}
-                      >
-                        {agent ? <Bot className="h-4 w-4" /> : <User className="h-4 w-4" />}
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-[#6b7280]">
-                          {fmtSegmentTime(seg.startMs)} ·{" "}
-                          {speakerLabel(seg.speaker, agentName, callerName)}
-                        </p>
-                        <p className="mt-1 text-sm leading-relaxed text-[#374151]">{seg.text}</p>
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="max-h-[32rem] overflow-auto">
+                <CallTranscript
+                  segments={segments}
+                  agentName={agentName}
+                  callerName={callerName}
+                  status={transcriptStatus}
+                  onRetry={!demo ? retryTranscript : undefined}
+                />
               </div>
             </div>
           )}
@@ -479,7 +542,16 @@ export default function VoiceCallDetailPage() {
           <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
             <h2 className="text-sm font-semibold text-[#111827]">Activity Feed</h2>
             <ol className="mt-4 space-y-0">
-              {(demo ? MOCK_ACTIVITY_EVENTS : MOCK_ACTIVITY_EVENTS).map((e, idx, arr) => (
+              {(demo
+                ? MOCK_ACTIVITY_EVENTS
+                : ((data?.events as Array<{ id: string; eventType: string; createdAt: string }>) || []).map(
+                    (e) => ({
+                      id: e.id,
+                      label: e.eventType.replace(/_/g, " "),
+                      at: new Date(e.createdAt).toLocaleString(),
+                    }),
+                  )
+              ).map((e, idx, arr) => (
                 <li key={e.id} className="flex gap-3">
                   <div className="flex flex-col items-center">
                     <span className="mt-1.5 h-2 w-2 rounded-full bg-[#6366f1]" />
@@ -539,6 +611,44 @@ export default function VoiceCallDetailPage() {
           </div>
         </aside>
       </div>
+
+      {blockConfirmOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="block-caller-title"
+        >
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-lg">
+            <h2 id="block-caller-title" className="text-lg font-semibold text-[#111827]">
+              Block this caller?
+            </h2>
+            <p className="mt-2 text-sm text-[#6b7280]">
+              Future calls from {fmtCallPhone(callerPhone)} will be rejected for this workspace.
+            </p>
+            {blockError ? (
+              <p className="mt-2 text-sm text-rose-700" role="alert">{blockError}</p>
+            ) : null}
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-[#e5e7eb] px-4 py-2 text-sm font-medium"
+                onClick={() => setBlockConfirmOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                disabled={blockStatus === "loading"}
+                onClick={confirmBlockCaller}
+              >
+                {blockStatus === "loading" ? "Blocking…" : "Block caller"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

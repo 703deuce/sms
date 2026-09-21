@@ -1,5 +1,7 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
+
 import {
   getValidAccessToken,
   hasOAuthTokens,
@@ -7,6 +9,7 @@ import {
   type CalendarConfig,
 } from "@/lib/voice/calendar/providers";
 import type { CreateBookingRequest } from "../booking-types";
+import { resolveMicrosoftGraphCalendarId } from "../resolve-provider-calendar-id";
 
 export type MicrosoftCreateBookingResult =
   | {
@@ -46,7 +49,11 @@ function classifyCreateError(err: unknown): MicrosoftCreateBookingResult {
   } else if (lower.includes("timeout") || lower.includes("etimedout") || lower.includes("econnreset")) {
     reason = "BOOKING_OUTCOME_UNKNOWN";
     outcomeUncertain = true;
-  } else if (lower.includes("validation") || lower.includes("malformed")) {
+  } else if (
+    lower.includes("validation") ||
+    lower.includes("malformed") ||
+    lower.includes(" 400")
+  ) {
     reason = "BOOKING_VALIDATION_FAILED";
   }
 
@@ -86,13 +93,26 @@ export async function executeMicrosoftCreateBooking(input: {
     const start = new Date(input.request.startUtc);
     const end = new Date(input.request.endUtc);
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+      const message = "Invalid booking interval";
+      console.error("MICROSOFT_BOOK_CREATE_FAILED", {
+        booking_attempt_id: input.request.bookingAttemptId,
+        call_id: input.request.callId,
+        calendar_id: input.request.calendarId,
+        reason: "BOOKING_VALIDATION_FAILED",
+        message,
+        start_utc: input.request.startUtc,
+        end_utc: input.request.endUtc,
+        duration_ms: Date.now() - started,
+      });
       return {
         ok: false,
         reason: "BOOKING_VALIDATION_FAILED",
-        message: "Invalid booking interval",
+        message,
         durationMs: Date.now() - started,
       };
     }
+
+    const graphTransactionId = randomUUID();
 
     const summary = `${input.request.service.name} — ${input.request.customer.name}`;
     const description = [
@@ -112,9 +132,8 @@ export async function executeMicrosoftCreateBooking(input: {
           start,
           end,
           timezone: input.request.timezone,
-          calendarId:
-            input.request.calendarId !== "primary" ? input.request.calendarId : undefined,
-          transactionId: input.request.bookingAttemptId,
+          calendarId: resolveMicrosoftGraphCalendarId(input.request.calendarId),
+          transactionId: graphTransactionId,
           transovoAppointmentId: input.request.bookingAttemptId,
         },
         { connectionId: input.connectionId, config: input.calendarConfig },
@@ -142,6 +161,14 @@ export async function executeMicrosoftCreateBooking(input: {
   } catch (err) {
     const classified = classifyCreateError(err);
     classified.durationMs = Date.now() - started;
+    console.error("MICROSOFT_BOOK_CREATE_FAILED", {
+      booking_attempt_id: input.request.bookingAttemptId,
+      call_id: input.request.callId,
+      calendar_id: input.request.calendarId,
+      reason: classified.reason,
+      message: classified.message,
+      duration_ms: classified.durationMs,
+    });
     return classified;
   }
 }

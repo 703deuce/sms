@@ -5,7 +5,8 @@ export type WizardV3ExecutionStatus =
   | "CONFIGURED_NOT_IMPLEMENTED"
   | "CONTROL_PLANE_ONLY"
   | "PROVIDER_CONFIG"
-  | "UNSUPPORTED_BY_CURRENT_LIVE_API";
+  | "UNSUPPORTED_BY_CURRENT_LIVE_API"
+  | "INTENTIONALLY_UNSUPPORTED";
 
 export type WizardV3RepublishBehavior =
   | "next_call"

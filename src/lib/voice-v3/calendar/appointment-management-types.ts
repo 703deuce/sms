@@ -30,7 +30,7 @@ export interface ExistingAppointmentCustomerIdentity {
 
 export interface ExistingAppointment {
   internalBookingId: string;
-  provider: "microsoft";
+  provider: "microsoft" | "google";
   providerEventId: string;
   providerCalendarId: string;
   /** Same Microsoft connection as certified FIND/BOOK. */

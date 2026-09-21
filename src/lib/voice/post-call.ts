@@ -8,7 +8,14 @@ import { resolveTransferInsightFields, resolveMessageTakenInsight } from "./rout
 import { getReceptionistCompiledFromAdvanced } from "./receptionist/runtime";
 import { notifyReceptionistStaff } from "./receptionist/notifications";
 
-export async function processPostCall(callId: string) {
+export type ProcessPostCallOptions = {
+  /** Voice V3 pipeline produces authoritative insights after Deepgram transcript. */
+  skipInsightGeneration?: boolean;
+  /** Defer after-hours notification until structured post-call summary is ready. */
+  skipV3ImmediateNotification?: boolean;
+};
+
+export async function processPostCall(callId: string, options?: ProcessPostCallOptions) {
   const prisma = getPrisma();
   const call = await prisma.voiceCall.findUnique({ where: { id: callId } });
   if (!call) return { ok: false };
@@ -60,8 +67,10 @@ export async function processPostCall(callId: string) {
     isTest: call.isTest,
   });
 
-  // Generate insights (Telnyx or internal stub)
-  const insight = await generateCallInsights(call, config);
+  // Generate insights (Telnyx or internal stub) — skipped for Voice V3 post-call pipeline.
+  const insight = options?.skipInsightGeneration
+    ? null
+    : await generateCallInsights(call, config);
   const extractionFields = config?.postCall?.extractionFields || [];
 
   const callMeta =
@@ -403,6 +412,7 @@ export async function processPostCall(callId: string) {
 
   void (async () => {
     try {
+      if (options?.skipV3ImmediateNotification) return;
       if (!agent?.id) return;
       const { isAppointmentReceptionistAgent } = await import(
         "@/lib/voice-v3/config/from-published-agent"

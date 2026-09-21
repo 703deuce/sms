@@ -22,6 +22,7 @@ class VoiceV3CallContext:
     call_id: str
     workspace_id: str
     agent_id: str
+    telnyx_call_screening: str | None = None
 
 
 class TransovoV3ToolClient:
@@ -39,6 +40,7 @@ class TransovoV3ToolClient:
             "providerCallId": self._ctx.provider_call_id,
             "trunkId": self._ctx.trunk_id,
             "ruleId": self._ctx.rule_id,
+            "telnyxCallScreening": self._ctx.telnyx_call_screening,
         }
         return await self._backend.call("resolve_voice_v3_livekit_session", payload)
 

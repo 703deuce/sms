@@ -6,6 +6,7 @@ import {
   resolveConfiguredCallbackRequiredKeys,
 } from "../callback/callback-requirements";
 import { fieldSatisfiesObjectiveRequirement } from "./validate-intake-value";
+import { resolveActiveServicePolicy } from "../policy/service-policy";
 
 export type VoiceOperationName =
   | "unresolved"
@@ -38,18 +39,38 @@ function defaultRequiredIntakeKeys(config: VoiceV3AgentConfig): string[] {
 function configuredRequiredForOperation(
   config: VoiceV3AgentConfig,
   operation: VoiceOperationName,
+  context?: VoiceV3CallContext,
 ): string[] {
   const overrides = config.operationRequirements?.[operation];
-  if (overrides !== undefined) return [...overrides];
+  if (overrides !== undefined && operation !== "book_appointment") return [...overrides];
   if (operation === "unresolved") return [];
   if (operation === "request_callback") {
     return resolveConfiguredCallbackRequiredKeys(config);
+  }
+  if (operation === "book_appointment" && context) {
+    return requiredIntakeKeysForBookAppointment(config, context);
+  }
+  if (operation === "book_appointment") {
+    return overrides ?? defaultRequiredIntakeKeys(config);
   }
   if (READ_OPERATIONS.includes(operation)) return [];
   if (MUTATION_INTAKE_OPERATIONS.includes(operation)) {
     return defaultRequiredIntakeKeys(config);
   }
   return [];
+}
+
+function requiredIntakeKeysForBookAppointment(
+  config: VoiceV3AgentConfig,
+  context: VoiceV3CallContext,
+): string[] {
+  const global =
+    config.operationRequirements?.book_appointment ?? defaultRequiredIntakeKeys(config);
+  const service = resolveActiveServicePolicy(config, context);
+  const perService = service.requiredIntakeKeys?.filter(Boolean) ?? [];
+  if (!perService.length) return global;
+  const merged = new Set([...global, ...perService]);
+  return [...merged];
 }
 
 /** Intake requirements follow the active dialog goal — shared facts, operation-specific gaps. */
@@ -84,7 +105,7 @@ export function configuredRequiredKeysForActiveOperation(
   context: VoiceV3CallContext,
 ): string[] {
   const operation = resolveActiveIntakeOperation(config, context);
-  return configuredRequiredForOperation(config, operation);
+  return configuredRequiredForOperation(config, operation, context);
 }
 
 export function getMissingFieldsForOperation(
@@ -98,7 +119,7 @@ export function getMissingFieldsForOperation(
   if (operation === "request_callback") {
     return getMissingCallbackRequirementKeys(config, context);
   }
-  const requiredKeys = configuredRequiredForOperation(config, operation);
+  const requiredKeys = configuredRequiredForOperation(config, operation, context);
   const values = context.intake.values;
   return requiredKeys.filter((key) => {
     const field = config.intakeFields.find((f) => f.key === key);

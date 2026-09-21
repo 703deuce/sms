@@ -12,6 +12,7 @@ import { pushLiveThinkingEvent } from "../live-runtime-hooks";
 import type { RevalidateBusyFetcher } from "./book-dispatch";
 import { runAuthoritativeOperation } from "../operations/run-authoritative-operation";
 import { mapProviderFailureToRecoveryCode } from "../operations/provider-failure-map";
+import { calendarProviderForConfig } from "./direct-booking-strategy";
 
 export type UpdateBookingExecutor = (input: {
   providerEventId: string;
@@ -90,22 +91,9 @@ export async function dispatchRescheduleIfRequired(
       }
       busy = r.busy;
     } else {
-      const { fetchMicrosoftBusyIntervals } = await import("./microsoft/microsoft-find-availability");
-      const { resolveVoiceV3MicrosoftCalendar } = await import(
-        "./microsoft/resolve-voice-v3-microsoft-calendar"
-      );
-      const resolved = await resolveVoiceV3MicrosoftCalendar(runtime.config);
-      if (!resolved.ok) {
-        runtime.replaceContext({
-          ...runtime.getSnapshot(),
-          appointmentManagement: {
-            ...runtime.getSnapshot().appointmentManagement,
-            reschedule: { phase: "RESCHEDULE_FAILED", attemptId },
-          },
-        });
-        return;
-      }
-      const graphResult = await fetchMicrosoftBusyIntervals({
+      const { fetchVoiceV3BusyIntervals } = await import("./calendar-provider-runtime");
+      const graphResult = await fetchVoiceV3BusyIntervals({
+        config: runtime.config,
         request: {
           callId: ctx.callId,
           schedulingGeneration: ctx.scheduling.generation,
@@ -113,11 +101,9 @@ export async function dispatchRescheduleIfRequired(
           rangeStartUtc: window.rangeStartUtc,
           rangeEndUtc: window.rangeEndUtc,
           durationMinutes: runtime.config.service.durationMinutes,
-          calendarIds: resolved.calendarIds,
+          calendarIds: runtime.config.calendar?.calendarIds ?? ["primary"],
           requestKey: `reschedule_revalidate|${attemptId}`,
         },
-        connectionId: resolved.connectionId,
-        calendarConfig: resolved.calendarConfig,
       });
       if (!graphResult.ok) {
         runtime.replaceContext({
@@ -196,6 +182,55 @@ export async function dispatchRescheduleIfRequired(
               config: runtime.config,
             });
           }
+
+          const provider =
+            existing.provider === "google" || existing.provider === "microsoft"
+              ? existing.provider
+              : calendarProviderForConfig(runtime.config);
+
+          if (provider === "google") {
+            const { resolveVoiceV3GoogleCalendar } = await import(
+              "./google/resolve-voice-v3-google-calendar"
+            );
+            const resolved = await resolveVoiceV3GoogleCalendar(runtime.config);
+            if (!resolved.ok) {
+              return { ok: false, message: resolved.message };
+            }
+            const { validateGoogleAppointmentBeforeMutation } = await import(
+              "./google/validate-google-appointment"
+            );
+            const validation = await validateGoogleAppointmentBeforeMutation({
+              appointment: existing,
+              connectionId: resolved.connectionId,
+              calendarConfig: resolved.calendarConfig,
+            });
+            if (!validation.ok) {
+              return {
+                ok: false,
+                message: validation.message,
+                outcomeUncertain: validation.reason === "error",
+              };
+            }
+            const { executeGoogleUpdateBooking } = await import("./google/google-update-booking");
+            const ms = await executeGoogleUpdateBooking(
+              {
+                connectionId: resolved.connectionId,
+                providerEventId: existing.providerEventId,
+                providerCalendarId: existing.providerCalendarId,
+                startUtc: slotSnapshot.startUtc,
+                endUtc: slotSnapshot.endUtc,
+                timezone: slotSnapshot.timezone,
+              },
+              resolved.calendarConfig,
+            );
+            if (ms.ok) return { ok: true, durationMs: ms.durationMs };
+            return {
+              ok: false,
+              message: ms.message,
+              outcomeUncertain: ms.outcomeUncertain,
+            };
+          }
+
           const { resolveVoiceV3MicrosoftCalendar } = await import(
             "./microsoft/resolve-voice-v3-microsoft-calendar"
           );
@@ -244,17 +279,36 @@ export async function dispatchRescheduleIfRequired(
         const u = await runUpdate();
         if (u.ok) return { ok: true, value: { durationMs: u.durationMs } };
         if (u.outcomeUncertain) {
-          const { reconcileMicrosoftRescheduleOutcome } = await import(
-            "./microsoft/microsoft-reconcile-mutation-outcome"
-          );
-          const verdict = await reconcileMicrosoftRescheduleOutcome({
-            appointment: existing,
-            requestedStartUtc: slotSnapshot.startUtc,
-            requestedEndUtc: slotSnapshot.endUtc,
-            config: runtime.config,
-          });
-          if (verdict === "NEW_TIME") {
-            return { ok: true, value: { durationMs: u.durationMs } };
+          const provider =
+            existing.provider === "google" || existing.provider === "microsoft"
+              ? existing.provider
+              : calendarProviderForConfig(runtime.config);
+          if (provider === "google") {
+            const { reconcileGoogleRescheduleOutcome } = await import(
+              "./google/google-reconcile-mutation-outcome"
+            );
+            const verdict = await reconcileGoogleRescheduleOutcome({
+              appointment: existing,
+              requestedStartUtc: slotSnapshot.startUtc,
+              requestedEndUtc: slotSnapshot.endUtc,
+              config: runtime.config,
+            });
+            if (verdict === "NEW_TIME") {
+              return { ok: true, value: { durationMs: u.durationMs } };
+            }
+          } else {
+            const { reconcileMicrosoftRescheduleOutcome } = await import(
+              "./microsoft/microsoft-reconcile-mutation-outcome"
+            );
+            const verdict = await reconcileMicrosoftRescheduleOutcome({
+              appointment: existing,
+              requestedStartUtc: slotSnapshot.startUtc,
+              requestedEndUtc: slotSnapshot.endUtc,
+              config: runtime.config,
+            });
+            if (verdict === "NEW_TIME") {
+              return { ok: true, value: { durationMs: u.durationMs } };
+            }
           }
         }
         return {

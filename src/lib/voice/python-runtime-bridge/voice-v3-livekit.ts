@@ -19,11 +19,19 @@ import {
 } from "@/lib/voice-v3/state/call-runtime";
 import { executeVoiceTool } from "@/lib/voice-v3/tools/execute-voice-tool";
 import { commitFinalCallerUtterance } from "@/lib/voice-v3/conversation/caller-turn-manager";
+import { isCallerBlockedForWorkspace } from "@/lib/voice-v3/spam-protection/blocklist";
+import {
+  LIVEKIT_SPAM_SCREENING_ATTR,
+  normalizeTelnyxScreeningValue,
+} from "@/lib/voice-v3/spam-protection/types";
 import { getCurrentConversationRevision } from "@/lib/voice-v3/conversation/conversation-revision";
 import type { FunctionTool } from "openai/resources/live/live";
 
 /** Tools executed natively in the LiveKit Python worker (not Astra FunctionTools). */
-export const VOICE_V3_LIVEKIT_NATIVE_TOOL_NAMES = ["end_call"] as const;
+export const VOICE_V3_LIVEKIT_NATIVE_TOOL_NAMES = [
+  "end_call",
+  "report_unwanted_solicitor",
+] as const;
 
 /**
  * @deprecated Certification-only subset — production uses wizard capability list.
@@ -45,6 +53,7 @@ export type VoiceV3LiveKitBootstrapPayload = {
   providerCallId?: string | null;
   trunkId?: string | null;
   ruleId?: string | null;
+  telnyxCallScreening?: string | null;
 };
 
 export type VoiceV3LiveKitSessionConfig = {
@@ -64,6 +73,12 @@ export type VoiceV3LiveKitSessionConfig = {
   maxToolSteps: number;
   reasoningEffort: "low" | "medium" | "high" | null;
   textVerbosity: "low" | "medium" | "high" | null;
+  preCallReject?: "blocklist" | null;
+  suspectedSpamLikely?: boolean;
+  endCallToolHint?: string;
+  solicitorPolicy?: string;
+  /** OpenAI vector stores for LiveKit `FileSearch` on GPT Live delegation backend. */
+  openaiFileSearchVectorStoreIds: string[];
 };
 
 function liveSessionIdForRoom(roomName: string): string {
@@ -100,6 +115,57 @@ export async function resolveVoiceV3LiveKitSession(
     agentId: routing.agentId,
   });
 
+  const caller = payload.callerE164?.trim() || null;
+  const blocked = await isCallerBlockedForWorkspace({
+    workspaceId: routing.workspaceId,
+    callerE164: caller,
+  });
+  if (blocked) {
+    console.log("VOICE_V3_BLOCKLIST_MATCH", {
+      workspaceId: routing.workspaceId,
+      agentId: routing.agentId,
+      callerE164: caller,
+    });
+    const liveSessionId = liveSessionIdForRoom(payload.roomName);
+    return {
+      liveSessionId,
+      callId: liveSessionId,
+      workspaceId: routing.workspaceId,
+      agentId: routing.agentId,
+      phoneNumberId: routing.phoneNumberId,
+      amyInstructions: "",
+      astraInstructions: "",
+      astraModel: VOICE_V3_ASTRA_MODEL,
+      liveVoiceId: "marin",
+      toolSchemas: [],
+      toolNames: [],
+      intakeFields: [],
+      parallelToolCalls: false,
+      maxToolSteps: 0,
+      reasoningEffort: null,
+      textVerbosity: null,
+      preCallReject: "blocklist",
+      openaiFileSearchVectorStoreIds: [],
+    };
+  }
+
+  const screeningRaw =
+    payload.telnyxCallScreening?.trim() ||
+    "";
+  const screeningNormalized = normalizeTelnyxScreeningValue(screeningRaw);
+  const suspectedSpamLikely =
+    screeningNormalized === "spam_likely" &&
+    agentConfig.spamProtection?.spamLikelyPolicy === "SCREEN";
+  if (screeningNormalized === "spam_likely") {
+    console.log("VOICE_V3_SPAM_FLAG_RECEIVED", {
+      workspaceId: routing.workspaceId,
+      agentId: routing.agentId,
+      attr: LIVEKIT_SPAM_SCREENING_ATTR,
+      raw: screeningRaw,
+      policy: agentConfig.spamProtection?.spamLikelyPolicy,
+    });
+  }
+
   const promptInput = resolveVoiceV3DefaultPromptInput(new Date(), agentConfig);
   const nativeAmy = new Set<string>(VOICE_V3_LIVEKIT_NATIVE_TOOL_NAMES);
   const astraDelegationToolNames = listVoiceV3AstraToolNamesForConfig(agentConfig).filter(
@@ -108,11 +174,11 @@ export async function resolveVoiceV3LiveKitSession(
   const { liveInstructions, astraInstructions } = buildVoiceV3Prompts({
     ...promptInput,
     toolNames: astraDelegationToolNames,
+    suspectedSpamLikely,
   });
 
   const liveSessionId = liveSessionIdForRoom(payload.roomName);
   const callId = liveSessionId;
-  const caller = payload.callerE164?.trim() || null;
 
   createVoiceV3CallRuntime({
     liveSessionId,
@@ -120,6 +186,27 @@ export async function resolveVoiceV3LiveKitSession(
     inboundCallerE164: caller,
     config: agentConfig,
   });
+
+  if (screeningRaw || screeningNormalized !== "unknown") {
+    const { mergeVoiceV3ScreeningOnCall } = await import(
+      "@/lib/voice-v3/spam-protection/call-metadata"
+    );
+    void mergeVoiceV3ScreeningOnCall({
+      workspaceId: routing.workspaceId,
+      callId,
+      patch: {
+        carrierScreeningRaw: screeningRaw || null,
+        carrierScreeningNormalized: screeningNormalized,
+        suspectedSpamLikely,
+        spamLikelyPolicy: agentConfig.spamProtection?.spamLikelyPolicy ?? null,
+      },
+    }).catch((err) => {
+      console.warn("VOICE_V3_SCREENING_METADATA_MERGE_FAILED", {
+        callId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+  }
 
   const catalogTools = buildVoiceV3AstraFunctionToolsFromCatalog(agentConfig);
   const intakeTools = buildLiveKitIntakeFunctionTools(agentConfig);
@@ -134,6 +221,16 @@ export async function resolveVoiceV3LiveKitSession(
   const intakeFields = buildLiveKitIntakeFieldMetadata(agentConfig);
 
   const liveVoiceId = agentConfig.telephony?.liveVoiceId?.trim() || "marin";
+  const solicitorPolicy = agentConfig.spamProtection?.solicitorPolicy ?? "ALLOW";
+  const endCallToolHint =
+    solicitorPolicy === "DECLINE"
+      ? "For a confirmed unsolicited sales call: call report_unwanted_solicitor first, give a brief polite decline, then end_call."
+      : "";
+
+  const openaiFileSearchVectorStoreIds =
+    agentConfig.knowledge?.retrieval?.enabled === true
+      ? (agentConfig.knowledge.retrieval.openaiVectorStoreIds ?? []).filter(Boolean)
+      : [];
 
   return {
     liveSessionId,
@@ -152,7 +249,33 @@ export async function resolveVoiceV3LiveKitSession(
     maxToolSteps: 5,
     reasoningEffort: "low",
     textVerbosity: "low",
+    suspectedSpamLikely,
+    endCallToolHint,
+    solicitorPolicy,
+    openaiFileSearchVectorStoreIds,
   };
+}
+
+export async function recordVoiceV3SolicitorOutcomeForLiveKit(payload: {
+  liveSessionId: string;
+  workspaceId: string;
+  callId: string;
+}): Promise<{ ok: boolean }> {
+  const { applyUnwantedSolicitorCustomerBilling } = await import(
+    "@/lib/voice-v3/spam-protection/billing"
+  );
+  const billing = await applyUnwantedSolicitorCustomerBilling({
+    workspaceId: payload.workspaceId,
+    callId: payload.callId,
+  });
+  console.log("VOICE_V3_SOLICITOR_DECLINED", {
+    workspaceId: payload.workspaceId,
+    callId: payload.callId,
+    liveSessionId: payload.liveSessionId,
+    alreadyApplied: billing.alreadyApplied,
+    applied: billing.applied,
+  });
+  return { ok: true, alreadyApplied: billing.alreadyApplied, applied: billing.applied };
 }
 
 export type VoiceV3LiveKitExecuteToolPayload = {

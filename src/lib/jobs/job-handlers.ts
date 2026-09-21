@@ -153,10 +153,36 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       });
     }
     case "voice_post_call": {
-      const { processPostCall } = await import("@/lib/voice/post-call");
+      const { routeVoicePostCallJob } = await import("@/lib/voice-v3/post-call/post-call-router");
       const callId = String(payload.callId || "");
       if (!callId) throw new Error("callId required");
-      return processPostCall(callId);
+      return routeVoicePostCallJob(callId);
+    }
+    case "voice_v3_post_call": {
+      const { processVoiceV3CompletedCall } = await import(
+        "@/lib/voice-v3/post-call/process-completed-call"
+      );
+      const callId = String(payload.callId || "");
+      if (!callId) throw new Error("callId required");
+      return processVoiceV3CompletedCall(callId);
+    }
+    case "voice_webhook_deliver": {
+      const { executeVoiceWebhookDeliverJob } = await import("@/lib/voice-v3/webhooks/delivery");
+      return executeVoiceWebhookDeliverJob(payload);
+    }
+    case "voice_after_hours_digest": {
+      const { sendAfterHoursDigestForWorkspace } = await import(
+        "@/lib/voice-v3/post-call/digest-email"
+      );
+      const workspaceId = String(payload.workspaceId || "");
+      if (!workspaceId) throw new Error("workspaceId required");
+      return sendAfterHoursDigestForWorkspace(workspaceId);
+    }
+    case "voice_after_hours_digest_scan": {
+      const { scanAndEnqueueAfterHoursDigests } = await import(
+        "@/lib/voice-v3/post-call/digest-scheduler"
+      );
+      return scanAndEnqueueAfterHoursDigests();
     }
     case "mctb_worker_smoke": {
       const issuedAt = Date.parse(String(payload.issuedAt || ""));
@@ -365,18 +391,38 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       const workspaceId = String(payload.workspaceId || "");
       if (!callId) throw new Error("callId required");
       const urls = payload.recordingUrl as Record<string, string> | undefined;
-      const storageUrl = urls?.mp3 || urls?.wav || null;
-      const recording = await prisma.voiceRecording.create({
-        data: {
-          workspaceId,
-          callId,
-          provider: "telnyx",
-          status: "ready",
-          storageUrl,
-          providerRecordingId: String(payload.providerRecordingId || ""),
-          channels: 2,
-        },
-      });
+      const storageUrl =
+        urls?.mp3 || urls?.wav || urls?.ogg || (payload.storageUrl as string | undefined) || null;
+      const provider = String(payload.provider || "telnyx");
+      const providerRecordingId = String(payload.providerRecordingId || "");
+
+      const existing = providerRecordingId
+        ? await prisma.voiceRecording.findFirst({
+            where: { callId, providerRecordingId },
+          })
+        : await prisma.voiceRecording.findFirst({ where: { callId }, orderBy: { createdAt: "desc" } });
+
+      const recording = existing
+        ? await prisma.voiceRecording.update({
+            where: { id: existing.id },
+            data: {
+              status: storageUrl ? "ready" : existing.status,
+              storageUrl: storageUrl || existing.storageUrl,
+              provider,
+              channels: existing.channels || 2,
+            },
+          })
+        : await prisma.voiceRecording.create({
+            data: {
+              workspaceId,
+              callId,
+              provider,
+              status: "ready",
+              storageUrl,
+              providerRecordingId,
+              channels: 2,
+            },
+          });
       if (storageUrl) {
         const call = await prisma.voiceCall.findUnique({ where: { id: callId } });
         const { publishRecordingReady } = await import("@/lib/crm/events");
@@ -390,16 +436,10 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
               ? "outbound"
               : "inbound",
         }).catch(() => undefined);
-        const { enqueueVoiceV2PostCallTranscription } = await import(
-          "@/lib/voice-receptionist-wizard/post-call/transcription-pipeline"
+        const { enqueueVoiceV3PostCallJob } = await import("@/lib/voice-v3/post-call/enqueue");
+        await enqueueVoiceV3PostCallJob({ workspaceId, callId, delaySeconds: 5 }).catch(
+          () => undefined,
         );
-        await enqueueVoiceV2PostCallTranscription({
-          workspaceId,
-          callId,
-          recordingId: recording.id,
-          recordingUrl: storageUrl,
-          channels: recording.channels,
-        }).catch(() => undefined);
       }
       return { ok: true };
     }
@@ -478,6 +518,23 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       const sourceId = String(payload.sourceId || "");
       if (!sourceId) throw new Error("sourceId required");
       return processKnowledgeSource(sourceId);
+    }
+    case "voice_website_crawl": {
+      const { runVoiceWebsiteCrawlJob } = await import(
+        "@/lib/voice-v3/knowledge/website-crawl/run-crawl-job"
+      );
+      const crawlJobId = String(payload.crawlJobId || "");
+      if (!crawlJobId) throw new Error("crawlJobId required");
+      await runVoiceWebsiteCrawlJob(crawlJobId);
+      return { ok: true };
+    }
+    case "voice_v3_billing_dispatch": {
+      const { dispatchVoiceV3BillableCallUsage } = await import(
+        "@/lib/voice-v3/billing/dispatch-stripe-usage"
+      );
+      const usageEventId = String(payload.usageEventId || "");
+      if (!usageEventId) throw new Error("usageEventId required");
+      return dispatchVoiceV3BillableCallUsage(usageEventId);
     }
     case "phone_queue_overflow": {
       const { handleQueueOverflowJob } = await import("@/lib/phone/queue-runtime");
@@ -1234,6 +1291,12 @@ export async function processDueJobs(limit = 25) {
     queueName: "maintenance",
     payload: { dayKey, frequency: "daily" },
     idempotencyKey: `notification-digest:daily:${dayKey}`,
+  });
+  await enqueueJob({
+    jobType: "voice_after_hours_digest_scan",
+    queueName: "maintenance",
+    payload: { dayKey },
+    idempotencyKey: `voice-after-hours-digest-scan:${dayKey}`,
   });
   await enqueueJob({
     jobType: "campaign_recurrence_tick",

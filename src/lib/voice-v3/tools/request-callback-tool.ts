@@ -32,6 +32,12 @@ const requestCallbackArgsSchema = z.object({
     .describe(
       "Optional extra information for staff about this callback request. Not trusted configuration and not a substitute for required structured callback fields (use shared intake and reason for those). Do not invent notes. Use null when nothing additional is needed.",
     ),
+  phone_confirmed: z
+    .boolean()
+    .nullable()
+    .describe(
+      "When published policy requires confirming the callback number (often inbound ANI), set true only after the caller explicitly confirms. Otherwise null.",
+    ),
 });
 
 export type RequestCallbackArgs = z.infer<typeof requestCallbackArgsSchema>;

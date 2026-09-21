@@ -23,9 +23,20 @@ import {
   requestCallbackTool,
 } from "./request-callback-tool";
 import {
+  buildSearchBusinessKnowledgeOpenAiTool,
+  searchBusinessKnowledgeTool,
+} from "./search-business-knowledge-tool";
+import {
+  buildSubmitAppointmentRequestOpenAiTool,
+  submitAppointmentRequestTool,
+} from "./submit-appointment-request-tool";
+import { buildTakeMessageOpenAiTool, takeMessageTool } from "./take-message-tool";
+import { isTakeMessageAuthorized } from "./authorize-tool-for-config";
+import {
   isRequestCallbackAuthorized,
   isSendBookingLinkAuthorized,
 } from "./authorize-tool-for-config";
+import { isDirectCalendarBookingConfig } from "../calendar/direct-booking-strategy";
 
 export type VoiceToolCatalogEntry = {
   name: string;
@@ -113,10 +124,31 @@ export const VOICE_TOOL_CATALOG: VoiceToolCatalogEntry[] = [
     definition: requestCallbackTool as VoiceToolDefinition<unknown>,
     buildOpenAiTool: buildRequestCallbackOpenAiTool,
   },
+  {
+    name: "search_business_knowledge",
+    kind: "read",
+    telemetryName: "search_business_knowledge",
+    definition: searchBusinessKnowledgeTool as VoiceToolDefinition<unknown>,
+    buildOpenAiTool: buildSearchBusinessKnowledgeOpenAiTool,
+  },
+  {
+    name: "submit_appointment_request",
+    kind: "mutation",
+    telemetryName: "submit_appointment_request",
+    definition: submitAppointmentRequestTool as VoiceToolDefinition<unknown>,
+    buildOpenAiTool: buildSubmitAppointmentRequestOpenAiTool,
+  },
+  {
+    name: "take_message",
+    kind: "mutation",
+    telemetryName: "take_message",
+    definition: takeMessageTool as VoiceToolDefinition<unknown>,
+    buildOpenAiTool: buildTakeMessageOpenAiTool,
+  },
 ];
 
-function isMicrosoftDirectStrategy(config: VoiceV3AgentConfig): boolean {
-  return config.scheduling?.bookingStrategy === "MICROSOFT_365";
+function isDirectCalendarStrategy(config: VoiceV3AgentConfig): boolean {
+  return isDirectCalendarBookingConfig(config);
 }
 
 function isToolEnabledForConfig(entry: VoiceToolCatalogEntry, config: VoiceV3AgentConfig): boolean {
@@ -126,27 +158,37 @@ function isToolEnabledForConfig(entry: VoiceToolCatalogEntry, config: VoiceV3Age
   }
   switch (entry.name) {
     case "book_appointment":
-      return caps.bookAppointments && isMicrosoftDirectStrategy(config);
+      return caps.bookAppointments && isDirectCalendarStrategy(config);
     case "find_availability":
-      return caps.checkAvailability && isMicrosoftDirectStrategy(config);
+      return caps.checkAvailability && isDirectCalendarStrategy(config);
     case "find_appointment":
-      return caps.findAppointments && isMicrosoftDirectStrategy(config);
+      return caps.findAppointments && isDirectCalendarStrategy(config);
     case "reschedule_appointment":
-      return caps.rescheduleAppointments && isMicrosoftDirectStrategy(config);
+      return caps.rescheduleAppointments && isDirectCalendarStrategy(config);
     case "cancel_appointment":
-      return caps.cancelAppointments && isMicrosoftDirectStrategy(config);
+      return caps.cancelAppointments && isDirectCalendarStrategy(config);
     case "send_booking_link":
       return isSendBookingLinkAuthorized(config);
     case "request_callback":
       return isRequestCallbackAuthorized(config);
     case "set_scheduling_preference":
-      return isMicrosoftDirectStrategy(config);
+      return isDirectCalendarStrategy(config);
     case "transfer_call":
       return (
         caps.transferCalls &&
         (config.transfer?.enabled === true ||
           (config.transferDestinations?.some((d) => d.enabled !== false) ?? false))
       );
+    case "search_business_knowledge":
+      return (
+        config.knowledge?.retrieval?.enabled === true &&
+        (config.capabilities?.answerQuestions !== false) &&
+        (config.knowledge?.retrieval?.openaiVectorStoreIds?.length ?? 0) === 0
+      );
+    case "submit_appointment_request":
+      return config.scheduling?.bookingStrategy === "REQUEST_ONLY";
+    case "take_message":
+      return isTakeMessageAuthorized(config);
     case "update_intake":
     case "end_call":
       return true;

@@ -89,6 +89,8 @@ export async function persistInboundCallForPython(
       answeredAt: new Date(),
       metadata: {
         source: "livekit_voice_runtime",
+        voiceV3WizardBound: true,
+        voiceTransport: "voice_v3_livekit",
         bootstrapPath: "async_persist",
         ...(input.mediaBackend ? mediaBackendMetadataStamp(input.mediaBackend) : {}),
         ...(input.livekitRoomName ? { livekitRoomName: input.livekitRoomName } : {}),
@@ -99,6 +101,17 @@ export async function persistInboundCallForPython(
       } as object,
     },
   });
+
+  if (input.livekitRoomName) {
+    const { maybeStartVoiceV3LiveKitRecording } = await import(
+      "@/lib/voice-v3/post-call/recording"
+    );
+    await maybeStartVoiceV3LiveKitRecording({
+      workspaceId: input.workspaceId,
+      callId,
+      roomName: input.livekitRoomName,
+    }).catch(() => undefined);
+  }
 
   return { ok: true, callId };
 }

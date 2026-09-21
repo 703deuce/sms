@@ -1,6 +1,12 @@
 import { getPrisma } from "@/lib/db";
 import type { VoiceKnowledgeSource } from "@prisma/client";
 import {
+  syncTextSourceToOpenAiVectorStore,
+  useGptLiveFileSearchRag,
+  waitForOpenAiKnowledgeBaseVectorStore,
+} from "@/lib/voice/gpt-live-file-search-rag";
+import {
+  getEmbeddingTaskStatus,
   isTelnyxRagConfigured,
   similaritySearch,
   syncFileSourceToTelnyx,
@@ -9,7 +15,7 @@ import {
 } from "./telnyx/rag";
 
 const CHUNK_SIZE = 800;
-/** Keep a short local preview for UI; full docs live in Telnyx RAG. */
+/** Keep a short local preview for UI; full docs live in OpenAI vector stores (V3) or Telnyx (legacy). */
 const LOCAL_TEXT_CAP = 8_000;
 
 export async function processKnowledgeSource(sourceId: string) {
@@ -40,7 +46,8 @@ export async function processKnowledgeSource(sourceId: string) {
     let bucketName = knowledgeBase.telnyxBucketName;
     let objectKey = source.telnyxObjectKey;
     let taskId: string | null = null;
-    let ragMode: "telnyx" | "mock" | "local" = "local";
+    let ragMode: "telnyx" | "mock" | "local" | "openai_file_search" = "local";
+    const gptLiveRag = useGptLiveFileSearchRag();
 
     if (source.sourceType === "file" && source.fileMeta) {
       const meta = source.fileMeta as {
@@ -51,19 +58,21 @@ export async function processKnowledgeSource(sourceId: string) {
       };
       if (meta.base64) {
         const bytes = Buffer.from(meta.base64, "base64");
-        const sync = await syncFileSourceToTelnyx({
-          workspaceId: source.workspaceId,
-          knowledgeBaseId: source.knowledgeBaseId,
-          sourceId: source.id,
-          fileName: meta.fileName || source.name,
-          contentType: meta.contentType || "application/octet-stream",
-          bytes,
-          existingBucketName: bucketName,
-        });
-        ragMode = sync.mode === "telnyx" ? "telnyx" : "mock";
-        bucketName = sync.bucketName || bucketName;
-        objectKey = sync.objectKey || objectKey;
-        taskId = sync.taskId;
+        if (!gptLiveRag) {
+          const sync = await syncFileSourceToTelnyx({
+            workspaceId: source.workspaceId,
+            knowledgeBaseId: source.knowledgeBaseId,
+            sourceId: source.id,
+            fileName: meta.fileName || source.name,
+            contentType: meta.contentType || "application/octet-stream",
+            bytes,
+            existingBucketName: bucketName,
+          });
+          ragMode = sync.mode === "telnyx" ? "telnyx" : "mock";
+          bucketName = sync.bucketName || bucketName;
+          objectKey = sync.objectKey || objectKey;
+          taskId = sync.taskId;
+        }
         // Extract text preview for searchable UI when possible (txt/csv/json).
         const ct = (meta.contentType || "").toLowerCase();
         if (
@@ -84,13 +93,13 @@ export async function processKnowledgeSource(sourceId: string) {
               contentType: meta.contentType,
               fileName: meta.fileName,
               byteLength: meta.byteLength || bytes.length,
-              syncedToTelnyx: sync.mode === "telnyx",
+              syncedToTelnyx: !gptLiveRag && ragMode === "telnyx",
             },
           },
         });
       }
     } else if (source.crawlUrl) {
-      if (isTelnyxRagConfigured()) {
+      if (!gptLiveRag && isTelnyxRagConfigured()) {
         const sync = await syncUrlSourceToTelnyx({
           workspaceId: source.workspaceId,
           knowledgeBaseId: source.knowledgeBaseId,
@@ -126,7 +135,7 @@ export async function processKnowledgeSource(sourceId: string) {
           .replace(/\s+/g, " ")
           .trim();
       }
-    } else if (text) {
+    } else if (text && !gptLiveRag) {
       const sync = await syncTextSourceToTelnyx({
         workspaceId: source.workspaceId,
         knowledgeBaseId: source.knowledgeBaseId,
@@ -141,12 +150,25 @@ export async function processKnowledgeSource(sourceId: string) {
       taskId = sync.taskId;
     }
 
+    if (gptLiveRag && text.trim()) {
+      const openAi = await syncTextSourceToOpenAiVectorStore({
+        workspaceId: source.workspaceId,
+        knowledgeBaseId: source.knowledgeBaseId,
+        sourceId: source.id,
+        fileName: source.name || source.crawlUrl || "knowledge",
+        text,
+      });
+      if (openAi) {
+        ragMode = "openai_file_search";
+      }
+    }
+
     if (!text && ragMode === "local") throw new Error("No extractable text");
 
     const chunks = chunkText(text || "", CHUNK_SIZE);
     const preview = (text || source.name || "").slice(0, 500);
 
-    if (bucketName) {
+    if (bucketName && !gptLiveRag) {
       await prisma.voiceKnowledgeBase.update({
         where: { id: source.knowledgeBaseId },
         data: {
@@ -269,6 +291,51 @@ export async function searchKnowledge(
       snippet: extractSnippet(s.contentText || s.extractedPreview || "", q),
       provider: "local" as const,
     }));
+}
+
+/** Best-effort wait for Telnyx bucket embed after URL/file sync (wizard website import). */
+export async function waitForKnowledgeBaseEmbedding(input: {
+  knowledgeBaseId: string;
+  maxWaitMs?: number;
+}): Promise<{ ready: boolean; status?: string }> {
+  if (useGptLiveFileSearchRag()) {
+    const openAi = await waitForOpenAiKnowledgeBaseVectorStore({
+      knowledgeBaseId: input.knowledgeBaseId,
+      maxWaitMs: input.maxWaitMs ?? 60_000,
+    });
+    return { ready: openAi.ready, status: openAi.status ?? undefined };
+  }
+  const maxWaitMs = input.maxWaitMs ?? 45_000;
+  const prisma = getPrisma();
+  const kb = await prisma.voiceKnowledgeBase.findUnique({
+    where: { id: input.knowledgeBaseId },
+    select: { telnyxEmbeddingTaskId: true, telnyxEmbeddingStatus: true },
+  });
+  const taskId = kb?.telnyxEmbeddingTaskId?.trim();
+  if (!taskId || !isTelnyxRagConfigured()) {
+    return { ready: true, status: kb?.telnyxEmbeddingStatus || "local" };
+  }
+  const started = Date.now();
+  while (Date.now() - started < maxWaitMs) {
+    try {
+      const res = await getEmbeddingTaskStatus(taskId);
+      const status = String(res.data?.status || "").toLowerCase();
+      if (status === "completed" || status === "complete" || status === "success") {
+        await prisma.voiceKnowledgeBase.update({
+          where: { id: input.knowledgeBaseId },
+          data: { telnyxEmbeddingStatus: "ready", lastEmbeddedAt: new Date() },
+        });
+        return { ready: true, status };
+      }
+      if (status === "failed" || status === "error") {
+        return { ready: false, status };
+      }
+    } catch {
+      // retry
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  return { ready: false, status: "timeout" };
 }
 
 function extractSnippet(text: string, q: string): string {
