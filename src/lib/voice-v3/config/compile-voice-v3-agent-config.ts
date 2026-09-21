@@ -5,6 +5,7 @@ import { ensureWizardOperatingMaturity } from "@/lib/solutions/appointment-recep
 import { deriveBookingStrategyFromWizard } from "@/lib/voice-receptionist-wizard/booking-strategy";
 import { tryNormalizeVoiceV3LiveBuiltInVoice } from "./voice-v3-live-built-in-voices";
 import type { VoiceV3AgentConfig, VoiceV3ServiceConfig } from "./agent-config";
+import { servicePolicyFromWizardType } from "../policy/service-policy";
 import { VOICE_V3_BOOKING_AGENT_CONFIG } from "./booking-agent-config";
 import { compileBusinessHoursAmyDisplay } from "./business-hours-display";
 import { businessHoursWindowFromWeeklySchedule } from "./business-hours-from-wizard";
@@ -46,14 +47,7 @@ function wizardServices(
 ): VoiceV3ServiceConfig[] {
   return (wizard.appointmentTypes || [])
     .filter((t) => t.enabled)
-    .map((t) => ({
-      id: t.id,
-      name: t.name?.trim() || t.id,
-      durationMinutes: t.durationMin > 0 ? t.durationMin : 30,
-      slotStepMinutes,
-      description: t.description?.trim() || undefined,
-      enabled: true,
-    }));
+    .map((t) => servicePolicyFromWizardType(t, slotStepMinutes));
 }
 
 function resolvePrimaryService(
@@ -212,6 +206,7 @@ function callHandlingFromWizard(
     defaultTransferPlanId: wizard.defaultTransferPlanId?.trim() || null,
     transferPlanSteps: wizard.transferPlanSteps ?? [],
     urgencyEnabled: wizard.urgencyEnabled === true,
+    urgencyRules: wizard.urgencyRules ?? [],
     callbackRequestsEnabled: wizard.callbackRequestsEnabled !== false,
     callbackUseAniByDefault: wizard.callbackUseAniByDefault !== false,
     callbackAskPreferredTime: wizard.callbackAskPreferredTime !== false,

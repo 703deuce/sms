@@ -1,4 +1,6 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
+import type { VoiceV3CallContext } from "../state/call-context";
+import { isVoiceV3ToolAuthorizedEffective } from "../policy/effective-tool-authorization";
 import { voiceToolError } from "./types";
 
 export type VoiceV3AuthorizedToolName =
@@ -25,7 +27,7 @@ export function isSendBookingLinkAuthorized(config: VoiceV3AgentConfig): boolean
   return Boolean(url);
 }
 
-export function isVoiceV3ToolAuthorized(
+export function isVoiceV3ToolAuthorizedBase(
   config: VoiceV3AgentConfig,
   toolName: VoiceV3AuthorizedToolName,
 ): boolean {
@@ -56,11 +58,23 @@ export function isVoiceV3ToolAuthorized(
   }
 }
 
+export function isVoiceV3ToolAuthorized(
+  config: VoiceV3AgentConfig,
+  toolName: VoiceV3AuthorizedToolName,
+  callContext?: VoiceV3CallContext,
+): boolean {
+  if (!isVoiceV3ToolAuthorizedBase(config, toolName)) {
+    return false;
+  }
+  return isVoiceV3ToolAuthorizedEffective(config, toolName, undefined, callContext);
+}
+
 export function authorizeVoiceV3ToolOrError(
   config: VoiceV3AgentConfig,
   toolName: VoiceV3AuthorizedToolName,
+  callContext?: VoiceV3CallContext,
 ) {
-  if (isVoiceV3ToolAuthorized(config, toolName)) return null;
+  if (isVoiceV3ToolAuthorized(config, toolName, callContext)) return null;
   if (toolName === "send_booking_link" && isMicrosoftDirectStrategy(config)) {
     return voiceToolError(
       "BOOKING_STRATEGY_MISMATCH",
@@ -77,7 +91,7 @@ export function authorizeVoiceV3ToolOrError(
       "BOOKING_STRATEGY_MISMATCH",
       `${toolName} is not available when the published strategy is Send booking link.`,
       { tool: toolName },
-      "not_allowed",
+      "not_ready",
     );
   }
   return voiceToolError(

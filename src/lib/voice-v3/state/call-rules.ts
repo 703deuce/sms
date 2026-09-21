@@ -7,6 +7,12 @@ import type { BookingPhase } from "../calendar/booking-types";
 import type { CancellationPhase } from "../calendar/appointment-management-types";
 import { deriveIntakeObjective } from "../intake-objective";
 import { getMissingFieldsForOperation } from "../intake-objective/operation-requirements";
+import { isQualificationBlockingCalendarActions } from "../qualification/evaluate-qualification";
+import {
+  resolveActiveServicePolicy,
+  serviceAllowsLiveBooking,
+  validateSlotAgainstServicePolicy,
+} from "../policy/service-policy";
 
 export interface VoiceV3RuleEvaluation {
   missingRequiredFields: string[];
@@ -48,9 +54,12 @@ export function evaluateVoiceV3Rules(
 
   const mayRunCalendarAction = hasSchedulingPreference && !schedulingRequiresClarification;
 
+  const activeService = resolveActiveServicePolicy(config, ctx);
   const calendarConfigured = Boolean(config.calendar?.connectionId && config.calendar.calendarIds.length);
-  const durationKnown = config.service.durationMinutes > 0;
-  const serviceKnown = Boolean(config.service.id?.trim() && config.service.name?.trim());
+  const durationKnown = activeService.durationMinutes > 0;
+  const serviceKnown = Boolean(activeService.id?.trim() && activeService.name?.trim());
+  const qualificationBlocks = isQualificationBlockingCalendarActions(config, ctx);
+  const serviceBookable = serviceAllowsLiveBooking(activeService);
 
   const goal = ctx.dialog.activeGoal;
 
@@ -58,6 +67,8 @@ export function evaluateVoiceV3Rules(
     mayRunCalendarAction &&
     durationKnown &&
     calendarConfigured &&
+    serviceBookable &&
+    !qualificationBlocks &&
     (goal === "BOOK_APPOINTMENT" ||
       goal === "RESCHEDULE_APPOINTMENT" ||
       hasSchedulingPreference);
@@ -82,6 +93,14 @@ export function evaluateVoiceV3Rules(
     ctx.booking.phase === "BOOKING_OUTCOME_UNKNOWN";
 
   const isBookGoal = goal === "BOOK_APPOINTMENT";
+  const slotPolicyOk =
+    !selected?.startUtc ||
+    !validateSlotAgainstServicePolicy({
+      service: activeService,
+      slotStartUtc: selected.startUtc,
+      timezone: ctx.business.timezone,
+    });
+
   const bookingReady =
     isBookGoal &&
     slotSelected &&
@@ -89,6 +108,9 @@ export function evaluateVoiceV3Rules(
     durationKnown &&
     serviceKnown &&
     calendarConfigured &&
+    serviceBookable &&
+    !qualificationBlocks &&
+    slotPolicyOk &&
     !schedulingRequiresClarification &&
     !bookingConfirmed &&
     !bookingInProgress;

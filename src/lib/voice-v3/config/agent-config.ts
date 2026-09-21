@@ -61,6 +61,15 @@ export interface VoiceV3ServiceConfig {
   slotStepMinutes: number;
   description?: string;
   enabled?: boolean;
+  calendarId?: string;
+  status?: "ready" | "needs_rules";
+  location?: string;
+  modality?: "in_person" | "phone" | "video";
+  bookingPermission?: import("@/lib/solutions/appointment-receptionist/types").BookingPermission;
+  minimumBookingNoticeMinutes?: number;
+  maximumBookingDaysAhead?: number;
+  requiredIntakeKeys?: string[];
+  bookingHoursProse?: string;
 }
 
 export interface VoiceV3CapabilityFlags {
@@ -122,6 +131,8 @@ export interface VoiceV3KnowledgeConfig {
     websiteUrl?: string | null;
     documentSourceIds: string[];
     revision?: string | null;
+    /** OpenAI vector store ids for LiveKit GPT-Live FileSearch (when wired). */
+    openaiVectorStoreIds?: string[];
   };
 }
 
@@ -182,6 +193,7 @@ export interface VoiceV3CallHandlingConfig {
     timeoutSeconds?: number;
   }>;
   urgencyEnabled: boolean;
+  urgencyRules?: import("@/lib/voice-receptionist-wizard/after-hours-handling-types").VoiceV2UrgencyRuleRow[];
   callbackRequestsEnabled: boolean;
   callbackUseAniByDefault: boolean;
   callbackAskPreferredTime: boolean;
