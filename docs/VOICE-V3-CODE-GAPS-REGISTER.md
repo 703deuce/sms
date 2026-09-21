@@ -93,7 +93,7 @@ This is a **copy-paste register** of incomplete, partial, or missing **code** �
 
 | Gap | Status | Where / notes |
 |-----|--------|----------------|
-| **Google Calendar** provider for V3 FIND/BOOK/MANAGE | **Not done** | No `src/lib/voice-v3/**/google*` provider module; no `GOOGLE_CALENDAR` strategy wired through `book-dispatch` parallel to Microsoft. OAuth/storage/compile path not implemented. |
+| **Google Calendar** on Voice V3 FIND/BOOK/MANAGE | **Not connected to V3 path** | Shared Google OAuth + Calendar API exist in `src/lib/calendar/**` (production). No `src/lib/voice-v3/**/google*` adapters; no `GOOGLE_CALENDAR` strategy; dispatch hard-coded to Microsoft. See `docs/VOICE-V3-GOOGLE-CALENDAR-REUSE-AUDIT.md`. |
 | **Calendly** as V3 executor | **Not done** | Wizard fields tagged `FUTURE_CALENDLY` in `wizard-v3-manifest-builder.ts`. Calendly commit exists for **python/Front Desk** (`commit-booking-for-python.ts`), not V3 Microsoft-style pipeline. |
 | **SEND_LINK** | **Partial** | `execute-send-booking-link.ts`, SMS path, tool catalog — works when strategy is `SEND_LINK`; manifest still labels some link fields `future SEND_LINK executor`; not equivalent depth to Microsoft book path. |
 | **REQUEST_ONLY** / qualification / urgency flows | **Partial / future** | Manifest: `future qualification executor`, `future urgency executor` — wizard captures intent; runtime executors incomplete. |
