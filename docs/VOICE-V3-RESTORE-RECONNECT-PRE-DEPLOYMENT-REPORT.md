@@ -13,8 +13,8 @@ This pass treats the reuse audit as authoritative: **restore/port proven V3 code
 | Phase | Scope | Status this pass |
 |-------|--------|------------------|
 | **1** | Booking persistence after `BOOKING_CONFIRMED` | **Implemented + tested** |
-| **2** | Qualification / urgency / REQUEST_ONLY (`d275f9c3`) | **Not wired** — requires `deterministic-rules` + call-context + compile deltas |
-| **3** | 100-page website crawl + RAG (`55e48438`, `affb98c5`, `0ad68d4e`) | **Not ported** — Prisma + job handlers + UI bundle |
+| **2** | Qualification / urgency / service policy (`d275f9c3`) | **Minimum port** — pure rules only; see `VOICE-V3-RESTORE-RECONNECT-AUDIT-PHASE-2-3.md`. REQUEST_ONLY tool **deferred** |
+| **3** | 100-page website crawl + RAG (`55e48438`, `affb98c5`, `0ad68d4e`) | **Audit complete; not ported** — native FileSearch path documented; Telnyx live retrieval not restored |
 | **4** | Wizard → Live V3 config (`instructions.system`, publish fallback) | **Not changed** — audit only |
 | **5** | Transfer alignment | **Not changed** — compile paths already present on master |
 | **6** | Freshness (`markCallerTurnSemanticApplied`) | **Not wired** — hook point needs trace on current pipeline |
