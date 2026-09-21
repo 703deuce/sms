@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 import time
-from typing import Any, TYPE_CHECKING
+from typing import Any
 
 from livekit.agents import function_tool
 from livekit.agents.llm.tool_context import DuplicateScope, ToolError, ToolFlag
@@ -14,15 +14,13 @@ from transovo_voice.telemetry import log_event
 from transovo_voice.voice_v3.intake_active_collection import run_active_intake_collection
 from transovo_voice.voice_v3.tool_client import TransovoV3ToolClient
 from transovo_voice.voice_v3.telephony_bridge import LiveKitTelephonyBridge
+from transovo_voice.voice_v3.forensics import VoiceV3CallForensics
 from transovo_voice.voice_v3.transfer_executor import execute_authorized_transfer_plan
 
 COLLECT_INTAKE_FIELD_TOOL = "collect_intake_field"
 _SET_INTAKE_PREFIX = "set_intake_"
 
 logger = logging.getLogger("transovo-voice.voice_v3.tools")
-
-if TYPE_CHECKING:
-    from transovo_voice.voice_v3.forensics import VoiceV3CallForensics
 
 _READ_TOOLS = frozenset({"find_availability", "find_appointment"})
 # Writes are non-cancellable by default (no ToolFlag.CANCELLABLE). We do NOT call
@@ -54,7 +52,7 @@ async def _execute_transovo_tool(
     context: RunContext,
     client: TransovoV3ToolClient,
     telephony: LiveKitTelephonyBridge | None,
-    forensics: "VoiceV3CallForensics | None" = None,
+    forensics: VoiceV3CallForensics | None = None,
 ) -> dict[str, Any]:
     fc_meta = getattr(context, "function_call", None)
     function_call_id = None
@@ -130,7 +128,7 @@ def build_livekit_tools(
     client: TransovoV3ToolClient,
     telephony: LiveKitTelephonyBridge | None = None,
     intake_fields: list[dict[str, Any]] | None = None,
-    forensics: "VoiceV3CallForensics | None" = None,
+    forensics: VoiceV3CallForensics | None = None,
 ) -> list[Any]:
     intake_meta = intake_fields or []
     tools: list[Any] = []
@@ -154,7 +152,7 @@ def build_livekit_tools(
             _tool_name: str = name,
             _client: TransovoV3ToolClient = client,
             _telephony: LiveKitTelephonyBridge | None = telephony,
-            _forensics: "VoiceV3CallForensics | None" = forensics,
+            _forensics: VoiceV3CallForensics | None = forensics,
         ) -> str:
             args: dict[str, Any]
             if isinstance(raw_arguments, str):
