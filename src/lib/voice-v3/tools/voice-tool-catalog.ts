@@ -30,6 +30,8 @@ import {
   buildSubmitAppointmentRequestOpenAiTool,
   submitAppointmentRequestTool,
 } from "./submit-appointment-request-tool";
+import { buildTakeMessageOpenAiTool, takeMessageTool } from "./take-message-tool";
+import { isTakeMessageAuthorized } from "./authorize-tool-for-config";
 import {
   isRequestCallbackAuthorized,
   isSendBookingLinkAuthorized,
@@ -136,6 +138,13 @@ export const VOICE_TOOL_CATALOG: VoiceToolCatalogEntry[] = [
     definition: submitAppointmentRequestTool as VoiceToolDefinition<unknown>,
     buildOpenAiTool: buildSubmitAppointmentRequestOpenAiTool,
   },
+  {
+    name: "take_message",
+    kind: "mutation",
+    telemetryName: "take_message",
+    definition: takeMessageTool as VoiceToolDefinition<unknown>,
+    buildOpenAiTool: buildTakeMessageOpenAiTool,
+  },
 ];
 
 function isDirectCalendarStrategy(config: VoiceV3AgentConfig): boolean {
@@ -174,6 +183,8 @@ function isToolEnabledForConfig(entry: VoiceToolCatalogEntry, config: VoiceV3Age
       return config.knowledge?.retrieval?.enabled === true;
     case "submit_appointment_request":
       return config.scheduling?.bookingStrategy === "REQUEST_ONLY";
+    case "take_message":
+      return isTakeMessageAuthorized(config);
     case "update_intake":
     case "end_call":
       return true;

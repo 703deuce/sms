@@ -94,6 +94,8 @@ export function isVoiceV3ToolAuthorizedEffective(
       return gates.liveBookingAllowed;
     case "request_callback":
       return gates.callbackToolAvailable;
+    case "take_message":
+      return gates.messageTakingAllowed && config.capabilities.takeMessages === true;
     case "transfer_call":
       return gates.transferToolAvailable;
     case "send_booking_link":

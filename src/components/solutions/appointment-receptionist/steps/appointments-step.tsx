@@ -24,6 +24,12 @@ const CALENDARS = [
   { id: "internal", label: "Transovo Calendar" },
 ];
 
+/** V1 Voice V3 PSTN booking: Microsoft + Google only (Calendly executor not active). */
+const V1_VOICE_BOOKING_PROVIDERS = [
+  { id: "google", label: "Google Calendar" },
+  { id: "microsoft", label: "Microsoft Outlook" },
+];
+
 const MCTB_BOOKING_PROVIDERS = [
   { id: "microsoft", label: "Microsoft Calendar" },
   { id: "calendly", label: "Calendly" },
@@ -39,7 +45,7 @@ export function AppointmentsStep({
   presentation?: "legacy" | "mctb";
 }) {
   const isMctb = presentation === "mctb";
-  const providerCards = isMctb ? MCTB_BOOKING_PROVIDERS : CALENDARS;
+  const providerCards = isMctb ? MCTB_BOOKING_PROVIDERS : V1_VOICE_BOOKING_PROVIDERS;
   const selected =
     state.appointmentTypes.find((t) => t.id === state.selectedAppointmentTypeId) ||
     state.appointmentTypes[0];

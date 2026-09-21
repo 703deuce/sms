@@ -11,10 +11,15 @@ export type VoiceV3AuthorizedToolName =
   | "cancel_appointment"
   | "transfer_call"
   | "send_booking_link"
-  | "request_callback";
+  | "request_callback"
+  | "take_message";
 
 export function isRequestCallbackAuthorized(config: VoiceV3AgentConfig): boolean {
   return config.callHandling.callbackRequestsEnabled === true;
+}
+
+export function isTakeMessageAuthorized(config: VoiceV3AgentConfig): boolean {
+  return config.capabilities?.takeMessages === true;
 }
 
 function isDirectCalendarStrategy(config: VoiceV3AgentConfig): boolean {
@@ -53,6 +58,8 @@ export function isVoiceV3ToolAuthorizedBase(
       );
     case "request_callback":
       return isRequestCallbackAuthorized(config);
+    case "take_message":
+      return isTakeMessageAuthorized(config);
     default:
       return false;
   }
@@ -109,6 +116,18 @@ export function authorizeRequestCallbackOrError(config: VoiceV3AgentConfig) {
     return voiceToolError(
       "CALLBACK_DISABLED",
       "Callback requests are not enabled for this agent.",
+      { status: "not_available" },
+      "not_available",
+    );
+  }
+  return null;
+}
+
+export function authorizeTakeMessageOrError(config: VoiceV3AgentConfig) {
+  if (!isTakeMessageAuthorized(config)) {
+    return voiceToolError(
+      "MESSAGE_TAKING_DISABLED",
+      "Message taking is not enabled for this agent.",
       { status: "not_available" },
       "not_available",
     );

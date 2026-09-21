@@ -17,6 +17,8 @@ import {
   logVoiceV3ConfigFallbackUsed,
 } from "./config-observability";
 import { resolveWizardSnapshotForVoiceV3 } from "./resolve-wizard-snapshot-for-v3";
+import { resolveDocumentSourceIdsForKnowledgeBases } from "../knowledge/resolve-document-source-ids";
+import { knowledgeConfigFromWizard } from "@/lib/voice-receptionist-wizard/knowledge-config";
 
 /** Appointment receptionist wizard agents use Voice V3 PSTN only — no optional flag. */
 export function isAppointmentReceptionistAgent(config: VoiceAgentConfig): boolean {
@@ -122,11 +124,20 @@ export async function resolveVoiceV3AgentConfigForAgent(input: {
       wizard,
     );
 
+    const kbConfig = knowledgeConfigFromWizard(wizard);
+    const documentSourceIds = kbConfig.knowledgeBaseEnabled
+      ? await resolveDocumentSourceIdsForKnowledgeBases(
+          input.workspaceId,
+          kbConfig.knowledgeBaseIds,
+        )
+      : [];
+
     const compiled = compileVoiceV3AgentConfig({
       wizard,
       providerConnections,
       envFallback,
       source,
+      documentSourceIds,
     });
 
     const withTenant: VoiceV3AgentConfig = {

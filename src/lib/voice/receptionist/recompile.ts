@@ -93,10 +93,26 @@ export function recompileReceptionistFromDraft(config: VoiceAgentConfig): VoiceA
       mergedAdvanced,
     );
     const snapshot = compileReceptionistConfig(draftInput);
-    return applyCompiledToVoiceConfig(config, snapshot, {
+    const preservedKnowledge = {
+      knowledgeBaseIds: Array.isArray((config as { knowledgeBaseIds?: string[] }).knowledgeBaseIds)
+        ? (config as { knowledgeBaseIds?: string[] }).knowledgeBaseIds
+        : undefined,
+      advancedKnowledge: (advanced?.knowledge as Record<string, unknown> | undefined) ?? undefined,
+    };
+    const next = applyCompiledToVoiceConfig(config, snapshot, {
       ...mergedAdvanced,
       appointmentReceptionistWizard: appointmentWizard,
+      ...(preservedKnowledge.advancedKnowledge
+        ? { knowledge: preservedKnowledge.advancedKnowledge }
+        : {}),
     });
+    if (preservedKnowledge.knowledgeBaseIds?.length) {
+      return {
+        ...next,
+        knowledgeBaseIds: preservedKnowledge.knowledgeBaseIds,
+      };
+    }
+    return next;
   }
   if (!wizard) {
     const existing = getReceptionistCompiledFromAdvanced(advanced);
