@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { InfoCallout, SelectableCard, SidePanel, StatusPill } from "../ui";
 import { BusinessScheduleEditor } from "../operating-maturity-editor";
+import { BusinessAutoSetupPanel } from "../business-auto-setup-panel";
 
 type KnowledgeItem = AppointmentReceptionistWizardState["knowledgeItems"][number];
 
@@ -509,6 +510,9 @@ export function InformationStep({
             Add business information so the AI can answer with confidence. Facts
             here are written into the agent knowledge on save/activate.
           </p>
+          <div className="mt-4">
+            <BusinessAutoSetupPanel state={state} onStateChange={patch} />
+          </div>
           <div className="mt-4 rounded-xl border border-border bg-card p-4">
             <label className="flex cursor-pointer items-start gap-3">
               <input

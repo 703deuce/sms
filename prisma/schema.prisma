@@ -299,6 +299,8 @@ model Workspace {
   voiceKnowledgeBases               VoiceKnowledgeBase[]
   voiceKnowledgeSources             VoiceKnowledgeSource[]
   voiceAgentKnowledgeBases          VoiceAgentKnowledgeBase[]
+  voiceV3BusinessKnowledgeSources   VoiceV3BusinessKnowledgeSource[]
+  voiceV3BusinessKnowledgeImports   VoiceV3BusinessKnowledgeImport[]
   voiceTools                        VoiceTool[]
   voiceAgentTools                   VoiceAgentTool[]
   voiceCalendarConnections          VoiceCalendarConnection[]
@@ -2343,6 +2345,8 @@ model VoiceAgent {
   versions              VoiceAgentVersion[]
   phoneAssignments      VoiceAgentPhoneNumber[]
   knowledgeLinks        VoiceAgentKnowledgeBase[]
+  businessKnowledgeSource VoiceV3BusinessKnowledgeSource?
+  businessKnowledgeImports VoiceV3BusinessKnowledgeImport[]
   toolLinks             VoiceAgentTool[]
   calls                 VoiceCall[]
   campaigns             VoiceCampaign[]
@@ -2463,6 +2467,58 @@ model VoiceAgentKnowledgeBase {
 
   @@unique([agentId, knowledgeBaseId])
   @@map("voice_agent_knowledge_bases")
+}
+
+/// Persistent public sources for Voice V3 business auto-setup (website + Google listing).
+model VoiceV3BusinessKnowledgeSource {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  voiceAgentId      String   @unique
+  websiteRootUrl    String?
+  websiteFinalUrl   String?
+  googlePlaceId     String?
+  googleDataId      String?
+  googleLudocid     String?
+  googleDisplayName String?
+  googleAddress     String?
+  googleWebsite     String?
+  lastCheckedAt     DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  agent             VoiceAgent @relation(fields: [voiceAgentId], references: [id], onDelete: Cascade)
+  imports           VoiceV3BusinessKnowledgeImport[]
+
+  @@index([workspaceId])
+  @@map("voice_v3_business_knowledge_sources")
+}
+
+/// One import run: acquisition → extraction → diff → review → apply.
+model VoiceV3BusinessKnowledgeImport {
+  id               String   @id @default(cuid())
+  workspaceId      String
+  voiceAgentId     String
+  sourceRecordId   String?
+  status           String   @default("QUEUED")
+  trigger          String   @default("onboarding")
+  sourceTypes      String[] @default([])
+  pagesJson        Json?
+  googleSnapshot   Json?
+  candidatesJson   Json?
+  reviewJson       Json?
+  telemetryJson    Json?
+  appliedPatchJson Json?
+  errorMessage     String?
+  createdAt        DateTime @default(now())
+  completedAt      DateTime?
+  appliedAt        DateTime?
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  agent            VoiceAgent @relation(fields: [voiceAgentId], references: [id], onDelete: Cascade)
+  sourceRecord     VoiceV3BusinessKnowledgeSource? @relation(fields: [sourceRecordId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, voiceAgentId, createdAt])
+  @@index([voiceAgentId, status])
+  @@map("voice_v3_business_knowledge_imports")
 }
 
 model VoiceTool {

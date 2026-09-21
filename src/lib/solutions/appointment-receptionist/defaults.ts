@@ -344,6 +344,13 @@ export function createDefaultWizardState(): AppointmentReceptionistWizardState {
         status: "warning",
         statusLabel: "Not configured",
       },
+      {
+        id: "service_area",
+        label: "Service areas",
+        summary: "Cities or regions you serve",
+        status: "optional",
+        statusLabel: "Optional",
+      },
     ],
 
     calendarProvider: null,
