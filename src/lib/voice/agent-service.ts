@@ -642,12 +642,7 @@ export async function publishVoiceAgent(
       skipLiveKitForMctb ||
       (!isLiveKitVoiceRuntime() && usesTexmlDirectInbound(config)));
 
-  const { getCallHandlingPublishPolicy } = await import("@/lib/call-handling/publish-gate");
-  const ingressPublishPolicy = await getCallHandlingPublishPolicy({
-    workspaceId,
-    phoneNumberId: updated.phoneNumberId,
-  });
-  const skipIngressRoutingOnPublish = ingressPublishPolicy.skipIngressRouting;
+  const skipIngressRoutingOnPublish = ingressPublishPolicyEarly.skipIngressRouting;
 
   if (
     !skipIngressRoutingOnPublish &&
