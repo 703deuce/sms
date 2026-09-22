@@ -3,6 +3,7 @@ import { ODD_INTAKE_HARNESS_AGENT_CONFIG } from "./fixtures/voice-v3-odd-intake-
 import { createInitialVoiceV3CallContext } from "../src/lib/voice-v3/state/call-context";
 import { buildVoiceV3CallClock } from "../src/lib/voice-v3/time/call-clock";
 import {
+  buildToolIntakeProjection,
   deriveIntakeObjective,
   mergeIntakeUpdate,
 } from "../src/lib/voice-v3/intake-objective";
@@ -217,6 +218,16 @@ async function toolIntegration() {
   }
   assert.ok(sent.some((e) => e.type === "session.thinking.append"));
   clearVoiceV3CallRuntimeStore();
+}
+
+// Tool result projection: book requirements even when active operation is unresolved
+{
+  const ctx = emptyCtx();
+  const p = buildToolIntakeProjection(config, ctx);
+  assert.equal(p.active_operation, "unresolved");
+  assert.deepEqual(p.missing_required_fields, []);
+  assert.equal(p.book_appointment.ready, false);
+  assert.ok(p.book_appointment.missing_fields.includes("email"));
 }
 
 toolIntegration()

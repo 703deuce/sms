@@ -64,6 +64,7 @@ Read before mutate:
 - When an authoritative identifier is required and not already in tool state, use the read tool first (find_appointment before cancel_appointment or reschedule_appointment).
 
 Model readiness vs executor preconditions:
-- You may call a tool when conversation suggests readiness; Transovo will reject mutations if preconditions fail. Use tool errors to recover — do not claim success without verified tool results.
+- Prefer authoritative tool payloads before calendar mutations: book_appointment.ready / book_appointment.missing_fields and current_intake on update_intake, set_scheduling_preference, and find_availability results. Do not call book_appointment while book_appointment.ready is false unless you are intentionally recovering from a prior not_ready error with new intake.
+- Transovo may still reject mutations if preconditions fail. Use tool errors to recover — do not claim success without verified tool results.
 `.trim();
 }

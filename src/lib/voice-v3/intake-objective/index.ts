@@ -2,6 +2,7 @@ export * from "./types";
 export { deriveIntakeObjective } from "./derive-intake-objective";
 export { mergeIntakeUpdate } from "./merge-intake-update";
 export { buildIntakeObjectiveContext } from "./build-intake-context";
+export { buildToolIntakeProjection } from "./tool-intake-projection";
 export {
   buildUpdateIntakeZodSchema,
   normalizeUpdateIntakeArguments,

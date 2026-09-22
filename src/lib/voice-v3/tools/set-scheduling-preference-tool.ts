@@ -12,6 +12,7 @@ import { schedulingMeaningHasSignal } from "../time/scheduling-normalizer";
 import { SET_SCHEDULING_PREFERENCE_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 import type { VoiceToolDefinition } from "./types";
 import { shouldApplySemanticSteeringToActiveGoal } from "../delegation/conversation-freshness";
+import { buildToolIntakeProjection } from "../intake-objective/tool-intake-projection";
 import { toolOk, voiceToolError } from "./types";
 
 const setSchedulingArgsSchema = schedulingMeaningZodObject;
@@ -85,11 +86,14 @@ export const setSchedulingPreferenceTool: VoiceToolDefinition<SetSchedulingPrefe
       );
     }
 
+    const intakeProjection = buildToolIntakeProjection(config, next);
+
     return toolOk("SCHEDULING_PREFERENCE_SET", {
       generation: next.scheduling.generation,
       display_preference: schedulingDisplayPreference(args, normalized),
       ready_for_availability_search: true,
       scheduling_generation_changed: merged.schedulingGenerationChanged,
+      ...intakeProjection,
     });
   },
 };
