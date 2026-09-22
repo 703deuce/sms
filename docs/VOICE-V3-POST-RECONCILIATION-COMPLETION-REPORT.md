@@ -127,7 +127,7 @@
 | Migrations removed | **0** |
 | Protected-path diffs | **none** (narrow Voice wizard SLA copy only) |
 
-Final candidate SHA: `4c64127d` (branch tip; includes spam commit `e41181e8` + closure commit).
+Final candidate SHA: `cc3421fb` (includes spam `e41181e8` + closure `4c64127d` + report).
 
 ## G. Tests
 
