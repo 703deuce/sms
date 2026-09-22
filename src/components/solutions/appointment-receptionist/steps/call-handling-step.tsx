@@ -308,44 +308,6 @@ export function CallHandlingStep({
             </div>
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-4">
-            <h3 className="text-sm font-semibold">Other call handling</h3>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Transfer fallback is configured under Emergency &amp; human transfer above.
-            </p>
-            <div className="mt-4 space-y-2 border-t border-border pt-3">
-              <label className="flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="mt-1"
-                  checked={state.longTermMemory}
-                  onChange={(e) => patch({ longTermMemory: e.target.checked })}
-                />
-                <span>
-                  <span className="font-medium">Long-term caller memory</span>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">
-                    Remember returning callers across conversations (optional).
-                  </span>
-                </span>
-              </label>
-              {booking || state.capabilities.includes("qualify_callers") ? (
-              <label className="flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="mt-1"
-                  checked={state.crmEnabled}
-                  onChange={(e) => patch({ crmEnabled: e.target.checked })}
-                />
-                <span>
-                  <span className="font-medium">Enable CRM tools</span>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">
-                    Search/upsert contacts and create CRM tasks (notes always on).
-                  </span>
-                </span>
-              </label>
-              ) : null}
-            </div>
-          </div>
         </div>
 
         <AfterHoursBehaviorEditor state={state} patch={patch} />

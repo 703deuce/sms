@@ -381,11 +381,6 @@ export function AppointmentReceptionistWizard({
           );
           return { agentId, telnyxAssistantId, clonedAgentId };
         }
-        if (!json.data.published && payload.activationMode === "schedule") {
-          localStorage.removeItem(storageKey);
-          router.push(postSavePath(agentId, "activate"));
-          return { agentId, telnyxAssistantId, clonedAgentId };
-        }
         if (json.data.published) {
           setAgentLifecycle("active");
           onAgentStatusChange?.("active");
@@ -441,26 +436,7 @@ export function AppointmentReceptionistWizard({
       goToStep(stepIndex + 1);
       return;
     }
-    if (state.activationMode === "save_draft") {
-      const saved = await persist("save_draft");
-      if (saved?.agentId) {
-        if (!isMctb) localStorage.removeItem(storageKey);
-        router.push(postSavePath(saved.agentId, isMctb ? "activate" : undefined));
-      }
-      return;
-    }
-    if (state.activationMode === "schedule" && !state.scheduledAt?.trim()) {
-      setError(
-        "Pick a schedule date/time, or choose Save as draft. Saving as draft for now…",
-      );
-      const saved = await persist("save_draft");
-      if (saved?.agentId) {
-        if (!isMctb) localStorage.removeItem(storageKey);
-        router.push(postSavePath(saved.agentId, isMctb ? "activate" : undefined));
-      }
-      return;
-    }
-    await persist("activate");
+    await persist("activate", { activationMode: "activate_now", scheduledAt: null });
   }
 
   async function onSaveDraft() {
@@ -595,15 +571,9 @@ export function AppointmentReceptionistWizard({
                 {busy
                   ? "Working…"
                   : stepIndex === steps.length - 1
-                    ? state.activationMode === "save_draft"
-                      ? "Save draft"
-                      : state.activationMode === "schedule"
-                        ? "Schedule activation"
-                        : state.activationMode === "duplicate_location"
-                          ? "Activate & duplicate"
-                          : hireMode
-                            ? "Put Amy to work"
-                            : "Activate now"
+                    ? hireMode
+                      ? "Put Amy to work"
+                      : "Activate"
                     : "Continue"}
               </Button>
             </div>

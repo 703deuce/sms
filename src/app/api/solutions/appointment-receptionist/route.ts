@@ -70,23 +70,24 @@ export async function POST(request: Request) {
       }
     }
 
-    const activationMode = state.activationMode || "activate_now";
+    let activationMode = state.activationMode || "activate_now";
     const warnings: string[] = [];
 
-    // Schedule without a datetime → treat as save_draft (do not publish).
-    let effectiveAction: WizardPersistAction | "activate" = action;
-    if (action === "activate" && activationMode === "schedule") {
-      if (!state.scheduledAt?.trim()) {
-        effectiveAction = "save_draft";
+    // Product: one activation path — publish immediately. Scheduled / duplicate-location UI removed.
+    if (action === "activate") {
+      if (activationMode === "save_draft") {
+        warnings.push("Use save draft action to keep editing without publishing.");
+      } else if (activationMode === "schedule" || activationMode === "duplicate_location") {
         warnings.push(
-          "Schedule activation needs a date/time — saved as draft instead of publishing.",
+          "Scheduled and duplicate-location activation are no longer supported — publishing now.",
         );
       }
+      activationMode = "activate_now";
+      state.activationMode = "activate_now";
+      state.scheduledAt = null;
     }
-    // save_draft activation mode always persists without publishing
-    if (action === "activate" && activationMode === "save_draft") {
-      effectiveAction = "save_draft";
-    }
+
+    let effectiveAction: WizardPersistAction | "activate" = action;
 
     const rawName =
       (state.solutionName || "Appointment Receptionist").trim() ||
@@ -101,21 +102,6 @@ export async function POST(request: Request) {
     const draftConfig = buildWizardAgentConfig(state);
     const outcomeSlug = outcomeSlugFromWizard(state);
     const productAgentType = agentTypeFromOutcomeSlug(outcomeSlug);
-
-    // Store schedule intent on advanced even when not publishing yet.
-    if (activationMode === "schedule" && state.scheduledAt?.trim()) {
-      const adv = (draftConfig.advanced || {}) as Record<string, unknown>;
-      draftConfig.advanced = {
-        ...adv,
-        activationMode: "schedule",
-        scheduledAt: state.scheduledAt,
-        appointmentReceptionistWizard: {
-          ...((adv.appointmentReceptionistWizard as object) || {}),
-          activationMode: "schedule",
-          scheduledAt: state.scheduledAt,
-        },
-      };
-    }
 
     let agentId = state.agentId ?? "";
     if (!agentId) {
@@ -148,20 +134,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const shouldPublish =
-      effectiveAction === "activate" &&
-      (activationMode === "activate_now" || activationMode === "duplicate_location");
+    const shouldPublish = effectiveAction === "activate";
 
-    // Scheduled activation: persist DRAFT with schedule metadata, do not publish yet.
-    const scheduleOnly =
-      effectiveAction === "activate" &&
-      activationMode === "schedule" &&
-      Boolean(state.scheduledAt?.trim());
-
-    if (
-      (shouldPublish || scheduleOnly) &&
-      hasBlockingActivationIssues(hooks.issues)
-    ) {
+    if (shouldPublish && hasBlockingActivationIssues(hooks.issues)) {
       return NextResponse.json(
         {
           error: "Activation checklist incomplete",
@@ -183,14 +158,10 @@ export async function POST(request: Request) {
         : draftConfig.knowledgeBaseIds || [],
     };
 
-    // Scheduling must not demote an already-live ACTIVE agent to DRAFT (that
-    // would stop inbound AI until the scheduled promote runs).
     const existingAgent = await getPrisma().voiceAgent.findFirst({
       where: { id: agentId, workspaceId: auth.workspaceId },
       select: { status: true, publishedVersionId: true },
     });
-    const preserveActiveOnSchedule =
-      scheduleOnly && existingAgent?.status === "ACTIVE";
     const preserveActiveOnDraftSave =
       effectiveAction === "save_draft" && existingAgent?.status === "ACTIVE";
 
@@ -202,10 +173,7 @@ export async function POST(request: Request) {
       purpose: "appointment_receptionist",
       phoneNumberId: shouldPublish ? state.phoneNumberId : state.phoneNumberId,
       draftConfig: configWithKb,
-      status:
-        shouldPublish || preserveActiveOnSchedule || preserveActiveOnDraftSave
-          ? undefined
-          : "DRAFT",
+      status: shouldPublish || preserveActiveOnDraftSave ? undefined : "DRAFT",
     });
 
     if (preserveActiveOnDraftSave && state.phoneNumberId) {
@@ -248,7 +216,7 @@ export async function POST(request: Request) {
     }
 
     // Long-term memory via VoiceMemoryConfig — enable or explicitly disable.
-    if (shouldPublish || scheduleOnly || effectiveAction !== "create_draft") {
+    if (shouldPublish || effectiveAction !== "create_draft") {
       try {
         const { saveMemoryConfig } = await import("@/lib/voice/platform/ai-platform");
         if (state.longTermMemory) {
@@ -287,9 +255,7 @@ export async function POST(request: Request) {
       state: { ...state, agentId },
       published:
         !shouldPublish &&
-        (preserveActiveOnSchedule ||
-          preserveActiveOnDraftSave ||
-          existingAgent?.status === "ACTIVE"),
+        (preserveActiveOnDraftSave || existingAgent?.status === "ACTIVE"),
       links: {
         calendarConnectionId: hooks.calendarConnectionId,
       },
@@ -460,77 +426,6 @@ export async function POST(request: Request) {
         published = false;
       }
 
-      // Duplicate for another location: clone agent with same config, leave as DRAFT
-      // (no phone assigned) so the second office can be wired separately.
-      if (activationMode === "duplicate_location" && published) {
-        try {
-          const copyName = `${name} (copy)`;
-          const clone = await createVoiceAgent(auth.workspaceId, {
-            name: copyName,
-            agentType: productAgentType,
-            templateId: "appointment_booking",
-            description: `Cloned ${productAgentType} wizard agent`,
-          });
-          const cloneConfig = parseVoiceAgentConfig(configWithKb);
-          // Don't bind the copy to the same DID.
-          await updateVoiceAgentDraft(auth.workspaceId, clone.id, {
-            name: copyName,
-            description: `Cloned ${productAgentType} wizard agent`,
-            agentType: productAgentType,
-            displayName: `${state.agentName || name} (copy)`,
-            purpose: "appointment_receptionist",
-            phoneNumberId: null,
-            draftConfig: cloneConfig,
-            status: "DRAFT",
-          });
-          if (state.longTermMemory) {
-            const { saveMemoryConfig } = await import("@/lib/voice/platform/ai-platform");
-            await saveMemoryConfig(auth.workspaceId, clone.id, {
-              mode: "caller",
-              retentionDays: 30,
-            }).catch(() => undefined);
-          }
-          clonedAgentId = clone.id;
-          await upsertAppointmentReceptionistSetup({
-            workspaceId: auth.workspaceId,
-            agentId: clone.id,
-            state: {
-              ...state,
-              agentId: clone.id,
-              setupId: undefined,
-              phoneNumberId: null,
-              solutionName: copyName,
-            },
-            published: false,
-            links: {
-              calendarConnectionId: hooks.calendarConnectionId,
-            },
-          }).catch(() => undefined);
-        } catch (err) {
-          warnings.push(
-            err instanceof Error
-              ? `Clone failed: ${err.message}`
-              : "Clone for duplicate location failed",
-          );
-        }
-      }
-    } else if (scheduleOnly) {
-      warnings.push(
-        preserveActiveOnSchedule
-          ? `Activation changes scheduled for ${state.scheduledAt} — live agent stays ACTIVE until then.`
-          : `Activation scheduled for ${state.scheduledAt} — agent kept as DRAFT until then.`,
-      );
-      // Keep setup linked for schedule; mark published only if already live.
-      await upsertAppointmentReceptionistSetup({
-        workspaceId: auth.workspaceId,
-        agentId,
-        state: { ...state, agentId },
-        published:
-          preserveActiveOnSchedule || existingAgent?.status === "ACTIVE",
-        links: {
-          calendarConnectionId: hooks.calendarConnectionId,
-        },
-      });
     }
 
     return NextResponse.json({

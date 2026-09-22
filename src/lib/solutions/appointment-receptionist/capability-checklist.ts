@@ -1,6 +1,12 @@
 import type { AppointmentReceptionistWizardState } from "./types";
 import { normalizeWizardTransferPhone } from "./transfer-utils";
 import { transferWizardValidationIssues } from "./transfer-wizard-state";
+import { deriveBookingStrategyFromWizard } from "@/lib/voice-receptionist-wizard/booking-strategy";
+import {
+  wizardBookingRequiresCalendarConnection,
+  wizardRequiresBookingLinkUrl,
+  wizardRequiresOutboundSms,
+} from "./wizard-readiness";
 
 export type ActivationIssue = {
   id: string;
@@ -92,7 +98,7 @@ export function getWizardActivationIssues(
     });
   }
 
-  if (state.capabilities.includes("transfer_calls")) {
+  if (state.capabilities.includes("transfer_calls") || state.voiceV2HumanTransferEnabled) {
     const hasDestRow = (state.transferDestinations ?? []).some(
       (d) => d.enabled !== false && Boolean(d.phoneE164?.trim()),
     );
@@ -114,6 +120,7 @@ export function getWizardActivationIssues(
   }
 
   if (state.capabilities.includes("book_appointments")) {
+    const strategy = deriveBookingStrategyFromWizard(state);
     const enabledTypes = state.appointmentTypes.filter((t) => t.enabled);
     if (!enabledTypes.length) {
       issues.push({
@@ -122,28 +129,48 @@ export function getWizardActivationIssues(
         message: "Enable at least one appointment type for booking.",
       });
     }
-    if (!ctx?.hasCalendarConnection && !state.calendarConnected) {
+    if (strategy === "CALENDLY") {
+      issues.push({
+        id: "booking_strategy_calendly",
+        severity: "blocking",
+        message:
+          "Calendly live booking is not supported on Voice V3 — choose Microsoft/Google calendar booking, send a link, or request-only.",
+      });
+    }
+    if (
+      wizardBookingRequiresCalendarConnection(state) &&
+      !ctx?.hasCalendarConnection &&
+      !state.calendarConnected
+    ) {
       issues.push({
         id: "calendar",
         severity: "blocking",
         message:
-          "Connect a live calendar before activating booking — link Google, Microsoft, Calendly, or Transovo Calendar under Appointments.",
+          "Connect Google or Microsoft calendar before activating live booking (Appointments step).",
+      });
+    }
+    if (wizardRequiresBookingLinkUrl(state) && !state.bookingLinkUrl?.trim()) {
+      issues.push({
+        id: "booking_link",
+        severity: "blocking",
+        message: "Add your booking page URL for the send-link strategy.",
       });
     }
   }
 
-  if (state.lastTestPassed === false) {
-    issues.push({
-      id: "test",
-      severity: "blocking",
-      message: "Last test did not pass — retest before going live.",
-    });
-  } else if (state.lastTestPassed === null) {
-    issues.push({
-      id: "test",
-      severity: "warning",
-      message: "No successful test recorded yet — consider running a test before going live.",
-    });
+  if (wizardRequiresOutboundSms(state)) {
+    const sender =
+      state.outboundSmsPhoneNumberId ||
+      state.aiCallRecoverySendingPhoneNumberId ||
+      state.outboundSmsE164?.trim();
+    if (!sender) {
+      issues.push({
+        id: "sms_sender",
+        severity: "blocking",
+        message:
+          "Assign an outbound SMS number for booking links or AI call recovery (Numbers / Appointments).",
+      });
+    }
   }
 
   if (state.callRecording !== "off") {
