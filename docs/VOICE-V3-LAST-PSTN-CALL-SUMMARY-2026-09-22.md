@@ -2,7 +2,7 @@
 
 **Generated (UTC):** 2026-09-22T15:37Z  
 **Data sources:** Production Postgres (via web container on Coolify), voice worker logs (`tgjridm6vrmrgljkfrr0rpjn`), `scripts/generate-voice-v3-tool-chain-report.ts`  
-**Full tool-chain report:** `docs/VOICE-V3-LAST-PSTN-CALL-FORENSICS-2026-09-22.md` (445 lines)
+**Full tool-chain report (445 lines):** [GitHub — raw file](https://raw.githubusercontent.com/703deuce/sms/master/docs/VOICE-V3-LAST-PSTN-CALL-FORENSICS-2026-09-22.md) · [browse in repo](https://github.com/703deuce/sms/blob/master/docs/VOICE-V3-LAST-PSTN-CALL-FORENSICS-2026-09-22.md)
 
 ---
 
