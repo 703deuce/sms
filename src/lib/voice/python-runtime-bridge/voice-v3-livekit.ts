@@ -120,6 +120,18 @@ export async function resolveVoiceV3LiveKitSession(
     agentId: routing.agentId,
   });
 
+  const caller = payload.callerE164?.trim() || null;
+  if (caller) {
+    const { isCallerBlockedForWorkspace } = await import("@/lib/voice-v3/spam-protection/blocklist");
+    const blocked = await isCallerBlockedForWorkspace({
+      workspaceId: routing.workspaceId,
+      callerE164: caller,
+    });
+    if (blocked) {
+      throw new Error("caller_blocked_for_workspace");
+    }
+  }
+
   const promptInput = resolveVoiceV3DefaultPromptInput(new Date(), agentConfig);
   const nativeAmy = new Set<string>(VOICE_V3_LIVEKIT_NATIVE_TOOL_NAMES);
   const astraDelegationToolNames = listVoiceV3AstraToolNamesForConfig(agentConfig).filter(
@@ -132,7 +144,6 @@ export async function resolveVoiceV3LiveKitSession(
 
   const liveSessionId = liveSessionIdForRoom(payload.roomName);
   const callId = liveSessionId;
-  const caller = payload.callerE164?.trim() || null;
 
   createVoiceV3CallRuntime({
     liveSessionId,

@@ -12,7 +12,8 @@ export type VoiceV3AuthorizedToolName =
   | "transfer_call"
   | "send_booking_link"
   | "request_callback"
-  | "take_message";
+  | "take_message"
+  | "report_unwanted_solicitor";
 
 export function isRequestCallbackAuthorized(config: VoiceV3AgentConfig): boolean {
   return config.callHandling.callbackRequestsEnabled === true;
@@ -20,6 +21,10 @@ export function isRequestCallbackAuthorized(config: VoiceV3AgentConfig): boolean
 
 export function isTakeMessageAuthorized(config: VoiceV3AgentConfig): boolean {
   return config.capabilities?.takeMessages === true;
+}
+
+export function isReportUnwantedSolicitorAuthorized(config: VoiceV3AgentConfig): boolean {
+  return (config.spamProtection?.solicitorPolicy ?? "ALLOW") === "DECLINE";
 }
 
 function isDirectCalendarStrategy(config: VoiceV3AgentConfig): boolean {
@@ -60,6 +65,8 @@ export function isVoiceV3ToolAuthorizedBase(
       return isRequestCallbackAuthorized(config);
     case "take_message":
       return isTakeMessageAuthorized(config);
+    case "report_unwanted_solicitor":
+      return isReportUnwantedSolicitorAuthorized(config);
     default:
       return false;
   }

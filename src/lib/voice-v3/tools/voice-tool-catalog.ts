@@ -31,7 +31,11 @@ import {
   submitAppointmentRequestTool,
 } from "./submit-appointment-request-tool";
 import { buildTakeMessageOpenAiTool, takeMessageTool } from "./take-message-tool";
-import { isTakeMessageAuthorized } from "./authorize-tool-for-config";
+import {
+  buildReportUnwantedSolicitorOpenAiTool,
+  reportUnwantedSolicitorTool,
+} from "./report-unwanted-solicitor-tool";
+import { isTakeMessageAuthorized, isReportUnwantedSolicitorAuthorized } from "./authorize-tool-for-config";
 import {
   isRequestCallbackAuthorized,
   isSendBookingLinkAuthorized,
@@ -145,6 +149,13 @@ export const VOICE_TOOL_CATALOG: VoiceToolCatalogEntry[] = [
     definition: takeMessageTool as VoiceToolDefinition<unknown>,
     buildOpenAiTool: buildTakeMessageOpenAiTool,
   },
+  {
+    name: "report_unwanted_solicitor",
+    kind: "mutation",
+    telemetryName: "report_unwanted_solicitor",
+    definition: reportUnwantedSolicitorTool as VoiceToolDefinition<unknown>,
+    buildOpenAiTool: buildReportUnwantedSolicitorOpenAiTool,
+  },
 ];
 
 function isDirectCalendarStrategy(config: VoiceV3AgentConfig): boolean {
@@ -189,6 +200,8 @@ function isToolEnabledForConfig(entry: VoiceToolCatalogEntry, config: VoiceV3Age
       return config.scheduling?.bookingStrategy === "REQUEST_ONLY";
     case "take_message":
       return isTakeMessageAuthorized(config);
+    case "report_unwanted_solicitor":
+      return isReportUnwantedSolicitorAuthorized(config);
     case "update_intake":
     case "end_call":
       return true;
