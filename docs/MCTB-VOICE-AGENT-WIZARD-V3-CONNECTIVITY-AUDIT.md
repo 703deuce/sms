@@ -19,6 +19,8 @@
 
 **MCTB-specific:** The **Call handling** card (`PATCH /api/mctb/inbound-handling`) is **outside** the wizard republish path. It switches MCTB TeXML vs Voice Agent on the same ingress; it is not updated when you click Save on a wizard step.
 
+**Off-master work:** Several items rated **Not connected** below are **implemented on unmerged branches** (notably `cursor/voice-v3-gap-closure-2304` and `cursor/voice-v3-final-completion-2304`). See **[branch archaeology](./MCTB-VOICE-AGENT-WIZARD-V3-BRANCH-ARCHAEOLOGY.md)** before treating the audit as “never built.” Ratings in this file describe **`origin/master`** unless a row says otherwise.
+
 ---
 
 ## Page chrome (above wizard)
@@ -79,7 +81,7 @@
 
 | UI element | Rating | Notes |
 |------------|--------|-------|
-| **Search uploaded documents during calls** | **Partial** | Compiles to `knowledge.retrieval`; activate hooks build/link KB. **No `retrieve` tool** in current V3 tool catalog — answers still primarily from **prompt hot context** + activate-time KB processing, not live RAG tool loop. |
+| **Search uploaded documents during calls** | **Partial** | On **`master`:** when `useGptLiveFileSearchRag()` is on and KB sources are **indexed**, `resolveAgentKnowledgeRetrieval` supplies OpenAI vector store ids → LiveKit GPT-Live **FileSearch** (`voice-v3-livekit.ts`). No delegated `search_business_knowledge` tool in catalog on `master` (exists on **`voice-v3-gap-closure-2304`**). Without ingest/index, effect is still **hot context** only. |
 | Source cards (website, guided profile, upload, connect) | **Partial** | Persisted; **activate** runs knowledge processors / links KB. Effect on **next call** depends on ingest finishing and summaries being present. |
 | Website URL + **Scan** | **Partial** | Populates `knowledgeItems` + optional KB; not instant without successful scan/approve. |
 | Guided profile fields + **Save profile to knowledge** | **Connected** | Writes into `knowledgeItems` → `hotContextFromWizard` → Amy/Astra prompts on republish. |
@@ -136,17 +138,17 @@
 | Transfer contacts (name, phone, mode, timeout, reorder) | **Partial** | Destinations **Connected** for `transfer_call`. **Warm** mode / per-step timeouts: **partial**. |
 | Detect voicemail on transfer | **Partial** | Compiled; provider-dependent behavior. |
 | Transfer fallback radios | **Connected** | `transferFallback` in call handling config. |
-| **Urgent-call handling** + rules editor | **Not connected** | Compiles to config but **`evaluateVoiceV3Urgency` is not called** anywhere in `src/` (dead path). |
-| **Sales / solicitation handling** | **Not connected** | Compiles only; no V3 consumer. |
+| **Urgent-call handling** + rules editor | **Not connected** *(on `master`)* | Compiles to config; **`evaluateVoiceV3Urgency` not invoked** on `master`. **Wired on `voice-v3-gap-closure-2304`** (`authorize-transfer.ts`, callback path). |
+| **Sales / solicitation handling** | **Not connected** *(on `master`)* | Compiles only on `master`. **Implemented on `voice-v3-gap-closure-2304`** (`spam-protection/*`, merged from `voice-v3-spam-solicitor-protection-2304`). |
 | **Take messages and callback requests** | **Connected** | `callbackRequestsEnabled` + `request_callback` tool. |
 | **Required before recording a callback** (field checkboxes) | **Connected** | `callbackRequiredCollectFieldIds` → operation requirements. |
 | **After-hours notifications** (events + recipients) | **Partial** | Compiles; **notify-*** handlers run on **post-call events** (SMS/email to staff), not in-call AI behavior. |
-| **AI Call Recovery** (all fields) | **Not connected** | Compiles to `recovery.*`; **no Voice V3 runtime** sends post-call SMS from these flags yet. |
+| **AI Call Recovery** (all fields) | **Not connected** *(on `master`)* | Compiles to `recovery.*`; `voice_v2_ai_call_recovery_settle` on `master` is a **no-op**. **V3 SMS on `voice-v3-gap-closure-2304`:** `post-call/ai-call-recovery-sms.ts` + unified post-call processor. |
 | **Long-term caller memory** | **Partial** | Persisted in agent `advanced.memory`; limited V3 session continuity — not full memory product. |
 | **Enable CRM tools** | **Partial** | `crmEnabled` compiles; tool surface limited vs UI promise. |
-| **After-hours behavior** (checkbox grid) | **Not connected** | Compiled into operating maturity; **no V3 in-call consumer** for `whenClosed.*` toggles. |
-| **On-call schedule** | **Not connected** | Compiled; not wired into live transfer selection in V3 milestone. |
-| **Callback SLA** selects | **Not connected** | Stored; no V3 executor enforcing SLA on voice callbacks. |
+| **After-hours behavior** (checkbox grid) | **Not connected** *(on `master`)* | Gating helpers exist under `voice-receptionist-wizard/operating-maturity/` but **not applied on V3 transfer path** on `master`. **Used in transfer auth on `voice-v3-gap-closure-2304`.** |
+| **On-call schedule** | **Not connected** *(on `master`)* | `resolveActiveOnCallTarget` on disk; **not wired into `authorize-transfer` on `master`**. **Wired on `voice-v3-gap-closure-2304`.** |
+| **Callback SLA** selects | **Not connected** | Stored; `callback-overdue-job` exists on `master` but manifest marks SLA **future** — treat as ops/partial until manifest + runtime aligned. |
 | Side panel **Call handling preview** | **Not connected** | Display. |
 
 ---
@@ -209,13 +211,16 @@ Rough grouping of **user-visible controls** from the inventory (excluding pure c
 
 ## Highest-impact gaps (if you expect “wizard = truth”)
 
-1. **AI Call Recovery** (Call Handling) — configured in UI, **no V3 post-call SMS executor** hooked up.  
-2. **Urgency rules** — editor + compile, **evaluator never invoked**.  
-3. **Calendly live booking** — UI present, execution **not implemented** for V3.  
-4. **Document RAG checkbox** — no retrieve tool in V3 catalog; rely on **knowledge item text** in prompts.  
-5. **Waterfall transfer plan steps** — destinations work; full waterfall semantics **partial**.  
+*Scope: **`origin/master`** today. Items 1–2 and parts of 4 have **completed implementations on `cursor/voice-v3-gap-closure-2304`** — merge first, then re-audit.*
+
+1. **AI Call Recovery** (Call Handling) — on `master`, **no V3 post-call SMS**; gap-closure branch has executor.  
+2. **Urgency rules** — on `master`, **evaluator never invoked**; gap-closure wires transfer + callback.  
+3. **Calendly live booking** — UI present; **V3 executor still absent** even on gap-closure (see gap register).  
+4. **Document RAG** — on `master`, **FileSearch** when vector stores exist; otherwise hot context only; gap-closure adds delegated search tool.  
+5. **Waterfall transfer plan steps** — destinations work; full waterfall semantics **partial** on all inspected branches.  
 6. **MCTB Call handling switch** — separate from wizard; must be toggled independently of Save/Activate.  
-7. **Purpose “when to answer”** vs **MCTB carrier forwarding** — AI config can disagree with real ingress unless phone + inbound-handling aligned.
+7. **Purpose “when to answer”** vs **MCTB carrier forwarding** — AI config can disagree with real ingress unless phone + inbound-handling aligned.  
+8. **Google Calendar booking strategy** — provider work on **`google-calendar-voice-v3-implementation-2304`** / gap-closure; **not on `master`**.
 
 ---
 
