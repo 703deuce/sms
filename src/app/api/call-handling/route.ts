@@ -9,6 +9,8 @@ import type { ActiveCallHandler } from "@/lib/call-handling/types";
 
 const patchSchema = z.object({
   handler: z.enum(["mctb", "ai_receptionist"]),
+  voiceIngressPhoneNumberId: z.string().min(1).optional(),
+  /** @deprecated use voiceIngressPhoneNumberId */
   phoneNumberId: z.string().min(1).optional(),
 });
 
@@ -17,11 +19,12 @@ export async function GET(req: Request) {
   if ("error" in auth) return auth.error;
 
   const url = new URL(req.url);
-  const phoneNumberId = url.searchParams.get("phoneNumberId");
+  const voiceIngressPhoneNumberId =
+    url.searchParams.get("voiceIngressPhoneNumberId") ?? url.searchParams.get("phoneNumberId");
 
   const state = await loadCallHandlingOwnershipState({
     workspaceId: auth.workspaceId,
-    phoneNumberId,
+    voiceIngressPhoneNumberId,
   });
 
   if (!state) {
@@ -54,9 +57,11 @@ export async function PATCH(req: Request) {
   }
 
   try {
+    const voiceIngressPhoneNumberId =
+      parsed.data.voiceIngressPhoneNumberId ?? parsed.data.phoneNumberId;
     const state = await setActiveCallHandler({
       workspaceId: auth.workspaceId,
-      phoneNumberId: parsed.data.phoneNumberId,
+      voiceIngressPhoneNumberId,
       handler: parsed.data.handler as ActiveCallHandler,
       userId: auth.session.userId,
     });
@@ -65,7 +70,7 @@ export async function PATCH(req: Request) {
     const message = err instanceof Error ? err.message : "Switch failed";
     const prior = await loadCallHandlingOwnershipState({
       workspaceId: auth.workspaceId,
-      phoneNumberId: parsed.data.phoneNumberId,
+      voiceIngressPhoneNumberId,
     });
     return NextResponse.json(
       {

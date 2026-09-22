@@ -11,7 +11,11 @@ export type CallHandlingPhoneSettings = {
 };
 
 export type CallHandlingOwnershipState = {
+  /** Canonical CFNA / voice ingress DID (Call Handling mutates this row only). */
+  voiceIngressPhoneNumberId: string;
+  /** @deprecated Use voiceIngressPhoneNumberId — kept for API compatibility. */
   phoneNumberId: string;
+  voiceIngressE164: string | null;
   e164: string | null;
   selectedHandler: ActiveCallHandler | null;
   explicitSelection: boolean;
@@ -21,6 +25,8 @@ export type CallHandlingOwnershipState = {
   error: string | null;
   aiReceptionist: {
     agentId: string | null;
+    /** Agent's configured voice DID; may differ from voice ingress. */
+    aiVoicePhoneNumberId: string | null;
     ready: boolean;
     readinessMessage: string | null;
   };
