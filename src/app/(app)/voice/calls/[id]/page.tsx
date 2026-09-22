@@ -5,6 +5,14 @@ import {
   buildActionItems,
   buildCapturedFields,
 } from "@/lib/voice/calls/detail";
+import {
+  buildCustomerActivityFeed,
+  formatCallCostCents,
+  formatTelephonyProviderLabel,
+  recordingPipelineState,
+  summaryPipelineState,
+  transcriptPipelineState,
+} from "@/lib/voice/calls/customer-activity-feed";
 import { deriveOutcomeBadges, fmtCallDuration, fmtCallPhone } from "@/lib/voice/calls/display";
 import {
   getMockCallById,
@@ -13,16 +21,7 @@ import {
   MOCK_TRANSCRIPT_SEGMENTS,
 } from "@/lib/voice/calls/mock-data";
 import { cn } from "@/lib/utils";
-import {
-  Bot,
-  ChevronRight,
-  Download,
-  Link2,
-  MoreHorizontal,
-  Share2,
-  Trash2,
-  User,
-} from "lucide-react";
+import { Bot, ChevronRight, User } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -101,12 +100,17 @@ export default function VoiceCallDetailPage() {
       }
     : (data?.call as Record<string, unknown> | undefined);
 
-  const recordings = demo ? [] : ((data?.recordings as Array<{ id: string }>) || []);
+  const recordings = demo
+    ? []
+    : ((data?.recordings as Array<{ id: string; status?: string | null; provider?: string | null; createdAt?: string }>) ||
+        []);
+  const rawEvents =
+    (data?.events as Array<{ id: string; eventType: string; createdAt: string; payload?: unknown }>) || [];
+  const rawTranscripts =
+    (data?.transcripts as Array<{ status?: string | null; segments?: Segment[] }>) || [];
   const segments: Segment[] = demo
     ? MOCK_TRANSCRIPT_SEGMENTS
-    : ((data?.transcripts as Array<{ segments?: Segment[] }>) || []).flatMap(
-        (t) => t.segments || [],
-      );
+    : rawTranscripts.flatMap((t) => t.segments || []);
   const insight: CallInsight | undefined = demo && mock
     ? { summary: mock.summary, intent: mock.intent, sentiment: mock.sentiment }
     : ((data?.insights as CallInsight[]) || [])[0];
@@ -203,10 +207,75 @@ export default function VoiceCallDetailPage() {
     transfers: (data?.transfers as Array<{ status?: string; destination?: string; summary?: string; createdAt?: string }>) || [],
   });
 
+  const activityFeed = buildCustomerActivityFeed({
+    call: {
+      startedAt: String(call.startedAt),
+      answeredAt: call.answeredAt as string | null | undefined,
+      endedAt: call.endedAt as string | null | undefined,
+      appointmentBooked: Boolean(call.appointmentBooked),
+      transferred: Boolean(call.transferred),
+    },
+    events: demo ? undefined : rawEvents,
+    toolExecutions: demo
+      ? undefined
+      : (data?.toolExecutions as Array<{
+          id: string;
+          status?: string | null;
+          createdAt?: string;
+          completedAt?: string | null;
+          errorMessage?: string | null;
+          toolType?: string | null;
+          input?: unknown;
+          output?: unknown;
+        }>) || [],
+    transfers: demo
+      ? undefined
+      : (data?.transfers as Array<{
+          id: string;
+          status?: string | null;
+          destination?: string | null;
+          createdAt?: string;
+          completedAt?: string | null;
+        }>) || [],
+    recordings: demo ? undefined : recordings,
+    callbackRequest: demo ? null : callbackRequest,
+    demoItems: demo
+      ? MOCK_ACTIVITY_EVENTS.map((e, i) => ({
+          id: e.id,
+          label: e.label,
+          at: e.at,
+          sortMs: i,
+        }))
+      : undefined,
+  });
+
+  const costLabel = demo ? null : formatCallCostCents(call.costCents as number | undefined);
+  const providerLabel = demo
+    ? null
+    : formatTelephonyProviderLabel(recordings[0]?.provider ?? null);
+
+  const recordingState = recordingPipelineState({
+    recordings,
+    callHistoryRecordingStatus: callHistoryMeta?.recordingStatus as string | null | undefined,
+  });
+  const transcriptState = transcriptPipelineState({
+    segmentsCount: segments.length,
+    transcripts: rawTranscripts,
+  });
+  const summaryState = summaryPipelineState({
+    summary: insight?.summary,
+    insights: (data?.insights as Array<{ status?: string | null }>) || [],
+    callEnded: Boolean(call.endedAt),
+  });
+
+  const contactEmailDisplay =
+    (call.contactEmail as string | null | undefined)?.trim() ||
+    (demo ? mockCall?.contactEmail : null);
+
   return (
     <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-8">
       <nav className="mb-4 flex flex-wrap items-center gap-1 text-sm text-[#6b7280]">
-        <Link href="/voice/setup" className="hover:text-[#374151]">AI Receptionist</Link>
+        <Link href="/voice/overview" className="hover:text-[#374151]">AI After Hours</Link>
         <ChevronRight className="h-3.5 w-3.5" />
         <Link href="/voice/calls" className="hover:text-[#374151]">Calls</Link>
         <ChevronRight className="h-3.5 w-3.5" />
@@ -234,26 +303,6 @@ export default function VoiceCallDetailPage() {
             {fmtCallDuration(call.durationSeconds as number)}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            className="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2 text-sm font-medium text-[#374151] shadow-sm hover:bg-[#f9fafb]"
-          >
-            Transfer
-          </button>
-          <button
-            type="button"
-            className="rounded-lg border border-[#e5e7eb] bg-white px-4 py-2 text-sm font-medium text-[#374151] shadow-sm hover:bg-[#f9fafb]"
-          >
-            Add Note
-          </button>
-          <button
-            type="button"
-            className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white shadow-sm"
-          >
-            <MoreHorizontal className="h-4 w-4 text-[#6b7280]" />
-          </button>
-        </div>
       </div>
 
       <div className="mb-6 flex gap-6 border-b border-[#e5e7eb]">
@@ -278,15 +327,17 @@ export default function VoiceCallDetailPage() {
         <div className="min-w-0 space-y-6">
           {tab === "overview" ? (
             <>
-              {recordings[0]?.id ? (
+              {recordings[0]?.id && recordingState === "ready" ? (
                 <WaveformRecordingPlayer recordingId={recordings[0].id} />
               ) : (
                 <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
-                  <p className="text-sm text-[#374151]">
-                    {callHistoryMeta?.recordingStatus === "recording" ||
-                    callHistoryMeta?.recordingStatus === "processing"
+                  <h2 className="text-sm font-semibold text-[#111827]">Recording</h2>
+                  <p className="mt-2 text-sm text-[#374151]">
+                    {recordingState === "processing"
                       ? "Recording is being processed…"
-                      : "Recording unavailable for this call."}
+                      : recordingState === "failed"
+                        ? "Recording unavailable for this call."
+                        : "Recording unavailable for this call."}
                   </p>
                 </div>
               )}
@@ -321,9 +372,11 @@ export default function VoiceCallDetailPage() {
               <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
                 <h2 className="text-sm font-semibold text-[#111827]">AI Summary</h2>
                 <p className="mt-3 text-sm leading-relaxed text-[#374151]">
-                  {insight?.summary ||
-                    mockCall?.summary ||
-                    "No AI summary available for this call."}
+                  {summaryState === "ready"
+                    ? insight?.summary || mockCall?.summary
+                    : summaryState === "processing"
+                      ? "Summary is being generated…"
+                      : "No AI summary available for this call."}
                 </p>
               </div>
 
@@ -358,6 +411,12 @@ export default function VoiceCallDetailPage() {
                   </label>
                 </div>
                 <div className="mt-4 space-y-4">
+                  {transcriptState === "processing" && segments.length === 0 ? (
+                    <p className="text-sm text-[#6b7280]">Transcript is being processed…</p>
+                  ) : null}
+                  {transcriptState === "unavailable" && segments.length === 0 ? (
+                    <p className="text-sm text-[#6b7280]">Transcript unavailable for this call.</p>
+                  ) : null}
                   {segments.slice(0, 4).map((seg) => (
                     <div key={seg.id} className="flex gap-3">
                       {showTranscriptDetails ? (
@@ -435,14 +494,18 @@ export default function VoiceCallDetailPage() {
                   {fmtCallDuration(call.durationSeconds as number)}
                 </dd>
               </div>
-              <div className="flex justify-between gap-2">
-                <dt className="text-[#6b7280]">Cost</dt>
-                <dd className="font-medium text-[#111827]">$0.15 (est.)</dd>
-              </div>
-              <div className="flex justify-between gap-2">
-                <dt className="text-[#6b7280]">Provider</dt>
-                <dd className="font-medium text-[#111827]">Twilio</dd>
-              </div>
+              {costLabel ? (
+                <div className="flex justify-between gap-2">
+                  <dt className="text-[#6b7280]">Cost</dt>
+                  <dd className="font-medium text-[#111827]">{costLabel}</dd>
+                </div>
+              ) : null}
+              {providerLabel ? (
+                <div className="flex justify-between gap-2">
+                  <dt className="text-[#6b7280]">Provider</dt>
+                  <dd className="font-medium text-[#111827]">{providerLabel}</dd>
+                </div>
+              ) : null}
               <div className="flex justify-between gap-2">
                 <dt className="text-[#6b7280]">To</dt>
                 <dd className="font-medium text-[#111827]">{fmtCallPhone(String(call.toE164))}</dd>
@@ -456,43 +519,24 @@ export default function VoiceCallDetailPage() {
 
           <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
             <h2 className="text-sm font-semibold text-[#111827]">Activity Feed</h2>
-            <ol className="mt-4 space-y-0">
-              {(demo ? MOCK_ACTIVITY_EVENTS : MOCK_ACTIVITY_EVENTS).map((e, idx, arr) => (
-                <li key={e.id} className="flex gap-3">
-                  <div className="flex flex-col items-center">
-                    <span className="mt-1.5 h-2 w-2 rounded-full bg-[#6366f1]" />
-                    {idx < arr.length - 1 ? <span className="w-px flex-1 bg-[#e5e7eb]" /> : null}
-                  </div>
-                  <div className="pb-4">
-                    <p className="text-sm font-medium text-[#111827]">{e.label}</p>
-                    <p className="text-xs text-[#6b7280]">{e.at}</p>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </div>
-
-          <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
-            <h2 className="text-sm font-semibold text-[#111827]">Tags & Lead Status</h2>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <span className="rounded-full bg-[#eef2ff] px-2.5 py-0.5 text-xs font-medium text-[#4f46e5]">
-                Sales
-              </span>
-              <span className="rounded-full bg-[#f3f4f6] px-2.5 py-0.5 text-xs font-medium text-[#374151]">
-                Inbound Call
-              </span>
-              <button type="button" className="text-xs font-medium text-[#6366f1] hover:underline">
-                + Add Tag
-              </button>
-            </div>
-            <div className="mt-4">
-              <label className="text-xs text-[#6b7280]">Lead Status</label>
-              <select className="mt-1 w-full rounded-lg border border-[#e5e7eb] px-3 py-2 text-sm">
-                <option>Interested (High)</option>
-                <option>Interested (Medium)</option>
-                <option>Not interested</option>
-              </select>
-            </div>
+            {activityFeed.length === 0 ? (
+              <p className="mt-4 text-sm text-[#6b7280]">No activity recorded for this call yet.</p>
+            ) : (
+              <ol className="mt-4 space-y-0">
+                {activityFeed.map((e, idx, arr) => (
+                  <li key={e.id} className="flex gap-3">
+                    <div className="flex flex-col items-center">
+                      <span className="mt-1.5 h-2 w-2 rounded-full bg-[#6366f1]" />
+                      {idx < arr.length - 1 ? <span className="w-px flex-1 bg-[#e5e7eb]" /> : null}
+                    </div>
+                    <div className="pb-4">
+                      <p className="text-sm font-medium text-[#111827]">{e.label}</p>
+                      <p className="text-xs text-[#6b7280]">{e.at}</p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            )}
           </div>
 
           <div className="rounded-xl border border-[#e5e7eb] bg-white p-4 shadow-sm">
@@ -509,9 +553,12 @@ export default function VoiceCallDetailPage() {
                   {callerName.slice(0, 1)}
                 </div>
               )}
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm font-semibold text-[#111827]">{callerName}</p>
-                <p className="text-xs text-[#6b7280]">Last contact: 10 mins ago</p>
+                <p className="text-xs text-[#6b7280]">{fmtCallPhone(callerPhone)}</p>
+                {contactEmailDisplay ? (
+                  <p className="truncate text-xs text-[#6b7280]">{contactEmailDisplay}</p>
+                ) : null}
               </div>
             </div>
           </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { AgentTemplateSelect } from "@/components/receptionist/agent-template-select";
-import { LiveKitBrowserCall } from "@/components/receptionist/livekit-browser-call";
+import { VoiceV3BrowserCall } from "@/components/voice/voice-v3-browser-call";
 import { PhoneNumberSelect } from "@/components/receptionist/phone-number-select";
 import {
   WIZARD_VOICES,
@@ -84,8 +84,8 @@ export function VoiceTestStep({
       <WizardPageHeader
         banner
         icon={<Volume2 className="h-5 w-5 text-[#6366f1]" />}
-        title={`Voice & Test: ${agent}`}
-        subtitle="Tune voice settings, preview the call, then connect and deploy."
+        title={`Test Amy: ${agent}`}
+        subtitle="Tune voice settings, test in your browser, then connect and deploy."
       />
 
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1fr)_minmax(0,1.35fr)]">
@@ -205,7 +205,7 @@ export function VoiceTestStep({
                 <Bot className="h-9 w-9 text-[#a5b4fc]" />
               </div>
               <p className="mt-3 text-lg font-semibold">{agent}</p>
-              <p className="text-xs text-[#94a3b8]">AI Receptionist</p>
+              <p className="text-xs text-[#94a3b8]">AI After Hours</p>
               <p className="mt-1.5 text-xs font-medium text-[#818cf8]">Listening…</p>
               <div className="mt-5 flex h-8 items-end justify-center gap-1">
                 {[3, 5, 8, 4, 7, 5, 9, 4, 6].map((h, i) => (
@@ -232,10 +232,9 @@ export function VoiceTestStep({
           </div>
           {state.agentId ? (
             <div className="mt-4 w-full max-w-[300px] voice-card p-4">
-              <LiveKitBrowserCall
+              <VoiceV3BrowserCall
                 agentId={state.agentId}
                 voiceLabel={state.voiceLabel}
-                agentTemplate={state.livekitAgentTemplate}
               />
             </div>
           ) : null}
