@@ -510,20 +510,30 @@ export async function publishVoiceAgent(
     throw new Error(message);
   };
 
-  try {
-    const { syncVoiceAgentPhoneAssignment } = await import("./agent-phone");
-    const appointmentWizard = Boolean(
-      (config.advanced as Record<string, unknown> | undefined)?.appointmentReceptionistWizard,
-    );
-    await syncVoiceAgentPhoneAssignment({
-      workspaceId,
-      agentId,
-      phoneNumberId: updated.phoneNumberId,
-      exclusive: true,
-      allowMctbTexmlVoiceAgentTakeover: appointmentWizard,
-    });
-  } catch (err) {
-    console.error("[voice] phone assignment sync failed", err);
+  const { getCallHandlingPublishPolicy: getCallHandlingPublishPolicyEarly } = await import(
+    "@/lib/call-handling/publish-gate"
+  );
+  const ingressPublishPolicyEarly = await getCallHandlingPublishPolicyEarly({
+    workspaceId,
+    phoneNumberId: updated.phoneNumberId,
+  });
+
+  if (!ingressPublishPolicyEarly.skipIngressRouting) {
+    try {
+      const { syncVoiceAgentPhoneAssignment } = await import("./agent-phone");
+      const appointmentWizard = Boolean(
+        (config.advanced as Record<string, unknown> | undefined)?.appointmentReceptionistWizard,
+      );
+      await syncVoiceAgentPhoneAssignment({
+        workspaceId,
+        agentId,
+        phoneNumberId: updated.phoneNumberId,
+        exclusive: true,
+        allowMctbTexmlVoiceAgentTakeover: appointmentWizard,
+      });
+    } catch (err) {
+      console.error("[voice] phone assignment sync failed", err);
+    }
   }
 
   let telnyxSync: unknown = null;
@@ -632,7 +642,15 @@ export async function publishVoiceAgent(
       skipLiveKitForMctb ||
       (!isLiveKitVoiceRuntime() && usesTexmlDirectInbound(config)));
 
+  const { getCallHandlingPublishPolicy } = await import("@/lib/call-handling/publish-gate");
+  const ingressPublishPolicy = await getCallHandlingPublishPolicy({
+    workspaceId,
+    phoneNumberId: updated.phoneNumberId,
+  });
+  const skipIngressRoutingOnPublish = ingressPublishPolicy.skipIngressRouting;
+
   if (
+    !skipIngressRoutingOnPublish &&
     realtimeMediaBridge &&
     updated.phoneNumberId &&
     !isLiveKitVoiceRuntime()
@@ -665,6 +683,7 @@ export async function publishVoiceAgent(
       );
     }
   } else if (
+    !skipIngressRoutingOnPublish &&
     voiceV3AppointmentReceptionist &&
     updated.phoneNumberId &&
     !isLiveKitVoiceRuntime()
@@ -705,7 +724,7 @@ export async function publishVoiceAgent(
         `Voice V3 Call Control routing failed — deploy rolled back: ${detail}`,
       );
     }
-  } else if (shouldRouteTexmlAssistant && updated.phoneNumberId) {
+  } else if (!skipIngressRoutingOnPublish && shouldRouteTexmlAssistant && updated.phoneNumberId) {
     const phone = await prisma.phoneNumber.findFirst({
       where: { id: updated.phoneNumberId, workspaceId },
       select: { e164: true, providerNumberId: true, settingsJson: true },
@@ -823,25 +842,40 @@ export async function syncLiveWizardDraftToProvider(
     await syncAssistantToTelnyx(workspaceId, agentId, agent, config);
 
     if (agent.phoneNumberId) {
-      const { syncVoiceAgentPhoneAssignment } = await import("./agent-phone");
+      const { getCallHandlingPublishPolicy } = await import("@/lib/call-handling/publish-gate");
+      const ingressPolicy = await getCallHandlingPublishPolicy({
+        workspaceId,
+        phoneNumberId: agent.phoneNumberId,
+      });
+
+      if (!ingressPolicy.skipIngressRouting) {
+        const { syncVoiceAgentPhoneAssignment } = await import("./agent-phone");
+        const appointmentWizard = Boolean(
+          (config.advanced as Record<string, unknown> | undefined)
+            ?.appointmentReceptionistWizard,
+        );
+        await syncVoiceAgentPhoneAssignment({
+          workspaceId,
+          agentId,
+          phoneNumberId: agent.phoneNumberId,
+          exclusive: true,
+          allowMctbTexmlVoiceAgentTakeover: appointmentWizard,
+        });
+      }
+
       const appointmentWizard = Boolean(
         (config.advanced as Record<string, unknown> | undefined)
           ?.appointmentReceptionistWizard,
       );
-      await syncVoiceAgentPhoneAssignment({
-        workspaceId,
-        agentId,
-        phoneNumberId: agent.phoneNumberId,
-        exclusive: true,
-        allowMctbTexmlVoiceAgentTakeover: appointmentWizard,
-      });
-
       if (appointmentWizard) {
         const phone = await prisma.phoneNumber.findFirst({
           where: { id: agent.phoneNumberId, workspaceId },
           select: { e164: true, providerNumberId: true, settingsJson: true },
         });
         if (phone?.e164) {
+          if (ingressPolicy.skipIngressRouting) {
+            return { synced: true };
+          }
           const { isAppointmentReceptionistAgent: isApptReceptionist } = await import(
             "@/lib/voice-v3/config/from-published-agent"
           );

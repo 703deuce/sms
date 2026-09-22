@@ -18,6 +18,8 @@ import { useEffect, useRef, useState } from "react";
 import { isAppointmentsProductPath } from "@/lib/products/appointments-routes";
 import { isMctbProductChromePath } from "@/lib/products/mctb-shell";
 import { useProductShell } from "@/components/products/product-shell-tabs";
+import { CallHandlingSwitcher } from "@/components/call-handling/call-handling-switcher";
+import { shouldShowCallHandlingSwitcher } from "@/lib/call-handling/show-switcher";
 
 type SearchResult = {
   id: string;
@@ -80,6 +82,10 @@ export function Header({
   const appointmentsChrome = isAppointmentsProductPath(pathname);
   const mctbChrome = isMctbProductChromePath(pathname, productShell, { hasMctb });
   const neutralChrome = appointmentsChrome || mctbChrome;
+  const showCallHandlingChrome = shouldShowCallHandlingSwitcher({
+    hasMctb: Boolean(hasMctb),
+    hasVoice: Boolean(hasVoice),
+  });
   const showMassSmsChrome = hasSms && !appointmentsChrome;
   const [numberId, setNumberId] = useState(
     activeFromNumberId || phoneNumbers[0]?.id || "",
@@ -238,6 +244,12 @@ export function Header({
         ) : (
           <span className="shrink-0" aria-hidden />
         )}
+
+        {showCallHandlingChrome ? (
+          <div className="hidden min-w-[200px] max-w-[260px] shrink-0 md:block">
+            <CallHandlingSwitcher variant="header" className="!px-0 !pb-0" />
+          </div>
+        ) : null}
 
         <div className="flex-1" />
 
