@@ -303,37 +303,21 @@ async function completeFindAvailabilityAfterDispatch(input: {
       schedulingGeneration: request.schedulingGeneration,
     };
   } else {
-    const { fetchMicrosoftBusyIntervals } = await import("./microsoft/microsoft-find-availability");
-    const { getPrisma } = await import("@/lib/db");
-    const prisma = getPrisma();
-    const connection = await prisma.voiceCalendarConnection.findFirst({
-      where: { id: runtime.config.calendar!.connectionId, provider: "microsoft" },
+    const { fetchVoiceV3BusyIntervals } = await import("./calendar-provider-runtime");
+    const graphResult = await fetchVoiceV3BusyIntervals({
+      config: runtime.config,
+      request,
     });
-    if (!connection || connection.status !== "connected") {
+    graphDurationMs = graphResult.durationMs;
+    if (graphResult.ok) {
+      busy = graphResult.busy;
+    } else {
       failure = {
-        reason: "configuration_missing",
-        message: "Microsoft calendar connection not found or not connected",
+        reason: graphResult.reason as import("./types").FindAvailabilityFailureReason,
+        message: graphResult.message,
         at: new Date().toISOString(),
         schedulingGeneration: request.schedulingGeneration,
       };
-    } else {
-      const calendarConfig = (connection.config || {}) as import("@/lib/voice/calendar/providers").CalendarConfig;
-      const graphResult = await fetchMicrosoftBusyIntervals({
-        request,
-        connectionId: connection.id,
-        calendarConfig,
-      });
-      graphDurationMs = graphResult.durationMs;
-      if (graphResult.ok) {
-        busy = graphResult.busy;
-      } else {
-        failure = {
-          reason: graphResult.reason,
-          message: graphResult.message,
-          at: new Date().toISOString(),
-          schedulingGeneration: request.schedulingGeneration,
-        };
-      }
     }
   }
 

@@ -10,6 +10,11 @@ import type {
 } from "./types";
 import { voiceToolError, toolOk } from "../tools/types";
 import type { VoiceToolResult } from "../tools/types";
+import { resolveActiveOnCallTarget } from "@/lib/voice-receptionist-wizard/operating-maturity/on-call";
+import { resolveVoiceV2OperatingState } from "@/lib/voice-receptionist-wizard/operating-maturity/operating-state";
+import { gateCapabilitiesForOperatingState } from "@/lib/voice-receptionist-wizard/operating-maturity/behavior-gating";
+import { evaluateVoiceV3Urgency } from "../urgency/evaluate-urgency";
+import { isVoiceV3ToolAuthorizedBase } from "../tools/authorize-tool-for-config";
 
 export type TransferCallArgs = {
   route_id?: string | null;
@@ -39,6 +44,22 @@ export function authorizeVoiceV3Transfer(input: {
   args: TransferCallArgs;
 }): VoiceToolResult<{ execution: VoiceV3AuthorizedTransferPlan; surface: VoiceV3TransferToolSurfaceResult }> {
   const { policy, config, callContext, args } = input;
+  if (config.callHandling.allowCallerRequestedTransfer === false) {
+    const reason = args.reason?.trim().toLowerCase() || "";
+    const callerRequested =
+      reason.includes("caller") ||
+      reason.includes("asked to speak") ||
+      reason.includes("requested transfer");
+    if (callerRequested) {
+      return voiceToolError(
+        "TRANSFER_NOT_ALLOWED",
+        "Caller-requested transfers are disabled for this agent.",
+        {},
+        "not_allowed",
+      );
+    }
+  }
+
   if (!policy.enabled) {
     return voiceToolError(
       "TRANSFER_NOT_CONFIGURED",
@@ -49,7 +70,56 @@ export function authorizeVoiceV3Transfer(input: {
   }
 
   const destId = (args.destination_id ?? args.destination)?.trim() || null;
-  const route = resolveRoute(policy, args.route_id);
+  let route = resolveRoute(policy, args.route_id);
+
+  const urgency = evaluateVoiceV3Urgency(config, callContext);
+  if (urgency.matched && urgency.transferPlanId) {
+    const urgentRoute = policy.routes.find((r) => r.id === urgency.transferPlanId);
+    if (urgentRoute) route = urgentRoute;
+  }
+
+  const maturitySchedule = config.operatingPolicy?.onCallSchedule;
+  const operating = config.operatingPolicy?.businessSchedule
+    ? resolveVoiceV2OperatingState({ schedule: config.operatingPolicy.businessSchedule })
+    : null;
+  const onCall =
+    maturitySchedule && operating
+      ? resolveActiveOnCallTarget({
+          schedule: maturitySchedule,
+          operatingState: operating.state,
+        })
+      : null;
+
+  if (onCall?.phoneE164 && config.operatingPolicy?.afterHoursBehavior) {
+    const gates = gateCapabilitiesForOperatingState({
+      ctx: {
+        capabilities: {
+          transferToolAvailable: isVoiceV3ToolAuthorizedBase(config, "transfer_call"),
+          callbackToolAvailable: config.callHandling.callbackRequestsEnabled === true,
+          bookingEnabled: false,
+          voiceV2PstnLiveBooking: false,
+        },
+      } as Parameters<typeof gateCapabilitiesForOperatingState>[0]["ctx"],
+      operating,
+      behavior: config.operatingPolicy.afterHoursBehavior,
+    });
+    if (gates.onCallEscalationAllowed && !gates.officeTransferAllowed) {
+      const onCallDestId = `on_call_${onCall.entryId}`;
+      route = {
+        id: "on_call_escalation",
+        label: "On-call escalation",
+        description: "Active on-call destination",
+        targets: [
+          {
+            destinationId: onCallDestId,
+            mode: "DIRECT",
+            ringingTimeoutSeconds: policy.defaultRingingTimeoutSeconds,
+          },
+        ],
+        fallback: policy.defaultFallback,
+      };
+    }
+  }
   if (!route) {
     return voiceToolError(
       "INVALID_ROUTE",
@@ -58,7 +128,21 @@ export function authorizeVoiceV3Transfer(input: {
     );
   }
 
-  const destMap = new Map(policy.destinations.map((d) => [d.id, d]));
+  const extraDestinations = [...policy.destinations];
+  if (onCall?.phoneE164) {
+    const onCallDestId = `on_call_${onCall.entryId}`;
+    if (!extraDestinations.some((d) => d.id === onCallDestId)) {
+      extraDestinations.push({
+        id: onCallDestId,
+        label: onCall.label,
+        phoneE164: onCall.phoneE164,
+        defaultMode: "DIRECT",
+        ringingTimeoutSeconds: policy.defaultRingingTimeoutSeconds,
+        enabled: true,
+      });
+    }
+  }
+  const destMap = new Map(extraDestinations.map((d) => [d.id, d]));
   let targets = route.targets;
 
   if (destId) {

@@ -749,6 +749,24 @@ export async function publishVoiceAgent(
     }
   }
 
+  if (voiceV3AppointmentReceptionist && updated.phoneNumberId) {
+    const { syncVoiceV3SpamProtectionOnPublish } = await import(
+      "@/lib/voice-v3/spam-protection/publish-sync"
+    );
+    const spamSync = await syncVoiceV3SpamProtectionOnPublish({
+      workspaceId,
+      agentId,
+      phoneNumberId: updated.phoneNumberId,
+      config,
+    });
+    if (!spamSync.ok) {
+      await rollbackPublish(
+        spamSync.error ||
+          "Spam protection could not be updated on your phone number. Try publishing again.",
+      );
+    }
+  }
+
   return {
     agent: refreshedAfterSync,
     version: versionRow,

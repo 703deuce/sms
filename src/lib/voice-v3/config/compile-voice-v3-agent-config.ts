@@ -25,11 +25,14 @@ import {
 } from "./wizard-collect-fields-v3";
 import { compileAfterHoursNotificationsFromWizard } from "../notifications/compile-from-wizard";
 import { resolveLivePromptControlsFromWizard } from "../prompts/live-prompt-controls";
+import { wizardSpamProtectionFromState } from "../spam-protection/types";
 
 export type VoiceV3ProviderConnections = {
   microsoftConnectionId?: string | null;
   microsoftCalendarIds?: string[];
   microsoftSmtp?: string | null;
+  googleConnectionId?: string | null;
+  googleCalendarIds?: string[];
 };
 
 function interpolateGreeting(
@@ -300,6 +303,23 @@ export function compileVoiceV3AgentConfig(input: {
 
   const bookingStrategy = deriveBookingStrategyFromWizard(wizard);
 
+  const isGoogle = bookingStrategy === "GOOGLE_CALENDAR";
+  const connectionId = isGoogle
+    ? input.providerConnections?.googleConnectionId?.trim() ||
+      envFallback.calendar?.connectionId ||
+      ""
+    : input.providerConnections?.microsoftConnectionId?.trim() ||
+      envFallback.calendar?.connectionId ||
+      "";
+
+  const calendarIds = isGoogle
+    ? input.providerConnections?.googleCalendarIds?.length
+      ? input.providerConnections.googleCalendarIds
+      : envFallback.calendar?.calendarIds ?? ["primary"]
+    : input.providerConnections?.microsoftCalendarIds?.length
+      ? input.providerConnections.microsoftCalendarIds
+      : envFallback.calendar?.calendarIds ?? ["primary"];
+
   const resolvedRetrieval = input.knowledgeRetrieval;
   const kbIds =
     resolvedRetrieval?.knowledgeBaseIds?.length
@@ -321,16 +341,6 @@ export function compileVoiceV3AgentConfig(input: {
     resolvedRetrieval?.openaiVectorStoreIds?.filter(Boolean) ?? [];
   const retrievalRevision =
     resolvedRetrieval?.revision ?? wizard.knowledgeBaseRevision ?? null;
-
-  const connectionId =
-    input.providerConnections?.microsoftConnectionId?.trim() ||
-    envFallback.calendar?.connectionId ||
-    "";
-
-  const calendarIds =
-    input.providerConnections?.microsoftCalendarIds?.length
-      ? input.providerConnections.microsoftCalendarIds
-      : envFallback.calendar?.calendarIds ?? ["primary"];
 
   const nested = defaultNestedFromFlat({
     businessName,
@@ -363,7 +373,14 @@ export function compileVoiceV3AgentConfig(input: {
               envFallback.calendar?.smtp ??
               null,
           }
-        : envFallback.calendar,
+        : bookingStrategy === "GOOGLE_CALENDAR"
+          ? {
+              provider: "google",
+              connectionId,
+              calendarIds,
+              smtp: null,
+            }
+          : envFallback.calendar,
     ...nested,
     services: services.length ? services : [service],
     source: input.source ?? "wizard_published",
@@ -423,6 +440,7 @@ export function compileVoiceV3AgentConfig(input: {
         revision: retrievalRevision,
       },
     },
+    spamProtection: wizardSpamProtectionFromState(wizard),
     telephony: {
       phoneNumberId: wizard.phoneNumberId,
       phoneNumberE164: wizard.phoneNumberE164,

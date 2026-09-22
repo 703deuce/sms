@@ -288,6 +288,7 @@ export interface VoiceV3AgentConfig {
   recovery: VoiceV3RecoveryConfig;
   integrations: VoiceV3IntegrationsConfig;
   bookingStrategyDetail: VoiceV3BookingStrategyConfig;
+  spamProtection?: import("../spam-protection/types").VoiceV3SpamProtectionConfig;
 
   /** Hash / version for observability at accept time. */
   configVersion?: string;

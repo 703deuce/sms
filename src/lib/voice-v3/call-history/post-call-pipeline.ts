@@ -188,5 +188,26 @@ export async function runVoiceV3CallHistoryPostProcess(
     transcriptProvider,
   });
 
+  void (async () => {
+    try {
+      const { loadVoiceV3NotificationsConfigForCall } = await import(
+        "../notifications/load-config-for-call"
+      );
+      const { maybeSendVoiceV3AiCallRecoverySms } = await import("../post-call/ai-call-recovery-sms");
+      const loaded = await loadVoiceV3NotificationsConfigForCall(callId);
+      if (!loaded) return;
+      await maybeSendVoiceV3AiCallRecoverySms({
+        callId,
+        workspaceId: call.workspaceId,
+        config: loaded.config,
+      });
+    } catch (err) {
+      console.error("VOICE_V3_AI_CALL_RECOVERY_SMS_FAILED", {
+        callId,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  })();
+
   return { ok: true, status: transcriptStatus };
 }

@@ -28,7 +28,7 @@ export function buildAstraCrossToolInstructions(config?: VoiceV3AgentConfig): st
   return `
 Tool discipline (production):
 1. One authoritative step at a time. Prefer the most specific tool for the caller's immediate need.
-2. New booking path: update_intake (contact fields as needed) → set_scheduling_preference (date/time semantics) → find_availability → caller chooses slot → book_appointment.
+2. New booking path (typical order): persist clearly supplied intake with update_intake when the caller provides it → set_scheduling_preference (date/time semantics) → find_availability → caller chooses slot → book_appointment. FIND may occur while intake is still incomplete; do not require every configured intake field before find_availability unless a deterministic policy already requires it. Whenever the caller clearly supplies configured intake information during booking or scheduling work, persist it promptly with update_intake rather than deferring it merely because scheduling is also underway. Before book_appointment, rely on the current authoritative intake state and existing deterministic booking preconditions.
 3. Reschedule path: find_appointment → set_scheduling_preference (new time semantics) → find_availability → caller chooses slot → reschedule_appointment.
 4. Cancel path: find_appointment → explicit caller confirmation → cancel_appointment with confirmed=true.
 ${callbackSection}5. Never invent offer_set_id, slot_id, or provider_event_id. Only use values returned by tools in this call.
@@ -53,9 +53,9 @@ When no tool is needed:
 - Pleasantries, hold, or clarification that does not require external data or state mutation — no function call.
 
 Persistent vs temporary state:
-- Save durable caller/business facts with update_intake when clearly known (name, reason, email candidate, configured fields).
+- Save durable caller/business facts with update_intake when clearly known (name, reason, email candidate, configured fields), during the same delegated work when the caller supplies them — not only at book time.
 - Scheduling preferences do not belong in update_intake. Use set_scheduling_preference for date/time semantics, then find_availability / book_appointment with authoritative ids when ready.
-- Incomplete operation arguments may remain in conversation until a tool has sufficient parameters — do not invent partial permanent state.
+- Incomplete operation arguments may remain in conversation until a tool has sufficient parameters — do not invent partial permanent state. Clearly supplied configured intake is not "incomplete operation arguments"; persist it with update_intake.
 
 One utterance, multiple tools:
 - A single caller statement may justify zero, one, or multiple independent tools (for example update_intake plus set_scheduling_preference). Do not call find_availability in parallel with set_scheduling_preference — FIND depends on normalized scheduling state.
@@ -65,5 +65,6 @@ Read before mutate:
 
 Model readiness vs executor preconditions:
 - You may call a tool when conversation suggests readiness; Transovo will reject mutations if preconditions fail. Use tool errors to recover — do not claim success without verified tool results.
+- Executor rejection is not a substitute for prompt intake persistence: do not defer clearly supplied configured intake to conversation alone because book_appointment or another mutation may fail later and remind you to save intake.
 `.trim();
 }

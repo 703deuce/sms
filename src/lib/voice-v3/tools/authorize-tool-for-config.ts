@@ -1,5 +1,5 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
-import type { VoiceV3CallContext } from "../state/call-context";
+import { isDirectCalendarBookingConfig } from "../calendar/direct-booking-strategy";
 import { isVoiceV3ToolAuthorizedEffective } from "../policy/effective-tool-authorization";
 import { voiceToolError } from "./types";
 
@@ -12,14 +12,18 @@ export type VoiceV3AuthorizedToolName =
   | "transfer_call"
   | "send_booking_link"
   | "request_callback"
-  | "submit_appointment_request";
+  | "take_message";
 
 export function isRequestCallbackAuthorized(config: VoiceV3AgentConfig): boolean {
   return config.callHandling.callbackRequestsEnabled === true;
 }
 
-function isMicrosoftDirectStrategy(config: VoiceV3AgentConfig): boolean {
-  return config.scheduling?.bookingStrategy === "MICROSOFT_365";
+export function isTakeMessageAuthorized(config: VoiceV3AgentConfig): boolean {
+  return config.capabilities?.takeMessages === true;
+}
+
+function isDirectCalendarStrategy(config: VoiceV3AgentConfig): boolean {
+  return isDirectCalendarBookingConfig(config);
 }
 
 export function isSendBookingLinkAuthorized(config: VoiceV3AgentConfig): boolean {
@@ -35,15 +39,15 @@ export function isVoiceV3ToolAuthorizedBase(
   const caps = config.capabilities;
   switch (toolName) {
     case "book_appointment":
-      return caps.bookAppointments && isMicrosoftDirectStrategy(config);
+      return caps.bookAppointments && isDirectCalendarStrategy(config);
     case "find_availability":
-      return caps.checkAvailability && isMicrosoftDirectStrategy(config);
+      return caps.checkAvailability && isDirectCalendarStrategy(config);
     case "find_appointment":
-      return caps.findAppointments && isMicrosoftDirectStrategy(config);
+      return caps.findAppointments && isDirectCalendarStrategy(config);
     case "reschedule_appointment":
-      return caps.rescheduleAppointments && isMicrosoftDirectStrategy(config);
+      return caps.rescheduleAppointments && isDirectCalendarStrategy(config);
     case "cancel_appointment":
-      return caps.cancelAppointments && isMicrosoftDirectStrategy(config);
+      return caps.cancelAppointments && isDirectCalendarStrategy(config);
     case "send_booking_link":
       return isSendBookingLinkAuthorized(config);
     case "transfer_call":
@@ -54,8 +58,8 @@ export function isVoiceV3ToolAuthorizedBase(
       );
     case "request_callback":
       return isRequestCallbackAuthorized(config);
-    case "submit_appointment_request":
-      return config.scheduling?.bookingStrategy === "REQUEST_ONLY";
+    case "take_message":
+      return isTakeMessageAuthorized(config);
     default:
       return false;
   }
@@ -64,21 +68,19 @@ export function isVoiceV3ToolAuthorizedBase(
 export function isVoiceV3ToolAuthorized(
   config: VoiceV3AgentConfig,
   toolName: VoiceV3AuthorizedToolName,
-  callContext?: VoiceV3CallContext,
 ): boolean {
   if (!isVoiceV3ToolAuthorizedBase(config, toolName)) {
     return false;
   }
-  return isVoiceV3ToolAuthorizedEffective(config, toolName, undefined, callContext);
+  return isVoiceV3ToolAuthorizedEffective(config, toolName);
 }
 
 export function authorizeVoiceV3ToolOrError(
   config: VoiceV3AgentConfig,
   toolName: VoiceV3AuthorizedToolName,
-  callContext?: VoiceV3CallContext,
 ) {
-  if (isVoiceV3ToolAuthorized(config, toolName, callContext)) return null;
-  if (toolName === "send_booking_link" && isMicrosoftDirectStrategy(config)) {
+  if (isVoiceV3ToolAuthorized(config, toolName)) return null;
+  if (toolName === "send_booking_link" && isDirectCalendarStrategy(config)) {
     return voiceToolError(
       "BOOKING_STRATEGY_MISMATCH",
       "send_booking_link is not available for Microsoft direct booking.",
@@ -94,7 +96,7 @@ export function authorizeVoiceV3ToolOrError(
       "BOOKING_STRATEGY_MISMATCH",
       `${toolName} is not available when the published strategy is Send booking link.`,
       { tool: toolName },
-      "not_ready",
+      "not_allowed",
     );
   }
   return voiceToolError(
@@ -114,6 +116,18 @@ export function authorizeRequestCallbackOrError(config: VoiceV3AgentConfig) {
     return voiceToolError(
       "CALLBACK_DISABLED",
       "Callback requests are not enabled for this agent.",
+      { status: "not_available" },
+      "not_available",
+    );
+  }
+  return null;
+}
+
+export function authorizeTakeMessageOrError(config: VoiceV3AgentConfig) {
+  if (!isTakeMessageAuthorized(config)) {
+    return voiceToolError(
+      "MESSAGE_TAKING_DISABLED",
+      "Message taking is not enabled for this agent.",
       { status: "not_available" },
       "not_available",
     );
