@@ -7,7 +7,10 @@
 ## 2. Integration candidate
 
 Branch: `cursor/voice-v3-reconcile-gap-to-master-2304`  
-Commit: `0ff5d1df`
+Integration commit: `0ff5d1df` (`feat(voice-v3): reconcile gap-closure capabilities onto master`)  
+Branch HEAD (docs pin): `0072e59e`
+
+**Merge to `master`:** not performed. This document is the pre-merge zero-loss gate.
 
 ## 3. Recovered capabilities
 
@@ -96,3 +99,119 @@ PSTN / production deploy: **not performed** (per instructions).
 ## 10. Deployment
 
 **No production deployment** as part of this reconciliation.
+
+---
+
+## 11. Zero-loss verification (pre-`master` merge gate)
+
+Verified after `git fetch origin --prune` on **2026-09-22**.
+
+### 11.1 Git
+
+| Item | SHA / value |
+|------|-------------|
+| Current `origin/master` | `d5db122e5854f00ae8cd5aed60d93ebe8073a6d4` |
+| Reconciliation integration commit | `0ff5d1df` |
+| Final integration candidate (branch HEAD) | `0072e59ee244ea5e65584ed8973c19e52d0ba72a` |
+| Merge base (`master` ∩ candidate) | `d5db122e` |
+| Commits on `master` not in candidate | **0** (master has not advanced past reconciliation base) |
+| Commits on candidate not in `master` | `0ff5d1df`, `0072e59e` |
+| Integration model | **Additive:** branch created from `d5db122e`; delta applied on top — **not** wholesale gap-closure merge |
+
+If `origin/master` advances before merge, **rebase or cherry-pick `0ff5d1df` onto the new master** and re-run this section (especially deletions and website/legal byte-compare).
+
+### 11.2 `origin/master` → final candidate diff
+
+| Metric | Result |
+|--------|--------|
+| Files changed | **59** |
+| Insertions / deletions | **+3915 / −161** (edits only; no tree removals) |
+| **Deleted files** (`--diff-filter=D`) | **none** |
+| **Renamed files** (`--diff-filter=R`) | **none** |
+| Existing Prisma migrations removed | **none** (master: 21 dirs → candidate: 24 dirs) |
+
+**Migrations added (additive only):**
+
+- `prisma/migrations/20260920120000_voice_knowledge_gaps/`
+- `prisma/migrations/20260920194500_voice_v3_caller_blocklist/`
+- `prisma/migrations/20260920210000_voice_post_call_webhooks_blocks/`
+
+**Changed-file summary (by area):**
+
+- Docs: `VOICE-V3-GAP-RECONCILIATION-PLAN.md`, `VOICE-V3-GAP-RECONCILIATION-REPORT.md`
+- Prisma: schema + 3 migrations (above)
+- Voice V3: calendar/google/*, provider runtime, FIND/BOOK dispatch, transfer auth, callback persist, post-call recovery SMS, tools (take_message, search_business_knowledge), spam-protection/*, webhooks/*, config compile/from-published, Astra intake prompts + tests
+- APIs: `blocked-callers`, `block-caller`
+- UI glue: `spam-unwanted-calls-editor.tsx`
+- Telnyx: `telnyx-spam-header-trunk.ts`
+- `agent-service.ts`: spam publish sync hook
+- `package.json`: adds `test-voice-v3-astra-intake-prompt-contract.ts` to `test:voice-v3-intake`
+
+Full path list: `git diff --name-only origin/master...origin/cursor/voice-v3-reconcile-gap-to-master-2304`
+
+### 11.3 Website / legal bundle (master wins — verified identical)
+
+Byte-identical between `origin/master` and candidate:
+
+| Surface | Path |
+|---------|------|
+| MCTB marketing homepage | `src/app/page.tsx` |
+| Appointments marketing | `src/app/(public)/appointments/page.tsx` |
+| Opt-in documentation | `src/app/opt-in-documentation/page.tsx` |
+| Opt-in diagram asset | `src/components/landing/mctb/mctb-opt-in-flow-diagram.jpg` |
+| Privacy | `src/app/privacy/page.tsx` |
+| Terms | `src/app/terms/page.tsx` |
+| SMS opt-in | `src/app/sms-opt-in/page.tsx` |
+| Middleware | `src/middleware.ts` |
+
+### 11.4 MCTB / product surfaces (verified identical)
+
+| Route / area | Path | Status |
+|--------------|------|--------|
+| MCTB overview | `src/app/(app)/mctb/page.tsx` | identical |
+| MCTB voice agent wizard | `src/app/(app)/mctb/voice-agent/page.tsx` | identical |
+
+No candidate diff touches MCTB marketing, setup, or SMS platform routes outside Voice V3 lib changes.
+
+### 11.5 Protected master implementations (verified on candidate)
+
+| Requirement | Verification |
+|-------------|--------------|
+| Call history pipeline | `runVoiceV3CallHistoryPostProcess` remains primary; **no** `processVoiceV3CompletedCall` |
+| AI recovery hook | `maybeSendVoiceV3AiCallRecoverySms` called from `post-call-pipeline.ts` |
+| Native FileSearch | `resolve-agent-knowledge-retrieval.ts` **unchanged** vs master; `useGptLiveFileSearchRag` present |
+| Microsoft booking | `persist-booking-after-confirmation` still referenced from `book-dispatch.ts` |
+| LiveKit bridge | `voice-v3-livekit.ts` **not** in changed-file set (forensics/telemetry preserved) |
+| ACTIVE agent safety | `from-published-agent` diff adds Google connections only; env/demo fallback path retained |
+
+### 11.6 Recovered Voice capability (present on candidate)
+
+| Capability | Evidence on candidate |
+|------------|----------------------|
+| Urgency rules / transfer auth | `urgency/evaluate-urgency.ts`, `transfer/authorize-transfer.ts` |
+| On-call + after-hours gating | `authorize-transfer.ts` + behavior gating imports |
+| AI Call Recovery SMS | `post-call/ai-call-recovery-sms.ts` + pipeline hook |
+| Outbound SMS resolver | `sms/resolve-voice-v3-outbound-sms.ts` |
+| Google Calendar V3 | `calendar/google/*`, `calendar-provider-runtime.ts`, compile/from-published |
+| `take_message` | `tools/take-message-tool.ts`, catalog + authorization |
+| `search_business_knowledge` fallback | `knowledge/execute-search-business-knowledge.ts`, catalog gating |
+| Spam / blocklist | `spam-protection/*`, Prisma `VoiceCallerBlock`, APIs, publish hook |
+| Callback SLA metadata | `callback/persist-voice-v3-callback-request.ts`, `execute-request-callback.ts` |
+| Astra intake prompt fix | Cherry-pick `f2b3f82b` (prompt + `test-voice-v3-astra-intake-*`) |
+
+### 11.7 STOP condition
+
+**Unexpected deletions:** none → **proceed to human review** (not auto-merge).
+
+**Master merge / deploy:** blocked until explicit approval after this report.
+
+### 11.8 Remaining gaps (unchanged — report separately)
+
+- LiveKit spam/solicitor screening completion (`report_unwanted_solicitor` ingress)
+- Google Calendar PSTN certification
+- AI Call Recovery PSTN certification
+- Warm/waterfall transfer PSTN certification
+- Callback SLA full enforcement (metadata only on candidate)
+- Calendly V3 unsupported
+- Agent Quality Studio deferred
+- Post-call webhook + knowledge-gap **processing** hooks on call-history (migrations/schema present; not fully wired)
