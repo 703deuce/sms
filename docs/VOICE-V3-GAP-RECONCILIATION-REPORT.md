@@ -7,7 +7,7 @@
 ## 2. Integration candidate
 
 Branch: `cursor/voice-v3-reconcile-gap-to-master-2304`  
-Commit: *(see `git rev-parse HEAD` on branch after push)*
+Commit: `0ff5d1df`
 
 ## 3. Recovered capabilities
 
