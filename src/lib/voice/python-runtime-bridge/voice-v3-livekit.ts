@@ -55,6 +55,8 @@ export type VoiceV3LiveKitBootstrapPayload = {
   providerCallId?: string | null;
   trunkId?: string | null;
   ruleId?: string | null;
+  /** LiveKit SIP participant attribute from Telnyx X-Telnyx-Call-Screening header mapping */
+  telnyxCallScreeningRaw?: string | null;
 };
 
 export type VoiceV3LiveKitSessionConfig = {
@@ -132,6 +134,11 @@ export async function resolveVoiceV3LiveKitSession(
     }
   }
 
+  const { normalizeTelnyxScreeningValue } = await import("@/lib/voice-v3/spam-protection/types");
+  const carrierScreeningRaw = payload.telnyxCallScreeningRaw?.trim() || null;
+  const carrierScreeningNormalized = normalizeTelnyxScreeningValue(carrierScreeningRaw);
+  const suspectedSpamLikely = carrierScreeningNormalized === "spam_likely";
+
   const promptInput = resolveVoiceV3DefaultPromptInput(new Date(), agentConfig);
   const nativeAmy = new Set<string>(VOICE_V3_LIVEKIT_NATIVE_TOOL_NAMES);
   const astraDelegationToolNames = listVoiceV3AstraToolNamesForConfig(agentConfig).filter(
@@ -140,6 +147,7 @@ export async function resolveVoiceV3LiveKitSession(
   const { liveInstructions, astraInstructions } = buildVoiceV3Prompts({
     ...promptInput,
     toolNames: astraDelegationToolNames,
+    suspectedSpamLikely,
   });
 
   const liveSessionId = liveSessionIdForRoom(payload.roomName);
@@ -176,6 +184,28 @@ export async function resolveVoiceV3LiveKitSession(
     workspaceId: routing.workspaceId,
     agentId: routing.agentId,
   });
+
+  if (carrierScreeningRaw) {
+    const { mergeVoiceV3ScreeningOnCall } = await import(
+      "@/lib/voice-v3/spam-protection/call-metadata"
+    );
+    await mergeVoiceV3ScreeningOnCall({
+      workspaceId: routing.workspaceId,
+      callId,
+      patch: {
+        carrierScreeningRaw,
+        carrierScreeningNormalized,
+        suspectedSpamLikely,
+        spamLikelyPolicy: agentConfig.spamProtection?.spamLikelyPolicy ?? null,
+        classifiedAt: new Date().toISOString(),
+      },
+    }).catch((err) => {
+      console.warn("VOICE_V3_SCREENING_METADATA_MERGE_FAILED", {
+        callId,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    });
+  }
 
   const catalogTools = buildVoiceV3AstraFunctionToolsFromCatalog(agentConfig);
   const intakeTools = buildLiveKitIntakeFunctionTools(agentConfig);

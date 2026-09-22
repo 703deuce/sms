@@ -151,8 +151,9 @@ export async function runVoiceV3CallHistoryPostProcess(
   }
 
   const transcriptText = chosen?.fullText || segments.map((s) => s.text).join(" ") || "";
+  let summaryText = "";
   if (transcriptText.trim() && transcriptStatus === "completed") {
-    await ensureCallHistorySummary({
+    const summaryResult = await ensureCallHistorySummary({
       workspaceId: call.workspaceId,
       callId,
       transcriptText,
@@ -161,7 +162,9 @@ export async function runVoiceV3CallHistoryPostProcess(
         callId,
         message: err instanceof Error ? err.message : String(err),
       });
+      return null;
     });
+    summaryText = summaryResult?.summary?.trim() || transcriptText.slice(0, 500);
   }
 
   const recordingStatus = recording?.status || "not_requested";
@@ -189,6 +192,23 @@ export async function runVoiceV3CallHistoryPostProcess(
   });
 
   void (async () => {
+    try {
+      if (summaryText.trim()) {
+        const { runVoiceV3PostCallSideEffects } = await import(
+          "../post-call/run-post-call-side-effects"
+        );
+        await runVoiceV3PostCallSideEffects({
+          callId,
+          workspaceId: call.workspaceId,
+          summaryText,
+        });
+      }
+    } catch (err) {
+      console.error("VOICE_V3_POST_CALL_SIDE_EFFECTS_FAILED", {
+        callId,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
     try {
       const { loadVoiceV3NotificationsConfigForCall } = await import(
         "../notifications/load-config-for-call"

@@ -1,4 +1,4 @@
-# Voice V3 — post-reconciliation completion report
+# Voice V3 — post-reconciliation completion report (final pre-merge closure)
 
 **STOP BEFORE MERGE** — awaiting explicit approval.
 
@@ -6,146 +6,140 @@
 
 | Item | Value |
 |------|--------|
-| `origin/master` @ fetch | `3b3945b3004b7142b95dff6c3a3c3c8b3c91e5ff` (includes reconciliation merge) |
-| New branch | `cursor/voice-v3-post-reconciliation-completion-2304` |
-| Branch created from | `origin/master` @ `3b3945b3` |
+| `origin/master` baseline | `3b3945b3004b7142b95dff6c3a3c3c8b3c91e5ff` |
+| Branch | `cursor/voice-v3-post-reconciliation-completion-2304` |
 | Historical branches merged | **none** |
 
-## B. Capability inspection (remaining items)
+## B. Final closure pass (this iteration)
 
-### 1. LiveKit spam / solicitor completion
-
-| | Detail |
-|---|--------|
-| **Master already had** | Wizard → compiler `spamProtection`; Telnyx screening publish sync; blocklist APIs + Prisma; prompt copy in `prompt-sections.ts` (unused in Astra instructions); billing metadata helpers |
-| **Actually missing** | `report_unwanted_solicitor` FunctionTool in catalog; deterministic executor; Astra spam/solicitor instructions in `buildAstraBackendInstructions`; blocked-caller rejection at LiveKit session bootstrap |
-| **Historical reference** | Gap branch Python `solicitor_outcome.py` (behavior only — implemented via TS tool + existing blocklist/billing on master) |
-| **Files changed** | `report-unwanted-solicitor-tool.ts`, `record-solicitor-outcome.ts`, `voice-tool-catalog.ts`, `authorize-tool-for-config.ts`, `astra-backend-instructions.ts`, `voice-v3-livekit.ts` (blocklist gate only), `scripts/test-voice-v3-spam-solicitor-tool.ts` |
-| **Why** | Prompts referenced a tool that did not exist in the GPT-Live delegation catalog; DECLINE policy had no runtime consumer |
-
-**Not done (by design):** Python-native `report_unwanted_solicitor` in `voice-runtime-python` — master architecture uses TS catalog tools via `execute_voice_v3_livekit_tool`. No wholesale `voice-v3-livekit.ts` replacement.
-
-### 2. Google Calendar — verify integrated path
+### 1. Post-call webhooks — **connected**
 
 | | Detail |
 |---|--------|
-| **Master already had** | Full `calendar/google/*`, `calendar-provider-runtime.ts`, compile/from-published Google connections, FIND/BOOK dispatch with `persist-booking-after-confirmation` |
-| **Actually missing** | Nothing in source for this pass |
-| **Status** | **BUILT / NEEDS PSTN CERTIFICATION** |
-| **Files changed** | none |
+| **Attachment** | `runVoiceV3CallHistoryPostProcess` → fire-and-forget IIFE → `runVoiceV3PostCallSideEffects` |
+| **Implementation** | `emit-post-call-webhooks.ts` reuses `webhooks/delivery.ts` (`queueVoiceWebhookDelivery`, per-hook `eventId` upsert) |
+| **Semantics** | Async; failures logged; does not block transcript/summary/recording; idempotent via `metadata.voiceV3PostCall.webhooksEmittedAt` |
+| **Did not restore** | `processVoiceV3CompletedCall` as primary pipeline |
 
-### 3. AI Call Recovery — verify chain
-
-| | Detail |
-|---|--------|
-| **Master already had** | `maybeSendVoiceV3AiCallRecoverySms` hooked from `runVoiceV3CallHistoryPostProcess`; `resolve-voice-v3-outbound-sms.ts`; wizard recovery flags on compiled config |
-| **Actually missing** | No code gap identified; requires SMS sender + wizard flags + `continueOverSms` |
-| **Status** | **WORKING / EXTERNAL SETUP REQUIRED** (sender/flags); **BUILT / NEEDS PSTN CERTIFICATION** for live SMS proof |
-| **Files changed** | none |
-
-### 4. Warm / waterfall transfer
+### 2. Knowledge-gap persistence — **connected**
 
 | | Detail |
 |---|--------|
-| **Master already had** | `transfer_call` tool, `authorize-transfer.ts` with urgency, on-call, after-hours gating, waterfall route execution |
-| **Actually missing** | No additional semantics identified vs gap branch without PSTN evidence |
-| **Status** | **BUILT / NEEDS PSTN CERTIFICATION** |
-| **Files changed** | none |
+| **Source of candidates** | LLM call-history summary JSON (`knowledgeGapCandidates`) stored on `voiceConversationInsight.customFields.voiceV3KnowledgeGapCandidates` — transcript + deterministic facts only; no live-call LLM |
+| **Attachment** | Same `runVoiceV3PostCallSideEffects`; `persistKnowledgeGapCandidates` → `voiceKnowledgeGap` |
+| **Semantics** | Fail-open; idempotent via `metadata.voiceV3PostCall.knowledgeGapsPersistedAt`; deterministic-only summaries produce no gaps |
 
-### 5. Callback SLA
+### 3. Callback SLA — **truthfulness + wiring**
 
-| | Detail |
-|---|--------|
-| **Master already had** | Wizard SLA fields; `callbackSlaMetadataPatch` on callback persist; overdue job in operating-maturity layer |
-| **Actually missing** | Wizard manifest still lists some SLA paths as “future”; operational customer-facing SLA enforcement narrative not fully certified |
-| **Status** | **PARTIAL** — metadata + job exist; full product SLA behavior not certified |
-| **Files changed** | none (no speculative SLA subsystem added) |
+| Question | Answer |
+|----------|--------|
+| Real due timestamp from wizard? | **Yes** — `computeCallbackDeadline` + `callbackSlaMetadataPatch` on persist |
+| Persisted? | **Yes** — `callbackRequest.metadata.voiceV2CallbackSla.promisedDeadline` |
+| Overdue job runs? | **Yes** — `voice_v2_callback_sla_overdue_scan` via `job-handlers.ts` |
+| What triggers it? | Scheduled job enqueue (minute cadence) |
+| On overdue? | Lifecycle → `OVERDUE`, `overdueNotifiedAt` set, in-app `notifyWorkspace` → `/voice/callback-requests` |
+| Needs Attention UI? | Notification only (no auto-dial) |
+| Completing callback stops repeats? | `overdueNotifiedAt` guard prevents duplicate notifications |
+| **Fix in this pass** | `operatingPolicy.callbackSla` compiled on `VoiceV3AgentConfig` (was missing → SLA metadata never applied on `request_callback`) |
+| **UI** | `CallbackSlaEditor` copy updated to describe notification-only behavior (no invented auto-dial SLA) |
 
-### 6. Post-call webhook / knowledge-gap processing
+**Classification:** **WORKING** for deadline + overdue notification; not a full auto-escalation / auto-dial product.
 
-| | Detail |
-|---|--------|
-| **Master already had** | Prisma models + migrations; `webhooks/delivery.ts`; call-history post-process pipeline |
-| **Actually missing** | `emitVoiceV3PostCallWebhooks` and `persistKnowledgeGapCandidates` not wired to `runVoiceV3CallHistoryPostProcess` (gap used separate `processVoiceV3CompletedCall`) |
-| **Status** | **PARTIAL** — infrastructure present; hooks deferred to follow-up (per deployment scope) |
-| **Files changed** | none |
+### 4. SCREEN / `suspectedSpamLikely` — **connected (conditional)**
 
-### 7. Recording / transcript / summary
+| Step | Status |
+|------|--------|
+| Telnyx `flag_calls` + trunk `X-Telnyx-Call-Screening` → LiveKit `transovo.telnyx.call_screening` | Infrastructure on master (`telnyx-spam-header-trunk.ts`) |
+| Python bootstrap reads participant attr | **Yes** — forwarded as `telnyxCallScreeningRaw` |
+| TS `resolveVoiceV3LiveKitSession` | Normalizes via `normalizeTelnyxScreeningValue`; sets `suspectedSpamLikely` for SCREEN policy prompt hint |
+| Astra/GPT-Live context | `buildAmySpamSolicitorInstructions(..., { suspectedSpamLikely })` |
+| Call metadata | `mergeVoiceV3ScreeningOnCall` when raw header present |
+| **Caveat** | If trunk header mapping missing or Telnyx sends no header, attribute is absent — **no new transport invented**; DECLINE/report/block path unchanged |
 
-| | Detail |
-|---|--------|
-| **Master already had** | Full `call-history/*` pipeline, Deepgram fallback, summary, no customer infra cost surfacing in reviewed paths |
-| **Actually missing** | No defect found in inspection |
-| **Status** | **WORKING** (pending any outstanding PSTN cert for end-to-end proof) |
-| **Files changed** | none |
+### 5. Spam / solicitor (prior commit on branch) — **unchanged architecture**
+
+`report_unwanted_solicitor` via TS catalog + LiveKit blocklist gate — not rewritten.
 
 ## C. Protected surfaces
 
-Explicitly confirmed unchanged vs `origin/master` for website/legal/MCTB sample paths and architecture:
+- Website / legal / MCTB / SMS platform paths: **no diff** vs `3b3945b3`
+- `runVoiceV3CallHistoryPostProcess`: **extended** only with async side-effect IIFE (recording/transcript/summary path unchanged)
+- FileSearch, Microsoft booking, forensics, GPT-Live/Sol: **unchanged**
 
-- Website/legal/MCTB routes: **no diff** on protected paths
-- Voice architecture: GPT-Live + Sol delegation, LiveKit bridge (**surgical** blocklist check only)
-- `runVoiceV3CallHistoryPostProcess`: **unchanged**
-- FileSearch / `resolve-agent-knowledge-retrieval`: **unchanged**
-- Microsoft booking + `persist-booking-after-confirmation`: **unchanged**
-- Forensics: **unchanged**
-- No historical branch wholesale merge
+## D. Wizard connectivity matrix (final candidate)
 
-## D. Wizard connectivity matrix (summary)
+| Area | Status |
+|------|--------|
+| Spam DECLINE + `report_unwanted_solicitor` | **WORKING** |
+| Spam SCREEN (carrier hint) | **WORKING** when Telnyx header + trunk mapping present; otherwise policy still works without hint |
+| Blocked caller handling | **WORKING** (bootstrap gate) |
+| AI Call Recovery | **WORKING / EXTERNAL SETUP REQUIRED** + **BUILT / NEEDS PSTN CERTIFICATION** |
+| Callback SLA | **WORKING** (deadline persist + overdue in-app notification); not auto-dial |
+| Post-call webhooks | **WORKING** (when workspace webhooks configured) |
+| Knowledge gaps | **WORKING** (when LLM summary produces candidates) |
+| Google Calendar | **BUILT / NEEDS PSTN CERTIFICATION** |
+| Warm / waterfall transfer | **BUILT / NEEDS PSTN CERTIFICATION** |
+| Calendly V3 | **GENUINELY NOT IMPLEMENTED** |
+| Quality Studio | **DEFERRED / HIDDEN** |
 
-Full leaf propagation cert on master baseline: **209/209 PASS** (`test-voice-v3-wizard-backend-propagation.ts`).
+## E. Implemented vs external vs cert vs gaps
 
-| Area | Representative controls | Status (post branch) |
-|------|-------------------------|----------------------|
-| Purpose / capabilities | Capability cards | WORKING |
-| Phone / recording | Number, greeting, recording | WORKING / EXTERNAL SETUP REQUIRED |
-| Knowledge | FileSearch, crawl, uploads | WORKING / EXTERNAL SETUP REQUIRED |
-| Booking Microsoft | FIND/BOOK + persistence | WORKING |
-| Booking Google | Provider stack | BUILT / NEEDS PSTN CERTIFICATION |
-| REQUEST_ONLY / SEND_LINK | Tools + compiler | WORKING |
-| Transfer / urgency / on-call / after-hours | authorize-transfer + tools | WORKING / BUILT NEEDS PSTN CERT (warm/waterfall) |
-| Spam / solicitation | DECLINE + `report_unwanted_solicitor` | **WORKING** (this branch); carrier SCREEN via Telnyx publish |
-| Messages | `take_message` | WORKING |
-| Callbacks | `request_callback` | WORKING |
-| Callback SLA | Wizard targets | PARTIAL |
-| AI Call Recovery | Post-call SMS hook | WORKING / EXTERNAL SETUP REQUIRED |
-| Post-call webhooks / knowledge gaps | Schema only | PARTIAL |
-| Calendly V3 | — | GENUINELY NOT IMPLEMENTED |
-| Quality Studio | — | DEFERRED / HIDDEN |
-| Test step | Live V3 vs metadata | PARTIAL (browser live not run) |
-| Activate / publish | Compiler + LiveKit bootstrap | WORKING |
+### Implemented and source-complete (wired)
 
-## E. Remaining genuine gaps (after this branch)
+- Spam solicitor tool + blocklist gate
+- Carrier SCREEN hint at LiveKit bootstrap (when metadata present)
+- Post-call webhook queueing on call-history completion
+- Knowledge-gap persistence from post-call summary
+- Callback SLA compile → persist → overdue scan → notification
 
-1. Post-call webhook delivery + knowledge-gap persistence on call-history completion  
-2. Callback SLA operational behavior vs wizard copy  
-3. PSTN certification matrix (Google, recovery SMS, spam policy, warm/waterfall)  
-4. Calendly V3  
-5. Quality Studio  
-6. Optional: Telnyx `suspectedSpamLikely` injected into live session prompts (SCREEN policy) when header metadata available at bootstrap  
+### External setup required
+
+- AI Call Recovery SMS sender, wizard flags
+- Knowledge base indexing / FileSearch vector stores
+- Telnyx `flag_calls` + inbound trunk spam header mapping for SCREEN hints
+
+### Needs real PSTN certification
+
+- Google booking path
+- Recovery SMS end-to-end
+- Warm/waterfall transfer
+- Spam DECLINE/SCREEN behavior on live PSTN
+
+### Genuine remaining product gaps
+
+- Calendly V3
+- Quality Studio
+- Callback SLA: no auto-dial / no SMS escalation (by design — documented in UI)
+
+### Intentionally deferred
+
+- Quality Studio, Calendly V3, wholesale historical merges
 
 ## F. Zero-loss diff (vs `origin/master` @ `3b3945b3`)
 
 | Metric | Value |
 |--------|--------|
-| Files changed | 7 (4 modified + 3 added) |
-| Insertions / deletions | ~+250 / −4 (approx., includes new modules + test) |
+| Files changed | **22** |
+| Insertions / deletions | **+781 / −12** (approx.) |
 | Deleted files | **0** |
 | Renamed files | **0** |
 | Migrations added | **0** |
 | Migrations removed | **0** |
-| Protected-path diffs | **none** |
+| Protected-path diffs | **none** (narrow Voice wizard SLA copy only) |
+
+Final candidate SHA: see git log on branch after push.
 
 ## G. Tests
 
 | Script | Result |
 |--------|--------|
 | `scripts/test-voice-v3-qualification-urgency.ts` | PASS |
-| `scripts/test-voice-v3-wizard-backend-propagation.ts` | PASS |
+| `scripts/test-voice-v3-wizard-backend-propagation.ts` | PASS (209/209) |
 | `scripts/test-voice-v3-spam-solicitor-tool.ts` | PASS |
+| `scripts/test-voice-v3-post-call-closure.ts` | PASS |
 
-No local production build. No Coolify deploy (awaiting merge approval).
+No local production build. No Coolify deploy.
 
 ## H. STOP BEFORE MERGE
 
-Do not merge `cursor/voice-v3-post-reconciliation-completion-2304` into `master` until this report is approved.
+Do **not** merge or deploy until explicitly approved.

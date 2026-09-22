@@ -22,6 +22,7 @@ export type AstraBackendPromptContext = {
   capabilities?: VoiceV3AgentConfig["capabilities"];
   transferDestinations?: VoiceV3AgentConfig["transferDestinations"];
   agentConfig?: VoiceV3AgentConfig;
+  suspectedSpamLikely?: boolean;
 };
 
 function bookingStrategyAppend(
@@ -67,7 +68,9 @@ export function buildAstraBackendInstructions(
   const spamInstructions =
     spamProtection &&
     (spamProtection.solicitorPolicy || spamProtection.spamLikelyPolicy)
-      ? buildAmySpamSolicitorInstructions(spamProtection)
+      ? buildAmySpamSolicitorInstructions(spamProtection, {
+          suspectedSpamLikely: context.suspectedSpamLikely,
+        })
       : "";
   const solicitorHint = spamProtection ? buildAstraSolicitorHint(spamProtection) : "";
 

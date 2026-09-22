@@ -470,6 +470,13 @@ export function compileVoiceV3AgentConfig(input: {
     },
     transferDestinations: transferDestinationsFromWizard(wizard),
     transfer: compileVoiceV3TransferPolicyFromWizard(wizard),
+    operatingPolicy: {
+      revision: maturity.revision,
+      businessSchedule: maturity.businessSchedule,
+      afterHoursBehavior: maturity.afterHoursBehavior,
+      onCallSchedule: maturity.onCallSchedule,
+      callbackSla: maturity.callbackSla,
+    },
   });
 }
 

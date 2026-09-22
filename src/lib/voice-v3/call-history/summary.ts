@@ -157,11 +157,12 @@ export async function ensureCallHistorySummary(input: {
       const res = await client.chat.completions.create({
         model: process.env.VOICE_CALL_SUMMARY_MODEL?.trim() || "gpt-4.1-mini",
         temperature: 0.2,
+        response_format: { type: "json_object" },
         messages: [
           {
             role: "system",
             content:
-              "Write a concise 2-4 sentence call summary for a business owner. Use only facts from the transcript and structured facts JSON. Do not invent appointments, names, or outcomes.",
+              "Summarize a completed business call for the owner. Use only transcript + structured facts. Return JSON: { \"summary\": string (2-4 sentences), \"knowledgeGapCandidates\": optional array of { \"question\", \"normalizedQuestion\", \"unanswered\": true, \"context\"? } for business questions the agent could not answer from approved knowledge — omit if none }. Do not invent appointments or outcomes.",
           },
           {
             role: "user",
@@ -169,10 +170,25 @@ export async function ensureCallHistorySummary(input: {
           },
         ],
       });
-      const llm = res.choices[0]?.message?.content?.trim();
-      if (llm) {
-        summary = llm;
-        usedLlm = true;
+      const raw = res.choices[0]?.message?.content?.trim();
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as {
+            summary?: string;
+            knowledgeGapCandidates?: unknown[];
+          };
+          if (parsed.summary?.trim()) {
+            summary = parsed.summary.trim();
+            usedLlm = true;
+          }
+          if (Array.isArray(parsed.knowledgeGapCandidates)) {
+            (facts as Record<string, unknown>).voiceV3KnowledgeGapCandidates =
+              parsed.knowledgeGapCandidates;
+          }
+        } catch {
+          summary = raw;
+          usedLlm = true;
+        }
       }
     } catch (err) {
       console.warn("VOICE_CALL_SUMMARY_LLM_FAILED", {
@@ -180,6 +196,12 @@ export async function ensureCallHistorySummary(input: {
         message: err instanceof Error ? err.message : String(err),
       });
     }
+  }
+
+  const customFields = { ...facts } as Record<string, unknown>;
+  const gapCandidates = (facts as Record<string, unknown>).voiceV3KnowledgeGapCandidates;
+  if (Array.isArray(gapCandidates)) {
+    customFields.voiceV3KnowledgeGapCandidates = gapCandidates;
   }
 
   await prisma.voiceConversationInsight.create({
@@ -191,7 +213,7 @@ export async function ensureCallHistorySummary(input: {
       sentiment: "neutral",
       isLead: false,
       confidence: usedLlm ? 0.85 : 0.7,
-      customFields: facts as object,
+      customFields: customFields as object,
     },
   });
 

@@ -289,6 +289,7 @@ export interface VoiceV3AgentConfig {
   integrations: VoiceV3IntegrationsConfig;
   bookingStrategyDetail: VoiceV3BookingStrategyConfig;
   spamProtection?: import("../spam-protection/types").VoiceV3SpamProtectionConfig;
+  operatingPolicy?: import("@/lib/voice-receptionist-wizard/operating-maturity/types").VoiceV2OperatingMaturityPublishedConfig;
 
   /** Hash / version for observability at accept time. */
   configVersion?: string;
