@@ -16,7 +16,7 @@ import {
 } from "../src/lib/solutions/appointment-receptionist/capability-checklist";
 import { resolveLiveCalendar } from "../src/lib/solutions/appointment-receptionist/live-calendar";
 import { createDefaultWizardState } from "../src/lib/solutions/appointment-receptionist/defaults";
-import { mergeWizardStateForSave } from "../src/lib/solutions/appointment-receptionist/merge-wizard-state-on-save";
+import { mergeWizardStateForSave } from "../src/lib/solutions/appointment-receptionist/merge-wizard-state-on-save"; // activate POST skips merge — see route.ts
 import { resolveServiceRequiredFields } from "../src/lib/solutions/appointment-receptionist/required-fields";
 import {
   buildSystemPrompt,
@@ -269,25 +269,14 @@ assert("empty → 0", parseNoticeMinutes("") === 0);
     !getWizardActivationIssues(recordingOff).some((i) => i.id === "recording_disclosure"),
   );
 
-  const serverStale = { ...ready, voiceId: "voice_old", openingGreeting: "Old greeting" };
-  const clientFresh = {
-    ...ready,
-    voiceId: "voice_new",
-    openingGreeting: "New greeting from form",
-  };
-  const mergedActivate = mergeWizardStateForSave(
-    serverStale,
-    clientFresh,
-    "activate",
-  );
+  const serverStale = { ...ready, voiceId: "voice_old" };
+  const clientFresh = { ...ready, voiceId: "voice_new" };
+  const mergedVoiceStep = mergeWizardStateForSave(serverStale, clientFresh, "voice");
   assert(
-    "activate-step merge would stomp voice (documented anti-pattern)",
-    mergedActivate.voiceId === "voice_old",
+    "voice step save keeps client voiceId",
+    mergedVoiceStep.voiceId === "voice_new",
   );
-  assert(
-    "activate-step merge would stomp greeting",
-    mergedActivate.openingGreeting === "Old greeting",
-  );
+  // Activate uses action=activate → route skips mergeWizardStateForSave (see route.ts).
 }
 
 // --- Live calendar resolution (Calendly must count like activate-hooks) ---

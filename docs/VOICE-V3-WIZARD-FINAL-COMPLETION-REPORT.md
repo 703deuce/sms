@@ -38,8 +38,9 @@
 | Transfer dest | `transferDestinations` / legacy phone when transfer enabled | Yes |
 | SMS sender | `outboundSms*` / recovery sender when SEND_LINK or AI recovery | Yes |
 | Document KB | Informational when retrieval selected | No |
-| Recording on | Warning in issues | No |
 | Browser test | Recommended copy | No |
+
+Recording does not emit activation issues (on or off); readiness row only shows **Off** or **On — disclose…**.
 
 **Removed:** `lastTestPassed` as activation gate.
 
