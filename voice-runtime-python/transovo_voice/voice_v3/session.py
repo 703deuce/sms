@@ -21,6 +21,8 @@ from transovo_voice.voice_v3.tools import LiveKitTelephonyBridge, build_livekit_
 
 logger = logging.getLogger("transovo-voice.voice_v3")
 
+TELNYX_CALL_SCREENING_ATTR = "transovo.telnyx.call_screening"
+
 
 def _attrs_dict(participant: rtc.RemoteParticipant) -> dict[str, str]:
     return {str(k): str(v) for k, v in (participant.attributes or {}).items()}
@@ -94,6 +96,7 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
                 provider_call_id=None,
                 trunk_id=None,
                 rule_id=None,
+                telnyx_call_screening_raw=None,
                 live_session_id="",
                 call_id="",
                 workspace_id="",
@@ -112,6 +115,7 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             sip_participant.identity,
         )
 
+        screening_raw = attrs.get(TELNYX_CALL_SCREENING_ATTR)
         provisional_ctx = VoiceV3CallContext(
             room_name=ctx.room.name,
             sip_participant_identity=sip_participant.identity,
@@ -121,6 +125,7 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             provider_call_id=attrs.get("sip.callIDFull"),
             trunk_id=attrs.get("sip.trunkID"),
             rule_id=attrs.get("sip.ruleID"),
+            telnyx_call_screening_raw=screening_raw,
             live_session_id="",
             call_id="",
             workspace_id="",
@@ -140,6 +145,7 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             provider_call_id=attrs.get("sip.callIDFull"),
             trunk_id=attrs.get("sip.trunkID"),
             rule_id=attrs.get("sip.ruleID"),
+            telnyx_call_screening_raw=screening_raw,
             live_session_id=live_session_id,
             call_id=str(config.get("callId") or live_session_id),
             workspace_id=str(config.get("workspaceId") or ""),

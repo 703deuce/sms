@@ -5,6 +5,10 @@ import { buildAstraCrossToolInstructions } from "./astra-cross-tool-instructions
 import { buildAstraIntakeInstructions } from "./astra-intake-instructions";
 import { buildAstraTransferInstructions } from "./astra-transfer-instructions";
 import { buildAstraKnowledgeInstructions } from "../knowledge/astra-knowledge-instructions";
+import {
+  buildAmySpamSolicitorInstructions,
+  buildAstraSolicitorHint,
+} from "../spam-protection/prompt-sections";
 
 export type AstraBackendPromptContext = {
   businessName?: string;
@@ -18,6 +22,7 @@ export type AstraBackendPromptContext = {
   capabilities?: VoiceV3AgentConfig["capabilities"];
   transferDestinations?: VoiceV3AgentConfig["transferDestinations"];
   agentConfig?: VoiceV3AgentConfig;
+  suspectedSpamLikely?: boolean;
 };
 
 function bookingStrategyAppend(
@@ -59,6 +64,15 @@ export function buildAstraBackendInstructions(
   const intake = buildAstraIntakeInstructions();
   const transfer = agentConfig ? buildAstraTransferInstructions(agentConfig) : "";
   const knowledge = agentConfig ? buildAstraKnowledgeInstructions(agentConfig) : null;
+  const spamProtection = agentConfig?.spamProtection;
+  const spamInstructions =
+    spamProtection &&
+    (spamProtection.solicitorPolicy || spamProtection.spamLikelyPolicy)
+      ? buildAmySpamSolicitorInstructions(spamProtection, {
+          suspectedSpamLikely: context.suspectedSpamLikely,
+        })
+      : "";
+  const solicitorHint = spamProtection ? buildAstraSolicitorHint(spamProtection) : "";
 
   return `
 ${core}
@@ -79,7 +93,7 @@ ${bookingStrategyAppend(context.bookingStrategy)}
 
 ${callback ? `${callback}\n\n` : ""}${intake}
 
-${transfer ? `${transfer}\n\n` : ""}${knowledge ? `${knowledge}\n\n` : ""}${crossTool}
+${transfer ? `${transfer}\n\n` : ""}${knowledge ? `${knowledge}\n\n` : ""}${spamInstructions ? `${spamInstructions}\n\n` : ""}${solicitorHint ? `${solicitorHint}\n\n` : ""}${crossTool}
 
 Each function tool description defines when to call, when not to call, side effects, and parameters. Follow those contracts exactly.
 `.trim();

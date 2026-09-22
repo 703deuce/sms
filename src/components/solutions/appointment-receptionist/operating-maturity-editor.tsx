@@ -503,7 +503,9 @@ export function CallbackSlaEditor({
     <section className="space-y-3 rounded-xl border border-border bg-card p-4">
       <h3 className="font-medium">Callback SLA</h3>
       <p className="text-sm text-muted-foreground">
-        Promised response windows for callback requests created from voice.
+        Sets promised deadlines on voice callback requests. When a deadline passes,
+        staff get an in-app notification on Callback requests. Transovo does not
+        auto-dial overdue callbacks.
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>

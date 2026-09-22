@@ -28,6 +28,8 @@ export function buildVoiceV3Prompts(input: {
   currentLocalDateTime?: string;
   agentConfig?: VoiceV3AgentConfig;
   toolNames?: string[];
+  /** Carrier spam-likely signal at session bootstrap (SCREEN policy context only). */
+  suspectedSpamLikely?: boolean;
 }) {
   const agentConfig = input.agentConfig ?? resolveVoiceV3AgentConfig();
   const timezone =
@@ -64,6 +66,7 @@ export function buildVoiceV3Prompts(input: {
     capabilities: agentConfig.capabilities,
     transferDestinations: agentConfig.transferDestinations,
     agentConfig,
+    suspectedSpamLikely: input.suspectedSpamLikely,
   });
 
   if (input.toolNames) {
