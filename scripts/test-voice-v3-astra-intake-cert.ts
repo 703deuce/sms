@@ -21,6 +21,20 @@ type Scenario = {
 
 const SCENARIOS: Scenario[] = [
   {
+    label: "caseA_phone_only",
+    history: "Caller: My phone number is 571-555-1234.",
+    expectTools: ["update_intake"],
+    expectIntakeKeys: ["phone"],
+    forbiddenTools: ["book_appointment"],
+  },
+  {
+    label: "caseB_name_and_phone",
+    history:
+      "Caller: I'm Anthony Johnson and my number is 571-555-1234.",
+    expectTools: ["update_intake"],
+    expectIntakeKeys: ["name", "phone"],
+  },
+  {
     label: "case1_name_only",
     history: "Caller: I'm Anthony Johnson.",
     expectTools: ["update_intake"],
@@ -41,12 +55,26 @@ const SCENARIOS: Scenario[] = [
     forbiddenTools: ["update_intake", "find_availability"],
   },
   {
-    label: "case6_intake_plus_find",
+    label: "caseC_intake_plus_scheduling",
     history:
-      "Caller: I'm Anthony Johnson and what do you have Tuesday afternoon?",
-    // parallel_tool_calls is off in production — intake may arrive in first delegation; FIND may follow.
+      "Caller: I'm Anthony Johnson. Do you have anything Tuesday afternoon?",
+    // parallel_tool_calls is off in production — intake may arrive in first delegation; scheduling tools may follow.
     expectTools: ["update_intake"],
     expectIntakeKeys: ["name"],
+  },
+  {
+    label: "caseD_phone_correction",
+    history:
+      "Authoritative state on record: phone was previously saved as 571-111-1111. Caller: Actually, I gave you the wrong number. It's 571-222-2222.",
+    expectTools: ["update_intake"],
+    expectIntakeKeys: ["phone"],
+  },
+  {
+    label: "caseE_phone_already_persisted",
+    history:
+      "Authoritative intake state: phone is already saved and usable for this call. Caller: My email is anthony@example.com.",
+    expectTools: ["update_intake"],
+    expectIntakeKeys: ["email"],
   },
   {
     label: "case8_incomplete_email",

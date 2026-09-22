@@ -10,6 +10,7 @@ import {
   resolveCallbackReasonText,
 } from "./callback-requirements";
 import { persistVoiceV3CallbackRequest } from "./persist-voice-v3-callback-request";
+import { evaluateVoiceV3Urgency } from "../urgency/evaluate-urgency";
 import type {
   RequestCallbackToolArgs,
   VoiceV3CallbackCallState,
@@ -161,6 +162,7 @@ export async function executeRequestCallback(
   }
 
   const persistFn = input.deps?.persist ?? persistVoiceV3CallbackRequest;
+  const urgency = evaluateVoiceV3Urgency(config, ctx);
   const persistResult = await persistFn({
     workspaceId: input.workspaceId,
     agentId: input.agentId,
@@ -176,6 +178,8 @@ export async function executeRequestCallback(
     idempotencyKey,
     businessE164: config.telephony.phoneNumberE164,
     phoneNumberId: config.telephony.phoneNumberId,
+    callbackSlaPolicy: config.operatingPolicy?.callbackSla,
+    urgencySeverity: urgency.matched ? urgency.severity : "NORMAL",
   });
 
   if (!persistResult.ok) {

@@ -69,5 +69,13 @@ const prompts = buildVoiceV3Prompts({
 assert.ok(prompts.astraInstructions.includes("New booking path"));
 assert.ok(prompts.astraInstructions.includes("update_intake"));
 assert.ok(prompts.astraInstructions.includes("set_scheduling_preference"));
+assert.ok(
+  prompts.astraInstructions.includes("FIND may occur while intake is still incomplete"),
+  "cross-tool must allow FIND before full intake",
+);
+assert.ok(
+  prompts.astraInstructions.includes("persist it with update_intake during the current delegated work"),
+  "intake prompt persistence rule must ship in Astra instructions",
+);
 
 console.log("PASS voice-v3 astra tool contracts audit");

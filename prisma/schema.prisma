@@ -297,6 +297,8 @@ model Workspace {
   voiceAgentVersions                VoiceAgentVersion[]
   voiceAgentPhoneNumbers            VoiceAgentPhoneNumber[]
   voiceKnowledgeBases               VoiceKnowledgeBase[]
+  voiceKnowledgeGaps                VoiceKnowledgeGap[]
+  voiceCallerBlocks                 VoiceCallerBlock[]
   voiceKnowledgeSources             VoiceKnowledgeSource[]
   voiceWebsiteCrawlJobs             VoiceWebsiteCrawlJob[]
   voiceWebsiteCrawlPages            VoiceWebsiteCrawlPage[]
@@ -2404,6 +2406,43 @@ model VoiceAgentPhoneNumber {
   @@unique([agentId, phoneNumberId])
   @@index([workspaceId])
   @@map("voice_agent_phone_numbers")
+}
+
+model VoiceCallerBlock {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  callerE164      String
+  displayName     String?
+  reason          String?
+  blockedByUserId String?
+  sourceCallId    String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, callerE164])
+  @@index([workspaceId, createdAt])
+  @@map("voice_caller_blocks")
+}
+
+model VoiceKnowledgeGap {
+  id                 String    @id @default(cuid())
+  workspaceId        String
+  normalizedQuestion String
+  displayQuestion    String
+  status             String    @default("OPEN")
+  timesAsked         Int       @default(1)
+  firstAskedAt       DateTime  @default(now())
+  lastAskedAt        DateTime  @default(now())
+  sourceCallIds      Json      @default("[]")
+  recentWording      String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  workspace          Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, normalizedQuestion])
+  @@index([workspaceId, status])
+  @@map("voice_knowledge_gaps")
 }
 
 model VoiceKnowledgeBase {
