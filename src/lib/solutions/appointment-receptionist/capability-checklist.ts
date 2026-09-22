@@ -4,6 +4,8 @@ import { transferWizardValidationIssues } from "./transfer-wizard-state";
 import { deriveBookingStrategyFromWizard } from "@/lib/voice-receptionist-wizard/booking-strategy";
 import {
   wizardBookingRequiresCalendarConnection,
+  wizardHasBusinessName,
+  wizardKnowledgeSourceActivationIssues,
   wizardRequiresBookingLinkUrl,
   wizardRequiresOutboundSms,
 } from "./wizard-readiness";
@@ -78,24 +80,15 @@ export function getWizardActivationIssues(
     });
   }
 
-  const hasKnowledge =
-    ctx?.hasKnowledgeText ||
-    Boolean(state.businessName?.trim()) ||
-    state.knowledgeItems.some((k) => k.status === "complete" || Boolean(k.summary?.trim())) ||
-    Boolean(state.websiteUrl?.trim());
-  if (!hasKnowledge) {
-    issues.push({
-      id: "knowledge",
-      severity: "blocking",
-      message:
-        "Add a business name or other business information (hours, services, or FAQ) so the agent can answer questions.",
-    });
-  } else if (!state.businessName?.trim()) {
+  if (!wizardHasBusinessName(state)) {
     issues.push({
       id: "business_name",
-      severity: "warning",
-      message: "Add a business name so callers hear who they’re calling.",
+      severity: "blocking",
+      message: "Add your business name on Business Knowledge.",
     });
+  }
+  for (const issue of wizardKnowledgeSourceActivationIssues(state)) {
+    issues.push(issue);
   }
 
   if (state.capabilities.includes("transfer_calls") || state.voiceV2HumanTransferEnabled) {
@@ -171,15 +164,6 @@ export function getWizardActivationIssues(
           "Assign an outbound SMS number for booking links or AI call recovery (Numbers / Appointments).",
       });
     }
-  }
-
-  if (state.callRecording !== "off") {
-    issues.push({
-      id: "recording_disclosure",
-      severity: "warning",
-      message:
-        "Call recording is on — ensure callers hear a recording disclosure at the start of the call.",
-    });
   }
 
   return issues;

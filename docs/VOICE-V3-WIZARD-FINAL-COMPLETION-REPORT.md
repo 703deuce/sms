@@ -27,7 +27,9 @@
 |------|--------|------------------|
 | Phone | `phoneNumberId` | Yes |
 | Receptionist name | `agentName` | Yes |
-| Business info | `businessName` / knowledge items / website | Yes |
+| Business name | `businessName` only | Yes |
+| Knowledge source | Conditional on `knowledgeSource` (website URL, guided profile save, upload/connect) | Yes when that method is selected |
+| Recording | Display only (Off / On) | No |
 | Voice / greeting | `voiceId`, `openingGreeting` | Yes |
 | Calendar | `deriveBookingStrategyFromWizard` + live calendar APIs when live book | Yes (if applicable) |
 | Calendly strategy | Legacy state `CALENDLY` | Yes (must change strategy) |
@@ -47,16 +49,33 @@
 2. **Save draft for test** or **Build & start live test** calls `onEnsureAgent` → `save_draft`.
 3. Browser WebRTC session uses draft `agentId` → Voice V3 compile path (same as production resolver on published config after activate).
 
-## Activate
+## Activate — publish chain (static proof)
+
+**1. Client sends the full in-memory wizard on Activate** (`wizard.tsx` `persist("activate", …)` posts `state: payload` where `payload` is the live React wizard object).
+
+**2. Server does not per-step-merge on activate** (`route.ts`): `mergeWizardStateForSave` is skipped when `action === "activate"` so the activate step cannot replace voice/booking/etc. with stale server-only fields (activate step previously owned only `activationMode` / `scheduledAt`).
+
+**3. Same request body drives config + hooks**
+
+| Order | Call | Input |
+|-------|------|--------|
+| a | `buildWizardAgentConfig(state)` | Full `state` from POST |
+| b | `runAppointmentReceptionistActivateHooks({ state, mode: "activate" })` | Same `state` |
+| c | `updateVoiceAgentDraft({ draftConfig: configWithKb })` | Built from (a); snapshot includes `advanced.appointmentReceptionistWizard` |
+| d | `upsertAppointmentReceptionistSetup({ state })` | Same `state` |
+| e | `activateFlowTriggers` → **`publishVoiceAgent`** | Reads agent `draftConfig` just written in (c), publishes version used as **published** runtime |
+
+**4. Next production call (ACTIVE agent)** — `resolveWizardSnapshotForVoiceV3` uses **`wizard_published`** from `loadVoiceAgentRuntimeConfig` (not draft). That published config is produced by **`publishVoiceAgent`** in step (e), which runs only after (c) persisted the activate request’s `draftConfig`.
+
+**5. Draft browser test (TESTING)** still uses `draftConfig` via `wizard_draft_test` — unchanged.
 
 ```
-Wizard state
-  → POST /api/solutions/appointment-receptionist (action: activate)
-  → buildWizardAgentConfig()
-  → updateVoiceAgentDraft + publish hooks
-  → VoiceAgent published config
-  → resolveVoiceV3AgentConfigForAgent()
-  → compileVoiceV3AgentConfig()
+Wizard UI state (POST body)
+  → buildWizardAgentConfig(state)
+  → updateVoiceAgentDraft(draftConfig)
+  → activateFlowTriggers → publishVoiceAgent()
+  → published runtime snapshot
+  → resolveVoiceV3AgentConfigForAgent() → compileVoiceV3AgentConfig()
   → next GPT-Live / PSTN session
 ```
 

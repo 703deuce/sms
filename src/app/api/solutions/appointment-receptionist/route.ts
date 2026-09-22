@@ -57,7 +57,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "state is required" }, { status: 400 });
     }
 
-    if (state.agentId && body.wizardStepId && action !== "create_draft") {
+    // Activate must publish the full wizard form in the request body — not a stale per-step
+    // server merge (activate step only owns activationMode/scheduledAt).
+    if (
+      state.agentId &&
+      body.wizardStepId &&
+      action !== "create_draft" &&
+      action !== "activate"
+    ) {
       const existing = await loadAppointmentReceptionistSetup(auth.workspaceId, {
         agentId: state.agentId,
       });

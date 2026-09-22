@@ -16,6 +16,7 @@ import {
 } from "../src/lib/solutions/appointment-receptionist/capability-checklist";
 import { resolveLiveCalendar } from "../src/lib/solutions/appointment-receptionist/live-calendar";
 import { createDefaultWizardState } from "../src/lib/solutions/appointment-receptionist/defaults";
+import { mergeWizardStateForSave } from "../src/lib/solutions/appointment-receptionist/merge-wizard-state-on-save";
 import { resolveServiceRequiredFields } from "../src/lib/solutions/appointment-receptionist/required-fields";
 import {
   buildSystemPrompt,
@@ -214,6 +215,10 @@ assert("empty → 0", parseNoticeMinutes("") === 0);
   ready.voiceId = "voice_1";
   ready.openingGreeting = "Thanks for calling.";
   ready.businessName = "Acme Dental";
+  ready.knowledgeSource = "guided_profile";
+  ready.knowledgeItems = ready.knowledgeItems.map((k, i) =>
+    i === 0 ? { ...k, status: "complete", summary: "Services and hours" } : k,
+  );
   ready.capabilities = ["answer_questions", "book_appointments", "transfer_calls"];
   ready.transferDestinationPhone = "+15551234567";
   ready.appointmentTypes = ready.appointmentTypes.map((t) => ({ ...t, enabled: true }));
@@ -234,6 +239,54 @@ assert("empty → 0", parseNoticeMinutes("") === 0);
   assert(
     "invalid transfer blocks when capability on",
     xferIssues.some((i) => i.id === "transfer" && i.severity === "blocking"),
+  );
+
+  const nameOnly = createDefaultWizardState();
+  nameOnly.phoneNumberId = "pn_test";
+  nameOnly.agentName = "Alex";
+  nameOnly.voiceId = "voice_1";
+  nameOnly.openingGreeting = "Hi";
+  nameOnly.businessName = "Acme Dental";
+  nameOnly.knowledgeSource = "guided_profile";
+  nameOnly.knowledgeItems = nameOnly.knowledgeItems.map((k, i) =>
+    i === 0 ? { ...k, status: "complete", summary: "Hours Mon-Fri 9-5" } : k,
+  );
+  const nameOnlyIssues = getWizardActivationIssues(nameOnly);
+  assert(
+    "business name + guided profile does not require website",
+    !nameOnlyIssues.some((i) => i.id === "website_url"),
+  );
+
+  const websiteMissing = { ...nameOnly, knowledgeSource: "website" as const, websiteUrl: "" };
+  assert(
+    "website source requires URL",
+    getWizardActivationIssues(websiteMissing).some((i) => i.id === "website_url"),
+  );
+
+  const recordingOff = { ...ready, callRecording: "off" as const };
+  assert(
+    "recording off is not an activation issue",
+    !getWizardActivationIssues(recordingOff).some((i) => i.id === "recording_disclosure"),
+  );
+
+  const serverStale = { ...ready, voiceId: "voice_old", openingGreeting: "Old greeting" };
+  const clientFresh = {
+    ...ready,
+    voiceId: "voice_new",
+    openingGreeting: "New greeting from form",
+  };
+  const mergedActivate = mergeWizardStateForSave(
+    serverStale,
+    clientFresh,
+    "activate",
+  );
+  assert(
+    "activate-step merge would stomp voice (documented anti-pattern)",
+    mergedActivate.voiceId === "voice_old",
+  );
+  assert(
+    "activate-step merge would stomp greeting",
+    mergedActivate.openingGreeting === "Old greeting",
   );
 }
 

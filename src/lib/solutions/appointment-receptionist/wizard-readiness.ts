@@ -31,6 +31,59 @@ export function wizardRequiresBookingLinkUrl(
   return deriveBookingStrategyFromWizard(state) === "SEND_LINK";
 }
 
+/** Minimum business identity for activation — name only; knowledge paths are conditional. */
+export function wizardHasBusinessName(state: AppointmentReceptionistWizardState): boolean {
+  return Boolean(state.businessName?.trim());
+}
+
+/** Extra requirements for the knowledge source the customer actually chose. */
+export function wizardKnowledgeSourceActivationIssues(
+  state: AppointmentReceptionistWizardState,
+): Array<{ id: string; severity: "blocking" | "warning"; message: string }> {
+  const issues: Array<{ id: string; severity: "blocking" | "warning"; message: string }> =
+    [];
+  const src = state.knowledgeSource;
+
+  if (src === "website" && !state.websiteUrl?.trim()) {
+    issues.push({
+      id: "website_url",
+      severity: "blocking",
+      message:
+        "Add a website URL on Business Knowledge, or switch to guided profile / manual entries.",
+    });
+  }
+
+  if (src === "guided_profile") {
+    const hasProfile = state.knowledgeItems.some(
+      (k) => k.status === "complete" || Boolean(k.summary?.trim()),
+    );
+    if (!hasProfile) {
+      issues.push({
+        id: "guided_profile",
+        severity: "blocking",
+        message: "Save your business profile to knowledge before activating.",
+      });
+    }
+  }
+
+  if (src === "upload_docs" || src === "connect_data") {
+    const hasLinked = Boolean(state.linkedKnowledgeBaseId?.trim());
+    const hasItems = state.knowledgeItems.some(
+      (k) => k.status === "complete" || Boolean(k.summary?.trim()),
+    );
+    if (!hasLinked && !hasItems) {
+      issues.push({
+        id: "knowledge_upload_connect",
+        severity: "blocking",
+        message:
+          "Connect or upload knowledge sources you selected, or change the knowledge method.",
+      });
+    }
+  }
+
+  return issues;
+}
+
 export function wizardKnowledgeRetrievalSelected(
   state: AppointmentReceptionistWizardState,
 ): boolean {
@@ -77,17 +130,23 @@ export function buildWizardReadinessRows(
     blocksActivation: !state.agentName?.trim(),
   });
 
-  const hasKnowledge =
-    Boolean(state.businessName?.trim()) ||
-    state.knowledgeItems.some((k) => k.status === "complete" || Boolean(k.summary?.trim())) ||
-    Boolean(state.websiteUrl?.trim());
   rows.push({
-    id: "knowledge",
-    label: "Business information",
-    status: hasKnowledge ? "ready" : "needs_setup",
-    detail: hasKnowledge ? "Ready" : "Add name, hours, or FAQ",
-    blocksActivation: !hasKnowledge,
+    id: "business_name",
+    label: "Business name",
+    status: wizardHasBusinessName(state) ? "ready" : "needs_setup",
+    detail: state.businessName?.trim() || "Set on Business Knowledge",
+    blocksActivation: !wizardHasBusinessName(state),
   });
+
+  for (const issue of wizardKnowledgeSourceActivationIssues(state)) {
+    rows.push({
+      id: issue.id,
+      label: "Knowledge setup",
+      status: "needs_setup",
+      detail: issue.message,
+      blocksActivation: issue.severity === "blocking",
+    });
+  }
 
   rows.push({
     id: "voice",
@@ -187,15 +246,16 @@ export function buildWizardReadinessRows(
     });
   }
 
-  if (state.callRecording !== "off") {
-    rows.push({
-      id: "recording",
-      label: "Call recording",
-      status: "optional",
-      detail: "On — disclose recording to callers",
-      blocksActivation: false,
-    });
-  }
+  rows.push({
+    id: "recording",
+    label: "Call recording",
+    status: state.callRecording === "off" ? "ready" : "optional",
+    detail:
+      state.callRecording === "off"
+        ? "Off"
+        : "On — disclose recording to callers",
+    blocksActivation: false,
+  });
 
   rows.push({
     id: "browser_test",
