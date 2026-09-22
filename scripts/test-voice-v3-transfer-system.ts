@@ -140,6 +140,44 @@ function run(): void {
   const singlePolicy = compileVoiceV3TransferPolicyFromWizard(singleWizard);
   assert.equal(singlePolicy.routes[0]?.targets.length, 1);
 
+  const offHoursWizard = baseWizard({
+    transferDestinations: [
+      {
+        id: "oncall",
+        label: "Anthony",
+        phoneE164: "+15559876543",
+        enabled: true,
+        availability: {
+          mode: "SCHEDULED",
+          timezone: "America/New_York",
+          weekly: {
+            monday: { enabled: true, windows: [{ start: "17:00", end: "07:00" }] },
+          },
+        },
+      },
+    ],
+    transferPlanSteps: [
+      { order: 1, destinationId: "oncall", transferMode: "WARM", timeoutSeconds: 20 },
+    ],
+  });
+  const offConfig = compileVoiceV3AgentConfig({ wizard: offHoursWizard });
+  const offAuth = authorizeVoiceV3Transfer({
+    config: offConfig,
+    policy: offConfig.transfer!,
+    callContext: minimalCallContext(),
+    args: { route_id: offConfig.transfer!.routes[0].id, reason: "emergency" },
+    now: new Date("2026-03-02T16:00:00-05:00"),
+  });
+  assert.equal(offAuth.ok, true);
+  if (!offAuth.ok) throw new Error("expected ok");
+  const offData = offAuth.data as {
+    execution: { targets: unknown[]; route_outcome_hint?: string };
+    surface: { status: string };
+  };
+  assert.equal(offData.surface.status, "no_eligible_destinations");
+  assert.equal(offData.execution.targets.length, 0);
+  assert.equal(offData.execution.route_outcome_hint, "NO_ELIGIBLE_DESTINATIONS");
+
   console.log("VOICE_V3_TRANSFER_SYSTEM_CERT: PASS");
 }
 

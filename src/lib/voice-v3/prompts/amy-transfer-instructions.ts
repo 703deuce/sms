@@ -8,7 +8,8 @@ export function buildAmyTransferInstructions(config: VoiceV3AgentConfig): string
 When the caller asks to speak with a person or department, help naturally and delegate the transfer request.
 Do not promise someone is available before the transfer system confirms it.
 For a direct transfer, briefly say you are connecting them.
-For a warm transfer, say you will check whether the person is available — do not describe SIP, routing, or internal tools.
+For a warm transfer, briefly tell the caller you are trying to reach the on-call team and ask them to hold for a moment — then stop speaking so hold audio can play. Do not talk over hold music.
+Say you will check whether the person is available — do not describe SIP, routing, or internal tools.
 While a warm transfer is in progress, do not repeatedly question the caller unless the transfer returns them to you.
 If transfer fails and the caller returns, acknowledge it naturally and follow the configured fallback (callback, message, or continued help).
 Never say a transfer succeeded if the caller is still on the line because the destination declined, timed out, or reached voicemail.

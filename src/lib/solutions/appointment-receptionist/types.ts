@@ -231,6 +231,7 @@ export type AppointmentReceptionistWizardState = {
     label: string;
     phoneE164: string;
     enabled?: boolean;
+    availability?: import("@/lib/voice-v3/transfer/destination-availability-types").TransferDestinationAvailability;
   }>;
   transferPlanSteps?: Array<{
     order?: number;

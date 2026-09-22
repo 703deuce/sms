@@ -8,6 +8,8 @@ import type {
   VoiceV3TransferRouteCompiled,
   VoiceV3TransferMode,
 } from "./types";
+import { defaultTransferDestinationAvailability } from "./destination-availability-types";
+import { normalizeDestinationAvailability } from "./evaluate-destination-eligibility";
 
 function wizardMode(
   stepMode: "BASIC" | "WARM" | undefined,
@@ -34,6 +36,7 @@ function destinationsFromWizard(
     } catch {
       continue;
     }
+    const businessTz = wizard.timezone?.trim() || "America/New_York";
     out.push({
       id: d.id,
       label: d.label?.trim() || "Destination",
@@ -42,6 +45,10 @@ function destinationsFromWizard(
       defaultMode: defaultWarm ? "WARM" : "DIRECT",
       ringingTimeoutSeconds: defaultTimeout,
       enabled: d.enabled !== false,
+      availability: normalizeDestinationAvailability(
+        d.availability ?? defaultTransferDestinationAvailability(businessTz),
+        businessTz,
+      ),
     });
   }
   if (out.length) return out;
@@ -58,6 +65,9 @@ function destinationsFromWizard(
         defaultMode: defaultWarm ? "WARM" : "DIRECT",
         ringingTimeoutSeconds: defaultTimeout,
         enabled: true,
+        availability: defaultTransferDestinationAvailability(
+          wizard.timezone?.trim() || "America/New_York",
+        ),
       },
     ];
   } catch {

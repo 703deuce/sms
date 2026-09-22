@@ -26,7 +26,7 @@ export async function notifyVoiceV3TransferOutcome(input: {
   reason?: string | null;
   connectedDestinationLabel?: string | null;
   attempts: TransferAttemptLine[];
-  status: "transfer_connected" | "transfer_exhausted";
+  status: "transfer_connected" | "transfer_exhausted" | "transfer_no_eligible_destinations";
 }): Promise<void> {
   const notifications = input.config.afterHoursNotifications;
   if (!notifications?.recipients?.length) return;
@@ -34,6 +34,9 @@ export async function notifyVoiceV3TransferOutcome(input: {
   const isEmergency = routeLooksEmergency(input.routeId, input.routeLabel);
   const event =
     input.status === "transfer_connected" ? "transfer.connected" : "transfer.failed";
+  const exhausted =
+    input.status === "transfer_exhausted" || input.status === "transfer_no_eligible_destinations";
+  const noEligible = input.status === "transfer_no_eligible_destinations";
 
   const baseUrl = legalPublicSiteUrl();
   const callDetailHref = baseUrl
@@ -48,7 +51,8 @@ export async function notifyVoiceV3TransferOutcome(input: {
     reason: input.reason,
     connectedLabel: input.connectedDestinationLabel,
     attempts: input.attempts,
-    exhausted: input.status === "transfer_exhausted",
+    exhausted,
+    noEligibleDestinations: noEligible,
     receivedAt,
   });
 
@@ -59,7 +63,7 @@ export async function notifyVoiceV3TransferOutcome(input: {
     reason: input.reason,
     connectedLabel: input.connectedDestinationLabel,
     attempts: input.attempts,
-    exhausted: input.status === "transfer_exhausted",
+    exhausted,
     receivedAt,
     callDetailHref,
   });
@@ -84,7 +88,8 @@ export async function notifyVoiceV3TransferOutcome(input: {
       reason: input.reason,
       connectedLabel: input.connectedDestinationLabel,
       attempts: input.attempts,
-      exhausted: input.status === "transfer_exhausted",
+      exhausted,
+      noEligibleDestinations: noEligible,
       receivedAt,
     });
     const emergencyEmail = formatTransferEmail({
@@ -94,7 +99,7 @@ export async function notifyVoiceV3TransferOutcome(input: {
       reason: input.reason,
       connectedLabel: input.connectedDestinationLabel,
       attempts: input.attempts,
-      exhausted: input.status === "transfer_exhausted",
+      exhausted,
       receivedAt,
       callDetailHref,
     });
