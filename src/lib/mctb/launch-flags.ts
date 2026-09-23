@@ -14,3 +14,6 @@ export const MCTB_LAUNCH_HIDE_AI_BOOK_UI = true;
 
 /** Hide read-only / misleading max-attempt and follow-up editor affordances. */
 export const MCTB_LAUNCH_SIMPLIFY_RECOVERY_UI = true;
+
+/** Primary recovery UX is goal + template preview; composer is advanced-only. */
+export const MCTB_LAUNCH_GOAL_DRIVEN_RECOVERY_UI = true;

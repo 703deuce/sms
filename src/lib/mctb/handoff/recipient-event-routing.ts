@@ -15,7 +15,7 @@ export function recipientAllowsNotificationChannel(input: {
     return input.channel === "email";
   }
 
-  if (input.channel === "email") return prefs.email !== false;
+  if (input.channel === "email") return prefs.email === true || prefs.email === undefined;
   if (input.channel === "sms") return prefs.sms === true;
   return prefs.in_app === true;
 }

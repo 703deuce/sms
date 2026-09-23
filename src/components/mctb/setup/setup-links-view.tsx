@@ -8,6 +8,7 @@ import {
   mctbRequestFormPublicPath,
   type MctbRequestFormField,
 } from "@/lib/mctb/request-form-shared";
+import { MCTB_RECOVERY_GOALS } from "@/lib/mctb/recovery-goals";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import { ExternalLink, Link2 } from "lucide-react";
 import Link from "next/link";
@@ -162,6 +163,31 @@ export function MctbSetupLinksView() {
             Used when the request form is off. Only http/https URLs are allowed.
           </span>
         </label>
+
+        <div className="rounded-lg border border-border bg-muted/20 p-3">
+          <p className="text-[13px] font-semibold">Request form presets</p>
+          <p className="mt-1 text-[12px] text-muted-foreground">
+            Aligned to recovery goals — applies to the authoritative request form fields below.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {MCTB_RECOVERY_GOALS.filter((g) => g.requestFormPreset.length > 0).map((g) => (
+              <Button
+                key={g.id}
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setFields(g.requestFormPreset);
+                  if (g.id === "collect_details" || g.id === "request_callback") {
+                    setRequestFormEnabled(true);
+                  }
+                }}
+              >
+                {g.title}
+              </Button>
+            ))}
+          </div>
+        </div>
 
         <label className="flex items-start gap-2 text-[13px]">
           <input

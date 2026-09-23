@@ -7,7 +7,6 @@ import { MctbHeroNumber } from "@/components/mctb/kimi-ui/mctb-premium-patterns"
 import {
   MctbConsentModeCards,
   MctbMessagingActivationPanel,
-  MctbTextBackComposer,
   MctbVerificationTimeline,
 } from "@/components/mctb/wizard/mctb-wizard-ui";
 import type { CarrierForwardingGuide } from "@/lib/mctb/onboarding/carriers";
@@ -34,7 +33,7 @@ import {
   useMctbNumberDrawerEvents,
   type MctbNumberDrawerMode,
 } from "@/components/mctb/numbers/mctb-number-drawer-host";
-import { MctbRecoveryGoalCards } from "@/components/mctb/onboarding/mctb-recovery-goal-cards";
+import { MctbRecoveryGoalSetupSection } from "@/components/mctb/setup/mctb-recovery-goal-setup-section";
 import { OnboardingVoicemailStep } from "@/components/mctb/onboarding/onboarding-voicemail-step";
 import {
   getRecoveryGoalDefinition,
@@ -591,22 +590,23 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
             </header>
             <div className="mctb-onb-panel__body mctb-onb-split">
               <div>
-                <p className="mb-2 text-[13px] font-semibold text-[#1a1d21]">Recovery goal</p>
-                <MctbRecoveryGoalCards
+                <MctbRecoveryGoalSetupSection
                   value={recoveryGoal}
-                  onChange={(id) => {
+                  messagePreview={
+                    messageTemplate || getRecoveryGoalDefinition(recoveryGoal).defaultOpener
+                  }
+                  onGoalChange={(id, suggested) => {
                     setRecoveryGoal(id);
-                    setMessageTemplate(getRecoveryGoalDefinition(id).defaultOpener);
+                    setMessageTemplate(suggested);
                   }}
-                />
-                <p className="mb-2 mt-4 text-[13px] font-semibold text-[#1a1d21]">Recovery message</p>
-                <MctbTextBackComposer
-                  message={messageTemplate}
                   onMessageChange={setMessageTemplate}
-                  press1Mode={consentMode === "press_1"}
-                  compliancePreview="Reply YES to confirm you want text messages from this business. Msg & data rates may apply. Reply STOP to opt out."
-                  variablesHint="{{customer.firstName}} · {{business.name}}"
                 />
+                {consentMode === "press_1" ? (
+                  <p className="mt-3 text-[12px] text-[#626872]">
+                    Press-1 callers also receive the locked compliance confirmation before your recovery
+                    opener.
+                  </p>
+                ) : null}
                 <div className="mt-4 rounded-lg border border-[#e8eaed] p-3 text-[13px]">
                   <p className="font-semibold">Text-back number</p>
                   <p className="mt-1 font-mono">{data?.trialNumber.display || forwardDisplay}</p>

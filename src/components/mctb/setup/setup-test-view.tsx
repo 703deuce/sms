@@ -2,44 +2,24 @@
 
 import { Button } from "@/components/ui/button";
 import { MctbSetupSectionLayout } from "@/components/mctb/setup/mctb-setup-section-layout";
-import {
-  MctbCallout,
-  MctbHeroNumber,
-} from "@/components/mctb/kimi-ui/mctb-premium-patterns";
-import { MctbConsentModeCards, MctbVerificationTimeline } from "@/components/mctb/wizard/mctb-wizard-ui";
-import type { MctbConsentMode } from "@/lib/mctb/consent-mode";
+import { MctbCallout } from "@/components/mctb/kimi-ui/mctb-premium-patterns";
+import { MctbVerificationTimeline } from "@/components/mctb/wizard/mctb-wizard-ui";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
-import type { TryItStatus } from "@/lib/mctb/try-it/types";
 import type { MctbSetupTestStatus } from "@/lib/mctb/setup-test";
 import type { LiveTestStatus } from "@/lib/mctb/onboarding/live-test";
-import { FileCheck, Phone, Radio, ShieldCheck, Sparkles, Zap } from "lucide-react";
+import { Phone, Radio, Zap } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 const SECTION_TITLE = "text-[15px] font-semibold tracking-tight text-foreground";
 
 export function MctbSetupTestView() {
-  const [consentMode, setConsentMode] = useState<MctbConsentMode>("press_1");
-  const [existingConsentAttested, setExistingConsentAttested] = useState(false);
-  const [tryItStatus, setTryItStatus] = useState<TryItStatus | null>(null);
   const [setupTest, setSetupTest] = useState<MctbSetupTestStatus | null>(null);
   const [liveTest, setLiveTest] = useState<LiveTestStatus | null>(null);
   const [loading, setLoading] = useState(true);
-  const [startingTryIt, setStartingTryIt] = useState(false);
   const [startingSetupTest, setStartingSetupTest] = useState(false);
   const [startingLiveTest, setStartingLiveTest] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const refreshTryIt = useCallback(async () => {
-    const res = await fetch("/api/mctb/try-it");
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setError(json?.error || "Failed to load demo test status");
-      return;
-    }
-    setTryItStatus(json.data);
-    if (json.data?.consentMode) setConsentMode(json.data.consentMode);
-  }, []);
 
   const refreshSetupTest = useCallback(async () => {
     const res = await fetch("/api/mctb/setup-test");
@@ -55,45 +35,19 @@ export function MctbSetupTestView() {
 
   const refreshAll = useCallback(async () => {
     setError(null);
-    await Promise.all([refreshTryIt(), refreshSetupTest(), refreshLiveTest()]);
-  }, [refreshTryIt, refreshSetupTest, refreshLiveTest]);
+    await Promise.all([refreshSetupTest(), refreshLiveTest()]);
+  }, [refreshSetupTest, refreshLiveTest]);
 
   useEffect(() => {
     void refreshAll().finally(() => setLoading(false));
   }, [refreshAll]);
 
   useEffect(() => {
-    const active =
-      tryItStatus?.sessionActive ||
-      setupTest?.started ||
-      (liveTest?.started && !liveTest?.passed);
+    const active = setupTest?.started || (liveTest?.started && !liveTest?.passed);
     if (!active) return;
     const timer = setInterval(() => void refreshAll(), 3000);
     return () => clearInterval(timer);
-  }, [tryItStatus?.sessionActive, setupTest?.started, liveTest?.started, liveTest?.passed, refreshAll]);
-
-  async function startTryIt() {
-    setStartingTryIt(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/mctb/try-it", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          consentMode,
-          existingConsentAttested,
-          context: "try_it",
-        }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error || "Could not start demo test");
-      await refreshTryIt();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not start demo test");
-    } finally {
-      setStartingTryIt(false);
-    }
-  }
+  }, [setupTest?.started, liveTest?.started, liveTest?.passed, refreshAll]);
 
   async function startSetupTest() {
     setStartingSetupTest(true);
@@ -127,9 +81,6 @@ export function MctbSetupTestView() {
     }
   }
 
-  const demoDisplay = tryItStatus?.demoNumberDisplay || "—";
-  const showPress1 = consentMode === "press_1";
-  const tryItStarted = Boolean(tryItStatus?.sessionActive || tryItStatus?.completed);
   const setupNumber =
     setupTest?.assignedNumberE164?.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, "1-$1-$2-$3") ||
     "your MCTB number";
@@ -153,92 +104,10 @@ export function MctbSetupTestView() {
   return (
     <MctbSetupSectionLayout
       title="Test & diagnostics"
-      description="Validate missed-call recovery on the same Telnyx paths as production — demo line, assigned number, then forwarded business line."
+      description="Validate missed-call recovery on production paths: assigned MCTB number, then your forwarded business line."
       showSave={false}
       error={error}
     >
-      <MctbCallout icon={Sparkles} title="Demo test (no forwarding)">
-        Call your workspace demo line from your verified mobile. Use this before carrier forwarding is
-        configured.
-      </MctbCallout>
-
-      <div className="voice-card space-y-5 p-5 sm:p-6">
-        <MctbConsentModeCards
-          value={consentMode}
-          onChange={setConsentMode}
-          attested={existingConsentAttested}
-          onAttestedChange={setExistingConsentAttested}
-          options={[
-            {
-              id: "press_1",
-              title: "Ask callers to press 1",
-              subtitle: "Full Press-1 path on the demo line.",
-              audience: "Validate disclosure + DTMF before production.",
-              icon: ShieldCheck,
-              nextSteps: ["Greeting plays", "Press 1 captured", "Compliance + recovery SMS"],
-            },
-            {
-              id: "existing_consent",
-              title: "Use permission my business already has",
-              subtitle: "Skips Press 1 on the demo call.",
-              audience: "Only if you already hold compliant permission.",
-              icon: FileCheck,
-              nextSteps: ["Greeting plays", "Missed call classified", "Recovery SMS sends"],
-            },
-          ]}
-        />
-
-        <MctbHeroNumber label="Demo number" number={demoDisplay} tint="blue" />
-
-        {!tryItStarted ? (
-          <div className="space-y-3">
-            <h2 className={SECTION_TITLE}>2. Start demo test</h2>
-            <Button
-              className="shadow-sm"
-              disabled={
-                startingTryIt || (consentMode === "existing_consent" && !existingConsentAttested)
-              }
-              onClick={() => void startTryIt()}
-            >
-              <Phone className="mr-2 h-4 w-4" aria-hidden />
-              Start demo test
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <h2 className={SECTION_TITLE}>Demo progress</h2>
-            <p className="text-[13px] font-medium text-foreground">
-              {tryItStatus?.completed
-                ? "Demo complete — check your phone for the recovery text."
-                : tryItStatus?.waitingForCall
-                  ? "Waiting for your call…"
-                  : "Call in progress…"}
-            </p>
-            <MctbVerificationTimeline
-              title="Demo progress"
-              waitingHint="Call the demo number and let it ring without answering."
-              passed={tryItStatus?.completed}
-              passedTitle="Demo complete"
-              steps={[
-                { id: "call", label: "Call received", done: tryItStatus?.checks.callReceived || false },
-                { id: "greeting", label: "Greeting played", done: tryItStatus?.checks.greetingPlayed || false },
-                ...(showPress1
-                  ? [{ id: "p1", label: "Press 1 received", done: tryItStatus?.checks.press1Received || false }]
-                  : []),
-                { id: "consent", label: "Consent confirmed", done: tryItStatus?.checks.consentConfirmed || false },
-                { id: "queued", label: "Recovery SMS queued", done: tryItStatus?.checks.recoverySmsQueued || false },
-                { id: "sent", label: "Recovery SMS sent", done: tryItStatus?.checks.recoverySmsSent || false },
-              ]}
-            />
-            {tryItStatus?.expired ? (
-              <Button variant="secondary" onClick={() => void startTryIt()} disabled={startingTryIt}>
-                Start a new demo test
-              </Button>
-            ) : null}
-          </div>
-        )}
-      </div>
-
       <MctbCallout icon={Zap} title="Production path test" variant="success">
         Call your assigned MCTB number ({setupNumber}) directly. Validates workspace routing, consent
         mode, missed-call event creation, and SMS delivery on the production ingress.
@@ -345,7 +214,11 @@ export function MctbSetupTestView() {
         <Link href={MCTB_ROUTES.setupPhone} className="font-semibold text-primary hover:underline">
           Phone & Forwarding
         </Link>
-        . Review consent and message copy before activating recovery.
+        . Review consent and recovery goal in{" "}
+        <Link href={MCTB_ROUTES.setupTextBack} className="font-semibold text-primary hover:underline">
+          Text Back
+        </Link>{" "}
+        before activating recovery.
       </MctbCallout>
     </MctbSetupSectionLayout>
   );

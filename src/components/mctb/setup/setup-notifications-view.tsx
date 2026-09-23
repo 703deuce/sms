@@ -34,6 +34,8 @@ import {
   UserCheck,
 } from "lucide-react";
 import Link from "next/link";
+import { MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY } from "@/lib/mctb/launch-flags";
+import type { MctbEventChannelPrefs } from "@/lib/mctb/handoff/types";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 
 const MODE_ICONS: Record<MctbResponseMode, typeof Bell> = {
@@ -62,6 +64,8 @@ export function MctbSetupNotificationsView() {
   const [baseline, setBaseline] = useState<NotificationsSnapshot | null>(null);
   const [previewTab, setPreviewTab] = useState<"normal" | "urgent" | "email">("normal");
   const [testBusy, setTestBusy] = useState(false);
+  const [aiRepliesEnabled, setAiRepliesEnabled] = useState(false);
+  const [aiRepliesBusy, setAiRepliesBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -72,6 +76,7 @@ export function MctbSetupNotificationsView() {
       if (!res.ok) throw new Error(json.error || "Failed to load notification settings");
       setConfig(json.data.config);
       setRecipients(json.data.recipients || []);
+      setAiRepliesEnabled(Boolean(json.data.launch?.aiRepliesEnabled));
       setBaseline({ config: json.data.config, recipients: json.data.recipients || [] });
       setSaved(false);
     } catch (err) {
@@ -91,6 +96,44 @@ export function MctbSetupNotificationsView() {
   );
   const dirty =
     baseline && currentSnapshot ? !notificationsSnapshotsEqual(baseline, currentSnapshot) : false;
+
+  async function setLaunchAiReplies(enabled: boolean) {
+    setAiRepliesBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/mctb/handoff", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "set_launch_ai_replies", enabled }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not update AI replies");
+      setConfig(json.data.config);
+      setRecipients(json.data.recipients);
+      setAiRepliesEnabled(Boolean(json.data.launch?.aiRepliesEnabled));
+      setBaseline({ config: json.data.config, recipients: json.data.recipients });
+      setSaved(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update AI replies");
+    } finally {
+      setAiRepliesBusy(false);
+    }
+  }
+
+  function setRecipientEventEmail(
+    index: number,
+    event: MctbHandoffEventType,
+    subscribed: boolean,
+  ) {
+    const next = [...recipients];
+    const r = next[index];
+    const eventChannels = { ...r.eventChannels };
+    const prev: MctbEventChannelPrefs = { ...(eventChannels[event] || {}) };
+    eventChannels[event] = { ...prev, email: subscribed };
+    next[index] = { ...r, eventChannels };
+    setRecipients(next);
+    setSaved(false);
+  }
 
   async function save() {
     if (!config) return;
@@ -251,74 +294,40 @@ export function MctbSetupNotificationsView() {
             <div className="mctb-notif-status-strip__label">Primary email</div>
             <div className="mctb-notif-status-strip__value">{primaryEmailDestination(recipients)}</div>
           </div>
+          {MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY ? null : (
+            <div className="mctb-notif-status-strip__cell">
+              <div className="mctb-notif-status-strip__label">SMS alerts</div>
+              <div className="mctb-notif-status-strip__value">{primarySmsDestination(recipients)}</div>
+            </div>
+          )}
           <div className="mctb-notif-status-strip__cell">
-            <div className="mctb-notif-status-strip__label">SMS alerts</div>
-            <div className="mctb-notif-status-strip__value">{primarySmsDestination(recipients)}</div>
-          </div>
-          <div className="mctb-notif-status-strip__cell">
-            <div className="mctb-notif-status-strip__label">Handoff</div>
-            <div className="mctb-notif-status-strip__value">{handoffModeLabel(config.responseMode)}</div>
+            <div className="mctb-notif-status-strip__label">AI replies</div>
+            <div className="mctb-notif-status-strip__value">
+              {aiRepliesEnabled ? "On" : "Off"}
+            </div>
           </div>
         </div>
 
         <div className="mctb-notif-grid">
           <div className="mctb-notif-main">
             <section className="mctb-notif-module" aria-labelledby="handoff-heading">
-              <h3 id="handoff-heading" className="mctb-notif-module__title">Conversation handoff</h3>
+              <h3 id="handoff-heading" className="mctb-notif-module__title">AI replies</h3>
               <p className="mctb-notif-module__sub">
-                Choose what happens when a missed caller responds to recovery texting.
+                When enabled, Transovo may answer ordinary business questions from configured knowledge on
+                inbound recovery SMS. Scheduling requests send your booking link — not conversational booking.
               </p>
-              <div role="radiogroup" aria-label="Response mode">
-                {MCTB_RESPONSE_MODES.map((mode) => {
-                  const meta = RESPONSE_MODE_LABELS[mode];
-                  const Icon = MODE_ICONS[mode];
-                  return (
-                    <button
-                      key={mode}
-                      type="button"
-                      role="radio"
-                      aria-checked={config.responseMode === mode}
-                      className={`mctb-notif-choice${
-                        config.responseMode === mode ? " mctb-notif-choice--selected" : ""
-                      }`}
-                      onClick={() => {
-                        setConfig({ ...config, responseMode: mode });
-                        setSaved(false);
-                      }}
-                    >
-                      <span className="inline-flex items-center gap-2">
-                        <Icon className="h-4 w-4 shrink-0 text-[#626872]" aria-hidden />
-                        <span>
-                          <p className="mctb-notif-choice__title">{meta.title}</p>
-                          <p className="mctb-notif-choice__sub">{meta.subtitle}</p>
-                        </span>
-                      </span>
-                    </button>
-                  );
-                })}
+              <div className="mctb-notif-toggle-row">
+                <span>AI replies</span>
+                <ToggleSwitch
+                  checked={aiRepliesEnabled}
+                  label="AI replies"
+                  disabled={aiRepliesBusy}
+                  onChange={(on) => void setLaunchAiReplies(on)}
+                />
               </div>
-              <label className="mt-3 block text-[12px] font-medium text-[#626872]">
-                Appointment booking in thread
-                <select
-                  className="mctb-notif-field mt-1"
-                  value={config.bookingBehavior}
-                  onChange={(e) => {
-                    setConfig({
-                      ...config,
-                      bookingBehavior: e.target.value as MctbHandoffConfigDto["bookingBehavior"],
-                    });
-                    setSaved(false);
-                  }}
-                >
-                  <option value="off">Off</option>
-                  <option value="on_request">When customer asks</option>
-                  <option value="selected_services">Selected services only</option>
-                  <option value="ai_when_fit">AI when appropriate</option>
-                </select>
-              </label>
             </section>
 
-            {config.responseMode === "guided_collection" ? (
+            {!MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY && config.responseMode === "guided_collection" ? (
               <section className="mctb-notif-module">
                 <h3 className="mctb-notif-module__title">Information to collect</h3>
                 <p className="mctb-notif-module__sub">
@@ -487,17 +496,41 @@ export function MctbSetupNotificationsView() {
                         setSaved(false);
                       }}
                     />
-                    <input
-                      className="mctb-notif-field"
-                      placeholder="Mobile +1…"
-                      value={r.mobileE164 || ""}
-                      onChange={(e) => {
-                        const next = [...recipients];
-                        next[index] = { ...r, mobileE164: e.target.value };
-                        setRecipients(next);
-                        setSaved(false);
-                      }}
-                    />
+                    {MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY ? null : (
+                      <input
+                        className="mctb-notif-field"
+                        placeholder="Mobile +1…"
+                        value={r.mobileE164 || ""}
+                        onChange={(e) => {
+                          const next = [...recipients];
+                          next[index] = { ...r, mobileE164: e.target.value };
+                          setRecipients(next);
+                          setSaved(false);
+                        }}
+                      />
+                    )}
+                  </div>
+                  <div className="mt-3">
+                    <p className="text-[12px] font-medium text-[#626872] mb-2">Email events for this recipient</p>
+                    <ul className="m-0 grid gap-1 p-0 list-none sm:grid-cols-2">
+                      {ROUTING_EVENT_ROWS.map((event) => {
+                        const subscribed = r.eventChannels?.[event]?.email !== false;
+                        return (
+                          <li key={event}>
+                            <label className="flex items-center gap-2 text-[12px]">
+                              <input
+                                type="checkbox"
+                                checked={subscribed}
+                                onChange={(e) =>
+                                  setRecipientEventEmail(index, event, e.target.checked)
+                                }
+                              />
+                              {HANDOFF_EVENT_LABELS[event]}
+                            </label>
+                          </li>
+                        );
+                      })}
+                    </ul>
                   </div>
                 </div>
               ))}
@@ -535,8 +568,12 @@ export function MctbSetupNotificationsView() {
                   <tr>
                     <th style={{ width: "46%" }}>Event</th>
                     <th style={{ width: "14%" }}>Email</th>
-                    <th style={{ width: "14%" }}>SMS</th>
-                    <th style={{ width: "14%" }}>In-app</th>
+                    {MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY ? null : (
+                      <>
+                        <th style={{ width: "14%" }}>SMS</th>
+                        <th style={{ width: "14%" }}>In-app</th>
+                      </>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -553,20 +590,24 @@ export function MctbSetupNotificationsView() {
                             onChange={(on) => updateRoutingChannel(event, "email", on)}
                           />
                         </td>
-                        <td data-label="SMS">
-                          <ChannelCheck
-                            checked={Boolean(ch.sms)}
-                            label={`SMS for ${HANDOFF_EVENT_LABELS[event]}`}
-                            onChange={(on) => updateRoutingChannel(event, "sms", on)}
-                          />
-                        </td>
-                        <td data-label="In-app">
-                          <ChannelCheck
-                            checked={Boolean(ch.in_app)}
-                            label={`In-app for ${HANDOFF_EVENT_LABELS[event]}`}
-                            onChange={(on) => updateRoutingChannel(event, "in_app", on)}
-                          />
-                        </td>
+                        {MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY ? null : (
+                          <>
+                            <td data-label="SMS">
+                              <ChannelCheck
+                                checked={Boolean(ch.sms)}
+                                label={`SMS for ${HANDOFF_EVENT_LABELS[event]}`}
+                                onChange={(on) => updateRoutingChannel(event, "sms", on)}
+                              />
+                            </td>
+                            <td data-label="In-app">
+                              <ChannelCheck
+                                checked={Boolean(ch.in_app)}
+                                label={`In-app for ${HANDOFF_EVENT_LABELS[event]}`}
+                                onChange={(on) => updateRoutingChannel(event, "in_app", on)}
+                              />
+                            </td>
+                          </>
+                        )}
                       </tr>
                     );
                   })}
@@ -761,10 +802,12 @@ function ToggleSwitch({
   checked,
   onChange,
   label,
+  disabled,
 }: {
   checked: boolean;
   onChange: (on: boolean) => void;
   label: string;
+  disabled?: boolean;
 }) {
   return (
     <button
@@ -772,6 +815,7 @@ function ToggleSwitch({
       role="switch"
       aria-checked={checked}
       aria-label={label}
+      disabled={disabled}
       className={`mctb-notif-switch${checked ? " mctb-notif-switch--on" : ""}`}
       onClick={() => onChange(!checked)}
     >
