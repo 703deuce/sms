@@ -1,6 +1,7 @@
 # MCTB + Call Answering + AI Receptionist — Product gap inventory
 
-**Purpose:** Page-by-page inventory of what exists in the dashboard today and what still needs to finish for the **combined product group**:
+**Purpose:** Page-by-page inventory of what exists in the dashboard today and what still needs **code** to finish for the **combined product group** (no cert/testing/live-QA items):
+
 
 - **Missed Call Text Back (MCTB)** — missed call → consent/eligibility → recovery SMS → conversations
 - **Call answering ownership** — who handles forwarded ingress (MCTB TeXML vs AI voice agent)
@@ -14,22 +15,79 @@
 
 ---
 
-## 1. What “finished” means for this group
+## 1. Code-only “finished” (this doc)
 
-| Layer | Done when |
-|-------|-----------|
-| **UI / IA** | Every manifest route exists under `/mctb/*` (or declared legacy redirect); no orphan nav links; spec 01–12 checklists satisfied or explicitly deferred with product sign-off |
-| **Runtime truth** | Visible controls map to persistence; preview matches send path; Press-1 + existing_consent both certified on PSTN |
-| **Ownership** | One canonical ingress switch; MCTB pause ≠ disable forwarding; Voice path matches published agent runtime (V3 contract where that is the product) |
-| **Conversational SMS** | Simplified launch: goal + template + **AI Replies** FAQ grounded on approved Company Brain (#484); advanced scenario editor optional post-launch |
-| **Receptionist ops** | Call list/detail backed by real `VoiceCall` data (not demo mocks); Smith/Rosie parity items either shipped or explicitly out of V1 |
-| **Launch gate** | `npm run test:v1-production-readiness` + documented live PSTN/SMS matrix + browser walkthrough evidence |
+Shipped in **application code** on `master` when:
 
-**Explicitly not required for MCTB simplified launch (separate items):** PLATFORM vs CUSTOMER SMS sender mode (`docs/MCTB-EXPLICIT-SMS-SENDER-MODE-LAUNCH-ITEM.md`), full Smith human receptionist queue, unified voice+SMS inbox, global “Publish” hub for all agent edits.
+- Routes render and read/write the intended APIs/models.
+- No placeholder/mock customer data on production code paths (demo IDs excepted).
+- One canonical control per persisted ownership field (no duplicate switches writing different stores).
+
+**Out of scope here:** PSTN cert, browser QA, screenshot passes, `npm run test:*`, human A2P consoles.
+
+**Re-checked on `master` (2026-09-23):** Several items from the first draft were **wrong** — see §2.
 
 ---
 
-## 2. Product shells and navigation (cross-cutting)
+## 2. Verified already done on `master` (do not re-build)
+
+| Claimed gap | Actual on `master` |
+|-------------|-------------------|
+| Voice **calls list** is all mock | **False.** `useDemo = false`; loads `/api/voice/calls` (`src/app/(app)/voice/calls/page.tsx`). |
+| MCTB Home still `/voice/missed-calls` | **False.** `mctbShellHome()` → `/mctb`. |
+| Call Handling #483 not merged | **False.** `setActiveCallHandler` + header/overview `CallHandlingSwitcher` on `master`. |
+| `/mctb/ai-lead-recovery` missing | **False.** Route + page exist; nav href is `/mctb/ai-lead-recovery`. |
+| Legacy `/voice/missed-calls` etc. | **Mostly done** — redirect pages to `/mctb/*` under `src/app/(app)/voice/`. |
+| Request form has zero field control | **Partial product.** Presets + read-only field list; copy says custom editing is a later release (`setup-links-view.tsx`). |
+| Book appointment from MCTB thread | **Intentional redirect** — `/mctb/appointments/*` → conversations; thread action is **Send booking link** only (`conversation-booking-actions.tsx`). |
+| Voice call history pipeline | **Merged** (`voice-v3-call-history` ancestry on `master`; commits through `ccfa2d3e`). |
+
+---
+
+## 3. Real code gaps on `master` (build these)
+
+### MCTB
+
+| Gap | Evidence | What to build |
+|-----|----------|----------------|
+| Missed calls **consent filter** | `filterEventsByConsentMode` needs `consentMode` on rows; list loader never sets it (`MissedCallEvent` has no column) | Enrich list data before filter |
+| **PLATFORM vs CUSTOMER** SMS sender | `docs/MCTB-EXPLICIT-SMS-SENDER-MODE-LAUNCH-ITEM.md`; `resolveMctbSmsSender` ordering | Explicit mode in config + send path |
+| Analytics **per line** | `/api/mctb/analytics` — range only | `phoneNumberId` filter end-to-end |
+| **Two call-handling APIs** | Header/overview: `/api/call-handling` (V3). Voice Agent: `/api/mctb/inbound-handling` (TeXML assistant) | One canonical persistence + one switch |
+| Recovery **max attempts / follow-up** | Display-only; hidden by `MCTB_LAUNCH_SIMPLIFY_RECOVERY_UI` | Editors or remove from runtime |
+| Handoff **`bookingBehavior`** | Stored; no notifications UI; unused in `processMctbInboundReply` | Wire or delete |
+| **Text-to-Pay refund** in Payments drawer | API `payment-requests/[id]/refund`; drawer has no refund | UI action |
+| Request form **custom fields** | “Later release” in UI | Builder if in scope |
+
+### AI receptionist / voice UI
+
+| Gap | Evidence | What to build |
+|-----|----------|----------------|
+| Call detail **activity feed + sidebar facts** | Always `MOCK_ACTIVITY_EVENTS`; hardcoded cost/provider/tags | Real API-driven UI |
+| Unified inbox, Rosie hub, Call Decisions | Not in codebase | New surfaces if product requires |
+| `/voice/receptionist` redirect | → `/voice/setup` not `/mctb/voice-agent` | Optional redirect fix |
+
+### Launch flags (`launch-flags.ts`)
+
+Hides Try It, parts of Recovery/LR/AI_BOOK — re-enable is flag + UI, not new engines.
+
+---
+
+## 4. Unmerged branches with code you may want
+
+| Branch | Notes |
+|--------|--------|
+| `cursor/voice-ui-closure-2304` | **Call detail** activity feed + truthful cost/provider (`customer-activity-feed.ts`) — not on `master` |
+| `cursor/voice-v3-final-completion-2304` | Large V3 delta; reconcile before merge |
+| `cursor/mctb-simplified-launch-2304` | **Merged** (#484); extra commits may be docs-only |
+
+Check: `git log master..origin/<branch> --oneline -- src/...`
+
+---
+
+## 5. Older inventory (includes cert/QA language — use §2–4 for code planning)
+
+### Product shells and navigation (cross-cutting)
 
 | Surface | Canonical entry | Status | Gaps |
 |---------|-----------------|--------|------|
