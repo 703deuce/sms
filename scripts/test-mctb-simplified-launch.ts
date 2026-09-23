@@ -11,7 +11,11 @@ import {
   MCTB_LAUNCH_TRY_IT_ENABLED,
 } from "../src/lib/mctb/launch-flags";
 import { getRecoveryGoalDefinition, MCTB_RECOVERY_GOALS } from "../src/lib/mctb/recovery-goals";
-import { recipientAllowsNotificationChannel } from "../src/lib/mctb/handoff/recipient-event-routing";
+import {
+  defaultNewMctbNotificationRecipientEventChannels,
+  recipientAllowsNotificationChannel,
+} from "../src/lib/mctb/handoff/recipient-event-routing";
+import { isCarrierProtocolOptOutMessage } from "../src/lib/mctb/lead-recovery/protocol-intent";
 import { shouldShowTryItNav } from "../src/lib/mctb/try-it/visibility";
 import { launchBookingIntentActions } from "../src/lib/mctb/launch-lead-recovery";
 import { MCTB_SETUP_FIELD_AUTHORITY } from "../src/lib/mctb/setup-field-authority";
@@ -32,6 +36,11 @@ const recipientBase = {
   sortOrder: 0,
 };
 
+const explicitNewDefaults = defaultNewMctbNotificationRecipientEventChannels();
+assert.ok(Object.keys(explicitNewDefaults).length >= 6);
+assert.equal(explicitNewDefaults.caller_replied?.email, true);
+assert.equal(explicitNewDefaults.lead_captured?.email, true);
+
 assert.equal(
   recipientAllowsNotificationChannel({
     recipient: { ...recipientBase, eventChannels: {} },
@@ -40,6 +49,17 @@ assert.equal(
   }),
   true,
 );
+
+assert.equal(
+  recipientAllowsNotificationChannel({
+    recipient: { ...recipientBase, eventChannels: explicitNewDefaults },
+    eventType: "caller_replied",
+    channel: "email",
+  }),
+  true,
+);
+
+assert.ok(isCarrierProtocolOptOutMessage("STOP"));
 
 assert.equal(
   recipientAllowsNotificationChannel({
@@ -116,5 +136,15 @@ const notifications = fs.readFileSync(
 );
 assert.ok(notifications.includes("set_launch_ai_replies"));
 assert.ok(notifications.includes("Email events for this recipient"));
+assert.ok(notifications.includes("defaultNewMctbNotificationRecipientEventChannels"));
+
+const customerSms = fs.readFileSync(
+  path.join(process.cwd(), "src/lib/agents/missed-call-text-back/customer-sms.ts"),
+  "utf8",
+);
+assert.ok(customerSms.includes("recordMctbInboundSmsOptOut"));
+const stopIdx = customerSms.indexOf("isCarrierProtocolOptOutMessage");
+const lrDisabledIdx = customerSms.indexOf("lead_recovery_not_enabled");
+assert.ok(stopIdx > 0 && lrDisabledIdx > 0 && stopIdx < lrDisabledIdx);
 
 console.log("test-mctb-simplified-launch: PASS");

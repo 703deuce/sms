@@ -142,6 +142,25 @@ export type MctbCustomerSmsReplyResult =
       outboundJobId?: string | null;
     };
 
+async function recordMctbInboundSmsOptOut(workspaceId: string, fromE164: string): Promise<void> {
+  const prisma = getPrisma();
+  await prisma.suppression.upsert({
+    where: { suppressionKey: `${workspaceId}:p:${fromE164}` },
+    create: {
+      workspaceId,
+      phone: fromE164,
+      suppressionKey: `${workspaceId}:p:${fromE164}`,
+      reason: "sms_stop",
+      source: "mctb_sms",
+    },
+    update: { reason: "sms_stop", source: "mctb_sms" },
+  });
+  await prisma.contact.updateMany({
+    where: { workspaceId, phone: { in: mctbCallerE164Variants(fromE164) } },
+    data: { status: "UNSUBSCRIBED" },
+  });
+}
+
 export async function handleMctbCustomerSmsReply(input: {
   workspaceId: string;
   fromE164: string;
@@ -154,6 +173,12 @@ export async function handleMctbCustomerSmsReply(input: {
   processingJobId?: string | null;
 }): Promise<MctbCustomerSmsReplyResult> {
   const fromE164 = normalizeMctbCallerE164(input.fromE164);
+
+  if (isCarrierProtocolOptOutMessage(input.body)) {
+    await recordMctbInboundSmsOptOut(input.workspaceId, fromE164);
+    return { handled: true, action: "opted_out" };
+  }
+
   const config = await loadMissedCallTextConfig(input.workspaceId);
 
   const leadRecoveryConfig = await loadLeadRecoveryConfig(input.workspaceId);
@@ -163,26 +188,6 @@ export async function handleMctbCustomerSmsReply(input: {
 
   if (!config.conversationEnabled) {
     console.warn("[mctb/customer-sms] conversationEnabled=false but Lead Recovery is on — replying anyway");
-  }
-
-  if (isCarrierProtocolOptOutMessage(input.body)) {
-    const prisma = getPrisma();
-    await prisma.suppression.upsert({
-      where: { suppressionKey: `${input.workspaceId}:p:${fromE164}` },
-      create: {
-        workspaceId: input.workspaceId,
-        phone: fromE164,
-        suppressionKey: `${input.workspaceId}:p:${fromE164}`,
-        reason: "sms_stop",
-        source: "mctb_sms",
-      },
-      update: { reason: "sms_stop", source: "mctb_sms" },
-    });
-    await prisma.contact.updateMany({
-      where: { workspaceId: input.workspaceId, phone: { in: mctbCallerE164Variants(fromE164) } },
-      data: { status: "UNSUBSCRIBED" },
-    });
-    return { handled: true, action: "opted_out" };
   }
 
   const prisma = getPrisma();

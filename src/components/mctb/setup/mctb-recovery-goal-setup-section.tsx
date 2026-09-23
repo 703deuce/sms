@@ -46,7 +46,8 @@ export function MctbRecoveryGoalSetupSection({
         ) : null}
       </div>
       {MCTB_LAUNCH_GOAL_DRIVEN_RECOVERY_UI && onMessageChange ? (
-        <div>
+        <div data-mctb-recovery-opener-editor>
+          {/* Future PLATFORM/CUSTOMER sender mode: gate this block + POST /api/mctb/setup messageTemplate. */}
           <button
             type="button"
             className="text-[12px] font-semibold underline text-foreground"

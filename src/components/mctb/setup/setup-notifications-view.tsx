@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY } from "@/lib/mctb/launch-flags";
+import { defaultNewMctbNotificationRecipientEventChannels } from "@/lib/mctb/handoff/recipient-event-routing";
 import type { MctbEventChannelPrefs } from "@/lib/mctb/handoff/types";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 
@@ -546,7 +547,7 @@ export function MctbSetupNotificationsView() {
                       email: null,
                       mobileE164: null,
                       roleDescription: null,
-                      eventChannels: {},
+                      eventChannels: defaultNewMctbNotificationRecipientEventChannels(),
                       enabled: true,
                       sortOrder: recipients.length,
                     },
