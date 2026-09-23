@@ -98,4 +98,6 @@ Additional MCTB/V3 suite (run before merge): `test-mctb-final-pipeline-contract`
 3. Publish AI while MCTB explicit → ingress stays MCTB (existing publish gate).
 4. Split SMS sender unchanged by switch (separate platform/customer sender product work tracked in `docs/MCTB-EXPLICIT-SMS-SENDER-MODE-LAUNCH-ITEM.md`).
 
-**Do not merge/deploy** until those PSTN checks pass.
+**Merge/deploy first** (Coolify), then run PSTN checks on the environment that receives live Telnyx webhooks. PSTN certification cannot precede deployed code.
+
+See **`docs/CALL-HANDLING-FINAL-SOURCE-REGRESSION-REPORT.md`** for full regression matrix and certification checklist.
