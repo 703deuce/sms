@@ -1,97 +1,114 @@
-# MCTB Simplified Launch — Implementation Report (pass 1)
+# MCTB Simplified Launch — Implementation Report (Pass 1 + Pass 2)
 
-**Status:** In progress — **do not merge/deploy** until reviewed and remaining gaps closed.
+**Status:** Source complete for simplified launch scope — **do not merge/deploy** until product review.
 
-**Baseline master SHA (PR #483 merged):** `40b49edbcdad8b13d470b65546ab31650d9bc90e`  
-**Branch:** `cursor/mctb-simplified-launch-2304`  
-**PR #483 at baseline:** Yes (Call Handling on master)
-
----
-
-## Call Handling (protected — not reimplemented)
-
-- Uses existing `src/lib/call-handling/*` + `/api/call-handling` + `call-handling-switcher.tsx`.
-- No `mctbInbound` ownership revert; static tests assert canonical ingress resolver remains.
-- Voice V3 PSTN deterministic bind (`resolve-pstn-wizard-binding.ts`) unchanged in this pass.
+| | |
+|--|--|
+| Baseline master (PR #483) | `40b49edbcdad8b13d470b65546ab31650d9bc90e` |
+| Branch | `cursor/mctb-simplified-launch-2304` |
+| Draft PR | #484 |
 
 ---
 
-## What this pass implemented
+## Protected (unchanged)
 
-| Area | Change |
-|------|--------|
-| **Launch flags** | `src/lib/mctb/launch-flags.ts` — Try It off, email-only notifications, hide AI_BOOK UI, simplify recovery UI |
-| **Try It** | `shouldShowTryItNav` respects launch flag (admin-only); onboarding demo CTA hidden |
-| **Recovery goals** | `recovery-goals.ts`, `apply-recovery-goal-config.ts`, onboarding goal cards + API `recoveryGoal` |
-| **Voicemail onboarding** | `OnboardingVoicemailStep` — platform default vs embed `MctbVoicemailSetupSection` |
-| **Notifications runtime** | `recipient-event-routing.ts` + `deliverMctbHandoffNotifications` intersects recipient `eventChannels`; launch suppresses SMS/in-app |
-| **Recovery setup UI** | Hide max-attempts row + `MctbSetupBookingSection` when launch flags set |
-| **Tests** | `scripts/test-mctb-simplified-launch.ts` |
+PR #483 Call Handling, canonical ingress, Voice V3 PSTN binding, frozen MCTB TeXML, eligibility/dispatch, consent pipeline, **outbound SMS sender routing**.
+
+**PLATFORM/CUSTOMER sender mode:** NOT implemented (`docs/MCTB-EXPLICIT-SMS-SENDER-MODE-LAUNCH-ITEM.md`).
 
 ---
 
-## Not completed in this pass (explicit gaps)
+## Pass 2 deliverables
 
-- Setup **Text Back / Recovery** goal selector (setup editors — onboarding only so far).
-- **PLATFORM/CUSTOMER** SMS sender mode — **not implemented** (see `docs/MCTB-EXPLICIT-SMS-SENDER-MODE-LAUNCH-ITEM.md`); outbound pipeline untouched.
-- **Notifications setup UI** — hide SMS/in-app matrix columns; per-recipient event subscription UI.
-- **AI replies launch policy** — wire setup toggle to `leadRecovery.enabled` with SEND_BOOKING_LINK defaults; hide misleading `responseMode` picker.
-- **Legacy `/numbers/.../call-handling`** — deprecate/hide second control vs PR #483.
-- **Setup-test Try It embed** — gate/hide synthetic demo block on `/mctb/setup/test`.
-- **Controlled platform-sender templates** — product copy/variants only after sender mode exists.
-- **Duplicate-setting audit** — documented in connectivity audit; no new persistence split.
+### Recovery goal (onboarding + Setup)
+
+- Authoritative: `workspace.customFieldsConfig.mctb.recoveryGoal` + `applyMctbRecoveryGoalConfiguration` → `initial_message` + `request_form_fields_json`.
+- **Setup:** `/mctb/setup/text-back` — `MctbRecoveryGoalSetupSection` (same as onboarding).
+- **API:** `GET/POST /api/mctb/setup` includes `recoveryGoal`.
+
+### Goal-driven messaging UX
+
+- Launch UI is goal + template preview; optional **Advanced: customize opener** (preserves `messageTemplate` backend).
+- Documented limitation: full PLATFORM template lock awaits sender-mode task.
+
+### Request form presets
+
+- `MCTB_RECOVERY_GOALS[].requestFormPreset` on Links setup + goal apply on onboarding/setup.
+
+### Try It removed from customer surfaces
+
+- Nav/demo CTA gated (`MCTB_LAUNCH_TRY_IT_ENABLED`).
+- `/mctb/setup/test` — no `/api/mctb/try-it`; setup test + live forward test only.
+
+### Notifications (email launch)
+
+- Workspace event matrix: **email column only** (SMS/in-app hidden).
+- Per-recipient **email event** checkboxes → `eventChannelsJson`.
+- Runtime: `recipient-event-routing.ts` + launch suppresses SMS/in-app.
+
+### AI replies ↔ Lead Recovery
+
+- **UI:** Notifications → **AI replies** toggle.
+- **API:** `POST /api/mctb/handoff` `action: set_launch_ai_replies`.
+- **Runtime:** `applyLaunchAiRepliesSetting` → `leadRecovery.enabled` + `SEND_BOOKING_LINK` policies (no `AI_BOOK` in launch action set).
+
+### Legacy `/numbers/.../call-handling`
+
+- `CallHandlingModePanel` read-only redirect to MCTB Overview — no second switch.
+
+### Recovery setup simplification
+
+- Hidden: max attempts row, AI_BOOK section, misleading follow-up link, full AI Lead Recovery nav (pointer to Notifications).
+
+### Duplicate-setting authority
+
+- `src/lib/mctb/setup-field-authority.ts` — authoritative fields documented for audit pairs.
+
+### Voicemail onboarding
+
+- Platform default vs customize (`MctbVoicemailSetupSection`); default does not activate custom greeting (state-only `mark_voicemail_configured`).
 
 ---
 
-## Onboarding flow (after this pass)
+## Onboarding flow (final)
 
 1. Business line  
-2. Connect calls / forwarding  
+2. Connect calls  
 3. Consent  
-4. Recovery goal + message (composer)  
+4. Recovery goal (template-driven)  
 5. Voicemail (default or studio paths)  
 6. Review & real test  
 
-No Try It step; no AI Receptionist configuration inside MCTB onboarding.
+No Try It, no AI Receptionist config, no team SMS/in-app setup.
 
 ---
 
-## Pause → voicemail
+## Message editing after this pass
 
-Unchanged runtime: MCTB Call Handling owner + `automationActive` / recovery pause → voicemail, no recovery SMS (existing MCTB path).
-
----
-
-## PLATFORM / CUSTOMER sender mode
-
-**Status:** Not implemented. Current model remains `resolveMctbOutboundSmsRoute` candidate ordering + authorization. This pass did **not** modify SMS send pipeline.
+| Surface | Customer can edit |
+|---------|-------------------|
+| Recovery goal | Yes (4 options) |
+| Opener text | Advanced disclosure only (optional custom `messageTemplate`) |
+| PLATFORM enforcement | **No** (deferred) |
 
 ---
 
-## Automated tests (this branch)
+## Automated tests
 
-| Command | Result |
-|---------|--------|
-| `npx tsx scripts/test-mctb-simplified-launch.ts` | **PASS** |
-| `npx tsx scripts/test-call-handling-ownership.ts` | **PASS** |
-| `npx tsx scripts/test-call-handling-pstn-wizard-binding.ts` | **PASS** |
-| `npx tsx scripts/test-mctb-onboarding-wizard-flow.ts` | **PASS** |
-| MCTB setup suite (consent, phone, links, notifications, exclusions, recovery, handoff) | **PASS** |
-| `test-mctb-final-pipeline-contract.ts` | **PASS** |
-| `test-voice-v3-wizard-step7-v3-path.ts` | **PASS** |
-| `npm run verify:mctb-final-pipeline` | **Not re-run** — previously classified environmental on reference DID |
+All Pass 1 suite **PASS** + `test-mctb-simplified-launch.ts` (expanded).
+
+`npm run verify:mctb-final-pipeline`: **environment failure** (reference DID on AI Direct app) — same class as PR #483; not treated as source regression.
 
 ---
 
-## Zero-loss (intentional)
+## Zero-loss
 
-No changes to frozen TeXML, eligibility dispatch, Voice V3 internals, or Call Handling routing. Backend Try It APIs preserved; customer nav/demo gated off.
+No changes to Call Handling routing, Voice V3 internals, TeXML pipeline, or SMS send pipeline.
 
 ---
 
-## Next steps
+## Remaining (post-merge / external)
 
-1. Complete setup-surface recovery goals, notifications UI, AI reply launch wiring, legacy call-handling hide.  
-2. Re-run full regression + update this report.  
-3. Merge only after review — **separate from PR #483** (already on master).  
-4. Live PSTN certification for Call Handling remains on deployed `40b49edb` per `docs/CALL-HANDLING-FINAL-SOURCE-REGRESSION-REPORT.md`.
+- Live PSTN certification (Call Handling A–H on deployed SHA).
+- PLATFORM/CUSTOMER SMS sender mode (next task).
+- Optional: stricter recipient event defaulting for brand-new workspaces (empty `eventChannels` still defaults to email-on for compat).
