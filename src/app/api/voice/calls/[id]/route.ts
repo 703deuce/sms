@@ -52,6 +52,7 @@ export async function GET(
         prisma.voiceToolExecution.findMany({
           where: { callId: id },
           orderBy: { createdAt: "asc" },
+          include: { tool: { select: { toolType: true } } },
         }),
       ]);
 
@@ -81,7 +82,10 @@ export async function GET(
         recordings,
         insights,
         transfers,
-        toolExecutions,
+        toolExecutions: toolExecutions.map(({ tool, ...row }) => ({
+          ...row,
+          toolType: tool?.toolType ?? null,
+        })),
         callbackRequest: callbackRequest
           ? {
               id: callbackRequest.id,

@@ -19,6 +19,9 @@ import {
 } from "lucide-react";
 import { InfoCallout, SelectableCard, SidePanel, StatusPill } from "../ui";
 import { BusinessScheduleEditor } from "../operating-maturity-editor";
+import { VoiceWebsiteCrawlProgress } from "@/components/voice/voice-website-crawl-progress";
+import { useVoiceWebsiteCrawlPoll } from "@/components/voice/use-voice-website-crawl-poll";
+import { isCrawlTerminalPhase } from "@/lib/voice/knowledge/crawl-job-ui";
 
 type KnowledgeItem = AppointmentReceptionistWizardState["knowledgeItems"][number];
 
@@ -241,7 +244,31 @@ export function InformationStep({
     policies: "",
   });
   const [uploadNote, setUploadNote] = useState("");
+  const [crawlJobId, setCrawlJobId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const crawlTerminalAppliedRef = useRef<string | null>(null);
+  const { phase: crawlPhase, job: crawlJob } = useVoiceWebsiteCrawlPoll(crawlJobId);
+
+  useEffect(() => {
+    if (!crawlJobId || !crawlPhase || !isCrawlTerminalPhase(crawlPhase)) return;
+    const terminalKey = `${crawlJobId}:${crawlPhase}`;
+    if (crawlTerminalAppliedRef.current === terminalKey) return;
+    crawlTerminalAppliedRef.current = terminalKey;
+    const url = normalizeWebsiteUrl(state.websiteUrl);
+    const businessName = state.businessName?.trim() || guessBusinessNameFromUrl(url);
+    const pagesIndexed = crawlJob?.stats?.pagesIndexed ?? 0;
+    const failed = crawlPhase === "failed" || crawlPhase === "partial";
+    patch({
+      knowledgeItems: itemsForScanResult({
+        businessName,
+        url,
+        sourceStatus: failed ? "failed" : pagesIndexed > 0 ? "indexed" : "failed",
+        chunkCount: pagesIndexed,
+        preview: failed ? null : `${pagesIndexed} page(s) indexed from your website`,
+        errorMessage: failed ? crawlJob?.errorSummary || "Website scan failed" : null,
+      }),
+    });
+  }, [crawlJobId, crawlPhase, crawlJob, state.businessName, state.websiteUrl, patch]);
 
   async function importWebsiteKnowledge() {
     const url = normalizeWebsiteUrl(state.websiteUrl);
@@ -266,7 +293,9 @@ export function InformationStep({
         throw new Error(json?.error || "Website scan failed");
       }
       const payload = json?.data || {};
-      const source = payload?.source || payload;
+      const jobId = String(payload.crawlJobId || "");
+      if (!jobId) throw new Error("Scan did not start");
+      setCrawlJobId(jobId);
       patch({
         businessName,
         websiteUrl: url,
@@ -275,13 +304,10 @@ export function InformationStep({
         knowledgeItems: itemsForScanResult({
           businessName,
           url,
-          sourceStatus: source?.status || payload.sourceStatus,
-          chunkCount: source?.chunkCount ?? payload.chunkCount,
-          preview:
-            source?.extractedPreview ||
-            source?.contentText ||
-            payload.extractedPreview,
-          errorMessage: source?.errorMessage || payload.errorMessage,
+          sourceStatus: "pending",
+          chunkCount: 0,
+          preview: "Scan in progress…",
+          errorMessage: null,
         }),
       });
     } catch (err) {
@@ -603,6 +629,10 @@ export function InformationStep({
               {scanError ? (
                 <p className="mt-2 text-xs text-warning">{scanError}</p>
               ) : null}
+              <VoiceWebsiteCrawlProgress
+                crawlJobId={crawlJobId}
+                onRetry={() => void importWebsiteKnowledge()}
+              />
             </div>
           ) : null}
 

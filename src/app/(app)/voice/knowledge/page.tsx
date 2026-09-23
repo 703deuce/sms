@@ -6,6 +6,9 @@ import { Input, Label } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { VoiceSubNav } from "@/components/voice/voice-subnav";
+import { VoiceWebsiteCrawlProgress } from "@/components/voice/voice-website-crawl-progress";
+import { isCrawlTerminalPhase } from "@/lib/voice/knowledge/crawl-job-ui";
+import { useVoiceWebsiteCrawlPoll } from "@/components/voice/use-voice-website-crawl-poll";
 import { Plus, RefreshCw, Search, Trash2, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -37,7 +40,12 @@ export default function VoiceKnowledgePage() {
   const [searchHits, setSearchHits] = useState<Array<{ name: string; snippet: string }>>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [crawlJobId, setCrawlJobId] = useState<string | null>(null);
+  const [scanUrl, setScanUrl] = useState("");
+  const [scanBusy, setScanBusy] = useState(false);
+  const [scanError, setScanError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { phase: crawlPhase } = useVoiceWebsiteCrawlPoll(crawlJobId);
 
   function load() {
     fetch("/api/voice/knowledge")
@@ -56,6 +64,11 @@ export default function VoiceKnowledgePage() {
   }
 
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    if (!crawlJobId || !crawlPhase || !isCrawlTerminalPhase(crawlPhase)) return;
+    if (selectedId) loadDetail(selectedId);
+  }, [crawlJobId, crawlPhase, selectedId]);
 
   async function create() {
     const res = await fetch("/api/voice/knowledge", {
@@ -86,6 +99,36 @@ export default function VoiceKnowledgePage() {
       body: JSON.stringify({ name: sourceUrl, sourceType: "url", crawlUrl: sourceUrl }),
     });
     loadDetail(selectedId);
+  }
+
+  async function scanWebsite() {
+    if (!selectedId || !scanUrl.trim()) return;
+    setScanBusy(true);
+    setScanError("");
+    setCrawlJobId(null);
+    try {
+      const normalized = scanUrl.trim().startsWith("http") ? scanUrl.trim() : `https://${scanUrl.trim()}`;
+      const res = await fetch("/api/voice/knowledge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "scan_website",
+          url: normalized,
+          name: `Website ${normalized}`,
+          knowledgeBaseId: selectedId,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || "Website scan failed");
+      const jobId = json?.data?.crawlJobId as string | undefined;
+      if (!jobId) throw new Error("Scan did not start");
+      setCrawlJobId(jobId);
+      setScanUrl(normalized);
+    } catch (e) {
+      setScanError(e instanceof Error ? e.message : "Website scan failed");
+    } finally {
+      setScanBusy(false);
+    }
   }
 
   async function uploadFile(file: File) {
@@ -204,6 +247,30 @@ export default function VoiceKnowledgePage() {
               <Input value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://example.com/faq" />
             </div>
             <Button variant="outline" onClick={addUrlSource}>Add URL source</Button>
+            <div className="border-t border-border pt-4">
+              <Label>Scan full website</Label>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Discovers pages on the same site and prepares them for Amy. This can take a few minutes.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Input
+                  value={scanUrl}
+                  onChange={(e) => setScanUrl(e.target.value)}
+                  placeholder="https://example.com"
+                  className="min-w-[200px] flex-1"
+                />
+                <Button variant="outline" onClick={scanWebsite} disabled={scanBusy || !scanUrl.trim()}>
+                  {scanBusy ? "Starting…" : "Scan website"}
+                </Button>
+              </div>
+              {scanError ? <p className="mt-2 text-sm text-danger">{scanError}</p> : null}
+              <VoiceWebsiteCrawlProgress
+                crawlJobId={crawlJobId}
+                onRetry={() => {
+                  void scanWebsite();
+                }}
+              />
+            </div>
 
             <div className="border-t border-border pt-4">
               <Label>Upload file (PDF, DOCX, TXT, CSV)</Label>
