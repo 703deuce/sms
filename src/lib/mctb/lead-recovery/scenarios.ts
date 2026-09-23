@@ -87,3 +87,13 @@ export function defaultEnabledScenarios(
     general_faq: false,
   };
 }
+
+/** Simplified launch AI Replies profile — FAQ scenario only (not full Lead Recovery catalog). */
+export function defaultLaunchEnabledScenarios(): Partial<
+  Record<LeadRecoveryScenarioKey, boolean>
+> {
+  return {
+    ...defaultEnabledScenarios(false),
+    general_faq: true,
+  };
+}

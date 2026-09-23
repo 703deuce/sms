@@ -51,6 +51,7 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { MctbSetupBookingSection } from "@/components/mctb/setup/mctb-setup-booking-section";
+import { MCTB_LAUNCH_HIDE_AI_BOOK_UI, MCTB_LAUNCH_SIMPLIFY_RECOVERY_UI } from "@/lib/mctb/launch-flags";
 
 type SetupRuntime = {
   phoneNumberId: string | null;
@@ -729,19 +730,34 @@ export function MctbSetupRecoveryView() {
               </div>
             </section>
 
-            <section className="mctb-recovery-module mctb-recovery-module--elevated" aria-labelledby="mctb-rec-ai-lr">
-              <h3 id="mctb-rec-ai-lr" className="mctb-recovery-module__title mb-1">
-                AI Lead Recovery
-              </h3>
-              <p className="mctb-recovery-module__desc text-[13px] text-[#555] mb-3">
-                Configure how Transovo handles replies, booking, emergencies, payments, and handoff.
-              </p>
-              <Link href={MCTB_ROUTES.aiLeadRecovery} className="mctb-recovery-link font-medium">
-                Configure AI Lead Recovery →
-              </Link>
-            </section>
+            {MCTB_LAUNCH_SIMPLIFY_RECOVERY_UI ? (
+              <section className="mctb-recovery-module mctb-recovery-module--elevated" aria-labelledby="mctb-rec-ai-lr">
+                <h3 id="mctb-rec-ai-lr" className="mctb-recovery-module__title mb-1">
+                  AI replies
+                </h3>
+                <p className="mctb-recovery-module__desc text-[13px] text-[#555] mb-3">
+                  Enable or disable automated replies to recovery SMS in{" "}
+                  <Link href={MCTB_ROUTES.setupNotifications} className="font-medium underline">
+                    Notifications &amp; Handoff
+                  </Link>
+                  .
+                </p>
+              </section>
+            ) : (
+              <section className="mctb-recovery-module mctb-recovery-module--elevated" aria-labelledby="mctb-rec-ai-lr">
+                <h3 id="mctb-rec-ai-lr" className="mctb-recovery-module__title mb-1">
+                  AI Lead Recovery
+                </h3>
+                <p className="mctb-recovery-module__desc text-[13px] text-[#555] mb-3">
+                  Configure how Transovo handles replies, booking, emergencies, payments, and handoff.
+                </p>
+                <Link href={MCTB_ROUTES.aiLeadRecovery} className="mctb-recovery-link font-medium">
+                  Configure AI Lead Recovery →
+                </Link>
+              </section>
+            )}
 
-            <MctbSetupBookingSection />
+            {MCTB_LAUNCH_HIDE_AI_BOOK_UI ? null : <MctbSetupBookingSection />}
 
             <section className="mctb-recovery-module mctb-recovery-module--elevated" aria-labelledby="mctb-rec-guard">
               <h3 id="mctb-rec-guard" className="mctb-recovery-module__title mb-1">
@@ -766,14 +782,18 @@ export function MctbSetupRecoveryView() {
                   {isCooldownOff(cooldownMinutes) ? "Allow immediately" : "Allow after cooldown"}
                 </span>
               </div>
-              <Link href={MCTB_ROUTES.setupTextBack} className="mctb-recovery-guard-row">
-                <span className="text-[#626872]">Follow-up behavior</span>
-                <span className="font-semibold text-[#1b1e23]">{followUpEnabled ? "On" : "Off"} ›</span>
-              </Link>
-              <div className="mctb-recovery-guard-row mctb-recovery-guard-row--static">
-                <span className="text-[#626872]">Maximum attempts</span>
-                <span className="font-semibold text-[#1b1e23]">{maxMessages}</span>
-              </div>
+              {MCTB_LAUNCH_SIMPLIFY_RECOVERY_UI ? null : (
+                <Link href={MCTB_ROUTES.setupTextBack} className="mctb-recovery-guard-row">
+                  <span className="text-[#626872]">Follow-up behavior</span>
+                  <span className="font-semibold text-[#1b1e23]">{followUpEnabled ? "On" : "Off"} ›</span>
+                </Link>
+              )}
+              {MCTB_LAUNCH_SIMPLIFY_RECOVERY_UI ? null : (
+                <div className="mctb-recovery-guard-row mctb-recovery-guard-row--static">
+                  <span className="text-[#626872]">Maximum attempts</span>
+                  <span className="font-semibold text-[#1b1e23]">{maxMessages}</span>
+                </div>
+              )}
             </section>
 
             <section className="mctb-recovery-module mctb-recovery-module--elevated" aria-labelledby="mctb-rec-why">

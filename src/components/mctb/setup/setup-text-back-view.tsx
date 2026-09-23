@@ -1,19 +1,22 @@
 "use client";
 
 import { MctbPausedNotice } from "@/components/mctb/mctb-paused-notice";
+import { MctbRecoveryGoalSetupSection } from "@/components/mctb/setup/mctb-recovery-goal-setup-section";
 import { MctbSetupSectionLayout } from "@/components/mctb/setup/mctb-setup-section-layout";
-import { MctbTextBackComposer, WizardQuestionBlock } from "@/components/mctb/wizard/mctb-wizard-ui";
+import { WizardQuestionBlock } from "@/components/mctb/wizard/mctb-wizard-ui";
 import {
   MCTB_CONSENT_MODE_EXISTING,
   MCTB_CONSENT_MODE_VERIFIED,
   type MctbConsentMode,
 } from "@/lib/mctb/consent-mode";
+import {
+  getRecoveryGoalDefinition,
+  parseRecoveryGoalId,
+  type MctbRecoveryGoalId,
+} from "@/lib/mctb/recovery-goals";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-
-const COMPLIANCE_PREVIEW =
-  "Reply YES to confirm you want text messages from this business. Msg & data rates may apply. Reply STOP to opt out.";
 
 export function MctbSetupTextBackView() {
   const [loading, setLoading] = useState(true);
@@ -22,6 +25,7 @@ export function MctbSetupTextBackView() {
   const [error, setError] = useState<string | null>(null);
   const [phoneNumberId, setPhoneNumberId] = useState<string | null>(null);
   const [messageTemplate, setMessageTemplate] = useState("");
+  const [recoveryGoal, setRecoveryGoal] = useState<MctbRecoveryGoalId>("get_reply");
   const [delaySeconds, setDelaySeconds] = useState(0);
   const [consentMode, setConsentMode] = useState<MctbConsentMode>(MCTB_CONSENT_MODE_VERIFIED);
   const [paused, setPaused] = useState(false);
@@ -42,6 +46,8 @@ export function MctbSetupTextBackView() {
       setPaused(Boolean(json.data.schedule?.paused));
       setPauseKind(json.data.schedule?.pauseKind ?? null);
       setPauseUntil(json.data.schedule?.pauseUntil ?? null);
+      const goal = parseRecoveryGoalId(json.data.recoveryGoal);
+      if (goal) setRecoveryGoal(goal);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load");
     } finally {
@@ -53,8 +59,6 @@ export function MctbSetupTextBackView() {
     void load();
   }, [load]);
 
-  const isPress1 = consentMode === MCTB_CONSENT_MODE_VERIFIED;
-
   async function save() {
     setSaving(true);
     setError(null);
@@ -65,6 +69,7 @@ export function MctbSetupTextBackView() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           phoneNumberId,
+          recoveryGoal,
           messageTemplate,
           delaySeconds,
           activate: false,
@@ -94,7 +99,7 @@ export function MctbSetupTextBackView() {
   return (
     <MctbSetupSectionLayout
       title="Text Back"
-      description="Configure the recovery message sequence callers receive after a missed call."
+      description="Choose what recovery should accomplish and how callers are prompted after a missed call."
       saving={saving}
       saved={saved}
       error={error}
@@ -117,12 +122,14 @@ export function MctbSetupTextBackView() {
       </div>
 
       <div className="voice-card p-4 sm:p-6">
-        <MctbTextBackComposer
-          message={messageTemplate}
+        <MctbRecoveryGoalSetupSection
+          value={recoveryGoal}
+          messagePreview={messageTemplate || getRecoveryGoalDefinition(recoveryGoal).defaultOpener}
+          onGoalChange={(id, suggested) => {
+            setRecoveryGoal(id);
+            setMessageTemplate(suggested);
+          }}
           onMessageChange={setMessageTemplate}
-          press1Mode={isPress1}
-          compliancePreview={COMPLIANCE_PREVIEW}
-          variablesHint="{{customer.firstName}} · {{business.name}} · {{link}}"
         />
       </div>
 

@@ -7,7 +7,6 @@ import { MctbHeroNumber } from "@/components/mctb/kimi-ui/mctb-premium-patterns"
 import {
   MctbConsentModeCards,
   MctbMessagingActivationPanel,
-  MctbTextBackComposer,
   MctbVerificationTimeline,
 } from "@/components/mctb/wizard/mctb-wizard-ui";
 import type { CarrierForwardingGuide } from "@/lib/mctb/onboarding/carriers";
@@ -34,11 +33,19 @@ import {
   useMctbNumberDrawerEvents,
   type MctbNumberDrawerMode,
 } from "@/components/mctb/numbers/mctb-number-drawer-host";
+import { MctbRecoveryGoalSetupSection } from "@/components/mctb/setup/mctb-recovery-goal-setup-section";
+import { OnboardingVoicemailStep } from "@/components/mctb/onboarding/onboarding-voicemail-step";
+import {
+  getRecoveryGoalDefinition,
+  type MctbRecoveryGoalId,
+} from "@/lib/mctb/recovery-goals";
+import { MCTB_LAUNCH_TRY_IT_ENABLED } from "@/lib/mctb/launch-flags";
 
 type OnboardingPayload = {
   state: MctbOnboardingState;
   trialNumber: {
     provisioned: boolean;
+    phoneNumberId?: string | null;
     display: string | null;
     messagingVerificationStatus: MctbTfvStatus;
     tfvStatusLabel: string;
@@ -96,6 +103,7 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
   const [businessNumber, setBusinessNumber] = useState("");
   const [carrier, setCarrier] = useState<MctbForwardingCarrier>("verizon");
   const [messageTemplate, setMessageTemplate] = useState(DEFAULT_MESSAGE);
+  const [recoveryGoal, setRecoveryGoal] = useState<MctbRecoveryGoalId>("get_reply");
   const [consentMode, setConsentMode] = useState<MctbConsentMode>("press_1");
   const [existingConsentAttested, setExistingConsentAttested] = useState(false);
   const [forwardRingSeconds, setForwardRingSeconds] = useState(15);
@@ -438,6 +446,7 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
                   type="button"
                   className="mt-3 text-[12px] font-semibold text-[#3a3f47] underline"
                   onClick={() => setDemoOpen(true)}
+                  hidden={!MCTB_LAUNCH_TRY_IT_ENABLED}
                 >
                   See how it works
                 </button>
@@ -581,13 +590,23 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
             </header>
             <div className="mctb-onb-panel__body mctb-onb-split">
               <div>
-                <MctbTextBackComposer
-                  message={messageTemplate}
+                <MctbRecoveryGoalSetupSection
+                  value={recoveryGoal}
+                  messagePreview={
+                    messageTemplate || getRecoveryGoalDefinition(recoveryGoal).defaultOpener
+                  }
+                  onGoalChange={(id, suggested) => {
+                    setRecoveryGoal(id);
+                    setMessageTemplate(suggested);
+                  }}
                   onMessageChange={setMessageTemplate}
-                  press1Mode={consentMode === "press_1"}
-                  compliancePreview="Reply YES to confirm you want text messages from this business. Msg & data rates may apply. Reply STOP to opt out."
-                  variablesHint="{{customer.firstName}} · {{business.name}}"
                 />
+                {consentMode === "press_1" ? (
+                  <p className="mt-3 text-[12px] text-[#626872]">
+                    Press-1 callers also receive the locked compliance confirmation before your recovery
+                    opener.
+                  </p>
+                ) : null}
                 <div className="mt-4 rounded-lg border border-[#e8eaed] p-3 text-[13px]">
                   <p className="font-semibold">Text-back number</p>
                   <p className="mt-1 font-mono">{data?.trialNumber.display || forwardDisplay}</p>
@@ -631,7 +650,11 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
             {panelFooter(true, {
               label: "Continue",
               disabled: !messageTemplate.trim(),
-              onClick: () => void post({ messageTemplate: messageTemplate.trim() }),
+              onClick: () =>
+                void post({
+                  recoveryGoal,
+                  messageTemplate: messageTemplate.trim(),
+                }),
             })}
           </div>
         ) : null}
@@ -643,30 +666,12 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
               <p className="mctb-onb-panel__sub">Choose what callers hear when you cannot answer.</p>
             </header>
             <div className="mctb-onb-panel__body mctb-onb-split">
-              <div className="space-y-3 text-[13px]">
-                <p>
-                  Use the Transovo default greeting for the fastest setup, or customize later in{" "}
-                  <Link href={MCTB_ROUTES.voicemail} className="font-semibold underline">
-                    Voicemail
-                  </Link>
-                  .
-                </p>
-                <button
-                  type="button"
-                  className="mctb-setup-btn mctb-setup-btn--primary"
-                  onClick={() => void post({ action: "mark_voicemail_configured" })}
-                >
-                  Use default greeting
-                </button>
-              </div>
-              <aside className="mctb-onb-aside">
-                <h2 className="mctb-onb-aside__title">Call ending</h2>
-                <p className="text-[12.5px] leading-relaxed text-[#626872]">
-                  {consentMode === "press_1"
-                    ? "If the caller does not press 1, they hear your voicemail greeting and can leave a message."
-                    : "Callers reach voicemail according to your configured call flow after the missed call."}
-                </p>
-              </aside>
+              <OnboardingVoicemailStep
+                phoneNumberId={data?.trialNumber.phoneNumberId ?? null}
+                press1Mode={consentMode === "press_1"}
+                onPlatformDefault={() => post({ action: "mark_voicemail_configured" })}
+                onContinue={() => post({ action: "mark_voicemail_configured" })}
+              />
             </div>
             {panelFooter(true, {
               label: "Continue",

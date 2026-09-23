@@ -18,7 +18,17 @@ export async function GET() {
   await ensureMctbHandoffConfig(workspaceId);
   const config = await loadMctbHandoffConfig(workspaceId);
   const recipients = await loadMctbNotificationRecipients(workspaceId);
-  return NextResponse.json({ data: { config, recipients } });
+  const { loadLeadRecoveryConfig } = await import("@/lib/mctb/lead-recovery/config");
+  const lr = await loadLeadRecoveryConfig(workspaceId);
+  return NextResponse.json({
+    data: {
+      config,
+      recipients,
+      launch: {
+        aiRepliesEnabled: lr.enabled && lr.policyHealth !== "DISABLED",
+      },
+    },
+  });
 }
 
 export async function POST(req: Request) {
@@ -28,8 +38,19 @@ export async function POST(req: Request) {
   const body = (await req.json()) as {
     config?: Partial<MctbHandoffConfigDto>;
     recipients?: MctbNotificationRecipientDto[];
-    action?: "test_notification";
+    action?: "test_notification" | "set_launch_ai_replies";
+    enabled?: boolean;
   };
+
+  if (body.action === "set_launch_ai_replies") {
+    const { applyLaunchAiRepliesSetting } = await import("@/lib/mctb/launch-lead-recovery");
+    const result = await applyLaunchAiRepliesSetting(workspaceId, body.enabled === true);
+    const config = await loadMctbHandoffConfig(workspaceId);
+    const recipients = await loadMctbNotificationRecipients(workspaceId);
+    return NextResponse.json({
+      data: { config, recipients, launch: { aiRepliesEnabled: result.enabled } },
+    });
+  }
 
   if (body.action === "test_notification") {
     const idempotencyKey = `mctb-test-notify:${workspaceId}:${Date.now()}`;

@@ -3,6 +3,8 @@ import { notifyWorkspace } from "@/lib/notifications/in-app";
 import { notifyWorkspaceByEmail } from "@/lib/notifications/workspace-email";
 import { sendQuickSms } from "@/lib/sms/send-quick";
 import { loadMctbHandoffConfig, loadMctbNotificationRecipients } from "./config";
+import { recipientAllowsNotificationChannel } from "./recipient-event-routing";
+import { MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY } from "@/lib/mctb/launch-flags";
 import { renderMctbTeamEmail, renderMctbTeamSms, type NotificationRenderInput } from "./templates";
 import type { MctbHandoffEventType, MctbLeadSnapshotDerived, MctbLeadSnapshotFacts } from "./types";
 
@@ -68,13 +70,32 @@ export async function deliverMctbHandoffNotifications(input: {
   const channels = routing.channels || { in_app: true };
   const results: Array<{ channel: string; status: string; destination?: string }> = [];
 
+  const emailRecipients = targetRecipients.filter(
+    (r) =>
+      r.email &&
+      recipientAllowsNotificationChannel({
+        recipient: r,
+        eventType: input.eventType,
+        channel: "email",
+      }),
+  );
+  const smsRecipients = targetRecipients.filter(
+    (r) =>
+      r.mobileE164 &&
+      recipientAllowsNotificationChannel({
+        recipient: r,
+        eventType: input.eventType,
+        channel: "sms",
+      }),
+  );
+
   if (blockAllNonUrgent && !channels.email) {
     return { delivered: results, suppressed: true, reason: "quiet_hours" };
   }
 
   const idemBase = `mctb-notify:${input.handoffEventId}`;
 
-  if (channels.in_app && !blockAllNonUrgent) {
+  if (channels.in_app && !blockAllNonUrgent && !MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY) {
     const idempotencyKey = `${idemBase}:in_app`;
     const prior = await prisma.mctbNotificationDelivery.findUnique({
       where: { idempotencyKey },
@@ -103,7 +124,7 @@ export async function deliverMctbHandoffNotifications(input: {
   }
 
   if (channels.email && !blockAllNonUrgent) {
-    for (const recipient of targetRecipients.filter((r) => r.email)) {
+    for (const recipient of emailRecipients) {
       const idempotencyKey = `${idemBase}:email:${recipient.id}`;
       const prior = await prisma.mctbNotificationDelivery.findUnique({
         where: { idempotencyKey },
@@ -154,7 +175,7 @@ export async function deliverMctbHandoffNotifications(input: {
 
   if (channels.sms && !suppressNonUrgentSms && !blockAllNonUrgent) {
     const smsBody = renderMctbTeamSms(renderInput);
-    for (const recipient of targetRecipients.filter((r) => r.mobileE164)) {
+    for (const recipient of smsRecipients) {
       const idempotencyKey = `${idemBase}:sms:${recipient.id}`;
       const prior = await prisma.mctbNotificationDelivery.findUnique({
         where: { idempotencyKey },

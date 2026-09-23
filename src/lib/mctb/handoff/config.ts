@@ -7,6 +7,7 @@ import type {
   MctbRoutingMatrix,
 } from "./types";
 import { MCTB_RESPONSE_MODES, MCTB_EMERGENCY_ACTIONS } from "./types";
+import { normalizeMctbNotificationRecipientEventChannelsForSave } from "./recipient-event-routing";
 
 function parseFieldSchema(json: unknown): MctbLeadFieldConfig[] {
   if (!Array.isArray(json)) return DEFAULT_LEAD_FIELD_SCHEMA;
@@ -184,13 +185,18 @@ export async function saveMctbNotificationRecipients(
   const out: MctbNotificationRecipientDto[] = [];
   for (let i = 0; i < recipients.length; i++) {
     const r = recipients[i];
+    const isCreate = !r.id || !keepIds.has(r.id);
+    const eventChannels = normalizeMctbNotificationRecipientEventChannelsForSave({
+      isCreate,
+      eventChannels: r.eventChannels,
+    });
     const data = {
       workspaceId,
       name: r.name.trim(),
       email: r.email?.trim() || null,
       mobileE164: r.mobileE164?.trim() || null,
       roleDescription: r.roleDescription?.trim() || null,
-      eventChannelsJson: r.eventChannels || {},
+      eventChannelsJson: eventChannels,
       enabled: r.enabled ?? true,
       sortOrder: r.sortOrder ?? i,
     };

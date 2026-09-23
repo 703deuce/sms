@@ -83,6 +83,7 @@ export type MctbSetupPayload = {
   requestFormEnabled?: boolean;
   leadCaptureEnabled?: boolean;
   requestFormFieldsJson?: unknown;
+  recoveryGoal?: string;
   activate?: boolean;
   existingConsentAttested?: boolean;
 };
@@ -201,8 +202,12 @@ export async function GET() {
     messagingReady,
   });
 
+  const { readMctbRecoveryGoalId } = await import("@/lib/mctb/apply-recovery-goal-config");
+  const recoveryGoal = await readMctbRecoveryGoalId(workspaceId);
+
   return NextResponse.json({
     data: {
+      recoveryGoal,
       runtime: runtimeForClient,
       schedule: {
         scheduleMode: effectiveSchedule.scheduleMode,
@@ -287,6 +292,22 @@ export async function POST(req: Request) {
     enabled: body.enabled ?? null,
     pauseUntil: body.pauseUntil ?? null,
   });
+
+  if (body.recoveryGoal) {
+    const { parseRecoveryGoalId } = await import("@/lib/mctb/recovery-goals");
+    const { applyMctbRecoveryGoalConfiguration } = await import(
+      "@/lib/mctb/apply-recovery-goal-config"
+    );
+    const goalId = parseRecoveryGoalId(body.recoveryGoal);
+    if (goalId) {
+      await applyMctbRecoveryGoalConfiguration({
+        workspaceId,
+        goalId,
+        actorUserId: session.userId,
+        messageOverride: body.messageTemplate ?? null,
+      });
+    }
+  }
 
   if (body.phoneNumberId !== undefined && body.phoneNumberId !== null) {
     const requestedPhoneId = body.phoneNumberId;
