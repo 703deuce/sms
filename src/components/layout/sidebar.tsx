@@ -27,6 +27,8 @@ import {
   shellHomePath,
 } from "@/lib/products/product-shell";
 import { useProductShell, ProductShellSwitcher } from "@/components/products/product-shell-tabs";
+import { CallHandlingSwitcher } from "@/components/call-handling/call-handling-switcher";
+import { shouldShowCallHandlingSwitcher } from "@/lib/call-handling/show-switcher";
 import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlements";
 import { productLabel, type CurrentProduct } from "@/lib/products/types";
 import { trackCrossSellClicked } from "@/lib/products/analytics";
@@ -350,6 +352,10 @@ export function Sidebar({
     hasMassSms,
     hasAiAfterHours,
   });
+  const showCallHandlingSwitcher = shouldShowCallHandlingSwitcher({
+    hasMctb,
+    hasVoice,
+  });
   const { shell: productShell } = useProductShell(hasMctb, hasMassSms, hasAiAfterHours);
   const isAppointmentsOverviewPilot = pathname === "/appointments/overview";
   const softCoolSlateShell =
@@ -462,7 +468,9 @@ export function Sidebar({
         onToggleCollapse={onToggleCollapse}
         homeHref={homeHref}
         productSwitcher={
-          multiProduct ? (
+          showCallHandlingSwitcher ? (
+            <CallHandlingSwitcher collapsed={collapsed} className="px-0 pb-0" />
+          ) : multiProduct ? (
             <ProductShellSwitcher
               hasMctb={hasMctb}
               hasMassSms={hasMassSms}
@@ -559,7 +567,9 @@ export function Sidebar({
         </Link>
       </div>
 
-      {multiProduct && !realtorMode && !isLauncher && currentProduct !== "numbers" ? (
+      {showCallHandlingSwitcher && !realtorMode && !isLauncher && currentProduct !== "numbers" ? (
+        <CallHandlingSwitcher collapsed={collapsed} onNavigate={onClose} />
+      ) : multiProduct && !realtorMode && !isLauncher && currentProduct !== "numbers" ? (
         <ProductShellSwitcher
           hasMctb={hasMctb}
           hasMassSms={hasMassSms}

@@ -191,9 +191,17 @@ export async function POST(request: Request) {
       } else if (liveSync.synced) {
         try {
           const { isMctbV1Primary } = await import("@/lib/workspace/platform-launch");
-          if (isMctbV1Primary()) {
-            const { setInboundHandlingMode } = await import(
-              "@/lib/mctb/inbound-handling/switch-mode"
+          if (isMctbV1Primary() && state.phoneNumberId) {
+            const { hasExplicitCallHandlingSelection } = await import(
+              "@/lib/call-handling/phone-settings"
+            );
+            const { getPrisma } = await import("@/lib/db");
+            const phoneRow = await getPrisma().phoneNumber.findFirst({
+              where: { id: state.phoneNumberId, workspaceId: auth.workspaceId },
+              select: { settingsJson: true },
+            });
+            const explicitCallHandling = hasExplicitCallHandlingSelection(
+              phoneRow?.settingsJson,
             );
             const { persistMctbLineInboundConfig } = await import(
               "@/lib/mctb/inbound-handling/line-config"
@@ -203,18 +211,23 @@ export async function POST(request: Request) {
               phoneNumberId: state.phoneNumberId,
               patch: { voiceAgentId: agentId },
             }).catch(() => undefined);
-            await setInboundHandlingMode({
-              workspaceId: auth.workspaceId,
-              mode: "VOICE_AGENT",
-              phoneNumberId: state.phoneNumberId,
-              voiceAgentId: agentId,
-            }).catch((err) => {
-              warnings.push(
-                err instanceof Error
-                  ? `Voice call-handling refresh: ${err.message}`
-                  : "Voice call-handling refresh failed",
+            if (!explicitCallHandling) {
+              const { setInboundHandlingMode } = await import(
+                "@/lib/mctb/inbound-handling/switch-mode"
               );
-            });
+              await setInboundHandlingMode({
+                workspaceId: auth.workspaceId,
+                mode: "VOICE_AGENT",
+                phoneNumberId: state.phoneNumberId,
+                voiceAgentId: agentId,
+              }).catch((err) => {
+                warnings.push(
+                  err instanceof Error
+                    ? `Voice call-handling refresh: ${err.message}`
+                    : "Voice call-handling refresh failed",
+                );
+              });
+            }
           }
         } catch {
           // non-blocking
@@ -392,9 +405,6 @@ export async function POST(request: Request) {
         if (published && state.phoneNumberId) {
           const { isMctbV1Primary } = await import("@/lib/workspace/platform-launch");
           if (isMctbV1Primary()) {
-            const { setInboundHandlingMode } = await import(
-              "@/lib/mctb/inbound-handling/switch-mode"
-            );
             const { persistMctbLineInboundConfig } = await import(
               "@/lib/mctb/inbound-handling/line-config"
             );
@@ -403,18 +413,46 @@ export async function POST(request: Request) {
               phoneNumberId: state.phoneNumberId,
               patch: { voiceAgentId: agentId },
             }).catch(() => undefined);
-            await setInboundHandlingMode({
-              workspaceId: auth.workspaceId,
-              mode: "VOICE_AGENT",
-              phoneNumberId: state.phoneNumberId,
-              voiceAgentId: agentId,
-            }).catch((err) => {
-              warnings.push(
-                err instanceof Error
-                  ? `Voice call-handling mode: ${err.message}`
-                  : "Voice call-handling mode switch failed",
-              );
+
+            const { hasExplicitCallHandlingSelection } = await import(
+              "@/lib/call-handling/phone-settings"
+            );
+            const { getPrisma } = await import("@/lib/db");
+            const phoneRow = await getPrisma().phoneNumber.findFirst({
+              where: { id: state.phoneNumberId, workspaceId: auth.workspaceId },
+              select: { settingsJson: true },
             });
+            const explicitCallHandling = hasExplicitCallHandlingSelection(
+              phoneRow?.settingsJson,
+            );
+
+            if (!explicitCallHandling) {
+              const { setInboundHandlingMode } = await import(
+                "@/lib/mctb/inbound-handling/switch-mode"
+              );
+              await setInboundHandlingMode({
+                workspaceId: auth.workspaceId,
+                mode: "VOICE_AGENT",
+                phoneNumberId: state.phoneNumberId,
+                voiceAgentId: agentId,
+              }).catch((err) => {
+                warnings.push(
+                  err instanceof Error
+                    ? `Voice call-handling mode: ${err.message}`
+                    : "Voice call-handling mode switch failed",
+                );
+              });
+              const { persistInitialCallHandlerIfUnset } = await import(
+                "@/lib/call-handling/initial-selection"
+              );
+              await persistInitialCallHandlerIfUnset({
+                workspaceId: auth.workspaceId,
+                phoneNumberId: state.phoneNumberId,
+                handler: "ai_receptionist",
+                aiReceptionistAgentId: agentId,
+                userId: auth.session.userId,
+              }).catch(() => undefined);
+            }
           }
         }
 

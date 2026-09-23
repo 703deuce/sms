@@ -5,6 +5,7 @@ import type { MctbOverviewPayload } from "@/lib/mctb/overview-types";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { CallHandlingDashboardCard } from "@/components/call-handling/call-handling-switcher";
 import {
   MctbHomeKpiStrip,
   MctbHomeLeadRecoveryCard,
@@ -150,6 +151,8 @@ export function MctbOverviewView({ initialData = null }: MctbOverviewViewProps) 
             </Link>
           </p>
         ) : null}
+
+        <CallHandlingDashboardCard />
 
         <MctbHomeKpiStrip data={data} />
 
