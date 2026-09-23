@@ -51,6 +51,7 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { MctbSetupBookingSection } from "@/components/mctb/setup/mctb-setup-booking-section";
+import { MCTB_LAUNCH_HIDE_AI_BOOK_UI, MCTB_LAUNCH_SIMPLIFY_RECOVERY_UI } from "@/lib/mctb/launch-flags";
 
 type SetupRuntime = {
   phoneNumberId: string | null;
@@ -741,7 +742,7 @@ export function MctbSetupRecoveryView() {
               </Link>
             </section>
 
-            <MctbSetupBookingSection />
+            {MCTB_LAUNCH_HIDE_AI_BOOK_UI ? null : <MctbSetupBookingSection />}
 
             <section className="mctb-recovery-module mctb-recovery-module--elevated" aria-labelledby="mctb-rec-guard">
               <h3 id="mctb-rec-guard" className="mctb-recovery-module__title mb-1">
@@ -770,10 +771,12 @@ export function MctbSetupRecoveryView() {
                 <span className="text-[#626872]">Follow-up behavior</span>
                 <span className="font-semibold text-[#1b1e23]">{followUpEnabled ? "On" : "Off"} ›</span>
               </Link>
-              <div className="mctb-recovery-guard-row mctb-recovery-guard-row--static">
-                <span className="text-[#626872]">Maximum attempts</span>
-                <span className="font-semibold text-[#1b1e23]">{maxMessages}</span>
-              </div>
+              {MCTB_LAUNCH_SIMPLIFY_RECOVERY_UI ? null : (
+                <div className="mctb-recovery-guard-row mctb-recovery-guard-row--static">
+                  <span className="text-[#626872]">Maximum attempts</span>
+                  <span className="font-semibold text-[#1b1e23]">{maxMessages}</span>
+                </div>
+              )}
             </section>
 
             <section className="mctb-recovery-module mctb-recovery-module--elevated" aria-labelledby="mctb-rec-why">

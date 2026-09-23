@@ -132,6 +132,7 @@ export async function POST(req: Request) {
       websiteUrl?: string;
       industry?: string;
       messageTemplate?: string;
+      recoveryGoal?: string;
       consentMode?: MctbConsentMode;
       existingConsentAttested?: boolean;
       forwardingCarrier?: MctbForwardingCarrier;
@@ -246,13 +247,31 @@ export async function POST(req: Request) {
       await recordFunnelEvent(auth.workspaceId, "MCTB_BUSINESS_INFO_COMPLETED");
     }
 
+    if (body.recoveryGoal) {
+      const { applyMctbRecoveryGoalConfiguration } = await import(
+        "@/lib/mctb/apply-recovery-goal-config"
+      );
+      const { parseRecoveryGoalId } = await import("@/lib/mctb/recovery-goals");
+      const goalId = parseRecoveryGoalId(body.recoveryGoal);
+      if (goalId) {
+        await applyMctbRecoveryGoalConfiguration({
+          workspaceId: auth.workspaceId,
+          goalId,
+          actorUserId: auth.session.userId,
+          messageOverride: body.messageTemplate ?? null,
+        });
+      }
+    }
+
     if (body.messageTemplate) {
-      await updateMissedCallTextConfig({
-        workspaceId: auth.workspaceId,
-        patch: { initial_message: body.messageTemplate },
-        actor: auth.session.userId,
-        source: "mctb_onboarding",
-      });
+      if (!body.recoveryGoal) {
+        await updateMissedCallTextConfig({
+          workspaceId: auth.workspaceId,
+          patch: { initial_message: body.messageTemplate },
+          actor: auth.session.userId,
+          source: "mctb_onboarding",
+        });
+      }
       state = await saveMctbOnboardingState(auth.workspaceId, {
         messageTemplate: body.messageTemplate,
       });
