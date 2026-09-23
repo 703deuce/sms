@@ -27,7 +27,28 @@ import {
 import { applyWorkflowInvalidation } from "@/lib/mctb/lead-recovery/workflow-invalidation";
 import { withLeadRecoveryCrossWorkerLock } from "@/lib/mctb/lead-recovery/cross-worker-lock";
 import { buildMctbSemanticConversationContext } from "@/lib/mctb/semantic-conversation-context";
-import type { LeadRecoveryCollectField, StructuredLeadIntent } from "@/lib/mctb/lead-recovery/types";
+import type {
+  LeadRecoveryCollectField,
+  LeadRecoveryIntent,
+  LeadRecoveryWorkspaceConfig,
+  StructuredLeadIntent,
+} from "@/lib/mctb/lead-recovery/types";
+
+function clampIntentToEnabledIntents(
+  intent: StructuredLeadIntent,
+  config: LeadRecoveryWorkspaceConfig,
+): StructuredLeadIntent {
+  const allowed = new Set<LeadRecoveryIntent>(config.enabledIntents);
+  let primary = intent.primary_intent;
+  if (!allowed.has(primary)) {
+    primary = "UNKNOWN";
+  }
+  const secondary = intent.secondary_intents.filter((s) => allowed.has(s));
+  if (primary === intent.primary_intent && secondary.length === intent.secondary_intents.length) {
+    return intent;
+  }
+  return { ...intent, primary_intent: primary, secondary_intents: secondary };
+}
 
 function applyIntentExtractedFields(
   state: Awaited<ReturnType<typeof loadLeadRecoveryState>>,
@@ -243,10 +264,11 @@ async function handleMctbLeadRecoveryInboundSmsLocked(input: {
     };
   }
 
-  const intent = await runLeadRecoveryIntentAgent({
+  const classified = await runLeadRecoveryIntentAgent({
     message: input.body,
     conversationContext: semanticCtx,
   });
+  const intent = clampIntentToEnabledIntents(classified, config);
 
   if (intent.primary_intent === "OPT_OUT" || intent.primary_intent === "WRONG_NUMBER") {
     state = mergeIntentIntoState(state, intent);

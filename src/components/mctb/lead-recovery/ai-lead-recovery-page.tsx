@@ -10,6 +10,7 @@ import {
   MCTB_LAUNCH_HIDE_LR_AI_BOOK_UI,
   MCTB_LAUNCH_HIDE_LR_TEXT_TO_PAY_UI,
 } from "@/lib/mctb/launch-flags";
+import { defaultIntentPolicies } from "@/lib/mctb/lead-recovery/policy-defaults";
 import { LEAD_RECOVERY_SCENARIO_DEFS } from "@/lib/mctb/lead-recovery/scenarios";
 import type {
   IntentPolicyShape,
@@ -155,10 +156,22 @@ export function AiLeadRecoveryPage() {
 
   const toggleScenario = (key: LeadRecoveryScenarioKey, on: boolean) => {
     if (!draft) return;
+    const enabledScenarios = { ...draft.enabledScenarios, [key]: on };
+    let intentPolicies = draft.intentPolicies;
+    if (key === "existing_customer" && on) {
+      const defaults = defaultIntentPolicies("SEND_BOOKING_LINK");
+      intentPolicies = {
+        ...intentPolicies,
+        EXISTING_CUSTOMER_ISSUE:
+          intentPolicies.EXISTING_CUSTOMER_ISSUE ?? defaults.EXISTING_CUSTOMER_ISSUE,
+        CANCEL_REQUEST: intentPolicies.CANCEL_REQUEST ?? defaults.CANCEL_REQUEST,
+      };
+    }
     setDraft({
       ...draft,
       enabled: true,
-      enabledScenarios: { ...draft.enabledScenarios, [key]: on },
+      enabledScenarios,
+      intentPolicies,
     });
   };
 
@@ -677,6 +690,8 @@ function ExistingCustomerEditor({
     <>
       <p className="lr-panel-desc">
         Choose how Transovo handles customers with an existing job, appointment, or prior visit.
+        Cancellation requests create a team follow-up — Transovo does not cancel appointments or
+        jobs automatically by text.
       </p>
       <label className="lr-check">
         <input

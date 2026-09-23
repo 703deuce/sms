@@ -81,6 +81,7 @@ export async function PATCH(request: Request) {
     mode,
     phoneNumberId,
     voiceAgentId,
+    userId: auth.session.userId,
   });
 
   if (!result.ok) {

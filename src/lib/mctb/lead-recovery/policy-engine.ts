@@ -19,10 +19,31 @@ const EMERGENCY_IMMEDIATE_ACTIONS = new Set([
   "CREATE_CALLBACK_REQUEST",
 ]);
 
+function scenarioAllowsIntent(
+  config: LeadRecoveryWorkspaceConfig,
+  intentKey: LeadRecoveryIntent,
+): boolean {
+  if (intentKey === "EXISTING_CUSTOMER_ISSUE" || intentKey === "CANCEL_REQUEST") {
+    return config.enabledScenarios.existing_customer === true;
+  }
+  return true;
+}
+
 function policyForIntentKey(
   config: LeadRecoveryWorkspaceConfig,
   intentKey: LeadRecoveryIntent,
 ): { policy: IntentPolicyShape; policyId: string } {
+  if (!scenarioAllowsIntent(config, intentKey)) {
+    return { policy: config.fallbackPolicy, policyId: "fallback:scenario_off" };
+  }
+
+  if (
+    intentKey === "EXISTING_CUSTOMER_ISSUE" &&
+    !config.existingCustomerPolicy.treatDifferently
+  ) {
+    return { policy: config.fallbackPolicy, policyId: "fallback:existing_customer_generic" };
+  }
+
   const specific = config.intentPolicies[intentKey];
   if (specific?.enabled) {
     return { policy: specific, policyId: `intent:${intentKey}` };

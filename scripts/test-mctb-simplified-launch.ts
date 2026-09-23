@@ -32,12 +32,21 @@ assert.equal(MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY, true);
 assert.equal(MCTB_LAUNCH_HIDE_LR_TEXT_TO_PAY_UI, true);
 assert.equal(MCTB_LAUNCH_HIDE_LR_AI_BOOK_UI, true);
 
-const vaHandling = fs.readFileSync(
-  path.join(process.cwd(), "src/components/mctb/voice-agent/call-handling-mode-switch.tsx"),
+const vaPage = fs.readFileSync(
+  path.join(process.cwd(), "src/components/mctb/voice-agent/mctb-voice-agent-page.tsx"),
   "utf8",
 );
-assert.ok(vaHandling.includes("CallHandlingDashboardCard"));
-assert.ok(!vaHandling.includes("/api/mctb/inbound-handling"));
+assert.ok(!vaPage.includes("CallHandlingDashboardCard"));
+assert.ok(!vaPage.includes("CallHandlingModeSwitch"));
+assert.ok(!vaPage.includes("/api/mctb/inbound-handling"));
+
+const inboundSwitch = fs.readFileSync(
+  path.join(process.cwd(), "src/lib/mctb/inbound-handling/switch-mode.ts"),
+  "utf8",
+);
+assert.ok(inboundSwitch.includes("setActiveCallHandler"));
+assert.ok(!inboundSwitch.includes("routePhoneToTexmlAssistant"));
+assert.ok(!inboundSwitch.includes("routePhoneToTexmlApp"));
 
 const lrPage = fs.readFileSync(
   path.join(process.cwd(), "src/components/mctb/lead-recovery/ai-lead-recovery-page.tsx"),

@@ -1,14 +1,10 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
+import { setActiveCallHandler } from "@/lib/call-handling/set-active-call-handler";
+import { mergeCallHandlingIntoSettings } from "@/lib/call-handling/phone-settings";
 import { invalidateMctbInboundRoutingProfile } from "@/lib/mctb/texml-ingress/routing-profile";
 import { invalidateMctbTexmlIngressCache } from "@/lib/mctb/texml-ingress/config-cache";
-import {
-  ensureMctbTexmlApplication,
-  routePhoneToTexmlApp,
-} from "@/lib/mctb/texml-ingress/texml-route";
-import { routePhoneToTexmlAssistant } from "@/lib/voice/telnyx/texml-direct-route";
-import { MCTB_TEXML_DEFAULT_APP_ID } from "@/lib/mctb/texml-ingress/constants";
 import type { InboundHandlingMode } from "./types";
 import { loadMctbLineInboundConfig, persistMctbLineInboundConfig } from "./line-config";
 import { getVoiceAgentReadiness } from "./voice-readiness";
@@ -18,11 +14,16 @@ export type SetInboundHandlingModeResult =
   | { ok: true; mode: InboundHandlingMode; telephonyPath: string }
   | { ok: false; error: string; blockingReasons?: string[] };
 
+/**
+ * Legacy MCTB inbound-handling mode switch — Telnyx ownership mutations delegate to
+ * `setActiveCallHandler` (PR #483). This function only updates line metadata labels.
+ */
 export async function setInboundHandlingMode(input: {
   workspaceId: string;
   mode: InboundHandlingMode;
   phoneNumberId?: string | null;
   voiceAgentId?: string | null;
+  userId?: string | null;
 }): Promise<SetInboundHandlingModeResult> {
   const line = await loadMctbLineInboundConfig({
     workspaceId: input.workspaceId,
@@ -60,94 +61,74 @@ export async function setInboundHandlingMode(input: {
     return { ok: false, error: "phone_missing_provider_id" };
   }
 
-  let telephonyPath = "";
-
-  if (input.mode === "VOICE_AGENT") {
-    const agent = await prisma.voiceAgent.findFirst({
-      where: { id: agentId!, workspaceId: input.workspaceId },
-      select: { telnyxAssistantId: true },
+  if (input.mode === "VOICE_AGENT" && agentId) {
+    const settings = mergeCallHandlingIntoSettings(phone.settingsJson, {
+      parkedAiReceptionistAgentId: agentId,
     });
-    const assistantId = agent?.telnyxAssistantId?.trim();
-    if (!assistantId) {
-      return { ok: false, error: "missing_telnyx_assistant" };
-    }
-
-    const mctbTexmlAppId =
-      line.mctbTexmlAppId ||
-      (await ensureMctbTexmlApplication({
-        preferredAppId:
-          process.env.MCTB_TEXML_APP_ID?.trim() || MCTB_TEXML_DEFAULT_APP_ID,
-      }));
-
-    const routed = await routePhoneToTexmlAssistant({
-      e164: phone.e164,
-      assistantId,
-      providerNumberId: phone.providerNumberId,
-      preferredTexmlAppId: line.voiceTexmlAppId || undefined,
-    });
-
-    telephonyPath = routed.path;
-
-    await persistMctbLineInboundConfig({
-      workspaceId: input.workspaceId,
-      phoneNumberId: phone.id,
-      patch: {
-        inboundHandlingMode: "VOICE_AGENT",
-        voiceAgentId: agentId!,
-        voiceAgentEnabled: true,
-        voiceTexmlAppId: routed.texmlAppId,
-        mctbTexmlAppId: mctbTexmlAppId,
-        configRevision: `voice-on-${Date.now()}`,
-      },
-    });
-
-    await prisma.voiceAgent.updateMany({
-      where: { id: agentId!, workspaceId: input.workspaceId },
-      data: { phoneNumberId: phone.id },
-    });
-
-    await emitInboundHandlingTrace({
-      workspaceId: input.workspaceId,
-      phoneNumberId: phone.id,
-      event: "VOICE_AGENT_SELECTED",
-      detail: { assistantId, texmlAppId: routed.texmlAppId, path: telephonyPath },
-    });
-  } else {
-    const mctbTexmlAppId =
-      line.mctbTexmlAppId ||
-      (await ensureMctbTexmlApplication({
-        preferredAppId:
-          process.env.MCTB_TEXML_APP_ID?.trim() || MCTB_TEXML_DEFAULT_APP_ID,
-      }));
-
-    await routePhoneToTexmlApp({
-      e164: phone.e164,
-      providerNumberId: phone.providerNumberId,
-      texmlAppId: mctbTexmlAppId,
-    });
-
-    telephonyPath = `${phone.e164} → MCTB TeXML ${mctbTexmlAppId}`;
-
-    await persistMctbLineInboundConfig({
-      workspaceId: input.workspaceId,
-      phoneNumberId: phone.id,
-      patch: {
-        inboundHandlingMode: "MCTB_RECOVERY",
-        voiceAgentEnabled: false,
-        configRevision: `mctb-on-${Date.now()}`,
-      },
-    });
-
-    await emitInboundHandlingTrace({
-      workspaceId: input.workspaceId,
-      phoneNumberId: phone.id,
-      event: "MCTB_RECOVERY_SELECTED",
-      detail: { texmlAppId: mctbTexmlAppId, path: telephonyPath },
+    await prisma.phoneNumber.update({
+      where: { id: phone.id },
+      data: { settingsJson: settings as object },
     });
   }
 
-  invalidateMctbTexmlIngressCache(phone.e164);
-  invalidateMctbInboundRoutingProfile(phone.e164);
+  const handler = input.mode === "VOICE_AGENT" ? "ai_receptionist" : "mctb";
 
-  return { ok: true, mode: input.mode, telephonyPath };
+  try {
+    const state = await setActiveCallHandler({
+      workspaceId: input.workspaceId,
+      voiceIngressPhoneNumberId: phone.id,
+      handler,
+      userId: input.userId ?? null,
+    });
+
+    const telephonyPath =
+      state.effectiveHandler === "ai_receptionist"
+        ? `${phone.e164} → AI Receptionist (Voice V3)`
+        : `${phone.e164} → MCTB call-handling ingress`;
+
+    if (input.mode === "VOICE_AGENT") {
+      await persistMctbLineInboundConfig({
+        workspaceId: input.workspaceId,
+        phoneNumberId: phone.id,
+        patch: {
+          inboundHandlingMode: "VOICE_AGENT",
+          voiceAgentId: agentId!,
+          voiceAgentEnabled: true,
+          configRevision: `voice-on-${Date.now()}`,
+        },
+      });
+
+      await emitInboundHandlingTrace({
+        workspaceId: input.workspaceId,
+        phoneNumberId: phone.id,
+        event: "VOICE_AGENT_SELECTED",
+        detail: { voiceAgentId: agentId, path: telephonyPath },
+      });
+    } else {
+      await persistMctbLineInboundConfig({
+        workspaceId: input.workspaceId,
+        phoneNumberId: phone.id,
+        patch: {
+          inboundHandlingMode: "MCTB_RECOVERY",
+          voiceAgentEnabled: false,
+          configRevision: `mctb-on-${Date.now()}`,
+        },
+      });
+
+      await emitInboundHandlingTrace({
+        workspaceId: input.workspaceId,
+        phoneNumberId: phone.id,
+        event: "MCTB_RECOVERY_SELECTED",
+        detail: { path: telephonyPath },
+      });
+    }
+
+    invalidateMctbTexmlIngressCache(phone.e164);
+    invalidateMctbInboundRoutingProfile(phone.e164);
+
+    return { ok: true, mode: input.mode, telephonyPath };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "switch_failed";
+    return { ok: false, error: message };
+  }
 }

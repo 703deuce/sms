@@ -88,5 +88,18 @@ export function defaultIntentPolicies(bookingMode: "AI_BOOK" | "SEND_BOOKING_LIN
       actions: ["CUSTOMER_MESSAGE"],
       customerMessage: "Sure — what were you calling about?",
     },
+    EXISTING_CUSTOMER_ISSUE: {
+      enabled: true,
+      collect: ["ISSUE_DESCRIPTION"],
+      actions: ["CREATE_CALLBACK_REQUEST", "SEND_EMAIL_SUMMARY", "CUSTOMER_MESSAGE"],
+      customerMessage: "Thanks — I've notified our team about your existing service.",
+    },
+    CANCEL_REQUEST: {
+      enabled: true,
+      collect: ["ISSUE_DESCRIPTION"],
+      actions: ["CREATE_CALLBACK_REQUEST", "ESCALATE_HUMAN", "CUSTOMER_MESSAGE"],
+      customerMessage:
+        "I can't cancel automatically by text — our team will confirm cancellation shortly.",
+    },
   };
 }

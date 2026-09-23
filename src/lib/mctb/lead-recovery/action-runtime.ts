@@ -166,6 +166,15 @@ export async function executeLeadRecoveryActions(
         action = "callback_requested";
         break;
       }
+      case "ROUTE_TO_TEAM": {
+        await notifyBusiness(ctx, "callback_requested");
+        if (!reply && ctx.policy.responseConstraints.customerMessageTemplate) {
+          reply = ctx.policy.responseConstraints.customerMessageTemplate;
+        }
+        if (!reply) reply = "I've routed this to our team — someone will follow up.";
+        action = "route_to_team";
+        break;
+      }
       case "SEND_OWNER_SMS":
       case "SEND_TEAM_SMS":
       case "SEND_EMAIL_SUMMARY": {

@@ -1,7 +1,6 @@
 "use client";
 
 import { AppointmentReceptionistWizard } from "@/components/solutions/appointment-receptionist/wizard";
-import { CallHandlingModeSwitch } from "@/components/mctb/voice-agent/call-handling-mode-switch";
 import { MctbPageContainer } from "@/components/mctb/shell/mctb-page-container";
 import { Button } from "@/components/ui/button";
 import { useCallback, useState } from "react";
@@ -11,7 +10,6 @@ type AgentStatus = "draft" | "active" | "needs_attention" | null;
 
 export function MctbVoiceAgentPage() {
   const [agentStatus, setAgentStatus] = useState<AgentStatus>(null);
-  const [agentId, setAgentId] = useState<string | null>(null);
   const [pageTitle, setPageTitle] = useState("After-Hours Voice Agent");
   const onAgentStatusChange = useCallback((status: AgentStatus) => {
     setAgentStatus(status);
@@ -64,15 +62,9 @@ export function MctbVoiceAgentPage() {
           </div>
         </header>
 
-        <CallHandlingModeSwitch
-          voiceAgentId={agentId}
-          agentReady={agentStatus === "active"}
-        />
-
         <AppointmentReceptionistWizard
           presentation="mctb"
           onAgentStatusChange={onAgentStatusChange}
-          onAgentIdChange={setAgentId}
           onSolutionNameChange={setPageTitle}
         />
       </div>
