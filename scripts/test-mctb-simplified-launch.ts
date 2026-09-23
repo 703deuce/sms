@@ -18,6 +18,8 @@ import {
 import { isCarrierProtocolOptOutMessage } from "../src/lib/mctb/lead-recovery/protocol-intent";
 import { shouldShowTryItNav } from "../src/lib/mctb/try-it/visibility";
 import { launchBookingIntentActions } from "../src/lib/mctb/launch-lead-recovery";
+import { defaultLaunchEnabledScenarios } from "../src/lib/mctb/lead-recovery/scenarios";
+import { launchFaqIntentPolicyOverrides } from "../src/lib/mctb/lead-recovery/launch-faq-policies";
 import { MCTB_SETUP_FIELD_AUTHORITY } from "../src/lib/mctb/setup-field-authority";
 
 assert.equal(MCTB_LAUNCH_TRY_IT_ENABLED, false);
@@ -88,6 +90,18 @@ assert.equal(
 const bookingActions = launchBookingIntentActions();
 assert.ok(bookingActions.includes("SEND_BOOKING_LINK"));
 assert.ok(!bookingActions.includes("AI_BOOK"));
+
+assert.equal(defaultLaunchEnabledScenarios().general_faq, true);
+assert.deepEqual(launchFaqIntentPolicyOverrides().BUSINESS_HOURS?.actions, [
+  "ANSWER_APPROVED_INFORMATION",
+]);
+
+const launchLr = fs.readFileSync(
+  path.join(process.cwd(), "src/lib/mctb/launch-lead-recovery.ts"),
+  "utf8",
+);
+assert.ok(launchLr.includes("ANSWER_APPROVED_INFORMATION"));
+assert.ok(launchLr.includes("defaultLaunchEnabledScenarios"));
 
 assert.equal(MCTB_RECOVERY_GOALS.length, 4);
 assert.ok(getRecoveryGoalDefinition("book_appointment").defaultOpener.includes("{{link}}"));

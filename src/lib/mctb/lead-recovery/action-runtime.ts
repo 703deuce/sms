@@ -282,10 +282,17 @@ export async function executeLeadRecoveryActions(
         break;
       }
       case "ANSWER_APPROVED_INFORMATION": {
-        if (!reply) {
-          reply = "What would you like to know?";
-        }
-        action = "approved_info";
+        const { generateApprovedInformationSmsReply } = await import(
+          "@/lib/mctb/lead-recovery/approved-information-reply"
+        );
+        const faq = await generateApprovedInformationSmsReply({
+          workspaceId: ctx.workspaceId,
+          customerMessage: ctx.body,
+          structuredIntent: ctx.intent,
+          config: ctx.config,
+        });
+        reply = faq.reply;
+        action = faq.grounded ? "approved_info" : "approved_info_fallback";
         break;
       }
       case "NO_OP":

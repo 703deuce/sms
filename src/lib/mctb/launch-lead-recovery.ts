@@ -5,8 +5,9 @@ import {
   loadLeadRecoveryConfig,
   saveLeadRecoveryConfig,
 } from "@/lib/mctb/lead-recovery/config";
+import { launchFaqIntentPolicyOverrides } from "@/lib/mctb/lead-recovery/launch-faq-policies";
 import { defaultIntentPolicies } from "@/lib/mctb/lead-recovery/policy-defaults";
-import { defaultEnabledScenarios } from "@/lib/mctb/lead-recovery/scenarios";
+import { defaultLaunchEnabledScenarios } from "@/lib/mctb/lead-recovery/scenarios";
 import type { LeadRecoveryWorkspaceConfig } from "@/lib/mctb/lead-recovery/types";
 
 const LAUNCH_ACTION_CAPABILITIES: LeadRecoveryWorkspaceConfig["actionCapabilities"] = [
@@ -15,6 +16,7 @@ const LAUNCH_ACTION_CAPABILITIES: LeadRecoveryWorkspaceConfig["actionCapabilitie
   "SEND_EMAIL_SUMMARY",
   "SEND_OWNER_SMS",
   "CUSTOMER_MESSAGE",
+  "ANSWER_APPROVED_INFORMATION",
   "ESCALATE_HUMAN",
   "END_AUTOMATION",
   "SUPPRESS_CONTACT",
@@ -34,11 +36,14 @@ export async function applyLaunchAiRepliesSetting(
     return { enabled: false };
   }
 
-  const policies = defaultIntentPolicies("SEND_BOOKING_LINK");
+  const policies = {
+    ...defaultIntentPolicies("SEND_BOOKING_LINK"),
+    ...launchFaqIntentPolicyOverrides(),
+  };
   await saveLeadRecoveryConfig(workspaceId, {
     enabled: true,
     globalMode: "STANDARD",
-    enabledScenarios: defaultEnabledScenarios(),
+    enabledScenarios: defaultLaunchEnabledScenarios(),
     intentPolicies: policies,
     actionCapabilities: LAUNCH_ACTION_CAPABILITIES,
     faqPolicy: {

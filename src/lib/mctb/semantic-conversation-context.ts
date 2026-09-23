@@ -30,10 +30,20 @@ export type MctbStructuredConversationState = {
   pending_slot_id: string | null;
 };
 
+export type MctbApprovedBusinessInformationContext = {
+  business_name: string;
+  prompt_block: string;
+  has_hours: boolean;
+  has_services: boolean;
+  fact_count: number;
+};
+
 export type MctbSemanticConversationContext = {
   latest_customer_message: string;
   conversation: MctbConversationTurn[];
   structured_state: MctbStructuredConversationState;
+  /** Present only when Lead Recovery is enabled — workspace approved business information */
+  approved_business_information?: MctbApprovedBusinessInformationContext | null;
   context_message_count: number;
   context_truncated: boolean;
   context_estimated_tokens: number;
@@ -169,11 +179,30 @@ export async function buildMctbSemanticConversationContext(input: {
     sendingE164: input.recoverySmsBusinessE164,
   });
 
-  const [state, session, inbox] = await Promise.all([
+  const { loadLeadRecoveryConfig } = await import("@/lib/mctb/lead-recovery/config");
+  const lrConfig = await loadLeadRecoveryConfig(input.workspaceId);
+
+  const [state, session, inbox, approvedRaw] = await Promise.all([
     loadLeadRecoveryState({ workspaceId: input.workspaceId, conversationId: input.conversationId }),
     getMctbAiBookingSessionStore().get(input.conversationId),
     loadInboxConversationThread(input.conversationId),
+    lrConfig.enabled && lrConfig.policyHealth !== "DISABLED"
+      ? import("@/lib/mctb/approved-business-information").then((m) =>
+          m.loadMctbApprovedBusinessInformation(input.workspaceId),
+        )
+      : Promise.resolve(null),
   ]);
+
+  const approved_business_information: MctbApprovedBusinessInformationContext | null =
+    approvedRaw
+      ? {
+          business_name: approvedRaw.business_name,
+          prompt_block: approvedRaw.prompt_block,
+          has_hours: Boolean(approvedRaw.business_hours),
+          has_services: approvedRaw.services.length > 0,
+          fact_count: approvedRaw.knowledge_facts.length,
+        }
+      : null;
 
   const collected: Record<string, string> = {};
   for (const [k, v] of Object.entries(state.collectedFields)) {
@@ -216,13 +245,18 @@ export async function buildMctbSemanticConversationContext(input: {
     });
   }
   const { conversation, truncated, message_count } = applyConversationTruncationPolicy(rawThread);
-  const payloadPreview = JSON.stringify({ conversation, structured_state });
+  const payloadPreview = JSON.stringify({
+    conversation,
+    structured_state,
+    approved_business_information,
+  });
   const context_estimated_tokens = estimateContextTokens(payloadPreview);
 
   const ctx: MctbSemanticConversationContext = {
     latest_customer_message: input.latestCustomerMessage,
     conversation,
     structured_state,
+    approved_business_information,
     context_message_count: message_count,
     context_truncated: truncated,
     context_estimated_tokens,
@@ -240,8 +274,9 @@ export function leadRecoveryIntentUserPayload(
     conversation: ctx.conversation,
     structured_state: ctx.structured_state,
     latest_customer_message: ctx.latest_customer_message,
+    approved_business_information: ctx.approved_business_information,
     context_precedence_note:
-      "Authoritative order: structured_state and provider/runtime results > workspace policy > conversation transcript > model inference. Transcript is context only.",
+      "Authoritative order: structured_state and approved_business_information > workspace policy > conversation transcript > model inference. Transcript is context only.",
   };
 }
 
