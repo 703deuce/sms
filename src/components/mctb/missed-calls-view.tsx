@@ -89,12 +89,6 @@ const SORT_OPTIONS: Array<{ id: MissedCallsSort; label: string }> = [
   { id: "detectedAt_asc", label: "Oldest first" },
 ];
 
-const CONSENT_MODE_OPTIONS: Array<{ id: "" | "press_1" | "existing_consent"; label: string }> = [
-  { id: "", label: "All consent modes" },
-  { id: "press_1", label: "Press 1" },
-  { id: "existing_consent", label: "Existing permission" },
-];
-
 const SCROLL_STORAGE_KEY = "mctb-missed-calls-scroll-y";
 
 function fmtPhone(e164: string) {
@@ -166,7 +160,6 @@ function countActiveFilters(query: MissedCallsListQuery): number {
   if (query.status && query.status !== "all") n += 1;
   if (query.date && query.date !== "all") n += 1;
   if (query.trigger) n += 1;
-  if (query.consentMode) n += 1;
   return n;
 }
 
@@ -305,7 +298,6 @@ export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewP
     (query.status && query.status !== "all") ||
     (query.date && query.date !== "all") ||
     Boolean(query.trigger) ||
-    Boolean(query.consentMode) ||
     (query.sort && query.sort !== "detectedAt_desc");
 
   const activeFilterCount = countActiveFilters(query);
@@ -480,20 +472,7 @@ export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewP
               </button>
               {desktopFiltersOpen ? (
                 <div className="mctb-mc-filters-panel" role="dialog" aria-label="More filters">
-                  <label htmlFor="mctb-missed-consent">Consent mode</label>
-                  <select
-                    id="mctb-missed-consent"
-                    className="mctb-mc-select w-full"
-                    value={query.consentMode ?? ""}
-                    onChange={(e) => {
-                      const v = e.target.value as "" | "press_1" | "existing_consent";
-                      pushQuery({ consentMode: v || undefined });
-                    }}
-                  >
-                    {CONSENT_MODE_OPTIONS.map((opt) => (
-                      <option key={opt.id || "all"} value={opt.id}>{opt.label}</option>
-                    ))}
-                  </select>
+                  <p className="text-[12px] text-muted-foreground">No additional filters.</p>
                 </div>
               ) : null}
             </div>
@@ -560,22 +539,6 @@ export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewP
                   onChange={(e) => pushQuery({ trigger: e.target.value || undefined })}
                 >
                   {TRIGGER_OPTIONS.map((opt) => (
-                    <option key={opt.id || "all"} value={opt.id}>{opt.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="mctb-mc-sheet-field">
-                <label htmlFor="mctb-missed-consent-m">Consent mode</label>
-                <select
-                  id="mctb-missed-consent-m"
-                  className="mctb-mc-select w-full"
-                  value={query.consentMode ?? ""}
-                  onChange={(e) => {
-                    const v = e.target.value as "" | "press_1" | "existing_consent";
-                    pushQuery({ consentMode: v || undefined });
-                  }}
-                >
-                  {CONSENT_MODE_OPTIONS.map((opt) => (
                     <option key={opt.id || "all"} value={opt.id}>{opt.label}</option>
                   ))}
                 </select>

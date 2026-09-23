@@ -8,6 +8,8 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY,
+  MCTB_LAUNCH_HIDE_LR_AI_BOOK_UI,
+  MCTB_LAUNCH_HIDE_LR_TEXT_TO_PAY_UI,
   MCTB_LAUNCH_TRY_IT_ENABLED,
 } from "../src/lib/mctb/launch-flags";
 import { getRecoveryGoalDefinition, MCTB_RECOVERY_GOALS } from "../src/lib/mctb/recovery-goals";
@@ -27,6 +29,28 @@ assert.equal(shouldShowTryItNav("trial"), false);
 assert.equal(shouldShowTryItNav("trial", { isPlatformAdmin: true }), true);
 
 assert.equal(MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY, true);
+assert.equal(MCTB_LAUNCH_HIDE_LR_TEXT_TO_PAY_UI, true);
+assert.equal(MCTB_LAUNCH_HIDE_LR_AI_BOOK_UI, true);
+
+const vaHandling = fs.readFileSync(
+  path.join(process.cwd(), "src/components/mctb/voice-agent/call-handling-mode-switch.tsx"),
+  "utf8",
+);
+assert.ok(vaHandling.includes("CallHandlingDashboardCard"));
+assert.ok(!vaHandling.includes("/api/mctb/inbound-handling"));
+
+const lrPage = fs.readFileSync(
+  path.join(process.cwd(), "src/components/mctb/lead-recovery/ai-lead-recovery-page.tsx"),
+  "utf8",
+);
+assert.ok(lrPage.includes("MCTB_LAUNCH_HIDE_LR_TEXT_TO_PAY_UI"));
+assert.ok(!lrPage.includes('<PolicyCard title="Payments"'));
+
+const missedList = fs.readFileSync(
+  path.join(process.cwd(), "src/components/mctb/missed-calls-view.tsx"),
+  "utf8",
+);
+assert.ok(!missedList.includes("Consent mode"));
 
 const recipientBase = {
   id: "r1",

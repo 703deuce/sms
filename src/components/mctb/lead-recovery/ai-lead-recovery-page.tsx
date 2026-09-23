@@ -6,6 +6,10 @@ import {
   workspaceUsesBookingProvider,
   workspaceUsesTextToPay,
 } from "@/lib/mctb/lead-recovery/capabilities";
+import {
+  MCTB_LAUNCH_HIDE_LR_AI_BOOK_UI,
+  MCTB_LAUNCH_HIDE_LR_TEXT_TO_PAY_UI,
+} from "@/lib/mctb/launch-flags";
 import { LEAD_RECOVERY_SCENARIO_DEFS } from "@/lib/mctb/lead-recovery/scenarios";
 import type {
   IntentPolicyShape,
@@ -76,23 +80,55 @@ export function AiLeadRecoveryPage() {
 
   const dirty = useMemo(() => JSON.stringify(config) !== JSON.stringify(draft), [config, draft]);
 
+  const launchScenarioDefs = useMemo(
+    () =>
+      LEAD_RECOVERY_SCENARIO_DEFS.filter((d) => {
+        if (MCTB_LAUNCH_HIDE_LR_TEXT_TO_PAY_UI && d.key === "payments") return false;
+        return true;
+      }),
+    [],
+  );
+
   const enabledCount = useMemo(() => {
     if (!draft) return 0;
-    return LEAD_RECOVERY_SCENARIO_DEFS.filter((d) => draft.enabledScenarios[d.key]).length;
-  }, [draft]);
+    return launchScenarioDefs.filter((d) => draft.enabledScenarios[d.key]).length;
+  }, [draft, launchScenarioDefs]);
 
   const save = async () => {
     if (!draft) return;
     setSaving(true);
     setError(null);
+    const enabledScenarios = { ...draft.enabledScenarios };
+    if (MCTB_LAUNCH_HIDE_LR_TEXT_TO_PAY_UI) {
+      enabledScenarios.payments = false;
+    }
+    const intentPolicies = { ...draft.intentPolicies };
+    if (MCTB_LAUNCH_HIDE_LR_AI_BOOK_UI) {
+      const booking = intentPolicies.BOOKING_REQUEST;
+      if (booking?.mode === "AI_BOOK" || booking?.actions?.includes("AI_BOOK")) {
+        intentPolicies.BOOKING_REQUEST = {
+          ...booking,
+          mode: "SEND_BOOKING_LINK",
+          actions: ["SEND_BOOKING_LINK", "CUSTOMER_MESSAGE"],
+          enabled: booking.enabled ?? true,
+        };
+      }
+      const emergency = intentPolicies.EMERGENCY_OR_URGENT;
+      if (emergency?.actions?.includes("AI_BOOK")) {
+        intentPolicies.EMERGENCY_OR_URGENT = {
+          ...emergency,
+          actions: emergency.actions.filter((a) => a !== "AI_BOOK"),
+        };
+      }
+    }
     const res = await fetch("/api/mctb/lead-recovery/config", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         enabled: draft.enabled,
         globalMode: draft.globalMode,
-        enabledScenarios: draft.enabledScenarios,
-        intentPolicies: draft.intentPolicies,
+        enabledScenarios,
+        intentPolicies,
         fallbackPolicy: draft.fallbackPolicy,
         globalBehavior: draft.globalBehavior,
         paymentPolicy: draft.paymentPolicy,
@@ -159,7 +195,7 @@ export function AiLeadRecoveryPage() {
             <div>
               <h1 className="lr-title">AI Lead Recovery</h1>
               <p className="lr-subtitle">
-                Turn on capabilities (booking, emergencies, payments, and more). Intent detection stays separate
+                Turn on capabilities (booking links, emergencies, FAQs, and more). Intent detection stays separate
                 from your saved handling policy for each enabled scenario.
               </p>
             </div>
@@ -205,7 +241,7 @@ export function AiLeadRecoveryPage() {
               <h2 className="lr-section-title">What should Transovo handle?</h2>
               <p className="lr-section-desc">Turn on only the situations you want AI Lead Recovery to manage.</p>
               <div className="lr-cap-grid">
-                {LEAD_RECOVERY_SCENARIO_DEFS.map((def) => {
+                {launchScenarioDefs.map((def) => {
                   const on = Boolean(draft.enabledScenarios[def.key]);
                   const st = draft.scenarioHealth?.[def.key] || health?.scenarioHealth?.[def.key];
                   return (
@@ -254,16 +290,6 @@ export function AiLeadRecoveryPage() {
               </PolicyCard>
             )}
 
-            {draft.enabledScenarios.payments && (
-              <PolicyCard title="Payments" status={health?.scenarioHealth?.payments}>
-                <PaymentsEditor
-                  draft={draft}
-                  setDraft={setDraft}
-                  updatePolicy={updatePolicy}
-                />
-              </PolicyCard>
-            )}
-
             {draft.enabledScenarios.service_area && (
               <PolicyCard title="Service-area questions" status={health?.scenarioHealth?.service_area}>
                 <ServiceAreaEditor draft={draft} setDraft={setDraft} />
@@ -296,7 +322,7 @@ export function AiLeadRecoveryPage() {
             <div className="lr-card">
               <h3 className="lr-card-title">Policy health</h3>
               <ul className="lr-health-list">
-                {LEAD_RECOVERY_SCENARIO_DEFS.filter((d) => draft.enabledScenarios[d.key]).map((def) => {
+                {launchScenarioDefs.filter((d) => draft.enabledScenarios[d.key]).map((def) => {
                   const st = health?.scenarioHealth?.[def.key];
                   return (
                     <li key={def.key}>
@@ -309,8 +335,12 @@ export function AiLeadRecoveryPage() {
             </div>
             <LeadRecoveryProviderPanel
               showBookingProvider={workspaceUsesBookingProvider(draft)}
-              showBookingTargets={workspaceUsesAiBookTarget(draft)}
-              showPaymentsProvider={workspaceUsesTextToPay(draft)}
+              showBookingTargets={
+                !MCTB_LAUNCH_HIDE_LR_AI_BOOK_UI && workspaceUsesAiBookTarget(draft)
+              }
+              showPaymentsProvider={
+                !MCTB_LAUNCH_HIDE_LR_TEXT_TO_PAY_UI && workspaceUsesTextToPay(draft)
+              }
               onBookingSaved={() => void load()}
             />
             <div className="lr-card lr-card--locked">
@@ -359,8 +389,12 @@ function BookingModeEditor({
   updatePolicy: (intent: string, patch: Partial<IntentPolicyShape>) => void;
 }) {
   const pol = draft.intentPolicies.BOOKING_REQUEST;
-  const mode = pol?.mode || (pol?.actions?.includes("AI_BOOK") ? "AI_BOOK" : "SEND_BOOKING_LINK");
+  const rawMode =
+    pol?.mode || (pol?.actions?.includes("AI_BOOK") ? "AI_BOOK" : "SEND_BOOKING_LINK");
+  const mode =
+    MCTB_LAUNCH_HIDE_LR_AI_BOOK_UI && rawMode === "AI_BOOK" ? "SEND_BOOKING_LINK" : rawMode;
   const setMode = (m: string) => {
+    if (MCTB_LAUNCH_HIDE_LR_AI_BOOK_UI && m === "AI_BOOK") return;
     const actions =
       m === "AI_BOOK"
         ? ["AI_BOOK"]
@@ -377,7 +411,9 @@ function BookingModeEditor({
     <div className="lr-radio-group">
       {[
         ["SEND_BOOKING_LINK", "Send booking link"],
-        ["AI_BOOK", "AI checks availability and books"],
+        ...(MCTB_LAUNCH_HIDE_LR_AI_BOOK_UI
+          ? []
+          : [["AI_BOOK", "AI checks availability and books"] as [string, string]]),
         ["NOTIFY_BUSINESS", "Notify me and let me handle it"],
         ["COLLECT_ONLY", "Collect request only"],
         ["DO_NOTHING", "Do nothing"],
@@ -392,12 +428,12 @@ function BookingModeEditor({
           <Link href={MCTB_ROUTES.setupLinks}>Manage booking links</Link> in Setup.
         </p>
       )}
-      {mode === "AI_BOOK" && (
+      {!MCTB_LAUNCH_HIDE_LR_AI_BOOK_UI && mode === "AI_BOOK" ? (
         <p className="lr-hint">
           Connect calendar in <Link href="/integrations?provider=microsoft">Integrations</Link> and choose
           the booking target in Connected services (right column).
         </p>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -425,7 +461,9 @@ function EmergencyEditor({
           ["ROUTE_TO_ON_CALL", "Route to on-call"],
           ["CREATE_CALLBACK_REQUEST", "Callback request"],
           ["SEND_BOOKING_LINK", "Send booking link"],
-          ["AI_BOOK", "AI book emergency slot"],
+          ...(MCTB_LAUNCH_HIDE_LR_AI_BOOK_UI
+            ? []
+            : [["AI_BOOK", "AI book emergency slot"] as [string, string]]),
         ].map(([a, label]) => (
           <label key={a} className="lr-check">
             <input type="checkbox" checked={pol.actions?.includes(a as never)} onChange={() => toggleAction(a)} />
