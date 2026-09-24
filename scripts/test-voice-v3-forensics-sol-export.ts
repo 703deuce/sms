@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import {
   VOICE_V3_ASTRA_MODEL,
+  VOICE_V3_ASTRA_MODEL_DEFAULT,
   VOICE_V3_ASTRA_REASONING_EFFORT,
 } from "../src/lib/voice-v3/intake/delegation-config";
 import {
@@ -19,7 +20,10 @@ import {
 import { speechTimestampToSegmentMs } from "../src/lib/voice-v3/telemetry/forensics-persist";
 
 function main() {
-  assert.equal(VOICE_V3_ASTRA_MODEL, "gpt-5.6-sol");
+  assert.equal(VOICE_V3_ASTRA_MODEL_DEFAULT, "gpt-5.6-sol");
+  if (!process.env.VOICE_V3_ASTRA_MODEL?.trim()) {
+    assert.equal(VOICE_V3_ASTRA_MODEL, "gpt-5.6-sol");
+  }
   assert.equal(VOICE_V3_ASTRA_REASONING_EFFORT, "none");
 
   assert.equal(speechTimestampToSegmentMs(5.1, null), 5100);

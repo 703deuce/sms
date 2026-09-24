@@ -6,6 +6,7 @@ import { buildVoiceV3Prompts, resolveVoiceV3DefaultPromptInput } from "@/lib/voi
 import {
   VOICE_V3_ASTRA_MODEL,
   VOICE_V3_ASTRA_REASONING_EFFORT,
+  logVoiceV3AstraModelOnce,
 } from "@/lib/voice-v3/intake/delegation-config";
 import {
   VOICE_TOOL_CATALOG,
@@ -221,6 +222,7 @@ export async function resolveVoiceV3LiveKitSession(
 
   const liveVoiceId = agentConfig.telephony?.liveVoiceId?.trim() || "marin";
 
+  logVoiceV3AstraModelOnce();
   appendVoiceV3ForensicEvent(liveSessionId, "VOICE_V3_SESSION_BOOTSTRAP_START", {
     room_name: payload.roomName,
     dialed_e164: dialed,

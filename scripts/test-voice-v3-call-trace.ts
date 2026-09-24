@@ -3,7 +3,10 @@
  */
 import assert from "node:assert/strict";
 import { shouldSendInitialGreeting } from "../src/lib/voice-v3/greeting";
-import { VOICE_V3_ASTRA_MODEL } from "../src/lib/voice-v3/intake/delegation-config";
+import {
+  VOICE_V3_ASTRA_MODEL,
+  VOICE_V3_ASTRA_MODEL_DEFAULT,
+} from "../src/lib/voice-v3/intake/delegation-config";
 import { VoiceV3CallTrace } from "../src/lib/voice-v3/telemetry/call-trace";
 import { buildVoiceNumberProvisioningConfig } from "../src/lib/voice-v3/provisioning/config";
 
@@ -14,7 +17,10 @@ function main() {
   });
   assert.equal(cfg.liveModel, "gpt-live-1");
   assert.equal(cfg.backendModel, "gpt-6-astra");
-  assert.equal(VOICE_V3_ASTRA_MODEL, "gpt-5.6-sol");
+  assert.equal(VOICE_V3_ASTRA_MODEL_DEFAULT, "gpt-5.6-sol");
+  if (!process.env.VOICE_V3_ASTRA_MODEL?.trim()) {
+    assert.equal(VOICE_V3_ASTRA_MODEL, "gpt-5.6-sol");
+  }
   assert.equal(cfg.openaiWebhookEvent, "live.transport.incoming");
 
   assert.equal(shouldSendInitialGreeting("live_sess_1"), true);

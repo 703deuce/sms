@@ -10,10 +10,28 @@ import { resolveVoiceV3IntakeTransport } from "./intake-transport";
 import { buildVoiceV3AstraFunctionTools } from "../tools/build-openai-tools";
 import { voiceV3DelegationParallelToolCallsEnabled } from "../tools/concurrency-policy";
 
-export const VOICE_V3_ASTRA_MODEL = "gpt-5.6-sol";
+/** Default GPT-Live delegated Responses backend (rollback target). */
+export const VOICE_V3_ASTRA_MODEL_DEFAULT = "gpt-5.6-sol";
 
-/** Sol test: none (Astra minimum was low). LiveKit responses_options + sideband delegation. */
-export const VOICE_V3_ASTRA_REASONING_EFFORT = "none" as const;
+/**
+ * Delegated backend for tool/reasoning (`delegation.responses.model` / LiveKit `responses_options.model`).
+ * Override for tests: `VOICE_V3_ASTRA_MODEL=gpt-6-luna` (see OpenAI Live delegation guide).
+ */
+export function resolveVoiceV3AstraModel(): string {
+  const fromEnv = process.env.VOICE_V3_ASTRA_MODEL?.trim();
+  return fromEnv || VOICE_V3_ASTRA_MODEL_DEFAULT;
+}
+
+export const VOICE_V3_ASTRA_MODEL = resolveVoiceV3AstraModel();
+
+/** Sol/Luna: none is typical for low-latency delegation. Override: `VOICE_V3_ASTRA_REASONING_EFFORT`. */
+export function resolveVoiceV3AstraReasoningEffort(): "none" | "low" | "medium" | "high" {
+  const raw = process.env.VOICE_V3_ASTRA_REASONING_EFFORT?.trim().toLowerCase();
+  if (raw === "low" || raw === "medium" || raw === "high" || raw === "none") return raw;
+  return "none";
+}
+
+export const VOICE_V3_ASTRA_REASONING_EFFORT = resolveVoiceV3AstraReasoningEffort();
 
 /**
  * Live `sessions.accept` delegation config (PSTN/SIP).
@@ -89,9 +107,23 @@ export function assertLiveDelegationAcceptPayloadCompatible(
 }
 
 /** Log + validate accept delegation slice (no network). */
+let astraModelLogged = false;
+
+/** Log once per process so production confirms delegated backend after env override. */
+export function logVoiceV3AstraModelOnce(): void {
+  if (astraModelLogged) return;
+  astraModelLogged = true;
+  console.log("VOICE_V3_ASTRA_MODEL_RESOLVED", {
+    model: VOICE_V3_ASTRA_MODEL,
+    reasoning_effort: VOICE_V3_ASTRA_REASONING_EFFORT,
+    source: process.env.VOICE_V3_ASTRA_MODEL?.trim() ? "env" : "default",
+  });
+}
+
 export function validateAndLogLiveAcceptDelegationPayload(
   responses: ResponsesDelegationConfig,
 ): void {
+  logVoiceV3AstraModelOnce();
   assertLiveDelegationAcceptPayloadCompatible(responses);
   const transport = resolveVoiceV3IntakeTransport();
   const toolNames = (responses.tools ?? [])
