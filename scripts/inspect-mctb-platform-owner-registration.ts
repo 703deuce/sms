@@ -1,74 +1,98 @@
 /**
- * Read-only: platform-owner MessagingRegistration readiness for MCTB platform sender.
- * Run: NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/inspect-mctb-platform-owner-registration.ts
+ * Read-only: Model B platform sender readiness (parent Twilio TFN + adopted PhoneNumber).
+ * Run: MCTB_PLATFORM_OWNER_WORKSPACE_ID=ws_... npx tsx scripts/inspect-mctb-platform-owner-registration.ts
  */
 import { getPrisma } from "@/lib/db";
-import {
-  requireMctbPlatformOwnerWorkspaceId,
-  resolveMctbPlatformOwnerWorkspaceId,
-} from "@/lib/mctb/platform-owner-workspace";
-import { isMessagingSendAuthorized } from "@/lib/messaging/status";
-import { getRegistrationByWorkspace } from "@/lib/messaging/store";
-import { listTwilioOwnedNumbers } from "@/lib/numbers/twilio-number-import";
+import { resolveCanonicalMctbPlatformSender } from "@/lib/mctb/messaging/platform-sender-config";
+import { requireMctbPlatformOwnerWorkspaceId } from "@/lib/mctb/platform-owner-workspace";
+import { isPhoneAuthorizedForOutboundSms } from "@/lib/mctb/messaging/outbound-sms-route";
+import { isPlatformMctbSenderPhoneRecord } from "@/lib/messaging/compliance/phone-number-class";
+import { assertLiveTwilioConfigured, getTwilioParentCredentials } from "@/lib/messaging/twilio-config";
+import { getLiveParentClient } from "@/lib/messaging/twilio-client";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+import { getRegistrationByWorkspace } from "@/lib/messaging/store";
 
 const PLATFORM_E164 = process.env.MCTB_PLATFORM_SENDER_E164?.trim() || "+18885046264";
 
+function maskSid(sid: string | null | undefined): string | null {
+  if (!sid) return null;
+  return sid.length < 8 ? "***" : `${sid.slice(0, 2)}…${sid.slice(-4)}`;
+}
+
 async function main() {
-  const workspaceId = process.env.REQUIRE_EXPLICIT_PLATFORM_OWNER === "1"
-    ? requireMctbPlatformOwnerWorkspaceId()
-    : resolveMctbPlatformOwnerWorkspaceId();
-  const prisma = getPrisma();
-  const reg = await getRegistrationByWorkspace(workspaceId);
+  const ownerWorkspaceId = requireMctbPlatformOwnerWorkspaceId();
   const target = normalizeE164(PLATFORM_E164);
+  const prisma = getPrisma();
+  const reg = await getRegistrationByWorkspace(ownerWorkspaceId);
 
-  let twilioOwnership: {
-    found: boolean;
-    accountSid?: string;
-    source?: string;
-    sid?: string;
-  } = { found: false };
-
+  let parentTfn: Record<string, unknown> = { configured: false };
   try {
-    const owned = await listTwilioOwnedNumbers(workspaceId);
-    const hit = owned.find((n) => n.e164 === target);
-    if (hit) {
-      twilioOwnership = {
-        found: true,
-        accountSid: hit.accountSid,
-        source: hit.source,
-        sid: hit.sid,
-      };
-    }
+    assertLiveTwilioConfigured();
+    const { accountSid: parentAccountSid } = getTwilioParentCredentials();
+    const client = getLiveParentClient();
+    const listed = await client.incomingPhoneNumbers.list({ phoneNumber: target, limit: 5 });
+    const row = listed.find((n) => normalizeE164(n.phoneNumber) === target);
+    parentTfn = {
+      configured: true,
+      parentAccountSidMasked: maskSid(parentAccountSid || null),
+      incomingFound: Boolean(row),
+      phoneNumberSidMasked: row ? maskSid(row.sid) : null,
+      ownedByParent:
+        row && parentAccountSid ? row.accountSid === parentAccountSid : null,
+      smsCapability: row?.capabilities?.sms ?? null,
+    };
   } catch (err) {
-    twilioOwnership = {
-      found: false,
-      source: err instanceof Error ? err.message.slice(0, 120) : "twilio_list_failed",
+    parentTfn = {
+      configured: false,
+      error: err instanceof Error ? err.message.slice(0, 160) : "twilio_read_failed",
     };
   }
 
-  const subaccountSidPresent = Boolean(reg?.subaccountSid?.trim());
-  const messagingServiceSidPresent = Boolean(reg?.messagingServiceSid?.trim());
-  const sendAuthorized = isMessagingSendAuthorized(reg);
+  const canonical = await resolveCanonicalMctbPlatformSender();
+  const adopted = await prisma.phoneNumber.findFirst({
+    where: { e164: target, workspaceId: ownerWorkspaceId, status: "Active" },
+    select: { id: true, settingsJson: true, provider: true },
+  });
+  const adoptedRole = adopted
+    ? isPlatformMctbSenderPhoneRecord({ settingsJson: adopted.settingsJson })
+    : false;
+  const phoneAuth = adopted
+    ? await isPhoneAuthorizedForOutboundSms(adopted.id)
+    : { allowed: false, regime: null, provider: null };
 
   console.log(
     JSON.stringify(
       {
-        workspaceId,
-        registrationExists: Boolean(reg),
-        provider: reg?.messagingProvider || null,
-        overallStatus: reg?.overallStatus || null,
-        messagingEnabled: reg?.messagingEnabled ?? null,
-        subaccountSidPresent,
-        messagingServiceSidPresent,
-        isMessagingSendAuthorized: sendAuthorized,
-        sendViaRegistrationPrerequisitesSatisfied:
-          subaccountSidPresent && (sendAuthorized || twilioOwnership.found),
-        platformE164: target,
-        twilioNumberListing: twilioOwnership,
-        regPhoneE164: reg?.phoneE164 || null,
-        note:
-          "If number is on parent account but subaccount cannot send, STOP before setup script.",
+        model: "B_parent_account_platform_sender",
+        ownerWorkspaceId,
+        ownerMessagingRegistration: {
+          exists: Boolean(reg),
+          provider: reg?.messagingProvider || null,
+          note:
+            "Telnyx or non-Twilio owner registration does NOT block Model B platform Twilio sends.",
+        },
+        parentTwilioTfn: parentTfn,
+        adoptedPhoneNumber: adopted
+          ? {
+              id: adopted.id,
+              provider: adopted.provider,
+              platform_mctb_sender: adoptedRole,
+              outboundSmsAuthorized: phoneAuth.allowed,
+            }
+          : null,
+        canonicalResolver: canonical
+          ? {
+              phoneNumberId: canonical.phoneNumberId,
+              e164: canonical.e164,
+              provider: canonical.provider,
+            }
+          : null,
+        modelBPlatformSendReady:
+          Boolean(parentTfn.incomingFound) &&
+          adoptedRole &&
+          phoneAuth.allowed &&
+          Boolean(canonical),
+        sendViaRegistrationSubaccountRequiredForPlatformSend: false,
       },
       null,
       2,
