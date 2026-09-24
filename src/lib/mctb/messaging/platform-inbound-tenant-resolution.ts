@@ -95,7 +95,7 @@ export async function loadPlatformMctbReplyContexts(input: {
   const byWorkspace = new Map<string, PlatformMctbReplyContext>();
 
   for (const conv of conversations) {
-    const outboundAt = conv.messages[0]?.createdAt;
+    const outboundAt = conv.messages?.[0]?.createdAt;
     if (!outboundAt || outboundAt < since) continue;
     const existing = byWorkspace.get(conv.workspaceId);
     if (!existing || outboundAt > existing.lastOutboundAt) {
