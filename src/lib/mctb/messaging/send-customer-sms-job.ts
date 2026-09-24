@@ -34,6 +34,18 @@ export async function executeMctbSendCustomerSmsJob(payload: Record<string, unkn
     throw new Error("mctb_no_outbound_sms_route");
   }
 
+  const { gateMctbPlatformOutboundSend, touchMctbPlatformAssignmentAfterOutbound } =
+    await import("@/lib/mctb/messaging/platform-outbound-gate");
+  const gate = await gateMctbPlatformOutboundSend({
+    workspaceId,
+    route,
+    consumerE164: toE164,
+    conversationId,
+  });
+  if (!gate.ok) {
+    throw new Error("PLATFORM_SENDER_PAIR_COLLISION");
+  }
+
   const sendResult = await sendQuickSms({
     workspaceId,
     to: toE164,
@@ -72,6 +84,14 @@ export async function executeMctbSendCustomerSmsJob(payload: Record<string, unkn
       })
       .catch(() => undefined);
   }
+
+  await touchMctbPlatformAssignmentAfterOutbound({
+    workspaceId,
+    route,
+    consumerE164: toE164,
+    conversationId,
+    claim: gate.claim,
+  }).catch(() => undefined);
 
   await logMctbInboundProcessingEvent({
     kind: "OUTBOUND_SENT",

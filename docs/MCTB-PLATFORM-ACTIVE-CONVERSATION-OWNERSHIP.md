@@ -1,7 +1,8 @@
 # MCTB Platform Sender — Active Conversation Ownership (Operational Model)
 
-**Status:** Approved direction — **2026-09-24**  
+**Status:** **Implemented** (application runtime) — **2026-09-24**  
 **Companion:** `docs/MCTB-PLATFORM-SENDER-ASSIGNMENT-DESIGN.md` (engineering schema)  
+**Implementation & deploy checklist:** `docs/MCTB-PLATFORM-ACTIVE-CONVERSATION-OWNERSHIP-IMPLEMENTATION.md`  
 **Current sender:** `+18885046264` (single verified platform TFN)
 
 ---

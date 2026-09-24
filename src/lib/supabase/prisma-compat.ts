@@ -308,6 +308,7 @@ const MODEL_TO_TABLE: Record<string, string> = {
   mctbUrgencyAssessment: "mctb_urgency_assessments",
   mctbHandoffEvent: "mctb_handoff_events",
   mctbNotificationDelivery: "mctb_notification_deliveries",
+  mctbPlatformSenderAssignment: "mctb_platform_sender_assignments",
   cfnaIngressProbe: "cfna_ingress_probes",
   agentConfigurationChange: "agent_configuration_changes",
   smartRoutingFlow: "smart_routing_flows",

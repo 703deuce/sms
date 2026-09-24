@@ -7,8 +7,11 @@ import {
 import { handlePlatformSenderComplianceInbound } from "@/lib/mctb/messaging/platform-inbound-boundary";
 import {
   logPlatformInboundResolution,
-  resolvePlatformMctbInboundReply,
 } from "@/lib/mctb/messaging/platform-inbound-tenant-resolution";
+import {
+  resolvePlatformMctbInboundReplyWithAssignment,
+  touchPlatformSenderAssignment,
+} from "@/lib/mctb/messaging/platform-sender-assignment";
 import { acceptMctbInboundSmsIngress } from "@/lib/mctb/messaging/inbound-sms-ingress";
 
 export async function handleMctbPlatformSenderInboundCore(input: {
@@ -57,7 +60,7 @@ export async function handleMctbPlatformSenderInboundCore(input: {
     return { resolution: "platform_opt_out" };
   }
 
-  const resolution = await resolvePlatformMctbInboundReply({
+  const resolution = await resolvePlatformMctbInboundReplyWithAssignment({
     platformSender,
     consumerE164: input.fromE164,
   });
@@ -68,6 +71,7 @@ export async function handleMctbPlatformSenderInboundCore(input: {
     status: resolution.status,
     fromE164: input.fromE164,
     toE164: platformSender.e164,
+    resolutionSource: resolution.resolutionSource,
     ...(resolution.status === "RESOLVED"
       ? { workspaceId: resolution.workspaceId }
       : resolution.status === "AMBIGUOUS"
@@ -92,6 +96,13 @@ export async function handleMctbPlatformSenderInboundCore(input: {
     providerMessageId: input.providerMessageId,
     mediaUrls: input.mediaUrls ?? null,
   });
+
+  await touchPlatformSenderAssignment({
+    workspaceId: resolution.workspaceId,
+    consumerE164: input.fromE164,
+    platformPhoneNumberId: platformSender.phoneNumberId,
+    conversationId: resolution.conversationId,
+  }).catch(() => undefined);
 
   return {
     resolution: "platform_reply_resolved",

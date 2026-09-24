@@ -268,6 +268,41 @@ export async function executeMissedCallTextSend(input: {
     source: route.source,
   };
 
+  const { gateMctbPlatformOutboundSend, touchMctbPlatformAssignmentAfterOutbound } =
+    await import("@/lib/mctb/messaging/platform-outbound-gate");
+  const platformGate = await gateMctbPlatformOutboundSend({
+    workspaceId: input.workspaceId,
+    route,
+    consumerE164: event.callerE164,
+    missedCallEventId: event.id,
+  });
+  if (!platformGate.ok) {
+    if (trialReservation?.reserved) {
+      await releaseTrialSmsSegmentReservation(input.workspaceId, trialReservation.segments).catch(
+        () => undefined,
+      );
+    }
+    await prisma.missedCallEvent.update({
+      where: { id: event.id },
+      data: {
+        status: "SUPPRESSED",
+        suppressionReason: "PLATFORM_SENDER_PAIR_COLLISION",
+        eligible: false,
+      },
+    });
+    await appendMctbTrace({
+      workspaceId: input.workspaceId,
+      traceId: input.traceId,
+      missedCallEventId: event.id,
+      kind: "sms.send.blocked",
+      detail: {
+        reason: "PLATFORM_SENDER_PAIR_COLLISION",
+        ownerWorkspaceId: platformGate.ownerWorkspaceId,
+      },
+    });
+    return { ok: false, reason: "PLATFORM_SENDER_PAIR_COLLISION" };
+  }
+
   await appendMctbTrace({
     workspaceId: input.workspaceId,
     traceId: input.traceId,
@@ -360,7 +395,7 @@ export async function executeMissedCallTextSend(input: {
       const { ensureMctbRecoveryConversation } = await import(
         "@/lib/mctb/messaging/recovery-conversation"
       );
-      await ensureMctbRecoveryConversation({
+      const conv = await ensureMctbRecoveryConversation({
         workspaceId: input.workspaceId,
         toE164: event.callerE164,
         fromE164: resolvedSender.e164,
@@ -368,6 +403,13 @@ export async function executeMissedCallTextSend(input: {
         providerMessageId: msgRow?.providerId,
         missedCallEventId: event.id,
         outboundSmsPhoneNumberId: route.phoneNumberId,
+      }).catch(() => ({ conversationId: null }));
+      await touchMctbPlatformAssignmentAfterOutbound({
+        workspaceId: input.workspaceId,
+        route,
+        consumerE164: event.callerE164,
+        conversationId: conv?.conversationId,
+        claim: platformGate.claim,
       }).catch(() => undefined);
     }
 

@@ -262,3 +262,19 @@ npx tsx scripts/test-mctb-platform-inbound-tenant-isolation.ts
 ---
 
 SAFE TO REPLY TO CURRENT 888 THREAD: **YES** (tenant resolves to ws_1; deploy D1 first; ws_1 isolation not proven; LR policy health may limit booking)
+
+---
+
+## Engineering pass — D1 / D2 (2026-09-24)
+
+| Item | Status | Detail |
+|------|--------|--------|
+| **D1** | **PASS** | `latestConversationOutboundAt()` + `conv.messages?.[0]` guard; `scripts/test-mctb-message-from-persistence.ts` |
+| **D2** | **PASS** | `resolvePersistedOutboundMessageFrom()` — `senderRoute.fromE164` before `preferredFrom`; `src/lib/sms/send-quick.ts` |
+| Assignment design | **YES** | `docs/MCTB-PLATFORM-SENDER-ASSIGNMENT-DESIGN.md` (design only, no pool) |
+
+**Post-deploy verification (new PLATFORM send only):** `Message.from` must equal `+18885046264`. Historical rows may still show `+15714073615`.
+
+**Scalable routing:** 14-day resolver remains **safety fallback**; primary future identity = `PlatformSenderAssignment` (consumer + platformPhoneNumberId → one workspace). See assignment design doc.
+
+**After deploy + new outbound:** re-run `scripts/audit-mctb-platform-inbound-production.ts`, then handset reply.

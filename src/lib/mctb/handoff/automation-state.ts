@@ -53,10 +53,23 @@ export async function updateAutomationState(
     data.followUpActorUserId = patch.followUpActorUserId;
   }
   if (patch.appointmentId !== undefined) data.appointmentId = patch.appointmentId;
-  return prisma.mctbConversationAutomationState.update({
+  const updated = await prisma.mctbConversationAutomationState.update({
     where: { conversationId },
     data,
   });
+
+  if (patch.state === "resolved" || patch.state === "appointment_booked") {
+    const { maybeReleasePlatformAssignmentForConversation } = await import(
+      "@/lib/mctb/messaging/platform-assignment-lifecycle"
+    );
+    await maybeReleasePlatformAssignmentForConversation({
+      workspaceId: updated.workspaceId,
+      conversationId,
+      releaseReason: patch.state === "resolved" ? "RESOLVED" : "HANDOFF_COMPLETE",
+    }).catch(() => undefined);
+  }
+
+  return updated;
 }
 
 export function isHumanActiveState(state: string | null | undefined): boolean {

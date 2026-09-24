@@ -32,7 +32,17 @@ async function sendMctbCustomerOutboundSms(input: {
   if (!route.fromE164) {
     throw new Error("mctb_no_outbound_sms_route");
   }
-  return sendQuickSms({
+  const { gateMctbPlatformOutboundSend, touchMctbPlatformAssignmentAfterOutbound } =
+    await import("@/lib/mctb/messaging/platform-outbound-gate");
+  const gate = await gateMctbPlatformOutboundSend({
+    workspaceId: input.workspaceId,
+    route,
+    consumerE164: input.toE164,
+  });
+  if (!gate.ok) {
+    throw new Error("PLATFORM_SENDER_PAIR_COLLISION");
+  }
+  const result = await sendQuickSms({
     workspaceId: input.workspaceId,
     to: input.toE164,
     body: input.body,
@@ -44,6 +54,13 @@ async function sendMctbCustomerOutboundSms(input: {
       phoneNumberId: route.phoneNumberId,
     },
   });
+  await touchMctbPlatformAssignmentAfterOutbound({
+    workspaceId: input.workspaceId,
+    route,
+    consumerE164: input.toE164,
+    claim: gate.claim,
+  }).catch(() => undefined);
+  return result;
 }
 
 /** Active missed-call-text-back thread (opener already sent to this caller). */
@@ -144,6 +161,28 @@ export type MctbCustomerSmsReplyResult =
 
 async function recordMctbInboundSmsOptOut(workspaceId: string, fromE164: string): Promise<void> {
   const prisma = getPrisma();
+  const config = await loadMissedCallTextConfig(workspaceId);
+  if (config.senderMode === "PLATFORM") {
+    const { maybeReleasePlatformAssignmentForConversation } = await import(
+      "@/lib/mctb/messaging/platform-assignment-lifecycle"
+    );
+    const conv = await prisma.conversation.findFirst({
+      where: {
+        workspaceId,
+        productSource: "MCTB",
+        contact: { phone: { in: mctbCallerE164Variants(fromE164) } },
+      },
+      orderBy: { updatedAt: "desc" },
+      select: { id: true },
+    });
+    if (conv) {
+      await maybeReleasePlatformAssignmentForConversation({
+        workspaceId,
+        conversationId: conv.id,
+        releaseReason: "OPT_OUT",
+      }).catch(() => undefined);
+    }
+  }
   await prisma.suppression.upsert({
     where: { suppressionKey: `${workspaceId}:p:${fromE164}` },
     create: {

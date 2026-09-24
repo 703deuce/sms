@@ -161,6 +161,11 @@ enum MctbSenderMode {
   PLATFORM
 }
 
+enum MctbPlatformSenderAssignmentState {
+  ACTIVE
+  RELEASED
+}
+
 /// Shared inbox product discriminator (MCTB vs Mass Texting vs manual).
 enum ConversationProductSource {
   MCTB
@@ -494,6 +499,7 @@ model Workspace {
   mctbLeadSnapshots                 MctbLeadSnapshot[]
   mctbUrgencyAssessments            MctbUrgencyAssessment[]
   mctbHandoffEvents                 MctbHandoffEvent[]
+  mctbPlatformSenderAssignments     MctbPlatformSenderAssignment[]
   mctbNotificationDeliveries        MctbNotificationDelivery[]
   faxAccount                        FaxAccount?
   owner                             User?                              @relation("WorkspaceOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
@@ -707,6 +713,7 @@ model PhoneNumber {
   assignments                PhoneNumberAssignment[]
   triggerDeployments         TriggerDeployment[]
   numberServiceSubscriptions NumberServiceSubscription[]
+  mctbPlatformSenderAssignments MctbPlatformSenderAssignment[]
 
   @@unique([workspaceId, e164])
   @@index([twilioSid])
@@ -1701,6 +1708,7 @@ model Conversation {
   contact           Contact                    @relation(fields: [contactId], references: [id], onDelete: Cascade)
   assignee          User?                      @relation("Assignee", fields: [assigneeId], references: [id])
   messages          ConversationMessage[]
+  platformSenderAssignments MctbPlatformSenderAssignment[]
 
   @@index([workspaceId, productSource, updatedAt])
   @@index([workspaceId, phoneNumberId, updatedAt])
@@ -4726,6 +4734,29 @@ model MissedCallTextConfig {
   workspace                    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@map("missed_call_text_configs")
+}
+
+/// Active ownership of (consumer + platform MCTB sender) for PLATFORM senderMode routing.
+model MctbPlatformSenderAssignment {
+  id                    String                            @id @default(cuid())
+  workspaceId           String
+  consumerE164          String
+  platformPhoneNumberId String
+  conversationId        String?
+  missedCallEventId     String?
+  state                 MctbPlatformSenderAssignmentState @default(ACTIVE)
+  releaseReason         String?
+  createdAt             DateTime                          @default(now())
+  lastUsedAt            DateTime                          @default(now())
+  releasedAt            DateTime?
+  expiresAt             DateTime?
+  workspace             Workspace                         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  platformPhoneNumber   PhoneNumber                       @relation(fields: [platformPhoneNumberId], references: [id], onDelete: Restrict)
+  conversation          Conversation?                     @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, consumerE164])
+  @@index([platformPhoneNumberId, consumerE164, state])
+  @@map("mctb_platform_sender_assignments")
 }
 
 model MctbRequestFormSubmission {

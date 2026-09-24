@@ -1,6 +1,6 @@
 # MCTB Platform Sender Assignment — Scalable Tenant Addressing Design
 
-**Status:** Design (not implemented) — **2026-09-24** (updated: active ownership model)  
+**Status:** **Implemented** — **2026-09-24** (active ownership model; single 888; no pool)  
 **Operational model:** `docs/MCTB-PLATFORM-ACTIVE-CONVERSATION-OWNERSHIP.md`  
 **Prerequisites:** `docs/MCTB-PLATFORM-INBOUND-TENANT-AND-AI-AUDIT.md`, Model B parent-Twilio PLATFORM send  
 **Current production:** One approved platform sender `+18885046264` (`platform_mctb_sender`)
@@ -46,7 +46,17 @@ Sticky per **conversation thread**: workspace A’s active assignment on S for c
 
 ---
 
-## 4. Proposed schema (follow Transovo conventions)
+## 4. Schema (as-built — 2026-09-24)
+
+See `docs/MCTB-PLATFORM-ACTIVE-CONVERSATION-OWNERSHIP-IMPLEMENTATION.md` for migration path, modules, and certification checklist.
+
+**State enum:** `ACTIVE` | `RELEASED` (not separate `expired` row state — idle uses `RELEASED` + `releaseReason: IDLE_TIMEOUT`).
+
+**Idle safety net:** 72h (`MCTB_PLATFORM_SENDER_ASSIGNMENT_IDLE_MS`), not the 14-day evidence window.
+
+---
+
+## 4a. Original proposed schema (reference)
 
 **New table (name TBD — e.g. `MctbPlatformSenderAssignment`):**
 
