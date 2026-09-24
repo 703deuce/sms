@@ -126,6 +126,7 @@ const MODEL_TO_TABLE: Record<string, string> = {
   voiceCall: "voice_calls",
   voiceCallLeg: "voice_call_legs",
   voiceCallEvent: "voice_call_events",
+  voiceCallerBlock: "voice_caller_blocks",
   voiceTransfer: "voice_transfers",
   voiceRecording: "voice_recordings",
   voiceTranscript: "voice_transcripts",

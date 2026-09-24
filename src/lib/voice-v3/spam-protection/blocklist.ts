@@ -10,6 +10,9 @@ export async function isCallerBlockedForWorkspace(input: {
   const normalized = normalizeE164(String(input.callerE164 || "").trim());
   if (!normalized) return false;
   const prisma = getPrisma();
+  if (!prisma.voiceCallerBlock?.findFirst) {
+    return false;
+  }
   const row = await prisma.voiceCallerBlock.findFirst({
     where: { workspaceId: input.workspaceId, callerE164: normalized },
     select: { id: true },
