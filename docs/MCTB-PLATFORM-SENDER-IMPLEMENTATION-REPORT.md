@@ -1,6 +1,7 @@
 # MCTB Platform Sender — Implementation Report
 
 **Branch:** `cursor/mctb-platform-sender-impl-2304`  
+**Commit:** `a7af2b87`  
 **Scope:** MCTB only. No AI Receptionist / Voice V3 runtime changes.  
 **Pre-implementation audit:** `docs/MCTB-PLATFORM-SENDER-PRE-IMPLEMENTATION-AUDIT.md` (approved on PR #494).
 
