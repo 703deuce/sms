@@ -20,9 +20,9 @@ import {
 import { speechTimestampToSegmentMs } from "../src/lib/voice-v3/telemetry/forensics-persist";
 
 function main() {
-  assert.equal(VOICE_V3_ASTRA_MODEL_DEFAULT, "gpt-6-sol");
+  assert.equal(VOICE_V3_ASTRA_MODEL_DEFAULT, "gpt-6-luna");
   if (!process.env.VOICE_V3_ASTRA_MODEL?.trim()) {
-    assert.equal(VOICE_V3_ASTRA_MODEL, "gpt-6-sol");
+    assert.equal(VOICE_V3_ASTRA_MODEL, "gpt-6-luna");
   }
   assert.equal(VOICE_V3_ASTRA_REASONING_EFFORT, "none");
 
