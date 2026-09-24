@@ -8,6 +8,7 @@ import {
   loadPlatformMctbReplyContexts,
   logPlatformInboundResolution,
 } from "@/lib/mctb/messaging/platform-inbound-tenant-resolution";
+import { recordPlatformMctbSenderOptOut } from "@/lib/mctb/messaging/platform-sender-suppression";
 
 const PLATFORM_HELP_MESSAGE =
   "Transovo: Reply STOP to opt out. Msg&data rates may apply. For help email support@transovo.com.";
@@ -66,6 +67,11 @@ export async function handlePlatformSenderComplianceInbound(input: {
     for (const workspaceId of workspaceIds) {
       await applyWorkspaceOptOut(workspaceId, from);
     }
+    await recordPlatformMctbSenderOptOut({
+      platformSender: input.platformSender,
+      consumerE164: from,
+      source: "mctb_platform_sender_inbound",
+    });
     logPlatformInboundResolution({
       event: "platform_opt_out",
       fromE164: from,

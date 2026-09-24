@@ -161,6 +161,7 @@ export async function resolvePlatformTelnyxSmsRoute(input: {
 
 async function resolvePlatformMctbSenderRoute(
   customerWorkspaceId: string,
+  consumerE164ForOptOutCheck?: string,
 ): Promise<MctbOutboundSmsRoute | null> {
   const platform = await resolveCanonicalMctbPlatformSender();
   if (!platform) {
@@ -172,6 +173,23 @@ async function resolvePlatformMctbSenderRoute(
       }),
     );
     return null;
+  }
+
+  if (consumerE164ForOptOutCheck) {
+    const { isPlatformMctbSenderOptedOut } = await import(
+      "@/lib/mctb/messaging/platform-sender-suppression"
+    );
+    if (await isPlatformMctbSenderOptedOut(platform, consumerE164ForOptOutCheck)) {
+      console.log(
+        JSON.stringify({
+          source: "mctb-platform-sender",
+          event: "platform_opt_out",
+          customerWorkspaceId,
+          consumerE164: consumerE164ForOptOutCheck,
+        }),
+      );
+      return null;
+    }
   }
 
   const auth = await isPhoneAuthorizedForOutboundSms(platform.phoneNumberId);
@@ -208,6 +226,8 @@ export async function resolveMctbOutboundSmsRoute(input: {
     MissedCallTextConfigRecord,
     "phoneNumberId" | "smsPhoneNumberId" | "senderMode"
   >;
+  /** Recipient E.164 — used for platform-sender-wide STOP checks in PLATFORM mode. */
+  recipientE164?: string;
   /** Onboarding demo — routes via platform 571, isolated from customer production. */
   demoMode?: boolean;
   /** Explicit certification run on platform 571 (same adapter path, not customer TFN). */
@@ -219,7 +239,7 @@ export async function resolveMctbOutboundSmsRoute(input: {
 
   const mode: MctbSenderMode = input.config.senderMode || "WORKSPACE";
   if (mode === "PLATFORM") {
-    return resolvePlatformMctbSenderRoute(input.workspaceId);
+    return resolvePlatformMctbSenderRoute(input.workspaceId, input.recipientE164);
   }
 
   const senderCandidates: MctbSmsSender[] = [];

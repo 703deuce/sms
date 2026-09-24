@@ -484,34 +484,30 @@ export async function sendViaRegistration(
     throw new Error("Messaging registration not found for this workspace.");
   }
 
-  if (!isMessagingSendAuthorized(reg)) {
-    const phoneId = options?.authorizedPhoneNumberId;
-    if (phoneId) {
-      const { isPhoneAuthorizedForOutboundSms } = await import(
-        "@/lib/mctb/messaging/outbound-sms-route"
-      );
-      const phoneAuth = await isPhoneAuthorizedForOutboundSms(phoneId);
-      if (!phoneAuth.allowed) {
-        throw new Error("Messaging is not ready for this workspace. Complete A2P registration first.");
-      }
-      const prisma = getPrisma();
-      const pn = await prisma.phoneNumber.findFirst({
-        where: { id: phoneId, workspaceId },
-        select: { e164: true, messagingService: true, provider: true },
-      });
-      if (!pn?.e164) {
-        throw new Error("Messaging is not ready for this workspace. Complete A2P registration first.");
-      }
+  const phoneId = options?.authorizedPhoneNumberId;
+  if (phoneId) {
+    const { isPhoneAuthorizedForOutboundSms } = await import(
+      "@/lib/mctb/messaging/outbound-sms-route"
+    );
+    const phoneAuth = await isPhoneAuthorizedForOutboundSms(phoneId);
+    const prisma = getPrisma();
+    const pn = await prisma.phoneNumber.findFirst({
+      where: { id: phoneId, workspaceId },
+      select: { e164: true, messagingService: true, provider: true },
+    });
+    if (phoneAuth.allowed && pn?.e164) {
       reg = {
         ...reg,
         phoneE164: fromOverride || pn.e164,
-        messagingProvider: pn.provider || reg.messagingProvider || "telnyx",
+        messagingProvider: pn.provider || reg.messagingProvider || "twilio",
         messagingProfileId: pn.messagingService || reg.messagingProfileId,
         messagingServiceSid: pn.messagingService || reg.messagingServiceSid,
       };
-    } else {
+    } else if (!isMessagingSendAuthorized(reg)) {
       throw new Error("Messaging is not ready for this workspace. Complete A2P registration first.");
     }
+  } else if (!isMessagingSendAuthorized(reg)) {
+    throw new Error("Messaging is not ready for this workspace. Complete A2P registration first.");
   }
 
   const provider = getMessagingProviderForRegistration(reg!);

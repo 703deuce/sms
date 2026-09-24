@@ -342,17 +342,35 @@ export const twilioAdapter = {
 
   async sendSmsViaMessagingService(
     reg: MessagingRegistration,
-    input: { to: string; body: string },
+    input: { to: string; body: string; from?: string; messagingServiceSid?: string | null },
   ) {
-    if (!reg.messagingServiceSid) throw new Error("Messaging Service SID required");
     const client = requireSubaccount(reg);
     const urls = getWebhookUrls();
+    const from = input.from?.trim();
+    const messagingServiceSid = input.messagingServiceSid || reg.messagingServiceSid;
+
+    if (from) {
+      const msg = await client.messages.create({
+        to: input.to,
+        body: input.body,
+        from,
+        statusCallback: urls.messageStatus,
+      });
+      return {
+        sid: msg.sid,
+        status: msg.status,
+        to: msg.to,
+        messagingServiceSid: messagingServiceSid || null,
+      };
+    }
+
+    if (!messagingServiceSid) throw new Error("Messaging Service SID or From E.164 required");
     const msg = await client.messages.create({
       to: input.to,
       body: input.body,
-      messagingServiceSid: reg.messagingServiceSid,
+      messagingServiceSid,
       statusCallback: urls.messageStatus,
     });
-    return { sid: msg.sid, status: msg.status, to: msg.to, messagingServiceSid: reg.messagingServiceSid };
+    return { sid: msg.sid, status: msg.status, to: msg.to, messagingServiceSid };
   },
 };

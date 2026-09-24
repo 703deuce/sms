@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
-import { decryptSecret } from "@/lib/messaging/crypto";
 import { processInboundMessage, resolveInboundContext } from "@/lib/messaging/inbound-process";
-import { getTwilioParentCredentials, isLiveMessagingAdapter } from "@/lib/messaging/twilio-config";
-import { validateTwilioSignature } from "@/lib/messaging/twilio-client";
+import { verifyTwilioSmsWebhookSignature } from "@/lib/messaging/twilio-sms-webhook-auth";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 
 async function parseTwilioForm(request: Request) {
@@ -19,28 +17,7 @@ async function verifySignature(
   params: Record<string, string>,
   registration: { subaccountAuthTokenEnc: string | null } | null | undefined,
 ) {
-  const signature = request.headers.get("x-twilio-signature") || "";
-  if (!signature) {
-    // Unsigned only allowed outside production AND when not live
-    if (process.env.NODE_ENV === "production") return false;
-    if (isLiveMessagingAdapter()) return false;
-    return true;
-  }
-
-  const tokens: string[] = [];
-  if (registration?.subaccountAuthTokenEnc) {
-    try {
-      tokens.push(decryptSecret(registration.subaccountAuthTokenEnc));
-    } catch {
-      // ignore decrypt errors
-    }
-  }
-  const parent = getTwilioParentCredentials().authToken;
-  if (parent) tokens.push(parent);
-
-  if (!tokens.length) return process.env.NODE_ENV !== "production";
-
-  return tokens.some((token) => validateTwilioSignature(token, signature, request.url, params));
+  return verifyTwilioSmsWebhookSignature(request, params, registration);
 }
 
 function escapeXml(value: string) {

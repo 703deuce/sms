@@ -36,6 +36,8 @@ export const twilioProvider: MessagingProvider = {
     const result = await twilioAdapter.sendSmsViaMessagingService(reg, {
       to: input.to,
       body: input.body,
+      from: input.from,
+      messagingServiceSid: input.messagingServiceSid || reg.messagingServiceSid,
     });
     return {
       providerMessageId: result.sid,

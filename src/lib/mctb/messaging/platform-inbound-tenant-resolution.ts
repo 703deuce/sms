@@ -2,7 +2,7 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
-import { INBOUND_OUTBOUND_PAIRING_WINDOW_MS } from "@/lib/messaging/inbound-workspace-routing-policy";
+import { MCTB_PLATFORM_REPLY_CONTEXT_WINDOW_MS } from "@/lib/mctb/messaging/platform-sender-suppression";
 import {
   mctbCallerE164Variants,
   normalizeMctbCallerE164,
@@ -46,7 +46,7 @@ export async function loadPlatformMctbReplyContexts(input: {
   const prisma = getPrisma();
   const consumer = normalizeMctbCallerE164(input.consumerE164);
   const variants = mctbCallerE164Variants(input.consumerE164);
-  const since = input.since ?? new Date(Date.now() - INBOUND_OUTBOUND_PAIRING_WINDOW_MS);
+  const since = input.since ?? new Date(Date.now() - MCTB_PLATFORM_REPLY_CONTEXT_WINDOW_MS);
   const platformFrom = input.platformSender.e164;
   let platformFromNorm = platformFrom;
   try {
@@ -95,8 +95,8 @@ export async function loadPlatformMctbReplyContexts(input: {
   const byWorkspace = new Map<string, PlatformMctbReplyContext>();
 
   for (const conv of conversations) {
-    const outboundAt = conv.messages[0]?.createdAt ?? conv.updatedAt;
-    if (outboundAt < since) continue;
+    const outboundAt = conv.messages[0]?.createdAt;
+    if (!outboundAt || outboundAt < since) continue;
     const existing = byWorkspace.get(conv.workspaceId);
     if (!existing || outboundAt > existing.lastOutboundAt) {
       byWorkspace.set(conv.workspaceId, {
@@ -149,7 +149,7 @@ export async function loadPlatformMctbReplyContexts(input: {
       outboundSenderId === input.platformSender.phoneNumberId ||
       outboundFrom === platformFrom ||
       outboundFrom === platformFromNorm;
-    if (!matchesPlatform && outboundSenderId && outboundFrom) continue;
+    if (!matchesPlatform) continue;
     if (!hit.smsSentAt) continue;
     const existing = byWorkspace.get(hit.workspaceId);
     if (!existing || hit.smsSentAt > existing.lastOutboundAt) {

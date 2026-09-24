@@ -154,6 +154,19 @@ export async function evaluateMissedCallTextEligibility(input: {
     }
   }
 
+  if (config.senderMode === "PLATFORM" && config.suppressOptedOutNumbers) {
+    const { resolveCanonicalMctbPlatformSender } = await import(
+      "@/lib/mctb/messaging/platform-sender-config"
+    );
+    const { isPlatformMctbSenderOptedOut } = await import(
+      "@/lib/mctb/messaging/platform-sender-suppression"
+    );
+    const platform = await resolveCanonicalMctbPlatformSender();
+    if (platform && (await isPlatformMctbSenderOptedOut(platform, caller))) {
+      return { eligible: false, reason: "OPTED_OUT", classification };
+    }
+  }
+
   const cooldownSince = new Date(Date.now() - config.cooldownMinutes * 60_000);
   const skipCooldown =
     input.eventMetadata?.testSms === true ||

@@ -8,6 +8,10 @@ import {
   type PlatformMctbReplyContext,
 } from "@/lib/mctb/messaging/platform-inbound-tenant-resolution";
 import {
+  MCTB_PLATFORM_REPLY_CONTEXT_WINDOW_MS,
+  platformMctbSenderSuppressionKey,
+} from "@/lib/mctb/messaging/platform-sender-suppression";
+import {
   isPlatformMctbSenderPhoneRecord,
   platformMctbSenderSettings,
 } from "@/lib/messaging/compliance/phone-number-class";
@@ -48,6 +52,36 @@ function ctx(workspaceId: string, at: string): PlatformMctbReplyContext {
   const resolution = resolvePlatformInboundReplyFromContexts([]);
   assert.equal(resolution.status, "UNMATCHED");
 }
+
+// Old A (outside window) + current B (inside window) — not ambiguous
+{
+  const now = Date.now();
+  const since = new Date(now - MCTB_PLATFORM_REPLY_CONTEXT_WINDOW_MS);
+  const contexts: PlatformMctbReplyContext[] = [
+    {
+      workspaceId: "ws_a",
+      conversationId: "c_a",
+      lastOutboundAt: new Date(since.getTime() - 86_400_000),
+    },
+    {
+      workspaceId: "ws_b",
+      conversationId: "c_b",
+      lastOutboundAt: new Date(now - 60_000),
+    },
+  ];
+  const eligible = contexts.filter((c) => c.lastOutboundAt >= since);
+  const resolution = resolvePlatformInboundReplyFromContexts(eligible);
+  assert.equal(resolution.status, "RESOLVED");
+  if (resolution.status === "RESOLVED") {
+    assert.equal(resolution.workspaceId, "ws_b");
+  }
+}
+
+// Platform sender-wide STOP key is stable and global
+assert.match(
+  platformMctbSenderSuppressionKey("pn_platform", "+17035550000"),
+  /^mctb_platform_sender:pn_platform:p:\+17035550000$/,
+);
 
 // Platform phone role marker
 assert.equal(
