@@ -217,6 +217,6 @@ No Voice V3 / LiveKit / GPT-Live changes in this workstream.
 
 ---
 
-## Full certification doc (longer)
+## Certification status (canonical)
 
-See also: `docs/MCTB-PLATFORM-SENDER-PRODUCTION-CERTIFICATION.md` (may be partially stale vs this report; prefer this file for Model B + `faa5decf` timeline).
+**Use `docs/MCTB-PLATFORM-SENDER-PRODUCTION-CERTIFICATION.md`** for live certification PASS/FAIL/NOT TESTED. This file is a point-in-time Model B snapshot only.
