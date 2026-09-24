@@ -393,25 +393,25 @@ SAFE FOR SECOND REAL CUSTOMER: NO
 
 ---
 
-## Certification pass (2026-09-24) — two-workspace proof
+## Certification — LOCKED (2026-09-24)
 
-**Report:** `docs/TRANSOVO-MULTI-TENANT-ISOLATION-CERTIFICATION.md`  
-**Runner:** `npx tsx scripts/test-transovo-multi-tenant-isolation-fixture.ts`
+**Report (authoritative):** `docs/TRANSOVO-MULTI-TENANT-ISOLATION-CERTIFICATION.md`  
+**Copy summary:** `docs/TRANSOVO-TENANT-ISO-CERTIFICATION-COPY.md`  
+**Runners:**
 
-| A→B READ | B→A READ | A→B WRITE | CALL HANDLING A/B | SAME CONSUMER | ANALYTICS | P0 |
-|----------|----------|-----------|-------------------|---------------|-----------|-----|
-| PASS | PASS | PASS | PASS (settings; no Telnyx) | PASS | PASS | 0 |
+```bash
+npx tsx scripts/test-transovo-multi-tenant-isolation-fixture.ts
+npx tsx scripts/test-telnyx-voice-tool-webhook-auth.ts
+```
 
-**VOICE TOOL TRUST:** DEFENSE-IN-DEPTH (trace only, no Voice V3 changes).  
-**PRODUCTION ws_1 FALLBACK:** WARN (8 `src/` paths).  
-**SAFE FOR SECOND REAL CUSTOMER:** still **NO** until P1 fallbacks + tool auth hardening + optional HTTP IDOR suite.
+| A→B READ | B→A READ | A→B WRITE | CALL HANDLING (local) | P0 | P1 | App cert |
+|----------|----------|-----------|------------------------|----|----|----------|
+| PASS | PASS | PASS | PASS (no Telnyx PATCH) | 0 | 0 | **YES** |
 
-**Next focused passes (after this audit):**
+**Remediation:** PR #503 (voice tool auth + `ws_1` removal). **Fixture suite:** PR #502.  
+**Production:** mandatory Telnyx shared-tool re-publish + live Voice smoke — see certification doc § “Mandatory production sequence”.  
+**Telnyx Call Handling provider mutation:** NOT TESTED (stub test later; does not invalidate app certification).
 
-1. Implement Phase 2–3 of `test-transovo-multi-tenant-isolation-fixture.ts` (A/B workspaces in CI/staging).  
-2. Call Handling A/B Telnyx mock test.  
-3. Voice tool webhook tenant binding review (P1-002).  
-4. Active `(consumer + 888)` ownership implementation (operational doc).  
-5. Twilio TFN / ISV multi-business compliance reconciliation before scale.
+**Next engineering feature (after prod deploy checklist):** active `(consumer + 888)` conversation ownership — `docs/MCTB-PLATFORM-ACTIVE-CONVERSATION-OWNERSHIP.md`.
 
-**Change discipline:** No merge required for this audit document. **No production deploy** for audit-only commits.
+Do not reopen broad tenancy audits unless a new cross-tenant defect is demonstrated.
