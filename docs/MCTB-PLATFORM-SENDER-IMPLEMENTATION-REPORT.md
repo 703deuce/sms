@@ -193,3 +193,141 @@ git diff --stat master...HEAD
 ---
 
 **STOP:** No merge, no production Twilio/Telnyx changes, no live SMS certification in this pass.
+
+---
+
+## FINAL PRE-MERGE SOURCE REVIEW
+
+### Outbound proof
+
+**Runtime chain (PLATFORM):**
+
+`executeMissedCallTextSend` → `loadMissedCallTextConfig` (`senderMode`) → `resolveMctbOutboundSmsRoute({ recipientE164 })` → `resolveCanonicalMctbPlatformSender()` → `isPlatformMctbSenderOptedOut` (sender-wide STOP) → `isPhoneAuthorizedForOutboundSms(platformPhoneNumberId)` → `sendQuickSms({ workspaceId: customer, senderRoute: { sendWorkspaceId: platformOwner, fromE164, phoneNumberId }})` → `sendViaRegistration(sendWorkspaceId, …, fromOverride, { authorizedPhoneNumberId })` → `getMessagingProviderForRegistration(reg)` → `twilioProvider.sendMessage` → `twilioAdapter.sendSmsViaMessagingService`.
+
+**A. `sendViaRegistration` requirements**
+
+- Always loads `MessagingRegistration` for `sendWorkspaceId` (platform owner).
+- Send allowed when `isMessagingSendAuthorized(reg)` **or** `authorizedPhoneNumberId` passes `isPhoneAuthorizedForOutboundSms` and the `PhoneNumber` row exists on that same `sendWorkspaceId`.
+- Does **not** require customer workspace registration.
+- TFV gate is on the **platform `PhoneNumber`** via `isPhoneAuthorizedForOutboundSms` (`TWILIO_TOLL_FREE` + `messagingCompliance` / workspace TFV store).
+
+**B. Customer A / platform owner**
+
+- `Message.workspaceId` = customer A (`sendQuickSms` create).
+- Provider API auth = platform-owner `MessagingRegistration.subaccountSid` + token (`requireSubaccount` in Twilio adapter).
+
+**C. TFV**
+
+- `mctbRole=platform_mctb_sender` alone is **not** authorization; `isPhoneAuthorizedForOutboundSms` reads `settingsJson.messagingCompliance` / TFV store.
+
+**D. From override (defect fixed in review)**
+
+- Pre-review: `twilioProvider.sendMessage` ignored `input.from` and always used Messaging Service SID only.
+- **Fix:** adapter now sends with explicit `from` E.164 when provided (platform TFN path). `sendViaRegistration` merges `authorizedPhoneNumberId` even when owner reg is already “authorized.”
+
+**E. Persistence**
+
+- `Message` + `Conversation` remain customer `workspaceId`; `sendWorkspaceId` is only for provider credentials.
+
+**Production prerequisite:** Platform-owner workspace must have Twilio subaccount registration; platform `PhoneNumber` must be on that workspace with TFV-approved settings and correct Twilio SID.
+
+### Signature proof
+
+**Sequence (`POST /api/twilio/inbound`):**
+
+1. Parse body → normalize `From`
+2. `isActiveMctbPlatformSenderE164(To)` — if true, **skip** `resolveInboundContext` (no tenant routing)
+3. `verifyTwilioSmsWebhookSignature` **before** STOP/HELP/tenant/MCTB ingress
+4. Platform handler OR generic `processInboundMessage`
+
+**Validation URL:** `resolveTwilioWebhookRequestUrl(request)` → `APP_URL` + path (same helper as voice webhooks), not raw internal `request.url` when `APP_URL` is set.
+
+**Tokens:** subaccount token (when `AccountSid` / ctx registration known) + parent auth token.
+
+**Tests:** `scripts/test-twilio-sms-webhook-signature.ts` (valid / invalid / wrong URL).
+
+No unsigned bypass in production when live Twilio adapter is enabled.
+
+### STOP proof
+
+**On STOP to platform sender:**
+
+1. Workspace-level suppression for each workspace in **current** platform reply contexts (existing behavior).
+2. **Sender-wide** record: `Suppression` on platform-owner workspace with key `mctb_platform_sender:{phoneNumberId}:p:{consumer}` (`recordPlatformMctbSenderOptOut`).
+
+**Later PLATFORM send to new Workspace Z:**
+
+- `resolveMctbOutboundSmsRoute` + `evaluateMissedCallTextEligibility` check `isPlatformMctbSenderOptedOut` → route `null` / `OPTED_OUT` before provider call.
+- Workspace-specific verified senders (`senderMode=WORKSPACE`) use existing per-workspace suppression only.
+
+Twilio/carrier opt-out may also block at provider; application now fails closed on platform-sender suppression key.
+
+### Reply-context definition
+
+**Window:** `MCTB_PLATFORM_REPLY_CONTEXT_WINDOW_MS` = 14 days (same as inbound pairing constant).
+
+**Eligible workspace evidence (within window):**
+
+| Source | Predicates |
+|--------|------------|
+| `Conversation` | `productSource=MCTB`, contact phone match, `phoneNumberId` or `fromE164` = platform sender, **recent outbound** message from platform E.164 |
+| `Message` | customer `workspaceId`, `to=consumer`, `from=platform`, not failed/canceled |
+| `MissedCallEvent` | `smsSentAt` in window, caller match, metadata `outboundSmsPhoneNumberId` / `outboundSmsFromE164` matches platform |
+
+**Not eligible:** conversation `updatedAt` alone (inbound-only activity); legacy missed calls without platform outbound metadata.
+
+**Resolution:** count unique workspaces in eligible set → 1 = RESOLVED, >1 = AMBIGUOUS, 0 = UNMATCHED. **No recency tie-break.**
+
+### Platform-number adoption
+
+**Script (idempotent, not run in review):** `scripts/setup-mctb-platform-sender.ts`
+
+```bash
+PLATFORM_OWNER_WORKSPACE_ID=<transovo_owner_ws> \
+MCTB_PLATFORM_SENDER_E164=+18885046264 \
+npx tsx scripts/setup-mctb-platform-sender.ts
+```
+
+Uses existing `importTwilioNumbersIntoWorkspace` (no purchase), sets `platformMctbSenderSettings`, prints `MCTB_PLATFORM_SENDER_PHONE_NUMBER_ID`.
+
+### Delivery proof
+
+`POST /api/twilio/message-status` → `applyOutboundDeliveryStatus({ providerMessageId: MessageSid })` → `message.updateMany({ where: { providerId: sid }})` — **not** scoped to platform workspace; customer-owned `Message` rows update correctly.
+
+### Regression proof
+
+- **Twilio platform inbound:** early return after platform handler — no `processInboundMessage` double path.
+- **Twilio ordinary:** unchanged when `To` is not platform sender.
+- **Telnyx:** platform branch only when `isActiveMctbPlatformSenderE164(parsed.to)`; otherwise existing handler.
+- **Voice V3:** no files under `src/lib/voice-v3/**` in diff.
+
+### Tests (this review)
+
+```bash
+npx tsx scripts/test-mctb-platform-sender.ts
+npx tsx scripts/test-twilio-sms-webhook-signature.ts
+NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-mctb-sms-sender-strict.ts
+NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-mctb-durable-inbound-architecture.ts
+NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-mass-texting-boundary.ts
+```
+
+All passed in review environment.
+
+### Defects found and fixed (review pass)
+
+| Defect | Fix |
+|--------|-----|
+| Twilio send ignored explicit `From` | `twilio-provider` + `twilio-adapter` use `from` E.164 when set |
+| `authorizedPhoneNumberId` ignored when owner reg already authorized | `sendViaRegistration` always merges authorized phone when allowed |
+| Inbound signature used `request.url` only | `verifyTwilioSmsWebhookSignature` + `APP_URL` canonical URL |
+| STOP only on known workspaces | Platform-sender suppression key + outbound/eligibility checks |
+| Stale conversation `updatedAt` counted as reply context | Require recent **outbound** platform message |
+| Legacy missed-call rows without platform metadata counted | Require metadata match to platform sender |
+
+### Post-deployment commands (do not run until authorized)
+
+1. `npx prisma migrate deploy`
+2. `PLATFORM_OWNER_WORKSPACE_ID=… MCTB_PLATFORM_SENDER_E164=+18885046264 npx tsx scripts/setup-mctb-platform-sender.ts`
+3. Set `MCTB_PLATFORM_SENDER_PHONE_NUMBER_ID` from script output
+4. Configure Twilio TFN inbound → `https://<APP_URL>/api/twilio/inbound` POST; status → `/api/twilio/message-status`
+5. Enable `senderMode=PLATFORM` on **one** test workspace only; run PSTN/SMS certification matrix §P
