@@ -391,6 +391,21 @@ SAFE FOR SECOND REAL CUSTOMER: NO
 
 **Reason:** Isolation patterns are present in auth, schema, Call Handling ingress scoping, and platform inbound resolution, but **cross-tenant IDOR and two-workspace Call Handling regression are not yet proven in automated tests**. ws_1-only production certification cannot detect several failure classes.
 
+---
+
+## Certification pass (2026-09-24) — two-workspace proof
+
+**Report:** `docs/TRANSOVO-MULTI-TENANT-ISOLATION-CERTIFICATION.md`  
+**Runner:** `npx tsx scripts/test-transovo-multi-tenant-isolation-fixture.ts`
+
+| A→B READ | B→A READ | A→B WRITE | CALL HANDLING A/B | SAME CONSUMER | ANALYTICS | P0 |
+|----------|----------|-----------|-------------------|---------------|-----------|-----|
+| PASS | PASS | PASS | PASS (settings; no Telnyx) | PASS | PASS | 0 |
+
+**VOICE TOOL TRUST:** DEFENSE-IN-DEPTH (trace only, no Voice V3 changes).  
+**PRODUCTION ws_1 FALLBACK:** WARN (8 `src/` paths).  
+**SAFE FOR SECOND REAL CUSTOMER:** still **NO** until P1 fallbacks + tool auth hardening + optional HTTP IDOR suite.
+
 **Next focused passes (after this audit):**
 
 1. Implement Phase 2–3 of `test-transovo-multi-tenant-isolation-fixture.ts` (A/B workspaces in CI/staging).  
