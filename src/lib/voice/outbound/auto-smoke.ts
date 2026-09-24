@@ -19,7 +19,11 @@ export function scheduleOutboundAutoSmokeCall(): void {
     return;
   }
 
-  const workspaceId = process.env.WORKSPACE_ID?.trim() || "ws_1";
+  const workspaceId = process.env.WORKSPACE_ID?.trim();
+  if (!workspaceId) {
+    console.warn("[outbound-smoke] OUTBOUND_AUTO_SMOKE_CALL=1 but WORKSPACE_ID is missing");
+    return;
+  }
   const explicitAgentId = process.env.OUTBOUND_SMOKE_AGENT_ID?.trim() || undefined;
   const smokeVoice = process.env.OUTBOUND_AUTO_SMOKE_VOICE?.trim() || undefined;
 

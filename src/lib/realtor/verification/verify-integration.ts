@@ -25,7 +25,11 @@ export type IntegrationVerificationResult = {
 };
 
 function workspaceId(): string {
-  return process.env.WORKSPACE_ID?.trim() || "ws_1";
+  const id = process.env.WORKSPACE_ID?.trim();
+  if (!id) {
+    throw new Error("verifyRealtorIntegration requires WORKSPACE_ID");
+  }
+  return id;
 }
 
 /** Live DB integration — deploy paths, template resolution, knowledge seed. */

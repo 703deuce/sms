@@ -27,6 +27,8 @@ export type TenantIsoFixture = {
   voiceAgentAId: string;
   voiceAgentBId: string;
   voiceCallAId: string;
+  voiceCallBId: string;
+  voiceCallBCallControlId: string;
   knowledgeAId: string;
 };
 
@@ -231,6 +233,22 @@ export async function createTenantIsoFixture(): Promise<TenantIsoFixture> {
       status: "COMPLETED",
       fromE164: TENANT_ISO_CONSUMER_E164,
       toE164: phoneAE164,
+      telnyxCallControlId: `iso-cc-a-${token}`,
+      startedAt: now,
+    },
+  });
+
+  const voiceCallBCallControlId = `iso-cc-b-${token}`;
+  const voiceCallB = await prisma.voiceCall.create({
+    data: {
+      workspaceId: wsB.id,
+      agentId: agentB.id,
+      phoneNumberId: phoneB.id,
+      direction: "INBOUND",
+      status: "COMPLETED",
+      fromE164: TENANT_ISO_CONSUMER_E164,
+      toE164: phoneBE164,
+      telnyxCallControlId: voiceCallBCallControlId,
       startedAt: now,
     },
   });
@@ -269,6 +287,8 @@ export async function createTenantIsoFixture(): Promise<TenantIsoFixture> {
     voiceAgentAId: agentA.id,
     voiceAgentBId: agentB.id,
     voiceCallAId: voiceCallA.id,
+    voiceCallBId: voiceCallB.id,
+    voiceCallBCallControlId,
     knowledgeAId: kbA.id,
   };
 }

@@ -69,7 +69,10 @@ export async function POST(request: Request) {
 
     let workspaceId = "";
     if (request.headers.get(BOOTSTRAP_HEADER) === BOOTSTRAP_VALUE) {
-      workspaceId = String(body.workspaceId || "ws_1").trim();
+      workspaceId = String(body.workspaceId || "").trim();
+      if (!workspaceId) {
+        return jsonError("workspaceId required in body for smoke bootstrap", 400);
+      }
     } else {
       const auth = await requireSession();
       if ("error" in auth) return auth.error;

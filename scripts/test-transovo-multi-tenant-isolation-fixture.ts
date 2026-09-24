@@ -42,6 +42,9 @@ const report: Record<string, CertResult> = {
   analytics: "SKIP",
   backgroundJobs: "WARN",
   voiceToolTrust: "WARN",
+  voiceToolUnauthenticated: "SKIP",
+  voiceToolAuthenticated: "SKIP",
+  voiceToolTenantBinding: "SKIP",
   productionWs1Fallback: "WARN",
   newWorkspaceCleanStart: "PASS",
 };
@@ -401,12 +404,66 @@ function voiceToolTrustTrace(): "NOT EXPLOITABLE" | "DEFENSE-IN-DEPTH" | "CONFIR
   const tools = readFileSync(join(ROOT, "src/app/api/telnyx/voice/tools/route.ts"), "utf8");
   assert.match(tools, /x-transovo-workspace-id/);
   assert.match(tools, /where: \{ id: agentId, workspaceId \}/);
-  // Public webhook surface without session; cross-tenant blocked when agentId ∉ workspaceId.
-  // Same-tenant agent invocation without Telnyx signature is defense-in-depth concern.
-  if (!tools.includes("signature") && !tools.includes("verify")) {
-    return "DEFENSE-IN-DEPTH";
-  }
+  assert.match(tools, /verifyTelnyxVoiceToolWebhookAuth/);
+  assert.match(tools, /assertToolWebhookCallTenantBinding/);
   return "NOT EXPLOITABLE";
+}
+
+async function runVoiceToolWebhookAuthChecks(fx: TenantIsoFixture): Promise<void> {
+  const { POST } = await import("../src/app/api/telnyx/voice/tools/route");
+  const secret = "tenant-iso-fixture-telnyx-tool-secret-key";
+  const prev = process.env.TRANSOVO_INTERNAL_API_KEY;
+  process.env.TRANSOVO_INTERNAL_API_KEY = secret;
+
+  const baseHeaders = {
+    "content-type": "application/json",
+    "x-transovo-workspace-id": fx.workspaceAId,
+    "x-transovo-agent-id": fx.voiceAgentAId,
+    "x-transovo-tool-type": "get_runtime_context",
+  };
+
+  try {
+    const unauth = await POST(
+      new Request("http://test.internal/api/telnyx/voice/tools", {
+        method: "POST",
+        headers: baseHeaders,
+        body: JSON.stringify({}),
+      }),
+    );
+    assert.equal(unauth.status, 401);
+    report.voiceToolUnauthenticated = "PASS";
+
+    const auth = await POST(
+      new Request("http://test.internal/api/telnyx/voice/tools", {
+        method: "POST",
+        headers: {
+          ...baseHeaders,
+          authorization: `Bearer ${secret}`,
+        },
+        body: JSON.stringify({}),
+      }),
+    );
+    assert.notEqual(auth.status, 401);
+    report.voiceToolAuthenticated = "PASS";
+
+    const mismatch = await POST(
+      new Request("http://test.internal/api/telnyx/voice/tools", {
+        method: "POST",
+        headers: {
+          ...baseHeaders,
+          authorization: `Bearer ${secret}`,
+          "x-telnyx-call-control-id": fx.voiceCallBCallControlId,
+        },
+        body: JSON.stringify({ call_control_id: fx.voiceCallBCallControlId }),
+      }),
+    );
+    assert.equal(mismatch.status, 403);
+    report.voiceToolTenantBinding = "PASS";
+    report.voiceToolTrust = "PASS";
+  } finally {
+    if (prev === undefined) delete process.env.TRANSOVO_INTERNAL_API_KEY;
+    else process.env.TRANSOVO_INTERNAL_API_KEY = prev;
+  }
 }
 
 function backgroundJobTrace(): CertResult {
@@ -442,6 +499,7 @@ async function main() {
   const fx = await createTenantIsoFixture();
   try {
     await runDbCertification(fx);
+    await runVoiceToolWebhookAuthChecks(fx);
   } finally {
     await deleteTenantIsoFixture(fx);
   }
@@ -464,9 +522,12 @@ function printReport(voiceVerdict: string) {
     report.contactSameConsumer === "PASS" &&
     report.aiLeadRecovery === "PASS" &&
     report.analytics === "PASS" &&
-    report.productionWs1Fallback !== "FAIL" &&
+    report.productionWs1Fallback === "PASS" &&
+    report.voiceToolUnauthenticated === "PASS" &&
+    report.voiceToolAuthenticated === "PASS" &&
+    report.voiceToolTenantBinding === "PASS" &&
     p0Confirmed === 0;
-  const safe = corePass && report.productionWs1Fallback === "PASS" ? "NO" : "NO";
+  const safe = corePass ? "YES" : "NO";
 
   console.log("\n--- TRANSOVO TENANT ISO CERTIFICATION ---");
   console.log("A→B READ TESTS:", report.aToBRead);
@@ -481,6 +542,11 @@ function printReport(voiceVerdict: string) {
   console.log("ANALYTICS:", report.analytics);
   console.log("BACKGROUND JOB PROPAGATION:", report.backgroundJobs);
   console.log("VOICE TOOL TRUST BOUNDARY:", voiceVerdict);
+  console.log("VOICE TOOL UNAUTHENTICATED REJECTED:", report.voiceToolUnauthenticated);
+  console.log("VOICE TOOL AUTHENTICATED ACCEPTED:", report.voiceToolAuthenticated);
+  console.log("VOICE TOOL TENANT BINDING:", report.voiceToolTenantBinding);
+  console.log("CALL HANDLING LOCAL A/B:", report.callHandlingAb);
+  console.log("TELNYX PROVIDER MUTATION ISOLATION: NOT TESTED");
   console.log("PRODUCTION ws_1 FALLBACK:", report.productionWs1Fallback);
   console.log("NEW WORKSPACE CLEAN START:", report.newWorkspaceCleanStart);
   console.log("P0 CONFIRMED:", p0Confirmed);

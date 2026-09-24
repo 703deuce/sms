@@ -74,7 +74,10 @@ export async function seedRealEstateFrontDeskKnowledge(
   input: SeedRealEstateFrontDeskKnowledgeInput = {},
 ): Promise<SeedRealEstateFrontDeskKnowledgeResult> {
   const prisma = getPrisma();
-  const workspaceId = input.workspaceId?.trim() || process.env.WORKSPACE_ID?.trim() || "ws_1";
+  const { requireExplicitWorkspaceId } = await import("@/lib/workspace/require-explicit-workspace-id");
+  const workspaceId = requireExplicitWorkspaceId(input.workspaceId, {
+    label: "seedRealEstateFrontDeskKnowledge",
+  });
   const agentId = await resolveAgentId(workspaceId, input.agentId);
   const ragText = fs.readFileSync(ragFixturePath(), "utf8");
 

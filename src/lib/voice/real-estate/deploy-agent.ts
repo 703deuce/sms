@@ -139,7 +139,10 @@ export async function ensureRealEstateFrontDeskAgent(
   input: EnsureRealEstateFrontDeskAgentInput = {},
 ): Promise<EnsureRealEstateFrontDeskAgentResult> {
   const prisma = getPrisma();
-  const workspaceId = input.workspaceId?.trim() || process.env.WORKSPACE_ID?.trim() || "ws_1";
+  const { requireExplicitWorkspaceId } = await import("@/lib/workspace/require-explicit-workspace-id");
+  const workspaceId = requireExplicitWorkspaceId(input.workspaceId, {
+    label: "ensureRealEstateFrontDeskAgent",
+  });
   const phoneE164 = resolvePhoneE164(input.phoneE164);
   const assignPhone = input.assignPhone !== false;
 
