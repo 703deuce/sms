@@ -8,14 +8,23 @@ import { listTelnyxOwnedNumbers } from "@/lib/voice/telnyx/number-import";
 import { isMctbTexmlIngressConnection } from "@/lib/mctb/texml-ingress/texml-route";
 import { workspaceNumberUsesTexmlDirect } from "@/lib/voice/telnyx/texml-direct-route";
 
-function is800TollFree(e164: string): boolean {
+function isNorthAmericaTollFree(e164: string): boolean {
   const digits = e164.replace(/\D/g, "");
-  return digits.length === 11 && digits.startsWith("1") && digits.slice(1, 4) === "800";
+  if (digits.length !== 11 || !digits.startsWith("1")) return false;
+  const npa = digits.slice(1, 4);
+  return /^(800|833|844|855|866|877|888)$/.test(npa);
+}
+
+/** Prefer literal 800; include 866 per operator (counts as toll-free for MCTB ingress). */
+function isPreferredTollFreeIngress(e164: string): boolean {
+  const digits = e164.replace(/\D/g, "");
+  const npa = digits.slice(1, 4);
+  return npa === "800" || npa === "866";
 }
 
 async function main() {
   const owned = await listTelnyxOwnedNumbers();
-  const eightHundreds = owned.filter((n) => is800TollFree(n.e164));
+  const eightHundreds = owned.filter((n) => isPreferredTollFreeIngress(n.e164));
   const prisma = getPrisma();
 
   const phoneRows = await prisma.phoneNumber.findMany({
@@ -71,6 +80,7 @@ async function main() {
     if (db && db.workspaceId !== "ws_1") {
       blockers.push(`phone_row_in_${db.workspaceId}`);
     }
+    // ws_1 row is OK for ws_1 ingress; block only if already another workspace's MCTB ingress
 
     rows.push({
       e164: n.e164,
@@ -93,7 +103,8 @@ async function main() {
     JSON.stringify(
       {
         totalTelnyxNumbers: owned.length,
-        total800Prefix: eightHundreds.length,
+        total800Or866Prefix: eightHundreds.length,
+        totalNorthAmericaTollFree: owned.filter((n) => isNorthAmericaTollFree(n.e164)).length,
         safeForWs1: safe,
         all800: rows,
       },

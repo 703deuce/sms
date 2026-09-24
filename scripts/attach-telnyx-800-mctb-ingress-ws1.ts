@@ -18,9 +18,11 @@ import { parseMctbPhoneRole } from "@/lib/messaging/compliance/phone-number-clas
 const WORKSPACE_ID = process.env.MCTB_TEST_WORKSPACE_ID?.trim() || "ws_1";
 const DRY_RUN = process.env.DRY_RUN === "1";
 
-function is800TollFree(e164: string): boolean {
+function isAllowedTollFreeIngress(e164: string): boolean {
   const digits = e164.replace(/\D/g, "");
-  return digits.length === 11 && digits.startsWith("1") && digits.slice(1, 4) === "800";
+  if (digits.length !== 11 || !digits.startsWith("1")) return false;
+  const npa = digits.slice(1, 4);
+  return npa === "800" || npa === "866";
 }
 
 async function pickSafe800(): Promise<string | null> {
@@ -44,8 +46,8 @@ async function main() {
   if (!e164) {
     e164 = await pickSafe800();
   }
-  if (!e164 || !is800TollFree(e164)) {
-    throw new Error("No safe existing Telnyx +1800 number available for ws_1 ingress");
+  if (!e164 || !isAllowedTollFreeIngress(e164)) {
+    throw new Error("No safe existing Telnyx 800/866 toll-free available for ws_1 ingress");
   }
 
   const owned = await listTelnyxOwnedNumbers();
@@ -105,15 +107,15 @@ async function main() {
     mctbRole: "customer_mctb",
   });
 
+  await prisma.missedCallTextConfig.updateMany({
+    where: { workspaceId: WORKSPACE_ID },
+    data: { phoneNumberId: phone.id },
+  });
+
   await setActiveCallHandler({
     workspaceId: WORKSPACE_ID,
     voiceIngressPhoneNumberId: phone.id,
     handler: "mctb",
-  });
-
-  await prisma.missedCallTextConfig.updateMany({
-    where: { workspaceId: WORKSPACE_ID },
-    data: { phoneNumberId: phone.id },
   });
 
   const afterCfg = await prisma.missedCallTextConfig.findFirst({
