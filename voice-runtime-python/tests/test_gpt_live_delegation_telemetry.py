@@ -47,7 +47,7 @@ def test_parse_server_response_created_preserves_resp_id() -> None:
             "delegation_id": "dlg_1",
             "event": {
                 "type": "response.created",
-                "response": {"id": "resp_abc123", "model": "gpt-5.6-sol"},
+                "response": {"id": "resp_abc123", "model": "gpt-6-sol"},
             },
         }
     )
@@ -55,7 +55,7 @@ def test_parse_server_response_created_preserves_resp_id() -> None:
     assert detail["inner_type"] == "response.created"
     assert detail["response_id"] == "resp_abc123"
     assert detail["delegation_id"] == "dlg_1"
-    assert detail["response_model"] == "gpt-5.6-sol"
+    assert detail["response_model"] == "gpt-6-sol"
 
 
 def test_parse_server_function_call_output_item_done() -> None:

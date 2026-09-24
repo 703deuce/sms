@@ -201,7 +201,7 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
         ctx.room.on("participant_disconnected", _on_participant_disconnected)
 
         responses_options: dict[str, Any] = {
-            "model": config.get("astraModel") or "gpt-5.6-sol",
+            "model": config.get("astraModel") or "gpt-6-sol",
             "instructions": config.get("astraInstructions") or "",
             "tool_choice": "auto",
             "parallel_tool_calls": bool(config.get("parallelToolCalls", False)),
