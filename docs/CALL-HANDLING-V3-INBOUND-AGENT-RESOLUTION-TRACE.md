@@ -68,6 +68,15 @@
 
 A surgical fix at the **orchestration boundary** (still without changing Voice V3 internals) would be to pass the intended `agentId` into the same mechanism `tryNotePstnWizardBindingFromToE164` already uses (`notePstnLegWizardContext`), e.g. from `parkedAiReceptionistAgentId` on the ingress phone — that wiring does **not** exist today.
 
+### Update (canonical agent policy — 2026-09-24)
+
+Implemented **`resolveCanonicalVoiceV3WorkspaceAgent`** (`src/lib/voice-v3/canonical-workspace-agent.ts`):
+
+- Env override: `VOICE_V3_CANONICAL_AGENT_ID`
+- Default cert DID: `VOICE_V3_CANONICAL_E164` (default `+15717491060`) → inbound AI on that number
+
+**All inbound orchestration** (Call Handling readiness, PSTN v3-basic bind, LiveKit `resolveAgentByCalledNumber`) now uses this single agent. Legacy frontdesk / “newest receptionist” selection is **not** used for routing. Ops script: `scripts/voice-v3-enforce-canonical-agent.ts`.
+
 ---
 
 ## Platform vs customer SMS (separate from PR #483)

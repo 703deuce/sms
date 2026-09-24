@@ -3,6 +3,7 @@ import "server-only";
 import { getPrisma } from "@/lib/db";
 import { loadVoiceAgentRuntimeConfig } from "@/lib/voice/load-agent-config";
 import { isAppointmentReceptionistAgent } from "./config/from-published-agent";
+import { resolveCanonicalVoiceV3WorkspaceAgent } from "./canonical-workspace-agent";
 import { decideExplicitCallHandlingPstnBind } from "./pstn-wizard-agent-selection";
 import { notePstnLegWizardContext } from "./telemetry/call-trace";
 
@@ -21,23 +22,16 @@ async function isValidPublishedAppointmentReceptionist(input: {
   return isAppointmentReceptionistAgent(cfg);
 }
 
-async function resolveLegacyPublishedReceptionistAgentId(workspaceId: string): Promise<string | null> {
-  const prisma = getPrisma();
-  const agents = await prisma.voiceAgent.findMany({
-    where: {
-      workspaceId,
-      publishedVersionId: { not: null },
-    },
-    orderBy: { updatedAt: "desc" },
-    take: 12,
-    select: { id: true },
+async function resolveCanonicalPublishedReceptionistAgentId(
+  workspaceId: string,
+): Promise<string | null> {
+  const canonical = await resolveCanonicalVoiceV3WorkspaceAgent(workspaceId);
+  if (!canonical?.published || canonical.status !== "ACTIVE") return null;
+  const valid = await isValidPublishedAppointmentReceptionist({
+    workspaceId,
+    agentId: canonical.agentId,
   });
-
-  for (const row of agents) {
-    const cfg = await loadVoiceAgentRuntimeConfig(workspaceId, row.id);
-    if (isAppointmentReceptionistAgent(cfg)) return row.id;
-  }
-  return null;
+  return valid ? canonical.agentId : null;
 }
 
 function bindPstnWizardContext(input: {
@@ -85,41 +79,30 @@ export async function tryNotePstnWizardBindingFromToE164(input: {
   });
   if (!phone?.workspaceId) return;
 
+  const canonicalAgentId = await resolveCanonicalPublishedReceptionistAgentId(
+    phone.workspaceId,
+  );
+  if (!canonicalAgentId) return;
+
   const explicitDecision = decideExplicitCallHandlingPstnBind(phone.settingsJson);
-  if (explicitDecision.useExplicit) {
-    const valid = await isValidPublishedAppointmentReceptionist({
-      workspaceId: phone.workspaceId,
-      agentId: explicitDecision.agentId,
-    });
-    if (valid) {
-      bindPstnWizardContext({
-        callControlId,
-        toE164,
-        workspaceId: phone.workspaceId,
-        agentId: explicitDecision.agentId,
-        fromE164: input.fromE164,
-        bindSource: "explicit_call_handling",
-      });
-      return;
-    }
-    console.error("VOICE_V3_PSTN_EXPLICIT_CALL_HANDLING_AGENT_INVALID", {
+  if (explicitDecision.useExplicit && explicitDecision.agentId !== canonicalAgentId) {
+    console.warn("VOICE_V3_PSTN_EXPLICIT_AGENT_CANONICAL_OVERRIDE", {
       callControlId,
       toE164,
       workspaceId: phone.workspaceId,
-      agentId: explicitDecision.agentId,
+      parkedAgentId: explicitDecision.agentId,
+      canonicalAgentId,
     });
-    return;
   }
-
-  const legacyAgentId = await resolveLegacyPublishedReceptionistAgentId(phone.workspaceId);
-  if (!legacyAgentId) return;
 
   bindPstnWizardContext({
     callControlId,
     toE164,
     workspaceId: phone.workspaceId,
-    agentId: legacyAgentId,
+    agentId: canonicalAgentId,
     fromE164: input.fromE164,
-    bindSource: "legacy_recency",
+    bindSource: explicitDecision.useExplicit
+      ? "explicit_call_handling"
+      : "canonical_workspace_agent",
   });
 }

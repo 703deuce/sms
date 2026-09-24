@@ -1,8 +1,6 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/db";
-import { parseVoiceAgentConfig } from "@/lib/voice/types";
-import { isAppointmentReceptionistAgent } from "@/lib/voice-v3/config/from-published-agent";
+import { resolveCanonicalVoiceV3WorkspaceAgent } from "@/lib/voice-v3/canonical-workspace-agent";
 
 export type ResolvedAiReceptionist = {
   agentId: string;
@@ -13,64 +11,31 @@ export type ResolvedAiReceptionist = {
 };
 
 /**
- * Resolve the AI Receptionist for Call Handling independently of voice ingress DID.
+ * Resolve the AI Receptionist for Call Handling — always the workspace canonical
+ * GPT-Live V3 agent (cert DID / VOICE_V3_CANONICAL_AGENT_ID), never legacy agents.
  */
 export async function resolveAiReceptionistForCallHandling(input: {
   workspaceId: string;
   preferredAgentId?: string | null;
 }): Promise<ResolvedAiReceptionist | null> {
-  const prisma = getPrisma();
+  const canonical = await resolveCanonicalVoiceV3WorkspaceAgent(input.workspaceId);
+  if (!canonical) return null;
 
-  if (input.preferredAgentId?.trim()) {
-    const agent = await prisma.voiceAgent.findFirst({
-      where: { id: input.preferredAgentId.trim(), workspaceId: input.workspaceId },
-      select: {
-        id: true,
-        status: true,
-        publishedVersionId: true,
-        phoneNumberId: true,
-        draftConfig: true,
-      },
-    });
-    if (agent) {
-      const config = parseVoiceAgentConfig(agent.draftConfig);
-      if (!isAppointmentReceptionistAgent(config)) return null;
-      return {
-        agentId: agent.id,
-        aiVoicePhoneNumberId: agent.phoneNumberId,
-        status: agent.status,
-        published: Boolean(agent.publishedVersionId),
-      };
-    }
-  }
-
-  const agents = await prisma.voiceAgent.findMany({
-    where: {
+  if (
+    input.preferredAgentId?.trim() &&
+    input.preferredAgentId.trim() !== canonical.agentId
+  ) {
+    console.warn("CALL_HANDLING_CANONICAL_AGENT_OVERRIDE", {
       workspaceId: input.workspaceId,
-      publishedVersionId: { not: null },
-      status: "ACTIVE",
-    },
-    orderBy: { updatedAt: "desc" },
-    take: 12,
-    select: {
-      id: true,
-      status: true,
-      publishedVersionId: true,
-      phoneNumberId: true,
-      draftConfig: true,
-    },
-  });
-
-  for (const agent of agents) {
-    const config = parseVoiceAgentConfig(agent.draftConfig);
-    if (!isAppointmentReceptionistAgent(config)) continue;
-    return {
-      agentId: agent.id,
-      aiVoicePhoneNumberId: agent.phoneNumberId,
-      status: agent.status,
-      published: Boolean(agent.publishedVersionId),
-    };
+      parkedAgentId: input.preferredAgentId.trim(),
+      canonicalAgentId: canonical.agentId,
+    });
   }
 
-  return null;
+  return {
+    agentId: canonical.agentId,
+    aiVoicePhoneNumberId: canonical.primaryPhoneNumberId,
+    status: canonical.status,
+    published: canonical.published,
+  };
 }

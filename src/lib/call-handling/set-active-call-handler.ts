@@ -176,8 +176,7 @@ export async function setActiveCallHandler(input: {
           workspaceId: input.workspaceId,
           preferredAgentId: block.parkedAiReceptionistAgentId,
         });
-        const parkedId =
-          block.parkedAiReceptionistAgentId || aiForPark?.agentId || null;
+        const parkedId = aiForPark?.agentId ?? null;
 
         await routePhoneToMctbCallHandlingIngress({
           workspaceId: input.workspaceId,

@@ -2,11 +2,7 @@ import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { readPhoneCapabilities } from "@/lib/numbers/phone-capabilities";
 import { resolveInboundAiAgent } from "@/lib/voice/agent-phone";
-import { findFrontDeskAgentForWorkspace } from "@/lib/voice/frontdesk/resolve-frontdesk-agent";
-import {
-  isFrontDeskRuntimeConfig,
-  loadFrontDeskRuntimeConfig,
-} from "@/lib/voice/frontdesk/pick-frontdesk-agent";
+import { resolveCanonicalVoiceV3WorkspaceAgent } from "@/lib/voice-v3/canonical-workspace-agent";
 import { getLiveKitSipClient } from "./livekit/client";
 import type { AgentRoutingResolution } from "./types";
 
@@ -135,17 +131,24 @@ export async function resolveAgentByCalledNumber(
   }> = [];
 
   for (const phone of phones) {
-    const agent = await resolveInboundAiAgent(phone.workspaceId, phone.id);
-    if (!agent) continue;
+    const canonical = await resolveCanonicalVoiceV3WorkspaceAgent(phone.workspaceId);
+    const inbound = canonical
+      ? {
+          id: canonical.agentId,
+          status: canonical.status,
+          name: canonical.agentName,
+        }
+      : await resolveInboundAiAgent(phone.workspaceId, phone.id);
+    if (!inbound) continue;
     candidates.push({
       phone,
       routing: {
         workspaceId: phone.workspaceId,
-        agentId: agent.id,
+        agentId: inbound.id,
         phoneNumberId: phone.id,
         e164: phone.e164,
-        agentStatus: agent.status,
-        agentName: agent.name,
+        agentStatus: inbound.status,
+        agentName: inbound.name,
       },
       score: scoreInboundPhoneCandidate(phone),
     });
@@ -157,49 +160,32 @@ export async function resolveAgentByCalledNumber(
   return candidates[0]!.routing;
 }
 
-async function applyInboundFrontDeskDefault(
+/** Never swap inbound calls to legacy frontdesk / recency agents — canonical V3 only. */
+async function applyCanonicalInboundAgent(
   routing: AgentRoutingResolution,
 ): Promise<AgentRoutingResolution> {
-  const prisma = getPrisma();
-  const routedAgent = await prisma.voiceAgent.findFirst({
-    where: { id: routing.agentId, workspaceId: routing.workspaceId, status: "ACTIVE" },
-    select: { id: true, draftConfig: true },
-  });
-  if (routedAgent) {
-    const runtimeConfig = await loadFrontDeskRuntimeConfig(
-      routing.workspaceId,
-      routedAgent.id,
-      routedAgent.draftConfig,
-    );
-    if (isFrontDeskRuntimeConfig(runtimeConfig)) {
-      return routing;
-    }
-  }
-
-  const frontdesk = await findFrontDeskAgentForWorkspace(routing.workspaceId, {
-    preferPhoneNumberId: routing.phoneNumberId,
-  });
-  if (!frontdesk || frontdesk.id === routing.agentId) return routing;
+  const canonical = await resolveCanonicalVoiceV3WorkspaceAgent(routing.workspaceId);
+  if (!canonical || canonical.agentId === routing.agentId) return routing;
 
   console.log(
     JSON.stringify({
       source: "transovo-agent-routing",
-      event: "inbound_frontdesk_default",
+      event: "inbound_canonical_agent_override",
       workspaceId: routing.workspaceId,
       previousAgentId: routing.agentId,
       previousAgentName: routing.agentName,
-      frontdeskAgentId: frontdesk.id,
-      frontdeskAgentName: frontdesk.name,
+      canonicalAgentId: canonical.agentId,
+      canonicalAgentName: canonical.agentName,
       toE164: routing.e164 || null,
     }),
   );
 
   return {
     ...routing,
-    agentId: frontdesk.id,
-    agentName: frontdesk.name,
-    agentStatus: frontdesk.status,
-    phoneNumberId: frontdesk.phoneNumberId || routing.phoneNumberId,
+    agentId: canonical.agentId,
+    agentName: canonical.agentName,
+    agentStatus: canonical.status,
+    phoneNumberId: canonical.primaryPhoneNumberId || routing.phoneNumberId,
   };
 }
 
@@ -211,7 +197,7 @@ export async function resolveAgentRoutingForCall(input: {
   // Called DID is authoritative — DB phone assignment wins over stale dispatch/room metadata.
   if (input.toE164?.trim()) {
     const byPhone = await resolveAgentByCalledNumber(input.toE164);
-    if (byPhone) return applyInboundFrontDeskDefault(byPhone);
+    if (byPhone) return applyCanonicalInboundAgent(byPhone);
   }
 
   if (input.workspaceId && input.agentId) {
@@ -235,7 +221,7 @@ export async function resolveAgentRoutingForCall(input: {
       });
       e164 = pn?.e164 || "";
     }
-    return applyInboundFrontDeskDefault({
+    return applyCanonicalInboundAgent({
       workspaceId: agent.workspaceId,
       agentId: agent.id,
       phoneNumberId: agent.phoneNumberId || "",
