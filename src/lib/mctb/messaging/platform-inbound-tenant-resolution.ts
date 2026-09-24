@@ -34,6 +34,13 @@ export type PlatformMctbReplyContext = {
   lastOutboundAt: Date;
 };
 
+/** Safe read when Prisma nested `messages` is missing or unloaded. */
+export function latestConversationOutboundAt(
+  messages: Array<{ createdAt: Date }> | null | undefined,
+): Date | undefined {
+  return messages?.[0]?.createdAt;
+}
+
 /**
  * Collect workspaces with an active MCTB recovery thread on the shared platform sender.
  * Recency is evidence for ranking only — never used alone to pick a tenant when count > 1.
@@ -95,7 +102,7 @@ export async function loadPlatformMctbReplyContexts(input: {
   const byWorkspace = new Map<string, PlatformMctbReplyContext>();
 
   for (const conv of conversations) {
-    const outboundAt = conv.messages[0]?.createdAt;
+    const outboundAt = latestConversationOutboundAt(conv.messages);
     if (!outboundAt || outboundAt < since) continue;
     const existing = byWorkspace.get(conv.workspaceId);
     if (!existing || outboundAt > existing.lastOutboundAt) {
