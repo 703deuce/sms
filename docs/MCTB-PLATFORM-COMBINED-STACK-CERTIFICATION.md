@@ -13,7 +13,7 @@
 | **TENANT CERTIFICATION COMMIT** | `1dcbf3ce84bb9cefeae44efc6355afdbea0a80df` (`cursor/transovo-tenant-iso-remediation-2304`) |
 | **ACTIVE OWNERSHIP COMMIT** | `8e64d453159bf6a852dc10628fa5231c08ca7567` (`cursor/mctb-platform-active-ownership-2304`, PR #504) |
 | **COMBINED DEPLOY CANDIDATE (pre-cert script commit)** | `06bcfd6166cdfd403860924888dccdaaed77cd98` |
-| **COMBINED DEPLOY SHA (after cert scripts)** | `c0bc7ae9aa07ac1bd3e450155dddc96496448e25` |
+| **COMBINED DEPLOY SHA (after cert scripts)** | `77c710516ca4a71102a2c7f9fa78d0b0abf1692d` |
 
 **Branch:** `cursor/mctb-combined-stack-cert-2304` = merge of tenant remediation + #504 (no unrelated cleanup).
 
@@ -86,7 +86,7 @@ Unauthenticated → 401; authenticated → accepted; tenant/agent/call mismatch 
 
 ```
 COMBINED DEPLOY SHA:
-c0bc7ae9aa07ac1bd3e450155dddc96496448e25
+77c71051aa07ac1bd3e450155dddc96496448e25
 
 MIGRATION REVIEW:
 PASS
