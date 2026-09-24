@@ -46,6 +46,7 @@ export function MobileNav({
   productFeatures = null,
   hasMctb = false,
   hasMassSms = false,
+  hasVoice = false,
   hasAiAfterHours = false,
   primaryVoiceAgentId = null,
 }: {
@@ -56,6 +57,7 @@ export function MobileNav({
   productFeatures?: WorkspaceFeatureSnapshot | null;
   hasMctb?: boolean;
   hasMassSms?: boolean;
+  hasVoice?: boolean;
   hasAiAfterHours?: boolean;
   primaryVoiceAgentId?: string | null;
 }) {
@@ -94,6 +96,8 @@ export function MobileNav({
     showTryIt,
     productFeatures,
     hasSms: hasMassSms,
+    hasMctb,
+    hasVoice,
   });
 
   const mobileIconSets: Record<string, typeof Home[]> = {

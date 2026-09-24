@@ -57,28 +57,31 @@ assert.ok(
   !shouldShowProductSwitcher({ hasMassSms: false, hasMctb: false, hasAiAfterHours: false }),
 );
 
-const mctbNav = buildMctbV1Nav();
-assert.equal(mctbNav.length, 12);
+const mctbNav = buildMctbV1Nav({ hasVoice: true, hasNumbers: true });
 const mctbLabels = mctbNav.map((i) => i.label);
 
 const mctbNavFromPath = resolveProductSidebarNav({
   pathname: "/mctb/missed-calls",
   multiProduct: false,
   productShell: "appointments",
+  hasMctb: true,
+  hasVoice: true,
+  hasNumbers: true,
 });
 assert.equal(mctbNavFromPath.map((i) => i.label).join(","), mctbLabels.join(","));
 assert.ok(mctbLabels.includes("Overview"));
 assert.ok(mctbLabels.includes("Missed Calls"));
-assert.ok(mctbLabels.includes("Conversations"));
+assert.ok(mctbLabels.includes("Inbox"));
+assert.ok(mctbLabels.includes("Calls"));
+assert.ok(mctbLabels.includes("AI Agent"));
 assert.ok(mctbLabels.includes("Voicemail"));
 assert.ok(mctbLabels.includes("Analytics"));
 assert.ok(mctbLabels.includes("Setup"));
-assert.ok(mctbLabels.includes("Calendar"));
-assert.ok(mctbLabels.includes("Payments"));
 assert.ok(mctbLabels.includes("Integrations"));
+assert.ok(mctbLabels.includes("Numbers"));
+assert.ok(mctbLabels.includes("Settings"));
 assert.ok(!mctbLabels.includes("Home"));
-assert.ok(!mctbLabels.includes("Numbers"));
-assert.ok(!mctbLabels.includes("Settings"));
+assert.ok(!mctbLabels.includes("Conversations"));
 assert.ok(!mctbLabels.includes("Campaigns"));
 
 const aiNav = buildAiAfterHoursNav({ primaryVoiceAgentId: "agent_1" });

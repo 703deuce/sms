@@ -1,30 +1,64 @@
 import {
   BarChart3,
+  BookOpen,
   CreditCard,
   Home,
   LayoutDashboard,
   MessageSquare,
+  PhoneCall,
   PhoneMissed,
   Plug,
   SlidersHorizontal,
-  Voicemail,
-  Sparkles,
   AudioLines,
+  Settings,
+  Sparkles,
+  Users,
+  Voicemail,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 
 export type MctbNavOptions = {
   inboxBadge?: number;
+  /** Workspace voice / AI receptionist entitlement — shows AI Receptionist nav group + Calls. */
+  hasVoice?: boolean;
+  hasNumbers?: boolean;
 };
 
 const MCTB_SECTION = "Missed Call Text Back";
+const AI_RECEPTIONIST_SECTION = "AI Receptionist";
+const SHARED_SECTION = "Shared";
 
-/** Canonical MCTB product-local navigation — grouped by product ownership. */
+/** Canonical MCTB product-local navigation — AI Receptionist + MCTB groups + shared links. */
 export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
   const badge = options.inboxBadge ?? 0;
+  const items: NavItem[] = [];
 
-  return [
+  if (options.hasVoice) {
+    items.push(
+      {
+        label: "Overview",
+        href: "/voice/overview",
+        icon: LayoutDashboard,
+        sectionLabel: AI_RECEPTIONIST_SECTION,
+        matchExact: true,
+      },
+      { label: "Calls", href: "/voice/calls", icon: PhoneCall },
+      {
+        label: "AI Agent",
+        href: MCTB_ROUTES.voiceAgent,
+        icon: AudioLines,
+      },
+      { label: "Knowledge", href: "/voice/knowledge", icon: BookOpen },
+      {
+        label: "Call Rules",
+        href: "/voice/inbound-routing",
+        icon: SlidersHorizontal,
+      },
+    );
+  }
+
+  items.push(
     {
       label: "Overview",
       href: MCTB_ROUTES.home,
@@ -38,7 +72,7 @@ export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
       icon: PhoneMissed,
     },
     {
-      label: "Conversations",
+      label: "Inbox",
       href: MCTB_ROUTES.conversations,
       icon: MessageSquare,
       badge: badge > 0 ? badge : undefined,
@@ -54,11 +88,6 @@ export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
       icon: Sparkles,
     },
     {
-      label: "Voice Agent",
-      href: MCTB_ROUTES.voiceAgent,
-      icon: AudioLines,
-    },
-    {
       label: "Analytics",
       href: MCTB_ROUTES.analytics,
       icon: BarChart3,
@@ -69,22 +98,41 @@ export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
       icon: SlidersHorizontal,
     },
     {
-      label: "Payments",
-      href: MCTB_ROUTES.payments,
-      icon: CreditCard,
-    },
-    {
       label: "Integrations",
       href: MCTB_ROUTES.integrations,
       icon: Plug,
+      sectionLabel: SHARED_SECTION,
     },
-  ];
+  );
+
+  if (options.hasNumbers) {
+    items.push({
+      label: "Numbers",
+      href: "/voice/numbers",
+      icon: Users,
+    });
+  }
+
+  items.push(
+    {
+      label: "Billing",
+      href: "/settings/billing",
+      icon: CreditCard,
+    },
+    {
+      label: "Settings",
+      href: "/settings",
+      icon: Settings,
+    },
+  );
+
+  return items;
 }
 
-/** Bottom nav for mobile — primary MCTB destinations (compact; full IA via sidebar “More”). */
+/** Bottom nav for mobile — primary MCTB destinations (compact; full IA via sidebar). */
 export function buildMctbV1MobileNav(options: MctbNavOptions = {}): NavItem[] {
   const badge = options.inboxBadge ?? 0;
-  return [
+  const items: NavItem[] = [
     { label: "Home", href: MCTB_ROUTES.home, icon: Home },
     { label: "Missed", href: MCTB_ROUTES.missedCalls, icon: PhoneMissed },
     {
@@ -93,11 +141,27 @@ export function buildMctbV1MobileNav(options: MctbNavOptions = {}): NavItem[] {
       icon: MessageSquare,
       badge: badge > 0 ? badge : undefined,
     },
-    { label: "Setup", href: MCTB_ROUTES.setup, icon: SlidersHorizontal },
   ];
+
+  if (options.hasVoice) {
+    items.push({ label: "Calls", href: "/voice/calls", icon: PhoneCall });
+  }
+
+  items.push({ label: "Setup", href: MCTB_ROUTES.setup, icon: SlidersHorizontal });
+
+  return items;
 }
 
 export function getMctbPageTitle(pathname: string): string {
+  if (pathname === "/voice/overview" || pathname.startsWith("/voice/overview/")) {
+    return "Overview";
+  }
+  if (pathname.startsWith("/voice/calls")) return "Calls";
+  if (pathname.startsWith("/voice/knowledge")) return "Knowledge";
+  if (pathname.startsWith("/voice/inbound-routing")) return "Call Rules";
+  if (pathname.startsWith("/voice/numbers")) return "Numbers";
+  if (pathname.startsWith("/settings/billing")) return "Billing";
+
   if (pathname === MCTB_ROUTES.home) return "Missed Call Text Back";
   if (pathname === MCTB_ROUTES.missedCalls) return "";
   if (pathname.startsWith(MCTB_ROUTES.missedCalls)) return "Missed Calls";
@@ -107,13 +171,13 @@ export function getMctbPageTitle(pathname: string): string {
   if (pathname.startsWith(MCTB_ROUTES.analytics) || pathname.startsWith("/analytics/mctb")) {
     return "Analytics";
   }
-  if (pathname.startsWith(MCTB_ROUTES.voiceAgent)) return "Voice Agent";
+  if (pathname.startsWith(MCTB_ROUTES.voiceAgent)) return "AI Agent";
   if (pathname.startsWith(MCTB_ROUTES.setup)) return "Setup";
   if (pathname.startsWith(MCTB_ROUTES.numbers)) return "Numbers";
   if (pathname.startsWith(MCTB_ROUTES.complianceConsent)) return "Consent Log";
   if (pathname.startsWith("/onboarding/mctb")) return "Setup";
   if (pathname.startsWith("/conversations") || pathname.startsWith("/mctb/conversations")) {
-    return "Conversations";
+    return "Inbox";
   }
   if (pathname.startsWith(MCTB_ROUTES.payments)) return "Payments";
   if (pathname === MCTB_ROUTES.integrations || pathname.startsWith("/integrations")) return "Integrations";
@@ -134,5 +198,6 @@ export function getMctbPageTitle(pathname: string): string {
 export function isMctbSharedWorkspacePath(pathname: string): boolean {
   if (pathname === "/payments" || pathname.startsWith("/payments/")) return true;
   if (pathname === "/integrations" || pathname.startsWith("/integrations/")) return true;
+  if (pathname === "/settings/billing" || pathname.startsWith("/settings/billing/")) return true;
   return false;
 }

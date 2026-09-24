@@ -1,4 +1,5 @@
 import { isMctbSharedWorkspacePath } from "@/lib/products/mctb-nav";
+import { isMctbBundledAiReceptionistPath } from "@/lib/products/mctb-bundled-receptionist-paths";
 import { isMctbNeutralShellPath } from "@/lib/products/mctb-shell";
 import type { ProductShell } from "@/lib/products/product-shell";
 import { resolveProductShellFromPath } from "@/lib/products/product-shell";
@@ -31,6 +32,7 @@ export function isMctbUniversalChromeActive(
   if (isMctbNeutralShellPath(pathname)) return true;
   if (productShell === "mctb" && isMctbSharedWorkspacePath(pathname)) return true;
   if (isMctbV1Primary() && options?.hasMctb !== false) {
+    if (isMctbBundledAiReceptionistPath(pathname)) return true;
     const pathShell = resolveProductShellFromPath(pathname);
     if (pathShell === "mass_sms" || pathShell === "ai_after_hours") return false;
     if (pathShell === "appointments") return false;
@@ -45,6 +47,9 @@ export function resolveMctbLaunchProductShell(
   productShell: ProductShell,
   hasMctb: boolean,
 ): ProductShell | null {
+  if (isMctbV1Primary() && hasMctb && isMctbBundledAiReceptionistPath(pathname)) {
+    return "mctb";
+  }
   const pathShell = resolveProductShellFromPath(pathname);
   if (pathShell) return pathShell;
   if (!hasMctb) return null;

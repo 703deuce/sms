@@ -381,6 +381,8 @@ export function Sidebar({
       productFeatures,
       hasSms,
       hasMctb,
+      hasVoice,
+      hasNumbers,
       smartRoutingFlowId: smartRoutingFlowIdFromPath(pathname),
     });
   }, [
@@ -395,6 +397,8 @@ export function Sidebar({
     hasSms,
     hasMassSms,
     hasMctb,
+    hasVoice,
+    hasNumbers,
     hasAiAfterHours,
     multiProduct,
     productShell,

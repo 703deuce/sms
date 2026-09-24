@@ -43,8 +43,9 @@ const setupApi = readFileSync("src/app/api/mctb/setup/route.ts", "utf8");
 assert.ok(setupApi.includes("loadMctbOnboardingState"));
 assert.ok(setupApi.includes("saveMctbOnboardingState"));
 
-// 5 — Numbers not in MCTB nav; legacy redirect
-const navHrefs = collectNavHrefs(buildMctbV1Nav());
+// 5 — Numbers in shared nav when entitled; legacy /mctb/numbers redirect
+const navHrefs = collectNavHrefs(buildMctbV1Nav({ hasNumbers: true }));
+assert.ok(navHrefs.includes("/voice/numbers"));
 assert.ok(!navHrefs.includes("/mctb/numbers"));
 const numbersPage = readFileSync("src/app/(app)/mctb/numbers/page.tsx", "utf8");
 assert.ok(numbersPage.includes("redirect"));

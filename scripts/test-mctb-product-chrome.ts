@@ -11,7 +11,7 @@ assert.equal(isMctbProductChromePath("/payments", "appointments", { hasMctb: tru
 assert.equal(isMctbProductChromePath("/payments", "appointments", { hasMctb: false }), false);
 assert.equal(isMctbProductChromePath("/integrations", "mctb"), true);
 
-const kimi = mapProductionNavToKimi(buildMctbV1Nav());
+const kimi = mapProductionNavToKimi(buildMctbV1Nav({ hasVoice: false }));
 const nested: Array<[string, string]> = [
   ["/mctb/missed-calls/abc", "/mctb/missed-calls"],
   ["/mctb/conversations", "/mctb/conversations"],
@@ -19,8 +19,8 @@ const nested: Array<[string, string]> = [
   ["/mctb/analytics/overview", "/mctb/analytics"],
   ["/mctb/setup/phone", "/mctb/setup"],
   ["/mctb/setup/recovery", "/mctb/setup"],
-  ["/payments/requests", "/payments"],
   ["/integrations", "/integrations"],
+  ["/settings/billing", "/settings/billing"],
 ];
 
 for (const [pathname, expectedHref] of nested) {

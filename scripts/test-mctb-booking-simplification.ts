@@ -16,14 +16,16 @@ import { validateBookingLinkUrl, bookingLinkHostname } from "../src/lib/mctb/boo
 import { findBestNavMatch } from "../src/lib/nav-active";
 import { mapProductionNavToKimi } from "../src/components/kimi/sidebar/map-nav";
 
-const navLabels = buildMctbV1Nav().map((i) => i.label);
-const navHrefs = collectNavHrefs(buildMctbV1Nav());
+const navLabels = buildMctbV1Nav({ hasVoice: false }).map((i) => i.label);
+const navHrefs = collectNavHrefs(buildMctbV1Nav({ hasVoice: false }));
 
 // —— Removals (38–41) ——
 for (const label of ["Calendar", "Appointments", "Booking Setup", "Reminders"]) {
   assert.ok(!navLabels.includes(label), `nav must not include ${label}`);
 }
-assert.equal(navLabels.length, 8);
+assert.ok(navLabels.includes("Inbox"));
+assert.ok(!navLabels.includes("Conversations"));
+assert.equal(navLabels.filter((l) => l === "Overview").length, 1);
 
 // —— Redirect map ——
 assert.equal(resolveRemovedMctbSchedulingRedirect("/mctb/calendar"), MCTB_ROUTES.conversations);
@@ -85,9 +87,9 @@ assert.ok(existsSync("docs/MCTB-AI-BOOKING-ARCHITECTURE.md"));
 assert.ok(existsSync("src/lib/mctb/ai-booking/service.ts"));
 
 // —— Nav match: removed paths should not highlight calendar nav ——
-const kimi = mapProductionNavToKimi(buildMctbV1Nav());
+const kimi = mapProductionNavToKimi(buildMctbV1Nav({ hasVoice: false }));
 assert.equal(findBestNavMatch(kimi, "/mctb/setup/recovery")?.href, "/mctb/setup");
-assert.equal(findBestNavMatch(kimi, "/payments")?.href, "/payments");
+assert.equal(findBestNavMatch(kimi, "/integrations")?.href, "/integrations");
 
 // —— Audit flags ——
 const audit = readFileSync("docs/MCTB-BOOKING-SIMPLIFICATION-AUDIT.md", "utf8");

@@ -182,7 +182,7 @@ export function MctbHomeKpiStrip({ data }: { data: MctbOverviewPayload }) {
     {
       label: "Need a reply",
       value: data.kpis.needsReplyCount,
-      sub: "Conversations",
+      sub: "Inbox",
       href: `${MCTB_ROUTES.conversations}?filter=needs_reply`,
       icon: ShieldAlert,
       iconTone: "amber" as const,

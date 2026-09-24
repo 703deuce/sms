@@ -376,6 +376,7 @@ export function AppShell({
         productFeatures={productFeatures}
         hasMctb={hasMctb}
         hasMassSms={hasSms}
+        hasVoice={hasVoice}
         hasAiAfterHours={hasAiAfterHours}
         primaryVoiceAgentId={primaryVoiceAgentId}
         onMore={() => setMenuOpen(true)}

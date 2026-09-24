@@ -22,5 +22,15 @@ assert.equal(isMctbUniversalChromeActive("/payments", "appointments", { hasMctb:
 assert.equal(isMctbUniversalChromeActive("/mctb", "mctb", { hasMctb: true }), true);
 assert.equal(isMctbUniversalChromeActive("/appointments/overview", "mctb", { hasMctb: true }), false);
 assert.equal(isMctbUniversalChromeActive("/login", "mctb", { hasMctb: true }), false);
+assert.equal(isMctbUniversalChromeActive("/voice/calls", "ai_after_hours", { hasMctb: true }), true);
+
+const navCalls = resolveProductSidebarNav({
+  pathname: "/voice/calls",
+  multiProduct: false,
+  productShell: "mctb",
+  hasMctb: true,
+  hasVoice: true,
+});
+assert.ok(navCalls.some((i) => i.label === "Calls" && i.href === "/voice/calls"));
 
 console.log("test-mctb-universal-shell: OK");
