@@ -1,7 +1,10 @@
 /**
  * Pure inbound workspace routing policy — safe to import from tests/scripts.
  */
-import { isPlatformDemoPhoneRecord } from "@/lib/messaging/compliance/phone-number-class";
+import {
+  isPlatformDemoPhoneRecord,
+  isPlatformMctbSenderPhoneRecord,
+} from "@/lib/messaging/compliance/phone-number-class";
 
 export const INBOUND_OUTBOUND_PAIRING_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 
@@ -62,6 +65,7 @@ export type InboundWorkspaceRouteResult =
 export function isMirrorOrArchivedPhoneRow(candidate: InboundPhoneCandidate): boolean {
   if (String(candidate.status || "").toLowerCase() === "released") return true;
   if (isArchivedIngressRow(candidate.settingsJson)) return true;
+  if (isPlatformMctbSenderPhoneRecord({ settingsJson: candidate.settingsJson })) return true;
   return isPlatformDemoPhoneRecord({
     e164: candidate.e164,
     settingsJson: candidate.settingsJson,

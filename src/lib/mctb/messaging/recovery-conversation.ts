@@ -15,6 +15,8 @@ export async function ensureMctbRecoveryConversation(input: {
   body: string;
   providerMessageId?: string | null;
   missedCallEventId?: string | null;
+  /** Outbound sender PhoneNumber id (platform or workspace) — aids shared-sender inbound routing. */
+  outboundSmsPhoneNumberId?: string | null;
 }): Promise<{ conversationId: string | null }> {
   const prisma = getPrisma();
   let to = input.toE164;
@@ -46,11 +48,12 @@ export async function ensureMctbRecoveryConversation(input: {
   }
 
   const fromPhone = await resolvePhoneForInbound(input.workspaceId, input.fromE164);
+  const senderPhoneNumberId = input.outboundSmsPhoneNumberId ?? fromPhone?.id ?? null;
   const { conversationId } = await ensureProductConversation({
     workspaceId: input.workspaceId,
     contactId: contact.id,
     productSource: "mctb",
-    phoneNumberId: fromPhone?.id ?? null,
+    phoneNumberId: senderPhoneNumberId,
     fromE164: input.fromE164,
     missedCallEventId: input.missedCallEventId ?? null,
   });

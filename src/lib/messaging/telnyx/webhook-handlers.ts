@@ -50,6 +50,28 @@ export async function handleTelnyxInbound(payload: unknown) {
     return { ok: true as const, skipped: true as const, reason: "missing_from_or_to" };
   }
 
+  const { isActiveMctbPlatformSenderE164 } = await import(
+    "@/lib/mctb/messaging/platform-sender-config"
+  );
+  if (await isActiveMctbPlatformSenderE164(parsed.to)) {
+    const { handleMctbPlatformSenderInboundCore } = await import(
+      "@/lib/mctb/messaging/platform-sender-inbound-core"
+    );
+    const core = await handleMctbPlatformSenderInboundCore({
+      channel: "telnyx",
+      fromE164: parsed.from,
+      toRaw: parsed.to,
+      body: parsed.body,
+      providerMessageId: parsed.providerMessageId,
+      mediaUrls: parsed.mediaUrls || null,
+    });
+    return {
+      ok: true as const,
+      platformSender: true,
+      ...core,
+    };
+  }
+
   try {
     const { recordDemoReplyReceived } = await import("@/lib/mctb/onboarding/demo");
     const { resolvePlatformDemoInboundWorkspace } = await import(

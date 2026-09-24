@@ -75,9 +75,42 @@ export async function POST(request: Request) {
     const to = params.To || "";
     const body = (params.Body || "").trim();
 
-    const ctx = await resolveInboundContext(to, params.AccountSid, { fromE164: from, body });
+    const { isActiveMctbPlatformSenderE164 } = await import(
+      "@/lib/mctb/messaging/platform-sender-config"
+    );
+    const platformTo = await isActiveMctbPlatformSenderE164(to);
+
+    const ctx = platformTo
+      ? null
+      : await resolveInboundContext(to, params.AccountSid, { fromE164: from, body });
     if (!(await verifySignature(request, params, ctx?.registration))) {
       return new NextResponse("Invalid signature", { status: 403 });
+    }
+
+    if (platformTo) {
+      const { tryHandleTwilioMctbPlatformSenderInbound } = await import(
+        "@/lib/mctb/messaging/twilio-platform-inbound"
+      );
+      const mediaCount = Number(params.NumMedia || 0);
+      const mediaUrls: string[] = [];
+      for (let i = 0; i < mediaCount; i += 1) {
+        const url = params[`MediaUrl${i}`];
+        if (url) mediaUrls.push(url);
+      }
+      const platformHandled = await tryHandleTwilioMctbPlatformSenderInbound({
+        toRaw: to,
+        fromE164: from,
+        body,
+        providerMessageId: params.MessageSid,
+        mediaUrls,
+      });
+      if (platformHandled.plainText) {
+        return new NextResponse(platformHandled.plainText, { status: platformHandled.status });
+      }
+      return new NextResponse(twimlMessage(platformHandled.twimlBody), {
+        status: platformHandled.status,
+        headers: { "Content-Type": "text/xml" },
+      });
     }
 
     if (!ctx || !from) {

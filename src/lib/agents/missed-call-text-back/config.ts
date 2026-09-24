@@ -37,6 +37,7 @@ export function configToRecord(row: {
   conversationEnabled: boolean;
   phoneNumberId: string | null;
   smsPhoneNumberId?: string | null;
+  senderMode?: "WORKSPACE" | "PLATFORM";
   messageTemplateBusinessHours?: string | null;
   messageTemplateAfterHours?: string | null;
   requireCarrierForward?: boolean;
@@ -49,6 +50,7 @@ export function configToRecord(row: {
 }): MissedCallTextConfigRecord {
   return {
     smsPhoneNumberId: null,
+    senderMode: "WORKSPACE",
     messageTemplateBusinessHours: null,
     messageTemplateAfterHours: null,
     requireCarrierForward: true,
@@ -135,6 +137,11 @@ export async function updateMissedCallTextConfig(input: {
   if (input.patch.sms_phone_number_id !== undefined) {
     data.smsPhoneNumberId = input.patch.sms_phone_number_id;
     mark("smsPhoneNumberId", input.patch.sms_phone_number_id, before.smsPhoneNumberId);
+  }
+  if (input.patch.sender_mode !== undefined) {
+    const v = input.patch.sender_mode === "PLATFORM" ? "PLATFORM" : "WORKSPACE";
+    data.senderMode = v;
+    mark("senderMode", v, before.senderMode);
   }
   if (input.patch.message_template_business_hours !== undefined) {
     const v = input.patch.message_template_business_hours?.trim() || null;

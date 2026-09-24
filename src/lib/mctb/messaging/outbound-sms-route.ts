@@ -26,7 +26,11 @@ import {
   resolveConfiguredMctbPhoneForWorkspace,
   type MctbSmsSender,
 } from "@/lib/agents/missed-call-text-back/sms-sender";
-import type { MissedCallTextConfigRecord } from "@/lib/agents/missed-call-text-back/types";
+import type {
+  MissedCallTextConfigRecord,
+  MctbSenderMode,
+} from "@/lib/agents/missed-call-text-back/types";
+import { resolveCanonicalMctbPlatformSender } from "@/lib/mctb/messaging/platform-sender-config";
 import {
   resolvePlatformDemoOwnerWorkspaceId,
   resolvePlatformDemoSmsSender,
@@ -42,9 +46,11 @@ export type MctbOutboundSmsRoute = {
   customerWorkspaceId: string;
   /** Workspace whose messagingRegistration performs the provider API send. */
   sendWorkspaceId: string;
+  senderMode: "PLATFORM" | "WORKSPACE";
   fromE164: string;
   phoneNumberId: string;
-  source: MctbSmsSender["source"] | "platform_telnyx_a2p";
+  provider: string | null;
+  source: MctbSmsSender["source"] | "platform_telnyx_a2p" | "platform_mctb_sender";
   complianceRegime: MessagingComplianceRegime;
   trafficMode: MctbPlatformTrafficMode | "CUSTOMER_PRODUCTION";
 };
@@ -143,17 +149,65 @@ export async function resolvePlatformTelnyxSmsRoute(input: {
   return {
     customerWorkspaceId: input.customerWorkspaceId,
     sendWorkspaceId: ownerId,
+    senderMode: "PLATFORM",
     fromE164: sender.e164,
     phoneNumberId: sender.phoneNumberId,
+    provider: registrationProviderName(reg) || "telnyx",
     source: "platform_telnyx_a2p",
     complianceRegime: "A2P_10DLC",
     trafficMode: input.trafficMode,
   };
 }
 
+async function resolvePlatformMctbSenderRoute(
+  customerWorkspaceId: string,
+): Promise<MctbOutboundSmsRoute | null> {
+  const platform = await resolveCanonicalMctbPlatformSender();
+  if (!platform) {
+    console.log(
+      JSON.stringify({
+        source: "mctb-platform-sender",
+        event: "platform_sender_not_configured",
+        customerWorkspaceId,
+      }),
+    );
+    return null;
+  }
+
+  const auth = await isPhoneAuthorizedForOutboundSms(platform.phoneNumberId);
+  if (!auth.allowed) {
+    console.log(
+      JSON.stringify({
+        source: "mctb-platform-sender",
+        event: "platform_sender_not_authorized",
+        customerWorkspaceId,
+        phoneNumberId: platform.phoneNumberId,
+        regime: auth.regime,
+        provider: auth.provider,
+      }),
+    );
+    return null;
+  }
+
+  return {
+    customerWorkspaceId,
+    sendWorkspaceId: platform.workspaceId,
+    senderMode: "PLATFORM",
+    fromE164: platform.e164,
+    phoneNumberId: platform.phoneNumberId,
+    provider: auth.provider || platform.provider,
+    source: "platform_mctb_sender",
+    complianceRegime: auth.regime || "TOLL_FREE_VERIFICATION",
+    trafficMode: "CUSTOMER_PRODUCTION",
+  };
+}
+
 export async function resolveMctbOutboundSmsRoute(input: {
   workspaceId: string;
-  config: Pick<MissedCallTextConfigRecord, "phoneNumberId" | "smsPhoneNumberId">;
+  config: Pick<
+    MissedCallTextConfigRecord,
+    "phoneNumberId" | "smsPhoneNumberId" | "senderMode"
+  >;
   /** Onboarding demo — routes via platform 571, isolated from customer production. */
   demoMode?: boolean;
   /** Explicit certification run on platform 571 (same adapter path, not customer TFN). */
@@ -161,6 +215,11 @@ export async function resolveMctbOutboundSmsRoute(input: {
 }): Promise<MctbOutboundSmsRoute | null> {
   if (input.demoMode || input.certificationMode) {
     // Platform demo retired — certification and Try It use workspace-owned numbers.
+  }
+
+  const mode: MctbSenderMode = input.config.senderMode || "WORKSPACE";
+  if (mode === "PLATFORM") {
+    return resolvePlatformMctbSenderRoute(input.workspaceId);
   }
 
   const senderCandidates: MctbSmsSender[] = [];
@@ -207,8 +266,10 @@ export async function resolveMctbOutboundSmsRoute(input: {
   return {
     customerWorkspaceId: input.workspaceId,
     sendWorkspaceId: pn.workspaceId,
+    senderMode: "WORKSPACE",
     fromE164: sender.e164,
     phoneNumberId: sender.phoneNumberId,
+    provider: auth.provider,
     source: sender.source,
     complianceRegime: auth.regime || "A2P_10DLC",
     trafficMode: "CUSTOMER_PRODUCTION",

@@ -155,6 +155,12 @@ enum WorkspaceProductFeatureKey {
   VERIFY
 }
 
+/// MCTB outbound SMS sender selection (ingress DID is separate).
+enum MctbSenderMode {
+  WORKSPACE
+  PLATFORM
+}
+
 /// Shared inbox product discriminator (MCTB vs Mass Texting vs manual).
 enum ConversationProductSource {
   MCTB
@@ -4702,6 +4708,10 @@ model MissedCallTextConfig {
    * Outbound SMS sender DID (may differ from voice trigger DID).
    */
   smsPhoneNumberId             String?
+  /**
+   * PLATFORM = shared Transovo platform sender; WORKSPACE = workspace-owned sender (default preserves legacy).
+   */
+  senderMode                   MctbSenderMode @default(WORKSPACE)
   /**
    * Optional PSTN forward target for direct-dial MCTB ingress (bypasses consent prompt).
    */

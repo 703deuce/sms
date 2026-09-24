@@ -48,6 +48,8 @@ export type MctbSuppressionReason =
   | "WORKSPACE_INACTIVE"
   | "NOT_FORWARD_EVENT";
 
+export type MctbSenderMode = "WORKSPACE" | "PLATFORM";
+
 export type MissedCallTextConfigRecord = {
   id: string;
   workspaceId: string;
@@ -75,6 +77,7 @@ export type MissedCallTextConfigRecord = {
   conversationEnabled: boolean;
   phoneNumberId: string | null;
   smsPhoneNumberId: string | null;
+  senderMode: MctbSenderMode;
   messageTemplateBusinessHours?: string | null;
   messageTemplateAfterHours?: string | null;
   requireCarrierForward?: boolean;
@@ -106,6 +109,7 @@ export type MissedCallTextSettingsUpdate = {
   max_messages_per_caller?: number;
   phone_number_id?: string | null;
   sms_phone_number_id?: string | null;
+  sender_mode?: MctbSenderMode;
   message_template_business_hours?: string | null;
   message_template_after_hours?: string | null;
   require_carrier_forward?: boolean;
@@ -148,6 +152,7 @@ export const DEFAULT_MCTB_CONFIG: Omit<
   conversationEnabled: true,
   phoneNumberId: null,
   smsPhoneNumberId: null,
+  senderMode: "WORKSPACE",
   messageTemplateBusinessHours: null,
   messageTemplateAfterHours: null,
   requireCarrierForward: true,

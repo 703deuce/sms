@@ -8,7 +8,11 @@ import { parseMessagingComplianceFromSettings } from "./messaging-compliance";
 
 export type MctbProductionNumberClass = "TWILIO_TOLL_FREE" | "TELNYX_LOCAL_A2P";
 
-export type MctbPhoneRole = "platform_demo" | "customer_production" | "customer_voice_only";
+export type MctbPhoneRole =
+  | "platform_demo"
+  | "platform_mctb_sender"
+  | "customer_production"
+  | "customer_voice_only";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -49,7 +53,12 @@ export function classifyProductionNumber(input: {
 
 export function parseMctbPhoneRole(settingsJson: unknown): MctbPhoneRole | null {
   const role = asRecord(settingsJson).mctbRole;
-  if (role === "platform_demo" || role === "customer_production" || role === "customer_voice_only") {
+  if (
+    role === "platform_demo" ||
+    role === "platform_mctb_sender" ||
+    role === "customer_production" ||
+    role === "customer_voice_only"
+  ) {
     return role;
   }
   return null;
@@ -60,6 +69,28 @@ export function isPlatformDemoPhoneRecord(input: {
   settingsJson?: unknown;
 }): boolean {
   return parseMctbPhoneRole(input.settingsJson) === "platform_demo";
+}
+
+export function isPlatformMctbSenderPhoneRecord(input: {
+  settingsJson?: unknown;
+}): boolean {
+  return parseMctbPhoneRole(input.settingsJson) === "platform_mctb_sender";
+}
+
+export function platformMctbSenderSettings(input?: {
+  tfvApproved?: boolean;
+  provider?: "twilio" | "telnyx";
+}): Record<string, unknown> {
+  const provider = input?.provider || "twilio";
+  const approved = input?.tfvApproved ?? true;
+  return {
+    mctbNumberClass: provider === "twilio" ? "TWILIO_TOLL_FREE" : "TELNYX_LOCAL_A2P",
+    mctbRole: "platform_mctb_sender" as const,
+    messagingCompliance: {
+      type: provider === "twilio" ? "TOLL_FREE_VERIFICATION" : "A2P_10DLC",
+      status: approved ? "APPROVED" : "NOT_STARTED",
+    },
+  };
 }
 
 export function tollFreeComplianceSettings(): Record<string, unknown> {

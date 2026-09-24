@@ -304,6 +304,10 @@ export async function executeMissedCallTextSend(input: {
         ? String((result as { messageId?: string }).messageId || "")
         : null;
 
+    const priorMeta =
+      event.metadata && typeof event.metadata === "object"
+        ? (event.metadata as Record<string, unknown>)
+        : {};
     await prisma.missedCallEvent.update({
       where: { id: event.id },
       data: {
@@ -311,6 +315,12 @@ export async function executeMissedCallTextSend(input: {
         eligible: true,
         smsSentAt: new Date(),
         smsMessageId: messageId,
+        metadata: {
+          ...priorMeta,
+          outboundSmsPhoneNumberId: route.phoneNumberId,
+          outboundSmsFromE164: route.fromE164,
+          outboundSmsSenderMode: route.senderMode,
+        },
       },
     });
 
@@ -356,6 +366,7 @@ export async function executeMissedCallTextSend(input: {
         body: msgRow?.body || body,
         providerMessageId: msgRow?.providerId,
         missedCallEventId: event.id,
+        outboundSmsPhoneNumberId: route.phoneNumberId,
       }).catch(() => undefined);
     }
 

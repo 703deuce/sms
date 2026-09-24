@@ -28,14 +28,35 @@ export async function resolveConfiguredMctbPhoneForWorkspace(
   return null;
 }
 
+function hasExplicitWorkspaceSmsSender(
+  config: Pick<MissedCallTextConfigRecord, "phoneNumberId" | "smsPhoneNumberId">,
+): boolean {
+  return Boolean(config.smsPhoneNumberId?.trim());
+}
+
 /**
- * Resolve the SMS sender for MCTB using only numbers saved in setup config.
- * Production: the voice/setup DID is the primary sender (`phoneNumberId` wins).
+ * Resolve workspace-owned SMS sender (PLATFORM mode uses platform-sender-config instead).
+ *
+ * WORKSPACE semantics:
+ * - Explicit `smsPhoneNumberId` wins over ingress `phoneNumberId` (intentional outbound sender).
+ * - Legacy rows without explicit SMS sender: ingress first, then SMS id (unchanged behavior).
  */
 export async function resolveMctbSmsSender(input: {
   workspaceId: string;
   config: Pick<MissedCallTextConfigRecord, "phoneNumberId" | "smsPhoneNumberId">;
 }): Promise<MctbSmsSender | null> {
+  const explicitSms = hasExplicitWorkspaceSmsSender(input.config);
+
+  if (explicitSms) {
+    const fromSms = await resolveConfiguredMctbPhoneForWorkspace(
+      input.workspaceId,
+      input.config.smsPhoneNumberId,
+    );
+    if (fromSms) {
+      return { ...fromSms, source: "sms_phone_number_id" };
+    }
+  }
+
   const fromVoice = await resolveConfiguredMctbPhoneForWorkspace(
     input.workspaceId,
     input.config.phoneNumberId,
@@ -44,12 +65,14 @@ export async function resolveMctbSmsSender(input: {
     return { ...fromVoice, source: "phone_number_id" };
   }
 
-  const fromSms = await resolveConfiguredMctbPhoneForWorkspace(
-    input.workspaceId,
-    input.config.smsPhoneNumberId,
-  );
-  if (fromSms) {
-    return { ...fromSms, source: "sms_phone_number_id" };
+  if (!explicitSms) {
+    const fromSms = await resolveConfiguredMctbPhoneForWorkspace(
+      input.workspaceId,
+      input.config.smsPhoneNumberId,
+    );
+    if (fromSms) {
+      return { ...fromSms, source: "sms_phone_number_id" };
+    }
   }
 
   return null;
