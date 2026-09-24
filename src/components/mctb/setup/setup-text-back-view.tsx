@@ -15,6 +15,9 @@ import {
   type MctbRecoveryGoalId,
 } from "@/lib/mctb/recovery-goals";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
+import type { MctbSenderMode } from "@/lib/agents/missed-call-text-back/types";
+import type { MctbSetupPhoneOption } from "@/lib/mctb/sender-mode-ui";
+import { MctbTextMessageSenderSection } from "@/components/mctb/setup/mctb-text-message-sender-section";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
@@ -23,7 +26,9 @@ export function MctbSetupTextBackView() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [phoneNumberId, setPhoneNumberId] = useState<string | null>(null);
+  const [senderMode, setSenderMode] = useState<MctbSenderMode>("WORKSPACE");
+  const [smsPhoneNumberId, setSmsPhoneNumberId] = useState<string | null>(null);
+  const [phoneNumbers, setPhoneNumbers] = useState<MctbSetupPhoneOption[]>([]);
   const [messageTemplate, setMessageTemplate] = useState("");
   const [recoveryGoal, setRecoveryGoal] = useState<MctbRecoveryGoalId>("get_reply");
   const [delaySeconds, setDelaySeconds] = useState(0);
@@ -39,7 +44,9 @@ export function MctbSetupTextBackView() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to load");
       const r = json.data.runtime;
-      setPhoneNumberId(r.phoneNumberId);
+      setSenderMode(r.senderMode === "PLATFORM" ? "PLATFORM" : "WORKSPACE");
+      setSmsPhoneNumberId(r.smsPhoneNumberId ?? null);
+      setPhoneNumbers(json.data.phoneNumbers || []);
       setMessageTemplate(r.messageTemplate || "");
       setDelaySeconds(r.delaySeconds ?? 0);
       setConsentMode(json.data.consentMode);
@@ -68,7 +75,8 @@ export function MctbSetupTextBackView() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          phoneNumberId,
+          senderMode,
+          smsPhoneNumberId: senderMode === "WORKSPACE" ? smsPhoneNumberId : undefined,
           recoveryGoal,
           messageTemplate,
           delaySeconds,
@@ -119,6 +127,20 @@ export function MctbSetupTextBackView() {
         <Link href={MCTB_ROUTES.setupConsent} className="font-semibold text-primary hover:underline">
           Change consent method
         </Link>
+      </div>
+
+      <div className="voice-card p-4 sm:p-6">
+        <MctbTextMessageSenderSection
+          senderMode={senderMode}
+          smsPhoneNumberId={smsPhoneNumberId}
+          phoneNumbers={phoneNumbers}
+          disabled={saving}
+          onChange={({ senderMode: mode, smsPhoneNumberId: smsId }) => {
+            setSenderMode(mode);
+            setSmsPhoneNumberId(smsId);
+            setSaved(false);
+          }}
+        />
       </div>
 
       <div className="voice-card p-4 sm:p-6">
