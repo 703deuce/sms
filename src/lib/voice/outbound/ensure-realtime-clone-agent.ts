@@ -105,7 +105,10 @@ async function resolveSourceOutboundPhone(input: {
 export async function ensureOutboundRealtimeCloneAgent(
   input: EnsureOutboundRealtimeCloneInput = {},
 ): Promise<EnsureOutboundRealtimeCloneResult> {
-  const workspaceId = input.workspaceId?.trim() || process.env.WORKSPACE_ID?.trim() || "ws_1";
+  const { requireExplicitWorkspaceId } = await import("@/lib/workspace/require-explicit-workspace-id");
+  const workspaceId = requireExplicitWorkspaceId(input.workspaceId, {
+    label: "ensureOutboundRealtimeCloneAgent",
+  });
   const sourceAgentId = input.sourceAgentId?.trim() || process.env.SOURCE_AGENT_ID?.trim();
   const sourceAgentName =
     input.sourceAgentName?.trim() ||

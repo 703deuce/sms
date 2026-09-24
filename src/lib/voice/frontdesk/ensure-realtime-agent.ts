@@ -50,7 +50,10 @@ function resolveRealtimeVoice(input?: string): string {
 export async function ensureFrontDeskRealtimeAgent(
   input: EnsureFrontDeskRealtimeAgentInput = {},
 ): Promise<EnsureFrontDeskRealtimeAgentResult> {
-  const workspaceId = input.workspaceId?.trim() || process.env.WORKSPACE_ID?.trim() || "ws_1";
+  const { requireExplicitWorkspaceId } = await import("@/lib/workspace/require-explicit-workspace-id");
+  const workspaceId = requireExplicitWorkspaceId(input.workspaceId, {
+    label: "ensureFrontDeskRealtimeAgent",
+  });
   const realtimeModel = resolveRealtimeModel(input.realtimeModel);
   const realtimeVoice = resolveRealtimeVoice(input.realtimeVoice);
 

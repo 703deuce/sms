@@ -2,6 +2,8 @@
  * Production-equivalent Telnyx webhook request builders for pre-production tests.
  */
 
+import { applyTelnyxToolWebhookInternalAuthHeaders } from "@/lib/voice/telnyx/tool-webhook-auth";
+
 export type TelnyxToolWebhookInput = {
   workspaceId: string;
   agentId: string;
@@ -29,6 +31,7 @@ export function buildTelnyxMinimalToolWebhookRequest(input: {
     "x-transovo-tool-type": input.toolType,
     "x-telnyx-call-control-id": input.callControlId,
   });
+  applyTelnyxToolWebhookInternalAuthHeaders(headers);
   return new Request("http://test.internal/api/telnyx/voice/tools", {
     method: "POST",
     headers,
@@ -54,6 +57,8 @@ export function buildTelnyxToolWebhookRequest(input: TelnyxToolWebhookInput): Re
     headers.set("x-telnyx-caller-id", input.fromE164);
   }
   if (input.toE164) headers.set("x-telnyx-to", input.toE164);
+
+  applyTelnyxToolWebhookInternalAuthHeaders(headers);
 
   return new Request("http://test.internal/api/telnyx/voice/tools", {
     method: "POST",

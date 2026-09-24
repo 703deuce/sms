@@ -27,6 +27,10 @@ import { isConversationWorkflowMode } from "@/lib/voice/workflow-engine/tool-pub
 import { isWorkflowGraphPublishedTool } from "@/lib/voice/runtime/capability-resolver";
 import { enrichVoiceAgentConfigForCanonicalAiBooking } from "@/lib/voice/ai-booking/publish-config";
 import { loadVoiceAgentRuntimeConfig } from "@/lib/voice/load-agent-config";
+import {
+  assertToolWebhookCallTenantBinding,
+  verifyTelnyxVoiceToolWebhookAuth,
+} from "@/lib/voice/telnyx/tool-webhook-auth";
 
 function telnyxToolJson(payload: Record<string, unknown>, init?: ResponseInit) {
   return NextResponse.json(formatTelnyxToolPayload(payload), init);
@@ -60,10 +64,37 @@ export async function POST(request: Request) {
   const ingress = await recordToolWebhookIngress({ request, body, ingressStartedAt });
 
   try {
+    if (!verifyTelnyxVoiceToolWebhookAuth(request)) {
+      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     const workspaceId = request.headers.get("x-transovo-workspace-id") || "";
     const agentId = request.headers.get("x-transovo-agent-id") || "";
     const toolId = request.headers.get("x-transovo-tool-id") || "";
     const toolType = request.headers.get("x-transovo-tool-type") || "";
+
+    const callControlId =
+      request.headers.get("x-telnyx-call-control-id")?.trim() ||
+      request.headers.get("x-telnyx-call-control-id".toUpperCase())?.trim() ||
+      String(body.call_control_id || body.callControlId || body.call_controlId || "").trim();
+    const conversationId =
+      request.headers.get("x-telnyx-conversation-id")?.trim() ||
+      String(body.telnyx_conversation_id || body.conversation_id || "").trim();
+
+    if (workspaceId && agentId && (callControlId || conversationId)) {
+      const binding = await assertToolWebhookCallTenantBinding({
+        workspaceId,
+        agentId,
+        callControlId: callControlId || undefined,
+        conversationId: conversationId || undefined,
+      });
+      if (!binding.ok) {
+        return NextResponse.json(
+          { ok: false, error: "tenant_binding_rejected", reason: binding.reason },
+          { status: 403 },
+        );
+      }
+    }
 
     if (!workspaceId) {
       return telnyxToolJson(
@@ -235,13 +266,6 @@ export async function POST(request: Request) {
     }
 
     // Resolve call identity from Telnyx headers first — never trust the LLM.
-    const callControlId =
-      request.headers.get("x-telnyx-call-control-id") ||
-      request.headers.get("x-telnyx-call-control-id".toUpperCase()) ||
-      String(body.call_control_id || body.callControlId || body.call_controlId || "");
-    const conversationId =
-      request.headers.get("x-telnyx-conversation-id") ||
-      String(body.telnyx_conversation_id || body.conversation_id || "");
     const inboundAni = resolveInboundAni(request, body);
     const toE164FromBody = body.to
       ? String(body.to)

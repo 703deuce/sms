@@ -11,6 +11,7 @@ import {
   SEND_RESOURCE_WEBHOOK_BODY,
 } from "@/lib/voice/tools/builtin-webhook-bodies";
 import { BUILTIN_WEBHOOK_BODIES } from "@/lib/voice/tools/catalog";
+import { voiceRuntimeInternalSecret } from "@/lib/voice/python-runtime-bridge/auth";
 
 export type TransovoSharedToolSet = {
   sendResourceId: string | null;
@@ -64,6 +65,19 @@ function webhookToolBody(input: {
   toolType: string;
   bodyParameters: Record<string, unknown>;
 }) {
+  const webhookHeaders: Array<{ name: string; value: string }> = [
+    { name: "X-Transovo-Workspace-Id", value: input.workspaceId },
+    { name: "X-Transovo-Agent-Id", value: input.agentId },
+    { name: "X-Transovo-Tool-Type", value: input.toolType },
+  ];
+  const internalSecret = voiceRuntimeInternalSecret();
+  if (internalSecret) {
+    webhookHeaders.push({
+      name: "Authorization",
+      value: `Bearer ${internalSecret}`,
+    });
+  }
+
   return {
     type: "webhook",
     display_name: input.name,
@@ -73,11 +87,7 @@ function webhookToolBody(input: {
       url: input.url,
       method: "POST",
       timeout_ms: 25000,
-      headers: [
-        { name: "X-Transovo-Workspace-Id", value: input.workspaceId },
-        { name: "X-Transovo-Agent-Id", value: input.agentId },
-        { name: "X-Transovo-Tool-Type", value: input.toolType },
-      ],
+      headers: webhookHeaders,
       body_parameters: strictWebhookBodyParameters(input.bodyParameters),
     },
   };

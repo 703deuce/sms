@@ -68,7 +68,11 @@ export async function bootstrapRealEstateFrontDesk(): Promise<BootstrapRealEstat
   }
 
   try {
-    const workspaceId = process.env.WORKSPACE_ID?.trim() || "ws_1";
+    const workspaceId = process.env.WORKSPACE_ID?.trim();
+    if (!workspaceId) {
+      console.warn("[re-frontdesk] skipping bootstrap — WORKSPACE_ID missing");
+      return null;
+    }
     const existing = await loadRealtorProductConfig(workspaceId);
     const productConfig = bootstrapProductConfig(existing);
     const deploy = await deployRealEstateFrontDesk({
@@ -139,7 +143,10 @@ export async function deployRealEstateFrontDesk(input?: {
   useRecommendedFollowUp?: boolean;
   productConfig?: import("@/lib/realtor/types").RealtorProductConfig;
 }): Promise<DeployRealEstateFrontDeskResult> {
-  const workspaceId = input?.workspaceId || process.env.WORKSPACE_ID?.trim() || "ws_1";
+  const { requireExplicitWorkspaceId } = await import("@/lib/workspace/require-explicit-workspace-id");
+  const workspaceId = requireExplicitWorkspaceId(input?.workspaceId, {
+    label: "deployRealEstateFrontDesk",
+  });
   const existing = input?.productConfig || (await loadRealtorProductConfig(workspaceId));
   const productConfig = {
     ...existing,
