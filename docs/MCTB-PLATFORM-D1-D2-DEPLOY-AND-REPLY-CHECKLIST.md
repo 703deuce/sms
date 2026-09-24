@@ -8,7 +8,7 @@
 
 ## Executive summary
 
-Engineering pass completed: **D1** and **D2** fixed, tests added, scalable **Platform Sender Assignment** documented (not implemented). Do **not** treat shared-number routing as finished until assignment + pool ship; the 14-day resolver remains a **safety fallback** only.
+Engineering pass completed: **D1** and **D2** fixed, tests added, **active conversation ownership** documented (not implemented). One 888 can serve many businesses via **released** `(consumer + 888)` pairs; a TFN pool is for **concurrent** active collisions only. The 14-day resolver remains a **safety fallback** — see `docs/MCTB-PLATFORM-ACTIVE-CONVERSATION-OWNERSHIP.md`.
 
 ---
 

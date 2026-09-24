@@ -1,6 +1,7 @@
 # MCTB Platform Sender Assignment — Scalable Tenant Addressing Design
 
-**Status:** Design (not implemented) — **2026-09-24**  
+**Status:** Design (not implemented) — **2026-09-24** (updated: active ownership model)  
+**Operational model:** `docs/MCTB-PLATFORM-ACTIVE-CONVERSATION-OWNERSHIP.md`  
 **Prerequisites:** `docs/MCTB-PLATFORM-INBOUND-TENANT-AND-AI-AUDIT.md`, Model B parent-Twilio PLATFORM send  
 **Current production:** One approved platform sender `+18885046264` (`platform_mctb_sender`)
 
@@ -8,39 +9,40 @@
 
 ## 1. Problem statement
 
-With `senderMode = PLATFORM`, many customer workspaces share the same physical SMS sender (today one TFN). Inbound replies arrive as:
+With `senderMode = PLATFORM`, many customer workspaces share the same physical SMS sender (today one TFN). Inbound SMS carries only **From**, **To**, and **body** — no workspace or conversation ID on the wire. Twilio-style routing uses the **To/From pair**; only one **active** session should own that pair at a time.
 
-```
-FROM = consumer E.164
-TO   = platform sender E.164
-```
+`TO` alone cannot identify which **customer workspace** owns the reply. The durable answer is **active conversation ownership**: `(consumerE164, platformPhoneNumberId) → current customer workspaceId` while the thread is active, then **release** when the conversation ends so the same pair can serve another business later.
 
-`TO` alone cannot identify which **customer workspace** owns the conversation. A time-bounded evidence resolver (14-day pairing window) can **fail closed** as `AMBIGUOUS` when the same consumer has recent PLATFORM activity with two businesses — correct safety, not a scalable primary identity system at ~10k customers.
+The interim 14-day **evidence** resolver can **fail closed** as `AMBIGUOUS` when it sees recent activity with two workspaces. That is a **safety fallback**, not the product definition of collision (which is **two concurrent active owners**, not “two businesses texted this person within 14 days”).
 
 ---
 
-## 2. Why one shared sender is ambiguous
+## 2. When is routing ambiguous?
 
-For consumer **X** and platform sender **S**:
+**Not ambiguous (one 888 is enough):** Plumber A texts Monday; thread **closes/expires**; Electrician B texts Wednesday → B becomes active owner of `(consumer, 888)`; reply routes to B.
 
-| Outbound | Meaning without assignment |
-|----------|---------------------------|
-| Plumber A → X from S | Workspace A |
-| Electrician B → X from S | Workspace B |
+**Ambiguous (cannot be solved in software alone):** At 10:00 Plumber A and at 10:15 Electrician B both have **active** threads expecting replies, both from the same **S**. Inbound *“Yes, come tomorrow”* has no tenant signal. Options: fail closed, second platform address for one session, or consumer re-entry via business-specific flow — **not** AI/body guessing.
 
-Reply **X → S** has two valid workspaces → **addressing collision**. No deterministic tenant without extra state.
+| Situation | Need second number? |
+|-----------|---------------------|
+| Same consumer, two businesses, **sequential** active threads | No — release pair between threads |
+| Same consumer, two businesses, **concurrent** active threads on same S | Yes **or** fail closed / re-entry |
 
 ---
 
 ## 3. Assignment invariant (target)
 
-For active reply routing:
+For **active** reply routing only:
 
 ```
-(consumerE164, platformPhoneNumberId) → at most ONE customer workspaceId
+(consumerE164, platformPhoneNumberId) → at most ONE customer workspaceId  [state = active]
 ```
 
-Sticky per **conversation thread**: once workspace A establishes an active assignment on sender S for consumer X, subsequent PLATFORM outbound for that thread **reuses S** until the assignment ends (not a new random sender per message).
+When the conversation **finishes / expires / releases**, that pair may be assigned to another workspace for the same consumer.
+
+Sticky per **conversation thread**: workspace A’s active assignment on S for consumer X **reuses S** for all messages in that thread until release (no per-message sender rotation).
+
+**Rename mentally:** `PlatformSenderAssignment` = **active conversation ownership** of the SMS address pair, aligned with Twilio’s one-active-binding-per-pair constraint.
 
 ---
 
@@ -75,18 +77,28 @@ Platform **owner** workspace (`PhoneNumber.workspaceId` for the TFN row) remains
 
 ## 5. Outbound allocation algorithm (future)
 
+**Default path (single 888):**
+
 ```
 workspace W, consumer X, senderMode PLATFORM
-  → find active assignment (W, X) → reuse platformPhoneNumberId
-  → else enumerate eligible platform senders {S1..Sn}
-  → exclude Si where ∃ active assignment (X, Si) for workspace ≠ W
-  → pick eligible Si (capacity, provider, compliance — policy module)
-  → insert assignment (W, X, Si), sticky for thread
-  → send via Model B / route resolver (unchanged provider path)
+  → active assignment (W, X) on S? → reuse S, send
+  → else ∃ active assignment (X, S) for workspace ≠ W?
+        → CONCURRENT_PAIR_OWNED: block, queue, or collision policy (see §8)
+  → else create active assignment (W, X, S), send
   → persist Message.from = actual From (D2)
 ```
 
-**Pool exhausted:** deterministic `POOL_EXHAUSTED` — do not steal Si from workspace A; do not overwrite active assignment. With **n=1** sender, second workspace for same consumer may be blocked until A’s assignment ends → until then, **legacy 14-day resolver** may still return `AMBIGUOUS` on reply.
+**Optional second sender (exception, not default scale):**
+
+Only when policy requires a **concurrent** second active thread for the same consumer and releasing/waiting is unacceptable:
+
+```
+  → enumerate eligible platform senders {S1..Sn}
+  → exclude Si where ∃ active assignment (X, Si) for workspace ≠ W
+  → pick eligible Si (compliance + capacity)
+```
+
+**Do not** plan a large TFN pool as the primary multi-tenant strategy without a **Twilio TFN / ISV multi-business** compliance reconciliation (see operational doc § compliance). Verification burden grows with TFN count; published rules emphasize 1:1 business mapping with limited ISV exceptions.
 
 ---
 
@@ -115,14 +127,19 @@ No recency tie-break when step 3 sees 2+ workspaces.
 
 ---
 
-## 8. Pool exhaustion
+## 8. Concurrent collision & pool exhaustion
 
-When no sender S is collision-free for (W, X):
+**Concurrent active ownership (fundamental):** Two workspaces both need `(X, S)` active at once → inbound cannot disambiguate. Outbound for B should not steal A’s assignment.
 
-- Outbound: fail with explicit error / queue / operator signal — **never** reassign S away from an active (A, X, S).
-- Inbound: if only legacy resolver applies and 2+ workspaces → **AMBIGUOUS** (today’s behavior).
+| Policy | Behavior |
+|--------|----------|
+| Default (n=1) | Outbound for B blocked until A releases; or fail closed on ambiguous inbound |
+| Exception | Allocate S2 from small verified pool **only** for concurrent case |
+| Never | Overwrite A’s active assignment; LLM/body tenant pick |
 
-Document operator messaging: add platform sender to pool or wait for assignment release.
+**Pool exhausted** (no collision-free S for concurrent need): deterministic `POOL_EXHAUSTED` / operator signal — wait for release or fail closed.
+
+**Sequential reuse:** With one S, plumber-then-electrician on different days is **not** pool exhaustion — release between threads.
 
 ---
 
@@ -179,12 +196,13 @@ Scripts today: `test-mctb-platform-inbound-tenant-isolation.ts` (resolver only).
 
 ## 13. Migration strategy
 
-1. Ship D1/D2 + correct `Message.from` (this pass).
+1. Ship D1/D2 + correct `Message.from` (done).
 2. Handset cert on single sender + legacy resolver.
-3. Add assignment table + outbound hook on PLATFORM send (reuse sender per thread).
-4. Inbound: assignment lookup before legacy.
-5. Backfill optional: recent MissedCallEvent + Conversation → assignments for active threads.
-6. Add second platform sender when compliance allows; enable pool selection.
+3. **Compliance:** Reconcile existing 888 approval with Twilio published TFN / ISV multi-business rules before massive shared-TFN scale.
+4. Add **active ownership** table + outbound hook on PLATFORM send; define release rules (close, idle, opt-out).
+5. Inbound: active assignment lookup **before** legacy 14-day evidence.
+6. Backfill optional: only **still-active** threads → assignments.
+7. Add second platform sender **only** if concurrent-collision rate + compliance justify it — not as default per-customer provisioning.
 
 ---
 
