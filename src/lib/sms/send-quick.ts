@@ -165,10 +165,21 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
     );
   }
 
+  let mctbPlatformParentTwilioSend = false;
+  if (input.senderRoute?.phoneNumberId && sendFromAuthorizedPhone) {
+    const { isCanonicalMctbPlatformTwilioSenderPhoneNumberId } = await import(
+      "@/lib/mctb/messaging/platform-parent-twilio-send"
+    );
+    mctbPlatformParentTwilioSend = await isCanonicalMctbPlatformTwilioSenderPhoneNumberId(
+      input.senderRoute.phoneNumberId,
+    );
+  }
+
   if (
     input.senderRoute &&
     !sendFromAuthorizedPhone &&
-    !isMessagingSendAuthorized(activeReg)
+    !isMessagingSendAuthorized(activeReg) &&
+    !mctbPlatformParentTwilioSend
   ) {
     throw new Error("Outbound SMS sender is not messaging-ready for its provider regime.");
   }

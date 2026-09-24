@@ -476,6 +476,22 @@ export async function sendViaRegistration(
   fromOverride?: string,
   options?: { authorizedPhoneNumberId?: string },
 ) {
+  if (options?.authorizedPhoneNumberId) {
+    const { trySendMctbPlatformParentTwilio } = await import(
+      "@/lib/mctb/messaging/platform-parent-twilio-send"
+    );
+    const platformSend = await trySendMctbPlatformParentTwilio({
+      authorizedPhoneNumberId: options.authorizedPhoneNumberId,
+      to,
+      body,
+      mediaUrls,
+      fromOverride,
+    });
+    if (platformSend) {
+      return platformSend;
+    }
+  }
+
   const { reconcileTelnyxSendStateIfNeeded } = await import("./reconcile-send-state");
   await reconcileTelnyxSendStateIfNeeded(workspaceId);
 

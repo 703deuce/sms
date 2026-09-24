@@ -3,7 +3,10 @@
  * Run: NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/inspect-mctb-platform-owner-registration.ts
  */
 import { getPrisma } from "@/lib/db";
-import { resolveMctbPlatformOwnerWorkspaceId } from "@/lib/mctb/platform-owner-workspace";
+import {
+  requireMctbPlatformOwnerWorkspaceId,
+  resolveMctbPlatformOwnerWorkspaceId,
+} from "@/lib/mctb/platform-owner-workspace";
 import { isMessagingSendAuthorized } from "@/lib/messaging/status";
 import { getRegistrationByWorkspace } from "@/lib/messaging/store";
 import { listTwilioOwnedNumbers } from "@/lib/numbers/twilio-number-import";
@@ -12,7 +15,9 @@ import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 const PLATFORM_E164 = process.env.MCTB_PLATFORM_SENDER_E164?.trim() || "+18885046264";
 
 async function main() {
-  const workspaceId = resolveMctbPlatformOwnerWorkspaceId();
+  const workspaceId = process.env.REQUIRE_EXPLICIT_PLATFORM_OWNER === "1"
+    ? requireMctbPlatformOwnerWorkspaceId()
+    : resolveMctbPlatformOwnerWorkspaceId();
   const prisma = getPrisma();
   const reg = await getRegistrationByWorkspace(workspaceId);
   const target = normalizeE164(PLATFORM_E164);

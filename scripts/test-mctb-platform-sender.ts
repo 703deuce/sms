@@ -11,6 +11,7 @@ import {
   MCTB_PLATFORM_REPLY_CONTEXT_WINDOW_MS,
   platformMctbSenderSuppressionKey,
 } from "@/lib/mctb/messaging/platform-sender-suppression";
+import { isCanonicalMctbPlatformTwilioSenderPhoneNumberId } from "@/lib/mctb/messaging/platform-parent-twilio-send";
 import {
   isPlatformMctbSenderPhoneRecord,
   platformMctbSenderSettings,
@@ -112,4 +113,14 @@ assert.equal(
 const telnyxPlatform = platformMctbSenderSettings({ provider: "telnyx", tfvApproved: true });
 assert.equal((telnyxPlatform.messagingCompliance as { type: string }).type, "A2P_10DLC");
 
-console.log("test:mctb-platform-sender ok");
+async function main() {
+  // Canonical platform Twilio gate — arbitrary id must not match without configured platform sender
+  const arbitrary = await isCanonicalMctbPlatformTwilioSenderPhoneNumberId("not-a-platform-sender-id");
+  assert.equal(arbitrary, false);
+  console.log("test:mctb-platform-sender ok");
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

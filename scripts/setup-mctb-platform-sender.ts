@@ -22,7 +22,9 @@ import { importTwilioNumbersIntoWorkspace } from "@/lib/numbers/twilio-number-im
 import { isTfvApproved, parseMessagingComplianceFromSettings } from "@/lib/messaging/compliance/messaging-compliance";
 
 async function main() {
-  const ownerWorkspaceId = process.env.PLATFORM_OWNER_WORKSPACE_ID?.trim();
+  const ownerWorkspaceId =
+    process.env.PLATFORM_OWNER_WORKSPACE_ID?.trim() ||
+    process.env.MCTB_PLATFORM_OWNER_WORKSPACE_ID?.trim();
   const e164Raw = process.env.MCTB_PLATFORM_SENDER_E164?.trim() || "+18885046264";
   const dryRun = process.env.DRY_RUN === "1";
   const skipImport = process.env.SKIP_TWILIO_IMPORT === "1";
