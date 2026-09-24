@@ -9,6 +9,10 @@ import { sendViaRegistration } from "@/lib/messaging/registration-processor";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { getAppBaseUrl } from "@/lib/messaging/twilio-config";
 import { mergeTemplate, splitDisplayName } from "@/lib/messaging/template";
+import {
+  resolvePersistedOutboundMessageFrom,
+  resolveProviderOutboundFromE164,
+} from "@/lib/sms/persisted-message-from";
 
 export type QuickSendSmsInput = {
   workspaceId: string;
@@ -214,6 +218,21 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
       ? body
       : `${body.trim()} ${trackedUrl}`.trim();
 
+  const persistedFrom = resolvePersistedOutboundMessageFrom({
+    poolFrom,
+    senderRouteFromE164: input.senderRoute?.fromE164,
+    explicitFrom: input.from,
+    preferredWorkspaceFrom: preferredFrom,
+    registrationFrom: activeReg?.phoneE164,
+  });
+
+  const providerFrom = resolveProviderOutboundFromE164({
+    poolFrom,
+    senderRouteFromE164: input.senderRoute?.fromE164,
+    explicitFrom: input.from,
+    preferredWorkspaceFrom: preferredFrom,
+  });
+
   let pending;
   try {
     pending = await prisma.message.create({
@@ -221,7 +240,7 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
         workspaceId: input.workspaceId,
         campaignId: input.campaignId,
         to,
-        from: poolFrom || preferredFrom || activeReg?.phoneE164 || input.from || "messaging_service",
+        from: persistedFrom,
         body: finalBody,
         status: "sending",
         providerId: input.idempotencyKey ? `idem:${input.idempotencyKey}` : `pending:${trackingToken}`,
@@ -269,7 +288,7 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
       to,
       finalBody,
       input.mediaUrls,
-      poolFrom || input.from || input.senderRoute?.fromE164 || preferredFrom,
+      providerFrom,
       input.senderRoute?.phoneNumberId
         ? { authorizedPhoneNumberId: input.senderRoute.phoneNumberId }
         : undefined,
