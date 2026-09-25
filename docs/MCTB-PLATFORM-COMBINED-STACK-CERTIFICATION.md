@@ -2,7 +2,7 @@
 
 **Generated:** 2026-09-24 (UTC)  
 **Purpose:** Prove tenant remediation + Voice tool auth + Active Conversation Ownership (#504) on one deploy candidate.  
-**Do not deploy from this document alone — handset certification remains PENDING.**
+**Engineering certification: COMPLETE.** Proceed via `docs/MCTB-PLATFORM-MERGE-DEPLOY-RUNBOOK.md`. Handset certification remains **PENDING** until final `master` SHA is deployed and verified.
 
 ---
 
@@ -86,7 +86,7 @@ Unauthenticated → 401; authenticated → accepted; tenant/agent/call mismatch 
 
 ```
 COMBINED DEPLOY SHA:
-77c71051aa07ac1bd3e450155dddc96496448e25
+77c710516ca4a71102a2c7f9fa78d0b0abf1692d
 
 MIGRATION REVIEW:
 PASS
@@ -122,10 +122,13 @@ CALL HANDLING MODIFIED:
 NO
 
 READY TO MERGE:
-YES (tenant PR + #504 — human approval; not auto-merge)
+YES (merge tenant remediation first, then #504 — human approval; not auto-merge)
 
 READY TO DEPLOY:
-NO (handset + Coolify + migrate + Telnyx tool republish still required)
+NO until final master SHA after both merges is built, migrated, and health-verified (see merge/deploy runbook)
+
+ARCHITECTURE CHANGES BEFORE LAUNCH:
+NO — stop changing assignment/routing unless production defect
 
 PRODUCTION HANDSET CERTIFICATION:
 PENDING
