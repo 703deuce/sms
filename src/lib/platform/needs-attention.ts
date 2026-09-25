@@ -30,7 +30,9 @@ export async function loadNeedsAttentionItems(
   const filter = options?.filter ?? "all";
   const userId = options?.userId;
 
-  const [callbacks, voicemails, missed, formSubs] = await Promise.all([
+  const since14d = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+
+  const [callbacks, voicemails, missed, formSubs, failedTransfers] = await Promise.all([
     prisma.callbackRequest.findMany({
       where: {
         workspaceId,
@@ -78,6 +80,15 @@ export async function loadNeedsAttentionItems(
         take: 50,
       })
       .catch(() => []),
+    prisma.voiceTransfer.findMany({
+      where: {
+        workspaceId,
+        status: { in: ["failed", "exhausted"] },
+        createdAt: { gte: since14d },
+      },
+      include: { call: { select: { id: true, fromE164: true, metadata: true } } },
+      take: 40,
+    }),
   ]);
 
   const repeatCounts = new Map<string, number>();
@@ -192,6 +203,31 @@ export async function loadNeedsAttentionItems(
         href: MCTB_ROUTES.missedCallDetail(m.id),
       },
       at: m.detectedAt.toISOString(),
+    });
+  }
+
+  for (const ft of failedTransfers) {
+    const phone = ft.call?.fromE164;
+    if (!phone) continue;
+    const callMeta = (ft.call?.metadata || {}) as Record<string, unknown>;
+    const na = (callMeta.voiceV3NeedsAttention || {}) as Record<string, unknown>;
+    if (na.transferFollowUpDismissedAt) continue;
+    upsert({
+      id: normalizeCaller(phone),
+      callerE164: phone,
+      title: "Transfer did not connect",
+      subtitle: ft.destination,
+      status: "needs_attention",
+      primaryKind: "failed_transfer",
+      primaryRefId: ft.callId,
+      event: {
+        kind: "failed_transfer",
+        id: ft.id,
+        label: "Failed transfer",
+        at: ft.createdAt.toISOString(),
+        href: `/voice/calls/${ft.callId}`,
+      },
+      at: ft.createdAt.toISOString(),
     });
   }
 

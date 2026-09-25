@@ -35,6 +35,25 @@ async function markDoneForKind(
     });
     return;
   }
+  if (kind === "failed_transfer") {
+    const call = await prisma.voiceCall.findFirst({
+      where: { id, workspaceId },
+      select: { metadata: true },
+    });
+    if (!call) return;
+    const meta =
+      call.metadata && typeof call.metadata === "object" && !Array.isArray(call.metadata)
+        ? { ...(call.metadata as Record<string, unknown>) }
+        : {};
+    const na = (meta.voiceV3NeedsAttention || {}) as Record<string, unknown>;
+    na.transferFollowUpDismissedAt = new Date().toISOString();
+    meta.voiceV3NeedsAttention = na;
+    await prisma.voiceCall.update({
+      where: { id, workspaceId },
+      data: { metadata: meta },
+    });
+    return;
+  }
   if (kind === "form_submission") {
     const row = await prisma.mctbRequestFormSubmission.findFirst({
       where: { id, workspaceId },

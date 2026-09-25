@@ -168,6 +168,33 @@ export async function loadVoiceAnalytics(
     diagnosticCounts[k] = (diagnosticCounts[k] || 0) + 1;
   }
 
+  const outcomeUpper = (k: string) => k.toUpperCase();
+  let callbacksRequested = 0;
+  let messagesTaken = 0;
+  let emergencies = 0;
+  let transferFailed = 0;
+  let spamOrSolicitor = 0;
+  for (const [key, count] of Object.entries(outcomes)) {
+    const u = outcomeUpper(key);
+    if (u.includes("CALLBACK")) callbacksRequested += count;
+    if (u.includes("MESSAGE")) messagesTaken += count;
+    if (u.includes("EMERGENCY")) emergencies += count;
+    if (u.includes("TRANSFER") && u.includes("FAIL")) transferFailed += count;
+    if (u.includes("SOLICIT") || u.includes("SPAM") || u.includes("UNWANTED")) {
+      spamOrSolicitor += count;
+    }
+  }
+
+  const transferAttempts = transfers.length;
+  const transferCompleted = transfers.filter((t) => t.status === "completed").length;
+  const transferFailedCount = transfers.filter(
+    (t) => t.status === "failed" || t.status === "exhausted" || t.answered === false,
+  ).length;
+
+  const openKnowledgeGaps = await prisma.voiceKnowledgeGap.count({
+    where: { workspaceId, status: "OPEN" },
+  });
+
   return {
     periodDays: days,
     totalCalls: total,
@@ -219,6 +246,17 @@ export async function loadVoiceAnalytics(
       p95ResponseLatencyMs,
       responseLatencySampleSize: responseSorted.length,
       diagnosticCounts,
+    },
+    voiceProduct: {
+      callbacksRequested,
+      messagesTaken,
+      emergenciesEscalated: emergencies,
+      transferAttempts,
+      transferCompleted,
+      transferFailed: Math.max(transferFailedCount, transferFailed),
+      appointmentsBooked: appointments,
+      openKnowledgeGaps,
+      spamOrSolicitorOutcomes: spamOrSolicitor,
     },
   };
 }

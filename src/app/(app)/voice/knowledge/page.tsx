@@ -6,6 +6,7 @@ import { Input, Label } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { VoiceSubNav } from "@/components/voice/voice-subnav";
+import { KnowledgeGapsPanel } from "@/components/voice/knowledge-gaps-panel";
 import { Plus, RefreshCw, Search, Trash2, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -299,6 +300,10 @@ export default function VoiceKnowledgePage() {
           </Card>
         </div>
       )}
+
+      <div id="knowledge-gaps" className="mt-10">
+        <KnowledgeGapsPanel />
+      </div>
     </div>
   );
 }

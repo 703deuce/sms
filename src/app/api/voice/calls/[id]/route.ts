@@ -59,6 +59,24 @@ export async function GET(
     const meta = asRecord(call.metadata);
     const feedback = asRecord(meta.callFeedback);
 
+    const gapRows = await prisma.voiceKnowledgeGap.findMany({
+      where: { workspaceId: auth.workspaceId },
+      orderBy: { lastAskedAt: "desc" },
+      take: 100,
+    });
+    const knowledgeGaps = gapRows
+      .filter((g) => {
+        const ids = Array.isArray(g.sourceCallIds) ? (g.sourceCallIds as string[]) : [];
+        return ids.includes(id);
+      })
+      .map((g) => ({
+        id: g.id,
+        displayQuestion: g.displayQuestion,
+        status: g.status,
+        timesAsked: g.timesAsked,
+        lastAskedAt: g.lastAskedAt.toISOString(),
+      }));
+
     return NextResponse.json({
       data: {
         call: {
@@ -94,6 +112,7 @@ export async function GET(
               requestedAt: callbackRequest.requestedAt.toISOString(),
             }
           : null,
+        knowledgeGaps,
       },
     });
   } catch (err) {

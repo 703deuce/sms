@@ -1,6 +1,5 @@
-import { redirect } from "next/navigation";
-import { MCTB_ROUTES } from "@/lib/mctb/routes";
+import { VoiceAnalyticsDashboard } from "@/components/voice/voice-analytics-dashboard";
 
 export default function VoiceAnalyticsPage() {
-  redirect(MCTB_ROUTES.analytics);
+  return <VoiceAnalyticsDashboard />;
 }
