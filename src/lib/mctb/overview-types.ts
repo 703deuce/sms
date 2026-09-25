@@ -12,6 +12,8 @@ export type MctbOverviewPayload = {
   pausedUntil: string | null;
   setupComplete: boolean;
   kpis: {
+    windowLabel: string;
+    timeZone: string;
     missedCallsToday: number;
     recoveryTextsToday: number;
     repliesToday: number;
@@ -40,12 +42,7 @@ export type MctbOverviewPayload = {
     recoveryLabel: string;
     voicemailLabel: string | null;
   };
-  performanceSnapshot: {
-    missedCalls: number;
-    recoveryTexts: number;
-    replies: number;
-    replyRate: number;
-  };
+  performanceSnapshot: null;
   leadRecovery: {
     enabled: boolean;
     activePolicyCount: number;

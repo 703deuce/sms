@@ -2,7 +2,7 @@ import "server-only";
 
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { getPrisma } from "@/lib/db";
-import { loadMctbAnalytics } from "@/lib/mctb/analytics";
+import { loadMctbOverviewKpis } from "@/lib/mctb/overview-kpis";
 import { MCTB_CONSENT_MODE_LABELS, normalizeMctbConsentMode } from "@/lib/mctb/consent-mode";
 import { loadMctbOnboardingState, isOnboardingComplete } from "@/lib/mctb/onboarding/state";
 import { formatMctbPhoneLabel } from "@/lib/mctb/phone-display";
@@ -33,15 +33,8 @@ import type { MctbOverviewPayload, MctbOverviewStatus } from "@/lib/mctb/overvie
 
 export type { MctbOverviewPayload, MctbOverviewStatus } from "@/lib/mctb/overview-types";
 
-function startOfToday(): Date {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
 export async function loadMctbOverview(workspaceId: string): Promise<MctbOverviewPayload> {
   const prisma = getPrisma();
-  const todayStart = startOfToday();
 
   const ws = await prisma.workspace.findUnique({
     where: { id: workspaceId },
@@ -64,12 +57,8 @@ export async function loadMctbOverview(workspaceId: string): Promise<MctbOvervie
     compliance,
     reg,
     adminFlags,
-    analytics7d,
+    overviewKpis,
     recentEvents,
-    missedToday,
-    sentToday,
-    repliedToday,
-    needsReplyCount,
     recentConversations,
   ] = await Promise.all([
     loadMissedCallTextConfig(workspaceId),
@@ -79,32 +68,11 @@ export async function loadMctbOverview(workspaceId: string): Promise<MctbOvervie
     loadComplianceOverview(workspaceId),
     loadPhoneNumbers(workspaceId, { includeLinked: true }),
     loadAdminMctbTestFlags(workspaceId),
-    loadMctbAnalytics(workspaceId, "7d"),
+    loadMctbOverviewKpis(workspaceId),
     prisma.missedCallEvent.findMany({
       where: { workspaceId },
       orderBy: { detectedAt: "desc" },
-      take: 5,
-    }),
-    prisma.missedCallEvent.count({
-      where: { workspaceId, detectedAt: { gte: todayStart } },
-    }),
-    prisma.missedCallEvent.count({
-      where: { workspaceId, smsSentAt: { gte: todayStart } },
-    }),
-    prisma.missedCallEvent.count({
-      where: {
-        workspaceId,
-        status: "CUSTOMER_REPLIED",
-        updatedAt: { gte: todayStart },
-      },
-    }),
-    prisma.conversation.count({
-      where: {
-        workspaceId,
-        productSource: appProductSourceToPrisma("mctb"),
-        status: "OPEN",
-        unread: true,
-      },
+      take: 8,
     }),
     prisma.conversation.findMany({
       where: {
@@ -201,10 +169,12 @@ export async function loadMctbOverview(workspaceId: string): Promise<MctbOvervie
     pausedUntil: effectiveSchedule.pauseUntil ?? null,
     setupComplete,
     kpis: {
-      missedCallsToday: missedToday,
-      recoveryTextsToday: sentToday,
-      repliesToday: repliedToday,
-      needsReplyCount,
+      windowLabel: overviewKpis.windowLabel,
+      timeZone: overviewKpis.timeZone,
+      missedCallsToday: overviewKpis.missedCalls,
+      recoveryTextsToday: overviewKpis.recoveryTextsSent,
+      repliesToday: overviewKpis.customerReplies,
+      needsReplyCount: overviewKpis.needsReplyCount,
     },
     recentMissedCalls: recentEvents.map((e: (typeof recentEvents)[number]) => ({
       id: e.id,
@@ -236,12 +206,7 @@ export async function loadMctbOverview(workspaceId: string): Promise<MctbOvervie
       recoveryLabel,
       voicemailLabel: runtime.sendAfterVoicemail ? "Enabled" : null,
     },
-    performanceSnapshot: {
-      missedCalls: analytics7d.totalMissed,
-      recoveryTexts: analytics7d.textsSent,
-      replies: analytics7d.replies,
-      replyRate: analytics7d.replyRate,
-    },
+    performanceSnapshot: null,
     callHandling: await (async () => {
       const line = await loadMctbLineInboundConfig({ workspaceId });
       const decision = await resolveInboundHandlingDecision({ workspaceId });
