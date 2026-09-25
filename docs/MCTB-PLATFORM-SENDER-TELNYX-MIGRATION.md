@@ -9,13 +9,22 @@
 
 ## Three number identities (do not collapse)
 
-MCTB uses **three distinct identities**. Only (1) is per customer workspace. (2) and (3) are **Transovo infrastructure** — they do not change when a new workspace signs up.
+MCTB uses **three distinct identities** with **different scope**:
 
 | # | Identity | Scope | Resolved by | Purpose |
 |---|----------|--------|-------------|---------|
-| **1** | **Business DID** | Per workspace | Setup / forwarding config (customer’s public number) | CFNA forwards *from* this when the business does not answer |
-| **2** | **MCTB voice-ingress DID** | Per workspace (Transovo-owned) | `MissedCallTextConfig.phoneNumberId` → TeXML ingress | Where the forwarded call lands; Press-1 / consent audio |
-| **3** | **Platform SMS sender DID** | **Global** Transovo infrastructure | `resolveCanonicalMctbPlatformSender()` + `MCTB_PLATFORM_SENDER_PHONE_NUMBER_ID` | `From` on PLATFORM recovery texts; inbound replies to that `To` |
+| **1** | **Customer business DID** | **Per customer / workspace** | Setup / forwarding config (customer’s public number) | CFNA forwards *from* this when the business does not answer |
+| **2** | **Transovo MCTB voice-ingress DID** | **Per workspace** (Transovo/provider-owned) | `MissedCallTextConfig.phoneNumberId` → TeXML ingress | Unique forwarding destination per workspace; identifies which workspace owns the call |
+| **3** | **Transovo PLATFORM SMS sender DID** | **Global / shared** Transovo infrastructure | `resolveCanonicalMctbPlatformSender()` + `MCTB_PLATFORM_SENDER_PHONE_NUMBER_ID` | `From` on PLATFORM recovery texts; inbound replies to that `To` when `senderMode === PLATFORM` |
+
+**Tenancy model (future workspaces):**
+
+```
+Business A → CFNA → Workspace A ingress DID_A → ws_A → recovery → GLOBAL platform sender (PLATFORM mode)
+Business B → CFNA → Workspace B ingress DID_B → ws_B → recovery → same GLOBAL platform sender
+```
+
+Onboarding must **not** assign `MCTB_PLATFORM_SENDER_PHONE_NUMBER_ID` as every workspace’s `MissedCallTextConfig.phoneNumberId`.
 
 **Call flow (conceptual):**
 
@@ -26,7 +35,7 @@ Business DID → CFNA → voice-ingress DID → IVR/Press-1 → recovery runtime
 
 **(2) and (3) do not have to be the same E.164.** This migration changes **only (3)** (provider/number boundary for PLATFORM SMS). It does **not** change TeXML/CFNA, `phoneNumberId` for ingress, or per-workspace business numbers.
 
-**ws_1 certification note:** Today `+18666020680` is both voice ingress and the verified Telnyx platform SMS sender (same `PhoneNumber` row). That is an operational choice for cert, not a product rule. Other workspaces can use different ingress DIDs while sharing one canonical platform sender.
+**ws_1 dual-role exception (cert only):** Today `+18666020680` may wear **two roles** on one `PhoneNumber` row: ws_1 voice-ingress DID **and** global PLATFORM SMS sender (`customer_mctb` + `platformMctbSender: true`). That is acceptable for the current certification workspace. It does **not** mean every workspace’s ingress DID equals the global platform sender DID.
 
 Audit (read-only): `WORKSPACE_ID=ws_1 npx tsx scripts/audit-mctb-three-number-identities.ts`
 
@@ -294,7 +303,11 @@ Switch script (DB): `scripts/switch-mctb-platform-sender-to-telnyx.ts` — demot
 3. Run switch script on production DB if not already applied:  
    `MCTB_PLATFORM_OWNER_WORKSPACE_ID=ws_1 npx tsx scripts/switch-mctb-platform-sender-to-telnyx.ts`
 4. Confirm Telnyx messaging profile webhook URL (already `/api/telnyx/messaging`).
-5. **Do not** change MCTB TeXML / CFNA voice ingress unless separately intended.
+5. **Do not** change identity (2) voice ingress: switch script does **not** mutate `MissedCallTextConfig.phoneNumberId` or TeXML routes.
+
+### §48 — No telephony migration (identity 3 only)
+
+PLATFORM SMS sender provider switch only. Business DIDs remain workspace-specific; Transovo ingress and platform sender are infrastructure resolved on separate config paths (see **Three number identities** above).
 
 ---
 

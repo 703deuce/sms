@@ -24,13 +24,13 @@ This task does **not** reopen: MCTB IA, sender-authority (1B/1C), PLATFORM vs WO
 
 ## Three number identities (do not collapse)
 
-Only **(1)** is per customer workspace. **(2)** and **(3)** are **Transovo infrastructure** — they do **not** change when a new workspace signs up.
-
 | # | Identity | Scope | Resolved by | Purpose |
 |---|----------|--------|-------------|---------|
-| **1** | **Business DID** | Per workspace | Setup / forwarding (customer’s public number) | CFNA forwards *from* this when the business does not answer |
-| **2** | **MCTB voice-ingress DID** | Per workspace (Transovo-owned) | `MissedCallTextConfig.phoneNumberId` → TeXML ingress | Where the forwarded call lands; Press-1 / consent audio |
-| **3** | **Platform SMS sender DID** | **Global** Transovo infrastructure | `resolveCanonicalMctbPlatformSender()` + `MCTB_PLATFORM_SENDER_PHONE_NUMBER_ID` | `From` on PLATFORM recovery texts; inbound replies to that `To` |
+| **1** | **Customer business DID** | **Per customer / workspace** | Setup / forwarding (customer’s public number) | CFNA forwards *from* this when the business does not answer |
+| **2** | **Transovo MCTB voice-ingress DID** | **Per workspace** (Transovo/provider-owned) | `MissedCallTextConfig.phoneNumberId` → TeXML ingress | Unique CFNA destination per workspace; routes call to correct tenant |
+| **3** | **Transovo PLATFORM SMS sender DID** | **Global / shared** | `resolveCanonicalMctbPlatformSender()` + `MCTB_PLATFORM_SENDER_PHONE_NUMBER_ID` | `From` on PLATFORM recovery texts; inbound replies to that `To` |
+
+Provisioning must **not** set every workspace’s ingress to the canonical platform sender. See `docs/MCTB-NUMBER-IDENTITY-VERIFICATION-REPORT.md`.
 
 **Call flow (conceptual):**
 
