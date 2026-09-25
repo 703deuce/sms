@@ -15,7 +15,7 @@ export function PageHeader({
   return (
     <div
       className={cn(
-        "mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between",
+        "transovo-page-header mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between",
         className,
       )}
     >
