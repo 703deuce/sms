@@ -36,24 +36,24 @@ Also certified together:
 
 | Gate | Status |
 |------|--------|
-| READY TO MERGE | **YES** (human merge; not auto) |
-| READY TO DEPLOY | **NO** until final `master` SHA is built and verified |
-| HANDSET CERTIFICATION | **PENDING** |
+| READY TO MERGE | **DONE** (`master` includes tenant + ownership; target **`6228d16b`**) |
+| READY TO DEPLOY | **DONE** (ops confirmed production deploy + migrations complete — 2026-09-25) |
+| HANDSET CERTIFICATION | **PENDING** — only remaining launch proof for platform routing |
 
 ---
 
-## Operational sequence (no further dev pass)
+## Operational sequence
 
-1. **Merge tenant remediation PR first** (#503 or equivalent).
-2. **Merge #504** (Active Conversation Ownership) second.
-3. **Record final `master` SHA** — this is the production deploy candidate.
-4. **Coolify:** wait for build/deploy to complete successfully.
-5. **Verify deploy:**
-   - `/api/health` (or equivalent) reports **that exact SHA**
-   - `prisma migrate deploy` applied `20260924183000_mctb_platform_sender_assignment`
-   - Table `mctb_platform_sender_assignments` and partial unique index exist in production DB
-6. **Telnyx:** re-sync/republish **shared Voice tools** with `Authorization` header; run harmless Voice auth smoke (`npx tsx scripts/test-telnyx-voice-tool-webhook-auth.ts` against staging if applicable).
-7. **MCTB handset certification** (below) — only after steps 1–6.
+### Completed (engineering / deploy)
+
+1. ~~Merge tenant remediation + #504 to `master`~~ — **done** (`6228d16b`).
+2. ~~Coolify production deploy + `prisma migrate deploy`~~ — **confirmed complete** (2026-09-25).
+3. **Spot-check when convenient:** `/api/health` `commitSha` ≥ `6228d16b`; production DB has `mctb_platform_sender_assignments` + `mctb_platform_sender_assignments_active_pair_key`.
+4. **Telnyx shared Voice tools** — confirm `Authorization` republish if not already done with this deploy (required for voice tool auth in prod).
+
+### Next (only remaining gate for platform routing)
+
+5. **MCTB handset certification** (below) — proves `ACTIVE_ASSIGNMENT` on real 888 + iPhone, not just engineering tests.
 
 If final `master` differs only by expected merge commits and **no conflict-resolution edits** touch assignment, tenant isolation, or Voice tool auth paths, **no re-certification dev pass is required** — combined certification remains pre-production evidence.
 
