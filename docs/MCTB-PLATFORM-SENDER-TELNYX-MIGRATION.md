@@ -37,7 +37,8 @@ Business DID → CFNA → voice-ingress DID → IVR/Press-1 → recovery runtime
 
 **ws_1 dual-role exception (cert only):** Today `+18666020680` may wear **two roles** on one `PhoneNumber` row: ws_1 voice-ingress DID **and** global PLATFORM SMS sender (`customer_mctb` + `platformMctbSender: true`). That is acceptable for the current certification workspace. It does **not** mean every workspace’s ingress DID equals the global platform sender DID.
 
-Audit (read-only): `WORKSPACE_ID=ws_1 npx tsx scripts/audit-mctb-three-number-identities.ts`
+Audit (read-only): `WORKSPACE_ID=ws_1 npx tsx scripts/audit-mctb-three-number-identities.ts`  
+Tenancy proof (PR gate): `NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-mctb-number-identity-scope.ts` — see `docs/MCTB-NUMBER-IDENTITY-VERIFICATION-REPORT.md`
 
 ---
 
