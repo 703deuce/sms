@@ -33,7 +33,7 @@ import { KnowledgeGapsPanel } from "@/components/voice/knowledge-gaps-panel";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/input";
-import { OperationalPage, OperationalPageHeader } from "@/components/transovo/operational-page";
+import { PageHeader } from "@/components/ui/page-header";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { VoiceSubNav } from "@/components/voice/voice-subnav";
 import { toErrorMessage } from "@/lib/errors";
@@ -378,19 +378,19 @@ export function BusinessKnowledgeEditor() {
 
   if (!hydrated) {
     return (
-      <OperationalPage narrow className="pb-24">
-        <OperationalPageHeader title="Business Knowledge" description="Loading…" />
+      <div className="mx-auto max-w-5xl px-4 pb-24 sm:px-6">
+        <PageHeader title="Business Knowledge" description="Loading…" />
         <VoiceSubNav />
         <p className="text-sm text-muted-foreground">Loading business knowledge…</p>
-      </OperationalPage>
+      </div>
     );
   }
 
   return (
-    <OperationalPage narrow className="pb-24">
-      <OperationalPageHeader
+    <div className="mx-auto max-w-5xl px-4 pb-24 sm:px-6">
+      <PageHeader
         title="Business Knowledge"
-        description="Sources Amy can search and gaps to resolve from recent calls."
+        description="Teach Amy accurate information about your business, manage sources she can search, and resolve questions she could not answer on calls."
         actions={
           <Link href="/company-brain" className="text-sm text-muted-foreground hover:text-primary">
             Company-wide knowledge
@@ -675,7 +675,7 @@ export function BusinessKnowledgeEditor() {
           />
         </div>
       </div>
-    </OperationalPage>
+    </div>
   );
 }
 

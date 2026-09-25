@@ -5,7 +5,7 @@
 @import "./mctb-brand-tokens.css";
 
 .product-theme[data-mctb-neutral-shell] {
-  --mctb-canvas: #fafafa;
+  --mctb-canvas: #e8ebf0;
   --mctb-page-max: 90rem;
   --mctb-page-pad-x: 1.75rem;
   --mctb-page-pad-top: 1.5rem;

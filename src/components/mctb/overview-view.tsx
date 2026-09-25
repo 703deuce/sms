@@ -71,7 +71,7 @@ export function MctbOverviewView({ initialData = null }: MctbOverviewViewProps) 
 
   if (loading) {
     return (
-      <div className="mctb-home transovo-product-surface-first" aria-busy="true" aria-label="Loading overview">
+      <div className="mctb-home" aria-busy="true" aria-label="Loading overview">
         <div className="mctb-home-inner animate-pulse space-y-4">
           <div className="h-8 w-72 rounded bg-[#e5e8eb]" />
           <div className="mctb-home-kpi-strip">
@@ -96,7 +96,7 @@ export function MctbOverviewView({ initialData = null }: MctbOverviewViewProps) 
 
   if (error || !data) {
     return (
-      <div className="mctb-home transovo-product-surface-first">
+      <div className="mctb-home">
         <div className="mctb-home-inner">
           <div className="mctb-home-surface px-6 py-10 text-center">
             <p className="text-[15px] font-medium text-[#1b1e23]">Overview couldn&apos;t be loaded.</p>
@@ -124,7 +124,7 @@ export function MctbOverviewView({ initialData = null }: MctbOverviewViewProps) 
           : "Setup incomplete";
 
   return (
-    <div className="mctb-home transovo-product-surface-first">
+    <div className="mctb-home">
       <div className="mctb-home-inner space-y-4">
         <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>

@@ -3,15 +3,11 @@ import { HTMLAttributes, ReactNode } from "react";
 
 export function Card({
   className,
-  contained,
   ...props
-}: HTMLAttributes<HTMLDivElement> & { /** Pass 3: only modals/warnings/charts that need a box */ contained?: boolean }) {
+}: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn(
-        contained ? "transovo-surface--contained transovo-surface-flat bg-card p-4" : "transovo-surface-flat",
-        className,
-      )}
+      className={cn("surface rounded-xl bg-card p-5", className)}
       {...props}
     />
   );
@@ -45,10 +41,10 @@ export function StatCard({
 }) {
   const content = (
     <>
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
         {label}
       </p>
-      <p className="mt-1 font-display text-xl font-semibold tracking-tight text-foreground tabular-nums">
+      <p className="mt-1.5 font-display text-2xl font-semibold tracking-tight text-foreground">
         {value}
       </p>
       {hint ? <div className="mt-1 text-xs text-muted-foreground">{hint}</div> : null}
@@ -59,7 +55,7 @@ export function StatCard({
     return (
       <a
         href={href}
-        className="transovo-surface-flat block bg-card p-4 transition-colors duration-150 hover:border-[var(--transovo-brand)]"
+        className="surface block rounded-xl bg-card p-5 transition-all duration-150 hover:border-primary/40 hover:shadow-md"
       >
         {content}
       </a>

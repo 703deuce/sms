@@ -1,6 +1,6 @@
 .mctb-missed-calls {
   min-height: 100%;
-  background: #fafafa;
+  background: #f6f7f8;
   color: #1b1e23;
 }
 
@@ -254,11 +254,10 @@
 .mctb-mc-table-wrap {
   display: flex;
   flex-direction: column;
-  border: none;
-  border-radius: 0;
-  background: transparent;
+  border: 1px solid #eaedf0;
+  border-radius: 8px;
+  background: #ffffff;
   overflow: hidden;
-  border-top: 1px solid #eceef1;
 }
 
 /* Table body only — pagination footer is a separate block below (no overlay). */

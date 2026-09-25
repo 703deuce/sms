@@ -303,8 +303,8 @@ export default function VoiceCallDetailPage() {
     }>) || [];
 
   return (
-    <div className="transovo-call-detail">
-      <nav className="transovo-call-detail__crumb flex flex-wrap items-center gap-1">
+    <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-8">
+      <nav className="mb-4 flex flex-wrap items-center gap-1 text-sm text-[#6b7280]">
         <Link href="/voice/overview" className="hover:text-[#374151]">Overview</Link>
         <ChevronRight className="h-3.5 w-3.5" />
         <Link href="/voice/calls" className="hover:text-[#374151]">Calls</Link>
@@ -312,13 +312,13 @@ export default function VoiceCallDetailPage() {
         <span className="text-[#374151]">Call from {callerName}</span>
       </nav>
 
-      <header className="transovo-call-detail__header">
+      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h1 className="transovo-call-detail__title">
+          <h1 className="font-display text-[26px] font-semibold tracking-tight text-[#111827]">
             {callerName}
           </h1>
-          <p className="transovo-call-detail__meta">{fmtCallPhone(callerPhone)}</p>
-          <p className="transovo-call-detail__meta mt-1">
+          <p className="mt-1 text-sm text-[#6b7280]">{fmtCallPhone(callerPhone)}</p>
+          <p className="mt-2 text-sm text-[#6b7280]">
             {dateLabel} at {timeLabel}
             {" · "}
             {fmtCallDuration(call.durationSeconds as number)}
@@ -333,19 +333,19 @@ export default function VoiceCallDetailPage() {
             </p>
           ) : null}
         </div>
-      </header>
+      </div>
 
-      <div className="transovo-call-detail__tabs" role="tablist" aria-label="Call detail">
+      <div className="mb-6 flex gap-6 border-b border-[#e5e7eb]">
         {(["overview", "transcript"] as const).map((t) => (
           <button
             key={t}
             type="button"
-            role="tab"
-            aria-selected={tab === t}
             onClick={() => setTab(t)}
             className={cn(
-              "transovo-call-detail__tab capitalize",
-              tab === t && "transovo-call-detail__tab--active",
+              "pb-3 text-sm font-medium capitalize",
+              tab === t
+                ? "border-b-2 border-[#6366f1] text-[#6366f1]"
+                : "text-[#6b7280] hover:text-[#374151]",
             )}
           >
             {t}
@@ -353,8 +353,8 @@ export default function VoiceCallDetailPage() {
         ))}
       </div>
 
-      <div className="transovo-call-detail__layout">
-        <div className="transovo-call-detail__main space-y-6">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,320px)]">
+        <div className="min-w-0 space-y-6">
           {tab === "overview" ? (
             <>
               <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
@@ -564,9 +564,9 @@ export default function VoiceCallDetailPage() {
           )}
         </div>
 
-        <aside className="transovo-call-detail__rail lg:sticky lg:top-4 lg:self-start">
-          <div className="transovo-call-detail__panel">
-            <h2 className="transovo-call-detail__panel-title">Call details</h2>
+        <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+          <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
+            <h2 className="text-sm font-semibold text-[#111827]">Call Data</h2>
             <dl className="mt-4 space-y-2.5 text-sm">
               <div className="flex justify-between gap-2">
                 <dt className="text-[#6b7280]">Status</dt>

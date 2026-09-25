@@ -3,11 +3,10 @@
  * Extends MCTB brand tokens; Voice + Inbox consume the same semantic palette.
  */
 @import "../components/mctb/shell/mctb-brand-tokens.css";
-@import "./transovo-pass3-surface-first.css";
 
 :root,
 .product-theme {
-  --transovo-canvas: #fafafa;
+  --transovo-canvas: #e8ebf0;
   --transovo-page-max: 90rem;
   --transovo-page-max-narrow: 64rem;
   --transovo-page-pad-x: 1.75rem;
@@ -72,14 +71,8 @@
 .transovo-surface-card {
   background: var(--transovo-surface);
   border: 1px solid var(--transovo-border);
-  border-radius: var(--transovo-radius-md);
-  box-shadow: none;
-}
-
-.transovo-surface-flat {
-  border: 1px solid var(--transovo-border);
-  border-radius: var(--transovo-radius-md);
-  box-shadow: none;
+  border-radius: var(--transovo-radius-lg);
+  box-shadow: var(--transovo-shadow-sm);
 }
 
 .transovo-kpi-strip {

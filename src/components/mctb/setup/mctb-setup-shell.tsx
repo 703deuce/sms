@@ -26,7 +26,7 @@ export function MctbSetupShell({
   children,
 }: Props) {
   return (
-    <div className="mctb-setup-workspace transovo-operational-redesign">
+    <div className="mctb-setup-workspace">
       <div className="mctb-setup-workspace-inner">
         <header className="mctb-setup-page-header">
           <div className="mctb-setup-page-header__left">

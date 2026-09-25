@@ -216,7 +216,7 @@ export function AiRecoverySettingsPage() {
   if (loading) {
     return (
       <MctbPageContainer>
-        <div className="mctb-page voice-theme transovo-operational-redesign">
+        <div className="mctb-page voice-theme">
           <div className="mctb-page-inner max-w-2xl space-y-4">
             <div className="h-8 w-48 animate-pulse rounded bg-muted" />
             <SectionSkeleton />
@@ -231,7 +231,7 @@ export function AiRecoverySettingsPage() {
   if (loadError) {
     return (
       <MctbPageContainer>
-        <div className="mctb-page voice-theme transovo-operational-redesign">
+        <div className="mctb-page voice-theme">
           <div className="mctb-page-inner max-w-2xl">
             <MctbPageHeader title="AI Recovery" description="Help Transovo collect useful information after a missed call." />
             <div className="ref-card mt-6 p-6" role="alert">

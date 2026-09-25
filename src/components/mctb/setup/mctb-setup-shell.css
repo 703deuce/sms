@@ -2,7 +2,7 @@
   width: 100%;
   min-width: 0;
   min-height: 100%;
-  background: var(--transovo-canvas, #fafafa);
+  background: var(--transovo-canvas, #e8ebf0);
   color: var(--transovo-text, #1b1e23);
 }
 

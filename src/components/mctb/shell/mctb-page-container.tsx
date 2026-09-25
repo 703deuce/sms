@@ -11,10 +11,10 @@ type MctbPageContainerProps = {
 /** Standard MCTB page padding + max-width (shell-level). */
 export function MctbPageContainer({ children, className, flush }: MctbPageContainerProps) {
   return (
-    <div className="mctb-page-canvas transovo-product-surface-first min-h-full">
+    <div className="mctb-page-canvas min-h-full">
       <div
         className={cn(
-          "mctb-page-container transovo-page-stack",
+          "mctb-page-container",
           flush && "mctb-page-container--flush",
           className,
         )}
