@@ -45,10 +45,16 @@ export function mergePlatformMctbSenderSettings(
   const voiceIngressRole = parseMctbPhoneRole(existingSettings);
   const dualVoiceIngress =
     voiceIngressRole === "customer_mctb" || voiceIngressRole === "platform_demo";
+  const patchCompliance = asRecord(platformPatch.messagingCompliance);
+  const patchComplianceApproved =
+    Boolean(patchCompliance.type) &&
+    isTfvApproved(String(patchCompliance.status || "NOT_STARTED") as import("@/lib/messaging/compliance/messaging-compliance").TollFreeVerificationStatus);
   const merged = {
     ...existing,
     ...platformPatch,
-    messagingCompliance: platformPatch.messagingCompliance ?? existing.messagingCompliance,
+    messagingCompliance: patchComplianceApproved
+      ? platformPatch.messagingCompliance
+      : (platformPatch.messagingCompliance ?? existing.messagingCompliance),
   };
   const telephony = asRecord(existing.telephony);
   const hasMctbTexmlIngress =
