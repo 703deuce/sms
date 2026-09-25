@@ -8,7 +8,12 @@ import {
 import { AfterHoursNotificationsEditor } from "@/components/solutions/appointment-receptionist/after-hours-notifications-editor";
 import { UrgencyRulesEditor } from "@/components/solutions/appointment-receptionist/urgency-rules-editor";
 import { SpamUnwantedCallsEditor } from "@/components/solutions/appointment-receptionist/spam-unwanted-calls-editor";
+import { BusinessScheduleEditor } from "@/components/solutions/appointment-receptionist/operating-maturity-editor";
 import { transferWizardValidationIssues } from "@/lib/solutions/appointment-receptionist/transfer-wizard-state";
+import { TransferEffectiveStatusCard } from "@/components/voice/transfer-effective-status-card";
+import { TransferWaterfallPreview } from "@/components/voice/transfer-waterfall-preview";
+import { VoiceIngressSetupPanel } from "@/components/voice/voice-ingress-setup-panel";
+import { RecordingConfigCard } from "@/components/voice/recording-config-card";
 import {
   applyWizardPreset,
   createDefaultWizardState,
@@ -175,6 +180,10 @@ export function CallHandlingOperationalPage() {
         <p className="text-xs text-muted-foreground">Saved at {savedAt}.</p>
       ) : null}
 
+      <VoiceIngressSetupPanel wizardState={state} />
+
+      <TransferEffectiveStatusCard state={state} patch={patch} />
+
       <Card className="p-5">
         <h2 className="text-sm font-semibold">Current behavior</h2>
         <p className="mt-1 text-xs text-muted-foreground">
@@ -208,41 +217,24 @@ export function CallHandlingOperationalPage() {
             {summary.emergencyHandlingEnabled ? "Enabled" : "Off"}
           </li>
         </ul>
-        {summary.waterfallSteps.length > 1 ? (
-          <ol className="mt-4 space-y-2 border-l-2 border-border pl-4 text-sm">
-            {summary.waterfallSteps.map((step) => (
-              <li key={step.order}>
-                <span className="font-medium">{step.order}. {step.label}</span>
-                <span className="text-muted-foreground">
-                  {" "}
-                  · {step.mode} · Ring {step.ringSeconds}s
-                </span>
-              </li>
-            ))}
-            <li className="text-muted-foreground">↓ Fallback: {summary.fallbackLabel}</li>
-          </ol>
-        ) : null}
+        <div className="mt-4">
+          <TransferWaterfallPreview
+            summary={summary}
+            fallbackLabel={summary.fallbackLabel}
+          />
+        </div>
       </Card>
 
       <section className="space-y-4" aria-labelledby="transfers-heading">
         <h2 id="transfers-heading" className="text-lg font-semibold">Transfers</h2>
-        {!state.capabilities.includes("transfer_calls") ? (
-          <p className="text-sm text-muted-foreground">
-            Enable <strong>Transfer calls</strong> in{" "}
-            <Link href={MCTB_ROUTES.voiceAgent} className="text-primary underline">
-              AI agent setup → Goals
-            </Link>{" "}
-            to configure destinations.
-          </p>
-        ) : (
-          <EmergencyTransferEditor state={state} patch={patch} />
-        )}
+        <EmergencyTransferEditor state={state} patch={patch} />
       </section>
 
       <section className="space-y-4" aria-labelledby="hours-heading">
         <h2 id="hours-heading" className="text-lg font-semibold">Business hours &amp; after hours</h2>
         <p className="text-sm text-muted-foreground">{hoursSummary.duringHours}</p>
         <p className="text-sm text-muted-foreground">{hoursSummary.afterHours}</p>
+        <BusinessScheduleEditor state={state} patch={patch} />
         <AfterHoursBehaviorEditor state={state} patch={patch} />
       </section>
 
@@ -280,21 +272,9 @@ export function CallHandlingOperationalPage() {
         <SpamUnwantedCallsEditor state={state} patch={patch} />
       </section>
 
-      <section className="space-y-3" aria-labelledby="recording-heading">
-        <h2 id="recording-heading" className="text-lg font-semibold">Call recording</h2>
-        <Card className="p-4 text-sm">
-          <p>
-            Recording is{" "}
-            <strong>{state.callRecording ? "on" : "off"}</strong> for this agent.
-          </p>
-          <p className="mt-2 text-muted-foreground">
-            Change recording in{" "}
-            <Link href={MCTB_ROUTES.voiceAgent} className="text-primary underline">
-              AI agent setup → Phone
-            </Link>
-            . Playback stays on each call detail page.
-          </p>
-        </Card>
+      <section aria-labelledby="recording-heading">
+        <h2 id="recording-heading" className="mb-4 text-lg font-semibold">Call recording</h2>
+        <RecordingConfigCard state={state} patch={patch} />
       </section>
 
       <section className="space-y-3" aria-labelledby="recent-heading">

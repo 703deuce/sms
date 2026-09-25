@@ -2,6 +2,7 @@ import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appoint
 import {
   ensureEmergencyTransferWizardState,
 } from "@/lib/solutions/appointment-receptionist/transfer-wizard-state";
+import { deriveEffectiveTransferState } from "./effective-transfer-state";
 import { resolveActiveOnCallTarget } from "@/lib/voice-receptionist-wizard/operating-maturity/on-call";
 import { DEFAULT_VOICE_V2_OPERATING_MATURITY_CONFIG } from "@/lib/voice-receptionist-wizard/operating-maturity/defaults";
 
@@ -33,9 +34,8 @@ export function buildCallHandlingBehaviorSummary(
   state: AppointmentReceptionistWizardState,
 ): CallHandlingBehaviorSummary {
   const normalized = ensureEmergencyTransferWizardState(state);
-  const enabled =
-    normalized.voiceV2HumanTransferEnabled !== false &&
-    normalized.capabilities.includes("transfer_calls");
+  const effective = deriveEffectiveTransferState(state);
+  const enabled = effective.canAmyTransferNow;
   const routing =
     normalized.transferRouting === "waterfall" ? "waterfall" : "single";
   const destinations = (normalized.transferDestinations ?? []).filter(

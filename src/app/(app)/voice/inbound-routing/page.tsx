@@ -93,6 +93,19 @@ export default function InboundRoutingPage() {
       />
       <VoiceSubNav />
 
+      <Card className="mb-6 border-primary/20 bg-primary/5 p-4 text-sm">
+        <p className="font-medium">Not the same as Call Handling</p>
+        <p className="mt-1 text-muted-foreground">
+          <strong>Inbound routing rules</strong> decide which product or agent answers when a call
+          hits Transovo (business hours, overflow, AI handoff).{" "}
+          <strong>Call Handling</strong> configures what Amy does after answering — transfers,
+          on-call, emergency, and caller protection.{" "}
+          <a href="/voice/call-handling" className="font-medium text-primary underline">
+            Open Call Handling
+          </a>
+        </p>
+      </Card>
+
       <div className="mb-6 grid gap-6 lg:grid-cols-2">
         <Card className="space-y-4 p-5">
           <h2 className="font-medium">Add routing rule</h2>

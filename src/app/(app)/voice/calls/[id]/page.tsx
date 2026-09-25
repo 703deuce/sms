@@ -272,6 +272,14 @@ export default function VoiceCallDetailPage() {
     (call.contactEmail as string | null | undefined)?.trim() ||
     (demo ? mockCall?.contactEmail : null);
 
+  const knowledgeGaps =
+    (data?.knowledgeGaps as Array<{
+      id: string;
+      displayQuestion: string;
+      status: string;
+      timesAsked?: number;
+    }>) || [];
+
   return (
     <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-8">
       <nav className="mb-4 flex flex-wrap items-center gap-1 text-sm text-[#6b7280]">
@@ -368,6 +376,31 @@ export default function VoiceCallDetailPage() {
                     ))}
                 </ul>
               </div>
+
+              {knowledgeGaps.length > 0 ? (
+                <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h2 className="text-sm font-semibold text-[#111827]">Knowledge gaps</h2>
+                    <Link
+                      href="/voice/knowledge#knowledge-gaps"
+                      className="text-sm font-medium text-[#6366f1] hover:underline"
+                    >
+                      Manage gaps
+                    </Link>
+                  </div>
+                  <ul className="mt-3 space-y-2 text-sm text-[#374151]">
+                    {knowledgeGaps.map((g) => (
+                      <li key={g.id}>
+                        <span className="font-medium">{g.displayQuestion}</span>
+                        <span className="mt-0.5 block text-xs text-[#6b7280]">
+                          Status: {g.status.replace(/_/g, " ")}
+                          {g.timesAsked != null ? ` · Asked ${g.timesAsked} time(s)` : ""}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
 
               <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
                 <h2 className="text-sm font-semibold text-[#111827]">AI Summary</h2>

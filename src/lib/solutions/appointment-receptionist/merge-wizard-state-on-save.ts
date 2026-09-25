@@ -103,6 +103,8 @@ const STEP_OWNED_FIELDS: Record<
     "aiCallRecoveryContinueOverSms",
     "aiCallRecoveryDelaySeconds",
     "aiCallRecoverySendWhenCallbackCreated",
+    "capabilities",
+    "callRecording",
   ],
   voice: [
     "voiceId",

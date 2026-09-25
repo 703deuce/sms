@@ -92,6 +92,24 @@ export default function VoiceOverviewPage() {
       />
       <VoiceSubNav />
 
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          { href: "/voice/calls", label: "Calls", hint: "History & detail" },
+          { href: "/voice/call-handling", label: "Call Handling", hint: "Transfers & on-call" },
+          { href: "/voice/knowledge", label: "Knowledge", hint: "FAQ & gaps" },
+          { href: "/voice/needs-attention", label: "Needs attention", hint: "Follow-ups" },
+        ].map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className="rounded-xl border border-border bg-card px-4 py-3 transition hover:border-primary/40"
+          >
+            <span className="text-sm font-semibold">{item.label}</span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">{item.hint}</span>
+          </Link>
+        ))}
+      </div>
+
       <div className="mb-4 rounded-xl border border-violet-200/80 bg-violet-50/40 px-4 py-3 text-sm text-slate-600">
         <strong className="font-semibold text-slate-800">Phone minutes</strong> count live talk
         time on real inbound/outbound calls (PSTN/LiveKit). Browser voice tests and TTS-only
