@@ -381,6 +381,13 @@ export async function POST(req: Request) {
   }
 
   if (body.consentMode === "existing_consent") {
+    const { hasActiveMctbPaidEntitlement } = await import("@/lib/mctb/entitlement");
+    if (!(await hasActiveMctbPaidEntitlement(workspaceId))) {
+      return NextResponse.json(
+        { error: "Existing consent mode requires a paid MCTB plan. Free accounts use Press-1 consent." },
+        { status: 400 },
+      );
+    }
     const [phoneNumbersForConsent, complianceForConsent, regForConsent, adminFlagsForConsent] =
       await Promise.all([
         loadMctbSetupPhoneOptionsWithTelnyxSync(workspaceId),

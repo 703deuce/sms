@@ -17,6 +17,8 @@ import { ConversationPaymentActions } from "@/components/payments/conversation-p
 import { MctbConversationBookingActions } from "@/components/mctb/booking/conversation-booking-actions";
 import { MctbRecoveryContextPanel } from "@/components/mctb/handoff/mctb-recovery-context-panel";
 import { isMctbInboxThread } from "@/lib/mctb/inbox/is-mctb-thread";
+import { useMctbInboxCapabilities } from "@/components/mctb/inbox/use-mctb-inbox-capabilities";
+import Link from "next/link";
 
 type Props = {
   convo: Conversation;
@@ -55,6 +57,10 @@ export function ConversationsThreadArea({
 }: Props) {
   const assist = useInboxAiAssist(convo.id);
   const mctbThread = isMctbInboxThread(convo);
+  const { capabilities: mctbCaps } = useMctbInboxCapabilities(convo.id, mctbThread);
+  const mctbSmsEnabled = !mctbThread || Boolean(mctbCaps?.canUseFreeformMessaging);
+  const mctbShowSavedReplies = !mctbThread || Boolean(mctbCaps?.canUseSavedReplies);
+  const mctbBookingEnabled = Boolean(mctbCaps?.canUseBookingLink);
   const [prefill, setPrefill] = useState("");
   const [viewers, setViewers] = useState<Array<{ userId: string; userName: string }>>([]);
 
@@ -111,7 +117,7 @@ export function ConversationsThreadArea({
       disabled?: boolean;
     }) => (
       <>
-        {mctbThread ? (
+        {mctbThread && mctbBookingEnabled ? (
           <MctbConversationBookingActions
             conversationId={convo.id}
             phone={convo.phone}
@@ -144,6 +150,28 @@ export function ConversationsThreadArea({
             {composerDisabledReason}
           </div>
         ) : null}
+        {mctbThread && mctbCaps && !mctbSmsEnabled && mctbCaps.messagingAuthorityHint ? (
+          <div
+            style={{
+              padding: "10px 16px",
+              fontSize: 12.5,
+              lineHeight: 1.5,
+              color: "#4b5563",
+              background: "#f8f9fb",
+              borderTop: "1px solid #eaedf0",
+            }}
+          >
+            {mctbCaps.messagingAuthorityHint}
+            {mctbCaps.upgradeHint ? (
+              <span>
+                {" "}
+                <Link href="/voice/numbers" className="font-semibold text-[#2f3f85] underline">
+                  Numbers
+                </Link>
+              </span>
+            ) : null}
+          </div>
+        ) : null}
         <ConversationsComposer
           onSend={(text, mediaUrls, fromE164) => {
             if (composeFromRef) composeFromRef.current = fromE164;
@@ -156,10 +184,26 @@ export function ConversationsThreadArea({
           teammates={teammates}
           phoneNumbers={phoneNumbers}
           defaultFromNumberId={defaultFromNumberId}
+          smsEnabled={mctbSmsEnabled}
+          showSavedReplies={mctbShowSavedReplies}
         />
       </>
     ),
-    [prefill, composerDisabled, composerDisabledReason, teammates, phoneNumbers, composeFromRef, defaultFromNumberId, convo, mctbThread],
+    [
+      prefill,
+      composerDisabled,
+      composerDisabledReason,
+      teammates,
+      phoneNumbers,
+      composeFromRef,
+      defaultFromNumberId,
+      convo,
+      mctbThread,
+      mctbBookingEnabled,
+      mctbSmsEnabled,
+      mctbShowSavedReplies,
+      mctbCaps,
+    ],
   );
 
   return (
