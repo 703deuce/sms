@@ -190,7 +190,7 @@ export async function loadMctbOverview(workspaceId: string): Promise<MctbOvervie
         attentionHref = "/integrations?provider=microsoft";
       } else {
         attentionReason = "One or more policies need configuration";
-        attentionHref = "/mctb/ai-lead-recovery";
+        attentionHref = "/mctb/ai-recovery";
       }
     }
   }

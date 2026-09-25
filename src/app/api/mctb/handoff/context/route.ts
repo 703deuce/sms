@@ -13,8 +13,16 @@ export async function GET(req: Request) {
   }
 
   const prisma = getPrisma();
-  const automation = await prisma.mctbConversationAutomationState.findUnique({
-    where: { conversationId },
+  const conversation = await prisma.conversation.findFirst({
+    where: { id: conversationId, workspaceId },
+    select: { id: true },
+  });
+  if (!conversation) {
+    return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
+  }
+
+  const automation = await prisma.mctbConversationAutomationState.findFirst({
+    where: { conversationId, workspaceId },
   });
   const snapshot = await prisma.mctbLeadSnapshot.findFirst({
     where: { workspaceId, conversationId },

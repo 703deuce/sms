@@ -130,7 +130,7 @@ export function MctbHomeLeadRecoveryCard({ data }: { data: MctbOverviewPayload }
     <section className="mctb-home-surface mctb-home-lr-card" aria-labelledby="mctb-home-lr">
       <div className="mctb-home-section-head">
         <h2 id="mctb-home-lr" className="mctb-home-section-title">AI Lead Recovery</h2>
-        <Link href={MCTB_ROUTES.aiLeadRecovery} className="mctb-home-link">Manage</Link>
+        <Link href={MCTB_ROUTES.aiRecovery} className="mctb-home-link">Manage</Link>
       </div>
       <p className="mctb-home-lr-line">
         <strong>{lr.enabled ? "Enabled" : "Disabled"}</strong>
