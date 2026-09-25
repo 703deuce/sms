@@ -20,7 +20,10 @@ function configuredPlatformSenderPhoneNumberId(): string | null {
 }
 
 /**
- * Resolve the single canonical Transovo MCTB platform SMS sender (not per-workspace).
+ * Resolve the single canonical Transovo MCTB **platform SMS sender** (identity 3).
+ *
+ * Not the per-workspace voice-ingress DID (`MissedCallTextConfig.phoneNumberId`).
+ * Not the customer's business DID. Global Transovo infrastructure for senderMode=PLATFORM.
  */
 export async function resolveCanonicalMctbPlatformSender(): Promise<CanonicalMctbPlatformSender | null> {
   const prisma = getPrisma();

@@ -7,6 +7,31 @@
 
 ---
 
+## Three number identities (do not collapse)
+
+MCTB uses **three distinct identities**. Only (1) is per customer workspace. (2) and (3) are **Transovo infrastructure** — they do not change when a new workspace signs up.
+
+| # | Identity | Scope | Resolved by | Purpose |
+|---|----------|--------|-------------|---------|
+| **1** | **Business DID** | Per workspace | Setup / forwarding config (customer’s public number) | CFNA forwards *from* this when the business does not answer |
+| **2** | **MCTB voice-ingress DID** | Per workspace (Transovo-owned) | `MissedCallTextConfig.phoneNumberId` → TeXML ingress | Where the forwarded call lands; Press-1 / consent audio |
+| **3** | **Platform SMS sender DID** | **Global** Transovo infrastructure | `resolveCanonicalMctbPlatformSender()` + `MCTB_PLATFORM_SENDER_PHONE_NUMBER_ID` | `From` on PLATFORM recovery texts; inbound replies to that `To` |
+
+**Call flow (conceptual):**
+
+```
+Business DID → CFNA → voice-ingress DID → IVR/Press-1 → recovery runtime
+                                                      → platform SMS sender DID → customer handset
+```
+
+**(2) and (3) do not have to be the same E.164.** This migration changes **only (3)** (provider/number boundary for PLATFORM SMS). It does **not** change TeXML/CFNA, `phoneNumberId` for ingress, or per-workspace business numbers.
+
+**ws_1 certification note:** Today `+18666020680` is both voice ingress and the verified Telnyx platform SMS sender (same `PhoneNumber` row). That is an operational choice for cert, not a product rule. Other workspaces can use different ingress DIDs while sharing one canonical platform sender.
+
+Audit (read-only): `WORKSPACE_ID=ws_1 npx tsx scripts/audit-mctb-three-number-identities.ts`
+
+---
+
 ## 1. Executive verdict
 
 **MCTB TELNYX PRIMARY PLATFORM SENDER READY — TWILIO PRESERVED** at the code and configuration layer.
