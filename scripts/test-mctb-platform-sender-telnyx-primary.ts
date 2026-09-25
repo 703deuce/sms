@@ -31,6 +31,20 @@ const TWILIO_E164 = "+18885046264";
   assert.equal(isPlatformMctbSenderPhoneRecord({ settingsJson: merged }), true);
 }
 
+// Platform adopt must not leave stale NOT_STARTED compliance on an existing ingress row
+{
+  const merged = mergePlatformMctbSenderSettings(
+    {
+      messagingCompliance: { type: "A2P_10DLC", status: "NOT_STARTED" },
+      mctbNumberClass: "TELNYX_LOCAL_A2P",
+      mctbRole: "customer_mctb",
+    },
+    platformMctbSenderSettings({ provider: "telnyx", tfvApproved: true, dualVoiceIngress: true }),
+  );
+  const compliance = merged.messagingCompliance as { status?: string };
+  assert.equal(compliance.status, "APPROVED");
+}
+
 // Dedicated platform_mctb_sender row shape (Twilio preserved alternate)
 assert.equal(
   isPlatformMctbSenderPhoneRecord({
