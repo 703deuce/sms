@@ -1,10 +1,9 @@
-import { MctbVoiceAgentPage } from "@/components/mctb/voice-agent/mctb-voice-agent-page";
-import { Suspense } from "react";
+import { redirect } from "next/navigation";
 
-export default function MctbVoiceAgentRoutePage() {
-  return (
-    <Suspense fallback={<div className="mctb-page-container text-sm text-muted-foreground">Loading…</div>}>
-      <MctbVoiceAgentPage />
-    </Suspense>
-  );
+/**
+ * Legacy MCTB URL for Voice AI receptionist configuration.
+ * Voice owns agent setup — not MCTB AI Recovery.
+ */
+export default function MctbVoiceAgentLegacyRedirect() {
+  redirect("/voice/agents");
 }

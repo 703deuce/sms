@@ -1,6 +1,5 @@
-import { AiLeadRecoveryPage } from "@/components/mctb/lead-recovery/ai-lead-recovery-page";
+import { AiRecoverySettingsPage } from "@/components/mctb/ai-recovery/ai-recovery-settings-page";
 
-/** Canonical AI Recovery route — simplified page lands with Pass 3 merge. */
 export default function MctbAiRecoveryPage() {
-  return <AiLeadRecoveryPage />;
+  return <AiRecoverySettingsPage />;
 }

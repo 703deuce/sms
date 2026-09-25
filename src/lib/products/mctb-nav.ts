@@ -46,7 +46,7 @@ export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
       { label: "Calls", href: "/voice/calls", icon: PhoneCall },
       {
         label: "AI Agent",
-        href: MCTB_ROUTES.voiceAgent,
+        href: "/voice/agents",
         icon: AudioLines,
       },
       { label: "Knowledge", href: "/voice/knowledge", icon: BookOpen },
@@ -78,14 +78,14 @@ export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
       badge: badge > 0 ? badge : undefined,
     },
     {
+      label: "AI Recovery",
+      href: MCTB_ROUTES.aiRecovery,
+      icon: Sparkles,
+    },
+    {
       label: "Voicemail",
       href: MCTB_ROUTES.voicemail,
       icon: Voicemail,
-    },
-    {
-      label: "AI Lead Recovery",
-      href: MCTB_ROUTES.aiLeadRecovery,
-      icon: Sparkles,
     },
     {
       label: "Analytics",
@@ -171,6 +171,8 @@ export function getMctbPageTitle(pathname: string): string {
   if (pathname.startsWith(MCTB_ROUTES.analytics) || pathname.startsWith("/analytics/mctb")) {
     return "Analytics";
   }
+  if (pathname.startsWith(MCTB_ROUTES.aiRecovery)) return "AI Recovery";
+  if (pathname.startsWith(MCTB_ROUTES.aiLeadRecovery)) return "AI Recovery";
   if (pathname.startsWith(MCTB_ROUTES.voiceAgent)) return "AI Agent";
   if (pathname.startsWith(MCTB_ROUTES.setup)) return "Setup";
   if (pathname.startsWith(MCTB_ROUTES.numbers)) return "Numbers";

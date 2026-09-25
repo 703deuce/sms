@@ -1,5 +1,7 @@
-import { MctbAnalyticsView } from "@/components/mctb/analytics-view";
+import { redirect } from "next/navigation";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 
-export default function AnalyticsMctbPage() {
-  return <MctbAnalyticsView />;
+/** Legacy analytics path — canonical MCTB analytics is /mctb/analytics */
+export default function AnalyticsMctbLegacyRedirect() {
+  redirect(MCTB_ROUTES.analytics);
 }

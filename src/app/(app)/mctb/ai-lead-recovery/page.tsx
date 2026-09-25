@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 
+/** Legacy route — canonical AI Recovery configuration is /mctb/ai-recovery */
 export default async function MctbAiLeadRecoveryLegacyPage({
   searchParams,
 }: {

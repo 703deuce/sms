@@ -8,6 +8,7 @@ export const MCTB_ROUTES = {
   aiRecovery: "/mctb/ai-recovery",
   /** @deprecated Redirects to aiRecovery */
   aiLeadRecovery: "/mctb/ai-lead-recovery",
+  /** @deprecated Voice product — /mctb/voice-agent redirects to /voice/agents */
   voiceAgent: "/mctb/voice-agent",
   analytics: "/mctb/analytics",
   setup: "/mctb/setup",
