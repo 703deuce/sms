@@ -298,7 +298,7 @@ Evidence paths: `visual-audit/mctb/*.png`, `visual-audit/voice/*.png` (refreshed
 | Operational tables | Full columns; filter bar wraps | Hide low-priority columns | Per-table strategy (scroll, stacked meta, expandable row, or list) — **not** default card-list (lock §11) |
 | Setup | Two-column when summary column | Stack summary below | Single column; save in header |
 | Inbox | Three panes | List + thread; context drawer | List ↔ thread full screen |
-| Voice Receptionist | Split editor | Stack | Accordion sections |
+| Voice Receptionist | Split editor | Stacked/focused responsive sections | Accordion only if workflow review proves it improves mobile usability without hiding required state, changing workflow, or weakening a11y (lock §3) |
 | KPI strip | 4-column | 2×2 | 2×2 scroll optional |
 
 Use existing `mctb-design-tokens.css` breakpoints; extend to global `transovo-layout.css`.
