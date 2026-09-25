@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
-import { loadMctbAnalytics, type MctbAnalyticsRange } from "@/lib/mctb/analytics";
+import { loadMctbAnalytics } from "@/lib/mctb/analytics";
+import type { MctbAnalyticsRange } from "@/lib/mctb/analytics-range";
 import { traceMctbDebug, traceMctbDebugError } from "@/lib/mctb/debug";
 
 const VALID_RANGES = new Set<MctbAnalyticsRange>(["7d", "30d", "90d"]);

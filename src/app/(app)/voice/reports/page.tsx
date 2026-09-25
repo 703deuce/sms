@@ -15,7 +15,7 @@ type MctbAnalytics = {
   repeatCallers: number;
   replies: number;
   replyRate: number;
-  deliveryRate: number;
+  sendRate: number;
 };
 
 type SrAnalytics = {
@@ -96,7 +96,7 @@ export default function VoiceReportsPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Missed calls" value={formatNumber(mctb?.totalMissed ?? 0)} />
           <StatCard label="Texts sent" value={formatNumber(mctb?.textsSent ?? 0)} />
-          <StatCard label="Delivery rate" value={`${mctb?.deliveryRate ?? 0}%`} />
+          <StatCard label="Send rate (eligible)" value={`${mctb?.sendRate ?? 0}%`} />
           <StatCard label="Reply rate" value={`${mctb?.replyRate ?? 0}%`} />
         </div>
         <p className="mt-3 text-sm text-muted-foreground">

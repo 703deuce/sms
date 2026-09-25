@@ -3,13 +3,16 @@
 import { Button } from "@/components/ui/button";
 import type { MctbOverviewPayload } from "@/lib/mctb/overview-types";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
+import { MCTB_LAUNCH_COMPACT_OVERVIEW } from "@/lib/mctb/launch-flags";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CallHandlingDashboardCard } from "@/components/call-handling/call-handling-switcher";
 import {
+  MctbHomeAiRecoverySummary,
+  MctbHomeAttentionOkStrip,
   MctbHomeKpiStrip,
-  MctbHomeLeadRecoveryCard,
   MctbHomeNeedsAttention,
+  MctbHomeRecentActivity,
   MctbHomeRecentConversations,
   MctbHomeRecentMissedCallsTable,
   MctbHomeSetupStatus,
@@ -26,6 +29,7 @@ function headerCta(data: MctbOverviewPayload) {
   if (data.status === "setup_incomplete") return { href: MCTB_ROUTES.setup, label: "Finish setup" };
   if (data.status === "paused") return { href: MCTB_ROUTES.setupRecovery, label: "Resume now" };
   if (data.status === "messaging_blocked") return { href: MCTB_ROUTES.setup, label: "Fix messaging" };
+  if (MCTB_LAUNCH_COMPACT_OVERVIEW && data.status === "active") return null;
   return { href: MCTB_ROUTES.setup, label: "Manage setup" };
 }
 
@@ -63,6 +67,7 @@ export function MctbOverviewView({ initialData = null }: MctbOverviewViewProps) 
   const attentionItems = useMemo(() => (data ? buildMctbAttentionItems(data) : []), [data]);
   const cta = data ? headerCta(data) : null;
   const hasAttention = attentionItems.length > 0;
+  const compact = MCTB_LAUNCH_COMPACT_OVERVIEW;
 
   if (loading) {
     return (
@@ -130,7 +135,9 @@ export function MctbOverviewView({ initialData = null }: MctbOverviewViewProps) 
               {statusChip(data.status, statusLabel)}
             </div>
             <p className="mctb-home-page-subtitle mt-1 text-sm leading-5">
-              Missed-call recovery activity, replies, and setup health.
+              {compact
+                ? "What’s happening with missed-call recovery right now."
+                : "Missed-call recovery activity, replies, and setup health."}
             </p>
           </div>
           {cta ? (
@@ -152,40 +159,58 @@ export function MctbOverviewView({ initialData = null }: MctbOverviewViewProps) 
           </p>
         ) : null}
 
-        <CallHandlingDashboardCard />
+        {!compact ? <CallHandlingDashboardCard /> : null}
 
         <MctbHomeKpiStrip data={data} />
 
-        <MctbHomeLeadRecoveryCard data={data} />
+        <MctbHomeAiRecoverySummary data={data} />
 
-        <div className="flex flex-col gap-3 lg:grid lg:grid-cols-12 lg:items-stretch lg:gap-3">
-          {hasAttention ? (
-            <div className="order-1 lg:hidden">
-              <MctbHomeNeedsAttention items={attentionItems} />
+        {compact ? (
+          <div className="flex flex-col gap-3 lg:grid lg:grid-cols-12 lg:gap-3">
+            {hasAttention ? (
+              <div className="lg:col-span-4">
+                <MctbHomeNeedsAttention items={attentionItems} />
+              </div>
+            ) : (
+              <div className="lg:col-span-12">
+                <MctbHomeAttentionOkStrip />
+              </div>
+            )}
+            <div className={hasAttention ? "lg:col-span-8" : "lg:col-span-12"}>
+              <MctbHomeRecentActivity data={data} />
             </div>
-          ) : null}
-
-          <div
-            className={
-              hasAttention
-                ? "order-2 lg:order-1 lg:col-span-8"
-                : "order-2 lg:order-1 lg:col-span-12"
-            }
-          >
-            <MctbHomeRecentMissedCallsTable data={data} attentionOkInline={!hasAttention} />
-          </div>
-
-          {hasAttention ? (
-            <div className="order-3 hidden lg:order-1 lg:col-span-4 lg:block">
-              <MctbHomeNeedsAttention items={attentionItems} />
-            </div>
-          ) : null}
-
-          <div className="mctb-home-bottom-pair order-4 lg:col-span-12 lg:row-start-2">
-            <MctbHomeRecentConversations data={data} />
             <MctbHomeSetupStatus data={data} />
           </div>
-        </div>
+        ) : (
+          <div className="flex flex-col gap-3 lg:grid lg:grid-cols-12 lg:items-stretch lg:gap-3">
+            {hasAttention ? (
+              <div className="order-1 lg:hidden">
+                <MctbHomeNeedsAttention items={attentionItems} />
+              </div>
+            ) : null}
+
+            <div
+              className={
+                hasAttention
+                  ? "order-2 lg:order-1 lg:col-span-8"
+                  : "order-2 lg:order-1 lg:col-span-12"
+              }
+            >
+              <MctbHomeRecentMissedCallsTable data={data} attentionOkInline={!hasAttention} />
+            </div>
+
+            {hasAttention ? (
+              <div className="order-3 hidden lg:order-1 lg:col-span-4 lg:block">
+                <MctbHomeNeedsAttention items={attentionItems} />
+              </div>
+            ) : null}
+
+            <div className="mctb-home-bottom-pair order-4 lg:col-span-12 lg:row-start-2">
+              <MctbHomeRecentConversations data={data} />
+              <MctbHomeSetupStatus data={data} />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

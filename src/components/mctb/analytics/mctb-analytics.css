@@ -237,6 +237,30 @@
   color: #1b1e23;
 }
 
+.mctb-analytics-funnel-rate {
+  display: block;
+  margin-top: 0.125rem;
+  font-size: 11px;
+  color: #8b939e;
+}
+
+.mctb-analytics-definitions {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  font-size: 13px;
+}
+
+.mctb-analytics-definitions dt {
+  font-weight: 600;
+  color: #1b1e23;
+}
+
+.mctb-analytics-definitions dd {
+  margin: 0.125rem 0 0;
+  color: #626872;
+}
+
 .mctb-analytics-panel {
   border: 1px solid #eaedf0;
   border-radius: 8px;
