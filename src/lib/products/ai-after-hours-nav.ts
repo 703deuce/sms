@@ -15,12 +15,9 @@ export type AiAfterHoursNavOptions = {
 };
 
 /**
- * AI After Hours sidebar — reuses existing /voice/* agent and call surfaces.
+ * AI After Hours sidebar — canonical six-destination Voice IA (legacy /voice/agents/* redirects).
  */
-export function buildAiAfterHoursNav(options: AiAfterHoursNavOptions = {}): NavItem[] {
-  const agentId = options.primaryVoiceAgentId ?? null;
-  const agentRoot = agentId ? `/voice/agents/${agentId}/about` : "/voice/agents";
-
+export function buildAiAfterHoursNav(_options: AiAfterHoursNavOptions = {}): NavItem[] {
   const items: NavItem[] = [
     {
       label: "Overview",
@@ -29,26 +26,10 @@ export function buildAiAfterHoursNav(options: AiAfterHoursNavOptions = {}): NavI
       sectionLabel: AI_AFTER_HOURS_DISPLAY_NAME,
       matchExact: true,
     },
-    {
-      label: "AI Agent",
-      href: agentRoot,
-      icon: Sparkles,
-      children: agentId
-        ? [
-            { label: "About", href: `/voice/agents/${agentId}/about` },
-            { label: "Capabilities", href: `/voice/agents/${agentId}/capabilities` },
-            { label: "Integrations", href: `/voice/agents/${agentId}/integrations` },
-            { label: "Advanced", href: `/voice/agents/${agentId}/advanced` },
-            { label: "Voice & Test", href: `/voice/agents/${agentId}/voice-test` },
-          ]
-        : [
-            { label: "All agents", href: "/voice/agents" },
-            { label: "Create agent", href: "/voice/agents/new" },
-          ],
-    },
+    { label: "Receptionist", href: "/voice/receptionist", icon: Sparkles },
     { label: "Calls", href: "/voice/calls", icon: PhoneCall },
     { label: "Knowledge", href: "/voice/knowledge", icon: BookOpen },
-    { label: "Call Handling", href: "/voice/inbound-routing", icon: SlidersHorizontal },
+    { label: "Call Handling", href: "/voice/call-handling", icon: SlidersHorizontal },
     {
       label: "Numbers",
       href: "/voice/numbers",
@@ -66,28 +47,21 @@ export function getAiAfterHoursPageTitle(pathname: string): string | null {
   if (pathname === "/voice/overview" || pathname.startsWith("/voice/overview/")) {
     return "Overview";
   }
-  if (pathname.startsWith("/voice/agents")) {
-    if (pathname.endsWith("/about")) return "AI Agent";
-    if (pathname.endsWith("/capabilities")) return "Capabilities";
-    if (pathname.endsWith("/integrations")) return "Integrations";
-    if (pathname.endsWith("/advanced")) return "Advanced";
-    if (pathname.endsWith("/voice-test")) return "Voice & Test";
-    if (pathname === "/voice/agents/new") return "Create AI Agent";
-    if (pathname === "/voice/agents") return "AI Agent";
-    return "AI Agent";
-  }
+  if (pathname.startsWith("/voice/receptionist")) return "Receptionist";
+  if (pathname.startsWith("/voice/agents")) return "Receptionist";
   if (pathname.startsWith("/voice/calls")) return "Calls";
   if (pathname.startsWith("/voice/knowledge")) return "Knowledge";
-  if (pathname.startsWith("/voice/inbound-routing")) return "Call Handling";
+  if (pathname.startsWith("/voice/call-handling") || pathname.startsWith("/voice/inbound-routing")) {
+    return "Call Handling";
+  }
   if (pathname.startsWith("/voice/numbers")) return "Numbers";
   return null;
 }
 
-export function buildAiAfterHoursMobileNav(agentId?: string | null) {
-  const agentHref = agentId ? `/voice/agents/${agentId}/about` : "/voice/agents";
+export function buildAiAfterHoursMobileNav() {
   return [
     { label: "Overview", href: "/voice/overview" },
-    { label: "Agent", href: agentHref },
+    { label: "Receptionist", href: "/voice/receptionist" },
     { label: "Calls", href: "/voice/calls" },
     { label: "Knowledge", href: "/voice/knowledge" },
   ];

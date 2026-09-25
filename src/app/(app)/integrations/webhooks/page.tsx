@@ -1,5 +1,4 @@
 import { WebhooksPanel } from "@/components/integrations/webhooks-panel";
-import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { Tabs } from "@/components/ui/tabs";
 import { getAppBaseUrl } from "@/lib/messaging/telnyx/config";
@@ -9,7 +8,6 @@ import {
   loadOutboundWebhooks,
   requireWorkspaceContext,
 } from "@/lib/workspace-data";
-import { Plus } from "lucide-react";
 
 const integrationTabs = [
   { label: "Directory", href: "/integrations" },
@@ -48,24 +46,26 @@ export default async function IntegrationsWebhooksPage() {
     successRate: eventStats.get(ep.id)?.successRate ?? null,
   }));
 
-  const outboundRows = outbound.map((w) => ({
-    id: w.id,
-    url: w.url,
-    events: w.events,
-    active: w.active,
-  }));
+  const outboundRows = outbound.map((w) => {
+    const meta =
+      w.metadata && typeof w.metadata === "object" && !Array.isArray(w.metadata)
+        ? (w.metadata as { label?: string })
+        : {};
+    return {
+      id: w.id,
+      url: w.url,
+      label: meta.label || w.url,
+      events: w.events,
+      active: w.active,
+      signingSecretPrefix: w.signingSecretPrefix,
+    };
+  });
 
   return (
     <div>
       <PageHeader
         title="Webhooks"
-        description="Receive real-time push notifications for delivery, inbound messages, and subscription events."
-        actions={
-          <Button disabled>
-            <Plus className="h-4 w-4" />
-            Add endpoint
-          </Button>
-        }
+        description="Outbound Voice events to your systems, and incoming automation webhooks into Transovo."
       />
 
       <Tabs items={integrationTabs} />

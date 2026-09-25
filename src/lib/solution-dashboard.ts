@@ -721,7 +721,7 @@ export async function loadSolutionDashboard(workspaceId: string, userName: strin
       id: "ai-voice",
       label: "Set up AI Voice",
       done: agents > 0,
-      href: "/voice/agents",
+      href: "/voice/receptionist",
     },
     {
       id: "missed-call",

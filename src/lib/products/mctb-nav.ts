@@ -45,14 +45,14 @@ export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
       },
       { label: "Calls", href: "/voice/calls", icon: PhoneCall },
       {
-        label: "AI Agent",
-        href: "/voice/agents",
+        label: "Receptionist",
+        href: "/voice/receptionist",
         icon: AudioLines,
       },
       { label: "Knowledge", href: "/voice/knowledge", icon: BookOpen },
       {
-        label: "Call Rules",
-        href: "/voice/inbound-routing",
+        label: "Call Handling",
+        href: "/voice/call-handling",
         icon: SlidersHorizontal,
       },
     );
@@ -158,7 +158,10 @@ export function getMctbPageTitle(pathname: string): string {
   }
   if (pathname.startsWith("/voice/calls")) return "Calls";
   if (pathname.startsWith("/voice/knowledge")) return "Knowledge";
-  if (pathname.startsWith("/voice/inbound-routing")) return "Call Rules";
+  if (pathname.startsWith("/voice/call-handling") || pathname.startsWith("/voice/inbound-routing")) {
+    return "Call Handling";
+  }
+  if (pathname.startsWith("/voice/receptionist")) return "Receptionist";
   if (pathname.startsWith("/voice/numbers")) return "Numbers";
   if (pathname.startsWith("/settings/billing")) return "Billing";
 

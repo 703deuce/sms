@@ -78,6 +78,12 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       if (!deliveryId) throw new Error("deliveryId required");
       return deliverAppointmentWebhook(deliveryId);
     }
+    case "voice_webhook_deliver": {
+      const { executeVoiceWebhookDeliverJob } = await import(
+        "@/lib/voice-v3/webhooks/delivery"
+      );
+      return executeVoiceWebhookDeliverJob(payload);
+    }
     case "appointment_webhook_sweep": {
       const { sweepPendingWebhookDeliveries } = await import(
         "@/lib/appointments/service-booking/webhook-delivery"
