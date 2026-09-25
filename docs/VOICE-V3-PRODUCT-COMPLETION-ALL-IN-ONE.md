@@ -3,8 +3,9 @@
 Single file: **operator order (Pass 1→2→3)**, **full Cursor Pass 1 prompt**, **Pass 1 report**, **after-hours market audit**, **cert checklist**.
 
 **Last updated:** 2026-09-25  
-**Pass 1 implementation branch:** `cursor/voice-v3-e2e-product-completion-2304` (draft PR #505)  
-**Note:** Section 4 “after-hours audit” reflects pre–Pass-1 `master` where noted; Section 3 report reflects Pass 1 code changes (knowledge gaps UI, `/voice/analytics`, needs-attention transfers).
+**Pass 1 branch:** `cursor/voice-v3-e2e-product-completion-2304` (PR #505) — **closed; do not polish further.**  
+**Pass 2 branch:** `cursor/voice-v3-pass-2-call-handling-2304` — Call Handling operational UI.  
+**Cert order:** Merge Pass 1 → Pass 2 → PSTN certification.
 
 ---
 
@@ -317,12 +318,14 @@ READY FOR SELF-SERVE PAID ACQUISITION: NO
 
 `callRecording` → `startTelnyxRecordingForVoiceV3Call` → `VoiceRecording` → call API → player. **CERTIFICATION ONLY** unless staging finds pre-provider break (`VOICE-V3-CALL-HISTORY-CERTIFICATION-REPORT.md`).
 
-### Next steps
+### Next steps (Pass 1 closed — do not continue polishing Pass 1)
 
 1. Merge Pass 1 branch (#505).  
-2. Run §16 certification.  
-3. **Pass 2:** Call Handling / Transfers page (inventory above).  
+2. **Pass 2:** Product surface architecture — Call Handling / Transfers operational UI (same persisted config as wizard).  
+3. Run §16 PSTN certification on the **finished** customer product (after Pass 2).  
 4. Clarify customer-facing Voice V3 ingress when toggling AI on business number.
+
+**Ordering rationale:** Certify after operational surfaces exist so transfer PSTN work is not immediately invalidated by moving configuration out of the wizard.
 
 ---
 
