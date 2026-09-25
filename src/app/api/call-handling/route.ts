@@ -68,6 +68,8 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ data: state });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Switch failed";
+    const voiceIngressPhoneNumberId =
+      parsed.data.voiceIngressPhoneNumberId ?? parsed.data.phoneNumberId;
     const prior = await loadCallHandlingOwnershipState({
       workspaceId: auth.workspaceId,
       voiceIngressPhoneNumberId,

@@ -12,7 +12,7 @@ export const voiceAgentsSection: VoiceSection = {
   items: [
     { label: "Agents", href: "/voice/agents" },
     { label: "AI platform", href: "/voice/ai-platform" },
-    { label: "Knowledge", href: "/voice/knowledge" },
+    { label: "Business Knowledge", href: "/voice/knowledge" },
     { label: "Tools", href: "/voice/tools" },
     { label: "Testing", href: "/voice/testing" },
   ],
@@ -23,6 +23,7 @@ export const voicePhoneSection: VoiceSection = {
   label: "Phone & routing",
   items: [
     { label: "Phone numbers", href: "/voice/numbers" },
+    { label: "Call Handling", href: "/voice/call-handling" },
     { label: "Inbound routing", href: "/voice/inbound-routing" },
   ],
 };
@@ -56,7 +57,10 @@ const sectionMatchers: Array<{ match: (pathname: string) => boolean; section: Vo
     section: voiceAgentsSection,
   },
   {
-    match: (p) => p === "/voice/numbers" || p === "/voice/inbound-routing",
+    match: (p) =>
+      p === "/voice/numbers" ||
+      p === "/voice/inbound-routing" ||
+      p.startsWith("/voice/call-handling"),
     section: voicePhoneSection,
   },
   {

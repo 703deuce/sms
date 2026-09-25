@@ -62,7 +62,6 @@ const nextConfig: NextConfig = {
       { source: "/voice/missed-calls", destination: "/mctb/missed-calls", permanent: false },
       { source: "/voice/missed-calls/:path*", destination: "/mctb/missed-calls/:path*", permanent: false },
       { source: "/voice/setup", destination: "/mctb/setup", permanent: false },
-      { source: "/voice/analytics", destination: "/mctb/analytics", permanent: false },
       { source: "/mctb/setup/business-hours", destination: "/mctb/setup/recovery", permanent: false },
       { source: "/mctb/setup/follow-up", destination: "/mctb/setup/recovery", permanent: false },
       { source: "/mctb/setup/schedule", destination: "/mctb/setup/recovery", permanent: false },

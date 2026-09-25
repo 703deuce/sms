@@ -13,7 +13,7 @@ import { loadVoiceAnalytics, analyticsToCsv } from "../src/lib/voice/analytics";
 import { createRecordingAccessToken, verifyRecordingAccessToken } from "../src/lib/voice/recordings";
 import { simulateRouting } from "../src/lib/voice/routing";
 import { executeVoiceTool } from "../src/lib/voice/tools/executor";
-import { loadVoiceOverview } from "../src/lib/voice/overview";
+import { loadVoiceOverviewSummary } from "../src/lib/voice/overview-summary";
 
 const failures: string[] = [];
 function ok(label: string) { console.log(`✓ ${label}`); }
@@ -41,8 +41,8 @@ async function main() {
   await publishVoiceAgent(ws, agent.id);
   ok("agent create + publish");
 
-  const overview = await loadVoiceOverview(ws, 7);
-  if (overview.activeAgents >= 1) ok("overview load");
+  const overview = await loadVoiceOverviewSummary(ws);
+  if (overview.data.mode === "active" || overview.data.mode === "first_run") ok("overview load");
   else fail("overview load");
 
   await prisma.voiceRoutingRule.create({

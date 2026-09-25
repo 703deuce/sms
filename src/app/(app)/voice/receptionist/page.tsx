@@ -1,6 +1,5 @@
-import { redirect } from "next/navigation";
+import { VoiceReceptionistEditor } from "@/components/voice/receptionist/voice-receptionist-editor";
 
-/** Legacy receptionist hub → MCTB setup. */
-export default function VoiceReceptionistRedirectPage() {
-  redirect("/voice/setup");
+export default function VoiceReceptionistPage() {
+  return <VoiceReceptionistEditor />;
 }

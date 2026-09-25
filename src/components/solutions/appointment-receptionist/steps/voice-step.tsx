@@ -19,16 +19,28 @@ import { InfoCallout, RadioRow, SelectableCard, SidePanel } from "../ui";
 
 const ALL_VOICES = [...WIZARD_VOICES, ...WIZARD_VOICE_BACKUPS];
 
+export type VoiceStepPart = "identity" | "greeting" | "voice";
+
 export function VoiceStep({
   state,
   patch,
   presentation = "legacy",
+  parts,
+  showSidePanel = true,
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
   presentation?: "legacy" | "mctb";
+  /** Permanent Receptionist page: render subsets without remounting wizard-only chrome. */
+  parts?: VoiceStepPart[];
+  showSidePanel?: boolean;
 }) {
   const isMctb = presentation === "mctb";
+  const showPart = (part: VoiceStepPart) => !parts || parts.includes(part);
+  const showIdentity = showPart("identity");
+  const showGreeting = showPart("greeting");
+  const showVoice = showPart("voice");
+  const showLeftColumn = showIdentity || showGreeting;
   const [previewing, setPreviewing] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState("");
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -94,19 +106,30 @@ export function VoiceStep({
     <div className="flex gap-6">
       <audio ref={audioRef} className="hidden" />
       <div className="min-w-0 flex-1 space-y-6">
-        <div>
-          <h2 className="font-display text-xl font-semibold tracking-tight">
-            {isMctb ? "How should your agent sound?" : "Who is your receptionist?"}
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {isMctb
-              ? "Set identity, greeting, and voice — preview clips, then test live on the next step."
-              : "Identity, greeting, and voice — play each clip, then test live on the next step."}
-          </p>
-        </div>
+        {!parts ? (
+          <div>
+            <h2 className="font-display text-xl font-semibold tracking-tight">
+              {isMctb ? "How should your agent sound?" : "Who is your receptionist?"}
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {isMctb
+                ? "Set identity, greeting, and voice — preview clips, then test live on the next step."
+                : "Identity, greeting, and voice — play each clip, then test live on the next step."}
+            </p>
+          </div>
+        ) : null}
 
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div
+          className={
+            showLeftColumn && showVoice
+              ? "grid gap-6 lg:grid-cols-2"
+              : "grid gap-6 grid-cols-1"
+          }
+        >
+          {showLeftColumn ? (
           <div className="space-y-4 rounded-xl border border-border bg-card p-4">
+            {showIdentity ? (
+              <>
             <h3 className="text-sm font-semibold">Identity</h3>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
@@ -188,7 +211,10 @@ export function VoiceStep({
                 </select>
               </div>
             </div>
+              </>
+            ) : null}
 
+            {showGreeting ? (
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Greeting behavior
@@ -258,8 +284,11 @@ export function VoiceStep({
                 ))}
               </div>
             </div>
+            ) : null}
           </div>
+          ) : null}
 
+          {showVoice ? (
           <div className="space-y-4 rounded-xl border border-border bg-card p-4">
             <div>
               <h3 className="text-sm font-semibold">Choose a voice</h3>
@@ -372,9 +401,11 @@ export function VoiceStep({
               ) : null}
             </div>
           </div>
+          ) : null}
         </div>
       </div>
 
+      {showSidePanel ? (
       <SidePanel title="Voice settings">
         <div className="flex items-center gap-3 rounded-xl border border-border p-3">
           <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -395,6 +426,7 @@ export function VoiceStep({
           assistant that answers the phone after activate.
         </InfoCallout>
       </SidePanel>
+      ) : null}
     </div>
   );
 }

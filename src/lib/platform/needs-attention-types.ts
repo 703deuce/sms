@@ -4,7 +4,8 @@ export type NeedsAttentionKind =
   | "mctb_reply"
   | "missed_call"
   | "form_submission"
-  | "repeat_caller";
+  | "repeat_caller"
+  | "failed_transfer";
 
 export type NeedsAttentionStatus = "needs_attention" | "contacted" | "done";
 

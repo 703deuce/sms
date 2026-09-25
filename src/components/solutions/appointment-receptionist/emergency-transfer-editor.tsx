@@ -171,7 +171,7 @@ export function EmergencyTransferEditor({
           </p>
         ) : null}
 
-        <ul className="mt-2 space-y-3">
+        <ul className="mt-2 space-y-0">
           {steps.map((step, stepIndex) => {
             const dest = destinations.find((d) => d.id === step.destinationId);
             if (!dest) return null;
@@ -181,8 +181,8 @@ export function EmergencyTransferEditor({
             const usesDefaultTimeout = step.timeoutSeconds == null;
 
             return (
-              <li
-                key={dest.id}
+              <li key={dest.id} className="space-y-0">
+              <div
                 className="rounded-lg border border-border bg-muted/20 p-3 space-y-2"
               >
                 <div className="flex items-start gap-2">
@@ -299,11 +299,20 @@ export function EmergencyTransferEditor({
                     </div>
                     <p className="text-xs text-muted-foreground">
                       {mode === "WARM"
-                        ? "Warm: the receptionist calls this contact first, shares a brief summary, and connects the caller after they accept."
-                        : "Direct: the caller is transferred straight to this number."}
+                        ? "Warm transfer — Amy contacts this person first and connects the caller after they accept."
+                        : "Direct transfer — Amy sends the caller straight to this number."}
                     </p>
                   </div>
                 </div>
+              </div>
+              {routing === "waterfall" && stepIndex < steps.length - 1 ? (
+                <p
+                  className="py-2 text-center text-xs font-medium text-muted-foreground"
+                  aria-hidden
+                >
+                  ↓ if unanswered
+                </p>
+              ) : null}
               </li>
             );
           })}

@@ -1,5 +1,52 @@
 import { getPrisma } from "@/lib/db";
 import type { VoiceCall, VoiceToolExecution, VoiceUsageRecord, VoiceTransfer } from "@prisma/client";
+import {
+  aggregateReceptionistCalls,
+  aggregateResponseLatencyMs,
+} from "@/lib/voice/analytics/voice-analytics-aggregate";
+import {
+  buildDailyCallVolumeSeries,
+  normalizeVoiceAnalyticsDays,
+  voiceAnalyticsPeriodBounds,
+  type VoiceAnalyticsPeriodDays,
+} from "@/lib/voice/analytics/voice-analytics-period";
+import { resolveVoiceBusinessTimezone } from "@/lib/voice/analytics/resolve-business-timezone";
+
+export type VoiceAnalyticsReceptionist = {
+  timezone: string;
+  periodDays: VoiceAnalyticsPeriodDays;
+  periodStart: string;
+  periodEnd: string;
+  population: "inbound_non_test";
+  totalCalls: number;
+  appointmentsBooked: number;
+  transfersAnswered: number;
+  transfersFailed: number;
+  callbacksRequested: number;
+  voicemailCount: number;
+  voicemailRate: number;
+  avgDurationSeconds: number;
+  materialOutcomes: Record<string, number>;
+  dailyCallVolume: Array<{ date: string; count: number }>;
+  responseLatency: {
+    medianResponseLatencyMs: number | null;
+    p95ResponseLatencyMs: number | null;
+    responseLatencySampleSize: number;
+    metricDefinition: "caller_end_of_speech_to_first_audible_agent_audio";
+  };
+  usage: {
+    aiMinutes: number;
+    telephonyMinutes: number;
+  };
+  sentimentCounts: {
+    positive: number;
+    neutral: number;
+    negative: number;
+    unknown: number;
+    analyzedCalls: number;
+  };
+  openKnowledgeGaps: number;
+};
 
 export async function loadVoiceAnalytics(
   workspaceId: string,
@@ -13,12 +60,13 @@ export async function loadVoiceAnalytics(
   },
 ) {
   const prisma = getPrisma();
-  const since = new Date();
-  since.setDate(since.getDate() - days);
+  const periodDays = normalizeVoiceAnalyticsDays(days);
+  const timezone = await resolveVoiceBusinessTimezone(workspaceId);
+  const { start, end, dayKeys } = voiceAnalyticsPeriodBounds(periodDays, timezone);
 
   const where: Record<string, unknown> = {
     workspaceId,
-    startedAt: { gte: since },
+    startedAt: { gte: start, lt: end },
     isTest: false,
   };
   if (filters?.agentId) where.agentId = filters.agentId;
@@ -27,7 +75,35 @@ export async function loadVoiceAnalytics(
   if (filters?.outcome) where.outcome = filters.outcome;
   if (filters?.phoneNumberId) where.phoneNumberId = filters.phoneNumberId;
 
-  const calls: VoiceCall[] = await prisma.voiceCall.findMany({ where });
+  const calls = await prisma.voiceCall.findMany({
+    where,
+    include: {
+      transfers: {
+        select: { status: true, answered: true },
+      },
+    },
+  });
+
+  const receptionistAgg = aggregateReceptionistCalls(
+    calls.map((c) => ({
+      id: c.id,
+      startedAt: c.startedAt,
+      direction: c.direction,
+      isTest: c.isTest,
+      outcome: c.outcome,
+      appointmentBooked: c.appointmentBooked,
+      transferred: c.transferred,
+      voicemailDetected: c.voicemailDetected,
+      leadScore: c.leadScore,
+      status: c.status,
+      durationSeconds: c.durationSeconds,
+      transfers: c.transfers,
+      metadata: c.metadata,
+    })),
+    timezone,
+  );
+
+  const latency = aggregateResponseLatencyMs(receptionistAgg.calls);
 
   const total = calls.length;
   const inbound = calls.filter((c) => c.direction === "INBOUND").length;
@@ -45,14 +121,17 @@ export async function loadVoiceAnalytics(
   const totalCost = calls.reduce((s, c) => s + c.costCents, 0);
 
   const transfers: VoiceTransfer[] = await prisma.voiceTransfer.findMany({
-    where: { workspaceId, createdAt: { gte: since } },
+    where: {
+      workspaceId,
+      callId: { in: receptionistAgg.calls.map((c) => c.id) },
+    },
   });
   const successfulTransfers = transfers.filter(
     (t) => t.status === "completed" && t.answered,
   ).length;
 
   const usage: VoiceUsageRecord[] = await prisma.voiceUsageRecord.findMany({
-    where: { workspaceId, createdAt: { gte: since } },
+    where: { workspaceId, createdAt: { gte: start, lt: end } },
   });
   const aiMinutes = usage
     .filter((u) => u.category === "ai_minutes")
@@ -95,8 +174,8 @@ export async function loadVoiceAnalytics(
   }
 
   const insights = await prisma.voiceConversationInsight.findMany({
-    where: { workspaceId, createdAt: { gte: since } },
-    select: { sentiment: true },
+    where: { workspaceId, createdAt: { gte: start, lt: end } },
+    select: { sentiment: true, callId: true },
   });
   const sentimentCounts = { positive: 0, neutral: 0, negative: 0, unknown: 0 };
   for (const i of insights) {
@@ -108,7 +187,7 @@ export async function loadVoiceAnalytics(
   }
 
   const toolExecs: VoiceToolExecution[] = await prisma.voiceToolExecution.findMany({
-    where: { workspaceId, createdAt: { gte: since } },
+    where: { workspaceId, createdAt: { gte: start, lt: end } },
   });
   const toolSuccess = toolExecs.filter((t) => t.status === "completed").length;
   const toolFail = toolExecs.filter((t) => t.status === "failed").length;
@@ -124,41 +203,8 @@ export async function loadVoiceAnalytics(
       ]
     : 0;
 
-  // Caller end-of-speech → first audible agent audio (not LLM completion time).
-  const responseLatencySamples: number[] = [];
-  for (const c of calls) {
-    const meta = (c.metadata || {}) as {
-      responseLatency?: {
-        samples?: Array<{ latencyMs?: number }>;
-        summary?: { medianMs?: number | null };
-      };
-    };
-    const samples = meta.responseLatency?.samples;
-    if (Array.isArray(samples) && samples.length) {
-      for (const s of samples) {
-        if (typeof s?.latencyMs === "number" && s.latencyMs >= 0) {
-          responseLatencySamples.push(s.latencyMs);
-        }
-      }
-    } else if (typeof meta.responseLatency?.summary?.medianMs === "number") {
-      responseLatencySamples.push(meta.responseLatency.summary.medianMs);
-    }
-  }
-  const responseSorted = [...responseLatencySamples].sort((a, b) => a - b);
-  const avgResponseLatencyMs = responseSorted.length
-    ? Math.round(responseSorted.reduce((a, b) => a + b, 0) / responseSorted.length)
-    : null;
-  const medianResponseLatencyMs = responseSorted.length
-    ? responseSorted[Math.floor((responseSorted.length - 1) / 2)]
-    : null;
-  const p95ResponseLatencyMs = responseSorted.length
-    ? responseSorted[
-        Math.min(responseSorted.length - 1, Math.floor(responseSorted.length * 0.95))
-      ]
-    : null;
-
   const diagnostics = await prisma.voiceFailureDiagnostic.findMany({
-    where: { workspaceId, createdAt: { gte: since } },
+    where: { workspaceId, createdAt: { gte: start, lt: end } },
     select: { category: true, code: true },
     take: 500,
   });
@@ -168,13 +214,64 @@ export async function loadVoiceAnalytics(
     diagnosticCounts[k] = (diagnosticCounts[k] || 0) + 1;
   }
 
+  const openKnowledgeGaps = await prisma.voiceKnowledgeGap.count({
+    where: { workspaceId, status: "OPEN" },
+  });
+
+  const dailyCallVolume = buildDailyCallVolumeSeries(
+    dayKeys,
+    receptionistAgg.dailyCallVolume,
+  );
+
+  const receptionist: VoiceAnalyticsReceptionist = {
+    timezone,
+    periodDays,
+    periodStart: start.toISOString(),
+    periodEnd: end.toISOString(),
+    population: "inbound_non_test",
+    totalCalls: receptionistAgg.totalCalls,
+    appointmentsBooked: receptionistAgg.appointmentsBooked,
+    transfersAnswered: receptionistAgg.transfersAnswered,
+    transfersFailed: receptionistAgg.transfersFailedEvents,
+    callbacksRequested: receptionistAgg.callbacksRequested,
+    voicemailCount: receptionistAgg.voicemailCount,
+    voicemailRate:
+      receptionistAgg.totalCalls > 0
+        ? receptionistAgg.voicemailCount / receptionistAgg.totalCalls
+        : 0,
+    avgDurationSeconds:
+      receptionistAgg.totalCalls > 0
+        ? receptionistAgg.totalDurationSeconds / receptionistAgg.totalCalls
+        : 0,
+    materialOutcomes: receptionistAgg.materialOutcomes as Record<string, number>,
+    dailyCallVolume,
+    responseLatency: {
+      ...latency,
+      metricDefinition: "caller_end_of_speech_to_first_audible_agent_audio",
+    },
+    usage: {
+      aiMinutes,
+      telephonyMinutes,
+    },
+    sentimentCounts: {
+      ...sentimentCounts,
+      analyzedCalls:
+        sentimentCounts.positive +
+        sentimentCounts.neutral +
+        sentimentCounts.negative +
+        sentimentCounts.unknown,
+    },
+    openKnowledgeGaps,
+  };
+
   return {
-    periodDays: days,
+    periodDays,
+    timezone,
+    receptionist,
     totalCalls: total,
     inbound,
     outbound,
     answerRate: total ? answered / total : 0,
-    // Human answer rate excludes AMD/voicemail answers.
     humanAnswerRate: total
       ? calls.filter(
           (c) =>
@@ -187,9 +284,7 @@ export async function loadVoiceAnalytics(
     failureRate: total ? failed / total : 0,
     voicemailRate: total ? voicemail / total : 0,
     transferRate: total ? transferred / total : 0,
-    successfulTransferRate: transfers.length
-      ? successfulTransfers / transfers.length
-      : 0,
+    successfulTransferRate: transfers.length ? successfulTransfers / transfers.length : 0,
     qualifiedRate: total ? qualified / total : 0,
     appointmentRate: total ? appointments / total : 0,
     avgDurationSeconds: total ? totalDuration / total : 0,
@@ -212,43 +307,45 @@ export async function loadVoiceAnalytics(
       avgToolLatencyMs,
       p95ToolLatencyMs,
       toolSampleSize: toolLatencies.length,
-      /** Caller end-of-speech → first audible agent audio — not LLM time. */
       responseLatencyMetric: "caller_end_of_speech_to_first_audible_agent_audio",
-      avgResponseLatencyMs,
-      medianResponseLatencyMs,
-      p95ResponseLatencyMs,
-      responseLatencySampleSize: responseSorted.length,
+      avgResponseLatencyMs: latency.medianResponseLatencyMs,
+      medianResponseLatencyMs: latency.medianResponseLatencyMs,
+      p95ResponseLatencyMs: latency.p95ResponseLatencyMs,
+      responseLatencySampleSize: latency.responseLatencySampleSize,
       diagnosticCounts,
+    },
+    voiceProduct: {
+      callbacksRequested: receptionist.callbacksRequested,
+      messagesTaken: receptionist.materialOutcomes["Message Taken"] ?? 0,
+      emergenciesEscalated: receptionist.materialOutcomes["Emergency"] ?? 0,
+      transferAttempts: transfers.length,
+      transferCompleted: transfers.filter((t) => t.status === "completed").length,
+      transferFailed: receptionist.transfersFailed,
+      appointmentsBooked: receptionist.appointmentsBooked,
+      openKnowledgeGaps,
+      spamOrSolicitorOutcomes:
+        (receptionist.materialOutcomes["Spam"] ?? 0) +
+        (receptionist.materialOutcomes["Solicitor"] ?? 0),
     },
   };
 }
 
 export function analyticsToCsv(data: Awaited<ReturnType<typeof loadVoiceAnalytics>>): string {
+  const r = data.receptionist;
   const lines = [
     "metric,value",
-    `total_calls,${data.totalCalls}`,
-    `inbound,${data.inbound}`,
-    `outbound,${data.outbound}`,
-    `answer_rate,${data.answerRate}`,
-    `no_answer_rate,${data.noAnswerRate}`,
-    `failure_rate,${data.failureRate}`,
-    `voicemail_rate,${data.voicemailRate}`,
-    `transfer_rate,${data.transferRate}`,
-    `successful_transfer_rate,${data.successfulTransferRate}`,
-    `qualified_rate,${data.qualifiedRate}`,
-    `appointment_rate,${data.appointmentRate}`,
-    `avg_duration_seconds,${data.avgDurationSeconds}`,
-    `cost_per_call_cents,${data.costPerCall}`,
-    `total_cost_cents,${data.totalCostCents}`,
-    `ai_minutes,${data.aiMinutes}`,
-    `telephony_minutes,${data.telephonyMinutes}`,
-    `model_cost_cents,${data.modelCostCents}`,
-    `transcription_cost_cents,${data.transcriptionCostCents}`,
+    `receptionist_calls,${r.totalCalls}`,
+    `appointments_booked,${r.appointmentsBooked}`,
+    `transfers_answered,${r.transfersAnswered}`,
+    `callbacks_requested,${r.callbacksRequested}`,
+    `avg_duration_seconds,${r.avgDurationSeconds}`,
+    `timezone,${r.timezone}`,
+    `total_calls_legacy_all_directions,${data.totalCalls}`,
   ];
-  for (const [day, count] of Object.entries(data.byDay)) {
-    lines.push(`calls_${day},${count}`);
+  for (const { date, count } of r.dailyCallVolume) {
+    lines.push(`calls_${date},${count}`);
   }
-  for (const [outcome, count] of Object.entries(data.outcomes)) {
+  for (const [outcome, count] of Object.entries(r.materialOutcomes)) {
     lines.push(`outcome_${outcome},${count}`);
   }
   return lines.join("\n");

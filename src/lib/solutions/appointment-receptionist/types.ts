@@ -268,6 +268,8 @@ export type AppointmentReceptionistWizardState = {
   salesSolicitationAction?:
     | import("@/lib/voice-receptionist-wizard/after-hours-handling-types").VoiceV2SalesSolicitationAction
     | null;
+  spamLikelyPolicy?: import("@/lib/voice-v3/spam-protection/types").VoiceV3SpamLikelyPolicy | null;
+  solicitorPolicy?: import("@/lib/voice-v3/spam-protection/types").VoiceV3SolicitorPolicy | null;
 
   /** Voice V2 — AI Call Recovery (unresolved AI voice → SMS text-agent continuation). */
   aiCallRecoveryEnabled?: boolean | null;

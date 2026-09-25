@@ -1,4 +1,5 @@
 import type { MockCallOutcome } from "./mock-data";
+import { deriveCallOutcomeBadge } from "./outcome-display";
 
 export type CallOutcomeBadge =
   | "New Lead"
@@ -14,6 +15,8 @@ export type CallOutcomeBadge =
   | "Information Provided"
   | "Completed"
   | "Spam"
+  | "Solicitor"
+  | "Urgent"
   | "No Action"
   | "Resolved"
   | "Lead Captured"
@@ -115,63 +118,8 @@ export function deriveOutcomeBadges(call: CallRowLike): CallOutcomeBadge[] {
   return badges;
 }
 
-export function deriveCallOutcomeBadge(call: CallRowLike): CallOutcomeBadge {
-  if (call.mockOutcome) {
-    const m = String(call.mockOutcome);
-    if (m === "Lead Captured") return "Lead Captured";
-    if (m === "Resolved") return "Resolved";
-    if (m === "Voice") return "Voice";
-    if (m === "Voicemail") return "Voicemail";
-    if (m === "No Answer") return "No Answer";
-    if (m === "Appointment Booked") return "Appointment Booked";
-    if (m === "Message Taken") return "Message Taken";
-    if (m === "Transferred") return "Transferred";
-  }
-  if (call.voicemailDetected) return "Voicemail";
-  if (call.transferred) return "Transferred";
-  if (call.appointmentBooked) return "Appointment Booked";
-  const outcome = String(call.outcome || "").toLowerCase();
-  if (outcome.includes("transfer_exhausted") || outcome.includes("transfer_failed")) {
-    return "Transfer Failed";
-  }
-  if (outcome.includes("emergency")) return "Emergency";
-  if (outcome.includes("callback")) return "Callback Requested";
-  if (outcome.includes("spam")) return "Spam";
-  if (outcome.includes("booking_link_sent")) {
-    return "Booking Link Sent";
-  }
-  if (outcome.includes("appointment_requested") || outcome.includes("appointment request")) {
-    return "Appointment Requested";
-  }
-  if (outcome.includes("booked") || outcome.includes("appointment_booked")) {
-    return "Appointment Booked";
-  }
-  if (
-    outcome.includes("message") ||
-    outcome.includes("callback") ||
-    outcome.includes("follow_up")
-  ) {
-    return "Message Taken";
-  }
-  if (
-    call.isLead ||
-    (call.leadScore != null && call.leadScore >= 40) ||
-    outcome.includes("lead")
-  ) {
-    return "New Lead";
-  }
-  if (outcome.includes("faq") || outcome.includes("information")) {
-    return outcome.includes("information") ? "Information Provided" : "FAQ";
-  }
-  if (outcome.includes("no_answer") || call.status === "NO_ANSWER") return "No Answer";
-  if (outcome.includes("completed") || call.status === "COMPLETED") {
-    return "Resolved";
-  }
-  if (!outcome || outcome === "no_action" || outcome === "none") {
-    return "No Action";
-  }
-  return "Completed";
-}
+export { deriveCallOutcomeBadge, deriveCallListOutcomeDisplay } from "./outcome-display";
+export type { CallAttentionBadge, CallListOutcomeDisplay } from "./outcome-display";
 
 export const OUTCOME_BADGE_STYLES: Record<CallOutcomeBadge, string> = {
   "New Lead": "bg-violet-50 text-violet-700 ring-violet-200",
@@ -191,6 +139,8 @@ export const OUTCOME_BADGE_STYLES: Record<CallOutcomeBadge, string> = {
   Voice: "bg-slate-100 text-slate-600 ring-slate-200",
   Voicemail: "bg-slate-100 text-slate-600 ring-slate-200",
   Spam: "bg-rose-50 text-rose-700 ring-rose-200",
+  Solicitor: "bg-rose-50 text-rose-800 ring-rose-200",
+  Urgent: "bg-amber-50 text-amber-900 ring-amber-200",
   "No Action": "bg-slate-100 text-slate-600 ring-slate-200",
   "No Answer": "bg-slate-100 text-slate-600 ring-slate-200",
 };

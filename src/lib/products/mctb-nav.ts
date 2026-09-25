@@ -49,12 +49,13 @@ export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
         href: "/voice/receptionist",
         icon: AudioLines,
       },
-      { label: "Knowledge", href: "/voice/knowledge", icon: BookOpen },
+      { label: "Business Knowledge", href: "/voice/knowledge", icon: BookOpen },
       {
         label: "Call Handling",
         href: "/voice/call-handling",
         icon: SlidersHorizontal,
       },
+      { label: "Analytics", href: "/voice/analytics", icon: BarChart3 },
     );
   }
 
@@ -157,11 +158,12 @@ export function getMctbPageTitle(pathname: string): string {
     return "Overview";
   }
   if (pathname.startsWith("/voice/calls")) return "Calls";
-  if (pathname.startsWith("/voice/knowledge")) return "Knowledge";
+  if (pathname.startsWith("/voice/knowledge")) return "Business Knowledge";
+  if (pathname.startsWith("/voice/receptionist")) return "Receptionist";
   if (pathname.startsWith("/voice/call-handling") || pathname.startsWith("/voice/inbound-routing")) {
     return "Call Handling";
   }
-  if (pathname.startsWith("/voice/receptionist")) return "Receptionist";
+  if (pathname.startsWith("/voice/needs-attention")) return "Calls";
   if (pathname.startsWith("/voice/numbers")) return "Numbers";
   if (pathname.startsWith("/settings/billing")) return "Billing";
 
@@ -176,7 +178,7 @@ export function getMctbPageTitle(pathname: string): string {
   }
   if (pathname.startsWith(MCTB_ROUTES.aiRecovery)) return "AI Recovery";
   if (pathname.startsWith(MCTB_ROUTES.aiLeadRecovery)) return "AI Recovery";
-  if (pathname.startsWith(MCTB_ROUTES.voiceAgent)) return "AI Agent";
+  if (pathname.startsWith(MCTB_ROUTES.voiceAgent)) return "Receptionist";
   if (pathname.startsWith(MCTB_ROUTES.setup)) return "Setup";
   if (pathname.startsWith(MCTB_ROUTES.numbers)) return "Numbers";
   if (pathname.startsWith(MCTB_ROUTES.complianceConsent)) return "Consent Log";

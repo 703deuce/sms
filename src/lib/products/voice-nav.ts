@@ -179,6 +179,7 @@ export function getVoicePageTitle(pathname: string): string {
   if (pathname.startsWith("/voice/schedule")) return "Schedule";
   if (pathname.startsWith("/voice/transcription")) return "Transcription";
   if (pathname.startsWith("/voice/callback-requests")) return "Callback Requests";
+  if (pathname.startsWith("/voice/call-handling")) return "Call Handling";
   if (pathname.startsWith("/voice/needs-attention")) return "Needs Attention";
   if (pathname === "/voice/analytics") return "Analytics";
   if (pathname.startsWith("/voice/reports")) return "Analytics";
