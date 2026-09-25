@@ -318,7 +318,7 @@ export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewP
   const tablePageSize = (pagination?.pageSize ?? query.pageSize ?? 10) as GlobalTablePageSize;
 
   return (
-    <div className="mctb-missed-calls">
+    <div className="mctb-missed-calls transovo-product-surface-first">
       <div className="mctb-missed-calls-inner">
         <header className="mctb-mc-header">
           <div>

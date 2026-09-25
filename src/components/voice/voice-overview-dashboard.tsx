@@ -3,7 +3,9 @@
 import { CallAttentionBadge } from "@/components/calls/call-attention-badge";
 import { CallOutcomeBadge } from "@/components/calls/call-outcome-badge";
 import { Button } from "@/components/ui/button";
-import { Card, StatCard } from "@/components/ui/card";
+import { TransovoProductPage } from "@/components/transovo/product-page";
+import { TransovoHairline, TransovoSection } from "@/components/transovo/section";
+import { TransovoKpiStrip } from "@/components/transovo/kpi-strip";
 import { PageHeader } from "@/components/ui/page-header";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { DependencyRow } from "@/components/voice/dependency-row";
@@ -78,10 +80,11 @@ export function VoiceOverviewDashboard() {
   const errors = result?.errors ?? {};
 
   return (
-    <div className="mx-auto max-w-[1200px] space-y-6 px-4 py-6 sm:px-8">
+    <TransovoProductPage>
       <PageHeader
         title="Overview"
         description="See how your receptionist is running, what happened recently, and anything that needs your attention."
+        className="!mb-0"
       />
 
       {loading && !data ? (
@@ -89,50 +92,39 @@ export function VoiceOverviewDashboard() {
       ) : null}
 
       {data?.mode === "first_run" ? (
-        <Card className="p-6">
-          <h2 className="text-lg font-semibold">AI Receptionist</h2>
-          <p className="mt-2 max-w-xl text-sm text-muted-foreground">
-            Set up your receptionist to answer calls, help callers, and handle appointments
-            after hours.
-          </p>
-          <div className="mt-4">
-            <Button variant="primary" size="sm" asChild>
-              <Link href="/mctb/voice-agent">Start setup</Link>
-            </Button>
-          </div>
-        </Card>
+        <TransovoSection title="AI Receptionist" description="Set up your receptionist to answer calls, help callers, and handle appointments after hours.">
+          <Button variant="primary" size="sm" asChild>
+            <Link href="/mctb/voice-agent">Start setup</Link>
+          </Button>
+        </TransovoSection>
       ) : null}
 
       {data?.mode === "active" && data.operational ? (
-        <Card className="p-5">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-sm font-semibold">AI Receptionist</h2>
-                <StatusPill tone={statusPillTone(data.operational.publicationLabel)}>
-                  {data.operational.publicationLabel}
-                </StatusPill>
-              </div>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {data.operational.receptionistName || "Receptionist"}
-                {data.operational.voiceLabel
-                  ? ` · ${data.operational.voiceLabel}`
-                  : null}
-              </p>
-              {data.operational.publicationStatus === "active" ? (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Published configuration is active.
-                </p>
-              ) : null}
-            </div>
+        <TransovoSection
+          title="AI Receptionist"
+          actions={
             <Link
               href={data.operational.manageReceptionistHref}
               className="shrink-0 text-sm font-medium text-primary hover:underline"
             >
               Manage receptionist →
             </Link>
+          }
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusPill tone={statusPillTone(data.operational.publicationLabel)}>
+              {data.operational.publicationLabel}
+            </StatusPill>
+            <span className="text-sm text-muted-foreground">
+              {data.operational.receptionistName || "Receptionist"}
+              {data.operational.voiceLabel ? ` · ${data.operational.voiceLabel}` : null}
+            </span>
           </div>
-          <div className="mt-4 divide-y divide-border border-t border-border pt-2">
+          {data.operational.publicationStatus === "active" ? (
+            <p className="text-xs text-muted-foreground">Published configuration is active.</p>
+          ) : null}
+          <TransovoHairline className="!mt-3" />
+          <div className="divide-y divide-border">
             {data.operational.phone ? (
               <OperationalRow
                 label="Phone"
@@ -166,13 +158,12 @@ export function VoiceOverviewDashboard() {
               />
             ) : null}
           </div>
-        </Card>
+        </TransovoSection>
       ) : null}
 
       {data?.mode === "active" && data.attention.length > 0 ? (
-        <Card className="p-5">
-          <h2 className="text-sm font-semibold">Needs attention</h2>
-          <ul className="mt-3 divide-y divide-border">
+        <TransovoSection title="Needs attention">
+          <ul className="divide-y divide-border">
             {data.attention.map((row) => (
               <li key={row.id} className="flex items-center justify-between gap-3 py-3">
                 <span className="text-sm">{row.label}</span>
@@ -182,7 +173,7 @@ export function VoiceOverviewDashboard() {
               </li>
             ))}
           </ul>
-        </Card>
+        </TransovoSection>
       ) : null}
 
       {data?.mode === "active" ? (
@@ -206,44 +197,55 @@ export function VoiceOverviewDashboard() {
               </button>
             </p>
           ) : data.metrics ? (
-            <div className="grid gap-4 sm:grid-cols-3">
-              <StatCard
-                label="Calls"
-                value={formatNumber(data.metrics.totalCalls)}
-              />
-              <StatCard
-                label="Appointments booked"
-                value={formatNumber(data.metrics.appointmentsBooked)}
-              />
-              <StatCard
-                label="Callbacks requested"
-                value={formatNumber(data.metrics.callbacksRequested)}
-              />
-            </div>
+            <TransovoKpiStrip
+              variant="inline"
+              columns={3}
+              items={[
+                { label: "Calls", value: formatNumber(data.metrics.totalCalls) },
+                {
+                  label: "Appointments booked",
+                  value: formatNumber(data.metrics.appointmentsBooked),
+                },
+                {
+                  label: "Callbacks requested",
+                  value: formatNumber(data.metrics.callbacksRequested),
+                },
+              ]}
+            />
+          ) : loading ? (
+            <TransovoKpiStrip
+              variant="inline"
+              columns={3}
+              loading
+              items={[
+                { label: "Calls", value: "" },
+                { label: "Appointments booked", value: "" },
+                { label: "Callbacks requested", value: "" },
+              ]}
+            />
           ) : null}
         </section>
       ) : null}
 
       {data?.mode === "active" ? (
-        <Card className="overflow-hidden p-0">
-          <div className="flex items-center justify-between border-b border-border px-5 py-3">
-            <h2 className="text-sm font-semibold">Recent calls</h2>
-            <Link
-              href="/voice/calls"
-              className="text-sm font-medium text-primary hover:underline"
-            >
+        <TransovoSection
+          title="Recent calls"
+          actions={
+            <Link href="/voice/calls" className="text-sm font-medium text-primary hover:underline">
               View all calls →
             </Link>
-          </div>
+          }
+        >
+          <TransovoHairline />
           {errors.recentCalls ? (
-            <div className="px-5 py-4 text-sm text-muted-foreground">
+            <div className="py-4 text-sm text-muted-foreground">
               Recent calls unavailable.{" "}
               <button type="button" className="text-primary underline" onClick={load}>
                 Retry
               </button>
             </div>
           ) : data.recentCalls.length === 0 ? (
-            <p className="px-5 py-4 text-sm text-muted-foreground">No calls yet.</p>
+            <p className="py-4 text-sm text-muted-foreground">No calls yet.</p>
           ) : (
             <>
               <div className="hidden md:block">
@@ -278,7 +280,7 @@ export function VoiceOverviewDashboard() {
                           </TD>
                           <TD>{fmtCallDurationTable(c.durationSeconds)}</TD>
                           <TD>
-                            <CallOutcomeBadge label={primary} />
+                            <CallOutcomeBadge outcome={primary} compact />
                           </TD>
                           <TD>
                             {attention ? <CallAttentionBadge label={attention} /> : "—"}
@@ -306,7 +308,7 @@ export function VoiceOverviewDashboard() {
                     <li key={c.id}>
                       <Link
                         href={`/voice/calls/${c.id}`}
-                        className="flex min-h-[44px] flex-col gap-2 px-5 py-4"
+                        className="flex min-h-[44px] flex-col gap-2 py-4"
                       >
                         <div className="flex items-start justify-between gap-2">
                           <span className="font-medium">{caller}</span>
@@ -316,7 +318,7 @@ export function VoiceOverviewDashboard() {
                           </span>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <CallOutcomeBadge label={primary} />
+                          <CallOutcomeBadge outcome={primary} compact />
                           {attention ? <CallAttentionBadge label={attention} /> : null}
                         </div>
                       </Link>
@@ -326,12 +328,12 @@ export function VoiceOverviewDashboard() {
               </ul>
             </>
           )}
-        </Card>
+        </TransovoSection>
       ) : null}
 
       {data?.mode === "active" &&
       (data.dependencies.businessKnowledge || data.dependencies.callHandling) ? (
-        <Card className="divide-y divide-border px-5">
+        <div className="divide-y divide-border">
           {data.dependencies.businessKnowledge ? (
             <DependencyRow
               title="Business Knowledge"
@@ -348,7 +350,7 @@ export function VoiceOverviewDashboard() {
               linkLabel="Manage call handling"
             />
           ) : null}
-        </Card>
+        </div>
       ) : null}
 
       <p className="text-center text-sm">
@@ -356,20 +358,24 @@ export function VoiceOverviewDashboard() {
           Usage &amp; billing →
         </Link>
       </p>
-    </div>
+    </TransovoProductPage>
   );
 }
 
 function OverviewSkeleton() {
   return (
-    <div className="space-y-6">
-      <div className="h-40 animate-pulse rounded-xl bg-muted/40" />
-      <div className="grid gap-4 sm:grid-cols-3">
+    <div className="space-y-8" aria-hidden>
+      <div className="h-20 max-w-md animate-pulse bg-muted/30" />
+      <div className="flex gap-8 border-b border-border pb-4">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="h-24 animate-pulse rounded-xl bg-muted/40" />
+          <div key={i} className="h-12 w-24 animate-pulse bg-muted/30" />
         ))}
       </div>
-      <div className="h-48 animate-pulse rounded-xl bg-muted/40" />
+      <div className="space-y-3">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="h-10 animate-pulse border-b border-border bg-muted/20" />
+        ))}
+      </div>
     </div>
   );
 }

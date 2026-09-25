@@ -5,7 +5,7 @@
   --mctb-text-primary: #0a0d12;
   --mctb-text-secondary: #4a5563;
   --mctb-text-tertiary: #7a8494;
-  --mctb-canvas: #e3e6ec;
+  --mctb-canvas: #fafafa;
   --mctb-surface: #ffffff;
   --mctb-surface-inset: #f3f5f8;
   --mctb-border: #c8ced8;
@@ -47,10 +47,16 @@
 }
 
 .mctb-home-surface {
-  border: 1px solid var(--mctb-border);
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.transovo-product-surface-first .mctb-home-surface.transovo-surface--contained {
+  border: 1px solid var(--mctb-border-subtle);
   border-radius: 8px;
   background: var(--mctb-surface);
-  box-shadow: 0 1px 3px rgba(10, 13, 18, 0.06);
 }
 
 .mctb-home-module {

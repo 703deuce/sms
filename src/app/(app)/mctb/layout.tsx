@@ -1,3 +1,4 @@
+import "@/styles/transovo-pass3-surface-first.css";
 import "@/components/mctb/shell/mctb-design-tokens.css";
 import "@/components/mctb/shell/mctb-neutral-shell.css";
 import "@/components/mctb/shell/mctb-sidebar.css";

@@ -16,11 +16,18 @@ import {
   MOCK_CALLS_METRICS,
   type MockCallRow,
 } from "@/lib/voice/calls/mock-data";
+import { PageHeader } from "@/components/ui/page-header";
+import { TransovoOperationalToolbar } from "@/components/transovo/operational-toolbar";
+import {
+  TransovoPageEmpty,
+  TransovoTableBodySkeleton,
+} from "@/components/transovo/state-feedback";
 import { cn } from "@/lib/utils";
 import { AudioWaveform, ChevronLeft, ChevronRight, MessageSquare, Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import "@/styles/transovo-voice-calls-workspace.css";
 
 type CallRow = {
   id: string;
@@ -182,18 +189,9 @@ export default function VoiceCallsPage() {
     });
   }, [apiRows, useDemo, filter, q]);
 
-  const metrics = useDemo
-    ? MOCK_CALLS_METRICS
-    : apiMetrics ?? {
-        answered: 0,
-        leads: 0,
-        appointments: 0,
-        talkTimeSeconds: 0,
-        answeredChangePct: null,
-        leadsChangePct: null,
-        appointmentsChangePct: null,
-        talkTimeChangePct: null,
-      };
+  const metricsData = useDemo ? MOCK_CALLS_METRICS : apiMetrics;
+  const metricsLoading = !useDemo && loading;
+  const metricsDegraded = !useDemo && !loading && apiMetrics === null;
 
   const totalPages = Math.max(1, Math.ceil(allRows.length / perPage));
   const pageRows = allRows.slice((page - 1) * perPage, page * perPage);
@@ -204,75 +202,111 @@ export default function VoiceCallsPage() {
   }, [page, totalPages]);
 
   return (
-    <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-8">
-      <div className="mb-6">
-        <h1 className="font-display text-[28px] font-semibold tracking-tight text-[#111827]">Calls</h1>
-        <p className="mt-1 text-sm text-[#6b7280]">
-          Track and manage all calls handled by your AI receptionist.
-        </p>
-      </div>
+    <div className="transovo-page-container transovo-page-stack transovo-voice-calls-workspace">
+      <PageHeader
+        title="Calls"
+        description="Track and manage all calls handled by your AI receptionist."
+        className="!mb-0"
+      />
 
-      <CallsMetrics metrics={metrics} />
+      {!attentionOpen ? (
+        <CallsMetrics
+          metrics={metricsData}
+          loading={metricsLoading}
+          degraded={metricsDegraded}
+        />
+      ) : null}
 
-      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="relative max-w-sm flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]" />
-          <input
-            type="search"
-            placeholder="Search calls..."
-            value={q}
-            onChange={(e) => {
-              setPage(1);
-              setQ(e.target.value);
-            }}
-            className="h-10 w-full rounded-lg border border-[#e5e7eb] bg-white pl-9 pr-3 text-sm shadow-sm placeholder:text-[#9ca3af] focus:border-[#6366f1] focus:outline-none focus:ring-2 focus:ring-[#6366f1]/20"
-          />
+      <section className="transovo-operating-region transovo-section" aria-label="Calls filters and views">
+        <TransovoOperationalToolbar>
+          {!attentionOpen ? (
+            <div className="transovo-operational-toolbar__search">
+              <label className="sr-only" htmlFor="voice-calls-search">Search calls</label>
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--transovo-text-subtle)]"
+                aria-hidden
+              />
+              <input
+                id="voice-calls-search"
+                type="search"
+                placeholder="Search calls…"
+                value={q}
+                onChange={(e) => {
+                  setPage(1);
+                  setQ(e.target.value);
+                }}
+                className="transovo-input pl-9"
+              />
+            </div>
+          ) : null}
+          <div className="transovo-operational-toolbar__controls">
+            {!attentionOpen ? (
+              <label className="transovo-calls-period inline-flex items-center gap-2">
+                <span>Period</span>
+                <select
+                  value={dateRange}
+                  onChange={(e) => {
+                    setPage(1);
+                    setDateRange(e.target.value as DateRangeKey);
+                  }}
+                  aria-label="Date range for calls"
+                >
+                  <option value="today">Today</option>
+                  <option value="7d">Last 7 days</option>
+                  <option value="30d">Last 30 days</option>
+                </select>
+              </label>
+            ) : null}
+          </div>
+        </TransovoOperationalToolbar>
+
+        <div
+          className="transovo-view-tabs"
+          role="tablist"
+          aria-label="Calls view"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={!attentionOpen}
+            onClick={() => setAttentionOpen(false)}
+            className={cn("transovo-tab-link", !attentionOpen && "transovo-tab-link--active")}
+          >
+            All calls
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={attentionOpen}
+            onClick={() => setAttentionOpen(true)}
+            className={cn("transovo-tab-link", attentionOpen && "transovo-tab-link--active")}
+          >
+            Needs attention
+          </button>
         </div>
-        {!attentionOpen ? (
-          <label className="inline-flex items-center gap-2 text-sm text-[#374151]">
-            <span className="text-[#6b7280]">Period</span>
-            <select
-              value={dateRange}
-              onChange={(e) => {
-                setPage(1);
-                setDateRange(e.target.value as DateRangeKey);
-              }}
-              className="h-10 rounded-lg border border-[#e5e7eb] bg-white px-3 text-sm shadow-sm"
-            >
-              <option value="today">Today</option>
-              <option value="7d">Last 7 days</option>
-              <option value="30d">Last 30 days</option>
-            </select>
-          </label>
-        ) : null}
-      </div>
 
-      <div className="mb-4 flex flex-wrap gap-4 border-b border-[#e5e7eb]">
-        <button
-          type="button"
-          onClick={() => setAttentionOpen(false)}
-          className={cn(
-            "pb-3 text-sm font-medium transition",
-            !attentionOpen
-              ? "border-b-2 border-[#6366f1] text-[#6366f1]"
-              : "text-[#6b7280] hover:text-[#374151]",
-          )}
-        >
-          All calls
-        </button>
-        <button
-          type="button"
-          onClick={() => setAttentionOpen(true)}
-          className={cn(
-            "pb-3 text-sm font-medium transition",
-            attentionOpen
-              ? "border-b-2 border-[#6366f1] text-[#6366f1]"
-              : "text-[#6b7280] hover:text-[#374151]",
-          )}
-        >
-          Needs attention
-        </button>
-      </div>
+        {!attentionOpen ? (
+          <div className="transovo-filter-chips" role="group" aria-label="Filter by outcome">
+            {FILTERS.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => {
+                  setPage(1);
+                  setFilter(f.id);
+                }}
+                className={cn(
+                  "transovo-filter-chip",
+                  filter === f.id && "transovo-filter-chip--active",
+                )}
+                aria-pressed={filter === f.id}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </section>
 
       {attentionOpen ? (
         <NeedsAttentionView voiceOnly embedded />
@@ -280,29 +314,9 @@ export default function VoiceCallsPage() {
 
       {!attentionOpen ? (
       <>
-      <div className="mb-4 flex flex-wrap gap-6 border-b border-[#e5e7eb]">
-        {FILTERS.map((f) => (
-          <button
-            key={f.id}
-            type="button"
-            onClick={() => {
-              setPage(1);
-              setFilter(f.id);
-            }}
-            className={cn(
-              "pb-3 text-sm font-medium transition",
-              filter === f.id
-                ? "border-b-2 border-[#6366f1] text-[#6366f1]"
-                : "text-[#6b7280] hover:text-[#374151]",
-            )}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-sm">
-        <div className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_auto_auto_minmax(0,2fr)_auto] gap-4 border-b border-[#e5e7eb] bg-[#f9fafb] px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-[#6b7280]">
+      <div className="transovo-data-table-shell transovo-data-table-scroll border-t-0">
+        <div className="transovo-data-table-min">
+        <div className="transovo-data-table-head grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_auto_auto_minmax(0,2fr)_auto]">
           <span>Caller</span>
           <span>Call Date & Time</span>
           <span>Duration</span>
@@ -312,11 +326,9 @@ export default function VoiceCallsPage() {
         </div>
 
         {loading && !useDemo ? (
-          <div className="px-5 py-14 text-center text-sm text-[#6b7280]">Loading calls…</div>
+          <TransovoTableBodySkeleton rows={8} message="Loading calls…" />
         ) : pageRows.length === 0 ? (
-          <div className="px-5 py-14 text-center text-sm text-[#6b7280]">
-            No calls match your filters.
-          </div>
+          <TransovoPageEmpty title="No calls match your filters." />
         ) : (
           pageRows.map((c) => {
             const callerPhone = c.direction === "INBOUND" ? c.fromE164 : c.toE164;
@@ -337,51 +349,57 @@ export default function VoiceCallsPage() {
               <Link
                 key={c.id}
                 href={`/voice/calls/${c.id}`}
-                className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_auto_auto_minmax(0,2fr)_auto] items-center gap-4 border-b border-[#f3f4f6] px-5 py-4 transition hover:bg-[#fafafa] last:border-b-0"
+                className="transovo-calls-table-row grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_auto_auto_minmax(0,2fr)_auto] items-center transition"
               >
-                <div className="flex min-w-0 items-center gap-3">
+                <div className="flex min-w-0 items-center gap-2">
                   {c.avatarUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={c.avatarUrl}
                       alt=""
-                      className="h-9 w-9 shrink-0 rounded-full bg-[#f3f4f6] object-cover ring-1 ring-[#e5e7eb]"
+                      className="h-6 w-6 shrink-0 rounded object-cover"
                     />
                   ) : (
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#eef2ff] text-xs font-semibold text-[#6366f1]">
+                    <span className="transovo-calls-initial" aria-hidden>
                       {callerName.slice(0, 1)}
-                    </div>
+                    </span>
                   )}
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-[#111827]">{callerName}</p>
-                    <p className="truncate text-xs text-[#6b7280]">{fmtCallPhone(callerPhone)}</p>
+                    <p className="transovo-calls-caller-name truncate">{callerName}</p>
+                    <p className="transovo-calls-caller-phone truncate">{fmtCallPhone(callerPhone)}</p>
                   </div>
                 </div>
 
                 <div>
-                  <p className="text-sm text-[#111827]">{dt.date}</p>
-                  <p className="text-xs text-[#6b7280]">{dt.time}</p>
+                  <p className="transovo-calls-meta-line">{dt.date}</p>
+                  <p className="text-[0.6875rem] text-[var(--transovo-calls-meta,#9ca3af)]">{dt.time}</p>
                 </div>
 
-                <p className="text-sm tabular-nums text-[#374151]">
+                <p className="transovo-calls-meta-line tabular-nums">
                   {fmtCallDurationTable(c.durationSeconds)}
                 </p>
 
-                <div className="flex min-w-[8rem] flex-col gap-1">
-                  <CallOutcomeBadge outcome={outcome} />
-                  {attention ? <CallAttentionBadge label={attention} /> : null}
+                <div className="flex min-w-[7rem] flex-col gap-0.5">
+                  <CallOutcomeBadge outcome={outcome} compact />
+                  {attention ? (
+                    <CallAttentionBadge
+                      label={attention}
+                      className="transovo-calls-attention-badge !rounded px-1.5 py-px !text-[10px] !ring-0"
+                    />
+                  ) : null}
                 </div>
 
-                <p className="line-clamp-2 text-sm leading-snug text-[#4b5563]">
+                <p className="transovo-calls-summary line-clamp-2">
                   {c.summary || "No summary yet."}
                 </p>
 
-                <div className="flex w-24 items-center justify-end gap-2">
+                <div className="flex w-20 items-center justify-end gap-0.5">
                   <span
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white text-[#6366f1]"
+                    className="transovo-calls-row-action"
                     title="Play recording"
+                    aria-hidden
                   >
-                    <AudioWaveform className="h-4 w-4" />
+                    <AudioWaveform className="h-3.5 w-3.5" />
                   </span>
                   <button
                     type="button"
@@ -390,21 +408,22 @@ export default function VoiceCallsPage() {
                       e.stopPropagation();
                       window.location.href = `/send/quick?to=${encodeURIComponent(callerPhone)}`;
                     }}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white text-[#6b7280] hover:text-[#374151]"
-                    title="Text caller"
+                    className="transovo-calls-row-action"
+                    aria-label={`Text ${callerName}`}
                   >
-                    <MessageSquare className="h-4 w-4" />
+                    <MessageSquare className="h-3.5 w-3.5" />
                   </button>
-                  <ChevronRight className="h-4 w-4 text-[#9ca3af]" />
+                  <ChevronRight className="h-3.5 w-3.5 text-[var(--transovo-calls-meta,#9ca3af)]" aria-hidden />
                 </div>
               </Link>
             );
           })
         )}
+        </div>
       </div>
 
-      <div className="mt-4 flex flex-col items-center justify-between gap-3 sm:flex-row">
-        <p className="text-sm text-[#6b7280]">
+      <div className="transovo-calls-pagination flex flex-col items-center justify-between gap-2 px-3 py-2 sm:flex-row">
+        <p>
           Showing {(page - 1) * perPage + 1}–{Math.min(page * perPage, allRows.length)} of{" "}
           {totalCount} calls
         </p>
@@ -413,7 +432,8 @@ export default function VoiceCallsPage() {
             type="button"
             disabled={page <= 1}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
-            className="flex h-8 w-8 items-center justify-center rounded-md text-[#6b7280] hover:bg-[#f3f4f6] disabled:opacity-40"
+            className="transovo-calls-row-action disabled:opacity-40"
+            aria-label="Previous page"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
@@ -423,10 +443,10 @@ export default function VoiceCallsPage() {
               type="button"
               onClick={() => setPage(n)}
               className={cn(
-                "flex h-8 w-8 items-center justify-center rounded-md text-sm font-medium",
+                "transovo-calls-page-btn flex items-center justify-center",
                 page === n
-                  ? "bg-[#6366f1] text-white shadow-sm"
-                  : "text-[#6b7280] hover:bg-[#f3f4f6]",
+                  ? "transovo-calls-page-btn--active"
+                  : "text-[var(--transovo-calls-muted)] hover:bg-[#f3f4f6]",
               )}
             >
               {n}
@@ -436,12 +456,13 @@ export default function VoiceCallsPage() {
             type="button"
             disabled={page >= totalPages}
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            className="flex h-8 w-8 items-center justify-center rounded-md text-[#6b7280] hover:bg-[#f3f4f6] disabled:opacity-40"
+            className="transovo-calls-row-action disabled:opacity-40"
+            aria-label="Next page"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
-        <div className="text-sm text-[#6b7280]">Rows per page: 10</div>
+        <div>Rows per page: 10</div>
       </div>
       </>
       ) : null}
