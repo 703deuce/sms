@@ -31,6 +31,8 @@ export function MctbSetupTextBackView() {
   const [paused, setPaused] = useState(false);
   const [pauseKind, setPauseKind] = useState<"manual" | "timed" | null>(null);
   const [pauseUntil, setPauseUntil] = useState<string | null>(null);
+  const [canEditOpener, setCanEditOpener] = useState(true);
+  const [senderTitle, setSenderTitle] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -48,6 +50,8 @@ export function MctbSetupTextBackView() {
       setPauseUntil(json.data.schedule?.pauseUntil ?? null);
       const goal = parseRecoveryGoalId(json.data.recoveryGoal);
       if (goal) setRecoveryGoal(goal);
+      setCanEditOpener(json.data.messaging?.canEditRecoveryOpener !== false);
+      setSenderTitle(json.data.messaging?.title ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load");
     } finally {
@@ -99,7 +103,7 @@ export function MctbSetupTextBackView() {
   return (
     <MctbSetupSectionLayout
       title="Text Back"
-      description="Choose what recovery should accomplish and how callers are prompted after a missed call."
+      description="First recovery SMS after a missed call. Consent is configured separately."
       saving={saving}
       saved={saved}
       error={error}
@@ -125,11 +129,13 @@ export function MctbSetupTextBackView() {
         <MctbRecoveryGoalSetupSection
           value={recoveryGoal}
           messagePreview={messageTemplate || getRecoveryGoalDefinition(recoveryGoal).defaultOpener}
+          allowCustomOpener={canEditOpener}
+          senderPresentationTitle={senderTitle}
           onGoalChange={(id, suggested) => {
             setRecoveryGoal(id);
-            setMessageTemplate(suggested);
+            if (canEditOpener) setMessageTemplate(suggested);
           }}
-          onMessageChange={setMessageTemplate}
+          onMessageChange={canEditOpener ? setMessageTemplate : undefined}
         />
       </div>
 

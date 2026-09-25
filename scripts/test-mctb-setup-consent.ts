@@ -21,9 +21,12 @@ import { resolveMctbSetupSectionId } from "../src/lib/mctb/setup-sections";
 
 assert.equal(resolveMctbSetupSectionId("/mctb/setup/consent"), "consent");
 
-assert.equal(isExistingConsentModeEligible({ messagingReady: true }), true);
+assert.equal(isExistingConsentModeEligible({ messagingReady: true, paidEntitled: true }), true);
+assert.equal(isExistingConsentModeEligible({ messagingReady: true, paidEntitled: false }), false);
 assert.equal(isExistingConsentModeEligible({ messagingReady: false }), false);
-assert.ok(existingConsentIneligibleReason(false)?.includes("messaging"));
+assert.ok(existingConsentIneligibleReason(false, true)?.includes("messaging"));
+assert.ok(existingConsentIneligibleReason(true, false)?.includes("paid"));
+assert.equal(resolveMctbSetupSectionId("/mctb/setup/text-back"), "text-back");
 
 assert.equal(methodLabel(MCTB_CONSENT_MODE_VERIFIED), "Press 1");
 assert.equal(methodLabel(MCTB_CONSENT_MODE_EXISTING), "Existing consent");

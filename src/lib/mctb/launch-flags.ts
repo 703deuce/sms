@@ -23,3 +23,6 @@ export const MCTB_LAUNCH_SIMPLIFY_RECOVERY_UI = true;
 
 /** Primary recovery UX is goal + template preview; composer is advanced-only. */
 export const MCTB_LAUNCH_GOAL_DRIVEN_RECOVERY_UI = true;
+
+/** Setup home: compact section list; hide secondary marketing panels. */
+export const MCTB_LAUNCH_COMPACT_SETUP_HOME = true;

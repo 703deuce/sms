@@ -140,6 +140,13 @@ export function MctbSetupLinksView() {
       error={error || fieldError}
       onSave={() => void save()}
     >
+      <p className="text-[13px] text-muted-foreground">
+        Booking links for AI Recovery are configured in{" "}
+        <Link href={MCTB_ROUTES.aiRecovery} className="font-semibold text-primary hover:underline">
+          AI Recovery
+        </Link>
+        . This page manages the {"{{link}}"} variable and optional request form only.
+      </p>
       <div className="voice-card space-y-4 p-4 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3 text-[13px]">
           <div>

@@ -13,6 +13,8 @@ type Props = {
   messagePreview: string;
   onGoalChange: (goal: MctbRecoveryGoalId, suggestedMessage: string) => void;
   onMessageChange?: (message: string) => void;
+  allowCustomOpener?: boolean;
+  senderPresentationTitle?: string | null;
 };
 
 export function MctbRecoveryGoalSetupSection({
@@ -20,6 +22,8 @@ export function MctbRecoveryGoalSetupSection({
   messagePreview,
   onGoalChange,
   onMessageChange,
+  allowCustomOpener = true,
+  senderPresentationTitle,
 }: Props) {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -38,14 +42,20 @@ export function MctbRecoveryGoalSetupSection({
       <div className="rounded-lg border border-border bg-muted/30 p-3 text-[13px]">
         <p className="font-medium text-foreground">Recovery opener preview</p>
         <p className="mt-2 whitespace-pre-wrap text-muted-foreground">{messagePreview}</p>
-        {MCTB_LAUNCH_GOAL_DRIVEN_RECOVERY_UI ? (
+        {senderPresentationTitle ? (
+          <p className="mt-2 text-[12px] text-muted-foreground">{senderPresentationTitle}</p>
+        ) : MCTB_LAUNCH_GOAL_DRIVEN_RECOVERY_UI ? (
           <p className="mt-2 text-[12px] text-muted-foreground">
-            Launch templates are goal-driven. Full custom copy will be governed by messaging sender mode in a
-            future release.
+            Recovery opener follows your selected goal. Custom copy depends on your messaging setup.
+          </p>
+        ) : null}
+        {!allowCustomOpener ? (
+          <p className="mt-2 text-[12px] text-muted-foreground">
+            This preview shows the approved recovery message. It cannot be edited on Transovo-managed messaging.
           </p>
         ) : null}
       </div>
-      {MCTB_LAUNCH_GOAL_DRIVEN_RECOVERY_UI && onMessageChange ? (
+      {MCTB_LAUNCH_GOAL_DRIVEN_RECOVERY_UI && onMessageChange && allowCustomOpener ? (
         <div data-mctb-recovery-opener-editor>
           {/* Future PLATFORM/CUSTOMER sender mode: gate this block + POST /api/mctb/setup messageTemplate. */}
           <button

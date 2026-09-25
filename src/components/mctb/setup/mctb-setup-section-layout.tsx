@@ -67,6 +67,11 @@ export function MctbSetupSectionLayout({
         </div>
       ) : null}
       <div className="min-w-0 w-full max-w-none">
+        <p className="mb-3 text-[12px]">
+          <Link href={MCTB_ROUTES.setup} className="font-semibold text-[#626872] hover:text-[#1b1e23]">
+            ← Setup
+          </Link>
+        </p>
         <div className="mb-4">
           <h2 className="text-[1.125rem] font-semibold tracking-tight text-[#1b1e23]">{title}</h2>
           <p className="mt-1 text-[13px] text-[#626872]">{description}</p>

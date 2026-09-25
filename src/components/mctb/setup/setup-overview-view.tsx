@@ -21,6 +21,7 @@ import {
   buildSetupSummaryRows,
   formatShortWhenCompact,
 } from "@/lib/mctb/setup-overview-model";
+import { MCTB_LAUNCH_COMPACT_SETUP_HOME } from "@/lib/mctb/launch-flags";
 import { AlertTriangle, Check, Settings2 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -38,6 +39,9 @@ type SetupApi = {
     cooldownMinutes: number;
     timezone?: string;
     replyNotifications?: boolean;
+    defaultLinkUrl?: string | null;
+    requestFormEnabled?: boolean;
+    senderMode?: "PLATFORM" | "WORKSPACE";
   };
   schedule: {
     paused: boolean;
@@ -49,6 +53,11 @@ type SetupApi = {
   productionForwardTargetE164?: string | null;
   phoneNumbers: Array<{ id: string; e164: string; label?: string | null }>;
   compliance: { messagingReady: boolean; requiredActions: string[] };
+  messaging?: {
+    senderMode?: "PLATFORM" | "WORKSPACE";
+    canEditRecoveryOpener?: boolean;
+  };
+  consentMeta?: { paidEntitled?: boolean; existingConsentEligible?: boolean };
 };
 
 export function MctbSetupOverviewView() {
@@ -201,17 +210,27 @@ export function MctbSetupOverviewView() {
       triggersOn,
       consentMode: setup.consentMode,
       existingConsentBlocked:
-        setup.consentMode === "existing_consent" && !setup.compliance.messagingReady,
+        setup.consentMode === "existing_consent" &&
+        (!setup.compliance.messagingReady || setup.consentMeta?.paidEntitled === false),
       voicemailConfigured: !voicemailSummary.includes("Not") && voicemailSummary !== "Configure in Voicemail",
     });
   }, [setup, forwardingVerified, triggersOn, voicemailSummary]);
 
   const rows = useMemo(() => {
     if (!setup) return [];
+    const linkUrl = setup.runtime.defaultLinkUrl?.trim();
+    const linksSummary = setup.runtime.requestFormEnabled
+      ? "Request form enabled"
+      : linkUrl
+        ? "Default link configured"
+        : "Optional";
+
     return buildSetupSummaryRows({
       runtime: setup.runtime,
       schedule: setup.schedule,
       consentMode: setup.consentMode,
+      senderMode: setup.messaging?.senderMode ?? setup.runtime.senderMode ?? null,
+      linksSummary,
       businessLineE164: setup.businessLineE164,
       forwardTargetE164: setup.productionForwardTargetE164,
       forwardingVerified,
@@ -225,7 +244,8 @@ export function MctbSetupOverviewView() {
       voicemailSummary,
       voicemailTranscriptionOn,
       existingConsentBlocked:
-        setup.consentMode === "existing_consent" && !setup.compliance.messagingReady,
+        setup.consentMode === "existing_consent" &&
+        (!setup.compliance.messagingReady || setup.consentMeta?.paidEntitled === false),
     });
   }, [
     setup,
@@ -282,8 +302,7 @@ export function MctbSetupOverviewView() {
 
   const shellProps = {
     title: "Setup",
-    description:
-      "Configure missed-call recovery, forwarding, consent, voicemail, and operational controls.",
+    description: "How Missed Call Text Back is connected and configured.",
     headerIcon: <Settings2 className="h-4 w-4" strokeWidth={1.75} aria-hidden />,
     headerMeta,
     headerAction,
@@ -443,9 +462,11 @@ export function MctbSetupOverviewView() {
           </div>
         ) : null}
 
-        <div className="mctb-setup-span-12">
-          <SetupOverviewFlowStrip stages={flowStages} />
-        </div>
+        {MCTB_LAUNCH_COMPACT_SETUP_HOME ? null : (
+          <div className="mctb-setup-span-12">
+            <SetupOverviewFlowStrip stages={flowStages} />
+          </div>
+        )}
 
         <div className="mctb-setup-span-12">
           <SetupOverviewGroupHead label="Call flow" />
@@ -465,7 +486,7 @@ export function MctbSetupOverviewView() {
           </div>
         </div>
 
-        {activity.length > 0 ? (
+        {MCTB_LAUNCH_COMPACT_SETUP_HOME ? null : activity.length > 0 ? (
           <div className="mctb-setup-span-7 mctb-setup-panel mctb-setup-panel--level3">
             <h2>Recent system activity</h2>
             <ul className="mctb-setup-activity-timeline">
@@ -489,9 +510,11 @@ export function MctbSetupOverviewView() {
           <div className="mctb-setup-span-7" />
         )}
 
-        <div className="mctb-setup-span-5">
-          <SetupOverviewQuickActions />
-        </div>
+        {MCTB_LAUNCH_COMPACT_SETUP_HOME ? null : (
+          <div className="mctb-setup-span-5">
+            <SetupOverviewQuickActions />
+          </div>
+        )}
       </div>
     </MctbSetupShell>
   );

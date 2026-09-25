@@ -5,11 +5,20 @@
  */
 export function isExistingConsentModeEligible(input: {
   messagingReady: boolean;
+  /** Free / trial workspaces cannot enable existing permission (Pass 1B). */
+  paidEntitled?: boolean;
 }): boolean {
+  if (input.paidEntitled === false) return false;
   return input.messagingReady;
 }
 
-export function existingConsentIneligibleReason(messagingReady: boolean): string | null {
+export function existingConsentIneligibleReason(
+  messagingReady: boolean,
+  paidEntitled = true,
+): string | null {
+  if (!paidEntitled) {
+    return "Use existing permission is available on paid plans with an approved messaging sender.";
+  }
   if (messagingReady) return null;
-  return "Existing-consent mode requires an eligible business messaging setup.";
+  return "Use existing permission requires messaging to be ready on your connected number.";
 }

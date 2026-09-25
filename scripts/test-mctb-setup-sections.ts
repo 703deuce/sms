@@ -6,12 +6,15 @@ import {
   buildCoreSystemsReadiness,
   resolveSetupChipTone,
 } from "../src/lib/mctb/setup-overview-model";
+import { isExistingConsentModeEligible } from "../src/lib/mctb/setup-consent-eligibility";
 
-assert.equal(MCTB_SETUP_SECTIONS.length, 8);
+assert.equal(MCTB_SETUP_SECTIONS.length, 10);
 assert.equal(resolveMctbSetupSectionId("/mctb/setup"), "overview");
 assert.equal(resolveMctbSetupSectionId("/mctb/setup/phone"), "phone");
+assert.equal(resolveMctbSetupSectionId("/mctb/setup/consent"), "consent");
 assert.equal(resolveMctbSetupSectionId("/mctb/setup/missed-call-rules"), "recovery");
-assert.equal(resolveMctbSetupSectionId("/mctb/setup/text-back"), "recovery");
+assert.equal(resolveMctbSetupSectionId("/mctb/setup/text-back"), "text-back");
+assert.equal(resolveMctbSetupSectionId("/mctb/setup/links"), "links");
 assert.equal(resolveMctbSetupSectionId("/mctb/setup/test"), "test");
 
 const rows = buildSetupSummaryRows({
@@ -37,12 +40,15 @@ const rows = buildSetupSummaryRows({
   notificationSummary: "Email enabled · SMS disabled",
   voicemailSummary: "Custom greeting · Active",
   existingConsentBlocked: false,
+  linksSummary: "Optional",
+  senderMode: "PLATFORM",
 });
 
-assert.equal(rows.length, 8);
+assert.equal(rows.length, 9);
 assert.ok(rows[0].secondary.includes("→"));
 assert.equal(rows[0].group, "call-flow");
-assert.equal(rows.filter((r) => r.group === "operations").length, 3);
+assert.equal(rows.find((r) => r.id === "text-back")?.title, "Text Back");
+assert.equal(rows.filter((r) => r.group === "operations").length, 4);
 
 const attention = buildSetupAttentionItems({
   forwardingVerified: false,
@@ -67,5 +73,8 @@ assert.equal(readiness.ready, 5);
 
 assert.equal(resolveSetupChipTone("Configured", "neutral"), "neutral");
 assert.equal(resolveSetupChipTone("Verified", "ok"), "positive");
+
+assert.equal(isExistingConsentModeEligible({ messagingReady: true, paidEntitled: true }), true);
+assert.equal(isExistingConsentModeEligible({ messagingReady: true, paidEntitled: false }), false);
 
 console.log("test-mctb-setup-sections: ok");

@@ -22,6 +22,8 @@ import { loadComplianceOverview, loadPhoneNumbers } from "@/lib/workspace-data";
 import { loadAdminMctbTestFlags } from "@/lib/mctb/admin-test-workspace";
 import { isMctbSetupMessagingReady } from "@/lib/mctb/setup-messaging-ready";
 import { isExistingConsentModeEligible } from "@/lib/mctb/setup-consent-eligibility";
+import { hasActiveMctbPaidEntitlement } from "@/lib/mctb/entitlement";
+import { describeMctbSenderPresentation } from "@/lib/mctb/sender-presentation";
 import { EXISTING_CONSENT_ATTESTATION_VERSION } from "@/lib/mctb/capture/attestation";
 import {
   resolveCanonicalMctbSetupPhoneId,
@@ -204,6 +206,9 @@ export async function GET() {
 
   const { readMctbRecoveryGoalId } = await import("@/lib/mctb/apply-recovery-goal-config");
   const recoveryGoal = await readMctbRecoveryGoalId(workspaceId);
+  const paidEntitled = await hasActiveMctbPaidEntitlement(workspaceId);
+  const senderMode = runtimeForClient.senderMode || "WORKSPACE";
+  const senderPresentation = describeMctbSenderPresentation(senderMode);
 
   return NextResponse.json({
     data: {
@@ -253,7 +258,11 @@ export async function GET() {
         (setupMeta.consentMode as MctbConsentMode | undefined) ||
         "press_1",
       consentMeta: {
-        existingConsentEligible: isExistingConsentModeEligible({ messagingReady }),
+        paidEntitled,
+        existingConsentEligible: isExistingConsentModeEligible({
+          messagingReady,
+          paidEntitled,
+        }),
         existingConsentAttestation: (() => {
           const raw = mctbSettings.existingConsentAttestation;
           if (!raw || typeof raw !== "object") return null;
@@ -268,6 +277,11 @@ export async function GET() {
       },
       productionForwardTargetE164: productionForwardE164,
       businessLineE164,
+      messaging: {
+        senderMode,
+        ...senderPresentation,
+        canEditRecoveryOpener: senderMode !== "PLATFORM",
+      },
     },
   });
 }
@@ -280,6 +294,12 @@ export async function POST(req: Request) {
   const prisma = getPrisma();
   const priorRuntime = await loadMissedCallTextConfig(workspaceId);
   const previousPhoneId = priorRuntime.phoneNumberId;
+
+  if (priorRuntime.senderMode === "PLATFORM" && body.messageTemplate !== undefined) {
+    delete body.messageTemplate;
+    delete body.messageTemplateBusinessHours;
+    delete body.messageTemplateAfterHours;
+  }
 
   traceMctbDebug("setup", "post_start", {
     workspaceId,
@@ -381,12 +401,13 @@ export async function POST(req: Request) {
   }
 
   if (body.consentMode === "existing_consent") {
-    const [phoneNumbersForConsent, complianceForConsent, regForConsent, adminFlagsForConsent] =
+    const [phoneNumbersForConsent, complianceForConsent, regForConsent, adminFlagsForConsent, paidForConsent] =
       await Promise.all([
         loadMctbSetupPhoneOptionsWithTelnyxSync(workspaceId),
         loadComplianceOverview(workspaceId),
         loadPhoneNumbers(workspaceId, { includeLinked: true }),
         loadAdminMctbTestFlags(workspaceId),
+        hasActiveMctbPaidEntitlement(workspaceId),
       ]);
     const requiredForConsent = deriveRequiredActions(
       complianceForConsent.registration,
@@ -399,6 +420,7 @@ export async function POST(req: Request) {
           requiredActions: requiredForConsent,
           adminFlags: adminFlagsForConsent,
         }),
+        paidEntitled: paidForConsent,
       })
     ) {
       return NextResponse.json(

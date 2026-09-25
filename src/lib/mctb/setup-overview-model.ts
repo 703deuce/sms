@@ -1,4 +1,5 @@
 import { MCTB_CONSENT_MODE_LABELS, type MctbConsentMode } from "@/lib/mctb/consent-mode";
+import { describeMctbSenderPresentation } from "@/lib/mctb/sender-presentation";
 import { getCarrierGuide } from "@/lib/mctb/onboarding/carriers";
 import type { MctbForwardingCarrier } from "@/lib/mctb/onboarding/types";
 import { formatMctbPhoneLabel } from "@/lib/mctb/phone-display";
@@ -248,6 +249,8 @@ export function buildSetupSummaryRows(input: {
   voicemailSummary: string;
   voicemailTranscriptionOn?: boolean;
   existingConsentBlocked: boolean;
+  linksSummary?: string;
+  senderMode?: "PLATFORM" | "WORKSPACE" | null;
 }): SetupOverviewSummaryRow[] {
   const r = input.runtime;
   const triggersOn =
@@ -289,16 +292,27 @@ export function buildSetupSummaryRows(input: {
 
   const consent = MCTB_CONSENT_MODE_LABELS[input.consentMode];
   const consentSecondary =
-    input.consentMode === "press_1" ? "Press 1" : "Existing consent";
+    input.consentMode === "press_1" ? "Press-1 consent" : "Use existing permission";
   const consentOperational =
-    input.consentMode === "press_1" ? "Per-call consent capture" : "Business attestation";
-  const consentSummary = `${consentSecondary} · ${consentOperational}`;
+    input.consentMode === "press_1"
+      ? "Caller presses 1 before recovery text"
+      : "Business attestation on file";
+  const consentSummary = consentSecondary;
 
+  const senderCopy = describeMctbSenderPresentation(input.senderMode);
   const msgPreview = r.messageTemplate.trim().replace(/\s+/g, " ").slice(0, 48);
   const textSecondary =
-    msgLen > 0 ? `Configured · ${msgLen} characters` : "Not configured";
+    input.senderMode === "PLATFORM"
+      ? senderCopy.title
+      : msgLen > 0
+        ? `Configured · ${msgLen} characters`
+        : "Not configured";
   const textOperational =
-    msgLen > 0 ? `"${msgPreview}${r.messageTemplate.trim().length > 48 ? "…" : ""}"` : "Add your recovery opener";
+    input.senderMode === "PLATFORM"
+      ? "Transovo-controlled recovery opener"
+      : msgLen > 0
+        ? `"${msgPreview}${r.messageTemplate.trim().length > 48 ? "…" : ""}"`
+        : "Add your recovery opener";
 
   const vmSecondary = input.voicemailSummary.replace(" · Active", "");
   const vmOperational =
@@ -321,6 +335,8 @@ export function buildSetupSummaryRows(input: {
       : "Never tested";
   const testOperational = "Production path";
 
+  const linksSecondary = input.linksSummary || "Request form and shared links";
+
   return [
     {
       id: "phone",
@@ -331,17 +347,6 @@ export function buildSetupSummaryRows(input: {
       statusLabel: phoneStatusLabel,
       status: phoneStatus,
       href: MCTB_ROUTES.setupPhone,
-      group: "call-flow",
-    },
-    {
-      id: "recovery",
-      title: "Recovery",
-      summary: recoverySummary,
-      secondary: recoverySecondary,
-      operationalDetail: recoveryOperational,
-      statusLabel: paused ? "Paused" : triggersOn ? "Active" : "Needs attention",
-      status: paused ? "warning" : triggersOn ? "ok" : "warning",
-      href: MCTB_ROUTES.setupRecovery,
       group: "call-flow",
     },
     {
@@ -357,13 +362,29 @@ export function buildSetupSummaryRows(input: {
     },
     {
       id: "text-back",
-      title: "Text-back message",
+      title: "Text Back",
       summary: textSecondary,
       secondary: textSecondary,
       operationalDetail: textOperational,
-      statusLabel: msgLen > 0 ? "Configured" : "Missing",
-      status: msgLen > 0 ? "ok" : "warning",
-      href: `${MCTB_ROUTES.setupTextBack}`,
+      statusLabel:
+        input.senderMode === "PLATFORM"
+          ? "Managed"
+          : msgLen > 0
+            ? "Configured"
+            : "Missing",
+      status: input.senderMode === "PLATFORM" || msgLen > 0 ? "ok" : "warning",
+      href: MCTB_ROUTES.setupTextBack,
+      group: "call-flow",
+    },
+    {
+      id: "recovery",
+      title: "Recovery",
+      summary: recoverySummary,
+      secondary: recoverySecondary,
+      operationalDetail: recoveryOperational,
+      statusLabel: paused ? "Paused" : triggersOn ? "Active" : "Needs attention",
+      status: paused ? "warning" : triggersOn ? "ok" : "warning",
+      href: MCTB_ROUTES.setupRecovery,
       group: "call-flow",
     },
     {
@@ -400,8 +421,19 @@ export function buildSetupSummaryRows(input: {
       group: "operations",
     },
     {
+      id: "links",
+      title: "Links",
+      summary: linksSecondary,
+      secondary: linksSecondary,
+      operationalDetail: "Request form · customer URLs",
+      statusLabel: input.linksSummary?.includes("Enabled") ? "Active" : "Optional",
+      status: "neutral",
+      href: MCTB_ROUTES.setupLinks,
+      group: "operations",
+    },
+    {
       id: "test",
-      title: "Test & diagnostics",
+      title: "Test",
       summary: testSecondary,
       secondary: testSecondary,
       operationalDetail: testOperational,

@@ -293,6 +293,37 @@ export async function POST(req: Request) {
           { status: 400 },
         );
       }
+      if (body.consentMode === "existing_consent") {
+        const { hasActiveMctbPaidEntitlement } = await import("@/lib/mctb/entitlement");
+        const { isExistingConsentModeEligible } = await import(
+          "@/lib/mctb/setup-consent-eligibility"
+        );
+        const { isMctbSetupMessagingReady } = await import("@/lib/mctb/setup-messaging-ready");
+        const { loadMctbSetupPhoneOptionsWithTelnyxSync } = await import(
+          "@/lib/mctb/setup-telnyx-messaging-sync"
+        );
+        const { loadComplianceOverview, loadPhoneNumbers } = await import("@/lib/workspace-data");
+        const { deriveRequiredActions } = await import("@/lib/compliance-helpers");
+        const { loadAdminMctbTestFlags } = await import("@/lib/mctb/admin-test-workspace");
+        const [phones, compliance, reg, adminFlags, paid] = await Promise.all([
+          loadMctbSetupPhoneOptionsWithTelnyxSync(auth.workspaceId),
+          loadComplianceOverview(auth.workspaceId),
+          loadPhoneNumbers(auth.workspaceId, { includeLinked: true }),
+          loadAdminMctbTestFlags(auth.workspaceId),
+          hasActiveMctbPaidEntitlement(auth.workspaceId),
+        ]);
+        const messagingReady = isMctbSetupMessagingReady({
+          phoneNumbers: phones,
+          requiredActions: deriveRequiredActions(compliance.registration, reg),
+          adminFlags,
+        });
+        if (!isExistingConsentModeEligible({ messagingReady, paidEntitled: paid })) {
+          return NextResponse.json(
+            { error: "Use existing permission is not available for this workspace." },
+            { status: 400 },
+          );
+        }
+      }
       await saveMissedCallTextBack(auth.workspaceId, { activate: false });
       const ws = await prisma.workspace.findUnique({
         where: { id: auth.workspaceId },

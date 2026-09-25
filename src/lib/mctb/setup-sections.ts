@@ -3,11 +3,13 @@ import { MCTB_ROUTES } from "@/lib/mctb/routes";
 export type MctbSetupSectionId =
   | "overview"
   | "phone"
-  | "recovery"
   | "consent"
+  | "text-back"
+  | "recovery"
   | "voicemail"
   | "notifications"
   | "exclusions"
+  | "links"
   | "test";
 
 export type MctbSetupSection = {
@@ -17,65 +19,68 @@ export type MctbSetupSection = {
   description: string;
 };
 
-/** Permanent Setup workspace sections (horizontal nav). */
+/** Permanent Setup workspace sections (horizontal nav) — canonical Pass 4 order. */
 export const MCTB_SETUP_SECTIONS: MctbSetupSection[] = [
   {
     id: "overview",
     label: "Overview",
     href: MCTB_ROUTES.setup,
-    description: "Operational status and quick links",
+    description: "Setup status and section shortcuts",
   },
   {
     id: "phone",
     label: "Phone & Forwarding",
     href: MCTB_ROUTES.setupPhone,
-    description: "Business line, carrier, and forwarding verification",
-  },
-  {
-    id: "recovery",
-    label: "Recovery",
-    href: MCTB_ROUTES.setupRecovery,
-    description: "Missed-call triggers, cooldown, pause, and recovery eligibility",
+    description: "Business line, forwarding, and messaging sender",
   },
   {
     id: "consent",
     label: "Consent",
     href: MCTB_ROUTES.setupConsent,
-    description: "Press 1 vs existing consent",
+    description: "How permission to text is established",
+  },
+  {
+    id: "text-back",
+    label: "Text Back",
+    href: MCTB_ROUTES.setupTextBack,
+    description: "First recovery message and delivery timing",
+  },
+  {
+    id: "recovery",
+    label: "Recovery",
+    href: MCTB_ROUTES.setupRecovery,
+    description: "Pause, triggers, cooldown, and duplicate protection",
   },
   {
     id: "voicemail",
     label: "Voicemail",
     href: MCTB_ROUTES.setupVoicemail,
-    description: "Greeting and voicemail fallback",
+    description: "Voicemail greeting and behavior",
   },
   {
     id: "notifications",
     label: "Notifications",
     href: MCTB_ROUTES.setupNotifications,
-    description: "Alerts and handoff",
+    description: "Team email alerts for recovery events",
   },
   {
     id: "exclusions",
     label: "Exclusions",
     href: MCTB_ROUTES.setupExclusions,
-    description: "Do-not-text numbers",
+    description: "Numbers that should not receive recovery texts",
+  },
+  {
+    id: "links",
+    label: "Links",
+    href: MCTB_ROUTES.setupLinks,
+    description: "Request form and shared customer links",
   },
   {
     id: "test",
     label: "Test",
     href: MCTB_ROUTES.setupTest,
-    description: "Live test and diagnostics",
+    description: "Verify forwarding and recovery",
   },
-];
-
-const RECOVERY_PREFIXES = [
-  "/mctb/setup/recovery",
-  "/mctb/setup/missed-call-rules",
-  "/mctb/setup/text-back",
-  "/mctb/setup/links",
-  "/mctb/setup/follow-up",
-  "/mctb/setup/business-hours",
 ];
 
 export function resolveMctbSetupSectionId(pathname: string): MctbSetupSectionId {
@@ -83,13 +88,20 @@ export function resolveMctbSetupSectionId(pathname: string): MctbSetupSectionId 
     return "overview";
   }
   if (pathname.startsWith(MCTB_ROUTES.setupPhone)) return "phone";
-  if (RECOVERY_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
+  if (pathname.startsWith(MCTB_ROUTES.setupConsent)) return "consent";
+  if (pathname.startsWith(MCTB_ROUTES.setupTextBack)) return "text-back";
+  if (
+    pathname.startsWith(MCTB_ROUTES.setupRecovery) ||
+    pathname.startsWith(MCTB_ROUTES.setupMissedCallRules) ||
+    pathname.startsWith("/mctb/setup/follow-up") ||
+    pathname.startsWith("/mctb/setup/business-hours")
+  ) {
     return "recovery";
   }
-  if (pathname.startsWith(MCTB_ROUTES.setupConsent)) return "consent";
   if (pathname.startsWith(MCTB_ROUTES.setupVoicemail)) return "voicemail";
   if (pathname.startsWith(MCTB_ROUTES.setupNotifications)) return "notifications";
   if (pathname.startsWith(MCTB_ROUTES.setupExclusions)) return "exclusions";
+  if (pathname.startsWith(MCTB_ROUTES.setupLinks)) return "links";
   if (pathname.startsWith(MCTB_ROUTES.setupTest)) return "test";
   if (pathname.startsWith(MCTB_ROUTES.setupStart)) return "overview";
   return "overview";

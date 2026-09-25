@@ -72,6 +72,7 @@ export function MctbSetupConsentView() {
   const [savedAttestation, setSavedAttestation] = useState<ConsentAttestationMeta>(null);
   const [messagingReady, setMessagingReady] = useState(false);
   const [existingConsentEligible, setExistingConsentEligible] = useState(false);
+  const [paidEntitled, setPaidEntitled] = useState(true);
   const [recoveryEnabled, setRecoveryEnabled] = useState(false);
   const [messageTemplate, setMessageTemplate] = useState("");
   const [paused, setPaused] = useState(false);
@@ -116,6 +117,7 @@ export function MctbSetupConsentView() {
       setDraftMode(mode);
       setBaseline({ mode });
       setMessagingReady(Boolean(data.compliance?.messagingReady));
+      setPaidEntitled(data.consentMeta?.paidEntitled !== false);
       setExistingConsentEligible(Boolean(data.consentMeta?.existingConsentEligible));
       setSavedAttestation(data.consentMeta?.existingConsentAttestation ?? null);
       setRecoveryEnabled(Boolean(data.runtime?.enabled));
@@ -159,7 +161,7 @@ export function MctbSetupConsentView() {
       baseline?.mode === MCTB_CONSENT_MODE_EXISTING ? existingConsentEligible : true,
   });
 
-  const ineligibleCopy = existingConsentIneligibleReason(messagingReady);
+  const ineligibleCopy = existingConsentIneligibleReason(messagingReady, paidEntitled);
   const callerFlow =
     draftMode === MCTB_CONSENT_MODE_VERIFIED ? PRESS_1_CALLER_FLOW : EXISTING_CONSENT_CALLER_FLOW;
   const miniFlow =
@@ -555,7 +557,7 @@ export function MctbSetupConsentView() {
                     <span className="mctb-consent-kv__value">Call / recovery event</span>
                   </div>
                   <p className="mt-2 mb-0 text-[12.5px]">
-                    <Link href={MCTB_ROUTES.complianceConsent}>View consent log →</Link>
+                    <Link href={MCTB_ROUTES.complianceConsent}>View consent history →</Link>
                   </p>
                 </>
               ) : (
