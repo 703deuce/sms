@@ -28,7 +28,7 @@ export function buildMissedCallLifecycleMilestones(input: {
   }
 
   const consentStep = input.timelineSteps.find((s) => s.id === "consent_recorded" || s.id === "press_1");
-  if (input.consentMode === "press_1" || input.consentMode === "verified") {
+  if (input.consentMode === "press_1") {
     if (input.consentCapturedAt) {
       milestones.push({
         at: input.consentCapturedAt,
