@@ -22,6 +22,7 @@ import {
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
 import { ensureWizardOperatingMaturity } from "@/lib/solutions/appointment-receptionist/operating-maturity-wizard";
 import { transferWizardValidationIssues } from "@/lib/solutions/appointment-receptionist/transfer-wizard-state";
+import { TransovoSectionError } from "@/components/transovo/state-feedback";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { toErrorMessage } from "@/lib/errors";
@@ -285,7 +286,7 @@ export function VoiceReceptionistEditor() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8 pb-24 px-4 sm:px-8">
+    <div className="transovo-page-container transovo-page-container--narrow space-y-8 pb-24">
       <PageHeader
         title="Receptionist"
         description="Configure how your AI receptionist speaks, collects information, and helps callers."
@@ -319,11 +320,7 @@ export function VoiceReceptionistEditor() {
         {statusMessage}
       </div>
 
-      {error ? (
-        <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-          {error}
-        </div>
-      ) : null}
+      {error ? <TransovoSectionError message={error} /> : null}
 
       {isLive && (pendingPublication || hasLocalEdits) ? (
         <p className="text-xs text-muted-foreground">
