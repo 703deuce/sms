@@ -215,6 +215,7 @@ export function VoiceStep({
             ) : null}
 
             {showGreeting ? (
+            <>
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Greeting behavior
@@ -284,6 +285,7 @@ export function VoiceStep({
                 ))}
               </div>
             </div>
+            </>
             ) : null}
           </div>
           ) : null}

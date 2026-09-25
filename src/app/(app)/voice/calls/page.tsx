@@ -279,6 +279,7 @@ export default function VoiceCallsPage() {
       ) : null}
 
       {!attentionOpen ? (
+      <>
       <div className="mb-4 flex flex-wrap gap-6 border-b border-[#e5e7eb]">
         {FILTERS.map((f) => (
           <button
@@ -442,6 +443,7 @@ export default function VoiceCallsPage() {
         </div>
         <div className="text-sm text-[#6b7280]">Rows per page: 10</div>
       </div>
+      </>
       ) : null}
     </div>
   );
