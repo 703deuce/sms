@@ -28,6 +28,14 @@ Default output directory: `/opt/cursor/artifacts/screenshots/visual-audit/` (ove
 
 Deliver to Kirsten: **the full folder** (both `mctb/` and `voice/` subdirectories when using `--product all`), plus any **additional** screenshots already shared out-of-band (Inbox at `/conversations` or `/mctb/conversations`, mobile widths, error states, etc.).
 
+### External reference — Fonio (progressive disclosure only)
+
+**Not** Transovo product authority. Bundled in repo:
+
+`docs/KIRSTEN-VISUAL-AUDIT-REFERENCES/fonio/`
+
+See master spec **§8A** and `fonio/README.md` in that folder.
+
 ---
 
 ## MCTB routes (canonical Pass 1 set)
@@ -78,9 +86,10 @@ Use `scripts/capture-mctb-setup-notifications-screenshot.ts` or add a one-off Pl
 ## Engagement checklist (for whoever sends Kirsten the package)
 
 1. Attach **master spec:** `docs/KIRSTEN-TRANSOVO-MASTER-VISUAL-AUDIT-AND-DESIGN-SYSTEM-SPEC.md`  
-2. Attach **all** screenshots listed above (MCTB + Voice + shared Inbox if separate).  
-3. State explicitly: **no implementation** until report sections A–K are reviewed.  
-4. Expected deliverable: report per spec §29 + verdict per spec §35.
+2. Attach **all** Transovo screenshots listed above (MCTB + Voice + shared Inbox if separate).  
+3. Attach **Fonio reference images:** `docs/KIRSTEN-VISUAL-AUDIT-REFERENCES/fonio/` (§8A).  
+4. State explicitly: **no implementation** — inspect code, Transovo screenshots, Fonio references, and Transovo standards; return report sections A–K only.  
+5. Expected deliverable: report per spec §29 + verdict per spec §35. Product reviews before any implementation prompt.
 
 ---
 

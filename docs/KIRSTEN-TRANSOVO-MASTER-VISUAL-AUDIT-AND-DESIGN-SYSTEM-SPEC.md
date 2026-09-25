@@ -29,7 +29,7 @@ The result of this pass must be a **concrete implementation specification** for 
 
 Do **not** take one screenshot you happen to like and rebuild the product around it.
 
-**Screenshot package:** Use **all** supplied screenshots — **MCTB and Voice** (and shared surfaces such as Inbox). Voice screens are essential for cross-product inconsistency analysis. See `docs/KIRSTEN-VISUAL-AUDIT-SCREENSHOT-MANIFEST.md`.
+**Screenshot package:** Use **all** supplied screenshots — **MCTB and Voice** (and shared surfaces such as Inbox), plus **external Fonio reference images** (progressive-disclosure example only — §8A). Voice screens are essential for cross-product inconsistency analysis. See `docs/KIRSTEN-VISUAL-AUDIT-SCREENSHOT-MANIFEST.md`.
 
 ---
 
@@ -296,6 +296,100 @@ The following existing screens contain useful patterns. Do not treat them as per
 | MCTB Analytics | compact KPI treatment; operational density; understandable funnel structure |
 
 These should inform the new visual system more heavily than older oversized Voice dashboard patterns.
+
+---
+
+## 8A. EXTERNAL VISUAL REFERENCE — FONIO
+
+The supplied Fonio screenshots are an **external visual reference only**.
+
+They are **not** product-architecture authority and should **not** be copied literally.
+
+**Files (repo):** `docs/KIRSTEN-VISUAL-AUDIT-REFERENCES/fonio/` — webhooks capability list, HTTP request modal, webhooks drawer, conversation/transcript detail.
+
+Use them to study how a feature-rich AI communications product can remain visually simple through:
+
+- progressive disclosure
+- restrained surfaces
+- compact capability navigation
+- focused configuration panels
+- contextual modals/drawers
+- master/detail operational layouts
+- strong hierarchy without excessive decoration
+- limited explanatory copy
+- clear primary actions
+- purposeful whitespace
+- compact controls
+- reduced card nesting
+- keeping advanced configuration out of the default view
+
+### Important lesson
+
+The goal is **not** to make Transovo look like Fonio.
+
+The goal is to understand why Fonio can expose substantial functionality without making every page appear complicated.
+
+A user should generally see:
+
+**what this area does → current state → important choices/actions**
+
+before seeing every possible configuration field.
+
+Deeper configuration should appear when the user selects the relevant capability, row, section, modal, drawer, or focused editor.
+
+### Example pattern from the supplied Fonio screenshots
+
+Fonio’s Webhooks interface does not expose every HTTP configuration field simultaneously.
+
+The initial surface presents the capabilities and existing webhook objects. Selecting or adding an HTTP request then opens a focused configuration surface containing the detailed settings.
+
+This is a useful example of **progressive disclosure**.
+
+Apply that principle where appropriate in Transovo, especially where current pages expose large amounts of configuration, explanation, status information, and secondary information simultaneously.
+
+### Operational reference
+
+The supplied Fonio conversation/call screen also demonstrates a useful operational pattern:
+
+**conversation/call list → primary interaction/transcript → contextual details**
+
+This is relevant when evaluating Transovo Calls, Inbox, Missed Calls, and Voicemail.
+
+Do **not** force those pages into this exact layout. Determine whether the underlying master/detail principle improves the existing Transovo workflow without changing feature ownership.
+
+### What NOT to copy
+
+Do **not** copy:
+
+- Fonio branding
+- Fonio colors
+- Fonio navigation architecture
+- Fonio feature organization
+- Fonio terminology
+- Fonio’s exact page layouts
+- functionality Transovo does not have
+- interactions that conflict with Transovo’s frozen architecture
+
+### Required comparison in the audit
+
+When reviewing the Transovo screenshots, explicitly identify places where complexity is caused by **presentation** rather than actual product complexity.
+
+For those cases, determine whether complexity can be reduced through:
+
+- progressive disclosure
+- better hierarchy
+- removal of redundant explanatory text
+- contextual summaries instead of duplicate information
+- drawers or modals for secondary configuration
+- expandable advanced settings
+- master/detail patterns
+- clearer grouping
+- fewer nested surfaces
+- stronger default states
+
+Do **not** remove necessary information merely to make a screenshot appear cleaner.
+
+The finished Transovo product should retain its operational depth while making that depth feel substantially easier to understand.
 
 ---
 
