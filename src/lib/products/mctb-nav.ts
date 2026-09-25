@@ -1,4 +1,5 @@
 import {
+  AlertTriangle,
   BarChart3,
   BookOpen,
   CreditCard,
@@ -51,9 +52,15 @@ export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
       },
       { label: "Knowledge", href: "/voice/knowledge", icon: BookOpen },
       {
-        label: "Call Rules",
-        href: "/voice/inbound-routing",
+        label: "Call Handling",
+        href: "/voice/call-handling",
         icon: SlidersHorizontal,
+      },
+      { label: "Analytics", href: "/voice/analytics", icon: BarChart3 },
+      {
+        label: "Needs attention",
+        href: "/voice/needs-attention",
+        icon: AlertTriangle,
       },
     );
   }
@@ -158,6 +165,8 @@ export function getMctbPageTitle(pathname: string): string {
   }
   if (pathname.startsWith("/voice/calls")) return "Calls";
   if (pathname.startsWith("/voice/knowledge")) return "Knowledge";
+  if (pathname.startsWith("/voice/call-handling")) return "Call Handling";
+  if (pathname.startsWith("/voice/needs-attention")) return "Needs attention";
   if (pathname.startsWith("/voice/inbound-routing")) return "Call Rules";
   if (pathname.startsWith("/voice/numbers")) return "Numbers";
   if (pathname.startsWith("/settings/billing")) return "Billing";

@@ -8,6 +8,9 @@ export const MCTB_BUNDLED_AI_RECEPTIONIST_PATH_PREFIXES = [
   "/voice/calls",
   "/voice/knowledge",
   "/voice/inbound-routing",
+  "/voice/call-handling",
+  "/voice/analytics",
+  "/voice/needs-attention",
   "/mctb/voice-agent",
 ] as const;
 
