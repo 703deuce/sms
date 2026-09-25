@@ -9,6 +9,30 @@ export function TransovoPageLoading({ message = "Loading…" }: { message?: stri
   );
 }
 
+/** Skeleton rows inside an existing table shell (header stays visible). */
+export function TransovoTableBodySkeleton({
+  rows = 6,
+  message = "Loading…",
+}: {
+  rows?: number;
+  message?: string;
+}) {
+  return (
+    <div className="transovo-table-body-skeleton" role="status" aria-live="polite">
+      <span className="sr-only">{message}</span>
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className="transovo-table-skeleton-row" aria-hidden>
+          <div className="transovo-skeleton-block transovo-skeleton-block--wide" />
+          <div className="transovo-skeleton-block" />
+          <div className="transovo-skeleton-block transovo-skeleton-block--narrow" />
+          <div className="transovo-skeleton-block transovo-skeleton-block--badge" />
+          <div className="transovo-skeleton-block transovo-skeleton-block--wide" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function TransovoPageEmpty({
   title,
   description,

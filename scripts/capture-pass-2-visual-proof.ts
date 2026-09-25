@@ -19,10 +19,11 @@ const PROOF_ROUTES: Array<{ slug: string; path: string }> = [
   { slug: "05_conversations", path: "/conversations" },
 ];
 
-function parsePhase(): "before" | "after" {
+function parsePhase(): "before" | "pass-2" | "pass-2a" {
   const idx = process.argv.indexOf("--phase");
-  const v = idx >= 0 ? process.argv[idx + 1] : "after";
-  return v === "before" ? "before" : "after";
+  const v = idx >= 0 ? process.argv[idx + 1] : "pass-2a";
+  if (v === "before" || v === "pass-2" || v === "pass-2a") return v;
+  return "pass-2a";
 }
 
 async function authenticate(page: Page, nextPath: string) {
