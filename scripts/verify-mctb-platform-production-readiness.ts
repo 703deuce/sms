@@ -10,11 +10,15 @@ import {
 } from "@/lib/messaging/compliance/phone-number-class";
 import { getRegistrationByWorkspace } from "@/lib/messaging/store";
 
-const EXPECTED_PHONE_ID =
-  process.env.MCTB_PLATFORM_SENDER_PHONE_NUMBER_ID?.trim() || "cmufvsanf1g0v060m13730z0q";
 const EXPECTED_OWNER =
   process.env.MCTB_PLATFORM_OWNER_WORKSPACE_ID?.trim() || "ws_1";
-const EXPECTED_E164 = "+18885046264";
+const EXPECTED_E164 =
+  process.env.MCTB_PLATFORM_SENDER_E164?.trim() || "+18666020680";
+const EXPECTED_PROVIDER =
+  (process.env.MCTB_PLATFORM_SENDER_PROVIDER?.trim() || "telnyx").toLowerCase();
+const EXPECTED_PHONE_ID =
+  process.env.MCTB_PLATFORM_SENDER_PHONE_NUMBER_ID?.trim() ||
+  (EXPECTED_PROVIDER === "telnyx" ? "cmtoszkn26t6z485u3d2w3c51" : "cmufvsanf1g0v060m13730z0q");
 
 async function main() {
   const prisma = getPrisma();
@@ -78,9 +82,15 @@ async function main() {
         idsMatch:
           canonical?.phoneNumberId === EXPECTED_PHONE_ID &&
           row?.workspaceId === EXPECTED_OWNER,
+        expectedProvider: EXPECTED_PROVIDER,
         modelBParentPathEligible:
           Boolean(canonical) &&
           canonical?.provider === "twilio" &&
+          auth.allowed &&
+          isPlatformMctbSenderPhoneRecord({ settingsJson: row?.settingsJson }),
+        telnyxRegistrationPathEligible:
+          Boolean(canonical) &&
+          canonical?.provider === "telnyx" &&
           auth.allowed &&
           isPlatformMctbSenderPhoneRecord({ settingsJson: row?.settingsJson }),
         ownerWorkspaceRegistration: {
@@ -95,7 +105,8 @@ async function main() {
         readinessGreen:
           Boolean(canonical) &&
           canonical?.phoneNumberId === EXPECTED_PHONE_ID &&
-          platformRows.length === 1 &&
+          canonical?.provider === EXPECTED_PROVIDER &&
+          platformRows.length <= 1 &&
           migrationSenderModeColumn &&
           auth.allowed,
       },

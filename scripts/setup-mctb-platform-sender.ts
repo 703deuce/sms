@@ -11,13 +11,18 @@
  *
  * Optional: DRY_RUN=1 — print planned adoption only (no DB write)
  */
-import { adoptMctbPlatformSenderFromParentAccount } from "@/lib/mctb/messaging/platform-sender-adopt";
+import {
+  adoptMctbPlatformSenderFromParentAccount,
+  adoptMctbPlatformSenderFromTelnyxAccount,
+} from "@/lib/mctb/messaging/platform-sender-adopt";
 import { requireMctbPlatformOwnerWorkspaceId } from "@/lib/mctb/platform-owner-workspace";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 
 async function main() {
   const ownerWorkspaceId = requireMctbPlatformOwnerWorkspaceId();
-  const e164Raw = process.env.MCTB_PLATFORM_SENDER_E164?.trim() || "+18885046264";
+  const provider = (process.env.MCTB_PLATFORM_SENDER_PROVIDER?.trim() || "twilio").toLowerCase();
+  const e164Default = provider === "telnyx" ? "+18666020680" : "+18885046264";
+  const e164Raw = process.env.MCTB_PLATFORM_SENDER_E164?.trim() || e164Default;
   const dryRun = process.env.DRY_RUN === "1";
   const e164 = normalizeE164(e164Raw);
 
@@ -28,8 +33,36 @@ async function main() {
         action: "dry_run",
         ownerWorkspaceId,
         e164,
+        provider,
         bootstrapNote:
-          "Would adopt parent-account TFN via adoptMctbPlatformSenderFromParentAccount; no MCTB_PLATFORM_SENDER_PHONE_NUMBER_ID required beforehand.",
+          provider === "telnyx"
+            ? "Would adopt Telnyx TFN via adoptMctbPlatformSenderFromTelnyxAccount."
+            : "Would adopt parent-account TFN via adoptMctbPlatformSenderFromParentAccount.",
+      }),
+    );
+    return;
+  }
+
+  if (provider === "telnyx") {
+    const result = await adoptMctbPlatformSenderFromTelnyxAccount({
+      ownerWorkspaceId,
+      e164,
+    });
+    console.log(
+      JSON.stringify({
+        ok: true,
+        provider: "telnyx",
+        action: result.action,
+        phoneNumberId: result.phoneNumberId,
+        e164: result.e164,
+        workspaceId: result.workspaceId,
+        telnyxProviderNumberId: result.telnyxProviderNumberId,
+        messagingProfileId: result.messagingProfileId,
+        nextSteps: [
+          `Set MCTB_PLATFORM_SENDER_PHONE_NUMBER_ID=${result.phoneNumberId}`,
+          "Restart/redeploy application so resolveCanonicalMctbPlatformSender() resolves this row",
+          "Telnyx messaging profile must POST to /api/telnyx/messaging (already on shared profiles)",
+        ],
       }),
     );
     return;
@@ -43,6 +76,7 @@ async function main() {
   console.log(
     JSON.stringify({
       ok: true,
+      provider: "twilio",
       action: result.action,
       phoneNumberId: result.phoneNumberId,
       e164: result.e164,

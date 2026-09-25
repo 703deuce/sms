@@ -76,6 +76,7 @@ assert.equal(
   false,
 );
 assert.match(setupSource, /adoptMctbPlatformSenderFromParentAccount/);
+assert.match(setupSource, /adoptMctbPlatformSenderFromTelnyxAccount/);
 assert.match(setupSource, /requireMctbPlatformOwnerWorkspaceId/);
 
 console.log("test:mctb-platform-parent-twilio-gate ok");

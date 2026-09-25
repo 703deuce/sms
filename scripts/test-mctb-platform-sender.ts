@@ -98,6 +98,18 @@ assert.equal(
   true,
 );
 
+// Dual voice ingress + platform SMS marker (Telnyx +18666020680 shape)
+assert.equal(
+  isPlatformMctbSenderPhoneRecord({
+    settingsJson: {
+      mctbRole: "customer_mctb",
+      platformMctbSender: true,
+      messagingCompliance: { type: "A2P_10DLC", status: "APPROVED" },
+    },
+  }),
+  true,
+);
+
 // Generic inbound routing must not treat platform sender as a tenant-owned row
 assert.equal(
   isMirrorOrArchivedPhoneRow({

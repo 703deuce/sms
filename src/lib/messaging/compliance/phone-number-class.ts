@@ -74,23 +74,41 @@ export function isPlatformDemoPhoneRecord(input: {
 export function isPlatformMctbSenderPhoneRecord(input: {
   settingsJson?: unknown;
 }): boolean {
-  return parseMctbPhoneRole(input.settingsJson) === "platform_mctb_sender";
+  if (parseMctbPhoneRole(input.settingsJson) === "platform_mctb_sender") {
+    return true;
+  }
+  const settings = asRecord(input.settingsJson);
+  return settings.platformMctbSender === true;
+}
+
+/** Twilio platform TFN retained after primary switch to Telnyx (not canonical). */
+export function isPreservedTwilioPlatformMctbSenderRecord(input: {
+  settingsJson?: unknown;
+}): boolean {
+  const settings = asRecord(input.settingsJson);
+  return settings.platformMctbSenderPreservedTwilio === true;
 }
 
 export function platformMctbSenderSettings(input?: {
   tfvApproved?: boolean;
   provider?: "twilio" | "telnyx";
+  /** When true, keep existing voice ingress role (e.g. customer_mctb) on the same DID. */
+  dualVoiceIngress?: boolean;
 }): Record<string, unknown> {
   const provider = input?.provider || "twilio";
   const approved = input?.tfvApproved ?? true;
-  return {
+  const base: Record<string, unknown> = {
     mctbNumberClass: provider === "twilio" ? "TWILIO_TOLL_FREE" : "TELNYX_LOCAL_A2P",
-    mctbRole: "platform_mctb_sender" as const,
+    platformMctbSender: true,
     messagingCompliance: {
       type: provider === "twilio" ? "TOLL_FREE_VERIFICATION" : "A2P_10DLC",
       status: approved ? "APPROVED" : "NOT_STARTED",
     },
   };
+  if (input?.dualVoiceIngress) {
+    return base;
+  }
+  return { ...base, mctbRole: "platform_mctb_sender" as const };
 }
 
 export function tollFreeComplianceSettings(): Record<string, unknown> {

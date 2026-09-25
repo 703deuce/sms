@@ -207,7 +207,7 @@ async function resolvePlatformMctbSenderRoute(
     return null;
   }
 
-  return {
+  const route: MctbOutboundSmsRoute = {
     customerWorkspaceId,
     sendWorkspaceId: platform.workspaceId,
     senderMode: "PLATFORM",
@@ -218,6 +218,19 @@ async function resolvePlatformMctbSenderRoute(
     complianceRegime: auth.regime || "TOLL_FREE_VERIFICATION",
     trafficMode: "CUSTOMER_PRODUCTION",
   };
+  console.log(
+    JSON.stringify({
+      source: "mctb-platform-sender",
+      event: "platform_outbound_route_resolved",
+      customerWorkspaceId,
+      senderMode: "PLATFORM",
+      provider: route.provider,
+      fromE164: route.fromE164,
+      phoneNumberId: route.phoneNumberId,
+      complianceRegime: route.complianceRegime,
+    }),
+  );
+  return route;
 }
 
 export async function resolveMctbOutboundSmsRoute(input: {
