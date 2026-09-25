@@ -257,10 +257,7 @@ Evidence paths: `visual-audit/mctb/*.png`, `visual-audit/voice/*.png` (refreshed
 |------|-------|
 | **Conversations (global)** | Kimi CSS — consolidate shell; preserve panes |
 
-**Fonio application (presentation-only):**  
-- Setup/Test/Links: move advanced blocks behind “Advanced” expand or drawer.  
-- Voice Calls: strengthen list → detail → metadata without changing IA.  
-- Receptionist: capability list left, detail right (already partial) — reduce always-visible fields.
+**Fonio (principle only — see lock doc §3):** Where presentation stacks too much on first paint, *consider* progressive disclosure after workflow review. **Not** automatic drawers, accordions, capability-list/detail restructures, or table→card conversions.
 
 ---
 
@@ -298,7 +295,7 @@ Evidence paths: `visual-audit/mctb/*.png`, `visual-audit/voice/*.png` (refreshed
 
 | Family | Desktop | Tablet | Mobile |
 |--------|---------|--------|--------|
-| Operational tables | Full columns; filter bar wraps | Hide low-priority columns | Card list pattern per table standards |
+| Operational tables | Full columns; filter bar wraps | Hide low-priority columns | Per-table strategy (scroll, stacked meta, expandable row, or list) — **not** default card-list (lock §11) |
 | Setup | Two-column when summary column | Stack summary below | Single column; save in header |
 | Inbox | Three panes | List + thread; context drawer | List ↔ thread full screen |
 | Voice Receptionist | Split editor | Stack | Accordion sections |
@@ -328,41 +325,37 @@ Target: WCAG 2.2 AA per `docs/TRANSOVO-ACCESSIBILITY-STANDARDS.md`.
 
 | Area | Symptom | Likely boundary | Engineering before polish lock |
 |------|---------|-----------------|--------------------------------|
-| **AI Recovery** | `b.filter is not a function` (screenshot evidence) | API or client assuming array (`booking.links`, `business.services`) | Harden `/api/mctb/ai-recovery/context` + client guards |
-| **Voice Analytics** | `Cannot read properties of undefined (reading 'count')` | `voice-analytics-dashboard.tsx` uses `r.sentimentCounts.*` without null guard when API partial | Defensive defaults in dashboard + API contract |
-| **Voice route** | Full-page “couldn’t load” | Route-level error boundary — identify specific path from capture | Fix data fetch before visual pass on that page |
+| **AI Recovery** | `b.filter is not a function` (screenshot evidence) | **Trace first incorrect boundary** (persistence → API → client) — do not assume endpoint or add client guards without contract proof | Parallel engineering; blocks **certification** of this page only |
+| **Voice Analytics** | `Cannot read properties of undefined (reading 'count')` | **Trace authoritative analytics contract** — likely `sentimentCounts` shape; avoid zero-fill if backend should supply data | Parallel engineering; blocks **certification** of this page only |
+| **Voice route** | Full-page “couldn’t load” | Identify exact route + first failing data boundary | Parallel engineering; blocks **certification** of that page only |
 
 **Do not** hide these with mock data or empty states in the visual phase.
 
 ---
 
-## L. Proposed implementation sequence (after approval)
+## L. Proposed implementation sequence
 
-1. **Engineering:** Fix §K blockers.  
-2. **Tokens:** `transovo-visual-tokens.css` (extend `mctb-brand-tokens`).  
-3. **Primitives:** `TransovoPageHeader`, `TransovoStatusBadge`, `TransovoSection`, `TransovoKpiStrip`.  
-4. **MCTB operational family** (already closest to target).  
-5. **MCTB Setup** (token swap, language copy).  
-6. **Inbox shell** reskin.  
-7. **Voice operational** (Calls, Overview, Analytics).  
-8. **Voice configuration** (Receptionist, Knowledge, Call Handling) with progressive disclosure refactors.  
-9. Responsive + a11y pass per family.
+**Superseded by product lock:** `docs/TRANSOVO-PASS-1-PRODUCT-REVIEW-AND-DESIGN-SYSTEM-LOCK.md` §17–18 (Phase 0–5, representative proof gate, controlled first pass).
+
+Summary: shared foundation → **five representative pages** (side-by-side proof) → family migration → page-specific refinement → certification. Engineering §K fixes run **in parallel**; they block certification of affected pages only.
 
 ---
 
 ## §35. Implementation readiness verdict
 
-**`NOT READY — FUNCTIONAL / ARCHITECTURAL BLOCKERS MUST BE RESOLVED FIRST`**
+### Original (Pass 1)
 
-**Genuine blockers (must fix before shared visual-system implementation):**
+`NOT READY — FUNCTIONAL / ARCHITECTURAL BLOCKERS MUST BE RESOLVED FIRST`
 
-1. AI Recovery page load failure (`b.filter is not a function`).  
-2. Voice Analytics runtime error on partial/undefined analytics payload.  
-3. At least one Voice page full error state (“couldn’t load”) — confirm route and fix fetch/boundary.
+### Corrected (product review 2026-09-25)
 
-**Not blockers (address in visual phase):** typography drift, card density, purple accent overuse, Voice KPI scale, Inbox shell mismatch, customer-language copy listed in §G.
+## **`READY FOR SHARED VISUAL-SYSTEM IMPLEMENTATION`**
 
-Once §K items are fixed and verified on production captures, re-run Pass 1 spot-check and flip verdict to **`READY FOR SHARED VISUAL-SYSTEM IMPLEMENTATION`**.
+**Parallel track:** **`PARALLEL ENGINEERING BLOCKERS FOR AFFECTED-PAGE COMPLETION`**
+
+The three runtime defects in §K are real and must be traced to the first incorrect boundary (not patched speculatively). They do **not** block building shared tokens, primitives, or migrating unaffected pages. They **do** block final visual certification of AI Recovery, Voice Analytics, and the failing Voice route until fixed.
+
+**Authoritative lock:** `docs/TRANSOVO-PASS-1-PRODUCT-REVIEW-AND-DESIGN-SYSTEM-LOCK.md`
 
 ---
 

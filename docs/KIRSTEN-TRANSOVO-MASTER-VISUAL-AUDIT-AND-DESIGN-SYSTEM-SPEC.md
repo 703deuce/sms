@@ -2,7 +2,8 @@
 
 **Audience:** Pass 1 auditor (Cursor Cloud agent or designated designer)  
 **Status:** Authoritative brief for read-only audit — not an implementation prompt  
-**Deliverable:** `docs/TRANSOVO-PASS-1-VISUAL-AUDIT-AND-DESIGN-SYSTEM-REPORT.md` (sections A–K + §35 verdict)  
+**Pass 1 deliverable:** `docs/TRANSOVO-PASS-1-VISUAL-AUDIT-AND-DESIGN-SYSTEM-REPORT.md` (sections A–K)  
+**Pass 1 lock (product review):** `docs/TRANSOVO-PASS-1-PRODUCT-REVIEW-AND-DESIGN-SYSTEM-LOCK.md` — corrected verdict + implementation gates  
 **Last updated:** 2026-09-25
 
 ---
