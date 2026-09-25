@@ -19,6 +19,10 @@ import { buildSmsPlatformNav } from "../src/lib/products/sms-platform-nav";
 import { buildMctbV1Nav } from "../src/lib/products/mctb-nav";
 import { resolveProductSidebarNav } from "../src/lib/products/resolve-product-nav";
 import { isAiAfterHoursEntitled, AI_AFTER_HOURS_DISPLAY_NAME } from "../src/lib/products/ai-after-hours";
+import {
+  isAppointmentsV1Primary,
+  isSmsStandaloneHidden,
+} from "../src/lib/workspace/platform-launch";
 
 assert.equal(productShellLabel("appointments"), "Appointments");
 assert.equal(productShellLabel("mass_sms"), "SMS");
@@ -48,11 +52,25 @@ const v1Shells = visibleProductShells({
   hasMctb: true,
   hasAiAfterHours: true,
 });
-assert.deepEqual(v1Shells, ["appointments", "mctb"]);
+if (isAppointmentsV1Primary()) {
+  assert.deepEqual(v1Shells, ["appointments", "mctb"]);
+} else {
+  const expected: ReturnType<typeof visibleProductShells> = [];
+  if (!isSmsStandaloneHidden()) expected.push("mass_sms");
+  expected.push("mctb");
+  expected.push("ai_after_hours");
+  assert.deepEqual(v1Shells, expected);
+}
 
-assert.ok(
-  shouldShowProductSwitcher({ hasMassSms: true, hasMctb: true, hasAiAfterHours: false }),
-);
+if (isAppointmentsV1Primary()) {
+  assert.ok(
+    !shouldShowProductSwitcher({ hasMassSms: true, hasMctb: true, hasAiAfterHours: false }),
+  );
+} else {
+  assert.ok(
+    shouldShowProductSwitcher({ hasMassSms: true, hasMctb: true, hasAiAfterHours: true }),
+  );
+}
 assert.ok(
   !shouldShowProductSwitcher({ hasMassSms: false, hasMctb: false, hasAiAfterHours: false }),
 );
@@ -73,7 +91,9 @@ assert.ok(mctbLabels.includes("Overview"));
 assert.ok(mctbLabels.includes("Missed Calls"));
 assert.ok(mctbLabels.includes("Inbox"));
 assert.ok(mctbLabels.includes("Calls"));
-assert.ok(mctbLabels.includes("AI Agent"));
+assert.ok(mctbLabels.includes("Receptionist"));
+assert.ok(mctbLabels.includes("Business Knowledge"));
+assert.ok(!mctbLabels.includes("AI Agent"));
 assert.ok(mctbLabels.includes("Voicemail"));
 assert.ok(mctbLabels.includes("Analytics"));
 assert.ok(mctbLabels.includes("Setup"));
@@ -87,7 +107,10 @@ assert.ok(!mctbLabels.includes("Campaigns"));
 const aiNav = buildAiAfterHoursNav({ primaryVoiceAgentId: "agent_1" });
 const aiLabels = aiNav.map((i) => i.label);
 assert.ok(aiLabels.includes("Overview"));
-assert.ok(aiLabels.includes("AI Agent"));
+assert.ok(aiLabels.includes("Receptionist"));
+assert.ok(aiLabels.includes("Business Knowledge"));
+assert.equal(aiNav.find((i) => i.label === "Call Handling")?.href, "/voice/call-handling");
+assert.ok(!aiLabels.includes("AI Agent"));
 assert.ok(!aiLabels.includes("Missed Calls"));
 
 const smsNav = buildSmsPlatformNav();

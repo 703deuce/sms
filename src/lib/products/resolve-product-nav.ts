@@ -2,7 +2,10 @@ import type { NavItem } from "@/lib/nav";
 import { buildAppointmentsMobileNav, buildAppointmentsV1Nav } from "@/lib/products/appointments-nav";
 import { isMctbBundledAiReceptionistPath } from "@/lib/products/mctb-bundled-receptionist-paths";
 import { buildMctbV1Nav, buildMctbV1MobileNav, isMctbSharedWorkspacePath } from "@/lib/products/mctb-nav";
-import { buildAiAfterHoursNav } from "@/lib/products/ai-after-hours-nav";
+import {
+  buildAiAfterHoursMobileNav,
+  buildAiAfterHoursNav,
+} from "@/lib/products/ai-after-hours-nav";
 import { buildSmsPlatformNav } from "@/lib/products/sms-platform-nav";
 import { buildMctbShellNav } from "@/lib/products/voice-nav";
 import {
@@ -126,9 +129,7 @@ export function resolveProductMobileNav(input: ResolveProductNavInput): NavItem[
     return buildSmsPlatformNav({ conversationsBadge: input.inboxBadge });
   }
   if (effectiveShell === "ai_after_hours") {
-    return buildAiAfterHoursNav({
-      primaryVoiceAgentId: input.primaryVoiceAgentId ?? null,
-    });
+    return buildAiAfterHoursMobileNav();
   }
   if (isAppointmentsV1Primary()) {
     return buildAppointmentsMobileNav();
