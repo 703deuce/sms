@@ -1,35 +1,26 @@
-import { compileBusinessHoursAmyDisplay } from "@/lib/voice-v3/config/business-hours-display";
 import { formatWeeklyHoursForAmy } from "@/lib/voice-v3/config/business-hours-from-wizard";
 import { ensureWizardOperatingMaturity } from "./operating-maturity-wizard";
 import type { AppointmentReceptionistWizardState } from "./types";
-import { upsertKnowledgeItem } from "./knowledge-items-helpers";
+import { applyDerivedHoursKnowledgeItem } from "./knowledge-editor-hours-sync-pure";
 import {
   businessScheduleHasHours,
   mirrorTimezoneFromBusinessSchedule,
 } from "./knowledge-editor-timezone";
 
 export { businessScheduleHasHours, mirrorTimezoneFromBusinessSchedule };
+export { applyDerivedHoursKnowledgeItem, brainHoursSummaryFromKnowledgeItems } from "./knowledge-editor-hours-sync-pure";
 
 /** Derive hours knowledge item prose from structured schedule (not a second editor). */
 export function syncHoursKnowledgeItemFromSchedule(
   state: AppointmentReceptionistWizardState,
 ): AppointmentReceptionistWizardState {
   const maturity = ensureWizardOperatingMaturity(state);
-  const compiled = compileBusinessHoursAmyDisplay({
-    structuredSchedule: maturity.businessSchedule,
-    hoursKnowledgeProse: null,
-  });
-  const display = compiled.hoursDisplay?.trim();
-  if (!display) return state;
-  return {
-    ...state,
-    knowledgeItems: upsertKnowledgeItem(state.knowledgeItems, "hours", {
-      label: "Hours",
-      summary: display,
-      status: "complete",
-      statusLabel: "From business hours",
-    }),
-  };
+  const knowledgeItems = applyDerivedHoursKnowledgeItem(
+    state.knowledgeItems,
+    maturity.businessSchedule,
+  );
+  if (knowledgeItems === state.knowledgeItems) return state;
+  return { ...state, knowledgeItems };
 }
 
 export function formatBusinessHoursSummaryLine(
