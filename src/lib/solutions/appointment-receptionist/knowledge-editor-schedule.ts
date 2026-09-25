@@ -51,10 +51,3 @@ export function formatBusinessHoursSummaryLine(
       : `${openDays.length} days/week`;
   return `${label} · ${range} · ${tz}`;
 }
-
-export function businessScheduleHasHours(state: AppointmentReceptionistWizardState): boolean {
-  const maturity = ensureWizardOperatingMaturity(state);
-  return Object.values(maturity.businessSchedule.weekly).some(
-    (row) => row && !row.closed && row.ranges?.length,
-  );
-}
