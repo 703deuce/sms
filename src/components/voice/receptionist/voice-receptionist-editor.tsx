@@ -25,6 +25,7 @@ import { transferWizardValidationIssues } from "@/lib/solutions/appointment-rece
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { toErrorMessage } from "@/lib/errors";
+import { DependencyRow } from "@/components/voice/dependency-row";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ReceptionistCollectFieldsEditor } from "./receptionist-collect-fields-editor";
@@ -545,26 +546,3 @@ export function VoiceReceptionistEditor() {
   );
 }
 
-function DependencyRow({
-  title,
-  detail,
-  href,
-  linkLabel,
-}: {
-  title: string;
-  detail: string;
-  href: string;
-  linkLabel: string;
-}) {
-  return (
-    <div className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between">
-      <div className="min-w-0 max-w-xl">
-        <p className="text-sm font-medium">{title}</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">{detail}</p>
-      </div>
-      <Link href={href} className="shrink-0 text-sm font-medium text-primary hover:underline">
-        {linkLabel} →
-      </Link>
-    </div>
-  );
-}

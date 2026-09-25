@@ -18,14 +18,22 @@ type Gap = {
 
 type KbRow = { id: string; name: string };
 
-export function KnowledgeGapsPanel() {
+export function KnowledgeGapsPanel({
+  defaultKnowledgeBaseId,
+  onResolved,
+}: {
+  defaultKnowledgeBaseId?: string;
+  onResolved?: () => void;
+} = {}) {
   const [gaps, setGaps] = useState<Gap[]>([]);
   const [kbs, setKbs] = useState<KbRow[]>([]);
   const [filter, setFilter] = useState<"OPEN" | "all">("OPEN");
   const [loading, setLoading] = useState(true);
   const [resolveId, setResolveId] = useState<string | null>(null);
   const [answerText, setAnswerText] = useState("");
-  const [kbId, setKbId] = useState("");
+  const [kbId, setKbId] = useState(defaultKnowledgeBaseId || "");
+  const [resolving, setResolving] = useState(false);
+  const [resolveError, setResolveError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -40,37 +48,55 @@ export function KnowledgeGapsPanel() {
       setGaps(gJson.data || []);
       const kbRows = (kJson.data || []) as KbRow[];
       setKbs(kbRows);
-      if (!kbId && kbRows[0]?.id) setKbId(kbRows[0].id);
+      if (!kbId && defaultKnowledgeBaseId) setKbId(defaultKnowledgeBaseId);
+      else if (!kbId && kbRows[0]?.id) setKbId(kbRows[0].id);
     } finally {
       setLoading(false);
     }
-  }, [filter, kbId]);
+  }, [filter, kbId, defaultKnowledgeBaseId]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   async function patchGap(id: string, status: "DISMISSED" | "RESOLVED", extra?: { answerText?: string }) {
-    await fetch("/api/voice/knowledge-gaps", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id,
-        status,
-        knowledgeBaseId: kbId || undefined,
-        answerText: extra?.answerText,
-      }),
-    });
-    setResolveId(null);
-    setAnswerText("");
-    await load();
+    setResolveError("");
+    if (status === "RESOLVED" && extra?.answerText) {
+      setResolving(true);
+    }
+    try {
+      const res = await fetch("/api/voice/knowledge-gaps", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id,
+          status,
+          knowledgeBaseId: kbId || undefined,
+          answerText: extra?.answerText,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setResolveError(
+          json.error ||
+            "Answer could not be prepared for search. The question stays open — try again or reindex.",
+        );
+        return;
+      }
+      setResolveId(null);
+      setAnswerText("");
+      onResolved?.();
+      await load();
+    } finally {
+      setResolving(false);
+    }
   }
 
   return (
     <Card className="p-4 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">Knowledge gaps</h2>
+          <h2 className="text-lg font-semibold">Unanswered questions</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Questions callers asked that Amy could not answer from approved knowledge. Review and add
             answers you approve — we never auto-learn from callers.
@@ -160,12 +186,15 @@ export function KnowledgeGapsPanel() {
                     />
                   </div>
                   <div className="flex gap-2">
+                    {resolveError ? (
+                      <p className="text-sm text-danger" role="alert">{resolveError}</p>
+                    ) : null}
                     <Button
                       size="sm"
-                      disabled={!answerText.trim() || !kbId}
+                      disabled={!answerText.trim() || !kbId || resolving}
                       onClick={() => patchGap(g.id, "RESOLVED", { answerText })}
                     >
-                      Save & resolve
+                      {resolving ? "Processing answer…" : "Save & make searchable"}
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => setResolveId(null)}>
                       Cancel

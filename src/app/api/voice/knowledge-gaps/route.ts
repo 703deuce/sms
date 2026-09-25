@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
-import {
-  appendApprovedAnswerToKnowledgeBase,
-  listVoiceKnowledgeGaps,
-  updateVoiceKnowledgeGapStatus,
-} from "@/lib/voice-v3/knowledge-gaps/owner-service";
+import { listVoiceKnowledgeGaps, updateVoiceKnowledgeGapStatus } from "@/lib/voice-v3/knowledge-gaps/owner-service";
+import { resolveVoiceKnowledgeGapWithIndexing } from "@/lib/voice-v3/knowledge-gaps/resolve-gap-with-indexing";
 import { requireVoicePermission } from "@/lib/voice/permissions";
 
 export async function GET(request: Request) {
@@ -46,12 +43,24 @@ export async function PATCH(request: Request) {
       if (!gap) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
       }
-      await appendApprovedAnswerToKnowledgeBase({
+      const result = await resolveVoiceKnowledgeGapWithIndexing({
         workspaceId: auth.workspaceId,
+        gapId: id,
         knowledgeBaseId: body.knowledgeBaseId.trim(),
         question: gap.displayQuestion,
         answerText: body.answerText.trim(),
       });
+      if (!result.ok) {
+        return NextResponse.json(
+          {
+            error: result.error,
+            sourceId: result.sourceId,
+            gapStatus: "OPEN",
+          },
+          { status: 422 },
+        );
+      }
+      return NextResponse.json({ ok: true, sourceId: result.sourceId, indexed: true });
     }
 
     await updateVoiceKnowledgeGapStatus({

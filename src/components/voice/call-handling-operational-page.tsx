@@ -8,7 +8,8 @@ import {
 import { AfterHoursNotificationsEditor } from "@/components/solutions/appointment-receptionist/after-hours-notifications-editor";
 import { UrgencyRulesEditor } from "@/components/solutions/appointment-receptionist/urgency-rules-editor";
 import { SpamUnwantedCallsEditor } from "@/components/solutions/appointment-receptionist/spam-unwanted-calls-editor";
-import { BusinessScheduleEditor } from "@/components/solutions/appointment-receptionist/operating-maturity-editor";
+import { DependencyRow } from "@/components/voice/dependency-row";
+import { formatBusinessHoursSummaryLine } from "@/lib/solutions/appointment-receptionist/knowledge-editor-schedule";
 import { transferWizardValidationIssues } from "@/lib/solutions/appointment-receptionist/transfer-wizard-state";
 import { TransferEffectiveStatusCard } from "@/components/voice/transfer-effective-status-card";
 import { TransferWaterfallPreview } from "@/components/voice/transfer-waterfall-preview";
@@ -112,6 +113,7 @@ export function CallHandlingOperationalPage() {
 
   const summary = useMemo(() => buildCallHandlingBehaviorSummary(state), [state]);
   const hoursSummary = useMemo(() => afterHoursBehaviorSummary(state), [state]);
+  const businessHoursLine = useMemo(() => formatBusinessHoursSummaryLine(state), [state]);
   const validationIssues = useMemo(() => transferWizardValidationIssues(state), [state]);
 
   async function save() {
@@ -237,7 +239,14 @@ export function CallHandlingOperationalPage() {
         <h2 id="hours-heading" className="text-lg font-semibold">Business hours &amp; after hours</h2>
         <p className="text-sm text-muted-foreground">{hoursSummary.duringHours}</p>
         <p className="text-sm text-muted-foreground">{hoursSummary.afterHours}</p>
-        <BusinessScheduleEditor state={state} patch={patch} />
+        <div className="rounded-xl border border-border bg-card px-5">
+          <DependencyRow
+            title="Business hours"
+            detail={`${businessHoursLine}. Used to determine when after-hours rules apply.`}
+            href="/voice/knowledge#hours"
+            linkLabel="Manage business hours"
+          />
+        </div>
         <AfterHoursBehaviorEditor state={state} patch={patch} />
       </section>
 

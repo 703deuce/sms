@@ -57,13 +57,13 @@ export async function updateVoiceKnowledgeGapStatus(input: {
   }
 }
 
-/** Append approved answer text to a knowledge base (customer-authored — not auto-learn from callers). */
+/** @deprecated Prefer resolveVoiceKnowledgeGapWithIndexing — creates source only, does not index. */
 export async function appendApprovedAnswerToKnowledgeBase(input: {
   workspaceId: string;
   knowledgeBaseId: string;
   question: string;
   answerText: string;
-}): Promise<void> {
+}): Promise<string> {
   const prisma = getPrisma();
   const kb = await prisma.voiceKnowledgeBase.findFirst({
     where: { id: input.knowledgeBaseId, workspaceId: input.workspaceId },
@@ -74,14 +74,15 @@ export async function appendApprovedAnswerToKnowledgeBase(input: {
   const name = `FAQ: ${input.question.trim().slice(0, 80)}`;
   const content = `Q: ${input.question.trim()}\nA: ${input.answerText.trim()}`;
 
-  await prisma.voiceKnowledgeSource.create({
+  const source = await prisma.voiceKnowledgeSource.create({
     data: {
       knowledgeBaseId: kb.id,
       workspaceId: input.workspaceId,
       name,
       sourceType: "text",
-      status: "active",
+      status: "pending",
       contentText: content,
     },
   });
+  return source.id;
 }
