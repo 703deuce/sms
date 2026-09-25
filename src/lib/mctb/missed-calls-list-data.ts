@@ -1,4 +1,5 @@
 import { getPrisma } from "@/lib/db";
+import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { appProductSourceToPrisma } from "@/lib/mass-texting/product-source";
 import {
   buildMissedCallsListWhere,
@@ -12,6 +13,7 @@ import { countCallerMissedEventsToday } from "@/lib/mctb/repeat-caller";
 import type { MissedCallEvent } from "@prisma/client";
 
 export type MctbMissedCallsListData = {
+  timezone: string;
   summary: {
     missedCount: number;
     recoveryTextsCount: number;
@@ -32,6 +34,9 @@ export type MctbMissedCallsListData = {
     smsSentAt: Date | null;
     classification: string | null;
     callsToday?: number;
+    automationState?: string | null;
+    followUpStatus?: string | null;
+    hasVoicemail?: boolean;
   }>;
   pagination: {
     page: number;
@@ -46,6 +51,7 @@ export async function loadMctbMissedCallsListData(
   query: MissedCallsListQuery,
 ): Promise<MctbMissedCallsListData> {
   const prisma = getPrisma();
+  const config = await loadMissedCallTextConfig(workspaceId);
   const where = buildMissedCallsListWhere(workspaceId, query);
   const orderBy = missedCallsOrderBy(query.sort);
   const take = query.pageSize ?? MISSED_CALLS_PAGE_SIZE_DEFAULT;
@@ -82,11 +88,24 @@ export async function loadMctbMissedCallsListData(
       : [];
 
   const conversationByContact = new Map<string, string>();
+  const conversationIds: string[] = [];
   for (const c of conversations) {
     if (c.contactId && !conversationByContact.has(c.contactId)) {
       conversationByContact.set(c.contactId, c.id);
+      conversationIds.push(c.id);
     }
   }
+
+  const automationRows =
+    conversationIds.length > 0
+      ? await prisma.mctbConversationAutomationState.findMany({
+          where: { conversationId: { in: conversationIds } },
+          select: { conversationId: true, state: true, followUpStatus: true },
+        })
+      : [];
+  const automationByConversation = new Map(
+    automationRows.map((r) => [r.conversationId, r]),
+  );
 
   const mapped = await Promise.all(
     events.map(async (e: MissedCallEvent) => {
@@ -101,12 +120,14 @@ export async function loadMctbMissedCallsListData(
           contactName = [contact.firstName, contact.lastName].filter(Boolean).join(" ") || null;
         }
       }
+      const conversationId = e.contactId ? conversationByContact.get(e.contactId) ?? null : null;
+      const automation = conversationId ? automationByConversation.get(conversationId) : null;
       return {
         id: e.id,
         callerE164: e.callerE164,
         contactName,
         contactId: e.contactId,
-        conversationId: e.contactId ? conversationByContact.get(e.contactId) ?? null : null,
+        conversationId,
         businessE164: e.businessE164,
         status: e.status,
         suppressionReason: e.suppressionReason,
@@ -114,6 +135,9 @@ export async function loadMctbMissedCallsListData(
         smsSentAt: e.smsSentAt,
         classification: e.disposition,
         callsToday: repeat.missedToday,
+        automationState: automation?.state ?? null,
+        followUpStatus: automation?.followUpStatus ?? null,
+        hasVoicemail: e.disposition === "voicemail",
       };
     }),
   );
@@ -122,6 +146,7 @@ export async function loadMctbMissedCallsListData(
   const listTotal = query.consentMode ? filtered.length : total;
 
   return {
+    timezone: config.timezone || "America/New_York",
     summary,
     events: filtered.map((e) => ({
       ...e,

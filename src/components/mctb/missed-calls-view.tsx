@@ -12,8 +12,14 @@ import {
   type MissedCallsStatusFilter,
 } from "@/lib/mctb/missed-calls-list-filters";
 import { missedCallActionableIssue } from "@/lib/mctb/missed-calls-display";
+import {
+  deriveMissedCallConversationPresentation,
+  deriveMissedCallNextAction,
+  recoveryListSecondaryLine,
+} from "@/lib/mctb/missed-calls-row-presentation";
+import { formatMissedCallLocalListTime } from "@/lib/mctb/missed-calls-time";
 import { DataTablePaginationFooter } from "@/components/ui/data-table-pagination-footer";
-import { formatRecoveryStatus, formatReplyStatus } from "@/lib/mctb/recovery-display";
+import { formatRecoveryStatus } from "@/lib/mctb/recovery-display";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import type { GlobalTablePageSize } from "@/lib/ui/global-data-table";
 import { AlertTriangle, MoreHorizontal, SlidersHorizontal } from "lucide-react";
@@ -36,6 +42,9 @@ type MissedCallEvent = {
   classification: string | null;
   callsToday?: number;
   conversationId?: string | null;
+  automationState?: string | null;
+  followUpStatus?: string | null;
+  hasVoicemail?: boolean;
 };
 
 type Summary = {
@@ -99,26 +108,6 @@ function fmtPhone(e164: string) {
   return e164;
 }
 
-function fmtMissedTime(iso: string) {
-  const d = new Date(iso);
-  const now = new Date();
-  const sameDay =
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate();
-  if (sameDay) {
-    return d.toLocaleString("en-US", { hour: "numeric", minute: "2-digit" });
-  }
-  const datePart = d.toLocaleString("en-US", { month: "short", day: "numeric" });
-  const timePart = d.toLocaleString("en-US", { hour: "numeric", minute: "2-digit" });
-  return `${datePart} · ${timePart}`;
-}
-
-function fmtSuppressionReason(reason: string | null): string | null {
-  if (!reason) return null;
-  return reason.replace(/_/g, " ").toLowerCase();
-}
-
 function recoveryStatusClass(status: string, suppressionReason: string | null): string {
   const s = status.toUpperCase();
   if (s === "FAILED") return "mctb-mc-status mctb-mc-status--failed";
@@ -132,12 +121,6 @@ function recoveryStatusClass(status: string, suppressionReason: string | null): 
     return "mctb-mc-status mctb-mc-status--sent";
   }
   return "mctb-mc-status";
-}
-
-function replyStatusClass(status: string): string {
-  const s = status.toUpperCase();
-  if (s === "CUSTOMER_REPLIED") return "mctb-mc-status mctb-mc-status--replied";
-  return "mctb-mc-status mctb-mc-status--muted";
 }
 
 function toMissedCallEvents(data: MctbMissedCallsListData["events"]): MissedCallEvent[] {
@@ -180,6 +163,7 @@ export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewP
   );
   const [summary, setSummary] = useState<Summary | null>(initialData?.summary ?? null);
   const [pagination, setPagination] = useState<Pagination | null>(initialData?.pagination ?? null);
+  const [timezone, setTimezone] = useState(initialData?.timezone ?? "America/New_York");
   const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState(false);
   const [searchInput, setSearchInput] = useState(query.q ?? "");
@@ -225,9 +209,10 @@ export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewP
       const res = await fetch(`/api/mctb/missed-calls?${params}`, { cache: "no-store" });
       const json = await res.json();
       if (!res.ok || !json.data) throw new Error("load failed");
-      setEvents(json.data.events || []);
+      setEvents(toMissedCallEvents(json.data.events || []));
       setSummary(json.data.summary || null);
       setPagination(json.data.pagination || null);
+      if (json.data.timezone) setTimezone(json.data.timezone);
       traceMctbClient("missed-calls", "load_complete", {
         eventCount: (json.data.events || []).length,
       });
@@ -244,6 +229,7 @@ export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewP
       setEvents(toMissedCallEvents(initialData.events));
       setSummary(initialData.summary);
       setPagination(initialData.pagination);
+      setTimezone(initialData.timezone);
       setLoading(false);
       setError(false);
       return;
@@ -584,7 +570,15 @@ export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewP
                   : "No missed calls yet."}
               </p>
               {!hasActiveFilters ? (
-                <p className="mctb-mc-empty-sub">Missed calls will appear here when they occur.</p>
+                <>
+                  <p className="mctb-mc-empty-sub">
+                    Missed calls will appear here after your business number forwards unanswered calls
+                    to Transovo.
+                  </p>
+                  <Link href={MCTB_ROUTES.setupTest} className="mctb-mc-clear mt-4 inline-block">
+                    Test setup
+                  </Link>
+                </>
               ) : (
                 <button type="button" className="mctb-mc-clear mt-4" onClick={clearFilters}>
                   Clear filters
@@ -599,19 +593,30 @@ export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewP
                     <tr>
                       <th scope="col">Caller</th>
                       <th scope="col">Missed</th>
-                      <th scope="col">Trigger</th>
                       <th scope="col">Recovery</th>
-                      <th scope="col">Reply</th>
-                      <th scope="col" className="hidden md:table-cell">Business line</th>
+                      <th scope="col">Conversation</th>
+                      <th scope="col">Next action</th>
                       <th scope="col" className="text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {events.map((row) => {
                       const recoveryPrimary = formatRecoveryStatus(row.status, row.suppressionReason);
-                      const reason = fmtSuppressionReason(row.suppressionReason);
+                      const reason = recoveryListSecondaryLine(row.status, row.suppressionReason);
                       const recoveryClass = recoveryStatusClass(row.status, row.suppressionReason);
-                      const replyClass = replyStatusClass(row.status);
+                      const conversationState = deriveMissedCallConversationPresentation({
+                        status: row.status,
+                        automationState: row.automationState,
+                        followUpStatus: row.followUpStatus,
+                      });
+                      const nextAction = deriveMissedCallNextAction({
+                        status: row.status,
+                        suppressionReason: row.suppressionReason,
+                        conversationId: row.conversationId,
+                        hasVoicemail: row.hasVoicemail,
+                        automationState: row.automationState,
+                        followUpStatus: row.followUpStatus,
+                      });
                       const issue = missedCallActionableIssue(row.status, row.suppressionReason);
                       const callerPrimary = row.contactName || fmtPhone(row.callerE164);
                       const showPhoneSecondary = Boolean(row.contactName);
@@ -637,11 +642,8 @@ export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewP
                               <span className="mctb-mc-repeat">Called {row.callsToday}× today</span>
                             ) : null}
                           </th>
-                          <td className="mctb-mc-muted" title={new Date(row.detectedAt).toLocaleString()}>
-                            {fmtMissedTime(row.detectedAt)}
-                          </td>
-                          <td className="mctb-mc-muted">
-                            {classificationToTriggerLabel(row.classification)}
+                          <td className="mctb-mc-muted" title={formatMissedCallLocalListTime(row.detectedAt, timezone)}>
+                            {formatMissedCallLocalListTime(row.detectedAt, timezone)}
                           </td>
                           <td className="mctb-mc-cell-recovery">
                             <span className="mctb-mc-recovery-line">
@@ -659,9 +661,25 @@ export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewP
                             ) : null}
                           </td>
                           <td>
-                            <span className={replyClass}>{formatReplyStatus(row.status)}</span>
+                            <span className={`mctb-mc-status mctb-mc-status--${conversationState.tone}`}>
+                              {conversationState.label}
+                            </span>
                           </td>
-                          <td className="mctb-mc-muted hidden md:table-cell">{fmtPhone(row.businessE164)}</td>
+                          <td className="mctb-mc-muted">
+                            {nextAction.kind === "none" ? (
+                              <span>{nextAction.label}</span>
+                            ) : nextAction.kind === "open_conversation" && nextAction.conversationId ? (
+                              <Link
+                                href={conversationHref(nextAction.conversationId)}
+                                className="mctb-mc-callback"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {nextAction.label}
+                              </Link>
+                            ) : (
+                              <span>{nextAction.label}</span>
+                            )}
+                          </td>
                           <td className="text-right" onClick={(e) => e.stopPropagation()}>
                             <div className="mctb-mc-actions relative">
                               <a
@@ -730,8 +748,21 @@ export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewP
               <div className="mctb-mc-mobile-list">
                 {events.map((row) => {
                   const recoveryPrimary = formatRecoveryStatus(row.status, row.suppressionReason);
-                  const reason = fmtSuppressionReason(row.suppressionReason);
+                  const reason = recoveryListSecondaryLine(row.status, row.suppressionReason);
                   const recoveryLine = reason ? `${recoveryPrimary} · ${reason}` : recoveryPrimary;
+                  const conversationState = deriveMissedCallConversationPresentation({
+                    status: row.status,
+                    automationState: row.automationState,
+                    followUpStatus: row.followUpStatus,
+                  });
+                  const nextAction = deriveMissedCallNextAction({
+                    status: row.status,
+                    suppressionReason: row.suppressionReason,
+                    conversationId: row.conversationId,
+                    hasVoicemail: row.hasVoicemail,
+                    automationState: row.automationState,
+                    followUpStatus: row.followUpStatus,
+                  });
                   return (
                     <div
                       key={row.id}
@@ -754,11 +785,13 @@ export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewP
                       ) : null}
                       <div className="mctb-mc-record-grid">
                         <span className="mctb-mc-record-label">Missed</span>
-                        <span>{fmtMissedTime(row.detectedAt)}</span>
+                        <span>{formatMissedCallLocalListTime(row.detectedAt, timezone)}</span>
                         <span className="mctb-mc-record-label">Recovery</span>
                         <span>{recoveryLine}</span>
-                        <span className="mctb-mc-record-label">Reply</span>
-                        <span>{formatReplyStatus(row.status)}</span>
+                        <span className="mctb-mc-record-label">Conversation</span>
+                        <span>{conversationState.label}</span>
+                        <span className="mctb-mc-record-label">Next</span>
+                        <span>{nextAction.label}</span>
                         <span className="mctb-mc-record-label">Business line</span>
                         <span>{fmtPhone(row.businessE164)}</span>
                       </div>

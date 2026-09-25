@@ -8,7 +8,9 @@ import {
   MCTB_CONSENT_MODE_VERIFIED,
 } from "@/lib/mctb/consent-mode";
 import { classificationToTriggerLabel } from "@/lib/mctb/missed-calls-list-filters";
-import { formatRecoveryStatus, formatReplyStatus } from "@/lib/mctb/recovery-display";
+import { formatMissedCallLocalDateTime } from "@/lib/mctb/missed-calls-time";
+import type { RecoverySuppressionPresentation } from "@/lib/mctb/recovery-suppression-presentation";
+import { formatRecoveryStatus } from "@/lib/mctb/recovery-display";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -54,13 +56,7 @@ function fmtDateTime(iso: string) {
 }
 
 function primaryStatusLabel(status: string, suppressionReason: string | null) {
-  const recovery = formatRecoveryStatus(status, suppressionReason);
-  if (status === "CUSTOMER_REPLIED") return "Needs reply";
-  if (status === "SUPPRESSED") return "Suppressed";
-  if (status === "FAILED") return "Failed";
-  if (recovery === "Waiting for consent") return "Waiting for consent";
-  if (status === "SENT" || status === "CUSTOMER_REPLIED") return "Recovered";
-  return recovery;
+  return formatRecoveryStatus(status, suppressionReason);
 }
 
 export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
@@ -99,6 +95,22 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
     durationSeconds: number | null;
   } | null>(null);
   const [showCallBack, setShowCallBack] = useState(false);
+  const [lifecycle, setLifecycle] = useState<
+    Array<{ at: string | null; label: string; detail: string }>
+  >([]);
+  const [whyNotTexted, setWhyNotTexted] = useState<RecoverySuppressionPresentation | null>(null);
+  const [capturedFields, setCapturedFields] = useState<Record<string, unknown>>({});
+  const [leadSummary, setLeadSummary] = useState<string | null>(null);
+  const [messagingContext, setMessagingContext] = useState<{ senderLabel: string } | null>(null);
+  const [bookingAction, setBookingAction] = useState<{
+    allowed: boolean;
+    bookingUrl?: string | null;
+  } | null>(null);
+  const [automation, setAutomation] = useState<{
+    state: string;
+    followUpStatus: string | null;
+  } | null>(null);
+  const [timezone, setTimezone] = useState("America/New_York");
 
   useEffect(() => {
     void fetch(`/api/mctb/missed-calls/${eventId}`, { cache: "no-store" })
@@ -114,6 +126,14 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
         setContact(json.contact || null);
         setConversation(json.conversation || null);
         setVoicemail(json.voicemail || null);
+        setLifecycle(json.lifecycle || []);
+        setWhyNotTexted(json.whyNotTexted || null);
+        setCapturedFields(json.capturedFields || {});
+        setLeadSummary(json.leadSummary || null);
+        setMessagingContext(json.messagingContext || null);
+        setBookingAction(json.bookingAction || null);
+        setAutomation(json.automation || null);
+        if (json.timezone) setTimezone(json.timezone);
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
       .finally(() => setLoading(false));
@@ -132,56 +152,45 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
     return name || fmtPhone(phone);
   }, [contact, event?.callerE164]);
 
-  const lifecycleSteps = useMemo(() => {
-    const detectedAt = event?.detectedAt ? String(event.detectedAt) : null;
-    const status = String(event?.status || "");
-    const suppressionReason =
-      event?.suppressionReason != null ? String(event.suppressionReason) : null;
-
-    const steps: Array<{ label: string; value: string; detail?: string }> = [
-      {
-        label: "Call",
-        value: detectedAt ? `Missed · ${fmtDateTime(detectedAt)}` : "Missed",
-      },
-    ];
-
-    if (isPress1) {
-      steps.push({
-        label: "Consent",
-        value: consent
-          ? `Captured by ${MCTB_CONSENT_MODE_LABELS.press_1.title}`
-          : suppressionReason === "NOT_EXISTING_CONSENT"
-            ? "Not captured"
-            : "Pending",
-        detail: consent?.consentedAt
-          ? fmtDateTime(String(consent.consentedAt))
-          : undefined,
-      });
-      steps.push({
-        label: "Compliance text",
-        value: event?.smsSentAt ? `Sent · ${fmtDateTime(String(event.smsSentAt))}` : "—",
-      });
-    } else if (isExistingConsent) {
-      steps.push({
-        label: "Consent",
-        value: "Existing permission mode",
-        detail: "No Press-1 prompt on this call",
-      });
+  const capturedRows = useMemo(() => {
+    const labels: Record<string, string> = {
+      caller_name: "Name",
+      NAME: "Name",
+      service_reason: "What they need",
+      REASON: "What they need",
+      service_address: "Location",
+      ADDRESS: "Location",
+      urgency: "Urgency",
+      URGENCY: "Urgency",
+      callback_time: "Callback preference",
+      CALLBACK_TIME: "Callback preference",
+    };
+    const rows: Array<{ label: string; value: string }> = [];
+    for (const [key, raw] of Object.entries(capturedFields)) {
+      if (raw == null || raw === "") continue;
+      if (key.startsWith("_")) continue;
+      const value = typeof raw === "string" ? raw : JSON.stringify(raw);
+      if (!value.trim()) continue;
+      rows.push({ label: labels[key] || key.replace(/_/g, " "), value: value.trim() });
     }
+    return rows;
+  }, [capturedFields]);
 
-    steps.push({
-      label: "Recovery text",
-      value: formatRecoveryStatus(status, suppressionReason),
-      detail: event?.smsSentAt ? fmtDateTime(String(event.smsSentAt)) : undefined,
+  async function followUp(status: "called_back" | "resolved") {
+    if (!conversation?.id) return;
+    await fetch("/api/mctb/handoff/actions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "follow_up",
+        conversationId: conversation.id,
+        followUpStatus: status,
+      }),
     });
-
-    steps.push({
-      label: "Reply",
-      value: formatReplyStatus(status),
-    });
-
-    return steps;
-  }, [consent, event, isExistingConsent, isPress1]);
+    setAutomation((prev) =>
+      prev ? { ...prev, followUpStatus: status, state: status === "resolved" ? "resolved" : "human_active" } : prev,
+    );
+  }
 
   if (loading) {
     return (
@@ -236,7 +245,11 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
         <div className="mt-3">
           <MctbPageHeader
             title={callerLabel}
-            description={`Missed call · ${event.detectedAt ? fmtDateTime(String(event.detectedAt)) : "—"} · Called ${fmtPhone(String(event.businessE164 || ""))}`}
+            description={`Missed call · ${
+              event.detectedAt
+                ? formatMissedCallLocalDateTime(String(event.detectedAt), timezone)
+                : "—"
+            } · Business line ${fmtPhone(String(event.businessE164 || ""))}`}
             badge={
               <MctbStatusBadge
                 tone={
@@ -258,17 +271,54 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
       <div className="space-y-4">
       <MctbSectionPanel title="Recovery lifecycle">
         <ol className="space-y-2">
-          {lifecycleSteps.map((step) => (
-            <li key={step.label} className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
-              <span className="font-medium text-foreground">{step.label}</span>
+          {lifecycle.map((step) => (
+            <li key={`${step.label}-${step.at || "na"}`} className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
+              <span className="font-medium text-foreground">
+                {step.at ? formatMissedCallLocalDateTime(step.at, timezone) : "—"}
+              </span>
               <span className="text-muted-foreground">
-                {step.value}
+                {step.label}
                 {step.detail ? ` · ${step.detail}` : ""}
               </span>
             </li>
           ))}
         </ol>
       </MctbSectionPanel>
+
+      {whyNotTexted ? (
+        <MctbSectionPanel title="Why wasn’t a recovery text sent?">
+          <p className="text-sm font-medium text-foreground">{whyNotTexted.title}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{whyNotTexted.explanation}</p>
+          {whyNotTexted.unknown ? (
+            <p className="mt-2 text-[13px] text-muted-foreground">
+              View technical details below for more context.
+            </p>
+          ) : null}
+        </MctbSectionPanel>
+      ) : null}
+
+      {capturedRows.length > 0 || leadSummary ? (
+        <MctbSectionPanel title="Captured recovery information">
+          {capturedRows.length > 0 ? (
+            <dl className="grid gap-2 text-sm sm:grid-cols-2">
+              {capturedRows.map((row) => (
+                <div key={row.label}>
+                  <dt className="text-muted-foreground">{row.label}</dt>
+                  <dd className="font-medium">{row.value}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
+          {leadSummary ? (
+            <div className="mt-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Summary
+              </p>
+              <p className="mt-1 text-sm">{leadSummary}</p>
+            </div>
+          ) : null}
+        </MctbSectionPanel>
+      ) : null}
 
       <MctbSectionPanel title="Call details">
         <dl className="grid gap-2 text-sm sm:grid-cols-2">
@@ -302,13 +352,18 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
       </MctbSectionPanel>
 
       <MctbSectionPanel
-        title="Consent"
+        title="Consent & messaging"
         action={
           <Link href={MCTB_ROUTES.complianceConsent} className="text-sm font-semibold text-primary hover:underline">
-            View consent record
+            View consent history
           </Link>
         }
       >
+        {messagingContext ? (
+          <p className="mb-3 text-sm text-muted-foreground">
+            Sender: {messagingContext.senderLabel}
+          </p>
+        ) : null}
         {isPress1 ? (
           <dl className="grid gap-2 text-sm sm:grid-cols-2">
             <div>
@@ -358,12 +413,8 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
               </dd>
             </div>
           ) : null}
-          {suppressionReason ? (
-            <p className="text-[13px] text-muted-foreground">
-              {suppressionReason === "OPTED_OUT"
-                ? "Suppressed — customer opted out"
-                : `Suppressed — ${suppressionReason.replace(/_/g, " ").toLowerCase()}`}
-            </p>
+          {whyNotTexted && !event.smsSentAt ? (
+            <p className="text-[13px] text-muted-foreground">{whyNotTexted.explanation}</p>
           ) : null}
           {status === "FAILED" ? (
             <p className="text-[13px] text-rose-700">
@@ -412,6 +463,19 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
         </MctbSectionPanel>
       ) : null}
 
+      {automation?.followUpStatus === "needs_follow_up" || automation?.state === "callback_requested" ? (
+        <MctbSectionPanel title="Callback">
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" size="sm" variant="outline" onClick={() => void followUp("called_back")}>
+              Mark called back
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={() => void followUp("resolved")}>
+              Resolve
+            </Button>
+          </div>
+        </MctbSectionPanel>
+      ) : null}
+
       <MctbSectionPanel title="Conversation">
         {conversation ? (
           <>
@@ -424,11 +488,32 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
               <p className="rounded-lg bg-muted/40 p-3 text-sm">{conversation.lastMessage.body}</p>
             ) : null}
             <Link
-              href={`/conversations?product=mctb&conversation=${conversation.id}`}
+              href={`${MCTB_ROUTES.conversations}?conversation=${conversation.id}`}
               className="text-sm font-semibold text-primary hover:underline"
             >
               Open conversation
             </Link>
+            {bookingAction?.allowed && bookingAction.bookingUrl && conversation ? (
+              <form
+                className="mt-3"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  await fetch("/api/contacts/actions", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      action: "send_booking_link",
+                      phone: String(event.callerE164),
+                      bookingUrl: bookingAction.bookingUrl,
+                    }),
+                  });
+                }}
+              >
+                <Button type="submit" size="sm" variant="secondary">
+                  Send booking link
+                </Button>
+              </form>
+            ) : null}
           </>
         ) : (
           <p className="text-sm text-muted-foreground">No reply yet.</p>
@@ -477,6 +562,11 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
         <div className="ref-deco-section-body space-y-2 text-xs text-muted-foreground">
           <p>Event ID: {eventId}</p>
           {event.traceId ? <p>Trace: {String(event.traceId)}</p> : null}
+          {event.suppressionReason ? (
+            <p>Suppression code: {String(event.suppressionReason)}</p>
+          ) : null}
+          {messagingContext ? <p>Sender: {messagingContext.senderLabel}</p> : null}
+          {conversation ? <p>Conversation ID: {conversation.id}</p> : null}
           <p className="font-medium text-foreground">Authoritative timeline</p>
           <ol className="mt-2 list-decimal space-y-1 pl-4">
             {(timeline?.steps || []).map((step) => (
