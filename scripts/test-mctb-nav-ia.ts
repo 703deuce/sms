@@ -17,7 +17,8 @@ const voiceLabels = voiceNav.map((i) => i.label);
 const voiceHrefs = collectNavHrefs(voiceNav);
 
 assert.ok(voiceLabels.includes("Calls"));
-assert.ok(voiceLabels.includes("AI Agent"));
+assert.ok(voiceLabels.includes("Receptionist"));
+assert.ok(voiceLabels.includes("Business Knowledge"));
 assert.ok(voiceLabels.includes("Inbox"));
 assert.ok(!voiceLabels.includes("Conversations"));
 assert.ok(!voiceLabels.includes("Voice Agent"));
@@ -25,9 +26,8 @@ assert.equal(voiceNav.find((i) => i.label === "Overview" && i.sectionLabel === "
 assert.equal(voiceNav.find((i) => i.label === "Overview" && i.sectionLabel === "Missed Call Text Back")?.href, "/mctb");
 assert.equal(voiceNav.find((i) => i.label === "Call Handling")?.href, "/voice/call-handling");
 assert.ok(voiceHrefs.includes("/voice/analytics"));
-assert.ok(voiceHrefs.includes("/voice/needs-attention"));
 assert.ok(voiceHrefs.includes("/voice/calls"));
-assert.ok(voiceHrefs.includes("/voice/agents"));
+assert.ok(voiceHrefs.includes("/voice/receptionist"));
 assert.ok(!voiceHrefs.includes("/mctb/voice-agent"));
 assert.equal(voiceNav.find((i) => i.label === "AI Recovery")?.href, MCTB_ROUTES.aiRecovery);
 const mctbStartIdx = voiceNav.findIndex((i) => i.sectionLabel === "Missed Call Text Back");
@@ -49,7 +49,7 @@ assert.ok(voiceHrefs.includes("/voice/numbers"));
 const mctbOnly = buildMctbV1Nav({ hasVoice: false });
 const mctbOnlyLabels = mctbOnly.map((i) => i.label);
 assert.ok(!mctbOnlyLabels.includes("Calls"));
-assert.ok(!mctbOnlyLabels.includes("AI Agent"));
+assert.ok(!mctbOnlyLabels.includes("Receptionist"));
 assert.equal(mctbOnly.find((i) => i.label === "Inbox")?.href, MCTB_ROUTES.conversations);
 
 const mobile = buildMctbV1MobileNav({ hasVoice: true });
