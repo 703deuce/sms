@@ -58,7 +58,7 @@ export async function GET() {
         business: {
           name: business.business_name,
           hours: business.business_hours,
-          services: business.services.slice(0, 6),
+          services: Array.isArray(business.services) ? business.services.slice(0, 6) : [],
           serviceArea,
           website: business.website,
           editHref: "/settings/business",

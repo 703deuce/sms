@@ -357,7 +357,7 @@ export function MctbSetupOverviewView() {
   return (
     <MctbSetupShell {...shellProps}>
       <div className="mctb-setup-canvas">
-        <div className="mctb-setup-span-12 mctb-setup-status-rail">
+        <div className="mctb-setup-span-12 mctb-setup-status-rail transovo-config-flat">
           <div className="mctb-setup-status-rail__lead-col">
             <span className="mctb-setup-status-rail__kicker">Recovery</span>
             <span

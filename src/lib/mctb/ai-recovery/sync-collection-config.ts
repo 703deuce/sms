@@ -41,10 +41,11 @@ const BOOKING_INTENTS: LeadRecoveryIntent[] = [
 const STRIP_ACTIONS = new Set(["AI_BOOK", "FOLLOW_UP", "SEND_TEXT_TO_PAY"]);
 
 function stripPolicyActions(policy: IntentPolicyShape): IntentPolicyShape {
+  const actions = Array.isArray(policy.actions) ? policy.actions : [];
   return {
     ...policy,
     mode: policy.mode === "AI_BOOK" ? "SEND_BOOKING_LINK" : policy.mode,
-    actions: policy.actions.filter((a) => !STRIP_ACTIONS.has(a)),
+    actions: actions.filter((a) => !STRIP_ACTIONS.has(a)),
   };
 }
 
@@ -130,10 +131,11 @@ export function buildAiRecoverySavePatch(
   if (MCTB_LAUNCH_HIDE_LR_AI_BOOK_UI) {
     const booking = intentPolicies.BOOKING_REQUEST;
     if (booking) {
+      const bookingActions = Array.isArray(booking.actions) ? booking.actions : [];
       intentPolicies.BOOKING_REQUEST = {
         ...booking,
         mode: null,
-        actions: booking.actions.filter((a) => a !== "AI_BOOK"),
+        actions: bookingActions.filter((a) => a !== "AI_BOOK"),
       };
     }
   }

@@ -54,7 +54,7 @@ function ToggleRow({
   return (
     <label
       htmlFor={id}
-      className="flex cursor-pointer items-start gap-3 rounded-lg border border-border/80 bg-white px-4 py-3 hover:bg-muted/20"
+      className="transovo-config-row transovo-ai-recovery-toggle flex cursor-pointer items-start gap-3 hover:bg-[#fafbfc]"
     >
       <input
         id={id}
@@ -117,6 +117,9 @@ export function AiRecoverySettingsPage() {
       if (!cfgRes.ok) throw new Error(cfgJson.error || "Could not load settings");
 
       const context = ctxJson.data as ContextData;
+      if (context.booking && !Array.isArray(context.booking.links)) {
+        context.booking.links = [];
+      }
       setCtx(context);
       setEnabled(Boolean(context.recovery.enabled));
       const caps = (cfgJson.data?.config?.collectCapabilities || []) as LeadRecoveryCollectField[];
@@ -248,7 +251,7 @@ export function AiRecoverySettingsPage() {
 
   return (
     <MctbPageContainer>
-      <div className="mctb-page voice-theme">
+      <div className="mctb-page voice-theme transovo-operational-redesign">
         <div className="mctb-page-inner max-w-2xl">
           <MctbPageHeader
             title="AI Recovery"

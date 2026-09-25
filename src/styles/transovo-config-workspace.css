@@ -1,0 +1,198 @@
+/**
+ * Configuration / setup workspace — Fonio-family open sections (not cards).
+ */
+.transovo-config-section {
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--op-hairline, #eceef1);
+}
+
+.transovo-config-section:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.transovo-config-section__title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--op-text, #111827);
+}
+
+.transovo-config-section__desc {
+  margin: 0.25rem 0 0;
+  max-width: 40rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--op-muted, #6b7280);
+}
+
+.transovo-config-section__body {
+  margin-top: 1rem;
+}
+
+.transovo-config-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1.5rem 0 0.5rem;
+}
+
+.transovo-config-group__label {
+  flex-shrink: 0;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--op-meta, #9ca3af);
+}
+
+.transovo-config-group__rule {
+  flex: 1;
+  height: 1px;
+  background: var(--op-hairline, #eceef1);
+}
+
+.transovo-config-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  min-height: 3rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--op-hairline, #eceef1);
+  font-size: 0.8125rem;
+}
+
+.transovo-config-row:last-child {
+  border-bottom: none;
+}
+
+.transovo-config-row__main {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.transovo-config-row__label {
+  display: block;
+  font-weight: 500;
+  color: var(--op-text, #111827);
+}
+
+.transovo-config-row__detail {
+  display: block;
+  margin-top: 0.125rem;
+  font-size: 0.75rem;
+  color: var(--op-muted, #6b7280);
+}
+
+.transovo-config-row__value {
+  font-weight: 500;
+  color: var(--op-text, #111827);
+  text-align: right;
+}
+
+.transovo-config-row__action {
+  flex-shrink: 0;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--op-text, #111827);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.transovo-config-row__action:hover {
+  opacity: 0.85;
+}
+
+/* MCTB setup overview — open rows without icon tiles */
+.mctb-setup-summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  min-height: 3.25rem;
+  padding: 0.625rem 0;
+  border-bottom: 1px solid #eceef1;
+  text-decoration: none;
+  color: inherit;
+}
+
+.mctb-setup-summary-row:hover {
+  background: #fafbfc;
+}
+
+.mctb-setup-summary-row__main {
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+
+.mctb-setup-summary-row__title {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #111827;
+}
+
+.mctb-setup-summary-row__secondary {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-top: 0.125rem;
+}
+
+.mctb-setup-summary-row__detail {
+  font-size: 0.8125rem;
+  color: #374151;
+}
+
+.mctb-setup-workspace.transovo-operational-redesign {
+  background: transparent;
+}
+
+.mctb-setup-status-rail.transovo-config-flat {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  border-bottom: 1px solid #eceef1;
+  padding-inline: 0;
+}
+
+/* Inbox — thin pane separators (MCTB + shared) */
+.transovo-operational-redesign .kimi-conversations .ref-scope {
+  --tv-pane-border: #eceef1;
+}
+
+.transovo-operational-redesign .kimi-conversations [data-pane="list"],
+.transovo-operational-redesign .kimi-conversations [data-pane="thread"],
+.transovo-operational-redesign .kimi-conversations [data-pane="context"] {
+  border-color: var(--tv-pane-border);
+}
+
+.transovo-operational-redesign .mctb-setup-panel,
+.transovo-operational-redesign .mctb-setup-panel--level3 {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  padding: 0;
+}
+
+.transovo-operational-redesign .mctb-setup-panel h2 {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: #111827;
+}
+
+.transovo-ai-recovery-toggle {
+  min-height: 3.25rem;
+}
+
+.transovo-operational-redesign .voice-call-handling-workspace .transovo-config-section + .transovo-config-section {
+  margin-top: 0;
+}
