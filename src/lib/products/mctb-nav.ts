@@ -83,8 +83,8 @@ export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
       icon: Voicemail,
     },
     {
-      label: "AI Lead Recovery",
-      href: MCTB_ROUTES.aiLeadRecovery,
+      label: "AI Recovery",
+      href: MCTB_ROUTES.aiRecovery,
       icon: Sparkles,
     },
     {
@@ -170,6 +170,9 @@ export function getMctbPageTitle(pathname: string): string {
   if (pathname === MCTB_ROUTES.analytics) return "";
   if (pathname.startsWith(MCTB_ROUTES.analytics) || pathname.startsWith("/analytics/mctb")) {
     return "Analytics";
+  }
+  if (pathname.startsWith(MCTB_ROUTES.aiRecovery) || pathname.startsWith(MCTB_ROUTES.aiLeadRecovery)) {
+    return "AI Recovery";
   }
   if (pathname.startsWith(MCTB_ROUTES.voiceAgent)) return "AI Agent";
   if (pathname.startsWith(MCTB_ROUTES.setup)) return "Setup";
