@@ -57,8 +57,11 @@ const nav = buildAiAfterHoursNav();
 record(
   "AI_NAV_RESTORED",
   "SIMULATED",
-  nav.some((i) => i.href === "/voice/agents") ? "PASS" : "FAIL",
-  `${nav.length} nav items; AI Agent -> /voice/agents`,
+  nav.some((i) => i.href === "/voice/receptionist") &&
+    nav.some((i) => i.href === "/voice/call-handling")
+    ? "PASS"
+    : "FAIL",
+  `${nav.length} nav items; canonical Receptionist + Call Handling`,
 );
 
 // Gate 3: LiveKit Cloud default

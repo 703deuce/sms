@@ -78,7 +78,7 @@ export function MobileNav({
     ...item,
     icon: massSmsMobileIcons[i] ?? LayoutDashboard,
   }));
-  const aiAfterHoursItems = buildAiAfterHoursMobileNav(primaryVoiceAgentId).map((item, i) => ({
+  const aiAfterHoursItems = buildAiAfterHoursMobileNav().map((item, i) => ({
     ...item,
     icon: aiAfterHoursMobileIcons[i] ?? LayoutDashboard,
   }));
