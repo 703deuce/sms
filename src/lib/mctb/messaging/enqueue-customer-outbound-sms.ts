@@ -13,6 +13,9 @@ export async function enqueueMctbCustomerOutboundSmsJob(input: {
   providerMessageId?: string | null;
   processingJobId?: string | null;
   action?: string;
+  outboundSource?: "lead_recovery_ai" | "manual" | string;
+  senderMode?: "PLATFORM" | "WORKSPACE";
+  platformResponseId?: string | null;
 }) {
   const key = input.idempotencyKey.trim();
   if (!key) throw new Error("mctb_outbound_missing_idempotency_key");
@@ -34,6 +37,9 @@ export async function enqueueMctbCustomerOutboundSmsJob(input: {
       processingJobId: input.processingJobId || null,
       action: input.action || null,
       enqueuedAt: new Date().toISOString(),
+      outboundSource: input.outboundSource || "lead_recovery_ai",
+      senderMode: input.senderMode || null,
+      platformResponseId: input.platformResponseId || null,
     },
     wake: true,
   });

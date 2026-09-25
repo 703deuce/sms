@@ -7,6 +7,7 @@ export type MctbInboundProcessingTraceKind =
   | "LR_COMPLETED"
   | "OUTBOUND_ENQUEUED"
   | "OUTBOUND_SENT"
+  | "OUTBOUND_SUPPRESSED"
   | "LR_FAILED"
   | "LR_FALLBACK_ENQUEUED";
 

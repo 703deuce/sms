@@ -306,6 +306,20 @@ export async function handleMctbCustomerSmsReply(input: {
     return { handled: true, action: leadRecovery.action, reply: leadRecovery.reply };
   }
 
+  const { resolveMctbAiOutboundSmsBody } = await import(
+    "@/lib/mctb/platform-sender/resolve-ai-outbound-body"
+  );
+  const outboundBody = await resolveMctbAiOutboundSmsBody({
+    workspaceId: input.workspaceId,
+    config,
+    leadRecovery,
+    callerFirstName: contact?.firstName,
+  });
+
+  if (!outboundBody.body.trim()) {
+    return { handled: true, action: leadRecovery.action, reply: "" };
+  }
+
   const idemKey = `mctb-lead-recovery:${conversationId}:${input.providerMessageId || input.body.slice(0, 32)}`;
   const outboundDelivery = input.outboundDelivery ?? "inline";
 
@@ -321,11 +335,14 @@ export async function handleMctbCustomerSmsReply(input: {
         workspaceId: input.workspaceId,
         conversationId,
         toE164: fromE164,
-        body: leadRecovery.reply,
+        body: outboundBody.body,
         idempotencyKey: idemKey,
         providerMessageId: input.providerMessageId,
         processingJobId: input.processingJobId,
         action: leadRecovery.action,
+        outboundSource: "lead_recovery_ai",
+        senderMode: outboundBody.senderMode,
+        platformResponseId: outboundBody.platformResponseId || null,
       });
       await logMctbInboundProcessingEvent({
         kind: "OUTBOUND_ENQUEUED",
@@ -338,7 +355,7 @@ export async function handleMctbCustomerSmsReply(input: {
       return {
         handled: true,
         action: leadRecovery.action,
-        reply: leadRecovery.reply,
+        reply: outboundBody.body,
         outboundJobId: job.id,
       };
     } catch (err) {
@@ -347,12 +364,29 @@ export async function handleMctbCustomerSmsReply(input: {
     }
   }
 
+  const { validateMctbAutonomousAiOutboundBeforeSend } = await import(
+    "@/lib/mctb/messaging/ai-outbound-handoff-guard"
+  );
+  const enqueuedAtIso = new Date().toISOString();
+  const handoff = await validateMctbAutonomousAiOutboundBeforeSend({
+    conversationId,
+    enqueuedAtIso,
+    outboundSource: "lead_recovery_ai",
+  });
+  if (!handoff.allow) {
+    return {
+      handled: true,
+      action: leadRecovery.action,
+      reply: "",
+    };
+  }
+
   try {
     await sendMctbCustomerOutboundSms({
       workspaceId: input.workspaceId,
       config,
       toE164: fromE164,
-      body: leadRecovery.reply,
+      body: outboundBody.body,
       idempotencyKey: idemKey,
     });
   } catch (err) {
@@ -364,7 +398,7 @@ export async function handleMctbCustomerSmsReply(input: {
     data: {
       conversationId,
       direction: "outbound",
-      body: leadRecovery.reply,
+      body: outboundBody.body,
       userName: "AI",
       providerMessageId: null,
     },
@@ -373,7 +407,7 @@ export async function handleMctbCustomerSmsReply(input: {
   return {
     handled: true,
     action: leadRecovery.action,
-    reply: leadRecovery.reply,
+    reply: outboundBody.body,
   };
 }
 

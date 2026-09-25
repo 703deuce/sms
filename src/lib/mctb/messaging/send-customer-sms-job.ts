@@ -3,6 +3,7 @@ import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/con
 import { logMctbInboundProcessingEvent } from "@/lib/mctb/messaging/inbound-processing-trace";
 import { sendQuickSms } from "@/lib/sms/send-quick";
 import { resolveMctbOutboundSmsRoute } from "@/lib/mctb/messaging/outbound-sms-route";
+import { validateMctbAutonomousAiOutboundBeforeSend } from "@/lib/mctb/messaging/ai-outbound-handoff-guard";
 
 export async function executeMctbSendCustomerSmsJob(payload: Record<string, unknown>) {
   const workspaceId = String(payload.workspaceId || "");
@@ -12,9 +13,40 @@ export async function executeMctbSendCustomerSmsJob(payload: Record<string, unkn
   const idempotencyKey = String(payload.idempotencyKey || "");
   const processingJobId = payload.processingJobId ? String(payload.processingJobId) : null;
   const inboundProviderMessageId = payload.providerMessageId ? String(payload.providerMessageId) : null;
+  const enqueuedAtIso = String(payload.enqueuedAt || new Date().toISOString());
+  const outboundSource = payload.outboundSource ? String(payload.outboundSource) : "lead_recovery_ai";
+  const platformResponseId = payload.platformResponseId ? String(payload.platformResponseId) : null;
+  const senderMode = payload.senderMode ? String(payload.senderMode) : null;
 
   if (!workspaceId || !conversationId || !toE164 || !body.trim() || !idempotencyKey) {
     throw new Error("mctb_send_customer_sms_payload_incomplete");
+  }
+
+  const handoff = await validateMctbAutonomousAiOutboundBeforeSend({
+    conversationId,
+    enqueuedAtIso,
+    outboundSource,
+  });
+  if (!handoff.allow) {
+    await logMctbInboundProcessingEvent({
+      kind: "OUTBOUND_SUPPRESSED",
+      workspaceId,
+      conversationId,
+      providerMessageId: inboundProviderMessageId,
+      processingJobId,
+      meta: {
+        idempotencyKey,
+        suppressionReason: handoff.reason,
+        outboundSource,
+        senderMode,
+        platformResponseId,
+      },
+    });
+    return {
+      ok: true,
+      suppressed: true,
+      suppressionReason: handoff.reason,
+    };
   }
 
   const prisma = getPrisma();
@@ -103,6 +135,9 @@ export async function executeMctbSendCustomerSmsJob(payload: Record<string, unkn
       idempotencyKey,
       providerOutboundMessageId: providerMessageId,
       idempotentReplay: Boolean(sendResult.idempotentReplay),
+      outboundSource,
+      senderMode,
+      platformResponseId,
     },
   });
 
