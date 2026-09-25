@@ -1,6 +1,5 @@
 import {
   BarChart3,
-  BookOpen,
   CreditCard,
   Home,
   LayoutDashboard,
@@ -9,7 +8,6 @@ import {
   PhoneMissed,
   Plug,
   SlidersHorizontal,
-  AudioLines,
   Settings,
   Sparkles,
   Users,
@@ -17,6 +15,7 @@ import {
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
+import { buildVoiceIaPrimaryNavItems, getVoiceIaPageTitle } from "@/lib/products/voice-ia-nav";
 
 export type MctbNavOptions = {
   inboxBadge?: number;
@@ -36,25 +35,7 @@ export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
 
   if (options.hasVoice) {
     items.push(
-      {
-        label: "Overview",
-        href: "/voice/overview",
-        icon: LayoutDashboard,
-        sectionLabel: AI_RECEPTIONIST_SECTION,
-        matchExact: true,
-      },
-      { label: "Calls", href: "/voice/calls", icon: PhoneCall },
-      {
-        label: "AI Agent",
-        href: MCTB_ROUTES.voiceAgent,
-        icon: AudioLines,
-      },
-      { label: "Knowledge", href: "/voice/knowledge", icon: BookOpen },
-      {
-        label: "Call Rules",
-        href: "/voice/inbound-routing",
-        icon: SlidersHorizontal,
-      },
+      ...buildVoiceIaPrimaryNavItems({ sectionLabel: AI_RECEPTIONIST_SECTION }),
     );
   }
 
@@ -153,12 +134,9 @@ export function buildMctbV1MobileNav(options: MctbNavOptions = {}): NavItem[] {
 }
 
 export function getMctbPageTitle(pathname: string): string {
-  if (pathname === "/voice/overview" || pathname.startsWith("/voice/overview/")) {
-    return "Overview";
-  }
-  if (pathname.startsWith("/voice/calls")) return "Calls";
-  if (pathname.startsWith("/voice/knowledge")) return "Knowledge";
-  if (pathname.startsWith("/voice/inbound-routing")) return "Call Rules";
+  const voiceIaTitle = getVoiceIaPageTitle(pathname);
+  if (voiceIaTitle) return voiceIaTitle;
+  if (pathname.startsWith("/voice/needs-attention")) return "Calls";
   if (pathname.startsWith("/voice/numbers")) return "Numbers";
   if (pathname.startsWith("/settings/billing")) return "Billing";
 

@@ -87,7 +87,22 @@ export function isVoiceNavItemActive(
     return pathname.startsWith("/voice/agents/");
   }
   if (sectionKey === "activity" && item.href === "/voice/calls") {
-    return pathname.startsWith("/voice/calls/");
+    return (
+      pathname.startsWith("/voice/calls/") ||
+      pathname.startsWith("/voice/needs-attention")
+    );
+  }
+  if (sectionKey === "phone" && item.href === "/voice/call-handling") {
+    return (
+      pathname.startsWith("/voice/call-handling") ||
+      pathname === "/voice/inbound-routing" ||
+      pathname.startsWith("/voice/inbound-routing/") ||
+      pathname === "/voice/operations" ||
+      pathname.startsWith("/voice/operations/")
+    );
+  }
+  if (sectionKey === "insights" && item.href === "/voice/analytics") {
+    return pathname.startsWith("/voice/analytics");
   }
   return false;
 }
