@@ -1,7 +1,8 @@
 # TRANSOVO — MASTER VISUAL UI/UX AUDIT + DESIGN-SYSTEM SPECIFICATION
 
-**Audience:** Kirsten (Pass 1)  
+**Audience:** Pass 1 auditor (Cursor Cloud agent or designated designer)  
 **Status:** Authoritative brief for read-only audit — not an implementation prompt  
+**Deliverable:** `docs/TRANSOVO-PASS-1-VISUAL-AUDIT-AND-DESIGN-SYSTEM-REPORT.md` (sections A–K + §35 verdict)  
 **Last updated:** 2026-09-25
 
 ---
