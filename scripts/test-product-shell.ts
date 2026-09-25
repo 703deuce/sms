@@ -72,8 +72,9 @@ assert.equal(mctbNavFromPath.map((i) => i.label).join(","), mctbLabels.join(",")
 assert.ok(mctbLabels.includes("Overview"));
 assert.ok(mctbLabels.includes("Missed Calls"));
 assert.ok(mctbLabels.includes("Inbox"));
-assert.ok(mctbLabels.includes("Calls"));
-assert.ok(mctbLabels.includes("AI Agent"));
+assert.ok(mctbLabels.includes("AI Recovery"));
+assert.ok(!mctbLabels.includes("Calls"));
+assert.ok(!mctbLabels.includes("AI Agent"));
 assert.ok(mctbLabels.includes("Voicemail"));
 assert.ok(mctbLabels.includes("Analytics"));
 assert.ok(mctbLabels.includes("Setup"));

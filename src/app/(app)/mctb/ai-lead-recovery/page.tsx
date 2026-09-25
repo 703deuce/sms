@@ -1,5 +1,6 @@
-import { AiLeadRecoveryPage } from "@/components/mctb/lead-recovery/ai-lead-recovery-page";
+import { redirect } from "next/navigation";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 
-export default function MctbAiLeadRecoveryRoute() {
-  return <AiLeadRecoveryPage />;
+export default function MctbAiLeadRecoveryLegacyRoute() {
+  redirect(MCTB_ROUTES.aiRecovery);
 }

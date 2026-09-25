@@ -15,6 +15,8 @@ import {
 import { normalizePhoneE164 } from "@/lib/messaging/preferred-sending-number";
 import { ConversationPaymentActions } from "@/components/payments/conversation-payments";
 import { MctbConversationBookingActions } from "@/components/mctb/booking/conversation-booking-actions";
+import { MctbRecoveryContextPanel } from "@/components/mctb/handoff/mctb-recovery-context-panel";
+import { isMctbInboxThread } from "@/lib/mctb/inbox/is-mctb-thread";
 
 type Props = {
   convo: Conversation;
@@ -52,6 +54,7 @@ export function ConversationsThreadArea({
   composeFromRef,
 }: Props) {
   const assist = useInboxAiAssist(convo.id);
+  const mctbThread = isMctbInboxThread(convo);
   const [prefill, setPrefill] = useState("");
   const [viewers, setViewers] = useState<Array<{ userId: string; userName: string }>>([]);
 
@@ -108,7 +111,7 @@ export function ConversationsThreadArea({
       disabled?: boolean;
     }) => (
       <>
-        {isAppointmentsV1Primary() ? (
+        {mctbThread ? (
           <MctbConversationBookingActions
             conversationId={convo.id}
             phone={convo.phone}
@@ -156,7 +159,7 @@ export function ConversationsThreadArea({
         />
       </>
     ),
-    [prefill, composerDisabled, composerDisabledReason, teammates, phoneNumbers, composeFromRef, defaultFromNumberId, convo],
+    [prefill, composerDisabled, composerDisabledReason, teammates, phoneNumbers, composeFromRef, defaultFromNumberId, convo, mctbThread],
   );
 
   return (
@@ -171,12 +174,19 @@ export function ConversationsThreadArea({
             Also viewing: {viewers.map((v) => v.userName).join(", ")}
           </div>
         ) : null}
-        {assist.session?.status === "ai_active" ? (
+        {!mctbThread && assist.session?.status === "ai_active" ? (
           <div style={{ padding: "8px 16px 0", background: "#fff" }}>
             <InboxAiBanner session={assist.session} onTakeover={() => void assist.takeover()} />
           </div>
         ) : null}
-        {convo.productSource === "mctb" && convo.missedCallEventId ? (
+        {mctbThread ? (
+          <MctbRecoveryContextPanel
+            conversationId={convo.id}
+            missedCallEventId={convo.missedCallEventId}
+            customerPhone={convo.phone}
+          />
+        ) : null}
+        {mctbThread && convo.missedCallEventId ? (
           <MctbConversationContextBanner
             missedCallEventId={convo.missedCallEventId}
             detectedAt={convo.missedCallDetectedAt}
@@ -209,6 +219,7 @@ export function ConversationsThreadArea({
       <InboxAiAssistPanel
         conversationId={convo.id}
         assist={assist}
+        hideAutomationOwnership={mctbThread}
         onUseSuggestion={(text) => setPrefill(text)}
       />
     </div>
