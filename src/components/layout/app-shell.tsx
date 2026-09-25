@@ -5,19 +5,12 @@ import { MobileNav } from "@/components/layout/mobile-nav";
 import { RealtorHeader } from "@/components/realtor/realtor-header";
 import { Sidebar } from "@/components/layout/sidebar";
 import { ProductActivityTracker } from "@/components/products/product-activity-tracker";
-import { getPageTitle } from "@/lib/nav";
-import { getRealtorPageTitle } from "@/lib/realtor/nav";
 import { getCurrentProduct } from "@/lib/products/context";
 import { isVoiceShellRoute } from "@/lib/products/voice-routes";
-import { getNumbersPageTitle } from "@/lib/products/numbers-nav";
-import { getAiAfterHoursPageTitle } from "@/lib/products/ai-after-hours-nav";
-import { getVoicePageTitle } from "@/lib/products/voice-nav";
-import { getSmsPlatformPageTitle } from "@/lib/products/sms-platform-nav";
-import { getMctbPageTitle } from "@/lib/products/mctb-nav";
-import { getAppointmentsPageTitle } from "@/lib/products/appointments-nav";
 import { isAppointmentsProductPath } from "@/lib/products/appointments-routes";
 import { isAppointmentsV1Primary } from "@/lib/workspace/platform-launch";
 import { isSmsShellRoute } from "@/lib/products/sms-routes";
+import { getMctbPageTitle } from "@/lib/products/mctb-nav";
 import { useProductShell } from "@/components/products/product-shell-tabs";
 import { shouldShowProductSwitcher } from "@/lib/products/product-shell";
 import { isMctbProductChromePath } from "@/lib/products/mctb-shell";
@@ -215,32 +208,28 @@ export function AppShell({
     productShell,
     hasMctb,
   );
-  const smsPlatformTitle = isSmsShellRoute(pathname) ? getSmsPlatformPageTitle(pathname) : "";
-  const appointmentsTitle =
-    appointmentsContextActive && isAppointmentsProductPath(pathname)
-      ? getAppointmentsPageTitle(pathname)
-      : "";
-  const mctbTitle = mctbContextActive ? getMctbPageTitle(pathname) || getVoicePageTitle(pathname) : "";
   const hideAppointmentsHeaderTitle = pathname.startsWith("/appointments/calendar");
-  const title = hideChromeTitle || hideAppointmentsHeaderTitle
-    ? ""
-    : isLauncher
-      ? "Your Transovo Products"
-      : mctbTitle
-        ? mctbTitle
-        : appointmentsTitle
-          ? appointmentsTitle
-        : smsPlatformTitle
-          ? smsPlatformTitle
-          : currentProduct === "numbers"
-            ? getNumbersPageTitle(pathname)
-            : multiProduct && productShell === "ai_after_hours"
-              ? getAiAfterHoursPageTitle(pathname) ||
-                getVoicePageTitle(pathname) ||
-                getSmsPlatformPageTitle(pathname)
-              : currentProduct === "voice" || currentProduct === "sms"
-                ? getVoicePageTitle(pathname) || getSmsPlatformPageTitle(pathname)
-                : getPageTitle(pathname);
+  const title =
+    hideChromeTitle || hideAppointmentsHeaderTitle
+      ? ""
+      : isLauncher
+        ? "Your Transovo Products"
+        : mctbContextActive
+          ? getMctbPageTitle(pathname)
+          : (
+              require("@/lib/shell/resolve-app-shell-title-extended") as typeof import("@/lib/shell/resolve-app-shell-title-extended")
+            ).resolveNonMctbAppShellTitle({
+              pathname,
+              hideChromeTitle,
+              hideAppointmentsHeaderTitle,
+              isLauncher,
+              mctbContextActive,
+              appointmentsContextActive,
+              smsPlatformActive: isSmsShellRoute(pathname),
+              currentProduct,
+              multiProduct,
+              productShell,
+            });
 
   const autoCollapseSidebar = shouldAutoCollapseSidebar(pathname);
   const sidebarCollapsedEffective = autoCollapseSidebar || sidebarCollapsed;

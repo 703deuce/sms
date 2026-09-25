@@ -7,12 +7,11 @@ import {
   smartRoutingFlowIdFromPath,
   type SolutionNavInstance,
 } from "@/lib/solutions-nav";
-import { buildRealtorNav } from "@/lib/realtor/nav";
-import { buildNumbersNav } from "@/lib/products/numbers-nav";
-import { buildAiAfterHoursNav } from "@/lib/products/ai-after-hours-nav";
-import { buildMctbShellNav, buildMassSmsMobileNav, buildVoiceMobileNav } from "@/lib/products/voice-nav";
-import { buildSmsPlatformNav } from "@/lib/products/sms-platform-nav";
-import { resolveProductSidebarNav, isMctbShellActive, isAppointmentsShellActive } from "@/lib/products/resolve-product-nav";
+import {
+  buildMctbPrimarySidebarNav,
+  shouldUseMctbPrimarySidebar,
+} from "@/lib/products/resolve-mctb-primary-nav";
+import { isMctbShellActive, isAppointmentsShellActive } from "@/lib/products/resolve-product-nav";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import { isMctbProductChromePath } from "@/lib/products/mctb-shell";
 import { appointmentsShellHome, isAppointmentsNavItemActive } from "@/lib/products/appointments-routes";
@@ -363,15 +362,21 @@ export function Sidebar({
   const sidebarExpandedPx = softCoolSlateShell ? 204 : SIDEBAR_WIDTH_PX;
 
   const navItems: NavItem[] = useMemo(() => {
-    if (realtorMode) return buildRealtorNav(inboxBadge);
+    if (realtorMode) {
+      const { buildRealtorNav } =
+        require("@/lib/realtor/nav") as typeof import("@/lib/realtor/nav");
+      return buildRealtorNav(inboxBadge);
+    }
     if (isLauncher) return [];
     if (currentProduct === "numbers") {
+      const { buildNumbersNav } =
+        require("@/lib/products/numbers-nav") as typeof import("@/lib/products/numbers-nav");
       return buildNumbersNav({
         smartRoutingFlowId: smartRoutingFlowIdFromPath(pathname),
       });
     }
 
-    return resolveProductSidebarNav({
+    const navInput = {
       pathname,
       inboxBadge,
       multiProduct,
@@ -384,7 +389,13 @@ export function Sidebar({
       hasVoice,
       hasNumbers,
       smartRoutingFlowId: smartRoutingFlowIdFromPath(pathname),
-    });
+    };
+    if (shouldUseMctbPrimarySidebar(navInput)) {
+      return buildMctbPrimarySidebarNav(navInput);
+    }
+    const { resolveProductSidebarNavExtended } =
+      require("@/lib/products/resolve-product-nav-extended") as typeof import("@/lib/products/resolve-product-nav-extended");
+    return resolveProductSidebarNavExtended(navInput);
   }, [
     primaryVoiceAgentId,
     showTryIt,
