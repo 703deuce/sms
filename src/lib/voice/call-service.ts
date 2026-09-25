@@ -3,36 +3,9 @@ import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 import { dialOutboundCall } from "./telnyx/assistant-sync";
 import { getPublishedConfig } from "./agent-service";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
-/** Midnight (start of local day) for a campaign timezone. */
-export function startOfDayInTimezone(timezone: string, now = new Date()): Date {
-  try {
-    const fmt = new Intl.DateTimeFormat("en-US", {
-      timeZone: timezone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-    const parts = fmt.formatToParts(now);
-    const y = parts.find((p) => p.type === "year")?.value;
-    const m = parts.find((p) => p.type === "month")?.value;
-    const d = parts.find((p) => p.type === "day")?.value;
-    // Approximate: construct a UTC instant that is midnight in that zone via iterative offset.
-    const guess = new Date(`${y}-${m}-${d}T00:00:00.000Z`);
-    const local = new Intl.DateTimeFormat("en-US", {
-      timeZone: timezone,
-      hour: "numeric",
-      hour12: false,
-      minute: "numeric",
-    }).formatToParts(guess);
-    const hour = Number(local.find((p) => p.type === "hour")?.value || 0);
-    const minute = Number(local.find((p) => p.type === "minute")?.value || 0);
-    return new Date(guess.getTime() - (hour * 60 + minute) * 60_000);
-  } catch {
-    const start = new Date(now);
-    start.setHours(0, 0, 0, 0);
-    return start;
-  }
-}
+import { startOfDayInTimezone } from "./timezone-day-boundary";
+
+export { startOfDayInTimezone };
 
 function contactTimezone(
   contact: { variables?: unknown; contactId?: string | null },
