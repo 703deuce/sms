@@ -1,5 +1,6 @@
-import type { MctbAnalyticsRange } from "@/lib/mctb/analytics";
 import type { MissedCallsDateFilter } from "@/lib/mctb/missed-calls-list-filters";
+
+export type MctbAnalyticsRange = "7d" | "30d" | "90d";
 
 export function analyticsRangeLabel(range: MctbAnalyticsRange): string {
   if (range === "7d") return "7 days";

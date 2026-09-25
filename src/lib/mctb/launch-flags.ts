@@ -23,3 +23,6 @@ export const MCTB_LAUNCH_SIMPLIFY_RECOVERY_UI = true;
 
 /** Primary recovery UX is goal + template preview; composer is advanced-only. */
 export const MCTB_LAUNCH_GOAL_DRIVEN_RECOVERY_UI = true;
+
+/** Overview: operational KPIs + needs attention + recent activity (no duplicate analytics/setup panels). */
+export const MCTB_LAUNCH_COMPACT_OVERVIEW = true;

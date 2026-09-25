@@ -1,6 +1,6 @@
 /**
  * Voice receptionist routes surfaced inside the MCTB-first product chrome.
- * URLs stay on existing /voice/* and /mctb/voice-agent — no duplicate pages.
+ * URLs stay on existing /voice/* — legacy /mctb/voice-agent redirects to /voice/agents.
  */
 
 export const MCTB_BUNDLED_AI_RECEPTIONIST_PATH_PREFIXES = [
@@ -8,6 +8,7 @@ export const MCTB_BUNDLED_AI_RECEPTIONIST_PATH_PREFIXES = [
   "/voice/calls",
   "/voice/knowledge",
   "/voice/inbound-routing",
+  "/voice/agents",
   "/mctb/voice-agent",
 ] as const;
 

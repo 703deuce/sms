@@ -13,8 +13,16 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import type { MctbAttentionItem } from "@/components/mctb/kimi-ui/mctb-needs-attention";
+import { MCTB_LAUNCH_COMPACT_OVERVIEW } from "@/lib/mctb/launch-flags";
 import type { ReactNode } from "react";
 import "./mctb-home.css";
+
+import {
+  buildMctbRecentActivity,
+  type MctbRecentActivityItem,
+} from "@/lib/mctb/overview-recent-activity";
+
+export type { MctbRecentActivityItem } from "@/lib/mctb/overview-recent-activity";
 
 /** Shared module header — same geometry for every Home section. */
 export function MctbHomeSectionHead({
@@ -124,13 +132,26 @@ export function statusChip(status: MctbOverviewStatus, label: string) {
   );
 }
 
-export function MctbHomeLeadRecoveryCard({ data }: { data: MctbOverviewPayload }) {
+export function MctbHomeAiRecoverySummary({ data }: { data: MctbOverviewPayload }) {
   const lr = data.leadRecovery;
+  if (MCTB_LAUNCH_COMPACT_OVERVIEW) {
+    return (
+      <p className="mctb-home-muted-body text-[13px]" role="status">
+        AI Recovery:{" "}
+        <strong className="text-[#1b1e23]">{lr.enabled ? "On" : "Off"}</strong>
+        {lr.enabled && lr.status === "needs_attention" ? " · Needs attention" : null}
+        {" · "}
+        <Link href={MCTB_ROUTES.aiRecovery} className="mctb-home-link font-medium">
+          Manage
+        </Link>
+      </p>
+    );
+  }
   return (
     <section className="mctb-home-surface mctb-home-lr-card" aria-labelledby="mctb-home-lr">
       <div className="mctb-home-section-head">
-        <h2 id="mctb-home-lr" className="mctb-home-section-title">AI Lead Recovery</h2>
-        <Link href={MCTB_ROUTES.aiLeadRecovery} className="mctb-home-link">Manage</Link>
+        <h2 id="mctb-home-lr" className="mctb-home-section-title">AI Recovery</h2>
+        <Link href={MCTB_ROUTES.aiRecovery} className="mctb-home-link">Manage</Link>
       </div>
       <p className="mctb-home-lr-line">
         <strong>{lr.enabled ? "Enabled" : "Disabled"}</strong>
@@ -155,7 +176,7 @@ export function MctbHomeKpiStrip({ data }: { data: MctbOverviewPayload }) {
     {
       label: "Missed calls",
       value: data.kpis.missedCallsToday,
-      sub: "Today",
+      sub: data.kpis.windowLabel || "Today",
       href: MCTB_ROUTES.missedCalls,
       icon: PhoneMissed,
       iconTone: "neutral" as const,
@@ -164,23 +185,23 @@ export function MctbHomeKpiStrip({ data }: { data: MctbOverviewPayload }) {
     {
       label: "Recovery texts sent",
       value: data.kpis.recoveryTextsToday,
-      sub: "Today",
+      sub: data.kpis.windowLabel || "Today",
       href: MCTB_ROUTES.missedCalls,
       icon: Send,
       iconTone: "neutral" as const,
       attention: false,
     },
     {
-      label: "Replies",
+      label: "Customer replies",
       value: data.kpis.repliesToday,
-      sub: "Today",
+      sub: data.kpis.windowLabel || "Today",
       href: MCTB_ROUTES.conversations,
       icon: MessageSquare,
       iconTone: "brand" as const,
       attention: false,
     },
     {
-      label: "Need a reply",
+      label: "Needs reply",
       value: data.kpis.needsReplyCount,
       sub: "Inbox",
       href: `${MCTB_ROUTES.conversations}?filter=needs_reply`,
@@ -386,12 +407,76 @@ const SETUP_ROWS: Array<{
   {
     key: "call-handling",
     label: "Call recovery",
-    href: MCTB_ROUTES.voiceAgent,
+    href: MCTB_ROUTES.setupPhone,
     value: (d) => `${d.callHandling.modeLabel} · ${d.callHandling.forwardingLabel}`,
   },
 ];
 
+export function MctbHomeRecentActivity({ data }: { data: MctbOverviewPayload }) {
+  const items = buildMctbRecentActivity(data);
+  const isFirstUse =
+    data.setupComplete &&
+    items.length === 0 &&
+    data.kpis.missedCallsToday === 0 &&
+    data.kpis.recoveryTextsToday === 0;
+
+  return (
+    <section className="mctb-home-surface mctb-home-module" aria-labelledby="mctb-home-activity">
+      <MctbHomeSectionHead
+        id="mctb-home-activity"
+        title="Recent activity"
+        action={
+          <Link href={MCTB_ROUTES.analytics} className="mctb-home-link">
+            View analytics →
+          </Link>
+        }
+      />
+      {items.length === 0 ? (
+        <div className="px-4 py-5 text-center">
+          {isFirstUse ? (
+            <>
+              <p className="mctb-home-muted-title">No activity yet</p>
+              <p className="mctb-home-muted-body mt-1">
+                Activity will appear here after MCTB handles missed calls.
+              </p>
+              <p className="mt-3 flex flex-wrap justify-center gap-3 text-[13px]">
+                <Link href={MCTB_ROUTES.setup} className="mctb-home-link font-medium">Setup</Link>
+                <Link href={MCTB_ROUTES.setupTest} className="mctb-home-link font-medium">Test</Link>
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="mctb-home-muted-title">You&apos;re all caught up.</p>
+              <p className="mctb-home-muted-body mt-1">No recent missed-call activity to show.</p>
+            </>
+          )}
+        </div>
+      ) : (
+        <ul className="mctb-home-module-body divide-y divide-[#f0f2f4]">
+          {items.map((item) => (
+            <li key={item.id}>
+              <Link
+                href={item.href}
+                className="mctb-home-interactive-row flex items-start justify-between gap-3 px-4 py-2.5"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="mctb-home-muted-title truncate leading-[18px]">{item.title}</p>
+                  <p className="mctb-home-muted-body truncate leading-[17px]">{item.subtitle}</p>
+                </div>
+                <span className="mctb-home-muted-body shrink-0 text-[11px]">{fmtConvTime(item.at)}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 export function MctbHomeSetupStatus({ data }: { data: MctbOverviewPayload }) {
+  if (MCTB_LAUNCH_COMPACT_OVERVIEW && data.setupComplete && data.status === "active") {
+    return null;
+  }
   return (
     <section
       className="mctb-home-surface mctb-home-module mctb-home-setup-module"
@@ -408,18 +493,13 @@ export function MctbHomeSetupStatus({ data }: { data: MctbOverviewPayload }) {
           </Link>
         ))}
       </div>
-      <div className="mctb-home-footer-line">
-        <span>
-          Last 7 days:{" "}
-          <span className="mctb-home-footer-metric">{data.performanceSnapshot.missedCalls}</span> missed ·{" "}
-          <span className="mctb-home-footer-metric">{data.performanceSnapshot.recoveryTexts}</span> recovery text
-          {data.performanceSnapshot.recoveryTexts === 1 ? "" : "s"} ·{" "}
-          <span className="mctb-home-footer-metric">{data.performanceSnapshot.replies}</span> replies
-        </span>
-        <Link href={MCTB_ROUTES.analytics} className="mctb-home-link">
-          View analytics →
-        </Link>
-      </div>
+      {!MCTB_LAUNCH_COMPACT_OVERVIEW ? (
+        <div className="mctb-home-footer-line">
+          <Link href={MCTB_ROUTES.analytics} className="mctb-home-link">
+            View analytics →
+          </Link>
+        </div>
+      ) : null}
     </section>
   );
 }

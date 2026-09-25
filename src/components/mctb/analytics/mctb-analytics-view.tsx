@@ -96,7 +96,8 @@ export function MctbAnalyticsView({ initialData = null }: { initialData?: MctbAn
             <div>
               <h1 className="mctb-analytics-title">Analytics</h1>
               <p className="mctb-analytics-desc">
-                Recovery performance, delivery health, replies, and suppression reasons.
+                How well missed-call recovery is performing over time.
+                {mctb?.timeZone ? ` Dates use ${mctb.timeZone}.` : null}
               </p>
             </div>
             <div className="mctb-analytics-range" role="group" aria-label="Date range">
@@ -144,7 +145,7 @@ export function MctbAnalyticsView({ initialData = null }: { initialData?: MctbAn
                 <div className="mctb-analytics-metric-sub">{rangeLabel}</div>
               </Link>
               <Link href={missedCallsHref} className="mctb-analytics-metric mctb-analytics-span-3">
-                <div className="mctb-analytics-metric-label">Recovery texts</div>
+                <div className="mctb-analytics-metric-label">Recovery texts sent</div>
                 <div className="mctb-analytics-metric-value">
                   {formatNumber(mctb?.textsSent ?? 0)}
                 </div>
@@ -160,7 +161,7 @@ export function MctbAnalyticsView({ initialData = null }: { initialData?: MctbAn
               <div className="mctb-analytics-metric mctb-analytics-span-3">
                 <div className="mctb-analytics-metric-label">Reply rate</div>
                 <div className="mctb-analytics-metric-value">{mctb?.replyRate ?? 0}%</div>
-                <div className="mctb-analytics-metric-sub">Sent → replied</div>
+                <div className="mctb-analytics-metric-sub">Replied ÷ texts sent</div>
               </div>
 
               <section
@@ -169,7 +170,8 @@ export function MctbAnalyticsView({ initialData = null }: { initialData?: MctbAn
               >
                 <h2>Recovery funnel</h2>
                 <p className="mctb-analytics-funnel-note">
-                  Suppressed and ineligible events are excluded from recovery sends.
+                  Eligible counts use runtime eligibility on each missed call. Suppressed outcomes
+                  are policy results, not send failures.
                 </p>
                 <div className="mctb-analytics-funnel-steps">
                   <div className="mctb-analytics-funnel-step">
@@ -177,16 +179,19 @@ export function MctbAnalyticsView({ initialData = null }: { initialData?: MctbAn
                     <strong>{formatNumber(mctb?.totalMissed ?? 0)}</strong>
                   </div>
                   <div className="mctb-analytics-funnel-step">
-                    Recovery texts
+                    Eligible
+                    <strong>{formatNumber(mctb?.eligible ?? 0)}</strong>
+                    <span className="mctb-analytics-funnel-rate">{mctb?.eligibilityRate ?? 0}% of missed</span>
+                  </div>
+                  <div className="mctb-analytics-funnel-step">
+                    Recovery texts sent
                     <strong>{formatNumber(mctb?.textsSent ?? 0)}</strong>
+                    <span className="mctb-analytics-funnel-rate">{mctb?.sendRate ?? 0}% of eligible</span>
                   </div>
                   <div className="mctb-analytics-funnel-step">
-                    Customers replied
+                    Customer replies
                     <strong>{formatNumber(mctb?.replies ?? 0)}</strong>
-                  </div>
-                  <div className="mctb-analytics-funnel-step">
-                    Reply rate
-                    <strong>{mctb?.replyRate ?? 0}%</strong>
+                    <span className="mctb-analytics-funnel-rate">{mctb?.replyRate ?? 0}% of texts sent</span>
                   </div>
                 </div>
               </section>
@@ -231,30 +236,64 @@ export function MctbAnalyticsView({ initialData = null }: { initialData?: MctbAn
                 </div>
               ) : null}
               <div className="mctb-analytics-panel mctb-analytics-delivery mctb-analytics-span-5">
-                <h2>Delivery &amp; engagement</h2>
+                <h2>Outcomes &amp; delivery</h2>
                 <dl>
-                  <div>
-                    <dt>Delivery rate</dt>
-                    <dd>{mctb?.deliveryRate ?? 0}%</dd>
-                  </div>
-                  <div>
-                    <dt>Link clicks</dt>
-                    <dd>{formatNumber(mctb?.linkClicks ?? 0)}</dd>
-                  </div>
                   <div>
                     <dt>Delivery failures</dt>
                     <dd>{formatNumber(mctb?.deliveryFailures ?? 0)}</dd>
                   </div>
                   <div>
-                    <dt>Opt-outs</dt>
+                    <dt>Booking links sent</dt>
+                    <dd>{formatNumber(mctb?.bookingLinksSent ?? 0)}</dd>
+                  </div>
+                  <div>
+                    <dt>Callback requests</dt>
+                    <dd>{formatNumber(mctb?.callbackRequested ?? 0)}</dd>
+                  </div>
+                  <div>
+                    <dt>AI-assisted conversations</dt>
+                    <dd>{formatNumber(mctb?.aiAssistedConversations ?? 0)}</dd>
+                  </div>
+                  <div>
+                    <dt>Tracking link clicks</dt>
+                    <dd>{formatNumber(mctb?.linkClicks ?? 0)}</dd>
+                  </div>
+                  <div>
+                    <dt>Opt-outs (suppressed)</dt>
                     <dd>{formatNumber(mctb?.optOuts ?? 0)}</dd>
                   </div>
                 </dl>
               </div>
 
+              <section className="mctb-analytics-panel mctb-analytics-span-12">
+                <h2>Definitions</h2>
+                <dl className="mctb-analytics-definitions">
+                  <div>
+                    <dt>Eligible</dt>
+                    <dd>Missed calls that met requirements for recovery messaging at runtime.</dd>
+                  </div>
+                  <div>
+                    <dt>Recovery texts sent</dt>
+                    <dd>Outbound recovery SMS recorded on the missed-call event.</dd>
+                  </div>
+                  <div>
+                    <dt>Customer replies</dt>
+                    <dd>Missed calls where the caller replied at least once in the recovery thread.</dd>
+                  </div>
+                  <div>
+                    <dt>Reply rate</dt>
+                    <dd>Customer replies divided by recovery texts sent in this range.</dd>
+                  </div>
+                </dl>
+              </section>
+
               <section className="mctb-analytics-panel mctb-analytics-suppression mctb-analytics-span-8">
                 <h2>Why some callers weren&apos;t texted</h2>
-                {suppressionRows.length === 0 ? (
+                {mctb && mctb.totalMissed === 0 ? (
+                  <p className="text-[13px] text-[#626872]">
+                    No MCTB activity occurred during this period.
+                  </p>
+                ) : suppressionRows.length === 0 ? (
                   <p className="text-[13px] text-[#626872]">No suppressions in this period.</p>
                 ) : (
                   <table>

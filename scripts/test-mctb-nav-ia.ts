@@ -25,7 +25,23 @@ assert.equal(voiceNav.find((i) => i.label === "Overview" && i.sectionLabel === "
 assert.equal(voiceNav.find((i) => i.label === "Overview" && i.sectionLabel === "Missed Call Text Back")?.href, "/mctb");
 assert.equal(voiceNav.find((i) => i.label === "Call Rules")?.href, "/voice/inbound-routing");
 assert.ok(voiceHrefs.includes("/voice/calls"));
-assert.ok(voiceHrefs.includes("/mctb/voice-agent"));
+assert.ok(voiceHrefs.includes("/voice/agents"));
+assert.ok(!voiceHrefs.includes("/mctb/voice-agent"));
+assert.equal(voiceNav.find((i) => i.label === "AI Recovery")?.href, MCTB_ROUTES.aiRecovery);
+const mctbStartIdx = voiceNav.findIndex((i) => i.sectionLabel === "Missed Call Text Back");
+const sharedIdx = voiceNav.findIndex((i) => i.sectionLabel === "Shared");
+const mctbPrimaryLabels = voiceNav
+  .slice(mctbStartIdx, sharedIdx >= 0 ? sharedIdx : undefined)
+  .map((i) => i.label);
+assert.deepEqual(mctbPrimaryLabels, [
+  "Overview",
+  "Missed Calls",
+  "Inbox",
+  "AI Recovery",
+  "Voicemail",
+  "Analytics",
+  "Setup",
+]);
 assert.ok(voiceHrefs.includes("/voice/numbers"));
 
 const mctbOnly = buildMctbV1Nav({ hasVoice: false });
