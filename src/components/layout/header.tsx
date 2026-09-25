@@ -238,7 +238,9 @@ export function Header({
         </button>
 
         {title ? (
-          <h1 className="shrink-0 text-[18px] font-bold tracking-tight text-foreground">
+          <h1
+            className="min-w-0 flex-1 truncate text-base font-bold tracking-tight text-foreground sm:text-[18px] lg:flex-none lg:max-w-[min(42vw,28rem)]"
+          >
             {title}
           </h1>
         ) : (

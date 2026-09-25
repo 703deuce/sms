@@ -31,6 +31,7 @@ import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlemen
 import type { DashboardMetrics, PhoneNumber, Workspace } from "@/lib/types";
 import type { WorkspaceTypeCookie } from "@/lib/auth";
 import { isKimiIntegratedRoute } from "@/lib/products/kimi-ui-routes";
+import { cn } from "@/lib/utils";
 import { usePathname } from "next/navigation";
 import { Suspense, useEffect, useState, type CSSProperties } from "react";
 
@@ -305,14 +306,14 @@ export function AppShell({
         />
       </Suspense>
       <div
-        className={`flex h-full min-w-0 flex-1 flex-col overflow-hidden ${
-          sidebarCollapsedEffective ? "lg:pl-[56px]" : "lg:pl-[224px]"
-        }`}
-        style={
-          !sidebarCollapsedEffective && softCoolSlateShell
-            ? ({ paddingLeft: sidebarExpandedPx } as CSSProperties)
-            : undefined
-        }
+        className={cn(
+          "flex h-full min-w-0 flex-1 flex-col overflow-hidden",
+          sidebarCollapsedEffective
+            ? "lg:pl-14"
+            : softCoolSlateShell
+              ? "lg:pl-[204px]"
+              : "lg:pl-56",
+        )}
       >
         {realtorMode ? (
           <RealtorHeader

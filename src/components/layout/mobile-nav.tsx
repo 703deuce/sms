@@ -139,7 +139,7 @@ export function MobileNav({
                 key={`${item.label}-${item.href}`}
                 href={item.href}
                 className={cn(
-                  "flex flex-col items-center gap-0.5 rounded-lg px-1 py-2 text-[11px] font-medium",
+                  "flex min-h-[44px] flex-col items-center justify-center gap-0.5 rounded-lg px-0.5 py-1.5 text-[10px] font-medium leading-tight sm:px-1 sm:text-[11px]",
                   active
                     ? mctbNeutral
                       ? "mctb-mobile-tab-active text-[#1b1e23]"
@@ -155,7 +155,7 @@ export function MobileNav({
           <button
             type="button"
             onClick={onMore}
-            className="flex flex-col items-center gap-0.5 rounded-lg px-1 py-2 text-[11px] font-medium text-muted-foreground"
+            className="flex min-h-[44px] flex-col items-center justify-center gap-0.5 rounded-lg px-0.5 py-1.5 text-[10px] font-medium leading-tight text-muted-foreground sm:px-1 sm:text-[11px]"
           >
             <MoreHorizontal className="h-5 w-5" />
             More

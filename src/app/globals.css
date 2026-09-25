@@ -14,6 +14,7 @@
 @import "../styles/kimi/grow-qr-codes.css";
 @import "../styles/kimi/grow-tap-to-join.css";
 @import "../styles/kimi/messaging-media.css";
+@import "../styles/transovo-app-shell-mobile.css";
 
 :root {
   --background: #f5f6fa;
