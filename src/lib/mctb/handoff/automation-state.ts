@@ -1,4 +1,5 @@
 import { getPrisma } from "@/lib/db";
+import { mergeLastHumanTakeoverMetadata } from "@/lib/mctb/messaging/automation-handoff-watermark";
 import type { MctbAutomationState, MctbFollowUpStatus, MctbResponseMode } from "./types";
 
 export async function getOrCreateAutomationState(input: {
@@ -37,13 +38,26 @@ export async function updateAutomationState(
   },
 ) {
   const prisma = getPrisma();
+  const existing = await prisma.mctbConversationAutomationState.findUnique({
+    where: { conversationId },
+    select: { metadataJson: true },
+  });
   const data: Record<string, unknown> = {};
   if (patch.state) data.state = patch.state;
   if (patch.capturedFieldsJson) data.capturedFieldsJson = patch.capturedFieldsJson;
   if (patch.activeFieldId !== undefined) data.activeFieldId = patch.activeFieldId;
   if (patch.humanTakenOverByUserId !== undefined) {
     data.humanTakenOverByUserId = patch.humanTakenOverByUserId;
-    data.humanTakenOverAt = patch.humanTakenOverByUserId ? new Date() : null;
+    if (patch.humanTakenOverByUserId) {
+      const takeoverAt = new Date();
+      data.humanTakenOverAt = takeoverAt;
+      data.metadataJson = mergeLastHumanTakeoverMetadata(
+        existing?.metadataJson,
+        takeoverAt.getTime(),
+      );
+    } else {
+      data.humanTakenOverAt = null;
+    }
   }
   if (patch.followUpStatus !== undefined) {
     data.followUpStatus = patch.followUpStatus;

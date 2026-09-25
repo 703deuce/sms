@@ -16,6 +16,9 @@ type Props = {
   teammates?: Teammate[];
   phoneNumbers?: Array<{ id: string; number: string; label?: string }>;
   defaultFromNumberId?: string;
+  /** When false, only internal notes (no customer SMS composer). */
+  smsEnabled?: boolean;
+  showSavedReplies?: boolean;
 };
 
 /** Production composer for conversations — wires saved replies + MMS attach. */
@@ -28,8 +31,10 @@ export function ConversationsComposer({
   teammates = [],
   phoneNumbers = [],
   defaultFromNumberId = "",
+  smsEnabled = true,
+  showSavedReplies = true,
 }: Props) {
-  const [tab, setTab] = useState<"message" | "note">("message");
+  const [tab, setTab] = useState<"message" | "note">(smsEnabled ? "message" : "note");
   const [text, setText] = useState("");
   const [fromNumberId, setFromNumberId] = useState(defaultFromNumberId);
   const [mentionOpen, setMentionOpen] = useState(false);
@@ -45,6 +50,10 @@ export function ConversationsComposer({
     if (defaultFromNumberId) setFromNumberId(defaultFromNumberId);
   }, [defaultFromNumberId]);
 
+  useEffect(() => {
+    if (!smsEnabled) setTab("note");
+  }, [smsEnabled]);
+
   const mentionCandidates = teammates.filter((t) => t.id !== "me");
   const noteMentionMatch = note ? text.match(/@([\w\s]*)$/) : null;
 
@@ -56,7 +65,7 @@ export function ConversationsComposer({
 
   useEffect(() => {
     if (!prefill) return;
-    setTab("message");
+    if (smsEnabled) setTab("message");
     setText(prefill);
     onPrefillApplied?.();
   }, [prefill, onPrefillApplied]);
@@ -99,7 +108,7 @@ export function ConversationsComposer({
     <>
       <div style={{ borderTop: "1px solid var(--tv-border)", background: "#fff" }}>
         <div style={{ display: "flex", gap: 22, padding: "0 16px", borderBottom: "1px solid var(--tv-border)" }}>
-          {(["message", "note"] as const).map((t) => (
+          {(smsEnabled ? (["message", "note"] as const) : (["note"] as const)).map((t) => (
             <button
               key={t}
               type="button"
@@ -259,15 +268,17 @@ export function ConversationsComposer({
                   anchorRef={emojiBtnRef}
                 />
               </div>
-              <button
-                type="button"
-                className="tv-composer-tool"
-                title="Saved replies"
-                disabled={disabled || note}
-                onClick={() => setTemplatesOpen(true)}
-              >
-                <Braces size={16} />
-              </button>
+              {showSavedReplies && smsEnabled ? (
+                <button
+                  type="button"
+                  className="tv-composer-tool"
+                  title="Saved replies"
+                  disabled={disabled || note}
+                  onClick={() => setTemplatesOpen(true)}
+                >
+                  <Braces size={16} />
+                </button>
+              ) : null}
               {phoneNumbers.length > 1 && !note ? (
                 <select
                   className="tv-input"

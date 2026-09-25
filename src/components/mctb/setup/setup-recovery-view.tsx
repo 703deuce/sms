@@ -751,7 +751,7 @@ export function MctbSetupRecoveryView() {
                 <p className="mctb-recovery-module__desc text-[13px] text-[#555] mb-3">
                   Configure how Transovo handles replies, booking, emergencies, payments, and handoff.
                 </p>
-                <Link href={MCTB_ROUTES.aiLeadRecovery} className="mctb-recovery-link font-medium">
+                <Link href={MCTB_ROUTES.aiRecovery} className="mctb-recovery-link font-medium">
                   Configure AI Lead Recovery →
                 </Link>
               </section>

@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * MCTB sidebar IA — dual product groups + shared routes.
+ * MCTB sidebar IA — Pass 1 seven-destination nav (Voice via product switcher only).
  * Run: npx tsx scripts/test-mctb-nav-ia.ts
  */
 import assert from "node:assert/strict";
@@ -12,21 +12,20 @@ import { isMctbV1Primary } from "../src/lib/workspace/platform-launch";
 import { isMctbUniversalChromeActive } from "../src/lib/mctb/universal-shell";
 import { isMctbBundledAiReceptionistPath } from "../src/lib/products/mctb-bundled-receptionist-paths";
 
-const voiceNav = buildMctbV1Nav({ hasVoice: true, hasNumbers: true });
-const voiceLabels = voiceNav.map((i) => i.label);
-const voiceHrefs = collectNavHrefs(voiceNav);
+const mctbNav = buildMctbV1Nav({ hasVoice: true, hasNumbers: true });
+const mctbLabels = mctbNav.map((i) => i.label);
+const mctbHrefs = collectNavHrefs(mctbNav);
 
-assert.ok(voiceLabels.includes("Calls"));
-assert.ok(voiceLabels.includes("AI Agent"));
-assert.ok(voiceLabels.includes("Inbox"));
-assert.ok(!voiceLabels.includes("Conversations"));
-assert.ok(!voiceLabels.includes("Voice Agent"));
-assert.equal(voiceNav.find((i) => i.label === "Overview" && i.sectionLabel === "AI Receptionist")?.href, "/voice/overview");
-assert.equal(voiceNav.find((i) => i.label === "Overview" && i.sectionLabel === "Missed Call Text Back")?.href, "/mctb");
-assert.equal(voiceNav.find((i) => i.label === "Call Rules")?.href, "/voice/inbound-routing");
-assert.ok(voiceHrefs.includes("/voice/calls"));
-assert.ok(voiceHrefs.includes("/mctb/voice-agent"));
-assert.ok(voiceHrefs.includes("/voice/numbers"));
+assert.ok(!mctbLabels.includes("Calls"));
+assert.ok(!mctbLabels.includes("AI Agent"));
+assert.ok(!mctbLabels.includes("Conversations"));
+assert.ok(mctbLabels.includes("Inbox"));
+assert.ok(mctbLabels.includes("AI Recovery"));
+assert.equal(mctbNav.find((i) => i.label === "Overview")?.href, MCTB_ROUTES.home);
+assert.equal(mctbNav.find((i) => i.label === "AI Recovery")?.href, MCTB_ROUTES.aiRecovery);
+assert.ok(!mctbHrefs.includes("/voice/calls"));
+assert.ok(!mctbHrefs.includes("/mctb/voice-agent"));
+assert.ok(mctbHrefs.includes("/voice/numbers"));
 
 const mctbOnly = buildMctbV1Nav({ hasVoice: false });
 const mctbOnlyLabels = mctbOnly.map((i) => i.label);
@@ -35,10 +34,9 @@ assert.ok(!mctbOnlyLabels.includes("AI Agent"));
 assert.equal(mctbOnly.find((i) => i.label === "Inbox")?.href, MCTB_ROUTES.conversations);
 
 const mobile = buildMctbV1MobileNav({ hasVoice: true });
-assert.deepEqual(mobile.map((i) => i.label), ["Home", "Missed", "Inbox", "Calls", "Setup"]);
+assert.deepEqual(mobile.map((i) => i.label), ["Home", "Missed", "Inbox", "Setup"]);
 
 assert.ok(isMctbBundledAiReceptionistPath("/voice/calls"));
-assert.ok(isMctbBundledAiReceptionistPath("/mctb/voice-agent"));
 assert.equal(isMctbUniversalChromeActive("/voice/calls", "ai_after_hours", { hasMctb: true }), true);
 
 const mctbOnPayments = resolveProductSidebarNav({
@@ -60,6 +58,6 @@ if (!isMctbV1Primary()) {
   assert.ok(apptOnPayments.some((i) => i.label === "Home" || i.label === "Booking"));
 }
 
-assert.equal(MCTB_ROUTES.home, "/mctb");
+assert.equal(MCTB_ROUTES.aiRecovery, "/mctb/ai-recovery");
 
 console.log("test-mctb-nav-ia: OK");

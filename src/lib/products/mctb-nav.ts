@@ -1,15 +1,12 @@
 import {
   BarChart3,
-  BookOpen,
   CreditCard,
   Home,
   LayoutDashboard,
   MessageSquare,
-  PhoneCall,
   PhoneMissed,
   Plug,
   SlidersHorizontal,
-  AudioLines,
   Settings,
   Sparkles,
   Users,
@@ -20,43 +17,18 @@ import { MCTB_ROUTES } from "@/lib/mctb/routes";
 
 export type MctbNavOptions = {
   inboxBadge?: number;
-  /** Workspace voice / AI receptionist entitlement — shows AI Receptionist nav group + Calls. */
+  /** @deprecated Voice IA is reached via product switcher — not MCTB local nav. */
   hasVoice?: boolean;
   hasNumbers?: boolean;
 };
 
 const MCTB_SECTION = "Missed Call Text Back";
-const AI_RECEPTIONIST_SECTION = "AI Receptionist";
 const SHARED_SECTION = "Shared";
 
-/** Canonical MCTB product-local navigation — AI Receptionist + MCTB groups + shared links. */
+/** Canonical MCTB product-local navigation (seven destinations + shared links). */
 export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
   const badge = options.inboxBadge ?? 0;
   const items: NavItem[] = [];
-
-  if (options.hasVoice) {
-    items.push(
-      {
-        label: "Overview",
-        href: "/voice/overview",
-        icon: LayoutDashboard,
-        sectionLabel: AI_RECEPTIONIST_SECTION,
-        matchExact: true,
-      },
-      { label: "Calls", href: "/voice/calls", icon: PhoneCall },
-      {
-        label: "AI Agent",
-        href: MCTB_ROUTES.voiceAgent,
-        icon: AudioLines,
-      },
-      { label: "Knowledge", href: "/voice/knowledge", icon: BookOpen },
-      {
-        label: "Call Rules",
-        href: "/voice/inbound-routing",
-        icon: SlidersHorizontal,
-      },
-    );
-  }
 
   items.push(
     {
@@ -78,14 +50,14 @@ export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
       badge: badge > 0 ? badge : undefined,
     },
     {
+      label: "AI Recovery",
+      href: MCTB_ROUTES.aiRecovery,
+      icon: Sparkles,
+    },
+    {
       label: "Voicemail",
       href: MCTB_ROUTES.voicemail,
       icon: Voicemail,
-    },
-    {
-      label: "AI Lead Recovery",
-      href: MCTB_ROUTES.aiLeadRecovery,
-      icon: Sparkles,
     },
     {
       label: "Analytics",
@@ -143,10 +115,6 @@ export function buildMctbV1MobileNav(options: MctbNavOptions = {}): NavItem[] {
     },
   ];
 
-  if (options.hasVoice) {
-    items.push({ label: "Calls", href: "/voice/calls", icon: PhoneCall });
-  }
-
   items.push({ label: "Setup", href: MCTB_ROUTES.setup, icon: SlidersHorizontal });
 
   return items;
@@ -171,7 +139,10 @@ export function getMctbPageTitle(pathname: string): string {
   if (pathname.startsWith(MCTB_ROUTES.analytics) || pathname.startsWith("/analytics/mctb")) {
     return "Analytics";
   }
-  if (pathname.startsWith(MCTB_ROUTES.voiceAgent)) return "AI Agent";
+  if (pathname.startsWith(MCTB_ROUTES.aiRecovery) || pathname.startsWith(MCTB_ROUTES.aiLeadRecovery)) {
+    return "AI Recovery";
+  }
+  if (pathname.startsWith(MCTB_ROUTES.voiceAgent)) return "AI Recovery";
   if (pathname.startsWith(MCTB_ROUTES.setup)) return "Setup";
   if (pathname.startsWith(MCTB_ROUTES.numbers)) return "Numbers";
   if (pathname.startsWith(MCTB_ROUTES.complianceConsent)) return "Consent Log";
