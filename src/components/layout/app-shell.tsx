@@ -25,6 +25,7 @@ import "@/components/mctb/shell/mctb-sidebar.css";
 import "@/components/mctb/shell/mctb-design-tokens.css";
 import "@/components/mctb/shell/mctb-global-overrides.css";
 import "@/styles/transovo-visual-foundation.css";
+import "@/styles/transovo-pass3-surface-first.css";
 import { isAppointmentsShellActive, isMctbShellActive } from "@/lib/products/resolve-product-nav";
 import type { SolutionNavInstance } from "@/lib/solutions-nav";
 import type { CurrentProduct } from "@/lib/products/types";

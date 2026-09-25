@@ -3,6 +3,7 @@
 import "@/components/mctb/analytics/mctb-analytics.css";
 import { MctbAnalyticsChart } from "@/components/mctb/analytics/mctb-analytics-chart";
 import { Card, StatCard } from "@/components/ui/card";
+import { TransovoProductPage } from "@/components/transovo/product-page";
 import { PageHeader } from "@/components/ui/page-header";
 import { VoiceSubNav } from "@/components/voice/voice-subnav";
 import { ANALYTICS_OUTCOME_DISPLAY_ORDER } from "@/lib/voice/analytics/voice-analytics-aggregate";
@@ -45,9 +46,12 @@ function formatLatencySeconds(ms: number | null): string {
 
 function KpiSkeleton() {
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+    <div className="transovo-kpi-strip--inline transovo-kpi-strip" aria-busy="true">
       {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="surface h-[88px] animate-pulse rounded-xl bg-muted/40" />
+        <div key={i} className="transovo-kpi-inline-item">
+          <div className="transovo-kpi-skeleton-value" />
+          <p className="transovo-kpi-inline-label">Loading</p>
+        </div>
       ))}
     </div>
   );
@@ -113,11 +117,12 @@ export function VoiceAnalyticsDashboard() {
   const callsDateRange = days === 7 ? "7d" : "30d";
 
   return (
-    <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-8">
+    <TransovoProductPage>
       <VoiceSubNav />
       <PageHeader
         title="Analytics"
         description="Understand call volume, outcomes, and receptionist performance."
+        className="!mb-0"
         actions={
           <div
             className="inline-flex rounded-lg border border-border p-0.5"
@@ -170,7 +175,7 @@ export function VoiceAnalyticsDashboard() {
           >
             <StatCard
               label="Calls"
-              value={formatNumber(r.totalCalls)}
+              value={formatNumber(r.totalCalls ?? 0)}
               hint="Non-test inbound calls"
               href={`/voice/calls?dateRange=${callsDateRange}`}
             />
@@ -389,6 +394,6 @@ export function VoiceAnalyticsDashboard() {
           </section>
         </>
       )}
-    </div>
+    </TransovoProductPage>
   );
 }

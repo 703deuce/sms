@@ -1,0 +1,357 @@
+/**
+ * TRANSOVO PASS 3 — Surface-first, content-first composition (Voice + MCTB).
+ * OPEN SURFACE BY DEFAULT. Contained cards are the exception (.transovo-surface--contained).
+ * Numeric tokens align with Pass 3 spec (§4–§24).
+ */
+.transovo-product-surface-first {
+  --tv3-canvas: #fafafa;
+  --tv3-surface: #ffffff;
+  --tv3-border: #e8eaed;
+  --tv3-border-hairline: #eceef1;
+  --tv3-text: #111827;
+  --tv3-text-muted: #6b7280;
+  --tv3-text-meta: #9ca3af;
+
+  --tv3-page-pad-x: 1.5rem;
+  --tv3-page-pad-top: 1.5rem;
+  --tv3-page-pad-bottom: 1.5rem;
+  --tv3-section-gap: 1.5rem;
+  --tv3-subsection-gap: 1.125rem;
+  --tv3-tight-gap: 0.625rem;
+  --tv3-label-gap: 0.4375rem;
+
+  --tv3-radius-sm: 6px;
+  --tv3-radius-md: 8px;
+  --tv3-radius-lg: 10px;
+
+  --tv3-control-h: 2.375rem;
+  --tv3-table-head-h: 2.375rem;
+  --tv3-table-row-min-h: 3rem;
+  --tv3-cell-pad-x: 0.875rem;
+  --tv3-cell-pad-y: 0.625rem;
+
+  --tv3-title-page: 1.625rem;
+  --tv3-title-section: 1.0625rem;
+  --tv3-body: 0.875rem;
+  --tv3-meta: 0.8125rem;
+
+  color: var(--tv3-text);
+}
+
+@media (min-width: 1024px) {
+  .transovo-product-surface-first {
+    --tv3-page-pad-x: 1.75rem;
+    --tv3-page-pad-top: 1.75rem;
+    --tv3-section-gap: 1.75rem;
+  }
+}
+
+@media (max-width: 639px) {
+  .transovo-product-surface-first {
+    --tv3-page-pad-x: 1rem;
+    --tv3-page-pad-top: 1.25rem;
+  }
+}
+
+/* Canvas: continuous near-white working surface */
+.transovo-product-surface-first.transovo-product-canvas,
+.voice-theme.transovo-product-surface-first,
+.mctb-page-canvas.transovo-product-surface-first {
+  background: var(--tv3-canvas);
+}
+
+/* Page geometry */
+.transovo-product-surface-first .transovo-page-container,
+.transovo-product-surface-first .mctb-page-container {
+  padding: var(--tv3-page-pad-top) var(--tv3-page-pad-x) var(--tv3-page-pad-bottom);
+  gap: var(--tv3-section-gap);
+}
+
+.transovo-product-surface-first .transovo-page-stack {
+  gap: var(--tv3-section-gap);
+}
+
+/* Page header (§6) */
+.transovo-product-surface-first .transovo-page-header {
+  margin-bottom: 0;
+  gap: var(--tv3-tight-gap);
+}
+
+.transovo-product-surface-first .transovo-page-header h1 {
+  font-size: var(--tv3-title-page);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+  color: var(--tv3-text);
+}
+
+.transovo-product-surface-first .transovo-page-header p {
+  margin-top: var(--tv3-label-gap);
+  max-width: 40rem;
+  font-size: var(--tv3-meta);
+  line-height: 1.45;
+  color: var(--tv3-text-muted);
+}
+
+/* Section primitives (no card) */
+.transovo-product-surface-first .transovo-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tv3-subsection-gap);
+}
+
+.transovo-product-surface-first .transovo-section-title {
+  margin: 0;
+  font-size: var(--tv3-title-section);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--tv3-text);
+}
+
+.transovo-product-surface-first .transovo-section-desc {
+  margin: 0;
+  font-size: var(--tv3-body);
+  line-height: 1.45;
+  color: var(--tv3-text-muted);
+}
+
+.transovo-product-surface-first .transovo-hairline {
+  border: none;
+  border-top: 1px solid var(--tv3-border-hairline);
+  margin: 0;
+}
+
+.transovo-product-surface-first .transovo-hairline--bottom {
+  border-top: none;
+  border-bottom: 1px solid var(--tv3-border-hairline);
+}
+
+/* OPEN SURFACE BY DEFAULT: demote decorative cards (§3, §30) */
+.transovo-product-surface-first .transovo-surface-flat:not(.transovo-surface--contained),
+.transovo-product-surface-first .voice-card:not(.transovo-surface--contained) {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.transovo-product-surface-first .transovo-surface--contained {
+  border: 1px solid var(--tv3-border);
+  border-radius: var(--tv3-radius-md);
+  background: var(--tv3-surface);
+  box-shadow: none;
+}
+
+/* KPI: inline/open (§8) */
+.transovo-product-surface-first .transovo-kpi-strip--inline {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  border-bottom: 1px solid var(--tv3-border-hairline);
+  padding-bottom: var(--tv3-tight-gap);
+}
+
+.transovo-product-surface-first .transovo-kpi-inline-item {
+  padding: 0 1rem 0 0;
+  border-right: 1px solid var(--tv3-border-hairline);
+}
+
+.transovo-product-surface-first .transovo-kpi-inline-item:last-of-type {
+  border-right: none;
+  padding-right: 0;
+}
+
+.transovo-product-surface-first .transovo-kpi-inline-value {
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.transovo-product-surface-first .transovo-kpi-inline-label {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tv3-text-meta);
+}
+
+.transovo-product-surface-first .transovo-kpi-card__trend {
+  margin-top: 0.125rem;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  font-size: 0.625rem;
+  font-weight: 500;
+  color: var(--tv3-text-meta);
+}
+
+/* Legacy KPI tiles → open row on product surfaces */
+.transovo-product-surface-first .transovo-kpi-card:not(.transovo-surface--contained) {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  padding: 0.25rem 1rem 0.25rem 0;
+}
+
+/* Controls (§11) */
+.transovo-product-surface-first .transovo-input {
+  height: var(--tv3-control-h);
+  font-size: var(--tv3-body);
+  border-radius: var(--tv3-radius-sm);
+  border-color: var(--tv3-border);
+  box-shadow: none;
+  background: var(--tv3-surface);
+}
+
+.transovo-product-surface-first .transovo-input:focus {
+  box-shadow: none;
+  border-color: #c5c9d0;
+}
+
+/* Tabs (§12) */
+.transovo-product-surface-first .transovo-tab-link {
+  padding-bottom: 0.5rem;
+  font-size: var(--tv3-body);
+  font-weight: 500;
+  border-bottom-width: 1px;
+  color: var(--tv3-text-muted);
+}
+
+.transovo-product-surface-first .transovo-tab-link--active {
+  color: var(--tv3-text);
+  border-bottom-color: var(--tv3-text);
+  font-weight: 600;
+}
+
+/* Filter chips (§13) */
+.transovo-product-surface-first .transovo-filter-chip {
+  border-radius: var(--tv3-radius-sm);
+  padding: 0.1875rem 0.5rem;
+  font-size: 0.6875rem;
+}
+
+.transovo-product-surface-first .transovo-filter-chip--active {
+  background: #f3f4f6;
+  border-color: var(--tv3-border-hairline);
+  color: var(--tv3-text);
+}
+
+/* Tables (§9) */
+.transovo-product-surface-first .transovo-data-table-shell:not(.transovo-surface--contained) {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.transovo-product-surface-first .transovo-data-table-head {
+  min-height: var(--tv3-table-head-h);
+  padding: 0 var(--tv3-cell-pad-x);
+  align-items: center;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tv3-text-meta);
+  background: transparent;
+  border-bottom: 1px solid var(--tv3-border-hairline);
+}
+
+.transovo-product-surface-first .transovo-operating-region {
+  gap: var(--tv3-tight-gap);
+  padding-bottom: var(--tv3-tight-gap);
+  border-bottom: 1px solid var(--tv3-border-hairline);
+}
+
+/* MCTB missed calls open composition */
+.transovo-product-surface-first .mctb-missed-calls {
+  background: var(--tv3-canvas);
+}
+
+.transovo-product-surface-first .mctb-mc-metric:not(.transovo-surface--contained) {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  min-height: 0;
+  max-height: none;
+  padding: 0.25rem 1rem 0.25rem 0;
+  border-right: 1px solid var(--tv3-border-hairline);
+}
+
+.transovo-product-surface-first .mctb-mc-metrics {
+  gap: 0;
+  margin-bottom: var(--tv3-subsection-gap);
+  border-bottom: 1px solid var(--tv3-border-hairline);
+  padding-bottom: var(--tv3-tight-gap);
+}
+
+.transovo-product-surface-first .mctb-mc-metric:last-child {
+  border-right: none;
+}
+
+.transovo-product-surface-first .mctb-mc-table-wrap:not(.transovo-surface--contained) {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+/* MCTB overview KPIs → open inline (§8) */
+.transovo-product-surface-first .mctb-home-kpi-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  border-bottom: 1px solid var(--tv3-border-hairline);
+  padding-bottom: var(--tv3-tight-gap);
+  margin-bottom: var(--tv3-subsection-gap);
+}
+
+.transovo-product-surface-first .mctb-home-kpi {
+  flex: 1 1 7rem;
+  min-width: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  min-height: 0;
+  max-height: none;
+  padding: 0.25rem 1rem 0.25rem 0;
+  border-right: 1px solid var(--tv3-border-hairline);
+}
+
+.transovo-product-surface-first .mctb-home-kpi:last-child {
+  border-right: none;
+}
+
+.transovo-product-surface-first .mctb-home-kpi-icon {
+  display: none;
+}
+
+.transovo-product-surface-first .mctb-home-kpi--attention {
+  background: transparent;
+  border-color: transparent;
+}
+
+.transovo-product-surface-first .mctb-home-module.mctb-home-surface {
+  border: none;
+  box-shadow: none;
+  background: transparent;
+}
+
+.transovo-product-surface-first .mctb-home-section-head {
+  padding: 0 0 var(--tv3-tight-gap);
+  min-height: 0;
+  border-bottom: 1px solid var(--tv3-border-hairline);
+}
+
+/* Voice theme: remove decorative mesh on product surfaces */
+.voice-theme.transovo-product-surface-first {
+  --background: var(--tv3-canvas);
+}
+
+.voice-theme.transovo-product-surface-first .bg-mesh {
+  background-color: var(--tv3-canvas);
+  background-image: none;
+}

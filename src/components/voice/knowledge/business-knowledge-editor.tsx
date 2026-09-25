@@ -33,6 +33,7 @@ import { KnowledgeGapsPanel } from "@/components/voice/knowledge-gaps-panel";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/input";
+import { TransovoProductPage } from "@/components/transovo/product-page";
 import { PageHeader } from "@/components/ui/page-header";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { VoiceSubNav } from "@/components/voice/voice-subnav";
@@ -378,16 +379,16 @@ export function BusinessKnowledgeEditor() {
 
   if (!hydrated) {
     return (
-      <div className="mx-auto max-w-5xl px-4 pb-24 sm:px-6">
+      <TransovoProductPage narrow className="pb-24">
         <PageHeader title="Business Knowledge" description="Loading…" />
         <VoiceSubNav />
         <p className="text-sm text-muted-foreground">Loading business knowledge…</p>
-      </div>
+      </TransovoProductPage>
     );
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 pb-24 sm:px-6">
+    <TransovoProductPage narrow className="pb-24">
       <PageHeader
         title="Business Knowledge"
         description="Teach Amy accurate information about your business, manage sources she can search, and resolve questions she could not answer on calls."

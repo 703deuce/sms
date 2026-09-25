@@ -20,11 +20,11 @@ export function PageHeader({
       )}
     >
       <div>
-        <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
+        <h1 className="font-display text-[var(--tv3-title-page,1.625rem)] font-semibold tracking-tight text-foreground">
           {title}
         </h1>
         {description ? (
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+          <p className="mt-1 max-w-2xl text-[var(--tv3-meta,0.8125rem)] text-muted-foreground">
             {description}
           </p>
         ) : null}

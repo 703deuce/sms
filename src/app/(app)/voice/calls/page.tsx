@@ -202,9 +202,7 @@ export default function VoiceCallsPage() {
   }, [page, totalPages]);
 
   return (
-    <div
-      className="transovo-page-container transovo-page-stack transovo-voice-calls-workspace transovo-voice-calls-bleed"
-    >
+    <div className="transovo-page-container transovo-page-stack transovo-voice-calls-workspace">
       <PageHeader
         title="Calls"
         description="Track and manage all calls handled by your AI receptionist."
@@ -219,8 +217,7 @@ export default function VoiceCallsPage() {
         />
       ) : null}
 
-      <div className="transovo-calls-workspace-panel">
-      <section className="transovo-operating-region" aria-label="Calls filters and views">
+      <section className="transovo-operating-region transovo-section" aria-label="Calls filters and views">
         <TransovoOperationalToolbar>
           {!attentionOpen ? (
             <div className="transovo-operational-toolbar__search">
@@ -469,7 +466,6 @@ export default function VoiceCallsPage() {
       </div>
       </>
       ) : null}
-      </div>
     </div>
   );
 }
