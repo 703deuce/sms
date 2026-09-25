@@ -100,11 +100,10 @@ npx tsx scripts/test-mctb-pass-5-overview-analytics.ts
 
 1. **Merge** PRs **#526**, **#527**, and **#528** to `master` when ready (Pass 6 branch bundles much of Passes 3–5).
 2. **Stop architecture passes** — product structure is frozen per `docs/MCTB-LAUNCH-ARCHITECTURE-FREEZE.md`.
-3. **Next phase for Kirsten (fundamentally different instruction):**
-   - Open the actual application in the browser
-   - Capture pages (screenshots / reference states)
-   - Evaluate the visual system across the whole MCTB product (seven primary destinations + Setup sections)
-   - Begin **UI/UX polish only** — spacing, typography, table density, cards, hierarchy, motion, responsive/a11y visual pass
+3. **Next phase for Kirsten (Pass 1 — read-only, not implementation):**
+   - Use **`docs/KIRSTEN-TRANSOVO-MASTER-VISUAL-AUDIT-AND-DESIGN-SYSTEM-SPEC.md`** as the sole engagement brief
+   - Supply **all** screenshots (MCTB + Voice + shared Inbox) per **`docs/KIRSTEN-VISUAL-AUDIT-SCREENSHOT-MANIFEST.md`**
+   - Deliver report sections A–K + readiness verdict (§35) — **no broad UI rewrite** until product reviews the spec
    - Do **not** reopen product structure unless a concrete blocker appears (wrong product on canonical route, duplicate editor, sender/entitlement bypass, broken cross-links, etc.)
 
 ### Pass 6 blocker standard (for reference)
