@@ -26,7 +26,7 @@ import {
 } from "@/lib/voice/call-handling/behavior-summary";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import { Button } from "@/components/ui/button";
-import { ConfigSection } from "@/components/transovo/config-workspace";
+import { Card } from "@/components/ui/card";
 import { OperationalPage, OperationalPageHeader } from "@/components/transovo/operational-page";
 import { TransovoPageLoading } from "@/components/transovo/state-feedback";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
@@ -160,7 +160,7 @@ export function CallHandlingOperationalPage() {
   }
 
   return (
-    <OperationalPage narrow className="pb-24 voice-call-handling-workspace">
+    <OperationalPage narrow className="pb-24">
       <OperationalPageHeader
         title="Call Handling"
         description="Transfers, on-call coverage, escalation, and caller protection."
@@ -192,11 +192,12 @@ export function CallHandlingOperationalPage() {
 
       <TransferEffectiveStatusCard state={state} patch={patch} />
 
-      <ConfigSection
-        title="Current behavior"
-        description="What happens on a real call with your saved configuration."
-      >
-        <ul className="grid gap-2 text-sm sm:grid-cols-2">
+      <Card className="p-5">
+        <h2 className="text-sm font-semibold">Current behavior</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          What happens on a real call with your saved configuration.
+        </p>
+        <ul className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
           <li>
             <span className="text-muted-foreground">Transfers:</span>{" "}
             {summary.transfersEnabled ? "Enabled" : "Not configured"}
@@ -230,17 +231,18 @@ export function CallHandlingOperationalPage() {
             fallbackLabel={summary.fallbackLabel}
           />
         </div>
-      </ConfigSection>
+      </Card>
 
-      <ConfigSection id="transfers-heading" title="Transfers">
+      <section className="space-y-4" aria-labelledby="transfers-heading">
+        <h2 id="transfers-heading" className="text-lg font-semibold">Transfers</h2>
         <EmergencyTransferEditor state={state} patch={patch} />
-      </ConfigSection>
+      </section>
 
-      <ConfigSection id="hours-heading" title="Business hours & after hours">
       <section className="space-y-4" aria-labelledby="hours-heading">
+        <h2 id="hours-heading" className="text-lg font-semibold">Business hours &amp; after hours</h2>
         <p className="text-sm text-muted-foreground">{hoursSummary.duringHours}</p>
         <p className="text-sm text-muted-foreground">{hoursSummary.afterHours}</p>
-        <div className="transovo-config-row border-b-0 px-0">
+        <div className="rounded-xl border border-border bg-card px-5">
           <DependencyRow
             title="Business hours"
             detail={`${businessHoursLine}. Used to determine when after-hours rules apply.`}
@@ -250,14 +252,14 @@ export function CallHandlingOperationalPage() {
         </div>
         <AfterHoursBehaviorEditor state={state} patch={patch} />
       </section>
-      </ConfigSection>
 
-      <ConfigSection id="oncall-heading" title="On-call">
+      <section className="space-y-4" aria-labelledby="oncall-heading">
+        <h2 id="oncall-heading" className="text-lg font-semibold">On-call</h2>
         <OnCallScheduleEditor state={state} patch={patch} />
-      </ConfigSection>
+      </section>
 
-      <ConfigSection id="urgent-heading" title="Emergency & urgent calls">
       <section className="space-y-4" aria-labelledby="urgent-heading">
+        <h2 id="urgent-heading" className="text-lg font-semibold">Emergency &amp; urgent calls</h2>
         <label className="flex items-start gap-2 text-sm">
           <input
             type="checkbox"
@@ -274,27 +276,25 @@ export function CallHandlingOperationalPage() {
         </label>
         {state.urgencyEnabled ? <UrgencyRulesEditor state={state} patch={patch} /> : null}
       </section>
-      </ConfigSection>
 
-      <ConfigSection id="notify-heading" title="Transfer notifications">
+      <section className="space-y-4" aria-labelledby="notify-heading">
+        <h2 id="notify-heading" className="text-lg font-semibold">Transfer notifications</h2>
         <AfterHoursNotificationsEditor state={state} patch={patch} />
-      </ConfigSection>
+      </section>
 
-      <ConfigSection id="spam-heading" title="Caller protection">
+      <section aria-labelledby="spam-heading">
+        <h2 id="spam-heading" className="mb-4 text-lg font-semibold">Caller protection</h2>
         <SpamUnwantedCallsEditor state={state} patch={patch} />
-      </ConfigSection>
+      </section>
 
-      <ConfigSection id="recording-heading" title="Call recording">
+      <section aria-labelledby="recording-heading">
+        <h2 id="recording-heading" className="mb-4 text-lg font-semibold">Call recording</h2>
         <RecordingConfigCard state={state} patch={patch} />
-      </ConfigSection>
+      </section>
 
-      <ConfigSection
-        id="recent-heading"
-        title="Recent transfers"
-        className="transovo-config-section--toolbar-head"
-      >
       <section className="space-y-3" aria-labelledby="recent-heading">
-        <div className="flex flex-wrap items-center justify-end gap-2 -mt-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 id="recent-heading" className="text-lg font-semibold">Recent transfers</h2>
           <Button variant="ghost" size="sm" type="button" onClick={() => void loadTransfers()}>
             Refresh
           </Button>
@@ -302,7 +302,7 @@ export function CallHandlingOperationalPage() {
         {recentTransfers.length === 0 ? (
           <p className="text-sm text-muted-foreground">No transfer attempts in the last 14 days.</p>
         ) : (
-          <div className="overflow-x-auto border-t border-[#eceef1]">
+          <div className="overflow-x-auto rounded-lg border border-border">
             <Table>
               <THead>
                 <TR>
@@ -340,7 +340,6 @@ export function CallHandlingOperationalPage() {
           </div>
         )}
       </section>
-      </ConfigSection>
 
       <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-border bg-background/95 px-4 py-3 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">

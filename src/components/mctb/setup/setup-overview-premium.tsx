@@ -68,19 +68,19 @@ export function SetupOverviewGroupHead({ label, spaced }: { label: string; space
 }
 
 export function SetupOverviewSummaryRowLink({ row }: { row: SetupOverviewSummaryRow }) {
+  const Icon = ROW_ICONS[row.id] || Activity;
   return (
     <Link href={row.href} className="mctb-setup-summary-row" title={row.operationalDetail}>
+      <div className={iconTileClass(row)}>
+        <Icon className="h-4 w-4" strokeWidth={1.85} aria-hidden />
+      </div>
       <div className="mctb-setup-summary-row__main">
         <div className="mctb-setup-summary-row__title">{row.title}</div>
-        {row.secondary ? (
-          <div className="mctb-setup-summary-row__secondary">{row.secondary}</div>
-        ) : null}
+        <div className="mctb-setup-summary-row__secondary">{row.secondary}</div>
       </div>
-      {row.operationalDetail ? (
-        <div className="mctb-setup-summary-row__detail">{row.operationalDetail}</div>
-      ) : null}
+      <div className="mctb-setup-summary-row__detail">{row.operationalDetail}</div>
       <span className={chipClass(row)}>{row.statusLabel}</span>
-      <ChevronRight className="h-4 w-4 shrink-0 text-[#9ca3af]" aria-hidden />
+      <ChevronRight className="mctb-setup-summary-row__chevron h-4 w-4 shrink-0" aria-hidden />
     </Link>
   );
 }

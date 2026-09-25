@@ -47,8 +47,7 @@ export async function loadMctbApprovedBusinessInformation(
     .filter((f) => f.label && f.summary)
     .slice(0, 25);
 
-  const rawServices = Array.isArray(brain.services) ? brain.services : [];
-  const services = rawServices.map((s) => s.name.trim()).filter(Boolean).slice(0, 30);
+  const services = (brain.services || []).map((s) => s.name.trim()).filter(Boolean).slice(0, 30);
   const locations = (brain.locations || []).map((l) => ({
     name: l.name,
     address: l.address?.trim() || undefined,

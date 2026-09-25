@@ -24,7 +24,6 @@ import { ensureWizardOperatingMaturity } from "@/lib/solutions/appointment-recep
 import { transferWizardValidationIssues } from "@/lib/solutions/appointment-receptionist/transfer-wizard-state";
 import { TransovoSectionError } from "@/components/transovo/state-feedback";
 import { Button } from "@/components/ui/button";
-import { ConfigSection } from "@/components/transovo/config-workspace";
 import { OperationalPage, OperationalPageHeader } from "@/components/transovo/operational-page";
 import { toErrorMessage } from "@/lib/errors";
 import { DependencyRow } from "@/components/voice/dependency-row";
@@ -360,25 +359,45 @@ export function VoiceReceptionistEditor() {
           ))}
         </div>
 
-        <div className="min-w-0 flex-1">
-          <ConfigSection
+        <div className="min-w-0 flex-1 space-y-8">
+          <section
             id="identity-voice"
-            title="Identity & voice"
-            description="Name, role, and how Amy sounds on the phone."
+            className="scroll-mt-24 rounded-xl border border-border bg-card p-5"
           >
-            <VoiceStep
-              state={state}
-              patch={patch}
-              parts={["identity", "voice"]}
-              showSidePanel={false}
-            />
-          </ConfigSection>
+            <h2 className="text-sm font-semibold">Identity &amp; voice</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Name, role, and how Amy sounds on the phone.
+            </p>
+            <div className="mt-4">
+              <VoiceStep
+                state={state}
+                patch={patch}
+                parts={["identity", "voice"]}
+                showSidePanel={false}
+              />
+            </div>
+          </section>
 
-          <ConfigSection id="greeting-conversation" title="Greeting & conversation">
-            <VoiceStep state={state} patch={patch} parts={["greeting"]} showSidePanel={false} />
-          </ConfigSection>
+          <section
+            id="greeting-conversation"
+            className="scroll-mt-24 rounded-xl border border-border bg-card p-5"
+          >
+            <h2 className="text-sm font-semibold">Greeting &amp; conversation</h2>
+            <div className="mt-4">
+              <VoiceStep
+                state={state}
+                patch={patch}
+                parts={["greeting"]}
+                showSidePanel={false}
+              />
+            </div>
+          </section>
 
-          <ConfigSection id="responsibilities" title="Responsibilities">
+          <section
+            id="responsibilities"
+            className="scroll-mt-24 rounded-xl border border-border bg-card p-5"
+          >
+            <h2 className="text-sm font-semibold">Responsibilities</h2>
             <GoalsStep
               state={state}
               patch={patch}
@@ -416,26 +435,41 @@ export function VoiceReceptionistEditor() {
                 linkLabel="Manage call handling"
               />
             </div>
-          </ConfigSection>
+          </section>
 
-          <ConfigSection id="caller-information" title="Caller information">
-            <ReceptionistCollectFieldsEditor state={state} patch={patch} />
-          </ConfigSection>
-
-          <ConfigSection id="appointment-handling" title="Appointment handling">
-            <ReceptionistBookingHandlingSection
-              state={state}
-              patch={patch}
-              calendarSummary={calendarSummary}
-            />
-          </ConfigSection>
-
-          <ConfigSection
-            id="messages-callbacks"
-            title="Messages & callbacks"
-            description="What Amy may collect on the call. Notifications are in Call Handling."
+          <section
+            id="caller-information"
+            className="scroll-mt-24 rounded-xl border border-border bg-card p-5"
           >
-            <div className="space-y-3">
+            <h2 className="text-sm font-semibold">Caller information</h2>
+            <div className="mt-4">
+              <ReceptionistCollectFieldsEditor state={state} patch={patch} />
+            </div>
+          </section>
+
+          <section
+            id="appointment-handling"
+            className="scroll-mt-24 rounded-xl border border-border bg-card p-5"
+          >
+            <h2 className="text-sm font-semibold">Appointment handling</h2>
+            <div className="mt-4">
+              <ReceptionistBookingHandlingSection
+                state={state}
+                patch={patch}
+                calendarSummary={calendarSummary}
+              />
+            </div>
+          </section>
+
+          <section
+            id="messages-callbacks"
+            className="scroll-mt-24 rounded-xl border border-border bg-card p-5"
+          >
+            <h2 className="text-sm font-semibold">Messages &amp; callbacks</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              What Amy may collect on the call. Operational notifications live in Call Handling.
+            </p>
+            <div className="mt-4 space-y-3">
               <label className="flex items-start gap-2 text-sm">
                 <input
                   type="checkbox"
@@ -467,12 +501,12 @@ export function VoiceReceptionistEditor() {
                 linkLabel="Manage in call handling"
               />
             </div>
-          </ConfigSection>
+          </section>
 
           {showTestPanel ? (
-            <ConfigSection id="test" title="Test receptionist">
+            <section id="test" className="scroll-mt-24 rounded-xl border border-border bg-card p-5">
               <TestStep state={state} patch={patch} onEnsureAgent={ensureAgentForTest} />
-            </ConfigSection>
+            </section>
           ) : null}
         </div>
       </div>

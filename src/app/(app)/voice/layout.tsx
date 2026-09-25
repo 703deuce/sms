@@ -1,7 +1,6 @@
 import "./voice-theme.css";
 import "@/styles/transovo-pass3-surface-first.css";
 import "@/styles/transovo-operational-redesign.css";
-import "@/styles/transovo-config-workspace.css";
 import "@/styles/transovo-voice-calls-workspace.css";
 import "@/styles/transovo-call-detail-workspace.css";
 

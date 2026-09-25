@@ -31,7 +31,7 @@ import {
 } from "@/lib/voice/knowledge/website-crawl-customer-status";
 import { KnowledgeGapsPanel } from "@/components/voice/knowledge-gaps-panel";
 import { Button } from "@/components/ui/button";
-import { ConfigSection } from "@/components/transovo/config-workspace";
+import { Card } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/input";
 import { OperationalPage, OperationalPageHeader } from "@/components/transovo/operational-page";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
@@ -412,15 +412,16 @@ export function BusinessKnowledgeEditor() {
 
       <div className="space-y-8">
         {statusItems.length > 0 ? (
-          <ConfigSection id="status" title="Needs your review">
-            <ul className="space-y-1 text-sm">
+          <Card className="p-5" id="status">
+            <h2 className="text-sm font-semibold">Needs your review</h2>
+            <ul className="mt-2 space-y-1 text-sm">
               {statusItems.map((item) => (
                 <li key={item.href + item.label}>
                   <a href={item.href} className="text-primary underline">{item.label}</a>
                 </li>
               ))}
             </ul>
-          </ConfigSection>
+          </Card>
         ) : null}
 
         {needsPublishBanner ? (
@@ -436,8 +437,8 @@ export function BusinessKnowledgeEditor() {
           </InfoCallout>
         ) : null}
 
-        <ConfigSection id="core-facts" title="Core business information">
-          <div className="space-y-4">
+        <Card className="space-y-4 p-5" id="core-facts">
+          <h2 className="text-lg font-semibold">Core business information</h2>
           <FactField
             label="Business name"
             value={state.businessName || ""}
@@ -520,11 +521,10 @@ export function BusinessKnowledgeEditor() {
           <Button type="button" disabled={busy} onClick={() => void saveInformation()}>
             {busy ? "Saving…" : "Save business information"}
           </Button>
-          </div>
-        </ConfigSection>
+        </Card>
 
-        <ConfigSection id="hours" title="Business hours & timezone">
-          <div className="space-y-4">
+        <Card className="space-y-4 p-5" id="hours">
+          <h2 className="text-lg font-semibold">Business hours &amp; timezone</h2>
           <p className="text-sm text-muted-foreground">
             How Amy describes your hours:{" "}
             <span className="text-foreground">
@@ -566,11 +566,10 @@ export function BusinessKnowledgeEditor() {
           <Button type="button" disabled={busy} onClick={() => void saveSchedule()}>
             {busy ? "Saving…" : "Save business hours"}
           </Button>
-          </div>
-        </ConfigSection>
+        </Card>
 
-        <ConfigSection id="website" title="Website">
-          <div className="space-y-4">
+        <Card className="space-y-4 p-5" id="website">
+          <h2 className="text-lg font-semibold">Website</h2>
           <div>
             <Label htmlFor="website-url">Website URL</Label>
             <Input
@@ -625,11 +624,10 @@ export function BusinessKnowledgeEditor() {
               ))}
             </div>
           ) : null}
-          </div>
-        </ConfigSection>
+        </Card>
 
-        <ConfigSection id="faqs" title="FAQs & approved answers">
-          <div className="space-y-4">
+        <Card className="space-y-4 p-5" id="faqs">
+          <h2 className="text-lg font-semibold">FAQs &amp; approved answers</h2>
           <FactField
             label="Common questions & answers"
             value={itemSummary(state, "faqs")}
@@ -651,14 +649,13 @@ export function BusinessKnowledgeEditor() {
           <Button type="button" disabled={busy} onClick={() => void saveInformation()}>
             Save FAQs
           </Button>
-          </div>
-        </ConfigSection>
+        </Card>
 
-        <ConfigSection
-          id="sources"
-          title="Knowledge sources"
-          description="Documents and pages Amy can search during calls. Ready for search means retrieval is available — not the same as published instructions."
-        >
+        <Card className="space-y-4 p-5" id="sources">
+          <h2 className="text-lg font-semibold">Knowledge sources</h2>
+          <p className="text-sm text-muted-foreground">
+            Documents and pages Amy can search during calls. Ready for search means retrieval is available — not the same as published instructions.
+          </p>
           <SourceManager
             kbId={linkedKbId}
             sources={sources}
@@ -669,7 +666,7 @@ export function BusinessKnowledgeEditor() {
             setBusy={setBusy}
             setError={setError}
           />
-        </ConfigSection>
+        </Card>
 
         <div id="knowledge-gaps" key={gapRefresh}>
           <KnowledgeGapsPanel
