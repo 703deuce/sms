@@ -1,31 +1,25 @@
 "use client";
 
+import { CallAttentionBadge } from "@/components/calls/call-attention-badge";
 import { CallOutcomeBadge } from "@/components/calls/call-outcome-badge";
 import { CallsMetrics } from "@/components/calls/calls-metrics";
+import { NeedsAttentionView } from "@/components/voice/needs-attention-view";
 import {
-  deriveCallOutcomeBadge,
   fmtCallDateTable,
   fmtCallDurationTable,
   fmtCallPhone,
   type CallListFilter,
 } from "@/lib/voice/calls/display";
+import { deriveCallListOutcomeDisplay } from "@/lib/voice/calls/outcome-display";
 import {
   MOCK_CALL_ROWS,
   MOCK_CALLS_METRICS,
   type MockCallRow,
 } from "@/lib/voice/calls/mock-data";
 import { cn } from "@/lib/utils";
-import {
-  AudioWaveform,
-  Calendar,
-  ChevronLeft,
-  ChevronRight,
-  Download,
-  MessageSquare,
-  Search,
-} from "lucide-react";
+import { AudioWaveform, ChevronLeft, ChevronRight, MessageSquare, Search } from "lucide-react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 type CallRow = {
@@ -95,8 +89,10 @@ function mockToRow(m: MockCallRow): CallRow {
   };
 }
 
+type DateRangeKey = "today" | "7d" | "30d";
+
 function filterRow(filter: CallListFilter, row: CallRow): boolean {
-  const badge = deriveCallOutcomeBadge({
+  const { primary: badge } = deriveCallListOutcomeDisplay({
     outcome: row.outcome,
     appointmentBooked: row.appointmentBooked,
     transferred: row.transferred,
@@ -109,8 +105,8 @@ function filterRow(filter: CallListFilter, row: CallRow): boolean {
   if (filter === "all") return true;
   if (filter === "leads") return badge === "New Lead" || badge === "Lead Captured";
   if (filter === "appointments") return badge === "Appointment Booked";
-  if (filter === "messages") return badge === "Message Taken";
-  if (filter === "transferred") return badge === "Transferred";
+  if (filter === "messages") return badge === "Message Taken" || badge === "Callback Requested";
+  if (filter === "transferred") return badge === "Transferred" || badge === "Transfer Failed";
   if (filter === "voicemails") return badge === "Voicemail";
   if (filter === "no_answer") return badge === "No Answer" || badge === "No Action";
   return true;
@@ -132,11 +128,14 @@ function parseUrlFilter(raw: string | null): CallListFilter {
 
 export default function VoiceCallsPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const attentionOpen = searchParams.get("attention") === "open";
   const [apiRows, setApiRows] = useState<CallRow[]>([]);
   const [apiMetrics, setApiMetrics] = useState<Analytics | null>(null);
   const [filter, setFilter] = useState<CallListFilter>(() =>
     parseUrlFilter(searchParams.get("filter")),
   );
+  const [dateRange, setDateRange] = useState<DateRangeKey>("7d");
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -148,8 +147,9 @@ export default function VoiceCallsPage() {
   }, [searchParams]);
 
   useEffect(() => {
+    if (attentionOpen) return;
     setLoading(true);
-    const params = new URLSearchParams({ limit: "100", filter: "all", dateRange: "7d" });
+    const params = new URLSearchParams({ limit: "100", filter: "all", dateRange });
     fetch(`/api/voice/calls?${params}`)
       .then((r) => r.json())
       .then((j) => {
@@ -158,7 +158,14 @@ export default function VoiceCallsPage() {
       })
       .catch(() => undefined)
       .finally(() => setLoading(false));
-  }, []);
+  }, [attentionOpen, dateRange]);
+
+  function setAttentionOpen(open: boolean) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (open) params.set("attention", "open");
+    else params.delete("attention");
+    router.push(`/voice/calls?${params.toString()}`);
+  }
 
   const allRows = useMemo(() => {
     const source = useDemo ? MOCK_CALL_ROWS.map(mockToRow) : apiRows;
@@ -221,24 +228,57 @@ export default function VoiceCallsPage() {
             className="h-10 w-full rounded-lg border border-[#e5e7eb] bg-white pl-9 pr-3 text-sm shadow-sm placeholder:text-[#9ca3af] focus:border-[#6366f1] focus:outline-none focus:ring-2 focus:ring-[#6366f1]/20"
           />
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#e5e7eb] bg-white px-3 text-sm text-[#374151] shadow-sm"
-          >
-            <Calendar className="h-4 w-4 text-[#6b7280]" />
-            Mar 12 – Mar 18, 2024
-          </button>
-          <button
-            type="button"
-            className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#e5e7eb] bg-white px-3 text-sm font-medium text-[#374151] shadow-sm hover:bg-[#f9fafb]"
-          >
-            <Download className="h-4 w-4" />
-            Export
-          </button>
-        </div>
+        {!attentionOpen ? (
+          <label className="inline-flex items-center gap-2 text-sm text-[#374151]">
+            <span className="text-[#6b7280]">Period</span>
+            <select
+              value={dateRange}
+              onChange={(e) => {
+                setPage(1);
+                setDateRange(e.target.value as DateRangeKey);
+              }}
+              className="h-10 rounded-lg border border-[#e5e7eb] bg-white px-3 text-sm shadow-sm"
+            >
+              <option value="today">Today</option>
+              <option value="7d">Last 7 days</option>
+              <option value="30d">Last 30 days</option>
+            </select>
+          </label>
+        ) : null}
       </div>
 
+      <div className="mb-4 flex flex-wrap gap-4 border-b border-[#e5e7eb]">
+        <button
+          type="button"
+          onClick={() => setAttentionOpen(false)}
+          className={cn(
+            "pb-3 text-sm font-medium transition",
+            !attentionOpen
+              ? "border-b-2 border-[#6366f1] text-[#6366f1]"
+              : "text-[#6b7280] hover:text-[#374151]",
+          )}
+        >
+          All calls
+        </button>
+        <button
+          type="button"
+          onClick={() => setAttentionOpen(true)}
+          className={cn(
+            "pb-3 text-sm font-medium transition",
+            attentionOpen
+              ? "border-b-2 border-[#6366f1] text-[#6366f1]"
+              : "text-[#6b7280] hover:text-[#374151]",
+          )}
+        >
+          Needs attention
+        </button>
+      </div>
+
+      {attentionOpen ? (
+        <NeedsAttentionView voiceOnly embedded />
+      ) : null}
+
+      {!attentionOpen ? (
       <div className="mb-4 flex flex-wrap gap-6 border-b border-[#e5e7eb]">
         {FILTERS.map((f) => (
           <button
@@ -281,7 +321,7 @@ export default function VoiceCallsPage() {
             const callerPhone = c.direction === "INBOUND" ? c.fromE164 : c.toE164;
             const callerName = c.contactName?.trim() || "Unknown Caller";
             const dt = fmtCallDateTable(c.startedAt);
-            const outcome = deriveCallOutcomeBadge({
+            const { primary: outcome, attention } = deriveCallListOutcomeDisplay({
               outcome: c.outcome,
               appointmentBooked: c.appointmentBooked,
               transferred: c.transferred,
@@ -326,7 +366,10 @@ export default function VoiceCallsPage() {
                   {fmtCallDurationTable(c.durationSeconds)}
                 </p>
 
-                <CallOutcomeBadge outcome={outcome} />
+                <div className="flex min-w-[8rem] flex-col gap-1">
+                  <CallOutcomeBadge outcome={outcome} />
+                  {attention ? <CallAttentionBadge label={attention} /> : null}
+                </div>
 
                 <p className="line-clamp-2 text-sm leading-snug text-[#4b5563]">
                   {c.summary || "No summary yet."}
@@ -399,6 +442,7 @@ export default function VoiceCallsPage() {
         </div>
         <div className="text-sm text-[#6b7280]">Rows per page: 10</div>
       </div>
+      ) : null}
     </div>
   );
 }

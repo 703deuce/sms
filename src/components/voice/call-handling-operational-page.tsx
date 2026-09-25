@@ -162,10 +162,13 @@ export function CallHandlingOperationalPage() {
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" asChild>
-              <Link href={MCTB_ROUTES.voiceAgent}>Open AI agent setup</Link>
+              <Link href="/voice/receptionist">Receptionist</Link>
             </Button>
             <Button variant="outline" size="sm" asChild>
-              <Link href="/voice/needs-attention">Needs attention</Link>
+              <Link href="/voice/inbound-routing">Advanced routing</Link>
+            </Button>
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/voice/calls?attention=open">Calls — needs attention</Link>
             </Button>
           </div>
         }

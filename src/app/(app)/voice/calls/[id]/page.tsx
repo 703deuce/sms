@@ -1,5 +1,7 @@
 "use client";
 
+import { CallAttentionBadge } from "@/components/calls/call-attention-badge";
+import { CallOutcomeBadge } from "@/components/calls/call-outcome-badge";
 import { WaveformRecordingPlayer } from "@/components/calls/waveform-recording-player";
 import {
   buildActionItems,
@@ -13,7 +15,8 @@ import {
   summaryPipelineState,
   transcriptPipelineState,
 } from "@/lib/voice/calls/customer-activity-feed";
-import { deriveOutcomeBadges, fmtCallDuration, fmtCallPhone } from "@/lib/voice/calls/display";
+import { fmtCallDuration, fmtCallPhone } from "@/lib/voice/calls/display";
+import { deriveCallListOutcomeDisplay } from "@/lib/voice/calls/outcome-display";
 import {
   getMockCallById,
   isDemoCallId,
@@ -66,6 +69,7 @@ export default function VoiceCallDetailPage() {
   const [data, setData] = useState<Record<string, unknown> | null>(null);
   const [apiLoaded, setApiLoaded] = useState(false);
   const [showTranscriptDetails, setShowTranscriptDetails] = useState(true);
+  const [showTechnical, setShowTechnical] = useState(false);
   const demo = isDemoCallId(id);
   const mock = demo ? getMockCallById(id) : undefined;
 
@@ -183,12 +187,6 @@ export default function VoiceCallDetailPage() {
       : null;
   })();
 
-  const outcomeBadges = deriveOutcomeBadges({
-    outcome: call.outcome as string | null,
-    appointmentBooked: Boolean(call.appointmentBooked),
-    transferred: Boolean(call.transferred),
-    voicemailDetected: Boolean(call.voicemailDetected),
-  });
   const actionItems = buildActionItems({
     call: {
       appointmentBooked: Boolean(call.appointmentBooked),
@@ -280,10 +278,29 @@ export default function VoiceCallDetailPage() {
       timesAsked?: number;
     }>) || [];
 
+  const transfersForOutcome =
+    (data?.transfers as Array<{ status?: string }>) || [];
+  const listOutcome = deriveCallListOutcomeDisplay({
+    outcome: call.outcome as string | null,
+    appointmentBooked: Boolean(call.appointmentBooked),
+    transferred: Boolean(call.transferred),
+    voicemailDetected: Boolean(call.voicemailDetected),
+    transfers: transfersForOutcome,
+    hasKnowledgeGap: knowledgeGaps.length > 0,
+  });
+  const contactId = call.contactId as string | null | undefined;
+  const executionTrace = call.executionTrace as unknown;
+  const toolExecutions =
+    (data?.toolExecutions as Array<{
+      toolType?: string | null;
+      status?: string | null;
+      errorMessage?: string | null;
+    }>) || [];
+
   return (
     <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-8">
       <nav className="mb-4 flex flex-wrap items-center gap-1 text-sm text-[#6b7280]">
-        <Link href="/voice/overview" className="hover:text-[#374151]">AI After Hours</Link>
+        <Link href="/voice/overview" className="hover:text-[#374151]">Overview</Link>
         <ChevronRight className="h-3.5 w-3.5" />
         <Link href="/voice/calls" className="hover:text-[#374151]">Calls</Link>
         <ChevronRight className="h-3.5 w-3.5" />
@@ -292,24 +309,24 @@ export default function VoiceCallDetailPage() {
 
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="font-display text-[26px] font-semibold tracking-tight text-[#111827]">
-              Call from {callerName}
-            </h1>
-            {outcomeBadges.map((badge) => (
-              <span
-                key={badge}
-                className="rounded-full bg-violet-50 px-2.5 py-0.5 text-xs font-semibold tracking-wide text-violet-700 ring-1 ring-inset ring-violet-200"
-              >
-                {badge}
-              </span>
-            ))}
-          </div>
+          <h1 className="font-display text-[26px] font-semibold tracking-tight text-[#111827]">
+            {callerName}
+          </h1>
+          <p className="mt-1 text-sm text-[#6b7280]">{fmtCallPhone(callerPhone)}</p>
           <p className="mt-2 text-sm text-[#6b7280]">
             {dateLabel} at {timeLabel}
             {" · "}
             {fmtCallDuration(call.durationSeconds as number)}
+            {" · "}
+            {String(call.status)}
           </p>
+          {contactId ? (
+            <p className="mt-2 text-sm">
+              <Link href={`/contacts/${contactId}`} className="font-medium text-[#6366f1] hover:underline">
+                View contact
+              </Link>
+            </p>
+          ) : null}
         </div>
       </div>
 
@@ -335,37 +352,15 @@ export default function VoiceCallDetailPage() {
         <div className="min-w-0 space-y-6">
           {tab === "overview" ? (
             <>
-              {recordings[0]?.id && recordingState === "ready" ? (
-                <WaveformRecordingPlayer recordingId={recordings[0].id} />
-              ) : (
-                <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
-                  <h2 className="text-sm font-semibold text-[#111827]">Recording</h2>
-                  <p className="mt-2 text-sm text-[#374151]">
-                    {recordingState === "processing"
-                      ? "Recording is being processed…"
-                      : recordingState === "failed"
-                        ? "Recording unavailable for this call."
-                        : "Recording unavailable for this call."}
-                  </p>
-                </div>
-              )}
-
-              {callbackRequest ? (
-                <div className="rounded-xl border border-indigo-200 bg-indigo-50/40 p-5 shadow-sm">
-                  <h2 className="text-sm font-semibold text-[#111827]">Callback requested</h2>
-                  <p className="mt-2 text-sm text-[#374151]">
-                    {callbackRequest.reason || "Message / callback request recorded for follow-up."}
-                  </p>
-                  <p className="mt-1 text-xs text-[#6b7280]">
-                    Status: {callbackRequest.status} ·{" "}
-                    {new Date(callbackRequest.requestedAt).toLocaleString()}
-                  </p>
-                </div>
-              ) : null}
-
               <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
-                <h2 className="text-sm font-semibold text-[#111827]">Outcomes</h2>
-                <ul className="mt-3 space-y-2 text-sm text-[#374151]">
+                <h2 className="text-sm font-semibold text-[#111827]">What happened</h2>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <CallOutcomeBadge outcome={listOutcome.primary} />
+                  {listOutcome.attention ? (
+                    <CallAttentionBadge label={listOutcome.attention} />
+                  ) : null}
+                </div>
+                <ul className="mt-4 space-y-2 text-sm text-[#374151]">
                   {actionItems
                     .filter((item) => item.status !== "skipped")
                     .map((item) => (
@@ -375,6 +370,51 @@ export default function VoiceCallDetailPage() {
                       </li>
                     ))}
                 </ul>
+              </div>
+
+              {callbackRequest ? (
+                <div className="rounded-xl border border-indigo-200 bg-indigo-50/40 p-5 shadow-sm">
+                  <h2 className="text-sm font-semibold text-[#111827]">Still needs follow-up</h2>
+                  <p className="mt-2 text-sm text-[#374151]">
+                    Callback requested
+                    {callbackRequest.reason ? ` — ${callbackRequest.reason}` : ""}
+                  </p>
+                  <p className="mt-1 text-xs text-[#6b7280]">
+                    Status: {callbackRequest.status} ·{" "}
+                    {new Date(callbackRequest.requestedAt).toLocaleString()}
+                  </p>
+                  <Link
+                    href="/voice/calls?attention=open"
+                    className="mt-3 inline-block text-sm font-medium text-[#6366f1] hover:underline"
+                  >
+                    Open needs attention queue
+                  </Link>
+                </div>
+              ) : null}
+
+              <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
+                <h2 className="text-sm font-semibold text-[#111827]">Summary</h2>
+                <p className="mt-3 text-sm leading-relaxed text-[#374151]">
+                  {summaryState === "ready"
+                    ? insight?.summary || mockCall?.summary
+                    : summaryState === "processing"
+                      ? "Summary is being generated…"
+                      : insight?.intent
+                        ? String(insight.intent)
+                        : "No summary available for this call."}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
+                <h2 className="text-sm font-semibold text-[#111827]">Information collected</h2>
+                <dl className="mt-4 divide-y divide-[#f3f4f6]">
+                  {infoFields.map((f) => (
+                    <div key={f.label} className="flex justify-between gap-4 py-3 text-sm">
+                      <dt className="text-[#6b7280]">{f.label}</dt>
+                      <dd className="text-right font-medium text-[#111827]">{f.value}</dd>
+                    </div>
+                  ))}
+                </dl>
               </div>
 
               {knowledgeGaps.length > 0 ? (
@@ -402,33 +442,18 @@ export default function VoiceCallDetailPage() {
                 </div>
               ) : null}
 
-              <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
-                <h2 className="text-sm font-semibold text-[#111827]">AI Summary</h2>
-                <p className="mt-3 text-sm leading-relaxed text-[#374151]">
-                  {summaryState === "ready"
-                    ? insight?.summary || mockCall?.summary
-                    : summaryState === "processing"
-                      ? "Summary is being generated…"
-                      : "No AI summary available for this call."}
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-sm font-semibold text-[#111827]">Call Information</h2>
-                  <button type="button" className="text-sm font-medium text-[#6366f1] hover:underline">
-                    Edit
-                  </button>
+              {recordings[0]?.id && recordingState === "ready" ? (
+                <WaveformRecordingPlayer recordingId={recordings[0].id} />
+              ) : (
+                <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
+                  <h2 className="text-sm font-semibold text-[#111827]">Recording</h2>
+                  <p className="mt-2 text-sm text-[#374151]">
+                    {recordingState === "processing"
+                      ? "Recording is being processed…"
+                      : "Recording unavailable for this call."}
+                  </p>
                 </div>
-                <dl className="mt-4 divide-y divide-[#f3f4f6]">
-                  {infoFields.map((f) => (
-                    <div key={f.label} className="flex justify-between gap-4 py-3 text-sm">
-                      <dt className="text-[#6b7280]">{f.label}</dt>
-                      <dd className="text-right font-medium text-[#111827]">{f.value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </div>
+              )}
 
               <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
                 <div className="flex items-center justify-between">
@@ -466,12 +491,41 @@ export default function VoiceCallDetailPage() {
                     </div>
                   ))}
                   {segments.length > 4 ? (
-                    <button type="button" className="text-sm font-medium text-[#6366f1] hover:underline">
-                      See more
+                    <button
+                      type="button"
+                      className="text-sm font-medium text-[#6366f1] hover:underline"
+                      onClick={() => setTab("transcript")}
+                    >
+                      See full transcript
                     </button>
                   ) : null}
                 </div>
               </div>
+
+              {(executionTrace || toolExecutions.some((t) => t.status === "failed")) ? (
+                <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between text-left text-sm font-semibold text-[#111827]"
+                    onClick={() => setShowTechnical((v) => !v)}
+                    aria-expanded={showTechnical}
+                  >
+                    Technical details
+                    <span className="text-xs font-normal text-[#6b7280]">
+                      {showTechnical ? "Hide" : "Show"}
+                    </span>
+                  </button>
+                  {showTechnical ? (
+                    <pre className="mt-3 max-h-48 overflow-auto rounded-lg bg-[#f9fafb] p-3 text-xs text-[#374151]">
+                      {JSON.stringify(
+                        { executionTrace, toolExecutions },
+                        null,
+                        2,
+                      )}
+                    </pre>
+                  ) : null}
+                </div>
+              ) : null}
             </>
           ) : (
             <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">

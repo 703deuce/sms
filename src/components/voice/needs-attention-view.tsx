@@ -5,13 +5,21 @@ import { Card } from "@/components/ui/card";
 import { BusinessCallBackButton } from "@/components/smart-routing/business-call-back-button";
 import { fmtRelativeTime } from "@/lib/smart-routing/display";
 import type { NeedsAttentionItem } from "@/lib/platform/needs-attention-types";
+import { isVoiceCallsAttentionKind } from "@/lib/platform/voice-attention-kinds";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 type Member = { id: string; name: string };
 
-export function NeedsAttentionView() {
+type NeedsAttentionViewProps = {
+  /** When true, only Voice-call-backed attention items (excludes MCTB missed_call / mctb_reply). */
+  voiceOnly?: boolean;
+  /** Embedded inside Calls — hides page-level title. */
+  embedded?: boolean;
+};
+
+export function NeedsAttentionView({ voiceOnly = false, embedded = false }: NeedsAttentionViewProps) {
   const [items, setItems] = useState<NeedsAttentionItem[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [filter, setFilter] = useState<"all" | "assigned_to_me">("all");
@@ -73,15 +81,26 @@ export function NeedsAttentionView() {
     await load();
   }
 
+  const visibleItems = voiceOnly
+    ? items.filter((item) => isVoiceCallsAttentionKind(item.primaryKind))
+    : items;
+
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Needs Attention</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          One operational inbox for callbacks, voicemails, SMS replies, and missed-call follow-ups.
-          Deduplicated by caller — not a CRM.
+    <div className={embedded ? "space-y-4" : "mx-auto max-w-3xl space-y-6 p-4 sm:p-6"}>
+      {!embedded ? (
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Needs Attention</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            One operational inbox for callbacks, voicemails, SMS replies, and missed-call follow-ups.
+            Deduplicated by caller — not a CRM.
+          </p>
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          Voice call follow-ups that need a response. Missed-call and SMS inbox items stay in Missed
+          Call Text Back.
         </p>
-      </div>
+      )}
 
       <div className="flex flex-wrap gap-2">
         <Button
@@ -102,11 +121,11 @@ export function NeedsAttentionView() {
 
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
-      ) : items.length === 0 ? (
+      ) : visibleItems.length === 0 ? (
         <Card className="p-6 text-sm text-muted-foreground">Nothing needs attention right now.</Card>
       ) : (
         <ul className="space-y-3">
-          {items.map((item) => (
+          {visibleItems.map((item) => (
             <li key={item.id}>
               <Card className="p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">

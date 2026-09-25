@@ -95,9 +95,9 @@ export default function VoiceOverviewPage() {
       <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
           { href: "/voice/calls", label: "Calls", hint: "History & detail" },
-          { href: "/voice/call-handling", label: "Call Handling", hint: "Transfers & on-call" },
-          { href: "/voice/knowledge", label: "Knowledge", hint: "FAQ & gaps" },
-          { href: "/voice/needs-attention", label: "Needs attention", hint: "Follow-ups" },
+          { href: "/voice/receptionist", label: "Receptionist", hint: "Identity & capabilities" },
+          { href: "/voice/knowledge", label: "Business Knowledge", hint: "Facts & gaps" },
+          { href: "/voice/calls?attention=open", label: "Calls — needs attention", hint: "Follow-ups" },
         ].map((item) => (
           <Link
             key={item.href}
@@ -176,7 +176,12 @@ export default function VoiceOverviewPage() {
         </Card>
 
         <Card className="overflow-hidden p-0">
-          <div className="border-b border-border px-5 py-3 font-medium">Needs attention</div>
+          <div className="flex items-center justify-between border-b border-border px-5 py-3 font-medium">
+            <span>Needs attention</span>
+            <Link href="/voice/calls?attention=open" className="text-xs font-semibold text-primary hover:underline">
+              View in Calls
+            </Link>
+          </div>
           <ul className="divide-y divide-border">
             {stats?.agentsWithErrors ? (
               <li className="px-5 py-3 text-sm text-amber-700">

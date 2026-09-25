@@ -1,5 +1,6 @@
-import { NeedsAttentionView } from "@/components/voice/needs-attention-view";
+import { redirect } from "next/navigation";
 
-export default function NeedsAttentionPage() {
-  return <NeedsAttentionView />;
+/** Legacy route — Voice attention work lives on Calls. */
+export default function VoiceNeedsAttentionRedirectPage() {
+  redirect("/voice/calls?attention=open");
 }

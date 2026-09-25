@@ -144,7 +144,10 @@ export default function VoiceKnowledgePage() {
 
   return (
     <div>
-      <PageHeader title="Knowledge bases" description="Documents, FAQs, and structured facts for agent retrieval." />
+      <PageHeader
+        title="Business Knowledge"
+        description="Approved facts, sources, and unanswered questions your receptionist may use on calls."
+      />
       <VoiceSubNav />
       <Card className="mb-6 flex flex-wrap items-end gap-3 p-5">
         <div className="flex-1">

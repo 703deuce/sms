@@ -12,7 +12,7 @@ export const voiceAgentsSection: VoiceSection = {
   items: [
     { label: "Agents", href: "/voice/agents" },
     { label: "AI platform", href: "/voice/ai-platform" },
-    { label: "Knowledge", href: "/voice/knowledge" },
+    { label: "Business Knowledge", href: "/voice/knowledge" },
     { label: "Tools", href: "/voice/tools" },
     { label: "Testing", href: "/voice/testing" },
   ],
