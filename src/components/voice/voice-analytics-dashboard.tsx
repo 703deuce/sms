@@ -3,8 +3,7 @@
 import "@/components/mctb/analytics/mctb-analytics.css";
 import { MctbAnalyticsChart } from "@/components/mctb/analytics/mctb-analytics-chart";
 import { Card, StatCard } from "@/components/ui/card";
-import { TransovoProductPage } from "@/components/transovo/product-page";
-import { PageHeader } from "@/components/ui/page-header";
+import { OperationalPage, OperationalPageHeader } from "@/components/transovo/operational-page";
 import { VoiceSubNav } from "@/components/voice/voice-subnav";
 import { ANALYTICS_OUTCOME_DISPLAY_ORDER } from "@/lib/voice/analytics/voice-analytics-aggregate";
 import type { VoiceAnalyticsReceptionist } from "@/lib/voice/analytics";
@@ -117,12 +116,11 @@ export function VoiceAnalyticsDashboard() {
   const callsDateRange = days === 7 ? "7d" : "30d";
 
   return (
-    <TransovoProductPage>
+    <OperationalPage>
       <VoiceSubNav />
-      <PageHeader
+      <OperationalPageHeader
         title="Analytics"
-        description="Understand call volume, outcomes, and receptionist performance."
-        className="!mb-0"
+        description="Call volume, outcomes, and receptionist performance."
         actions={
           <div
             className="inline-flex rounded-lg border border-border p-0.5"
@@ -394,6 +392,6 @@ export function VoiceAnalyticsDashboard() {
           </section>
         </>
       )}
-    </TransovoProductPage>
+    </OperationalPage>
   );
 }

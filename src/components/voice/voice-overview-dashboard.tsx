@@ -3,10 +3,9 @@
 import { CallAttentionBadge } from "@/components/calls/call-attention-badge";
 import { CallOutcomeBadge } from "@/components/calls/call-outcome-badge";
 import { Button } from "@/components/ui/button";
-import { TransovoProductPage } from "@/components/transovo/product-page";
+import { OperationalPage, OperationalPageHeader } from "@/components/transovo/operational-page";
 import { TransovoHairline, TransovoSection } from "@/components/transovo/section";
 import { TransovoKpiStrip } from "@/components/transovo/kpi-strip";
-import { PageHeader } from "@/components/ui/page-header";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { DependencyRow } from "@/components/voice/dependency-row";
 import { StatusPill } from "@/components/solutions/appointment-receptionist/ui";
@@ -80,11 +79,10 @@ export function VoiceOverviewDashboard() {
   const errors = result?.errors ?? {};
 
   return (
-    <TransovoProductPage>
-      <PageHeader
+    <OperationalPage>
+      <OperationalPageHeader
         title="Overview"
-        description="See how your receptionist is running, what happened recently, and anything that needs your attention."
-        className="!mb-0"
+        description="Recent receptionist activity and anything that needs attention."
       />
 
       {loading && !data ? (
@@ -358,7 +356,7 @@ export function VoiceOverviewDashboard() {
           Usage &amp; billing →
         </Link>
       </p>
-    </TransovoProductPage>
+    </OperationalPage>
   );
 }
 

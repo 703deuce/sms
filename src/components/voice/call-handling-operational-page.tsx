@@ -27,9 +27,8 @@ import {
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { TransovoProductPage } from "@/components/transovo/product-page";
+import { OperationalPage, OperationalPageHeader } from "@/components/transovo/operational-page";
 import { TransovoPageLoading } from "@/components/transovo/state-feedback";
-import { PageHeader } from "@/components/ui/page-header";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -154,18 +153,17 @@ export function CallHandlingOperationalPage() {
 
   if (!hydrated) {
     return (
-      <TransovoProductPage narrow>
+      <OperationalPage narrow>
         <TransovoPageLoading message="Loading call handling…" />
-      </TransovoProductPage>
+      </OperationalPage>
     );
   }
 
   return (
-    <TransovoProductPage narrow className="pb-24">
-      <PageHeader
+    <OperationalPage narrow className="pb-24">
+      <OperationalPageHeader
         title="Call Handling"
-        description="Manage transfers, on-call coverage, escalation, and caller protection — the same settings as your AI agent setup."
-        className="!mb-0"
+        description="Transfers, on-call coverage, escalation, and caller protection."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" asChild>
@@ -353,6 +351,6 @@ export function CallHandlingOperationalPage() {
           </Button>
         </div>
       </div>
-    </TransovoProductPage>
+    </OperationalPage>
   );
 }

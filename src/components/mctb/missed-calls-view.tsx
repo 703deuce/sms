@@ -330,54 +330,28 @@ export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewP
           </Link>
         </header>
 
-        <div className="mctb-mc-metrics mctb-mc-metrics--four" aria-label="Summary for selected date range">
-          {[
-            {
-              label: "Missed calls",
-              value: summary?.missedCount,
-              context: summary?.rangeLabel,
-              href: undefined,
-            },
-            {
-              label: "Recovery texts",
-              value: summary?.recoveryTextsCount,
-              context: summary?.rangeLabel,
-              href: undefined,
-            },
-            {
-              label: "Replies",
-              value: summary?.repliesCount,
-              context: summary?.rangeLabel,
-              href: undefined,
-            },
-            {
-              label: "Needs reply",
-              value: summary?.needsReplyCount,
-              context: "Conversations",
-              href: NEEDS_REPLY_HREF,
-            },
-          ].map((stat) => {
-            const inner = (
-              <>
-                <span className="mctb-mc-metric-label">{stat.label}</span>
-                {loading && summary == null ? (
-                  <div className="mctb-mc-metric-skeleton" aria-hidden />
-                ) : (
-                  <span className="mctb-mc-metric-value">{stat.value ?? "—"}</span>
-                )}
-                {stat.context ? (
-                  <span className="mctb-mc-metric-context">{stat.context}</span>
-                ) : null}
-              </>
-            );
-            return stat.href ? (
-              <Link key={stat.label} href={stat.href} className="mctb-mc-metric mctb-mc-metric--link">
-                {inner}
+        <div className="transovo-op-context-line mctb-mc-context-line" aria-label="Summary for selected date range" aria-live="polite">
+          {loading && summary == null ? (
+            <span className="text-[var(--op-muted,#6b7280)]">Loading summary…</span>
+          ) : (
+            <>
+              <span><strong>{summary?.missedCount ?? "—"}</strong> missed</span>
+              <span className="transovo-op-context-line__sep" aria-hidden>·</span>
+              <span><strong>{summary?.recoveryTextsCount ?? "—"}</strong> recovery texts</span>
+              <span className="transovo-op-context-line__sep" aria-hidden>·</span>
+              <span><strong>{summary?.repliesCount ?? "—"}</strong> replies</span>
+              <span className="transovo-op-context-line__sep" aria-hidden>·</span>
+              <Link href={NEEDS_REPLY_HREF} className="hover:underline">
+                <strong>{summary?.needsReplyCount ?? "—"}</strong> need reply
               </Link>
-            ) : (
-              <div key={stat.label} className="mctb-mc-metric">{inner}</div>
-            );
-          })}
+              {summary?.rangeLabel ? (
+                <>
+                  <span className="transovo-op-context-line__sep" aria-hidden>·</span>
+                  <span className="text-[var(--op-meta,#9ca3af)]">{summary.rangeLabel}</span>
+                </>
+              ) : null}
+            </>
+          )}
         </div>
 
         {copyToast ? (

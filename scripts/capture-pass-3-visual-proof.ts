@@ -13,6 +13,7 @@ const OUT_ROOT = "/opt/cursor/artifacts/screenshots/pass-3-visual-proof";
 const ROUTES: Array<{ family: "Voice" | "MCTB"; slug: string; path: string }> = [
   { family: "Voice", slug: "overview", path: "/voice/overview" },
   { family: "Voice", slug: "calls", path: "/voice/calls" },
+  { family: "Voice", slug: "call_detail", path: "/voice/calls/demo-call-1" },
   { family: "Voice", slug: "receptionist", path: "/voice/receptionist" },
   { family: "Voice", slug: "knowledge", path: "/voice/knowledge" },
   { family: "Voice", slug: "call_handling", path: "/voice/call-handling" },

@@ -322,3 +322,78 @@
   padding: 2rem 0.75rem;
   font-size: 0.8125rem;
 }
+
+/* Pass 3B — page top band (Calls list) */
+.transovo-voice-calls-workspace .transovo-calls-page-top {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  margin-bottom: 0.25rem;
+}
+
+.transovo-voice-calls-workspace .transovo-calls-page-top__title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.transovo-voice-calls-workspace .transovo-calls-page-title {
+  margin: 0;
+  font-size: 1.375rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  color: var(--transovo-calls-text);
+}
+
+.transovo-voice-calls-workspace .transovo-calls-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.transovo-voice-calls-workspace .transovo-calls-toolbar__search {
+  position: relative;
+  flex: 1 1 14rem;
+  max-width: 22rem;
+}
+
+.transovo-voice-calls-workspace .transovo-calls-toolbar__search-icon {
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  width: 0.875rem;
+  height: 0.875rem;
+  transform: translateY(-50%);
+  color: var(--transovo-calls-meta);
+  pointer-events: none;
+}
+
+.transovo-voice-calls-workspace .transovo-calls-toolbar__input {
+  padding-left: 2.25rem;
+}
+
+.transovo-voice-calls-workspace .transovo-calls-outcome-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+
+.transovo-voice-calls-workspace .transovo-calls-outcome-link {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--transovo-calls-meta);
+  cursor: pointer;
+}
+
+.transovo-voice-calls-workspace .transovo-calls-outcome-link--active {
+  color: var(--transovo-calls-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

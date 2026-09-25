@@ -24,7 +24,7 @@ import { ensureWizardOperatingMaturity } from "@/lib/solutions/appointment-recep
 import { transferWizardValidationIssues } from "@/lib/solutions/appointment-receptionist/transfer-wizard-state";
 import { TransovoSectionError } from "@/components/transovo/state-feedback";
 import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/components/ui/page-header";
+import { OperationalPage, OperationalPageHeader } from "@/components/transovo/operational-page";
 import { toErrorMessage } from "@/lib/errors";
 import { DependencyRow } from "@/components/voice/dependency-row";
 import Link from "next/link";
@@ -286,10 +286,10 @@ export function VoiceReceptionistEditor() {
   }
 
   return (
-    <div className="transovo-page-container transovo-page-container--narrow space-y-8 pb-24">
-      <PageHeader
+    <OperationalPage narrow className="space-y-8 pb-24">
+      <OperationalPageHeader
         title="Receptionist"
-        description="Configure how your AI receptionist speaks, collects information, and helps callers."
+        description="How your receptionist speaks, collects information, and helps callers."
         actions={
           <>
             <StatusPill tone={headerStatus.tone}>{headerStatus.label}</StatusPill>
@@ -539,7 +539,7 @@ export function VoiceReceptionistEditor() {
           </div>
         </div>
       </div>
-    </div>
+    </OperationalPage>
   );
 }
 

@@ -16,8 +16,7 @@ import {
   MOCK_CALLS_METRICS,
   type MockCallRow,
 } from "@/lib/voice/calls/mock-data";
-import { PageHeader } from "@/components/ui/page-header";
-import { TransovoOperationalToolbar } from "@/components/transovo/operational-toolbar";
+import { OperationalPage } from "@/components/transovo/operational-page";
 import {
   TransovoPageEmpty,
   TransovoTableBodySkeleton,
@@ -202,30 +201,43 @@ export default function VoiceCallsPage() {
   }, [page, totalPages]);
 
   return (
-    <div className="transovo-page-container transovo-page-stack transovo-voice-calls-workspace">
-      <PageHeader
-        title="Calls"
-        description="Track and manage all calls handled by your AI receptionist."
-        className="!mb-0"
-      />
-
-      {!attentionOpen ? (
-        <CallsMetrics
-          metrics={metricsData}
-          loading={metricsLoading}
-          degraded={metricsDegraded}
-        />
-      ) : null}
-
-      <section className="transovo-operating-region transovo-section" aria-label="Calls filters and views">
-        <TransovoOperationalToolbar>
+    <OperationalPage className="transovo-voice-calls-workspace transovo-calls-redesign">
+      <header className="transovo-calls-page-top">
+        <div className="transovo-calls-page-top__title-row">
+          <h1 className="transovo-calls-page-title">Calls</h1>
           {!attentionOpen ? (
-            <div className="transovo-operational-toolbar__search">
+            <label className="transovo-calls-period transovo-calls-period--header">
+              <span className="sr-only">Period</span>
+              <select
+                value={dateRange}
+                onChange={(e) => {
+                  setPage(1);
+                  setDateRange(e.target.value as DateRangeKey);
+                }}
+                aria-label="Date range for calls"
+              >
+                <option value="today">Today</option>
+                <option value="7d">Last 7 days</option>
+                <option value="30d">Last 30 days</option>
+              </select>
+            </label>
+          ) : null}
+        </div>
+
+        {!attentionOpen ? (
+          <CallsMetrics
+            metrics={metricsData}
+            loading={metricsLoading}
+            degraded={metricsDegraded}
+            compact
+          />
+        ) : null}
+
+        <div className="transovo-calls-toolbar" role="search">
+          {!attentionOpen ? (
+            <div className="transovo-calls-toolbar__search">
               <label className="sr-only" htmlFor="voice-calls-search">Search calls</label>
-              <Search
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--transovo-text-subtle)]"
-                aria-hidden
-              />
+              <Search className="transovo-calls-toolbar__search-icon" aria-hidden />
               <input
                 id="voice-calls-search"
                 type="search"
@@ -235,58 +247,29 @@ export default function VoiceCallsPage() {
                   setPage(1);
                   setQ(e.target.value);
                 }}
-                className="transovo-input pl-9"
+                className="transovo-input transovo-calls-toolbar__input"
               />
             </div>
-          ) : null}
-          <div className="transovo-operational-toolbar__controls">
-            {!attentionOpen ? (
-              <label className="transovo-calls-period inline-flex items-center gap-2">
-                <span>Period</span>
-                <select
-                  value={dateRange}
-                  onChange={(e) => {
-                    setPage(1);
-                    setDateRange(e.target.value as DateRangeKey);
-                  }}
-                  aria-label="Date range for calls"
-                >
-                  <option value="today">Today</option>
-                  <option value="7d">Last 7 days</option>
-                  <option value="30d">Last 30 days</option>
-                </select>
-              </label>
-            ) : null}
+          ) : (
+            <p className="transovo-calls-toolbar__view-label">Needs attention</p>
+          )}
+          <div className="transovo-calls-toolbar__actions">
+            <button
+              type="button"
+              onClick={() => setAttentionOpen(!attentionOpen)}
+              className={cn(
+                "transovo-calls-view-toggle",
+                attentionOpen && "transovo-calls-view-toggle--active",
+              )}
+              aria-pressed={attentionOpen}
+            >
+              Needs attention
+            </button>
           </div>
-        </TransovoOperationalToolbar>
-
-        <div
-          className="transovo-view-tabs"
-          role="tablist"
-          aria-label="Calls view"
-        >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={!attentionOpen}
-            onClick={() => setAttentionOpen(false)}
-            className={cn("transovo-tab-link", !attentionOpen && "transovo-tab-link--active")}
-          >
-            All calls
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={attentionOpen}
-            onClick={() => setAttentionOpen(true)}
-            className={cn("transovo-tab-link", attentionOpen && "transovo-tab-link--active")}
-          >
-            Needs attention
-          </button>
         </div>
 
         {!attentionOpen ? (
-          <div className="transovo-filter-chips" role="group" aria-label="Filter by outcome">
+          <nav className="transovo-calls-outcome-nav" aria-label="Filter by outcome">
             {FILTERS.map((f) => (
               <button
                 key={f.id}
@@ -296,17 +279,17 @@ export default function VoiceCallsPage() {
                   setFilter(f.id);
                 }}
                 className={cn(
-                  "transovo-filter-chip",
-                  filter === f.id && "transovo-filter-chip--active",
+                  "transovo-calls-outcome-link",
+                  filter === f.id && "transovo-calls-outcome-link--active",
                 )}
-                aria-pressed={filter === f.id}
+                aria-current={filter === f.id ? "true" : undefined}
               >
                 {f.label}
               </button>
             ))}
-          </div>
+          </nav>
         ) : null}
-      </section>
+      </header>
 
       {attentionOpen ? (
         <NeedsAttentionView voiceOnly embedded />
@@ -466,6 +449,6 @@ export default function VoiceCallsPage() {
       </div>
       </>
       ) : null}
-    </div>
+    </OperationalPage>
   );
 }
