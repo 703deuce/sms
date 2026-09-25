@@ -60,9 +60,17 @@ queue_deploy() {
   local commit="${3:-HEAD}"
   local dep_uuid
   dep_uuid="$(openssl rand -hex 12)"
-  psql_exec "INSERT INTO application_deployment_queues (application_id, deployment_uuid, pull_request_id, force_rebuild, commit, status, is_webhook, created_at, updated_at, application_name, server_id, destination_id, only_this_server, rollback, is_api)
-    VALUES ('${app_id}', '${dep_uuid}', 0, true, '${commit}', 'queued', false, NOW(), NOW(), '${app_name}', 0, '0', false, false, true);"
-  echo "[coolify-voice-restore] queued deploy app_id=${app_id} uuid=${dep_uuid} commit=${commit}"
+  # Do NOT raw-SQL INSERT into application_deployment_queues — rows stay "queued" forever
+  # without ApplicationDeploymentJob::dispatch. Use Coolify UI Deploy or tinker:
+  #   queue_application_deployment($app, new_public_id(), 0, '<sha>', true, false, true, false, null, true);
+  docker exec coolify php artisan tinker --execute="
+    \$app = App\\Models\\Application::find(${app_id});
+    if (!\$app) { throw new Exception('application ${app_id} not found'); }
+    \$uuid = new_public_id();
+    queue_application_deployment(\$app, \$uuid, 0, '${commit}', true, false, true, false, null, true);
+    echo \"deploy uuid={\$uuid} app=${app_id} commit=${commit}\";
+  "
+  echo "[coolify-voice-restore] dispatched deploy app_id=${app_id} commit=${commit}"
 }
 
 ensure_sms_application() {
