@@ -583,4 +583,13 @@ Mitigation: vertical nav + disclosure (not new routes).
 
 ---
 
+## Implementation guardrails (approved before Pass 2)
+
+1. **No masked full-step mounts** — Do not render entire wizard steps with hidden OAuth/hydration/auto-patch effects. Extract presentation fragments (`VoiceStep` `parts`, `GoalsStep` compact, dedicated editors).
+2. **Business hours / timezone** — Read-only dependency on Receptionist; canonical edit → `/voice/knowledge`. Do not edit `state.timezone` on Receptionist.
+3. **Section-aware Save draft** — Dirty groups per ownership; sequential `wizardStepId` saves; never one arbitrary step id for all fields.
+4. **Publish status** — Transition-based UI (`Live`, `Unsaved changes`, `Draft saved — publish…`); no invented full-config JSON diff unless a reliable published snapshot API exists.
+
+---
+
 RECEPTIONIST PAGE SPEC COMPLETE — READY FOR IMPLEMENTATION REVIEW
