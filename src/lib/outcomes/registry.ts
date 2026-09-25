@@ -651,7 +651,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
           "Appointment booked",
           "Caller requested next-day callback",
           "Service request created",
-          "Morning digest summary",
+          "Immediate after-hours notifications (workspace digest is separate)",
         ],
       },
       {

@@ -300,6 +300,7 @@ model Workspace {
   integrationWebhookEvents          IntegrationWebhookEvent[]
   apiKeys                           ApiKey[]
   webhooks                          Webhook[]
+  voiceWebhookDeliveries            VoiceWebhookDelivery[]
   auditLogs                         AuditLog[]
   usageRecords                      UsageRecord[]
   automationExecutions              AutomationExecution[]
@@ -2242,12 +2243,42 @@ model ApiKey {
 }
 
 model Webhook {
-  id          String    @id @default(cuid())
-  workspaceId String
-  url         String
-  events      String[]
-  active      Boolean   @default(true)
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id                  String                 @id @default(cuid())
+  workspaceId         String
+  url                 String
+  events              String[]
+  active              Boolean                @default(true)
+  signingSecretPrefix String?
+  signingSecretHash   String?
+  metadata            Json?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  workspace           Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  voiceWebhookDeliveries VoiceWebhookDelivery[]
+
+  @@index([workspaceId, active])
+}
+
+model VoiceWebhookDelivery {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  webhookId       String
+  eventId         String    @unique
+  eventType       String
+  status          String    @default("pending")
+  attempt         Int       @default(0)
+  httpStatus      Int?
+  errorMessage    String?
+  responseExcerpt String?
+  nextRetryAt     DateTime?
+  attemptedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  webhook         Webhook   @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId, createdAt])
+  @@index([workspaceId, status])
+  @@map("voice_webhook_deliveries")
 }
 
 model AuditLog {
