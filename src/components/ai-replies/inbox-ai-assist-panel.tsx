@@ -95,10 +95,13 @@ export function InboxAiAssistPanel({
   conversationId,
   onUseSuggestion,
   assist,
+  hideAutomationOwnership = false,
 }: {
   conversationId?: string;
   onUseSuggestion: (text: string) => void;
   assist?: ReturnType<typeof useInboxAiAssist>;
+  /** MCTB threads use mctbConversationAutomationState — hide generic AI Assist takeover. */
+  hideAutomationOwnership?: boolean;
 }) {
   const internal = useInboxAiAssist(assist ? undefined : conversationId);
   const { session, suggestions, knowledge, loading, takeover } = assist ?? internal;
@@ -133,7 +136,7 @@ export function InboxAiAssistPanel({
           </div>
         ) : (
           <>
-            {session ? (
+            {session && !hideAutomationOwnership ? (
               <div className="mb-4 rounded-xl border border-border bg-card p-3.5 shadow-sm">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Session status
@@ -211,7 +214,7 @@ export function InboxAiAssistPanel({
         )}
       </div>
 
-      {session?.status === "ai_active" ? (
+      {session?.status === "ai_active" && !hideAutomationOwnership ? (
         <div className="border-t border-border bg-card/60 p-4">
           <Button type="button" size="sm" variant="outline" className="w-full" onClick={() => void takeover()}>
             Take Over Conversation

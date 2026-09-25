@@ -66,6 +66,8 @@ const nextConfig: NextConfig = {
       { source: "/mctb/setup/business-hours", destination: "/mctb/setup/recovery", permanent: false },
       { source: "/mctb/setup/follow-up", destination: "/mctb/setup/recovery", permanent: false },
       { source: "/mctb/setup/schedule", destination: "/mctb/setup/recovery", permanent: false },
+      { source: "/mctb/ai-lead-recovery", destination: "/mctb/ai-recovery", permanent: false },
+      { source: "/mctb/ai-lead-recovery/:path*", destination: "/mctb/ai-recovery", permanent: false },
     ];
   },
   // BullMQ pulls Node builtins (net, child_process) — keep external when webpack is used.

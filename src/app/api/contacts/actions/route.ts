@@ -17,6 +17,34 @@ export async function POST(request: Request) {
     };
 
     if (body.action === "send_booking_link") {
+      const conversationId = (body as { conversationId?: string }).conversationId;
+      if (conversationId) {
+        const { resolveMctbInboxCapabilitiesForConversation } = await import(
+          "@/lib/mctb/inbox/resolve-inbox-capabilities"
+        );
+        const caps = await resolveMctbInboxCapabilitiesForConversation({
+          workspaceId: auth.workspaceId,
+          conversationId,
+        });
+        if (caps && !caps.canUseBookingLink) {
+          return NextResponse.json(
+            { error: "Booking link send is not available for this account or sender." },
+            { status: 403 },
+          );
+        }
+      } else {
+        const { resolveMctbInboxCapabilities } = await import(
+          "@/lib/mctb/inbox/resolve-inbox-capabilities"
+        );
+        const caps = await resolveMctbInboxCapabilities(auth.workspaceId);
+        if (!caps.canUseBookingLink) {
+          return NextResponse.json(
+            { error: "Booking link send is not available for this account or sender." },
+            { status: 403 },
+          );
+        }
+      }
+
       const url = body.bookingUrl || "";
       const message = `Book an appointment with us: ${url}`;
       if (body.phone) {

@@ -133,6 +133,29 @@ export async function PATCH(
       if (perms.allowStartConversations === false && existing.status === "CLOSED") {
         return NextResponse.json({ error: "Cannot reply to closed conversations" }, { status: 403 });
       }
+
+      const { assertMctbInboxOutboundAllowed } = await import(
+        "@/lib/mctb/inbox/resolve-inbox-capabilities"
+      );
+      const mctbGate = await assertMctbInboxOutboundAllowed({
+        workspaceId: auth.workspaceId,
+        conversationId: id,
+        body: replyBody,
+        mediaUrls: replyMedia,
+      });
+      if (!mctbGate.ok) {
+        return NextResponse.json({ error: mctbGate.error }, { status: mctbGate.status });
+      }
+
+      const { ensureMctbHumanOwnershipBeforeManualSend } = await import(
+        "@/lib/mctb/inbox/manual-send-takeover"
+      );
+      await ensureMctbHumanOwnershipBeforeManualSend({
+        workspaceId: auth.workspaceId,
+        conversationId: id,
+        userId: auth.session.userId,
+      });
+
       const to = existing.contact.phone;
       const replyFrom = body.from || existing.fromE164 || undefined;
       await sendQuickSms({
