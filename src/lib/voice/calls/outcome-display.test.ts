@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { deriveCallListOutcomeDisplay } from "./outcome-display";
+import {
+  deriveCallDetailMaterialOutcomes,
+  deriveCallListOutcomeDisplay,
+} from "./outcome-display";
 
 describe("deriveCallListOutcomeDisplay", () => {
   it("does not treat SEND_LINK as booked", () => {
@@ -24,6 +27,16 @@ describe("deriveCallListOutcomeDisplay", () => {
       transferred: true,
     });
     expect(r.primary).toBe("Transfer Failed");
+  });
+
+  it("detail shows booked and transfer failed together", () => {
+    const facts = deriveCallDetailMaterialOutcomes({
+      outcome: "transfer_failed",
+      appointmentBooked: true,
+      transfers: [{ status: "failed" }],
+    });
+    expect(facts).toContain("Transfer Failed");
+    expect(facts).toContain("Appointment Booked");
   });
 
   it("surfaces solicitor outcome", () => {

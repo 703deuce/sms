@@ -16,7 +16,10 @@ import {
   transcriptPipelineState,
 } from "@/lib/voice/calls/customer-activity-feed";
 import { fmtCallDuration, fmtCallPhone } from "@/lib/voice/calls/display";
-import { deriveCallListOutcomeDisplay } from "@/lib/voice/calls/outcome-display";
+import {
+  deriveCallDetailMaterialOutcomes,
+  deriveCallListOutcomeDisplay,
+} from "@/lib/voice/calls/outcome-display";
 import {
   getMockCallById,
   isDemoCallId,
@@ -280,14 +283,16 @@ export default function VoiceCallDetailPage() {
 
   const transfersForOutcome =
     (data?.transfers as Array<{ status?: string }>) || [];
-  const listOutcome = deriveCallListOutcomeDisplay({
+  const outcomeInput = {
     outcome: call.outcome as string | null,
     appointmentBooked: Boolean(call.appointmentBooked),
     transferred: Boolean(call.transferred),
     voicemailDetected: Boolean(call.voicemailDetected),
     transfers: transfersForOutcome,
     hasKnowledgeGap: knowledgeGaps.length > 0,
-  });
+  };
+  const listOutcome = deriveCallListOutcomeDisplay(outcomeInput);
+  const materialOutcomes = deriveCallDetailMaterialOutcomes(outcomeInput);
   const contactId = call.contactId as string | null | undefined;
   const executionTrace = call.executionTrace as unknown;
   const toolExecutions =
@@ -355,7 +360,9 @@ export default function VoiceCallDetailPage() {
               <div className="rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
                 <h2 className="text-sm font-semibold text-[#111827]">What happened</h2>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <CallOutcomeBadge outcome={listOutcome.primary} />
+                  {materialOutcomes.map((o) => (
+                    <CallOutcomeBadge key={o} outcome={o} />
+                  ))}
                   {listOutcome.attention ? (
                     <CallAttentionBadge label={listOutcome.attention} />
                   ) : null}

@@ -1,9 +1,5 @@
-import { VoiceReceptionistHub } from "@/components/voice/voice-receptionist-hub";
+import { VoiceReceptionistEditor } from "@/components/voice/receptionist/voice-receptionist-editor";
 
 export default function VoiceReceptionistPage() {
-  return (
-    <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-8">
-      <VoiceReceptionistHub />
-    </div>
-  );
+  return <VoiceReceptionistEditor />;
 }

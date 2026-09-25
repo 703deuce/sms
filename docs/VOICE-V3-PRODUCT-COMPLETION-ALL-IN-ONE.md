@@ -4,8 +4,9 @@ Single file: **operator order (Pass 1→2→3)**, **full Cursor Pass 1 prompt**,
 
 **Last updated:** 2026-09-25  
 **Pass 1 branch:** `cursor/voice-v3-e2e-product-completion-2304` (PR #505) — **closed; do not polish further.**  
-**Pass 2 branch:** `cursor/voice-v3-pass-2-call-handling-2304` — Call Handling operational UI.  
-**Cert order:** Merge Pass 1 → Pass 2 → PSTN certification.
+**Pass 2 branch:** `cursor/voice-v3-pass-2-call-handling-2304` — Call Handling + implementation finish (PR #506).  
+**Cert order:** Merge Pass 1 → Pass 2 → **you** run owner certification (not Cursor).  
+**Finish report:** `docs/VOICE-V3-PRODUCT-IMPLEMENTATION-FINISH-REPORT.md`
 
 ---
 

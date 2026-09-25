@@ -171,3 +171,43 @@ export function deriveAttentionBadge(
 export function deriveCallOutcomeBadge(call: CallRowOutcomeInput): CallOutcomeBadge {
   return deriveCallListOutcomeDisplay(call).primary;
 }
+
+/**
+ * Call detail: every material deterministic outcome (list primary is only one slot).
+ */
+export function deriveCallDetailMaterialOutcomes(
+  call: CallRowOutcomeInput,
+): CallOutcomeBadge[] {
+  const { primary, attention } = deriveCallListOutcomeDisplay(call);
+  const facts = new Set<CallOutcomeBadge>();
+  facts.add(primary);
+
+  const outcomeLc = outcomeLower(call);
+  if (
+    (call.appointmentBooked ||
+      outcomeLc.includes("appointment_booked") ||
+      (outcomeLc.includes("booked") && !outcomeLc.includes("link"))) &&
+    primary !== "Appointment Booked"
+  ) {
+    facts.add("Appointment Booked");
+  }
+  if (transferFailed(call) && primary !== "Transfer Failed") {
+    facts.add("Transfer Failed");
+  }
+  if (call.transferred && primary !== "Transferred") {
+    facts.add("Transferred");
+  }
+  if (outcomeLc.includes("booking_link_sent") && primary !== "Booking Link Sent") {
+    facts.add("Booking Link Sent");
+  }
+  if (
+    (outcomeLc.includes("appointment_requested") || outcomeLc.includes("request_only")) &&
+    primary !== "Appointment Requested"
+  ) {
+    facts.add("Appointment Requested");
+  }
+  if (attention === "Transfer failed" && !facts.has("Transfer Failed")) {
+    facts.add("Transfer Failed");
+  }
+  return [...facts];
+}

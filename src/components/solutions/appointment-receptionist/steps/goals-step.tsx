@@ -64,11 +64,17 @@ export function GoalsStep({
   patch,
   hireMode = false,
   presentation = "legacy",
+  compactCapabilities = false,
+  hideSidePanel = false,
+  hideSolutionName = false,
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
   hireMode?: boolean;
   presentation?: "legacy" | "mctb";
+  compactCapabilities?: boolean;
+  hideSidePanel?: boolean;
+  hideSolutionName?: boolean;
 }) {
   const isMctb = presentation === "mctb";
   const options = capabilityOptionsForPreset(state.preset);
@@ -247,55 +253,89 @@ export function GoalsStep({
   return (
     <div className="flex gap-6">
       <div className="min-w-0 flex-1 space-y-8">
-        <div>
-          <Label htmlFor="solution-name">Agent name</Label>
-          <Input
-            id="solution-name"
-            className="mt-1.5 max-w-lg"
-            value={state.solutionName}
-            onChange={(e) => {
-              const solutionName = e.target.value;
-              patch({
-                solutionName,
-                agentName:
-                  !state.agentName ||
-                  state.agentName === "Astra" ||
-                  state.agentName === state.solutionName
-                    ? solutionName.slice(0, 40) || state.agentName
-                    : state.agentName,
-              });
-            }}
-            placeholder="e.g. Front Desk — Main Office"
-          />
-          <p className="mt-1.5 text-xs text-muted-foreground">
-            This name shows in Your Team and Automations so you can tell agents apart.
-          </p>
-        </div>
+        {!hideSolutionName ? (
+          <div>
+            <Label htmlFor="solution-name">Agent name</Label>
+            <Input
+              id="solution-name"
+              className="mt-1.5 max-w-lg"
+              value={state.solutionName}
+              onChange={(e) => {
+                const solutionName = e.target.value;
+                patch({
+                  solutionName,
+                  agentName:
+                    !state.agentName ||
+                    state.agentName === "Astra" ||
+                    state.agentName === state.solutionName
+                      ? solutionName.slice(0, 40) || state.agentName
+                      : state.agentName,
+                });
+              }}
+              placeholder="e.g. Front Desk — Main Office"
+            />
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              This name shows in Your Team and Automations so you can tell agents apart.
+            </p>
+          </div>
+        ) : null}
 
         <div>
-          <h2 className="font-display text-xl font-semibold tracking-tight text-foreground">
-            {isMctb ? "What should your voice agent handle?" : "What should this agent do?"}
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {isMctb
-              ? "Choose what the agent is allowed to help callers with."
-              : "Options match this agent type — select all that apply."}
-          </p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {options.map((opt) => {
-              const Icon = ICONS[opt.icon as keyof typeof ICONS];
-              return (
-                <SelectableCard
-                  key={opt.id}
-                  selected={state.capabilities.includes(opt.id)}
-                  onClick={() => toggleCap(opt.id)}
-                  title={opt.title}
-                  description={opt.description}
-                  icon={<Icon className="h-4 w-4" />}
-                />
-              );
-            })}
-          </div>
+          {!compactCapabilities ? (
+            <>
+              <h2 className="font-display text-xl font-semibold tracking-tight text-foreground">
+                {isMctb ? "What should your voice agent handle?" : "What should this agent do?"}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {isMctb
+                  ? "Choose what the agent is allowed to help callers with."
+                  : "Options match this agent type — select all that apply."}
+              </p>
+            </>
+          ) : null}
+          {compactCapabilities ? (
+            <ul className="divide-y divide-border">
+              {options.map((opt) => {
+                const enabled = state.capabilities.includes(opt.id);
+                return (
+                  <li
+                    key={opt.id}
+                    className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0 max-w-xl">
+                      <p className="text-sm font-medium text-foreground">{opt.title}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{opt.description}</p>
+                    </div>
+                    <label className="flex shrink-0 items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-border"
+                        checked={enabled}
+                        onChange={() => toggleCap(opt.id)}
+                      />
+                      {enabled ? "On" : "Off"}
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {options.map((opt) => {
+                const Icon = ICONS[opt.icon as keyof typeof ICONS];
+                return (
+                  <SelectableCard
+                    key={opt.id}
+                    selected={state.capabilities.includes(opt.id)}
+                    onClick={() => toggleCap(opt.id)}
+                    title={opt.title}
+                    description={opt.description}
+                    icon={<Icon className="h-4 w-4" />}
+                  />
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div>
@@ -329,6 +369,7 @@ export function GoalsStep({
         </div>
       </div>
 
+      {!hideSidePanel ? (
       <SidePanel title={isMctb ? "Agent summary" : "Recommended setup"}>
         {isMctb ? (
           <ul className="space-y-2 text-xs text-muted-foreground">
@@ -400,6 +441,7 @@ export function GoalsStep({
           </div>
         )}
       </SidePanel>
+      ) : null}
     </div>
   );
 }
