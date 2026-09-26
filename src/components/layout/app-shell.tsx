@@ -33,11 +33,11 @@ import type { WorkspaceTypeCookie } from "@/lib/auth";
 import { isKimiIntegratedRoute } from "@/lib/products/kimi-ui-routes";
 import { cn } from "@/lib/utils";
 import { usePathname } from "next/navigation";
-import { Suspense, useEffect, useState, type CSSProperties } from "react";
+import { Suspense, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { CallHandlingProvider } from "@/components/call-handling/call-handling-context";
 import type { CallHandlingOwnershipState } from "@/lib/call-handling/types";
 import { shouldUseNewUiShell } from "@/lib/products/newui-shell";
-import { NewUiTopbar } from "@/components/newui-shell/newui-topbar";
+import { NewUiTransplantShellLayout } from "@/components/newui-shell/newui-transplant-shell-layout";
 import { shouldShowCallHandlingSwitcher } from "@/lib/call-handling/show-switcher";
 
 const SIDEBAR_COLLAPSED_KEY = "transovo.sidebarCollapsed";
@@ -267,6 +267,81 @@ export function AppShell({
   const sidebarExpandedPx = softCoolSlateShell ? 204 : 224;
   const sidebarOffset = sidebarCollapsedEffective ? "56px" : `${sidebarExpandedPx}px`;
 
+  const mainClassName =
+    legacyAutomation
+      ? "h-dvh overflow-hidden px-0 pb-0 pt-0 lg:px-0"
+      : fixedViewport
+        ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+        : mctbWorkspaceFullWidth
+          ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-0 pb-28 pt-0 lg:pb-8"
+          : isFullBleed
+            ? isKimiFullBleed
+              ? "flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto"
+              : "flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-4 pb-28 pt-5 lg:px-6 lg:pb-8"
+            : "flex min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 pb-28 pt-5 lg:px-6 lg:pb-8";
+
+  const mainContent = isMctbNeutralShell ? (
+    <div className="mctb-page-canvas min-h-full">{children}</div>
+  ) : (
+    children
+  );
+
+  const wrapCallHandling = (body: ReactNode) =>
+    showCallHandlingSwitcher || callHandlingInitial ? (
+      <CallHandlingProvider initialState={callHandlingInitial}>{body}</CallHandlingProvider>
+    ) : (
+      body
+    );
+
+  if (newUiShell && !realtorMode && !legacyAutomation) {
+    return wrapCallHandling(
+      <div
+        className="product-theme flex h-dvh overflow-hidden bg-background"
+        data-newui-shell="true"
+      >
+        <ProductActivityTracker />
+        <Suspense fallback={null}>
+          <NewUiTransplantShellLayout
+            userName={userName}
+            workspaceId={workspaceId}
+            workspaceName={workspaceName}
+            workspaces={workspaces}
+            pageTitle={title}
+            unreadNotifications={unreadNotifications}
+            creditsRemaining={metrics.creditsRemaining}
+            currentProduct={currentProduct}
+            isLauncher={isLauncher}
+            realtorMode={realtorMode}
+            inboxBadge={isAppointmentsV1Primary() ? inboxUnreadCount : unreadNotifications}
+            primaryVoiceAgentId={primaryVoiceAgentId}
+            showTryIt={showTryIt}
+            productFeatures={productFeatures}
+            hasVoice={hasVoice}
+            hasSms={hasSms}
+            hasNumbers={hasNumbers}
+            hasMctb={hasMctb}
+            hasAiAfterHours={hasAiAfterHours}
+            mainClassName={mainClassName}
+          >
+            {mainContent}
+          </NewUiTransplantShellLayout>
+        </Suspense>
+        <MobileNav
+          realtorMode={realtorMode}
+          currentProduct={currentProduct}
+          showTryIt={showTryIt}
+          productFeatures={productFeatures}
+          hasMctb={hasMctb}
+          hasMassSms={hasSms}
+          hasVoice={hasVoice}
+          hasAiAfterHours={hasAiAfterHours}
+          primaryVoiceAgentId={primaryVoiceAgentId}
+          onMore={() => setMenuOpen(true)}
+        />
+      </div>,
+    );
+  }
+
   const shellBody = (
     <div
       className="product-theme flex h-dvh overflow-hidden bg-background"
@@ -320,21 +395,16 @@ export function AppShell({
           hasAiAfterHours={hasAiAfterHours}
           showTryIt={showTryIt}
           productFeatures={productFeatures}
-          shellVariant={newUiShell ? "newui" : "default"}
         />
       </Suspense>
       <div
         className={cn(
           "flex h-full min-w-0 flex-1 flex-col overflow-hidden",
-          newUiShell
-            ? sidebarCollapsedEffective
-              ? "lg:pl-14"
-              : "lg:pl-[16rem]"
-            : sidebarCollapsedEffective
-              ? "lg:pl-14"
-              : softCoolSlateShell
-                ? "lg:pl-[204px]"
-                : "lg:pl-56",
+          sidebarCollapsedEffective
+            ? "lg:pl-14"
+            : softCoolSlateShell
+              ? "lg:pl-[204px]"
+              : "lg:pl-56",
         )}
       >
         {realtorMode ? (
@@ -349,27 +419,7 @@ export function AppShell({
             unreadNotifications={unreadNotifications}
             onMenuClick={() => setMenuOpen(true)}
           />
-        ) : legacyAutomation ? null : newUiShell ? (
-          <NewUiTopbar
-            sectionLabel={
-              mctbContextActive
-                ? "Missed Call Text Back"
-                : appointmentsContextActive
-                  ? "Appointments"
-                  : pathname.startsWith("/voice/")
-                    ? "AI Receptionist"
-                    : pathname.startsWith("/integrations")
-                      ? "Shared"
-                      : pathname.startsWith("/settings")
-                        ? "Shared"
-                        : "Transovo"
-            }
-            pageLabel={title}
-            userName={userName}
-            unreadNotifications={unreadNotifications}
-            onMenuClick={() => setMenuOpen(true)}
-          />
-        ) : (
+        ) : legacyAutomation ? null : (
           <Header
             title={title}
             userName={userName}
@@ -390,27 +440,7 @@ export function AppShell({
             hasMctb={hasMctb}
           />
         )}
-        <main
-          className={
-            legacyAutomation
-              ? "h-dvh overflow-hidden px-0 pb-0 pt-0 lg:px-0"
-              : fixedViewport
-                ? "flex min-h-0 flex-1 flex-col overflow-hidden"
-                : mctbWorkspaceFullWidth
-                  ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-0 pb-28 pt-0 lg:pb-8"
-                  : isFullBleed
-                    ? isKimiFullBleed
-                      ? "flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto"
-                      : "flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-4 pb-28 pt-5 lg:px-6 lg:pb-8"
-                    : "flex min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 pb-28 pt-5 lg:px-6 lg:pb-8"
-          }
-        >
-          {isMctbNeutralShell ? (
-            <div className="mctb-page-canvas min-h-full">{children}</div>
-          ) : (
-            children
-          )}
-        </main>
+        <main className={mainClassName}>{mainContent}</main>
       </div>
       <MobileNav
         realtorMode={realtorMode}
@@ -427,10 +457,5 @@ export function AppShell({
     </div>
   );
 
-  if (showCallHandlingSwitcher || callHandlingInitial) {
-    return (
-      <CallHandlingProvider initialState={callHandlingInitial}>{shellBody}</CallHandlingProvider>
-    );
-  }
-  return shellBody;
+  return wrapCallHandling(shellBody);
 }

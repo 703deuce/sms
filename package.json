@@ -281,6 +281,7 @@
     "crm:live-readiness": "tsx scripts/crm-live-readiness.ts"
   },
   "dependencies": {
+    "@base-ui/react": "^1.5.0",
     "@aws-sdk/client-s3": "^3.1101.0",
     "@aws-sdk/s3-request-presigner": "^3.1128.0",
     "@livekit/agents": "^1.6.2",

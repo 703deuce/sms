@@ -38,6 +38,7 @@
   ],
   "exclude": [
     "node_modules",
+    "newui",
     "prisma/seed.ts",
     "scripts",
     "voice-runtime",
