@@ -4,7 +4,6 @@
  */
 import * as telnyxClient from "@/lib/messaging/telnyx/client";
 import { loadCallHandlingOwnershipState } from "@/lib/call-handling/ownership-state";
-import { getPrisma } from "@/lib/db";
 import { resolveDevAutoSession } from "@/lib/auth/dev-auto-session";
 
 let telnyxCalls = 0;
@@ -16,7 +15,6 @@ const original = telnyxClient.telnyxRequest;
 };
 
 async function main() {
-  const prisma = getPrisma();
   let workspaceId = process.argv[2]?.trim();
   if (!workspaceId) {
     process.env.DEV_AUTH_BYPASS = "1";
