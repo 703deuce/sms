@@ -1,6 +1,9 @@
 # Transovo sidebar menu — page UI inventory
 
-**Generated:** 2026-09-26 (code audit of production routes/components)  
+**Generated:** 2026-09-26 (code audit of production routes/components)
+
+**Copy-friendly full detail (every box/tab/field):** [`docs/TRANSOVO-MENU-PAGE-UI-INVENTORY-DETAILED.md`](./TRANSOVO-MENU-PAGE-UI-INVENTORY-DETAILED.md) — includes this document plus the exhaustive **DETAILED SUPPLEMENT** section. On GitHub: open that file on branch `cursor/menu-page-ui-inventory-2304` (PR #538).
+
 **Primary nav source:** `src/lib/products/mctb-nav.ts` → `buildMctbV1Nav()`  
 **When this menu applies:** MCTB product shell (`resolveProductSidebarNav` → `effectiveShell === "mctb"`), typically when the workspace has MCTB and you are not on the Appointments-primary shell.
 
