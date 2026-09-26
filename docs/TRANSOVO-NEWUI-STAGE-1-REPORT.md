@@ -144,13 +144,26 @@ Provider reconciliation / Telnyx writes: **not** added to ordinary navigation (u
 
 ## Runtime validation (one controlled session)
 
-See **Validation run** section appended at commit time in git or CI notes — single `next dev`, memory sampled before/after, sequential `curl` to representative routes only.
+**Rollback logic (no Next.js):**
+
+```
+NEXT_PUBLIC_NEWUI_SHELL=0 → isNewUiShellEnabled() false → shouldUseNewUiShell('/voice/overview') false
+(default unset) → isNewUiShellEnabled() true → shouldUseNewUiShell('/voice/overview') true
+```
+
+**Browser / `next dev`:** Not started for this report. The VM already has multiple `next dev` processes bound to `/workspace` (other branches). Per low-RAM policy, Stage 1 did not add another Next instance or screenshot pass — presentation authority is source-diff vs `newui/`.
+
+**Memory at static validation time:** ~9.4 GB used / ~16 GB total (~6.6 GB available). No additional runtime memory spike from this stage.
+
+**Recommended single session (post-merge or dedicated port):** `/voice/overview`, `/mctb`, one Category C route inside shell — sequential `curl` or one browser tab; stop if memory pressure rises.
 
 ---
 
 ## Blockers
 
 None for Stage 1 shell. Stage 2 blocked until this report is accepted.
+
+**Note:** Full shell smoke on `cursor/newui-shell-stage1-2304` requires running `next dev` from the worktree once (not parallel with existing dev servers) or validating after merge to `master`.
 
 ---
 

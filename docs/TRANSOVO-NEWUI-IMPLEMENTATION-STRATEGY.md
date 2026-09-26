@@ -42,7 +42,9 @@
 
 **Comparison source:** `newui/` stays untouched. Production copies live under `src/newui-transplant/`. Diff `newui/...` vs `src/newui-transplant/...`; differences must be explainable integration edits only. No mass Prettier/reformat on copy.
 
-**Adapters:** thin `production DTO → view model` only — no auth, telephony, compliance, entitlements, provider reconciliation, or persistence duplicated in adapters.
+**Adapters:** thin `production DTO → view model` only — no auth, telephony, compliance, entitlements, provider reconciliation, or persistence duplicated in adapters. Adapters must not become a second frontend.
+
+**Stage 1:** Category C page bodies must not be restyled during shell transplant (shell migration ≠ page migration).
 
 **No cleanup until certification:** do not delete `newui/`, old AppShell path, or legacy pages/components because a transplant exists.
 
