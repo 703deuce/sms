@@ -1,3 +1,5 @@
+'use client'
+
 import { Mic, Play, Type, Upload, Waves } from 'lucide-react'
 import { FieldRow, Panel, Pill } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
@@ -5,7 +7,15 @@ import { Switch } from '@/newui-transplant/components/ui/switch'
 import { Textarea } from '@/newui-transplant/components/ui/textarea'
 import { SaveBar } from '@/newui-transplant/components/app/save-bar'
 
-export const metadata: Metadata = { title: 'Voicemail Setup' }
+export type MctbSetupVoicemailWired = {
+  greetingText: string
+  onGreetingTextChange: (v: string) => void
+  greetingActive: boolean
+  sendAfterVoicemail: boolean
+  onSendAfterVoicemailChange: (v: boolean) => void
+  onSaveGreeting?: () => Promise<void>
+  onSaveRecoveryToggle?: () => Promise<void>
+}
 
 const SOURCES = [
   { icon: Type, label: 'Text to speech', active: true },
@@ -14,10 +24,20 @@ const SOURCES = [
   { icon: Upload, label: 'Upload' },
 ]
 
-export function TransplantMctbSetupVoicemailPage() {
+export function TransplantMctbSetupVoicemailPage({ wired }: { wired?: MctbSetupVoicemailWired }) {
+  const greeting =
+    wired?.greetingText ??
+    "You've reached Northside Plumbing & Heating. Leave your name, number, and what you need, and we'll text you right back."
+  const active = wired?.greetingActive ?? false
+
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <Panel title="Greeting" description="What callers hear before leaving a message" action={<Pill tone="warning">Not active</Pill>} className="lg:col-span-2">
+      <Panel
+        title="Greeting"
+        description="What callers hear before leaving a message"
+        action={<Pill tone={active ? 'success' : 'warning'}>{active ? 'Active' : 'Not active'}</Pill>}
+        className="lg:col-span-2"
+      >
         <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {SOURCES.map((s) => (
             <button
@@ -39,16 +59,24 @@ export function TransplantMctbSetupVoicemailPage() {
         <Textarea
           id="greeting"
           rows={3}
-          defaultValue="You've reached Northside Plumbing & Heating. Leave your name, number, and what you need, and we'll text you right back."
+          value={greeting}
+          onChange={(e) => wired?.onGreetingTextChange(e.target.value)}
         />
         <div className="mt-4 flex flex-wrap justify-end gap-2">
-          <Button variant="outline"><Play /> Preview</Button>
-          <SaveBar label="Activate greeting" />
+          <Button variant="outline" type="button"><Play /> Preview</Button>
+          <SaveBar label="Activate greeting" onSave={wired?.onSaveGreeting} />
         </div>
       </Panel>
       <Panel title="After a voicemail">
         <FieldRow label="Send recovery text" description="Text the caller after they leave a message">
-          <Switch defaultChecked aria-label="Send recovery text after voicemail" />
+          <Switch
+            checked={wired?.sendAfterVoicemail ?? true}
+            onCheckedChange={(v) => {
+              wired?.onSendAfterVoicemailChange(v)
+              void wired?.onSaveRecoveryToggle?.()
+            }}
+            aria-label="Send recovery text after voicemail"
+          />
         </FieldRow>
       </Panel>
       <Panel title="Transcription">

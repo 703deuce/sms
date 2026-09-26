@@ -1,17 +1,23 @@
+'use client'
+
 import { MoreHorizontal, Plus } from 'lucide-react'
 import { Initials, Panel } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Checkbox } from '@/newui-transplant/components/ui/checkbox'
+import { formatPhone } from '@/lib/utils'
 
-export const metadata: Metadata = { title: 'Notifications' }
+export type MctbSetupNotificationsWired = {
+  recipients: Array<{ name: string; email: string; mobile: string }>
+  events: Array<{ label: string; email: boolean; sms: boolean; onEmailChange?: (v: boolean) => void; onSmsChange?: (v: boolean) => void }>
+}
 
-const RECIPIENTS = [
+const DEMO_RECIPIENTS = [
   { name: 'Dana Whitaker', email: 'dana@northsideplumbing.com', mobile: '(512) 555-0161' },
   { name: 'Jake Morales', email: 'jake@northsideplumbing.com', mobile: '(512) 555-0170' },
   { name: 'Front office', email: 'office@northsideplumbing.com', mobile: '—' },
 ]
 
-const EVENTS = [
+const DEMO_EVENTS = [
   { label: 'Customer replied', email: true, sms: true },
   { label: 'Needs reply (15 min)', email: true, sms: true },
   { label: 'New voicemail', email: true, sms: false },
@@ -19,12 +25,15 @@ const EVENTS = [
   { label: 'Forwarding stopped working', email: true, sms: true },
 ]
 
-export function TransplantMctbSetupNotificationsPage() {
+export function TransplantMctbSetupNotificationsPage({ wired }: { wired?: MctbSetupNotificationsWired }) {
+  const recipients = wired?.recipients?.length ? wired.recipients : DEMO_RECIPIENTS
+  const events = wired?.events?.length ? wired.events : DEMO_EVENTS
+
   return (
     <div className="flex flex-col gap-4">
       <Panel title="Team recipients" action={<Button size="sm" variant="outline"><Plus /> Add recipient</Button>} bodyClassName="p-0">
         <ul className="divide-y">
-          {RECIPIENTS.map((r) => (
+          {recipients.map((r) => (
             <li key={r.name} className="flex items-center gap-3 px-5 py-3">
               <Initials name={r.name} />
               <div className="min-w-0 flex-1">
@@ -46,11 +55,23 @@ export function TransplantMctbSetupNotificationsPage() {
             </tr>
           </thead>
           <tbody className="divide-y">
-            {EVENTS.map((e) => (
+            {events.map((e) => (
               <tr key={e.label}>
                 <td className="px-5 py-3">{e.label}</td>
-                <td className="px-3 py-3 text-center"><Checkbox defaultChecked={e.email} aria-label={`${e.label} by email`} /></td>
-                <td className="px-5 py-3 text-center"><Checkbox defaultChecked={e.sms} aria-label={`${e.label} by SMS`} /></td>
+                <td className="px-3 py-3 text-center">
+                  <Checkbox
+                    checked={e.email}
+                    onCheckedChange={(v) => e.onEmailChange?.(Boolean(v))}
+                    aria-label={`${e.label} by email`}
+                  />
+                </td>
+                <td className="px-5 py-3 text-center">
+                  <Checkbox
+                    checked={e.sms}
+                    onCheckedChange={(v) => e.onSmsChange?.(Boolean(v))}
+                    aria-label={`${e.label} by SMS`}
+                  />
+                </td>
               </tr>
             ))}
           </tbody>
@@ -58,4 +79,9 @@ export function TransplantMctbSetupNotificationsPage() {
       </Panel>
     </div>
   )
+}
+
+export function formatRecipientMobile(mobileE164?: string | null): string {
+  if (!mobileE164?.trim()) return '—'
+  return formatPhone(mobileE164)
 }

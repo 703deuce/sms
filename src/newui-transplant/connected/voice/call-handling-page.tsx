@@ -1,8 +1,67 @@
 "use client";
 
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { TransplantVoiceCallHandlingPage } from "@/newui-transplant/mirror/routes/voice/call-handling/page";
+import {
+  buildVoiceCallHandlingWired,
+  type RecentTransferRow,
+  type VoiceCallHandlingWired,
+} from "@/lib/newui-transplant/adapters/voice-call-handling";
+import { useAppointmentReceptionistWizard } from "@/lib/newui-transplant/hooks/use-appointment-receptionist";
+import { DEFAULT_VOICE_V2_OPERATING_MATURITY_CONFIG } from "@/lib/voice-receptionist-wizard/operating-maturity/defaults";
 
-/** Call-handling Opus controls map partially to `/api/call-handling` ownership; full transfer UI remains Opus-presentational until dedicated APIs are exposed. */
 export function NewUiVoiceCallHandlingPage() {
-  return <TransplantVoiceCallHandlingPage />;
+  const { state, patch, loading, saveDraft } = useAppointmentReceptionistWizard();
+  const [recent, setRecent] = useState<RecentTransferRow[]>([]);
+
+  useEffect(() => {
+    fetch("/api/voice/call-handling/recent-transfers?limit=10", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => setRecent((j.data ?? []) as RecentTransferRow[]))
+      .catch(() => setRecent([]));
+  }, []);
+
+  const onSwitchChange = useCallback(
+    (key: keyof VoiceCallHandlingWired["switches"], value: boolean) => {
+      const maturity = state.operatingMaturity ?? DEFAULT_VOICE_V2_OPERATING_MATURITY_CONFIG;
+      const whenClosed = { ...maturity.afterHoursBehavior.whenClosed };
+      if (key === "ringTeamFirst") whenClosed.allowOfficeTransfer = value;
+      if (key === "aiAfterHours") whenClosed.allowOnCallEscalation = value;
+      if (key === "emergenciesOnly") whenClosed.allowNormalTransferDestinations = !value;
+      if (key === "whisper") patch({ warmTransfer: value });
+      if (key === "recordCalls") patch({ callRecording: value });
+      if (key === "declineSolicitors") patch({ salesSolicitationEnabled: value });
+      if (key === "blockSpam") patch({ spamLikelyPolicy: value ? "BLOCK" : null });
+      if (key === "ringTeamFirst" || key === "aiAfterHours" || key === "emergenciesOnly") {
+        patch({
+          operatingMaturity: {
+            ...maturity,
+            afterHoursBehavior: {
+              ...maturity.afterHoursBehavior,
+              whenClosed,
+            },
+          },
+        });
+      }
+    },
+    [patch, state.operatingMaturity],
+  );
+
+  const wired = useMemo(() => {
+    if (loading) return undefined;
+    const base = buildVoiceCallHandlingWired(state, recent);
+    return {
+      ...base,
+      onSwitchChange,
+      onSave: async () => {
+        await saveDraft("call-handling");
+      },
+    };
+  }, [loading, state, recent, onSwitchChange, saveDraft]);
+
+  if (loading) {
+    return <p className="p-6 text-sm text-muted-foreground">Loading call handling…</p>;
+  }
+
+  return <TransplantVoiceCallHandlingPage wired={wired} />;
 }

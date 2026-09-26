@@ -1,3 +1,5 @@
+'use client'
+
 import { FileText, Globe, HelpCircle, MoreHorizontal, Plus, RefreshCw, Upload } from 'lucide-react'
 import { Page, PageHeader, Panel, Pill } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
@@ -13,6 +15,12 @@ export type VoiceKnowledgeWired = {
   website?: string
   timezone?: string
   gaps?: Array<{ id: string; question: string; asked: number; last: string }>
+  hours?: Array<[string, string]>
+  faqs?: Array<{ q: string; a: string }>
+  sources?: Array<{ name: string; meta: string; status: string; icon?: 'globe' | 'file' }>
+  crawlSummary?: string
+  onSave?: () => Promise<void>
+  onRecrawl?: () => Promise<void>
 }
 
 export const metadata: Metadata = { title: 'Business Knowledge' }
@@ -44,12 +52,16 @@ const HOURS = [
 export function TransplantVoiceKnowledgePage({ wired }: { wired?: VoiceKnowledgeWired }) {
   const businessName = wired?.businessName ?? BUSINESS.name
   const gaps = wired?.gaps?.length ? wired.gaps : GAPS
+  const hours = wired?.hours?.length ? wired.hours : HOURS
+  const faqs = wired?.faqs?.length ? wired.faqs : FAQS
+  const sources = wired?.sources?.length ? wired.sources : SOURCES.map((s) => ({ name: s.name, meta: s.meta, status: s.status, icon: s.icon === Globe ? 'globe' as const : 'file' as const }))
+  const crawlSummary = wired?.crawlSummary ?? '42 pages imported · Last crawl Sep 23, 3:12 PM'
   return (
     <Page>
       <PageHeader
         title="Business Knowledge"
         description="What your receptionist knows about your business. Keep it accurate so callers get the right answers."
-        actions={<Button>Save changes</Button>}
+        actions={<Button type="button" onClick={() => void wired?.onSave?.()}>Save changes</Button>}
       />
 
       <section aria-labelledby="gaps" className="mb-6 rounded-xl border border-warning/40 bg-warning/5">
@@ -82,26 +94,27 @@ export function TransplantVoiceKnowledgePage({ wired }: { wired?: VoiceKnowledge
           <div className="flex flex-col gap-4">
             <div className="grid gap-1.5">
               <Label htmlFor="bname">Business name</Label>
-              <Input id="bname" defaultValue={businessName} />
+              <Input id="bname" key={businessName} defaultValue={businessName} />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="bdesc">Description</Label>
               <Textarea
                 id="bdesc"
                 rows={3}
-                defaultValue="Family-owned plumbing and HVAC company serving greater Austin since 2004. Residential repair, replacement, and maintenance."
+                key={wired?.description ?? 'desc-default'}
+                defaultValue={wired?.description ?? 'Family-owned plumbing and HVAC company serving greater Austin since 2004. Residential repair, replacement, and maintenance.'}
               />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="bservices">Services</Label>
-              <Input id="bservices" defaultValue="Water heaters, drains, repipes, AC & furnace repair, gas lines" />
+              <Input id="bservices" key={wired?.services ?? 'svc-default'} defaultValue={wired?.services ?? 'Water heaters, drains, repipes, AC & furnace repair, gas lines'} />
             </div>
           </div>
         </Panel>
 
         <Panel title="Business hours & timezone" description={wired?.timezone ?? BUSINESS.timezone}>
           <dl className="divide-y">
-            {HOURS.map(([day, hours]) => (
+            {hours.map(([day, hours]) => (
               <div key={day} className="flex justify-between py-2.5 text-sm first:pt-0">
                 <dt className="text-muted-foreground">{day}</dt>
                 <dd className="tabular-nums">{hours}</dd>
@@ -114,11 +127,11 @@ export function TransplantVoiceKnowledgePage({ wired }: { wired?: VoiceKnowledge
         <Panel title="Website" description="Import pages so Ava can answer from your site">
           <div className="flex gap-2">
             <Input aria-label="Website URL" defaultValue={wired?.website ? (wired.website.startsWith('http') ? wired.website : `https://${wired.website}`) : `https://${BUSINESS.website}`} />
-            <Button variant="outline">
+            <Button variant="outline" type="button" onClick={() => void wired?.onRecrawl?.()}>
               <RefreshCw /> Re-crawl
             </Button>
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">42 pages imported · Last crawl Sep 23, 3:12 PM</p>
+          <p className="mt-2 text-xs text-muted-foreground">{crawlSummary}</p>
         </Panel>
 
         <Panel
@@ -131,9 +144,11 @@ export function TransplantVoiceKnowledgePage({ wired }: { wired?: VoiceKnowledge
           bodyClassName="p-0"
         >
           <ul className="divide-y">
-            {SOURCES.map((s) => (
+            {sources.map((s) => {
+              const Icon = s.icon === 'globe' ? Globe : FileText
+              return (
               <li key={s.name} className="flex items-center gap-3 px-5 py-3">
-                <s.icon className="size-4 text-muted-foreground" aria-hidden="true" />
+                <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{s.name}</p>
                   <p className="text-xs text-muted-foreground">{s.meta}</p>
@@ -143,7 +158,7 @@ export function TransplantVoiceKnowledgePage({ wired }: { wired?: VoiceKnowledge
                   <MoreHorizontal />
                 </Button>
               </li>
-            ))}
+            )})}
           </ul>
         </Panel>
       </div>
@@ -160,7 +175,7 @@ export function TransplantVoiceKnowledgePage({ wired }: { wired?: VoiceKnowledge
         bodyClassName="p-0"
       >
         <ul className="divide-y">
-          {FAQS.map((f) => (
+          {faqs.map((f) => (
             <li key={f.q} className="px-5 py-4">
               <p className="text-sm font-medium">{f.q}</p>
               <p className="mt-1 text-pretty text-sm text-muted-foreground">{f.a}</p>

@@ -1,29 +1,41 @@
+'use client'
+
 import { Bot, GripVertical, Plus, User } from 'lucide-react'
 import { FieldRow, Page, PageHeader, Panel, Pill } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Switch } from '@/newui-transplant/components/ui/switch'
+import type { VoiceCallHandlingWired } from '@/lib/newui-transplant/adapters/voice-call-handling'
 
-export const metadata: Metadata = { title: 'Call Handling' }
-
-const TRANSFERS = [
+const DEMO_TRANSFERS = [
   { name: 'Front office', number: '(512) 555-0142', ring: '20s', status: 'Verified' },
   { name: 'Jake — Service manager', number: '(512) 555-0170', ring: '15s', status: 'Verified' },
   { name: 'On-call tech', number: '(737) 555-0184', ring: '25s', status: 'Unverified' },
 ]
 
-const RECENT = [
+const DEMO_RECENT = [
   { caller: 'Unknown caller', to: 'On-call tech', reason: 'Emergency: burst pipe', time: 'Today 9:31 AM', result: 'Answered' },
   { caller: 'Linda Park', to: 'Front office', reason: 'Billing question', time: 'Yesterday 2:10 PM', result: 'Answered' },
   { caller: 'Carl Mendez', to: 'Jake — Service manager', reason: 'Asked for manager', time: 'Sep 23 11:48 AM', result: 'No answer → voicemail' },
 ]
 
-export function TransplantVoiceCallHandlingPage() {
+const DEMO_KEYWORDS = ['burst pipe', 'flooding', 'gas smell', 'no heat', 'sewage backup', 'carbon monoxide']
+
+export function TransplantVoiceCallHandlingPage({ wired }: { wired?: VoiceCallHandlingWired }) {
+  const transfers = wired?.transfers?.length ? wired.transfers : DEMO_TRANSFERS
+  const recent = wired?.recent?.length ? wired.recent : DEMO_RECENT
+  const keywords = wired?.emergencyKeywords?.length ? wired.emergencyKeywords : DEMO_KEYWORDS
+  const sw = wired?.switches ?? {}
+
   return (
     <Page>
       <PageHeader
         title="Call Handling"
         description="Decide who answers, when calls transfer, and how emergencies are routed."
-        actions={<Button>Save changes</Button>}
+        actions={
+          <Button type="button" onClick={() => wired?.onSave?.()}>
+            Save changes
+          </Button>
+        }
       />
 
       <section aria-labelledby="current" className="mb-6 grid gap-4 rounded-xl border bg-card p-5 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
@@ -34,7 +46,7 @@ export function TransplantVoiceCallHandlingPage() {
           </span>
           <div>
             <p className="text-xs text-muted-foreground">During business hours</p>
-            <p className="text-sm font-semibold">Team rings first, AI after 20s</p>
+            <p className="text-sm font-semibold">{wired?.duringHoursLine ?? 'Team rings first, AI after 20s'}</p>
           </div>
         </div>
         <div className="hidden h-10 w-px bg-border sm:block" />
@@ -45,7 +57,8 @@ export function TransplantVoiceCallHandlingPage() {
           <div>
             <p className="text-xs text-muted-foreground">After hours — right now</p>
             <p className="flex items-center gap-2 text-sm font-semibold">
-              AI answers immediately <Pill tone="success">Live</Pill>
+              {wired?.afterHoursLine ?? 'AI answers immediately'}{' '}
+              {wired?.afterHoursLive !== false ? <Pill tone="success">Live</Pill> : null}
             </p>
           </div>
         </div>
@@ -64,8 +77,8 @@ export function TransplantVoiceCallHandlingPage() {
           className="lg:col-span-2"
         >
           <ol className="divide-y">
-            {TRANSFERS.map((t, i) => (
-              <li key={t.name} className="flex items-center gap-3 px-5 py-3">
+            {transfers.map((t, i) => (
+              <li key={`${t.name}-${i}`} className="flex items-center gap-3 px-5 py-3">
                 <GripVertical className="size-4 text-muted-foreground/50" aria-hidden="true" />
                 <span className="flex size-6 items-center justify-center rounded-full bg-muted text-xs font-medium tabular-nums">{i + 1}</span>
                 <div className="min-w-0 flex-1">
@@ -82,24 +95,40 @@ export function TransplantVoiceCallHandlingPage() {
         <Panel title="Business hours & after hours">
           <div className="divide-y">
             <FieldRow label="Ring team first during hours" description="AI picks up if nobody answers in 20 seconds">
-              <Switch defaultChecked aria-label="Ring team first" />
+              <Switch
+                checked={sw.ringTeamFirst ?? true}
+                onCheckedChange={(v) => wired?.onSwitchChange?.('ringTeamFirst', v)}
+                aria-label="Ring team first"
+              />
             </FieldRow>
             <FieldRow label="AI answers after hours" description="Books visits and takes messages when closed">
-              <Switch defaultChecked aria-label="AI after hours" />
+              <Switch
+                checked={sw.aiAfterHours ?? true}
+                onCheckedChange={(v) => wired?.onSwitchChange?.('aiAfterHours', v)}
+                aria-label="AI after hours"
+              />
             </FieldRow>
             <FieldRow label="Holiday schedule" description="Uses US federal holidays">
-              <Switch aria-label="Holiday schedule" />
+              <Switch
+                checked={sw.holidaySchedule ?? false}
+                onCheckedChange={(v) => wired?.onSwitchChange?.('holidaySchedule', v)}
+                aria-label="Holiday schedule"
+              />
             </FieldRow>
           </div>
         </Panel>
 
         <Panel title="On-call">
           <div className="divide-y">
-            <FieldRow label="On-call rotation" description="This week: Marco R. · (737) 555-0184">
+            <FieldRow label="On-call rotation" description={wired?.onCallDescription ?? 'This week: Marco R. · (737) 555-0184'}>
               <Button size="sm" variant="outline">Edit</Button>
             </FieldRow>
             <FieldRow label="Only transfer emergencies after hours">
-              <Switch defaultChecked aria-label="Emergencies only after hours" />
+              <Switch
+                checked={sw.emergenciesOnly ?? true}
+                onCheckedChange={(v) => wired?.onSwitchChange?.('emergenciesOnly', v)}
+                aria-label="Emergencies only after hours"
+              />
             </FieldRow>
           </div>
         </Panel>
@@ -107,7 +136,7 @@ export function TransplantVoiceCallHandlingPage() {
         <Panel title="Emergency & urgent calls">
           <p className="mb-3 text-xs text-muted-foreground">Keywords that trigger immediate transfer to on-call</p>
           <div className="flex flex-wrap gap-1.5">
-            {['burst pipe', 'flooding', 'gas smell', 'no heat', 'sewage backup', 'carbon monoxide'].map((k) => (
+            {keywords.map((k) => (
               <span key={k} className="rounded-md border bg-muted/50 px-2 py-1 text-xs">{k}</span>
             ))}
             <button type="button" className="rounded-md border border-dashed px-2 py-1 text-xs text-muted-foreground hover:text-foreground">
@@ -119,10 +148,18 @@ export function TransplantVoiceCallHandlingPage() {
         <Panel title="Transfer notifications">
           <div className="divide-y">
             <FieldRow label="Whisper caller context" description="Ava briefs the teammate before connecting">
-              <Switch defaultChecked aria-label="Whisper" />
+              <Switch
+                checked={sw.whisper ?? true}
+                onCheckedChange={(v) => wired?.onSwitchChange?.('whisper', v)}
+                aria-label="Whisper"
+              />
             </FieldRow>
             <FieldRow label="Text summary to teammate">
-              <Switch defaultChecked aria-label="Text summary" />
+              <Switch
+                checked={sw.textSummary ?? true}
+                onCheckedChange={(v) => wired?.onSwitchChange?.('textSummary', v)}
+                aria-label="Text summary"
+              />
             </FieldRow>
           </div>
         </Panel>
@@ -130,10 +167,18 @@ export function TransplantVoiceCallHandlingPage() {
         <Panel title="Caller protection">
           <div className="divide-y">
             <FieldRow label="Block spam & robocalls" description="142 calls blocked this month">
-              <Switch defaultChecked aria-label="Block spam" />
+              <Switch
+                checked={sw.blockSpam ?? true}
+                onCheckedChange={(v) => wired?.onSwitchChange?.('blockSpam', v)}
+                aria-label="Block spam"
+              />
             </FieldRow>
             <FieldRow label="Politely decline solicitors">
-              <Switch defaultChecked aria-label="Decline solicitors" />
+              <Switch
+                checked={sw.declineSolicitors ?? true}
+                onCheckedChange={(v) => wired?.onSwitchChange?.('declineSolicitors', v)}
+                aria-label="Decline solicitors"
+              />
             </FieldRow>
           </div>
         </Panel>
@@ -141,7 +186,11 @@ export function TransplantVoiceCallHandlingPage() {
         <Panel title="Call recording">
           <div className="divide-y">
             <FieldRow label="Record calls" description="Plays a short disclosure at the start of each call">
-              <Switch defaultChecked aria-label="Record calls" />
+              <Switch
+                checked={sw.recordCalls ?? true}
+                onCheckedChange={(v) => wired?.onSwitchChange?.('recordCalls', v)}
+                aria-label="Record calls"
+              />
             </FieldRow>
             <FieldRow label="Retention" description="Recordings are deleted after 90 days">
               <Button size="sm" variant="outline">Change</Button>
@@ -163,8 +212,8 @@ export function TransplantVoiceCallHandlingPage() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {RECENT.map((r) => (
-                <tr key={r.time}>
+              {recent.map((r) => (
+                <tr key={`${r.caller}-${r.time}`}>
                   <td className="px-5 py-3 font-medium">{r.caller}</td>
                   <td className="px-3 py-3">{r.to}</td>
                   <td className="px-3 py-3 text-muted-foreground">{r.reason}</td>

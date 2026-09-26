@@ -35,12 +35,13 @@ export function NewUiVoiceAnalyticsPage() {
     return mergeDailyTrends({
       days: dayKeys,
       calls: data.dailyCallVolume,
-      booked: data.dailyCallVolume.map((d) => ({
-        date: d.date,
-        count: Math.round((d.count * (data.appointmentsBooked / Math.max(1, data.totalCalls))) || 0),
-      })),
     });
   }, [data]);
+
+  const chartSeries = useMemo(
+    () => [{ key: "calls" as const, label: "Calls", color: "var(--chart-1)" }],
+    [],
+  );
 
   const outcomes = data
     ? Object.entries(data.materialOutcomes).map(([label, value]) => ({ label, value }))
@@ -113,14 +114,7 @@ export function NewUiVoiceAnalyticsPage() {
           {loading ? (
             <p className="text-sm text-muted-foreground">Loading chart…</p>
           ) : (
-            <TrendArea
-              data={chartRows}
-              series={[
-                { key: "calls", label: "Calls", color: "var(--chart-1)" },
-                { key: "booked", label: "Booked", color: "var(--chart-3)" },
-              ]}
-              height={240}
-            />
+            <TrendArea data={chartRows} series={chartSeries} height={240} />
           )}
         </Panel>
         <Panel title="Outcomes">
