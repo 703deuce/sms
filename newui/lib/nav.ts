@@ -1,0 +1,93 @@
+import {
+  BarChart3,
+  BookOpen,
+  Bot,
+  CreditCard,
+  Hash,
+  Inbox,
+  LayoutDashboard,
+  PhoneCall,
+  PhoneMissed,
+  Plug,
+  Settings,
+  Sparkles,
+  Voicemail,
+  Workflow,
+  Wrench,
+  type LucideIcon,
+} from 'lucide-react'
+
+export type NavItem = {
+  label: string
+  href: string
+  icon: LucideIcon
+  badge?: string
+  matchPrefix?: string
+}
+
+export type NavSection = { label: string; items: NavItem[] }
+
+export const NAV: NavSection[] = [
+  {
+    label: 'AI Receptionist',
+    items: [
+      { label: 'Overview', href: '/voice/overview', icon: LayoutDashboard },
+      { label: 'Calls', href: '/voice/calls', icon: PhoneCall, matchPrefix: '/voice/calls' },
+      { label: 'Receptionist', href: '/voice/receptionist', icon: Bot },
+      { label: 'Business Knowledge', href: '/voice/knowledge', icon: BookOpen, badge: '3' },
+      { label: 'Call Handling', href: '/voice/call-handling', icon: Workflow },
+      { label: 'Analytics', href: '/voice/analytics', icon: BarChart3 },
+    ],
+  },
+  {
+    label: 'Missed Call Text Back',
+    items: [
+      { label: 'Overview', href: '/mctb', icon: LayoutDashboard },
+      { label: 'Missed Calls', href: '/mctb/missed-calls', icon: PhoneMissed, matchPrefix: '/mctb/missed-calls' },
+      { label: 'Inbox', href: '/mctb/conversations', icon: Inbox, badge: '4' },
+      { label: 'AI Recovery', href: '/mctb/ai-recovery', icon: Sparkles },
+      { label: 'Voicemail', href: '/mctb/voicemail', icon: Voicemail },
+      { label: 'Analytics', href: '/mctb/analytics', icon: BarChart3 },
+      { label: 'Setup', href: '/mctb/setup', icon: Wrench, matchPrefix: '/mctb/setup' },
+    ],
+  },
+  {
+    label: 'Shared',
+    items: [
+      { label: 'Integrations', href: '/integrations', icon: Plug, matchPrefix: '/integrations' },
+      { label: 'Numbers', href: '/voice/numbers', icon: Hash },
+      { label: 'Billing', href: '/settings/billing', icon: CreditCard },
+      { label: 'Settings', href: '/settings', icon: Settings, matchPrefix: '/settings/business' },
+    ],
+  },
+]
+
+export const MCTB_SETUP_SECTIONS = [
+  { label: 'Overview', href: '/mctb/setup' },
+  { label: 'Phone & Forwarding', href: '/mctb/setup/phone' },
+  { label: 'Consent', href: '/mctb/setup/consent' },
+  { label: 'Text Back', href: '/mctb/setup/text-back' },
+  { label: 'Recovery', href: '/mctb/setup/recovery' },
+  { label: 'Voicemail', href: '/mctb/setup/voicemail' },
+  { label: 'Notifications', href: '/mctb/setup/notifications' },
+  { label: 'Exclusions', href: '/mctb/setup/exclusions' },
+  { label: 'Links', href: '/mctb/setup/links' },
+  { label: 'Test', href: '/mctb/setup/test' },
+]
+
+export const INTEGRATION_TABS = [
+  { label: 'Directory', href: '/integrations' },
+  { label: 'Calendars', href: '/integrations/calendars' },
+  { label: 'Payments', href: '/integrations/payments' },
+  { label: 'Connect apps', href: '/integrations/native' },
+  { label: 'CRM', href: '/integrations/crm' },
+  { label: 'API', href: '/integrations/api' },
+  { label: 'Webhooks', href: '/integrations/webhooks' },
+  { label: 'Developer logs', href: '/integrations/logs' },
+]
+
+export const SETTINGS_TABS = [
+  { label: 'Business', href: '/settings/business' },
+  { label: 'Team', href: '/settings/team' },
+  { label: 'Billing', href: '/settings/billing' },
+]
