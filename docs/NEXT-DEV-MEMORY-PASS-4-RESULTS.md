@@ -75,7 +75,7 @@ Used `const mod = await import("…"); void mod;` in `memory-pass4-layout.tsx` (
 
 **Not authorized:** `loadShellData` extract, outcomes split, AppShell child cleanup.
 
-**For review:** Instrument or escalate **Next 16 / Turbopack `(app)` segment first-compile** and **first authenticated document request** (dev-bypass + RSC) before product-module surgery. Optional: one webpack dev comparison on **segment** probe only (Pass 4 optional section).
+**Follow-up:** Pass 5 complete — `docs/NEXT-DEV-MEMORY-PASS-5-RESULTS.md` (bare root still ~2.2 GB; `(app)` segment cliff; webpack comparison; no product refactor).
 
 ---
 
