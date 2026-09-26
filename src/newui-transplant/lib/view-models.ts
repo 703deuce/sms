@@ -30,6 +30,7 @@ export type MissedCall = {
   id: string;
   caller: string;
   phone: string;
+  callerE164?: string;
   missed: string;
   trigger: "No answer" | "Busy" | "Rejected" | "Unreachable" | "Voicemail";
   recovery: RecoveryStatus;
@@ -55,6 +56,10 @@ export type Conversation = {
   needsReply: boolean;
   tag?: string;
   messages: Message[];
+  assignedTo?: string | null;
+  consentLabel?: string;
+  composerFooter?: string;
+  missedCallEventId?: string;
 };
 
 export type VoicemailItem = {
@@ -66,6 +71,8 @@ export type VoicemailItem = {
   duration: string;
   summary: string;
   transcript: string | null;
+  recordingSrc?: string;
+  conversationHref?: string;
 };
 
 export type ChartWeekRow = {

@@ -27,6 +27,7 @@ export function mapMctbMissedCallsListToNewUi(data: MctbMissedCallsListData): Mi
     id: e.id,
     caller: e.contactName?.trim() || fmtCallPhone(e.callerE164),
     phone: fmtCallPhone(e.callerE164),
+    callerE164: e.callerE164,
     missed: new Date(e.detectedAt).toLocaleString(undefined, {
       month: "short",
       day: "numeric",

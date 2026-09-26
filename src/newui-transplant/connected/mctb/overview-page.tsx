@@ -46,7 +46,10 @@ export function NewUiMctbOverviewPage({ data }: { data: MctbOverviewPayload }) {
         <TextLink href="/mctb/ai-recovery">Manage</TextLink>
       </div>
 
-      {data.status === "active" ? (
+      {data.status === "active" &&
+      data.setupComplete &&
+      data.leadRecovery.status === "ready" &&
+      data.kpis.needsReplyCount === 0 ? (
         <div className="mt-4 flex items-center gap-2 rounded-xl border border-success/30 bg-success/5 px-4 py-3 text-sm">
           <CheckCircle2 className="size-4 text-success" aria-hidden="true" />
           Nothing needs attention. Forwarding, sender, and consent are healthy.

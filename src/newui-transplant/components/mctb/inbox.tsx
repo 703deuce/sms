@@ -15,6 +15,14 @@ import { cn } from '@/lib/utils'
 const FILTERS = ['All', 'Needs reply', 'Mine', 'Unassigned', 'Closed', 'Spam'] as const
 type Filter = (typeof FILTERS)[number]
 
+export type InboxWiring = {
+  filter?: Filter
+  onFilterChange?: (filter: Filter) => void
+  onMarkRead?: (ids: string[]) => Promise<void>
+  onClose?: (ids: string[]) => Promise<void>
+  onSendMessage?: (conversationId: string, text: string) => Promise<void>
+}
+
 function Bubble({ m }: { m: Message }) {
   if (m.from === 'system') {
     return (
@@ -60,6 +68,7 @@ export function Inbox({
   missedCalls: missedCallsProp,
   business: businessProp,
   onSendMessage,
+  wiring,
 }: {
   initialId?: string
   initialFilter: Filter
@@ -67,12 +76,15 @@ export function Inbox({
   missedCalls?: MissedCall[]
   business?: BusinessContext
   onSendMessage?: (conversationId: string, text: string) => Promise<void>
+  wiring?: InboxWiring
 }) {
   const conversations = conversationsProp ?? CONVERSATIONS
   const missedCalls = missedCallsProp ?? MISSED_CALLS
   const business = businessProp ?? BUSINESS
 
-  const [filter, setFilter] = useState<Filter>(initialFilter)
+  const [filterLocal, setFilterLocal] = useState<Filter>(initialFilter)
+  const filter = wiring?.filter ?? filterLocal
+  const setFilter = wiring?.onFilterChange ?? setFilterLocal
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string | undefined>(initialId ?? conversations[0]?.id)
   const [mobileThread, setMobileThread] = useState(Boolean(initialId))
@@ -83,11 +95,14 @@ export function Inbox({
   const list = useMemo(() => {
     const q = query.trim().toLowerCase()
     return conversations.filter((c) => {
+      if (wiring) {
+        return !q || `${c.name} ${c.phone} ${c.preview}`.toLowerCase().includes(q)
+      }
       if (filter === 'Needs reply' && !c.needsReply) return false
       if (filter === 'Closed' || filter === 'Spam') return false
       return !q || `${c.name} ${c.phone} ${c.preview}`.toLowerCase().includes(q)
     })
-  }, [filter, query, conversations])
+  }, [filter, query, conversations, wiring])
 
   const selected: Conversation | undefined = conversations.find((c) => c.id === selectedId)
   const messages = selected ? [...selected.messages, ...(sent[selected.id] ?? [])] : []
@@ -104,8 +119,9 @@ export function Inbox({
   const send = async () => {
     const text = draft.trim()
     if (!text || !selected) return
-    if (onSendMessage) {
-      await onSendMessage(selected.id, text)
+    const sendHandler = wiring?.onSendMessage ?? onSendMessage
+    if (sendHandler) {
+      await sendHandler(selected.id, text)
     }
     setSent((prev) => ({
       ...prev,
@@ -151,8 +167,18 @@ export function Inbox({
             {checked.size ? (
               <div className="mt-2 flex items-center gap-2 text-xs">
                 <span className="text-muted-foreground">{checked.size} selected</span>
-                <Button size="xs" variant="outline" className="ml-auto">Mark read</Button>
-                <Button size="xs" variant="outline">Close</Button>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  className="ml-auto"
+                  type="button"
+                  onClick={() => void wiring?.onMarkRead?.([...checked])}
+                >
+                  Mark read
+                </Button>
+                <Button size="xs" variant="outline" type="button" onClick={() => void wiring?.onClose?.([...checked])}>
+                  Close
+                </Button>
               </div>
             ) : null}
           </div>
@@ -248,7 +274,7 @@ export function Inbox({
                   </Button>
                 </div>
                 <p className="mt-1.5 px-1 text-[11px] text-muted-foreground">
-                  {draft.length} / 160 · 1 segment · Customer has not opted out
+                  {selected.composerFooter ?? `${draft.length} / 160 · 1 segment · Customer has not opted out`}
                 </p>
               </form>
             </>
@@ -283,11 +309,11 @@ export function Inbox({
                 </div>
                 <div>
                   <dt className="text-muted-foreground">Consent</dt>
-                  <dd className="mt-0.5">Pressed 1</dd>
+                  <dd className="mt-0.5">{selected.consentLabel ?? '—'}</dd>
                 </div>
                 <div>
                   <dt className="text-muted-foreground">Assigned to</dt>
-                  <dd className="mt-0.5">Unassigned</dd>
+                  <dd className="mt-0.5">{selected.assignedTo ?? 'Unassigned'}</dd>
                 </div>
               </dl>
             </div>

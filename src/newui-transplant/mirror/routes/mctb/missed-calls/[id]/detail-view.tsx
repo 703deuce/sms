@@ -91,7 +91,7 @@ export function TransplantMctbMissedCallDetailView({ wired }: { wired: MctbMisse
           <Panel title="Text-back">
             <Rows
               items={[
-                { label: 'Sender', value: <span className="font-mono text-xs">{BUSINESS.sender}</span> },
+                { label: 'Sender', value: <span className="font-mono text-xs">{wired.senderLabel ?? BUSINESS.sender}</span> },
                 ...wired.textBackRows.map((r) => ({ label: r.label, value: r.value })),
               ]}
             />
@@ -117,7 +117,13 @@ export function TransplantMctbMissedCallDetailView({ wired }: { wired: MctbMisse
           </Panel>
           {wired.showVoicemail ? (
             <Panel title="Voicemail">
-              <audio controls preload="none" className="w-full" aria-label="Voicemail recording" />
+              <audio
+                controls
+                preload="none"
+                className="w-full"
+                aria-label="Voicemail recording"
+                src={wired.voicemailRecordingSrc}
+              />
               {wired.voicemailId ? (
                 <Link href={`/mctb/voicemail/${wired.voicemailId}`} className="mt-2 inline-block text-xs font-medium text-primary hover:underline">Open in Voicemail</Link>
               ) : null}

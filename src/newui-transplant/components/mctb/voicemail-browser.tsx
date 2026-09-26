@@ -81,14 +81,24 @@ export function VoicemailBrowser({ voicemails: voicemailsProp }: { voicemails?: 
             <Button variant="outline" size="sm" render={<a href={`tel:${selected.phone}`} />} nativeButton={false}>
               <Phone /> Call back
             </Button>
-            <Button size="sm" render={<Link href="/mctb/conversations" />} nativeButton={false}>
+            <Button
+              size="sm"
+              render={<Link href={selected.conversationHref ?? '/mctb/conversations'} />}
+              nativeButton={false}
+            >
               <MessageSquare /> Open conversation
             </Button>
           </header>
 
           <div>
             <h3 className="mb-2 text-xs font-medium text-muted-foreground">Original recording · {selected.duration}</h3>
-            <audio controls preload="none" className="w-full" aria-label={`Voicemail from ${selected.caller}`} />
+            <audio
+              controls
+              preload="none"
+              className="w-full"
+              aria-label={`Voicemail from ${selected.caller}`}
+              src={selected.recordingSrc}
+            />
           </div>
 
           <div className="rounded-lg bg-accent/50 p-4">

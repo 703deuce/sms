@@ -10,6 +10,8 @@ export type VoicemailApiMessage = {
   isRead?: boolean;
   aiSummary?: string | null;
   transcript?: string | null;
+  hasRecording?: boolean;
+  conversationId?: string | null;
 };
 
 export function mapVoicemailApiToNewUi(row: VoicemailApiMessage): VoicemailItem {
@@ -32,5 +34,9 @@ export function mapVoicemailApiToNewUi(row: VoicemailApiMessage): VoicemailItem 
     duration: `${m}:${String(s).padStart(2, "0")}`,
     summary: row.aiSummary?.trim() || "No summary yet",
     transcript: row.transcript?.trim() || null,
+    recordingSrc: row.hasRecording ? `/api/phone/voicemail/${row.id}/recording` : undefined,
+    conversationHref: row.conversationId
+      ? `/mctb/conversations?conversation=${row.conversationId}`
+      : undefined,
   };
 }

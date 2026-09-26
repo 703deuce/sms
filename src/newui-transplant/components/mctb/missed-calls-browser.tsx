@@ -15,6 +15,7 @@ import {
 } from '@/newui-transplant/components/ui/dropdown-menu'
 import { EmptyState, Initials } from '@/newui-transplant/components/app/kit'
 import { RecoveryPill } from '@/newui-transplant/components/app/status'
+import type { MctbMissedCallsListWiring } from '@/newui-transplant/mirror/routes/mctb/missed-calls/page'
 import type { MissedCall } from '@/newui-transplant/lib/view-models'
 
 const opts = (values: string[]) => values.map((v) => ({ label: v, value: v }))
@@ -49,14 +50,32 @@ function FilterSelect({
   )
 }
 
-export function MissedCallsBrowser({ missedCalls }: { missedCalls: MissedCall[] }) {
-  const [query, setQuery] = useState('')
-  const [recovery, setRecovery] = useState('All')
-  const [date, setDate] = useState('Last 7 days')
-  const [trigger, setTrigger] = useState('All')
-  const [sort, setSort] = useState('Newest first')
+export function MissedCallsBrowser({
+  missedCalls,
+  wiring,
+}: {
+  missedCalls: MissedCall[]
+  wiring?: MctbMissedCallsListWiring
+}) {
+  const [queryLocal, setQueryLocal] = useState('')
+  const [recoveryLocal, setRecoveryLocal] = useState('All')
+  const [dateLocal, setDateLocal] = useState('Last 7 days')
+  const [triggerLocal, setTriggerLocal] = useState('All')
+  const [sortLocal, setSortLocal] = useState('Newest first')
+
+  const query = wiring?.query ?? queryLocal
+  const setQuery = wiring?.onQueryChange ?? setQueryLocal
+  const recovery = wiring?.recovery ?? recoveryLocal
+  const setRecovery = wiring?.onRecoveryChange ?? setRecoveryLocal
+  const date = wiring?.date ?? dateLocal
+  const setDate = wiring?.onDateChange ?? setDateLocal
+  const trigger = wiring?.trigger ?? triggerLocal
+  const setTrigger = wiring?.onTriggerChange ?? setTriggerLocal
+  const sort = wiring?.sort ?? sortLocal
+  const setSort = wiring?.onSortChange ?? setSortLocal
 
   const rows = useMemo(() => {
+    if (wiring) return missedCalls
     const q = query.trim().toLowerCase()
     const list = missedCalls.filter(
       (m) =>
@@ -65,16 +84,27 @@ export function MissedCallsBrowser({ missedCalls }: { missedCalls: MissedCall[] 
         (!q || `${m.caller} ${m.phone}`.toLowerCase().includes(q)),
     )
     return sort === 'Oldest first' ? [...list].reverse() : list
-  }, [query, recovery, trigger, sort, missedCalls])
+  }, [query, recovery, trigger, sort, missedCalls, wiring])
 
-  const dirty = query || recovery !== 'All' || trigger !== 'All' || sort !== 'Newest first'
+  const dirty =
+    query ||
+    recovery !== 'All' ||
+    date !== 'Last 7 days' ||
+    trigger !== 'All' ||
+    sort !== 'Newest first'
 
   const clear = () => {
     setQuery('')
     setRecovery('All')
+    setDate('Last 7 days')
     setTrigger('All')
     setSort('Newest first')
+    if (wiring) wiring.onPageChange(1)
   }
+
+  const page = wiring?.page ?? 1
+  const pageCount = wiring?.pageCount ?? 1
+  const total = wiring?.total ?? missedCalls.length
 
   return (
     <div className="rounded-xl border bg-card shadow-xs">
@@ -147,7 +177,14 @@ export function MissedCallsBrowser({ missedCalls }: { missedCalls: MissedCall[] 
                           </DropdownMenuItem>
                         ) : null}
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem>Add to exclusions</DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            const e164 = m.callerE164 || m.phone
+                            void wiring?.onAddExclusion?.(e164, m.caller)
+                          }}
+                        >
+                          Add to exclusions
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </td>
@@ -167,9 +204,11 @@ export function MissedCallsBrowser({ missedCalls }: { missedCalls: MissedCall[] 
 
       <div className="flex items-center justify-between border-t px-5 py-3 text-xs text-muted-foreground">
         <span>
-          {rows.length} of {missedCalls.length} · {date}
+          {rows.length} of {total} · {date}
         </span>
-        <span>Page 1 of 1</span>
+        <span>
+          Page {page} of {pageCount}
+        </span>
       </div>
     </div>
   )

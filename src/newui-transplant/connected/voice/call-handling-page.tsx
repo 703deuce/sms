@@ -32,6 +32,7 @@ export function NewUiVoiceCallHandlingPage() {
       if (key === "recordCalls") patch({ callRecording: value });
       if (key === "declineSolicitors") patch({ salesSolicitationEnabled: value });
       if (key === "blockSpam") patch({ spamLikelyPolicy: value ? "BLOCK" : null });
+      if (key === "textSummary") patch({ afterHoursNotificationEvents: value });
       if (key === "holidaySchedule") {
         const schedule = maturity.businessSchedule ?? DEFAULT_VOICE_V2_OPERATING_MATURITY_CONFIG.businessSchedule;
         patch({

@@ -23,6 +23,8 @@ export type MctbMissedCallDetailWired = {
   consentRows: Array<{ label: string; value: string }>;
   showVoicemail: boolean;
   voicemailId?: string;
+  voicemailRecordingSrc?: string;
+  senderLabel?: string;
   diagnostics: string;
 };
 
@@ -42,7 +44,10 @@ function toRecoveryStatus(status: string, suppressionReason: string | null): Rec
   return "Sent";
 }
 
-export function buildMctbMissedCallDetailWired(json: Record<string, unknown>): MctbMissedCallDetailWired | null {
+export function buildMctbMissedCallDetailWired(
+  json: Record<string, unknown>,
+  extras?: { senderLabel?: string },
+): MctbMissedCallDetailWired | null {
   const event = json.event as Record<string, unknown> | undefined;
   if (!event) return null;
 
@@ -135,8 +140,10 @@ export function buildMctbMissedCallDetailWired(json: Record<string, unknown>): M
         value: recovery === "Waiting for consent" ? "Pending" : "Granted",
       },
     ],
-    showVoicemail: trigger.toLowerCase().includes("voicemail"),
+    showVoicemail: Boolean(voicemail?.id),
     voicemailId: voicemail?.id,
+    voicemailRecordingSrc: voicemail?.id ? `/api/phone/voicemail/${voicemail.id}/recording` : undefined,
+    senderLabel: extras?.senderLabel,
     diagnostics: `event_id: ${event.id}\nstatus: ${status}\nconsent: ${consent ? "loaded" : "none"}`,
   };
 }

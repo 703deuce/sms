@@ -26,13 +26,41 @@ const PERIODS = [
   { label: 'Last 30 days', value: '30d' },
 ]
 
-export function CallsBrowser({ calls: sourceCalls }: { calls: VoiceCall[] }) {
-  const [mode, setMode] = useState<'all' | 'attention'>('all')
-  const [filter, setFilter] = useState<CallOutcome | 'all'>('all')
-  const [query, setQuery] = useState('')
-  const [period, setPeriod] = useState('7d')
+export type CallsBrowserWiring = {
+  period: string
+  onPeriodChange: (value: string) => void
+  filter: CallOutcome | 'all'
+  onFilterChange: (value: CallOutcome | 'all') => void
+  query: string
+  onQueryChange: (value: string) => void
+  mode: 'all' | 'attention'
+  onModeChange: (value: 'all' | 'attention') => void
+  loading?: boolean
+}
+
+export function CallsBrowser({
+  calls: sourceCalls,
+  wiring,
+}: {
+  calls: VoiceCall[]
+  wiring?: CallsBrowserWiring
+}) {
+  const [modeLocal, setModeLocal] = useState<'all' | 'attention'>('all')
+  const [filterLocal, setFilterLocal] = useState<CallOutcome | 'all'>('all')
+  const [queryLocal, setQueryLocal] = useState('')
+  const [periodLocal, setPeriodLocal] = useState('7d')
+
+  const mode = wiring?.mode ?? modeLocal
+  const setMode = wiring?.onModeChange ?? setModeLocal
+  const filter = wiring?.filter ?? filterLocal
+  const setFilter = wiring?.onFilterChange ?? setFilterLocal
+  const query = wiring?.query ?? queryLocal
+  const setQuery = wiring?.onQueryChange ?? setQueryLocal
+  const period = wiring?.period ?? periodLocal
+  const setPeriod = wiring?.onPeriodChange ?? setPeriodLocal
 
   const calls = useMemo(() => {
+    if (wiring) return sourceCalls
     const q = query.trim().toLowerCase()
     return sourceCalls.filter((c) => {
       if (mode === 'attention' && !c.attention) return false
@@ -40,7 +68,7 @@ export function CallsBrowser({ calls: sourceCalls }: { calls: VoiceCall[] }) {
       if (q && !`${c.caller} ${c.phone}`.toLowerCase().includes(q)) return false
       return true
     })
-  }, [mode, filter, query, sourceCalls])
+  }, [mode, filter, query, sourceCalls, wiring])
 
   const attentionCount = sourceCalls.filter((c) => c.attention).length
 

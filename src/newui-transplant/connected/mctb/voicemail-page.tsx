@@ -27,6 +27,7 @@ export function NewUiMctbVoicemailPage({ numberId }: { numberId?: string }) {
           isRead: m.isRead,
           aiSummary: m.aiSummary,
           transcript: m.transcriptText,
+          hasRecording: m.hasRecording,
         }));
         setItems(rows);
       })
