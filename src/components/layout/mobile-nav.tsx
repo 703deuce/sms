@@ -1,11 +1,11 @@
 "use client";
 
-import { buildRealtorMobileNav } from "@/lib/realtor/nav";
-import { resolveProductMobileNav } from "@/lib/products/resolve-product-nav";
+import {
+  buildMctbPrimaryMobileNav,
+  shouldUseMctbPrimaryMobile,
+} from "@/lib/products/resolve-mctb-primary-nav";
+import type { ResolveProductNavInput } from "@/lib/products/resolve-product-nav-types";
 import { isAppointmentsNavItemActive } from "@/lib/products/appointments-routes";
-import { buildNumbersMobileNav } from "@/lib/products/numbers-nav";
-import { buildAiAfterHoursMobileNav } from "@/lib/products/ai-after-hours-nav";
-import { buildMassSmsMobileNav, buildVoiceMobileNav } from "@/lib/products/voice-nav";
 import { useProductShell } from "@/components/products/product-shell-tabs";
 import { resolveProductShellFromPath, shouldShowProductSwitcher } from "@/lib/products/product-shell";
 import { isMctbShellActive } from "@/lib/products/resolve-product-nav";
@@ -35,9 +35,6 @@ import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlemen
 import type { CurrentProduct } from "@/lib/products/types";
 
 const voiceMobileIcons = [PhoneMissed, PhoneCall, AudioLines, BookOpen];
-const massSmsMobileIcons = [LayoutDashboard, Megaphone, MessageSquare, Users];
-const aiAfterHoursMobileIcons = [LayoutDashboard, Moon, PhoneCall, BookOpen];
-
 export function MobileNav({
   onMore,
   realtorMode = false,
@@ -70,24 +67,7 @@ export function MobileNav({
   const { shell: productShell } = useProductShell(hasMctb, hasMassSms, hasAiAfterHours);
   const mctbNeutral = isMctbProductChromePath(pathname, productShell, { hasMctb });
 
-  const voiceItems = buildVoiceMobileNav({ showTryIt, productFeatures }).map((item, i) => ({
-    ...item,
-    icon: voiceMobileIcons[i] ?? LayoutDashboard,
-  }));
-  const massSmsItems = buildMassSmsMobileNav().map((item, i) => ({
-    ...item,
-    icon: massSmsMobileIcons[i] ?? LayoutDashboard,
-  }));
-  const aiAfterHoursItems = buildAiAfterHoursMobileNav(primaryVoiceAgentId).map((item, i) => ({
-    ...item,
-    icon: aiAfterHoursMobileIcons[i] ?? LayoutDashboard,
-  }));
-  const numbersItems = buildNumbersMobileNav().map((item, i) => ({
-    ...item,
-    icon: voiceMobileIcons[i] ?? LayoutDashboard,
-  }));
-
-  const resolvedMobile = resolveProductMobileNav({
+  const mobileInput: ResolveProductNavInput = {
     pathname,
     inboxBadge: 0,
     multiProduct,
@@ -98,7 +78,12 @@ export function MobileNav({
     hasSms: hasMassSms,
     hasMctb,
     hasVoice,
-  });
+  };
+  const resolvedMobile = shouldUseMctbPrimaryMobile(mobileInput)
+    ? buildMctbPrimaryMobileNav(mobileInput)
+    : (
+        require("@/lib/products/resolve-product-nav-extended") as typeof import("@/lib/products/resolve-product-nav-extended")
+      ).resolveProductMobileNavExtended(mobileInput);
 
   const mobileIconSets: Record<string, typeof Home[]> = {
     Home: [Home, Calendar, Globe, MessageSquare, Users],
@@ -106,9 +91,14 @@ export function MobileNav({
   };
 
   const items = realtorMode
-    ? buildRealtorMobileNav()
+    ? (require("@/lib/realtor/nav") as typeof import("@/lib/realtor/nav")).buildRealtorMobileNav()
     : currentProduct === "numbers"
-      ? numbersItems
+      ? (require("@/lib/products/numbers-nav") as typeof import("@/lib/products/numbers-nav"))
+          .buildNumbersMobileNav()
+          .map((item, i) => ({
+            ...item,
+            icon: voiceMobileIcons[i] ?? LayoutDashboard,
+          }))
       : resolvedMobile.map((item, i) => {
           const icons =
             item.href.startsWith("/mctb")

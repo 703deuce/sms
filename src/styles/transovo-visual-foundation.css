@@ -1,0 +1,419 @@
+/**
+ * Transovo Pass 2 — shared visual foundation (converge, do not duplicate).
+ * Extends MCTB brand tokens; Voice + Inbox consume the same semantic palette.
+ */
+@import "../components/mctb/shell/mctb-brand-tokens.css";
+
+:root,
+.product-theme {
+  --transovo-canvas: #e8ebf0;
+  --transovo-page-max: 90rem;
+  --transovo-page-max-narrow: 64rem;
+  --transovo-page-pad-x: 1.75rem;
+  --transovo-page-pad-y: 1rem;
+  --transovo-stack-gap: 0.75rem;
+  --transovo-stack-gap-tight: 0.5rem;
+  --transovo-surface: #ffffff;
+  --transovo-border: #e2e8f0;
+  --transovo-border-strong: #cbd5e1;
+  --transovo-text: #0f172a;
+  --transovo-text-muted: #64748b;
+  --transovo-text-subtle: #94a3b8;
+  --transovo-brand: var(--mctb-brand, #3d4f9f);
+  --transovo-brand-soft: var(--mctb-brand-soft, #e8eefb);
+  --transovo-brand-strong: var(--mctb-brand-strong, #2f3f85);
+  --transovo-focus-ring: var(--mctb-brand-ring, #c5d4f2);
+  --transovo-success: var(--mctb-success, #1f6b42);
+  --transovo-danger: var(--mctb-accent-red, #b42318);
+  --transovo-radius-md: 0.5rem;
+  --transovo-radius-lg: 0.75rem;
+  --transovo-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+@media (max-width: 1023px) {
+  :root,
+  .product-theme {
+    --transovo-page-pad-x: 1.25rem;
+  }
+}
+
+@media (max-width: 639px) {
+  :root,
+  .product-theme {
+    --transovo-page-pad-x: 1rem;
+  }
+}
+
+.transovo-page-canvas {
+  background: var(--transovo-canvas);
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.transovo-page-container {
+  box-sizing: border-box;
+  margin-inline: auto;
+  max-width: var(--transovo-page-max);
+  width: 100%;
+  padding: var(--transovo-page-pad-y) var(--transovo-page-pad-x) 1.5rem;
+}
+
+.transovo-page-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--transovo-stack-gap);
+}
+
+.transovo-page-container--narrow {
+  max-width: var(--transovo-page-max-narrow);
+}
+
+.transovo-surface-card {
+  background: var(--transovo-surface);
+  border: 1px solid var(--transovo-border);
+  border-radius: var(--transovo-radius-lg);
+  box-shadow: var(--transovo-shadow-sm);
+}
+
+.transovo-kpi-strip {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 0;
+}
+
+.transovo-kpi-strip--inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0;
+  border: 1px solid var(--transovo-border);
+  border-radius: var(--transovo-radius-md);
+  background: var(--transovo-surface);
+  padding: 0.375rem 0;
+}
+
+.transovo-kpi-inline-item {
+  flex: 1 1 7.5rem;
+  min-width: 0;
+  padding: 0.25rem 0.875rem;
+  border-right: 1px solid var(--transovo-border);
+}
+
+.transovo-kpi-inline-item:last-of-type {
+  border-right: none;
+}
+
+.transovo-kpi-inline-value {
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--transovo-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.transovo-kpi-inline-label {
+  margin-top: 0.125rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--transovo-text-muted);
+}
+
+.transovo-kpi-skeleton-value {
+  height: 1.125rem;
+  width: 2.75rem;
+  border-radius: 0.25rem;
+  background: linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
+  background-size: 200% 100%;
+  animation: transovo-shimmer 1.2s ease-in-out infinite;
+}
+
+.transovo-kpi-degraded-note {
+  width: 100%;
+  padding: 0.25rem 0.875rem 0.375rem;
+  font-size: 0.6875rem;
+  color: var(--transovo-text-muted);
+}
+
+.transovo-kpi-strip--degraded {
+  opacity: 0.85;
+}
+
+@keyframes transovo-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@media (min-width: 640px) {
+  .transovo-kpi-strip--four {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .transovo-kpi-strip--four {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.transovo-kpi-card {
+  background: var(--transovo-surface);
+  border: 1px solid var(--transovo-border);
+  border-radius: var(--transovo-radius-lg);
+  box-shadow: var(--transovo-shadow-sm);
+  padding: 1rem 1.25rem;
+}
+
+.transovo-kpi-card__value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--transovo-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.transovo-kpi-card__label {
+  margin-top: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--transovo-text-muted);
+}
+
+.transovo-kpi-card__trend {
+  margin-top: 0.375rem;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  background: var(--transovo-brand-soft);
+  padding: 0.125rem 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--transovo-brand-strong);
+}
+
+.transovo-operational-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.transovo-operational-toolbar__search {
+  position: relative;
+  flex: 1 1 12rem;
+  min-width: 0;
+  max-width: 22rem;
+}
+
+.transovo-operational-toolbar__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-left: auto;
+}
+
+.transovo-operating-region {
+  display: flex;
+  flex-direction: column;
+  gap: var(--transovo-stack-gap-tight);
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--transovo-border);
+}
+
+.transovo-view-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.transovo-tab-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  border-bottom: 1px solid var(--transovo-border);
+  margin-bottom: 0;
+}
+
+.transovo-tab-link {
+  padding-bottom: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--transovo-text-muted);
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.transovo-tab-link:hover {
+  color: var(--transovo-text);
+}
+
+.transovo-tab-link--active {
+  color: var(--transovo-brand);
+  border-bottom-color: var(--transovo-brand);
+}
+
+.transovo-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.transovo-filter-chip {
+  border: 1px solid transparent;
+  border-radius: 9999px;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--transovo-text-muted);
+  background: transparent;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.transovo-filter-chip:hover {
+  color: var(--transovo-text);
+  background: #f1f5f9;
+}
+
+.transovo-filter-chip--active {
+  color: var(--transovo-brand-strong);
+  border-color: var(--transovo-border);
+  background: var(--transovo-brand-soft);
+}
+
+.transovo-data-table-shell {
+  overflow: hidden;
+  border-radius: var(--transovo-radius-md);
+  border: 1px solid var(--transovo-border);
+  background: var(--transovo-surface);
+  box-shadow: none;
+}
+
+.transovo-data-table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.transovo-data-table-min {
+  min-width: 52rem;
+}
+
+.transovo-table-body-skeleton {
+  padding: 0.25rem 0;
+}
+
+.transovo-table-skeleton-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) auto auto minmax(0, 2fr) auto;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.625rem 1.25rem;
+  border-bottom: 1px solid var(--transovo-border);
+}
+
+.transovo-skeleton-block {
+  height: 0.75rem;
+  border-radius: 0.25rem;
+  background: #f1f5f9;
+  animation: transovo-shimmer 1.2s ease-in-out infinite;
+}
+
+.transovo-skeleton-block--wide {
+  width: 85%;
+}
+
+.transovo-skeleton-block--narrow {
+  width: 3rem;
+}
+
+.transovo-skeleton-block--badge {
+  width: 5.5rem;
+  height: 1.25rem;
+}
+
+.transovo-data-table-head {
+  display: grid;
+  gap: 1rem;
+  border-bottom: 1px solid var(--transovo-border);
+  background: #f8fafc;
+  padding: 0.5rem 1.25rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--transovo-text-muted);
+}
+
+.transovo-input {
+  height: 2.25rem;
+  width: 100%;
+  border-radius: var(--transovo-radius-md);
+  border: 1px solid var(--transovo-border);
+  background: var(--transovo-surface);
+  padding: 0 0.75rem;
+  font-size: 0.875rem;
+  color: var(--transovo-text);
+  box-shadow: var(--transovo-shadow-sm);
+}
+
+.transovo-input:focus {
+  outline: none;
+  border-color: var(--transovo-brand);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--transovo-brand) 20%, transparent);
+}
+
+.transovo-input::placeholder {
+  color: var(--transovo-text-subtle);
+}
+
+.transovo-inbox-shell.ref-scope {
+  --tv-primary: var(--transovo-brand);
+  --tv-primary-hover: var(--transovo-brand-strong);
+  --tv-border: var(--transovo-border);
+  --tv-border-strong: var(--transovo-border-strong);
+  --tv-text: var(--transovo-text);
+  --tv-text-muted: var(--transovo-text-muted);
+  --tv-surface: var(--transovo-surface);
+}
+
+.transovo-state-panel {
+  padding: 3.5rem 1.25rem;
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--transovo-text-muted);
+}
+
+.transovo-inline-error-banner {
+  position: fixed;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 200;
+  display: flex;
+  max-width: 22.5rem;
+  align-items: center;
+  gap: 0.625rem;
+  border-radius: var(--transovo-radius-md);
+  border: 1px solid color-mix(in srgb, var(--transovo-danger) 35%, transparent);
+  background: #fef2f2;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--transovo-danger);
+}
+
+.transovo-inline-error-banner button {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-weight: 700;
+  line-height: 1;
+}

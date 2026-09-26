@@ -19,6 +19,10 @@ import { ConversationsContactPanel } from "@/components/inbox/conversations-cont
 import { ConversationsThreadArea } from "@/components/inbox/conversations-thread-area";
 import { ConversationsInboxSettingsWired } from "@/components/inbox/conversations-inbox-settings-wired";
 import { InboxProductFilters } from "@/components/inbox/inbox-product-filters";
+import {
+  TransovoInlineErrorBanner,
+  TransovoPageLoading,
+} from "@/components/transovo/state-feedback";
 import { MessageSquarePlus, MessagesSquare, SendHorizonal, X, Loader2 } from "lucide-react";
 import {
   buildTagsFromConversations,
@@ -826,18 +830,18 @@ export function KimiConversationsConnected({
 
   if (!permissionsReady) {
     return (
-      <div className="ref-scope" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }}>
-        <p className="text-sm text-slate-500">Loading inbox…</p>
+      <div className="ref-scope transovo-inbox-shell" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }}>
+        <TransovoPageLoading message="Loading inbox…" />
       </div>
     );
   }
 
   if (!inboxEnabled) {
     return (
-      <div className="ref-scope" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }}>
+      <div className="ref-scope transovo-inbox-shell" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }}>
         <div style={{ maxWidth: 420, textAlign: "center" }}>
-          <h2 style={{ fontSize: 18, fontWeight: 700 }}>Inbox is disabled</h2>
-          <p style={{ color: "#6b7280", marginTop: 8 }}>
+          <h2 className="text-lg font-semibold text-[var(--transovo-text)]">Inbox is disabled</h2>
+          <p className="mt-2 text-sm text-[var(--transovo-text-muted)]">
             Turn on inbox messaging in settings to use conversations.
           </p>
           <button
@@ -854,35 +858,8 @@ export function KimiConversationsConnected({
   }
 
   return (
-    <div className="ref-scope" style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-      {error ? (
-        <div
-          style={{
-            position: "fixed",
-            top: 12,
-            right: 12,
-            zIndex: 200,
-            background: "#fef2f2",
-            color: "#b91c1c",
-            padding: "8px 12px",
-            borderRadius: 8,
-            fontSize: 13,
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            maxWidth: 360,
-          }}
-        >
-          <span style={{ flex: 1 }}>{error}</span>
-          <button
-            type="button"
-            onClick={() => setError("")}
-            style={{ border: "none", background: "transparent", color: "#b91c1c", cursor: "pointer", fontWeight: 700 }}
-          >
-            ×
-          </button>
-        </div>
-      ) : null}
+    <div className="ref-scope transovo-inbox-shell" style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+      <TransovoInlineErrorBanner message={error} onDismiss={() => setError("")} />
 
       {view === "settings" ? (
         <SettingsHome onOpenInbox={() => { setSettingsReturn("settings"); setView("inboxSettings"); }} />

@@ -36,9 +36,10 @@ const SIMPLIFIED_SET = new Set<LeadRecoveryCollectField>(
 );
 
 export function deriveSimplifiedFieldEnabled(
-  collectCapabilities: LeadRecoveryCollectField[],
+  collectCapabilities: LeadRecoveryCollectField[] | null | undefined,
 ): Record<AiRecoverySimplifiedField, boolean> {
-  const caps = new Set(collectCapabilities);
+  const list = Array.isArray(collectCapabilities) ? collectCapabilities : [];
+  const caps = new Set(list);
   const reasonOn =
     caps.has("REASON") || caps.has("ISSUE_DESCRIPTION") || caps.has("SERVICE_CATEGORY");
   return {

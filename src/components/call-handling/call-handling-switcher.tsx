@@ -106,8 +106,17 @@ export function CallHandlingSwitcher({
 
   if (loading && !state) {
     return (
-      <div className={cn("px-2 pb-2 text-[11px] text-sidebar-muted", className)} aria-busy="true">
-        Loading call handling…
+      <div
+        className={cn("px-2 pb-2", className)}
+        aria-busy="true"
+        aria-label="Call handling loading"
+      >
+        <div
+          className={cn(
+            "w-full animate-pulse rounded-[10px] bg-[#e8ebf0]",
+            collapsed ? "h-10" : "h-[52px]",
+          )}
+        />
       </div>
     );
   }

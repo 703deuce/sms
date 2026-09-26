@@ -20,6 +20,15 @@ Do not add new products or expand Fax/MCTB feature scope until production certif
 
 Certification: `docs/V1-PRODUCTION-CERTIFICATION.md` · Gate: `npm run test:v1-production-readiness`
 
+### Dev VM weight (MCTB + Voice only — monorepo still compiles everything)
+
+Production on Coolify is typically **~400 MiB** per web container; **local / Cloud Agent `next dev` is not.** Read **`docs/DEV-ENVIRONMENT-WEIGHT-DIAGNOSIS.md`**.
+
+- **One** `next dev` (port 3000). No parallel `next build` + Playwright marathons on a 16 GiB VM.
+- UI screenshots: **`docs/TRANSOVO-LIGHTWEIGHT-SCREENSHOT-WORKFLOW.md`** — never `npm run build` for visual review.
+- When dev is unstable or RAM is exhausted: stop orphan capture scripts, then `npm run dev:clean` (wipes `.next`, restarts dev).
+- Nav flags (`v1-launch-nav.ts`) hide products in UI; they **do not** shrink Next’s compile graph.
+
 ---
 
 ## Transovo production build — preserve first, extend second
