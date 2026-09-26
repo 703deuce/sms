@@ -148,11 +148,13 @@ Cache tracks **first authenticated compile size**, not a separate 48 GB mechanis
 
 ---
 
-## Pass 3 next step (when approved)
+## Pass 3 / Pass 4 next step
 
-**CASE A path:** Diagnostic halves on `(app)/layout` and `AppShell` only — measure P3 with layout stubbed to minimal server props, then restore and halve client shell children.
+Pass 3 complete — see `docs/NEXT-DEV-MEMORY-PASS-3-SERVER-VS-CLIENT.md` (shared ~3 GB floor + server/client overlap).
 
-**Do not** start MCTB view binary isolation until shell RSS for empty probe is **materially below ~2 GB** or shell halves identify a single import chain.
+**Pass 4 (attribution only):** `docs/NEXT-DEV-MEMORY-PASS-4-ATTRIBUTION.md` — segment-only + import-vs-execution matrix. **No authorized refactors** (including `loadShellData` extract) until the first boundary into ~3 GB is proven.
+
+**Do not** start MCTB `loadMctbOverview` optimization until `(app)` floor attribution is done.
 
 ---
 
