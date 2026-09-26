@@ -17,7 +17,8 @@ function rewriteSource(content) {
     .replaceAll("@/components/", "@/newui-transplant/components/")
     .replaceAll("@/lib/data", "@/newui-transplant/lib/sandbox-data")
     .replaceAll("@/lib/nav", "@/newui-transplant/lib/nav")
-    .replaceAll("@/lib/utils", "@/lib/utils");
+    .replaceAll("@/lib/utils", "@/lib/utils")
+    .replaceAll("@/hooks/", "@/newui-transplant/hooks/");
 }
 
 function walkCopy(srcDir, destDir) {
