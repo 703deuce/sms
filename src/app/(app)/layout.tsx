@@ -1,100 +1,19 @@
 import "./product-theme.css";
 import { AppShell } from "@/components/layout/app-shell";
 import { ServiceWorkerRegister } from "@/components/push/service-worker-register";
-import { getActiveWorkspaceId, getActiveWorkspaceType, getSession } from "@/lib/auth";
-import { getUserProductAccess } from "@/lib/products/entitlements";
-import { getWorkspaceProductFeatures } from "@/lib/products/feature-entitlements";
-import { isActiveEntitlement } from "@/lib/products/types";
-import { isAiAfterHoursEntitled } from "@/lib/products/ai-after-hours";
-import { loadOutcomeInstances } from "@/lib/outcomes/instances";
-import { shouldShowTryItNav } from "@/lib/mctb/try-it/visibility";
-import { getMaintenanceState } from "@/lib/platform-flags";
-import { loadShellData, loadWorkspace } from "@/lib/workspace-data";
-import { loadPrimaryVoiceAgentId } from "@/lib/voice/shell-nav";
-import { redirect } from "next/navigation";
+import { runAppLayoutServerPipeline } from "@/lib/shell/app-layout-server-pipeline";
 
 export default async function AppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getSession();
-  if (!session) redirect("/login");
-
-  try {
-    const maintenance = await getMaintenanceState();
-    if (maintenance.enabled && !session.isAdmin) {
-      redirect("/maintenance");
-    }
-  } catch {
-    // ignore settings load failures
-  }
-
-  const workspaceId = await getActiveWorkspaceId();
-  const workspaceType = await getActiveWorkspaceType();
-  const [shell, outcomeInstances, primaryVoiceAgentId, workspaceRow, productAccess, productFeatures] =
-    await Promise.all([
-    loadShellData(session.userId, workspaceId),
-    loadOutcomeInstances(workspaceId),
-    loadPrimaryVoiceAgentId(workspaceId),
-    loadWorkspace(workspaceId),
-    getUserProductAccess(session.userId),
-    getWorkspaceProductFeatures(workspaceId, { isPlatformAdmin: session.isAdmin }),
-  ]);
-  const workspaceName =
-    (workspaceRow as { displayName?: string | null; name?: string } | null)?.displayName ||
-    workspaceRow?.name ||
-    "Workspace";
-  const billingPlan = String(
-    (workspaceRow as { billingPlan?: string | null } | null)?.billingPlan || "",
-  );
-  const customCfg =
-    workspaceRow?.customFieldsConfig && typeof workspaceRow.customFieldsConfig === "object"
-      ? (workspaceRow.customFieldsConfig as Record<string, unknown>)
-      : {};
-  const mctbCfg =
-    customCfg.mctb && typeof customCfg.mctb === "object"
-      ? (customCfg.mctb as Record<string, unknown>)
-      : {};
-  const hasMctb = isActiveEntitlement(productFeatures.mctb);
-  const hasAiAfterHours = isAiAfterHoursEntitled(productAccess.hasVoice);
-  const showTryIt =
-    hasMctb &&
-    shouldShowTryItNav(billingPlan, {
-      isPlatformAdmin: session.isAdmin,
-      adminTestAccount: mctbCfg.adminTestAccount === true || mctbCfg.unlimitedMctbTesting === true,
-    });
+  const shellProps = await runAppLayoutServerPipeline();
 
   return (
     <>
-    <ServiceWorkerRegister />
-    <AppShell
-      userName={session.name}
-      isAdmin={session.isAdmin}
-      workspaceId={workspaceId}
-      workspaceName={workspaceName}
-      workspaceType={workspaceType}
-      workspaces={shell.workspaces}
-      phoneNumbers={shell.phoneNumbers}
-      metrics={shell.metrics}
-      activeFromNumberId={shell.activeFromNumberId}
-      unreadNotifications={shell.unreadNotifications}
-      inboxUnreadCount={shell.inboxUnreadCount}
-      outcomeInstances={outcomeInstances}
-      primaryVoiceAgentId={primaryVoiceAgentId}
-      realtorMode={false}
-      hasVoice={productAccess.hasVoice}
-      hasSms={
-        productAccess.hasSms || isActiveEntitlement(productFeatures.mass_texting)
-      }
-      hasNumbers={productAccess.hasNumbers}
-      hasMctb={hasMctb}
-      hasAiAfterHours={hasAiAfterHours}
-      showTryIt={showTryIt}
-      productFeatures={productFeatures}
-    >
-      {children}
-    </AppShell>
+      <ServiceWorkerRegister />
+      <AppShell {...shellProps}>{children}</AppShell>
     </>
   );
 }
