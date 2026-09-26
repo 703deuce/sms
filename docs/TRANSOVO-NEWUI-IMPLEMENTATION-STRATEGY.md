@@ -38,6 +38,14 @@
 
 **Production home for transplanted files:** `src/newui-transplant/` (copied from `newui/`; `newui/` kept as reference until certification).
 
+**Transplant unit (Stage 2+):** each New UI **page plus its full New UI component dependency graph** — not `page.tsx` alone. Copy every `newui/components/...` (and primitives) the page imports; wire data at the boundary. Never substitute old production page components because they already fetch.
+
+**Comparison source:** `newui/` stays untouched. Production copies live under `src/newui-transplant/`. Diff `newui/...` vs `src/newui-transplant/...`; differences must be explainable integration edits only. No mass Prettier/reformat on copy.
+
+**Adapters:** thin `production DTO → view model` only — no auth, telephony, compliance, entitlements, provider reconciliation, or persistence duplicated in adapters.
+
+**No cleanup until certification:** do not delete `newui/`, old AppShell path, or legacy pages/components because a transplant exists.
+
 ---
 
 ## Route categories (unchanged)
@@ -58,7 +66,7 @@ Do not delete old production UI until replacement is certified.
 |-------|--------|
 | **0** | Baseline branch, `newui/` on disk, no deletion of legacy UI |
 | **1** | Transplant shell: tokens + `newui-transplant` sidebar/topbar/layout + real session/workspace/nav/credits; `NEXT_PUBLIC_NEWUI_SHELL=0` rollback |
-| **2** | 25 routes — transplant each **page file** from `newui/app`, wire loaders/APIs per matrix |
+| **2** | Audited routes only — transplant each **page + New UI dependency graph** from `newui/app` + `newui/components`, wire loaders/APIs per `TRANSOVO-NEWUI-PRODUCTION-INTEGRATION-AUDIT.md` |
 | **3** | Category B gap completion |
 | **4** | Batched browser certification (functionality-first) |
 | **5** | Deploy via Coolify after certification |
@@ -109,18 +117,20 @@ Do not delete old production UI until replacement is certified.
 
 ---
 
-## Stage 2 batches (exact page transplant)
+## Stage 2 batches (organizational labels only)
 
-Port **page files** from `newui/app/**` into production routes; wire only data/mutation boundaries.
+**Authority for which routes exist:** `docs/TRANSOVO-NEWUI-PRODUCTION-INTEGRATION-AUDIT.md` — not batch label wording. No New UI page → **Category C** (keep production body in shell). Do not invent Voice “setup sections” or other pages absent from the audit.
 
-| Batch | Routes (examples) | Runtime validation |
-|-------|-------------------|--------------------|
-| Voice read surfaces | overview, calls, call detail, analytics | One session after batch |
-| MCTB operational | overview, missed calls, detail, voicemail, analytics | One session after batch |
-| Voice setup / config | setup sections, receptionist, knowledge, call handling | One session after batch |
-| MCTB setup | setup sections per audit matrix | One session after batch |
+For each audited New UI route: transplant **page + entire New UI import tree** into `src/newui-transplant/` (or route colocation per audit), then change boundaries only.
 
-**Representative visual smoke (Stage 4, not per-commit):** one Voice list, one Voice config page, one MCTB operational, one MCTB setup, one Category C page in shell.
+| Batch label | Purpose | Runtime validation |
+|-------------|---------|-------------------|
+| Voice read surfaces | Group audited Voice list/detail/analytics routes | One session after batch |
+| MCTB operational | Group audited MCTB ops routes | One session after batch |
+| Voice (audited only) | Remaining audited Voice routes (e.g. receptionist, knowledge, call-handling, numbers — **only if listed in audit**) | One session after batch |
+| MCTB setup (audited only) | Audited `/mctb/setup/*` routes from matrix | One session after batch |
+
+**Representative visual smoke (Stage 4, not per-commit):** pick one route per batch from the **audit map**, plus one Category C page in shell.
 
 ---
 
