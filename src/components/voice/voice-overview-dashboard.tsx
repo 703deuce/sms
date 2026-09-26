@@ -263,6 +263,7 @@ export function VoiceOverviewDashboard() {
                       const { primary, attention } = deriveCallListOutcomeDisplay(c);
                       const caller =
                         c.contactName?.trim() || fmtCallPhone(c.fromE164);
+                      const dt = fmtCallDateTable(c.startedAt);
                       return (
                         <TR key={c.id}>
                           <TD>
@@ -274,11 +275,12 @@ export function VoiceOverviewDashboard() {
                             </Link>
                           </TD>
                           <TD className="text-muted-foreground">
-                            {fmtCallDateTable(c.startedAt)}
+                            <p className="text-sm">{dt.date}</p>
+                            <p className="text-xs">{dt.time}</p>
                           </TD>
                           <TD>{fmtCallDurationTable(c.durationSeconds)}</TD>
                           <TD>
-                            <CallOutcomeBadge label={primary} />
+                            <CallOutcomeBadge outcome={primary} />
                           </TD>
                           <TD>
                             {attention ? <CallAttentionBadge label={attention} /> : "—"}
@@ -302,6 +304,7 @@ export function VoiceOverviewDashboard() {
                 {data.recentCalls.map((c) => {
                   const { primary, attention } = deriveCallListOutcomeDisplay(c);
                   const caller = c.contactName?.trim() || fmtCallPhone(c.fromE164);
+                  const dt = fmtCallDateTable(c.startedAt);
                   return (
                     <li key={c.id}>
                       <Link
@@ -311,12 +314,12 @@ export function VoiceOverviewDashboard() {
                         <div className="flex items-start justify-between gap-2">
                           <span className="font-medium">{caller}</span>
                           <span className="text-xs text-muted-foreground">
-                            {fmtCallDateTable(c.startedAt)} ·{" "}
+                            {dt.date} {dt.time} ·{" "}
                             {fmtCallDurationTable(c.durationSeconds)}
                           </span>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <CallOutcomeBadge label={primary} />
+                          <CallOutcomeBadge outcome={primary} />
                           {attention ? <CallAttentionBadge label={attention} /> : null}
                         </div>
                       </Link>
