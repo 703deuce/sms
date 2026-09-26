@@ -1,0 +1,39 @@
+/**
+ * Visual tokens aligned with newui/app/globals.css (sidebar + surface system).
+ * Scoped under [data-newui-shell] so legacy chrome is unchanged when flag is off.
+ */
+[data-newui-shell] {
+  color-scheme: light;
+  --background: oklch(0.985 0.002 95);
+  --foreground: oklch(0.2 0.01 260);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0.01 260);
+  --muted: oklch(0.965 0.003 95);
+  --muted-foreground: oklch(0.52 0.01 260);
+  --accent: oklch(0.955 0.025 168);
+  --accent-foreground: oklch(0.32 0.08 168);
+  --primary: oklch(0.52 0.12 168);
+  --primary-foreground: oklch(0.99 0 0);
+  --border: oklch(0.915 0.004 95);
+  --ring: oklch(0.52 0.12 168);
+  --sidebar: oklch(0.19 0.012 260);
+  --sidebar-foreground: oklch(0.92 0.01 260);
+  --sidebar-primary: oklch(0.72 0.14 168);
+  --sidebar-primary-foreground: oklch(0.15 0.02 260);
+  --sidebar-accent: oklch(0.24 0.014 260);
+  --sidebar-accent-foreground: oklch(0.96 0.01 260);
+  --sidebar-border: oklch(0.28 0.012 260);
+  --sidebar-muted: oklch(0.62 0.02 260);
+  --radius: 0.625rem;
+}
+
+[data-newui-shell] .newui-shell-sidebar {
+  background: var(--sidebar);
+  color: var(--sidebar-foreground);
+  border-color: var(--sidebar-border);
+}
+
+[data-newui-shell] .newui-shell-main {
+  background: var(--background);
+  color: var(--foreground);
+}

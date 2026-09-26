@@ -1,12 +1,12 @@
 "use client";
 
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
-import type { CallHandlingOwnershipState } from "@/lib/call-handling/types";
 import { CallHandlingSwitcher } from "@/components/call-handling/call-handling-switcher";
 import { Card } from "@/components/ui/card";
 import { formatPhone } from "@/lib/utils";
 import { mctbVoiceAgentStepHref } from "@/lib/mctb/voice-agent/wizard-deep-links";
 import Link from "next/link";
+import { useCallHandlingOptional } from "@/components/call-handling/call-handling-context";
 import { useEffect, useState } from "react";
 
 type InboundLine = {
@@ -24,7 +24,8 @@ export function VoiceIngressSetupPanel({
 }: {
   wizardState: AppointmentReceptionistWizardState;
 }) {
-  const [ownership, setOwnership] = useState<CallHandlingOwnershipState | null>(null);
+  const sharedCallHandling = useCallHandlingOptional();
+  const ownership = sharedCallHandling?.state ?? null;
   const [inbound, setInbound] = useState<InboundLine | null>(null);
   const [loadError, setLoadError] = useState("");
 
@@ -32,12 +33,7 @@ export function VoiceIngressSetupPanel({
     void (async () => {
       setLoadError("");
       try {
-        const [chRes, inRes] = await Promise.all([
-          fetch("/api/call-handling", { cache: "no-store" }),
-          fetch("/api/mctb/inbound-handling", { cache: "no-store" }),
-        ]);
-        const chJson = await chRes.json();
-        if (chRes.ok && chJson.data) setOwnership(chJson.data as CallHandlingOwnershipState);
+        const inRes = await fetch("/api/mctb/inbound-handling", { cache: "no-store" });
         const inJson = await inRes.json();
         const fwd = inJson.data?.forwarding;
         if (fwd?.ingressE164) {

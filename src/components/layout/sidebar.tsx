@@ -30,10 +30,12 @@ import { useProductShell, ProductShellSwitcher } from "@/components/products/pro
 import { CallHandlingSwitcher } from "@/components/call-handling/call-handling-switcher";
 import { shouldShowCallHandlingSwitcher } from "@/lib/call-handling/show-switcher";
 import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlements";
+import type { Workspace } from "@/lib/types";
 import { productLabel, type CurrentProduct } from "@/lib/products/types";
 import { trackCrossSellClicked } from "@/lib/products/analytics";
 import { cn } from "@/lib/utils";
 import { TransovoSidebar } from "@/components/kimi/sidebar/TransovoSidebar";
+import { NewUiAppSidebar } from "@/components/newui-shell/newui-app-sidebar";
 import { initialsForName, mapProductionNavToKimi } from "@/components/kimi/sidebar/map-nav";
 import {
   ChevronDown,
@@ -319,6 +321,9 @@ export function Sidebar({
   hasAiAfterHours = false,
   showTryIt = false,
   productFeatures = null,
+  shellVariant = "default",
+  workspaceId,
+  workspaces = [],
 }: {
   userName: string;
   workspaceName?: string;
@@ -340,6 +345,9 @@ export function Sidebar({
   hasAiAfterHours?: boolean;
   showTryIt?: boolean;
   productFeatures?: WorkspaceFeatureSnapshot | null;
+  shellVariant?: "default" | "newui";
+  workspaceId?: string;
+  workspaces?: Workspace[];
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -447,6 +455,36 @@ export function Sidebar({
                 : "/app";
 
   const useKimiSidebar = !realtorMode && !isLauncher && currentProduct !== "numbers";
+
+  if (useKimiSidebar && shellVariant === "newui") {
+    const productSwitcher = showCallHandlingSwitcher ? (
+      <CallHandlingSwitcher collapsed={collapsed} className="px-0 pb-0" requireProvider />
+    ) : multiProduct ? (
+      <ProductShellSwitcher
+        hasMctb={hasMctb}
+        hasMassSms={hasMassSms}
+        hasAiAfterHours={hasAiAfterHours}
+        collapsed={collapsed}
+        onNavigate={onClose}
+        className="px-0 pb-0"
+      />
+    ) : undefined;
+
+    return (
+      <NewUiAppSidebar
+        navItems={navItems}
+        homeHref={homeHref}
+        workspaceName={workspaceName || "Workspace"}
+        workspaces={workspaces}
+        workspaceId={workspaceId}
+        userName={userName}
+        collapsed={collapsed}
+        productSwitcher={productSwitcher}
+        mobileOpen={open}
+        onMobileClose={onClose}
+      />
+    );
+  }
 
   if (useKimiSidebar) {
     const planLabel =

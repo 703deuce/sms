@@ -12,6 +12,8 @@ type Props = {
   className?: string;
   variant?: "sidebar" | "header" | "card";
   onNavigate?: () => void;
+  /** When true, never GET /api/call-handling on mount — requires CallHandlingProvider. */
+  requireProvider?: boolean;
 };
 
 const HANDLER_LABEL: Record<ActiveCallHandler, string> = {
@@ -34,6 +36,7 @@ export function CallHandlingSwitcher({
   className,
   variant = "sidebar",
   onNavigate,
+  requireProvider = false,
 }: Props) {
   const shared = useCallHandlingOptional();
   const [open, setOpen] = useState(false);
@@ -68,8 +71,9 @@ export function CallHandlingSwitcher({
   }, [shared]);
 
   useEffect(() => {
+    if (requireProvider) return;
     if (!shared) void load();
-  }, [load, shared]);
+  }, [load, shared, requireProvider]);
 
   useEffect(() => {
     function onClick(e: MouseEvent) {
@@ -80,6 +84,10 @@ export function CallHandlingSwitcher({
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
+
+  if (requireProvider && !shared) {
+    return null;
+  }
 
   const active = displayHandler(state);
   const busy = switching || state?.switching;

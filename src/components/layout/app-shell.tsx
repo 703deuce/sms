@@ -36,6 +36,9 @@ import { usePathname } from "next/navigation";
 import { Suspense, useEffect, useState, type CSSProperties } from "react";
 import { CallHandlingProvider } from "@/components/call-handling/call-handling-context";
 import type { CallHandlingOwnershipState } from "@/lib/call-handling/types";
+import { shouldUseNewUiShell } from "@/lib/products/newui-shell";
+import { NewUiTopbar } from "@/components/newui-shell/newui-topbar";
+import { shouldShowCallHandlingSwitcher } from "@/lib/call-handling/show-switcher";
 
 const SIDEBAR_COLLAPSED_KEY = "transovo.sidebarCollapsed";
 const APP_HEADER_HEIGHT = "4rem";
@@ -211,6 +214,13 @@ export function AppShell({
     hasAiAfterHours,
   });
   const { shell: productShell } = useProductShell(hasMctb, hasSms, hasAiAfterHours);
+  const newUiShell = shouldUseNewUiShell(pathname, {
+    realtorMode,
+    isLauncher,
+    productShell,
+    hasMctb,
+  });
+  const showCallHandlingSwitcher = shouldShowCallHandlingSwitcher({ hasMctb, hasVoice });
   const mctbContextActive = isMctbShellActive(pathname, multiProduct, productShell, hasMctb);
   const appointmentsContextActive = isAppointmentsShellActive(
     pathname,
@@ -260,6 +270,7 @@ export function AppShell({
   const shellBody = (
     <div
       className="product-theme flex h-dvh overflow-hidden bg-background"
+      data-newui-shell={newUiShell ? "true" : undefined}
       data-appt-overview-shell={isAppointmentsOverviewPilot ? "soft-cool-slate-204" : undefined}
       data-mctb-neutral-shell={isMctbNeutralShell ? "true" : undefined}
       style={
@@ -284,6 +295,8 @@ export function AppShell({
         <Sidebar
           userName={userName}
           workspaceName={workspaceName}
+          workspaceId={workspaceId}
+          workspaces={workspaces}
           open={menuOpen}
           onClose={() => setMenuOpen(false)}
           outcomeInstances={outcomeInstances}
@@ -307,16 +320,21 @@ export function AppShell({
           hasAiAfterHours={hasAiAfterHours}
           showTryIt={showTryIt}
           productFeatures={productFeatures}
+          shellVariant={newUiShell ? "newui" : "default"}
         />
       </Suspense>
       <div
         className={cn(
           "flex h-full min-w-0 flex-1 flex-col overflow-hidden",
-          sidebarCollapsedEffective
-            ? "lg:pl-14"
-            : softCoolSlateShell
-              ? "lg:pl-[204px]"
-              : "lg:pl-56",
+          newUiShell
+            ? sidebarCollapsedEffective
+              ? "lg:pl-14"
+              : "lg:pl-[16rem]"
+            : sidebarCollapsedEffective
+              ? "lg:pl-14"
+              : softCoolSlateShell
+                ? "lg:pl-[204px]"
+                : "lg:pl-56",
         )}
       >
         {realtorMode ? (
@@ -331,7 +349,27 @@ export function AppShell({
             unreadNotifications={unreadNotifications}
             onMenuClick={() => setMenuOpen(true)}
           />
-        ) : legacyAutomation ? null : (
+        ) : legacyAutomation ? null : newUiShell ? (
+          <NewUiTopbar
+            sectionLabel={
+              mctbContextActive
+                ? "Missed Call Text Back"
+                : appointmentsContextActive
+                  ? "Appointments"
+                  : pathname.startsWith("/voice/")
+                    ? "AI Receptionist"
+                    : pathname.startsWith("/integrations")
+                      ? "Shared"
+                      : pathname.startsWith("/settings")
+                        ? "Shared"
+                        : "Transovo"
+            }
+            pageLabel={title}
+            userName={userName}
+            unreadNotifications={unreadNotifications}
+            onMenuClick={() => setMenuOpen(true)}
+          />
+        ) : (
           <Header
             title={title}
             userName={userName}
@@ -389,7 +427,7 @@ export function AppShell({
     </div>
   );
 
-  if (callHandlingInitial) {
+  if (showCallHandlingSwitcher || callHandlingInitial) {
     return (
       <CallHandlingProvider initialState={callHandlingInitial}>{shellBody}</CallHandlingProvider>
     );

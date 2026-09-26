@@ -1,4 +1,5 @@
 import "./product-theme.css";
+import "@/styles/newui-shell-tokens.css";
 import { AppShell } from "@/components/layout/app-shell";
 import { ServiceWorkerRegister } from "@/components/push/service-worker-register";
 import { getActiveWorkspaceId, getActiveWorkspaceType, getSession } from "@/lib/auth";
