@@ -40,8 +40,7 @@ export function mapVoiceCallApiRowToNewUi(row: VoiceCallApiRow): VoiceCall {
   const caller = row.contactName?.trim() || phone;
   const started = new Date(row.startedAt);
   const display = deriveCallListOutcomeDisplay(row);
-  const attention =
-    display.attention && display.attention !== "None" ? display.attention : undefined;
+  const attention = display.attention ?? undefined;
 
   return {
     id: row.id,
