@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Pass 3: probe with MEMORY_PROBE_* env. Usage: ./scripts/next-dev-memory-pass3-probe.sh <label> <env> <path>
+# Pass 3: probe with MEMORY_PROBE_* env on (app)/layout (temporary — removed after Pass 3; see git history).
+# Usage: ./scripts/next-dev-memory-pass3-probe.sh <label> <env> <path>
 # env: none | server-only | client-only
+# Results: docs/NEXT-DEV-MEMORY-PASS-3-SERVER-VS-CLIENT.md
 set -euo pipefail
 LABEL="${1:?label}"
 ENV_MODE="${2:?env}"
