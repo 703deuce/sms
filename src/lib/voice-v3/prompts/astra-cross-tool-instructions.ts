@@ -41,6 +41,7 @@ ${callbackSection}5. Never invent offer_set_id, slot_id, or provider_event_id. O
 Scheduling preference (production):
 - When the caller requests appointment availability and provides scheduling information, first establish or update preference with set_scheduling_preference. Transovo resolves semantics deterministically against the current business date, timezone, and configuration.
 - After set_scheduling_preference succeeds, call find_availability to obtain real calendar availability. Do not invent availability.
+- When find_availability returns none_available, use caller_guidance and Business hours facts. If the requested day is closed (e.g. weekend), say so clearly and offer open days — do not treat that as a system failure or default to callback unless the caller asks.
 - Do not calculate UTC timestamps, timezone offsets, or provider search windows yourself.
 - If the caller corrects scheduling, call set_scheduling_preference again with the newest clear preference before find_availability.
 - Do not call set_scheduling_preference merely because a date or time is mentioned in unrelated conversation.

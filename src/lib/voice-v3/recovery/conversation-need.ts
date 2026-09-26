@@ -1,3 +1,4 @@
+import { buildEmptyAvailabilityGuidance } from "../calendar/empty-availability-guidance";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { VoiceV3CallContext } from "../state/call-context";
 import type { VoiceV3RuleEvaluation } from "../state/call-rules";
@@ -144,10 +145,10 @@ export function evaluateSuggestedNextConversationAction(input: {
       };
     }
     if (ctx.availability.status === "empty") {
+      const guidance = buildEmptyAvailabilityGuidance(config, ctx);
       return {
-        action: "INFORM_TEMPORARY_FAILURE",
-        summary:
-          "No slots matched the caller's scheduling preference. Explain naturally and ask if another day or time works.",
+        action: guidance.reason === "CLOSED_WEEKDAY" ? "CLARIFY_SCHEDULING" : "INFORM_TEMPORARY_FAILURE",
+        summary: guidance.safeAgentMessage,
       };
     }
   }

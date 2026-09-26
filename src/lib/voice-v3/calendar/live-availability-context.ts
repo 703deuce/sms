@@ -1,5 +1,6 @@
 import type { AvailabilityOfferSet } from "./offer-set";
 import type { FindAvailabilityFailure } from "./types";
+import type { EmptyAvailabilityGuidance } from "./empty-availability-guidance";
 
 export function buildLiveAvailabilityThinkingContent(input: {
   offerSet: AvailabilityOfferSet | null;
@@ -7,6 +8,7 @@ export function buildLiveAvailabilityThinkingContent(input: {
   schedulingGeneration: number;
   /** Slots Amy may speak aloud (subset of OfferSet). */
   presentedSlotIds?: string[];
+  emptyGuidance?: EmptyAvailabilityGuidance | null;
 }): string {
   if (input.failure) {
     return [
@@ -41,7 +43,20 @@ export function buildLiveAvailabilityThinkingContent(input: {
 
   if (presented.length === 0) {
     lines.push("(no slots in requested range)");
-    lines.push("Tell the caller nothing is available in that range; ask if another day/time works.");
+    if (input.emptyGuidance) {
+      lines.push(`empty_reason=${input.emptyGuidance.reason}`);
+      if (input.emptyGuidance.requestedDayLabel) {
+        lines.push(`requested_day=${input.emptyGuidance.requestedDayLabel}`);
+      }
+      if (input.emptyGuidance.openDaysSummary) {
+        lines.push(`open_days_summary=${input.emptyGuidance.openDaysSummary}`);
+      }
+      lines.push(input.emptyGuidance.safeAgentMessage);
+    } else {
+      lines.push(
+        "Tell the caller nothing is available in that range; use Business hours from session facts when the day may be closed; ask if another day/time works.",
+      );
+    }
   } else {
     lines.push("Present ONLY these times to the caller (spoken offer):");
     for (const slot of presented) {
@@ -63,6 +78,7 @@ export function buildLiveAvailabilitySessionAppend(
   failure: FindAvailabilityFailure | null,
   schedulingGeneration: number,
   presentedSlotIds?: string[],
+  emptyGuidance?: EmptyAvailabilityGuidance | null,
 ) {
   return {
     type: "session.thinking.append" as const,
@@ -71,6 +87,7 @@ export function buildLiveAvailabilitySessionAppend(
       failure,
       schedulingGeneration,
       presentedSlotIds,
+      emptyGuidance,
     }),
     delegation_id: null,
   };

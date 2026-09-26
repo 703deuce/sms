@@ -6,6 +6,7 @@ import { buildFindAvailabilityRequest } from "./find-availability";
 import { buildAvailabilityOfferSet } from "./offer-set";
 import { generateAvailabilitySlots } from "./slot-generator";
 import type { CalendarBusyInterval, FindAvailabilityFailure } from "./types";
+import { buildEmptyAvailabilityGuidance } from "./empty-availability-guidance";
 import { buildLiveAvailabilitySessionAppend } from "./live-availability-context";
 import { deriveDefaultPresentedSlotIds, recordPresentedOffer } from "./presentation";
 import type { VoiceV3LiveRuntimeHooks } from "../live-runtime-hooks";
@@ -441,11 +442,17 @@ async function completeFindAvailabilityAfterDispatch(input: {
     });
   }
 
+  const emptyGuidance =
+    !failure && offerSet && offerSet.slots.length === 0
+      ? buildEmptyAvailabilityGuidance(runtime.config, latest)
+      : null;
+
   const append = buildLiveAvailabilitySessionAppend(
     offerSet,
     failure,
     request.schedulingGeneration,
     presentedSlotIds,
+    emptyGuidance,
   );
   pushLiveThinkingEvent(
     hooks,

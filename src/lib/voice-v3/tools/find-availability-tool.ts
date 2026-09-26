@@ -9,6 +9,7 @@ import type { VoiceToolDefinition } from "./types";
 import { authorizeVoiceV3ToolOrError } from "./authorize-tool-for-config";
 import { shouldApplySemanticSteeringToActiveGoal } from "../delegation/conversation-freshness";
 import { toolOk, voiceToolError } from "./types";
+import { buildEmptyAvailabilityGuidance } from "../calendar/empty-availability-guidance";
 import { FIND_AVAILABILITY_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 
 const findArgsSchema = z.object({
@@ -101,8 +102,12 @@ export const findAvailabilityTool: VoiceToolDefinition<FindAvailabilityArgs> = {
       );
     }
     if (!offer || offer.slots.length === 0) {
+      const guidance = buildEmptyAvailabilityGuidance(config, after);
       return toolOk("none_available", {
         scheduling_generation: after.scheduling.generation,
+        reason: guidance.reason,
+        caller_guidance: guidance.safeAgentMessage,
+        open_days_summary: guidance.openDaysSummary,
       });
     }
 

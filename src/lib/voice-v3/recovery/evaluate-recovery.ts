@@ -1,3 +1,4 @@
+import { buildEmptyAvailabilityGuidance } from "../calendar/empty-availability-guidance";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { VoiceV3CallContext } from "../state/call-context";
 import type { VoiceV3RuleEvaluation } from "../state/call-rules";
@@ -190,13 +191,13 @@ export function evaluateVoiceV3Recovery(input: {
     !ctx.availability.inFlightGeneration &&
     goal === "BOOK_APPOINTMENT"
   ) {
+    const guidance = buildEmptyAvailabilityGuidance(config, ctx);
     return newDirective({
       ctx,
       code: "NO_AVAILABILITY",
       userRecoverable: true,
       relatedAction: "FIND_AVAILABILITY",
-      safeAgentMessage:
-        "No availability matched the caller's scheduling preference. Do not invent times. Ask if another day or time would work.",
+      safeAgentMessage: guidance.safeAgentMessage,
       at,
     });
   }

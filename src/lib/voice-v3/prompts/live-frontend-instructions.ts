@@ -41,6 +41,11 @@ function buildAmyBusinessFactsSection(config: VoiceV3AgentConfig): string {
   if (hot.serviceArea?.trim()) parts.push(`Service area: ${hot.serviceArea.trim()}`);
   if (hot.hoursDisplay?.trim()) {
     parts.push(`Business hours:\n${hot.hoursDisplay.trim()}`);
+    if (c.bookAppointments) {
+      parts.push(
+        "When booking, only offer times on days and hours shown above. If the caller picks a closed day, explain that plainly and suggest an open day.",
+      );
+    }
   }
   if (hot.servicesSummary?.trim()) {
     parts.push(`Services: ${hot.servicesSummary.trim()}`);
