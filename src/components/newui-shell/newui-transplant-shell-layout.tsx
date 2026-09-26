@@ -16,7 +16,7 @@ import { resolveProductSidebarNav } from "@/lib/products/resolve-product-nav";
 import { smartRoutingFlowIdFromPath } from "@/lib/solutions-nav";
 import {
   aiAfterHoursShellHome,
-  appointmentsShellHome,
+  appointmentsProductShellHome,
   massSmsShellHome,
   mctbShellHome,
   shellHomePath,
@@ -126,13 +126,13 @@ export function NewUiTransplantShellLayout({
     isMctbShellActive(pathname, multiProduct, productShell)
       ? mctbShellHome()
       : isAppointmentsShellActive(pathname, multiProduct, productShell)
-        ? appointmentsShellHome()
+        ? appointmentsProductShellHome()
         : multiProduct && productShell === "appointments"
-          ? appointmentsShellHome()
+          ? appointmentsProductShellHome()
           : multiProduct && productShell === "mctb"
             ? mctbShellHome()
             : isAppointmentsV1Primary()
-              ? appointmentsShellHome()
+              ? appointmentsProductShellHome()
               : isLauncher
                 ? "/app"
                 : currentProduct === "numbers"

@@ -38,7 +38,7 @@ function primaryToCallOutcome(primary: string): CallOutcome {
 export function mapVoiceCallApiRowToNewUi(row: VoiceCallApiRow): VoiceCall {
   const phone = fmtCallPhone(row.direction === "INBOUND" ? row.fromE164 : row.toE164);
   const caller = row.contactName?.trim() || phone;
-  const started = new Date(row.startedAt);
+  const { date, time } = fmtCallDateTable(row.startedAt);
   const display = deriveCallListOutcomeDisplay(row);
   const attention = display.attention ?? undefined;
 
@@ -46,8 +46,8 @@ export function mapVoiceCallApiRowToNewUi(row: VoiceCallApiRow): VoiceCall {
     id: row.id,
     caller,
     phone,
-    date: fmtCallDateTable(row.startedAt),
-    time: started.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }),
+    date,
+    time,
     duration: fmtCallDurationTable(row.durationSeconds),
     outcome: primaryToCallOutcome(display.primary),
     attention,
