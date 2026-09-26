@@ -267,8 +267,14 @@ export function AppShell({
   const sidebarExpandedPx = softCoolSlateShell ? 204 : 224;
   const sidebarOffset = sidebarCollapsedEffective ? "56px" : `${sidebarExpandedPx}px`;
 
-  const mainClassName =
-    legacyAutomation
+  /** Opus shell: full-bleed main column — no legacy px-4/pt-5 frame or mctb-page-canvas inset. */
+  const newUiMainClassName = fixedViewport
+    ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+    : "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-0 pb-28 pt-0 lg:pb-8";
+
+  const mainClassName = newUiShell
+    ? newUiMainClassName
+    : legacyAutomation
       ? "h-dvh overflow-hidden px-0 pb-0 pt-0 lg:px-0"
       : fixedViewport
         ? "flex min-h-0 flex-1 flex-col overflow-hidden"
@@ -280,11 +286,10 @@ export function AppShell({
               : "flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-4 pb-28 pt-5 lg:px-6 lg:pb-8"
             : "flex min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 pb-28 pt-5 lg:px-6 lg:pb-8";
 
-  const mainContent = isMctbNeutralShell ? (
-    <div className="mctb-page-canvas min-h-full">{children}</div>
-  ) : (
-    children
-  );
+  const mainContent =
+    newUiShell || !isMctbNeutralShell
+      ? children
+      : <div className="mctb-page-canvas min-h-full">{children}</div>;
 
   const wrapCallHandling = (body: ReactNode) =>
     showCallHandlingSwitcher || callHandlingInitial ? (
