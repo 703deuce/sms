@@ -1,26 +1,29 @@
 'use client'
 
+import { usePathname } from 'next/navigation'
 import { Bell, HelpCircle, Search } from 'lucide-react'
 import { SidebarTrigger } from '@/newui-transplant/components/ui/sidebar'
 import { Separator } from '@/newui-transplant/components/ui/separator'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Avatar, AvatarFallback } from '@/newui-transplant/components/ui/avatar'
+import { NAV } from '@/newui-transplant/lib/nav'
 
-export type TransplantTopbarProps = {
-  section: string
-  page: string
-  userInitials: string
-  unreadNotifications?: number
-  searchDisabled?: boolean
+function sectionFor(pathname: string) {
+  for (const section of NAV) {
+    for (const item of section.items) {
+      if (pathname === item.href || (item.matchPrefix && pathname.startsWith(item.matchPrefix))) {
+        return { section: section.label, page: item.label }
+      }
+    }
+  }
+  if (pathname.startsWith('/settings')) return { section: 'Shared', page: 'Settings' }
+  return { section: 'Transovo', page: '' }
 }
 
-export function Topbar({
-  section,
-  page,
-  userInitials,
-  unreadNotifications = 0,
-  searchDisabled = true,
-}: TransplantTopbarProps) {
+export function Topbar() {
+  const pathname = usePathname()
+  const { section, page } = sectionFor(pathname)
+
   return (
     <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b bg-background/85 px-4 backdrop-blur md:px-6">
       <SidebarTrigger className="-ml-1" />
@@ -44,8 +47,6 @@ export function Topbar({
             type="search"
             placeholder="Search callers, numbers…"
             className="h-8 w-64 rounded-md border bg-card pl-8 pr-12 text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring/40"
-            disabled={searchDisabled}
-            aria-disabled={searchDisabled}
           />
           <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">
             ⌘K
@@ -56,12 +57,10 @@ export function Topbar({
         </Button>
         <Button variant="ghost" size="icon" aria-label="Notifications" className="relative">
           <Bell />
-          {unreadNotifications > 0 ? (
-            <span className="absolute right-2 top-2 size-1.5 rounded-full bg-primary" aria-hidden="true" />
-          ) : null}
+          <span className="absolute right-2 top-2 size-1.5 rounded-full bg-primary" aria-hidden="true" />
         </Button>
         <Avatar className="ml-1 size-8">
-          <AvatarFallback className="bg-accent text-xs font-medium text-accent-foreground">{userInitials}</AvatarFallback>
+          <AvatarFallback className="bg-accent text-xs font-medium text-accent-foreground">JR</AvatarFallback>
         </Avatar>
       </div>
     </header>

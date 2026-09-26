@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { ChevronRight, Mic } from 'lucide-react'
 import { Initials, Pill } from '@/newui-transplant/components/app/kit'
 import { OutcomePill } from '@/newui-transplant/components/app/status'
-import type { VoiceCall } from '@/newui-transplant/lib/view-models'
+import type { VoiceCall } from '@/newui-transplant/lib/sandbox-data'
 
 export function RecentCallsTable({ calls, showRecording = false }: { calls: VoiceCall[]; showRecording?: boolean }) {
   return (

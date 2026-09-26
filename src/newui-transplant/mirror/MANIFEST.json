@@ -1,0 +1,32 @@
+{
+  "syncedAt": "2026-09-26T10:56:25.368Z",
+  "pageCount": 26,
+  "routes": [
+    "/",
+    "/mctb",
+    "/mctb/ai-recovery",
+    "/mctb/analytics",
+    "/mctb/conversations",
+    "/mctb/missed-calls",
+    "/mctb/missed-calls/[id]",
+    "/mctb/setup",
+    "/mctb/setup/consent",
+    "/mctb/setup/exclusions",
+    "/mctb/setup/links",
+    "/mctb/setup/notifications",
+    "/mctb/setup/phone",
+    "/mctb/setup/recovery",
+    "/mctb/setup/test",
+    "/mctb/setup/text-back",
+    "/mctb/setup/voicemail",
+    "/mctb/voicemail",
+    "/voice/analytics",
+    "/voice/call-handling",
+    "/voice/calls",
+    "/voice/calls/[id]",
+    "/voice/knowledge",
+    "/voice/numbers",
+    "/voice/overview",
+    "/voice/receptionist"
+  ]
+}

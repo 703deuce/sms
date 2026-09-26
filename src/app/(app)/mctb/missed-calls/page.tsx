@@ -1,10 +1,9 @@
 import { MctbMissedCallsView } from "@/components/mctb/missed-calls-view";
 import { loadMctbMissedCallsListData } from "@/lib/mctb/missed-calls-list-data";
 import { parseMissedCallsListQuery } from "@/lib/mctb/missed-calls-list-filters";
-import { mapMctbMissedCallsListToNewUi } from "@/lib/newui-transplant/adapters/mctb-missed-calls";
 import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
+import { TransplantMctbMissedCallsPage } from "@/newui-transplant/mirror/routes/mctb/missed-calls/page";
 import { requireWorkspaceContext } from "@/lib/workspace-data";
-import { NewUiMctbMissedCallsPage } from "@/newui-transplant/connected/mctb/missed-calls-page";
 import { Suspense } from "react";
 
 export default async function MctbMissedCallsPage({
@@ -12,6 +11,10 @@ export default async function MctbMissedCallsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  if (isNewUiStage2Enabled()) {
+    return <TransplantMctbMissedCallsPage />;
+  }
+
   const { workspaceId } = await requireWorkspaceContext();
   const params = await searchParams;
   const query = parseMissedCallsListQuery(new URLSearchParams(
@@ -20,10 +23,6 @@ export default async function MctbMissedCallsPage({
     ) as [string, string][],
   ));
   const initialData = await loadMctbMissedCallsListData(workspaceId, query);
-
-  if (isNewUiStage2Enabled()) {
-    return <NewUiMctbMissedCallsPage missedCalls={mapMctbMissedCallsListToNewUi(initialData)} />;
-  }
 
   return (
     <Suspense fallback={null}>

@@ -1,11 +1,10 @@
-import { redirect } from "next/navigation";
-import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
-import { NewUiVoiceNumbersPage } from "@/newui-transplant/connected/voice/numbers-page";
+import { TransplantVoiceNumbersPage } from "@/newui-transplant/mirror/routes/voice/numbers/page";
+import { VoiceNumbersPage as LegacyVoiceNumbersPage } from "@/components/voice/numbers/voice-numbers-page";
 
 export default function VoiceNumbersPage() {
   if (isNewUiStage2Enabled()) {
-    return <NewUiVoiceNumbersPage />;
+    return <TransplantVoiceNumbersPage />;
   }
-  redirect(MCTB_ROUTES.numbers);
+  return <LegacyVoiceNumbersPage />;
 }

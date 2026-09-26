@@ -1,10 +1,10 @@
 import { MctbSetupTestView } from "@/components/mctb/setup/setup-test-view";
 import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
-import { NewUiMctbSetupTestPage } from "@/newui-transplant/connected/mctb/setup-pages";
+import { TransplantMctbSetupTestPage } from "@/newui-transplant/mirror/routes/mctb/setup/test/page";
 
 export default function MctbSetupTestPage() {
   if (isNewUiStage2Enabled()) {
-    return <NewUiMctbSetupTestPage />;
+    return <TransplantMctbSetupTestPage />;
   }
   return <MctbSetupTestView />;
 }

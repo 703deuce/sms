@@ -1,5 +1,5 @@
 import { Pill, type Tone } from '@/newui-transplant/components/app/kit'
-import type { CallOutcome, RecoveryStatus } from '@/newui-transplant/lib/view-models'
+import type { CallOutcome, RecoveryStatus } from '@/newui-transplant/lib/sandbox-data'
 
 const outcomeTone: Record<CallOutcome, Tone> = {
   Appointment: 'success',

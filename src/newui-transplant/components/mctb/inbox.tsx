@@ -8,7 +8,7 @@ import { Checkbox } from '@/newui-transplant/components/ui/checkbox'
 import { Input } from '@/newui-transplant/components/ui/input'
 import { Textarea } from '@/newui-transplant/components/ui/textarea'
 import { EmptyState, Initials, Pill } from '@/newui-transplant/components/app/kit'
-import type { BusinessContext, Conversation, Message, MissedCall } from '@/newui-transplant/lib/view-models'
+import { BUSINESS, CONVERSATIONS, MISSED_CALLS, type Conversation, type Message } from '@/newui-transplant/lib/sandbox-data'
 import { cn } from '@/lib/utils'
 
 const FILTERS = ['All', 'Needs reply', 'Mine', 'Unassigned', 'Closed', 'Spam'] as const
@@ -52,22 +52,10 @@ function Bubble({ m }: { m: Message }) {
   )
 }
 
-export function Inbox({
-  initialId,
-  initialFilter,
-  conversations,
-  missedCalls,
-  business,
-}: {
-  initialId?: string
-  initialFilter: Filter
-  conversations: Conversation[]
-  missedCalls: MissedCall[]
-  business: BusinessContext
-}) {
+export function Inbox({ initialId, initialFilter }: { initialId?: string; initialFilter: Filter }) {
   const [filter, setFilter] = useState<Filter>(initialFilter)
   const [query, setQuery] = useState('')
-  const [selectedId, setSelectedId] = useState<string | undefined>(initialId ?? conversations[0]?.id)
+  const [selectedId, setSelectedId] = useState<string | undefined>(initialId ?? CONVERSATIONS[0]?.id)
   const [mobileThread, setMobileThread] = useState(Boolean(initialId))
   const [checked, setChecked] = useState<Set<string>>(new Set())
   const [sent, setSent] = useState<Record<string, Message[]>>({})
@@ -75,16 +63,16 @@ export function Inbox({
 
   const list = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return conversations.filter((c) => {
+    return CONVERSATIONS.filter((c) => {
       if (filter === 'Needs reply' && !c.needsReply) return false
       if (filter === 'Closed' || filter === 'Spam') return false
       return !q || `${c.name} ${c.phone} ${c.preview}`.toLowerCase().includes(q)
     })
-  }, [filter, query, conversations])
+  }, [filter, query])
 
-  const selected: Conversation | undefined = conversations.find((c) => c.id === selectedId)
+  const selected: Conversation | undefined = CONVERSATIONS.find((c) => c.id === selectedId)
   const messages = selected ? [...selected.messages, ...(sent[selected.id] ?? [])] : []
-  const missed = selected ? missedCalls.find((m) => m.conversationId === selected.id) : undefined
+  const missed = selected ? MISSED_CALLS.find((m) => m.conversationId === selected.id) : undefined
 
   const toggle = (id: string) =>
     setChecked((prev) => {
@@ -123,7 +111,7 @@ export function Inbox({
             >
               {f}
               {f === 'Needs reply' ? (
-                <span className="ml-1.5 tabular-nums text-muted-foreground">{conversations.filter((c) => c.needsReply).length}</span>
+                <span className="ml-1.5 tabular-nums text-muted-foreground">{CONVERSATIONS.filter((c) => c.needsReply).length}</span>
               ) : null}
             </button>
           ))}
@@ -230,7 +218,7 @@ export function Inbox({
                       }
                     }}
                     rows={1}
-                    placeholder={`Reply from ${business.sender}`}
+                    placeholder={`Reply from ${BUSINESS.sender}`}
                     className="min-h-9 resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
                   />
                   <Button type="submit" size="icon" disabled={!draft.trim()} aria-label="Send">
@@ -269,7 +257,7 @@ export function Inbox({
               <dl className="flex flex-col gap-3 text-xs">
                 <div>
                   <dt className="text-muted-foreground">Business line</dt>
-                  <dd className="mt-0.5 font-mono">{business.line}</dd>
+                  <dd className="mt-0.5 font-mono">{BUSINESS.line}</dd>
                 </div>
                 <div>
                   <dt className="text-muted-foreground">Consent</dt>

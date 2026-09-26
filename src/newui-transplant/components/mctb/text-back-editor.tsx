@@ -7,19 +7,15 @@ import { Panel, Pill } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Textarea } from '@/newui-transplant/components/ui/textarea'
 import { SaveBar } from '@/newui-transplant/components/app/save-bar'
-import type { BusinessContext } from '@/newui-transplant/lib/view-models'
+import { BUSINESS } from '@/newui-transplant/lib/sandbox-data'
 
 const COMPLIANCE = 'Northside Plumbing: Thanks for pressing 1! Msg & data rates may apply. Reply STOP to opt out, HELP for help.'
 const VARIABLES = ['{first_name}', '{business_name}', '{booking_link}']
 
-export function TextBackEditor({
-  business,
-  initialOpener = 'Hi! Sorry we missed your call at {business_name}. How can we help? You can also book here: {booking_link}',
-}: {
-  business: BusinessContext
-  initialOpener?: string
-}) {
-  const [opener, setOpener] = useState(initialOpener)
+export function TextBackEditor() {
+  const [opener, setOpener] = useState(
+    'Hi! Sorry we missed your call at {business_name}. How can we help? You can also book here: {booking_link}',
+  )
   const ref = useRef<HTMLTextAreaElement>(null)
   const segments = Math.max(1, Math.ceil(opener.length / 160))
 
@@ -39,7 +35,7 @@ export function TextBackEditor({
           <Link href="/mctb/setup/consent" className="font-medium text-primary hover:underline">Press 1</Link>
           <span className="mx-1 hidden h-4 w-px bg-border sm:block" />
           <span className="text-muted-foreground">Sender:</span>
-          <span className="font-mono text-xs">{business.sender}</span>
+          <span className="font-mono text-xs">{BUSINESS.sender}</span>
           <Pill tone="success">Ready</Pill>
         </div>
 
@@ -68,7 +64,7 @@ export function TextBackEditor({
       </div>
 
       <aside aria-label="Message preview" className="rounded-[2rem] border-8 border-foreground/90 bg-card p-4 shadow-lg lg:sticky lg:top-20 lg:h-fit">
-        <p className="mb-4 text-center text-xs text-muted-foreground">{business.sender}</p>
+        <p className="mb-4 text-center text-xs text-muted-foreground">{BUSINESS.sender}</p>
         <div className="flex flex-col gap-2">
           <p className="max-w-[90%] rounded-2xl rounded-bl-md bg-muted px-3 py-2 text-xs leading-relaxed">{COMPLIANCE}</p>
           <p className="max-w-[90%] rounded-2xl rounded-bl-md bg-muted px-3 py-2 text-xs leading-relaxed">

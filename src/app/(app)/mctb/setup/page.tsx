@@ -1,10 +1,10 @@
-import { MctbSetupOverview } from "@/components/mctb/setup-overview";
 import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
-import { NewUiMctbSetupOverviewPage } from "@/newui-transplant/connected/mctb/setup-pages";
+import { TransplantMctbSetupPage } from "@/newui-transplant/mirror/routes/mctb/setup/page";
+import { MctbSetupOverview } from "@/components/mctb/setup-overview";
 
 export default function MctbSetupPage() {
   if (isNewUiStage2Enabled()) {
-    return <NewUiMctbSetupOverviewPage />;
+    return <TransplantMctbSetupPage />;
   }
   return <MctbSetupOverview />;
 }

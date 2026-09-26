@@ -2,9 +2,9 @@ import { AddOnUpgradeCard } from "@/components/products/add-on-upgrade-card";
 import { MctbVoicemailWorkspace } from "@/components/mctb/voicemail/mctb-voicemail-workspace";
 import { hasMctbBundledVoicemailAccess } from "@/lib/products/feature-entitlements";
 import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
+import { TransplantMctbVoicemailPage } from "@/newui-transplant/mirror/routes/mctb/voicemail/page";
 import { loadPersonalNumbers } from "@/lib/workspace/personal-data";
 import { requireWorkspaceContext } from "@/lib/workspace-data";
-import { NewUiMctbVoicemailPage } from "@/newui-transplant/connected/mctb/voicemail-page";
 import { Suspense } from "react";
 
 export default async function MctbVoicemailPage({
@@ -22,7 +22,7 @@ export default async function MctbVoicemailPage({
   const { numberId, id } = await searchParams;
 
   if (isNewUiStage2Enabled()) {
-    return <NewUiMctbVoicemailPage numberId={numberId} />;
+    return <TransplantMctbVoicemailPage />;
   }
 
   const numbers = await loadPersonalNumbers(workspaceId);

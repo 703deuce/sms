@@ -1,15 +1,10 @@
-import { VoiceAnalyticsDashboard } from "@/components/voice/voice-analytics-dashboard";
 import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
-import { NewUiVoiceAnalyticsPage } from "@/newui-transplant/connected/voice/analytics-page";
-import { Suspense } from "react";
+import { TransplantVoiceAnalyticsPage } from "@/newui-transplant/mirror/routes/voice/analytics/page";
+import { VoiceAnalyticsDashboard } from "@/components/voice/voice-analytics-dashboard";
 
 export default function VoiceAnalyticsPage() {
   if (isNewUiStage2Enabled()) {
-    return <NewUiVoiceAnalyticsPage />;
+    return <TransplantVoiceAnalyticsPage />;
   }
-  return (
-    <Suspense fallback={null}>
-      <VoiceAnalyticsDashboard />
-    </Suspense>
-  );
+  return <VoiceAnalyticsDashboard />;
 }

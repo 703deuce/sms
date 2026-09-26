@@ -7,7 +7,7 @@ import { Input } from '@/newui-transplant/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/newui-transplant/components/ui/select'
 import { EmptyState } from '@/newui-transplant/components/app/kit'
 import { RecentCallsTable } from '@/newui-transplant/components/voice/recent-calls-table'
-import type { CallOutcome, VoiceCall } from '@/newui-transplant/lib/view-models'
+import { VOICE_CALLS, type CallOutcome } from '@/newui-transplant/lib/sandbox-data'
 import { cn } from '@/lib/utils'
 
 const FILTERS: { label: string; value: CallOutcome | 'all' }[] = [
@@ -26,7 +26,7 @@ const PERIODS = [
   { label: 'Last 30 days', value: '30d' },
 ]
 
-export function CallsBrowser({ calls: sourceCalls }: { calls: VoiceCall[] }) {
+export function CallsBrowser() {
   const [mode, setMode] = useState<'all' | 'attention'>('all')
   const [filter, setFilter] = useState<CallOutcome | 'all'>('all')
   const [query, setQuery] = useState('')
@@ -34,15 +34,15 @@ export function CallsBrowser({ calls: sourceCalls }: { calls: VoiceCall[] }) {
 
   const calls = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return sourceCalls.filter((c) => {
+    return VOICE_CALLS.filter((c) => {
       if (mode === 'attention' && !c.attention) return false
       if (mode === 'all' && filter !== 'all' && c.outcome !== filter) return false
       if (q && !`${c.caller} ${c.phone}`.toLowerCase().includes(q)) return false
       return true
     })
-  }, [mode, filter, query, sourceCalls])
+  }, [mode, filter, query])
 
-  const attentionCount = sourceCalls.filter((c) => c.attention).length
+  const attentionCount = VOICE_CALLS.filter((c) => c.attention).length
 
   return (
     <div className="rounded-xl border bg-card shadow-xs">
@@ -127,7 +127,7 @@ export function CallsBrowser({ calls: sourceCalls }: { calls: VoiceCall[] }) {
 
       <div className="flex items-center justify-between border-t px-5 py-3 text-xs text-muted-foreground">
         <span>
-          Showing <span className="font-medium text-foreground">{calls.length}</span> of {sourceCalls.length} calls
+          Showing <span className="font-medium text-foreground">{calls.length}</span> of {VOICE_CALLS.length} calls
         </span>
         <div className="flex items-center gap-1">
           <Button variant="outline" size="icon-sm" disabled aria-label="Previous page">
