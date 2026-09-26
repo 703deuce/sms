@@ -9,6 +9,7 @@ import { Switch } from '@/newui-transplant/components/ui/switch'
 export type MctbSetupLinksWired = {
   defaultLinkUrl: string
   defaultLinkLabel?: string
+  defaultLinkClicks?: number
   requestFormEnabled: boolean
   requestFormUrl: string
   onDefaultLinkChange?: (v: string) => void
@@ -24,16 +25,18 @@ const DEMO_LINKS = [
 ]
 
 export function TransplantMctbSetupLinksPage({ wired }: { wired?: MctbSetupLinksWired }) {
-  const links = wired?.defaultLinkUrl
-    ? [
-        {
-          label: wired.defaultLinkLabel ?? 'Default link',
-          url: wired.defaultLinkUrl.replace(/^https?:\/\//, ''),
-          clicks: 0,
-          isDefault: true,
-        },
-        ...DEMO_LINKS.filter((l) => !l.isDefault),
-      ]
+  const live = wired !== undefined
+  const links = live
+    ? wired?.defaultLinkUrl
+      ? [
+          {
+            label: wired.defaultLinkLabel ?? 'Default link',
+            url: wired.defaultLinkUrl.replace(/^https?:\/\//, ''),
+            clicks: wired.defaultLinkClicks ?? 0,
+            isDefault: true,
+          },
+        ]
+      : []
     : DEMO_LINKS
 
   return (

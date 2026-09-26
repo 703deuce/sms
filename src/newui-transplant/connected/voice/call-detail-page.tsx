@@ -35,5 +35,23 @@ export function NewUiVoiceCallDetailPage({ callId }: { callId: string }) {
     return <p className="p-6 text-sm text-muted-foreground">Call not found.</p>;
   }
 
-  return <TransplantVoiceCallDetailView wired={wired} />;
+  const wiredWithActions = wired
+    ? {
+        ...wired,
+        onMarkHandled: async () => {
+          const res = await fetch(`/api/voice/calls/${callId}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ feedback: { rating: "good", reason: "marked_handled" } }),
+          });
+          if (!res.ok) {
+            const j = await res.json().catch(() => ({}));
+            throw new Error(j.error || "Could not mark handled");
+          }
+          setWired((prev) => (prev ? { ...prev, attention: undefined } : prev));
+        },
+      }
+    : null;
+
+  return <TransplantVoiceCallDetailView wired={wiredWithActions!} />;
 }

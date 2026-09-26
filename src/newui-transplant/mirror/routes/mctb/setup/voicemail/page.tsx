@@ -13,6 +13,8 @@ export type MctbSetupVoicemailWired = {
   greetingActive: boolean
   sendAfterVoicemail: boolean
   onSendAfterVoicemailChange: (v: boolean) => void
+  transcriptionEnabled?: boolean
+  onTranscriptionEnabledChange?: (v: boolean) => void
   onSaveGreeting?: () => Promise<void>
   onSaveRecoveryToggle?: () => Promise<void>
 }
@@ -81,7 +83,13 @@ export function TransplantMctbSetupVoicemailPage({ wired }: { wired?: MctbSetupV
       </Panel>
       <Panel title="Transcription">
         <FieldRow label="Transcribe voicemail" description="Adds a transcript and AI summary">
-          <Switch defaultChecked aria-label="Transcribe voicemail" />
+          <Switch
+            checked={wired?.transcriptionEnabled ?? true}
+            onCheckedChange={(v) => {
+              wired?.onTranscriptionEnabledChange?.(v)
+            }}
+            aria-label="Transcribe voicemail"
+          />
         </FieldRow>
       </Panel>
     </div>

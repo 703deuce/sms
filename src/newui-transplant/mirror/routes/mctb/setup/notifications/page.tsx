@@ -9,6 +9,7 @@ import { formatPhone } from '@/lib/utils'
 export type MctbSetupNotificationsWired = {
   recipients: Array<{ name: string; email: string; mobile: string }>
   events: Array<{ label: string; email: boolean; sms: boolean; onEmailChange?: (v: boolean) => void; onSmsChange?: (v: boolean) => void }>
+  onAddRecipient?: () => void
 }
 
 const DEMO_RECIPIENTS = [
@@ -26,12 +27,21 @@ const DEMO_EVENTS = [
 ]
 
 export function TransplantMctbSetupNotificationsPage({ wired }: { wired?: MctbSetupNotificationsWired }) {
-  const recipients = wired?.recipients?.length ? wired.recipients : DEMO_RECIPIENTS
-  const events = wired?.events?.length ? wired.events : DEMO_EVENTS
+  const live = wired !== undefined
+  const recipients = live ? (wired?.recipients ?? []) : DEMO_RECIPIENTS
+  const events = live ? (wired?.events ?? []) : DEMO_EVENTS
 
   return (
     <div className="flex flex-col gap-4">
-      <Panel title="Team recipients" action={<Button size="sm" variant="outline"><Plus /> Add recipient</Button>} bodyClassName="p-0">
+      <Panel
+        title="Team recipients"
+        action={
+          <Button size="sm" variant="outline" type="button" onClick={() => wired?.onAddRecipient?.()}>
+            <Plus /> Add recipient
+          </Button>
+        }
+        bodyClassName="p-0"
+      >
         <ul className="divide-y">
           {recipients.map((r) => (
             <li key={r.name} className="flex items-center gap-3 px-5 py-3">

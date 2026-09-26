@@ -96,6 +96,7 @@ export function buildVoiceCallHandlingWired(
     state.urgencyRules?.flatMap((r) => r.keywords ?? []).filter(Boolean).slice(0, 12) ?? [];
 
   const whenClosed = maturity.afterHoursBehavior.whenClosed;
+  const holidays = maturity.businessSchedule?.holidays ?? [];
 
   return {
     duringHoursLine: summary.transfersEnabled
@@ -122,6 +123,7 @@ export function buildVoiceCallHandlingWired(
       blockSpam: state.spamLikelyPolicy === "BLOCK",
       declineSolicitors: state.salesSolicitationEnabled === true,
       recordCalls: state.callRecording === true,
+      holidaySchedule: holidays.length > 0,
     },
   };
 }

@@ -155,6 +155,8 @@ export function NewUiMctbSetupVoicemailPage() {
         onSendAfterVoicemailChange: vm.setSendAfterVoicemail,
         onSaveGreeting: vm.saveGreeting,
         onSaveRecoveryToggle: vm.saveRecoveryToggle,
+        transcriptionEnabled: vm.transcriptionEnabled,
+        onTranscriptionEnabledChange: (v) => void vm.saveTranscription(v),
       }}
     />
   );
@@ -206,11 +208,33 @@ export function NewUiMctbSetupNotificationsPage() {
     <TransplantMctbSetupNotificationsPage
       wired={{
         recipients: n.recipients.map((r) => ({
-          name: r.label || r.email || "Recipient",
+          name: r.name || r.email || "Recipient",
           email: r.email || "—",
           mobile: formatRecipientMobile(r.mobileE164),
         })),
         events: events ?? undefined,
+        onAddRecipient: () => {
+          const name = window.prompt("Recipient name");
+          if (!name?.trim()) return;
+          const email = window.prompt("Email address");
+          if (!email?.trim()) return;
+          const mobile = window.prompt("Mobile (E.164, optional)") || null;
+          const next = [
+            ...n.recipients,
+            {
+              id: `new-${Date.now()}`,
+              name: name.trim(),
+              email: email.trim(),
+              mobileE164: mobile?.trim() || null,
+              roleDescription: null,
+              eventChannels: {},
+              enabled: true,
+              sortOrder: n.recipients.length,
+            },
+          ];
+          n.setRecipients(next);
+          void n.save();
+        },
       }}
     />
   );

@@ -117,6 +117,8 @@ export function useMctbVoicemailWiring() {
   const [greetingText, setGreetingText] = useState("");
   const [greetingActive, setGreetingActive] = useState(false);
   const [sendAfterVoicemail, setSendAfterVoicemail] = useState(true);
+  const [voicemailBoxId, setVoicemailBoxId] = useState<string | null>(null);
+  const [transcriptionEnabled, setTranscriptionEnabled] = useState(true);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -132,9 +134,16 @@ export function useMctbVoicemailWiring() {
         });
         const json = await res.json();
         if (res.ok) {
-          const box = json.data?.boxes?.[0] as { greetingText?: string; greetingUrl?: string } | undefined;
+          const box = json.data?.boxes?.[0] as {
+            id?: string;
+            greetingText?: string;
+            greetingUrl?: string;
+            transcriptionEnabled?: boolean;
+          } | undefined;
+          setVoicemailBoxId(box?.id ?? null);
           setGreetingText(box?.greetingText?.trim() || "");
           setGreetingActive(Boolean(box?.greetingUrl || box?.greetingText));
+          setTranscriptionEnabled(box?.transcriptionEnabled ?? true);
         }
       }
     } finally {
@@ -169,6 +178,24 @@ export function useMctbVoicemailWiring() {
     await reload();
   }, [phoneNumberId, greetingText, reload]);
 
+  const saveTranscription = useCallback(
+    async (enabled: boolean) => {
+      setTranscriptionEnabled(enabled);
+      if (!voicemailBoxId) return;
+      const res = await fetch("/api/phone/voicemail", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update_box", boxId: voicemailBoxId, transcriptionEnabled: enabled }),
+      });
+      if (!res.ok) {
+        const j = await res.json();
+        throw new Error(j.error || "Could not update transcription");
+      }
+      await reload();
+    },
+    [voicemailBoxId, reload],
+  );
+
   const saveRecoveryToggle = useCallback(async () => {
     const data = await fetchMctbSetup();
     const r = data.runtime as Record<string, unknown>;
@@ -195,6 +222,8 @@ export function useMctbVoicemailWiring() {
     setSendAfterVoicemail,
     saveGreeting,
     saveRecoveryToggle,
+    transcriptionEnabled,
+    saveTranscription,
   };
 }
 

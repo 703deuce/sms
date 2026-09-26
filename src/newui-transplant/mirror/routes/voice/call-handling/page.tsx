@@ -21,9 +21,10 @@ const DEMO_RECENT = [
 const DEMO_KEYWORDS = ['burst pipe', 'flooding', 'gas smell', 'no heat', 'sewage backup', 'carbon monoxide']
 
 export function TransplantVoiceCallHandlingPage({ wired }: { wired?: VoiceCallHandlingWired }) {
-  const transfers = wired?.transfers?.length ? wired.transfers : DEMO_TRANSFERS
-  const recent = wired?.recent?.length ? wired.recent : DEMO_RECENT
-  const keywords = wired?.emergencyKeywords?.length ? wired.emergencyKeywords : DEMO_KEYWORDS
+  const live = wired !== undefined
+  const transfers = live ? (wired?.transfers ?? []) : DEMO_TRANSFERS
+  const recent = live ? (wired?.recent ?? []) : DEMO_RECENT
+  const keywords = live ? (wired?.emergencyKeywords ?? []) : DEMO_KEYWORDS
   const sw = wired?.switches ?? {}
 
   return (

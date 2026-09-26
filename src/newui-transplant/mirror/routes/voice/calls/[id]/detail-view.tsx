@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { AlertTriangle, ArrowLeft, CalendarCheck, MessageSquare, Phone, PhoneIncoming, Sparkles } from 'lucide-react'
 import { Page, PageHeader, Panel, Pill, Rows } from '@/newui-transplant/components/app/kit'
 import { ButtonLink } from '@/newui-transplant/components/app/button-link'
+import { Button } from '@/newui-transplant/components/ui/button'
 import { OutcomePill } from '@/newui-transplant/components/app/status'
 import type { VoiceCallDetailWired } from '@/lib/newui-transplant/adapters/voice-call-detail'
 
@@ -71,7 +72,18 @@ export function TransplantVoiceCallDetailView({ wired }: { wired: VoiceCallDetai
                 <p className="text-sm font-medium">Still needs follow-up</p>
                 <p className="mt-0.5 text-sm text-muted-foreground">{wired.attention}</p>
               </div>
-              <ButtonLink href={`tel:${wired.phoneTel}`} size="sm" variant="outline">Mark handled</ButtonLink>
+              {wired.onMarkHandled ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void wired.onMarkHandled?.()}
+                >
+                  Mark handled
+                </Button>
+              ) : (
+                <ButtonLink href={`tel:${wired.phoneTel}`} size="sm" variant="outline">Mark handled</ButtonLink>
+              )}
             </div>
           ) : null}
 

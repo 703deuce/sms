@@ -21,6 +21,7 @@ export type VoiceCallDetailWired = {
   callDataRows: Array<{ label: string; value: string }>;
   activityFeed: Array<{ time: string; text: string }>;
   conversationHref?: string;
+  onMarkHandled?: () => Promise<void>;
 };
 
 type DetailPayload = {

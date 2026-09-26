@@ -21,6 +21,11 @@ export type VoiceKnowledgeWired = {
   crawlSummary?: string
   onSave?: () => Promise<void>
   onRecrawl?: () => Promise<void>
+  onDismissGap?: (gapId: string) => Promise<void>
+  onResolveGap?: (gapId: string, answerText: string) => Promise<void>
+  onUploadClick?: () => void
+  onAddFaq?: () => void
+  onEditHours?: () => void
 }
 
 export const metadata: Metadata = { title: 'Business Knowledge' }
@@ -50,12 +55,15 @@ const HOURS = [
 ]
 
 export function TransplantVoiceKnowledgePage({ wired }: { wired?: VoiceKnowledgeWired }) {
+  const live = wired !== undefined
   const businessName = wired?.businessName ?? BUSINESS.name
-  const gaps = wired?.gaps?.length ? wired.gaps : GAPS
-  const hours = wired?.hours?.length ? wired.hours : HOURS
-  const faqs = wired?.faqs?.length ? wired.faqs : FAQS
-  const sources = wired?.sources?.length ? wired.sources : SOURCES.map((s) => ({ name: s.name, meta: s.meta, status: s.status, icon: s.icon === Globe ? 'globe' as const : 'file' as const }))
-  const crawlSummary = wired?.crawlSummary ?? '42 pages imported · Last crawl Sep 23, 3:12 PM'
+  const gaps = live ? (wired?.gaps ?? []) : GAPS
+  const hours = live ? (wired?.hours ?? []) : HOURS
+  const faqs = live ? (wired?.faqs ?? []) : FAQS
+  const sources = live
+    ? (wired?.sources ?? [])
+    : SOURCES.map((s) => ({ name: s.name, meta: s.meta, status: s.status, icon: s.icon === Globe ? 'globe' as const : 'file' as const }))
+  const crawlSummary = wired?.crawlSummary ?? (live ? 'No crawl data yet' : '42 pages imported · Last crawl Sep 23, 3:12 PM')
   return (
     <Page>
       <PageHeader
@@ -81,8 +89,28 @@ export function TransplantVoiceKnowledgePage({ wired }: { wired?: VoiceKnowledge
                 </p>
               </div>
               <div className="flex gap-2">
-                <Button size="sm" variant="ghost">Dismiss</Button>
-                <Button size="sm" variant="outline">Add answer</Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  type="button"
+                  disabled={!gap.id || !wired?.onDismissGap}
+                  onClick={() => gap.id && void wired?.onDismissGap?.(gap.id)}
+                >
+                  Dismiss
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  type="button"
+                  disabled={!gap.id || !wired?.onResolveGap}
+                  onClick={() => {
+                    if (!gap.id || !wired?.onResolveGap) return
+                    const answer = window.prompt(`Approved answer for:\n${gap.question ?? gap.q}`)
+                    if (answer?.trim()) void wired.onResolveGap(gap.id, answer.trim())
+                  }}
+                >
+                  Add answer
+                </Button>
               </div>
             </li>
           ))}
@@ -121,7 +149,9 @@ export function TransplantVoiceKnowledgePage({ wired }: { wired?: VoiceKnowledge
               </div>
             ))}
           </dl>
-          <Button variant="outline" size="sm" className="mt-4">Edit hours</Button>
+          <Button variant="outline" size="sm" className="mt-4" type="button" onClick={() => wired?.onEditHours?.()}>
+            Edit hours
+          </Button>
         </Panel>
 
         <Panel title="Website" description="Import pages so Ava can answer from your site">
@@ -137,7 +167,7 @@ export function TransplantVoiceKnowledgePage({ wired }: { wired?: VoiceKnowledge
         <Panel
           title="Knowledge sources"
           action={
-            <Button size="sm" variant="outline">
+            <Button size="sm" variant="outline" type="button" onClick={() => wired?.onUploadClick?.()}>
               <Upload /> Upload
             </Button>
           }
@@ -168,7 +198,7 @@ export function TransplantVoiceKnowledgePage({ wired }: { wired?: VoiceKnowledge
         title="FAQs & approved answers"
         description="Ava will use these answers word-for-word"
         action={
-          <Button size="sm" variant="outline">
+          <Button size="sm" variant="outline" type="button" onClick={() => wired?.onAddFaq?.()}>
             <Plus /> Add FAQ
           </Button>
         }

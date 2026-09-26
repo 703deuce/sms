@@ -1,56 +1,55 @@
 # New UI Phase 2 — Remaining wiring exceptions
 
-After completing the continuation pass on `cursor/newui-stage2-transplant-2304`.
+After the user-directed wiring pass on `cursor/newui-stage2-transplant-2304`.
 
 ## 1. Opus controls/values with no production backend equivalent
 
 | Surface | Opus control / value | Notes |
 |--------|----------------------|--------|
-| `/voice/call-handling` | Holiday schedule switch | No dedicated holiday flag in appointment-receptionist wizard state wired here |
-| `/voice/call-handling` | Add target / Edit on-call / + Add keyword / Retention Change | Destination CRUD and keyword editor live in legacy operational editors, not exposed as discrete APIs for these Opus affordances |
-| `/mctb/setup/recovery` | Blocked caller ID trigger | No runtime trigger rule |
-| `/mctb/setup/notifications` | Forwarding stopped working event row | No handoff event type |
-| `/mctb/setup/notifications` | Add recipient / row edit actions | Recipient CRUD exists on `/api/mctb/handoff` but Opus affordances are not full editor parity |
-| `/mctb/setup/links` | Non-default link rows + click counts + Add link | Production has default URL + request form only |
-| `/mctb/setup/voicemail` | Transcribe voicemail switch | No MCTB setup flag located separate from inbox/runtime |
-| `/mctb/setup/voicemail` | ElevenLabs / Record / Upload source tiles (non-TTS) | Greeting persistence wired for TTS script + activate; other sources need legacy greeting studio flows |
-| `/voice/knowledge` | Dismiss / Add answer on gaps | Gap resolution APIs exist but not mapped to these Opus buttons in this pass |
-| `/voice/knowledge` | Add FAQ / Upload source | List/read wired; create/upload actions not bound to Opus buttons |
-| `/voice/calls/[id]` | Mark handled | No PATCH action beyond call feedback rating |
-| `/voice/analytics` | Booked time-series (second chart line) | API exposes aggregate `appointmentsBooked` only, not daily booked series |
+| `/voice/call-handling` | Add target / Edit on-call / + Add keyword / Retention Change | Destination and keyword CRUD live in appointment-receptionist wizard state; no discrete REST endpoints for these Opus affordances (save draft on page Save only). |
+| `/mctb/setup/recovery` | Blocked caller ID trigger | No runtime trigger rule in MCTB setup API. |
+| `/mctb/setup/notifications` | Forwarding stopped working event row | No `MctbHandoffEventType` for this label (row is display-only). |
+| `/mctb/setup/notifications` | Per-recipient Edit (⋯) | Recipient update/delete not exposed as separate Opus actions (add + matrix toggles persist via `/api/mctb/handoff`). |
+| `/mctb/setup/links` | Add link / secondary link rows / click counts | Production: `defaultLinkUrl` + public request form only; no multi-link CMS or per-link analytics on setup API. |
+| `/mctb/setup/voicemail` | ElevenLabs / Record / Upload source tiles (non-TTS) | TTS script + activate + transcription flag wired; alternate greeting sources use legacy voicemail studio flows. |
+| `/voice/knowledge` | Edit hours | Navigates to `/voice/setup` (canonical hours editor); no inline modal on this Opus page. |
+| `/voice/analytics` | Booked time-series (second chart line) | API exposes aggregate `appointmentsBooked`, not daily booked series. |
+| `/voice/analytics` | Usage meters / advanced latency panel | Billing usage and p95 blocks are static Opus chrome without a single analytics API field map in this pass. |
 
 ## 2. Remaining sandbox/mock data on Stage 2 path (when production empty)
 
-| Surface | Fallback |
+| Surface | Behavior |
 |--------|----------|
-| `/mctb/setup/links` | Secondary demo link rows when only one production default URL exists |
-| `/voice/call-handling` | Demo transfers/keywords when wizard has zero destinations / urgency keywords |
-| `/mctb/setup/notifications` | Demo recipients/events until `/api/mctb/handoff` loads |
-| Sidebar/topbar | Static nav badges / AI minutes (unchanged; static Opus chrome) |
+| Mirror routes without `wired` prop | Sandbox demo rows still used (preview / story paths only). |
+| Connected routes | When `wired` is passed, lists use **empty** arrays instead of demo filler (no fake transfers, gaps, links, etc.). |
+| Sidebar/topbar | Static nav badges / AI minutes (unchanged; static Opus chrome). |
 
 ## 3. Fake saves / actions
 
-None intentional on connected paths after this pass. Opus buttons without handlers still render but no-op where listed in section 1.
+None on connected paths. Opus buttons without handlers are limited to section 1.
 
 ## 4. Connected pages beyond adapter boundary
 
 | File | Issue |
 |------|--------|
-| `connected/voice/analytics-page.tsx` | Still renders Opus analytics layout inline (not `TransplantVoiceAnalyticsPage` mirror). Data is production; chart shows calls series only (see §1). |
-
-All other Stage 2 routes render mirror `Transplant*` components with `wired` props.
+| `connected/voice/analytics-page.tsx` | Production data; layout matches Opus analytics but is not yet routed through `TransplantVoiceAnalyticsPage` mirror component. |
 
 ## 5. Opus page structure differs from canonical mirror
 
-None for routes wired in this pass. Detail routes now use `detail-view.tsx` mirror compositions matching sandbox `[id]` pages.
+None for wired detail routes (`detail-view.tsx` compositions).
 
-## 6. Confirmation — dynamic values/actions
+## 6. Wired in this pass (previously listed as exceptions)
 
-All other Opus-drawn dynamic fields on the targeted routes load or persist through existing production APIs (`/api/solutions/appointment-receptionist`, `/api/voice/call-handling/recent-transfers`, `/api/mctb/setup`, `/api/mctb/handoff`, `/api/phone/voicemail`, `/api/mctb/setup-test`, `/api/mctb/live-test`, `/api/voice/knowledge*`, `/api/voice/calls/:id`, `/api/mctb/missed-calls/:id`, `/api/voice/analytics`, `/api/voice/knowledge-gaps`).
+- Knowledge: Dismiss / Add answer → `PATCH /api/voice/knowledge-gaps`; Upload → `/api/voice/knowledge/:id/upload`; Add FAQ → `knowledgeItems` + receptionist save; Save reads core fields from existing inputs.
+- MCTB voicemail: `transcriptionEnabled` → `/api/phone/voicemail` `update_box`.
+- MCTB notifications: Add recipient → `POST /api/mctb/handoff`; event matrix toggles persist.
+- MCTB links: Demo secondary rows removed when `wired` is active.
+- Call handling: Holiday switch maps to `businessSchedule.holidays` (off clears list; on retains existing holidays).
+- Call detail: Mark handled → `PATCH /api/voice/calls/:id` call feedback.
 
 ## 7. UI unchanged
 
-No new sections, controls, labels, or layout changes beyond optional `wired` prop plumbing inside existing mirror components (same DOM structure).
+Only `wired` callbacks and `wired`-active empty states; no new sections or layout changes.
 
 ## 8. `newui/` untouched
 
