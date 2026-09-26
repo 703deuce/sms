@@ -1,13 +1,8 @@
-import { CallHandlingOperationalPage } from "@/components/voice/call-handling-operational-page";
-import { NewUiLegacyEditorPage } from "@/newui-transplant/connected/shared/legacy-editor-page";
+"use client";
 
+import { TransplantVoiceCallHandlingPage } from "@/newui-transplant/mirror/routes/voice/call-handling/page";
+
+/** Call-handling Opus controls map partially to `/api/call-handling` ownership; full transfer UI remains Opus-presentational until dedicated APIs are exposed. */
 export function NewUiVoiceCallHandlingPage() {
-  return (
-    <NewUiLegacyEditorPage
-      title="Call Handling"
-      description="Business hours, transfers, spam protection, and who answers when you're unavailable."
-    >
-      <CallHandlingOperationalPage />
-    </NewUiLegacyEditorPage>
-  );
+  return <TransplantVoiceCallHandlingPage />;
 }

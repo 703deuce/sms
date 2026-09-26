@@ -5,10 +5,16 @@ import { ButtonLink } from '@/newui-transplant/components/app/button-link'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { BUSINESS } from '@/newui-transplant/lib/sandbox-data'
 
+export type MctbSetupOverviewWired = {
+  businessLine?: string
+  sender?: string
+  recoveryActive?: boolean
+}
+
 export const metadata: Metadata = { title: 'Setup' }
 
 const CALL_FLOW = [
-  { label: 'Phone & Forwarding', value: `Forwarding verified · ${BUSINESS.line}`, href: '/mctb/setup/phone', tone: 'success' as const },
+  { label: 'Phone & Forwarding', value: `Forwarding verified · ${BUSINESS.line}`, href: '/mctb/setup/phone', tone: 'success' as const }, // default copy; wired overrides in status strip
   { label: 'Consent', value: 'Press 1 · disclosure published', href: '/mctb/setup/consent', tone: 'success' as const },
   { label: 'Text Back', value: 'Opener customized · 1 segment', href: '/mctb/setup/text-back', tone: 'success' as const },
   { label: 'Recovery', value: '5 triggers · 30s delay', href: '/mctb/setup/recovery', tone: 'success' as const },
@@ -41,14 +47,18 @@ function SummaryRow({ label, value, href, tone }: { label: string; value: string
   )
 }
 
-export function TransplantMctbSetupPage() {
+export function TransplantMctbSetupPage({ wired }: { wired?: MctbSetupOverviewWired }) {
+  const businessLine = wired?.businessLine ?? BUSINESS.line
+  const sender = wired?.sender ?? BUSINESS.sender
+  const recoveryTone = wired?.recoveryActive === false ? 'warning' : 'success'
+  const recoveryLabel = wired?.recoveryActive === false ? 'Paused' : 'Active'
   return (
     <div className="flex flex-col gap-4">
       <section aria-label="Status" className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border md:grid-cols-5">
         {[
-          ['Recovery', <Pill key="r" tone="success">Active</Pill>],
-          ['Business line', <span key="b" className="font-mono text-sm">{BUSINESS.line}</span>],
-          ['Text-back sender', <span key="s" className="font-mono text-sm">{BUSINESS.sender}</span>],
+          ['Recovery', <Pill key="r" tone={recoveryTone}>{recoveryLabel}</Pill>],
+          ['Business line', <span key="b" className="font-mono text-sm">{businessLine}</span>],
+          ['Text-back sender', <span key="s" className="font-mono text-sm">{sender}</span>],
           ['Forwarding', <Pill key="f" tone="success">Verified</Pill>],
           ['Last test', <span key="t" className="text-sm">Sep 24</span>],
         ].map(([label, value]) => (

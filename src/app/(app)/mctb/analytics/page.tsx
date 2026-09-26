@@ -1,7 +1,7 @@
 import { MctbAnalyticsView } from "@/components/mctb/analytics-view";
 import { loadMctbAnalytics, type MctbAnalyticsRange } from "@/lib/mctb/analytics";
 import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
-import { TransplantMctbAnalyticsPage } from "@/newui-transplant/mirror/routes/mctb/analytics/page";
+import { NewUiMctbAnalyticsPage } from "@/newui-transplant/connected/mctb/analytics-page";
 import { requireWorkspaceContext } from "@/lib/workspace-data";
 import { Suspense } from "react";
 
@@ -22,7 +22,7 @@ export default async function MctbAnalyticsPage({
   const initialData = await loadMctbAnalytics(workspaceId, range);
 
   if (isNewUiStage2Enabled()) {
-    return <TransplantMctbAnalyticsPage />;
+    return <NewUiMctbAnalyticsPage initialData={initialData} initialRange={range} />;
   }
 
   return (

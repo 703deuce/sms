@@ -6,6 +6,16 @@ import { Label } from '@/newui-transplant/components/ui/label'
 import { SaveBar } from '@/newui-transplant/components/app/save-bar'
 import { BUSINESS } from '@/newui-transplant/lib/sandbox-data'
 
+export type MctbAiRecoveryWired = {
+  enabled?: boolean
+  senderLabel?: string
+  businessName?: string
+  services?: string
+  serviceArea?: string
+  hours?: string
+  onSave?: (patch: Record<string, unknown>) => Promise<void>
+}
+
 export const metadata: Metadata = { title: 'AI Recovery' }
 
 const COLLECT = [
@@ -16,22 +26,32 @@ const COLLECT = [
   { label: 'Best time to call back', description: 'Preferred callback window', on: false },
 ]
 
-export function TransplantMctbAiRecoveryPage() {
+export function TransplantMctbAiRecoveryPage({ wired }: { wired?: MctbAiRecoveryWired }) {
+  const sender = wired?.senderLabel ?? BUSINESS.sender
+  const enabled = wired?.enabled ?? true
   return (
     <Page>
       <PageHeader
         title="AI Recovery"
         description="Let AI continue the text conversation after a missed call, collect details, and share your booking link."
-        actions={<SaveBar />}
+        actions={
+          <SaveBar
+            onSave={
+              wired?.onSave
+                ? () => wired.onSave!({ enabled, fields: { NAME: true, REASON: true, ADDRESS: true, URGENCY: true } })
+                : undefined
+            }
+          />
+        }
       />
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="flex flex-col gap-4 lg:col-span-2">
           <Panel>
             <FieldRow
               label="AI Recovery"
-              description={`AI replies from your text-back sender ${BUSINESS.sender}. Your team can take over any time from the Inbox.`}
+              description={`AI replies from your text-back sender ${sender}. Your team can take over any time from the Inbox.`}
             >
-              <Switch defaultChecked aria-label="Enable AI Recovery" />
+              <Switch defaultChecked={enabled} aria-label="Enable AI Recovery" />
             </FieldRow>
             <div className="mt-4 flex gap-4 border-t pt-4">
               <TextLink href="/mctb/conversations">Open Inbox</TextLink>
@@ -74,10 +94,10 @@ export function TransplantMctbAiRecoveryPage() {
         >
           <Rows
             items={[
-              { label: 'Name', value: <span className="truncate">Northside Plumbing</span> },
-              { label: 'Services', value: 'Plumbing, HVAC' },
-              { label: 'Service area', value: 'Greater Austin' },
-              { label: 'Hours', value: 'Mon–Sat' },
+              { label: 'Name', value: <span className="truncate">{wired?.businessName ?? 'Northside Plumbing'}</span> },
+              { label: 'Services', value: wired?.services ?? 'Plumbing, HVAC' },
+              { label: 'Service area', value: wired?.serviceArea ?? 'Greater Austin' },
+              { label: 'Hours', value: wired?.hours ?? 'Mon–Sat' },
             ]}
           />
         </Panel>

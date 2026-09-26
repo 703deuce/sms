@@ -1,13 +1,32 @@
-import { VoiceReceptionistEditor } from "@/components/voice/receptionist/voice-receptionist-editor";
-import { NewUiLegacyEditorPage } from "@/newui-transplant/connected/shared/legacy-editor-page";
+"use client";
+
+import { useEffect, useState } from "react";
+import { TransplantVoiceReceptionistPage } from "@/newui-transplant/mirror/routes/voice/receptionist/page";
+import type { VoiceReceptionistWired } from "@/newui-transplant/mirror/routes/voice/receptionist/page";
 
 export function NewUiVoiceReceptionistPage() {
-  return (
-    <NewUiLegacyEditorPage
-      title="Receptionist"
-      description="Configure how your AI receptionist greets callers, books appointments, and handles transfers."
-    >
-      <VoiceReceptionistEditor />
-    </NewUiLegacyEditorPage>
-  );
+  const [wired, setWired] = useState<VoiceReceptionistWired | undefined>(undefined);
+
+  useEffect(() => {
+    fetch("/api/voice/overview", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        const data = j.data ?? j;
+        const op = data.operational;
+        if (!op) {
+          setWired(undefined);
+          return;
+        }
+        setWired({
+          agentInitial: (op.receptionistName || "A").slice(0, 1),
+          agentName: op.receptionistName || "Receptionist",
+          voiceLabel: op.voiceLabel || "Voice profile",
+          published: data.mode === "active" && op.publicationStatus === "published",
+          versionLabel: op.publicationLabel || undefined,
+        });
+      })
+      .catch(() => setWired(undefined));
+  }, []);
+
+  return <TransplantVoiceReceptionistPage wired={wired} />;
 }

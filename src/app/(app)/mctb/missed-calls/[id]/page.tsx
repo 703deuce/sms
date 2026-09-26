@@ -1,6 +1,6 @@
 import { MctbMissedCallDetailView } from "@/components/mctb/missed-call-detail-view";
 import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
-import { TransplantMctbMissedCallsIdPage } from "@/newui-transplant/mirror/routes/mctb/missed-calls/[id]/page";
+import { NewUiMctbMissedCallDetailPage } from "@/newui-transplant/connected/mctb/missed-call-detail-page";
 import { Suspense } from "react";
 
 export default async function MctbMissedCallDetailPage({
@@ -10,7 +10,7 @@ export default async function MctbMissedCallDetailPage({
 }) {
   const { id } = await params;
   if (isNewUiStage2Enabled()) {
-    return <TransplantMctbMissedCallsIdPage params={params} />;
+    return <NewUiMctbMissedCallDetailPage eventId={id} />;
   }
   return (
     <Suspense

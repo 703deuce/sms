@@ -1,5 +1,5 @@
 import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
-import { TransplantVoiceCallsIdPage } from "@/newui-transplant/mirror/routes/voice/calls/[id]/page";
+import { NewUiVoiceCallDetailPage } from "@/newui-transplant/connected/voice/call-detail-page";
 import VoiceCallsDetailLegacyPage from "../calls-detail-legacy-page";
 
 export default async function VoiceCallDetailPage({
@@ -7,8 +7,9 @@ export default async function VoiceCallDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const { id } = await params;
   if (isNewUiStage2Enabled()) {
-    return <TransplantVoiceCallsIdPage params={params} />;
+    return <NewUiVoiceCallDetailPage callId={id} />;
   }
   return <VoiceCallsDetailLegacyPage />;
 }

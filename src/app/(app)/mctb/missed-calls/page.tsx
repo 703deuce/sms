@@ -2,7 +2,7 @@ import { MctbMissedCallsView } from "@/components/mctb/missed-calls-view";
 import { loadMctbMissedCallsListData } from "@/lib/mctb/missed-calls-list-data";
 import { parseMissedCallsListQuery } from "@/lib/mctb/missed-calls-list-filters";
 import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
-import { TransplantMctbMissedCallsPage } from "@/newui-transplant/mirror/routes/mctb/missed-calls/page";
+import { NewUiMctbMissedCallsPage } from "@/newui-transplant/connected/mctb/missed-calls-page";
 import { requireWorkspaceContext } from "@/lib/workspace-data";
 import { Suspense } from "react";
 
@@ -12,7 +12,7 @@ export default async function MctbMissedCallsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   if (isNewUiStage2Enabled()) {
-    return <TransplantMctbMissedCallsPage />;
+    return <NewUiMctbMissedCallsPage />;
   }
 
   const { workspaceId } = await requireWorkspaceContext();

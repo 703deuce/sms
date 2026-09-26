@@ -4,8 +4,16 @@ import { useState } from 'react'
 import { Check } from 'lucide-react'
 import { Button } from '@/newui-transplant/components/ui/button'
 
-export function SaveBar({ label = 'Save changes' }: { label?: string }) {
+export function SaveBar({
+  label = 'Save changes',
+  onSave,
+}: {
+  label?: string
+  onSave?: () => Promise<void> | void
+}) {
   const [saved, setSaved] = useState(false)
+  const [busy, setBusy] = useState(false)
+
   return (
     <div className="flex items-center gap-3">
       <span aria-live="polite" className="text-xs text-muted-foreground">
@@ -16,9 +24,17 @@ export function SaveBar({ label = 'Save changes' }: { label?: string }) {
         ) : null}
       </span>
       <Button
-        onClick={() => {
-          setSaved(true)
-          setTimeout(() => setSaved(false), 2000)
+        disabled={busy}
+        onClick={async () => {
+          if (!onSave) return
+          setBusy(true)
+          try {
+            await onSave()
+            setSaved(true)
+            setTimeout(() => setSaved(false), 2000)
+          } finally {
+            setBusy(false)
+          }
         }}
       >
         {label}

@@ -1,5 +1,6 @@
 import { Page, PageHeader, Stat } from '@/newui-transplant/components/app/kit'
 import { CallsBrowser } from '@/newui-transplant/components/voice/calls-browser'
+import { VOICE_CALLS } from '@/newui-transplant/lib/sandbox-data'
 
 export const metadata: Metadata = { title: 'Calls' }
 
@@ -13,7 +14,7 @@ export function TransplantVoiceCallsPage() {
         <Stat label="Appointments" value="70" delta={8} />
         <Stat label="Talk time" value="14h 22m" delta={3} />
       </div>
-      <CallsBrowser />
+      <CallsBrowser calls={VOICE_CALLS} />
     </Page>
   )
 }

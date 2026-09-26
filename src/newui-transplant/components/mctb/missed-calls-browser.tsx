@@ -15,7 +15,7 @@ import {
 } from '@/newui-transplant/components/ui/dropdown-menu'
 import { EmptyState, Initials } from '@/newui-transplant/components/app/kit'
 import { RecoveryPill } from '@/newui-transplant/components/app/status'
-import { MISSED_CALLS } from '@/newui-transplant/lib/sandbox-data'
+import type { MissedCall } from '@/newui-transplant/lib/view-models'
 
 const opts = (values: string[]) => values.map((v) => ({ label: v, value: v }))
 const RECOVERY = opts(['All', 'Needs attention', 'Replied', 'Waiting for consent', 'Suppressed', 'Failed'])
@@ -49,7 +49,7 @@ function FilterSelect({
   )
 }
 
-export function MissedCallsBrowser() {
+export function MissedCallsBrowser({ missedCalls }: { missedCalls: MissedCall[] }) {
   const [query, setQuery] = useState('')
   const [recovery, setRecovery] = useState('All')
   const [date, setDate] = useState('Last 7 days')
@@ -58,14 +58,14 @@ export function MissedCallsBrowser() {
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
-    const list = MISSED_CALLS.filter(
+    const list = missedCalls.filter(
       (m) =>
         (recovery === 'All' || m.recovery === recovery) &&
         (trigger === 'All' || m.trigger === trigger) &&
         (!q || `${m.caller} ${m.phone}`.toLowerCase().includes(q)),
     )
     return sort === 'Oldest first' ? [...list].reverse() : list
-  }, [query, recovery, trigger, sort])
+  }, [query, recovery, trigger, sort, missedCalls])
 
   const dirty = query || recovery !== 'All' || trigger !== 'All' || sort !== 'Newest first'
 
@@ -167,7 +167,7 @@ export function MissedCallsBrowser() {
 
       <div className="flex items-center justify-between border-t px-5 py-3 text-xs text-muted-foreground">
         <span>
-          {rows.length} of {MISSED_CALLS.length} · {date}
+          {rows.length} of {missedCalls.length} · {date}
         </span>
         <span>Page 1 of 1</span>
       </div>

@@ -20,8 +20,15 @@ function sectionFor(pathname: string) {
   return { section: 'Transovo', page: '' }
 }
 
-export function Topbar() {
+export function Topbar({ userName }: { userName?: string }) {
   const pathname = usePathname()
+  const initials = (userName || 'User')
+    .trim()
+    .split(/\s+/)
+    .map((p) => p[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase() || 'U'
   const { section, page } = sectionFor(pathname)
 
   return (
@@ -60,7 +67,7 @@ export function Topbar() {
           <span className="absolute right-2 top-2 size-1.5 rounded-full bg-primary" aria-hidden="true" />
         </Button>
         <Avatar className="ml-1 size-8">
-          <AvatarFallback className="bg-accent text-xs font-medium text-accent-foreground">JR</AvatarFallback>
+          <AvatarFallback className="bg-accent text-xs font-medium text-accent-foreground">{initials}</AvatarFallback>
         </Avatar>
       </div>
     </header>

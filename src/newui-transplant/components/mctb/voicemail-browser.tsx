@@ -8,19 +8,21 @@ import { Input } from '@/newui-transplant/components/ui/input'
 import { EmptyState, Initials, Pill } from '@/newui-transplant/components/app/kit'
 import { ButtonLink } from '@/newui-transplant/components/app/button-link'
 import { VOICEMAILS } from '@/newui-transplant/lib/sandbox-data'
+import type { Voicemail } from '@/newui-transplant/lib/view-models'
 import { cn } from '@/lib/utils'
 
-export function VoicemailBrowser() {
+export function VoicemailBrowser({ voicemails: voicemailsProp }: { voicemails?: Voicemail[] }) {
+  const source = voicemailsProp ?? VOICEMAILS
   const [query, setQuery] = useState('')
-  const [selectedId, setSelectedId] = useState(VOICEMAILS[0]?.id)
+  const [selectedId, setSelectedId] = useState(source[0]?.id)
 
   const list = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return VOICEMAILS.filter((v) => !q || `${v.caller} ${v.phone} ${v.summary}`.toLowerCase().includes(q))
-  }, [query])
-  const selected = VOICEMAILS.find((v) => v.id === selectedId)
+    return source.filter((v) => !q || `${v.caller} ${v.phone} ${v.summary}`.toLowerCase().includes(q))
+  }, [query, source])
+  const selected = source.find((v) => v.id === selectedId)
 
-  if (!VOICEMAILS.length) {
+  if (!source.length) {
     return (
       <div className="rounded-xl border bg-card">
         <EmptyState

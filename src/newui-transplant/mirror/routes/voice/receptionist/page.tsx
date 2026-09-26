@@ -2,7 +2,14 @@ import { CalendarCheck, Check, MessageSquareText, PhoneForwarded, ShieldCheck, U
 import { Page, PageHeader, Panel, Pill, Rows } from '@/newui-transplant/components/app/kit'
 import { ButtonLink } from '@/newui-transplant/components/app/button-link'
 
-export const metadata: Metadata = { title: 'Receptionist' }
+export type VoiceReceptionistWired = {
+  agentInitial?: string
+  agentName?: string
+  voiceLabel?: string
+  greeting?: string
+  published?: boolean
+  versionLabel?: string
+}
 
 const CAPABILITIES = [
   { icon: CalendarCheck, label: 'Book appointments', detail: 'Google Calendar · Service team' },
@@ -13,7 +20,16 @@ const CAPABILITIES = [
   { icon: ShieldCheck, label: 'Spam protection', detail: 'Blocks known robocallers & solicitors' },
 ]
 
-export function TransplantVoiceReceptionistPage() {
+export function TransplantVoiceReceptionistPage({ wired }: { wired?: VoiceReceptionistWired }) {
+  const agentInitial = wired?.agentInitial ?? 'A'
+  const agentName = wired?.agentName ?? 'Ava'
+  const voiceLabel = wired?.voiceLabel ?? 'Warm · American English'
+  const greeting =
+    wired?.greeting ??
+    'Thanks for calling Northside Plumbing & Heating, this is Ava. How can I help today?'
+  const published = wired?.published ?? true
+  const versionLabel = wired?.versionLabel ?? 'v14 · Sep 22'
+
   return (
     <Page>
       <PageHeader
@@ -30,15 +46,15 @@ export function TransplantVoiceReceptionistPage() {
         <Panel title="Status" className="lg:col-span-1">
           <div className="mb-5 flex flex-col items-center rounded-lg bg-accent/60 p-5 text-center">
             <span className="flex size-14 items-center justify-center rounded-full bg-primary text-xl font-semibold text-primary-foreground">
-              A
+              {agentInitial}
             </span>
-            <p className="mt-3 text-base font-semibold">Ava</p>
-            <p className="text-xs text-muted-foreground">Warm · American English</p>
+            <p className="mt-3 text-base font-semibold">{agentName}</p>
+            <p className="text-xs text-muted-foreground">{voiceLabel}</p>
           </div>
           <Rows
             items={[
-              { label: 'Publish status', value: <Pill tone="success">Published</Pill> },
-              { label: 'Version', value: 'v14 · Sep 22' },
+              { label: 'Publish status', value: <Pill tone={published ? 'success' : 'warning'}>{published ? 'Published' : 'Draft'}</Pill> },
+              { label: 'Version', value: versionLabel },
               { label: 'Language', value: 'English, Spanish' },
               { label: 'Speaking speed', value: '1.0×' },
             ]}
@@ -48,7 +64,7 @@ export function TransplantVoiceReceptionistPage() {
         <div className="flex flex-col gap-4 lg:col-span-2">
           <Panel title="Greeting" description="The first thing callers hear">
             <blockquote className="rounded-lg border-l-2 border-primary bg-muted/50 px-4 py-3 text-pretty text-sm leading-relaxed">
-              {'"Thanks for calling Northside Plumbing & Heating, this is Ava. How can I help today?"'}
+              {`"${greeting}"`}
             </blockquote>
             <p className="mt-3 text-xs text-muted-foreground">
               After hours, Ava adds: {'"Our office is closed, but I can still book a visit or connect you with our on-call tech for emergencies."'}

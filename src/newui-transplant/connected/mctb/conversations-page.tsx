@@ -5,18 +5,23 @@ import { Inbox } from "@/newui-transplant/components/mctb/inbox";
 import type { BusinessContext, Conversation, MissedCall } from "@/newui-transplant/lib/view-models";
 import { mapApiConversationToNewUiInbox } from "@/lib/newui-transplant/adapters/mctb-conversations";
 import { businessContextFromWorkspace } from "@/lib/newui-transplant/adapters/business-context";
-import { fetchConversation, fetchInboxListPage } from "@/lib/inbox/kimi-inbox-adapter";
+import { useOpusWorkspaceData } from "@/newui-transplant/context/opus-workspace-data";
+import { fetchConversation, fetchInboxListPage, sendNewMessage } from "@/lib/inbox/kimi-inbox-adapter";
 import type { Conversation as ApiConversation } from "@/lib/types";
 
 export function NewUiMctbConversationsPage({
   initialConversationId,
   initialFilter,
-  business,
 }: {
   initialConversationId?: string;
   initialFilter: "All" | "Needs reply";
-  business: BusinessContext;
 }) {
+  const { business: opusBusiness } = useOpusWorkspaceData();
+  const business =
+    opusBusiness ??
+    businessContextFromWorkspace({
+      name: "Workspace",
+    });
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [missedCalls, setMissedCalls] = useState<MissedCall[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,6 +67,15 @@ export function NewUiMctbConversationsPage({
       conversations={conversations}
       missedCalls={missedCalls}
       business={business}
+      onSendMessage={async (conversationId, text) => {
+        const convo = conversations.find((c) => c.id === conversationId);
+        if (!convo) return;
+        await sendNewMessage({
+          to: convo.phone,
+          message: text,
+          inboxCompose: true,
+        });
+      }}
     />
   );
 }

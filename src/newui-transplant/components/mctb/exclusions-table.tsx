@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { Panel } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
@@ -16,21 +16,47 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/newui-transplant/components/ui/dialog'
+import { addMctbExclusion, deleteMctbExclusion, fetchMctbExclusions } from '@/lib/newui-transplant/api/mctb-setup-client'
+import { fmtCallPhone } from '@/lib/voice/calls/display'
 
-type Row = { number: string; label: string; source: string; added: string }
+type Row = { id: string; number: string; label: string; source: string; added: string }
 
-const INITIAL: Row[] = [
-  { number: '(512) 555-0100', label: 'Supply House', source: 'Manual', added: 'Aug 2' },
-  { number: '(512) 555-0133', label: 'Owner — personal', source: 'Manual', added: 'Jul 18' },
-  { number: '(737) 555-0102', label: '—', source: 'Replied STOP', added: 'Sep 11' },
-  { number: '(512) 555-0175', label: 'Answering service', source: 'Manual', added: 'Jun 30' },
-]
+function mapExclusionRow(raw: Record<string, unknown>): Row {
+  const phone = String(raw.phoneE164 || raw.phone || raw.number || '')
+  const created = raw.createdAt ? new Date(String(raw.createdAt)) : null
+  return {
+    id: String(raw.id || phone),
+    number: phone ? fmtCallPhone(phone) : '—',
+    label: String(raw.label || raw.name || '—'),
+    source: String(raw.source || raw.reason || 'Manual'),
+    added: created
+      ? created.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+      : '—',
+  }
+}
 
 export function ExclusionsTable() {
-  const [rows, setRows] = useState(INITIAL)
+  const [rows, setRows] = useState<Row[]>([])
   const [open, setOpen] = useState(false)
   const [number, setNumber] = useState('')
   const [label, setLabel] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  const reload = useCallback(async () => {
+    setLoading(true)
+    try {
+      const list = await fetchMctbExclusions()
+      setRows(list.map((r) => mapExclusionRow(r as Record<string, unknown>)))
+    } catch {
+      setRows([])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    reload()
+  }, [reload])
 
   return (
     <Panel
@@ -44,13 +70,14 @@ export function ExclusionsTable() {
           </DialogTrigger>
           <DialogContent>
             <form
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault()
                 if (!number.trim()) return
-                setRows([{ number: number.trim(), label: label.trim() || '—', source: 'Manual', added: 'Today' }, ...rows])
+                await addMctbExclusion({ phoneE164: number.trim(), label: label.trim() || undefined })
                 setNumber('')
                 setLabel('')
                 setOpen(false)
+                await reload()
               }}
               className="flex flex-col gap-4"
             >
@@ -75,39 +102,47 @@ export function ExclusionsTable() {
         </Dialog>
       }
     >
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[520px] text-sm">
-          <thead>
-            <tr className="border-b text-left text-xs text-muted-foreground">
-              <th scope="col" className="px-5 py-2.5 font-medium">Number</th>
-              <th scope="col" className="px-3 py-2.5 font-medium">Label</th>
-              <th scope="col" className="px-3 py-2.5 font-medium">Source</th>
-              <th scope="col" className="px-3 py-2.5 font-medium">Added</th>
-              <th scope="col" className="w-12 px-3 py-2.5"><span className="sr-only">Remove</span></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {rows.map((r) => (
-              <tr key={r.number}>
-                <td className="px-5 py-3 font-mono">{r.number}</td>
-                <td className="px-3 py-3">{r.label}</td>
-                <td className="px-3 py-3 text-muted-foreground">{r.source}</td>
-                <td className="px-3 py-3 text-muted-foreground">{r.added}</td>
-                <td className="px-3 py-3">
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label={`Remove ${r.number}`}
-                    onClick={() => setRows(rows.filter((x) => x.number !== r.number))}
-                  >
-                    <Trash2 />
-                  </Button>
-                </td>
+      {loading ? (
+        <p className="p-5 text-sm text-muted-foreground">Loading exclusions…</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[520px] text-sm">
+            <thead>
+              <tr className="border-b text-left text-xs text-muted-foreground">
+                <th scope="col" className="px-5 py-3 font-medium">Number</th>
+                <th scope="col" className="px-3 py-3 font-medium">Label</th>
+                <th scope="col" className="px-3 py-3 font-medium">Source</th>
+                <th scope="col" className="px-3 py-3 font-medium">Added</th>
+                <th scope="col" className="px-3 py-3 font-medium"><span className="sr-only">Actions</span></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y">
+              {rows.map((row) => (
+                <tr key={row.id}>
+                  <td className="px-5 py-3 font-mono text-xs">{row.number}</td>
+                  <td className="px-3 py-3">{row.label}</td>
+                  <td className="px-3 py-3 text-muted-foreground">{row.source}</td>
+                  <td className="px-3 py-3 text-muted-foreground">{row.added}</td>
+                  <td className="px-3 py-3 text-right">
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label={`Remove ${row.number}`}
+                      onClick={async () => {
+                        await deleteMctbExclusion(row.id)
+                        await reload()
+                      }}
+                    >
+                      <Trash2 />
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </Panel>
   )
 }

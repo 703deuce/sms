@@ -8,7 +8,8 @@ import { Checkbox } from '@/newui-transplant/components/ui/checkbox'
 import { Input } from '@/newui-transplant/components/ui/input'
 import { Textarea } from '@/newui-transplant/components/ui/textarea'
 import { EmptyState, Initials, Pill } from '@/newui-transplant/components/app/kit'
-import { BUSINESS, CONVERSATIONS, MISSED_CALLS, type Conversation, type Message } from '@/newui-transplant/lib/sandbox-data'
+import { BUSINESS, CONVERSATIONS, MISSED_CALLS } from '@/newui-transplant/lib/sandbox-data'
+import type { BusinessContext, Conversation, Message, MissedCall } from '@/newui-transplant/lib/view-models'
 import { cn } from '@/lib/utils'
 
 const FILTERS = ['All', 'Needs reply', 'Mine', 'Unassigned', 'Closed', 'Spam'] as const
@@ -52,10 +53,28 @@ function Bubble({ m }: { m: Message }) {
   )
 }
 
-export function Inbox({ initialId, initialFilter }: { initialId?: string; initialFilter: Filter }) {
+export function Inbox({
+  initialId,
+  initialFilter,
+  conversations: conversationsProp,
+  missedCalls: missedCallsProp,
+  business: businessProp,
+  onSendMessage,
+}: {
+  initialId?: string
+  initialFilter: Filter
+  conversations?: Conversation[]
+  missedCalls?: MissedCall[]
+  business?: BusinessContext
+  onSendMessage?: (conversationId: string, text: string) => Promise<void>
+}) {
+  const conversations = conversationsProp ?? CONVERSATIONS
+  const missedCalls = missedCallsProp ?? MISSED_CALLS
+  const business = businessProp ?? BUSINESS
+
   const [filter, setFilter] = useState<Filter>(initialFilter)
   const [query, setQuery] = useState('')
-  const [selectedId, setSelectedId] = useState<string | undefined>(initialId ?? CONVERSATIONS[0]?.id)
+  const [selectedId, setSelectedId] = useState<string | undefined>(initialId ?? conversations[0]?.id)
   const [mobileThread, setMobileThread] = useState(Boolean(initialId))
   const [checked, setChecked] = useState<Set<string>>(new Set())
   const [sent, setSent] = useState<Record<string, Message[]>>({})
@@ -63,16 +82,16 @@ export function Inbox({ initialId, initialFilter }: { initialId?: string; initia
 
   const list = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return CONVERSATIONS.filter((c) => {
+    return conversations.filter((c) => {
       if (filter === 'Needs reply' && !c.needsReply) return false
       if (filter === 'Closed' || filter === 'Spam') return false
       return !q || `${c.name} ${c.phone} ${c.preview}`.toLowerCase().includes(q)
     })
-  }, [filter, query])
+  }, [filter, query, conversations])
 
-  const selected: Conversation | undefined = CONVERSATIONS.find((c) => c.id === selectedId)
+  const selected: Conversation | undefined = conversations.find((c) => c.id === selectedId)
   const messages = selected ? [...selected.messages, ...(sent[selected.id] ?? [])] : []
-  const missed = selected ? MISSED_CALLS.find((m) => m.conversationId === selected.id) : undefined
+  const missed = selected ? missedCalls.find((m) => m.conversationId === selected.id) : undefined
 
   const toggle = (id: string) =>
     setChecked((prev) => {
@@ -82,9 +101,12 @@ export function Inbox({ initialId, initialFilter }: { initialId?: string; initia
       return next
     })
 
-  const send = () => {
+  const send = async () => {
     const text = draft.trim()
     if (!text || !selected) return
+    if (onSendMessage) {
+      await onSendMessage(selected.id, text)
+    }
     setSent((prev) => ({
       ...prev,
       [selected.id]: [...(prev[selected.id] ?? []), { from: 'business', text, time: 'Just now', status: 'Sent' }],
@@ -111,7 +133,7 @@ export function Inbox({ initialId, initialFilter }: { initialId?: string; initia
             >
               {f}
               {f === 'Needs reply' ? (
-                <span className="ml-1.5 tabular-nums text-muted-foreground">{CONVERSATIONS.filter((c) => c.needsReply).length}</span>
+                <span className="ml-1.5 tabular-nums text-muted-foreground">{conversations.filter((c) => c.needsReply).length}</span>
               ) : null}
             </button>
           ))}
@@ -218,7 +240,7 @@ export function Inbox({ initialId, initialFilter }: { initialId?: string; initia
                       }
                     }}
                     rows={1}
-                    placeholder={`Reply from ${BUSINESS.sender}`}
+                    placeholder={`Reply from ${business.sender}`}
                     className="min-h-9 resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
                   />
                   <Button type="submit" size="icon" disabled={!draft.trim()} aria-label="Send">
@@ -257,7 +279,7 @@ export function Inbox({ initialId, initialFilter }: { initialId?: string; initia
               <dl className="flex flex-col gap-3 text-xs">
                 <div>
                   <dt className="text-muted-foreground">Business line</dt>
-                  <dd className="mt-0.5 font-mono">{BUSINESS.line}</dd>
+                  <dd className="mt-0.5 font-mono">{business.line}</dd>
                 </div>
                 <div>
                   <dt className="text-muted-foreground">Consent</dt>

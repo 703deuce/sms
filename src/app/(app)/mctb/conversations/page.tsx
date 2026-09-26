@@ -3,7 +3,7 @@ import { KimiConversationsConnected } from "@/components/inbox/kimi-conversation
 import { inboxFiltersFromUrlParams } from "@/lib/inbox/conversation-url-filters";
 import { loadInboxPermissions } from "@/lib/inbox/inbox-access";
 import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
-import { TransplantMctbConversationsPage } from "@/newui-transplant/mirror/routes/mctb/conversations/page";
+import { NewUiMctbConversationsPage } from "@/newui-transplant/connected/mctb/conversations-page";
 import {
   loadConversations,
   loadTeamMembers,
@@ -17,7 +17,10 @@ export default async function MctbConversationsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   if (isNewUiStage2Enabled()) {
-    return <TransplantMctbConversationsPage searchParams={searchParams} />;
+    const params = await searchParams;
+    const initialConversationId = typeof params.conversation === "string" ? params.conversation : undefined;
+    const initialFilter = params.filter === "needs_reply" ? "Needs reply" : "All";
+    return <NewUiMctbConversationsPage initialConversationId={initialConversationId} initialFilter={initialFilter} />;
   }
 
   const { workspaceId, session } = await requireWorkspaceContext();

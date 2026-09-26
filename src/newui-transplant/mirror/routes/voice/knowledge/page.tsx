@@ -6,6 +6,15 @@ import { Label } from '@/newui-transplant/components/ui/label'
 import { Textarea } from '@/newui-transplant/components/ui/textarea'
 import { BUSINESS } from '@/newui-transplant/lib/sandbox-data'
 
+export type VoiceKnowledgeWired = {
+  businessName?: string
+  description?: string
+  services?: string
+  website?: string
+  timezone?: string
+  gaps?: Array<{ id: string; question: string; asked: number; last: string }>
+}
+
 export const metadata: Metadata = { title: 'Business Knowledge' }
 
 const GAPS = [
@@ -32,7 +41,9 @@ const HOURS = [
   ['Sunday', 'Closed · emergencies only'],
 ]
 
-export function TransplantVoiceKnowledgePage() {
+export function TransplantVoiceKnowledgePage({ wired }: { wired?: VoiceKnowledgeWired }) {
+  const businessName = wired?.businessName ?? BUSINESS.name
+  const gaps = wired?.gaps?.length ? wired.gaps : GAPS
   return (
     <Page>
       <PageHeader
@@ -49,10 +60,10 @@ export function TransplantVoiceKnowledgePage() {
           <span className="text-xs text-muted-foreground">Questions callers asked that Ava couldn&apos;t answer</span>
         </div>
         <ul className="divide-y divide-warning/20">
-          {GAPS.map((gap) => (
-            <li key={gap.q} className="flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+          {gaps.map((gap) => (
+            <li key={gap.id ?? gap.q} className="flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-sm font-medium">{gap.q}</p>
+                <p className="text-sm font-medium">{gap.question ?? gap.q}</p>
                 <p className="text-xs text-muted-foreground">
                   Asked {gap.asked}× · last {gap.last}
                 </p>
@@ -71,7 +82,7 @@ export function TransplantVoiceKnowledgePage() {
           <div className="flex flex-col gap-4">
             <div className="grid gap-1.5">
               <Label htmlFor="bname">Business name</Label>
-              <Input id="bname" defaultValue={BUSINESS.name} />
+              <Input id="bname" defaultValue={businessName} />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="bdesc">Description</Label>
@@ -88,7 +99,7 @@ export function TransplantVoiceKnowledgePage() {
           </div>
         </Panel>
 
-        <Panel title="Business hours & timezone" description={BUSINESS.timezone}>
+        <Panel title="Business hours & timezone" description={wired?.timezone ?? BUSINESS.timezone}>
           <dl className="divide-y">
             {HOURS.map(([day, hours]) => (
               <div key={day} className="flex justify-between py-2.5 text-sm first:pt-0">
@@ -102,7 +113,7 @@ export function TransplantVoiceKnowledgePage() {
 
         <Panel title="Website" description="Import pages so Ava can answer from your site">
           <div className="flex gap-2">
-            <Input aria-label="Website URL" defaultValue={`https://${BUSINESS.website}`} />
+            <Input aria-label="Website URL" defaultValue={wired?.website ? (wired.website.startsWith('http') ? wired.website : `https://${wired.website}`) : `https://${BUSINESS.website}`} />
             <Button variant="outline">
               <RefreshCw /> Re-crawl
             </Button>

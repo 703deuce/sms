@@ -19,6 +19,7 @@ import {
 } from '@/newui-transplant/components/ui/sidebar'
 import { NAV, type NavItem } from '@/newui-transplant/lib/nav'
 import { BUSINESS } from '@/newui-transplant/lib/sandbox-data'
+import { useOpusWorkspaceData, workspaceInitials } from '@/newui-transplant/context/opus-workspace-data'
 
 function isActive(pathname: string, item: NavItem) {
   if (pathname === item.href) return true
@@ -26,8 +27,11 @@ function isActive(pathname: string, item: NavItem) {
   return false
 }
 
-export function AppSidebar() {
+export function AppSidebar({ userName }: { userName?: string }) {
   const pathname = usePathname()
+  const { workspaceName, business } = useOpusWorkspaceData()
+  const displayName = business?.name || workspaceName || BUSINESS.name
+  const initials = workspaceInitials(displayName)
 
   return (
     <Sidebar collapsible="icon">
@@ -45,10 +49,10 @@ export function AppSidebar() {
           className="flex w-full items-center gap-2 rounded-lg border border-sidebar-border bg-sidebar-accent/50 px-2.5 py-2 text-left transition-colors hover:bg-sidebar-accent group-data-[collapsible=icon]:hidden"
         >
           <span className="flex size-6 items-center justify-center rounded-md bg-sidebar-border text-[11px] font-semibold text-sidebar-accent-foreground">
-            NP
+            {initials}
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-xs font-medium text-sidebar-accent-foreground">{BUSINESS.name}</span>
+            <span className="block truncate text-xs font-medium text-sidebar-accent-foreground">{displayName}</span>
             <span className="block text-[11px] text-sidebar-foreground/70">Pro workspace</span>
           </span>
           <ChevronsUpDown className="size-3.5 text-sidebar-foreground/60" aria-hidden="true" />

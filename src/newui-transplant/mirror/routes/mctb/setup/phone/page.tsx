@@ -5,20 +5,28 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { SaveBar } from '@/newui-transplant/components/app/save-bar'
 import { BUSINESS } from '@/newui-transplant/lib/sandbox-data'
 
+export type MctbSetupPhoneWired = {
+  businessLine?: string
+  forwardingDestination?: string
+  onSave?: () => Promise<void>
+}
+
 export const metadata: Metadata = { title: 'Phone & Forwarding' }
 
 const CARRIERS = ['Verizon', 'AT&T', 'T-Mobile', 'Comcast Business', 'RingCentral', 'Other']
 const RING = ['10', '15', '20', '25', '30']
 
-export function TransplantMctbSetupPhonePage() {
+export function TransplantMctbSetupPhonePage({ wired }: { wired?: MctbSetupPhoneWired }) {
+  const businessLine = wired?.businessLine ?? BUSINESS.line
+  const forwardDest = wired?.forwardingDestination ?? '(512) 555-0188'
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <Panel title="Business line" description="The public number customers call">
-        <p className="font-mono text-lg font-semibold">{BUSINESS.line}</p>
+        <p className="font-mono text-lg font-semibold">{businessLine}</p>
         <p className="mt-1 text-xs text-muted-foreground">Main line · Verizon Business</p>
       </Panel>
       <Panel title="Forwarding destination" description="Unanswered calls forward here">
-        <p className="font-mono text-lg font-semibold">(512) 555-0188</p>
+        <p className="font-mono text-lg font-semibold">{forwardDest}</p>
         <p className="mt-1 text-xs text-muted-foreground">Managed by Relay · do not share publicly</p>
       </Panel>
 
@@ -43,7 +51,7 @@ export function TransplantMctbSetupPhonePage() {
             </Select>
           </div>
         </div>
-        <div className="mt-4 flex justify-end"><SaveBar /></div>
+        <div className="mt-4 flex justify-end"><SaveBar onSave={wired?.onSave} /></div>
       </Panel>
 
       <Panel title="Forwarding instructions" description="Verizon · conditional call forwarding">
