@@ -214,9 +214,11 @@ export async function loadVoiceAnalytics(
     diagnosticCounts[k] = (diagnosticCounts[k] || 0) + 1;
   }
 
-  const openKnowledgeGaps = await prisma.voiceKnowledgeGap.count({
-    where: { workspaceId, status: "OPEN" },
-  });
+  const openKnowledgeGaps = await prisma.voiceKnowledgeGap
+    ?.count({
+      where: { workspaceId, status: "OPEN" },
+    })
+    .catch(() => 0) ?? 0;
 
   const dailyCallVolume = buildDailyCallVolumeSeries(
     dayKeys,

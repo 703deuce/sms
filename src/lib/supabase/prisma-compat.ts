@@ -112,6 +112,7 @@ const MODEL_TO_TABLE: Record<string, string> = {
   voiceAgentVersion: "voice_agent_versions",
   voiceAgentPhoneNumber: "voice_agent_phone_numbers",
   voiceKnowledgeBase: "voice_knowledge_bases",
+  voiceKnowledgeGap: "voice_knowledge_gaps",
   voiceKnowledgeSource: "voice_knowledge_sources",
   voiceAgentKnowledgeBase: "voice_agent_knowledge_bases",
   voiceTool: "voice_tools",
@@ -599,6 +600,9 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
     sourceSolutionSetup: { table: "solution_setups", fk: "sourceSolutionSetupId" },
   },
   voiceKnowledgeBase: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  voiceKnowledgeGap: {
     workspace: { table: "Workspace", fk: "workspaceId" },
   },
   voiceKnowledgeSource: {
