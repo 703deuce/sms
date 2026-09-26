@@ -8,6 +8,7 @@ import {
   type VoiceCallHandlingWired,
 } from "@/lib/newui-transplant/adapters/voice-call-handling";
 import { useAppointmentReceptionistWizard } from "@/lib/newui-transplant/hooks/use-appointment-receptionist";
+import { addTransferDestination } from "@/lib/solutions/appointment-receptionist/transfer-wizard-state";
 import { DEFAULT_VOICE_V2_OPERATING_MATURITY_CONFIG } from "@/lib/voice-receptionist-wizard/operating-maturity/defaults";
 
 export function NewUiVoiceCallHandlingPage() {
@@ -60,17 +61,22 @@ export function NewUiVoiceCallHandlingPage() {
     [patch, state.operatingMaturity],
   );
 
+  const onAddTransferTarget = useCallback(() => {
+    patch(addTransferDestination(state));
+  }, [patch, state]);
+
   const wired = useMemo(() => {
     if (loading) return undefined;
     const base = buildVoiceCallHandlingWired(state, recent);
     return {
       ...base,
       onSwitchChange,
+      onAddTransferTarget,
       onSave: async () => {
         await saveDraft("call-handling");
       },
     };
-  }, [loading, state, recent, onSwitchChange, saveDraft]);
+  }, [loading, state, recent, onSwitchChange, onAddTransferTarget, saveDraft]);
 
   if (loading) {
     return <p className="p-6 text-sm text-muted-foreground">Loading call handling…</p>;

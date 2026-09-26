@@ -70,7 +70,7 @@ export function TransplantVoiceCallHandlingPage({ wired }: { wired?: VoiceCallHa
           title="Transfers"
           description="Tried in order until someone picks up"
           action={
-            <Button size="sm" variant="outline">
+            <Button type="button" size="sm" variant="outline" onClick={() => wired?.onAddTransferTarget?.()}>
               <Plus /> Add target
             </Button>
           }
@@ -193,7 +193,10 @@ export function TransplantVoiceCallHandlingPage({ wired }: { wired?: VoiceCallHa
                 aria-label="Record calls"
               />
             </FieldRow>
-            <FieldRow label="Retention" description="Recordings are deleted after 90 days">
+            <FieldRow
+              label="Retention"
+              description={wired?.retentionDescription ?? 'Recordings are deleted after 90 days'}
+            >
               <Button size="sm" variant="outline">Change</Button>
             </FieldRow>
           </div>

@@ -5,10 +5,29 @@ import { ButtonLink } from '@/newui-transplant/components/app/button-link'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { BUSINESS } from '@/newui-transplant/lib/sandbox-data'
 
+export type MctbSetupOverviewSummaryRow = {
+  label: string
+  value: string
+  href: string
+  tone?: 'success' | 'warning'
+}
+
 export type MctbSetupOverviewWired = {
   businessLine?: string
   sender?: string
   recoveryActive?: boolean
+  recoveryLabel?: string
+  forwardingVerified?: boolean
+  forwardingPillLabel?: string
+  forwardingPillTone?: 'success' | 'warning'
+  lastTestLabel?: string
+  callFlowRows?: MctbSetupOverviewSummaryRow[]
+  operationsRows?: MctbSetupOverviewSummaryRow[]
+  activity?: Array<{ time: string; text: string }>
+  attentionHeadline?: string
+  attentionIssues?: Array<{ message: string; fixHref: string }>
+  onPauseToggle?: () => void | Promise<void>
+  pauseButtonLabel?: string
 }
 
 
@@ -47,10 +66,23 @@ function SummaryRow({ label, value, href, tone }: { label: string; value: string
 }
 
 export function TransplantMctbSetupPage({ wired }: { wired?: MctbSetupOverviewWired }) {
+  const live = wired !== undefined
   const businessLine = wired?.businessLine ?? BUSINESS.line
   const sender = wired?.sender ?? BUSINESS.sender
   const recoveryTone = wired?.recoveryActive === false ? 'warning' : 'success'
-  const recoveryLabel = wired?.recoveryActive === false ? 'Paused' : 'Active'
+  const recoveryLabel =
+    wired?.recoveryLabel ??
+    (wired?.recoveryActive === false ? 'Paused' : 'Active')
+  const callFlow = live && wired?.callFlowRows?.length ? wired.callFlowRows : CALL_FLOW
+  const operations = live && wired?.operationsRows?.length ? wired.operationsRows : OPERATIONS
+  const activity = live
+    ? (wired?.activity ?? [])
+    : ACTIVITY.map(([time, text]) => ({ time, text }))
+  const forwardingPillTone = wired?.forwardingPillTone ?? 'success'
+  const forwardingPillLabel = wired?.forwardingPillLabel ?? 'Verified'
+  const lastTest = wired?.lastTestLabel ?? 'Sep 24'
+  const attentionIssues = wired?.attentionIssues ?? []
+  const showAttention = live ? attentionIssues.length > 0 : true
   return (
     <div className="flex flex-col gap-4">
       <section aria-label="Status" className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border md:grid-cols-5">
@@ -58,8 +90,8 @@ export function TransplantMctbSetupPage({ wired }: { wired?: MctbSetupOverviewWi
           ['Recovery', <Pill key="r" tone={recoveryTone}>{recoveryLabel}</Pill>],
           ['Business line', <span key="b" className="font-mono text-sm">{businessLine}</span>],
           ['Text-back sender', <span key="s" className="font-mono text-sm">{sender}</span>],
-          ['Forwarding', <Pill key="f" tone="success">Verified</Pill>],
-          ['Last test', <span key="t" className="text-sm">Sep 24</span>],
+          ['Forwarding', <Pill key="f" tone={forwardingPillTone}>{forwardingPillLabel}</Pill>],
+          ['Last test', <span key="t" className="text-sm">{lastTest}</span>],
         ].map(([label, value]) => (
           <div key={label as string} className="bg-card p-4">
             <p className="text-xs text-muted-foreground">{label}</p>
@@ -73,30 +105,48 @@ export function TransplantMctbSetupPage({ wired }: { wired?: MctbSetupOverviewWi
           <p className="text-sm font-medium">Pause recovery</p>
           <p className="text-xs text-muted-foreground">Temporarily stop sending recovery texts, e.g. during a holiday.</p>
         </div>
-        <Button variant="outline">
-          <Pause /> Pause
+        <Button type="button" variant="outline" onClick={() => void wired?.onPauseToggle?.()}>
+          <Pause /> {wired?.pauseButtonLabel ?? 'Pause'}
         </Button>
       </div>
 
-      <details className="group rounded-xl border border-warning/40 bg-warning/5">
-        <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-sm">
-          <AlertTriangle className="size-4 text-warning" aria-hidden="true" />
-          <span className="flex-1 font-medium">Needs attention · 8 of 9 core systems ready</span>
-          <span className="text-xs text-muted-foreground group-open:hidden">View 1 issue</span>
-        </summary>
-        <div className="flex items-center justify-between gap-3 border-t border-warning/30 px-4 py-3 text-sm">
-          <span>No custom voicemail greeting — callers hear the default carrier greeting.</span>
-          <ButtonLink href="/mctb/setup/voicemail" size="sm" variant="outline">Fix</ButtonLink>
-        </div>
-      </details>
+      {showAttention ? (
+        <details className="group rounded-xl border border-warning/40 bg-warning/5" open={attentionIssues.length === 1}>
+          <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-sm">
+            <AlertTriangle className="size-4 text-warning" aria-hidden="true" />
+            <span className="flex-1 font-medium">
+              {wired?.attentionHeadline ?? 'Needs attention · 8 of 9 core systems ready'}
+            </span>
+            <span className="text-xs text-muted-foreground group-open:hidden">
+              View {attentionIssues.length || 1} issue{attentionIssues.length === 1 ? '' : 's'}
+            </span>
+          </summary>
+          {attentionIssues.length
+            ? attentionIssues.map((issue) => (
+                <div
+                  key={issue.message}
+                  className="flex items-center justify-between gap-3 border-t border-warning/30 px-4 py-3 text-sm"
+                >
+                  <span>{issue.message}</span>
+                  <ButtonLink href={issue.fixHref} size="sm" variant="outline">Fix</ButtonLink>
+                </div>
+              ))
+            : (
+                <div className="flex items-center justify-between gap-3 border-t border-warning/30 px-4 py-3 text-sm">
+                  <span>No custom voicemail greeting — callers hear the default carrier greeting.</span>
+                  <ButtonLink href="/mctb/setup/voicemail" size="sm" variant="outline">Fix</ButtonLink>
+                </div>
+              )}
+        </details>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="flex flex-col gap-4 lg:col-span-2">
           <Panel title="Call flow" bodyClassName="p-0">
-            <ul className="divide-y">{CALL_FLOW.map((r) => <SummaryRow key={r.label} {...r} />)}</ul>
+            <ul className="divide-y">{callFlow.map((r) => <SummaryRow key={r.label} {...r} />)}</ul>
           </Panel>
           <Panel title="Operations" bodyClassName="p-0">
-            <ul className="divide-y">{OPERATIONS.map((r) => <SummaryRow key={r.label} {...r} />)}</ul>
+            <ul className="divide-y">{operations.map((r) => <SummaryRow key={r.label} {...r} />)}</ul>
           </Panel>
         </div>
         <div className="flex flex-col gap-4">
@@ -109,11 +159,11 @@ export function TransplantMctbSetupPage({ wired }: { wired?: MctbSetupOverviewWi
           </Panel>
           <Panel title="Recent system activity">
             <ol className="relative flex flex-col gap-4 border-l pl-4">
-              {ACTIVITY.map(([time, text]) => (
-                <li key={time} className="relative">
+              {activity.map((row) => (
+                <li key={`${row.time}-${row.text}`} className="relative">
                   <span className="absolute -left-[21px] top-1.5 size-2 rounded-full bg-primary" aria-hidden="true" />
-                  <p className="text-sm">{text}</p>
-                  <p className="text-xs text-muted-foreground">{time}</p>
+                  <p className="text-sm">{row.text}</p>
+                  <p className="text-xs text-muted-foreground">{row.time}</p>
                 </li>
               ))}
             </ol>

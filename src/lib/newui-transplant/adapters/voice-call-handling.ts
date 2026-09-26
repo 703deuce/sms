@@ -42,6 +42,8 @@ export type VoiceCallHandlingWired = {
   };
   onSwitchChange?: (key: keyof VoiceCallHandlingWired["switches"], value: boolean) => void;
   onSave?: () => Promise<void> | void;
+  onAddTransferTarget?: () => void;
+  retentionDescription?: string;
 };
 
 function formatTransferTime(iso: string): string {
@@ -92,8 +94,7 @@ export function buildVoiceCallHandlingWired(
       ? "On-call rotation configured"
       : "No on-call rotation";
 
-  const urgencyKeywords =
-    state.urgencyRules?.flatMap((r) => r.keywords ?? []).filter(Boolean).slice(0, 12) ?? [];
+  const emergencyKeywords = (state.transferTriggers ?? []).map((t) => t.trim()).filter(Boolean).slice(0, 24);
 
   const whenClosed = maturity.afterHoursBehavior.whenClosed;
   const holidays = maturity.businessSchedule?.holidays ?? [];
@@ -113,7 +114,8 @@ export function buildVoiceCallHandlingWired(
       result: t.answered ? "Answered" : "No answer → voicemail",
     })),
     onCallDescription,
-    emergencyKeywords: urgencyKeywords.length ? urgencyKeywords : [],
+    emergencyKeywords,
+    retentionDescription: "Recordings are deleted per workspace policy (not configurable on this screen).",
     switches: {
       ringTeamFirst: whenClosed.allowOfficeTransfer,
       aiAfterHours: whenClosed.allowOnCallEscalation,

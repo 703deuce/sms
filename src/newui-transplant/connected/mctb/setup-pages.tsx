@@ -13,6 +13,8 @@ import { TransplantMctbSetupNotificationsPage, formatRecipientMobile } from "@/n
 import { TransplantMctbSetupLinksPage } from "@/newui-transplant/mirror/routes/mctb/setup/links/page";
 import { TransplantMctbSetupTestPage } from "@/newui-transplant/mirror/routes/mctb/setup/test/page";
 import { useMctbSetupApi, formatSetupPhoneLine } from "@/newui-transplant/connected/mctb/setup-hooks";
+import { useMctbSetupOverviewWiring } from "@/newui-transplant/connected/mctb/mctb-setup-overview-wiring";
+import { useMctbSetupPhoneWiring } from "@/newui-transplant/connected/mctb/mctb-setup-phone-wiring";
 import { useOpusWorkspaceData } from "@/newui-transplant/context/opus-workspace-data";
 import {
   useMctbLinksWiring,
@@ -65,35 +67,16 @@ const OPUS_EVENT_MAP: Array<{ label: string; event?: MctbHandoffEventType }> = [
 
 export function NewUiMctbSetupOverviewPage() {
   const { business } = useOpusWorkspaceData();
-  const { data, loading } = useMctbSetupApi();
+  const { loading, wired } = useMctbSetupOverviewWiring(business?.sender || "—");
   if (loading) return <p className="p-6 text-sm text-muted-foreground">Loading setup…</p>;
-  return (
-    <TransplantMctbSetupPage
-      wired={{
-        businessLine: formatSetupPhoneLine(data?.businessLineE164),
-        sender: business?.sender || "—",
-        recoveryActive: data?.runtime?.enabled !== false,
-      }}
-    />
-  );
+  return <TransplantMctbSetupPage wired={wired} />;
 }
 
 export function NewUiMctbSetupPhonePage() {
-  const { data, loading, save } = useMctbSetupApi();
+  const { business } = useOpusWorkspaceData();
+  const { loading, wired } = useMctbSetupPhoneWiring(business?.sender || "—");
   if (loading) return <p className="p-6 text-sm text-muted-foreground">Loading phone settings…</p>;
-  return (
-    <TransplantMctbSetupPhonePage
-      wired={{
-        businessLine: formatSetupPhoneLine(data?.businessLineE164),
-        forwardingDestination: formatSetupPhoneLine(data?.productionForwardTargetE164),
-        onSave: async () => {
-          const phoneNumberId = data?.runtime?.phoneNumberId;
-          if (!phoneNumberId) throw new Error("Select a forwarding number before saving.");
-          await save({ phoneNumberId, activate: false });
-        },
-      }}
-    />
-  );
+  return <TransplantMctbSetupPhonePage wired={wired} />;
 }
 
 export function NewUiMctbSetupConsentPage() {
