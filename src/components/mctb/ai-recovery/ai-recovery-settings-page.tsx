@@ -117,16 +117,26 @@ export function AiRecoverySettingsPage() {
       if (!cfgRes.ok) throw new Error(cfgJson.error || "Could not load settings");
 
       const context = ctxJson.data as ContextData;
-      setCtx(context);
+      const bookingLinks = Array.isArray(context.booking?.links) ? context.booking.links : [];
+      const safeContext: ContextData = {
+        ...context,
+        business: {
+          ...context.business,
+          services: Array.isArray(context.business?.services) ? context.business.services : [],
+        },
+        booking: { ...context.booking, links: bookingLinks },
+      };
+      setCtx(safeContext);
       setEnabled(Boolean(context.recovery.enabled));
-      const caps = (cfgJson.data?.config?.collectCapabilities || []) as LeadRecoveryCollectField[];
+      const rawCaps = cfgJson.data?.config?.collectCapabilities;
+      const caps = (Array.isArray(rawCaps) ? rawCaps : []) as LeadRecoveryCollectField[];
       const derived = deriveSimplifiedFieldEnabled(caps);
       const anyOn = Object.values(derived).some(Boolean);
       setFields(anyOn ? derived : DEFAULT_TOGGLES);
 
       const linkId = context.recovery.bookingLinkId;
       const hasLink = Boolean(
-        linkId && context.booking.links.some((l) => l.id === linkId && l.active),
+        linkId && bookingLinks.some((l) => l.id === linkId && l.active),
       );
       setBookingLinkEnabled(hasLink);
       setBookingLinkId(linkId);

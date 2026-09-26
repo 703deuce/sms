@@ -103,4 +103,12 @@ const nav = readFileSync("src/lib/products/mctb-nav.ts", "utf8");
 assert.match(nav, /AI Recovery/);
 assert.match(nav, /aiRecovery/);
 
+const contextRoute = readFileSync("src/app/api/mctb/ai-recovery/context/route.ts", "utf8");
+assert.match(
+  contextRoute,
+  /deriveRequiredActions\(compliance\.registration,\s*phoneNumbers\)/,
+  "messaging readiness must pass phone numbers, not registration row",
+);
+assert.doesNotMatch(contextRoute, /loadRegistration/);
+
 console.log("test-mctb-pass-3-ai-recovery: OK");

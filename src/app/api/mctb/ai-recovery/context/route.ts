@@ -9,7 +9,7 @@ import { isMctbSetupMessagingReady } from "@/lib/mctb/setup-messaging-ready";
 import { loadLeadRecoveryConfig } from "@/lib/mctb/lead-recovery/config";
 import { senderModeCustomerLabel } from "@/lib/mctb/missed-calls-booking-action";
 import { deriveRequiredActions } from "@/lib/compliance-helpers";
-import { loadComplianceOverview, loadPhoneNumbers, loadRegistration } from "@/lib/workspace-data";
+import { loadComplianceOverview, loadPhoneNumbers } from "@/lib/workspace-data";
 import { loadAdminMctbTestFlags } from "@/lib/mctb/admin-test-workspace";
 
 export async function GET() {
@@ -18,7 +18,7 @@ export async function GET() {
     if ("error" in auth) return auth.error;
 
     const workspaceId = auth.workspaceId;
-    const [business, config, mctbConfig, entitled, paid, links, phoneNumbers, compliance, reg, adminFlags] =
+    const [business, config, mctbConfig, entitled, paid, links, phoneNumbers, compliance, adminFlags] =
       await Promise.all([
         loadMctbApprovedBusinessInformation(workspaceId),
         loadLeadRecoveryConfig(workspaceId),
@@ -28,11 +28,10 @@ export async function GET() {
         listMctbBookingLinks(workspaceId),
         loadPhoneNumbers(workspaceId, { includeLinked: true }),
         loadComplianceOverview(workspaceId),
-        loadRegistration(workspaceId),
         loadAdminMctbTestFlags(workspaceId),
       ]);
 
-    const requiredActions = deriveRequiredActions(compliance.registration, reg);
+    const requiredActions = deriveRequiredActions(compliance.registration, phoneNumbers);
     const messagingReady = isMctbSetupMessagingReady({
       phoneNumbers,
       requiredActions,
