@@ -32,6 +32,11 @@ export function classifyProductionNumber(input: {
   type?: string | null;
   settingsJson?: unknown;
 }): MctbProductionNumberClass {
+  // Toll-free NPAs (800/866/etc.) are never 10DLC local — ignore stale A2P labels on the row.
+  if (isTollFreeE164(input.e164) || /toll/i.test(String(input.type || ""))) {
+    return "TWILIO_TOLL_FREE";
+  }
+
   const settings = asRecord(input.settingsJson);
   const stored = settings.mctbNumberClass;
   if (stored === "TWILIO_TOLL_FREE" || stored === "TELNYX_LOCAL_A2P") {
@@ -43,9 +48,6 @@ export function classifyProductionNumber(input: {
   if (compliance?.type === "A2P_10DLC") return "TELNYX_LOCAL_A2P";
 
   const provider = String(input.provider || "").toLowerCase();
-  if (isTollFreeE164(input.e164) || /toll/i.test(String(input.type || ""))) {
-    return "TWILIO_TOLL_FREE";
-  }
   if (provider === "telnyx") return "TELNYX_LOCAL_A2P";
   if (provider === "twilio") return "TWILIO_TOLL_FREE";
   return "TELNYX_LOCAL_A2P";
@@ -81,6 +83,18 @@ export function isPlatformMctbSenderPhoneRecord(input: {
   return settings.platformMctbSender === true;
 }
 
+/** Canonical Transovo platform MCTB sender row (not customer-owned numbers). */
+export function isCanonicalPlatformMctbSenderPhone(input: {
+  phoneNumberId: string;
+  settingsJson: unknown;
+  canonical: { phoneNumberId: string } | null;
+}): boolean {
+  if (!input.canonical || input.canonical.phoneNumberId !== input.phoneNumberId) {
+    return false;
+  }
+  return isPlatformMctbSenderPhoneRecord({ settingsJson: input.settingsJson });
+}
+
 /** Twilio platform TFN retained after primary switch to Telnyx (not canonical). */
 export function isPreservedTwilioPlatformMctbSenderRecord(input: {
   settingsJson?: unknown;
@@ -92,16 +106,19 @@ export function isPreservedTwilioPlatformMctbSenderRecord(input: {
 export function platformMctbSenderSettings(input?: {
   tfvApproved?: boolean;
   provider?: "twilio" | "telnyx";
+  /** Telnyx 866/800/etc. — same TFV regime as Twilio toll-free, not 10DLC. */
+  isTollFree?: boolean;
   /** When true, keep existing voice ingress role (e.g. customer_mctb) on the same DID. */
   dualVoiceIngress?: boolean;
 }): Record<string, unknown> {
   const provider = input?.provider || "twilio";
   const approved = input?.tfvApproved ?? true;
+  const tollFree = input?.isTollFree ?? provider === "twilio";
   const base: Record<string, unknown> = {
-    mctbNumberClass: provider === "twilio" ? "TWILIO_TOLL_FREE" : "TELNYX_LOCAL_A2P",
+    mctbNumberClass: tollFree ? "TWILIO_TOLL_FREE" : "TELNYX_LOCAL_A2P",
     platformMctbSender: true,
     messagingCompliance: {
-      type: provider === "twilio" ? "TOLL_FREE_VERIFICATION" : "A2P_10DLC",
+      type: tollFree ? "TOLL_FREE_VERIFICATION" : "A2P_10DLC",
       status: approved ? "APPROVED" : "NOT_STARTED",
     },
   };
