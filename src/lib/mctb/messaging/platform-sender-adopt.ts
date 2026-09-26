@@ -209,9 +209,14 @@ export async function adoptMctbPlatformSenderFromTelnyxAccount(input: {
   }
 
   const existingWsRow = existingRows.find((r) => r.workspaceId === input.ownerWorkspaceId);
+  const digits = e164.replace(/\D/g, "");
+  const npa = digits.slice(1, 4);
+  const isTollFree = isTollFreeAreaCode(npa);
+
   const platformPatch = platformMctbSenderSettings({
     provider: "telnyx",
     tfvApproved: true,
+    isTollFree,
     dualVoiceIngress: Boolean(
       existingWsRow && parseMctbPhoneRole(existingWsRow.settingsJson) === "customer_mctb",
     ),
@@ -220,10 +225,6 @@ export async function adoptMctbPlatformSenderFromTelnyxAccount(input: {
     existingWsRow?.settingsJson,
     platformPatch,
   );
-
-  const digits = e164.replace(/\D/g, "");
-  const npa = digits.slice(1, 4);
-  const isTollFree = isTollFreeAreaCode(npa);
 
   const row = await prisma.phoneNumber.upsert({
     where: {

@@ -19,6 +19,7 @@ import {
 } from "@/lib/messaging/compliance/messaging-compliance";
 import {
   classifyProductionNumber,
+  isCanonicalPlatformMctbSenderPhone,
   isPlatformDemoPhoneRecord,
 } from "@/lib/messaging/compliance/phone-number-class";
 import {
@@ -82,6 +83,23 @@ export async function isPhoneAuthorizedForOutboundSms(phoneNumberId: string): Pr
   if (!pn?.e164) return { allowed: false, regime: null, provider: null };
 
   const provider = String(pn.provider || "").toLowerCase();
+  const canonicalPlatform = await resolveCanonicalMctbPlatformSender();
+  if (
+    isCanonicalPlatformMctbSenderPhone({
+      phoneNumberId: pn.id,
+      settingsJson: pn.settingsJson,
+      canonical: canonicalPlatform,
+    })
+  ) {
+    const numberClass = classifyProductionNumber(pn);
+    return {
+      allowed: true,
+      regime:
+        numberClass === "TWILIO_TOLL_FREE" ? "TOLL_FREE_VERIFICATION" : "A2P_10DLC",
+      provider: provider || canonicalPlatform?.provider || "telnyx",
+    };
+  }
+
   const numberClass = classifyProductionNumber(pn);
 
   if (numberClass === "TWILIO_TOLL_FREE") {

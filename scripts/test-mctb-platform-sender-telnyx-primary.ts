@@ -16,15 +16,33 @@ import {
   telnyxLocalA2pSettings,
 } from "@/lib/messaging/compliance/phone-number-class";
 import type { CanonicalMctbPlatformSender } from "@/lib/mctb/messaging/platform-sender-config";
+import { isCanonicalPlatformMctbSenderPhone } from "@/lib/messaging/compliance/phone-number-class";
 
 const TELNYX_E164 = "+18666020680";
 const TWILIO_E164 = "+18885046264";
+
+// Telnyx toll-free platform sender uses TFV regime, not 10DLC
+{
+  const tfSettings = platformMctbSenderSettings({
+    provider: "telnyx",
+    isTollFree: true,
+    tfvApproved: true,
+  });
+  const compliance = tfSettings.messagingCompliance as { type?: string; status?: string };
+  assert.equal(compliance.type, "TOLL_FREE_VERIFICATION");
+  assert.equal(tfSettings.mctbNumberClass, "TWILIO_TOLL_FREE");
+}
 
 // Dual-role: voice ingress + platform SMS on same Telnyx DID
 {
   const merged = mergePlatformMctbSenderSettings(
     telnyxLocalA2pSettings({ role: "customer_mctb", a2pApproved: true }),
-    platformMctbSenderSettings({ provider: "telnyx", tfvApproved: true, dualVoiceIngress: true }),
+    platformMctbSenderSettings({
+      provider: "telnyx",
+      isTollFree: true,
+      tfvApproved: true,
+      dualVoiceIngress: true,
+    }),
   );
   assert.equal(merged.mctbRole, "customer_mctb");
   assert.equal(merged.platformMctbSender, true);
@@ -62,6 +80,34 @@ const preservedSettings = {
 };
 assert.equal(isPlatformMctbSenderPhoneRecord({ settingsJson: preservedSettings }), false);
 assert.equal(isPreservedTwilioPlatformMctbSenderRecord({ settingsJson: preservedSettings }), true);
+
+// Canonical platform sender identity is not gated by customer workspace registration rows
+assert.equal(
+  isCanonicalPlatformMctbSenderPhone({
+    phoneNumberId: "pn_telnyx_platform",
+    settingsJson: platformMctbSenderSettings({ provider: "telnyx" }),
+    canonical: {
+      phoneNumberId: "pn_telnyx_platform",
+      e164: TELNYX_E164,
+      workspaceId: "ws_owner",
+      provider: "telnyx",
+    },
+  }),
+  true,
+);
+assert.equal(
+  isCanonicalPlatformMctbSenderPhone({
+    phoneNumberId: "pn_other",
+    settingsJson: platformMctbSenderSettings({ provider: "telnyx" }),
+    canonical: {
+      phoneNumberId: "pn_telnyx_platform",
+      e164: TELNYX_E164,
+      workspaceId: "ws_owner",
+      provider: "telnyx",
+    },
+  }),
+  false,
+);
 
 // Telnyx canonical → parent Twilio send must not engage
 const telnyxCanonical: CanonicalMctbPlatformSender = {
