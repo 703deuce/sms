@@ -1,8 +1,10 @@
 import { AddOnUpgradeCard } from "@/components/products/add-on-upgrade-card";
 import { MctbVoicemailWorkspace } from "@/components/mctb/voicemail/mctb-voicemail-workspace";
 import { hasMctbBundledVoicemailAccess } from "@/lib/products/feature-entitlements";
+import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
 import { loadPersonalNumbers } from "@/lib/workspace/personal-data";
 import { requireWorkspaceContext } from "@/lib/workspace-data";
+import { NewUiMctbVoicemailPage } from "@/newui-transplant/connected/mctb/voicemail-page";
 import { Suspense } from "react";
 
 export default async function MctbVoicemailPage({
@@ -17,8 +19,13 @@ export default async function MctbVoicemailPage({
   if (!entitled) {
     return <AddOnUpgradeCard feature="visual_voicemail" />;
   }
-  const numbers = await loadPersonalNumbers(workspaceId);
   const { numberId, id } = await searchParams;
+
+  if (isNewUiStage2Enabled()) {
+    return <NewUiMctbVoicemailPage numberId={numberId} />;
+  }
+
+  const numbers = await loadPersonalNumbers(workspaceId);
 
   return (
     <Suspense fallback={null}>

@@ -1,7 +1,10 @@
 import { MctbMissedCallsView } from "@/components/mctb/missed-calls-view";
 import { loadMctbMissedCallsListData } from "@/lib/mctb/missed-calls-list-data";
 import { parseMissedCallsListQuery } from "@/lib/mctb/missed-calls-list-filters";
+import { mapMctbMissedCallsListToNewUi } from "@/lib/newui-transplant/adapters/mctb-missed-calls";
+import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
 import { requireWorkspaceContext } from "@/lib/workspace-data";
+import { NewUiMctbMissedCallsPage } from "@/newui-transplant/connected/mctb/missed-calls-page";
 import { Suspense } from "react";
 
 export default async function MctbMissedCallsPage({
@@ -17,6 +20,10 @@ export default async function MctbMissedCallsPage({
     ) as [string, string][],
   ));
   const initialData = await loadMctbMissedCallsListData(workspaceId, query);
+
+  if (isNewUiStage2Enabled()) {
+    return <NewUiMctbMissedCallsPage missedCalls={mapMctbMissedCallsListToNewUi(initialData)} />;
+  }
 
   return (
     <Suspense fallback={null}>
