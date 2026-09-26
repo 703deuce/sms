@@ -2,15 +2,15 @@
 
 **Date:** 2026-09-25  
 **Prerequisites:** `docs/NEXT-DEV-MEMORY-PASS-3-SERVER-VS-CLIENT.md`  
-**Mode:** **Measure only.** No production refactors. Revert all temporary probe routes/layouts before merge.
+**Mode:** **Measure only.** No `loadShellData` extraction, no outcomes restructuring, no AppShell cleanup. Revert temporary probe routes/layout wiring before merge.
 
 ---
 
 ## Governing question
 
-**What is the first individual import or boundary that takes RSS from ~400 MB (health) into the ~3 GB range?**
+**What is the first boundary that, when added from a clean `.next`, moves RSS from ~400–600 MB into ~3 GB — and when removed, moves it back?**
 
-Not: “which big group (server vs client) is more expensive?” — Pass 3 showed those groups **overlap**.
+Correlation (“first probe that shows ~3 GB”) is **not** enough. Pass 4 requires **A/B causality** from clean `.next` each time.
 
 ---
 
@@ -18,117 +18,170 @@ Not: “which big group (server vs client) is more expensive?” — Pass 3 show
 
 | Observation | Implication |
 |-------------|-------------|
-| Probe B ~3.4 GB with only `getSession` + AppShell | ~3 GB floor exists **without** layout server loaders |
-| Half A ~3.94 GB, Half B ~3.61 GB | Broad halves stay on the same floor; weak single-loader attribution |
-| Real+Real ~4.15 GB ≈ Probe A ~4.19 GB | **Massive shared compile graph** between server and client paths |
-| Probe B ~3.4 GB RSS, ~19 MB Turbopack cache | **RSS ≠ disk cache**; do not infer server graph from cache alone |
+| Probe B ~3.4 GB with only `getSession` + AppShell | ~3 GB floor without layout server loaders |
+| Real+Real ≈ Probe A | Server and client paths **overlap** heavily in Turbopack |
+| Half A vs Probe B ~540 MB | **Weak** evidence to blame `loadShellData` alone |
+| Probe B ~3.4 GB RSS, ~19 MB cache | **RSS ≠ disk cache** |
 
 ---
 
-## Baseline discipline
+## Measurement discipline
 
-- Clean `rm -rf .next` **per probe**
+- `rm -rf .next` **per probe** (mandatory for causality runs)
 - One `DEV_AUTH_BYPASS=1 next dev --port 3000`
 - P2: `GET /api/health` RSS
-- P3: dev-bypass cookie + probe URL RSS
-- Same VM, same Node, same Next — no `npm run build`, no Playwright marathons
-- Record: P2 RSS, P3 RSS, Δ, P3 compile ms, `.next` total (optional), cache bytes (optional — **secondary**)
+- P3: dev-bypass + probe URL RSS
+- Script: `scripts/next-dev-memory-pass4-probe.sh <label> <probe-id> <path>`
+- Record: P2, P3, Δ, compile ms; cache optional (secondary)
 
 ---
 
-## Probe matrix (single-boundary ladder)
+## “Module requested” vs “import-only” (do not tree-shake)
 
-Build from **smallest authenticated surface** upward. Each row is **one** controlled increment.
+A **static import** that never uses the symbol may be dropped or handled differently in Turbopack.
 
-| ID | Probe | What must happen on first P3 hit |
-|----|--------|----------------------------------|
-| **Base** | Page **outside** `(app)` | Trivial `<p>` only — control that health + public route stay ~400 MB |
-| **Segment** | Empty page **inside** `(app)` with **trivial layout** | No real `(app)/layout.tsx` server pipeline, no AppShell — proves whether **route group / segment** alone creates multi-GB floor |
-| **Auth** | `getSession` only inside `(app)` | Session boundary only |
-| **AppShell import-only** | `import` AppShell module (or dynamic import) **without rendering** | Compile graph for shell **module** only |
-| **AppShell render** | Render real AppShell with fixture props (Pass 3 Probe B pattern) | ~3.4 GB reference |
-| **workspace-data import-only** | `import "@/lib/workspace-data"` (or side-effect import) **no** `loadShellData()` | Import vs execution |
-| **loadShellData execute** | Import + `await loadShellData(...)` | If import-only ≈ execute → graph is module boundary; if execute ≫ import → trace dynamic/runtime loads |
-| **outcomes registry import-only** | `import "@/lib/outcomes/registry"` **no** loader call | Same pattern |
-| **outcomes execute** | `import` + `loadOutcomeInstances(workspaceId)` | Same pattern |
+**Required pattern for module-requested (not executed) probes:**
 
-### Critical: import-only probes
+```ts
+const mod = await import("@/lib/workspace-data");
+void mod;
+```
 
-Use a dedicated server file per probe so the layout/route **only** pulls that one boundary (no static import of full pipeline).
+**Execution probe (same route, otherwise identical):**
 
-Example interpretation:
+```ts
+const mod = await import("@/lib/workspace-data");
+await mod.loadShellData(userId, workspaceId);
+```
 
-| import-only | execute | Conclusion |
-|-------------|---------|------------|
-| ~3.7 GB | ~3.9 GB | **Module graph** dominates; SQL/runtime execution is not the story |
-| ~0.8 GB | ~3.9 GB | Theory wrong for import — investigate **execution** and dynamic `import()` inside loader |
-
-### Segment probe (highest priority if unproven)
-
-Pass 3 claimed a “wide `(app)` boundary” but did **not** isolate:
-
-- `(app)` **route segment** compile scope
-- **Root** `layout.tsx` / providers above `(app)`
-- **Explicit** imports in real `(app)/layout.tsx`
-
-**Segment** probe: temporary `(app)/layout.tsx` that is literally `{children}` (or `<main>{children}</main>`), no `product-theme.css`, no pipeline, no AppShell — page is empty `<p>`.
-
-If Segment alone → ~3+ GB: **stop halving individual loaders**; investigate Next/Turbopack segment + parent layouts/providers.
-
-If Segment → ~400–800 MB: floor comes from **real layout imports**; run import-only matrix on those imports.
+Apply the same rule to `@/components/layout/app-shell`, `@/lib/outcomes/registry`, etc.
 
 ---
 
-## Implementation notes (temporary only)
+## Route / layout hierarchy
 
-1. Prefer **dedicated routes** under `/dev/memory-pass4-*` (removed after run).
-2. Use **dynamic `import()`** in layout branches keyed by `MEMORY_PASS4_PROBE=<id>` so unrelated modules are not statically linked in that probe’s layout variant.
-3. **Do not** commit probe branches as permanent env flags in production layout.
-4. Optional script: `scripts/next-dev-memory-pass4-probe.sh` mirroring Pass 2/3 harness.
-5. After all probes: **revert** layout/route changes; keep script + this doc + results doc.
+```
+ROOT (app/layout.tsx — fonts, globals.css, html/body)
+│
+├── Base: /dev/memory-pass4-base  (outside `(app)`)
+│
+└── (app)
+    │
+    ├── MEMORY_PASS4_PROBE set → memory-pass4-layout.tsx ONLY
+    │   (zero imports from app-layout-production / pipeline / AppShell / product-theme)
+    │
+    └── MEMORY_PASS4_PROBE unset → dynamic import app-layout-production.tsx
+        │
+        └── /dev/memory-pass4-probe  (trivial <p>)
+```
 
----
+### Segment probe (highest priority)
 
-## Decision after Pass 4
+`(app)/layout.tsx` is a **thin wrapper** with **no** static imports of:
 
-| First boundary that jumps to ~3 GB | Next action (still measure-first until one chain proven) |
-|-----------------------------------|----------------------------------------------------------|
-| `(app)` segment trivial layout | Parent layouts, providers, Next config — not `loadShellData` |
-| `workspace-data` import-only | Extract **leaf** read module; prove with re-probe |
-| `outcomes/registry` import-only | Split nav metadata from runtime registrations |
-| AppShell import-only | Descend AppShell import tree with same import-only ladder |
-| None of the above; only full Real+Real | Interaction / shared modules / Turbopack duplication (Result D) |
+- `app-layout-production`, pipeline, AppShell, `product-theme.css`, ServiceWorkerRegister, or auth helpers.
 
-**Do not** authorize AppShell child optimization until AppShell **import-only** vs **render** separates compile from tree cost.
+When `MEMORY_PASS4_PROBE=segment`, only:
 
-**Do not** optimize `loadMctbOverview` until `(app)` floor is attributed (~+1 GB is a **separate** second cliff after shell floor).
+```tsx
+<main data-pass4="segment">{children}</main>
+```
 
----
+**Fork:**
 
-## Required report (after Pass 4 runs)
-
-Create or update: `docs/NEXT-DEV-MEMORY-PASS-4-RESULTS.md`
-
-Include:
-
-- Ladder table: Base → … → each probe RSS and Δ vs P2
-- **First step into ~3 GB range** (single boundary name)
-- Import vs execution table for workspace-data and outcomes
-- Segment vs real layout comparison
-- Dominant phenomenon: segment / shared module / specific import / interaction
-- **One** proposed correction boundary (documentation only unless explicitly approved)
-- STOP — no Pass 5 auto-implementation
+| Segment P3 RSS | Next step |
+|----------------|-----------|
+| **~400–800 MB** | `(app)` segment is **not** the cliff. Run ladder: auth → appshell-module → … |
+| **~3 GB+** | **Stop loader ladder.** Floor exists **before** workspace-data/outcomes. Run **root-layout control** (below). |
 
 ---
 
-## Optional (after one expensive graph is named)
+## Root-layout control (if Segment ≈ 3 GB+)
 
-One clean `next dev --help` check for an official alternate dev bundler; **one** diagnostic comparison on the **proven** probe only. Do not switch production bundlers.
+Compare:
+
+| Control | Path | Parent chain |
+|---------|------|----------------|
+| **Public trivial** | `/dev/memory-pass4-base` | `app/layout.tsx` only |
+| **(app) trivial** | `/dev/memory-pass4-probe` + `MEMORY_PASS4_PROBE=segment` | `app/layout.tsx` → trivial `(app)/layout` |
+
+**Document explicitly:** both inherit the same root (`Geist`, `globals.css`, `BRAND_NAME` metadata). Only the second enters the `(app)` route group.
+
+If public stays ~400 MB and `(app)+trivial` ≈ 3 GB → isolate **segment / compiler boundary**, not individual loaders.
+
+If public **also** ≈ 3 GB → fix the control (middleware, accidental `(app)` wrap, wrong URL) before concluding.
+
+---
+
+## Probe ladder
+
+| ID | `MEMORY_PASS4_PROBE` | Path | Action on P3 |
+|----|----------------------|------|----------------|
+| **base** | *(unset)* | `/dev/memory-pass4-base` | Trivial `<p>`, no `(app)` layout |
+| **segment** | `segment` | `/dev/memory-pass4-probe` | Trivial layout only |
+| **auth** | `auth` | same | `getSession()` only |
+| **appshell-module** | `appshell-module` | same | `import()` app-shell, `void mod`, no render |
+| **appshell-render** | `appshell-render` | same | Render AppShell + fixtures |
+| **workspace-data-module** | `workspace-data-module` | same | `import()` workspace-data, `void mod` |
+| **workspace-data-execute** | `workspace-data-execute` | same | `import()` + `loadShellData()` |
+| **outcomes-registry-module** | `outcomes-registry-module` | same | `import()` registry, `void mod` |
+| **outcomes-execute** | `outcomes-execute` | same | `import()` + `loadOutcomeInstances()` |
+
+**Do not run workspace-data / outcomes ladder if Segment ≈ 3 GB+** (cannot explain the original cliff).
+
+---
+
+## Causality standard (after a cliff candidate)
+
+Example ladder observation:
+
+| Probe | P3 RSS |
+|-------|--------|
+| segment | 510 MB |
+| auth | 620 MB |
+| appshell-module | **3180 MB** ← apparent cliff |
+| appshell-render | 3400 MB |
+
+**Do not optimize AppShell yet.** Re-run from clean `.next`:
+
+1. `segment` (no AppShell module) → expect ~500 MB
+2. `appshell-module` (module requested) → expect ~3.2 GB
+
+Same for `workspace-data-module` vs `auth`/`segment`, or `outcomes-registry-module`.
+
+**Culprit** = smallest boundary whose **removal** drops the cliff and whose **addition** restores it.
+
+---
+
+## Import vs execution interpretation
+
+| module requested | execute | Conclusion |
+|------------------|---------|------------|
+| ~3.7 GB | ~3.9 GB | Module graph dominates |
+| ~0.8 GB | ~3.9 GB | Investigate runtime / dynamic imports inside loader |
+
+---
+
+## Authorized work
+
+- Temporary probe pages, `memory-pass4-layout.tsx`, thin `(app)/layout.tsx` wrapper
+- `app-layout-production.tsx` (production graph isolated for uncontaminated segment probes)
+- Measurement script + `docs/NEXT-DEV-MEMORY-PASS-4-RESULTS.md`
+
+**Not authorized:** extracting `loadShellData`, outcomes splits, AppShell child optimization, `loadMctbOverview` work.
 
 ---
 
 ## STOP condition
 
-Stop when the **smallest practical import or segment boundary** that explains the jump into the ~3 GB floor is identified with import-only evidence.
+Stop when one boundary passes **causality A/B** (on/off from clean `.next`), with **module-requested** probes where applicable.
 
-Do not implement broad optimizations in Pass 4.
+Document **one** proposed correction boundary only. No Pass 5 implementation without review.
+
+---
+
+## Revert before merge
+
+Remove: probe pages, `memory-pass4-layout.tsx`, Pass 4 env wiring; restore `(app)/layout.tsx` to direct production imports (or keep production module + static layout if zero behavioral change and team agrees).
+
+Retain: scripts, Pass 4 spec, results doc.

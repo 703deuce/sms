@@ -3,7 +3,7 @@
 **Date:** 2026-09-25  
 **Prerequisites:** `docs/NEXT-DEV-MEMORY-PASS-2-BOUNDARY-ISOLATION.md`  
 **Objective:** Split the ~3.6 GB authenticated-shell delta into **(app)/layout server graph** vs **AppShell client graph**. Diagnostic only — no optimizations shipped in this pass.  
-**Next:** `docs/NEXT-DEV-MEMORY-PASS-4-ATTRIBUTION.md` (attribution-only; no authorized refactors yet).
+**Next:** Pass 4 complete — `docs/NEXT-DEV-MEMORY-PASS-4-RESULTS.md` (trivial `(app)` segment ~3.5 GB; no loader refactor authorized).
 
 ---
 
