@@ -11,7 +11,6 @@ export type MctbSetupPhoneWired = {
   onSave?: () => Promise<void>
 }
 
-export const metadata: Metadata = { title: 'Phone & Forwarding' }
 
 const CARRIERS = ['Verizon', 'AT&T', 'T-Mobile', 'Comcast Business', 'RingCentral', 'Other']
 const RING = ['10', '15', '20', '25', '30']

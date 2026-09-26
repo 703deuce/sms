@@ -5,7 +5,6 @@ import { ButtonLink } from '@/newui-transplant/components/app/button-link'
 import { RecoveryPill } from '@/newui-transplant/components/app/status'
 import { BUSINESS, CONVERSATIONS, MISSED_CALLS } from '@/newui-transplant/lib/sandbox-data'
 
-export const metadata: Metadata = { title: 'Missed Call Text Back' }
 
 const ACTIVITY = [
   { time: '10:35 AM', text: 'Rachel Kim replied to recovery text' },

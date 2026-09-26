@@ -5,7 +5,6 @@ import { ButtonLink } from '@/newui-transplant/components/app/button-link'
 import { RecentCallsTable } from '@/newui-transplant/components/voice/recent-calls-table'
 import { BUSINESS, VOICE_CALLS } from '@/newui-transplant/lib/sandbox-data'
 
-export const metadata: Metadata = { title: 'Receptionist Overview' }
 
 const ATTENTION = [
   { text: '3 unanswered questions from callers this week', href: '/voice/knowledge' },

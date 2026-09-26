@@ -16,7 +16,6 @@ export type MctbAiRecoveryWired = {
   onSave?: (patch: Record<string, unknown>) => Promise<void>
 }
 
-export const metadata: Metadata = { title: 'AI Recovery' }
 
 const COLLECT = [
   { label: 'Name', description: 'Ask for the caller’s name', on: true },

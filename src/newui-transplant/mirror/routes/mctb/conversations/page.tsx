@@ -1,6 +1,5 @@
 import { Inbox } from '@/newui-transplant/components/mctb/inbox'
 
-export const metadata: Metadata = { title: 'Inbox' }
 
 export async function TransplantMctbConversationsPage({
   searchParams,

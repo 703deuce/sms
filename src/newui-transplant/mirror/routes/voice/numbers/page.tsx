@@ -3,7 +3,6 @@ import { Page, PageHeader, Panel, Pill, type Tone } from '@/newui-transplant/com
 import { Button } from '@/newui-transplant/components/ui/button'
 import { NUMBERS } from '@/newui-transplant/lib/sandbox-data'
 
-export const metadata: Metadata = { title: 'Numbers' }
 
 const messagingTone: Record<string, Tone> = { Registered: 'success', 'Pending review': 'warning', 'Not enabled': 'neutral' }
 

@@ -2,7 +2,6 @@ import { Page, PageHeader } from '@/newui-transplant/components/app/kit'
 import { ButtonLink } from '@/newui-transplant/components/app/button-link'
 import { VoicemailBrowser } from '@/newui-transplant/components/mctb/voicemail-browser'
 
-export const metadata: Metadata = { title: 'Voicemail' }
 
 export function TransplantMctbVoicemailPage() {
   return (

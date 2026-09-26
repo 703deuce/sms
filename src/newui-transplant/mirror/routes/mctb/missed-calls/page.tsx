@@ -8,7 +8,6 @@ export type MctbMissedCallsWired = {
   missedCalls: MissedCall[]
 }
 
-export const metadata: Metadata = { title: 'Missed Calls' }
 
 export function TransplantMctbMissedCallsPage({ wired }: { wired?: MctbMissedCallsWired }) {
   const stats = wired?.stats ?? { missed: '87', recoveryTexts: '81', replies: '52', needsReply: '4' }

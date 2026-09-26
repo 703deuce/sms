@@ -11,7 +11,6 @@ export type MctbSetupOverviewWired = {
   recoveryActive?: boolean
 }
 
-export const metadata: Metadata = { title: 'Setup' }
 
 const CALL_FLOW = [
   { label: 'Phone & Forwarding', value: `Forwarding verified · ${BUSINESS.line}`, href: '/mctb/setup/phone', tone: 'success' as const }, // default copy; wired overrides in status strip

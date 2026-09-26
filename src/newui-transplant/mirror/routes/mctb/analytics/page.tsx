@@ -3,7 +3,6 @@ import { RangeToggle } from '@/newui-transplant/components/app/range-toggle'
 import { MiniBars } from '@/newui-transplant/components/app/charts'
 import { CHART_WEEK } from '@/newui-transplant/lib/sandbox-data'
 
-export const metadata: Metadata = { title: 'Text Back Analytics' }
 
 const FUNNEL = [
   { label: 'Missed calls', value: 87, note: '100%' },

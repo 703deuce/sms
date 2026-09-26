@@ -1,7 +1,6 @@
 import { Panel } from '@/newui-transplant/components/app/kit'
 import { ExclusionsTable } from '@/newui-transplant/components/mctb/exclusions-table'
 
-export const metadata: Metadata = { title: 'Exclusions' }
 
 export function TransplantMctbSetupExclusionsPage() {
   return (

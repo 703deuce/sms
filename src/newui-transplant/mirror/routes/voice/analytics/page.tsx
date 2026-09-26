@@ -5,7 +5,6 @@ import { RangeToggle } from '@/newui-transplant/components/app/range-toggle'
 import { TrendArea } from '@/newui-transplant/components/app/charts'
 import { CHART_WEEK } from '@/newui-transplant/lib/sandbox-data'
 
-export const metadata: Metadata = { title: 'Receptionist Analytics' }
 
 const OUTCOMES = [
   { label: 'Appointments', value: 70 },

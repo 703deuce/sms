@@ -2,7 +2,6 @@ import { Page, PageHeader, Stat } from '@/newui-transplant/components/app/kit'
 import { CallsBrowser } from '@/newui-transplant/components/voice/calls-browser'
 import { VOICE_CALLS } from '@/newui-transplant/lib/sandbox-data'
 
-export const metadata: Metadata = { title: 'Calls' }
 
 export function TransplantVoiceCallsPage() {
   return (

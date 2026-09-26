@@ -28,7 +28,6 @@ export type VoiceKnowledgeWired = {
   onEditHours?: () => void
 }
 
-export const metadata: Metadata = { title: 'Business Knowledge' }
 
 const GAPS = [
   { q: 'Do you offer financing for new water heaters?', asked: 4, last: 'Sep 24' },
