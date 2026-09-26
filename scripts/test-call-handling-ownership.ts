@@ -21,11 +21,49 @@ import {
 
 assert.deepEqual(readCallHandlingBlock({}), {
   activeCallHandler: null,
+  effectiveCallHandler: null,
+  lastProviderVerifiedAt: null,
+  routingDrift: false,
   parkedAiReceptionistAgentId: null,
   explicitSelectionAt: null,
   lastSwitchAt: null,
   lastSwitchByUserId: null,
 });
+
+import { resolvePersistedEffectiveCallHandler } from "../src/lib/call-handling/phone-settings";
+assert.equal(
+  resolvePersistedEffectiveCallHandler({
+    activeCallHandler: "ai_receptionist",
+    effectiveCallHandler: null,
+    explicitSelectionAt: "2026-01-01T00:00:00.000Z",
+  }),
+  "ai_receptionist",
+);
+assert.equal(
+  resolvePersistedEffectiveCallHandler({
+    activeCallHandler: "mctb",
+    effectiveCallHandler: "mctb",
+    explicitSelectionAt: null,
+  }),
+  "mctb",
+);
+
+const ownershipReadSource = fs.readFileSync(
+  path.join(process.cwd(), "src/lib/call-handling/ownership-state.ts"),
+  "utf8",
+);
+assert.ok(
+  !ownershipReadSource.includes("resolveEffectiveCallHandler"),
+  "read path must not reconcile call handling via Telnyx",
+);
+assert.ok(
+  !ownershipReadSource.includes("verifyMctbTexmlIngressRoute"),
+  "read path must not call MCTB TeXML verify",
+);
+assert.ok(
+  !ownershipReadSource.includes("telnyxRequest"),
+  "read path must not call Telnyx",
+);
 
 const merged = mergeCallHandlingIntoSettings(
   { voiceEnabled: true },

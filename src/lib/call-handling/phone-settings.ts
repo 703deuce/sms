@@ -20,8 +20,16 @@ export function readCallHandlingBlock(settingsJson: unknown): CallHandlingPhoneS
       : block.parkedAiReceptionistAgentId === null
         ? null
         : undefined;
+  const rawEffective = block.effectiveCallHandler;
+  const effectiveCallHandler: ActiveCallHandler | null =
+    rawEffective === "mctb" || rawEffective === "ai_receptionist" ? rawEffective : null;
+
   return {
     activeCallHandler,
+    effectiveCallHandler,
+    lastProviderVerifiedAt:
+      typeof block.lastProviderVerifiedAt === "string" ? block.lastProviderVerifiedAt : null,
+    routingDrift: block.routingDrift === true,
     parkedAiReceptionistAgentId: parked ?? null,
     explicitSelectionAt:
       typeof block.explicitSelectionAt === "string" ? block.explicitSelectionAt : null,
@@ -29,6 +37,19 @@ export function readCallHandlingBlock(settingsJson: unknown): CallHandlingPhoneS
     lastSwitchByUserId:
       typeof block.lastSwitchByUserId === "string" ? block.lastSwitchByUserId : null,
   };
+}
+
+/** Authoritative effective handler for navigation — database only. */
+export function resolvePersistedEffectiveCallHandler(
+  block: CallHandlingPhoneSettings,
+): ActiveCallHandler | null {
+  if (block.effectiveCallHandler === "mctb" || block.effectiveCallHandler === "ai_receptionist") {
+    return block.effectiveCallHandler;
+  }
+  if (block.explicitSelectionAt && block.activeCallHandler) {
+    return block.activeCallHandler;
+  }
+  return null;
 }
 
 export function hasExplicitCallHandlingSelection(settingsJson: unknown): boolean {
@@ -50,6 +71,9 @@ export function mergeCallHandlingIntoSettings(
     ...settings,
     [BLOCK_KEY]: {
       activeCallHandler: next.activeCallHandler,
+      effectiveCallHandler: next.effectiveCallHandler ?? null,
+      lastProviderVerifiedAt: next.lastProviderVerifiedAt ?? null,
+      routingDrift: next.routingDrift === true,
       parkedAiReceptionistAgentId: next.parkedAiReceptionistAgentId ?? null,
       explicitSelectionAt: next.explicitSelectionAt ?? null,
       lastSwitchAt: next.lastSwitchAt ?? null,

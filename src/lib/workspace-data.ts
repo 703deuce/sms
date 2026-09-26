@@ -734,18 +734,46 @@ export async function loadInboxUnreadConversationCount(workspaceId: string): Pro
     .catch(() => 0);
 }
 
+const SHELL_METRICS_DEFAULTS: DashboardMetrics = {
+  a2pStatus: "Pending",
+  activeNumber: "No number",
+  creditsRemaining: 0,
+  messagesSentPeriod: 0,
+  deliveryRate: 0,
+  replyRate: 0,
+  clickRate: 0,
+  optOutRate: 0,
+  contactGrowth: 0,
+  balance: 0,
+};
+
+/** Sidebar credits badge only — avoids dashboard campaign aggregation on every navigation. */
+async function loadShellCreditsRemaining(workspaceId: string): Promise<number> {
+  const usage = await getPrisma().usageRecord.findFirst({
+    where: { workspaceId },
+    orderBy: { periodStart: "desc" },
+    select: { costCents: true },
+  });
+  const costCents = usage?.costCents ?? 0;
+  return Math.max(0, 10000 - Math.round(costCents / 2));
+}
+
 export async function loadShellData(userId: string, workspaceId: string) {
-  const [workspaces, phoneNumbersRaw, metrics, workspace, unreadNotifications, inboxUnreadCount] =
+  const [workspaces, phoneNumbersRaw, creditsRemaining, workspace, unreadNotifications, inboxUnreadCount] =
     await Promise.all([
     loadWorkspacesForUser(userId),
     loadPhoneNumbers(workspaceId, { includeLinked: true }),
-    loadDashboardMetrics(workspaceId),
+    loadShellCreditsRemaining(workspaceId),
     loadWorkspace(workspaceId),
     getPrisma()
       .inAppNotification.count({ where: { workspaceId, userId, readAt: null } })
       .catch(() => 0),
     loadInboxUnreadConversationCount(workspaceId),
   ]);
+  const metrics: DashboardMetrics = {
+    ...SHELL_METRICS_DEFAULTS,
+    creditsRemaining,
+  };
   const { sortPhoneNumbersForSms, pickPreferredSmsSendingNumber, scoreSmsSendingNumber } = await import(
     "@/lib/messaging/preferred-sending-number"
   );
@@ -762,6 +790,7 @@ export async function loadShellData(userId: string, workspaceId: string) {
     workspaces,
     phoneNumbers,
     metrics,
+    workspace,
     activeFromNumberId: storedIsCompetitive ? storedFromId : preferred?.id ?? storedFromId,
     unreadNotifications,
     inboxUnreadCount,

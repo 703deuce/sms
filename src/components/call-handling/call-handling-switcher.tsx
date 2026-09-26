@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { Bot, Check, ChevronDown, PhoneMissed } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallHandlingOptional } from "./call-handling-context";
 
 type Props = {
   collapsed?: boolean;
@@ -34,34 +35,41 @@ export function CallHandlingSwitcher({
   variant = "sidebar",
   onNavigate,
 }: Props) {
+  const shared = useCallHandlingOptional();
   const [open, setOpen] = useState(false);
-  const [state, setState] = useState<CallHandlingOwnershipState | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [switching, setSwitching] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [localState, setLocalState] = useState<CallHandlingOwnershipState | null>(null);
+  const [localLoading, setLocalLoading] = useState(!shared);
+  const [localSwitching, setLocalSwitching] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
+  const state = shared?.state ?? localState;
+  const loading = shared ? false : localLoading;
+  const switching = shared?.loading ?? localSwitching;
+  const error = shared?.error ?? localError;
+
   const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+    if (shared) return;
+    setLocalLoading(true);
+    setLocalError(null);
     try {
       const res = await fetch("/api/call-handling", { cache: "no-store" });
       const json = await res.json();
       if (!res.ok || !json.data) {
         throw new Error(json.error || "Could not load call handling");
       }
-      setState(json.data);
+      setLocalState(json.data);
     } catch (err) {
-      setState(null);
-      setError(err instanceof Error ? err.message : "Could not load call handling");
+      setLocalState(null);
+      setLocalError(err instanceof Error ? err.message : "Could not load call handling");
     } finally {
-      setLoading(false);
+      setLocalLoading(false);
     }
-  }, []);
+  }, [shared]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (!shared) void load();
+  }, [load, shared]);
 
   useEffect(() => {
     function onClick(e: MouseEvent) {
@@ -81,8 +89,18 @@ export function CallHandlingSwitcher({
       setOpen(false);
       return;
     }
-    setSwitching(true);
-    setError(null);
+    if (shared) {
+      try {
+        await shared.patchHandler(next);
+        setOpen(false);
+        onNavigate?.();
+      } catch {
+        // error surfaced via shared.error
+      }
+      return;
+    }
+    setLocalSwitching(true);
+    setLocalError(null);
     try {
       const res = await fetch("/api/call-handling", {
         method: "PATCH",
@@ -91,16 +109,16 @@ export function CallHandlingSwitcher({
       });
       const json = await res.json();
       if (!res.ok) {
-        if (json.data) setState(json.data);
+        if (json.data) setLocalState(json.data);
         throw new Error(json.error || "Switch did not complete");
       }
-      setState(json.data);
+      setLocalState(json.data);
       setOpen(false);
       onNavigate?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Switch did not complete");
+      setLocalError(err instanceof Error ? err.message : "Switch did not complete");
     } finally {
-      setSwitching(false);
+      setLocalSwitching(false);
     }
   }
 
@@ -211,26 +229,11 @@ export function CallHandlingSwitcher({
 }
 
 export function CallHandlingDashboardCard({ className }: { className?: string }) {
-  const [state, setState] = useState<CallHandlingOwnershipState | null>(null);
-  const [loading, setLoading] = useState(true);
+  const shared = useCallHandlingOptional();
   const [switchOpen, setSwitchOpen] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/call-handling", { cache: "no-store" });
-      const json = await res.json();
-      if (res.ok && json.data) setState(json.data);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  if (loading || !state) return null;
+  const state = shared?.state ?? null;
+  if (!state) return null;
 
   const active = displayHandler(state);
   if (!active) return null;

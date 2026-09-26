@@ -5,7 +5,7 @@ import { telnyxRequest } from "@/lib/messaging/telnyx/client";
 import { routePhoneToMctbCallHandlingIngress } from "@/lib/mctb/texml-ingress/provision";
 import { routePhoneToVoiceV3BasicCallControl } from "@/lib/voice-v3/provisioning/route-phone-to-voice-v3-basic";
 import { clearMctbTexmlIngressLockMetadataForVoiceAgent } from "@/lib/voice/mctb-voice-agent-phone-takeover";
-import { mergeCallHandlingIntoSettings, readCallHandlingBlock } from "./phone-settings";
+import { mergeCallHandlingIntoSettings, readCallHandlingBlock, resolvePersistedEffectiveCallHandler } from "./phone-settings";
 import { resolveEffectiveCallHandler } from "./effective-handler";
 import {
   assessAiReceptionistCallHandlingReadiness,
@@ -17,9 +17,13 @@ import {
 } from "./resolve-canonical-voice-ingress";
 import { resolveAiReceptionistForCallHandling } from "./resolve-ai-receptionist";
 import { withCallHandlingSwitchLock } from "./switch-lock";
+import {
+  loadCallHandlingOwnershipState,
+  markCallHandlingSwitching,
+} from "./ownership-state";
 import type { ActiveCallHandler, CallHandlingOwnershipState } from "./types";
 
-const switchingPhones = new Set<string>();
+export { loadCallHandlingOwnershipState } from "./ownership-state";
 
 async function readLiveConnectionId(providerNumberId: string): Promise<string | null> {
   const verify = await telnyxRequest<{ data?: Record<string, unknown> }>(
@@ -46,77 +50,25 @@ async function restoreLiveConnectionId(
   }
 }
 
-export async function loadCallHandlingOwnershipState(input: {
+async function persistVerifiedCallHandling(input: {
+  phoneId: string;
   workspaceId: string;
-  voiceIngressPhoneNumberId?: string | null;
-  /** @deprecated use voiceIngressPhoneNumberId */
-  phoneNumberId?: string | null;
-}): Promise<CallHandlingOwnershipState | null> {
-  const voiceIngressPhoneNumberId = await resolveCanonicalVoiceIngressPhoneNumberId({
-    workspaceId: input.workspaceId,
-    voiceIngressPhoneNumberId: input.voiceIngressPhoneNumberId ?? input.phoneNumberId,
+  handler: ActiveCallHandler;
+  userId?: string | null;
+  settingsJson: unknown;
+  patch: Parameters<typeof mergeCallHandlingIntoSettings>[1];
+}): Promise<void> {
+  const verifiedAt = new Date().toISOString();
+  const settings = mergeCallHandlingIntoSettings(input.settingsJson, {
+    ...input.patch,
+    effectiveCallHandler: input.handler,
+    lastProviderVerifiedAt: verifiedAt,
+    routingDrift: false,
   });
-  if (!voiceIngressPhoneNumberId) return null;
-
-  const phone = await loadCanonicalVoiceIngressPhone({
-    workspaceId: input.workspaceId,
-    voiceIngressPhoneNumberId,
+  await getPrisma().phoneNumber.update({
+    where: { id: input.phoneId, workspaceId: input.workspaceId },
+    data: { settingsJson: settings as object },
   });
-  if (!phone) return null;
-
-  const block = readCallHandlingBlock(phone.settingsJson);
-  const explicit = Boolean(block.explicitSelectionAt && block.activeCallHandler);
-
-  let effective: ActiveCallHandler | null = null;
-  if (phone.e164 && phone.providerNumberId) {
-    effective = await resolveEffectiveCallHandler({
-      e164: phone.e164,
-      providerNumberId: phone.providerNumberId,
-    });
-  }
-
-  const [mctbReady, aiReady] = await Promise.all([
-    assessMctbCallHandlingReadiness({
-      workspaceId: input.workspaceId,
-      voiceIngressPhoneNumberId: phone.id,
-    }),
-    assessAiReceptionistCallHandlingReadiness({
-      workspaceId: input.workspaceId,
-      preferredAgentId: block.parkedAiReceptionistAgentId,
-    }),
-  ]);
-
-  const selected = block.activeCallHandler;
-  const drift =
-    explicit &&
-    selected !== null &&
-    effective !== null &&
-    selected !== effective;
-
-  return {
-    voiceIngressPhoneNumberId: phone.id,
-    phoneNumberId: phone.id,
-    voiceIngressE164: phone.e164,
-    e164: phone.e164,
-    selectedHandler: selected,
-    explicitSelection: explicit,
-    effectiveHandler: effective,
-    drift,
-    switching: switchingPhones.has(phone.id),
-    error: drift
-      ? "Call handling selection does not match live phone routing. Try switching again."
-      : null,
-    aiReceptionist: {
-      agentId: aiReady.agentId ?? block.parkedAiReceptionistAgentId ?? null,
-      aiVoicePhoneNumberId: aiReady.aiVoicePhoneNumberId,
-      ready: aiReady.ready,
-      readinessMessage: aiReady.message,
-    },
-    mctb: {
-      ready: mctbReady.ready,
-      readinessMessage: mctbReady.message,
-    },
-  };
 }
 
 export async function setActiveCallHandler(input: {
@@ -136,7 +88,7 @@ export async function setActiveCallHandler(input: {
   }
 
   return withCallHandlingSwitchLock(voiceIngressPhoneNumberId, async () => {
-    switchingPhones.add(voiceIngressPhoneNumberId);
+    markCallHandlingSwitching(voiceIngressPhoneNumberId, true);
     try {
       const phone = await loadCanonicalVoiceIngressPhone({
         workspaceId: input.workspaceId,
@@ -150,11 +102,8 @@ export async function setActiveCallHandler(input: {
       const block = readCallHandlingBlock(phone.settingsJson);
 
       if (block.activeCallHandler === input.handler && block.explicitSelectionAt) {
-        const effective = await resolveEffectiveCallHandler({
-          e164: phone.e164,
-          providerNumberId: phone.providerNumberId,
-        });
-        if (effective === input.handler) {
+        const persisted = resolvePersistedEffectiveCallHandler(block);
+        if (persisted === input.handler) {
           const state = await loadCallHandlingOwnershipState({
             workspaceId: input.workspaceId,
             voiceIngressPhoneNumberId: phone.id,
@@ -162,6 +111,9 @@ export async function setActiveCallHandler(input: {
           if (state) return state;
         }
       }
+
+      let settingsBase: unknown = phone.settingsJson;
+      let persistPatch: Parameters<typeof mergeCallHandlingIntoSettings>[1];
 
       if (input.handler === "mctb") {
         const readiness = await assessMctbCallHandlingReadiness({
@@ -183,17 +135,13 @@ export async function setActiveCallHandler(input: {
           phoneNumberId: phone.id,
         });
 
-        const settings = mergeCallHandlingIntoSettings(phone.settingsJson, {
+        persistPatch = {
           activeCallHandler: "mctb",
           parkedAiReceptionistAgentId: parkedId,
           explicitSelectionAt: new Date().toISOString(),
           lastSwitchAt: new Date().toISOString(),
           lastSwitchByUserId: input.userId ?? null,
-        });
-        await getPrisma().phoneNumber.update({
-          where: { id: phone.id },
-          data: { settingsJson: settings as object },
-        });
+        };
       } else {
         const readiness = await assessAiReceptionistCallHandlingReadiness({
           workspaceId: input.workspaceId,
@@ -225,17 +173,15 @@ export async function setActiveCallHandler(input: {
           where: { id: phone.id, workspaceId: input.workspaceId },
           select: { settingsJson: true },
         });
-        const settings = mergeCallHandlingIntoSettings(refreshed?.settingsJson ?? phone.settingsJson, {
+        settingsBase = refreshed?.settingsJson ?? phone.settingsJson;
+
+        persistPatch = {
           activeCallHandler: "ai_receptionist",
           parkedAiReceptionistAgentId: readiness.agentId,
           explicitSelectionAt: new Date().toISOString(),
           lastSwitchAt: new Date().toISOString(),
           lastSwitchByUserId: input.userId ?? null,
-        });
-        await getPrisma().phoneNumber.update({
-          where: { id: phone.id },
-          data: { settingsJson: settings as object },
-        });
+        };
       }
 
       const effective = await resolveEffectiveCallHandler({
@@ -252,6 +198,15 @@ export async function setActiveCallHandler(input: {
         }
         throw new Error("Provider routing verification failed after switch.");
       }
+
+      await persistVerifiedCallHandling({
+        phoneId: phone.id,
+        workspaceId: input.workspaceId,
+        handler: input.handler,
+        userId: input.userId,
+        settingsJson: settingsBase,
+        patch: persistPatch,
+      });
 
       console.log("CALL_HANDLING_SWITCH_OK", {
         workspaceId: input.workspaceId,
@@ -276,7 +231,7 @@ export async function setActiveCallHandler(input: {
       });
       throw err;
     } finally {
-      switchingPhones.delete(voiceIngressPhoneNumberId);
+      markCallHandlingSwitching(voiceIngressPhoneNumberId, false);
     }
   });
 }

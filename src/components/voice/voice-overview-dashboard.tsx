@@ -52,9 +52,13 @@ function OperationalRow({
   );
 }
 
-export function VoiceOverviewDashboard() {
-  const [result, setResult] = useState<VoiceOverviewSummaryResult | null>(null);
-  const [loading, setLoading] = useState(true);
+export function VoiceOverviewDashboard({
+  initialResult = null,
+}: {
+  initialResult?: VoiceOverviewSummaryResult | null;
+}) {
+  const [result, setResult] = useState<VoiceOverviewSummaryResult | null>(initialResult);
+  const [loading, setLoading] = useState(!initialResult);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -71,8 +75,8 @@ export function VoiceOverviewDashboard() {
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (!initialResult) load();
+  }, [load, initialResult]);
 
   const data = result?.data;
   const errors = result?.errors ?? {};

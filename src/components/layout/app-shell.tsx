@@ -34,6 +34,8 @@ import { isKimiIntegratedRoute } from "@/lib/products/kimi-ui-routes";
 import { cn } from "@/lib/utils";
 import { usePathname } from "next/navigation";
 import { Suspense, useEffect, useState, type CSSProperties } from "react";
+import { CallHandlingProvider } from "@/components/call-handling/call-handling-context";
+import type { CallHandlingOwnershipState } from "@/lib/call-handling/types";
 
 const SIDEBAR_COLLAPSED_KEY = "transovo.sidebarCollapsed";
 const APP_HEADER_HEIGHT = "4rem";
@@ -126,6 +128,7 @@ export function AppShell({
   hasAiAfterHours = false,
   showTryIt = false,
   productFeatures = null,
+  callHandlingInitial = null,
 }: {
   children: React.ReactNode;
   userName: string;
@@ -150,6 +153,7 @@ export function AppShell({
   hasAiAfterHours?: boolean;
   showTryIt?: boolean;
   productFeatures?: WorkspaceFeatureSnapshot | null;
+  callHandlingInitial?: CallHandlingOwnershipState | null;
 }) {
   const pathname = usePathname();
 
@@ -253,7 +257,7 @@ export function AppShell({
   const sidebarExpandedPx = softCoolSlateShell ? 204 : 224;
   const sidebarOffset = sidebarCollapsedEffective ? "56px" : `${sidebarExpandedPx}px`;
 
-  return (
+  const shellBody = (
     <div
       className="product-theme flex h-dvh overflow-hidden bg-background"
       data-appt-overview-shell={isAppointmentsOverviewPilot ? "soft-cool-slate-204" : undefined}
@@ -384,4 +388,11 @@ export function AppShell({
       />
     </div>
   );
+
+  if (callHandlingInitial) {
+    return (
+      <CallHandlingProvider initialState={callHandlingInitial}>{shellBody}</CallHandlingProvider>
+    );
+  }
+  return shellBody;
 }

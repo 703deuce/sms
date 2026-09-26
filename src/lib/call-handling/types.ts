@@ -3,6 +3,15 @@ export type ActiveCallHandler = "mctb" | "ai_receptionist";
 export type CallHandlingPhoneSettings = {
   /** Customer-selected handler; null = legacy / not yet explicitly chosen. */
   activeCallHandler: ActiveCallHandler | null;
+  /**
+   * Last handler Transovo confirmed after a successful provider switch.
+   * Navigation reads use this — not live Telnyx reconciliation.
+   */
+  effectiveCallHandler?: ActiveCallHandler | null;
+  /** ISO timestamp when provider routing last matched persisted state (switch/reconcile). */
+  lastProviderVerifiedAt?: string | null;
+  /** True when an explicit reconcile detected selected ≠ live provider routing. */
+  routingDrift?: boolean;
   /** Preserved while MCTB owns Telnyx routing so AI restores deterministically. */
   parkedAiReceptionistAgentId?: string | null;
   explicitSelectionAt?: string | null;
