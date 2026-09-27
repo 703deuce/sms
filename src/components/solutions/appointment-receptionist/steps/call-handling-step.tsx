@@ -23,6 +23,7 @@ import {
   CallbackSlaEditor,
   OnCallScheduleEditor,
 } from "../operating-maturity-editor";
+import { CallHandlingStepOpusOperations } from "@/newui-transplant/connected/voice/call-handling-step-opus-operations";
 
 const LEGACY_BOOKING_FLOW_STEPS = [
   "Understand request",
@@ -67,8 +68,7 @@ export function CallHandlingStep({
     booking ? ", and booking behavior" : ", and fallbacks"
   }.`;
 
-  return (
-    <div className="flex gap-6">
+  const setupColumn = (
       <div className="min-w-0 flex-1 space-y-8">
         {!isOpus ? (
         <div>
@@ -286,7 +286,9 @@ export function CallHandlingStep({
         <OnCallScheduleEditor state={state} patch={patch} presentation={presentation} />
         <CallbackSlaEditor state={state} patch={patch} presentation={presentation} />
       </div>
+  );
 
+  const previewSidePanel = (
       <SidePanel variant={uiVariant} title="Call handling preview">
         <ol className="space-y-2 border-l border-border pl-3 text-xs">
           {(booking
@@ -334,6 +336,21 @@ export function CallHandlingStep({
           You can update these settings anytime after activation.
         </InfoCallout>
       </SidePanel>
+  );
+
+  if (isOpus) {
+    return (
+      <CallHandlingStepOpusOperations
+        setupContent={setupColumn}
+        sidePanel={previewSidePanel}
+      />
+    );
+  }
+
+  return (
+    <div className="flex gap-6">
+      {setupColumn}
+      {previewSidePanel}
     </div>
   );
 }

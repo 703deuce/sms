@@ -36,6 +36,7 @@ import {
 import { InfoCallout, SelectableCard, SidePanel, StatusPill } from "../ui";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { InformationStepOpusOperations } from "@/newui-transplant/connected/voice/information-step-opus-operations";
 
 function OpusOrLegacyInset({
   isOpus,
@@ -566,8 +567,7 @@ export function InformationStep({
     setEditingId(null);
   }
 
-  return (
-    <div className="flex gap-6">
+  const setupColumn = (
       <div className="min-w-0 flex-1 space-y-8">
         <div>
           {isOpus ? (
@@ -1008,7 +1008,9 @@ export function InformationStep({
 
         <BusinessScheduleEditor state={state} patch={patch} presentation={presentation} />
       </div>
+  );
 
+  const knowledgeSidePanel = (
       <SidePanel variant={uiVariant} title="Knowledge quality">
         <ul className="space-y-3 text-xs">
           {state.knowledgeItems.map((item) => (
@@ -1034,6 +1036,22 @@ export function InformationStep({
           so Telnyx can answer without inventing details.
         </InfoCallout>
       </SidePanel>
+  );
+
+  if (isOpus) {
+    return (
+      <InformationStepOpusOperations
+        state={state}
+        setupContent={setupColumn}
+        sidePanel={knowledgeSidePanel}
+      />
+    );
+  }
+
+  return (
+    <div className="flex gap-6">
+      {setupColumn}
+      {knowledgeSidePanel}
     </div>
   );
 }

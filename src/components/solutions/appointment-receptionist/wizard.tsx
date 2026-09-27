@@ -480,6 +480,7 @@ export function AppointmentReceptionistWizard({
         const q = receptionistStepQueryFromIndex(next, steps);
         const params = new URLSearchParams(searchParams?.toString() || "");
         params.set("step", q);
+        params.delete("view");
         if (state.agentId) params.set("agentId", state.agentId);
         if (state.setupId) params.set("setupId", state.setupId);
         router.replace(`${RECEPTIONIST_WIZARD_EDIT_PATH}?${params.toString()}`, {
