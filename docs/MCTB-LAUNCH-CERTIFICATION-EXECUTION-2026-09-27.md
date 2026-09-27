@@ -11,7 +11,7 @@
 | Layer | Status |
 |-------|--------|
 | **Code / automated pre-checks** | **PASS** (MCTB matrix suite + V1 API products + Stage 2 Opus + route timing) |
-| **Certified TeXML pipeline (`verify:mctb-final-pipeline`)** | **FAIL** on this DB/env (866 ingress not on `mctb_texml_final_v1`; wrong TeXML app) — **requires production/staging re-cert with real ingress** |
+| **Certified TeXML pipeline (`verify:mctb-final-pipeline`)** | **PASS** when targeting workspace ingress `+18666020680` (production `cert=D`); earlier **FAIL** was stale verifier defaulting to historical `+18663464256` + `cert=C3` probe — corrected on `cursor/mctb-critical-path-perf-2304` |
 | **Launch matrix `LIVE_VERIFIED`** | **0 / 75** |
 | **Manual human passes (phone, carrier, Stripe)** | **NOT DONE** — 24 matrix rows |
 | **Overall MCTB launch** | **NOT READY** until Pass 1–4 live evidence is recorded |

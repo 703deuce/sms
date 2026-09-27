@@ -3,8 +3,8 @@
  *
  *   npm run verify:mctb-final-pipeline
  *
- * Current ws_1 platform ingress (not the Aug cert DID +18663464256):
- *   PHONE_E164=+18666020680 PHONE_866_ID=cmtoszkn26t6z485u3d2w3c51 npm run verify:mctb-final-pipeline
+ * Default target: workspace MCTB voice trigger from `loadMissedCallTextConfig` (not the
+ * historical Aug-2026 cert DID). Override with WORKSPACE_ID, PHONE_866_ID, PHONE_E164.
  */
 import { getPrisma } from "../src/lib/db";
 import { loadMissedCallTextConfig } from "../src/lib/agents/missed-call-text-back/config";
@@ -24,15 +24,44 @@ import {
 import { MCTB_TEXML_ROUTING_MODE, MCTB_TEXML_ROUTING_OWNER } from "../src/lib/mctb/texml-ingress/constants";
 import { readPhoneCapabilities } from "../src/lib/numbers/phone-capabilities";
 
-const E164 = process.env.PHONE_E164 || MCTB_FINAL_REFERENCE_DID;
-const PHONE_ID = process.env.PHONE_866_ID || MCTB_FINAL_REFERENCE_PHONE_ID;
 const WS = process.env.WORKSPACE_ID || MCTB_FINAL_REFERENCE_WORKSPACE_ID;
 
+type IngressResolveSource = "env_override" | "workspace_config" | "frozen_reference_fallback";
+
 type Check = { name: string; ok: boolean; detail?: string };
+
+async function resolveIngressTarget(prisma: ReturnType<typeof getPrisma>) {
+  const mctb = await loadMissedCallTextConfig(WS);
+  let phoneId: string;
+  let resolveSource: IngressResolveSource;
+
+  if (process.env.PHONE_866_ID?.trim()) {
+    phoneId = process.env.PHONE_866_ID.trim();
+    resolveSource = "env_override";
+  } else if (mctb.phoneNumberId) {
+    phoneId = mctb.phoneNumberId;
+    resolveSource = "workspace_config";
+  } else {
+    phoneId = MCTB_FINAL_REFERENCE_PHONE_ID;
+    resolveSource = "frozen_reference_fallback";
+  }
+
+  let e164 = process.env.PHONE_E164?.trim() || "";
+  if (!e164) {
+    const row = await prisma.phoneNumber.findUnique({
+      where: { id: phoneId },
+      select: { e164: true },
+    });
+    e164 = row?.e164 || MCTB_FINAL_REFERENCE_DID;
+  }
+
+  return { mctb, phoneId, e164, resolveSource };
+}
 
 async function main() {
   const checks: Check[] = [];
   const prisma = getPrisma();
+  const { mctb, phoneId: PHONE_ID, e164: E164, resolveSource } = await resolveIngressTarget(prisma);
 
   const phone = await prisma.phoneNumber.findUnique({ where: { id: PHONE_ID } });
   const settingsJson =
@@ -47,6 +76,11 @@ async function main() {
     name: "pipeline_id",
     ok: MCTB_FINAL_PIPELINE_ID === "mctb_texml_final_v1",
     detail: MCTB_FINAL_PIPELINE_ID,
+  });
+  checks.push({
+    name: "ingress_resolve_source",
+    ok: resolveSource !== "frozen_reference_fallback",
+    detail: `${resolveSource} (historical cert DID ${MCTB_FINAL_REFERENCE_DID} is not the default target)`,
   });
   checks.push({
     name: "db_routing_mode_mctb_texml",
@@ -66,11 +100,10 @@ async function main() {
     detail: String(caps.aiAfterHoursEnabled),
   });
 
-  const mctb = await loadMissedCallTextConfig(WS);
   checks.push({
-    name: "mctb_voice_trigger_866",
-    ok: mctb.phoneNumberId === PHONE_ID,
-    detail: mctb.phoneNumberId || "null",
+    name: "mctb_voice_trigger_matches_workspace",
+    ok: Boolean(mctb.phoneNumberId) && mctb.phoneNumberId === PHONE_ID,
+    detail: `config=${mctb.phoneNumberId || "null"} verify=${PHONE_ID}`,
   });
   checks.push({
     name: "mctb_sms_sender_matches_voice",
@@ -140,7 +173,6 @@ async function main() {
     });
   }
 
-  // existing_consent: entry without cert when workspace mode is existing_consent
   if (consentMode === "existing_consent") {
     checks.push({
       name: "existing_consent_texml_has_voicemail_audio",
@@ -161,6 +193,10 @@ async function main() {
   const failed = checks.filter((c) => !c.ok);
   const report = {
     pipelineId: MCTB_FINAL_PIPELINE_ID,
+    workspaceId: WS,
+    ingressResolveSource: resolveSource,
+    historicalCertDid: MCTB_FINAL_REFERENCE_DID,
+    phoneNumberId: PHONE_ID,
     e164: E164,
     consentMode,
     entryUrl,

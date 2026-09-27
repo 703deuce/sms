@@ -2,7 +2,7 @@
 
 **Pipeline ID:** `mctb_texml_final_v1`  
 **Status:** Pre-production certified — **do not change behavior without explicit product sign-off**  
-**Certified:** 2026-08-30 PSTN on `+18663464256` (ws_1)
+**PSTN cert (historical):** 2026-08-30 on `+18663464256` (ws_1). That DID is **not** the default `verify:mctb-final-pipeline` target; the verifier resolves the workspace’s configured MCTB voice trigger (ws_1 today: `+18666020680`).
 
 This document is the **only** canonical description of Missed Call Text Back inbound voice + SMS for carrier conditional-forward (CFNA) launch. The implementation lives in `src/lib/mctb/texml-ingress/` and `src/app/api/telnyx/voice/mctb-entry/`.
 
@@ -20,7 +20,7 @@ This document is the **only** canonical description of Missed Call Text Back inb
 
 Verification:
 - `npm run test:mctb-final-pipeline-contract` — unit lock on both mode TeXML shapes (no HTTP)
-- `npm run verify:mctb-final-pipeline` — live DB + Telnyx + entry webhook checks
+- `npm run verify:mctb-final-pipeline` — live DB + Telnyx + production `cert=D` entry webhook checks against **workspace config ingress** (override: `WORKSPACE_ID`, `PHONE_E164`, `PHONE_866_ID`)
 
 ---
 
