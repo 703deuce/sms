@@ -58,7 +58,10 @@ function parsePolicy(raw: unknown): IntentPolicyShape | undefined {
   };
 }
 
-export async function loadLeadRecoveryConfig(workspaceId: string): Promise<LeadRecoveryWorkspaceConfig> {
+/** Persisted Lead Recovery configuration only — no policy/provider health (safe for Overview). */
+export async function loadLeadRecoveryConfigPersisted(
+  workspaceId: string,
+): Promise<LeadRecoveryWorkspaceConfig> {
   const prisma = getPrisma();
   const ws = await prisma.workspace.findUnique({
     where: { id: workspaceId },
@@ -237,6 +240,11 @@ export async function loadLeadRecoveryConfig(workspaceId: string): Promise<LeadR
     scenarioHealth: {},
   };
 
+  return baseConfig;
+}
+
+export async function loadLeadRecoveryConfig(workspaceId: string): Promise<LeadRecoveryWorkspaceConfig> {
+  const baseConfig = await loadLeadRecoveryConfigPersisted(workspaceId);
   const health = await computeLeadRecoveryPolicyHealth(workspaceId, baseConfig);
   return {
     ...baseConfig,

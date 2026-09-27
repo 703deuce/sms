@@ -22,18 +22,14 @@ import { loadComplianceOverview, loadPhoneNumbers } from "@/lib/workspace-data";
 import { loadAdminMctbTestFlags } from "@/lib/mctb/admin-test-workspace";
 import { loadMissedCallTextBack } from "@/lib/solutions/missed-call-text-back/save";
 import { appProductSourceToPrisma } from "@/lib/mass-texting/product-source";
-import { loadLeadRecoveryConfig } from "@/lib/mctb/lead-recovery/config";
-import { computeLeadRecoveryPolicyHealth } from "@/lib/mctb/lead-recovery/policy-health";
-import { LEAD_RECOVERY_SCENARIO_DEFS } from "@/lib/mctb/lead-recovery/scenarios";
-import { evaluateMctbAiBookingReadiness } from "@/lib/mctb/ai-booking/readiness";
-import { loadMctbLineInboundConfig } from "@/lib/mctb/inbound-handling/line-config";
-import { resolveInboundHandlingDecision } from "@/lib/mctb/inbound-handling/router";
+import { loadLeadRecoveryConfigPersisted } from "@/lib/mctb/lead-recovery/config";
+import { buildMctbOverviewLeadRecoveryCard } from "@/lib/mctb/overview-lead-recovery-card";
 import { INBOUND_HANDLING_MODE_LABELS } from "@/lib/mctb/inbound-handling/types";
 import type { MctbOverviewPayload, MctbOverviewStatus } from "@/lib/mctb/overview-types";
 
 export type { MctbOverviewPayload, MctbOverviewStatus } from "@/lib/mctb/overview-types";
 
-export type MctbOverviewEnrichment = Pick<MctbOverviewPayload, "leadRecovery" | "callHandling">;
+export type MctbOverviewEnrichment = Pick<MctbOverviewPayload, "leadRecovery">;
 
 const OVERVIEW_LEAD_RECOVERY_PLACEHOLDER: MctbOverviewPayload["leadRecovery"] = {
   enabled: false,
@@ -63,57 +59,11 @@ export async function loadMctbOverviewCore(workspaceId: string): Promise<MctbOve
   };
 }
 
-/** Tier 2 — AI Recovery card + inbound handling (client or background). */
+/** Tier 2 — AI Recovery card (persisted V1 config; no direct-booking provider readiness). */
 export async function loadMctbOverviewEnrichment(workspaceId: string): Promise<MctbOverviewEnrichment> {
-  const lrConfig = await loadLeadRecoveryConfig(workspaceId);
-  const [lrHealth, aiReadiness] = await Promise.all([
-    computeLeadRecoveryPolicyHealth(workspaceId, lrConfig),
-    evaluateMctbAiBookingReadiness(workspaceId),
-  ]);
-  const activePolicies = LEAD_RECOVERY_SCENARIO_DEFS.filter((d) => lrConfig.enabledScenarios[d.key]);
-  const policySummary = activePolicies.map((d) => d.title.split(" ")[0]).slice(0, 4).join(" · ");
-  let lrStatus: "ready" | "needs_attention" | "disabled" = lrConfig.enabled ? "ready" : "disabled";
-  let attentionReason: string | null = null;
-  let attentionHref: string | null = null;
-  if (lrConfig.enabled) {
-    if (lrHealth.overall === "PROVIDER_BLOCKED" || lrHealth.overall === "NEEDS_CONFIGURATION") {
-      lrStatus = "needs_attention";
-      if (!aiReadiness.providerConnected) {
-        attentionReason = `${aiReadiness.reason === "provider_disconnected" ? "Calendar provider disconnected" : "Booking provider needs setup"}`;
-        attentionHref = "/integrations?provider=microsoft";
-      } else {
-        attentionReason = "One or more policies need configuration";
-        attentionHref = "/mctb/ai-recovery";
-      }
-    }
-  }
-
-  const line = await loadMctbLineInboundConfig({ workspaceId });
-  await resolveInboundHandlingDecision({ workspaceId });
-  const mode = line?.inboundHandlingMode ?? "MCTB_RECOVERY";
-
-  return {
-    callHandling: {
-      mode,
-      modeLabel: INBOUND_HANDLING_MODE_LABELS[mode],
-      forwardingLabel: line?.forwardingVerified ? "Already connected" : "Pending",
-      ingressE164: line?.ingressE164 ?? null,
-    },
-    leadRecovery: {
-      enabled: lrConfig.enabled,
-      activePolicyCount: activePolicies.length,
-      policySummary: policySummary || "No policies",
-      status: lrStatus,
-      statusLabel:
-        lrStatus === "ready"
-          ? "Ready"
-          : lrStatus === "needs_attention"
-            ? "Needs attention"
-            : "Disabled",
-      attentionReason,
-      attentionHref,
-    },
-  };
+  const lrConfig = await loadLeadRecoveryConfigPersisted(workspaceId);
+  const leadRecovery = await buildMctbOverviewLeadRecoveryCard(workspaceId, lrConfig);
+  return { leadRecovery };
 }
 
 export async function loadMctbOverview(workspaceId: string): Promise<MctbOverviewPayload> {

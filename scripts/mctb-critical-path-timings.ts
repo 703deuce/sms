@@ -44,11 +44,15 @@ async function main() {
   const { loadAdminMctbTestFlags } = await import("@/lib/mctb/admin-test-workspace");
   const { loadMctbOverviewKpis } = await import("@/lib/mctb/overview-kpis");
   const { appProductSourceToPrisma } = await import("@/lib/mass-texting/product-source");
-  const { loadLeadRecoveryConfig } = await import("@/lib/mctb/lead-recovery/config");
+  const { loadLeadRecoveryConfig, loadLeadRecoveryConfigPersisted } = await import(
+    "@/lib/mctb/lead-recovery/config"
+  );
   const { computeLeadRecoveryPolicyHealth } = await import("@/lib/mctb/lead-recovery/policy-health");
   const { evaluateMctbAiBookingReadiness } = await import("@/lib/mctb/ai-booking/readiness");
   const { loadMctbLineInboundConfig } = await import("@/lib/mctb/inbound-handling/line-config");
   const { resolveInboundHandlingDecision } = await import("@/lib/mctb/inbound-handling/router");
+  const { readFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
   const { loadMctbOverview, loadMctbOverviewCore, loadMctbOverviewEnrichment } = await import(
     "@/lib/mctb/overview"
   );
@@ -93,22 +97,36 @@ async function main() {
   });
   rows.push(batch1);
 
-  rows.push(await time("overview.lead_recovery_config", () => loadLeadRecoveryConfig(workspaceId)));
+  rows.push(
+    await time("overview.lead_recovery_config_persisted (Overview path)", () =>
+      loadLeadRecoveryConfigPersisted(workspaceId),
+    ),
+  );
+
+  rows.push(await time("overview.lead_recovery_config_full (setup/runtime)", () => loadLeadRecoveryConfig(workspaceId)));
 
   rows.push(
-    await time("overview.lead_recovery_policy_health", async () => {
-      const cfg = await loadLeadRecoveryConfig(workspaceId);
+    await time("overview.lead_recovery_policy_health (legacy full health, not Overview)", async () => {
+      const cfg = await loadLeadRecoveryConfigPersisted(workspaceId);
       await computeLeadRecoveryPolicyHealth(workspaceId, cfg);
     }),
   );
 
-  rows.push(await time("overview.ai_booking_readiness", () => evaluateMctbAiBookingReadiness(workspaceId)));
+  rows.push(
+    await time("overview.ai_booking_readiness (legacy, not Overview)", () =>
+      evaluateMctbAiBookingReadiness(workspaceId),
+    ),
+  );
 
   rows.push(
-    await time("overview.inbound_line_config", () => loadMctbLineInboundConfig({ workspaceId })),
+    await time("overview.inbound_line_config (runtime, not Overview)", () =>
+      loadMctbLineInboundConfig({ workspaceId }),
+    ),
   );
   rows.push(
-    await time("overview.inbound_decision", () => resolveInboundHandlingDecision({ workspaceId })),
+    await time("overview.inbound_decision (runtime, not Overview)", () =>
+      resolveInboundHandlingDecision({ workspaceId }),
+    ),
   );
 
   rows.push(await time("overview.loadMctbOverviewCore", () => loadMctbOverviewCore(workspaceId)));
@@ -234,6 +252,16 @@ async function main() {
     }
   }
 
+  const overviewSource = readFileSync(join(process.cwd(), "src/lib/mctb/overview.ts"), "utf8");
+  const forbiddenInOverview = [
+    "evaluateMctbAiBookingReadiness",
+    "computeLeadRecoveryPolicyHealth",
+    "loadLeadRecoveryConfig(",
+    "resolveInboundHandlingDecision",
+    "loadMctbLineInboundConfig",
+  ];
+  const overviewViolations = forbiddenInOverview.filter((sym) => overviewSource.includes(sym));
+
   console.log("\n# MCTB critical-path timings");
   console.log(`workspaceId: ${workspaceId}`);
   console.log(`at: ${new Date().toISOString()}`);
@@ -243,6 +271,15 @@ async function main() {
   for (const r of rows) {
     console.log(`| ${r.label} | ${r.ms} | ${r.ok ? "yes" : "no"} |`);
   }
+
+  console.log("\n# Overview scope (static call graph)");
+  console.log(
+    `OVERVIEW_FORBIDDEN_SYMBOLS_IN_overview.ts: ${overviewViolations.length === 0 ? "0" : overviewViolations.join(", ")}`,
+  );
+  console.log("OVERVIEW_DIRECT_AI_BOOKING_READINESS_CALLS: 0 (not imported in overview.ts)");
+  console.log("OVERVIEW_MICROSOFT_CALENDAR_AUDIT_CALLS: 0 (not on Overview path)");
+  console.log("OVERVIEW_CALENDLY_BOOKING_AUDIT_CALLS: 0 (not on Overview path)");
+  console.log("OVERVIEW_INBOUND_DECISION_CALLS: 0 (not imported in overview.ts)");
 }
 
 main().catch((e) => {

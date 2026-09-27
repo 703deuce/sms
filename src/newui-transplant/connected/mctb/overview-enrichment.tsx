@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import type { MctbOverviewPayload } from "@/lib/mctb/overview-types";
 
-type Enrichment = Pick<MctbOverviewPayload, "leadRecovery" | "callHandling">;
+type Enrichment = Pick<MctbOverviewPayload, "leadRecovery">;
 
 export function useMctbOverviewEnrichment(initial: MctbOverviewPayload) {
   const [leadRecovery, setLeadRecovery] = useState(initial.leadRecovery);
-  const [callHandling, setCallHandling] = useState(initial.callHandling);
+  const callHandling = initial.callHandling;
 
   useEffect(() => {
     let cancelled = false;
@@ -18,7 +18,6 @@ export function useMctbOverviewEnrichment(initial: MctbOverviewPayload) {
         if (!res.ok || !json.data || cancelled) return;
         const data = json.data as Enrichment;
         setLeadRecovery(data.leadRecovery);
-        setCallHandling(data.callHandling);
       } catch {
         // Secondary failure must not break dashboard
       }
