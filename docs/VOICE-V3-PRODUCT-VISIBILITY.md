@@ -53,7 +53,9 @@ These consume `isVoiceProductCustomerVisible()` or `voiceCustomerHiddenRedirect(
 
 When Voice is not customer-visible:
 
-- Paths under `MCTB_BUNDLED_AI_RECEPTIONIST_PATH_PREFIXES` (`src/lib/products/mctb-bundled-receptionist-paths.ts`) redirect to **`/mctb`** (via `mctbShellHome()`).
+- **All customer UI under `/voice` and `/voice/*`** redirect to **`/mctb`** via `isVoiceCustomerUiPath()` — including `/voice/receptionist/edit` (and `?step=…` query variants, which do not affect middleware pathname), `/voice/settings`, `/voice/testing`, legacy MCTB URLs on `/voice/setup`, `/voice/missed-calls`, etc.
+- `MCTB_BUNDLED_AI_RECEPTIONIST_PATH_PREFIXES` remains the list used for **MCTB universal shell / AI receptionist chrome** when Voice is visible again; it is a subset of `/voice/*`.
+- `/mctb/voice-agent` still redirects into `/voice/agents` at the page layer, then middleware sends customers to `/mctb`.
 - Legacy platform home `/dashboard` redirects to **`/mctb`** when `MCTB_V1_PRIMARY` is on.
 
 Ordinary customers who paste `/voice/receptionist` (or other bundled paths) get a clean redirect — not a blank page or 500.

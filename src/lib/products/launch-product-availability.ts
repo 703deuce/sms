@@ -8,7 +8,7 @@
  */
 
 import { mctbShellHome } from "@/lib/products/product-shell";
-import { isMctbBundledAiReceptionistPath } from "@/lib/products/mctb-bundled-receptionist-paths";
+import { isVoiceCustomerUiPath } from "@/lib/products/mctb-bundled-receptionist-paths";
 import { isDevAuthBypassEnabled } from "@/lib/auth/dev-auth-bypass";
 import { isMctbV1Primary } from "@/lib/workspace/platform-launch";
 
@@ -67,7 +67,7 @@ export function mctbLaunchCustomerHome(): string {
  */
 export function voiceCustomerHiddenRedirect(pathname: string): string | null {
   if (isVoiceProductCustomerVisible()) return null;
-  if (isMctbBundledAiReceptionistPath(pathname)) {
+  if (isVoiceCustomerUiPath(pathname)) {
     return mctbLaunchCustomerHome();
   }
   if (isMctbV1Primary() && (pathname === "/dashboard" || pathname.startsWith("/dashboard/"))) {

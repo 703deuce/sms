@@ -14,8 +14,16 @@ const prev = process.env.TRANSOVO_VOICE_CUSTOMER_VISIBLE;
 delete process.env.TRANSOVO_VOICE_CUSTOMER_VISIBLE;
 assert.equal(isVoiceProductCustomerVisible(), false);
 assert.equal(voiceCustomerHiddenRedirect("/voice/receptionist"), "/mctb");
+assert.equal(voiceCustomerHiddenRedirect("/voice/receptionist/edit"), "/mctb");
+assert.equal(voiceCustomerHiddenRedirect("/voice/settings"), "/mctb");
+assert.equal(voiceCustomerHiddenRedirect("/voice/testing"), "/mctb");
+assert.equal(voiceCustomerHiddenRedirect("/voice/billing"), "/mctb");
+assert.equal(voiceCustomerHiddenRedirect("/voice/setup"), "/mctb");
+assert.equal(voiceCustomerHiddenRedirect("/voice/missed-calls/abc"), "/mctb");
+assert.equal(voiceCustomerHiddenRedirect("/voice/agents/new"), "/mctb");
 assert.equal(voiceCustomerHiddenRedirect("/mctb"), null);
 assert.equal(voiceCustomerHiddenRedirect("/conversations"), null);
+assert.equal(voiceCustomerHiddenRedirect("/api/voice/agents"), null);
 
 process.env.TRANSOVO_VOICE_CUSTOMER_VISIBLE = "1";
 assert.equal(isVoiceProductCustomerVisible(), true);
