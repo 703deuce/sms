@@ -22,8 +22,17 @@ import {
   Pencil,
   X,
 } from "lucide-react";
-import { Panel } from "@/newui-transplant/components/app/kit";
-import { OpusCalloutPanel, OpusDensePanel } from "../wizard-opus-ui";
+import { EmptyState, Panel } from "@/newui-transplant/components/app/kit";
+import {
+  ButtonLink,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  OpusCalloutPanel,
+  OpusDensePanel,
+} from "../wizard-opus-ui";
 import { InfoCallout, SelectableCard, SidePanel, StatusPill } from "../ui";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
@@ -105,9 +114,10 @@ function ConnectExistingKnowledge({
     };
   }, []);
 
-  return (
-    <div className="mt-3 space-y-3 rounded-xl border border-primary/30 bg-card p-4 text-sm">
-      <p className="font-medium">Connect existing knowledge</p>
+  const isOpus = presentation === "opus";
+  const body = (
+    <>
+      <p className={isOpus ? "text-sm font-medium" : "font-medium"}>Connect existing knowledge</p>
       <p className="text-xs text-muted-foreground">
         Attach a knowledge base already in this workspace. It is linked to the
         agent on save/activate. You can also open Integrations for CRM.
@@ -133,13 +143,33 @@ function ConnectExistingKnowledge({
         />
       )}
       <div className="flex flex-wrap gap-2">
-        <Button type="button" variant="default" size="sm" asChild>
-          <a href="/integrations">Open Integrations</a>
-        </Button>
-        <Button type="button" variant="outline" size="sm" asChild>
-          <a href="/voice/knowledge">Open Knowledge bases</a>
-        </Button>
+        {isOpus ? (
+          <ButtonLink href="/integrations" variant="default">
+            Open Integrations
+          </ButtonLink>
+        ) : (
+          <Button type="button" variant="default" size="sm" asChild>
+            <a href="/integrations">Open Integrations</a>
+          </Button>
+        )}
+        {isOpus ? (
+          <ButtonLink href="/voice/knowledge" variant="outline">
+            Open Knowledge bases
+          </ButtonLink>
+        ) : (
+          <Button type="button" variant="outline" size="sm" asChild>
+            <a href="/voice/knowledge">Open Knowledge bases</a>
+          </Button>
+        )}
       </div>
+    </>
+  );
+  if (isOpus) {
+    return <OpusCalloutPanel className="mt-3 text-sm">{body}</OpusCalloutPanel>;
+  }
+  return (
+    <div className="mt-3 space-y-3 rounded-xl border border-primary/30 bg-card p-4 text-sm">
+      {body}
     </div>
   );
 }
@@ -739,19 +769,32 @@ export function InformationStep({
                 className="hidden"
                 onChange={(e) => void onUploadFiles(e.target.files)}
               />
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => fileRef.current?.click()}
-                className="flex h-auto w-full flex-col items-center rounded-xl border border-dashed bg-card/50 px-4 py-8 text-center hover:bg-muted/40"
-              >
-                <CloudUpload className="h-6 w-6 text-muted-foreground" />
-                <p className="mt-2 text-sm font-medium">Upload knowledge files</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  PDF, DOCX, TXT, MD, CSV — PDFs upload to your knowledge base for
-                  Telnyx RAG.
-                </p>
-              </Button>
+              {isOpus ? (
+                <EmptyState
+                  icon={CloudUpload}
+                  title="Upload knowledge files"
+                  description="PDF, DOCX, TXT, MD, CSV — PDFs upload to your knowledge base for Telnyx RAG."
+                  action={
+                    <Button type="button" variant="outline" onClick={() => fileRef.current?.click()}>
+                      Choose files
+                    </Button>
+                  }
+                />
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => fileRef.current?.click()}
+                  className="flex h-auto w-full flex-col items-center rounded-xl border border-dashed bg-card/50 px-4 py-8 text-center hover:bg-muted/40"
+                >
+                  <CloudUpload className="h-6 w-6 text-muted-foreground" />
+                  <p className="mt-2 text-sm font-medium">Upload knowledge files</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    PDF, DOCX, TXT, MD, CSV — PDFs upload to your knowledge base for
+                    Telnyx RAG.
+                  </p>
+                </Button>
+              )}
               {uploadNote ? (
                 <p className="mt-2 text-xs text-success">{uploadNote}</p>
               ) : null}
@@ -785,11 +828,9 @@ export function InformationStep({
         </div>
 
         <div className="space-y-2">
-          {state.knowledgeItems.map((item) => (
-            <div
-              key={item.id}
-              className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3"
-            >
+          {state.knowledgeItems.map((item) => {
+            const row = (
+              <div className="flex items-center gap-3">
               <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
                 <FileText className="h-4 w-4" />
               </span>
@@ -800,6 +841,7 @@ export function InformationStep({
                 </p>
               </div>
               <StatusPill
+                variant={uiVariant}
                 tone={
                   item.status === "complete"
                     ? "success"
@@ -848,8 +890,21 @@ export function InformationStep({
               >
                 <Pencil className="h-3.5 w-3.5" />
               </Button>
-            </div>
-          ))}
+              </div>
+            );
+            return isOpus ? (
+              <OpusDensePanel key={item.id} bodyClassName="px-4 py-3">
+                {row}
+              </OpusDensePanel>
+            ) : (
+              <div
+                key={item.id}
+                className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3"
+              >
+                {row}
+              </div>
+            );
+          })}
         </div>
 
         {state.knowledgeItems.some(
@@ -873,47 +928,82 @@ export function InformationStep({
         ) : null}
 
         {editingId ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-lg rounded-xl border border-border bg-card p-5 shadow-lg">
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-semibold">Edit knowledge item</h3>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setEditingId(null)}
-                  aria-label="Close"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-              <Label className="text-xs">Label</Label>
-              <Input
-                className="mt-1"
-                value={editDraft.label}
-                onChange={(e) =>
-                  setEditDraft((d) => ({ ...d, label: e.target.value }))
-                }
-              />
-              <Label className="mt-3 block text-xs">Facts the agent should know</Label>
-              <Textarea
-                className="mt-1 min-h-[140px]"
-                value={editDraft.summary}
-                onChange={(e) =>
-                  setEditDraft((d) => ({ ...d, summary: e.target.value }))
-                }
-                placeholder="Hours, pricing, policies, directions…"
-              />
-              <div className="mt-4 flex justify-end gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => setEditingId(null)}>
-                  Cancel
-                </Button>
-                <Button type="button" size="sm" onClick={saveEdit}>
-                  Save
-                </Button>
+          isOpus ? (
+            <Dialog open onOpenChange={(open) => !open && setEditingId(null)}>
+              <DialogContent className="sm:max-w-lg" showCloseButton>
+                <DialogHeader>
+                  <DialogTitle>Edit knowledge item</DialogTitle>
+                </DialogHeader>
+                <Label className="text-xs">Label</Label>
+                <Input
+                  className="mt-1"
+                  value={editDraft.label}
+                  onChange={(e) =>
+                    setEditDraft((d) => ({ ...d, label: e.target.value }))
+                  }
+                />
+                <Label className="mt-3 block text-xs">Facts the agent should know</Label>
+                <Textarea
+                  className="mt-1 min-h-[140px]"
+                  value={editDraft.summary}
+                  onChange={(e) =>
+                    setEditDraft((d) => ({ ...d, summary: e.target.value }))
+                  }
+                  placeholder="Hours, pricing, policies, directions…"
+                />
+                <DialogFooter>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setEditingId(null)}>
+                    Cancel
+                  </Button>
+                  <Button type="button" size="sm" onClick={saveEdit}>
+                    Save
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          ) : (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+              <div className="w-full max-w-lg rounded-xl border border-border bg-card p-5 shadow-lg">
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold">Edit knowledge item</h3>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setEditingId(null)}
+                    aria-label="Close"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                <Label className="text-xs">Label</Label>
+                <Input
+                  className="mt-1"
+                  value={editDraft.label}
+                  onChange={(e) =>
+                    setEditDraft((d) => ({ ...d, label: e.target.value }))
+                  }
+                />
+                <Label className="mt-3 block text-xs">Facts the agent should know</Label>
+                <Textarea
+                  className="mt-1 min-h-[140px]"
+                  value={editDraft.summary}
+                  onChange={(e) =>
+                    setEditDraft((d) => ({ ...d, summary: e.target.value }))
+                  }
+                  placeholder="Hours, pricing, policies, directions…"
+                />
+                <div className="mt-4 flex justify-end gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => setEditingId(null)}>
+                    Cancel
+                  </Button>
+                  <Button type="button" size="sm" onClick={saveEdit}>
+                    Save
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
+          )
         ) : null}
 
         <BusinessScheduleEditor state={state} patch={patch} presentation={presentation} />
@@ -939,7 +1029,7 @@ export function InformationStep({
             </li>
           ))}
         </ul>
-        <InfoCallout>
+        <InfoCallout variant={uiVariant}>
           On save/activate, these facts are written into the agent knowledge base
           so Telnyx can answer without inventing details.
         </InfoCallout>

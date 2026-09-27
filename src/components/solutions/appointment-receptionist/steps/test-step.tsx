@@ -2,7 +2,8 @@
 
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
 import { VoiceV3BrowserCall } from "@/components/voice/voice-v3-browser-call";
-import { Rows } from "@/newui-transplant/components/app/kit";
+import { EmptyState, Rows } from "@/newui-transplant/components/app/kit";
+import { OpusDensePanel, OpusInlineAlert } from "../wizard-opus-ui";
 import { pickWizardFieldComponents } from "../wizard-field-kit";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/newui-transplant/components/ui/tabs";
 import { cn } from "@/lib/utils";
@@ -90,9 +91,7 @@ export function TestStep({
         </div>
 
         {prepareError ? (
-          <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
-            {prepareError}
-          </p>
+          <OpusInlineAlert isOpus>{prepareError}</OpusInlineAlert>
         ) : null}
 
         <Rows
@@ -113,22 +112,23 @@ export function TestStep({
               }}
             />
           ) : (
-            <div className="rounded-lg border border-dashed px-6 py-8 text-center">
-              <p className="text-sm font-medium">Start a browser conversation</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                We&apos;ll save your draft and connect GPT-Live using voice {state.voiceLabel} (
-                {state.voiceId}).
-              </p>
-              <Button className="mt-4" disabled={preparing} onClick={() => void prepareLiveTest()}>
-                <Play />
-                {preparing ? "Building…" : "Build & start live test"}
-              </Button>
-            </div>
+            <OpusDensePanel bodyClassName="p-0">
+              <EmptyState
+                icon={Play}
+                title="Start a browser conversation"
+                description={`We'll save your draft and connect GPT-Live using voice ${state.voiceLabel} (${state.voiceId}).`}
+                action={
+                  <Button disabled={preparing} onClick={() => void prepareLiveTest()}>
+                    <Play />
+                    {preparing ? "Building…" : "Build & start live test"}
+                  </Button>
+                }
+              />
+            </OpusDensePanel>
           )
         ) : (
-          <div className="rounded-lg border bg-muted/30 p-5 text-sm">
-            <p className="font-medium">Test on your phone after activate</p>
-            <p className="mt-1 text-xs text-muted-foreground">
+          <OpusDensePanel title="Test on your phone after activate">
+            <p className="text-sm text-muted-foreground">
               Call your assigned number from another phone after you go live. Browser WebRTC is the
               fastest way to try changes while editing.
             </p>
@@ -141,7 +141,7 @@ export function TestStep({
                 Assign a phone number before relying on PSTN testing.
               </p>
             )}
-          </div>
+          </OpusDensePanel>
         )}
 
         <p className="text-xs text-muted-foreground">

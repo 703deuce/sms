@@ -19,6 +19,7 @@ import {
   WizardSelectField,
   WizardToggleField,
 } from "./wizard-field-kit";
+import { OpusCompactPanel } from "./wizard-opus-ui";
 
 function LegacySection({
   title,
@@ -69,7 +70,8 @@ export function BusinessScheduleEditor({
   const m = ensureWizardOperatingMaturity(state);
   const schedule = m.businessSchedule;
   const { Input, Label, Button, Panel } = pickWizardFieldComponents(presentation);
-  const Section = presentation === "opus" ? Panel : LegacySection;
+  const isOpus = presentation === "opus";
+  const Section = isOpus ? Panel : LegacySection;
 
   return (
     <Section
@@ -103,10 +105,8 @@ export function BusinessScheduleEditor({
           const row = schedule.weekly[day] || { closed: true, ranges: [] };
           const range = row.ranges[0] || { start: "09:00", end: "17:00" };
           return (
-            <div
-              key={day}
-              className="flex flex-wrap items-center gap-3 rounded-lg border border-border p-3 text-sm"
-            >
+            <OpusCompactPanel key={day} isOpus={isOpus} className="text-sm">
+            <div className="flex flex-wrap items-center gap-3">
               <span className="w-24 capitalize font-medium">{day}</span>
               <WizardCheckboxInline
                 presentation={presentation}
@@ -187,6 +187,7 @@ export function BusinessScheduleEditor({
                 </>
               ) : null}
             </div>
+            </OpusCompactPanel>
           );
         })}
       </div>
@@ -218,13 +219,15 @@ function HolidayListEditor({
   onChange: (h: VoiceV2HolidayClosure[]) => void;
 }) {
   const { Input, Button } = pickWizardFieldComponents(presentation);
+  const isOpus = presentation === "opus";
   return (
     <div className="space-y-2">
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         Holiday closures
       </p>
       {holidays.map((h) => (
-        <div key={h.id} className="flex flex-wrap gap-2 rounded-lg border border-border p-2 text-sm">
+        <OpusCompactPanel key={h.id} isOpus={isOpus} bodyClassName="p-2">
+        <div className="flex flex-wrap gap-2 text-sm">
           <Input
             className="min-w-[120px] flex-1"
             value={h.name}
@@ -259,6 +262,7 @@ function HolidayListEditor({
             Remove
           </Button>
         </div>
+        </OpusCompactPanel>
       ))}
       <Button
         type="button"
@@ -373,7 +377,8 @@ export function OnCallScheduleEditor({
   const m = ensureWizardOperatingMaturity(state);
   const onCall = m.onCallSchedule;
   const { Input, Button, Panel } = pickWizardFieldComponents(presentation);
-  const Section = presentation === "opus" ? Panel : LegacySection;
+  const isOpus = presentation === "opus";
+  const Section = isOpus ? Panel : LegacySection;
 
   const updateEntries = (entries: VoiceV2OnCallScheduleEntry[]) => {
     patchMaturity(
@@ -404,7 +409,7 @@ export function OnCallScheduleEditor({
         }
       />
       {onCall.entries.map((entry) => (
-        <div key={entry.id} className="space-y-2 rounded-lg border border-border p-3 text-sm">
+        <OpusCompactPanel key={entry.id} isOpus={isOpus} className="text-sm">
           <Input
             value={entry.name || ""}
             placeholder="Label (e.g. Mike)"
@@ -486,7 +491,7 @@ export function OnCallScheduleEditor({
           >
             Remove entry
           </Button>
-        </div>
+        </OpusCompactPanel>
       ))}
       <Button
         type="button"

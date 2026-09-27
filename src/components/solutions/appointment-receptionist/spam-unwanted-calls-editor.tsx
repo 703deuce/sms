@@ -9,6 +9,7 @@ import { BlockedCallersManageDialog } from "@/components/voice/blocked-callers-m
 import { Button } from "@/newui-transplant/components/ui/button";
 import { RadioRow } from "@/components/solutions/appointment-receptionist/ui";
 import type { WizardPresentation } from "@/components/solutions/appointment-receptionist/wizard-field-kit";
+import { OpusCompactPanel, WizardSection } from "@/components/solutions/appointment-receptionist/wizard-opus-ui";
 import { useCallback, useEffect, useState } from "react";
 
 const SPAM_OPTIONS: Array<{
@@ -150,15 +151,9 @@ export function SpamUnwantedCallsEditor({
     void refreshBlockedCount();
   }, [refreshBlockedCount]);
 
-  return (
-    <div className="rounded-xl border border-border bg-card p-4">
-      <h3 className="text-sm font-semibold">Spam &amp; unwanted calls</h3>
-      <p className="mt-1 text-xs text-muted-foreground">
-        Reduce unwanted calls before they reach your receptionist. Helps block calls Telnyx
-        identifies as likely spam (US/Canada reputation signals).
-      </p>
-
-      <div className="mt-4 space-y-6">
+  const isOpus = presentation === "opus";
+  const body = (
+      <div className="space-y-6">
         <div>
           <p className="text-sm font-medium">Spam Likely calls</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
@@ -208,7 +203,8 @@ export function SpamUnwantedCallsEditor({
           calls may not be identified, and legitimate calls can occasionally be flagged.
         </p>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
+        <OpusCompactPanel isOpus={isOpus} bodyClassName="px-3 py-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="text-sm">
             <span className="font-medium text-foreground">Blocked callers</span>
             <span className="mt-0.5 block text-xs text-muted-foreground">
@@ -225,8 +221,20 @@ export function SpamUnwantedCallsEditor({
           >
             Manage
           </Button>
-        </div>
+          </div>
+        </OpusCompactPanel>
       </div>
+  );
+
+  return (
+    <>
+      <WizardSection
+        opus={isOpus}
+        title="Spam & unwanted calls"
+        description="Reduce unwanted calls before they reach your receptionist. Helps block calls Telnyx identifies as likely spam (US/Canada reputation signals)."
+      >
+        {body}
+      </WizardSection>
       <BlockedCallersManageDialog
         open={manageOpen}
         onClose={() => {
@@ -234,6 +242,6 @@ export function SpamUnwantedCallsEditor({
           void refreshBlockedCount();
         }}
       />
-    </div>
+    </>
   );
 }

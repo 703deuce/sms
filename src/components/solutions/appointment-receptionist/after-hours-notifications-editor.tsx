@@ -8,6 +8,7 @@ import {
   WizardCheckboxInline,
   WizardToggleField,
 } from "./wizard-field-kit";
+import { OpusCompactPanel } from "./wizard-opus-ui";
 
 type Patch = (partial: Partial<AppointmentReceptionistWizardState>) => void;
 
@@ -31,6 +32,7 @@ export function AfterHoursNotificationsEditor({
   presentation?: WizardPresentation;
 }) {
   const { Input, Label, Button } = pickWizardFieldComponents(presentation);
+  const isOpus = presentation === "opus";
   const events = state.afterHoursNotificationEvents ?? {};
   const recipients = state.afterHoursNotificationRecipients ?? [];
 
@@ -86,7 +88,8 @@ export function AfterHoursNotificationsEditor({
             const sms = flags.sms ?? defaultOn;
             const email = flags.email ?? defaultOn;
             return (
-              <li key={row.key} className="rounded-lg border border-border px-3 py-2">
+              <li key={row.key}>
+                <OpusCompactPanel isOpus={isOpus} bodyClassName="px-3 py-2">
                 <p className="text-sm font-medium">{row.label}</p>
                 <div className="mt-2 flex flex-wrap gap-4 text-sm">
                   <WizardCheckboxInline
@@ -102,6 +105,7 @@ export function AfterHoursNotificationsEditor({
                     onCheckedChange={(on) => setEventChannel(row.key, "email", on)}
                   />
                 </div>
+                </OpusCompactPanel>
               </li>
             );
           })}
@@ -115,7 +119,7 @@ export function AfterHoursNotificationsEditor({
         </p>
         <div className="mt-3 space-y-3">
           {recipients.map((r) => (
-            <div key={r.id} className="rounded-lg border border-border p-3 space-y-2">
+            <OpusCompactPanel key={r.id} isOpus={isOpus}>
               <div className="flex flex-wrap items-end gap-2">
                 <div className="min-w-[140px] flex-1">
                   <Label>Label</Label>
@@ -152,7 +156,7 @@ export function AfterHoursNotificationsEditor({
                   />
                 </div>
               </div>
-            </div>
+            </OpusCompactPanel>
           ))}
           <Button type="button" variant="outline" size="sm" onClick={addRecipient}>
             + Add recipient

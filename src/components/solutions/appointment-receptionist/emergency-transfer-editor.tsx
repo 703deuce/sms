@@ -15,6 +15,7 @@ import {
 } from "@/lib/solutions/appointment-receptionist/transfer-wizard-state";
 import { normalizeWizardTransferPhone } from "@/lib/solutions/appointment-receptionist/transfer-utils";
 import { RadioRow } from "./ui";
+import { OpusCalloutPanel, OpusCompactPanel } from "./wizard-opus-ui";
 import {
   pickWizardFieldComponents,
   type WizardPresentation,
@@ -40,7 +41,8 @@ export function EmergencyTransferEditor({
 }) {
   const ui = pickWizardFieldComponents(presentation);
   const { Input, Label, Button } = ui;
-  const uiVariant = presentation === "opus" ? "opus" : "legacy";
+  const isOpus = presentation === "opus";
+  const uiVariant = isOpus ? "opus" : "legacy";
   const transferCapability = state.capabilities.includes("transfer_calls");
   const hydrated = useRef(false);
 
@@ -176,9 +178,7 @@ export function EmergencyTransferEditor({
 
             return (
               <li key={dest.id} className="space-y-0">
-              <div
-                className="rounded-lg border border-border bg-muted/20 p-3 space-y-2"
-              >
+              <OpusCompactPanel isOpus={isOpus}>
                 <div className="flex items-start gap-2">
                   {routing === "waterfall" ? (
                     <div className="flex flex-col gap-0.5 pt-1">
@@ -298,7 +298,7 @@ export function EmergencyTransferEditor({
                     </p>
                   </div>
                 </div>
-              </div>
+              </OpusCompactPanel>
               {routing === "waterfall" && stepIndex < steps.length - 1 ? (
                 <p
                   className="py-2 text-center text-xs font-medium text-muted-foreground"
@@ -339,11 +339,21 @@ export function EmergencyTransferEditor({
         </div>
 
         {issues.length > 0 ? (
-          <ul className="mt-4 space-y-1 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-100">
-            {issues.map((i) => (
-              <li key={i.id}>{i.message}</li>
-            ))}
-          </ul>
+          isOpus ? (
+            <OpusCalloutPanel title="Fix before activate" className="mt-4 border-amber-500/40">
+              <ul className="space-y-1 text-xs text-amber-900 dark:text-amber-100">
+                {issues.map((i) => (
+                  <li key={i.id}>{i.message}</li>
+                ))}
+              </ul>
+            </OpusCalloutPanel>
+          ) : (
+            <ul className="mt-4 space-y-1 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-100">
+              {issues.map((i) => (
+                <li key={i.id}>{i.message}</li>
+              ))}
+            </ul>
+          )
         ) : null}
       </div>
     </div>

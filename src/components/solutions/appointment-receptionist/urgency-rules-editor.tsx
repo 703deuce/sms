@@ -8,6 +8,7 @@ import {
   type WizardPresentation,
   WizardSelectField,
 } from "./wizard-field-kit";
+import { OpusCompactPanel } from "./wizard-opus-ui";
 
 const OPERATORS: Array<{ value: VoiceV2UrgencyRuleRow["operator"]; label: string }> = [
   { value: "EQUALS", label: "equals" },
@@ -49,6 +50,7 @@ export function UrgencyRulesEditor({
   presentation?: WizardPresentation;
 }) {
   const { Input, Label, Button } = pickWizardFieldComponents(presentation);
+  const isOpus = presentation === "opus";
   const fieldOptions = wizardIntakeFieldOptions(state);
   const planId = state.defaultTransferPlanId?.trim() || "default_transfer_plan";
   const rules = state.urgencyRules || [];
@@ -97,10 +99,7 @@ export function UrgencyRulesEditor({
         </p>
       ) : null}
       {rules.map((rule, ri) => (
-        <div
-          key={rule.id}
-          className="space-y-2 rounded-lg border border-border p-3 text-xs"
-        >
+        <OpusCompactPanel key={rule.id} isOpus={isOpus} className="text-xs">
           <div className="grid gap-2 sm:grid-cols-2">
             <WizardSelectField
               presentation={presentation}
@@ -207,7 +206,7 @@ export function UrgencyRulesEditor({
           >
             Remove rule
           </Button>
-        </div>
+        </OpusCompactPanel>
       ))}
     </div>
   );

@@ -21,6 +21,10 @@ import { useEffect, useState } from "react";
 import { Panel } from "@/newui-transplant/components/app/kit";
 import { ReceptionistCollectFieldsOpus } from "@/newui-transplant/connected/voice/receptionist-editor/receptionist-collect-fields-opus";
 import {
+  OpusCompactPanel,
+  OpusDensePanel,
+  OpusSectionInset,
+  SelectedAppointmentConfigShell,
   Table,
   TableBody,
   TableCell,
@@ -29,6 +33,7 @@ import {
   TableRow,
   WizardSection,
 } from "../wizard-opus-ui";
+import { FieldRow } from "@/newui-transplant/components/app/kit";
 import { InfoCallout, RadioRow, SelectableCard, SidePanel, StatusPill } from "../ui";
 
 const CALENDARS = [
@@ -458,14 +463,22 @@ export function AppointmentsStep({
                 checked={state.bookingLinkSmsConsentRequired !== false}
                 onCheckedChange={(on) => patch({ bookingLinkSmsConsentRequired: on })}
               />
-              <div className="rounded-lg border border-border bg-muted/30 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Message preview
-                </p>
-                <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">
-                  {`${state.businessName || state.solutionName || "Your business"}: Book your appointment here:\n${state.bookingLinkUrl?.trim() || "https://example.com/book"}\nMsg & data rates may apply. Reply STOP to opt out, HELP for help.`}
-                </p>
-              </div>
+              {isOpus ? (
+                <OpusDensePanel title="Message preview" bodyClassName="p-3">
+                  <p className="whitespace-pre-wrap text-sm text-foreground">
+                    {`${state.businessName || state.solutionName || "Your business"}: Book your appointment here:\n${state.bookingLinkUrl?.trim() || "https://example.com/book"}\nMsg & data rates may apply. Reply STOP to opt out, HELP for help.`}
+                  </p>
+                </OpusDensePanel>
+              ) : (
+                <div className="rounded-lg border border-border bg-muted/30 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Message preview
+                  </p>
+                  <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">
+                    {`${state.businessName || state.solutionName || "Your business"}: Book your appointment here:\n${state.bookingLinkUrl?.trim() || "https://example.com/book"}\nMsg & data rates may apply. Reply STOP to opt out, HELP for help.`}
+                  </p>
+                </div>
+              )}
               <div>
                 <Label htmlFor="booking-link-label">Link label (optional)</Label>
                 <Input
@@ -635,20 +648,10 @@ export function AppointmentsStep({
         </div>
 
         {selected ? (
-          <div className="rounded-xl border border-border bg-card p-4">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-sm font-semibold">Appointment configuration</h3>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground"
-                aria-label="Close"
-                onClick={() => patch({ selectedAppointmentTypeId: null })}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
+          <SelectedAppointmentConfigShell
+            isOpus={isOpus}
+            onClose={() => patch({ selectedAppointmentTypeId: null })}
+          >
             <div className="grid gap-6 lg:grid-cols-2">
               <div className="space-y-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -685,9 +688,18 @@ export function AppointmentsStep({
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Booking settings
                 </p>
-                <div className="rounded-lg border border-border px-3 py-2 text-sm">
-                  Booking hours: {selected.bookingHours || "Mon - Fri, 8:00 AM - 6:00 PM"}
-                </div>
+                {isOpus ? (
+                  <FieldRow
+                    label="Booking hours"
+                    description={selected.bookingHours || "Mon - Fri, 8:00 AM - 6:00 PM"}
+                  >
+                    <span className="text-sm text-muted-foreground">As configured</span>
+                  </FieldRow>
+                ) : (
+                  <div className="rounded-lg border border-border px-3 py-2 text-sm">
+                    Booking hours: {selected.bookingHours || "Mon - Fri, 8:00 AM - 6:00 PM"}
+                  </div>
+                )}
                 <WizardSelectField
                   presentation={presentation}
                   label="Minimum notice"
@@ -711,7 +723,7 @@ export function AppointmentsStep({
               </div>
             </div>
 
-            <div className="mt-6 rounded-xl border border-border bg-card p-4">
+            <OpusSectionInset isOpus={isOpus}>
               <WizardToggleField
                 presentation={presentation}
                 label="Enable caller qualification"
@@ -753,9 +765,11 @@ export function AppointmentsStep({
                     />
                   </div>
                   {(state.qualificationRules || []).map((rule, ri) => (
-                    <div
+                    <OpusCompactPanel
                       key={rule.id}
-                      className="grid gap-2 rounded-lg border border-border p-3 text-xs sm:grid-cols-2"
+                      isOpus={isOpus}
+                      className="text-xs sm:grid-cols-2"
+                      bodyClassName="grid gap-2 p-3 sm:grid-cols-2"
                     >
                       <Input
                         value={rule.fieldKey}
@@ -830,7 +844,7 @@ export function AppointmentsStep({
                       >
                         Remove rule
                       </Button>
-                    </div>
+                    </OpusCompactPanel>
                   ))}
                   <Button
                     type="button"
@@ -856,7 +870,7 @@ export function AppointmentsStep({
                   </Button>
                 </div>
               ) : null}
-            </div>
+            </OpusSectionInset>
 
             <div className="mt-6 grid gap-6 lg:grid-cols-2">
               <div>
@@ -1028,7 +1042,7 @@ export function AppointmentsStep({
                 </div>
               </div>
             </div>
-          </div>
+          </SelectedAppointmentConfigShell>
         ) : null}
         </WizardSection>
       </div>
@@ -1044,6 +1058,28 @@ export function AppointmentsStep({
             Book appointment
           </li>
         </ul>
+        {isOpus ? (
+          <OpusDensePanel title="Calendar connection" bodyClassName="p-3 text-xs">
+            <p className="text-muted-foreground">
+              {state.calendarConnected
+                ? [
+                    state.calendarProvider
+                      ? CALENDARS.find((c) => c.id === state.calendarProvider)?.label ||
+                        state.calendarProvider
+                      : null,
+                    state.calendarEmail,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ") || "Connected"
+                : "No calendar connected yet"}
+            </p>
+            {state.calendarConnected ? (
+              <StatusPill variant="opus" tone="success">Connected</StatusPill>
+            ) : (
+              <StatusPill variant="opus" tone="warning">Not connected</StatusPill>
+            )}
+          </OpusDensePanel>
+        ) : (
         <div className="rounded-xl border border-border p-3 text-xs">
           <p className="font-medium">Calendar connection</p>
           <p className="mt-1 text-muted-foreground">
@@ -1065,7 +1101,8 @@ export function AppointmentsStep({
             <StatusPill tone="warning">Needed</StatusPill>
           )}
         </div>
-        <InfoCallout>
+        )}
+        <InfoCallout variant={uiVariant}>
           AI calls your calendar in real time to check availability and book appointments
           instantly. You never copy event IDs or API keys.
         </InfoCallout>
