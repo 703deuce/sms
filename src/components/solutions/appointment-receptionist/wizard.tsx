@@ -1,7 +1,6 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Button as OpusButton } from "@/newui-transplant/components/ui/button";
+import { pickWizardFieldComponents } from "./wizard-field-kit";
 import {
   applyWizardPreset,
   createDefaultWizardState,
@@ -460,7 +459,7 @@ export function AppointmentReceptionistWizard({
   const step = steps[stepIndex];
   const stepPresentation = isMctb ? "mctb" : isOpus ? "opus" : "legacy";
 
-  const FooterButton = isOpus ? OpusButton : Button;
+  const { Button: FooterButton } = pickWizardFieldComponents(stepPresentation);
 
   return (
     <div

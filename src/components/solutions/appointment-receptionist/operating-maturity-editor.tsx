@@ -14,6 +14,7 @@ import type {
 import {
   pickWizardFieldComponents,
   type WizardPresentation,
+  WizardCheckboxInline,
   WizardHint,
   WizardSelectField,
   WizardToggleField,
@@ -107,33 +108,31 @@ export function BusinessScheduleEditor({
               className="flex flex-wrap items-center gap-3 rounded-lg border border-border p-3 text-sm"
             >
               <span className="w-24 capitalize font-medium">{day}</span>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={row.closed}
-                  onChange={(e) =>
-                    patchMaturity(
-                      state,
-                      (cur) => ({
-                        ...cur,
-                        businessSchedule: {
-                          ...cur.businessSchedule,
-                          weekly: {
-                            ...cur.businessSchedule.weekly,
-                            [day]: {
-                              ...row,
-                              closed: e.target.checked,
-                              ranges: row.ranges.length ? row.ranges : [range],
-                            },
+              <WizardCheckboxInline
+                presentation={presentation}
+                label="Closed"
+                checked={row.closed}
+                onCheckedChange={(on) =>
+                  patchMaturity(
+                    state,
+                    (cur) => ({
+                      ...cur,
+                      businessSchedule: {
+                        ...cur.businessSchedule,
+                        weekly: {
+                          ...cur.businessSchedule.weekly,
+                          [day]: {
+                            ...row,
+                            closed: on,
+                            ranges: row.ranges.length ? row.ranges : [range],
                           },
                         },
-                      }),
-                      patch,
-                    )
-                  }
-                />
-                Closed
-              </label>
+                      },
+                    }),
+                    patch,
+                  )
+                }
+              />
               {!row.closed ? (
                 <>
                   <Input

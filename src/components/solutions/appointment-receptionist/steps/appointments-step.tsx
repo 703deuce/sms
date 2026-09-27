@@ -12,6 +12,7 @@ import {
 } from "@/lib/solutions/appointment-receptionist/live-calendar";
 import {
   pickWizardFieldComponents,
+  WizardCheckboxInline,
   WizardSelectField,
   WizardToggleField,
 } from "../wizard-field-kit";
@@ -401,63 +402,54 @@ export function AppointmentsStep({
           {(state.bookingStrategy || "MICROSOFT_365") === "SEND_LINK" ? (
             <div className="mt-4 space-y-4 border-t border-border pt-4">
               <p className="text-sm font-medium">Send a booking link</p>
-              <label className="block text-sm font-medium" htmlFor="booking-link-url">
-                Booking URL <span className="text-destructive">*</span>
-              </label>
-              <input
-                id="booking-link-url"
-                type="url"
-                required
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-                placeholder="https://example.com/book"
-                value={state.bookingLinkUrl || ""}
-                onChange={(e) => patch({ bookingLinkUrl: e.target.value })}
-              />
-              <p className="text-[12px] text-muted-foreground">
-                This is the page callers will receive when they ask to schedule an appointment.
-              </p>
-              <label className="block text-sm font-medium" htmlFor="booking-link-sms-sender">
-                Text message sender <span className="text-destructive">*</span>
-              </label>
-              <select
+              <div>
+                <Label htmlFor="booking-link-url">
+                  Booking URL <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="booking-link-url"
+                  type="url"
+                  required
+                  className="mt-1"
+                  placeholder="https://example.com/book"
+                  value={state.bookingLinkUrl || ""}
+                  onChange={(e) => patch({ bookingLinkUrl: e.target.value })}
+                />
+                <p className="mt-1 text-[12px] text-muted-foreground">
+                  This is the page callers will receive when they ask to schedule an appointment.
+                </p>
+              </div>
+              <WizardSelectField
+                presentation={presentation}
                 id="booking-link-sms-sender"
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                label="Text message sender *"
                 value={state.outboundSmsPhoneNumberId || ""}
-                onChange={(e) => {
-                  const row = smsNumbers.find((n) => n.id === e.target.value);
+                onChange={(v) => {
+                  const row = smsNumbers.find((n) => n.id === v);
                   patch({
                     outboundSmsPhoneNumberId: row?.id ?? null,
                     outboundSmsE164: row?.e164 ?? null,
                     outboundSmsMode: "explicit_number",
                   });
                 }}
-              >
-                <option value="">Select SMS-enabled number…</option>
-                {smsNumbers.map((n) => (
-                  <option key={n.id} value={n.id}>
-                    {n.e164}
-                    {n.friendlyName ? ` — ${n.friendlyName}` : ""}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: "", label: "Select SMS-enabled number…" },
+                  ...smsNumbers.map((n) => ({
+                    value: n.id,
+                    label: `${n.e164}${n.friendlyName ? ` — ${n.friendlyName}` : ""}`,
+                  })),
+                ]}
+              />
               <p className="text-[12px] text-muted-foreground">
                 The booking link will be sent from this SMS-enabled number.
               </p>
-              <div className="flex items-start gap-2">
-                <input
-                  id="booking-link-sms-consent"
-                  type="checkbox"
-                  className="mt-1"
-                  checked={state.bookingLinkSmsConsentRequired !== false}
-                  onChange={(e) => patch({ bookingLinkSmsConsentRequired: e.target.checked })}
-                />
-                <label htmlFor="booking-link-sms-consent" className="text-sm">
-                  Ask for permission before sending
-                  <span className="mt-0.5 block text-[12px] font-normal text-muted-foreground">
-                    Caller receives the link only after explicitly agreeing to receive the text.
-                  </span>
-                </label>
-              </div>
+              <WizardToggleField
+                presentation={presentation}
+                label="Ask for permission before sending"
+                description="Caller receives the link only after explicitly agreeing to receive the text."
+                checked={state.bookingLinkSmsConsentRequired !== false}
+                onCheckedChange={(on) => patch({ bookingLinkSmsConsentRequired: on })}
+              />
               <div className="rounded-lg border border-border bg-muted/30 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Message preview
@@ -466,17 +458,16 @@ export function AppointmentsStep({
                   {`${state.businessName || state.solutionName || "Your business"}: Book your appointment here:\n${state.bookingLinkUrl?.trim() || "https://example.com/book"}\nMsg & data rates may apply. Reply STOP to opt out, HELP for help.`}
                 </p>
               </div>
-              <label className="block text-sm font-medium" htmlFor="booking-link-label">
-                Link label (optional)
-              </label>
-              <input
-                id="booking-link-label"
-                type="text"
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-                placeholder="Book your appointment"
-                value={state.bookingLinkLabel || ""}
-                onChange={(e) => patch({ bookingLinkLabel: e.target.value })}
-              />
+              <div>
+                <Label htmlFor="booking-link-label">Link label (optional)</Label>
+                <Input
+                  id="booking-link-label"
+                  className="mt-1"
+                  placeholder="Book your appointment"
+                  value={state.bookingLinkLabel || ""}
+                  onChange={(e) => patch({ bookingLinkLabel: e.target.value })}
+                />
+              </div>
             </div>
           ) : null}
         </div>
@@ -486,8 +477,10 @@ export function AppointmentsStep({
         <div className={isOpus ? undefined : "rounded-xl border border-border bg-card"}>
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             {!isOpus ? <h3 className="text-sm font-semibold">Appointment types</h3> : <span />}
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               className="inline-flex items-center gap-1 text-xs font-medium text-primary"
               onClick={() => {
                 const id = `type_${Date.now()}`;
@@ -517,7 +510,7 @@ export function AppointmentsStep({
             >
               <Plus className="h-3.5 w-3.5" />
               Add appointment
-            </button>
+            </Button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[560px] text-left text-sm">
@@ -540,23 +533,23 @@ export function AppointmentsStep({
                     onClick={() => patch({ selectedAppointmentTypeId: row.id })}
                   >
                     <td className="px-4 py-3 font-medium">
-                      <label className="inline-flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
+                      <span
+                        className="inline-flex items-center gap-2"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <WizardCheckboxInline
+                          presentation={presentation}
+                          label={row.name}
                           checked={row.enabled}
-                          onChange={() => {
+                          onCheckedChange={() => {
                             patch({
                               appointmentTypes: state.appointmentTypes.map((t) =>
                                 t.id === row.id ? { ...t, enabled: !t.enabled } : t,
                               ),
                             });
                           }}
-                          className="h-4 w-4 rounded border-border text-primary"
                         />
-                        <span className={!row.enabled ? "text-muted-foreground line-through" : ""}>
-                          {row.name}
-                        </span>
-                      </label>
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{row.durationMin} min</td>
                     <td className="px-4 py-3 text-muted-foreground">{row.calendar}</td>
@@ -579,14 +572,16 @@ export function AppointmentsStep({
           <div className="rounded-xl border border-border bg-card p-4">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-sm font-semibold">Appointment configuration</h3>
-              <button
+              <Button
                 type="button"
-                className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground"
                 aria-label="Close"
                 onClick={() => patch({ selectedAppointmentTypeId: null })}
               >
                 <X className="h-4 w-4" />
-              </button>
+              </Button>
             </div>
             <div className="grid gap-6 lg:grid-cols-2">
               <div className="space-y-3">
@@ -651,41 +646,30 @@ export function AppointmentsStep({
             </div>
 
             <div className="mt-6 rounded-xl border border-border bg-card p-4">
-              <label className="flex cursor-pointer items-start gap-3">
-                <input
-                  type="checkbox"
-                  className="mt-1 h-4 w-4 rounded border-border"
-                  checked={state.qualificationEnabled === true}
-                  onChange={(e) =>
-                    patch({
-                      qualificationEnabled: e.target.checked,
-                      capabilities: e.target.checked
-                        ? [...new Set([...state.capabilities, "qualify_callers"])]
-                        : state.capabilities.filter((c) => c !== "qualify_callers"),
-                    })
-                  }
-                />
-                <span className="min-w-0">
-                  <span className="text-sm font-medium">Enable caller qualification</span>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">
-                    Use collected fields and simple rules to decide fit before booking,
-                    sending a link, or taking a message. Works with any booking mode.
-                  </span>
-                </span>
-              </label>
+              <WizardToggleField
+                presentation={presentation}
+                label="Enable caller qualification"
+                description="Use collected fields and simple rules to decide fit before booking, sending a link, or taking a message. Works with any booking mode."
+                checked={state.qualificationEnabled === true}
+                onCheckedChange={(on) =>
+                  patch({
+                    qualificationEnabled: on,
+                    capabilities: on
+                      ? [...new Set([...state.capabilities, "qualify_callers"])]
+                      : state.capabilities.filter((c) => c !== "qualify_callers"),
+                  })
+                }
+              />
               {state.qualificationEnabled ? (
                 <div className="mt-4 space-y-3 border-t border-border pt-4">
-                  <label className="flex items-center gap-2 text-xs">
-                    <input
-                      type="checkbox"
-                      checked={state.qualificationRequiredBeforePrimaryAction === true}
-                      onChange={(e) =>
-                        patch({ qualificationRequiredBeforePrimaryAction: e.target.checked })
-                      }
-                      className="h-3.5 w-3.5 rounded border-border"
-                    />
-                    Require qualification before live booking or sending a booking link
-                  </label>
+                  <WizardToggleField
+                    presentation={presentation}
+                    label="Require qualification before live booking or sending a booking link"
+                    checked={state.qualificationRequiredBeforePrimaryAction === true}
+                    onCheckedChange={(on) =>
+                      patch({ qualificationRequiredBeforePrimaryAction: on })
+                    }
+                  />
                   <div>
                     <Label className="text-xs">Supported ZIP codes (comma-separated)</Label>
                     <Input
@@ -716,24 +700,27 @@ export function AppointmentsStep({
                         }}
                         placeholder="Field key (e.g. zip_code)"
                       />
-                      <select
-                        className="h-9 rounded-lg border border-border bg-card px-2"
+                      <WizardSelectField
+                        presentation={presentation}
+                        className="min-w-0"
+                        label="Operator"
                         value={rule.operator}
-                        onChange={(e) => {
+                        onChange={(v) => {
                           const next = [...(state.qualificationRules || [])];
                           next[ri] = {
                             ...rule,
-                            operator: e.target.value as typeof rule.operator,
+                            operator: v as typeof rule.operator,
                           };
                           patch({ qualificationRules: next });
                         }}
-                      >
-                        <option value="IN">is one of</option>
-                        <option value="NOT_IN">is not one of</option>
-                        <option value="EQUALS">equals</option>
-                        <option value="GREATER_THAN_OR_EQUAL">≥</option>
-                        <option value="LESS_THAN_OR_EQUAL">≤</option>
-                      </select>
+                        options={[
+                          { value: "IN", label: "is one of" },
+                          { value: "NOT_IN", label: "is not one of" },
+                          { value: "EQUALS", label: "equals" },
+                          { value: "GREATER_THAN_OR_EQUAL", label: "≥" },
+                          { value: "LESS_THAN_OR_EQUAL", label: "≤" },
+                        ]}
+                      />
                       <Input
                         className="sm:col-span-2"
                         value={rule.value}
@@ -744,25 +731,29 @@ export function AppointmentsStep({
                         }}
                         placeholder="Values (comma-separated if needed)"
                       />
-                      <select
-                        className="h-9 rounded-lg border border-border bg-card px-2"
+                      <WizardSelectField
+                        presentation={presentation}
+                        label="Result"
                         value={rule.resultStatus}
-                        onChange={(e) => {
+                        onChange={(v) => {
                           const next = [...(state.qualificationRules || [])];
                           next[ri] = {
                             ...rule,
-                            resultStatus: e.target.value as typeof rule.resultStatus,
+                            resultStatus: v as typeof rule.resultStatus,
                           };
                           patch({ qualificationRules: next });
                         }}
-                      >
-                        <option value="QUALIFIED">If match → Qualified</option>
-                        <option value="NOT_QUALIFIED">If match → Not qualified</option>
-                        <option value="NEEDS_REVIEW">If match → Needs review</option>
-                      </select>
-                      <button
+                        options={[
+                          { value: "QUALIFIED", label: "If match → Qualified" },
+                          { value: "NOT_QUALIFIED", label: "If match → Not qualified" },
+                          { value: "NEEDS_REVIEW", label: "If match → Needs review" },
+                        ]}
+                      />
+                      <Button
                         type="button"
-                        className="text-[11px] font-semibold text-rose-600"
+                        variant="ghost"
+                        size="sm"
+                        className="text-[11px] font-semibold text-destructive"
                         onClick={() =>
                           patch({
                             qualificationRules: (state.qualificationRules || []).filter(
@@ -772,12 +763,13 @@ export function AppointmentsStep({
                         }
                       >
                         Remove rule
-                      </button>
+                      </Button>
                     </div>
                   ))}
-                  <button
+                  <Button
                     type="button"
-                    className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold"
+                    variant="outline"
+                    size="sm"
                     onClick={() =>
                       patch({
                         qualificationRules: [
@@ -795,7 +787,7 @@ export function AppointmentsStep({
                     }
                   >
                     Add rule
-                  </button>
+                  </Button>
                 </div>
               ) : null}
             </div>
@@ -825,58 +817,53 @@ export function AppointmentsStep({
                       key={field.id}
                       className="flex flex-wrap items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm"
                     >
-                      <input
-                        type="checkbox"
+                      <WizardCheckboxInline
+                        presentation={presentation}
+                        label={field.label}
                         checked={field.enabled !== false}
-                        onChange={() => {
+                        onCheckedChange={() => {
                           const next = state.collectFields.map((f, i) =>
                             i === index ? { ...f, enabled: !f.enabled } : f,
                           );
                           patch({ collectFields: next });
                         }}
-                        className="h-4 w-4 rounded border-border text-primary"
                       />
-                      <span className="min-w-0 flex-1 font-medium">{field.label}</span>
-                      <label className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(field.required)}
-                          onChange={() => {
+                      <WizardCheckboxInline
+                        presentation={presentation}
+                        label="Required"
+                        checked={Boolean(field.required)}
+                        onCheckedChange={() => {
+                          const next = state.collectFields.map((f, i) =>
+                            i === index ? { ...f, required: !f.required } : f,
+                          );
+                          patch({ collectFields: next });
+                          const ids = next
+                            .filter((f) => f.enabled !== false && f.required)
+                            .map((f) => f.id);
+                          if (selected) updateSelected({ requiredFields: ids });
+                        }}
+                      />
+                      {state.qualificationEnabled ? (
+                        <WizardCheckboxInline
+                          presentation={presentation}
+                          label="Qualification"
+                          checked={field.useForQualification === true}
+                          onCheckedChange={() => {
                             const next = state.collectFields.map((f, i) =>
-                              i === index ? { ...f, required: !f.required } : f,
+                              i === index
+                                ? { ...f, useForQualification: !f.useForQualification }
+                                : f,
                             );
                             patch({ collectFields: next });
-                            const ids = next
-                              .filter((f) => f.enabled !== false && f.required)
-                              .map((f) => f.id);
-                            if (selected) updateSelected({ requiredFields: ids });
                           }}
-                          className="h-3.5 w-3.5 rounded border-border"
                         />
-                        Required
-                      </label>
-                      {state.qualificationEnabled ? (
-                        <label className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                          <input
-                            type="checkbox"
-                            checked={field.useForQualification === true}
-                            onChange={() => {
-                              const next = state.collectFields.map((f, i) =>
-                                i === index
-                                  ? { ...f, useForQualification: !f.useForQualification }
-                                  : f,
-                              );
-                              patch({ collectFields: next });
-                            }}
-                            className="h-3.5 w-3.5 rounded border-border"
-                          />
-                          Qualification
-                        </label>
                       ) : null}
                       {!["full_name", "phone", "service"].includes(field.id) ? (
-                        <button
+                        <Button
                           type="button"
-                          className="text-[11px] font-semibold text-rose-600"
+                          variant="ghost"
+                          size="sm"
+                          className="text-[11px] font-semibold text-destructive"
                           onClick={() => {
                             patch({
                               collectFields: state.collectFields.filter((_, i) => i !== index),
@@ -884,15 +871,15 @@ export function AppointmentsStep({
                           }}
                         >
                           Remove
-                        </button>
+                        </Button>
                       ) : null}
                     </div>
                   ))}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <input
+                  <Input
                     id="new-collect-field"
-                    className="h-9 min-w-[10rem] flex-1 rounded-lg border border-border px-2 text-sm"
+                    className="h-9 min-w-[10rem] flex-1"
                     placeholder="New field label"
                     onKeyDown={(e) => {
                       if (e.key !== "Enter") return;
@@ -915,9 +902,11 @@ export function AppointmentsStep({
                       input.value = "";
                     }}
                   />
-                  <button
+                  <Button
                     type="button"
-                    className="inline-flex h-9 items-center gap-1 rounded-lg border border-border px-3 text-[12px] font-semibold"
+                    variant="outline"
+                    size="sm"
+                    className="inline-flex h-9 items-center gap-1"
                     onClick={() => {
                       const input = document.getElementById(
                         "new-collect-field",
@@ -936,7 +925,7 @@ export function AppointmentsStep({
                   >
                     <Plus className="h-3.5 w-3.5" />
                     Add field
-                  </button>
+                  </Button>
                 </div>
                 </>
                 )}

@@ -7,15 +7,22 @@ import {
   resetCallbackRequiredToDefaults,
   setCallbackRequiredField,
 } from "@/lib/solutions/appointment-receptionist/callback-required-fields-logic";
-import { Label } from "@/components/ui/input";
+import {
+  pickWizardFieldComponents,
+  type WizardPresentation,
+  WizardToggleField,
+} from "./wizard-field-kit";
 
 export function CallbackRequiredFieldsEditor({
   state,
   patch,
+  presentation = "legacy",
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
+  presentation?: WizardPresentation;
 }) {
+  const { Label, Button } = pickWizardFieldComponents(presentation);
   const enabledFields = enabledCollectFieldsForCallback(state);
   const selected = callbackRequiredFieldIds(state);
 
@@ -39,31 +46,26 @@ export function CallbackRequiredFieldsEditor({
           const checked = selected.has(field.id);
           return (
             <li key={field.id}>
-              <label className="flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="mt-1 h-4 w-4 rounded border-border"
-                  checked={checked}
-                  onChange={(e) => setCallbackRequiredField(state, patch, field.id, e.target.checked)}
-                />
-                <span>
-                  <span className="font-medium">{field.label?.trim() || field.id}</span>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">
-                    Shared field — not a separate callback-only question.
-                  </span>
-                </span>
-              </label>
+              <WizardToggleField
+                presentation={presentation}
+                label={field.label?.trim() || field.id}
+                description="Shared field — not a separate callback-only question."
+                checked={checked}
+                onCheckedChange={(on) => setCallbackRequiredField(state, patch, field.id, on)}
+              />
             </li>
           );
         })}
       </ul>
-      <button
+      <Button
         type="button"
-        className="text-xs font-semibold text-primary underline-offset-2 hover:underline"
+        variant="link"
+        size="sm"
+        className="h-auto p-0 text-xs font-semibold"
         onClick={() => resetCallbackRequiredToDefaults(state, patch)}
       >
         Reset to recommended defaults
-      </button>
+      </Button>
     </div>
   );
 }

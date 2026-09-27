@@ -9,6 +9,7 @@ import type {
 import {
   pickWizardFieldComponents,
   WizardSelectField,
+  WizardToggleField,
   type WizardPresentation,
 } from "../wizard-field-kit";
 import {
@@ -522,29 +523,13 @@ export function InformationStep({
             </>
           )}
           <div className="mt-4 rounded-xl border border-border bg-card p-4">
-            <label className="flex cursor-pointer items-start gap-3">
-              <input
-                type="checkbox"
-                className="mt-1 h-4 w-4 rounded border-border"
-                checked={state.knowledgeBaseEnabled !== false}
-                onChange={(e) =>
-                  patch({
-                    knowledgeBaseEnabled: e.target.checked,
-                  })
-                }
-              />
-              <span className="min-w-0">
-                <span className="text-sm font-medium">
-                  Search uploaded documents during calls
-                </span>
-                <span className="mt-0.5 block text-xs text-muted-foreground">
-                  Hours, services, and FAQs in your profile below are always
-                  available immediately. Turn this on to let Amy search PDFs and
-                  other indexed documents when a caller asks something not covered
-                  there.
-                </span>
-              </span>
-            </label>
+            <WizardToggleField
+              presentation={presentation}
+              label="Search uploaded documents during calls"
+              description="Hours, services, and FAQs in your profile below are always available immediately. Turn this on to let Amy search PDFs and other indexed documents when a caller asks something not covered there."
+              checked={state.knowledgeBaseEnabled !== false}
+              onCheckedChange={(on) => patch({ knowledgeBaseEnabled: on })}
+            />
             {state.knowledgeBaseEnabled === false ? (
               <p className="mt-2 text-xs text-muted-foreground">
                 Large document search is off. Prompt facts and FAQs still work.
@@ -607,14 +592,15 @@ export function InformationStep({
                   placeholder="https://www.example.com"
                   disabled={scanning}
                 />
-                <button
+                <Button
                   type="button"
+                  size="sm"
                   onClick={() => void importWebsiteKnowledge()}
                   disabled={scanning || !state.websiteUrl.trim()}
-                  className="shrink-0 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground disabled:opacity-60"
+                  className="shrink-0"
                 >
                   {scanning ? "Scanning…" : "Scan"}
-                </button>
+                </Button>
               </div>
               {scanError ? (
                 <p className="mt-2 text-xs text-warning">{scanError}</p>
@@ -678,13 +664,9 @@ export function InformationStep({
                   placeholder="24h cancellation policy…"
                 />
               </div>
-              <button
-                type="button"
-                onClick={() => saveGuidedProfile()}
-                className="rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground"
-              >
+              <Button type="button" size="sm" onClick={() => saveGuidedProfile()}>
                 Save profile to knowledge
-              </button>
+              </Button>
             </div>
           ) : null}
 
@@ -698,10 +680,11 @@ export function InformationStep({
                 className="hidden"
                 onChange={(e) => void onUploadFiles(e.target.files)}
               />
-              <button
+              <Button
                 type="button"
+                variant="outline"
                 onClick={() => fileRef.current?.click()}
-                className="flex w-full flex-col items-center rounded-xl border border-dashed border-border bg-card/50 px-4 py-8 text-center hover:bg-muted/40"
+                className="flex h-auto w-full flex-col items-center rounded-xl border border-dashed bg-card/50 px-4 py-8 text-center hover:bg-muted/40"
               >
                 <CloudUpload className="h-6 w-6 text-muted-foreground" />
                 <p className="mt-2 text-sm font-medium">Upload knowledge files</p>
@@ -709,7 +692,7 @@ export function InformationStep({
                   PDF, DOCX, TXT, MD, CSV — PDFs upload to your knowledge base for
                   Telnyx RAG.
                 </p>
-              </button>
+              </Button>
               {uploadNote ? (
                 <p className="mt-2 text-xs text-success">{uploadNote}</p>
               ) : null}
@@ -774,8 +757,11 @@ export function InformationStep({
                 {item.statusLabel}
               </StatusPill>
               {item.status === "pending_review" || item.status === "extracted" ? (
-                <button
+                <Button
                   type="button"
+                  variant="outline"
+                  size="sm"
+                  className="text-[11px]"
                   onClick={() =>
                     patch({
                       knowledgeItems: state.knowledgeItems.map((i) =>
@@ -789,19 +775,20 @@ export function InformationStep({
                       ),
                     })
                   }
-                  className="rounded-lg border border-border px-2 py-1 text-[11px] font-semibold text-foreground hover:bg-muted"
                 >
                   Approve
-                </button>
+                </Button>
               ) : null}
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground"
                 onClick={() => openEdit(item)}
-                className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                 aria-label={`Edit ${item.label}`}
               >
                 <Pencil className="h-3.5 w-3.5" />
-              </button>
+              </Button>
             </div>
           ))}
         </div>
@@ -809,8 +796,9 @@ export function InformationStep({
         {state.knowledgeItems.some(
           (i) => i.status === "pending_review" || i.status === "extracted",
         ) ? (
-          <button
+          <Button
             type="button"
+            size="sm"
             onClick={() =>
               patch({
                 knowledgeItems: state.knowledgeItems.map((i) =>
@@ -820,10 +808,9 @@ export function InformationStep({
                 ),
               })
             }
-            className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground"
           >
             Approve all imported facts for shared brain
-          </button>
+          </Button>
         ) : null}
 
         {editingId ? (
@@ -831,13 +818,15 @@ export function InformationStep({
             <div className="w-full max-w-lg rounded-xl border border-border bg-card p-5 shadow-lg">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-sm font-semibold">Edit knowledge item</h3>
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="icon"
                   onClick={() => setEditingId(null)}
-                  className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+                  aria-label="Close"
                 >
                   <X className="h-4 w-4" />
-                </button>
+                </Button>
               </div>
               <Label className="text-xs">Label</Label>
               <Input
@@ -857,20 +846,12 @@ export function InformationStep({
                 placeholder="Hours, pricing, policies, directions…"
               />
               <div className="mt-4 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setEditingId(null)}
-                  className="rounded-lg border border-border px-3 py-1.5 text-xs"
-                >
+                <Button type="button" variant="outline" size="sm" onClick={() => setEditingId(null)}>
                   Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={saveEdit}
-                  className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
-                >
+                </Button>
+                <Button type="button" size="sm" onClick={saveEdit}>
                   Save
-                </button>
+                </Button>
               </div>
             </div>
           </div>

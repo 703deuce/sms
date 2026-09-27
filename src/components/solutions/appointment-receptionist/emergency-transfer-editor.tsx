@@ -182,24 +182,28 @@ export function EmergencyTransferEditor({
                 <div className="flex items-start gap-2">
                   {routing === "waterfall" ? (
                     <div className="flex flex-col gap-0.5 pt-1">
-                      <button
+                      <Button
                         type="button"
-                        className="rounded border border-border bg-card p-0.5 disabled:opacity-30"
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8"
                         disabled={stepIndex === 0}
                         aria-label={`Move ${dest.label} up`}
                         onClick={() => patch(moveTransferPlanStep(state, dest.id, "up"))}
                       >
                         <ChevronUp className="h-4 w-4" />
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        className="rounded border border-border bg-card p-0.5 disabled:opacity-30"
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8"
                         disabled={stepIndex === steps.length - 1}
                         aria-label={`Move ${dest.label} down`}
                         onClick={() => patch(moveTransferPlanStep(state, dest.id, "down"))}
                       >
                         <ChevronDown className="h-4 w-4" />
-                      </button>
+                      </Button>
                     </div>
                   ) : (
                     <span className="mt-2 text-xs font-semibold text-muted-foreground w-6">
@@ -243,53 +247,49 @@ export function EmergencyTransferEditor({
                     ) : null}
 
                     <div className="grid gap-2 sm:grid-cols-2">
-                      <div>
-                        <Label className="text-xs">Transfer mode</Label>
-                        <select
-                          className="mt-1 h-9 w-full rounded-lg border border-border bg-card px-2 text-sm"
-                          value={mode}
-                          onChange={(e) =>
+                      <WizardSelectField
+                        presentation={presentation}
+                        label="Transfer mode"
+                        value={mode}
+                        onChange={(v) =>
+                          patch(
+                            updateTransferPlanStep(state, dest.id, {
+                              transferMode: v as "BASIC" | "WARM",
+                            }),
+                          )
+                        }
+                        options={[
+                          { value: "BASIC", label: "Direct" },
+                          { value: "WARM", label: "Warm" },
+                        ]}
+                      />
+                      <WizardSelectField
+                        presentation={presentation}
+                        label="Ring timeout"
+                        value={usesDefaultTimeout ? "default" : String(stepTimeout)}
+                        onChange={(v) => {
+                          if (v === "default") {
                             patch(
                               updateTransferPlanStep(state, dest.id, {
-                                transferMode: e.target.value as "BASIC" | "WARM",
+                                timeoutSeconds: undefined,
                               }),
-                            )
+                            );
+                          } else {
+                            patch(
+                              updateTransferPlanStep(state, dest.id, {
+                                timeoutSeconds: Number(v),
+                              }),
+                            );
                           }
-                        >
-                          <option value="BASIC">Direct</option>
-                          <option value="WARM">Warm</option>
-                        </select>
-                      </div>
-                      <div>
-                        <Label className="text-xs">Ring timeout</Label>
-                        <select
-                          className="mt-1 h-9 w-full rounded-lg border border-border bg-card px-2 text-sm"
-                          value={usesDefaultTimeout ? "default" : String(stepTimeout)}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            if (v === "default") {
-                              patch(
-                                updateTransferPlanStep(state, dest.id, {
-                                  timeoutSeconds: undefined,
-                                }),
-                              );
-                            } else {
-                              patch(
-                                updateTransferPlanStep(state, dest.id, {
-                                  timeoutSeconds: Number(v),
-                                }),
-                              );
-                            }
-                          }}
-                        >
-                          <option value="default">Default ({defaultRing}s)</option>
-                          {TRANSFER_RING_SECONDS_OPTIONS.map((s) => (
-                            <option key={s} value={s}>
-                              {s} seconds
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                        }}
+                        options={[
+                          { value: "default", label: `Default (${defaultRing}s)` },
+                          ...TRANSFER_RING_SECONDS_OPTIONS.map((s) => ({
+                            value: String(s),
+                            label: `${s} seconds`,
+                          })),
+                        ]}
+                      />
                     </div>
                     <p className="text-xs text-muted-foreground">
                       {mode === "WARM"

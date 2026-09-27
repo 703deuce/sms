@@ -7,8 +7,6 @@ import {
   AlertTriangle,
   CheckCircle2,
 } from "lucide-react";
-import { FieldRow } from "@/newui-transplant/components/app/kit";
-import { Switch } from "@/newui-transplant/components/ui/switch";
 import { EmergencyTransferEditor } from "../emergency-transfer-editor";
 import { ensureEmergencyTransferWizardState } from "@/lib/solutions/appointment-receptionist/transfer-wizard-state";
 import { normalizeWizardTransferPhone } from "@/lib/solutions/appointment-receptionist/transfer-utils";
@@ -160,32 +158,22 @@ export function CallHandlingStep({
             </div>
             {presentation === "mctb" ? (
               <div className="mt-4 space-y-3 border-t border-border pt-3">
-                <label className="flex items-start gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="mt-1"
-                    checked={state.urgencyEnabled === true}
-                    onChange={(e) => patch({ urgencyEnabled: e.target.checked })}
-                  />
-                  <span>
-                    <span className="font-medium">Urgent-call handling</span>
-                    <span className="mt-0.5 block text-xs text-muted-foreground">
-                      Escalate when collected fields match your urgency rules.
-                    </span>
-                  </span>
-                </label>
+                <WizardToggleField
+                  presentation={presentation}
+                  label="Urgent-call handling"
+                  description="Escalate when collected fields match your urgency rules."
+                  checked={state.urgencyEnabled === true}
+                  onCheckedChange={(on) => patch({ urgencyEnabled: on })}
+                />
                 {state.urgencyEnabled ? (
-                  <UrgencyRulesEditor state={state} patch={patch} />
+                  <UrgencyRulesEditor state={state} patch={patch} presentation={presentation} />
                 ) : null}
-                <label className="flex items-start gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="mt-1"
-                    checked={state.salesSolicitationEnabled === true}
-                    onChange={(e) => patch({ salesSolicitationEnabled: e.target.checked })}
-                  />
-                  <span className="font-medium">Sales / solicitation handling</span>
-                </label>
+                <WizardToggleField
+                  presentation={presentation}
+                  label="Sales / solicitation handling"
+                  checked={state.salesSolicitationEnabled === true}
+                  onCheckedChange={(on) => patch({ salesSolicitationEnabled: on })}
+                />
               </div>
             ) : null}
           </WizardSection>
@@ -195,67 +183,33 @@ export function CallHandlingStep({
             title="Messages & callbacks"
             description="Let your receptionist take a message when a caller needs someone from your business to follow up."
           >
-            {isOpus ? (
-              <>
-                <FieldRow
-                  label="Take messages and callback requests"
-                  description="Independent of appointment booking strategy (Microsoft, send link, or none)."
-                >
-                  <Switch
-                    checked={state.callbackRequestsEnabled !== false}
-                    onCheckedChange={(on) => {
-                      if (on && !state.callbackRequiredCollectFieldIds?.length) {
-                        patch({
-                          callbackRequestsEnabled: true,
-                          callbackRequiredCollectFieldIds: defaultCallbackRequiredCollectFieldIds(
-                            state.collectFields,
-                          ),
-                        });
-                      } else {
-                        patch({ callbackRequestsEnabled: on });
-                      }
-                    }}
-                  />
-                </FieldRow>
-                {state.callbackRequestsEnabled !== false ? (
-                  <div className="mt-4 border-t pt-4">
-                    <CallbackRequiredFieldsOpus state={state} patch={patch} />
-                  </div>
-                ) : null}
-              </>
-            ) : (
-              <div className="space-y-3">
-                <label className="flex items-start gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="mt-1"
-                    checked={state.callbackRequestsEnabled !== false}
-                    onChange={(e) => {
-                      const on = e.target.checked;
-                      if (on && !state.callbackRequiredCollectFieldIds?.length) {
-                        patch({
-                          callbackRequestsEnabled: true,
-                          callbackRequiredCollectFieldIds: defaultCallbackRequiredCollectFieldIds(
-                            state.collectFields,
-                          ),
-                        });
-                      } else {
-                        patch({ callbackRequestsEnabled: on });
-                      }
-                    }}
-                  />
-                  <span>
-                    <span className="font-medium">Take messages and callback requests</span>
-                    <span className="mt-0.5 block text-xs text-muted-foreground">
-                      Independent of appointment booking strategy (Microsoft, send link, or none).
-                    </span>
-                  </span>
-                </label>
-                {state.callbackRequestsEnabled !== false ? (
-                  <CallbackRequiredFieldsEditor state={state} patch={patch} />
-                ) : null}
+            <WizardToggleField
+              presentation={presentation}
+              label="Take messages and callback requests"
+              description="Independent of appointment booking strategy (Microsoft, send link, or none)."
+              checked={state.callbackRequestsEnabled !== false}
+              onCheckedChange={(on) => {
+                if (on && !state.callbackRequiredCollectFieldIds?.length) {
+                  patch({
+                    callbackRequestsEnabled: true,
+                    callbackRequiredCollectFieldIds: defaultCallbackRequiredCollectFieldIds(
+                      state.collectFields,
+                    ),
+                  });
+                } else {
+                  patch({ callbackRequestsEnabled: on });
+                }
+              }}
+            />
+            {state.callbackRequestsEnabled !== false ? (
+              <div className="mt-4 border-t pt-4">
+                {isOpus ? (
+                  <CallbackRequiredFieldsOpus state={state} patch={patch} />
+                ) : (
+                  <CallbackRequiredFieldsEditor state={state} patch={patch} presentation={presentation} />
+                )}
               </div>
-            )}
+            ) : null}
           </WizardSection>
 
           <WizardSection

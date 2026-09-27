@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Panel } from "@/newui-transplant/components/app/kit";
-import { Button } from "@/newui-transplant/components/ui/button";
+import { pickWizardFieldComponents } from "../wizard-field-kit";
 import { InfoCallout, SidePanel, StatusPill } from "../ui";
 
 function formatBusinessHoursSummary(state: AppointmentReceptionistWizardState): string {
@@ -58,6 +58,7 @@ export function ActivateStep({
   const isMctb = presentation === "mctb";
   const isOpus = presentation === "opus";
   const uiVariant = isOpus ? "opus" : "legacy";
+  const { Button } = pickWizardFieldComponents(presentation);
   const phone = state.phoneNumberE164
     ? formatPhone(state.phoneNumberE164)
     : "No number assigned";
@@ -209,56 +210,28 @@ export function ActivateStep({
             <dd className="mt-0.5 font-medium text-foreground">{state.agentName}</dd>
           </div>
         </dl>
-        {isOpus ? (
-          <>
-            <Button
-              type="button"
-              data-testid="wizard-activate-submit"
-              disabled={blocked}
-              className="w-full"
-              onClick={() => {
-                patch({ activationMode: "activate_now", scheduledAt: null });
-                void onActivate?.();
-              }}
-            >
-              <Zap className="h-4 w-4" />
-              Activate
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="mt-2 w-full"
-              onClick={() => onGoToTest?.()}
-            >
-              <Play className="h-4 w-4" />
-              Test in browser first
-            </Button>
-          </>
-        ) : (
-          <>
-            <button
-              type="button"
-              data-testid="wizard-activate-submit"
-              disabled={blocked}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
-              onClick={() => {
-                patch({ activationMode: "activate_now", scheduledAt: null });
-                void onActivate?.();
-              }}
-            >
-              <Zap className="h-4 w-4" />
-              Activate
-            </button>
-            <button
-              type="button"
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2.5 text-sm font-medium"
-              onClick={() => onGoToTest?.()}
-            >
-              <Play className="h-4 w-4" />
-              Test in browser first
-            </button>
-          </>
-        )}
+        <Button
+          type="button"
+          data-testid="wizard-activate-submit"
+          disabled={blocked}
+          className="w-full"
+          onClick={() => {
+            patch({ activationMode: "activate_now", scheduledAt: null });
+            void onActivate?.();
+          }}
+        >
+          <Zap className="h-4 w-4" />
+          Activate
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          className="mt-2 w-full"
+          onClick={() => onGoToTest?.()}
+        >
+          <Play className="h-4 w-4" />
+          Test in browser first
+        </Button>
         <InfoCallout>
           Activate saves and publishes this wizard snapshot. On-call schedules, transfer rules, and
           after-hours behavior apply to calls after they reach the agent — they do not replace your

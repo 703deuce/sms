@@ -2,9 +2,8 @@
 
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
 import { VoiceV3BrowserCall } from "@/components/voice/voice-v3-browser-call";
-import { Button } from "@/components/ui/button";
 import { Rows } from "@/newui-transplant/components/app/kit";
-import { Button as OpusButton } from "@/newui-transplant/components/ui/button";
+import { pickWizardFieldComponents } from "../wizard-field-kit";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/newui-transplant/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { Phone, Play, Monitor } from "lucide-react";
@@ -24,6 +23,7 @@ export function TestStep({
 }) {
   const isMctb = presentation === "mctb";
   const isOpus = presentation === "opus";
+  const { Button } = pickWizardFieldComponents(presentation);
   const [mode, setMode] = useState<"browser" | "phone">("browser");
   const [preparing, setPreparing] = useState(false);
   const [prepareError, setPrepareError] = useState("");
@@ -79,14 +79,14 @@ export function TestStep({
               </TabsTrigger>
             </TabsList>
           </Tabs>
-          <OpusButton
+          <Button
             size="sm"
             variant="outline"
             disabled={preparing}
             onClick={() => void prepareLiveTest()}
           >
             {preparing ? "Saving…" : "Save draft for test"}
-          </OpusButton>
+          </Button>
         </div>
 
         {prepareError ? (
@@ -119,10 +119,10 @@ export function TestStep({
                 We&apos;ll save your draft and connect GPT-Live using voice {state.voiceLabel} (
                 {state.voiceId}).
               </p>
-              <OpusButton className="mt-4" disabled={preparing} onClick={() => void prepareLiveTest()}>
+              <Button className="mt-4" disabled={preparing} onClick={() => void prepareLiveTest()}>
                 <Play />
                 {preparing ? "Building…" : "Build & start live test"}
-              </OpusButton>
+              </Button>
             </div>
           )
         ) : (
@@ -167,32 +167,22 @@ export function TestStep({
 
         <div className="rounded-xl border border-border bg-card">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
-            <div className="flex gap-1 rounded-lg bg-muted p-1">
-              <button
-                type="button"
-                onClick={() => setMode("browser")}
-                className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium ${
-                  mode === "browser"
-                    ? "bg-card text-foreground shadow-sm"
-                    : "text-muted-foreground"
-                }`}
-              >
-                <Monitor className="h-3.5 w-3.5" />
-                Test in browser
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode("phone")}
-                className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium ${
-                  mode === "phone"
-                    ? "bg-card text-foreground shadow-sm"
-                    : "text-muted-foreground"
-                }`}
-              >
-                <Phone className="h-3.5 w-3.5" />
-                After activate (phone)
-              </button>
-            </div>
+            <Tabs
+              value={mode}
+              onValueChange={(v) => setMode(v as "browser" | "phone")}
+              className="gap-0"
+            >
+              <TabsList>
+                <TabsTrigger value="browser">
+                  <Monitor className="h-3.5 w-3.5" />
+                  Test in browser
+                </TabsTrigger>
+                <TabsTrigger value="phone">
+                  <Phone className="h-3.5 w-3.5" />
+                  After activate (phone)
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
             <Button
               size="sm"
               variant="outline"

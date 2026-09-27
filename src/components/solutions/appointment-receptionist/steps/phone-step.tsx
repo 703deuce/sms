@@ -276,9 +276,10 @@ export function PhoneStep({
             {numbers.length ? (
               <div className="mt-2 space-y-1">
                 {numbers.map((n) => (
-                  <button
+                  <RadioRow
                     key={n.id}
-                    type="button"
+                    variant={uiVariant}
+                    selected={state.phoneNumberId === n.id}
                     onClick={() =>
                       patch({
                         phoneNumberId: n.id,
@@ -286,14 +287,8 @@ export function PhoneStep({
                         numberSource: "forward_existing",
                       })
                     }
-                    className={`block w-full rounded-lg border px-2.5 py-1.5 text-left text-xs ${
-                      state.phoneNumberId === n.id
-                        ? "border-primary bg-primary/5 font-medium text-primary"
-                        : "border-border"
-                    }`}
-                  >
-                    Forward to {formatPhone(n.e164)}
-                  </button>
+                    label={`Forward to ${formatPhone(n.e164)}`}
+                  />
                 ))}
               </div>
             ) : (
@@ -311,10 +306,18 @@ export function PhoneStep({
             {numbers.map((n) => {
               const ownedByOther =
                 n.aiOwner && n.aiOwner.id !== state.agentId ? n.aiOwner : null;
+              const subline = n.mctbTexmlLocked
+                ? "MCTB TeXML ingress — activate here to route this number to this receptionist"
+                : ownedByOther
+                  ? `Currently answered by ${ownedByOther.name}${ownedByOther.status === "ACTIVE" ? " (live)" : ""} — activate to switch`
+                  : n.aiOwner?.id === state.agentId
+                    ? "Already assigned to this receptionist"
+                    : "Available — activate to put this receptionist on the line";
               return (
-                <button
+                <RadioRow
                   key={n.id}
-                  type="button"
+                  variant={uiVariant}
+                  selected={state.phoneNumberId === n.id}
                   onClick={() => {
                     patch({
                       phoneNumberId: n.id,
@@ -322,36 +325,9 @@ export function PhoneStep({
                       numberSource: "existing",
                     });
                   }}
-                  className={`block w-full max-w-md rounded-lg border px-2.5 py-1.5 text-left text-xs ${
-                    state.phoneNumberId === n.id
-                      ? "border-primary bg-primary/5 font-medium text-primary"
-                      : "border-border"
-                  }`}
-                >
-                  <span className="block">
-                    {formatPhone(n.e164)}
-                    {n.friendlyName ? ` · ${n.friendlyName}` : ""}
-                  </span>
-                  {n.mctbTexmlLocked ? (
-                    <span className="mt-0.5 block font-normal text-amber-700">
-                      MCTB TeXML ingress — activate here to route this number to this receptionist
-                    </span>
-                  ) : null}
-                  {ownedByOther ? (
-                    <span className="mt-0.5 block font-normal text-muted-foreground">
-                      Currently answered by {ownedByOther.name}
-                      {ownedByOther.status === "ACTIVE" ? " (live)" : ""} — activate to switch
-                    </span>
-                  ) : n.aiOwner?.id === state.agentId ? (
-                    <span className="mt-0.5 block font-normal text-muted-foreground">
-                      Already assigned to this receptionist
-                    </span>
-                  ) : (
-                    <span className="mt-0.5 block font-normal text-muted-foreground">
-                      Available — activate to put this receptionist on the line
-                    </span>
-                  )}
-                </button>
+                  label={`${formatPhone(n.e164)}${n.friendlyName ? ` · ${n.friendlyName}` : ""}`}
+                  description={subline}
+                />
               );
             })}
             {otherOwner ? (

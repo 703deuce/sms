@@ -83,7 +83,7 @@ export function GoalsStep({
   const isMctb = presentation === "mctb";
   const isOpus = presentation === "opus";
   const uiVariant = isOpus ? "opus" : "legacy";
-  const { Input, Label } = pickWizardFieldComponents(presentation);
+  const { Input, Label, Button } = pickWizardFieldComponents(presentation);
   const options = capabilityOptionsForPreset(state.preset);
   const answerOptions = answerWhenOptionsForPreset(state.preset);
   const panel = goalsSidePanelCopy(state.preset);
@@ -223,18 +223,15 @@ export function GoalsStep({
                   ["cancel", "May cancel"],
                 ] as const
               ).map(([id, label]) => (
-                <button
+                <Button
                   key={id}
                   type="button"
+                  size="sm"
+                  variant={state.capabilities.includes(id) ? "default" : "outline"}
                   onClick={() => toggleCap(id)}
-                  className={`rounded-lg border px-3 py-2 text-[12px] font-semibold ${
-                    state.capabilities.includes(id)
-                      ? "border-slate-900 bg-slate-900 text-white"
-                      : "border-slate-200 text-slate-700"
-                  }`}
                 >
                   {label}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -299,15 +296,11 @@ export function GoalsStep({
                       <p className="text-sm font-medium text-foreground">{opt.title}</p>
                       <p className="mt-0.5 text-xs text-muted-foreground">{opt.description}</p>
                     </div>
-                    <label className="flex shrink-0 items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-border"
-                        checked={enabled}
-                        onChange={() => toggleCap(opt.id)}
-                      />
-                      {enabled ? "On" : "Off"}
-                    </label>
+                    <Switch
+                      checked={enabled}
+                      onCheckedChange={() => toggleCap(opt.id)}
+                      aria-label={opt.title}
+                    />
                   </li>
                 );
               })}
