@@ -130,6 +130,7 @@
     "test:voice-v3-pstn-hardening": "tsx scripts/test-voice-v3-pstn-hardening.ts",
     "test:voice-v3-async-architecture": "tsx scripts/test-voice-v3-async-architecture.ts && tsx scripts/test-voice-v3-serialization-audit.ts",
     "test:voice-v3-wizard-backend-propagation": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-voice-v3-wizard-backend-propagation.ts",
+    "test:voice-v3-configuration-certification-contract": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-voice-v3-configuration-certification-contract.ts",
     "test:voice-v3-transfer-system": "tsx scripts/test-voice-v3-transfer-system.ts",
     "test:voice-v3-transfer-wizard-state": "tsx scripts/test-voice-v3-transfer-wizard-state.ts",
     "test:voice-v3-agent": "tsx scripts/test-voice-v3-agent-simulator.ts && tsx scripts/test-voice-v3-agent-claims.ts && tsx scripts/test-voice-v3-agent-foundation.ts && tsx scripts/test-voice-v3-agent-invariants.ts && tsx scripts/test-voice-v3-agent-failure-matrix.ts && tsx scripts/test-voice-v3-s47-complete.ts && tsx scripts/test-voice-v3-agent-closed-loop.ts && NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-voice-v3-closed-loop-intake-multiturn.ts && NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-voice-v3-operation-registration.ts && NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-voice-v3-delegation-protocol-race.ts",
