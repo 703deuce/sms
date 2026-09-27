@@ -108,6 +108,7 @@
     "test:video-pipeline-trace": "tsx scripts/test-video-pipeline-trace.ts",
     "verify:mctb-final-pipeline": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/verify-mctb-final-pipeline.ts",
     "verify:mctb-stage2-legacy-imports": "tsx scripts/verify-mctb-stage2-legacy-imports.ts",
+    "verify:mctb-stage2-demo-state": "tsx scripts/verify-mctb-stage2-demo-state.ts",
     "test:openai-realtime-test-a": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/openai-realtime-test-a-minimal.ts",
     "test:openai-live-test-a": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/probe-openai-live-session.ts",
     "test:openai-live-probe": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/probe-openai-live.ts",

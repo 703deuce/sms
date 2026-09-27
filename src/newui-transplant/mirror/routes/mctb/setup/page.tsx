@@ -67,20 +67,20 @@ function SummaryRow({ label, value, href, tone }: { label: string; value: string
 
 export function TransplantMctbSetupPage({ wired }: { wired?: MctbSetupOverviewWired }) {
   const live = wired !== undefined
-  const businessLine = wired?.businessLine ?? BUSINESS.line
-  const sender = wired?.sender ?? BUSINESS.sender
+  const businessLine = wired?.businessLine ?? (live ? '—' : BUSINESS.line)
+  const sender = wired?.sender ?? (live ? '—' : BUSINESS.sender)
   const recoveryTone = wired?.recoveryActive === false ? 'warning' : 'success'
   const recoveryLabel =
     wired?.recoveryLabel ??
-    (wired?.recoveryActive === false ? 'Paused' : 'Active')
-  const callFlow = live && wired?.callFlowRows?.length ? wired.callFlowRows : CALL_FLOW
-  const operations = live && wired?.operationsRows?.length ? wired.operationsRows : OPERATIONS
+    (wired?.recoveryActive === false ? 'Paused' : live ? '—' : 'Active')
+  const callFlow = live ? (wired?.callFlowRows ?? []) : CALL_FLOW
+  const operations = live ? (wired?.operationsRows ?? []) : OPERATIONS
   const activity = live
     ? (wired?.activity ?? [])
     : ACTIVITY.map(([time, text]) => ({ time, text }))
-  const forwardingPillTone = wired?.forwardingPillTone ?? 'success'
-  const forwardingPillLabel = wired?.forwardingPillLabel ?? 'Verified'
-  const lastTest = wired?.lastTestLabel ?? 'Sep 24'
+  const forwardingPillTone = wired?.forwardingPillTone ?? (live ? 'warning' : 'success')
+  const forwardingPillLabel = wired?.forwardingPillLabel ?? (live ? 'Not verified' : 'Verified')
+  const lastTest = wired?.lastTestLabel ?? (live ? 'Never' : 'Sep 24')
   const attentionIssues = wired?.attentionIssues ?? []
   const showAttention = live ? attentionIssues.length > 0 : true
   return (
@@ -143,10 +143,18 @@ export function TransplantMctbSetupPage({ wired }: { wired?: MctbSetupOverviewWi
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="flex flex-col gap-4 lg:col-span-2">
           <Panel title="Call flow" bodyClassName="p-0">
-            <ul className="divide-y">{callFlow.map((r) => <SummaryRow key={r.label} {...r} />)}</ul>
+            {callFlow.length ? (
+              <ul className="divide-y">{callFlow.map((r) => <SummaryRow key={r.label} {...r} />)}</ul>
+            ) : (
+              <p className="px-5 py-4 text-sm text-muted-foreground">No call-flow configuration loaded yet.</p>
+            )}
           </Panel>
           <Panel title="Operations" bodyClassName="p-0">
-            <ul className="divide-y">{operations.map((r) => <SummaryRow key={r.label} {...r} />)}</ul>
+            {operations.length ? (
+              <ul className="divide-y">{operations.map((r) => <SummaryRow key={r.label} {...r} />)}</ul>
+            ) : (
+              <p className="px-5 py-4 text-sm text-muted-foreground">No operational settings loaded yet.</p>
+            )}
           </Panel>
         </div>
         <div className="flex flex-col gap-4">
@@ -158,15 +166,19 @@ export function TransplantMctbSetupPage({ wired }: { wired?: MctbSetupOverviewWi
             </div>
           </Panel>
           <Panel title="Recent system activity">
-            <ol className="relative flex flex-col gap-4 border-l pl-4">
-              {activity.map((row) => (
-                <li key={`${row.time}-${row.text}`} className="relative">
-                  <span className="absolute -left-[21px] top-1.5 size-2 rounded-full bg-primary" aria-hidden="true" />
-                  <p className="text-sm">{row.text}</p>
-                  <p className="text-xs text-muted-foreground">{row.time}</p>
-                </li>
-              ))}
-            </ol>
+            {activity.length ? (
+              <ol className="relative flex flex-col gap-4 border-l pl-4">
+                {activity.map((row) => (
+                  <li key={`${row.time}-${row.text}`} className="relative">
+                    <span className="absolute -left-[21px] top-1.5 size-2 rounded-full bg-primary" aria-hidden="true" />
+                    <p className="text-sm">{row.text}</p>
+                    <p className="text-xs text-muted-foreground">{row.time}</p>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="text-sm text-muted-foreground">No recent setup activity recorded.</p>
+            )}
           </Panel>
         </div>
       </div>

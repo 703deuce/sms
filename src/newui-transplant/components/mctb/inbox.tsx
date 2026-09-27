@@ -78,9 +78,10 @@ export function Inbox({
   onSendMessage?: (conversationId: string, text: string) => Promise<void>
   wiring?: InboxWiring
 }) {
-  const conversations = conversationsProp ?? CONVERSATIONS
-  const missedCalls = missedCallsProp ?? MISSED_CALLS
-  const business = businessProp ?? BUSINESS
+  const production = Boolean(wiring)
+  const conversations = conversationsProp ?? (production ? [] : CONVERSATIONS)
+  const missedCalls = missedCallsProp ?? (production ? [] : MISSED_CALLS)
+  const business = businessProp ?? (production ? { line: '—', sender: '—', name: '—' } : BUSINESS)
 
   const [filterLocal, setFilterLocal] = useState<Filter>(initialFilter)
   const filter = wiring?.filter ?? filterLocal
@@ -311,10 +312,12 @@ export function Inbox({
                   <dt className="text-muted-foreground">Consent</dt>
                   <dd className="mt-0.5">{selected.consentLabel ?? '—'}</dd>
                 </div>
-                <div>
-                  <dt className="text-muted-foreground">Assigned to</dt>
-                  <dd className="mt-0.5">{selected.assignedTo ?? 'Unassigned'}</dd>
-                </div>
+                {!production && selected.assignedTo ? (
+                  <div>
+                    <dt className="text-muted-foreground">Assigned to</dt>
+                    <dd className="mt-0.5">{selected.assignedTo}</dd>
+                  </div>
+                ) : null}
               </dl>
             </div>
           ) : null}
