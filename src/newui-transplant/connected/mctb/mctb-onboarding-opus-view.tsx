@@ -16,7 +16,10 @@ import { existingConsentIneligibleReason } from "@/lib/mctb/setup-consent-eligib
 import { getRecoveryGoalDefinition, type MctbRecoveryGoalId } from "@/lib/mctb/recovery-goals";
 import Link from "next/link";
 import { useState } from "react";
-import { MctbNumberDrawerHost, type MctbNumberDrawerMode } from "@/components/mctb/numbers/mctb-number-drawer-host";
+import {
+  MctbNumberDrawerOpus,
+  type MctbNumberDrawerMode,
+} from "@/newui-transplant/components/mctb/number-drawer-opus";
 import { EmptyState, FieldRow, Panel, Pill, Rows } from "@/newui-transplant/components/app/kit";
 import { Button } from "@/newui-transplant/components/ui/button";
 import { Checkbox } from "@/newui-transplant/components/ui/checkbox";
@@ -623,7 +626,7 @@ export function MctbOnboardingOpusView({ controller: c }: { controller: MctbOnbo
         <ReviewTestOpusStep c={c} />
       ) : null}
 
-      <MctbNumberDrawerHost
+      <MctbNumberDrawerOpus
         open={c.drawerMode}
         onClose={() => c.setDrawerMode(null)}
         onOpenMode={c.setDrawerMode}

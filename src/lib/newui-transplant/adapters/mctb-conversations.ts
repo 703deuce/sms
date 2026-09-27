@@ -15,8 +15,11 @@ function mapMessage(m: ApiConversation["messages"][number]): Message {
   return { from: "business", text, time, status: "Sent" };
 }
 
-function consentLabelFromSource(productSource: ApiConversation["productSource"]): string {
-  if (productSource === "mctb") return "Missed call recovery";
+function consentLabelFromConversation(convo: ApiConversation): string {
+  const tags = (convo.tags ?? []).map((t) => t.toLowerCase());
+  if (tags.some((t) => t.includes("opted_out") || t === "opt_out" || t === "stop")) {
+    return "Opted out";
+  }
   return "—";
 }
 
@@ -46,8 +49,7 @@ export function mapApiConversationToNewUiInbox(convo: ApiConversation): Conversa
     needsReply,
     tag: convo.productSourceLabel ?? undefined,
     messages: (convo.messages ?? []).map(mapMessage),
-    assignedTo: convo.assignedTo,
-    consentLabel: consentLabelFromSource(convo.productSource),
+    consentLabel: consentLabelFromConversation(convo),
     composerFooter: composerFooterFromThread(convo),
     missedCallEventId: convo.missedCallEventId ?? undefined,
   };

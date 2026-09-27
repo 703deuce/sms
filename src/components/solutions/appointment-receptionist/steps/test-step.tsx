@@ -2,7 +2,11 @@
 
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
 import { VoiceV3BrowserCall } from "@/components/voice/voice-v3-browser-call";
-import { Button } from "@/components/ui/button";
+import { EmptyState, Rows } from "@/newui-transplant/components/app/kit";
+import { OpusDensePanel, OpusInlineAlert } from "../wizard-opus-ui";
+import { pickWizardFieldComponents } from "../wizard-field-kit";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/newui-transplant/components/ui/tabs";
+import { cn } from "@/lib/utils";
 import { Phone, Play, Monitor } from "lucide-react";
 import { useState } from "react";
 import { InfoCallout, SidePanel } from "../ui";
@@ -16,9 +20,11 @@ export function TestStep({
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
   onEnsureAgent?: () => Promise<{ agentId: string; telnyxAssistantId?: string | null } | null>;
-  presentation?: "legacy" | "mctb";
+  presentation?: "legacy" | "mctb" | "opus";
 }) {
   const isMctb = presentation === "mctb";
+  const isOpus = presentation === "opus";
+  const { Button } = pickWizardFieldComponents(presentation);
   const [mode, setMode] = useState<"browser" | "phone">("browser");
   const [preparing, setPreparing] = useState(false);
   const [prepareError, setPrepareError] = useState("");
@@ -47,6 +53,106 @@ export function TestStep({
     }
   }
 
+  if (isOpus) {
+    const draftStatus =
+      liveProbeSource === "wizard_draft_test"
+        ? "Connected (draft config)"
+        : state.agentId
+          ? "Ready — use browser test"
+          : "Save draft first";
+
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+          <Tabs
+            value={mode}
+            onValueChange={(v) => setMode(v as "browser" | "phone")}
+            className="gap-0"
+          >
+            <TabsList>
+              <TabsTrigger value="browser">
+                <Monitor />
+                Test in browser
+              </TabsTrigger>
+              <TabsTrigger value="phone">
+                <Phone />
+                After activate (phone)
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={preparing}
+            onClick={() => void prepareLiveTest()}
+          >
+            {preparing ? "Saving…" : "Save draft for test"}
+          </Button>
+        </div>
+
+        {prepareError ? (
+          <OpusInlineAlert isOpus>{prepareError}</OpusInlineAlert>
+        ) : null}
+
+        <Rows
+          items={[
+            { label: "Selected voice", value: state.voiceLabel || state.voiceId || "—" },
+            { label: "Draft live test", value: draftStatus },
+          ]}
+        />
+
+        {mode === "browser" ? (
+          state.agentId ? (
+            <VoiceV3BrowserCall
+              presentation="opus"
+              agentId={state.agentId}
+              voiceLabel={state.voiceLabel}
+              onNeedSave={() => prepareLiveTest().then(() => undefined)}
+              onSessionSuccess={(probe) => {
+                setLiveProbeSource(probe.source);
+              }}
+            />
+          ) : (
+            <OpusDensePanel bodyClassName="p-0">
+              <EmptyState
+                icon={Play}
+                title="Start a browser conversation"
+                description={`We'll save your draft and connect GPT-Live using voice ${state.voiceLabel} (${state.voiceId}).`}
+                action={
+                  <Button disabled={preparing} onClick={() => void prepareLiveTest()}>
+                    <Play />
+                    {preparing ? "Building…" : "Build & start live test"}
+                  </Button>
+                }
+              />
+            </OpusDensePanel>
+          )
+        ) : (
+          <OpusDensePanel title="Test on your phone after activate">
+            <p className="text-sm text-muted-foreground">
+              Call your assigned number from another phone after you go live. Browser WebRTC is the
+              fastest way to try changes while editing.
+            </p>
+            {state.phoneNumberE164 ? (
+              <p className="mt-3 text-xs">
+                Number: <span className="font-medium">{state.phoneNumberE164}</span>
+              </p>
+            ) : (
+              <p className="mt-3 text-xs text-muted-foreground">
+                Assign a phone number before relying on PSTN testing.
+              </p>
+            )}
+          </OpusDensePanel>
+        )}
+
+        <p className="text-xs text-muted-foreground">
+          Change voice, greeting, or booking settings, save, then start a new browser test before you
+          publish.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex gap-6">
       <div className="min-w-0 flex-1 space-y-4">
@@ -62,32 +168,22 @@ export function TestStep({
 
         <div className="rounded-xl border border-border bg-card">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
-            <div className="flex gap-1 rounded-lg bg-muted p-1">
-              <button
-                type="button"
-                onClick={() => setMode("browser")}
-                className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium ${
-                  mode === "browser"
-                    ? "bg-card text-foreground shadow-sm"
-                    : "text-muted-foreground"
-                }`}
-              >
-                <Monitor className="h-3.5 w-3.5" />
-                Test in browser
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode("phone")}
-                className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium ${
-                  mode === "phone"
-                    ? "bg-card text-foreground shadow-sm"
-                    : "text-muted-foreground"
-                }`}
-              >
-                <Phone className="h-3.5 w-3.5" />
-                After activate (phone)
-              </button>
-            </div>
+            <Tabs
+              value={mode}
+              onValueChange={(v) => setMode(v as "browser" | "phone")}
+              className="gap-0"
+            >
+              <TabsList>
+                <TabsTrigger value="browser">
+                  <Monitor className="h-3.5 w-3.5" />
+                  Test in browser
+                </TabsTrigger>
+                <TabsTrigger value="phone">
+                  <Phone className="h-3.5 w-3.5" />
+                  After activate (phone)
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
             <Button
               size="sm"
               variant="outline"

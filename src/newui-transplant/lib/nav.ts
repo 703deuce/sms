@@ -1,6 +1,5 @@
 import {
   BarChart3,
-  BookOpen,
   Bot,
   CreditCard,
   Hash,
@@ -12,10 +11,16 @@ import {
   Settings,
   Sparkles,
   Voicemail,
-  Workflow,
   Wrench,
   type LucideIcon,
 } from 'lucide-react'
+import { isVoiceProductCustomerVisible } from '@/lib/products/launch-product-availability'
+import { RECEPTIONIST_WIZARD_NAV_ITEMS } from '@/lib/voice/receptionist/wizard-step-url'
+
+export type NavSubItem = {
+  label: string
+  href: string
+}
 
 export type NavItem = {
   label: string
@@ -23,19 +28,38 @@ export type NavItem = {
   icon: LucideIcon
   badge?: string
   matchPrefix?: string
+  /** Direct submenu entries (no extra nav tier). */
+  children?: NavSubItem[]
 }
+
+/** Operational routes preserved — not primary receptionist config nav. */
+export const VOICE_RECEPTIONIST_OPERATIONAL_ROUTES = {
+  businessKnowledge: '/voice/knowledge',
+  callHandlingOps: '/voice/call-handling',
+} as const
+
+export const RECEPTIONIST_SIDEBAR_CHILDREN: NavSubItem[] = RECEPTIONIST_WIZARD_NAV_ITEMS.map(
+  (s) => ({
+    label: s.label,
+    href: s.href,
+  }),
+)
 
 export type NavSection = { label: string; items: NavItem[] }
 
-export const NAV: NavSection[] = [
+const FULL_NAV: NavSection[] = [
   {
     label: 'AI Receptionist',
     items: [
       { label: 'Overview', href: '/voice/overview', icon: LayoutDashboard },
       { label: 'Calls', href: '/voice/calls', icon: PhoneCall, matchPrefix: '/voice/calls' },
-      { label: 'Receptionist', href: '/voice/receptionist', icon: Bot },
-      { label: 'Business Knowledge', href: '/voice/knowledge', icon: BookOpen, badge: '3' },
-      { label: 'Call Handling', href: '/voice/call-handling', icon: Workflow },
+      {
+        label: 'Receptionist',
+        href: '/voice/receptionist',
+        icon: Bot,
+        matchPrefix: '/voice/receptionist',
+        children: RECEPTIONIST_SIDEBAR_CHILDREN,
+      },
       { label: 'Analytics', href: '/voice/analytics', icon: BarChart3 },
     ],
   },
@@ -85,6 +109,15 @@ export const INTEGRATION_TABS = [
   { label: 'Webhooks', href: '/integrations/webhooks' },
   { label: 'Developer logs', href: '/integrations/logs' },
 ]
+
+/** Customer-facing sidebar sections (respects launch product visibility). */
+export function resolveCustomerNavSections(): NavSection[] {
+  if (isVoiceProductCustomerVisible()) return FULL_NAV
+  return FULL_NAV.filter((section) => section.label !== 'AI Receptionist')
+}
+
+/** @deprecated Use resolveCustomerNavSections() for app chrome. */
+export const NAV: NavSection[] = FULL_NAV
 
 export const SETTINGS_TABS = [
   { label: 'Business', href: '/settings/business' },

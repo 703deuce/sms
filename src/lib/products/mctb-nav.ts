@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
+import { isVoiceProductCustomerVisible } from "@/lib/products/launch-product-availability";
 
 export type MctbNavOptions = {
   inboxBadge?: number;
@@ -34,7 +35,7 @@ export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
   const badge = options.inboxBadge ?? 0;
   const items: NavItem[] = [];
 
-  if (options.hasVoice) {
+  if (options.hasVoice && isVoiceProductCustomerVisible()) {
     items.push(
       {
         label: "Overview",
@@ -144,7 +145,7 @@ export function buildMctbV1MobileNav(options: MctbNavOptions = {}): NavItem[] {
     },
   ];
 
-  if (options.hasVoice) {
+  if (options.hasVoice && isVoiceProductCustomerVisible()) {
     items.push({ label: "Calls", href: "/voice/calls", icon: PhoneCall });
   }
 

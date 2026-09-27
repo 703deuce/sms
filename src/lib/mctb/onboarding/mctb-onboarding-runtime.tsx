@@ -1,7 +1,6 @@
 "use client";
 
 import { MctbOnboardingProgress } from "@/components/mctb/onboarding/mctb-onboarding-progress";
-import "@/components/mctb/onboarding/mctb-onboarding-wizard.css";
 import { Button } from "@/newui-transplant/components/ui/button";
 import { Panel } from "@/newui-transplant/components/app/kit";
 import { MctbPhoneForwardingPanel } from "@/components/mctb/wizard/mctb-phone-forwarding-panel";
@@ -118,6 +117,12 @@ export function MctbOnboardingRuntime({ initialBusinessName = "", shell = "legac
   const [demoOpen, setDemoOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<MctbNumberDrawerMode>(null);
   useMctbNumberDrawerEvents(setDrawerMode);
+
+  useEffect(() => {
+    if (!opus) {
+      void import("@/lib/mctb/onboarding/mctb-onboarding-legacy-styles");
+    }
+  }, [opus]);
 
   const step = normalizeOnboardingStep(data?.state.currentStep || "business_line");
   const stageIndex = wizardStageIndex(step);

@@ -30,9 +30,12 @@ export type MctbMissedCallsWired = {
 
 
 export function TransplantMctbMissedCallsPage({ wired }: { wired?: MctbMissedCallsWired }) {
-  const stats = wired?.stats ?? { missed: '87', recoveryTexts: '81', replies: '52', needsReply: '4' }
+  const live = wired !== undefined
+  const stats =
+    wired?.stats ??
+    (live ? { missed: '0', recoveryTexts: '0', replies: '0', needsReply: '0' } : { missed: '87', recoveryTexts: '81', replies: '52', needsReply: '4' })
   const missedCalls = wired?.missedCalls ?? []
-  const useLiveStats = Boolean(wired?.stats)
+  const useLiveStats = live
   return (
     <Page>
       <PageHeader

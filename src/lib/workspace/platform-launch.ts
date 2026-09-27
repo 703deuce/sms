@@ -4,8 +4,8 @@
  */
 export const NUMBERS_PLATFORM_ONLY = false;
 
-/** AI Receptionist is the primary Transovo launch product. */
-export const VOICE_PRIMARY_LAUNCH = true;
+/** AI Receptionist primary chrome — false while MCTB-only customer launch (Voice frozen/hidden). */
+export const VOICE_PRIMARY_LAUNCH = false;
 
 /** Standalone SMS platform hidden from primary nav/launcher — infrastructure preserved. */
 export const SMS_STANDALONE_HIDDEN = true;

@@ -40,12 +40,13 @@ const COLLECT: Array<{
 ]
 
 export function TransplantMctbAiRecoveryPage({ wired }: { wired?: MctbAiRecoveryWired }) {
-  const sender = wired?.senderLabel ?? BUSINESS.sender
-  const enabled = wired?.enabled ?? true
+  const live = wired !== undefined
+  const sender = wired?.senderLabel ?? (live ? '—' : BUSINESS.sender)
+  const enabled = wired?.enabled ?? (live ? false : true)
   const fields = wired?.fields
-  const bookingOn = wired?.bookingLinkEnabled ?? true
-  const bookingUrl = wired?.bookingLinkUrl ?? 'https://book.northsideplumbing.com/service'
-  const bookingLabel = wired?.bookingLinkLabel ?? 'Book a service visit'
+  const bookingOn = wired?.bookingLinkEnabled ?? (live ? false : true)
+  const bookingUrl = wired?.bookingLinkUrl ?? (live ? '' : 'https://book.northsideplumbing.com/service')
+  const bookingLabel = wired?.bookingLinkLabel ?? (live ? '' : 'Book a service visit')
 
   return (
     <Page>

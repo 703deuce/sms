@@ -28,6 +28,7 @@ import {
   isAppointmentsProductPath,
 } from "@/lib/products/appointments-routes";
 import { isKimiIntegratedRoute } from "@/lib/products/kimi-ui-routes";
+import { isAppointmentsV1Primary } from "@/lib/workspace/platform-launch";
 
 function access(
   partial: Partial<UserProductAccess> &
@@ -41,19 +42,18 @@ function access(
   };
 }
 
-// Voice-only login routing
+// MCTB V1 primary launch: all authenticated users land on MCTB home (Voice hidden).
 assert.equal(
   resolvePostLoginPath(access({ hasVoice: true, hasNumbers: false, hasSms: false })),
-  "/dashboard",
+  "/mctb",
 );
 
-// Numbers-only login routing
+// MCTB primary: entitlements do not change default post-login (still MCTB home).
 assert.equal(
   resolvePostLoginPath(access({ hasVoice: false, hasNumbers: true, hasSms: false })),
-  "/personal",
+  "/mctb",
 );
 
-// Multi-product with last active
 assert.equal(
   resolvePostLoginPath(
     access({
@@ -63,13 +63,12 @@ assert.equal(
       lastActiveProduct: "numbers",
     }),
   ),
-  "/personal",
+  "/mctb",
 );
 
-// Multi-product without last active → SMS dashboard (no product launcher)
 assert.equal(
   resolvePostLoginPath(access({ hasVoice: true, hasNumbers: true, hasSms: false })),
-  "/dashboard",
+  "/mctb",
 );
 
 // Deep link preserved
@@ -100,32 +99,22 @@ assert.equal(isSmsLegacyHidden("/outcomes"), true);
 assert.equal(isSmsShellRoute("/compliance/brand"), true);
 assert.equal(isSmsShellRoute("/outcomes"), false);
 assert.equal(isNumbersMarketplacePath("/numbers/premium"), true);
-assert.equal(productHomePath("voice"), "/dashboard");
+assert.equal(productHomePath("voice"), "/mctb", "Voice product home follows MCTB shell during launch");
 
-// Sidebar separation — no cross-product links in primary nav
-const voiceNav = buildVoiceNav({ showTryIt: false });
-const voiceNavTrial = buildVoiceNav({ showTryIt: true });
+// Legacy shell nav builder (preserved for old chrome; MCTB V1 uses buildMctbV1Nav).
+const legacyShellNav = buildVoiceNav({
+  showTryIt: false,
+  productFeatures: { mctb: "active" } as import("@/lib/products/feature-entitlements").WorkspaceFeatureSnapshot,
+});
+const legacyLabels = legacyShellNav.map((i) => i.label);
+assert.ok(legacyLabels.includes("Missed Calls"), "Legacy shell nav with MCTB entitlement includes missed calls");
+assert.ok(legacyLabels.includes("Dashboard"), "Legacy shell nav keeps dashboard entry");
+
 const numbersNav = buildNumbersNav();
 const smsNav = buildSmsNav();
-const voiceLabels = voiceNav.map((i) => i.label);
-const voiceHrefs = voiceNav.map((i) => i.href).join(" ");
 const numbersHrefs = numbersNav.map((i) => i.href).join(" ");
-assert.ok(!voiceHrefs.includes("/personal/vault"), "Voice nav must not include Number Vault");
 assert.ok(!numbersHrefs.includes("/campaigns"), "Numbers nav must not include Campaigns");
 assert.ok(numbersHrefs.includes("/personal/vault"), "Numbers nav includes vault");
-assert.ok(voiceHrefs.includes("/voice/setup"), "Voice nav includes Configure href");
-assert.ok(voiceLabels.includes("Configure"), "Voice nav includes Configure");
-assert.ok(voiceLabels.includes("Conversations"), "Voice nav includes Conversations");
-assert.ok(voiceLabels.includes("Missed Calls"), "Voice nav includes Missed Calls");
-assert.ok(voiceLabels.includes("Messaging Compliance"), "Voice nav includes Messaging Compliance");
-assert.ok(!voiceLabels.includes("Receptionist"), "Receptionist removed from voice nav");
-assert.ok(!voiceLabels.includes("Knowledge"), "Knowledge removed from voice nav");
-assert.ok(!voiceLabels.includes("Automations"), "Automations hidden from voice nav");
-assert.ok(voiceLabels.includes("Smart Routing"), "Smart Routing in voice nav");
-assert.ok(voiceLabels.includes("Dashboard"), "Voice nav includes Dashboard");
-assert.ok(voiceNavTrial.map((i) => i.label).includes("Try It"), "Trial voice nav includes Try It");
-assert.equal(voiceNav.length, 18, "Voice sidebar ships 18 items without Try It");
-assert.equal(voiceNavTrial.length, 19, "Voice sidebar ships 19 items with Try It");
 assert.equal(smsNav.length, 11, "SMS sidebar includes dashboard, drip campaigns, and playbooks");
 assert.ok(SMS_CREATE_ACTIONS.length >= 5, "Create menu has primary actions");
 
@@ -135,8 +124,8 @@ assert.equal(
     hasNumbers: true,
     hasSms: false,
   }),
-  "/mass-texting",
-  "Platform home gates without voice or SMS entitlement",
+  "/mctb",
+  "MCTB primary launch redirects legacy platform home to MCTB",
 );
 assert.equal(
   productAccessDeniedRedirect(
@@ -148,8 +137,17 @@ assert.equal(
     },
     { authenticated: true },
   ),
-  "/api/products/open?product=mass_texting",
-  "Authenticated platform home opens mass texting workspace",
+  "/mctb",
+  "Authenticated legacy platform home redirects to MCTB during launch",
+);
+assert.equal(
+  productAccessDeniedRedirect("/voice/receptionist", {
+    hasVoice: true,
+    hasNumbers: false,
+    hasSms: false,
+  }),
+  "/mctb",
+  "Hidden Voice UI routes redirect to MCTB",
 );
 assert.equal(
   productAccessDeniedRedirect(
@@ -161,8 +159,8 @@ assert.equal(
     },
     { authenticated: true },
   ),
-  null,
-  "Mass texting customers can open /dashboard without voice",
+  "/mctb",
+  "MCTB primary launch redirects legacy /dashboard for all entitlements",
 );
 assert.equal(
   productAccessDeniedRedirect("/campaigns", {
@@ -170,8 +168,8 @@ assert.equal(
     hasNumbers: false,
     hasSms: false,
   }),
-  "/dashboard",
-  "Hidden SMS routes redirect to voice home",
+  "/mctb",
+  "Hidden SMS routes redirect to MCTB home during launch",
 );
 assert.equal(
   productAccessDeniedRedirect("/sms/dashboard", {
@@ -179,8 +177,8 @@ assert.equal(
     hasNumbers: false,
     hasSms: false,
   }),
-  null,
-  "SMS dashboard stays reachable while standalone SMS is hidden",
+  "/mass-texting",
+  "Standalone SMS hidden — voice-only workspace cannot open SMS dashboard",
 );
 assert.equal(
   productAccessDeniedRedirect("/sms/analytics", {
@@ -188,54 +186,55 @@ assert.equal(
     hasNumbers: false,
     hasSms: false,
   }),
-  null,
-  "SMS analytics stays reachable while standalone SMS is hidden",
+  "/mass-texting",
+  "Standalone SMS hidden — voice-only workspace cannot open SMS analytics",
 );
 
-// Appointments V1 — promoted pages must not bounce through product open without voice/SMS.
-const appointmentsOnlyAccess = {
-  hasVoice: false,
-  hasNumbers: true,
-  hasSms: false,
-};
-for (const route of [
-  "/appointments/overview",
-  "/appointments/workflows",
-  "/appointments/automations/activity",
-  "/contacts",
-  "/conversations/saved-replies",
-  "/settings/business",
-  "/integrations/calendars",
-  "/payments/transactions",
-  "/meetings",
-  "/video",
-  "/getting-started",
-] as const) {
-  assert.equal(
-    productAccessDeniedRedirect(route, appointmentsOnlyAccess, { authenticated: true }),
-    null,
-    `Appointments shell route ${route} stays reachable`,
-  );
-  assert.equal(isAppointmentsProductPath(route), true, `${route} is appointments product path`);
-}
+if (isAppointmentsV1Primary()) {
+  const appointmentsOnlyAccess = {
+    hasVoice: false,
+    hasNumbers: true,
+    hasSms: false,
+  };
+  for (const route of [
+    "/appointments/overview",
+    "/appointments/workflows",
+    "/appointments/automations/activity",
+    "/contacts",
+    "/conversations/saved-replies",
+    "/settings/business",
+    "/integrations/calendars",
+    "/payments/transactions",
+    "/meetings",
+    "/video",
+    "/getting-started",
+  ] as const) {
+    assert.equal(
+      productAccessDeniedRedirect(route, appointmentsOnlyAccess, { authenticated: true }),
+      null,
+      `Appointments shell route ${route} stays reachable`,
+    );
+    assert.equal(isAppointmentsProductPath(route), true, `${route} is appointments product path`);
+  }
 
-for (const route of [
-  "/api/appointments",
-  "/api/appointments/overview",
-  "/api/appointments/settings",
-  "/api/meetings/overview",
-  "/api/merchant-payments/status",
-  "/api/templates",
-  "/api/team",
-  "/api/settings/billing",
-] as const) {
-  assert.equal(
-    productAccessDeniedRedirect(route, appointmentsOnlyAccess, { authenticated: true }),
-    null,
-    `Appointments API ${route} stays reachable`,
-  );
-  assert.equal(isAppointmentsApiPath(route), true, `${route} is appointments API path`);
-  assert.equal(isAppointmentsPlatformPath(route), true, `${route} is appointments platform path`);
+  for (const route of [
+    "/api/appointments",
+    "/api/appointments/overview",
+    "/api/appointments/settings",
+    "/api/meetings/overview",
+    "/api/merchant-payments/status",
+    "/api/templates",
+    "/api/team",
+    "/api/settings/billing",
+  ] as const) {
+    assert.equal(
+      productAccessDeniedRedirect(route, appointmentsOnlyAccess, { authenticated: true }),
+      null,
+      `Appointments API ${route} stays reachable`,
+    );
+    assert.equal(isAppointmentsApiPath(route), true, `${route} is appointments API path`);
+    assert.equal(isAppointmentsPlatformPath(route), true, `${route} is appointments platform path`);
+  }
 }
 
 assert.equal(isKimiIntegratedRoute("/appointments/calendar"), true, "Calendar is Kimi integrated");

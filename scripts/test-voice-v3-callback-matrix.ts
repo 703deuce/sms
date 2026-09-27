@@ -146,7 +146,7 @@ async function runPersistence() {
       args: {
         callback_phone: null,
         reason: null,
-        preferred_time: null,
+        preferred_time: "tomorrow morning",
         notes: null,
       },
       deps: {
@@ -167,6 +167,25 @@ async function runPersistence() {
   assert.equal(second.result.ok, true);
   assert.equal(persistCount, 1);
   pass("32_retry_deduped");
+
+  const needsPreferred = await executeRequestCallback({
+    workspaceId: "ws_cb",
+    agentId: "agent_cb",
+    config,
+    context: ctx,
+    args: {
+      callback_phone: null,
+      reason: null,
+      preferred_time: null,
+      notes: null,
+    },
+  });
+  assert.equal(needsPreferred.result.ok, true);
+  if (needsPreferred.result.ok) {
+    assert.equal(needsPreferred.result.data?.status, "needs_information");
+    assert.deepEqual(needsPreferred.result.data?.missingFields, ["preferred_time"]);
+  }
+  pass("33_preferred_time_required_when_configured");
 
   const disabled = await executeRequestCallback({
     workspaceId: "ws_cb",

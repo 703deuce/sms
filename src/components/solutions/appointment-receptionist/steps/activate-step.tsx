@@ -17,6 +17,9 @@ import {
   Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { Panel, Rows } from "@/newui-transplant/components/app/kit";
+import { pickWizardFieldComponents } from "../wizard-field-kit";
+import { OpusDensePanel } from "../wizard-opus-ui";
 import { InfoCallout, SidePanel, StatusPill } from "../ui";
 
 function formatBusinessHoursSummary(state: AppointmentReceptionistWizardState): string {
@@ -51,9 +54,12 @@ export function ActivateStep({
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
   onActivate?: () => void | Promise<void>;
   onGoToTest?: () => void;
-  presentation?: "legacy" | "mctb";
+  presentation?: "legacy" | "mctb" | "opus";
 }) {
   const isMctb = presentation === "mctb";
+  const isOpus = presentation === "opus";
+  const uiVariant = isOpus ? "opus" : "legacy";
+  const { Button } = pickWizardFieldComponents(presentation);
   const phone = state.phoneNumberE164
     ? formatPhone(state.phoneNumberE164)
     : "No number assigned";
@@ -110,30 +116,68 @@ export function ActivateStep({
   const blocked = hasBlockingActivationIssues(issues);
   const readiness = buildWizardReadinessRows(state, { hasCalendarConnection: hasCalendar });
 
+  const activateTitle = isMctb
+    ? "Ready to turn on your voice agent?"
+    : "Make your receptionist live";
+  const activateDescription = isMctb
+    ? "Review anything that still needs attention before the agent answers calls."
+    : "Activate publishes your configuration. The next call routed to this number uses the updated agent — your phone forwarding decides when calls arrive.";
+
   return (
     <div className="flex gap-6">
       <div className="min-w-0 flex-1 space-y-6">
-        <div>
-          <h2 className="font-display text-xl font-semibold tracking-tight">
-            {isMctb ? "Ready to turn on your voice agent?" : "Make your receptionist live"}
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {isMctb
-              ? "Review anything that still needs attention before the agent answers calls."
-              : "Activate publishes your configuration. The next call routed to this number uses the updated agent — your phone forwarding decides when calls arrive."}
-          </p>
-        </div>
+        {isOpus ? (
+          <Panel title={activateTitle} description={activateDescription} />
+        ) : (
+          <div>
+            <h2 className="font-display text-xl font-semibold tracking-tight">{activateTitle}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{activateDescription}</p>
+          </div>
+        )}
 
-        <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
-          <p className="text-sm font-semibold text-foreground">{state.solutionName}</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            When a call reaches Transovo, this receptionist uses the configuration below — including
-            business hours and on-call rules for how to handle the conversation (not when the line
-            forwards).
-          </p>
-        </div>
+        {isOpus ? (
+          <OpusDensePanel className="border-primary/20 bg-primary/5">
+            <p className="text-sm font-semibold text-foreground">{state.solutionName}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              When a call reaches Transovo, this receptionist uses the configuration below —
+              including business hours and on-call rules for how to handle the conversation (not when
+              the line forwards).
+            </p>
+          </OpusDensePanel>
+        ) : (
+          <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+            <p className="text-sm font-semibold text-foreground">{state.solutionName}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              When a call reaches Transovo, this receptionist uses the configuration below —
+              including business hours and on-call rules for how to handle the conversation (not when
+              the line forwards).
+            </p>
+          </div>
+        )}
 
         {issues.length ? (
+          isOpus ? (
+            <OpusDensePanel title="Needs attention before activate">
+            {issues.map((issue) => (
+              <div
+                key={issue.id}
+                className="flex items-start gap-2 text-sm text-muted-foreground"
+              >
+                <AlertTriangle
+                  className={`mt-0.5 h-4 w-4 shrink-0 ${
+                    issue.severity === "blocking" ? "text-destructive" : "text-warning"
+                  }`}
+                />
+                <span>
+                  <span className="font-medium text-foreground">
+                    {issue.severity === "blocking" ? "Required: " : "Note: "}
+                  </span>
+                  {issue.message}
+                </span>
+              </div>
+            ))}
+            </OpusDensePanel>
+          ) : (
           <div className="space-y-2 rounded-xl border border-border bg-card p-4">
             <p className="text-sm font-semibold">Needs attention before activate</p>
             {issues.map((issue) => (
@@ -155,37 +199,65 @@ export function ActivateStep({
               </div>
             ))}
           </div>
+          )
         ) : null}
 
-        <div className="grid gap-2 sm:grid-cols-2">
-          {readiness.map((item) => (
-            <div
-              key={item.id}
-              className="flex items-center justify-between rounded-xl border border-border bg-card px-3 py-2.5 text-sm"
-            >
-              <span className="font-medium">{item.label}</span>
-              <StatusPill
-                tone={
-                  item.status === "ready"
-                    ? "success"
-                    : item.status === "needs_setup"
-                      ? "warning"
-                      : "muted"
-                }
+        {isOpus ? (
+          <Rows
+            items={readiness.map((item) => ({
+              label: item.label,
+              value: (
+                <StatusPill
+                  variant="opus"
+                  tone={
+                    item.status === "ready"
+                      ? "success"
+                      : item.status === "needs_setup"
+                        ? "warning"
+                        : "muted"
+                  }
+                >
+                  {item.status === "ready" ? (
+                    <CheckCircle2 className="h-3 w-3" />
+                  ) : item.status === "needs_setup" ? (
+                    <Clock className="h-3 w-3" />
+                  ) : null}
+                  {item.detail}
+                </StatusPill>
+              ),
+            }))}
+          />
+        ) : (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {readiness.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center justify-between rounded-xl border border-border bg-card px-3 py-2.5 text-sm"
               >
-                {item.status === "ready" ? (
-                  <CheckCircle2 className="h-3 w-3" />
-                ) : item.status === "needs_setup" ? (
-                  <Clock className="h-3 w-3" />
-                ) : null}
-                {item.detail}
-              </StatusPill>
-            </div>
-          ))}
-        </div>
+                <span className="font-medium">{item.label}</span>
+                <StatusPill
+                  tone={
+                    item.status === "ready"
+                      ? "success"
+                      : item.status === "needs_setup"
+                        ? "warning"
+                        : "muted"
+                  }
+                >
+                  {item.status === "ready" ? (
+                    <CheckCircle2 className="h-3 w-3" />
+                  ) : item.status === "needs_setup" ? (
+                    <Clock className="h-3 w-3" />
+                  ) : null}
+                  {item.detail}
+                </StatusPill>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      <SidePanel title="Activate">
+      <SidePanel variant={uiVariant} title="Activate">
         <dl className="space-y-3 text-xs">
           <div>
             <dt className="text-muted-foreground">Phone number</dt>
@@ -200,11 +272,11 @@ export function ActivateStep({
             <dd className="mt-0.5 font-medium text-foreground">{state.agentName}</dd>
           </div>
         </dl>
-        <button
+        <Button
           type="button"
           data-testid="wizard-activate-submit"
           disabled={blocked}
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
+          className="w-full"
           onClick={() => {
             patch({ activationMode: "activate_now", scheduledAt: null });
             void onActivate?.();
@@ -212,16 +284,17 @@ export function ActivateStep({
         >
           <Zap className="h-4 w-4" />
           Activate
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2.5 text-sm font-medium"
+          variant="outline"
+          className="mt-2 w-full"
           onClick={() => onGoToTest?.()}
         >
           <Play className="h-4 w-4" />
           Test in browser first
-        </button>
-        <InfoCallout>
+        </Button>
+        <InfoCallout variant={uiVariant}>
           Activate saves and publishes this wizard snapshot. On-call schedules, transfer rules, and
           after-hours behavior apply to calls after they reach the agent — they do not replace your
           carrier call-forwarding setup.

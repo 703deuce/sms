@@ -12,14 +12,23 @@ import type {
   SpeakingPaceLevel,
   VoiceAccentStyle,
 } from "@/lib/voice-v3/prompts/live-prompt-controls";
-import { Input, Label, Textarea } from "@/components/ui/input";
-import { Play, Volume2 } from "lucide-react";
+import { FieldRow } from "@/newui-transplant/components/app/kit";
+import { Switch } from "@/newui-transplant/components/ui/switch";
+import {
+  pickWizardFieldComponents,
+  type WizardPresentation,
+  WizardSelectField,
+} from "../wizard-field-kit";
+import { cn } from "@/lib/utils";
+import { Check, Play, Volume2 } from "lucide-react";
 import { useRef, useState } from "react";
+import { IdentityConversationStage } from "@/newui-transplant/connected/voice/receptionist-editor/stages/identity-conversation-stage";
+import { OpusDensePanel, OpusVoicePickRow } from "../wizard-opus-ui";
 import { InfoCallout, RadioRow, SelectableCard, SidePanel } from "../ui";
 
 const ALL_VOICES = [...WIZARD_VOICES, ...WIZARD_VOICE_BACKUPS];
 
-export type VoiceStepPart = "identity" | "greeting" | "voice";
+export type VoiceStepPart = "identity" | "greeting" | "voice" | "conversation-rules";
 
 export function VoiceStep({
   state,
@@ -27,15 +36,19 @@ export function VoiceStep({
   presentation = "legacy",
   parts,
   showSidePanel = true,
+  opusVoiceSlice = "all",
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
-  presentation?: "legacy" | "mctb";
+  presentation?: "legacy" | "mctb" | "opus";
   /** Permanent Receptionist page: render subsets without remounting wizard-only chrome. */
   parts?: VoiceStepPart[];
   showSidePanel?: boolean;
+  /** Opus editor: split voice picks vs GPT-Live prompt controls. */
+  opusVoiceSlice?: "all" | "picks" | "prompts";
 }) {
   const isMctb = presentation === "mctb";
+  const isOpus = presentation === "opus";
   const showPart = (part: VoiceStepPart) => !parts || parts.includes(part);
   const showIdentity = showPart("identity");
   const showGreeting = showPart("greeting");
@@ -101,9 +114,110 @@ export function VoiceStep({
   }
 
   const behaviors = state.conversationBehaviors;
+  const stepPresentation: WizardPresentation = isOpus ? "opus" : isMctb ? "mctb" : "legacy";
+  const { Input, Label, Textarea, Button } = pickWizardFieldComponents(stepPresentation);
+
+  if (isOpus && !parts) {
+    return <IdentityConversationStage state={state} patch={patch} />;
+  }
+
+  const conversationRules = (
+    <div className="divide-y">
+      {(
+        [
+          ["keepBrief", "Keep answers brief"],
+          ["oneQuestionAtATime", "Ask one question at a time"],
+          ["confirmDetails", "Confirm names and numbers"],
+          ["neverInventPricing", "Never invent pricing"],
+          ["neverInventAvailability", "Never invent availability"],
+        ] as const
+      ).map(([key, label]) => (
+        <FieldRow key={key} label={label}>
+          <Switch
+            checked={Boolean(behaviors[key])}
+            onCheckedChange={(on) =>
+              patch({
+                conversationBehaviors: {
+                  ...behaviors,
+                  [key]: on,
+                },
+              })
+            }
+            aria-label={label}
+          />
+        </FieldRow>
+      ))}
+    </div>
+  );
+
+  if (isOpus && parts?.length === 1 && parts[0] === "conversation-rules") {
+    return conversationRules;
+  }
+
+  if (isOpus && parts?.length === 1 && parts[0] === "voice" && opusVoiceSlice === "prompts") {
+    return (
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <PromptSelect<SpeakingPaceLevel>
+          presentation="opus"
+          label="Speaking pace"
+          value={state.speakingPace ?? "normal"}
+          options={[
+            ["slower", "Slower"],
+            ["normal", "Normal"],
+            ["faster", "Faster"],
+          ]}
+          onChange={(speakingPace) => patch({ speakingPace })}
+        />
+        <PromptSelect<VoiceAccentStyle>
+          presentation="opus"
+          label="Accent / dialect"
+          value={state.voiceAccent ?? "neutral_american"}
+          options={[
+            ["neutral_american", "Neutral American"],
+            ["southern_us", "Southern US"],
+            ["british", "British English"],
+            ["irish", "Irish English"],
+          ]}
+          onChange={(voiceAccent) => patch({ voiceAccent })}
+        />
+        <PromptSelect<BackchannelLevel>
+          presentation="opus"
+          label="Backchannels"
+          value={state.backchannelLevel ?? "minimal"}
+          options={[
+            ["none", "None"],
+            ["minimal", "Minimal"],
+            ["natural", "Natural"],
+          ]}
+          onChange={(backchannelLevel) => patch({ backchannelLevel })}
+        />
+        <PromptSelect<CallerPausePatience>
+          presentation="opus"
+          label="Pause patience"
+          value={state.callerPausePatience ?? "normal"}
+          options={[
+            ["quick", "Quicker check-ins"],
+            ["normal", "Normal"],
+            ["patient", "Very patient"],
+          ]}
+          onChange={(callerPausePatience) => patch({ callerPausePatience })}
+        />
+        <PromptSelect<InterruptionStyle>
+          presentation="opus"
+          label="Interruption behavior"
+          value={state.interruptionStyle ?? "natural"}
+          options={[
+            ["natural", "Natural rhythm"],
+            ["yield_immediately", "Yield immediately"],
+          ]}
+          onChange={(interruptionStyle) => patch({ interruptionStyle })}
+        />
+      </div>
+    );
+  }
 
   return (
-    <div className="flex gap-6">
+    <div className={cn("flex gap-6", isOpus && "block")}>
       <audio ref={audioRef} className="hidden" />
       <div className="min-w-0 flex-1 space-y-6">
         {!parts ? (
@@ -127,10 +241,10 @@ export function VoiceStep({
           }
         >
           {showLeftColumn ? (
-          <div className="space-y-4 rounded-xl border border-border bg-card p-4">
+          <div className={cn("space-y-4", !isOpus && "rounded-xl border border-border bg-card p-4")}>
             {showIdentity ? (
               <>
-            <h3 className="text-sm font-semibold">Identity</h3>
+            {!isOpus ? <h3 className="text-sm font-semibold">Identity</h3> : null}
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <Label>Agent name</Label>
@@ -149,67 +263,47 @@ export function VoiceStep({
                   placeholder="Your business"
                 />
               </div>
-              <div>
-                <Label>Role</Label>
-                <select
-                  className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
-                  value={state.role}
-                  onChange={(e) => patch({ role: e.target.value })}
-                >
-                  {[
-                    "Front-desk receptionist",
-                    "Appointment coordinator",
-                    "Office assistant",
-                  ].map((r) => (
-                    <option key={r}>{r}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <Label>Tone</Label>
-                <select
-                  className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
-                  value={state.tone}
-                  onChange={(e) => patch({ tone: e.target.value })}
-                >
-                  {[
-                    "Warm and professional",
-                    "Friendly and upbeat",
-                    "Calm and supportive",
-                    "Crisp and efficient",
-                  ].map((r) => (
-                    <option key={r}>{r}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <Label>Speaking style</Label>
-                <select
-                  className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
-                  value={state.speakingStyle}
-                  onChange={(e) => patch({ speakingStyle: e.target.value })}
-                >
-                  {[
-                    "Brief and conversational",
-                    "Detailed and thorough",
-                    "Casual and approachable",
-                  ].map((r) => (
-                    <option key={r}>{r}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <Label>Language</Label>
-                <select
-                  className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
-                  value={state.language}
-                  onChange={(e) => patch({ language: e.target.value })}
-                >
-                  {["English", "Spanish", "French"].map((r) => (
-                    <option key={r}>{r}</option>
-                  ))}
-                </select>
-              </div>
+              <WizardSelectField
+                presentation={stepPresentation}
+                label="Role"
+                value={state.role}
+                onChange={(role) => patch({ role })}
+                options={[
+                  "Front-desk receptionist",
+                  "Appointment coordinator",
+                  "Office assistant",
+                ].map((r) => ({ value: r, label: r }))}
+              />
+              <WizardSelectField
+                presentation={stepPresentation}
+                label="Tone"
+                value={state.tone}
+                onChange={(tone) => patch({ tone })}
+                options={[
+                  "Warm and professional",
+                  "Friendly and upbeat",
+                  "Calm and supportive",
+                  "Crisp and efficient",
+                ].map((r) => ({ value: r, label: r }))}
+              />
+              <WizardSelectField
+                presentation={stepPresentation}
+                label="Speaking style"
+                value={state.speakingStyle}
+                onChange={(speakingStyle) => patch({ speakingStyle })}
+                options={[
+                  "Brief and conversational",
+                  "Detailed and thorough",
+                  "Casual and approachable",
+                ].map((r) => ({ value: r, label: r }))}
+              />
+              <WizardSelectField
+                presentation={stepPresentation}
+                label="Language"
+                value={state.language}
+                onChange={(language) => patch({ language })}
+                options={["English", "Spanish", "French"].map((r) => ({ value: r, label: r }))}
+              />
             </div>
               </>
             ) : null}
@@ -222,11 +316,13 @@ export function VoiceStep({
               </p>
               <div className="space-y-2">
                 <RadioRow
+                  variant={isOpus ? "opus" : "legacy"}
                   selected={state.speaksFirst === "ai"}
                   onClick={() => patch({ speaksFirst: "ai" })}
                   label="AI speaks first"
                 />
                 <RadioRow
+                  variant={isOpus ? "opus" : "legacy"}
                   selected={state.speaksFirst === "caller"}
                   onClick={() => patch({ speaksFirst: "caller" })}
                   label="Caller speaks first"
@@ -243,11 +339,12 @@ export function VoiceStep({
               </p>
             </div>
 
+            {!isOpus ? (
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Conversation behavior
               </p>
-              <div className="space-y-2">
+              <div className="divide-y">
                 {(
                   [
                     ["keepBrief", "Keep answers brief"],
@@ -257,43 +354,33 @@ export function VoiceStep({
                     ["neverInventAvailability", "Never invent availability"],
                   ] as const
                 ).map(([key, label]) => (
-                  <label key={key} className="flex items-center justify-between gap-3 text-sm">
-                    <span>{label}</span>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={behaviors[key]}
-                      onClick={() =>
+                  <FieldRow key={key} label={label}>
+                    <Switch
+                      checked={Boolean(behaviors[key])}
+                      onCheckedChange={(on) =>
                         patch({
                           conversationBehaviors: {
                             ...behaviors,
-                            [key]: !behaviors[key],
+                            [key]: on,
                           },
                         })
                       }
-                      className={`relative h-6 w-11 rounded-full transition ${
-                        behaviors[key] ? "bg-primary" : "bg-muted"
-                      }`}
-                    >
-                      <span
-                        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition ${
-                          behaviors[key] ? "left-5" : "left-0.5"
-                        }`}
-                      />
-                    </button>
-                  </label>
+                      aria-label={label}
+                    />
+                  </FieldRow>
                 ))}
               </div>
             </div>
+            ) : null}
             </>
             ) : null}
           </div>
           ) : null}
 
           {showVoice ? (
-          <div className="space-y-4 rounded-xl border border-border bg-card p-4">
+          <div className={cn("space-y-4", !isOpus && "rounded-xl border border-border bg-card p-4")}>
             <div>
-              <h3 className="text-sm font-semibold">Choose a voice</h3>
+              {!isOpus ? <h3 className="text-sm font-semibold">Choose a voice</h3> : null}
               <p className="mt-1 text-xs text-muted-foreground">
                 All {WIZARD_VOICES.length} GPT-Live built-in voices. Step 7 browser test uses the
                 exact voice you select. Clip preview may not match GPT-Live audio until you test live.
@@ -303,37 +390,65 @@ export function VoiceStep({
               ) : null}
             </div>
 
+            {opusVoiceSlice !== "prompts" ? (
             <div className="max-h-[min(28rem,50vh)] overflow-y-auto pr-1">
               <div className="grid gap-2 sm:grid-cols-2">
-                {WIZARD_VOICES.map((v) => (
-                  <VoicePickCard
-                    key={v.id}
-                    voice={v}
-                    selected={state.voiceId === v.id}
-                    previewing={previewing === v.id}
-                    onSelect={() => selectVoice(v.id, v.label, v.recommendedSpeed)}
-                    onPreview={() => void previewVoice(v.id, v.recommendedSpeed)}
-                  />
-                ))}
-                {WIZARD_VOICE_BACKUPS.map((v) => (
-                  <VoicePickCard
-                    key={v.id}
-                    voice={v}
-                    selected={state.voiceId === v.id}
-                    previewing={previewing === v.id}
-                    onSelect={() => selectVoice(v.id, v.label, v.recommendedSpeed)}
-                    onPreview={() => void previewVoice(v.id, v.recommendedSpeed)}
-                  />
-                ))}
+                {WIZARD_VOICES.map((v) =>
+                  isOpus ? (
+                    <OpusVoicePickRow
+                      key={v.id}
+                      selected={state.voiceId === v.id}
+                      label={v.label}
+                      badge={v.badge}
+                      previewing={previewing === v.id}
+                      onSelect={() => selectVoice(v.id, v.label, v.recommendedSpeed)}
+                      onPreview={() => void previewVoice(v.id, v.recommendedSpeed)}
+                    />
+                  ) : (
+                    <VoicePickCard
+                      key={v.id}
+                      voice={v}
+                      selected={state.voiceId === v.id}
+                      previewing={previewing === v.id}
+                      onSelect={() => selectVoice(v.id, v.label, v.recommendedSpeed)}
+                      onPreview={() => void previewVoice(v.id, v.recommendedSpeed)}
+                    />
+                  ),
+                )}
+                {WIZARD_VOICE_BACKUPS.map((v) =>
+                  isOpus ? (
+                    <OpusVoicePickRow
+                      key={v.id}
+                      selected={state.voiceId === v.id}
+                      label={v.label}
+                      badge={v.badge}
+                      previewing={previewing === v.id}
+                      onSelect={() => selectVoice(v.id, v.label, v.recommendedSpeed)}
+                      onPreview={() => void previewVoice(v.id, v.recommendedSpeed)}
+                    />
+                  ) : (
+                    <VoicePickCard
+                      key={v.id}
+                      voice={v}
+                      selected={state.voiceId === v.id}
+                      previewing={previewing === v.id}
+                      onSelect={() => selectVoice(v.id, v.label, v.recommendedSpeed)}
+                      onPreview={() => void previewVoice(v.id, v.recommendedSpeed)}
+                    />
+                  ),
+                )}
               </div>
             </div>
+            ) : null}
 
+            {opusVoiceSlice !== "picks" ? (
             <div className="space-y-4 pt-2 border-t border-border">
               <p className="text-xs text-muted-foreground">
                 Pace, accent, and conversation style are applied through GPT-Live instructions
                 (not legacy TTS or VAD sliders).
               </p>
               <PromptSelect<SpeakingPaceLevel>
+                presentation={stepPresentation}
                 label="Speaking pace"
                 value={state.speakingPace ?? "normal"}
                 options={[
@@ -344,6 +459,7 @@ export function VoiceStep({
                 onChange={(speakingPace) => patch({ speakingPace })}
               />
               <PromptSelect<VoiceAccentStyle>
+                presentation={stepPresentation}
                 label="Accent / dialect"
                 value={state.voiceAccent ?? "neutral_american"}
                 options={[
@@ -355,6 +471,7 @@ export function VoiceStep({
                 onChange={(voiceAccent) => patch({ voiceAccent })}
               />
               <PromptSelect<BackchannelLevel>
+                presentation={stepPresentation}
                 label="Backchannels (yeah, uh-huh)"
                 value={state.backchannelLevel ?? "minimal"}
                 options={[
@@ -365,6 +482,7 @@ export function VoiceStep({
                 onChange={(backchannelLevel) => patch({ backchannelLevel })}
               />
               <PromptSelect<CallerPausePatience>
+                presentation={stepPresentation}
                 label="Patience when caller pauses"
                 value={state.callerPausePatience ?? "normal"}
                 options={[
@@ -375,6 +493,7 @@ export function VoiceStep({
                 onChange={(callerPausePatience) => patch({ callerPausePatience })}
               />
               <PromptSelect<InterruptionStyle>
+                presentation={stepPresentation}
                 label="When caller interrupts"
                 value={state.interruptionStyle ?? "natural"}
                 options={[
@@ -384,30 +503,49 @@ export function VoiceStep({
                 onChange={(interruptionStyle) => patch({ interruptionStyle })}
               />
               {customVoiceWizardEnabled ? (
-                <div className="space-y-2 rounded-lg border border-dashed border-border p-3">
-                  <Label>Authorized custom OpenAI voice ID</Label>
-                  <Input
-                    value={state.openAiCustomVoiceId ?? ""}
-                    onChange={(e) =>
-                      patch({
-                        openAiCustomVoiceId: e.target.value.trim() || null,
-                        voiceSource: e.target.value.trim() ? "custom" : "builtin",
-                      })
-                    }
-                    placeholder="voice_…"
-                  />
-                  <p className="text-[11px] text-muted-foreground">
-                    Requires OpenAI custom-voice access on your organization.
-                  </p>
-                </div>
+                isOpus ? (
+                  <OpusDensePanel title="Authorized custom OpenAI voice ID" bodyClassName="space-y-2 p-3">
+                    <Input
+                      value={state.openAiCustomVoiceId ?? ""}
+                      onChange={(e) =>
+                        patch({
+                          openAiCustomVoiceId: e.target.value.trim() || null,
+                          voiceSource: e.target.value.trim() ? "custom" : "builtin",
+                        })
+                      }
+                      placeholder="voice_…"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Requires OpenAI custom-voice access on your organization.
+                    </p>
+                  </OpusDensePanel>
+                ) : (
+                  <div className="space-y-2 rounded-lg border border-dashed border-border p-3">
+                    <Label>Authorized custom OpenAI voice ID</Label>
+                    <Input
+                      value={state.openAiCustomVoiceId ?? ""}
+                      onChange={(e) =>
+                        patch({
+                          openAiCustomVoiceId: e.target.value.trim() || null,
+                          voiceSource: e.target.value.trim() ? "custom" : "builtin",
+                        })
+                      }
+                      placeholder="voice_…"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Requires OpenAI custom-voice access on your organization.
+                    </p>
+                  </div>
+                )
               ) : null}
             </div>
+            ) : null}
           </div>
           ) : null}
         </div>
       </div>
 
-      {showSidePanel ? (
+      {showSidePanel && !isOpus ? (
       <SidePanel title="Voice settings">
         <div className="flex items-center gap-3 rounded-xl border border-border p-3">
           <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -434,31 +572,26 @@ export function VoiceStep({
 }
 
 function PromptSelect<T extends string>({
+  presentation,
   label,
   value,
   options,
   onChange,
 }: {
+  presentation: WizardPresentation;
   label: string;
   value: T;
   options: Array<[T, string]>;
   onChange: (v: T) => void;
 }) {
   return (
-    <div>
-      <Label className="text-xs">{label}</Label>
-      <select
-        className="mt-1 h-9 w-full rounded-lg border border-border bg-card px-2 text-sm"
-        value={value}
-        onChange={(e) => onChange(e.target.value as T)}
-      >
-        {options.map(([v, text]) => (
-          <option key={v} value={v}>
-            {text}
-          </option>
-        ))}
-      </select>
-    </div>
+    <WizardSelectField
+      presentation={presentation}
+      label={label}
+      value={value}
+      onChange={(v) => onChange(v as T)}
+      options={options.map(([v, text]) => ({ value: v, label: text }))}
+    />
   );
 }
 
@@ -481,6 +614,7 @@ function VoicePickCard({
   onSelect: () => void;
   onPreview: () => void;
 }) {
+  const { Button: LegacyBtn } = pickWizardFieldComponents("legacy");
   return (
     <div className="relative">
       <SelectableCard
@@ -498,15 +632,16 @@ function VoicePickCard({
           ) : null}
         </div>
       </SelectableCard>
-      <button
+      <LegacyBtn
         type="button"
-        className="absolute bottom-3 right-3 z-10 inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1.5 text-[11px] font-medium text-primary-foreground shadow-sm hover:bg-primary-hover"
+        size="sm"
+        className="absolute bottom-3 right-3 z-10 h-auto gap-1 rounded-full px-2.5 py-1.5 text-[11px]"
         onClick={onPreview}
         aria-label={`Play sample of ${voice.label}`}
       >
         <Play className={`h-3 w-3 fill-current ${previewing ? "animate-pulse" : ""}`} />
         {previewing ? "…" : "Play"}
-      </button>
+      </LegacyBtn>
     </div>
   );
 }

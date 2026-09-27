@@ -69,6 +69,7 @@ export function NewUiMctbSetupOverviewPage() {
   const { business } = useOpusWorkspaceData();
   const { loading, wired } = useMctbSetupOverviewWiring(business?.sender || "—");
   if (loading) return <p className="p-6 text-sm text-muted-foreground">Loading setup…</p>;
+  if (!wired) return <p className="p-6 text-sm text-muted-foreground">Could not load setup.</p>;
   return <TransplantMctbSetupPage wired={wired} />;
 }
 
@@ -76,6 +77,7 @@ export function NewUiMctbSetupPhonePage() {
   const { business } = useOpusWorkspaceData();
   const { loading, wired } = useMctbSetupPhoneWiring(business?.sender || "—");
   if (loading) return <p className="p-6 text-sm text-muted-foreground">Loading phone settings…</p>;
+  if (!wired) return <p className="p-6 text-sm text-muted-foreground">Could not load phone settings.</p>;
   return <TransplantMctbSetupPhonePage wired={wired} />;
 }
 

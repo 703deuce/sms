@@ -9,6 +9,7 @@ import { isMctbAppPath, isVoiceProductPath } from "@/lib/products/voice-routes";
 import type { ProductKey, UserProductAccess } from "@/lib/products/types";
 import { productHomePath } from "@/lib/products/types";
 import { isAppointmentsV1Primary, isSmsStandaloneHidden } from "@/lib/workspace/platform-launch";
+import { voiceCustomerHiddenRedirect } from "@/lib/products/launch-product-availability";
 
 /** Edge-safe product route guards (no DB / server-only imports). */
 
@@ -22,6 +23,9 @@ export function productAccessDeniedRedirect(
   access: ProductAccessFlags,
   options?: { authenticated?: boolean },
 ): string | null {
+  const voiceHidden = voiceCustomerHiddenRedirect(pathname);
+  if (voiceHidden) return voiceHidden;
+
   // Appointments V1 is the primary product — do not bounce to /dashboard (SMS entitlement loop).
   if (isAppointmentsV1Primary() && isAppointmentsPlatformPath(pathname)) {
     return null;

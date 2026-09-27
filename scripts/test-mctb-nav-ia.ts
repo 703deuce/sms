@@ -11,28 +11,27 @@ import { MCTB_ROUTES } from "../src/lib/mctb/routes";
 import { isMctbV1Primary } from "../src/lib/workspace/platform-launch";
 import { isMctbUniversalChromeActive } from "../src/lib/mctb/universal-shell";
 import { isMctbBundledAiReceptionistPath } from "../src/lib/products/mctb-bundled-receptionist-paths";
+import { isVoiceProductCustomerVisible } from "../src/lib/products/launch-product-availability";
 
-const voiceNav = buildMctbV1Nav({ hasVoice: true, hasNumbers: true });
-const voiceLabels = voiceNav.map((i) => i.label);
-const voiceHrefs = collectNavHrefs(voiceNav);
+const launchNav = buildMctbV1Nav({ hasVoice: true, hasNumbers: true });
+const launchLabels = launchNav.map((i) => i.label);
+const launchHrefs = collectNavHrefs(launchNav);
 
-assert.ok(voiceLabels.includes("Calls"));
-assert.ok(voiceLabels.includes("Receptionist"));
-assert.ok(voiceLabels.includes("Business Knowledge"));
-assert.ok(voiceLabels.includes("Inbox"));
-assert.ok(!voiceLabels.includes("Conversations"));
-assert.ok(!voiceLabels.includes("Voice Agent"));
-assert.equal(voiceNav.find((i) => i.label === "Overview" && i.sectionLabel === "AI Receptionist")?.href, "/voice/overview");
-assert.equal(voiceNav.find((i) => i.label === "Overview" && i.sectionLabel === "Missed Call Text Back")?.href, "/mctb");
-assert.equal(voiceNav.find((i) => i.label === "Call Handling")?.href, "/voice/call-handling");
-assert.ok(voiceHrefs.includes("/voice/analytics"));
-assert.ok(voiceHrefs.includes("/voice/calls"));
-assert.ok(voiceHrefs.includes("/voice/receptionist"));
-assert.ok(!voiceHrefs.includes("/mctb/voice-agent"));
-assert.equal(voiceNav.find((i) => i.label === "AI Recovery")?.href, MCTB_ROUTES.aiRecovery);
-const mctbStartIdx = voiceNav.findIndex((i) => i.sectionLabel === "Missed Call Text Back");
-const sharedIdx = voiceNav.findIndex((i) => i.sectionLabel === "Shared");
-const mctbPrimaryLabels = voiceNav
+assert.equal(isVoiceProductCustomerVisible(), false, "default launch hides Voice from customer nav");
+assert.ok(!launchLabels.includes("Calls"));
+assert.ok(!launchLabels.includes("Receptionist"));
+assert.ok(!launchLabels.includes("Business Knowledge"));
+assert.ok(launchLabels.includes("Inbox"));
+assert.ok(!launchLabels.includes("Conversations"));
+assert.ok(!launchLabels.includes("Voice Agent"));
+assert.ok(!launchNav.some((i) => i.sectionLabel === "AI Receptionist"));
+assert.equal(launchNav.find((i) => i.label === "Overview" && i.sectionLabel === "Missed Call Text Back")?.href, "/mctb");
+assert.ok(!launchHrefs.includes("/voice/receptionist"));
+assert.ok(!launchHrefs.includes("/mctb/voice-agent"));
+assert.equal(launchNav.find((i) => i.label === "AI Recovery")?.href, MCTB_ROUTES.aiRecovery);
+const mctbStartIdx = launchNav.findIndex((i) => i.sectionLabel === "Missed Call Text Back");
+const sharedIdx = launchNav.findIndex((i) => i.sectionLabel === "Shared");
+const mctbPrimaryLabels = launchNav
   .slice(mctbStartIdx, sharedIdx >= 0 ? sharedIdx : undefined)
   .map((i) => i.label);
 assert.deepEqual(mctbPrimaryLabels, [
@@ -44,7 +43,7 @@ assert.deepEqual(mctbPrimaryLabels, [
   "Analytics",
   "Setup",
 ]);
-assert.ok(voiceHrefs.includes("/voice/numbers"));
+assert.ok(launchHrefs.includes("/voice/numbers"));
 
 const mctbOnly = buildMctbV1Nav({ hasVoice: false });
 const mctbOnlyLabels = mctbOnly.map((i) => i.label);
@@ -53,7 +52,7 @@ assert.ok(!mctbOnlyLabels.includes("Receptionist"));
 assert.equal(mctbOnly.find((i) => i.label === "Inbox")?.href, MCTB_ROUTES.conversations);
 
 const mobile = buildMctbV1MobileNav({ hasVoice: true });
-assert.deepEqual(mobile.map((i) => i.label), ["Home", "Missed", "Inbox", "Calls", "Setup"]);
+assert.deepEqual(mobile.map((i) => i.label), ["Home", "Missed", "Inbox", "Setup"]);
 
 assert.ok(isMctbBundledAiReceptionistPath("/voice/calls"));
 assert.ok(isMctbBundledAiReceptionistPath("/mctb/voice-agent"));

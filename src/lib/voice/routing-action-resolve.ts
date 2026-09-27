@@ -1,4 +1,8 @@
-import type { MessagingRuntimeSettings } from "@/lib/messaging/messaging-settings";
+import {
+  getMessagingRuntimeSettings,
+  isWithinBusinessHours,
+  type MessagingRuntimeSettings,
+} from "@/lib/messaging/messaging-settings";
 
 /** Human-first / ring timeout from routing rule actions (wizard writes ringSeconds + timeoutSeconds). */
 export function resolveRingTimeoutSeconds(
@@ -36,6 +40,24 @@ export function resolveTransferInsightFields(input: {
       input.outcome === "transferred" ||
       /transfer (completed|successful|connected|bridged)/i.test(text),
   };
+}
+
+/**
+ * Wizard `ai_after_hours` rules map to human_first during business hours and ai_answer after hours.
+ */
+export async function resolveEffectiveRoutingAction(
+  workspaceId: string,
+  action: string,
+  actions?: Record<string, unknown> | null,
+  now = new Date(),
+): Promise<string> {
+  if (action !== "ai_after_hours") return action;
+
+  const settings = await getMessagingRuntimeSettings(workspaceId);
+  const effective = applyActionTimezone(settings, actions);
+  const withinHours = isWithinBusinessHours(effective, now);
+  if (withinHours) return "human_first";
+  return "ai_answer";
 }
 
 export function resolveMessageTakenInsight(input: {

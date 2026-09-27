@@ -21,9 +21,8 @@ import { isSmsShellRoute } from "@/lib/products/sms-routes";
 import { useProductShell } from "@/components/products/product-shell-tabs";
 import { shouldShowProductSwitcher } from "@/lib/products/product-shell";
 import { isMctbProductChromePath } from "@/lib/products/mctb-shell";
-import "@/components/mctb/shell/mctb-sidebar.css";
-import "@/components/mctb/shell/mctb-design-tokens.css";
-import "@/components/mctb/shell/mctb-global-overrides.css";
+import { MctbLegacyAppShellStylesLoader } from "@/components/layout/mctb-legacy-app-shell-styles-loader";
+import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
 import { isAppointmentsShellActive, isMctbShellActive } from "@/lib/products/resolve-product-nav";
 import type { SolutionNavInstance } from "@/lib/solutions-nav";
 import type { CurrentProduct } from "@/lib/products/types";
@@ -260,6 +259,7 @@ export function AppShell({
   const isAppointmentsNeutralShell =
     isAppointmentsV1Primary() && isAppointmentsProductPath(pathname);
   const isMctbNeutralShell = isMctbProductChromePath(pathname, productShell, { hasMctb });
+  const legacyMctbPresentationCss = !isNewUiStage2Enabled() && isMctbNeutralShell;
   const isAppointmentsOverviewPilot =
     isAppointmentsNeutralShell &&
     (pathname === "/appointments/overview" || pathname.startsWith("/appointments/calendar"));
@@ -291,12 +291,19 @@ export function AppShell({
       ? children
       : <div className="mctb-page-canvas min-h-full">{children}</div>;
 
-  const wrapCallHandling = (body: ReactNode) =>
-    showCallHandlingSwitcher || callHandlingInitial ? (
-      <CallHandlingProvider initialState={callHandlingInitial}>{body}</CallHandlingProvider>
-    ) : (
-      body
+  const wrapCallHandling = (body: ReactNode) => {
+    const withPresentationBoundary = (
+      <>
+        <MctbLegacyAppShellStylesLoader enabled={legacyMctbPresentationCss} />
+        {body}
+      </>
     );
+    return showCallHandlingSwitcher || callHandlingInitial ? (
+      <CallHandlingProvider initialState={callHandlingInitial}>{withPresentationBoundary}</CallHandlingProvider>
+    ) : (
+      withPresentationBoundary
+    );
+  };
 
   if (newUiShell && !realtorMode && !legacyAutomation) {
     return wrapCallHandling(

@@ -217,6 +217,7 @@ export function useVoiceReceptionistEditor() {
     if (isLive && pendingPublication)
       return { tone: "warning", label: "Draft saved — publish to go live" };
     if (isLive) return { tone: "success", label: "Live" };
+    if (state.agentId && !hasLocalEdits) return { tone: "muted", label: "Ready to publish" };
     return { tone: "muted", label: "Draft" };
   }, [state.agentId, hasLocalEdits, isLive, pendingPublication]);
 

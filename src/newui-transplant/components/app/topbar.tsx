@@ -6,10 +6,10 @@ import { SidebarTrigger } from '@/newui-transplant/components/ui/sidebar'
 import { Separator } from '@/newui-transplant/components/ui/separator'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Avatar, AvatarFallback } from '@/newui-transplant/components/ui/avatar'
-import { NAV } from '@/newui-transplant/lib/nav'
+import { resolveCustomerNavSections } from '@/newui-transplant/lib/nav'
 
 function sectionFor(pathname: string) {
-  for (const section of NAV) {
+  for (const section of resolveCustomerNavSections()) {
     for (const item of section.items) {
       if (pathname === item.href || (item.matchPrefix && pathname.startsWith(item.matchPrefix))) {
         return { section: section.label, page: item.label }

@@ -5,6 +5,7 @@ import {
   capabilityOptionsForPreset,
   goalsSidePanelCopy,
   AMY_FIXED_CAPABILITIES,
+  usesCfnaUnansweredIngressModel,
 } from "@/lib/solutions/appointment-receptionist/wizard-presets";
 import type {
   AnswerWhen,
@@ -24,7 +25,9 @@ import {
 } from "lucide-react";
 import { useEffect } from "react";
 import { InfoCallout, RadioRow, SelectableCard, SidePanel } from "../ui";
-import { Input, Label } from "@/components/ui/input";
+import { FieldRow, Panel } from "@/newui-transplant/components/app/kit";
+import { Switch } from "@/newui-transplant/components/ui/switch";
+import { pickWizardFieldComponents } from "../wizard-field-kit";
 
 const ICONS = {
   MessageCircle,
@@ -67,16 +70,22 @@ export function GoalsStep({
   compactCapabilities = false,
   hideSidePanel = false,
   hideSolutionName = false,
+  hideAnswerWhen = false,
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
   hireMode?: boolean;
-  presentation?: "legacy" | "mctb";
+  presentation?: "legacy" | "mctb" | "opus";
   compactCapabilities?: boolean;
   hideSidePanel?: boolean;
   hideSolutionName?: boolean;
+  hideAnswerWhen?: boolean;
 }) {
   const isMctb = presentation === "mctb";
+  const isOpus = presentation === "opus";
+  const cfnaIngress = usesCfnaUnansweredIngressModel(state.preset);
+  const uiVariant = isOpus ? "opus" : "legacy";
+  const { Input, Label, Button } = pickWizardFieldComponents(presentation);
   const options = capabilityOptionsForPreset(state.preset);
   const answerOptions = answerWhenOptionsForPreset(state.preset);
   const panel = goalsSidePanelCopy(state.preset);
@@ -179,9 +188,18 @@ export function GoalsStep({
             <h3 className="text-sm font-semibold text-foreground">
               How should Amy cover the phone?
             </h3>
+            {cfnaIngress ? (
+              <InfoCallout variant={uiVariant}>
+                Unanswered calls on your business line should forward to Transovo using
+                conditional call forwarding (CFNA). You will set that up on the Phone step — Amy
+                answers only after your carrier forwards the call.
+              </InfoCallout>
+            ) : (
             <p className="mt-1 text-sm text-muted-foreground">
               Booking is always on. Choose only the coverage mode for this instance.
             </p>
+            )}
+            {!cfnaIngress ? (
             <div className="mt-3 grid gap-2">
               {OPERATING_MODES.map((opt) => (
                 <RadioRow
@@ -202,6 +220,7 @@ export function GoalsStep({
                 />
               ))}
             </div>
+            ) : null}
           </div>
 
           <div>
@@ -216,18 +235,15 @@ export function GoalsStep({
                   ["cancel", "May cancel"],
                 ] as const
               ).map(([id, label]) => (
-                <button
+                <Button
                   key={id}
                   type="button"
+                  size="sm"
+                  variant={state.capabilities.includes(id) ? "default" : "outline"}
                   onClick={() => toggleCap(id)}
-                  className={`rounded-lg border px-3 py-2 text-[12px] font-semibold ${
-                    state.capabilities.includes(id)
-                      ? "border-slate-900 bg-slate-900 text-white"
-                      : "border-slate-200 text-slate-700"
-                  }`}
                 >
                   {label}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -246,6 +262,158 @@ export function GoalsStep({
             plus her appointment-specific rules.
           </InfoCallout>
         </SidePanel>
+      </div>
+    );
+  }
+
+  const capabilityBody = (
+    <>
+          {compactCapabilities || isOpus ? (
+            isOpus ? (
+            <div className="divide-y divide-border">
+              {options.map((opt) => {
+                const enabled = state.capabilities.includes(opt.id);
+                return (
+                  <FieldRow key={opt.id} label={opt.title} description={opt.description}>
+                    <Switch
+                      checked={enabled}
+                      onCheckedChange={() => toggleCap(opt.id)}
+                      aria-label={opt.title}
+                    />
+                  </FieldRow>
+                );
+              })}
+            </div>
+            ) : (
+            <ul className="divide-y divide-border">
+              {options.map((opt) => {
+                const enabled = state.capabilities.includes(opt.id);
+                return (
+                  <li
+                    key={opt.id}
+                    className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0 max-w-xl">
+                      <p className="text-sm font-medium text-foreground">{opt.title}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{opt.description}</p>
+                    </div>
+                    <Switch
+                      checked={enabled}
+                      onCheckedChange={() => toggleCap(opt.id)}
+                      aria-label={opt.title}
+                    />
+                  </li>
+                );
+              })}
+            </ul>
+            )
+          ) : (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {options.map((opt) => {
+                const Icon = ICONS[opt.icon as keyof typeof ICONS];
+                return (
+                  <SelectableCard
+                    key={opt.id}
+                    variant={uiVariant}
+                    selected={state.capabilities.includes(opt.id)}
+                    onClick={() => toggleCap(opt.id)}
+                    title={opt.title}
+                    description={opt.description}
+                    icon={<Icon className="h-4 w-4" />}
+                  />
+                );
+              })}
+            </div>
+          )}
+    </>
+  );
+
+  const answerWhenBody = !hideAnswerWhen && !cfnaIngress ? (
+        <div>
+          {!isOpus ? (
+            <h3 className="text-sm font-semibold text-foreground">
+              When should this agent answer?
+            </h3>
+          ) : null}
+          <div className={isOpus ? "grid gap-2" : "mt-3 grid gap-2"}>
+            {answerOptions.map((opt) => (
+              <RadioRow
+                key={opt.id}
+                variant={uiVariant}
+                selected={state.answerWhen === opt.id}
+                onClick={() => {
+                  const answerWhen = opt.id as AnswerWhen;
+                  const ringBehavior =
+                    answerWhen === "nobody_answers"
+                      ? "ring_team_first"
+                      : answerWhen === "after_hours"
+                        ? "after_hours"
+                        : answerWhen === "custom_schedule"
+                          ? "custom"
+                          : answerWhen === "line_busy"
+                            ? "line_busy"
+                            : "ai_immediate";
+                  patch({ answerWhen, ringBehavior });
+                }}
+                label={opt.label}
+                description={opt.description}
+              />
+            ))}
+          </div>
+        </div>
+  ) : null;
+
+  if (isOpus) {
+    return (
+      <div className="flex gap-6">
+        <div className="min-w-0 flex-1 space-y-6">
+          {!hideSolutionName ? (
+            <Panel title="Agent name" description="Shown in Your Team and Automations.">
+              <Label htmlFor="solution-name">Display name</Label>
+              <Input
+                id="solution-name"
+                className="mt-1.5 max-w-lg"
+                value={state.solutionName}
+                onChange={(e) => {
+                  const solutionName = e.target.value;
+                  patch({
+                    solutionName,
+                    agentName:
+                      !state.agentName ||
+                      state.agentName === "Astra" ||
+                      state.agentName === state.solutionName
+                        ? solutionName.slice(0, 40) || state.agentName
+                        : state.agentName,
+                  });
+                }}
+                placeholder="e.g. Front Desk — Main Office"
+              />
+            </Panel>
+          ) : null}
+          <Panel
+            title={isMctb ? "What should your voice agent handle?" : "What should this agent do?"}
+            description="Select all capabilities this receptionist may use on calls."
+          >
+            {capabilityBody}
+          </Panel>
+          {answerWhenBody ? (
+            <Panel title="When should this agent answer?">{answerWhenBody}</Panel>
+          ) : null}
+        </div>
+        {!hideSidePanel ? (
+          <SidePanel variant="opus" title={isMctb ? "Agent summary" : "Recommended setup"}>
+            {isMctb ? (
+              <ul className="space-y-2 text-xs text-muted-foreground">
+                <li>
+                  <span className="font-semibold text-foreground">Enabled capabilities:</span>{" "}
+                  {state.capabilities.length}
+                </li>
+              </ul>
+            ) : (
+              <p className="text-xs text-muted-foreground">{panel.outcome}</p>
+            )}
+          </SidePanel>
+        ) : null}
       </div>
     );
   }
@@ -293,83 +461,13 @@ export function GoalsStep({
               </p>
             </>
           ) : null}
-          {compactCapabilities ? (
-            <ul className="divide-y divide-border">
-              {options.map((opt) => {
-                const enabled = state.capabilities.includes(opt.id);
-                return (
-                  <li
-                    key={opt.id}
-                    className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="min-w-0 max-w-xl">
-                      <p className="text-sm font-medium text-foreground">{opt.title}</p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">{opt.description}</p>
-                    </div>
-                    <label className="flex shrink-0 items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-border"
-                        checked={enabled}
-                        onChange={() => toggleCap(opt.id)}
-                      />
-                      {enabled ? "On" : "Off"}
-                    </label>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {options.map((opt) => {
-                const Icon = ICONS[opt.icon as keyof typeof ICONS];
-                return (
-                  <SelectableCard
-                    key={opt.id}
-                    selected={state.capabilities.includes(opt.id)}
-                    onClick={() => toggleCap(opt.id)}
-                    title={opt.title}
-                    description={opt.description}
-                    icon={<Icon className="h-4 w-4" />}
-                  />
-                );
-              })}
-            </div>
-          )}
+          {capabilityBody}
         </div>
 
-        <div>
-          <h3 className="text-sm font-semibold text-foreground">
-            When should this agent answer?
-          </h3>
-          <div className="mt-3 grid gap-2">
-            {answerOptions.map((opt) => (
-              <RadioRow
-                key={opt.id}
-                selected={state.answerWhen === opt.id}
-                onClick={() => {
-                  const answerWhen = opt.id as AnswerWhen;
-                  const ringBehavior =
-                    answerWhen === "nobody_answers"
-                      ? "ring_team_first"
-                      : answerWhen === "after_hours"
-                        ? "after_hours"
-                        : answerWhen === "custom_schedule"
-                          ? "custom"
-                          : answerWhen === "line_busy"
-                            ? "line_busy"
-                            : "ai_immediate";
-                  patch({ answerWhen, ringBehavior });
-                }}
-                label={opt.label}
-                description={opt.description}
-              />
-            ))}
-          </div>
-        </div>
+        {answerWhenBody}
       </div>
 
-      {!hideSidePanel ? (
+      {!hideSidePanel && !isOpus ? (
       <SidePanel title={isMctb ? "Agent summary" : "Recommended setup"}>
         {isMctb ? (
           <ul className="space-y-2 text-xs text-muted-foreground">

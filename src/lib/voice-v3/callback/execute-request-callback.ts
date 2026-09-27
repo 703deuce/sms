@@ -135,6 +135,16 @@ export async function executeRequestCallback(
   const callerName = resolveCallbackCallerName(ctx);
   const preferredTime = args.preferred_time?.trim() || null;
 
+  if (config.callHandling.callbackAskPreferredTime !== false && !preferredTime) {
+    return {
+      result: toolOk("needs_information", {
+        status: "needs_information",
+        missingFields: ["preferred_time"],
+      }),
+      nextContext: ctx,
+    };
+  }
+
   const configVersion = config.configVersion?.trim() || "unknown";
   const idempotencyKey = buildIdempotencyKey({
     callId: ctx.callId,

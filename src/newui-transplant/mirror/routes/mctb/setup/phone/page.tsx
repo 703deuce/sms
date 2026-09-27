@@ -35,8 +35,8 @@ const RING = ['10', '15', '20', '25', '30']
 
 export function TransplantMctbSetupPhonePage({ wired }: { wired?: MctbSetupPhoneWired }) {
   const live = wired !== undefined
-  const businessLine = wired?.businessLine ?? BUSINESS.line
-  const forwardDest = wired?.forwardingDestination ?? '(512) 555-0188'
+  const businessLine = wired?.businessLine ?? (live ? '—' : BUSINESS.line)
+  const forwardDest = wired?.forwardingDestination ?? (live ? '—' : '(512) 555-0188')
   const carrierOptions =
     live && wired?.carrierOptions?.length
       ? wired.carrierOptions
@@ -45,19 +45,19 @@ export function TransplantMctbSetupPhonePage({ wired }: { wired?: MctbSetupPhone
   const ringOptions = wired?.ringOptions ?? RING
   const ringValue = wired?.ringSeconds ?? '20'
   const steps =
-    live && wired?.instructionSteps?.length
-      ? wired.instructionSteps
+    live
+      ? (wired?.instructionSteps ?? [])
       : [
           'From your business phone, dial *71 followed by the forwarding number.',
           'Wait for the confirmation tone, then hang up.',
           'Place a test call and let it ring out.',
         ]
-  const dialCode = wired?.dialCode ?? '*71 512 555 0188'
-  const verificationTone = wired?.verificationPillTone ?? 'success'
-  const verificationLabel = wired?.verificationPillLabel ?? 'Verified'
-  const senderNum = wired?.senderNumber ?? BUSINESS.sender
-  const regLabel = wired?.senderRegistrationLabel ?? 'Registered (10DLC)'
-  const regTone = wired?.senderRegistrationTone ?? 'success'
+  const dialCode = wired?.dialCode ?? (live ? '—' : '*71 512 555 0188')
+  const verificationTone = wired?.verificationPillTone ?? (live ? 'warning' : 'success')
+  const verificationLabel = wired?.verificationPillLabel ?? (live ? 'Not verified' : 'Verified')
+  const senderNum = wired?.senderNumber ?? (live ? '—' : BUSINESS.sender)
+  const regLabel = wired?.senderRegistrationLabel ?? (live ? 'Pending' : 'Registered (10DLC)')
+  const regTone = wired?.senderRegistrationTone ?? (live ? 'warning' : 'success')
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
@@ -120,9 +120,12 @@ export function TransplantMctbSetupPhonePage({ wired }: { wired?: MctbSetupPhone
         <div className="flex items-start gap-3">
           <CheckCircle2 className="mt-0.5 size-5 text-success" aria-hidden="true" />
           <div className="text-sm">
-            <p className="font-medium">{wired?.verificationTitle ?? 'Test call received'}</p>
+            <p className="font-medium">{wired?.verificationTitle ?? (live ? 'Forwarding not verified' : 'Test call received')}</p>
             <p className="text-muted-foreground">
-              {wired?.verificationDetail ?? 'Sep 24, 4:17 PM from (512) 555-0142 · forwarded after 20s'}
+              {wired?.verificationDetail ??
+                (live
+                  ? 'Run a test call from another phone and let it ring unanswered.'
+                  : 'Sep 24, 4:17 PM from (512) 555-0142 · forwarded after 20s')}
             </p>
           </div>
         </div>
@@ -145,7 +148,7 @@ export function TransplantMctbSetupPhonePage({ wired }: { wired?: MctbSetupPhone
               label: 'Registration',
               value: <Pill tone={regTone}>{regLabel}</Pill>,
             },
-            { label: 'Throughput', value: '75 msg/min' },
+            ...(live ? [] : [{ label: 'Throughput', value: '75 msg/min' }]),
           ]}
         />
       </Panel>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { pickWizardFieldComponents } from "./wizard-field-kit";
 import {
   applyWizardPreset,
   createDefaultWizardState,
@@ -10,6 +10,7 @@ import {
   wizardHeadline,
   hireWizardHeadline,
   AMY_FIXED_CAPABILITIES,
+  usesCfnaUnansweredIngressModel,
 } from "@/lib/solutions/appointment-receptionist/wizard-presets";
 import { type AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
 import { toErrorMessage } from "@/lib/errors";
@@ -19,6 +20,11 @@ import {
   stepIndexFromQuery,
   stepQueryFromIndex,
 } from "@/lib/mctb/voice-agent/wizard-steps";
+import {
+  RECEPTIONIST_WIZARD_EDIT_PATH,
+  stepIndexFromReceptionistQuery,
+  receptionistStepQueryFromIndex,
+} from "@/lib/voice/receptionist/wizard-step-url";
 import { computeMctbWizardStepReadiness } from "@/lib/mctb/voice-agent/step-readiness";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -37,7 +43,7 @@ const STORAGE_KEY_LEGACY = "transovo.appointment-receptionist.wizard.v1";
 const STORAGE_KEY_MCTB = "transovo.mctb.voice-agent.wizard.v1";
 
 export type AppointmentReceptionistWizardProps = {
-  presentation?: "legacy" | "mctb";
+  presentation?: "legacy" | "mctb" | "opus";
   onAgentStatusChange?: (status: "draft" | "active" | "needs_attention" | null) => void;
   onAgentIdChange?: (agentId: string | null) => void;
   onSolutionNameChange?: (solutionName: string) => void;
@@ -59,6 +65,7 @@ export function AppointmentReceptionistWizard({
   onSolutionNameChange,
 }: AppointmentReceptionistWizardProps) {
   const isMctb = presentation === "mctb";
+  const isOpus = presentation === "opus";
   const storageKey = isMctb ? STORAGE_KEY_MCTB : STORAGE_KEY_LEGACY;
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -104,7 +111,19 @@ export function AppointmentReceptionistWizard({
     async function hydrate() {
       try {
         const setupId = searchParams?.get("setupId");
-        const agentId = searchParams?.get("agentId");
+        let agentId = searchParams?.get("agentId");
+        if (isOpus && !setupId && !agentId) {
+          try {
+            const agentsRes = await fetch("/api/voice/agents");
+            if (agentsRes.ok) {
+              const agentsJson = await agentsRes.json();
+              const list = (agentsJson.data || []) as Array<{ id: string }>;
+              agentId = list[0]?.id ?? null;
+            }
+          } catch {
+            /* optional */
+          }
+        }
         if (setupId || agentId) {
           const qs = new URLSearchParams();
           if (setupId) qs.set("setupId", setupId);
@@ -148,10 +167,14 @@ export function AppointmentReceptionistWizard({
                     ? "draft"
                     : "needs_attention",
               );
-              const fromUrl = stepIndexFromQuery(
-                searchParams?.get("step"),
-                mctbVisibleWizardSteps(loaded.state),
-              );
+              const visibleSteps = isMctb
+                ? mctbVisibleWizardSteps(loaded.state)
+                : visibleWizardSteps(merged, { hireMode, brainAlreadyDone: hireMode });
+              const fromUrl = isMctb
+                ? stepIndexFromQuery(searchParams?.get("step"), visibleSteps)
+                : isOpus
+                  ? stepIndexFromReceptionistQuery(searchParams?.get("step"), visibleSteps)
+                  : null;
               setStepIndex(fromUrl ?? 0);
               setHydrated(true);
               return;
@@ -201,6 +224,12 @@ export function AppointmentReceptionistWizard({
             mctbVisibleWizardSteps(state),
           );
           if (fromUrl !== null) setStepIndex(fromUrl);
+        } else if (isOpus) {
+          const fromUrl = stepIndexFromReceptionistQuery(
+            searchParams?.get("step"),
+            visibleWizardSteps(state, { hireMode, brainAlreadyDone: hireMode }),
+          );
+          if (fromUrl !== null) setStepIndex(fromUrl);
         }
       } catch {
         // ignore corrupt draft
@@ -211,7 +240,7 @@ export function AppointmentReceptionistWizard({
     return () => {
       cancelled = true;
     };
-  }, [preset, searchParams, hireMode, isMctb, storageKey, onAgentStatusChange]);
+  }, [preset, searchParams, hireMode, isMctb, isOpus, storageKey, onAgentStatusChange]);
 
   useEffect(() => {
     if (!hydrated || !hireMode) return;
@@ -313,6 +342,34 @@ export function AppointmentReceptionistWizard({
   useEffect(() => {
     setStepIndex((i) => Math.min(i, Math.max(0, steps.length - 1)));
   }, [steps.length]);
+
+  useEffect(() => {
+    if (!hydrated || !isOpus) return;
+    const fromUrl = stepIndexFromReceptionistQuery(searchParams?.get("step"), steps);
+    if (fromUrl !== null) {
+      setStepIndex((i) => (i === fromUrl ? i : fromUrl));
+    }
+  }, [hydrated, isOpus, searchParams, steps]);
+
+  useEffect(() => {
+    if (!hydrated || !isOpus) return;
+    if (searchParams?.get("step")) return;
+    const q = receptionistStepQueryFromIndex(stepIndex, steps);
+    const params = new URLSearchParams(searchParams?.toString() || "");
+    params.set("step", q);
+    if (state.agentId) params.set("agentId", state.agentId);
+    if (state.setupId) params.set("setupId", state.setupId);
+    router.replace(`${RECEPTIONIST_WIZARD_EDIT_PATH}?${params.toString()}`, { scroll: false });
+  }, [
+    hydrated,
+    isOpus,
+    router,
+    searchParams,
+    stepIndex,
+    steps,
+    state.agentId,
+    state.setupId,
+  ]);
 
   function postSavePath(agentId: string, step?: string) {
     if (isMctb) {
@@ -418,9 +475,20 @@ export function AppointmentReceptionistWizard({
         params.set("step", q);
         if (state.agentId) params.set("agentId", state.agentId);
         router.replace(`${MCTB_ROUTES.voiceAgent}?${params.toString()}`, { scroll: false });
+        return;
+      }
+      if (isOpus) {
+        const q = receptionistStepQueryFromIndex(next, steps);
+        const params = new URLSearchParams(searchParams?.toString() || "");
+        params.set("step", q);
+        if (state.agentId) params.set("agentId", state.agentId);
+        if (state.setupId) params.set("setupId", state.setupId);
+        router.replace(`${RECEPTIONIST_WIZARD_EDIT_PATH}?${params.toString()}`, {
+          scroll: false,
+        });
       }
     },
-    [isMctb, router, searchParams, state.agentId, steps],
+    [isMctb, isOpus, router, searchParams, state.agentId, state.setupId, steps],
   );
 
   async function onContinue() {
@@ -444,17 +512,21 @@ export function AppointmentReceptionistWizard({
   }
 
   const step = steps[stepIndex];
-  const stepPresentation = isMctb ? "mctb" : "legacy";
+  const stepPresentation = isMctb ? "mctb" : isOpus ? "opus" : "legacy";
+
+  const { Button: FooterButton } = pickWizardFieldComponents(stepPresentation);
 
   return (
     <div
       className={
         isMctb
           ? "mctb-va-wizard flex flex-col"
-          : "flex min-h-[calc(100vh-7rem)] flex-col"
+          : isOpus
+            ? "flex flex-col"
+            : "flex min-h-[calc(100vh-7rem)] flex-col"
       }
     >
-      {!isMctb ? (
+      {!isMctb && !isOpus ? (
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
@@ -475,7 +547,9 @@ export function AppointmentReceptionistWizard({
         className={
           isMctb
             ? "mctb-va-stepper-wrap"
-            : "mb-6 rounded-xl border border-border bg-card px-3 py-4 sm:px-5"
+            : isOpus
+              ? "mb-6"
+              : "mb-6 rounded-xl border border-border bg-card px-3 py-4 sm:px-5"
         }
       >
         <WizardStepper
@@ -483,7 +557,7 @@ export function AppointmentReceptionistWizard({
           currentIndex={stepIndex}
           presentation={presentation}
           stepStatuses={stepStatuses}
-          onStepSelect={isMctb ? goToStep : undefined}
+          onStepSelect={isMctb || isOpus ? goToStep : undefined}
         />
       </div>
 
@@ -494,10 +568,16 @@ export function AppointmentReceptionistWizard({
             patch={patch}
             hireMode={hireMode}
             presentation={stepPresentation}
+            hideAnswerWhen={usesCfnaUnansweredIngressModel(state.preset)}
           />
         ) : null}
         {step?.id === "phone" ? (
-          <PhoneStep state={state} patch={patch} presentation={stepPresentation} />
+          <PhoneStep
+            state={state}
+            patch={patch}
+            presentation={stepPresentation}
+            hideLegacyIngressControls={usesCfnaUnansweredIngressModel(state.preset)}
+          />
         ) : null}
         {step?.id === "information" ? (
           <InformationStep state={state} patch={patch} presentation={stepPresentation} />
@@ -537,30 +617,47 @@ export function AppointmentReceptionistWizard({
         className={
           isMctb
             ? "mctb-va-footer sticky bottom-0 z-20 mt-6"
-            : "sticky bottom-0 z-20 -mx-4 mt-6 border-t border-border bg-card/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:static lg:mx-0 lg:mt-8 lg:rounded-xl lg:border lg:px-5"
+            : isOpus
+              ? "fixed bottom-0 left-0 right-0 z-20 mt-6 border-t bg-background/95 px-4 py-3 backdrop-blur md:pl-[var(--sidebar-width,0px)]"
+              : "sticky bottom-0 z-20 -mx-4 mt-6 border-t border-border bg-card/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:static lg:mx-0 lg:mt-8 lg:rounded-xl lg:border lg:px-5"
         }
       >
-        <div className="flex items-center justify-between gap-3">
-          <Button
+        <div
+          className={
+            isOpus
+              ? "mx-auto flex max-w-7xl items-center justify-between gap-3"
+              : "flex items-center justify-between gap-3"
+          }
+        >
+          <FooterButton
             variant="outline"
             disabled={stepIndex === 0 || busy}
             onClick={() => goToStep(stepIndex - 1)}
           >
             Back
-          </Button>
+          </FooterButton>
           <div className="flex flex-1 flex-col items-end gap-1 sm:flex-row sm:items-center sm:justify-end">
             {error ? (
-              <p className="max-w-md text-right text-xs text-danger sm:mr-3">{error}</p>
+              <p
+                className={
+                  isOpus
+                    ? "max-w-md text-right text-xs text-destructive sm:mr-3"
+                    : "max-w-md text-right text-xs text-danger sm:mr-3"
+                }
+                role={error ? "alert" : undefined}
+              >
+                {error}
+              </p>
             ) : null}
             <div className="flex gap-2">
-              <Button
+              <FooterButton
                 variant="outline"
                 disabled={busy || !hydrated}
                 onClick={() => void onSaveDraft()}
               >
                 {isMctb ? "Save" : "Save draft"}
-              </Button>
-              <Button
+              </FooterButton>
+              <FooterButton
                 className={isMctb ? "btn-primary-mctb" : undefined}
                 data-testid={
                   stepIndex === steps.length - 1 ? "wizard-activate-footer" : "wizard-continue"
@@ -575,7 +672,7 @@ export function AppointmentReceptionistWizard({
                       ? "Put Amy to work"
                       : "Activate"
                     : "Continue"}
-              </Button>
+              </FooterButton>
             </div>
           </div>
         </div>

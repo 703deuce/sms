@@ -6,7 +6,12 @@ import type {
   KnowledgeItemStatus,
   KnowledgeSource,
 } from "@/lib/solutions/appointment-receptionist/types";
-import { Input, Label, Textarea } from "@/components/ui/input";
+import {
+  pickWizardFieldComponents,
+  WizardSelectField,
+  WizardToggleField,
+  type WizardPresentation,
+} from "../wizard-field-kit";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -17,7 +22,52 @@ import {
   Pencil,
   X,
 } from "lucide-react";
+import { EmptyState, Panel } from "@/newui-transplant/components/app/kit";
+import {
+  ButtonLink,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  OpusCalloutPanel,
+  OpusDensePanel,
+} from "../wizard-opus-ui";
 import { InfoCallout, SelectableCard, SidePanel, StatusPill } from "../ui";
+import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
+import { InformationStepOperationalExtras } from "@/newui-transplant/connected/voice/information-step-operational-extras";
+
+function OpusOrLegacyInset({
+  isOpus,
+  children,
+  accent,
+  className,
+}: {
+  isOpus: boolean;
+  children: ReactNode;
+  accent?: boolean;
+  className?: string;
+}) {
+  if (isOpus) {
+    return accent ? (
+      <OpusCalloutPanel className={cn("mt-3", className)}>{children}</OpusCalloutPanel>
+    ) : (
+      <OpusDensePanel className={cn("mt-3", className)}>{children}</OpusDensePanel>
+    );
+  }
+  return (
+    <div
+      className={cn(
+        "mt-3 rounded-xl border p-4",
+        accent ? "border-primary/30 bg-card" : "border-border bg-card",
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
 import { BusinessScheduleEditor } from "../operating-maturity-editor";
 
 type KnowledgeItem = AppointmentReceptionistWizardState["knowledgeItems"][number];
@@ -25,10 +75,13 @@ type KnowledgeItem = AppointmentReceptionistWizardState["knowledgeItems"][number
 function ConnectExistingKnowledge({
   selectedId,
   onSelect,
+  presentation = "legacy",
 }: {
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  presentation?: WizardPresentation;
 }) {
+  const { Button } = pickWizardFieldComponents(presentation);
   const [rows, setRows] = useState<Array<{ id: string; name: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -62,9 +115,10 @@ function ConnectExistingKnowledge({
     };
   }, []);
 
-  return (
-    <div className="mt-3 space-y-3 rounded-xl border border-primary/30 bg-card p-4 text-sm">
-      <p className="font-medium">Connect existing knowledge</p>
+  const isOpus = presentation === "opus";
+  const body = (
+    <>
+      <p className={isOpus ? "text-sm font-medium" : "font-medium"}>Connect existing knowledge</p>
       <p className="text-xs text-muted-foreground">
         Attach a knowledge base already in this workspace. It is linked to the
         agent on save/activate. You can also open Integrations for CRM.
@@ -78,33 +132,45 @@ function ConnectExistingKnowledge({
           No knowledge bases yet — use Guided profile or Upload first.
         </p>
       ) : (
-        <select
-          className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
+        <WizardSelectField
+          presentation={presentation}
+          label="Knowledge base"
           value={selectedId || ""}
-          onChange={(e) => onSelect(e.target.value || null)}
-        >
-          <option value="">Select a knowledge base…</option>
-          {rows.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.name}
-            </option>
-          ))}
-        </select>
+          onChange={(v) => onSelect(v || null)}
+          options={[
+            { value: "", label: "Select a knowledge base…" },
+            ...rows.map((r) => ({ value: r.id, label: r.name })),
+          ]}
+        />
       )}
       <div className="flex flex-wrap gap-2">
-        <a
-          href="/integrations"
-          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
-        >
-          Open Integrations
-        </a>
-        <a
-          href="/voice/knowledge"
-          className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium"
-        >
-          Open Knowledge bases
-        </a>
+        {isOpus ? (
+          <ButtonLink href="/integrations" variant="default">
+            Open Integrations
+          </ButtonLink>
+        ) : (
+          <Button type="button" variant="default" size="sm" asChild>
+            <a href="/integrations">Open Integrations</a>
+          </Button>
+        )}
+        {isOpus ? (
+          <ButtonLink href="/voice/knowledge" variant="outline">
+            Open Knowledge bases
+          </ButtonLink>
+        ) : (
+          <Button type="button" variant="outline" size="sm" asChild>
+            <a href="/voice/knowledge">Open Knowledge bases</a>
+          </Button>
+        )}
       </div>
+    </>
+  );
+  if (isOpus) {
+    return <OpusCalloutPanel className="mt-3 text-sm">{body}</OpusCalloutPanel>;
+  }
+  return (
+    <div className="mt-3 space-y-3 rounded-xl border border-primary/30 bg-card p-4 text-sm">
+      {body}
     </div>
   );
 }
@@ -225,9 +291,12 @@ export function InformationStep({
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
-  presentation?: "legacy" | "mctb";
+  presentation?: "legacy" | "mctb" | "opus";
 }) {
   const isMctb = presentation === "mctb";
+  const isOpus = presentation === "opus";
+  const uiVariant = isOpus ? "opus" : "legacy";
+  const { Input, Label, Textarea, Button } = pickWizardFieldComponents(presentation);
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -498,41 +567,34 @@ export function InformationStep({
     setEditingId(null);
   }
 
-  return (
-    <div className="flex gap-6">
+  const setupColumn = (
       <div className="min-w-0 flex-1 space-y-8">
         <div>
-          <h2 className="font-display text-xl font-semibold tracking-tight">
-            {isMctb ? "Business Knowledge" : "What should your agent know?"}
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Add business information so the AI can answer with confidence. Facts
-            here are written into the agent knowledge on save/activate.
-          </p>
-          <div className="mt-4 rounded-xl border border-border bg-card p-4">
-            <label className="flex cursor-pointer items-start gap-3">
-              <input
-                type="checkbox"
-                className="mt-1 h-4 w-4 rounded border-border"
-                checked={state.knowledgeBaseEnabled !== false}
-                onChange={(e) =>
-                  patch({
-                    knowledgeBaseEnabled: e.target.checked,
-                  })
-                }
-              />
-              <span className="min-w-0">
-                <span className="text-sm font-medium">
-                  Search uploaded documents during calls
-                </span>
-                <span className="mt-0.5 block text-xs text-muted-foreground">
-                  Hours, services, and FAQs in your profile below are always
-                  available immediately. Turn this on to let Amy search PDFs and
-                  other indexed documents when a caller asks something not covered
-                  there.
-                </span>
-              </span>
-            </label>
+          {isOpus ? (
+            <Panel
+              title={isMctb ? "Business Knowledge" : "What should your agent know?"}
+              description="Add business information so the AI can answer with confidence. Facts here are written into the agent knowledge on save/activate."
+            />
+          ) : (
+            <>
+              <h2 className="font-display text-xl font-semibold tracking-tight">
+                {isMctb ? "Business Knowledge" : "What should your agent know?"}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Add business information so the AI can answer with confidence. Facts here are
+                written into the agent knowledge on save/activate.
+              </p>
+            </>
+          )}
+          {isOpus ? (
+            <OpusDensePanel className="mt-4">
+            <WizardToggleField
+              presentation={presentation}
+              label="Search uploaded documents during calls"
+              description="Hours, services, and FAQs in your profile below are always available immediately. Turn this on to let Amy search PDFs and other indexed documents when a caller asks something not covered there."
+              checked={state.knowledgeBaseEnabled !== false}
+              onCheckedChange={(on) => patch({ knowledgeBaseEnabled: on })}
+            />
             {state.knowledgeBaseEnabled === false ? (
               <p className="mt-2 text-xs text-muted-foreground">
                 Large document search is off. Prompt facts and FAQs still work.
@@ -546,9 +608,34 @@ export function InformationStep({
                 enable document search.
               </p>
             ) : null}
-          </div>
+            </OpusDensePanel>
+          ) : (
+            <div className="mt-4 rounded-xl border border-border bg-card p-4">
+              <WizardToggleField
+                presentation={presentation}
+                label="Search uploaded documents during calls"
+                description="Hours, services, and FAQs in your profile below are always available immediately. Turn this on to let Amy search PDFs and other indexed documents when a caller asks something not covered there."
+                checked={state.knowledgeBaseEnabled !== false}
+                onCheckedChange={(on) => patch({ knowledgeBaseEnabled: on })}
+              />
+              {state.knowledgeBaseEnabled === false ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Large document search is off. Prompt facts and FAQs still work.
+                </p>
+              ) : !state.linkedKnowledgeBaseId &&
+                state.knowledgeSource !== "upload_docs" &&
+                state.knowledgeSource !== "website" &&
+                state.knowledgeSource !== "connect_data" ? (
+                <p className="mt-2 text-xs text-warning">
+                  Upload a document, scan a website, or connect a knowledge base to enable document
+                  search.
+                </p>
+              ) : null}
+            </div>
+          )}
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <SelectableCard
+              variant={uiVariant}
               selected={state.knowledgeSource === "website"}
               onClick={() => patch({ knowledgeSource: "website" as KnowledgeSource })}
               title="Import from your website"
@@ -556,6 +643,7 @@ export function InformationStep({
               icon={<Globe className="h-4 w-4" />}
             />
             <SelectableCard
+              variant={uiVariant}
               selected={state.knowledgeSource === "guided_profile"}
               onClick={() => patch({ knowledgeSource: "guided_profile" })}
               title="Complete guided business profile"
@@ -563,6 +651,7 @@ export function InformationStep({
               icon={<FileText className="h-4 w-4" />}
             />
             <SelectableCard
+              variant={uiVariant}
               selected={state.knowledgeSource === "upload_docs"}
               onClick={() => patch({ knowledgeSource: "upload_docs" })}
               title="Upload documents"
@@ -570,6 +659,7 @@ export function InformationStep({
               icon={<CloudUpload className="h-4 w-4" />}
             />
             <SelectableCard
+              variant={uiVariant}
               selected={state.knowledgeSource === "connect_data"}
               onClick={() => patch({ knowledgeSource: "connect_data" })}
               title="Connect existing data"
@@ -579,7 +669,7 @@ export function InformationStep({
           </div>
 
           {state.knowledgeSource === "website" ? (
-            <div className="mt-3 rounded-xl border border-primary/30 bg-card p-4">
+            <OpusOrLegacyInset isOpus={isOpus} accent>
               <Label htmlFor="website-url" className="text-xs">
                 Business website URL
               </Label>
@@ -591,23 +681,24 @@ export function InformationStep({
                   placeholder="https://www.example.com"
                   disabled={scanning}
                 />
-                <button
+                <Button
                   type="button"
+                  size="sm"
                   onClick={() => void importWebsiteKnowledge()}
                   disabled={scanning || !state.websiteUrl.trim()}
-                  className="shrink-0 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground disabled:opacity-60"
+                  className="shrink-0"
                 >
                   {scanning ? "Scanning…" : "Scan"}
-                </button>
+                </Button>
               </div>
               {scanError ? (
                 <p className="mt-2 text-xs text-warning">{scanError}</p>
               ) : null}
-            </div>
+            </OpusOrLegacyInset>
           ) : null}
 
           {state.knowledgeSource === "guided_profile" ? (
-            <div className="mt-3 space-y-3 rounded-xl border border-primary/30 bg-card p-4">
+            <OpusOrLegacyInset isOpus={isOpus} accent className="space-y-3">
               <div>
                 <Label className="text-xs">Business name</Label>
                 <Input
@@ -662,18 +753,14 @@ export function InformationStep({
                   placeholder="24h cancellation policy…"
                 />
               </div>
-              <button
-                type="button"
-                onClick={() => saveGuidedProfile()}
-                className="rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground"
-              >
+              <Button type="button" size="sm" onClick={() => saveGuidedProfile()}>
                 Save profile to knowledge
-              </button>
-            </div>
+              </Button>
+            </OpusOrLegacyInset>
           ) : null}
 
           {state.knowledgeSource === "upload_docs" ? (
-            <div className="mt-3 rounded-xl border border-primary/30 bg-card p-4">
+            <OpusOrLegacyInset isOpus={isOpus} accent>
               <input
                 ref={fileRef}
                 type="file"
@@ -682,26 +769,41 @@ export function InformationStep({
                 className="hidden"
                 onChange={(e) => void onUploadFiles(e.target.files)}
               />
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                className="flex w-full flex-col items-center rounded-xl border border-dashed border-border bg-card/50 px-4 py-8 text-center hover:bg-muted/40"
-              >
-                <CloudUpload className="h-6 w-6 text-muted-foreground" />
-                <p className="mt-2 text-sm font-medium">Upload knowledge files</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  PDF, DOCX, TXT, MD, CSV — PDFs upload to your knowledge base for
-                  Telnyx RAG.
-                </p>
-              </button>
+              {isOpus ? (
+                <EmptyState
+                  icon={CloudUpload}
+                  title="Upload knowledge files"
+                  description="PDF, DOCX, TXT, MD, CSV — PDFs upload to your knowledge base for Telnyx RAG."
+                  action={
+                    <Button type="button" variant="outline" onClick={() => fileRef.current?.click()}>
+                      Choose files
+                    </Button>
+                  }
+                />
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => fileRef.current?.click()}
+                  className="flex h-auto w-full flex-col items-center rounded-xl border border-dashed bg-card/50 px-4 py-8 text-center hover:bg-muted/40"
+                >
+                  <CloudUpload className="h-6 w-6 text-muted-foreground" />
+                  <p className="mt-2 text-sm font-medium">Upload knowledge files</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    PDF, DOCX, TXT, MD, CSV — PDFs upload to your knowledge base for
+                    Telnyx RAG.
+                  </p>
+                </Button>
+              )}
               {uploadNote ? (
                 <p className="mt-2 text-xs text-success">{uploadNote}</p>
               ) : null}
-            </div>
+            </OpusOrLegacyInset>
           ) : null}
 
           {state.knowledgeSource === "connect_data" ? (
             <ConnectExistingKnowledge
+              presentation={presentation}
               selectedId={state.linkedKnowledgeBaseId || null}
               onSelect={(id) => {
                 patch({
@@ -726,11 +828,9 @@ export function InformationStep({
         </div>
 
         <div className="space-y-2">
-          {state.knowledgeItems.map((item) => (
-            <div
-              key={item.id}
-              className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3"
-            >
+          {state.knowledgeItems.map((item) => {
+            const row = (
+              <div className="flex items-center gap-3">
               <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
                 <FileText className="h-4 w-4" />
               </span>
@@ -741,6 +841,7 @@ export function InformationStep({
                 </p>
               </div>
               <StatusPill
+                variant={uiVariant}
                 tone={
                   item.status === "complete"
                     ? "success"
@@ -757,8 +858,11 @@ export function InformationStep({
                 {item.statusLabel}
               </StatusPill>
               {item.status === "pending_review" || item.status === "extracted" ? (
-                <button
+                <Button
                   type="button"
+                  variant="outline"
+                  size="sm"
+                  className="text-[11px]"
                   onClick={() =>
                     patch({
                       knowledgeItems: state.knowledgeItems.map((i) =>
@@ -772,28 +876,43 @@ export function InformationStep({
                       ),
                     })
                   }
-                  className="rounded-lg border border-border px-2 py-1 text-[11px] font-semibold text-foreground hover:bg-muted"
                 >
                   Approve
-                </button>
+                </Button>
               ) : null}
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground"
                 onClick={() => openEdit(item)}
-                className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                 aria-label={`Edit ${item.label}`}
               >
                 <Pencil className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
+              </Button>
+              </div>
+            );
+            return isOpus ? (
+              <OpusDensePanel key={item.id} bodyClassName="px-4 py-3">
+                {row}
+              </OpusDensePanel>
+            ) : (
+              <div
+                key={item.id}
+                className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3"
+              >
+                {row}
+              </div>
+            );
+          })}
         </div>
 
         {state.knowledgeItems.some(
           (i) => i.status === "pending_review" || i.status === "extracted",
         ) ? (
-          <button
+          <Button
             type="button"
+            size="sm"
             onClick={() =>
               patch({
                 knowledgeItems: state.knowledgeItems.map((i) =>
@@ -803,66 +922,98 @@ export function InformationStep({
                 ),
               })
             }
-            className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground"
           >
             Approve all imported facts for shared brain
-          </button>
+          </Button>
         ) : null}
 
         {editingId ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-lg rounded-xl border border-border bg-card p-5 shadow-lg">
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-semibold">Edit knowledge item</h3>
-                <button
-                  type="button"
-                  onClick={() => setEditingId(null)}
-                  className="rounded-md p-1 text-muted-foreground hover:bg-muted"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-              <Label className="text-xs">Label</Label>
-              <Input
-                className="mt-1"
-                value={editDraft.label}
-                onChange={(e) =>
-                  setEditDraft((d) => ({ ...d, label: e.target.value }))
-                }
-              />
-              <Label className="mt-3 block text-xs">Facts the agent should know</Label>
-              <Textarea
-                className="mt-1 min-h-[140px]"
-                value={editDraft.summary}
-                onChange={(e) =>
-                  setEditDraft((d) => ({ ...d, summary: e.target.value }))
-                }
-                placeholder="Hours, pricing, policies, directions…"
-              />
-              <div className="mt-4 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setEditingId(null)}
-                  className="rounded-lg border border-border px-3 py-1.5 text-xs"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={saveEdit}
-                  className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
-                >
-                  Save
-                </button>
+          isOpus ? (
+            <Dialog open onOpenChange={(open) => !open && setEditingId(null)}>
+              <DialogContent className="sm:max-w-lg" showCloseButton>
+                <DialogHeader>
+                  <DialogTitle>Edit knowledge item</DialogTitle>
+                </DialogHeader>
+                <Label className="text-xs">Label</Label>
+                <Input
+                  className="mt-1"
+                  value={editDraft.label}
+                  onChange={(e) =>
+                    setEditDraft((d) => ({ ...d, label: e.target.value }))
+                  }
+                />
+                <Label className="mt-3 block text-xs">Facts the agent should know</Label>
+                <Textarea
+                  className="mt-1 min-h-[140px]"
+                  value={editDraft.summary}
+                  onChange={(e) =>
+                    setEditDraft((d) => ({ ...d, summary: e.target.value }))
+                  }
+                  placeholder="Hours, pricing, policies, directions…"
+                />
+                <DialogFooter>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setEditingId(null)}>
+                    Cancel
+                  </Button>
+                  <Button type="button" size="sm" onClick={saveEdit}>
+                    Save
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          ) : (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+              <div className="w-full max-w-lg rounded-xl border border-border bg-card p-5 shadow-lg">
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold">Edit knowledge item</h3>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setEditingId(null)}
+                    aria-label="Close"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                <Label className="text-xs">Label</Label>
+                <Input
+                  className="mt-1"
+                  value={editDraft.label}
+                  onChange={(e) =>
+                    setEditDraft((d) => ({ ...d, label: e.target.value }))
+                  }
+                />
+                <Label className="mt-3 block text-xs">Facts the agent should know</Label>
+                <Textarea
+                  className="mt-1 min-h-[140px]"
+                  value={editDraft.summary}
+                  onChange={(e) =>
+                    setEditDraft((d) => ({ ...d, summary: e.target.value }))
+                  }
+                  placeholder="Hours, pricing, policies, directions…"
+                />
+                <div className="mt-4 flex justify-end gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => setEditingId(null)}>
+                    Cancel
+                  </Button>
+                  <Button type="button" size="sm" onClick={saveEdit}>
+                    Save
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
+          )
         ) : null}
 
-        <BusinessScheduleEditor state={state} patch={patch} />
-      </div>
+        <BusinessScheduleEditor state={state} patch={patch} presentation={presentation} />
 
-      <SidePanel title="Knowledge quality">
+        <InformationStepOperationalExtras state={state} />
+      </div>
+  );
+
+  const knowledgeSidePanel = (
+      <SidePanel variant={uiVariant} title="Knowledge quality">
         <ul className="space-y-3 text-xs">
           {state.knowledgeItems.map((item) => (
             <li key={item.id} className="flex items-start gap-2">
@@ -882,11 +1033,17 @@ export function InformationStep({
             </li>
           ))}
         </ul>
-        <InfoCallout>
+        <InfoCallout variant={uiVariant}>
           On save/activate, these facts are written into the agent knowledge base
           so Telnyx can answer without inventing details.
         </InfoCallout>
       </SidePanel>
+  );
+
+  return (
+    <div className="flex gap-6">
+      {setupColumn}
+      {knowledgeSidePanel}
     </div>
   );
 }
