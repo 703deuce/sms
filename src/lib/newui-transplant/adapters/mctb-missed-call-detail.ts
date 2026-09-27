@@ -93,10 +93,14 @@ export function buildMctbMissedCallDetailWired(
         ];
 
   const messages =
-    conversation?.messages?.map((m) => ({
-      from: m.direction === "INBOUND" ? "customer" as const : "business" as const,
-      text: m.body,
-    })) ?? [];
+    conversation?.messages?.map((m) => {
+      const dir = String(m.direction || "").toLowerCase();
+      const outbound = dir === "outbound" || dir === "out";
+      return {
+        from: outbound ? ("business" as const) : ("customer" as const),
+        text: m.body,
+      };
+    }) ?? [];
 
   const linkActivity =
     linkClicks.length > 0
@@ -115,7 +119,9 @@ export function buildMctbMissedCallDetailWired(
     caller,
     phone,
     phoneTel: callerE164,
-    line: formatMctbPhoneLabel(String(event.businessLineE164 || event.toE164 || "")),
+    line: formatMctbPhoneLabel(
+      String(event.businessE164 || event.businessLineE164 || event.toE164 || ""),
+    ),
     missed,
     recovery,
     trigger,
@@ -131,7 +137,10 @@ export function buildMctbMissedCallDetailWired(
     requestForm,
     callDetailsRows: [
       { label: "Trigger", value: trigger },
-      { label: "Business line", value: formatMctbPhoneLabel(String(event.businessLineE164 || "—")) },
+      {
+        label: "Business line",
+        value: formatMctbPhoneLabel(String(event.businessE164 || event.businessLineE164 || "—")),
+      },
     ],
     consentRows: [
       { label: "Mode", value: consentMode },

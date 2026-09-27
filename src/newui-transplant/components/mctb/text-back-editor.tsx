@@ -22,6 +22,8 @@ export function TextBackEditor() {
   const [sender, setSender] = useState('—')
   const [senderReady, setSenderReady] = useState(false)
   const [canEdit, setCanEdit] = useState(true)
+  const [senderMode, setSenderMode] = useState<'PLATFORM' | 'WORKSPACE'>('WORKSPACE')
+  const [managedDescription, setManagedDescription] = useState<string | null>(null)
   const [phoneNumberId, setPhoneNumberId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const ref = useRef<HTMLTextAreaElement>(null)
@@ -39,7 +41,12 @@ export function TextBackEditor() {
       setConsentLabel(data.consentMode === 'existing_consent' ? 'Existing permission' : 'Press 1')
       setSender(data.messaging?.senderE164 || data.messaging?.senderLabel || business?.sender || '—')
       setSenderReady(Boolean(data.compliance?.messagingReady))
-      setCanEdit(data.messaging?.canEditRecoveryOpener !== false)
+      const mode = (data.messaging?.senderMode as 'PLATFORM' | 'WORKSPACE') || 'WORKSPACE'
+      setSenderMode(mode)
+      setManagedDescription(
+        typeof data.messaging?.description === 'string' ? data.messaging.description : null,
+      )
+      setCanEdit(data.messaging?.canEditRecoveryOpener !== false && mode !== 'PLATFORM')
     } finally {
       setLoading(false)
     }
@@ -88,7 +95,24 @@ export function TextBackEditor() {
           </p>
         </Panel>
 
-        <Panel title="Conversation opener" description="Sent right after the compliance message">
+        <Panel
+          title="Conversation opener"
+          description={
+            senderMode === 'PLATFORM'
+              ? 'Managed by Transovo — approved recovery template (locked for platform sender).'
+              : 'Sent right after the compliance message'
+          }
+        >
+          {senderMode === 'PLATFORM' && managedDescription ? (
+            <p className="mb-2 text-xs text-muted-foreground">{managedDescription}</p>
+          ) : null}
+          {senderMode === 'PLATFORM' ? (
+            <p className="flex gap-2 rounded-lg bg-muted/60 px-3 py-2.5 text-sm text-muted-foreground">
+              <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+              {opener}
+            </p>
+          ) : (
+            <>
           <label htmlFor="opener" className="sr-only">Conversation opener</label>
           <Textarea id="opener" ref={ref} rows={4} value={opener} onChange={(e) => setOpener(e.target.value)} disabled={!canEdit} />
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -103,6 +127,8 @@ export function TextBackEditor() {
             </span>
           </div>
           <div className="mt-4 flex justify-end"><SaveBar onSave={onSave} /></div>
+            </>
+          )}
         </Panel>
       </div>
 

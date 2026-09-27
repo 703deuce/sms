@@ -10,14 +10,23 @@ export function NewUiMctbMissedCallDetailPage({ eventId }: { eventId: string }) 
   const [detailJson, setDetailJson] = useState<unknown | null>(null);
   const [wired, setWired] = useState<ReturnType<typeof buildMctbMissedCallDetailWired> | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
     setDetailJson(null);
+    setError(null);
     fetch(`/api/mctb/missed-calls/${eventId}`, { cache: "no-store" })
-      .then((r) => r.json())
-      .then((json) => setDetailJson(json))
-      .catch(() => setDetailJson(null))
+      .then(async (r) => {
+        const json = await r.json();
+        if (!r.ok) throw new Error(json.error || "Failed to load missed call");
+        if (!json.event) throw new Error("Missed call record is incomplete");
+        setDetailJson(json);
+      })
+      .catch((err) => {
+        setDetailJson(null);
+        setError(err instanceof Error ? err.message : "Failed to load missed call");
+      })
       .finally(() => setLoading(false));
   }, [eventId]);
 
@@ -32,6 +41,13 @@ export function NewUiMctbMissedCallDetailPage({ eventId }: { eventId: string }) 
   }, [detailJson, business?.sender]);
 
   if (loading) return <p className="p-6 text-sm text-muted-foreground">Loading missed call…</p>;
+  if (error) {
+    return (
+      <p className="p-6 text-sm text-muted-foreground" role="alert">
+        {error}
+      </p>
+    );
+  }
   if (!wired) return <p className="p-6 text-sm text-muted-foreground">Missed call not found.</p>;
 
   return <TransplantMctbMissedCallDetailView wired={wired} />;

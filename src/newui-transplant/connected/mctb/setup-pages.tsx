@@ -42,18 +42,26 @@ function secondsFromDelayLabel(label: string): number {
 }
 
 function cooldownLabelFromMinutes(min: number): string {
+  if (min === 30) return "30 minutes";
   if (min === 60) return "1 hour";
+  if (min === 180) return "3 hours";
+  if (min === 360) return "6 hours";
   if (min === 720) return "12 hours";
   if (min === 1440) return "24 hours";
   if (min === 10080) return "7 days";
-  return "24 hours";
+  return `${min} minutes`;
 }
 
 function minutesFromCooldownLabel(label: string): number {
+  if (label === "30 minutes") return 30;
   if (label === "1 hour") return 60;
+  if (label === "3 hours") return 180;
+  if (label === "6 hours") return 360;
   if (label === "12 hours") return 720;
   if (label === "24 hours") return 1440;
   if (label === "7 days") return 10080;
+  const m = /^(\d+)\s*minutes?$/i.exec(label.trim());
+  if (m) return Math.max(1, Number(m[1]));
   return 1440;
 }
 

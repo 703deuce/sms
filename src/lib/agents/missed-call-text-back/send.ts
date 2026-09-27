@@ -9,7 +9,7 @@ import {
   releaseTrialSmsSegmentReservation,
 } from "@/lib/mctb/entitlement";
 
-import { resolveMctbMessageTemplate, renderMctbMessageTemplate } from "@/lib/mctb/message-template";
+import { resolveMctbRecoveryOpenerTemplate, renderMctbMessageTemplate } from "@/lib/mctb/message-template";
 import {
   resolveMctbLinkDestinationUrl,
   resolveMctbTemplateVars,
@@ -185,7 +185,7 @@ export async function executeMissedCallTextSend(input: {
 
   const rawBody = demoMode
     ? getDemoMessageBody()
-    : renderTemplate(resolveMctbMessageTemplate(config), templateVars);
+    : renderTemplate(resolveMctbRecoveryOpenerTemplate(config), templateVars);
 
   const destinationUrl = demoMode
     ? null

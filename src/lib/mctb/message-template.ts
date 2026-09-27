@@ -1,4 +1,8 @@
 import type { MissedCallTextConfigRecord } from "@/lib/agents/missed-call-text-back/types";
+import { DEFAULT_ONBOARDING_MESSAGE } from "@/lib/mctb/onboarding/types";
+
+/** Authoritative recovery opener for Transovo platform-sender workspaces (TFV/onboarding default). */
+export const MCTB_PLATFORM_SENDER_RECOVERY_OPENER = DEFAULT_ONBOARDING_MESSAGE;
 
 function parseHm(hm: string | null | undefined): number | null {
   if (!hm) return null;
@@ -40,6 +44,20 @@ export function resolveMctbMessageTemplate(
     return config.messageTemplateAfterHours.trim();
   }
   return config.messageTemplate;
+}
+
+/** Recovery SMS opener — platform sender ignores workspace-custom copy. */
+export function resolveMctbRecoveryOpenerTemplate(
+  config: MissedCallTextConfigRecord & {
+    messageTemplateBusinessHours?: string | null;
+    messageTemplateAfterHours?: string | null;
+  },
+  now = new Date(),
+): string {
+  if (config.senderMode === "PLATFORM") {
+    return MCTB_PLATFORM_SENDER_RECOVERY_OPENER;
+  }
+  return resolveMctbMessageTemplate(config, now);
 }
 
 export function renderMctbMessageTemplate(

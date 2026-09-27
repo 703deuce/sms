@@ -24,6 +24,7 @@ import { isMctbSetupMessagingReady } from "@/lib/mctb/setup-messaging-ready";
 import { isExistingConsentModeEligible } from "@/lib/mctb/setup-consent-eligibility";
 import { hasActiveMctbPaidEntitlement } from "@/lib/mctb/entitlement";
 import { describeMctbSenderPresentation } from "@/lib/mctb/sender-presentation";
+import { resolveMctbRecoveryOpenerTemplate } from "@/lib/mctb/message-template";
 import { EXISTING_CONSENT_ATTESTATION_VERSION } from "@/lib/mctb/capture/attestation";
 import {
   resolveCanonicalMctbSetupPhoneId,
@@ -161,7 +162,7 @@ export async function GET() {
     workspaceId,
     runtime.smsPhoneNumberId,
   );
-  const runtimeForClient =
+  let runtimeForClient =
     sanitizedPhoneNumberId !== runtime.phoneNumberId ||
     sanitizedSmsPhoneNumberId !== runtime.smsPhoneNumberId
       ? {
@@ -170,6 +171,15 @@ export async function GET() {
           smsPhoneNumberId: sanitizedSmsPhoneNumberId,
         }
       : runtime;
+
+  if (runtimeForClient.senderMode === "PLATFORM") {
+    runtimeForClient = {
+      ...runtimeForClient,
+      messageTemplate: resolveMctbRecoveryOpenerTemplate(runtimeForClient),
+      messageTemplateBusinessHours: null,
+      messageTemplateAfterHours: null,
+    };
+  }
 
   if (
     sanitizedPhoneNumberId &&

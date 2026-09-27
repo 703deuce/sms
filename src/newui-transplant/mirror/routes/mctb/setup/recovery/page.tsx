@@ -95,7 +95,7 @@ export function TransplantMctbSetupRecoveryPage({ wired }: { wired?: MctbSetupRe
           <FieldRow label="Cooldown" description="Don’t text the same caller again within this window">
             <Choice
               id="Cooldown"
-              options={['1 hour', '12 hours', '24 hours', '7 days']}
+              options={['30 minutes', '1 hour', '3 hours', '6 hours', '12 hours', '24 hours', '7 days']}
               value={cooldown}
               onValueChange={wired?.onCooldownChange}
             />
