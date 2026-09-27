@@ -449,9 +449,10 @@ export function PhoneStep({
             {state.connectionGreeting !== "none" ? (
               <div className="rounded-xl border border-border bg-card p-4">
                 <div className="flex items-center gap-3">
-                  <button
+                  <Button
                     type="button"
-                    className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground"
+                    size="icon-lg"
+                    className="rounded-full"
                     aria-label="Preview greeting"
                     onClick={() => {
                       const text =
@@ -465,7 +466,7 @@ export function PhoneStep({
                     }}
                   >
                     <Play className="h-4 w-4 fill-current" />
-                  </button>
+                  </Button>
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-medium">Preview connection greeting</p>
                     <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">

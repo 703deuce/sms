@@ -6,7 +6,7 @@ import type {
 } from "@/lib/solutions/appointment-receptionist/types";
 import { FieldRow, Panel, TextLink } from "@/newui-transplant/components/app/kit";
 import { Switch } from "@/newui-transplant/components/ui/switch";
-import { cn } from "@/lib/utils";
+import { SelectableCard } from "@/components/solutions/appointment-receptionist/ui";
 import { Calendar } from "lucide-react";
 
 const STRATEGIES: Array<[VoiceWizardBookingStrategy, string, string]> = [
@@ -61,9 +61,12 @@ export function ReceptionistBookingOpus({
           {STRATEGIES.map(([id, label, desc]) => {
             const selected = (state.bookingStrategy || "MICROSOFT_365") === id;
             return (
-              <button
+              <SelectableCard
                 key={id}
-                type="button"
+                variant="opus"
+                selected={selected}
+                title={label}
+                description={desc}
                 onClick={() => {
                   const caps = new Set(state.capabilities);
                   if (id === "NONE") {
@@ -77,16 +80,7 @@ export function ReceptionistBookingOpus({
                     capabilities: [...caps],
                   });
                 }}
-                className={cn(
-                  "rounded-lg border px-3 py-2.5 text-left text-sm transition-colors",
-                  selected
-                    ? "border-primary bg-accent/40"
-                    : "border-border hover:border-primary/40 hover:bg-muted/30",
-                )}
-              >
-                <span className="font-medium">{label}</span>
-                <span className="mt-0.5 block text-xs text-muted-foreground">{desc}</span>
-              </button>
+              />
             );
           })}
         </div>

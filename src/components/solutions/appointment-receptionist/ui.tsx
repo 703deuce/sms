@@ -1,6 +1,8 @@
 "use client";
 
-import { Panel } from "@/newui-transplant/components/app/kit";
+import { Panel, Pill } from "@/newui-transplant/components/app/kit";
+import { Button as OpusButton } from "@/newui-transplant/components/ui/button";
+import { Button as LegacyButton } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Check } from "lucide-react";
 import type { ReactNode } from "react";
@@ -27,13 +29,15 @@ export function SelectableCard({
   variant?: "legacy" | "opus";
 }) {
   const opusSelected = variant === "opus" && selected;
+  const Btn = variant === "opus" ? OpusButton : LegacyButton;
   return (
-    <button
+    <Btn
       type="button"
+      variant={variant === "opus" ? "outline" : "outline"}
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "relative flex w-full flex-col rounded-xl border bg-card p-4 text-left transition",
+        "relative flex h-auto w-full flex-col items-stretch rounded-xl border bg-card p-4 text-left font-normal transition",
         variant === "opus"
           ? opusSelected
             ? "border-primary bg-accent/40"
@@ -64,7 +68,7 @@ export function SelectableCard({
           {children}
         </div>
       </div>
-    </button>
+    </Btn>
   );
 }
 
@@ -81,12 +85,14 @@ export function RadioRow({
   description?: string;
   variant?: "legacy" | "opus";
 }) {
+  const Btn = variant === "opus" ? OpusButton : LegacyButton;
   return (
-    <button
+    <Btn
       type="button"
+      variant="outline"
       onClick={onClick}
       className={cn(
-        "flex w-full items-start gap-3 rounded-lg border px-4 py-3 text-left text-sm transition",
+        "flex h-auto w-full items-start justify-start gap-3 rounded-lg border px-4 py-3 text-left text-sm font-normal transition",
         variant === "opus"
           ? selected
             ? "border-primary bg-accent/40"
@@ -110,11 +116,24 @@ export function RadioRow({
           <span className="mt-0.5 block text-xs text-muted-foreground">{description}</span>
         ) : null}
       </span>
-    </button>
+    </Btn>
   );
 }
 
-export function InfoCallout({ children }: { children: ReactNode }) {
+export function InfoCallout({
+  children,
+  variant = "legacy",
+}: {
+  children: ReactNode;
+  variant?: "legacy" | "opus";
+}) {
+  if (variant === "opus") {
+    return (
+      <Panel className="text-xs leading-relaxed text-muted-foreground shadow-none">
+        {children}
+      </Panel>
+    );
+  }
   return (
     <div className="rounded-xl border border-accent/20 bg-accent/5 px-3.5 py-3 text-xs leading-relaxed text-foreground/80">
       {children}
@@ -125,9 +144,11 @@ export function InfoCallout({ children }: { children: ReactNode }) {
 export function StatusPill({
   tone,
   children,
+  variant = "legacy",
 }: {
   tone: "success" | "warning" | "muted" | "info";
   children: ReactNode;
+  variant?: "legacy" | "opus";
 }) {
   const styles = {
     success: "bg-success/10 text-success",
@@ -135,6 +156,17 @@ export function StatusPill({
     muted: "bg-muted text-muted-foreground",
     info: "bg-accent/10 text-accent",
   } as const;
+  if (variant === "opus") {
+    const pillTone =
+      tone === "success"
+        ? "success"
+        : tone === "warning"
+          ? "warning"
+          : tone === "info"
+            ? "primary"
+            : "neutral";
+    return <Pill tone={pillTone}>{children}</Pill>;
+  }
   return (
     <span
       className={cn(

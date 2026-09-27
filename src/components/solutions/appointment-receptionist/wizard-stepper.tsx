@@ -1,6 +1,7 @@
 "use client";
 
 import type { WizardStepStatus } from "@/lib/mctb/voice-agent/step-readiness";
+import { Button } from "@/newui-transplant/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Check } from "lucide-react";
 
@@ -27,12 +28,13 @@ export function WizardStepper({
             return (
               <li key={step.id}>
                 {onStepSelect ? (
-                  <button
+                  <Button
                     type="button"
+                    variant="link"
                     onClick={() => onStepSelect(index)}
                     aria-current={active ? "step" : undefined}
                     className={cn(
-                      "relative inline-flex h-10 items-center gap-2 pb-3 text-sm transition-colors",
+                      "relative inline-flex h-10 items-center gap-2 rounded-none pb-3 text-sm no-underline hover:no-underline",
                       active ? "font-medium text-foreground" : "text-muted-foreground hover:text-foreground",
                     )}
                   >
@@ -43,7 +45,7 @@ export function WizardStepper({
                     {active ? (
                       <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-primary" />
                     ) : null}
-                  </button>
+                  </Button>
                 ) : (
                   <span
                     className={cn(

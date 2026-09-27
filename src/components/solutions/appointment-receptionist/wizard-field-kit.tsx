@@ -7,6 +7,13 @@ import { Input as OpusInput } from "@/newui-transplant/components/ui/input";
 import { Label as OpusLabel } from "@/newui-transplant/components/ui/label";
 import { Switch as OpusSwitch } from "@/newui-transplant/components/ui/switch";
 import { Textarea as OpusTextarea } from "@/newui-transplant/components/ui/textarea";
+import {
+  Select as OpusSelect,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/newui-transplant/components/ui/select";
 import { Button as LegacyButton } from "@/components/ui/button";
 import { Input as LegacyInput, Label as LegacyLabel, Textarea as LegacyTextarea } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -115,7 +122,6 @@ function LegacyPill({
   );
 }
 
-/** Opus-styled native select (matches VoiceStep OpusPromptSelect). */
 export function WizardSelectField({
   presentation,
   label,
@@ -134,15 +140,36 @@ export function WizardSelectField({
   className?: string;
 }) {
   const { Label: L } = pickWizardFieldComponents(presentation);
-  const selectClass =
-    presentation === "opus"
-      ? "mt-1 h-9 w-full rounded-lg border border-border bg-background px-2 text-sm"
-      : "mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm";
+  if (presentation === "opus") {
+    return (
+      <div className={className}>
+        <L className="text-xs" id={id}>
+          {label}
+        </L>
+        <OpusSelect
+          value={value}
+          onValueChange={(next) => {
+            if (next != null) onChange(String(next));
+          }}
+        >
+          <SelectTrigger className="mt-1 h-9 w-full" aria-labelledby={id}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {options.map((o) => (
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </OpusSelect>
+      </div>
+    );
+  }
+  const selectClass = "mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm";
   return (
     <div className={className}>
-      <L className={presentation === "opus" ? "text-xs" : undefined} htmlFor={id}>
-        {label}
-      </L>
+      <L htmlFor={id}>{label}</L>
       <select
         id={id}
         className={selectClass}

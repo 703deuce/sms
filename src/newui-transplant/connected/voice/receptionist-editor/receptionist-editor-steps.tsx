@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/newui-transplant/components/ui/button";
 import { cn } from "@/lib/utils";
 import { RECEPTIONIST_EDITOR_STAGES, type ReceptionistEditorStage } from "./types";
 
@@ -20,12 +21,13 @@ export function ReceptionistEditorSteps({
           const active = stage === s.id;
           return (
             <li key={s.id}>
-              <button
+              <Button
                 type="button"
+                variant="link"
                 onClick={() => onStageChange(s.id)}
                 aria-current={active ? "step" : undefined}
                 className={cn(
-                  "relative inline-flex h-10 items-center gap-2 text-sm transition-colors",
+                  "relative inline-flex h-10 items-center gap-2 rounded-none text-sm no-underline hover:no-underline",
                   active ? "font-medium text-foreground" : "text-muted-foreground hover:text-foreground",
                 )}
               >
@@ -34,7 +36,7 @@ export function ReceptionistEditorSteps({
                 {active ? (
                   <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-primary" />
                 ) : null}
-              </button>
+              </Button>
             </li>
           );
         })}

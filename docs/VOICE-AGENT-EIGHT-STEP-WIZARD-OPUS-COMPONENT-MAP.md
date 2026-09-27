@@ -9,8 +9,10 @@ All Opus visual language comes from **`src/newui-transplant/`** (kit + ui primit
 | Wrapper | Opus source |
 |--------|-------------|
 | `WizardSection` | `@/newui-transplant/components/app/kit` → `Panel` |
-| `SelectableCard` (`variant="opus"`) | Same file — Opus border/selected styles on shared card pattern |
-| `RadioRow` (`variant="opus"`) | Same file — Opus list-row selection |
+| `SelectableCard` (`variant="opus"`) | `@/newui-transplant/components/ui/button` (outline) + Opus card layout |
+| `RadioRow` (`variant="opus"`) | Transplant `Button` (outline) + radio affordance |
+| `WizardSelectField` (`presentation="opus"`) | `@/newui-transplant/components/ui/select` |
+| `StatusPill` / `InfoCallout` (`variant="opus"`) | kit `Pill` / `Panel` |
 | `SidePanel` (`variant="opus"`) | `@/newui-transplant/components/app/kit` → `Panel` (sticky aside) |
 
 ---
@@ -21,7 +23,7 @@ All Opus visual language comes from **`src/newui-transplant/`** (kit + ui primit
 |----------|---------------------------|
 | Page shell | `Page`, `PageHeader` — `@/newui-transplant/components/app/kit` |
 | Back link | `ButtonLink` — `@/newui-transplant/components/app/button-link` |
-| Step indicator (01–08, underline tabs) | `WizardStepper` opus branch — same layout tokens as kit nav |
+| Step indicator (01–08, underline tabs) | `WizardStepper` opus branch — transplant `Button` `variant="link"` |
 | Footer Back / Save draft / Continue | `Button` — `@/newui-transplant/components/ui/button` |
 | Fixed footer bar | Opus layout in `wizard.tsx` (border-t, backdrop-blur; uses transplant button) |
 
@@ -49,6 +51,7 @@ All Opus visual language comes from **`src/newui-transplant/`** (kit + ui primit
 | Answering behavior | `WizardSection` → `Panel` + `RadioRow` `variant="opus"` |
 | Ring team / call recording | `WizardSection` → `Panel` |
 | Connection greeting options | `WizardSection` → `Panel` + `RadioRow` `variant="opus"` |
+| Greeting TTS preview | transplant `Button` `size="icon-lg"` |
 | Greeting URL / text | `Label`, `Input`, `Textarea` — transplant ui |
 | Phone setup aside | `SidePanel` `variant="opus"` |
 
@@ -104,7 +107,8 @@ Full wizard step (no `parts` prop) delegates to the same layout as the 3-stage O
 | Entire step layout | `IdentityConversationStage` — `@/newui-transplant/connected/voice/receptionist-editor/stages/identity-conversation-stage.tsx` |
 | Identity | kit `Panel` + `VoiceStep` `presentation="opus"` `parts={["identity"]}` |
 | Voice picks | kit `Panel`, `Pill` + `VoiceStep` `opusVoiceSlice="picks"` |
-| Conversation style (GPT-Live controls) | kit `Panel` + `VoiceStep` `opusVoiceSlice="prompts"` (`FieldRow`, `Switch`, `Label`, `select`) |
+| Conversation style (GPT-Live controls) | kit `Panel` + `VoiceStep` `opusVoiceSlice="prompts"` (`FieldRow`, `Switch`, `Label`, `WizardSelectField` → transplant `Select`) |
+| Voice row select + Play | transplant `Button` (`ghost` + `outline`) |
 | Greeting | kit `Panel` + `VoiceStep` `parts={["greeting"]}` |
 | Conversation rules | kit `Panel` + `VoiceStep` `parts={["conversation-rules"]}` |
 

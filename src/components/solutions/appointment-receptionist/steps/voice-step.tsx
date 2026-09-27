@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { Check, Play, Volume2 } from "lucide-react";
 import { useRef, useState } from "react";
 import { IdentityConversationStage } from "@/newui-transplant/connected/voice/receptionist-editor/stages/identity-conversation-stage";
+import { Button as LegacyWizardButton } from "@/components/ui/button";
 import { InfoCallout, RadioRow, SelectableCard, SidePanel } from "../ui";
 
 const ALL_VOICES = [...WIZARD_VOICES, ...WIZARD_VOICE_BACKUPS];
@@ -401,14 +402,17 @@ export function VoiceStep({
                         state.voiceId === v.id ? "border-primary bg-accent/30" : "border-border",
                       )}
                     >
-                      <button
+                      <Button
                         type="button"
-                        className="min-w-0 flex-1 text-left"
+                        variant="ghost"
+                        className="min-w-0 flex-1 justify-start px-2 text-left font-normal"
                         onClick={() => selectVoice(v.id, v.label, v.recommendedSpeed)}
                       >
-                        <p className="text-sm font-medium">{v.label}</p>
-                        <p className="text-xs text-muted-foreground">{v.badge}</p>
-                      </button>
+                        <span className="min-w-0">
+                          <p className="text-sm font-medium">{v.label}</p>
+                          <p className="text-xs text-muted-foreground">{v.badge}</p>
+                        </span>
+                      </Button>
                       <div className="flex shrink-0 items-center gap-1">
                         {state.voiceId === v.id ? (
                           <Check className="size-4 text-primary" aria-hidden="true" />
@@ -444,14 +448,17 @@ export function VoiceStep({
                         state.voiceId === v.id ? "border-primary bg-accent/30" : "border-border",
                       )}
                     >
-                      <button
+                      <Button
                         type="button"
-                        className="min-w-0 flex-1 text-left"
+                        variant="ghost"
+                        className="min-w-0 flex-1 justify-start px-2 text-left font-normal"
                         onClick={() => selectVoice(v.id, v.label, v.recommendedSpeed)}
                       >
-                        <p className="text-sm font-medium">{v.label}</p>
-                        <p className="text-xs text-muted-foreground">{v.badge}</p>
-                      </button>
+                        <span className="min-w-0">
+                          <p className="text-sm font-medium">{v.label}</p>
+                          <p className="text-xs text-muted-foreground">{v.badge}</p>
+                        </span>
+                      </Button>
                       <div className="flex shrink-0 items-center gap-1">
                         {state.voiceId === v.id ? (
                           <Check className="size-4 text-primary" aria-hidden="true" />
@@ -654,15 +661,16 @@ function VoicePickCard({
           ) : null}
         </div>
       </SelectableCard>
-      <button
+      <LegacyWizardButton
         type="button"
-        className="absolute bottom-3 right-3 z-10 inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1.5 text-[11px] font-medium text-primary-foreground shadow-sm hover:bg-primary-hover"
+        size="sm"
+        className="absolute bottom-3 right-3 z-10 h-auto gap-1 rounded-full px-2.5 py-1.5 text-[11px]"
         onClick={onPreview}
         aria-label={`Play sample of ${voice.label}`}
       >
         <Play className={`h-3 w-3 fill-current ${previewing ? "animate-pulse" : ""}`} />
         {previewing ? "…" : "Play"}
-      </button>
+      </LegacyWizardButton>
     </div>
   );
 }
