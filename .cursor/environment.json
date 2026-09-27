@@ -1,0 +1,11 @@
+{
+  "name": "Transovo SMS",
+  "install": "bash scripts/cloud/install.sh",
+  "start": "bash scripts/cloud/start.sh",
+  "terminals": [
+    {
+      "name": "web",
+      "command": "bash scripts/cloud/dev.sh"
+    }
+  ]
+}
