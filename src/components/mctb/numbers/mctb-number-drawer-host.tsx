@@ -15,7 +15,9 @@ import { Loader2, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
-export type MctbNumberDrawerMode = "manage" | "add" | "verify" | null;
+import type { MctbNumberDrawerMode } from "@/lib/mctb/numbers/mctb-number-drawer-controller";
+
+export type { MctbNumberDrawerMode } from "@/lib/mctb/numbers/mctb-number-drawer-controller";
 
 type NumbersPayload = {
   numbers: MctbNumberRow[];
@@ -512,14 +514,4 @@ export function MctbNumberDrawerHost({ open, onClose, onOpenMode, onNumbersChang
   );
 }
 
-/** Listen for cross-drawer navigation (manage → verify/add). */
-export function useMctbNumberDrawerEvents(setOpen: (mode: MctbNumberDrawerMode) => void) {
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent<MctbNumberDrawerMode>).detail;
-      if (detail) setOpen(detail);
-    };
-    window.addEventListener("mctb-open-drawer", handler);
-    return () => window.removeEventListener("mctb-open-drawer", handler);
-  }, [setOpen]);
-}
+export { useMctbNumberDrawerEvents } from "@/lib/mctb/numbers/mctb-number-drawer-controller";
