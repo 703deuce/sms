@@ -755,8 +755,18 @@ function runAutomatedTests(): boolean {
     "scripts/test-mctb-consent-prompt.ts",
   ];
   let allOk = true;
+  const env = {
+    ...process.env,
+    NODE_OPTIONS: process.env.NODE_OPTIONS?.includes("preload-server-only")
+      ? process.env.NODE_OPTIONS
+      : `${process.env.NODE_OPTIONS || ""} --import ./scripts/preload-server-only.mjs`.trim(),
+  };
   for (const script of scripts) {
-    const result = spawnSync("npx", ["tsx", script], { stdio: "pipe", encoding: "utf8" });
+    const result = spawnSync("npx", ["tsx", script], {
+      stdio: "pipe",
+      encoding: "utf8",
+      env,
+    });
     if (result.status !== 0) {
       allOk = false;
       console.error(`FAILED: ${script}\n${result.stderr || result.stdout}`);

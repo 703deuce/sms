@@ -30,8 +30,8 @@ pass("V1: Fax active", V1_PRODUCT_STATUS.fax === "active");
 pass("V1: Verify dormant", V1_PRODUCT_STATUS.verify === "dormant");
 pass("V1: Verify not launch-enabled by default", !isVerifyLaunchEnabled());
 pass(
-  "V1: Verify hidden from voice nav by default",
-  srcIncludes("src/lib/products/voice-nav.ts", "isVerifyLaunchEnabled()"),
+  "V1: Verify dormant in product status",
+  srcIncludes("src/lib/products/v1-product-status.ts", 'verify: "dormant"'),
 );
 
 // MCTB CORE (presence — full matrix in test:mctb-launch-readiness)

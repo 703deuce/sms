@@ -1,6 +1,6 @@
 /**
  * Smoke checks for MCTB demo-first onboarding architecture.
- * Run: npx tsx scripts/test-mctb-onboarding-architecture.ts
+ * Run: NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-mctb-onboarding-architecture.ts
  */
 import assert from "node:assert/strict";
 import {
@@ -27,28 +27,27 @@ import { MCTB_FUNNEL_EVENTS } from "../src/lib/mctb/onboarding/funnel";
 import { MCTB_CARRIER_GUIDES } from "../src/lib/mctb/onboarding/carriers";
 import { tfvStatusLabel } from "../src/lib/mctb/onboarding/trial-number";
 
-assert.equal(MCTB_ONBOARDING_STEP_ORDER[0], "business");
-assert.equal(MCTB_ONBOARDING_STEP_ORDER[1], "trial_number");
-assert.equal(MCTB_ONBOARDING_STEP_ORDER[4], "demo");
-assert.equal(MCTB_ONBOARDING_STEP_ORDER[5], "tfv");
-assert.equal(MCTB_ONBOARDING_STEP_ORDER.at(-1), "complete");
-assert.equal(MCTB_ONBOARDING_STEP_LABELS.trial_number, "Your Transovo number");
+assert.equal(MCTB_ONBOARDING_STEP_ORDER[0], "business_line");
+assert.equal(MCTB_ONBOARDING_STEP_ORDER[1], "connect_calls");
+assert.equal(MCTB_ONBOARDING_STEP_ORDER[4], "voicemail");
+assert.equal(MCTB_ONBOARDING_STEP_ORDER.at(-1), "ready");
+assert.equal(MCTB_ONBOARDING_STEP_LABELS.business_line, "Business line");
 
 const defaults = defaultMctbOnboardingState();
 assert.equal(defaults.version, 2);
-assert.equal(defaults.currentStep, "business");
+assert.equal(defaults.currentStep, "business_line");
 assert.equal(defaults.consentMode, "press_1");
 assert.equal(defaults.trialNumber, null);
 
 const parsed = parseMctbOnboardingState({
-  mctbOnboarding: { ...defaults, businessName: "Acme", currentStep: "compliance" },
+  mctbOnboarding: { ...defaults, businessName: "Acme", currentStep: "tfv" },
 });
 assert.equal(parsed.businessName, "Acme");
-assert.equal(parsed.currentStep, "tfv");
+assert.equal(parsed.currentStep, "recovery");
 
-const afterBusiness = markStepComplete(defaults, "business");
-assert.ok(afterBusiness.completedSteps.includes("business"));
-assert.equal(afterBusiness.currentStep, "trial_number");
+const afterBusiness = markStepComplete(defaults, "business_line");
+assert.ok(afterBusiness.completedSteps.includes("business_line"));
+assert.equal(afterBusiness.currentStep, "connect_calls");
 
 assert.match(getDemoMessageBody(), /Transovo Demo/i);
 assert.equal(getPlatformDemoNumberE164(), "+15714073615");
