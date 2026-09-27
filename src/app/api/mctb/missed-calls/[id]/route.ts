@@ -6,6 +6,15 @@ import { loadConsentForMissedCallEvent } from "@/lib/mctb/consent-log";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { traceMctbDebug, traceMctbDebugError } from "@/lib/mctb/debug";
 import { appProductSourceToPrisma } from "@/lib/mass-texting/product-source";
+import { buildMissedCallLifecycleMilestones } from "@/lib/mctb/missed-calls-lifecycle";
+import {
+  resolveMissedCallBookingActionEligibility,
+  senderModeCustomerLabel,
+} from "@/lib/mctb/missed-calls-booking-action";
+import {
+  presentRecoverySuppression,
+  shouldShowWhyNotTexted,
+} from "@/lib/mctb/recovery-suppression-presentation";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -28,7 +37,21 @@ export async function GET(_request: Request, { params }: Params) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const [repeatCaller, linkClicks, formSubmissions, config, consent, contact, conversation, voicemail] =
+    const conversationIdForAutomation = event.contactId
+      ? (
+          await prisma.conversation.findFirst({
+            where: {
+              workspaceId,
+              contactId: event.contactId,
+              productSource: appProductSourceToPrisma("mctb"),
+            },
+            orderBy: { updatedAt: "desc" },
+            select: { id: true },
+          })
+        )?.id
+      : null;
+
+    const [repeatCaller, linkClicks, formSubmissions, config, consent, contact, conversation, voicemail, automation, leadSnapshot, bookingAction] =
       await Promise.all([
       countCallerMissedEventsToday(workspaceId, event.callerE164),
       prisma.linkClickEvent.findMany({
@@ -70,6 +93,28 @@ export async function GET(_request: Request, { params }: Params) {
             },
           })
         : Promise.resolve(null),
+      conversationIdForAutomation
+        ? prisma.mctbConversationAutomationState.findUnique({
+            where: { conversationId: conversationIdForAutomation },
+            select: {
+              state: true,
+              followUpStatus: true,
+              capturedFieldsJson: true,
+            },
+          })
+        : Promise.resolve(null),
+      prisma.mctbLeadSnapshot.findFirst({
+        where: { workspaceId, missedCallEventId: id },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          summaryText: true,
+          customerFactsJson: true,
+          aiDerivedJson: true,
+          createdAt: true,
+        },
+      }),
+      resolveMissedCallBookingActionEligibility(workspaceId),
       prisma.voicemailMessage.findFirst({
         where: {
           workspaceId,
@@ -99,10 +144,47 @@ export async function GET(_request: Request, { params }: Params) {
       timelineSteps: timeline.steps.length,
     });
 
+    const whyNotTexted = shouldShowWhyNotTexted(event.status, event.smsSentAt)
+      ? presentRecoverySuppression(event.suppressionReason, event.status)
+      : null;
+
+    const lifecycle = buildMissedCallLifecycleMilestones({
+      detectedAt: event.detectedAt.toISOString(),
+      smsSentAt: event.smsSentAt?.toISOString() ?? null,
+      status: event.status,
+      suppressionReason: event.suppressionReason,
+      consentCapturedAt: consent?.consentedAt
+        ? new Date(String(consent.consentedAt)).toISOString()
+        : null,
+      consentMode: timeline.consentMode,
+      timelineSteps: timeline.steps,
+      automationState: automation?.state ?? null,
+    });
+
+    const capturedFields = {
+      ...(automation?.capturedFieldsJson as Record<string, unknown> | undefined),
+      ...((leadSnapshot?.customerFactsJson as Record<string, unknown>) || {}),
+    };
+
     return NextResponse.json({
       ok: true,
       event,
       timeline,
+      lifecycle,
+      whyNotTexted,
+      messagingContext: {
+        senderLabel: senderModeCustomerLabel(config.senderMode),
+        senderMode: config.senderMode,
+      },
+      bookingAction,
+      capturedFields,
+      leadSummary: leadSnapshot?.summaryText ?? null,
+      automation: automation
+        ? {
+            state: automation.state,
+            followUpStatus: automation.followUpStatus,
+          }
+        : null,
       repeatCaller,
       linkClicks: linkClicks.map((c: { id: string; destinationUrl: string | null; createdAt: Date }) => ({
         ...c,
@@ -113,6 +195,7 @@ export async function GET(_request: Request, { params }: Params) {
         submittedAt: s.submittedAt.toISOString(),
       })),
       leadCaptureEnabled: config.leadCaptureEnabled,
+      timezone: config.timezone,
       consent,
       contact,
       conversation: conversation
