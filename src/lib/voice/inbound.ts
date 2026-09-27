@@ -566,6 +566,20 @@ export async function executeInboundRoutingAction(input: {
   }
 }
 
+/** Missed inbound legs still use status `completed` — do not treat that as a human answer. */
+function humanCallWasAnsweredByHuman(human: {
+  status: string;
+  answeredAt: Date | null;
+  disposition: string | null;
+}) {
+  if (human.answeredAt) return true;
+  if (human.status === "in_progress" || human.status === "answered") return true;
+  const disposition = String(human.disposition || "");
+  if (disposition.startsWith("missed:") || disposition === "missed") return false;
+  if (human.status === "completed" && !disposition) return true;
+  return false;
+}
+
 /** Fallback to AI when human-first ring times out without an answer. */
 export async function handleHumanFirstTimeoutJob(payload: {
   workspaceId: string;
@@ -585,7 +599,7 @@ export async function handleHumanFirstTimeoutJob(payload: {
 
   if (payload.humanCallId) {
     const human = await prisma.humanCall.findUnique({ where: { id: payload.humanCallId } });
-    if (human && ["in_progress", "completed", "answered"].includes(human.status)) {
+    if (human && humanCallWasAnsweredByHuman(human)) {
       return { skipped: true, reason: "human_answered" };
     }
   }
