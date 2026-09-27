@@ -6,6 +6,7 @@ import { loadMctbOverviewKpis } from "@/lib/mctb/overview-kpis";
 import { MCTB_CONSENT_MODE_LABELS, normalizeMctbConsentMode } from "@/lib/mctb/consent-mode";
 import { loadMctbOnboardingState, isOnboardingComplete } from "@/lib/mctb/onboarding/state";
 import { formatMctbPhoneLabel } from "@/lib/mctb/phone-display";
+import { formatMctbTextBackSenderSummary } from "@/lib/mctb/sender-mode-ui";
 import {
   formatRecoveryStatus,
   formatReplyStatus,
@@ -116,8 +117,16 @@ export async function loadMctbOverview(workspaceId: string): Promise<MctbOvervie
         : null),
   );
 
-  const smsPhone = phoneNumbers.find((p) => p.id === runtime.smsPhoneNumberId);
-  const senderReady = messagingReady && Boolean(smsPhone);
+  const smsPhone = runtime.smsPhoneNumberId
+    ? phoneNumbers.find((p) => p.id === runtime.smsPhoneNumberId)
+    : null;
+  const senderSummary = formatMctbTextBackSenderSummary({
+    senderMode: runtime.senderMode,
+    smsPhone,
+    messagingReady,
+  });
+  const senderReady =
+    runtime.senderMode === "PLATFORM" ? senderSummary.ready : messagingReady && Boolean(smsPhone);
 
   let status: MctbOverviewStatus = "active";
   let statusLabel = "Active";
@@ -201,8 +210,8 @@ export async function loadMctbOverview(workspaceId: string): Promise<MctbOvervie
       forwardingLabel: forwardingVerified ? "Verified" : "Not verified",
       consentLabel: MCTB_CONSENT_MODE_LABELS[consentMode].title,
       senderLabel: senderReady
-        ? `${smsPhone ? formatMctbPhoneLabel(smsPhone.e164) : "Sender"} · Ready`
-        : "Needs attention",
+        ? `${senderSummary.primary} · Ready`
+        : `${senderSummary.primary} · ${senderSummary.secondary}`,
       recoveryLabel,
       voicemailLabel: runtime.sendAfterVoicemail ? "Enabled" : null,
     },

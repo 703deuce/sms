@@ -353,13 +353,7 @@ export function MctbSetupPhoneForwardingView() {
   }, [carrierGuide, forwardTarget, forwardRingSeconds]);
 
   const senderSecondary = selected
-    ? selected.messagingStatus?.approved
-      ? "Text-back sender · Ready"
-      : selected.messagingStatus?.label
-        ? `Text-back sender · ${selected.messagingStatus.label}`
-        : messagingReady
-          ? "Text-back sender · Ready"
-          : "Verification pending"
+    ? "Call-forwarding destination · receives forwarded voice calls"
     : "Assign a forwarding destination";
 
   const headerAction = (

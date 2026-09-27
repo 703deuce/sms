@@ -9,6 +9,8 @@ import {
   type MctbConsentMode,
 } from "@/lib/mctb/consent-mode";
 import { formatMctbPhoneLabel } from "@/lib/mctb/phone-display";
+import { formatMctbTextBackSenderSummary } from "@/lib/mctb/sender-mode-ui";
+import type { MctbSenderMode } from "@/lib/agents/missed-call-text-back/types";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import { existingConsentIneligibleReason } from "@/lib/mctb/setup-consent-eligibility";
 import {
@@ -66,6 +68,8 @@ export function MctbSetupConsentView() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [phoneNumberId, setPhoneNumberId] = useState<string | null>(null);
+  const [senderMode, setSenderMode] = useState<MctbSenderMode>("WORKSPACE");
+  const [smsPhoneNumberId, setSmsPhoneNumberId] = useState<string | null>(null);
   const [phoneNumbers, setPhoneNumbers] = useState<PhoneOption[]>([]);
   const [draftMode, setDraftMode] = useState<MctbConsentMode>(MCTB_CONSENT_MODE_VERIFIED);
   const [baseline, setBaseline] = useState<ConsentSnapshot | null>(null);
@@ -113,6 +117,8 @@ export function MctbSetupConsentView() {
       const data = json.data;
       const mode = (data.consentMode as MctbConsentMode) || MCTB_CONSENT_MODE_VERIFIED;
       setPhoneNumberId(data.runtime?.phoneNumberId ?? null);
+      setSenderMode(data.runtime?.senderMode === "PLATFORM" ? "PLATFORM" : "WORKSPACE");
+      setSmsPhoneNumberId(data.runtime?.smsPhoneNumberId ?? null);
       setPhoneNumbers(data.phoneNumbers || []);
       setDraftMode(mode);
       setBaseline({ mode });
@@ -146,14 +152,19 @@ export function MctbSetupConsentView() {
   const currentSnapshot = useMemo(() => ({ mode: draftMode }), [draftMode]);
   const dirty = baseline ? !consentSnapshotsEqual(baseline, currentSnapshot) : false;
 
-  const selectedPhone = useMemo(
-    () => phoneNumbers.find((p) => p.id === phoneNumberId) || phoneNumbers[0] || null,
-    [phoneNumbers, phoneNumberId],
+  const smsPhone = useMemo(
+    () =>
+      smsPhoneNumberId
+        ? phoneNumbers.find((p) => p.id === smsPhoneNumberId) || null
+        : null,
+    [phoneNumbers, smsPhoneNumberId],
   );
 
-  const senderLabel = selectedPhone
-    ? formatMctbPhoneLabel(selectedPhone.e164, selectedPhone.friendlyName)
-    : "MCTB line";
+  const senderLabel = formatMctbTextBackSenderSummary({
+    senderMode,
+    smsPhone,
+    messagingReady,
+  }).primary;
 
   const health = consentPageHealth({
     mode: baseline?.mode ?? draftMode,

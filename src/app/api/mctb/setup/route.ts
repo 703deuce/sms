@@ -53,6 +53,7 @@ export type MctbConsentMode = "press_1" | "existing_consent";
 export type MctbSetupPayload = {
   phoneNumberId: string | null;
   smsPhoneNumberId?: string | null;
+  senderMode?: "PLATFORM" | "WORKSPACE";
   enabled?: boolean;
   triggerRules?: {
     noAnswer?: boolean;
@@ -156,33 +157,41 @@ export async function GET() {
     workspaceId,
     runtime.smsPhoneNumberId,
   );
+  const { resolveStaleSmsPhoneRepair } = await import("@/lib/mctb/setup-sender-patch");
+  const repairedSmsPhoneNumberId = resolveStaleSmsPhoneRepair({
+    senderMode: runtime.senderMode || "WORKSPACE",
+    sanitizedSmsPhoneNumberId,
+    sanitizedPhoneNumberId,
+  });
   const runtimeForClient =
     sanitizedPhoneNumberId !== runtime.phoneNumberId ||
-    sanitizedSmsPhoneNumberId !== runtime.smsPhoneNumberId
+    sanitizedSmsPhoneNumberId !== runtime.smsPhoneNumberId ||
+    repairedSmsPhoneNumberId !== runtime.smsPhoneNumberId
       ? {
           ...runtime,
           phoneNumberId: sanitizedPhoneNumberId,
-          smsPhoneNumberId: sanitizedSmsPhoneNumberId,
+          smsPhoneNumberId: repairedSmsPhoneNumberId,
         }
       : runtime;
 
   if (
     sanitizedPhoneNumberId &&
     (sanitizedPhoneNumberId !== runtime.phoneNumberId ||
-      sanitizedSmsPhoneNumberId !== runtime.smsPhoneNumberId)
+      repairedSmsPhoneNumberId !== runtime.smsPhoneNumberId)
   ) {
     traceMctbDebug("setup", "stale_phone_repair", {
       workspaceId,
       beforePhoneNumberId: runtime.phoneNumberId,
       afterPhoneNumberId: sanitizedPhoneNumberId,
       beforeSmsPhoneNumberId: runtime.smsPhoneNumberId,
-      afterSmsPhoneNumberId: sanitizedSmsPhoneNumberId,
+      afterSmsPhoneNumberId: repairedSmsPhoneNumberId,
+      senderMode: runtime.senderMode,
     });
     void updateMissedCallTextConfig({
       workspaceId,
       patch: {
         phone_number_id: sanitizedPhoneNumberId,
-        sms_phone_number_id: sanitizedSmsPhoneNumberId || sanitizedPhoneNumberId,
+        sms_phone_number_id: repairedSmsPhoneNumberId,
       },
       source: "mctb_setup_stale_phone_repair",
     }).catch((err) => {
@@ -307,6 +316,7 @@ export async function POST(req: Request) {
     previousPhoneNumberId: previousPhoneId,
     requestedPhoneNumberId: body.phoneNumberId ?? null,
     requestedSmsPhoneNumberId: body.smsPhoneNumberId ?? null,
+    requestedSenderMode: body.senderMode ?? null,
     consentMode: body.consentMode ?? null,
     activate: body.activate ?? null,
     enabled: body.enabled ?? null,
@@ -355,6 +365,12 @@ export async function POST(req: Request) {
     body.phoneNumberId = canonicalPhoneId;
   }
 
+  const requestedSenderMode =
+    body.senderMode === "PLATFORM" || body.senderMode === "WORKSPACE"
+      ? body.senderMode
+      : undefined;
+  const effectiveSenderMode = requestedSenderMode ?? priorRuntime.senderMode ?? "WORKSPACE";
+
   if (body.smsPhoneNumberId !== undefined && body.smsPhoneNumberId !== null) {
     const canonicalSmsId = await resolveCanonicalMctbSetupPhoneId(
       workspaceId,
@@ -366,7 +382,32 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
+    const prismaForRole = getPrisma();
+    const smsRow = await prismaForRole.phoneNumber.findFirst({
+      where: { id: canonicalSmsId, workspaceId },
+      select: { settingsJson: true },
+    });
+    const { isPlatformMctbSenderPhoneRecord } = await import(
+      "@/lib/messaging/compliance/phone-number-class"
+    );
+    if (smsRow && isPlatformMctbSenderPhoneRecord({ settingsJson: smsRow.settingsJson })) {
+      return NextResponse.json(
+        { error: "The Transovo platform sender cannot be selected as a workspace number." },
+        { status: 400 },
+      );
+    }
     body.smsPhoneNumberId = canonicalSmsId;
+  }
+
+  if (
+    requestedSenderMode === "WORKSPACE" &&
+    body.smsPhoneNumberId === null &&
+    !priorRuntime.smsPhoneNumberId
+  ) {
+    return NextResponse.json(
+      { error: "Select a verified workspace number to send messages from." },
+      { status: 400 },
+    );
   }
 
   const sessionUser = await prisma.user.findUnique({
@@ -473,12 +514,12 @@ export async function POST(req: Request) {
       activate: body.activate ?? null,
     });
   }
-  const smsPhoneNumberIdForPatch =
-    body.smsPhoneNumberId !== undefined
-      ? body.smsPhoneNumberId
-      : phoneNumberChanged && body.phoneNumberId !== undefined
-        ? body.phoneNumberId
-        : undefined;
+  const { resolveSmsPhoneNumberIdForSetupPatch } = await import("@/lib/mctb/setup-sender-patch");
+  const smsPhoneNumberIdForPatch = resolveSmsPhoneNumberIdForSetupPatch({
+    bodySmsPhoneNumberId: body.smsPhoneNumberId,
+    phoneNumberChanged,
+    nextPhoneNumberId: body.phoneNumberId,
+  });
 
   const runtimeResult = await updateMissedCallTextConfig({
     workspaceId,
@@ -489,6 +530,7 @@ export async function POST(req: Request) {
       message_template_business_hours: body.messageTemplateBusinessHours,
       message_template_after_hours: body.messageTemplateAfterHours,
       phone_number_id: body.phoneNumberId,
+      ...(requestedSenderMode !== undefined ? { sender_mode: requestedSenderMode } : {}),
       ...(smsPhoneNumberIdForPatch !== undefined
         ? { sms_phone_number_id: smsPhoneNumberIdForPatch }
         : {}),

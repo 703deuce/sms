@@ -3,6 +3,8 @@ import { describeMctbSenderPresentation } from "@/lib/mctb/sender-presentation";
 import { getCarrierGuide } from "@/lib/mctb/onboarding/carriers";
 import type { MctbForwardingCarrier } from "@/lib/mctb/onboarding/types";
 import { formatMctbPhoneLabel } from "@/lib/mctb/phone-display";
+import { formatMctbTextBackSenderRailLabel } from "@/lib/mctb/sender-mode-ui";
+import type { MctbSenderMode } from "@/lib/agents/missed-call-text-back/types";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import type { MctbPauseKind } from "@/lib/mctb/schedule-shared";
 
@@ -53,6 +55,7 @@ type RuntimeSlice = {
   enabled: boolean;
   phoneNumberId: string | null;
   smsPhoneNumberId?: string | null;
+  senderMode?: MctbSenderMode;
   messageTemplate: string;
   sendAfterNoAnswer: boolean;
   sendAfterBusy: boolean;
@@ -79,8 +82,12 @@ export function buildSetupGlobalStatus(input: {
 }): SetupGlobalStatus {
   const { runtime, schedule, businessLineE164, phoneNumbers, forwardingVerified, messagingReady, lastTestAt } =
     input;
-  const smsId = runtime.smsPhoneNumberId || runtime.phoneNumberId;
-  const smsPhone = phoneNumbers.find((p) => p.id === smsId);
+  const smsPhone = runtime.smsPhoneNumberId
+    ? phoneNumbers.find((p) => p.id === runtime.smsPhoneNumberId)
+    : null;
+  const ingressPhone = runtime.phoneNumberId
+    ? phoneNumbers.find((p) => p.id === runtime.phoneNumberId)
+    : null;
 
   let recoveryLabel = "Recovery active";
   if (schedule.paused || !runtime.enabled) {
@@ -98,7 +105,15 @@ export function buildSetupGlobalStatus(input: {
   return {
     recoveryLabel,
     businessLineLabel: businessLineE164 ? formatMctbPhoneLabel(businessLineE164) : null,
-    senderLabel: smsPhone ? `${formatMctbPhoneLabel(smsPhone.e164)} · ${messagingReady ? "Ready" : "Pending"}` : null,
+    senderLabel:
+      formatMctbTextBackSenderRailLabel({
+        senderMode: runtime.senderMode,
+        smsPhone: smsPhone ? { e164: smsPhone.e164 } : null,
+        messagingReady,
+      }) ??
+      (ingressPhone
+        ? `${formatMctbPhoneLabel(ingressPhone.e164)} · Forwarding`
+        : null),
     forwardingLabel: forwardingVerified ? "Forwarding verified" : "Forwarding not verified",
     lastTestLabel: lastTestAt ? `Last tested ${formatShortWhen(lastTestAt)}` : "Never tested",
     pauseKind: schedule.pauseKind ?? (schedule.paused ? "manual" : null),
