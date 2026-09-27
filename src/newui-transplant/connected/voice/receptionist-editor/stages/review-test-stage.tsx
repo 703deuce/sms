@@ -170,7 +170,12 @@ export function ReviewTestStage({
         title="Test receptionist"
         description="Test the saved draft before publishing it to live callers."
       >
-        <TestStep state={state} patch={patch} onEnsureAgent={onEnsureAgent} />
+        <TestStep
+          state={state}
+          patch={patch}
+          onEnsureAgent={onEnsureAgent}
+          presentation="opus"
+        />
       </Panel>
 
       <Panel title="Publish">

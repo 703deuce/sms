@@ -1,7 +1,7 @@
 "use client";
 
-import { CallbackRequiredFieldsEditor } from "@/components/solutions/appointment-receptionist/callback-required-fields-editor";
 import { defaultCallbackRequiredCollectFieldIds } from "@/lib/solutions/appointment-receptionist/callback-required-field-defaults";
+import { CallbackRequiredFieldsOpus } from "../callback-required-fields-opus";
 import { GoalsStep } from "@/components/solutions/appointment-receptionist/steps/goals-step";
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
 import { FieldRow, Panel, TextLink } from "@/newui-transplant/components/app/kit";
@@ -109,7 +109,7 @@ export function ResponsibilitiesStage({
             </FieldRow>
             {state.callbackRequestsEnabled !== false ? (
               <div className="mt-4 border-t pt-4">
-                <CallbackRequiredFieldsEditor state={state} patch={patch} />
+                <CallbackRequiredFieldsOpus state={state} patch={patch} />
               </div>
             ) : null}
             <div className="mt-4 border-t pt-4">

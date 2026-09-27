@@ -3,6 +3,10 @@
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
 import { VoiceV3BrowserCall } from "@/components/voice/voice-v3-browser-call";
 import { Button } from "@/components/ui/button";
+import { Rows } from "@/newui-transplant/components/app/kit";
+import { Button as OpusButton } from "@/newui-transplant/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/newui-transplant/components/ui/tabs";
+import { cn } from "@/lib/utils";
 import { Phone, Play, Monitor } from "lucide-react";
 import { useState } from "react";
 import { InfoCallout, SidePanel } from "../ui";
@@ -16,9 +20,10 @@ export function TestStep({
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
   onEnsureAgent?: () => Promise<{ agentId: string; telnyxAssistantId?: string | null } | null>;
-  presentation?: "legacy" | "mctb";
+  presentation?: "legacy" | "mctb" | "opus";
 }) {
   const isMctb = presentation === "mctb";
+  const isOpus = presentation === "opus";
   const [mode, setMode] = useState<"browser" | "phone">("browser");
   const [preparing, setPreparing] = useState(false);
   const [prepareError, setPrepareError] = useState("");
@@ -45,6 +50,106 @@ export function TestStep({
     } finally {
       setPreparing(false);
     }
+  }
+
+  if (isOpus) {
+    const draftStatus =
+      liveProbeSource === "wizard_draft_test"
+        ? "Connected (draft config)"
+        : state.agentId
+          ? "Ready — use browser test"
+          : "Save draft first";
+
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+          <Tabs
+            value={mode}
+            onValueChange={(v) => setMode(v as "browser" | "phone")}
+            className="gap-0"
+          >
+            <TabsList>
+              <TabsTrigger value="browser">
+                <Monitor />
+                Test in browser
+              </TabsTrigger>
+              <TabsTrigger value="phone">
+                <Phone />
+                After activate (phone)
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <OpusButton
+            size="sm"
+            variant="outline"
+            disabled={preparing}
+            onClick={() => void prepareLiveTest()}
+          >
+            {preparing ? "Saving…" : "Save draft for test"}
+          </OpusButton>
+        </div>
+
+        {prepareError ? (
+          <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
+            {prepareError}
+          </p>
+        ) : null}
+
+        <Rows
+          items={[
+            { label: "Selected voice", value: state.voiceLabel || state.voiceId || "—" },
+            { label: "Draft live test", value: draftStatus },
+          ]}
+        />
+
+        {mode === "browser" ? (
+          state.agentId ? (
+            <VoiceV3BrowserCall
+              agentId={state.agentId}
+              voiceLabel={state.voiceLabel}
+              onNeedSave={() => prepareLiveTest().then(() => undefined)}
+              onSessionSuccess={(probe) => {
+                setLiveProbeSource(probe.source);
+              }}
+            />
+          ) : (
+            <div className="rounded-lg border border-dashed px-6 py-8 text-center">
+              <p className="text-sm font-medium">Start a browser conversation</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                We&apos;ll save your draft and connect GPT-Live using voice {state.voiceLabel} (
+                {state.voiceId}).
+              </p>
+              <OpusButton className="mt-4" disabled={preparing} onClick={() => void prepareLiveTest()}>
+                <Play />
+                {preparing ? "Building…" : "Build & start live test"}
+              </OpusButton>
+            </div>
+          )
+        ) : (
+          <div className="rounded-lg border bg-muted/30 p-5 text-sm">
+            <p className="font-medium">Test on your phone after activate</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Call your assigned number from another phone after you go live. Browser WebRTC is the
+              fastest way to try changes while editing.
+            </p>
+            {state.phoneNumberE164 ? (
+              <p className="mt-3 text-xs">
+                Number: <span className="font-medium">{state.phoneNumberE164}</span>
+              </p>
+            ) : (
+              <p className="mt-3 text-xs text-muted-foreground">
+                Assign a phone number before relying on PSTN testing.
+              </p>
+            )}
+          </div>
+        )}
+
+        <p className="text-xs text-muted-foreground">
+          Change voice, greeting, or booking settings, save, then start a new browser test before you
+          publish.
+        </p>
+      </div>
+    );
   }
 
   return (

@@ -338,24 +338,61 @@ export function VoiceStep({
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Greeting behavior
               </p>
-              <div className="space-y-2">
-                <RadioRow
-                  selected={state.speaksFirst === "ai"}
-                  onClick={() => patch({ speaksFirst: "ai" })}
-                  label="AI speaks first"
+              {isOpus ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {(
+                    [
+                      ["ai", "AI speaks first"],
+                      ["caller", "Caller speaks first"],
+                    ] as const
+                  ).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => patch({ speaksFirst: id })}
+                      className={cn(
+                        "rounded-lg border px-3 py-2 text-left text-sm transition-colors",
+                        state.speaksFirst === id
+                          ? "border-primary bg-accent/40"
+                          : "border-border hover:border-primary/40",
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <RadioRow
+                    selected={state.speaksFirst === "ai"}
+                    onClick={() => patch({ speaksFirst: "ai" })}
+                    label="AI speaks first"
+                  />
+                  <RadioRow
+                    selected={state.speaksFirst === "caller"}
+                    onClick={() => patch({ speaksFirst: "caller" })}
+                    label="Caller speaks first"
+                  />
+                </div>
+              )}
+              {isOpus ? (
+                <OpusLabel className="mt-3">Opening greeting</OpusLabel>
+              ) : (
+                <Label className="mt-3">Opening greeting</Label>
+              )}
+              {isOpus ? (
+                <OpusTextarea
+                  className="mt-1 min-h-[88px]"
+                  value={state.openingGreeting}
+                  onChange={(e) => patch({ openingGreeting: e.target.value.slice(0, 500) })}
                 />
-                <RadioRow
-                  selected={state.speaksFirst === "caller"}
-                  onClick={() => patch({ speaksFirst: "caller" })}
-                  label="Caller speaks first"
+              ) : (
+                <Textarea
+                  className="mt-1 min-h-[88px]"
+                  value={state.openingGreeting}
+                  onChange={(e) => patch({ openingGreeting: e.target.value.slice(0, 500) })}
                 />
-              </div>
-              <Label className="mt-3">Opening greeting</Label>
-              <Textarea
-                className="mt-1 min-h-[88px]"
-                value={state.openingGreeting}
-                onChange={(e) => patch({ openingGreeting: e.target.value.slice(0, 500) })}
-              />
+              )}
               <p className="mt-1 text-[11px] text-muted-foreground">
                 {state.openingGreeting.length}/500 · Preview: “{greeting}”
               </p>
@@ -426,9 +463,40 @@ export function VoiceStep({
             {opusVoiceSlice !== "prompts" ? (
             <div className="max-h-[min(28rem,50vh)] overflow-y-auto pr-1">
               <div className="grid gap-2 sm:grid-cols-2">
-                {WIZARD_VOICES.map((v) => (
+                {WIZARD_VOICES.map((v) =>
                   isOpus ? (
-                    <OpusVoiceRow
+                    <div
+                      key={v.id}
+                      className={cn(
+                        "flex items-center justify-between gap-2 rounded-lg border px-3 py-2",
+                        state.voiceId === v.id ? "border-primary bg-accent/30" : "border-border",
+                      )}
+                    >
+                      <button
+                        type="button"
+                        className="min-w-0 flex-1 text-left"
+                        onClick={() => selectVoice(v.id, v.label, v.recommendedSpeed)}
+                      >
+                        <p className="text-sm font-medium">{v.label}</p>
+                        <p className="text-xs text-muted-foreground">{v.badge}</p>
+                      </button>
+                      <div className="flex shrink-0 items-center gap-1">
+                        {state.voiceId === v.id ? (
+                          <Check className="size-4 text-primary" aria-hidden="true" />
+                        ) : null}
+                        <OpusButton
+                          type="button"
+                          size="xs"
+                          variant="outline"
+                          onClick={() => void previewVoice(v.id, v.recommendedSpeed)}
+                        >
+                          <Play className={previewing === v.id ? "animate-pulse" : ""} />
+                          Play
+                        </OpusButton>
+                      </div>
+                    </div>
+                  ) : (
+                    <VoicePickCard
                       key={v.id}
                       voice={v}
                       selected={state.voiceId === v.id}
@@ -436,20 +504,42 @@ export function VoiceStep({
                       onSelect={() => selectVoice(v.id, v.label, v.recommendedSpeed)}
                       onPreview={() => void previewVoice(v.id, v.recommendedSpeed)}
                     />
-                  ) : (
-                  <VoicePickCard
-                    key={v.id}
-                    voice={v}
-                    selected={state.voiceId === v.id}
-                    previewing={previewing === v.id}
-                    onSelect={() => selectVoice(v.id, v.label, v.recommendedSpeed)}
-                    onPreview={() => void previewVoice(v.id, v.recommendedSpeed)}
-                  />
-                  )
-                ))}
-                {WIZARD_VOICE_BACKUPS.map((v) => (
+                  ),
+                )}
+                {WIZARD_VOICE_BACKUPS.map((v) =>
                   isOpus ? (
-                    <OpusVoiceRow
+                    <div
+                      key={v.id}
+                      className={cn(
+                        "flex items-center justify-between gap-2 rounded-lg border px-3 py-2",
+                        state.voiceId === v.id ? "border-primary bg-accent/30" : "border-border",
+                      )}
+                    >
+                      <button
+                        type="button"
+                        className="min-w-0 flex-1 text-left"
+                        onClick={() => selectVoice(v.id, v.label, v.recommendedSpeed)}
+                      >
+                        <p className="text-sm font-medium">{v.label}</p>
+                        <p className="text-xs text-muted-foreground">{v.badge}</p>
+                      </button>
+                      <div className="flex shrink-0 items-center gap-1">
+                        {state.voiceId === v.id ? (
+                          <Check className="size-4 text-primary" aria-hidden="true" />
+                        ) : null}
+                        <OpusButton
+                          type="button"
+                          size="xs"
+                          variant="outline"
+                          onClick={() => void previewVoice(v.id, v.recommendedSpeed)}
+                        >
+                          <Play className={previewing === v.id ? "animate-pulse" : ""} />
+                          Play
+                        </OpusButton>
+                      </div>
+                    </div>
+                  ) : (
+                    <VoicePickCard
                       key={v.id}
                       voice={v}
                       selected={state.voiceId === v.id}
@@ -457,17 +547,8 @@ export function VoiceStep({
                       onSelect={() => selectVoice(v.id, v.label, v.recommendedSpeed)}
                       onPreview={() => void previewVoice(v.id, v.recommendedSpeed)}
                     />
-                  ) : (
-                  <VoicePickCard
-                    key={v.id}
-                    voice={v}
-                    selected={state.voiceId === v.id}
-                    previewing={previewing === v.id}
-                    onSelect={() => selectVoice(v.id, v.label, v.recommendedSpeed)}
-                    onPreview={() => void previewVoice(v.id, v.recommendedSpeed)}
-                  />
-                  )
-                ))}
+                  ),
+                )}
               </div>
             </div>
             ) : null}
@@ -604,41 +685,6 @@ function OpusPromptSelect<T extends string>({
           </option>
         ))}
       </select>
-    </div>
-  );
-}
-
-function OpusVoiceRow({
-  voice,
-  selected,
-  previewing,
-  onSelect,
-  onPreview,
-}: {
-  voice: { id: string; label: string; badge: string; description: string };
-  selected: boolean;
-  previewing: boolean;
-  onSelect: () => void;
-  onPreview: () => void;
-}) {
-  return (
-    <div
-      className={cn(
-        "flex items-center justify-between gap-2 rounded-lg border px-3 py-2",
-        selected ? "border-primary bg-accent/30" : "border-border",
-      )}
-    >
-      <button type="button" className="min-w-0 flex-1 text-left" onClick={onSelect}>
-        <p className="text-sm font-medium">{voice.label}</p>
-        <p className="text-xs text-muted-foreground">{voice.badge}</p>
-      </button>
-      <div className="flex shrink-0 items-center gap-1">
-        {selected ? <Check className="size-4 text-primary" aria-hidden="true" /> : null}
-        <OpusButton type="button" size="xs" variant="outline" onClick={onPreview}>
-          <Play className={previewing ? "animate-pulse" : ""} />
-          Play
-        </OpusButton>
-      </div>
     </div>
   );
 }

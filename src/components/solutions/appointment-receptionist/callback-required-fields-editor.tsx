@@ -2,9 +2,11 @@
 
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
 import {
-  defaultCallbackRequiredCollectFieldIds,
-  ensureCallbackRequiredCollectFieldIds,
-} from "@/lib/solutions/appointment-receptionist/callback-required-field-defaults";
+  callbackRequiredFieldIds,
+  enabledCollectFieldsForCallback,
+  resetCallbackRequiredToDefaults,
+  setCallbackRequiredField,
+} from "@/lib/solutions/appointment-receptionist/callback-required-fields-logic";
 import { Label } from "@/components/ui/input";
 
 export function CallbackRequiredFieldsEditor({
@@ -14,16 +16,8 @@ export function CallbackRequiredFieldsEditor({
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
 }) {
-  const enabledFields = (state.collectFields || []).filter((f) => f.enabled !== false);
-  const selected = new Set(ensureCallbackRequiredCollectFieldIds(state));
-
-  const setSelected = (fieldId: string, on: boolean) => {
-    const base = ensureCallbackRequiredCollectFieldIds(state);
-    const next = new Set(base);
-    if (on) next.add(fieldId);
-    else next.delete(fieldId);
-    patch({ callbackRequiredCollectFieldIds: [...next] });
-  };
+  const enabledFields = enabledCollectFieldsForCallback(state);
+  const selected = callbackRequiredFieldIds(state);
 
   if (enabledFields.length === 0) {
     return (
@@ -50,7 +44,7 @@ export function CallbackRequiredFieldsEditor({
                   type="checkbox"
                   className="mt-1 h-4 w-4 rounded border-border"
                   checked={checked}
-                  onChange={(e) => setSelected(field.id, e.target.checked)}
+                  onChange={(e) => setCallbackRequiredField(state, patch, field.id, e.target.checked)}
                 />
                 <span>
                   <span className="font-medium">{field.label?.trim() || field.id}</span>
@@ -66,13 +60,7 @@ export function CallbackRequiredFieldsEditor({
       <button
         type="button"
         className="text-xs font-semibold text-primary underline-offset-2 hover:underline"
-        onClick={() =>
-          patch({
-            callbackRequiredCollectFieldIds: defaultCallbackRequiredCollectFieldIds(
-              state.collectFields,
-            ),
-          })
-        }
+        onClick={() => resetCallbackRequiredToDefaults(state, patch)}
       >
         Reset to recommended defaults
       </button>
