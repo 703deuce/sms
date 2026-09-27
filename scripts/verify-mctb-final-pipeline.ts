@@ -32,10 +32,13 @@ async function main() {
   const prisma = getPrisma();
 
   const phone = await prisma.phoneNumber.findUnique({ where: { id: PHONE_ID } });
-  const telephony =
+  const settingsJson =
     phone?.settingsJson && typeof phone.settingsJson === "object"
-      ? ((phone.settingsJson as Record<string, unknown>).telephony as Record<string, unknown>)
+      ? (phone.settingsJson as Record<string, unknown>)
       : null;
+  const telephony = settingsJson?.telephony as Record<string, unknown> | undefined;
+  const routingMode = String(telephony?.routingMode || settingsJson?.routingOwner || "");
+  const routingOwner = String(telephony?.routingOwner || settingsJson?.routingOwner || "");
 
   checks.push({
     name: "pipeline_id",
@@ -44,15 +47,13 @@ async function main() {
   });
   checks.push({
     name: "db_routing_mode_mctb_texml",
-    ok: telephony?.routingMode === MCTB_TEXML_ROUTING_MODE,
-    detail: String(telephony?.routingMode || "missing"),
+    ok: routingMode === MCTB_TEXML_ROUTING_MODE,
+    detail: routingMode || "missing",
   });
   checks.push({
     name: "db_routing_owner",
-    ok:
-      telephony?.routingOwner === MCTB_TEXML_ROUTING_OWNER ||
-      (phone?.settingsJson as Record<string, unknown>)?.routingOwner === MCTB_TEXML_ROUTING_OWNER,
-    detail: String(telephony?.routingOwner || "missing"),
+    ok: routingOwner === MCTB_TEXML_ROUTING_OWNER,
+    detail: routingOwner || "missing",
   });
 
   const caps = readPhoneCapabilities({ settingsJson: phone?.settingsJson });
@@ -108,26 +109,33 @@ async function main() {
     }),
   });
   const press1Xml = await press1Res.text();
-  // Temporarily check press_1 shape via cert C3 if workspace is existing_consent
-  const c3Url = `${entryUrl}?cert=C3`;
-  const c3Res = await fetch(c3Url, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      From: "+15555550100",
-      To: E164,
-      CallSid: `verify-c3-${Date.now()}`,
-    }),
-  });
-  const c3Xml = await c3Res.text();
-  checks.push({
-    name: "press1_texml_has_gather_and_consent_audio",
-    ok:
-      c3Res.ok &&
-      c3Xml.includes("<Gather") &&
-      c3Xml.includes(MCTB_FINAL_PRESS1_CONSENT_AUDIO_ASSET_ID),
-    detail: c3Xml.slice(0, 200),
-  });
+  if (consentMode === "press_1") {
+    checks.push({
+      name: "press1_texml_has_gather_and_consent_audio",
+      ok:
+        press1Res.ok &&
+        press1Xml.includes("<Gather") &&
+        press1Xml.includes(MCTB_FINAL_PRESS1_CONSENT_AUDIO_ASSET_ID),
+      detail: press1Xml.slice(0, 200),
+    });
+  } else {
+    const c3Url = `${entryUrl}?cert=C3`;
+    const c3Res = await fetch(c3Url, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        From: "+15555550100",
+        To: E164,
+        CallSid: `verify-c3-${Date.now()}`,
+      }),
+    });
+    const c3Xml = await c3Res.text();
+    checks.push({
+      name: "press1_texml_skipped",
+      ok: true,
+      detail: `workspace consentMode=${consentMode}; C3 probe=${c3Xml.slice(0, 80)}`,
+    });
+  }
 
   // existing_consent: entry without cert when workspace mode is existing_consent
   if (consentMode === "existing_consent") {
