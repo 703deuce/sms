@@ -1,5 +1,6 @@
 "use client";
 
+import { Panel } from "@/newui-transplant/components/app/kit";
 import { cn } from "@/lib/utils";
 import { Check } from "lucide-react";
 import type { ReactNode } from "react";
@@ -13,6 +14,7 @@ export function SelectableCard({
   children,
   className,
   disabled,
+  variant = "legacy",
 }: {
   selected?: boolean;
   onClick?: () => void;
@@ -22,7 +24,9 @@ export function SelectableCard({
   children?: ReactNode;
   className?: string;
   disabled?: boolean;
+  variant?: "legacy" | "opus";
 }) {
+  const opusSelected = variant === "opus" && selected;
   return (
     <button
       type="button"
@@ -30,9 +34,13 @@ export function SelectableCard({
       onClick={onClick}
       className={cn(
         "relative flex w-full flex-col rounded-xl border bg-card p-4 text-left transition",
-        selected
-          ? "border-primary shadow-[0_0_0_1px_rgba(16,185,129,0.28)]"
-          : "border-border hover:border-primary/40 hover:bg-muted/30",
+        variant === "opus"
+          ? opusSelected
+            ? "border-primary bg-accent/40"
+            : "border-border hover:border-primary/40 hover:bg-muted/30"
+          : selected
+            ? "border-primary shadow-[0_0_0_1px_rgba(16,185,129,0.28)]"
+            : "border-border hover:border-primary/40 hover:bg-muted/30",
         disabled && "cursor-not-allowed opacity-60",
         className,
       )}
@@ -65,21 +73,27 @@ export function RadioRow({
   onClick,
   label,
   description,
+  variant = "legacy",
 }: {
   selected: boolean;
   onClick: () => void;
   label: string;
   description?: string;
+  variant?: "legacy" | "opus";
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        "flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left transition",
-        selected
-          ? "border-primary bg-primary/5"
-          : "border-border bg-card hover:border-primary/30",
+        "flex w-full items-start gap-3 rounded-lg border px-4 py-3 text-left text-sm transition",
+        variant === "opus"
+          ? selected
+            ? "border-primary bg-accent/40"
+            : "border-border hover:border-primary/40 hover:bg-muted/30"
+          : selected
+            ? "border-primary bg-primary/5"
+            : "border-border bg-card hover:border-primary/30",
       )}
     >
       <span
@@ -136,10 +150,21 @@ export function StatusPill({
 export function SidePanel({
   title,
   children,
+  variant = "legacy",
 }: {
   title: string;
   children: ReactNode;
+  variant?: "legacy" | "opus";
 }) {
+  if (variant === "opus") {
+    return (
+      <aside className="hidden w-[300px] shrink-0 xl:block">
+        <Panel title={title} className="sticky top-4 shadow-xs">
+          {children}
+        </Panel>
+      </aside>
+    );
+  }
   return (
     <aside className="hidden w-[300px] shrink-0 xl:block">
       <div className="sticky top-4 space-y-4 rounded-xl border border-border bg-card p-4 shadow-sm">

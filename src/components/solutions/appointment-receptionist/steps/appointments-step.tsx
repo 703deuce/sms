@@ -13,6 +13,9 @@ import {
 import { Input, Label } from "@/components/ui/input";
 import { CheckCircle2, MoreHorizontal, Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Panel } from "@/newui-transplant/components/app/kit";
+import { ReceptionistCollectFieldsOpus } from "@/newui-transplant/connected/voice/receptionist-editor/receptionist-collect-fields-opus";
+import { WizardSection } from "../wizard-opus-ui";
 import { InfoCallout, RadioRow, SelectableCard, SidePanel, StatusPill } from "../ui";
 
 const CALENDARS = [
@@ -30,9 +33,11 @@ export function AppointmentsStep({
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
-  presentation?: "legacy" | "mctb";
+  presentation?: "legacy" | "mctb" | "opus";
 }) {
   const isMctb = presentation === "mctb";
+  const isOpus = presentation === "opus";
+  const uiVariant = isOpus ? "opus" : "legacy";
   const providerCards = isMctb ? MCTB_BOOKING_PROVIDERS : CALENDARS;
   const selected =
     state.appointmentTypes.find((t) => t.id === state.selectedAppointmentTypeId) ||
@@ -258,23 +263,21 @@ export function AppointmentsStep({
     );
   }
 
-  return (
-    <div className="flex gap-6">
-      <div className="min-w-0 flex-1 space-y-6">
-        <div>
-          <h2 className="font-display text-xl font-semibold tracking-tight">
-            {isMctb ? "Booking" : "What can callers book?"}
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {isMctb
-              ? "Choose how the voice agent handles scheduling. Connections are managed in Integrations."
-              : "Connect a calendar to show real-time availability."}
-          </p>
+  const appointmentsTitle = isMctb ? "Booking" : "What can callers book?";
+  const appointmentsDescription = isMctb
+    ? "Choose how the voice agent handles scheduling. Connections are managed in Integrations."
+    : "Connect a calendar to show real-time availability.";
+
+  const providerGrid = (
           <div
             className={
               isMctb
-                ? "mt-4 grid gap-2 sm:grid-cols-2"
-                : "mt-4 grid gap-2 sm:grid-cols-3 xl:grid-cols-6"
+                ? isOpus
+                  ? "grid gap-2 sm:grid-cols-2"
+                  : "mt-4 grid gap-2 sm:grid-cols-2"
+                : isOpus
+                  ? "grid gap-2 sm:grid-cols-3 xl:grid-cols-6"
+                  : "mt-4 grid gap-2 sm:grid-cols-3 xl:grid-cols-6"
             }
           >
             {providerCards.map((cal) => {
@@ -283,6 +286,7 @@ export function AppointmentsStep({
               return (
                 <SelectableCard
                   key={cal.id}
+                  variant={uiVariant}
                   selected={connected}
                   onClick={() => void connectCalendar(cal.id)}
                   title={cal.label}
@@ -304,15 +308,39 @@ export function AppointmentsStep({
               );
             })}
           </div>
-        </div>
+  );
 
-        <div className="rounded-xl border border-border bg-card p-4">
+  return (
+    <div className="flex gap-6">
+      <div className="min-w-0 flex-1 space-y-6">
+        {isOpus ? (
+          <Panel title={appointmentsTitle} description={appointmentsDescription}>
+            {providerGrid}
+          </Panel>
+        ) : (
+          <div>
+            <h2 className="font-display text-xl font-semibold tracking-tight">{appointmentsTitle}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{appointmentsDescription}</p>
+            {providerGrid}
+          </div>
+        )}
+
+        <WizardSection opus={isOpus} title="When someone wants an appointment">
+        <div className={isOpus ? undefined : "rounded-xl border border-border bg-card p-4"}>
+          {!isOpus ? (
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             When someone wants an appointment
           </p>
+          ) : null}
+          {!isOpus ? (
           <p className="mt-1 mb-3 text-[12px] text-muted-foreground">
             Amy stays the same assistant — this chooses what she is allowed to do on the call.
           </p>
+          ) : (
+          <p className="mb-3 text-[12px] text-muted-foreground">
+            Amy stays the same assistant — this chooses what she is allowed to do on the call.
+          </p>
+          )}
           <div className="space-y-2">
             {(
               [
@@ -340,6 +368,7 @@ export function AppointmentsStep({
             ).map(([id, label, desc]) => (
               <RadioRow
                 key={id}
+                variant={uiVariant}
                 selected={(state.bookingStrategy || "MICROSOFT_365") === id}
                 onClick={() => {
                   const caps = new Set(state.capabilities);
@@ -446,10 +475,12 @@ export function AppointmentsStep({
             </div>
           ) : null}
         </div>
+        </WizardSection>
 
-        <div className="rounded-xl border border-border bg-card">
+        <WizardSection opus={isOpus} title="Appointment types">
+        <div className={isOpus ? undefined : "rounded-xl border border-border bg-card"}>
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
-            <h3 className="text-sm font-semibold">Appointment types</h3>
+            {!isOpus ? <h3 className="text-sm font-semibold">Appointment types</h3> : <span />}
             <button
               type="button"
               className="inline-flex items-center gap-1 text-xs font-medium text-primary"
@@ -776,6 +807,16 @@ export function AppointmentsStep({
 
             <div className="mt-6 grid gap-6 lg:grid-cols-2">
               <div>
+                {isOpus ? (
+                  <WizardSection
+                    opus
+                    title="What Amy must collect"
+                    description="Defaults cover name, callback number, and service. Add business-specific fields."
+                  >
+                    <ReceptionistCollectFieldsOpus state={state} patch={patch} />
+                  </WizardSection>
+                ) : (
+                <>
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   What Amy must collect
                 </p>
@@ -902,6 +943,8 @@ export function AppointmentsStep({
                     Add field
                   </button>
                 </div>
+                </>
+                )}
               </div>
               <div>
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -925,6 +968,7 @@ export function AppointmentsStep({
                   ).map(([id, label, desc]) => (
                     <RadioRow
                       key={id}
+                      variant={uiVariant}
                       selected={selected.bookingPermission === id}
                       onClick={() => updateSelected({ bookingPermission: id })}
                       label={label}
@@ -936,9 +980,10 @@ export function AppointmentsStep({
             </div>
           </div>
         ) : null}
+        </WizardSection>
       </div>
 
-      <SidePanel title="Appointment tools">
+      <SidePanel variant={uiVariant} title="Appointment tools">
         <ul className="space-y-2 text-xs">
           <li className="flex items-center gap-2">
             <CheckCircle2 className="h-3.5 w-3.5 text-success" />

@@ -17,6 +17,8 @@ import {
   Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { Panel } from "@/newui-transplant/components/app/kit";
+import { Button } from "@/newui-transplant/components/ui/button";
 import { InfoCallout, SidePanel, StatusPill } from "../ui";
 
 function formatBusinessHoursSummary(state: AppointmentReceptionistWizardState): string {
@@ -51,9 +53,11 @@ export function ActivateStep({
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
   onActivate?: () => void | Promise<void>;
   onGoToTest?: () => void;
-  presentation?: "legacy" | "mctb";
+  presentation?: "legacy" | "mctb" | "opus";
 }) {
   const isMctb = presentation === "mctb";
+  const isOpus = presentation === "opus";
+  const uiVariant = isOpus ? "opus" : "legacy";
   const phone = state.phoneNumberE164
     ? formatPhone(state.phoneNumberE164)
     : "No number assigned";
@@ -110,19 +114,24 @@ export function ActivateStep({
   const blocked = hasBlockingActivationIssues(issues);
   const readiness = buildWizardReadinessRows(state, { hasCalendarConnection: hasCalendar });
 
+  const activateTitle = isMctb
+    ? "Ready to turn on your voice agent?"
+    : "Make your receptionist live";
+  const activateDescription = isMctb
+    ? "Review anything that still needs attention before the agent answers calls."
+    : "Activate publishes your configuration. The next call routed to this number uses the updated agent — your phone forwarding decides when calls arrive.";
+
   return (
     <div className="flex gap-6">
       <div className="min-w-0 flex-1 space-y-6">
-        <div>
-          <h2 className="font-display text-xl font-semibold tracking-tight">
-            {isMctb ? "Ready to turn on your voice agent?" : "Make your receptionist live"}
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {isMctb
-              ? "Review anything that still needs attention before the agent answers calls."
-              : "Activate publishes your configuration. The next call routed to this number uses the updated agent — your phone forwarding decides when calls arrive."}
-          </p>
-        </div>
+        {isOpus ? (
+          <Panel title={activateTitle} description={activateDescription} />
+        ) : (
+          <div>
+            <h2 className="font-display text-xl font-semibold tracking-tight">{activateTitle}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{activateDescription}</p>
+          </div>
+        )}
 
         <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
           <p className="text-sm font-semibold text-foreground">{state.solutionName}</p>
@@ -185,7 +194,7 @@ export function ActivateStep({
         </div>
       </div>
 
-      <SidePanel title="Activate">
+      <SidePanel variant={uiVariant} title="Activate">
         <dl className="space-y-3 text-xs">
           <div>
             <dt className="text-muted-foreground">Phone number</dt>
@@ -200,27 +209,56 @@ export function ActivateStep({
             <dd className="mt-0.5 font-medium text-foreground">{state.agentName}</dd>
           </div>
         </dl>
-        <button
-          type="button"
-          data-testid="wizard-activate-submit"
-          disabled={blocked}
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
-          onClick={() => {
-            patch({ activationMode: "activate_now", scheduledAt: null });
-            void onActivate?.();
-          }}
-        >
-          <Zap className="h-4 w-4" />
-          Activate
-        </button>
-        <button
-          type="button"
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2.5 text-sm font-medium"
-          onClick={() => onGoToTest?.()}
-        >
-          <Play className="h-4 w-4" />
-          Test in browser first
-        </button>
+        {isOpus ? (
+          <>
+            <Button
+              type="button"
+              data-testid="wizard-activate-submit"
+              disabled={blocked}
+              className="w-full"
+              onClick={() => {
+                patch({ activationMode: "activate_now", scheduledAt: null });
+                void onActivate?.();
+              }}
+            >
+              <Zap className="h-4 w-4" />
+              Activate
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-2 w-full"
+              onClick={() => onGoToTest?.()}
+            >
+              <Play className="h-4 w-4" />
+              Test in browser first
+            </Button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              data-testid="wizard-activate-submit"
+              disabled={blocked}
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
+              onClick={() => {
+                patch({ activationMode: "activate_now", scheduledAt: null });
+                void onActivate?.();
+              }}
+            >
+              <Zap className="h-4 w-4" />
+              Activate
+            </button>
+            <button
+              type="button"
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2.5 text-sm font-medium"
+              onClick={() => onGoToTest?.()}
+            >
+              <Play className="h-4 w-4" />
+              Test in browser first
+            </button>
+          </>
+        )}
         <InfoCallout>
           Activate saves and publishes this wizard snapshot. On-call schedules, transfer rules, and
           after-hours behavior apply to calls after they reach the agent — they do not replace your

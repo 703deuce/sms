@@ -1,9 +1,8 @@
 "use client";
 
-import { useVoiceReceptionistEditor } from "@/lib/voice/receptionist/use-voice-receptionist-editor";
-import { ReceptionistEditorOpus } from "./receptionist-editor/receptionist-editor-opus";
+import { AppointmentReceptionistWizardOpusPage } from "./appointment-receptionist-wizard-opus-page";
 
+/** Edit receptionist — canonical 8-step wizard (Opus UI). */
 export function NewUiVoiceReceptionistEditorPage() {
-  const editor = useVoiceReceptionistEditor();
-  return <ReceptionistEditorOpus editor={editor} />;
+  return <AppointmentReceptionistWizardOpusPage />;
 }

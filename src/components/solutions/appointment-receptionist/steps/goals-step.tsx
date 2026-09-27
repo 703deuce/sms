@@ -25,6 +25,9 @@ import {
 import { useEffect } from "react";
 import { InfoCallout, RadioRow, SelectableCard, SidePanel } from "../ui";
 import { Input, Label } from "@/components/ui/input";
+import { Input as OpusInput } from "@/newui-transplant/components/ui/input";
+import { Label as OpusLabel } from "@/newui-transplant/components/ui/label";
+import { Panel } from "@/newui-transplant/components/app/kit";
 import { Switch } from "@/newui-transplant/components/ui/switch";
 
 const ICONS = {
@@ -81,6 +84,7 @@ export function GoalsStep({
 }) {
   const isMctb = presentation === "mctb";
   const isOpus = presentation === "opus";
+  const uiVariant = isOpus ? "opus" : "legacy";
   const options = capabilityOptionsForPreset(state.preset);
   const answerOptions = answerWhenOptionsForPreset(state.preset);
   const panel = goalsSidePanelCopy(state.preset);
@@ -254,50 +258,9 @@ export function GoalsStep({
     );
   }
 
-  return (
-    <div className="flex gap-6">
-      <div className="min-w-0 flex-1 space-y-8">
-        {!hideSolutionName ? (
-          <div>
-            <Label htmlFor="solution-name">Agent name</Label>
-            <Input
-              id="solution-name"
-              className="mt-1.5 max-w-lg"
-              value={state.solutionName}
-              onChange={(e) => {
-                const solutionName = e.target.value;
-                patch({
-                  solutionName,
-                  agentName:
-                    !state.agentName ||
-                    state.agentName === "Astra" ||
-                    state.agentName === state.solutionName
-                      ? solutionName.slice(0, 40) || state.agentName
-                      : state.agentName,
-                });
-              }}
-              placeholder="e.g. Front Desk — Main Office"
-            />
-            <p className="mt-1.5 text-xs text-muted-foreground">
-              This name shows in Your Team and Automations so you can tell agents apart.
-            </p>
-          </div>
-        ) : null}
-
-        <div>
-          {!compactCapabilities ? (
-            <>
-              <h2 className="font-display text-xl font-semibold tracking-tight text-foreground">
-                {isMctb ? "What should your voice agent handle?" : "What should this agent do?"}
-              </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {isMctb
-                  ? "Choose what the agent is allowed to help callers with."
-                  : "Options match this agent type — select all that apply."}
-              </p>
-            </>
-          ) : null}
-          {compactCapabilities ? (
+  const capabilityBody = (
+    <>
+          {compactCapabilities || isOpus ? (
             isOpus ? (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {options.map((opt) => {
@@ -358,6 +321,7 @@ export function GoalsStep({
                 return (
                   <SelectableCard
                     key={opt.id}
+                    variant={uiVariant}
                     selected={state.capabilities.includes(opt.id)}
                     onClick={() => toggleCap(opt.id)}
                     title={opt.title}
@@ -368,17 +332,21 @@ export function GoalsStep({
               })}
             </div>
           )}
-        </div>
+    </>
+  );
 
-        {!hideAnswerWhen ? (
+  const answerWhenBody = !hideAnswerWhen ? (
         <div>
-          <h3 className="text-sm font-semibold text-foreground">
-            When should this agent answer?
-          </h3>
-          <div className="mt-3 grid gap-2">
+          {!isOpus ? (
+            <h3 className="text-sm font-semibold text-foreground">
+              When should this agent answer?
+            </h3>
+          ) : null}
+          <div className={isOpus ? "grid gap-2" : "mt-3 grid gap-2"}>
             {answerOptions.map((opt) => (
               <RadioRow
                 key={opt.id}
+                variant={uiVariant}
                 selected={state.answerWhen === opt.id}
                 onClick={() => {
                   const answerWhen = opt.id as AnswerWhen;
@@ -400,7 +368,110 @@ export function GoalsStep({
             ))}
           </div>
         </div>
+  ) : null;
+
+  if (isOpus) {
+    return (
+      <div className="flex gap-6">
+        <div className="min-w-0 flex-1 space-y-6">
+          {!hideSolutionName ? (
+            <Panel title="Agent name" description="Shown in Your Team and Automations.">
+              <OpusLabel htmlFor="solution-name">Display name</OpusLabel>
+              <OpusInput
+                id="solution-name"
+                className="mt-1.5 max-w-lg"
+                value={state.solutionName}
+                onChange={(e) => {
+                  const solutionName = e.target.value;
+                  patch({
+                    solutionName,
+                    agentName:
+                      !state.agentName ||
+                      state.agentName === "Astra" ||
+                      state.agentName === state.solutionName
+                        ? solutionName.slice(0, 40) || state.agentName
+                        : state.agentName,
+                  });
+                }}
+                placeholder="e.g. Front Desk — Main Office"
+              />
+            </Panel>
+          ) : null}
+          <Panel
+            title={isMctb ? "What should your voice agent handle?" : "What should this agent do?"}
+            description="Select all capabilities this receptionist may use on calls."
+          >
+            {capabilityBody}
+          </Panel>
+          {answerWhenBody ? (
+            <Panel title="When should this agent answer?">{answerWhenBody}</Panel>
+          ) : null}
+        </div>
+        {!hideSidePanel ? (
+          <SidePanel variant="opus" title={isMctb ? "Agent summary" : "Recommended setup"}>
+            {isMctb ? (
+              <ul className="space-y-2 text-xs text-muted-foreground">
+                <li>
+                  <span className="font-semibold text-foreground">Enabled capabilities:</span>{" "}
+                  {state.capabilities.length}
+                </li>
+              </ul>
+            ) : (
+              <p className="text-xs text-muted-foreground">{panel.outcome}</p>
+            )}
+          </SidePanel>
         ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex gap-6">
+      <div className="min-w-0 flex-1 space-y-8">
+        {!hideSolutionName ? (
+          <div>
+            <Label htmlFor="solution-name">Agent name</Label>
+            <Input
+              id="solution-name"
+              className="mt-1.5 max-w-lg"
+              value={state.solutionName}
+              onChange={(e) => {
+                const solutionName = e.target.value;
+                patch({
+                  solutionName,
+                  agentName:
+                    !state.agentName ||
+                    state.agentName === "Astra" ||
+                    state.agentName === state.solutionName
+                      ? solutionName.slice(0, 40) || state.agentName
+                      : state.agentName,
+                });
+              }}
+              placeholder="e.g. Front Desk — Main Office"
+            />
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              This name shows in Your Team and Automations so you can tell agents apart.
+            </p>
+          </div>
+        ) : null}
+
+        <div>
+          {!compactCapabilities ? (
+            <>
+              <h2 className="font-display text-xl font-semibold tracking-tight text-foreground">
+                {isMctb ? "What should your voice agent handle?" : "What should this agent do?"}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {isMctb
+                  ? "Choose what the agent is allowed to help callers with."
+                  : "Options match this agent type — select all that apply."}
+              </p>
+            </>
+          ) : null}
+          {capabilityBody}
+        </div>
+
+        {answerWhenBody}
       </div>
 
       {!hideSidePanel && !isOpus ? (

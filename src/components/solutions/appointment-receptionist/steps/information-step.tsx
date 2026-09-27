@@ -17,6 +17,7 @@ import {
   Pencil,
   X,
 } from "lucide-react";
+import { Panel } from "@/newui-transplant/components/app/kit";
 import { InfoCallout, SelectableCard, SidePanel, StatusPill } from "../ui";
 import { BusinessScheduleEditor } from "../operating-maturity-editor";
 
@@ -225,9 +226,11 @@ export function InformationStep({
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
-  presentation?: "legacy" | "mctb";
+  presentation?: "legacy" | "mctb" | "opus";
 }) {
   const isMctb = presentation === "mctb";
+  const isOpus = presentation === "opus";
+  const uiVariant = isOpus ? "opus" : "legacy";
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -502,13 +505,22 @@ export function InformationStep({
     <div className="flex gap-6">
       <div className="min-w-0 flex-1 space-y-8">
         <div>
-          <h2 className="font-display text-xl font-semibold tracking-tight">
-            {isMctb ? "Business Knowledge" : "What should your agent know?"}
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Add business information so the AI can answer with confidence. Facts
-            here are written into the agent knowledge on save/activate.
-          </p>
+          {isOpus ? (
+            <Panel
+              title={isMctb ? "Business Knowledge" : "What should your agent know?"}
+              description="Add business information so the AI can answer with confidence. Facts here are written into the agent knowledge on save/activate."
+            />
+          ) : (
+            <>
+              <h2 className="font-display text-xl font-semibold tracking-tight">
+                {isMctb ? "Business Knowledge" : "What should your agent know?"}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Add business information so the AI can answer with confidence. Facts here are
+                written into the agent knowledge on save/activate.
+              </p>
+            </>
+          )}
           <div className="mt-4 rounded-xl border border-border bg-card p-4">
             <label className="flex cursor-pointer items-start gap-3">
               <input
@@ -549,6 +561,7 @@ export function InformationStep({
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <SelectableCard
+              variant={uiVariant}
               selected={state.knowledgeSource === "website"}
               onClick={() => patch({ knowledgeSource: "website" as KnowledgeSource })}
               title="Import from your website"
@@ -556,6 +569,7 @@ export function InformationStep({
               icon={<Globe className="h-4 w-4" />}
             />
             <SelectableCard
+              variant={uiVariant}
               selected={state.knowledgeSource === "guided_profile"}
               onClick={() => patch({ knowledgeSource: "guided_profile" })}
               title="Complete guided business profile"
@@ -563,6 +577,7 @@ export function InformationStep({
               icon={<FileText className="h-4 w-4" />}
             />
             <SelectableCard
+              variant={uiVariant}
               selected={state.knowledgeSource === "upload_docs"}
               onClick={() => patch({ knowledgeSource: "upload_docs" })}
               title="Upload documents"
@@ -570,6 +585,7 @@ export function InformationStep({
               icon={<CloudUpload className="h-4 w-4" />}
             />
             <SelectableCard
+              variant={uiVariant}
               selected={state.knowledgeSource === "connect_data"}
               onClick={() => patch({ knowledgeSource: "connect_data" })}
               title="Connect existing data"
@@ -862,7 +878,7 @@ export function InformationStep({
         <BusinessScheduleEditor state={state} patch={patch} />
       </div>
 
-      <SidePanel title="Knowledge quality">
+      <SidePanel variant={uiVariant} title="Knowledge quality">
         <ul className="space-y-3 text-xs">
           {state.knowledgeItems.map((item) => (
             <li key={item.id} className="flex items-start gap-2">

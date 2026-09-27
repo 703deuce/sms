@@ -11,6 +11,11 @@ import {
 import { EmergencyTransferEditor } from "../emergency-transfer-editor";
 import { ensureEmergencyTransferWizardState } from "@/lib/solutions/appointment-receptionist/transfer-wizard-state";
 import { normalizeWizardTransferPhone } from "@/lib/solutions/appointment-receptionist/transfer-utils";
+import { FieldRow } from "@/newui-transplant/components/app/kit";
+import { Switch } from "@/newui-transplant/components/ui/switch";
+import { CallbackRequiredFieldsOpus } from "@/newui-transplant/connected/voice/receptionist-editor/callback-required-fields-opus";
+import { Panel } from "@/newui-transplant/components/app/kit";
+import { WizardSection } from "../wizard-opus-ui";
 import { InfoCallout, SidePanel, StatusPill } from "../ui";
 import { UrgencyRulesEditor } from "../urgency-rules-editor";
 import { AfterHoursNotificationsEditor } from "../after-hours-notifications-editor";
@@ -48,8 +53,10 @@ export function CallHandlingStep({
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
-  presentation?: "legacy" | "mctb";
+  presentation?: "legacy" | "mctb" | "opus";
 }) {
+  const isOpus = presentation === "opus";
+  const uiVariant = isOpus ? "opus" : "legacy";
   const b = state.bookingBehavior;
   const booking = hasBookingCapability(state.capabilities);
   const transferReady = (() => {
@@ -59,17 +66,21 @@ export function CallHandlingStep({
     );
   })();
 
+  const headerDescription = `Configure transfers, messages${
+    booking ? ", and booking behavior" : ", and fallbacks"
+  }.`;
+
   return (
     <div className="flex gap-6">
       <div className="min-w-0 flex-1 space-y-8">
+        {isOpus ? (
+          <Panel title="How should your agent handle calls?" description={headerDescription} />
+        ) : (
         <div>
           <h2 className="font-display text-xl font-semibold tracking-tight">
             How should your agent handle calls?
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Configure transfers, messages
-            {booking ? ", and booking behavior" : ", and fallbacks"}.
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">{headerDescription}</p>
           {(booking || presentation === "mctb") ? (
           <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-4">
             {(presentation === "mctb" ? MCTB_VOICE_FLOW_STEPS : LEGACY_BOOKING_FLOW_STEPS).map((step, i) => (
@@ -90,12 +101,12 @@ export function CallHandlingStep({
           </div>
           ) : null}
         </div>
+        )}
 
         <div className="grid gap-4 lg:grid-cols-3">
           {booking ? (
-          <div className="rounded-xl border border-border bg-card p-4">
-            <h3 className="text-sm font-semibold">Booking behavior</h3>
-            <div className="mt-3 space-y-3">
+          <WizardSection opus={isOpus} title="Booking behavior">
+            <div className="space-y-3">
               {(
                 [
                   [
@@ -138,16 +149,16 @@ export function CallHandlingStep({
                 </label>
               ))}
             </div>
-          </div>
+          </WizardSection>
           ) : null}
 
-          <div className="rounded-xl border border-border bg-card p-4 lg:col-span-3">
-            <h3 className="text-sm font-semibold">Emergency &amp; human transfer</h3>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Policy triggers (when Amy may offer a transfer):{" "}
-              {state.transferTriggers.join(" · ")}
-            </p>
-            <div className="mt-4">
+          <WizardSection
+            opus={isOpus}
+            className="lg:col-span-3"
+            title="Emergency & human transfer"
+            description={`Policy triggers (when Amy may offer a transfer): ${state.transferTriggers.join(" · ")}`}
+          >
+            <div>
               <EmergencyTransferEditor state={state} patch={patch} />
             </div>
             {presentation === "mctb" ? (
@@ -180,67 +191,90 @@ export function CallHandlingStep({
                 </label>
               </div>
             ) : null}
-          </div>
+          </WizardSection>
 
-          <div className="rounded-xl border border-border bg-card p-4">
-            <h3 className="text-sm font-semibold">Messages &amp; callbacks</h3>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Let your receptionist take a message when a caller needs someone from your business to
-              follow up. Uses shared intake fields — one callback operation, not a separate message
-              tool.
-            </p>
-            <div className="mt-3 space-y-3">
-              <label className="flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="mt-1"
-                  checked={state.callbackRequestsEnabled !== false}
-                  onChange={(e) => {
-                    const on = e.target.checked;
-                    if (on && !state.callbackRequiredCollectFieldIds?.length) {
-                      patch({
-                        callbackRequestsEnabled: true,
-                        callbackRequiredCollectFieldIds: defaultCallbackRequiredCollectFieldIds(
-                          state.collectFields,
-                        ),
-                      });
-                    } else {
-                      patch({ callbackRequestsEnabled: on });
-                    }
-                  }}
-                />
-                <span>
-                  <span className="font-medium">Take messages and callback requests</span>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">
-                    Independent of appointment booking strategy (Microsoft, send link, or none).
+          <WizardSection
+            opus={isOpus}
+            title="Messages & callbacks"
+            description="Let your receptionist take a message when a caller needs someone from your business to follow up."
+          >
+            {isOpus ? (
+              <>
+                <FieldRow
+                  label="Take messages and callback requests"
+                  description="Independent of appointment booking strategy (Microsoft, send link, or none)."
+                >
+                  <Switch
+                    checked={state.callbackRequestsEnabled !== false}
+                    onCheckedChange={(on) => {
+                      if (on && !state.callbackRequiredCollectFieldIds?.length) {
+                        patch({
+                          callbackRequestsEnabled: true,
+                          callbackRequiredCollectFieldIds: defaultCallbackRequiredCollectFieldIds(
+                            state.collectFields,
+                          ),
+                        });
+                      } else {
+                        patch({ callbackRequestsEnabled: on });
+                      }
+                    }}
+                  />
+                </FieldRow>
+                {state.callbackRequestsEnabled !== false ? (
+                  <div className="mt-4 border-t pt-4">
+                    <CallbackRequiredFieldsOpus state={state} patch={patch} />
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <div className="space-y-3">
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={state.callbackRequestsEnabled !== false}
+                    onChange={(e) => {
+                      const on = e.target.checked;
+                      if (on && !state.callbackRequiredCollectFieldIds?.length) {
+                        patch({
+                          callbackRequestsEnabled: true,
+                          callbackRequiredCollectFieldIds: defaultCallbackRequiredCollectFieldIds(
+                            state.collectFields,
+                          ),
+                        });
+                      } else {
+                        patch({ callbackRequestsEnabled: on });
+                      }
+                    }}
+                  />
+                  <span>
+                    <span className="font-medium">Take messages and callback requests</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      Independent of appointment booking strategy (Microsoft, send link, or none).
+                    </span>
                   </span>
-                </span>
-              </label>
-              {state.callbackRequestsEnabled !== false ? (
-                <CallbackRequiredFieldsEditor state={state} patch={patch} />
-              ) : null}
-            </div>
-          </div>
+                </label>
+                {state.callbackRequestsEnabled !== false ? (
+                  <CallbackRequiredFieldsEditor state={state} patch={patch} />
+                ) : null}
+              </div>
+            )}
+          </WizardSection>
 
-          <div className="rounded-xl border border-border bg-card p-4">
-            <h3 className="text-sm font-semibold">After-hours notifications</h3>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Send SMS or email when important call outcomes occur. Notifications never change what
-              was saved on the call — they only alert your team.
-            </p>
-            <div className="mt-3">
+          <WizardSection
+            opus={isOpus}
+            title="After-hours notifications"
+            description="Send SMS or email when important call outcomes occur."
+          >
               <AfterHoursNotificationsEditor state={state} patch={patch} />
-            </div>
-          </div>
+          </WizardSection>
 
-          <div className="rounded-xl border border-border bg-card p-4">
-            <h3 className="text-sm font-semibold">AI Call Recovery</h3>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Text callers when an AI conversation ends before their request is resolved. Replies
-              continue in your existing SMS text agent with voice context — not a separate recovery
-              bot.
-            </p>
-            <div className="mt-3 space-y-3">
+          <WizardSection
+            opus={isOpus}
+            title="AI Call Recovery"
+            description="Text callers when an AI conversation ends before their request is resolved."
+          >
+            <div className="space-y-3">
               <label className="flex items-start gap-2 text-sm">
                 <input
                   type="checkbox"
@@ -306,7 +340,7 @@ export function CallHandlingStep({
                 </>
               ) : null}
             </div>
-          </div>
+          </WizardSection>
 
         </div>
 
@@ -315,7 +349,7 @@ export function CallHandlingStep({
         <CallbackSlaEditor state={state} patch={patch} />
       </div>
 
-      <SidePanel title="Call handling preview">
+      <SidePanel variant={uiVariant} title="Call handling preview">
         <ol className="space-y-2 border-l border-border pl-3 text-xs">
           {(booking
             ? LEGACY_BOOKING_FLOW_STEPS

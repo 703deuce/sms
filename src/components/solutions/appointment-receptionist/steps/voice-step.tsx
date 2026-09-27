@@ -22,6 +22,7 @@ import { Textarea as OpusTextarea } from "@/newui-transplant/components/ui/texta
 import { cn } from "@/lib/utils";
 import { Check, Play, Volume2 } from "lucide-react";
 import { useRef, useState } from "react";
+import { IdentityConversationStage } from "@/newui-transplant/connected/voice/receptionist-editor/stages/identity-conversation-stage";
 import { InfoCallout, RadioRow, SelectableCard, SidePanel } from "../ui";
 
 const ALL_VOICES = [...WIZARD_VOICES, ...WIZARD_VOICE_BACKUPS];
@@ -112,6 +113,10 @@ export function VoiceStep({
   }
 
   const behaviors = state.conversationBehaviors;
+
+  if (isOpus && !parts) {
+    return <IdentityConversationStage state={state} patch={patch} />;
+  }
 
   const conversationRules = (
     <div className="divide-y">
