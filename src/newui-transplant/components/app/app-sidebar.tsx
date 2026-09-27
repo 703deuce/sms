@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { ChevronsUpDown, PhoneCall } from 'lucide-react'
 import {
   Sidebar,
@@ -15,20 +15,55 @@ import {
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarRail,
 } from '@/newui-transplant/components/ui/sidebar'
-import { NAV, type NavItem } from '@/newui-transplant/lib/nav'
+import { NAV, type NavItem, type NavSubItem } from '@/newui-transplant/lib/nav'
 import { BUSINESS } from '@/newui-transplant/lib/sandbox-data'
 import { useOpusWorkspaceData, workspaceInitials } from '@/newui-transplant/context/opus-workspace-data'
+import {
+  isReceptionistWizardAreaPath,
+  isReceptionistWizardEditPath,
+  stepIdFromReceptionistQuery,
+} from '@/lib/voice/receptionist/wizard-step-url'
 
-function isActive(pathname: string, item: NavItem) {
+function isTopNavActive(pathname: string, item: NavItem) {
+  if (item.children?.length) {
+    if (pathname === item.href) return true
+    if (item.matchPrefix && pathname.startsWith(item.matchPrefix)) {
+      if (isReceptionistWizardEditPath(pathname)) return false
+      return true
+    }
+    return false
+  }
   if (pathname === item.href) return true
   if (item.matchPrefix && pathname.startsWith(item.matchPrefix)) return true
   return false
 }
 
+function isSubNavActive(pathname: string, searchParams: URLSearchParams, child: NavSubItem) {
+  if (!isReceptionistWizardEditPath(pathname)) return false
+  const stepParam = searchParams.get('step')
+  const childUrl = new URL(child.href, 'http://local')
+  const childStep = childUrl.searchParams.get('step')
+  if (childStep && stepParam) {
+    return childStep === stepParam.trim().toLowerCase()
+  }
+  if (!stepParam && childStep === 'goals') return true
+  const activeId = stepIdFromReceptionistQuery(stepParam)
+  const childId = stepIdFromReceptionistQuery(childStep)
+  return activeId !== null && childId !== null && activeId === childId
+}
+
+function receptionistAreaExpanded(pathname: string) {
+  return isReceptionistWizardAreaPath(pathname)
+}
+
 export function AppSidebar({ userName }: { userName?: string }) {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const { workspaceName, business } = useOpusWorkspaceData()
   const displayName = business?.name || workspaceName || BUSINESS.name
   const initials = workspaceInitials(displayName)
@@ -68,11 +103,19 @@ export function AppSidebar({ userName }: { userName?: string }) {
             <SidebarGroupContent>
               <SidebarMenu>
                 {section.items.map((item) => {
-                  const active = isActive(pathname, item)
+                  const hasChildren = Boolean(item.children?.length)
+                  const parentActive = isTopNavActive(pathname, item)
+                  const showChildren = hasChildren && receptionistAreaExpanded(pathname)
+                  const parentHighlighted =
+                    parentActive ||
+                    (hasChildren &&
+                      isReceptionistWizardEditPath(pathname) &&
+                      receptionistAreaExpanded(pathname))
+
                   return (
                     <SidebarMenuItem key={item.href}>
                       <SidebarMenuButton
-                        isActive={active}
+                        isActive={parentHighlighted}
                         tooltip={item.label}
                         render={<Link href={item.href} />}
                         className="data-active:bg-sidebar-accent data-active:text-sidebar-accent-foreground data-active:[&_svg]:text-sidebar-primary"
@@ -84,6 +127,24 @@ export function AppSidebar({ userName }: { userName?: string }) {
                         <SidebarMenuBadge className="rounded-full bg-sidebar-primary/15 text-[10px] text-sidebar-primary">
                           {item.badge}
                         </SidebarMenuBadge>
+                      ) : null}
+                      {showChildren ? (
+                        <SidebarMenuSub>
+                          {item.children!.map((child) => {
+                            const childActive = isSubNavActive(pathname, searchParams, child)
+                            return (
+                              <SidebarMenuSubItem key={child.href}>
+                                <SidebarMenuSubButton
+                                  isActive={childActive}
+                                  size="sm"
+                                  render={<Link href={child.href} />}
+                                >
+                                  <span>{child.label}</span>
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                            )
+                          })}
+                        </SidebarMenuSub>
                       ) : null}
                     </SidebarMenuItem>
                   )

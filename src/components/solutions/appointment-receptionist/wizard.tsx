@@ -19,6 +19,11 @@ import {
   stepIndexFromQuery,
   stepQueryFromIndex,
 } from "@/lib/mctb/voice-agent/wizard-steps";
+import {
+  RECEPTIONIST_WIZARD_EDIT_PATH,
+  stepIndexFromReceptionistQuery,
+  receptionistStepQueryFromIndex,
+} from "@/lib/voice/receptionist/wizard-step-url";
 import { computeMctbWizardStepReadiness } from "@/lib/mctb/voice-agent/step-readiness";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -161,10 +166,14 @@ export function AppointmentReceptionistWizard({
                     ? "draft"
                     : "needs_attention",
               );
-              const fromUrl = stepIndexFromQuery(
-                searchParams?.get("step"),
-                mctbVisibleWizardSteps(loaded.state),
-              );
+              const visibleSteps = isMctb
+                ? mctbVisibleWizardSteps(loaded.state)
+                : visibleWizardSteps(merged, { hireMode, brainAlreadyDone: hireMode });
+              const fromUrl = isMctb
+                ? stepIndexFromQuery(searchParams?.get("step"), visibleSteps)
+                : isOpus
+                  ? stepIndexFromReceptionistQuery(searchParams?.get("step"), visibleSteps)
+                  : null;
               setStepIndex(fromUrl ?? 0);
               setHydrated(true);
               return;
@@ -212,6 +221,12 @@ export function AppointmentReceptionistWizard({
           const fromUrl = stepIndexFromQuery(
             searchParams?.get("step"),
             mctbVisibleWizardSteps(state),
+          );
+          if (fromUrl !== null) setStepIndex(fromUrl);
+        } else if (isOpus) {
+          const fromUrl = stepIndexFromReceptionistQuery(
+            searchParams?.get("step"),
+            visibleWizardSteps(state, { hireMode, brainAlreadyDone: hireMode }),
           );
           if (fromUrl !== null) setStepIndex(fromUrl);
         }
@@ -327,6 +342,34 @@ export function AppointmentReceptionistWizard({
     setStepIndex((i) => Math.min(i, Math.max(0, steps.length - 1)));
   }, [steps.length]);
 
+  useEffect(() => {
+    if (!hydrated || !isOpus) return;
+    const fromUrl = stepIndexFromReceptionistQuery(searchParams?.get("step"), steps);
+    if (fromUrl !== null) {
+      setStepIndex((i) => (i === fromUrl ? i : fromUrl));
+    }
+  }, [hydrated, isOpus, searchParams, steps]);
+
+  useEffect(() => {
+    if (!hydrated || !isOpus) return;
+    if (searchParams?.get("step")) return;
+    const q = receptionistStepQueryFromIndex(stepIndex, steps);
+    const params = new URLSearchParams(searchParams?.toString() || "");
+    params.set("step", q);
+    if (state.agentId) params.set("agentId", state.agentId);
+    if (state.setupId) params.set("setupId", state.setupId);
+    router.replace(`${RECEPTIONIST_WIZARD_EDIT_PATH}?${params.toString()}`, { scroll: false });
+  }, [
+    hydrated,
+    isOpus,
+    router,
+    searchParams,
+    stepIndex,
+    steps,
+    state.agentId,
+    state.setupId,
+  ]);
+
   function postSavePath(agentId: string, step?: string) {
     if (isMctb) {
       const params = new URLSearchParams();
@@ -431,9 +474,20 @@ export function AppointmentReceptionistWizard({
         params.set("step", q);
         if (state.agentId) params.set("agentId", state.agentId);
         router.replace(`${MCTB_ROUTES.voiceAgent}?${params.toString()}`, { scroll: false });
+        return;
+      }
+      if (isOpus) {
+        const q = receptionistStepQueryFromIndex(next, steps);
+        const params = new URLSearchParams(searchParams?.toString() || "");
+        params.set("step", q);
+        if (state.agentId) params.set("agentId", state.agentId);
+        if (state.setupId) params.set("setupId", state.setupId);
+        router.replace(`${RECEPTIONIST_WIZARD_EDIT_PATH}?${params.toString()}`, {
+          scroll: false,
+        });
       }
     },
-    [isMctb, router, searchParams, state.agentId, steps],
+    [isMctb, isOpus, router, searchParams, state.agentId, state.setupId, steps],
   );
 
   async function onContinue() {
