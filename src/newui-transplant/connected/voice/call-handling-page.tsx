@@ -10,6 +10,7 @@ import {
 import { useAppointmentReceptionistWizard } from "@/lib/newui-transplant/hooks/use-appointment-receptionist";
 import { addTransferDestination } from "@/lib/solutions/appointment-receptionist/transfer-wizard-state";
 import { DEFAULT_VOICE_V2_OPERATING_MATURITY_CONFIG } from "@/lib/voice-receptionist-wizard/operating-maturity/defaults";
+import { OpusCallRoutingIngressPanel } from "@/newui-transplant/components/voice/call-routing-ingress-panel";
 
 export function NewUiVoiceCallHandlingPage() {
   const { state, patch, loading, saveDraft } = useAppointmentReceptionistWizard();
@@ -82,5 +83,10 @@ export function NewUiVoiceCallHandlingPage() {
     return <p className="p-6 text-sm text-muted-foreground">Loading call handling…</p>;
   }
 
-  return <TransplantVoiceCallHandlingPage wired={wired} />;
+  return (
+    <>
+      <TransplantVoiceCallHandlingPage wired={wired} />
+      <OpusCallRoutingIngressPanel />
+    </>
+  );
 }

@@ -16,9 +16,10 @@ import { AlertCircle, RefreshCw, Users } from "lucide-react";
 type Props = {
   initialMembers: TeamMember[];
   initialInvites: PendingInvite[];
+  hideChrome?: boolean;
 };
 
-export function UsersSettingsConnected({ initialMembers, initialInvites }: Props) {
+export function UsersSettingsConnected({ initialMembers, initialInvites, hideChrome = false }: Props) {
   const router = useRouter();
   const [members, setMembers] = useState(initialMembers);
   const [invites, setInvites] = useState(initialInvites);
@@ -77,30 +78,42 @@ export function UsersSettingsConnected({ initialMembers, initialInvites }: Props
   }
 
   return (
-    <div style={{ maxWidth: 960, margin: "0 auto", padding: "28px 24px 48px" }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          gap: 16,
-          flexWrap: "wrap",
-          marginBottom: 18,
-        }}
-      >
-        <div>
-          <h1
-            className="font-display"
-            style={{ margin: 0, fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}
-          >
-            Users &amp; permissions
-          </h1>
-          <p style={{ margin: "5px 0 0", fontSize: 13, color: "var(--text-muted)", maxWidth: 520 }}>
-            Manage team access, roles, and who can make changes across your workspace.
-          </p>
+    <div
+      style={
+        hideChrome
+          ? { maxWidth: "none", margin: 0, padding: 0 }
+          : { maxWidth: 960, margin: "0 auto", padding: "28px 24px 48px" }
+      }
+    >
+      {!hideChrome ? (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 16,
+            flexWrap: "wrap",
+            marginBottom: 18,
+          }}
+        >
+          <div>
+            <h1
+              className="font-display"
+              style={{ margin: 0, fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}
+            >
+              Users &amp; permissions
+            </h1>
+            <p style={{ margin: "5px 0 0", fontSize: 13, color: "var(--text-muted)", maxWidth: 520 }}>
+              Manage team access, roles, and who can make changes across your workspace.
+            </p>
+          </div>
+          {members.length > 0 && <InviteUserPanel onInvite={invite} />}
         </div>
-        {members.length > 0 && <InviteUserPanel onInvite={invite} />}
-      </div>
+      ) : members.length > 0 ? (
+        <div className="mb-4 flex justify-end">
+          <InviteUserPanel onInvite={invite} />
+        </div>
+      ) : null}
 
       {savedNotice && (
         <div
@@ -124,7 +137,7 @@ export function UsersSettingsConnected({ initialMembers, initialInvites }: Props
         </div>
       )}
 
-      <SettingsTabs active="Team" items={tabs} />
+      {!hideChrome ? <SettingsTabs active="Team" items={tabs} /> : null}
 
       {failed && (
         <div className="surface" style={{ padding: 24, display: "flex", alignItems: "center", gap: 14 }} role="alert">

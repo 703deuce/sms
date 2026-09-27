@@ -23,6 +23,8 @@ type Props = {
   registration: MessagingRegistration | null;
   complianceReady: boolean;
   lastSynced: string | null;
+  /** Opus settings layout provides page chrome and tabs. */
+  hideChrome?: boolean;
 };
 
 export function BusinessSettingsConnected({
@@ -30,6 +32,7 @@ export function BusinessSettingsConnected({
   registration,
   complianceReady,
   lastSynced,
+  hideChrome = false,
 }: Props) {
   const [workspaceName, setWorkspaceName] = useState(initialWorkspaceName);
   const [supportEmail, setSupportEmail] = useState(registration?.contactEmail || "");
@@ -192,30 +195,44 @@ export function BusinessSettingsConnected({
   const tabs = resolveSettingsTabs();
 
   return (
-    <div className="page">
-      <div className="page-header">
-        <div className="page-header-left">
-          <span className="page-icon">
-            <Building2 size={18} />
-          </span>
-          <div>
-            <h1 className="page-title">Business settings</h1>
-            <p className="page-desc">
-              Account-level business information displayed in messages and compliance records.
-            </p>
+    <div className={hideChrome ? "min-w-0" : "page"}>
+      {!hideChrome ? (
+        <>
+          <div className="page-header">
+            <div className="page-header-left">
+              <span className="page-icon">
+                <Building2 size={18} />
+              </span>
+              <div>
+                <h1 className="page-title">Business settings</h1>
+                <p className="page-desc">
+                  Account-level business information displayed in messages and compliance records.
+                </p>
+              </div>
+            </div>
+            <button
+              type="submit"
+              form="business-settings-form"
+              className="btn btn-primary"
+              disabled={saveState === "saving" || platformLoading}
+            >
+              {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : "Save changes"}
+            </button>
           </div>
+          <SettingsTabs active="Business" items={tabs} />
+        </>
+      ) : (
+        <div className="mb-4 flex justify-end">
+          <button
+            type="submit"
+            form="business-settings-form"
+            className="btn btn-primary"
+            disabled={saveState === "saving" || platformLoading}
+          >
+            {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : "Save changes"}
+          </button>
         </div>
-        <button
-          type="submit"
-          form="business-settings-form"
-          className="btn btn-primary"
-          disabled={saveState === "saving" || platformLoading}
-        >
-          {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : "Save changes"}
-        </button>
-      </div>
-
-      <SettingsTabs active="Business" items={tabs} />
+      )}
 
       {error ? (
         <div className="alert alert-error" role="alert">

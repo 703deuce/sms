@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 import { getActiveWorkspaceId, getSession } from "@/lib/auth";
 import { getPrisma } from "@/lib/db";
+import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
 import { MctbOnboardingWizard } from "@/components/mctb/onboarding-wizard";
+import { NewUiMctbOnboardingPage } from "@/newui-transplant/connected/mctb/onboarding-page";
 import { loadMctbOnboardingState, isOnboardingComplete } from "@/lib/mctb/onboarding/state";
 
 export default async function MctbOnboardingPage() {
@@ -20,6 +22,10 @@ export default async function MctbOnboardingPage() {
   const state = await loadMctbOnboardingState(workspaceId);
   if (isOnboardingComplete(state) && String(ws?.billingPlan).toLowerCase() === "trial") {
     redirect("/dashboard");
+  }
+
+  if (isNewUiStage2Enabled()) {
+    return <NewUiMctbOnboardingPage initialBusinessName={ws?.name || ""} />;
   }
 
   return <MctbOnboardingWizard initialBusinessName={ws?.name || ""} />;

@@ -5,6 +5,8 @@ import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
+import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
+import { Panel } from "@/newui-transplant/components/app/kit";
 import { titleCaseStatus } from "@/lib/mappers";
 import { loadIntegrationWebhookEvents, requireWorkspaceContext } from "@/lib/workspace-data";
 import { Terminal } from "lucide-react";
@@ -27,16 +29,10 @@ export default async function IntegrationsLogsPage() {
   const events = await loadIntegrationWebhookEvents(workspaceId);
   const errors = events.filter((e) => e.status === "failed").length;
 
-  return (
-    <div>
-      <PageHeader
-        title="Developer logs"
-        description="API request history, response codes, and latency for debugging integrations."
-        actions={<Button variant="outline">Export logs</Button>}
-      />
+  const opus = isNewUiStage2Enabled();
 
-      <Tabs items={integrationTabs} />
-
+  const logBody = (
+    <>
       <div className="mb-4 flex items-center gap-4 text-sm text-muted-foreground">
         <span>{events.length} webhook events</span>
         <span>{errors} errors</span>
@@ -86,6 +82,31 @@ export default async function IntegrationsLogsPage() {
           </Table>
         )}
       </Card>
+    </>
+  );
+
+  if (opus) {
+    return (
+      <Panel
+        title="Developer logs"
+        description="API request history, response codes, and latency for debugging integrations."
+      >
+        {logBody}
+      </Panel>
+    );
+  }
+
+  return (
+    <div>
+      <PageHeader
+        title="Developer logs"
+        description="API request history, response codes, and latency for debugging integrations."
+        actions={<Button variant="outline">Export logs</Button>}
+      />
+
+      <Tabs items={integrationTabs} />
+
+      {logBody}
     </div>
   );
 }

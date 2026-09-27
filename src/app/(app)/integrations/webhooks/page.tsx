@@ -1,6 +1,8 @@
 import { WebhooksPanel } from "@/components/integrations/webhooks-panel";
 import { PageHeader } from "@/components/ui/page-header";
 import { Tabs } from "@/components/ui/tabs";
+import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
+import { Panel } from "@/newui-transplant/components/app/kit";
 import { getAppBaseUrl } from "@/lib/messaging/telnyx/config";
 import {
   loadIntegrationEndpoints,
@@ -60,6 +62,19 @@ export default async function IntegrationsWebhooksPage() {
       signingSecretPrefix: w.signingSecretPrefix,
     };
   });
+
+  const opus = isNewUiStage2Enabled();
+
+  if (opus) {
+    return (
+      <Panel
+        title="Webhooks"
+        description="Outbound Voice events to your systems, and incoming automation webhooks into Transovo."
+      >
+        <WebhooksPanel endpoints={endpointRows} outbound={outboundRows} />
+      </Panel>
+    );
+  }
 
   return (
     <div>

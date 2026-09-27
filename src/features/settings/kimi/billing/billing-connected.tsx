@@ -21,9 +21,10 @@ import { AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
 
 type Props = {
   highlightProduct?: string | null;
+  hideChrome?: boolean;
 };
 
-export function BillingSettingsConnected({ highlightProduct }: Props) {
+export function BillingSettingsConnected({ highlightProduct, hideChrome = false }: Props) {
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [usage, setUsage] = useState<UsageRow[]>([]);
   const [billing, setBilling] = useState<Billing | null>(null);
@@ -74,15 +75,18 @@ export function BillingSettingsConnected({ highlightProduct }: Props) {
   }, []);
 
   return (
-    <div className="tv-page">
-      <div className="tv-page-header">
-        <div>
-          <h1 className="tv-page-title">Billing</h1>
-          <p className="tv-page-desc">Plan, credits, itemized estimate, ledger, and invoices.</p>
-        </div>
-      </div>
-
-      <SettingsTabs items={tabs} />
+    <div className={hideChrome ? "min-w-0" : "tv-page"}>
+      {!hideChrome ? (
+        <>
+          <div className="tv-page-header">
+            <div>
+              <h1 className="tv-page-title">Billing</h1>
+              <p className="tv-page-desc">Plan, credits, itemized estimate, ledger, and invoices.</p>
+            </div>
+          </div>
+          <SettingsTabs items={tabs} />
+        </>
+      ) : null}
 
       {highlightProduct ? (
         <div className="tv-banner tv-banner-success" style={{ marginBottom: 16 }}>

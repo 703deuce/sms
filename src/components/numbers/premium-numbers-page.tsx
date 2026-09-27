@@ -68,6 +68,8 @@ type Props = {
   initialMode?: SearchMode;
   /** Personal workspace uses the Find a Number product mockup layout. */
   layout?: "default" | "find-mockup";
+  /** Opus shell provides page header — hide legacy marketing header. */
+  hidePageChrome?: boolean;
 };
 
 type CheckoutState = PremiumCheckoutState;
@@ -76,6 +78,7 @@ export function PremiumNumbersPageClient({
   workspaceId,
   initialMode = "business",
   layout = "default",
+  hidePageChrome = false,
 }: Props) {
   if (initialMode === "personal" && layout === "find-mockup") {
     return (
@@ -310,32 +313,34 @@ export function PremiumNumbersPageClient({
   const showPreSearch = !searchResponse && !loading && !success;
 
   return (
-    <div className="mx-auto max-w-[1320px] space-y-6 p-4 lg:p-6">
+    <div className={cn(hidePageChrome ? "min-w-0 space-y-6" : "mx-auto max-w-[1320px] space-y-6 p-4 lg:p-6")}>
       <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
         <div className="min-w-0 flex-1 space-y-5">
-          <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex items-start gap-3">
-              <span className="mt-0.5 flex h-11 w-11 items-center justify-center rounded-xl bg-[#eef2ff] text-[#6366f1]">
-                <Sparkles className="h-5 w-5" />
-              </span>
-              <div>
-                <h1 className="text-[26px] font-bold tracking-tight text-[#111827]">
-                  Premium Numbers
-                </h1>
-                <p className="mt-1 max-w-xl text-[14px] leading-relaxed text-[#6b7280]">
-                  Find and activate the perfect phone number to stand out and increase caller trust.
-                </p>
+          {!hidePageChrome ? (
+            <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 flex h-11 w-11 items-center justify-center rounded-xl bg-[#eef2ff] text-[#6366f1]">
+                  <Sparkles className="h-5 w-5" />
+                </span>
+                <div>
+                  <h1 className="text-[26px] font-bold tracking-tight text-[#111827]">
+                    Premium Numbers
+                  </h1>
+                  <p className="mt-1 max-w-xl text-[14px] leading-relaxed text-[#6b7280]">
+                    Find and activate the perfect phone number to stand out and increase caller trust.
+                  </p>
+                </div>
               </div>
-            </div>
-            <Link href="/numbers">
-              <Button variant="outline" className="h-9 rounded-lg border-[#e5e7eb] text-[13px]">
-                <Phone className="h-4 w-4" />
-                My Numbers
-              </Button>
-            </Link>
-          </header>
+              <Link href="/numbers">
+                <Button variant="outline" className="h-9 rounded-lg border-[#e5e7eb] text-[13px]">
+                  <Phone className="h-4 w-4" />
+                  My Numbers
+                </Button>
+              </Link>
+            </header>
+          ) : null}
 
-          <div className={cn(srCard, "p-5 md:p-6")}>
+          <div className={cn(hidePageChrome ? "space-y-5" : srCard, hidePageChrome ? "" : "p-5 md:p-6")}>
             <div className="inline-flex rounded-lg border border-[#e5e7eb] bg-[#f9fafb] p-1">
               <PillTab active={mode === "business"} onClick={() => setMode("business")}>
                 Business

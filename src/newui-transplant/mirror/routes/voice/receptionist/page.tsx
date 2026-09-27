@@ -37,8 +37,8 @@ export function TransplantVoiceReceptionistPage({ wired }: { wired?: VoiceRecept
         description="A summary of how your AI receptionist greets and helps callers."
         actions={
           <>
-            <ButtonLink href="/voice/receptionist" variant="outline">Continue setup</ButtonLink>
-            <ButtonLink href="/voice/receptionist">Open setup editor</ButtonLink>
+            <ButtonLink href="/voice/receptionist/edit" variant="outline">Continue setup</ButtonLink>
+            <ButtonLink href="/voice/receptionist/edit">Open setup editor</ButtonLink>
           </>
         }
       />

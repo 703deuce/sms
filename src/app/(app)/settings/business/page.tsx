@@ -1,4 +1,5 @@
 import { BusinessSettingsConnected } from "@/features/settings/kimi/business/business-connected";
+import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
 import {
   loadComplianceOverview,
   loadRegistration,
@@ -17,14 +18,19 @@ export default async function SettingsBusinessPage() {
   const brandOk = (registration?.brandStatus || "").toLowerCase() === "approved";
   const campaignOk = (registration?.campaignStatus || "").toLowerCase() === "approved";
 
-  return (
-    <div className="kimi-surface kimi-settings-business">
-      <BusinessSettingsConnected
-        workspaceName={workspace?.name || ""}
-        registration={registration}
-        complianceReady={Boolean(brandOk && campaignOk && compliance.ready)}
-        lastSynced={registration?.updatedAt?.toISOString() || null}
-      />
-    </div>
+  const body = (
+    <BusinessSettingsConnected
+      workspaceName={workspace?.name || ""}
+      registration={registration}
+      complianceReady={Boolean(brandOk && campaignOk && compliance.ready)}
+      lastSynced={registration?.updatedAt?.toISOString() || null}
+      hideChrome={isNewUiStage2Enabled()}
+    />
   );
+
+  if (isNewUiStage2Enabled()) {
+    return body;
+  }
+
+  return <div className="kimi-surface kimi-settings-business">{body}</div>;
 }
