@@ -25,8 +25,9 @@ const DEMO_CHECKS = [
 ]
 
 export function TransplantMctbSetupTestPage({ wired }: { wired?: MctbSetupTestWired }) {
-  const checks = wired?.checks ?? DEMO_CHECKS
-  const line = wired?.businessLine ?? BUSINESS.line
+  const live = wired !== undefined
+  const checks = live ? (wired?.checks ?? []) : (wired?.checks ?? DEMO_CHECKS)
+  const line = wired?.businessLine ?? (live ? '—' : BUSINESS.line)
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">

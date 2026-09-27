@@ -5,7 +5,6 @@ import { ArrowLeft, Check, ChevronDown, MessageSquare, Phone } from 'lucide-reac
 import { Page, PageHeader, Panel, Pill, Rows } from '@/newui-transplant/components/app/kit'
 import { ButtonLink } from '@/newui-transplant/components/app/button-link'
 import { RecoveryPill } from '@/newui-transplant/components/app/status'
-import { BUSINESS } from '@/newui-transplant/lib/sandbox-data'
 import { cn } from '@/lib/utils'
 import type { MctbMissedCallDetailWired } from '@/lib/newui-transplant/adapters/mctb-missed-call-detail'
 
@@ -91,7 +90,7 @@ export function TransplantMctbMissedCallDetailView({ wired }: { wired: MctbMisse
           <Panel title="Text-back">
             <Rows
               items={[
-                { label: 'Sender', value: <span className="font-mono text-xs">{wired.senderLabel ?? BUSINESS.sender}</span> },
+                { label: 'Sender', value: <span className="font-mono text-xs">{wired.senderLabel ?? '—'}</span> },
                 ...wired.textBackRows.map((r) => ({ label: r.label, value: r.value })),
               ]}
             />

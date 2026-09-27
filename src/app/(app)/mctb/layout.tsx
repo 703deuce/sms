@@ -1,8 +1,14 @@
-import "@/components/mctb/shell/mctb-design-tokens.css";
-import "@/components/mctb/shell/mctb-neutral-shell.css";
-import "@/components/mctb/shell/mctb-sidebar.css";
-import "@/components/mctb/shell/mctb-global-overrides.css";
+import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
 
-export default function MctbProductLayout({ children }: { children: React.ReactNode }) {
+export default async function MctbProductLayout({ children }: { children: React.ReactNode }) {
+  if (!isNewUiStage2Enabled()) {
+    const { MctbLegacyShellStyles } = await import("./mctb-legacy-shell-styles");
+    return (
+      <>
+        <MctbLegacyShellStyles />
+        {children}
+      </>
+    );
+  }
   return children;
 }

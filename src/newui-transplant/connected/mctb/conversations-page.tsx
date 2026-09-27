@@ -5,7 +5,9 @@ import { Inbox } from "@/newui-transplant/components/mctb/inbox";
 import type { Conversation, MissedCall } from "@/newui-transplant/lib/view-models";
 import { mapApiConversationToNewUiInbox } from "@/lib/newui-transplant/adapters/mctb-conversations";
 import { businessContextFromWorkspace } from "@/lib/newui-transplant/adapters/business-context";
+import { formatMctbPhoneLabel } from "@/lib/mctb/phone-display";
 import { useOpusWorkspaceData } from "@/newui-transplant/context/opus-workspace-data";
+import type { BusinessContext } from "@/newui-transplant/lib/view-models";
 import {
   fetchConversation,
   fetchInboxListPage,
@@ -33,15 +35,37 @@ export function NewUiMctbConversationsPage({
   initialFilter: "All" | "Needs reply";
 }) {
   const { business: opusBusiness } = useOpusWorkspaceData();
-  const business =
-    opusBusiness ??
-    businessContextFromWorkspace({
-      name: "Workspace",
-    });
+  const [business, setBusiness] = useState<BusinessContext>(
+    opusBusiness ?? businessContextFromWorkspace({ name: "Workspace", businessLineE164: null, senderE164: null }),
+  );
   const [filter, setFilter] = useState<InboxFilter>(initialFilter === "Needs reply" ? "Needs reply" : "All");
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [missedCalls, setMissedCalls] = useState<MissedCall[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/mctb/setup", { cache: "no-store" })
+      .then(async (res) => {
+        const json = await res.json();
+        if (!res.ok || !json.data) return;
+        const d = json.data as {
+          businessLineE164?: string | null;
+          runtime?: { smsPhoneNumberId?: string | null; phoneNumberId?: string | null; timezone?: string };
+          phoneNumbers?: Array<{ id: string; e164: string }>;
+        };
+        const smsId = d.runtime?.smsPhoneNumberId || d.runtime?.phoneNumberId;
+        const senderPhone = d.phoneNumbers?.find((p) => p.id === smsId)?.e164 ?? d.phoneNumbers?.[0]?.e164;
+        setBusiness(
+          businessContextFromWorkspace({
+            name: opusBusiness?.name ?? "Workspace",
+            businessLineE164: d.businessLineE164,
+            senderE164: senderPhone ? formatMctbPhoneLabel(senderPhone) : null,
+            timezone: d.runtime?.timezone,
+          }),
+        );
+      })
+      .catch(() => undefined);
+  }, [opusBusiness?.name]);
 
   const loadList = useCallback(async () => {
     setLoading(true);
