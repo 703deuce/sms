@@ -17,8 +17,9 @@ import {
   Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Panel } from "@/newui-transplant/components/app/kit";
+import { Panel, Rows } from "@/newui-transplant/components/app/kit";
 import { pickWizardFieldComponents } from "../wizard-field-kit";
+import { OpusDensePanel } from "../wizard-opus-ui";
 import { InfoCallout, SidePanel, StatusPill } from "../ui";
 
 function formatBusinessHoursSummary(state: AppointmentReceptionistWizardState): string {
@@ -134,16 +135,49 @@ export function ActivateStep({
           </div>
         )}
 
-        <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
-          <p className="text-sm font-semibold text-foreground">{state.solutionName}</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            When a call reaches Transovo, this receptionist uses the configuration below — including
-            business hours and on-call rules for how to handle the conversation (not when the line
-            forwards).
-          </p>
-        </div>
+        {isOpus ? (
+          <OpusDensePanel className="border-primary/20 bg-primary/5">
+            <p className="text-sm font-semibold text-foreground">{state.solutionName}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              When a call reaches Transovo, this receptionist uses the configuration below —
+              including business hours and on-call rules for how to handle the conversation (not when
+              the line forwards).
+            </p>
+          </OpusDensePanel>
+        ) : (
+          <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+            <p className="text-sm font-semibold text-foreground">{state.solutionName}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              When a call reaches Transovo, this receptionist uses the configuration below —
+              including business hours and on-call rules for how to handle the conversation (not when
+              the line forwards).
+            </p>
+          </div>
+        )}
 
         {issues.length ? (
+          isOpus ? (
+            <OpusDensePanel title="Needs attention before activate">
+            {issues.map((issue) => (
+              <div
+                key={issue.id}
+                className="flex items-start gap-2 text-sm text-muted-foreground"
+              >
+                <AlertTriangle
+                  className={`mt-0.5 h-4 w-4 shrink-0 ${
+                    issue.severity === "blocking" ? "text-destructive" : "text-warning"
+                  }`}
+                />
+                <span>
+                  <span className="font-medium text-foreground">
+                    {issue.severity === "blocking" ? "Required: " : "Note: "}
+                  </span>
+                  {issue.message}
+                </span>
+              </div>
+            ))}
+            </OpusDensePanel>
+          ) : (
           <div className="space-y-2 rounded-xl border border-border bg-card p-4">
             <p className="text-sm font-semibold">Needs attention before activate</p>
             {issues.map((issue) => (
@@ -165,34 +199,62 @@ export function ActivateStep({
               </div>
             ))}
           </div>
+          )
         ) : null}
 
-        <div className="grid gap-2 sm:grid-cols-2">
-          {readiness.map((item) => (
-            <div
-              key={item.id}
-              className="flex items-center justify-between rounded-xl border border-border bg-card px-3 py-2.5 text-sm"
-            >
-              <span className="font-medium">{item.label}</span>
-              <StatusPill
-                tone={
-                  item.status === "ready"
-                    ? "success"
-                    : item.status === "needs_setup"
-                      ? "warning"
-                      : "muted"
-                }
+        {isOpus ? (
+          <Rows
+            items={readiness.map((item) => ({
+              label: item.label,
+              value: (
+                <StatusPill
+                  variant="opus"
+                  tone={
+                    item.status === "ready"
+                      ? "success"
+                      : item.status === "needs_setup"
+                        ? "warning"
+                        : "muted"
+                  }
+                >
+                  {item.status === "ready" ? (
+                    <CheckCircle2 className="h-3 w-3" />
+                  ) : item.status === "needs_setup" ? (
+                    <Clock className="h-3 w-3" />
+                  ) : null}
+                  {item.detail}
+                </StatusPill>
+              ),
+            }))}
+          />
+        ) : (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {readiness.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center justify-between rounded-xl border border-border bg-card px-3 py-2.5 text-sm"
               >
-                {item.status === "ready" ? (
-                  <CheckCircle2 className="h-3 w-3" />
-                ) : item.status === "needs_setup" ? (
-                  <Clock className="h-3 w-3" />
-                ) : null}
-                {item.detail}
-              </StatusPill>
-            </div>
-          ))}
-        </div>
+                <span className="font-medium">{item.label}</span>
+                <StatusPill
+                  tone={
+                    item.status === "ready"
+                      ? "success"
+                      : item.status === "needs_setup"
+                        ? "warning"
+                        : "muted"
+                  }
+                >
+                  {item.status === "ready" ? (
+                    <CheckCircle2 className="h-3 w-3" />
+                  ) : item.status === "needs_setup" ? (
+                    <Clock className="h-3 w-3" />
+                  ) : null}
+                  {item.detail}
+                </StatusPill>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <SidePanel variant={uiVariant} title="Activate">

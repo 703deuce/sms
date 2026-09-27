@@ -55,3 +55,54 @@ export {
   TableRow,
 } from "@/newui-transplant/components/ui/table";
 export { Tabs, TabsContent, TabsList, TabsTrigger } from "@/newui-transplant/components/ui/tabs";
+export {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/newui-transplant/components/ui/select";
+
+/** Highlighted inset block (replaces legacy `border-primary/30 bg-card` divs on Opus). */
+export function OpusCalloutPanel({
+  title,
+  children,
+  className,
+}: {
+  title?: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <Panel title={title} className={cn("border-primary/30 shadow-none", className)} bodyClassName="p-4 text-sm">
+      {children}
+    </Panel>
+  );
+}
+
+/** Standard nested block inside a step (replaces legacy `rounded-xl border bg-card` on Opus). */
+export function OpusDensePanel({
+  title,
+  description,
+  children,
+  className,
+  action,
+}: {
+  title?: string;
+  description?: string;
+  children: ReactNode;
+  className?: string;
+  action?: ReactNode;
+}) {
+  return (
+    <Panel
+      title={title}
+      description={description}
+      action={action}
+      className={cn("shadow-none", className)}
+      bodyClassName="p-4"
+    >
+      {children}
+    </Panel>
+  );
+}

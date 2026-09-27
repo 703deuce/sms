@@ -23,7 +23,6 @@ import { cn } from "@/lib/utils";
 import { Check, Play, Volume2 } from "lucide-react";
 import { useRef, useState } from "react";
 import { IdentityConversationStage } from "@/newui-transplant/connected/voice/receptionist-editor/stages/identity-conversation-stage";
-import { Button as LegacyWizardButton } from "@/components/ui/button";
 import { InfoCallout, RadioRow, SelectableCard, SidePanel } from "../ui";
 
 const ALL_VOICES = [...WIZARD_VOICES, ...WIZARD_VOICE_BACKUPS];
@@ -644,6 +643,7 @@ function VoicePickCard({
   onSelect: () => void;
   onPreview: () => void;
 }) {
+  const { Button: LegacyBtn } = pickWizardFieldComponents("legacy");
   return (
     <div className="relative">
       <SelectableCard
@@ -661,7 +661,7 @@ function VoicePickCard({
           ) : null}
         </div>
       </SelectableCard>
-      <LegacyWizardButton
+      <LegacyBtn
         type="button"
         size="sm"
         className="absolute bottom-3 right-3 z-10 h-auto gap-1 rounded-full px-2.5 py-1.5 text-[11px]"
@@ -670,7 +670,7 @@ function VoicePickCard({
       >
         <Play className={`h-3 w-3 fill-current ${previewing ? "animate-pulse" : ""}`} />
         {previewing ? "…" : "Play"}
-      </LegacyWizardButton>
+      </LegacyBtn>
     </div>
   );
 }

@@ -39,6 +39,11 @@ export function pickWizardFieldComponents(presentation: WizardPresentation) {
       FieldRow,
       Panel,
       Pill,
+      Select: OpusSelect,
+      SelectContent,
+      SelectItem,
+      SelectTrigger,
+      SelectValue,
     };
   }
   return {

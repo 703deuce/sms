@@ -23,7 +23,41 @@ import {
   X,
 } from "lucide-react";
 import { Panel } from "@/newui-transplant/components/app/kit";
+import { OpusCalloutPanel, OpusDensePanel } from "../wizard-opus-ui";
 import { InfoCallout, SelectableCard, SidePanel, StatusPill } from "../ui";
+import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
+
+function OpusOrLegacyInset({
+  isOpus,
+  children,
+  accent,
+  className,
+}: {
+  isOpus: boolean;
+  children: ReactNode;
+  accent?: boolean;
+  className?: string;
+}) {
+  if (isOpus) {
+    return accent ? (
+      <OpusCalloutPanel className={cn("mt-3", className)}>{children}</OpusCalloutPanel>
+    ) : (
+      <OpusDensePanel className={cn("mt-3", className)}>{children}</OpusDensePanel>
+    );
+  }
+  return (
+    <div
+      className={cn(
+        "mt-3 rounded-xl border p-4",
+        accent ? "border-primary/30 bg-card" : "border-border bg-card",
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
 import { BusinessScheduleEditor } from "../operating-maturity-editor";
 
 type KnowledgeItem = AppointmentReceptionistWizardState["knowledgeItems"][number];
@@ -522,7 +556,8 @@ export function InformationStep({
               </p>
             </>
           )}
-          <div className="mt-4 rounded-xl border border-border bg-card p-4">
+          {isOpus ? (
+            <OpusDensePanel className="mt-4">
             <WizardToggleField
               presentation={presentation}
               label="Search uploaded documents during calls"
@@ -543,7 +578,31 @@ export function InformationStep({
                 enable document search.
               </p>
             ) : null}
-          </div>
+            </OpusDensePanel>
+          ) : (
+            <div className="mt-4 rounded-xl border border-border bg-card p-4">
+              <WizardToggleField
+                presentation={presentation}
+                label="Search uploaded documents during calls"
+                description="Hours, services, and FAQs in your profile below are always available immediately. Turn this on to let Amy search PDFs and other indexed documents when a caller asks something not covered there."
+                checked={state.knowledgeBaseEnabled !== false}
+                onCheckedChange={(on) => patch({ knowledgeBaseEnabled: on })}
+              />
+              {state.knowledgeBaseEnabled === false ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Large document search is off. Prompt facts and FAQs still work.
+                </p>
+              ) : !state.linkedKnowledgeBaseId &&
+                state.knowledgeSource !== "upload_docs" &&
+                state.knowledgeSource !== "website" &&
+                state.knowledgeSource !== "connect_data" ? (
+                <p className="mt-2 text-xs text-warning">
+                  Upload a document, scan a website, or connect a knowledge base to enable document
+                  search.
+                </p>
+              ) : null}
+            </div>
+          )}
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <SelectableCard
               variant={uiVariant}
@@ -580,7 +639,7 @@ export function InformationStep({
           </div>
 
           {state.knowledgeSource === "website" ? (
-            <div className="mt-3 rounded-xl border border-primary/30 bg-card p-4">
+            <OpusOrLegacyInset isOpus={isOpus} accent>
               <Label htmlFor="website-url" className="text-xs">
                 Business website URL
               </Label>
@@ -605,11 +664,11 @@ export function InformationStep({
               {scanError ? (
                 <p className="mt-2 text-xs text-warning">{scanError}</p>
               ) : null}
-            </div>
+            </OpusOrLegacyInset>
           ) : null}
 
           {state.knowledgeSource === "guided_profile" ? (
-            <div className="mt-3 space-y-3 rounded-xl border border-primary/30 bg-card p-4">
+            <OpusOrLegacyInset isOpus={isOpus} accent className="space-y-3">
               <div>
                 <Label className="text-xs">Business name</Label>
                 <Input
@@ -667,11 +726,11 @@ export function InformationStep({
               <Button type="button" size="sm" onClick={() => saveGuidedProfile()}>
                 Save profile to knowledge
               </Button>
-            </div>
+            </OpusOrLegacyInset>
           ) : null}
 
           {state.knowledgeSource === "upload_docs" ? (
-            <div className="mt-3 rounded-xl border border-primary/30 bg-card p-4">
+            <OpusOrLegacyInset isOpus={isOpus} accent>
               <input
                 ref={fileRef}
                 type="file"
@@ -696,7 +755,7 @@ export function InformationStep({
               {uploadNote ? (
                 <p className="mt-2 text-xs text-success">{uploadNote}</p>
               ) : null}
-            </div>
+            </OpusOrLegacyInset>
           ) : null}
 
           {state.knowledgeSource === "connect_data" ? (

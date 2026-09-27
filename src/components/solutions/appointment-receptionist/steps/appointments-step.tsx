@@ -20,7 +20,15 @@ import { CheckCircle2, MoreHorizontal, Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Panel } from "@/newui-transplant/components/app/kit";
 import { ReceptionistCollectFieldsOpus } from "@/newui-transplant/connected/voice/receptionist-editor/receptionist-collect-fields-opus";
-import { WizardSection } from "../wizard-opus-ui";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  WizardSection,
+} from "../wizard-opus-ui";
 import { InfoCallout, RadioRow, SelectableCard, SidePanel, StatusPill } from "../ui";
 
 const CALENDARS = [
@@ -513,58 +521,116 @@ export function AppointmentsStep({
             </Button>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px] text-left text-sm">
-              <thead className="bg-muted/40 text-xs text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-2 font-medium">Appointment</th>
-                  <th className="px-4 py-2 font-medium">Duration</th>
-                  <th className="px-4 py-2 font-medium">Calendar</th>
-                  <th className="px-4 py-2 font-medium">Status</th>
-                  <th className="px-4 py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {state.appointmentTypes.map((row) => (
-                  <tr
-                    key={row.id}
-                    className={`cursor-pointer border-t border-border ${
-                      selected?.id === row.id ? "bg-primary/5" : "hover:bg-muted/30"
-                    }`}
-                    onClick={() => patch({ selectedAppointmentTypeId: row.id })}
-                  >
-                    <td className="px-4 py-3 font-medium">
-                      <span
-                        className="inline-flex items-center gap-2"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <WizardCheckboxInline
-                          presentation={presentation}
-                          label={row.name}
-                          checked={row.enabled}
-                          onCheckedChange={() => {
-                            patch({
-                              appointmentTypes: state.appointmentTypes.map((t) =>
-                                t.id === row.id ? { ...t, enabled: !t.enabled } : t,
-                              ),
-                            });
-                          }}
-                        />
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">{row.durationMin} min</td>
-                    <td className="px-4 py-3 text-muted-foreground">{row.calendar}</td>
-                    <td className="px-4 py-3">
-                      <StatusPill tone={row.status === "ready" ? "success" : "warning"}>
-                        {row.status === "ready" ? "Ready" : "Needs rules"}
-                      </StatusPill>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <MoreHorizontal className="ml-auto h-4 w-4 text-muted-foreground" />
-                    </td>
+            {isOpus ? (
+              <Table className="min-w-[560px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Appointment</TableHead>
+                    <TableHead>Duration</TableHead>
+                    <TableHead>Calendar</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="w-10" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {state.appointmentTypes.map((row) => (
+                    <TableRow
+                      key={row.id}
+                      className={`cursor-pointer ${
+                        selected?.id === row.id ? "bg-primary/5" : undefined
+                      }`}
+                      onClick={() => patch({ selectedAppointmentTypeId: row.id })}
+                    >
+                      <TableCell className="font-medium">
+                        <span
+                          className="inline-flex items-center gap-2"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <WizardCheckboxInline
+                            presentation={presentation}
+                            label={row.name}
+                            checked={row.enabled}
+                            onCheckedChange={() => {
+                              patch({
+                                appointmentTypes: state.appointmentTypes.map((t) =>
+                                  t.id === row.id ? { ...t, enabled: !t.enabled } : t,
+                                ),
+                              });
+                            }}
+                          />
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{row.durationMin} min</TableCell>
+                      <TableCell className="text-muted-foreground">{row.calendar}</TableCell>
+                      <TableCell>
+                        <StatusPill
+                          variant="opus"
+                          tone={row.status === "ready" ? "success" : "warning"}
+                        >
+                          {row.status === "ready" ? "Ready" : "Needs rules"}
+                        </StatusPill>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <MoreHorizontal className="ml-auto h-4 w-4 text-muted-foreground" />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <table className="w-full min-w-[560px] text-left text-sm">
+                <thead className="bg-muted/40 text-xs text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-2 font-medium">Appointment</th>
+                    <th className="px-4 py-2 font-medium">Duration</th>
+                    <th className="px-4 py-2 font-medium">Calendar</th>
+                    <th className="px-4 py-2 font-medium">Status</th>
+                    <th className="px-4 py-2" />
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {state.appointmentTypes.map((row) => (
+                    <tr
+                      key={row.id}
+                      className={`cursor-pointer border-t border-border ${
+                        selected?.id === row.id ? "bg-primary/5" : "hover:bg-muted/30"
+                      }`}
+                      onClick={() => patch({ selectedAppointmentTypeId: row.id })}
+                    >
+                      <td className="px-4 py-3 font-medium">
+                        <span
+                          className="inline-flex items-center gap-2"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <WizardCheckboxInline
+                            presentation={presentation}
+                            label={row.name}
+                            checked={row.enabled}
+                            onCheckedChange={() => {
+                              patch({
+                                appointmentTypes: state.appointmentTypes.map((t) =>
+                                  t.id === row.id ? { ...t, enabled: !t.enabled } : t,
+                                ),
+                              });
+                            }}
+                          />
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">{row.durationMin} min</td>
+                      <td className="px-4 py-3 text-muted-foreground">{row.calendar}</td>
+                      <td className="px-4 py-3">
+                        <StatusPill tone={row.status === "ready" ? "success" : "warning"}>
+                          {row.status === "ready" ? "Ready" : "Needs rules"}
+                        </StatusPill>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <MoreHorizontal className="ml-auto h-4 w-4 text-muted-foreground" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
 
