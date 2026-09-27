@@ -307,30 +307,32 @@ export function CallHandlingStep({
         <div className="space-y-2 text-xs">
           <div className="flex items-center justify-between">
             <span>Emergency transfer</span>
-            <StatusPill tone={transferReady ? "success" : "warning"}>
+            <StatusPill variant={uiVariant} tone={transferReady ? "success" : "warning"}>
               {transferReady ? "Ready" : "Needed"}
             </StatusPill>
           </div>
           <div className="flex items-center justify-between">
             <span>SMS confirmations</span>
             {b.sendSmsAfterBooking ? (
-              <StatusPill tone="warning">
+              <StatusPill variant={uiVariant} tone="warning">
                 <AlertTriangle className="h-3 w-3" />
                 Pending A2P
               </StatusPill>
             ) : (
-              <StatusPill tone="muted">Off</StatusPill>
+              <StatusPill variant={uiVariant} tone="muted">Off</StatusPill>
             )}
           </div>
           <div className="flex items-center justify-between">
             <span>Staff notification</span>
-            <StatusPill tone="success">
+            <StatusPill variant={uiVariant} tone="success">
               <CheckCircle2 className="h-3 w-3" />
               Enabled
             </StatusPill>
           </div>
         </div>
-        <InfoCallout>You can update these settings anytime after activation.</InfoCallout>
+        <InfoCallout variant={uiVariant}>
+          You can update these settings anytime after activation.
+        </InfoCallout>
       </SidePanel>
     </div>
   );

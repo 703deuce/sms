@@ -4,6 +4,23 @@
 
 **This is not** a claim that the 3-stage UI is complete. It is an inventory for onboarding design and gap closure.
 
+**Source of truth:** the **8-screen** `AppointmentReceptionistWizard` — **not** the newer 3-stage Receptionist editor (`/voice/receptionist/edit`).
+
+### Eight wizard screens (canonical order)
+
+| # | Step id | Label | Step component |
+|---|---------|-------|----------------|
+| 1 | `goals` | Goals | `goals-step.tsx` |
+| 2 | `phone` | Phone | `phone-step.tsx` |
+| 3 | `information` | Information | `information-step.tsx` |
+| 4 | `appointments` | Appointments | `appointments-step.tsx` |
+| 5 | `call-handling` | Call Handling | `call-handling-step.tsx` |
+| 6 | `voice` | Voice | `voice-step.tsx` |
+| 7 | `test` | Test | `test-step.tsx` |
+| 8 | `activate` | Activate | `activate-step.tsx` |
+
+Shell: `wizard.tsx` (stepper + navigation). Detailed per-screen UI inventory and new-IA comparison follow in **Steps 1–8** below.
+
 ---
 
 ## Canonical references (repo)

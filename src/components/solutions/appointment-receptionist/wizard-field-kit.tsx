@@ -18,6 +18,7 @@ import { Button as LegacyButton } from "@/components/ui/button";
 import { Input as LegacyInput, Label as LegacyLabel, Textarea as LegacyTextarea } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
+import { OpusCalloutPanel } from "./wizard-opus-ui";
 
 export type WizardPresentation = "legacy" | "mctb" | "opus";
 
@@ -238,7 +239,11 @@ export function WizardHint({
   children: ReactNode;
 }) {
   if (presentation === "opus") {
-    return <p className="text-xs leading-relaxed text-muted-foreground">{children}</p>;
+    return (
+      <OpusCalloutPanel className="text-xs leading-relaxed text-muted-foreground shadow-none">
+        {children}
+      </OpusCalloutPanel>
+    );
   }
   return (
     <div className="rounded-xl border border-accent/20 bg-accent/5 px-3.5 py-3 text-xs leading-relaxed text-foreground/80">

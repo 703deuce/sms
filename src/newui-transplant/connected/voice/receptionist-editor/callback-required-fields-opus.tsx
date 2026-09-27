@@ -8,6 +8,7 @@ import {
   setCallbackRequiredField,
 } from "@/lib/solutions/appointment-receptionist/callback-required-fields-logic";
 import { FieldRow } from "@/newui-transplant/components/app/kit";
+import { OpusDividedList } from "@/components/solutions/appointment-receptionist/wizard-opus-ui";
 import { Button } from "@/newui-transplant/components/ui/button";
 import { Checkbox } from "@/newui-transplant/components/ui/checkbox";
 import { Label } from "@/newui-transplant/components/ui/label";
@@ -39,11 +40,11 @@ export function CallbackRequiredFieldsOpus({
           different subsets.
         </p>
       </div>
-      <ul className="divide-y rounded-lg border">
+      <OpusDividedList>
         {enabledFields.map((field) => {
           const checked = selected.has(field.id);
           return (
-            <li key={field.id} className="px-3 py-2.5">
+            <div key={field.id} className="px-3 py-2.5">
               <FieldRow
                 label={field.label?.trim() || field.id}
                 description="Shared field — not a separate callback-only question."
@@ -54,10 +55,10 @@ export function CallbackRequiredFieldsOpus({
                   aria-label={`Require ${field.label || field.id} for callback`}
                 />
               </FieldRow>
-            </li>
+            </div>
           );
         })}
-      </ul>
+      </OpusDividedList>
       <Button
         type="button"
         variant="link"

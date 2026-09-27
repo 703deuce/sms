@@ -19,6 +19,17 @@ const FORBIDDEN = [
   { re: /type=["']checkbox["']/g, label: "raw checkbox input" },
 ];
 
+/** Raw legacy card chrome — forbidden outside explicit legacy branches in these files. */
+const RAW_CARD_RE = /rounded-(?:xl|lg)\s+border(?:\s+border-border)?(?:\s+bg-card)?/g;
+
+const RAW_CARD_ALLOW = new Set([
+  join(ROOT, "src/components/solutions/appointment-receptionist/wizard-opus-ui.tsx"),
+  join(ROOT, "src/components/solutions/appointment-receptionist/ui.tsx"),
+  join(ROOT, "src/components/solutions/appointment-receptionist/wizard-field-kit.tsx"),
+  join(ROOT, "src/components/solutions/appointment-receptionist/wizard.tsx"),
+  join(ROOT, "src/components/voice/voice-v3-browser-call.tsx"),
+]);
+
 function walk(dir, out = []) {
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
@@ -57,6 +68,22 @@ for (const rel of SCAN_DIRS) {
           console.error(`FAIL ${file.replace(ROOT + "/", "")}: ${label} (${hits})`);
           failed = true;
         }
+      }
+    }
+
+    if (
+      rel.includes("appointment-receptionist/steps/") &&
+      src.includes('presentation === "opus"') &&
+      !RAW_CARD_ALLOW.has(file)
+    ) {
+      const legacyElseHits = (src.match(/!isOpus|isOpus \?|presentation === "legacy"/g) || []).length;
+      RAW_CARD_RE.lastIndex = 0;
+      const cardHits = [...src.matchAll(RAW_CARD_RE)].length;
+      if (cardHits > 0 && legacyElseHits === 0) {
+        console.error(
+          `FAIL ${file.replace(ROOT + "/", "")}: raw rounded border card classes (${cardHits}) with no legacy branch`,
+        );
+        failed = true;
       }
     }
   }

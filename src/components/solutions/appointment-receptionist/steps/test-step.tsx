@@ -104,6 +104,7 @@ export function TestStep({
         {mode === "browser" ? (
           state.agentId ? (
             <VoiceV3BrowserCall
+              presentation="opus"
               agentId={state.agentId}
               voiceLabel={state.voiceLabel}
               onNeedSave={() => prepareLiveTest().then(() => undefined)}

@@ -1,11 +1,11 @@
 "use client";
 
 import { Panel, Pill } from "@/newui-transplant/components/app/kit";
-import { Button as OpusButton } from "@/newui-transplant/components/ui/button";
 import { Button as LegacyButton } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Check } from "lucide-react";
 import type { ReactNode } from "react";
+import { OpusChoiceCard, OpusRadioRow } from "./wizard-opus-ui";
 
 export function SelectableCard({
   selected,
@@ -28,23 +28,32 @@ export function SelectableCard({
   disabled?: boolean;
   variant?: "legacy" | "opus";
 }) {
-  const opusSelected = variant === "opus" && selected;
-  const Btn = variant === "opus" ? OpusButton : LegacyButton;
+  if (variant === "opus") {
+    return (
+      <OpusChoiceCard
+        selected={selected}
+        onClick={onClick}
+        title={title}
+        description={description}
+        icon={icon}
+        disabled={disabled}
+        className={className}
+      >
+        {children}
+      </OpusChoiceCard>
+    );
+  }
   return (
-    <Btn
+    <LegacyButton
       type="button"
-      variant={variant === "opus" ? "outline" : "outline"}
+      variant="outline"
       disabled={disabled}
       onClick={onClick}
       className={cn(
         "relative flex h-auto w-full flex-col items-stretch rounded-xl border bg-card p-4 text-left font-normal transition",
-        variant === "opus"
-          ? opusSelected
-            ? "border-primary bg-accent/40"
-            : "border-border hover:border-primary/40 hover:bg-muted/30"
-          : selected
-            ? "border-primary shadow-[0_0_0_1px_rgba(16,185,129,0.28)]"
-            : "border-border hover:border-primary/40 hover:bg-muted/30",
+        selected
+          ? "border-primary shadow-[0_0_0_1px_rgba(16,185,129,0.28)]"
+          : "border-border hover:border-primary/40 hover:bg-muted/30",
         disabled && "cursor-not-allowed opacity-60",
         className,
       )}
@@ -68,7 +77,7 @@ export function SelectableCard({
           {children}
         </div>
       </div>
-    </Btn>
+    </LegacyButton>
   );
 }
 
@@ -85,21 +94,21 @@ export function RadioRow({
   description?: string;
   variant?: "legacy" | "opus";
 }) {
-  const Btn = variant === "opus" ? OpusButton : LegacyButton;
+  if (variant === "opus") {
+    return (
+      <OpusRadioRow selected={selected} onClick={onClick} label={label} description={description} />
+    );
+  }
   return (
-    <Btn
+    <LegacyButton
       type="button"
       variant="outline"
       onClick={onClick}
       className={cn(
         "flex h-auto w-full items-start justify-start gap-3 rounded-lg border px-4 py-3 text-left text-sm font-normal transition",
-        variant === "opus"
-          ? selected
-            ? "border-primary bg-accent/40"
-            : "border-border hover:border-primary/40 hover:bg-muted/30"
-          : selected
-            ? "border-primary bg-primary/5"
-            : "border-border bg-card hover:border-primary/30",
+        selected
+          ? "border-primary bg-primary/5"
+          : "border-border bg-card hover:border-primary/30",
       )}
     >
       <span
@@ -116,7 +125,7 @@ export function RadioRow({
           <span className="mt-0.5 block text-xs text-muted-foreground">{description}</span>
         ) : null}
       </span>
-    </Btn>
+    </LegacyButton>
   );
 }
 

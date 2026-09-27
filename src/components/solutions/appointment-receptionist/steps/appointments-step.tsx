@@ -24,6 +24,7 @@ import {
   OpusCompactPanel,
   OpusDensePanel,
   OpusSectionInset,
+  OpusTableShell,
   SelectedAppointmentConfigShell,
   Table,
   TableBody,
@@ -535,6 +536,7 @@ export function AppointmentsStep({
           </div>
           <div className="overflow-x-auto">
             {isOpus ? (
+              <OpusTableShell>
               <Table className="min-w-[560px]">
                 <TableHeader>
                   <TableRow>
@@ -590,6 +592,7 @@ export function AppointmentsStep({
                   ))}
                 </TableBody>
               </Table>
+              </OpusTableShell>
             ) : (
               <table className="w-full min-w-[560px] text-left text-sm">
                 <thead className="bg-muted/40 text-xs text-muted-foreground">

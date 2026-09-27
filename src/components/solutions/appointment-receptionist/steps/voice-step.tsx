@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { Check, Play, Volume2 } from "lucide-react";
 import { useRef, useState } from "react";
 import { IdentityConversationStage } from "@/newui-transplant/connected/voice/receptionist-editor/stages/identity-conversation-stage";
+import { OpusDensePanel, OpusVoicePickRow } from "../wizard-opus-ui";
 import { InfoCallout, RadioRow, SelectableCard, SidePanel } from "../ui";
 
 const ALL_VOICES = [...WIZARD_VOICES, ...WIZARD_VOICE_BACKUPS];
@@ -394,39 +395,15 @@ export function VoiceStep({
               <div className="grid gap-2 sm:grid-cols-2">
                 {WIZARD_VOICES.map((v) =>
                   isOpus ? (
-                    <div
+                    <OpusVoicePickRow
                       key={v.id}
-                      className={cn(
-                        "flex items-center justify-between gap-2 rounded-lg border px-3 py-2",
-                        state.voiceId === v.id ? "border-primary bg-accent/30" : "border-border",
-                      )}
-                    >
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="min-w-0 flex-1 justify-start px-2 text-left font-normal"
-                        onClick={() => selectVoice(v.id, v.label, v.recommendedSpeed)}
-                      >
-                        <span className="min-w-0">
-                          <p className="text-sm font-medium">{v.label}</p>
-                          <p className="text-xs text-muted-foreground">{v.badge}</p>
-                        </span>
-                      </Button>
-                      <div className="flex shrink-0 items-center gap-1">
-                        {state.voiceId === v.id ? (
-                          <Check className="size-4 text-primary" aria-hidden="true" />
-                        ) : null}
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => void previewVoice(v.id, v.recommendedSpeed)}
-                        >
-                          <Play className={previewing === v.id ? "animate-pulse" : ""} />
-                          Play
-                        </Button>
-                      </div>
-                    </div>
+                      selected={state.voiceId === v.id}
+                      label={v.label}
+                      badge={v.badge}
+                      previewing={previewing === v.id}
+                      onSelect={() => selectVoice(v.id, v.label, v.recommendedSpeed)}
+                      onPreview={() => void previewVoice(v.id, v.recommendedSpeed)}
+                    />
                   ) : (
                     <VoicePickCard
                       key={v.id}
@@ -440,39 +417,15 @@ export function VoiceStep({
                 )}
                 {WIZARD_VOICE_BACKUPS.map((v) =>
                   isOpus ? (
-                    <div
+                    <OpusVoicePickRow
                       key={v.id}
-                      className={cn(
-                        "flex items-center justify-between gap-2 rounded-lg border px-3 py-2",
-                        state.voiceId === v.id ? "border-primary bg-accent/30" : "border-border",
-                      )}
-                    >
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="min-w-0 flex-1 justify-start px-2 text-left font-normal"
-                        onClick={() => selectVoice(v.id, v.label, v.recommendedSpeed)}
-                      >
-                        <span className="min-w-0">
-                          <p className="text-sm font-medium">{v.label}</p>
-                          <p className="text-xs text-muted-foreground">{v.badge}</p>
-                        </span>
-                      </Button>
-                      <div className="flex shrink-0 items-center gap-1">
-                        {state.voiceId === v.id ? (
-                          <Check className="size-4 text-primary" aria-hidden="true" />
-                        ) : null}
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => void previewVoice(v.id, v.recommendedSpeed)}
-                        >
-                          <Play className={previewing === v.id ? "animate-pulse" : ""} />
-                          Play
-                        </Button>
-                      </div>
-                    </div>
+                      selected={state.voiceId === v.id}
+                      label={v.label}
+                      badge={v.badge}
+                      previewing={previewing === v.id}
+                      onSelect={() => selectVoice(v.id, v.label, v.recommendedSpeed)}
+                      onPreview={() => void previewVoice(v.id, v.recommendedSpeed)}
+                    />
                   ) : (
                     <VoicePickCard
                       key={v.id}
@@ -550,22 +503,40 @@ export function VoiceStep({
                 onChange={(interruptionStyle) => patch({ interruptionStyle })}
               />
               {customVoiceWizardEnabled ? (
-                <div className="space-y-2 rounded-lg border border-dashed border-border p-3">
-                  <Label>Authorized custom OpenAI voice ID</Label>
-                  <Input
-                    value={state.openAiCustomVoiceId ?? ""}
-                    onChange={(e) =>
-                      patch({
-                        openAiCustomVoiceId: e.target.value.trim() || null,
-                        voiceSource: e.target.value.trim() ? "custom" : "builtin",
-                      })
-                    }
-                    placeholder="voice_…"
-                  />
-                  <p className="text-[11px] text-muted-foreground">
-                    Requires OpenAI custom-voice access on your organization.
-                  </p>
-                </div>
+                isOpus ? (
+                  <OpusDensePanel title="Authorized custom OpenAI voice ID" bodyClassName="space-y-2 p-3">
+                    <Input
+                      value={state.openAiCustomVoiceId ?? ""}
+                      onChange={(e) =>
+                        patch({
+                          openAiCustomVoiceId: e.target.value.trim() || null,
+                          voiceSource: e.target.value.trim() ? "custom" : "builtin",
+                        })
+                      }
+                      placeholder="voice_…"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Requires OpenAI custom-voice access on your organization.
+                    </p>
+                  </OpusDensePanel>
+                ) : (
+                  <div className="space-y-2 rounded-lg border border-dashed border-border p-3">
+                    <Label>Authorized custom OpenAI voice ID</Label>
+                    <Input
+                      value={state.openAiCustomVoiceId ?? ""}
+                      onChange={(e) =>
+                        patch({
+                          openAiCustomVoiceId: e.target.value.trim() || null,
+                          voiceSource: e.target.value.trim() ? "custom" : "builtin",
+                        })
+                      }
+                      placeholder="voice_…"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Requires OpenAI custom-voice access on your organization.
+                    </p>
+                  </div>
+                )
               ) : null}
             </div>
             ) : null}

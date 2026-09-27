@@ -294,7 +294,7 @@ export function ActivateStep({
           <Play className="h-4 w-4" />
           Test in browser first
         </Button>
-        <InfoCallout>
+        <InfoCallout variant={uiVariant}>
           Activate saves and publishes this wizard snapshot. On-call schedules, transfer rules, and
           after-hours behavior apply to calls after they reach the agent — they do not replace your
           carrier call-forwarding setup.

@@ -2,6 +2,7 @@
 
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
 import { FieldRow } from "@/newui-transplant/components/app/kit";
+import { OpusTableShell } from "@/components/solutions/appointment-receptionist/wizard-opus-ui";
 import { Button } from "@/newui-transplant/components/ui/button";
 import { Checkbox } from "@/newui-transplant/components/ui/checkbox";
 import { Input } from "@/newui-transplant/components/ui/input";
@@ -50,7 +51,7 @@ export function ReceptionistCollectFieldsOpus({
         />
       </FieldRow>
 
-      <div className="overflow-x-auto rounded-lg border">
+      <OpusTableShell>
         <Table>
           <TableHeader>
             <TableRow>
@@ -152,7 +153,7 @@ export function ReceptionistCollectFieldsOpus({
             ))}
           </TableBody>
         </Table>
-      </div>
+      </OpusTableShell>
 
       <div className="flex flex-wrap items-end gap-2">
         <div className="min-w-[12rem] flex-1">

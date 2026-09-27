@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { useVoiceReceptionistEditor } from "@/lib/voice/receptionist/use-voice-receptionist-editor";
 import { ButtonLink } from "@/newui-transplant/components/app/button-link";
 import { Page, PageHeader, Pill } from "@/newui-transplant/components/app/kit";
+import { OpusInlineAlert } from "@/components/solutions/appointment-receptionist/wizard-opus-ui";
 import { Button } from "@/newui-transplant/components/ui/button";
 import { ReceptionistEditorSteps } from "./receptionist-editor-steps";
 import type { ReceptionistEditorStage } from "./types";
@@ -73,12 +74,9 @@ export function ReceptionistEditorOpus({ editor }: { editor: Editor }) {
       </div>
 
       {editor.error ? (
-        <div
-          className="mb-4 rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive"
-          role="alert"
-        >
+        <OpusInlineAlert isOpus className="mb-4">
           {editor.error}
-        </div>
+        </OpusInlineAlert>
       ) : null}
 
       {isLive && (pendingPublication || hasLocalEdits) ? (

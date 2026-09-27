@@ -5,6 +5,7 @@ import { CallbackRequiredFieldsOpus } from "../callback-required-fields-opus";
 import { GoalsStep } from "@/components/solutions/appointment-receptionist/steps/goals-step";
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
 import { FieldRow, Panel, TextLink } from "@/newui-transplant/components/app/kit";
+import { OpusLinkTile } from "@/components/solutions/appointment-receptionist/wizard-opus-ui";
 import { Switch } from "@/newui-transplant/components/ui/switch";
 import { ReceptionistBookingOpus } from "../receptionist-booking-opus";
 import { ReceptionistCollectFieldsOpus } from "../receptionist-collect-fields-opus";
@@ -45,38 +46,26 @@ export function ResponsibilitiesStage({
       </Panel>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-lg border px-4 py-3">
-          <div className="flex items-start gap-2">
-            <Clock className="size-4 text-muted-foreground" aria-hidden="true" />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium">Business hours</p>
-              <p className="text-xs text-muted-foreground">{hoursSummary}</p>
-              <TextLink href="/voice/knowledge">Manage</TextLink>
-            </div>
-          </div>
-        </div>
-        <div className="rounded-lg border px-4 py-3">
-          <div className="flex items-start gap-2">
-            <BookOpen className="size-4 text-muted-foreground" aria-hidden="true" />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium">Business knowledge</p>
-              <p className="text-xs text-muted-foreground">
-                {state.knowledgeBaseEnabled ? "Knowledge base linked" : "May need knowledge sources"}
-              </p>
-              <TextLink href="/voice/knowledge">Manage</TextLink>
-            </div>
-          </div>
-        </div>
-        <div className="rounded-lg border px-4 py-3">
-          <div className="flex items-start gap-2">
-            <PhoneForwarded className="size-4 text-muted-foreground" aria-hidden="true" />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium">Call handling</p>
-              <p className="text-xs text-muted-foreground">{transferDetail}</p>
-              <TextLink href="/voice/call-handling">Manage</TextLink>
-            </div>
-          </div>
-        </div>
+        <OpusLinkTile
+          icon={Clock}
+          title="Business hours"
+          description={hoursSummary}
+          href="/voice/knowledge"
+        />
+        <OpusLinkTile
+          icon={BookOpen}
+          title="Business knowledge"
+          description={
+            state.knowledgeBaseEnabled ? "Knowledge base linked" : "May need knowledge sources"
+          }
+          href="/voice/knowledge"
+        />
+        <OpusLinkTile
+          icon={PhoneForwarded}
+          title="Call handling"
+          description={transferDetail}
+          href="/voice/call-handling"
+        />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-12">

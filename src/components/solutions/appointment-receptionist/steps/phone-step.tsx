@@ -388,21 +388,21 @@ export function PhoneStep({
               );
             })}
             {otherOwner ? (
-              <InfoCallout>
+              <InfoCallout variant={uiVariant}>
                 Selecting this number switches inbound calls from{" "}
                 <strong>{otherOwner.name}</strong> to this appointment receptionist when you
                 activate. Only one AI agent answers a number at a time.
               </InfoCallout>
             ) : null}
             {selected?.mctbTexmlLocked ? (
-              <InfoCallout>
+              <InfoCallout variant={uiVariant}>
                 This number is currently marked for MCTB TeXML missed-call recovery. When you
                 save or activate this receptionist, Transovo will switch inbound routing to this
                 Voice Agent for this DID only. Other MCTB numbers are unchanged.
               </InfoCallout>
             ) : null}
             {selected?.hasSoftphoneAssignment ? (
-              <InfoCallout>
+              <InfoCallout variant={uiVariant}>
                 This number also has a softphone / team assignment. After you activate,
                 the AI receptionist owns inbound calls; remove the softphone assignment
                 in Numbers if you want humans to answer this DID instead.
@@ -669,7 +669,7 @@ export function PhoneStep({
               ))}
             </ol>
           </div>
-          <InfoCallout>
+          <InfoCallout variant={uiVariant}>
             Activate publishes this agent to Telnyx and assigns your selected number so
             inbound callers reach this receptionist. Connection greeting plays while the AI
             initializes.
