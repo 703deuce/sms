@@ -7,12 +7,11 @@ import { Button } from '@/newui-transplant/components/ui/button'
 import { Input } from '@/newui-transplant/components/ui/input'
 import { EmptyState, Initials, Pill } from '@/newui-transplant/components/app/kit'
 import { ButtonLink } from '@/newui-transplant/components/app/button-link'
-import { VOICEMAILS } from '@/newui-transplant/lib/sandbox-data'
 import type { Voicemail } from '@/newui-transplant/lib/view-models'
 import { cn } from '@/lib/utils'
 
 export function VoicemailBrowser({ voicemails: voicemailsProp }: { voicemails?: Voicemail[] }) {
-  const source = voicemailsProp ?? VOICEMAILS
+  const source = voicemailsProp ?? []
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState(source[0]?.id)
 

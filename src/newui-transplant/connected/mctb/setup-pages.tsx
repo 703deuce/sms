@@ -262,11 +262,19 @@ export function NewUiMctbSetupTestPage() {
   const checks = [
     { label: "Business line connected", ok: Boolean(test.businessLine && test.businessLine !== "—") },
     { label: "Forwarding verified", ok: Boolean(test.liveTest?.passed) },
-    { label: "Sender registered", ok: Boolean(test.setupTest?.checks?.smsProviderAccepted) },
-    { label: "Consent disclosure published", ok: Boolean(test.setupTest?.checks?.consentModeLoaded) },
-    { label: "Text-back opener saved", ok: Boolean(test.setupTest?.checks?.smsQueued) },
     {
-      label: "Custom voicemail greeting",
+      label: "Sender ready",
+      ok: test.messagingReady,
+      href: "/mctb/setup/phone",
+    },
+    { label: "Consent mode configured", ok: Boolean(test.setupTest?.checks?.consentModeLoaded) },
+    {
+      label: "Text-back opener saved",
+      ok: test.openerSaved,
+      href: "/mctb/setup/text-back",
+    },
+    {
+      label: "Voicemail greeting (if used)",
       ok: Boolean(test.setupTest?.checks?.greetingPlayed),
       href: "/mctb/setup/voicemail",
     },

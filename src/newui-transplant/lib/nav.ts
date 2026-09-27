@@ -68,7 +68,7 @@ const FULL_NAV: NavSection[] = [
     items: [
       { label: 'Overview', href: '/mctb', icon: LayoutDashboard },
       { label: 'Missed Calls', href: '/mctb/missed-calls', icon: PhoneMissed, matchPrefix: '/mctb/missed-calls' },
-      { label: 'Inbox', href: '/mctb/conversations', icon: Inbox, badge: '4' },
+      { label: 'Inbox', href: '/mctb/conversations', icon: Inbox },
       { label: 'AI Recovery', href: '/mctb/ai-recovery', icon: Sparkles },
       { label: 'Voicemail', href: '/mctb/voicemail', icon: Voicemail },
       { label: 'Analytics', href: '/mctb/analytics', icon: BarChart3 },

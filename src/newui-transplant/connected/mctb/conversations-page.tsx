@@ -48,6 +48,7 @@ export function NewUiMctbConversationsPage({
   const [loading, setLoading] = useState(true);
   const [threadLoadingId, setThreadLoadingId] = useState<string | null>(null);
   const hydratedIds = useRef(new Set<string>());
+  const hydrateInFlight = useRef(new Set<string>());
   const hydrationToken = useRef(0);
 
   const buildMissedCallsFromRows = useCallback(
@@ -73,7 +74,8 @@ export function NewUiMctbConversationsPage({
   );
 
   const hydrateThread = useCallback(async (conversationId: string) => {
-    if (hydratedIds.current.has(conversationId)) return;
+    if (hydratedIds.current.has(conversationId) || hydrateInFlight.current.has(conversationId)) return;
+    hydrateInFlight.current.add(conversationId);
     const token = ++hydrationToken.current;
     setThreadLoadingId(conversationId);
     try {
@@ -88,6 +90,7 @@ export function NewUiMctbConversationsPage({
         hydratedIds.current.delete(conversationId);
       }
     } finally {
+      hydrateInFlight.current.delete(conversationId);
       if (token === hydrationToken.current) {
         setThreadLoadingId(null);
       }

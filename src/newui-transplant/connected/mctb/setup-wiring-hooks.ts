@@ -329,6 +329,8 @@ export function useMctbTestWiring() {
   const [setupTest, setSetupTest] = useState<MctbSetupTestStatus | null>(null);
   const [liveTest, setLiveTest] = useState<LiveTestStatus | null>(null);
   const [businessLine, setBusinessLine] = useState("");
+  const [messagingReady, setMessagingReady] = useState(false);
+  const [openerSaved, setOpenerSaved] = useState(false);
 
   const reload = useCallback(async () => {
     const [setupRes, liveRes, setupData, onboardRes] = await Promise.all([
@@ -352,6 +354,9 @@ export function useMctbTestWiring() {
       (onboardJson?.state?.businessNumberE164 as string) || null,
     );
     setBusinessLine(lineE164 ? formatSetupPhoneLine(lineE164) : "");
+    const runtime = (setupData?.runtime ?? {}) as { messageTemplate?: string };
+    setMessagingReady(Boolean((setupData as { compliance?: { messagingReady?: boolean } })?.compliance?.messagingReady));
+    setOpenerSaved(Boolean(runtime.messageTemplate?.trim()));
   }, []);
 
   useEffect(() => {
@@ -366,5 +371,14 @@ export function useMctbTestWiring() {
     else await reload();
   }, [reload]);
 
-  return { loading, setupTest, liveTest, businessLine, startLiveTest, reload };
+  return {
+    loading,
+    setupTest,
+    liveTest,
+    businessLine,
+    messagingReady,
+    openerSaved,
+    startLiveTest,
+    reload,
+  };
 }

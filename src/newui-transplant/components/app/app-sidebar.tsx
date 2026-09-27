@@ -22,7 +22,6 @@ import {
 } from '@/newui-transplant/components/ui/sidebar'
 import { mctbLaunchCustomerHome } from '@/lib/products/launch-product-availability'
 import { resolveCustomerNavSections, type NavItem, type NavSubItem } from '@/newui-transplant/lib/nav'
-import { BUSINESS } from '@/newui-transplant/lib/sandbox-data'
 import { useOpusWorkspaceData, workspaceInitials } from '@/newui-transplant/context/opus-workspace-data'
 import {
   isReceptionistWizardAreaPath,
@@ -66,7 +65,7 @@ export function AppSidebar({ userName }: { userName?: string }) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const { workspaceName, business } = useOpusWorkspaceData()
-  const displayName = business?.name || workspaceName || BUSINESS.name
+  const displayName = business?.name || workspaceName || 'Workspace'
   const initials = workspaceInitials(displayName)
 
   return (

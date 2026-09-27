@@ -39,7 +39,7 @@ export function OpusWorkspaceDataProvider({
           businessContextFromWorkspace({
             name: data.workspaceName ?? workspaceName,
             businessLineE164: data.businessLineE164,
-            senderE164: data.senderLabel,
+            senderE164: data.senderE164 ?? data.senderLabel,
             timezone: data.timezone,
             website: null,
           }),
