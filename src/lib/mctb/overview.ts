@@ -33,7 +33,98 @@ import type { MctbOverviewPayload, MctbOverviewStatus } from "@/lib/mctb/overvie
 
 export type { MctbOverviewPayload, MctbOverviewStatus } from "@/lib/mctb/overview-types";
 
+export type MctbOverviewEnrichment = Pick<MctbOverviewPayload, "leadRecovery" | "callHandling">;
+
+const OVERVIEW_LEAD_RECOVERY_PLACEHOLDER: MctbOverviewPayload["leadRecovery"] = {
+  enabled: false,
+  activePolicyCount: 0,
+  policySummary: "Loading…",
+  status: "disabled",
+  statusLabel: "—",
+  attentionReason: null,
+  attentionHref: null,
+};
+
+const OVERVIEW_CALL_HANDLING_PLACEHOLDER: MctbOverviewPayload["callHandling"] = {
+  mode: "MCTB_RECOVERY",
+  modeLabel: INBOUND_HANDLING_MODE_LABELS.MCTB_RECOVERY,
+  forwardingLabel: "—",
+  ingressE164: null,
+};
+
+/** Tier 1 — dashboard KPIs, recent activity, setup health (no AI booking / lead-recovery health). */
+export async function loadMctbOverviewCore(workspaceId: string): Promise<MctbOverviewPayload> {
+  const core = await loadMctbOverviewShared(workspaceId);
+  return {
+    ...core,
+    performanceSnapshot: null,
+    callHandling: OVERVIEW_CALL_HANDLING_PLACEHOLDER,
+    leadRecovery: OVERVIEW_LEAD_RECOVERY_PLACEHOLDER,
+  };
+}
+
+/** Tier 2 — AI Recovery card + inbound handling (client or background). */
+export async function loadMctbOverviewEnrichment(workspaceId: string): Promise<MctbOverviewEnrichment> {
+  const lrConfig = await loadLeadRecoveryConfig(workspaceId);
+  const [lrHealth, aiReadiness] = await Promise.all([
+    computeLeadRecoveryPolicyHealth(workspaceId, lrConfig),
+    evaluateMctbAiBookingReadiness(workspaceId),
+  ]);
+  const activePolicies = LEAD_RECOVERY_SCENARIO_DEFS.filter((d) => lrConfig.enabledScenarios[d.key]);
+  const policySummary = activePolicies.map((d) => d.title.split(" ")[0]).slice(0, 4).join(" · ");
+  let lrStatus: "ready" | "needs_attention" | "disabled" = lrConfig.enabled ? "ready" : "disabled";
+  let attentionReason: string | null = null;
+  let attentionHref: string | null = null;
+  if (lrConfig.enabled) {
+    if (lrHealth.overall === "PROVIDER_BLOCKED" || lrHealth.overall === "NEEDS_CONFIGURATION") {
+      lrStatus = "needs_attention";
+      if (!aiReadiness.providerConnected) {
+        attentionReason = `${aiReadiness.reason === "provider_disconnected" ? "Calendar provider disconnected" : "Booking provider needs setup"}`;
+        attentionHref = "/integrations?provider=microsoft";
+      } else {
+        attentionReason = "One or more policies need configuration";
+        attentionHref = "/mctb/ai-recovery";
+      }
+    }
+  }
+
+  const line = await loadMctbLineInboundConfig({ workspaceId });
+  await resolveInboundHandlingDecision({ workspaceId });
+  const mode = line?.inboundHandlingMode ?? "MCTB_RECOVERY";
+
+  return {
+    callHandling: {
+      mode,
+      modeLabel: INBOUND_HANDLING_MODE_LABELS[mode],
+      forwardingLabel: line?.forwardingVerified ? "Already connected" : "Pending",
+      ingressE164: line?.ingressE164 ?? null,
+    },
+    leadRecovery: {
+      enabled: lrConfig.enabled,
+      activePolicyCount: activePolicies.length,
+      policySummary: policySummary || "No policies",
+      status: lrStatus,
+      statusLabel:
+        lrStatus === "ready"
+          ? "Ready"
+          : lrStatus === "needs_attention"
+            ? "Needs attention"
+            : "Disabled",
+      attentionReason,
+      attentionHref,
+    },
+  };
+}
+
 export async function loadMctbOverview(workspaceId: string): Promise<MctbOverviewPayload> {
+  const [core, enrichment] = await Promise.all([
+    loadMctbOverviewCore(workspaceId),
+    loadMctbOverviewEnrichment(workspaceId),
+  ]);
+  return { ...core, ...enrichment };
+}
+
+async function loadMctbOverviewShared(workspaceId: string): Promise<Omit<MctbOverviewPayload, "leadRecovery" | "callHandling" | "performanceSnapshot">> {
   const prisma = getPrisma();
 
   const ws = await prisma.workspace.findUnique({
@@ -49,13 +140,15 @@ export async function loadMctbOverview(workspaceId: string): Promise<MctbOvervie
       ? (customCfg.mctb as Record<string, unknown>)
       : {};
 
+  const workspaceNumbersPromise = loadPhoneNumbers(workspaceId, { includeLinked: true });
+
   const [
     runtime,
     onboarding,
     solution,
     phoneNumbers,
     compliance,
-    reg,
+    workspaceNumbers,
     adminFlags,
     overviewKpis,
     recentEvents,
@@ -65,8 +158,8 @@ export async function loadMctbOverview(workspaceId: string): Promise<MctbOvervie
     loadMctbOnboardingState(workspaceId),
     loadMissedCallTextBack(workspaceId),
     loadMctbSetupPhoneOptions(workspaceId),
-    loadComplianceOverview(workspaceId),
-    loadPhoneNumbers(workspaceId, { includeLinked: true }),
+    workspaceNumbersPromise.then((nums) => loadComplianceOverview(workspaceId, { phoneNumbers: nums })),
+    workspaceNumbersPromise,
     loadAdminMctbTestFlags(workspaceId),
     loadMctbOverviewKpis(workspaceId),
     prisma.missedCallEvent.findMany({
@@ -88,7 +181,7 @@ export async function loadMctbOverview(workspaceId: string): Promise<MctbOvervie
     }),
   ]);
 
-  const requiredActions = deriveRequiredActions(compliance.registration, reg);
+  const requiredActions = deriveRequiredActions(compliance.registration, workspaceNumbers);
   const messagingReady = isMctbSetupMessagingReady({
     phoneNumbers,
     requiredActions,
@@ -140,29 +233,6 @@ export async function loadMctbOverview(workspaceId: string): Promise<MctbOvervie
       ? "Active"
       : "Inactive";
 
-  const lrConfig = await loadLeadRecoveryConfig(workspaceId);
-  const [lrHealth, aiReadiness] = await Promise.all([
-    computeLeadRecoveryPolicyHealth(workspaceId, lrConfig),
-    evaluateMctbAiBookingReadiness(workspaceId),
-  ]);
-  const activePolicies = LEAD_RECOVERY_SCENARIO_DEFS.filter((d) => lrConfig.enabledScenarios[d.key]);
-  const policySummary = activePolicies.map((d) => d.title.split(" ")[0]).slice(0, 4).join(" · ");
-  let lrStatus: "ready" | "needs_attention" | "disabled" = lrConfig.enabled ? "ready" : "disabled";
-  let attentionReason: string | null = null;
-  let attentionHref: string | null = null;
-  if (lrConfig.enabled) {
-    if (lrHealth.overall === "PROVIDER_BLOCKED" || lrHealth.overall === "NEEDS_CONFIGURATION") {
-      lrStatus = "needs_attention";
-      if (!aiReadiness.providerConnected) {
-        attentionReason = `${aiReadiness.reason === "provider_disconnected" ? "Calendar provider disconnected" : "Booking provider needs setup"}`;
-        attentionHref = "/integrations?provider=microsoft";
-      } else {
-        attentionReason = "One or more policies need configuration";
-        attentionHref = "/mctb/ai-recovery";
-      }
-    }
-  }
-
   return {
     status,
     statusLabel,
@@ -205,32 +275,6 @@ export async function loadMctbOverview(workspaceId: string): Promise<MctbOvervie
         : "Needs attention",
       recoveryLabel,
       voicemailLabel: runtime.sendAfterVoicemail ? "Enabled" : null,
-    },
-    performanceSnapshot: null,
-    callHandling: await (async () => {
-      const line = await loadMctbLineInboundConfig({ workspaceId });
-      const decision = await resolveInboundHandlingDecision({ workspaceId });
-      const mode = line?.inboundHandlingMode ?? "MCTB_RECOVERY";
-      return {
-        mode,
-        modeLabel: INBOUND_HANDLING_MODE_LABELS[mode],
-        forwardingLabel: line?.forwardingVerified ? "Already connected" : "Pending",
-        ingressE164: line?.ingressE164 ?? null,
-      };
-    })(),
-    leadRecovery: {
-      enabled: lrConfig.enabled,
-      activePolicyCount: activePolicies.length,
-      policySummary: policySummary || "No policies",
-      status: lrStatus,
-      statusLabel:
-        lrStatus === "ready"
-          ? "Ready"
-          : lrStatus === "needs_attention"
-            ? "Needs attention"
-            : "Disabled",
-      attentionReason,
-      attentionHref,
     },
   };
 }

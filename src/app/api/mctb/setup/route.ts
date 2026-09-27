@@ -116,13 +116,15 @@ export async function GET() {
       ? (customCfg.mctb as Record<string, unknown>)
       : {};
 
+  const workspaceNumbersPromise = loadPhoneNumbers(workspaceId, { includeLinked: true });
+
   const [runtime, solution, phoneNumbers, compliance, reg, adminFlags, onboarding, productionForwardE164] =
     await Promise.all([
     loadMissedCallTextConfig(workspaceId),
     loadMissedCallTextBack(workspaceId),
     loadMctbSetupPhoneOptions(workspaceId),
-    loadComplianceOverview(workspaceId),
-    loadPhoneNumbers(workspaceId, { includeLinked: true }),
+    workspaceNumbersPromise.then((nums) => loadComplianceOverview(workspaceId, { phoneNumbers: nums })),
+    workspaceNumbersPromise,
     loadAdminMctbTestFlags(workspaceId),
     loadMctbOnboardingState(workspaceId),
     getProductionMctbForwardTargetE164(workspaceId),

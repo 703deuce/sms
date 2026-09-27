@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { TransplantMctbMissedCallsPage } from "@/newui-transplant/mirror/routes/mctb/missed-calls/page";
 import { mapMctbMissedCallsListToNewUi } from "@/lib/newui-transplant/adapters/mctb-missed-calls";
 import { buildMissedCallsListUrl } from "@/lib/newui-transplant/missed-calls-query";
@@ -35,6 +35,7 @@ export function NewUiMctbMissedCallsPage({
   const [data, setData] = useState<MctbMissedCallsListData | null>(initialData ?? null);
   const [query, setQuery] = useState<ListQuery>(initialQuery);
   const [loading, setLoading] = useState(!initialData);
+  const skipInitialFetch = useRef(Boolean(initialData));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -51,6 +52,10 @@ export function NewUiMctbMissedCallsPage({
   }, [query]);
 
   useEffect(() => {
+    if (skipInitialFetch.current) {
+      skipInitialFetch.current = false;
+      return;
+    }
     void load();
   }, [load]);
 

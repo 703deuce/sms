@@ -1,5 +1,7 @@
 import type { Conversation, Message } from "@/newui-transplant/lib/view-models";
 import type { Conversation as ApiConversation } from "@/lib/types";
+import type { InboxListItem } from "@/lib/inbox/kimi-inbox-adapter";
+import { relativeAgo } from "@/lib/inbox/kimi-inbox-adapter";
 
 function mapMessage(m: ApiConversation["messages"][number]): Message {
   const text = m.body?.trim() || "";
@@ -28,6 +30,32 @@ function composerFooterFromThread(convo: ApiConversation): string {
   const blocked = convo.tags?.includes("opted_out");
   const eligibility = blocked ? "Customer has opted out" : "Customer has not opted out";
   return `${convo.lastMessage?.length ?? 0} / 160 · ${segments} segment · ${eligibility}`;
+}
+
+/** Row-level inbox list item — no full thread (Tier 1 conversations list). */
+export function mapInboxListItemToNewUiInbox(row: InboxListItem): Conversation {
+  const name =
+    [row.contact?.firstName, row.contact?.lastName].filter(Boolean).join(" ") ||
+    row.contact?.phone ||
+    row.fromE164 ||
+    "Unknown";
+  const phone = row.contact?.phone || row.fromE164 || "";
+  const status = (row.status || "").toLowerCase();
+  const needsReply = row.unread && (status === "open" || status === "pending");
+  return {
+    id: row.id,
+    name,
+    phone,
+    preview: row.lastMessage?.trim() || "",
+    time: relativeAgo(row.updatedAt),
+    unread: Boolean(row.unread),
+    needsReply,
+    tag: row.productSourceLabel ?? undefined,
+    messages: [],
+    consentLabel: "—",
+    composerFooter: "",
+    missedCallEventId: row.missedCallEventId ?? undefined,
+  };
 }
 
 export function mapApiConversationToNewUiInbox(convo: ApiConversation): Conversation {

@@ -1,13 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Inbox } from "@/newui-transplant/components/mctb/inbox";
 import type { Conversation, MissedCall } from "@/newui-transplant/lib/view-models";
-import { mapApiConversationToNewUiInbox } from "@/lib/newui-transplant/adapters/mctb-conversations";
+import {
+  mapApiConversationToNewUiInbox,
+  mapInboxListItemToNewUiInbox,
+} from "@/lib/newui-transplant/adapters/mctb-conversations";
 import { businessContextFromWorkspace } from "@/lib/newui-transplant/adapters/business-context";
-import { formatMctbPhoneLabel } from "@/lib/mctb/phone-display";
 import { useOpusWorkspaceData } from "@/newui-transplant/context/opus-workspace-data";
-import type { BusinessContext } from "@/newui-transplant/lib/view-models";
 import {
   fetchConversation,
   fetchInboxListPage,
@@ -15,7 +16,6 @@ import {
   patchConversation,
   sendNewMessage,
 } from "@/lib/inbox/kimi-inbox-adapter";
-import type { Conversation as ApiConversation } from "@/lib/types";
 
 type InboxFilter = "All" | "Needs reply" | "Mine" | "Unassigned" | "Closed" | "Spam";
 
@@ -35,66 +35,29 @@ export function NewUiMctbConversationsPage({
   initialFilter: "All" | "Needs reply";
 }) {
   const { business: opusBusiness } = useOpusWorkspaceData();
-  const [business, setBusiness] = useState<BusinessContext>(
-    opusBusiness ?? businessContextFromWorkspace({ name: "Workspace", businessLineE164: null, senderE164: null }),
+  const business = useMemo(
+    () =>
+      opusBusiness ??
+      businessContextFromWorkspace({ name: "Workspace", businessLineE164: null, senderE164: null }),
+    [opusBusiness],
   );
+
   const [filter, setFilter] = useState<InboxFilter>(initialFilter === "Needs reply" ? "Needs reply" : "All");
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [missedCalls, setMissedCalls] = useState<MissedCall[]>([]);
   const [loading, setLoading] = useState(true);
+  const hydratedIds = useRef(new Set<string>());
 
-  useEffect(() => {
-    fetch("/api/mctb/setup", { cache: "no-store" })
-      .then(async (res) => {
-        const json = await res.json();
-        if (!res.ok || !json.data) return;
-        const d = json.data as {
-          businessLineE164?: string | null;
-          runtime?: { smsPhoneNumberId?: string | null; phoneNumberId?: string | null; timezone?: string };
-          phoneNumbers?: Array<{ id: string; e164: string }>;
-        };
-        const smsId = d.runtime?.smsPhoneNumberId || d.runtime?.phoneNumberId;
-        const senderPhone = d.phoneNumbers?.find((p) => p.id === smsId)?.e164 ?? d.phoneNumbers?.[0]?.e164;
-        setBusiness(
-          businessContextFromWorkspace({
-            name: opusBusiness?.name ?? "Workspace",
-            businessLineE164: d.businessLineE164,
-            senderE164: senderPhone ? formatMctbPhoneLabel(senderPhone) : null,
-            timezone: d.runtime?.timezone,
-          }),
-        );
-      })
-      .catch(() => undefined);
-  }, [opusBusiness?.name]);
-
-  const loadList = useCallback(async () => {
-    setLoading(true);
-    try {
-      const query = filterToQuery(filter);
-      const page = await fetchInboxListPage(query);
-      const rows = page.rows;
-      const loaded: ApiConversation[] = [];
-      for (const row of rows.slice(0, 40)) {
-        const full = await fetchConversation(row.id);
-        if (full) loaded.push(full);
-      }
-      if (initialConversationId && !loaded.some((c) => c.id === initialConversationId)) {
-        const one = await fetchConversation(initialConversationId);
-        if (one) loaded.unshift(one);
-      }
-      let mapped = loaded.map(mapApiConversationToNewUiInbox);
-      if (filter === "Needs reply") mapped = mapped.filter((c) => c.needsReply);
-      setConversations(mapped);
+  const buildMissedCallsFromRows = useCallback(
+    (rows: Conversation[]) => {
       const missed: MissedCall[] = [];
-      for (const c of loaded) {
+      for (const c of rows) {
         if (!c.missedCallEventId) continue;
         missed.push({
           id: c.missedCallEventId,
-          caller: c.contactName || c.phone,
+          caller: c.name,
           phone: c.phone,
-          missed: c.missedCallDetectedAt
-            ? new Date(c.missedCallDetectedAt).toLocaleString()
-            : "—",
+          missed: "—",
           trigger: "No answer",
           recovery: "Sent",
           reply: null,
@@ -102,14 +65,44 @@ export function NewUiMctbConversationsPage({
           conversationId: c.id,
         });
       }
-      setMissedCalls(missed);
+      return missed;
+    },
+    [business.line],
+  );
+
+  const hydrateThread = useCallback(async (conversationId: string) => {
+    if (hydratedIds.current.has(conversationId)) return;
+    hydratedIds.current.add(conversationId);
+    try {
+      const full = await fetchConversation(conversationId);
+      setConversations((prev) =>
+        prev.map((c) => (c.id === conversationId ? mapApiConversationToNewUiInbox(full) : c)),
+      );
+    } catch {
+      hydratedIds.current.delete(conversationId);
+    }
+  }, []);
+
+  const loadList = useCallback(async () => {
+    setLoading(true);
+    hydratedIds.current.clear();
+    try {
+      const query = filterToQuery(filter);
+      const page = await fetchInboxListPage(query);
+      let mapped = page.rows.map(mapInboxListItemToNewUiInbox);
+      if (filter === "Needs reply") mapped = mapped.filter((c) => c.needsReply);
+      setConversations(mapped);
+      setMissedCalls(buildMissedCallsFromRows(mapped));
+      setLoading(false);
+
+      const toHydrate = initialConversationId ?? mapped[0]?.id;
+      if (toHydrate) void hydrateThread(toHydrate);
     } catch {
       setConversations([]);
       setMissedCalls([]);
-    } finally {
       setLoading(false);
     }
-  }, [filter, initialConversationId, business.line]);
+  }, [filter, initialConversationId, buildMissedCallsFromRows, hydrateThread]);
 
   useEffect(() => {
     void loadList();
@@ -119,6 +112,9 @@ export function NewUiMctbConversationsPage({
     () => ({
       filter,
       onFilterChange: setFilter,
+      onSelectionChange: (id: string) => {
+        void hydrateThread(id);
+      },
       onMarkRead: async (ids: string[]) => {
         for (const id of ids) {
           await patchConversation(id, { unread: false });
@@ -143,9 +139,10 @@ export function NewUiMctbConversationsPage({
         setConversations((prev) =>
           prev.map((c) => (c.id === conversationId ? mapApiConversationToNewUiInbox(refreshed) : c)),
         );
+        hydratedIds.current.add(conversationId);
       },
     }),
-    [filter, conversations, loadList],
+    [filter, conversations, loadList, hydrateThread],
   );
 
   if (loading) {
@@ -162,18 +159,4 @@ export function NewUiMctbConversationsPage({
       wiring={wiring}
     />
   );
-}
-
-export function defaultMctbInboxBusinessFromSetup(setup: {
-  businessLineE164?: string | null;
-  senderLabel?: string | null;
-  workspaceName: string;
-  timezone?: string | null;
-}): BusinessContext {
-  return businessContextFromWorkspace({
-    name: setup.workspaceName,
-    businessLineE164: setup.businessLineE164,
-    senderE164: setup.senderLabel,
-    timezone: setup.timezone,
-  });
 }

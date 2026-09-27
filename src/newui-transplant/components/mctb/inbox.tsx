@@ -18,6 +18,7 @@ type Filter = (typeof FILTERS)[number]
 export type InboxWiring = {
   filter?: Filter
   onFilterChange?: (filter: Filter) => void
+  onSelectionChange?: (conversationId: string) => void
   onMarkRead?: (ids: string[]) => Promise<void>
   onClose?: (ids: string[]) => Promise<void>
   onSendMessage?: (conversationId: string, text: string) => Promise<void>
@@ -198,6 +199,7 @@ export function Inbox({
                     onClick={() => {
                       setSelectedId(c.id)
                       setMobileThread(true)
+                      wiring?.onSelectionChange?.(c.id)
                     }}
                     className="flex min-w-0 flex-1 items-start gap-3 text-left"
                     aria-current={c.id === selectedId}

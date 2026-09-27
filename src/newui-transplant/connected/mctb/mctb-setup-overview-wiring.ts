@@ -93,8 +93,7 @@ export function useMctbSetupOverviewWiring(senderFallback: string): {
 
       setLoading(false);
 
-      const [overviewRes, exclRes, handoffRes, liveRes] = await Promise.all([
-        fetch("/api/mctb/overview", { cache: "no-store" }),
+      const [exclRes, handoffRes, liveRes] = await Promise.all([
         fetch("/api/mctb/exclusions", { cache: "no-store" }),
         fetch("/api/mctb/handoff", { cache: "no-store" }),
         fetch("/api/mctb/live-test", { cache: "no-store" }),
@@ -148,12 +147,6 @@ export function useMctbSetupOverviewWiring(senderFallback: string): {
         }
       }
 
-      if (overviewRes.ok) {
-        const ov = await overviewRes.json();
-        if (ov.data?.setupHealth?.forwardingLabel === "Verified") {
-          setForwardingVerified(true);
-        }
-      }
     } catch {
       setSetup(null);
     } finally {

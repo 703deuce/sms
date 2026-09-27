@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { CheckCircle2, Sparkles } from "lucide-react";
 import { ButtonLink } from "@/newui-transplant/components/app/button-link";
@@ -5,8 +7,10 @@ import { Initials, Page, PageHeader, Panel, Pill, Rows, Stat, TextLink } from "@
 import { RecoveryPill } from "@/newui-transplant/components/app/status";
 import { mapMctbOverviewRecentMissedCalls } from "@/lib/newui-transplant/adapters/mctb-overview";
 import type { MctbOverviewPayload } from "@/lib/mctb/overview-types";
+import { useMctbOverviewEnrichment } from "@/newui-transplant/connected/mctb/overview-enrichment";
 
 export function NewUiMctbOverviewPage({ data }: { data: MctbOverviewPayload }) {
+  const { leadRecovery } = useMctbOverviewEnrichment(data);
   const recentMissed = mapMctbOverviewRecentMissedCalls(data);
   const kpis = data.kpis;
 
@@ -37,18 +41,19 @@ export function NewUiMctbOverviewPage({ data }: { data: MctbOverviewPayload }) {
         <div className="flex-1">
           <p className="flex items-center gap-2 text-sm font-medium">
             AI Recovery{" "}
-            <Pill tone={data.leadRecovery.enabled ? "success" : "neutral"}>
-              {data.leadRecovery.enabled ? "On" : "Off"}
+            <Pill tone={leadRecovery.enabled ? "success" : "neutral"}>
+              {leadRecovery.enabled ? "On" : "Off"}
             </Pill>
           </p>
-          <p className="text-xs text-muted-foreground">{data.leadRecovery.policySummary}</p>
+          <p className="text-xs text-muted-foreground">{leadRecovery.policySummary}</p>
         </div>
         <TextLink href="/mctb/ai-recovery">Manage</TextLink>
       </div>
 
       {data.status === "active" &&
       data.setupComplete &&
-      data.leadRecovery.status === "ready" &&
+      leadRecovery.status === "ready" &&
+      leadRecovery.policySummary !== "Loading…" &&
       data.kpis.needsReplyCount === 0 ? (
         <div className="mt-4 flex items-center gap-2 rounded-xl border border-success/30 bg-success/5 px-4 py-3 text-sm">
           <CheckCircle2 className="size-4 text-success" aria-hidden="true" />

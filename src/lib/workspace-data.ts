@@ -705,9 +705,13 @@ function stepStatusLabel(status?: string | null) {
   return titleCaseStatus(status || "Pending");
 }
 
-export async function loadComplianceOverview(workspaceId: string) {
+export async function loadComplianceOverview(
+  workspaceId: string,
+  options?: { phoneNumbers?: Awaited<ReturnType<typeof loadPhoneNumbers>> },
+) {
   const reg = await loadRegistration(workspaceId);
-  const numbers = await loadPhoneNumbers(workspaceId, { includeLinked: true });
+  const numbers =
+    options?.phoneNumbers ?? (await loadPhoneNumbers(workspaceId, { includeLinked: true }));
   const brandOk = (reg?.brandStatus || "").toLowerCase() === "approved";
   const campaignOk = (reg?.campaignStatus || "").toLowerCase() === "approved";
   return {
