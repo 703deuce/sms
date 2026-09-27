@@ -22,6 +22,7 @@ type VoiceRuntimeAction =
   | "emit_event"
   | "record_call_telemetry"
   | "resolve_voice_v3_livekit_session"
+  | "assert_voice_v3_livekit_ai_start"
   | "execute_voice_v3_livekit_tool"
   | "commit_voice_v3_livekit_caller_utterance"
   | "record_voice_v3_transfer_outcome"
@@ -236,6 +237,14 @@ export async function POST(request: Request) {
           "@/lib/voice/python-runtime-bridge/voice-v3-livekit"
         );
         result = await resolveVoiceV3LiveKitSession(payload as never);
+        break;
+      }
+
+      case "assert_voice_v3_livekit_ai_start": {
+        const { assertVoiceV3LiveKitAiStartForPython } = await import(
+          "@/lib/voice/python-runtime-bridge/voice-v3-livekit"
+        );
+        result = await assertVoiceV3LiveKitAiStartForPython(payload as never);
         break;
       }
 

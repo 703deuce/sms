@@ -76,6 +76,11 @@ export interface VoiceV3AuthorizedTransferPlan {
   handoff_instructions: string;
   outbound_sip_trunk_id: string | null;
   outbound_caller_id_e164: string | null;
+  /**
+   * When true, warm consult legs may treat voicemail as VOICEMAIL outcome.
+   * LiveKit SIP REFER (DIRECT) cannot AMD — worker upgrades DIRECT→WARM when this is set.
+   */
+  detect_voicemail_on_transfer: boolean;
 }
 
 /** Model-safe tool result (no dial targets). */

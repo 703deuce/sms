@@ -72,18 +72,20 @@ const EXACT: Record<string, Omit<WizardV3LaunchClassificationRow, "statePath">> 
     evidence: "Compiled into retrieval.revision for cache busting",
   },
   answerWhen: {
-    classification: "CURRENT_VISIBLE_STILL_BROKEN",
+    classification: "CURRENT_VISIBLE_IMPLEMENTED",
     evidence:
-      "Compiled to telephony.answerWhen; Voice V3 LiveKit ingress does not gate answer timing from this field alone",
+      "Activate syncWizardRoutingRules + evaluateInboundRouting on LiveKit resolve_voice_v3_livekit_session",
+    runtimeConsumer: "livekit-ingress-policy.ts",
   },
   ringBehavior: {
-    classification: "CURRENT_VISIBLE_STILL_BROKEN",
+    classification: "CURRENT_VISIBLE_IMPLEMENTED",
     evidence:
-      "Compiled to telephony.ringBehavior; LiveKit ingress path does not implement ring_team_first semantics",
+      "Wizard routing mode + human_first team ring delay before GPT-Live session (ingressDelaySeconds)",
+    runtimeConsumer: "livekit-ingress-policy.ts + voice_v3/session.py",
   },
   ringTeamSeconds: {
     classification: "CHILD_IMPLEMENTED_BY_PARENT",
-    evidence: "Only meaningful when ringBehavior ring_team is honored",
+    evidence: "VoiceRoutingRule actions.ringSeconds + LiveKit ingress delay",
   },
   // —— Outbound SMS ——
   outboundSmsMode: {
@@ -194,9 +196,10 @@ const EXACT: Record<string, Omit<WizardV3LaunchClassificationRow, "statePath">> 
     evidence: "compile-transfer-config defaultMode WARM",
   },
   detectVoicemailOnTransfer: {
-    classification: "CURRENT_VISIBLE_STILL_BROKEN",
+    classification: "CURRENT_VISIBLE_IMPLEMENTED",
     evidence:
-      "Compiled to callHandling but Voice V3 LiveKit transfer execution plan does not pass AMD flag (lib/voice/transfers.ts only legacy path)",
+      "authorize-transfer detect_voicemail_on_transfer; warm consult leg AMD (DIRECT→WARM when enabled)",
+    runtimeConsumer: "transfer_executor.py",
   },
   voiceV2HumanTransferEnabled: {
     classification: "CURRENT_VISIBLE_IMPLEMENTED",
@@ -351,8 +354,10 @@ function patternRules(): Array<{
     {
       pattern: /^appointmentTypes\[\]\.requiredFields\[\]$/,
       row: {
-        classification: "CURRENT_VISIBLE_STILL_BROKEN",
-        evidence: "Per-service required intake keys not fully gated on book_appointment",
+        classification: "CURRENT_VISIBLE_IMPLEMENTED",
+        evidence:
+          "service.requiredIntakeKeys merged in getMissingFieldsForOperation(book_appointment)",
+        runtimeConsumer: "book-appointment-tool.ts",
       },
     },
     {

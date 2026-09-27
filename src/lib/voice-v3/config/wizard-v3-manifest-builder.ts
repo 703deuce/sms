@@ -184,10 +184,10 @@ export function buildWizardV3FieldManifest(): WizardV3FieldManifestRow[] {
       valueType: "AnswerWhen",
       v3ConfigPath: "telephony.answerWhen",
       destinations: ["PROVIDER_CONFIG", "CONTROL_PLANE_ONLY"],
-      executionStatus: "CONTROL_PLANE_ONLY",
+      executionStatus: "ACTIVE_EXECUTION",
       scope: "YES_GENERAL",
-      compilerFunction: "compileVoiceV3AgentConfig.telephony",
-      runtimeConsumer: "Telnyx routing (legacy); V3 PSTN ingress policy",
+      compilerFunction: "compileVoiceV3AgentConfig.telephony + syncWizardRoutingRules",
+      runtimeConsumer: "evaluateInboundRouting + livekit-ingress-policy",
       republishBehavior: "next_call",
     }),
     row({
@@ -212,8 +212,8 @@ export function buildWizardV3FieldManifest(): WizardV3FieldManifestRow[] {
     ["outboundSmsMode", "Outbound SMS mode", "telephony.outboundSmsMode", ["PROVIDER_CONFIG"], "CONFIGURED_NOT_IMPLEMENTED"],
     ["outboundSmsPhoneNumberId", "Outbound SMS number id", "telephony.outboundSmsPhoneNumberId", ["PROVIDER_CONFIG"], "CONFIGURED_NOT_IMPLEMENTED"],
     ["outboundSmsE164", "Outbound SMS E.164", "telephony.outboundSmsE164", ["PROVIDER_CONFIG"], "CONFIGURED_NOT_IMPLEMENTED"],
-    ["ringBehavior", "Ring behavior", "telephony.ringBehavior", ["PROVIDER_CONFIG"], "CONTROL_PLANE_ONLY"],
-    ["ringTeamSeconds", "Ring team seconds", "telephony.ringTeamSeconds", ["PROVIDER_CONFIG"], "CONTROL_PLANE_ONLY"],
+    ["ringBehavior", "Ring behavior", "telephony.ringBehavior", ["PROVIDER_CONFIG"], "ACTIVE_EXECUTION"],
+    ["ringTeamSeconds", "Ring team seconds", "telephony.ringTeamSeconds", ["PROVIDER_CONFIG"], "ACTIVE_EXECUTION"],
     ["callRecording", "Call recording", "telephony.callRecording", ["PROVIDER_CONFIG"], "ACTIVE_EXECUTION"],
     ["connectionGreeting", "Connection greeting mode", "telephony.connectionGreetingMode", ["PROVIDER_CONFIG"], "ACTIVE_EXECUTION"],
     ["connectionGreetingText", "Connection greeting text", "telephony.connectionGreetingText", ["PROVIDER_CONFIG"], "ACTIVE_EXECUTION"],
@@ -829,12 +829,12 @@ export function buildWizardV3FieldManifest(): WizardV3FieldManifestRow[] {
       uiLabel: "Appointment type required intake keys",
       statePath: "appointmentTypes[].requiredFields[]",
       valueType: "string[]",
-      v3ConfigPath: "services[].requiredIntakeKeys[] (future)",
+      v3ConfigPath: "services[].requiredIntakeKeys[]",
       destinations: ["DETERMINISTIC_CONFIG"],
-      executionStatus: "CONFIGURED_NOT_IMPLEMENTED",
+      executionStatus: "ACTIVE_EXECUTION",
       scope: "YES_MICROSOFT_BOOKING",
-      compilerFunction: "wizardServices",
-      runtimeConsumer: "per-service intake (future)",
+      compilerFunction: "servicePolicyFromWizardType + operation-requirements",
+      runtimeConsumer: "getMissingFieldsForOperation(book_appointment)",
       republishBehavior: "next_call",
     }),
   );
@@ -886,6 +886,7 @@ export function buildWizardV3FieldManifest(): WizardV3FieldManifestRow[] {
         destinations: ["DETERMINISTIC_CONFIG", "PROVIDER_CONFIG", "ASTRA_BACKEND_CONTEXT"],
         executionStatus:
           path.startsWith("transfer") ||
+          path === "detectVoicemailOnTransfer" ||
           path === "callbackRequestsEnabled" ||
           path === "callbackRequiredCollectFieldIds"
             ? "ACTIVE_EXECUTION"

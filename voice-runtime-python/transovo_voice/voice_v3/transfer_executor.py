@@ -182,6 +182,10 @@ async def execute_authorized_transfer_plan(
         mode = str(target.get("mode") or "DIRECT").upper()
         dial_target = str(target.get("dial_target") or "")
         timeout = float(target.get("ringing_timeout_seconds") or 30)
+        detect_amd = bool(plan.get("detect_voicemail_on_transfer"))
+        if detect_amd and mode == "DIRECT":
+            # SIP REFER cannot run Telnyx-style AMD; warm consult leg can surface VOICEMAIL.
+            mode = "WARM"
         if not dial_target:
             continue
 

@@ -3,11 +3,7 @@ import { telnyxRequest } from "@/lib/messaging/telnyx/client";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { evaluateInboundRouting } from "./routing";
 import {
-  getMessagingRuntimeSettings,
-  isWithinBusinessHours,
-} from "@/lib/messaging/messaging-settings";
-import {
-  applyActionTimezone,
+  resolveEffectiveRoutingAction,
   resolveRingTimeoutSeconds,
 } from "./routing-action-resolve";
 import { isTelnyxVoiceConfigured } from "./telnyx/assistant-sync";
@@ -467,21 +463,6 @@ async function executeOverflow(input: {
   });
 }
 
-async function resolveEffectiveAction(
-  workspaceId: string,
-  action: string,
-  actions?: Record<string, unknown>,
-  now = new Date(),
-) {
-  if (action !== "ai_after_hours") return action;
-
-  const settings = await getMessagingRuntimeSettings(workspaceId);
-  const effective = applyActionTimezone(settings, actions);
-  const withinHours = isWithinBusinessHours(effective, now);
-  if (withinHours) return "human_first";
-  return "ai_answer";
-}
-
 export async function executeInboundRoutingAction(input: {
   workspaceId: string;
   callId: string;
@@ -498,7 +479,7 @@ export async function executeInboundRoutingAction(input: {
   contactName?: string;
   payload?: Record<string, unknown>;
 }) {
-  const action = await resolveEffectiveAction(
+  const action = await resolveEffectiveRoutingAction(
     input.workspaceId,
     input.routing.action,
     input.routing.actions,
