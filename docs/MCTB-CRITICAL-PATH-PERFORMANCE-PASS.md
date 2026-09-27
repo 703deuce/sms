@@ -145,3 +145,22 @@ MCTB_STAGE2_FRONTEND: PURE_OPUS
 - `scripts/mctb-critical-path-timings.ts`
 
 **Not merged or deployed per instruction.**
+
+## Enrichment follow-up (non-blocking, `ws_1` sample)
+
+`loadMctbOverviewEnrichment` ~9174 ms total. Existing script sub-steps on the same workspace (not re-run for this verification):
+
+| Sub-step | ~ms | Note |
+|----------|-----|------|
+| `loadLeadRecoveryConfig` | 4878 | Largest single call |
+| `computeLeadRecoveryPolicyHealth` | 9891 | Includes second config load in script’s isolated timing |
+| `evaluateMctbAiBookingReadiness` | 3925 | Microsoft/Calendly audit + connection heal |
+| Inbound config + decision | ~560 | Minor |
+
+**Observation:** Lead-recovery policy health + AI booking readiness dominate; consider persisted/event-driven status later—not launch-blocking.
+
+## Verification pass (approved stage)
+
+- Overview split: core SSR + client enrichment; enrichment failure is caught and does not blank dashboard.
+- Conversations: list-first; thread-pane shows “Loading messages…” during hydrate; hydration token ignores superseded fetches.
+- Missed-call detail: detail fetch independent of shell-context; sender patched when shell arrives (`—` fallback).

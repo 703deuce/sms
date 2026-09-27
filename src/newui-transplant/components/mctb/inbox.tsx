@@ -70,6 +70,7 @@ export function Inbox({
   business: businessProp,
   onSendMessage,
   wiring,
+  threadLoadingId,
 }: {
   initialId?: string
   initialFilter: Filter
@@ -77,6 +78,7 @@ export function Inbox({
   missedCalls?: MissedCall[]
   business?: BusinessContext
   onSendMessage?: (conversationId: string, text: string) => Promise<void>
+  threadLoadingId?: string | null
   wiring?: InboxWiring
 }) {
   const production = Boolean(wiring)
@@ -244,6 +246,11 @@ export function Inbox({
                 </Button>
               </header>
               <ol className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-5">
+                {production &&
+                threadLoadingId === selected.id &&
+                messages.length === 0 ? (
+                  <li className="py-8 text-center text-sm text-muted-foreground">Loading messages…</li>
+                ) : null}
                 {messages.map((m, i) => (
                   <Bubble key={i} m={m} />
                 ))}

@@ -46,7 +46,9 @@ export function NewUiMctbConversationsPage({
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [missedCalls, setMissedCalls] = useState<MissedCall[]>([]);
   const [loading, setLoading] = useState(true);
+  const [threadLoadingId, setThreadLoadingId] = useState<string | null>(null);
   const hydratedIds = useRef(new Set<string>());
+  const hydrationToken = useRef(0);
 
   const buildMissedCallsFromRows = useCallback(
     (rows: Conversation[]) => {
@@ -72,14 +74,23 @@ export function NewUiMctbConversationsPage({
 
   const hydrateThread = useCallback(async (conversationId: string) => {
     if (hydratedIds.current.has(conversationId)) return;
-    hydratedIds.current.add(conversationId);
+    const token = ++hydrationToken.current;
+    setThreadLoadingId(conversationId);
     try {
       const full = await fetchConversation(conversationId);
+      if (token !== hydrationToken.current) return;
+      hydratedIds.current.add(conversationId);
       setConversations((prev) =>
         prev.map((c) => (c.id === conversationId ? mapApiConversationToNewUiInbox(full) : c)),
       );
     } catch {
-      hydratedIds.current.delete(conversationId);
+      if (token === hydrationToken.current) {
+        hydratedIds.current.delete(conversationId);
+      }
+    } finally {
+      if (token === hydrationToken.current) {
+        setThreadLoadingId(null);
+      }
     }
   }, []);
 
@@ -156,6 +167,7 @@ export function NewUiMctbConversationsPage({
       conversations={conversations}
       missedCalls={missedCalls}
       business={business}
+      threadLoadingId={threadLoadingId}
       wiring={wiring}
     />
   );
