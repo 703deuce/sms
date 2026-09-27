@@ -1,189 +1,406 @@
-# Voice agent: wizard vs Business Knowledge vs Call Handling — overlap map
+# Voice receptionist: 8-step wizard vs Business Knowledge vs Call Handling vs Setup (3-stage)
 
-**Purpose:** Copy-paste reference for what overlaps between the 8-step receptionist wizard and the standalone Voice IA pages `/voice/knowledge` (Business Knowledge) and `/voice/call-handling` (Call Handling).
+**Purpose:** Copy/paste inventory of **every control surface**, what is **shared**, what exists **only on the 8-step wizard**, and what exists **only on the three standalone pages** in the split IA flow.
 
-**Last updated:** 2026-09-27 (cloud agent session: Opus transplant + overlap audit)
-
----
-
-## Single source of truth
-
-All three surfaces read and write the same configuration domain:
-
-| Layer | Location |
-|-------|----------|
-| React state | `AppointmentReceptionistWizardState` |
-| Hook (Stage 2 pages) | `useAppointmentReceptionistWizard` — `src/lib/newui-transplant/hooks/use-appointment-receptionist.ts` |
-| API | `/api/solutions/appointment-receptionist` (load/save draft) |
-| Wizard shell | `AppointmentReceptionistWizard` — `src/components/solutions/appointment-receptionist/wizard.tsx` |
-| Edit route (Opus 8-step) | `src/app/(app)/voice/receptionist/edit/page.tsx` → `NewUiVoiceReceptionistEditorPage` → `AppointmentReceptionistWizardOpusPage` → `presentation="opus"` |
-
-**Implication:** Editing hours on Knowledge, toggles on Call Handling, or step 3/5 in the wizard all target the same persisted agent config (when saves run). Divergence is mostly **which controls are shown**, not separate databases.
+**Last updated:** 2026-09-27
 
 ---
 
-## High-level diagram
+## How to read this doc
+
+| Surface | Route | What it is today |
+|---------|--------|------------------|
+| **8-step wizard (Opus)** | `/voice/receptionist/edit` | Canonical editor when Stage 2 is on: `AppointmentReceptionistWizard` with `presentation="opus"` (all 8 steps). |
+| **Business Knowledge** | `/voice/knowledge` | Permanent ops page; same wizard state, `wizardStepId: "information"` on save. |
+| **Call Handling** | `/voice/call-handling` | Permanent ops page; saves `wizardStepId: "call-handling"`. |
+| **Receptionist setup (3-stage)** | *Code only* — `ReceptionistEditorOpus` | **Not** mounted on `/voice/receptionist/edit` anymore (replaced by 8-step). Still the best description of the **“setup + link out to Knowledge / Call Handling”** flow you had in product IA. |
+| **Receptionist summary** | `/voice/receptionist` | Read-only overview; links to edit wizard. |
+| **`/voice/setup`** | Redirect | **Missed Call Text Back** (`MCTB_ROUTES.setup`) — **not** AI receptionist config. |
+
+**Single source of truth for all of the above (except MCTB):** `AppointmentReceptionistWizardState` via `useAppointmentReceptionistWizard` / `POST /api/solutions/appointment-receptionist`.
+
+**Deeper parity audit (209 compiler leaves):** `docs/VOICE-AGENT-EIGHT-STEP-WIZARD-TO-NEW-IA-PARITY-AUDIT.md`
+
+---
+
+## Architecture (one state, many surfaces)
 
 ```mermaid
-flowchart TB
-  subgraph API["/api/solutions/appointment-receptionist"]
-    WState["AppointmentReceptionistWizardState"]
-  end
+flowchart LR
+  API["appointment-receptionist API"]
+  STATE["AppointmentReceptionistWizardState"]
 
-  subgraph Wizard["8-step wizard /voice/receptionist/edit"]
-    S2["Step 2 Phone"]
-    S3["Step 3 Information"]
-    S5["Step 5 Call Handling"]
-  end
+  W8["8-step wizard\n/edit"]
+  KB["Business Knowledge\n/knowledge"]
+  CH["Call Handling\n/call-handling"]
+  S3["3-stage setup\n(legacy shell)"]
 
-  subgraph Standalone["Standalone Voice IA"]
-    KB["/voice/knowledge"]
-    CH["/voice/call-handling"]
-  end
+  API --> STATE
+  STATE --> W8
+  STATE --> KB
+  STATE --> CH
+  STATE --> S3
 
-  WState --> S2
-  WState --> S3
-  WState --> S5
-  WState --> KB
-  WState --> CH
-
-  S3 -.->|shared editors| KB
-  S5 -.->|shared editors| CH
-  S2 -.->|ring/recording| CH
+  W8 ---|"steps 3 & 5 overlap"| KB
+  W8 ---|"step 5 + phone overlap"| CH
+  S3 ---|"link tiles"| KB
+  S3 ---|"link tiles"| CH
 ```
 
 ---
 
-## `/voice/knowledge` ↔ Wizard **Step 3 — Information**
+# Part A — Full inventory: 8-step wizard (every step)
 
-| Concern | Wizard step 3 | Business Knowledge page | Notes |
-|---------|---------------|-------------------------|-------|
-| Business name, description, services | `knowledgeItems`, `businessName`, guided/website flows | DOM fields + `mergeDomIntoState` → same items | Knowledge page reads/writes via transplant wired props |
-| Website URL + crawl | `websiteUrl`, `knowledgeSource: "website"`, crawl APIs | `onRecrawl` → `/api/voice/knowledge/crawl` | Same KB id |
-| Upload documents | Upload flow in `information-step.tsx` | `onUploadClick` → `/api/voice/knowledge/:id/upload` | KB must exist (`linkedKnowledgeBaseId`) |
-| Connect existing KB | `ConnectExistingKnowledge` → `/api/voice/knowledge` | Uses `state.linkedKnowledgeBaseId` + source list API | |
-| Enable/disable KB for agent | `knowledgeBaseEnabled` | Implicit when saving knowledge step | |
-| Knowledge source mode | `knowledgeSource` (`website`, `guided_profile`, `upload_docs`, `connect_data`) | Partially mirrored in UI actions (crawl, upload, FAQs) | Wizard is the full mode picker |
-| FAQ / item list | `knowledgeItems` (incl. `faq-*`) | `onAddFaq`, FAQ section in mirror UI | |
-| **Business hours / schedule** | **Inline `BusinessScheduleEditor`** on `operatingMaturity.businessSchedule` | **Display only** (`compileBusinessHoursAmyDisplay`); **`onEditHours` → `/voice/setup`** | **Not** inline on Knowledge page — hours edit is delegated to setup route, while wizard step 3 edits schedule in place |
-| Knowledge gaps (runtime Q&A misses) | Not in wizard step 3 | `/api/voice/knowledge-gaps`, dismiss/resolve | **Knowledge-only** operational surface |
-| Rich source manager / crawl summary | Basic in wizard | `loadSources`, crawl latest stats | **Knowledge-only** presentation |
-| Persist helper | Wizard save on step advance | `persistKnowledgeWizardStep` (`knowledge-editor-persist.ts`), `wizardStepId: "knowledge"` | Same backend path |
-
-### Shared components (both touch the same state fields)
-
-- `BusinessScheduleEditor` — **wizard step 3 only** (not on Knowledge page UI)
-- `information-step.tsx` — website, guided profile, upload, connect flows
-- `src/newui-transplant/connected/voice/knowledge-page.tsx` — wires mirror page to wizard state
-
-### Knowledge-only (not on wizard step 3)
-
-- Open knowledge **gaps** inbox and resolution workflow
-- Dedicated **sources** list with per-source status labels
-- **Crawl summary** strip (pages indexed, last crawl time)
-- Legacy path when Stage 2 off: `src/components/voice/knowledge/business-knowledge-editor.tsx`
-
-### Wizard step 3-only (not on Knowledge page)
-
-- Full **knowledge source** choice cards (website vs guided vs upload vs connect)
-- **Side panel** / Opus dense panels for setup UX (presentation-dependent)
-- Schedule editor **inline** with information gathering (vs Knowledge “edit hours” link away)
+Step order from `WIZARD_STEPS` in `src/lib/solutions/appointment-receptionist/types.ts`.  
+Components: `src/components/solutions/appointment-receptionist/steps/*.tsx`.
 
 ---
 
-## `/voice/call-handling` ↔ Wizard **Step 5 — Call Handling**
+## Step 1 — Goals (`goals-step.tsx`)
 
-| Concern | Wizard step 5 | Call Handling page | Notes |
-|---------|---------------|-------------------|-------|
-| Emergency / human transfer | `EmergencyTransferEditor`, `transferDestinations`, `transferTriggers` | `buildVoiceCallHandlingWired` + add target | Shared editor component |
-| After-hours behavior | `AfterHoursBehaviorEditor` | Switches map into `operatingMaturity.afterHoursBehavior.whenClosed` | Same maturity object |
-| On-call schedule | `OnCallScheduleEditor` | Partially via `aiAfterHours` / escalation switches | Wizard has full editor |
-| After-hours notifications | `AfterHoursNotificationsEditor` | `textSummary` switch → `afterHoursNotificationEvents` | |
-| Callback requests + required fields | `callbackRequestsEnabled`, `CallbackRequiredFieldsOpus` / `CallbackRequiredFieldsEditor` | May be absent or simplified on CH mirror | **Wizard-heavy** for field picker |
-| Callback SLA | `CallbackSlaEditor` | Typically **wizard-only** | |
-| Booking behavior toggles | `bookingBehavior.*` when `hasBookingCapability` | **Wizard-only** (ask day first, earliest 3, confirm, SMS) | |
-| AI Call Recovery | `aiCallRecoveryEnabled`, consent mode, delay, continue over SMS | **Wizard-only** | |
-| Urgency rules | `UrgencyRulesEditor` when `presentation === "mctb"` | `emergenciesOnly` switch on CH page | MCTB vs receptionist presentation differs |
-| Sales / solicitation | `salesSolicitationEnabled` (mctb block) | `declineSolicitors` switch | Same field on receptionist CH |
-| Spam policy | — | `blockSpam` → `spamLikelyPolicy` | **CH page** (not in standard wizard step 5 Opus grid) |
-| Call recording | — | `recordCalls` → `callRecording` | Also on **wizard step 2 Phone** |
-| Warm transfer whisper | `warmTransfer` | `whisper` switch | |
-| Holiday schedule toggle | — | `holidaySchedule` mutates `businessSchedule.holidays` | CH convenience toggle |
-| Ring team first / AI after hours | Partially in maturity editors | `ringTeamFirst`, `aiAfterHours` switches | |
-| Recent transfers | — | `/api/voice/call-handling/recent-transfers` | **CH-only** ops/diagnostics |
-| Ingress / routing panel | — | `OpusCallRoutingIngressPanel` below mirror | **CH-only** |
-| Save | Wizard step save | `saveDraft("call-handling")` | Same API |
+| Section | Controls / state |
+|---------|------------------|
+| Solution naming | `solutionName` (hidden on Opus compact mode via `hideSolutionName`) |
+| Operating mode | `answerWhen`: main / overflow / after-hours (+ preset-specific `ringBehavior` coupling) — **hidden on Opus when `hideAnswerWhen: true`** |
+| Capabilities (8 toggles) | `capabilities[]`: answer questions, book appointments, reschedule, cancel, take messages, qualify callers, transfer calls, send SMS confirmations |
+| Hire / Amy mode | Locks some capabilities; sets `agentName`, `role`, `solutionName` |
+| Meta | `preset`, `outcomeSlug` |
+| Chrome | Side panel “Recommended setup” / next steps (optional `hideSidePanel`) |
 
-### Shared components
-
-- `EmergencyTransferEditor`
-- `AfterHoursBehaviorEditor`
-- `OnCallScheduleEditor`
-- `AfterHoursNotificationsEditor`
-- Legacy when Stage 2 off: `src/components/voice/call-handling-operational-page.tsx`
-
-### Wizard step 5-only
-
-- Booking behavior matrix (when booking capability on)
-- **AI Call Recovery** block
-- **Callback SLA** editor
-- Opus **CallbackRequiredFieldsOpus**
-- Legacy/mctb: **UrgencyRulesEditor** block
-- **SidePanel** “Call handling preview” (legacy presentation; Opus 8-step may hide or slim chrome)
-
-### Call Handling page-only
-
-- **Recent transfers** table
-- **OpusCallRoutingIngressPanel** (ingress diagnostics)
-- Aggregate **switches** UI (`onSwitchChange` in `call-handling-page.tsx`) for recording, spam, solicitors, holidays, ring team, etc.
-- Operational copy tuned for “daily ops” not wizard stepper
+**Save-merge keys (`goals`):** `capabilities`, `answerWhen`, `solutionName`, `preset`, `outcomeSlug`
 
 ---
 
-## Wizard **Step 2 — Phone** overlap with Call Handling
+## Step 2 — Phone (`phone-step.tsx`)
 
-| Field | Step 2 Phone | Call Handling page |
-|-------|--------------|-------------------|
-| `ringBehavior` / ring team seconds | Yes | `ringTeamFirst` switch (maturity) |
-| `callRecording` | Yes | `recordCalls` switch |
+| Section | Controls / state |
+|---------|------------------|
+| Readiness strip | Phone assigned, inbound calling, AI voice, recording status |
+| Number source cards | `numberSource`: existing \| buy_new \| forward_existing \| connect_existing |
+| Number picker | `phoneNumberId`, `phoneNumberE164` (workspace numbers API) |
+| MCTB reuse | Auto-bind MCTB ingress line (MCTB presentation only) |
+| Answering behavior | `ringBehavior` → also drives `answerWhen` |
+| Settings | `ringTeamSeconds`, `callRecording` (`off` \| `all` \| `inbound_only`) |
+| Connection greeting | `connectionGreeting`, `connectionGreetingText`, `connectionGreetingAudioUrl` (pre-AI mask) |
+| Outbound SMS fields | On state for appointments send-link; **not primary UI on this step** |
+| Chrome | Side panel “Phone setup” |
 
-Configure in either place only if both surfaces are shown to customers — otherwise prefer **one canonical home** per product IA (wizard for first-time setup; Call Handling for ongoing ops).
-
----
-
-## Opus 8-step edit route (context)
-
-- **Not** the 3-stage `ReceptionistEditorOpus` shell on `/voice/receptionist/edit`; that shell remains under `receptionist-editor/` for reuse.
-- Hub components: `src/components/solutions/appointment-receptionist/wizard-opus-ui.tsx`
-- Verify script: `node scripts/verify-opus-receptionist-wizard-components.mjs`
-- Screenshots: `node scripts/capture-eight-step-opus-wizard.mjs` → `/opt/cursor/artifacts/eight-step-opus-wizard/01-goals.png` … `08-activate.png`
-
-### Opus component map vs code (doc drift to fix separately)
-
-See `docs/VOICE-AGENT-EIGHT-STEP-WIZARD-OPUS-COMPONENT-MAP.md` — update for:
-
-- `OpusChoiceCard`, `OpusRadioRow`, `OpusVoicePickRow`, `OpusTableShell`, `OpusDividedList`, `OpusWarningPanel`, `OpusLinkTile`
-- Goals step uses **FieldRow + Switch**, not choice-card grid on Opus 8-step
-- Test step: **no SidePanel** on Opus path
-- Shared sub-editors accept `presentation="opus"`
+**Save-merge keys (`phone`):** `numberSource`, `phoneNumberId`, `phoneNumberE164`, `outboundSmsMode`, `outboundSmsPhoneNumberId`, `outboundSmsE164`, `ringBehavior`, `ringTeamSeconds`, `callRecording`, `connectionGreeting`, `connectionGreetingText`, `connectionGreetingAudioUrl`
 
 ---
 
-## File index (quick navigation)
+## Step 3 — Information (`information-step.tsx`)
 
-| Surface | Primary files |
-|---------|----------------|
-| Wizard steps | `steps/information-step.tsx`, `steps/call-handling-step.tsx`, `steps/phone-step.tsx` |
-| Stage 2 Knowledge | `src/newui-transplant/connected/voice/knowledge-page.tsx`, mirror `newui-transplant/mirror/routes/voice/knowledge/page` |
-| Stage 2 Call Handling | `src/newui-transplant/connected/voice/call-handling-page.tsx`, `lib/newui-transplant/adapters/voice-call-handling.ts` |
-| Shared maturity | `operating-maturity-editor.tsx` (`BusinessScheduleEditor`, `AfterHoursBehaviorEditor`, …) |
-| Types | `src/lib/solutions/appointment-receptionist/types.ts` |
+| Section | Controls / state |
+|---------|------------------|
+| Document RAG | `knowledgeBaseEnabled` |
+| Source mode (4 cards) | `knowledgeSource`: website \| guided_profile \| upload_docs \| connect_data |
+| Website | `websiteUrl`, scan/import → `knowledgeItems` |
+| Guided profile | business name, address, hours prose, services, pricing, policies, FAQs → `knowledgeItems` |
+| Upload docs | File upload → KB / items |
+| Connect existing KB | `linkedKnowledgeBaseId` (`ConnectExistingKnowledge` → `/api/voice/knowledge`) |
+| Knowledge item list | Per-item label, summary, status; edit/approve flows |
+| Business schedule | `BusinessScheduleEditor` → `operatingMaturity.businessSchedule`, `timezone` |
+| Identity fields on merge | `businessName`, `agentName`, `role`, `tone`, `speakingStyle`, `language`, `speaksFirst`, `openingGreeting`, `conversationBehaviors`, `guardrails`, `longTermMemory`, `crmEnabled` — **UI for identity/greeting is on Step 6 Voice; merge still attributes many to `information` on save** |
+| Chrome | Side panel “Knowledge quality” |
+
+**Save-merge keys (`information`):** see parity audit Appendix A
 
 ---
 
-## Product / IA takeaway
+## Step 4 — Appointments (`appointments-step.tsx`)
 
-1. **Do not build a second config store** for Knowledge or Call Handling — extend `AppointmentReceptionistWizardState` and shared editors.
-2. **Hours inconsistency:** wizard step 3 edits schedule inline; Knowledge page links to `/voice/setup` for hours — intentional or consolidation candidate.
-3. **Call Handling page** is a superset of **switches + ops** (spam, recording, recent transfers, ingress); wizard step 5 is a superset of **booking + AI recovery + SLA + callback field UX**.
-4. For parity audits, use `docs/VOICE-AGENT-EIGHT-STEP-WIZARD-TO-NEW-IA-PARITY-AUDIT.md` alongside this doc.
+| Section | Controls / state |
+|---------|------------------|
+| Calendar providers | Connect cards → `calendarProvider`, `calendarConnected`, `calendarEmail` (links to Integrations) |
+| Booking strategy | `bookingStrategy`: Microsoft 365, request only, send link, none |
+| Send link block | `bookingLinkUrl`, `bookingLinkLabel`, `bookingLinkSmsConsentRequired`, outbound SMS sender fields |
+| Appointment types | Full CRUD list: name, duration, calendar, status, location, modality, hours, notice windows, `requiredFields`, `bookingPermission`, enabled; `selectedAppointmentTypeId` |
+| Qualification | `qualificationEnabled`, rules builder, ZIP lists, match mode, fallbacks |
+| Collect fields | `collectFields[]` enable/required/order/custom |
+| Booking behavior (subset) | `bookingBehavior` flags (also repeated on step 5 when booking on) |
+| Chrome | Side panel “Appointment tools” |
+
+**Save-merge keys (`appointments`):** see parity audit Appendix A
+
+---
+
+## Step 5 — Call Handling (`call-handling-step.tsx`)
+
+| Section | Controls / state |
+|---------|------------------|
+| Flow diagram | Booking vs message flow (legacy/mctb presentation) |
+| Booking behavior | 4× `bookingBehavior` toggles when booking capability on |
+| Emergency & human transfer | `EmergencyTransferEditor`: destinations, plan steps, `transferTriggers`, warm transfer, voicemail detect, caller-requested transfer, etc. |
+| Urgency (MCTB) | `urgencyEnabled`, `UrgencyRulesEditor` |
+| Sales solicitation (MCTB) | `salesSolicitationEnabled` |
+| Messages & callbacks | `callbackRequestsEnabled`, `CallbackRequiredFieldsOpus` / editor |
+| After-hours notifications | `AfterHoursNotificationsEditor` |
+| AI Call Recovery | `aiCallRecoveryEnabled`, consent mode, continue over SMS, delay, sending number |
+| Operating maturity | `AfterHoursBehaviorEditor`, `OnCallScheduleEditor`, `CallbackSlaEditor` |
+| Related state | `spamLikelyPolicy`, `solicitorPolicy` (full editors on legacy operational page) |
+| Chrome | Side panel “Call handling preview” (legacy; Opus may hide header diagram) |
+
+**Save-merge keys (`call-handling`):** see parity audit Appendix A
+
+---
+
+## Step 6 — Voice (`voice-step.tsx`)
+
+| Section | Controls / state |
+|---------|------------------|
+| Identity | `agentName`, `businessName`, `role`, `tone`, `speakingStyle`, `language` |
+| Voice catalog | `voiceId`, `voiceLabel`, `voiceSource`, preview |
+| Custom OpenAI voice | `openAiCustomVoiceId` (feature-flagged) |
+| GPT-Live controls | `speakingPace`, `voiceAccent`, `backchannelLevel`, `callerPausePatience`, `interruptionStyle` |
+| Greeting | `speaksFirst`, `openingGreeting` |
+| Conversation rules | `conversationBehaviors.*` (boolean guardrails) |
+| Chrome | Side panel “Voice settings” |
+
+**Save-merge keys (`voice`):** `voiceId`, `voiceLabel`, `speakingPace`, `voiceAccent`, `backchannelLevel`, `callerPausePatience`, `interruptionStyle`, `voiceSource`, `openAiCustomVoiceId`
+
+---
+
+## Step 7 — Test (`test-step.tsx`)
+
+| Section | Controls / state |
+|---------|------------------|
+| Browser test | `VoiceV3BrowserCall`, ensure agent / draft |
+| Phone test guidance | Shows `phoneNumberE164` after activate path |
+| Meta | `testScenario`, `lastTestPassed` |
+| Chrome | Side panel “Test” (Opus uses dense panels; side panel optional) |
+
+**Save-merge keys (`test`):** `testScenario`, `lastTestPassed`
+
+---
+
+## Step 8 — Activate (`activate-step.tsx`)
+
+| Section | Controls / state |
+|---------|------------------|
+| Readiness grid | `buildWizardReadinessRows`, activation issues |
+| Calendar probe | Sync calendar connection display |
+| Activate | `activationMode: activate_now`, publish |
+| Schedule activation | `scheduledAt` |
+| Navigation | Link back to test |
+| Chrome | Side panel “Activate” |
+
+**Save-merge keys (`activate`):** `activationMode`, `scheduledAt`
+
+---
+
+# Part B — Full inventory: Business Knowledge (`/voice/knowledge`)
+
+**Wiring:** `src/newui-transplant/connected/voice/knowledge-page.tsx` → mirror `TransplantVoiceKnowledgePage`.
+
+| Section | What it does | State / APIs |
+|---------|----------------|--------------|
+| **Needs your review** | Knowledge gaps inbox | `/api/voice/knowledge-gaps`; dismiss/resolve → PATCH gaps |
+| **Core business fields** | Name, description, services, website, timezone | `businessName`, `knowledgeItems`, `websiteUrl`; DOM merge on save |
+| **Business hours (display)** | Read-only hour rows compiled from schedule + hours item | `operatingMaturity.businessSchedule`, hours `knowledgeItems` |
+| **Edit hours** | Button routes away | `onEditHours` → **`/voice/setup`** (MCTB redirect — **not** inline schedule editor) |
+| **FAQs** | List + add via prompt | `knowledgeItems` (`faq-*`) |
+| **Sources** | Website crawl + uploads list | `linkedKnowledgeBaseId`, `/api/voice/knowledge/:id`, crawl latest |
+| **Recrawl** | POST crawl | `websiteUrl`, KB id |
+| **Upload** | Hidden file input | `/api/voice/knowledge/:id/upload` |
+| **Save** | Persist knowledge step | `persistKnowledgeWizardStep`, `wizardStepId: "knowledge"` |
+
+### Not on Business Knowledge page
+
+- `knowledgeSource` mode picker (4 cards)
+- `knowledgeBaseEnabled` RAG toggle (wizard step 3 has it)
+- Inline `BusinessScheduleEditor` (wizard has it; Knowledge links out for hours)
+- Guided profile **all** slices (only subset via form fields)
+- Per-item knowledge editor UX from wizard (richer on step 3)
+- Goals, phone, appointments, voice, test, activate (entire other steps)
+
+---
+
+# Part C — Full inventory: Call Handling (`/voice/call-handling`)
+
+**Wiring:** `src/newui-transplant/connected/voice/call-handling-page.tsx` + `buildVoiceCallHandlingWired` + **`OpusCallRoutingIngressPanel`** (below page).
+
+| Section | What it does | State / APIs |
+|---------|----------------|--------------|
+| **Current behavior** | During-hours / after-hours summary lines | Derived from maturity + transfer summary |
+| **Transfers** | Ordered list; **Add target** | `transferDestinations`, `transferPlanSteps`; `addTransferDestination` |
+| **Business hours & after hours** | Switches: ring team first, AI after hours, holiday schedule | `operatingMaturity.afterHoursBehavior.whenClosed`, `businessSchedule.holidays` |
+| **On-call** | Description + **Edit** button | `onCallSchedule` — **Edit button not wired** to full editor in connected shell |
+| **Emergency keywords** | Read-only chips + **+ Add** UI | `transferTriggers` — **Add not wired** in transplant |
+| **Transfer notifications** | Whisper, text summary | `warmTransfer`, `afterHoursNotificationEvents` |
+| **Caller protection** | Block spam, decline solicitors | `spamLikelyPolicy`, `salesSolicitationEnabled` |
+| **Call recording** | Record switch; retention row | `callRecording`; retention copy only |
+| **Recent transfers** | Ops table | `/api/voice/call-handling/recent-transfers` |
+| **Ingress panel** | Routing / ingress diagnostics | Separate component under page |
+| **Save** | Draft save | `saveDraft("call-handling")` |
+
+### Not on Call Handling page (wizard step 5 has these)
+
+- Full `EmergencyTransferEditor` (destinations editing beyond add stub)
+- `AfterHoursNotificationsEditor` (full recipient editor — only one switch mapped)
+- `AfterHoursBehaviorEditor`, `OnCallScheduleEditor`, `CallbackSlaEditor` (full forms)
+- Booking behavior toggles
+- AI Call Recovery block
+- Callback required fields picker (on 3-stage / wizard)
+- Urgency rules editor (MCTB)
+- Messages/callbacks section as on wizard
+
+---
+
+# Part D — Full inventory: Receptionist setup (3-stage shell)
+
+**Code:** `src/newui-transplant/connected/voice/receptionist-editor/receptionist-editor-opus.tsx`  
+**Stages:** Identity → Responsibilities → Review & Test (`receptionist-editor-steps.tsx`)
+
+### Stage 1 — Identity & conversation (`identity-conversation-stage.tsx`)
+
+Reuses **`VoiceStep`** slices only:
+
+| Panel | Content |
+|-------|---------|
+| Identity | Agent name, business name, role, tone, language |
+| Voice | Voice catalog picks |
+| Conversation style | GPT-Live pace / accent / backchannels / patience / interruptions |
+| Greeting | Speaks first, opening greeting |
+| Conversation rules | `conversationBehaviors` booleans |
+
+≈ **Wizard step 6 (Voice)** only.
+
+### Stage 2 — Responsibilities & call flow (`responsibilities-stage.tsx`)
+
+| Panel | Content |
+|-------|---------|
+| Responsibilities | `GoalsStep` opus: capabilities grid; **hides** `answerWhen`, solution name, side panel |
+| Link tiles | → `/voice/knowledge` (hours + knowledge), → `/voice/call-handling` (transfer status) |
+| Caller information | `ReceptionistCollectFieldsOpus` |
+| Messages & callbacks | Callback toggle + `CallbackRequiredFieldsOpus`; link “Manage” → Call Handling for notifications |
+| Appointment handling | `ReceptionistBookingOpus` (strategy tiles + partial booking behavior) |
+
+≈ **Parts of wizard steps 1, 4, 5** + **links** to Knowledge & Call Handling (no inline KB/transfer editors).
+
+### Stage 3 — Review & test (`review-test-stage.tsx`)
+
+| Panel | Content |
+|-------|---------|
+| Readiness checklist | Voice, greeting, collect fields, calendar, transfers |
+| Summary rows | Capabilities, strategy, fields |
+| Test | `TestStep` opus |
+| Publish | Go live / publish CTA |
+
+≈ **Wizard steps 7 + 8**.
+
+### Not in 3-stage setup (only in 8-step or other routes)
+
+- **Phone step** entirely (number source, connection greeting, ring seconds, etc.)
+- **Information step** knowledge flows (uses Knowledge page instead)
+- **Full appointments step** (types CRUD, qualification rules, send-link block)
+- **Full call-handling step** editors (uses Call Handling page + partial callbacks on stage 2)
+- **Goals `answerWhen`** (hidden)
+
+---
+
+# Part E — What is shared (together on multiple surfaces)
+
+| Domain | 8-step wizard | Business Knowledge | Call Handling | 3-stage setup |
+|--------|:-------------:|:------------------:|:-------------:|:-------------:|
+| `knowledgeItems`, website, crawl, upload, FAQs | Step 3 | **Primary UI** | — | Link only |
+| `knowledgeBaseEnabled`, source mode cards | Step 3 | Partial (no mode cards) | — | — |
+| `operatingMaturity.businessSchedule` / timezone | Step 3 inline editor | Display + link out | Holiday switch only | Link to Knowledge |
+| `businessName` | Steps 3, 6 | Form | — | Via Voice identity |
+| Transfer destinations / order | Step 5 full editor | — | List + add | Link + partial |
+| After-hours behavior switches | Step 5 editors | — | **Switches** | Link |
+| `warmTransfer`, notifications, spam, solicitors, recording | Steps 2, 5 | — | **Switches** | Link / partial |
+| Capabilities | Step 1 | — | — | Stage 2 |
+| Collect fields | Step 4 | — | — | Stage 2 |
+| Booking strategy / partial behavior | Steps 4–5 | — | — | Stage 2 |
+| Callbacks + required fields | Step 5 | — | — | Stage 2 |
+| Voice / identity / greeting | Step 6 | — | — | Stage 1 |
+| Test + activate / publish | Steps 7–8 | — | — | Stage 3 |
+
+---
+
+# Part F — Only in the 8-step wizard (missing from Knowledge + Call Handling + 3-stage)
+
+These are what you **gain** by using the full 8-step wizard instead of only the three-page split:
+
+| # | Capability | Wizard step | Why absent from 3-page flow |
+|---|------------|-------------|-----------------------------|
+| 1 | **`answerWhen` / operating mode** (main vs overflow vs after-hours) with ring coupling | 1 (+ 2) | Hidden on 3-stage Goals (`hideAnswerWhen`) |
+| 2 | **`solutionName` / preset / outcome** editing | 1 | Hidden on 3-stage |
+| 3 | **Entire Phone step**: number source cards, DID picker, `ringTeamSeconds`, **connection greeting** (pre-AI) | 2 | No equivalent on Knowledge, CH, or 3-stage |
+| 4 | **Knowledge source mode** (4-way picker) + full guided profile + item editor UX | 3 | Knowledge page is a **subset**; no mode cards |
+| 5 | **Inline `BusinessScheduleEditor`** on same screen as KB setup | 3 | Knowledge shows hours + sends you to `/voice/setup` for edit |
+| 6 | **Calendar connect + appointment types CRUD** + qualification **rules builder** | 4 | 3-stage has strategy + collect fields only; types/rules on legacy step |
+| 7 | **Send booking link** block (URL, SMS sender, consent) | 4 | Not on 3-stage booking opus |
+| 8 | **Full `EmergencyTransferEditor`** + transfer plan | 5 | CH page: list/add only; keywords add unwired |
+| 9 | **Full after-hours notifications editor** (recipients/events) | 5 | CH: one switch; 3-stage: “Manage” link |
+| 10 | **`AfterHoursBehaviorEditor` / `OnCallScheduleEditor` / `CallbackSlaEditor`** | 5 | CH: summary switches; on-call **Edit** unwired |
+| 11 | **AI Call Recovery** (SMS after unresolved AI call) | 5 | Not on CH or 3-stage |
+| 12 | **Booking behavior** (all toggles including service-first / new vs existing where present) | 4–5 | 3-stage: partial via `ReceptionistBookingOpus` |
+| 13 | **Urgency rules** (MCTB presentation) | 5 | Not on Opus CH |
+| 14 | **`testScenario`**, full test chrome | 7 | 3-stage uses TestStep but less step context |
+| 15 | **Scheduled activation** (`scheduledAt`) | 8 | 3-stage: publish now focus |
+| 16 | **State fields without dedicated UI anywhere** | 3 merge | `longTermMemory`, `crmEnabled`, `guardrails[]` — wizard state only unless legacy routes |
+
+**Bottom line:** The 8-step wizard is still the **only place** that combines phone provisioning, full KB onboarding UX, full appointments/qualification, and full call-handling maturity editors in one guided path. The three-page model **depends on link-outs** and leaves Phone + most of Appointments + deep Call Handling + AI Recovery on the wizard or legacy routes.
+
+---
+
+# Part G — Only on the three pages (not covered by 8-step UX on those routes)
+
+| Capability | Where | Notes |
+|------------|--------|-------|
+| **Knowledge gaps** workflow (open questions from live calls) | Business Knowledge only | Wizard step 3 does not show gaps inbox |
+| **Sources list + crawl summary** strip | Business Knowledge | Wizard has crawl during setup, not ongoing ops view |
+| **Recent transfers** table | Call Handling | Operational telemetry |
+| **`OpusCallRoutingIngressPanel`** | Call Handling | Ingress/diagnostics |
+| **Compact day-to-day switches** (spam, record, holidays, ring team, AI after hours) | Call Handling | Wizard spreads across steps 2 and 5 full editors |
+| **Read-only receptionist summary** | `/voice/receptionist` | Not in wizard |
+| **3-stage link tiles** (jump to Knowledge / CH with status blurbs) | 3-stage only | 8-step uses linear stepper instead |
+
+**Note:** Data for gaps/recent transfers is **not** duplicated in wizard state — these are **extra APIs/views**, not separate config stores.
+
+---
+
+# Part H — Step ↔ page map (where to edit what)
+
+| Wizard step | Primary standalone page overlap |
+|-------------|----------------------------------|
+| 1 Goals | 3-stage Responsibilities (capabilities only) |
+| 2 Phone | Call Handling (recording); Numbers / ingress panel |
+| 3 Information | **Business Knowledge** (partial); schedule editor **wizard only** |
+| 4 Appointments | 3-stage Responsibilities (partial); **Integrations** for OAuth |
+| 5 Call Handling | **Call Handling** (partial switches + transfers list) |
+| 6 Voice | 3-stage Identity |
+| 7 Test | 3-stage Review |
+| 8 Activate | 3-stage Review (publish) |
+
+---
+
+# Part I — File index
+
+| Surface | Files |
+|---------|--------|
+| 8-step shell | `wizard.tsx`, `appointment-receptionist-wizard-opus-page.tsx` |
+| Steps | `steps/goals-step.tsx` … `activate-step.tsx` |
+| Business Knowledge | `connected/voice/knowledge-page.tsx`, `mirror/routes/voice/knowledge/page.tsx` |
+| Call Handling | `connected/voice/call-handling-page.tsx`, `adapters/voice-call-handling.ts`, `mirror/routes/voice/call-handling/page.tsx` |
+| 3-stage setup | `receptionist-editor-opus.tsx`, `stages/*.tsx` |
+| Save merge | `merge-wizard-state-on-save.ts` → `STEP_OWNED_FIELDS` |
+
+---
+
+# Part J — Quick answers
+
+**Q: What does the 8-step wizard have that Business Knowledge + Call Handling + 3-stage setup did not give customers?**  
+**A:** Part F — especially **Phone**, **full Information onboarding**, **appointment types & qualification**, **full transfer/maturity/AI recovery editors**, and **answerWhen** — plus activate scheduling.
+
+**Q: What do the three pages have that the wizard does not surface on equivalent steps?**  
+**A:** Part G — **gaps inbox**, **ops tables** (recent transfers), **ingress panel**, and **fast toggles** for day-2 ops.
+
+**Q: Is `/voice/setup` the receptionist setup page?**  
+**A:** No — it redirects to **MCTB** setup. Receptionist setup is **`/voice/receptionist/edit`** (8-step) today.
+
+---
+
+*Copy this entire file for onboarding, IA consolidation, or gap closure planning.*
