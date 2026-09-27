@@ -31,16 +31,16 @@ export function OpusWorkspaceDataProvider({
     (async () => {
       setLoading(true);
       try {
-        const res = await fetch("/api/mctb/setup", { cache: "no-store" });
+        const res = await fetch("/api/mctb/shell-context", { cache: "no-store" });
         const json = await res.json();
         const data = json.data ?? json;
         if (cancelled) return;
         setBusiness(
           businessContextFromWorkspace({
-            name: workspaceName,
-            businessLineE164: data.businessLineE164 ?? data.runtime?.businessLineE164,
-            senderE164: data.messaging?.senderE164 ?? data.messaging?.senderLabel,
-            timezone: data.runtime?.timezone ?? data.schedule?.weeklySchedule?.timezone,
+            name: data.workspaceName ?? workspaceName,
+            businessLineE164: data.businessLineE164,
+            senderE164: data.senderLabel,
+            timezone: data.timezone,
             website: null,
           }),
         );

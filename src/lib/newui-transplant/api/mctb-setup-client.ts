@@ -1,11 +1,31 @@
-export async function fetchMctbSetup(): Promise<Record<string, unknown>> {
-  const res = await fetch("/api/mctb/setup", { cache: "no-store" });
-  if (!res.ok) throw new Error("Failed to load MCTB setup");
-  const json = (await res.json()) as { data?: Record<string, unknown> };
-  return (json.data ?? json) as Record<string, unknown>;
+let setupInflight: Promise<Record<string, unknown>> | null = null;
+let setupCache: { at: number; data: Record<string, unknown> } | null = null;
+const SETUP_CACHE_MS = 8_000;
+
+export async function fetchMctbSetup(options?: { force?: boolean }): Promise<Record<string, unknown>> {
+  const force = options?.force === true;
+  const now = Date.now();
+  if (!force && setupCache && now - setupCache.at < SETUP_CACHE_MS) {
+    return setupCache.data;
+  }
+  if (!force && setupInflight) {
+    return setupInflight;
+  }
+  setupInflight = (async () => {
+    const res = await fetch("/api/mctb/setup", { cache: "no-store" });
+    if (!res.ok) throw new Error("Failed to load MCTB setup");
+    const json = (await res.json()) as { data?: Record<string, unknown> };
+    const data = (json.data ?? json) as Record<string, unknown>;
+    setupCache = { at: Date.now(), data };
+    return data;
+  })().finally(() => {
+    setupInflight = null;
+  });
+  return setupInflight;
 }
 
 export async function saveMctbSetup(patch: Record<string, unknown>): Promise<void> {
+  setupCache = null;
   const res = await fetch("/api/mctb/setup", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

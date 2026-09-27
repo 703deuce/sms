@@ -11,7 +11,7 @@ import {
   formatReplyStatus,
 } from "@/lib/mctb/recovery-display";
 import { isMctbSetupMessagingReady } from "@/lib/mctb/setup-messaging-ready";
-import { loadMctbSetupPhoneOptionsWithTelnyxSync } from "@/lib/mctb/setup-telnyx-messaging-sync";
+import { loadMctbSetupPhoneOptions } from "@/lib/numbers/workspace-accessible-numbers";
 import {
   isMctbSchedulePaused,
   previewMctbPauseState,
@@ -64,7 +64,7 @@ export async function loadMctbOverview(workspaceId: string): Promise<MctbOvervie
     loadMissedCallTextConfig(workspaceId),
     loadMctbOnboardingState(workspaceId),
     loadMissedCallTextBack(workspaceId),
-    loadMctbSetupPhoneOptionsWithTelnyxSync(workspaceId),
+    loadMctbSetupPhoneOptions(workspaceId),
     loadComplianceOverview(workspaceId),
     loadPhoneNumbers(workspaceId, { includeLinked: true }),
     loadAdminMctbTestFlags(workspaceId),

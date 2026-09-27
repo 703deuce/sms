@@ -12,7 +12,17 @@ export default async function MctbMissedCallsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   if (isNewUiStage2Enabled()) {
-    return <NewUiMctbMissedCallsPage />;
+    const { workspaceId } = await requireWorkspaceContext();
+    const params = await searchParams;
+    const query = parseMissedCallsListQuery(
+      new URLSearchParams(
+        Object.entries(params).flatMap(([key, value]) =>
+          value === undefined ? [] : Array.isArray(value) ? value.map((v) => [key, v]) : [[key, value]],
+        ) as [string, string][],
+      ),
+    );
+    const initialData = await loadMctbMissedCallsListData(workspaceId, query);
+    return <NewUiMctbMissedCallsPage initialData={initialData} />;
   }
 
   const { workspaceId } = await requireWorkspaceContext();

@@ -25,10 +25,16 @@ const DEFAULT_QUERY: ListQuery = {
   page: 1,
 };
 
-export function NewUiMctbMissedCallsPage() {
-  const [data, setData] = useState<MctbMissedCallsListData | null>(null);
-  const [query, setQuery] = useState<ListQuery>(DEFAULT_QUERY);
-  const [loading, setLoading] = useState(true);
+export function NewUiMctbMissedCallsPage({
+  initialData,
+  initialQuery = DEFAULT_QUERY,
+}: {
+  initialData?: MctbMissedCallsListData;
+  initialQuery?: ListQuery;
+}) {
+  const [data, setData] = useState<MctbMissedCallsListData | null>(initialData ?? null);
+  const [query, setQuery] = useState<ListQuery>(initialQuery);
+  const [loading, setLoading] = useState(!initialData);
 
   const load = useCallback(async () => {
     setLoading(true);

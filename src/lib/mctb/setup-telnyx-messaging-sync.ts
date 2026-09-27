@@ -53,7 +53,10 @@ export async function syncMctbSetupPhoneMessagingFromTelnyx(
   }
 }
 
-/** Reload setup phone options after a Telnyx sync. */
+/**
+ * Reload setup phone options after a live Telnyx reconcile.
+ * Do not call on read-path GET handlers (setup overview, shell) — use {@link loadMctbSetupPhoneOptions} instead.
+ */
 export async function loadMctbSetupPhoneOptionsWithTelnyxSync(
   workspaceId: string,
 ): Promise<WorkspaceAccessiblePhoneRow[]> {

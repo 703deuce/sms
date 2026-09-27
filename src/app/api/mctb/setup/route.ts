@@ -120,7 +120,7 @@ export async function GET() {
     await Promise.all([
     loadMissedCallTextConfig(workspaceId),
     loadMissedCallTextBack(workspaceId),
-    loadMctbSetupPhoneOptionsWithTelnyxSync(workspaceId),
+    loadMctbSetupPhoneOptions(workspaceId),
     loadComplianceOverview(workspaceId),
     loadPhoneNumbers(workspaceId, { includeLinked: true }),
     loadAdminMctbTestFlags(workspaceId),

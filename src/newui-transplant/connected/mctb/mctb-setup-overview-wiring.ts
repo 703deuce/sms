@@ -65,13 +65,9 @@ export function useMctbSetupOverviewWiring(senderFallback: string): {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [setupRes, overviewRes, exclRes, handoffRes, onboardRes, liveRes] = await Promise.all([
+      const [setupRes, onboardRes] = await Promise.all([
         fetch("/api/mctb/setup", { cache: "no-store" }),
-        fetch("/api/mctb/overview", { cache: "no-store" }),
-        fetch("/api/mctb/exclusions", { cache: "no-store" }),
-        fetch("/api/mctb/handoff", { cache: "no-store" }),
         fetch("/api/mctb/onboarding", { cache: "no-store" }),
-        fetch("/api/mctb/live-test", { cache: "no-store" }),
       ]);
 
       const setupJson = await setupRes.json();
@@ -82,6 +78,27 @@ export function useMctbSetupOverviewWiring(senderFallback: string): {
 
       const data = setupJson.data as SetupApi;
       setSetup(data);
+
+      if (onboardRes.ok) {
+        const ob = await onboardRes.json();
+        setForwardingVerified(Boolean(ob.state?.forwardingConnectedAt || ob.forwardingVerification?.verified));
+        setFunnelEvents(ob.state?.funnelEvents || {});
+        if (ob.state?.forwardingCarrier) setForwardingCarrier(ob.state.forwardingCarrier);
+        if (ob.state?.forwardingRingSeconds != null) setForwardingRingSeconds(ob.state.forwardingRingSeconds);
+        if (ob.state?.liveTestPassedAt) {
+          setLastTestAt(ob.state.liveTestPassedAt as string);
+          setLiveTestPassed(true);
+        }
+      }
+
+      setLoading(false);
+
+      const [overviewRes, exclRes, handoffRes, liveRes] = await Promise.all([
+        fetch("/api/mctb/overview", { cache: "no-store" }),
+        fetch("/api/mctb/exclusions", { cache: "no-store" }),
+        fetch("/api/mctb/handoff", { cache: "no-store" }),
+        fetch("/api/mctb/live-test", { cache: "no-store" }),
+      ]);
 
       if (exclRes.ok) {
         const ex = await exclRes.json();
@@ -106,18 +123,6 @@ export function useMctbSetupOverviewWiring(senderFallback: string): {
         );
         if (active.length === 0) setNotificationSummary("No recipients configured");
         else setNotificationSummary(`${emailOn ? "Email on" : "Email off"} · ${smsOn ? "SMS on" : "SMS off"}`);
-      }
-
-      if (onboardRes.ok) {
-        const ob = await onboardRes.json();
-        setForwardingVerified(Boolean(ob.state?.forwardingConnectedAt || ob.forwardingVerification?.verified));
-        setFunnelEvents(ob.state?.funnelEvents || {});
-        if (ob.state?.forwardingCarrier) setForwardingCarrier(ob.state.forwardingCarrier);
-        if (ob.state?.forwardingRingSeconds != null) setForwardingRingSeconds(ob.state.forwardingRingSeconds);
-        if (ob.state?.liveTestPassedAt) {
-          setLastTestAt(ob.state.liveTestPassedAt as string);
-          setLiveTestPassed(true);
-        }
       }
 
       if (liveRes.ok) {
