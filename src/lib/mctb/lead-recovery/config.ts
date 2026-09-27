@@ -243,6 +243,12 @@ export async function loadLeadRecoveryConfigPersisted(
   return baseConfig;
 }
 
+/** Authoritative enabled flag without policy/provider health (Handoff, shell hints). */
+export async function isLeadRecoveryAiRepliesEnabled(workspaceId: string): Promise<boolean> {
+  const config = await loadLeadRecoveryConfigPersisted(workspaceId);
+  return config.enabled;
+}
+
 export async function loadLeadRecoveryConfig(workspaceId: string): Promise<LeadRecoveryWorkspaceConfig> {
   const baseConfig = await loadLeadRecoveryConfigPersisted(workspaceId);
   const health = await computeLeadRecoveryPolicyHealth(workspaceId, baseConfig);

@@ -33,13 +33,9 @@ export function NewUiMctbAiRecoveryPage() {
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const [ctxRes, cfgRes] = await Promise.all([
-        fetch("/api/mctb/ai-recovery/context", { cache: "no-store" }),
-        fetch("/api/mctb/lead-recovery/config", { cache: "no-store" }),
-      ]);
-      if (!ctxRes.ok || !cfgRes.ok) return;
+      const ctxRes = await fetch("/api/mctb/ai-recovery/context", { cache: "no-store" });
+      if (!ctxRes.ok) return;
       const ctxJson = await ctxRes.json();
-      const cfgJson = await cfgRes.json();
       const data = ctxJson.data ?? ctxJson;
       const bookingLinks = Array.isArray(data.booking?.links) ? data.booking.links : [];
 
@@ -52,7 +48,7 @@ export function NewUiMctbAiRecoveryPage() {
       });
       setEnabled(Boolean(data.recovery?.enabled));
 
-      const rawCaps = cfgJson.data?.config?.collectCapabilities;
+      const rawCaps = data.recovery?.collectCapabilities;
       const caps = (Array.isArray(rawCaps) ? rawCaps : []) as LeadRecoveryCollectField[];
       const derived = deriveSimplifiedFieldEnabled(caps);
       setFields(Object.values(derived).some(Boolean) ? derived : DEFAULT_FIELDS);

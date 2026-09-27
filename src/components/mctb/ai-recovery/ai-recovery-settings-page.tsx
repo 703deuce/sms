@@ -28,7 +28,11 @@ type ContextData = {
     knowledgeEditHref: string;
   };
   messaging: { ready: boolean; senderLabel: string; setupHref: string };
-  recovery: { enabled: boolean; bookingLinkId: string | null };
+  recovery: {
+    enabled: boolean;
+    bookingLinkId: string | null;
+    collectCapabilities?: string[];
+  };
   booking: {
     configAvailable: boolean;
     links: MctbBookingLinkDto[];
@@ -107,14 +111,9 @@ export function AiRecoverySettingsPage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const [ctxRes, cfgRes] = await Promise.all([
-        fetch("/api/mctb/ai-recovery/context", { cache: "no-store" }),
-        fetch("/api/mctb/lead-recovery/config", { cache: "no-store" }),
-      ]);
+      const ctxRes = await fetch("/api/mctb/ai-recovery/context", { cache: "no-store" });
       const ctxJson = await ctxRes.json();
-      const cfgJson = await cfgRes.json();
       if (!ctxRes.ok) throw new Error(ctxJson.error || "Could not load AI Recovery");
-      if (!cfgRes.ok) throw new Error(cfgJson.error || "Could not load settings");
 
       const context = ctxJson.data as ContextData;
       const bookingLinks = Array.isArray(context.booking?.links) ? context.booking.links : [];
@@ -128,7 +127,7 @@ export function AiRecoverySettingsPage() {
       };
       setCtx(safeContext);
       setEnabled(Boolean(context.recovery.enabled));
-      const rawCaps = cfgJson.data?.config?.collectCapabilities;
+      const rawCaps = context.recovery?.collectCapabilities;
       const caps = (Array.isArray(rawCaps) ? rawCaps : []) as LeadRecoveryCollectField[];
       const derived = deriveSimplifiedFieldEnabled(caps);
       const anyOn = Object.values(derived).some(Boolean);

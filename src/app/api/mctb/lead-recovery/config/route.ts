@@ -2,10 +2,12 @@ import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import {
   loadLeadRecoveryConfig,
+  loadLeadRecoveryConfigPersisted,
   saveLeadRecoveryConfig,
 } from "@/lib/mctb/lead-recovery/config";
 import { simulateLeadRecoveryTurn } from "@/lib/mctb/lead-recovery/simulation";
 import { computeLeadRecoveryPolicyHealth } from "@/lib/mctb/lead-recovery/policy-health";
+import { buildLeadRecoveryV1ConfigGetPayload } from "@/lib/mctb/lead-recovery/v1-config-api-payload";
 import { intentsForEnabledScenarios } from "@/lib/mctb/lead-recovery/scenarios";
 import type { LeadRecoveryScenarioKey } from "@/lib/mctb/lead-recovery/types";
 import { loadMctbAiBookingConfig } from "@/lib/mctb/ai-booking/config";
@@ -18,45 +20,62 @@ export async function GET(request: Request) {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
     const url = new URL(request.url);
-    const config = await loadLeadRecoveryConfig(auth.workspaceId);
-    const health = await computeLeadRecoveryPolicyHealth(auth.workspaceId, config);
-    const [aiBooking, aiReadiness, stripeCaps, brain] = await Promise.all([
-      loadMctbAiBookingConfig(auth.workspaceId),
-      evaluateMctbAiBookingReadiness(auth.workspaceId),
-      getStripeTextToPayCapabilities(auth.workspaceId),
-      loadBusinessBrain(auth.workspaceId),
-    ]);
-    const approvedKnowledge = brain.knowledgeFacts.filter(
-      (f) => (f.status || "approved") === "approved",
-    ).length;
-    const providers = {
-      booking: {
-        provider: aiBooking.provider,
-        connected: aiReadiness.providerConnected,
-        ready: aiReadiness.ready,
-        reason: aiReadiness.reason,
-        calendarLabel: aiBooking.calendarId || aiBooking.serviceName || null,
-        eventTypeLabel: aiBooking.eventTypeUri || aiBooking.eventTypeId || null,
-      },
-      stripe: {
-        connected: stripeCaps.connected,
-        canCharge: stripeCaps.canCreateCheckoutSession,
-      },
-    };
-    const knowledge = {
-      approvedCount: approvedKnowledge,
-      ready: approvedKnowledge > 0,
-    };
+    const providerDiagnostics = url.searchParams.get("providerDiagnostics") === "1";
+
+    if (providerDiagnostics) {
+      const config = await loadLeadRecoveryConfig(auth.workspaceId);
+      const health = await computeLeadRecoveryPolicyHealth(auth.workspaceId, config);
+      const [aiBooking, aiReadiness, stripeCaps, brain] = await Promise.all([
+        loadMctbAiBookingConfig(auth.workspaceId),
+        evaluateMctbAiBookingReadiness(auth.workspaceId),
+        getStripeTextToPayCapabilities(auth.workspaceId),
+        loadBusinessBrain(auth.workspaceId),
+      ]);
+      const approvedKnowledge = brain.knowledgeFacts.filter(
+        (f) => (f.status || "approved") === "approved",
+      ).length;
+      const providers = {
+        booking: {
+          provider: aiBooking.provider,
+          connected: aiReadiness.providerConnected,
+          ready: aiReadiness.ready,
+          reason: aiReadiness.reason,
+          calendarLabel: aiBooking.calendarId || aiBooking.serviceName || null,
+          eventTypeLabel: aiBooking.eventTypeUri || aiBooking.eventTypeId || null,
+        },
+        stripe: {
+          connected: stripeCaps.connected,
+          canCharge: stripeCaps.canCreateCheckoutSession,
+        },
+      };
+      const knowledge = {
+        approvedCount: approvedKnowledge,
+        ready: approvedKnowledge > 0,
+      };
+      if (url.searchParams.get("simulate") === "1") {
+        const message = url.searchParams.get("message") || "";
+        const simulation = await simulateLeadRecoveryTurn({
+          workspaceId: auth.workspaceId,
+          config,
+          message,
+        });
+        return NextResponse.json({ data: { config, health, simulation, providers, knowledge } });
+      }
+      return NextResponse.json({ data: { config, health, providers, knowledge } });
+    }
+
+    const config = await loadLeadRecoveryConfigPersisted(auth.workspaceId);
+    const payload = await buildLeadRecoveryV1ConfigGetPayload(auth.workspaceId, config);
     if (url.searchParams.get("simulate") === "1") {
       const message = url.searchParams.get("message") || "";
       const simulation = await simulateLeadRecoveryTurn({
         workspaceId: auth.workspaceId,
-        config,
+        config: payload.config,
         message,
       });
-      return NextResponse.json({ data: { config, health, simulation, providers, knowledge } });
+      return NextResponse.json({ data: { ...payload, simulation } });
     }
-    return NextResponse.json({ data: { config, health, providers, knowledge } });
+    return NextResponse.json({ data: payload });
   } catch (err) {
     return jsonError(err, 500);
   }

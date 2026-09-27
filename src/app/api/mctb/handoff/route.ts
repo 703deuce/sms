@@ -18,14 +18,14 @@ export async function GET() {
   await ensureMctbHandoffConfig(workspaceId);
   const config = await loadMctbHandoffConfig(workspaceId);
   const recipients = await loadMctbNotificationRecipients(workspaceId);
-  const { loadLeadRecoveryConfig } = await import("@/lib/mctb/lead-recovery/config");
-  const lr = await loadLeadRecoveryConfig(workspaceId);
+  const { isLeadRecoveryAiRepliesEnabled } = await import("@/lib/mctb/lead-recovery/config");
+  const aiRepliesEnabled = await isLeadRecoveryAiRepliesEnabled(workspaceId);
   return NextResponse.json({
     data: {
       config,
       recipients,
       launch: {
-        aiRepliesEnabled: lr.enabled && lr.policyHealth !== "DISABLED",
+        aiRepliesEnabled,
       },
     },
   });
@@ -80,10 +80,9 @@ export async function POST(req: Request) {
 
   let config = await loadMctbHandoffConfig(workspaceId);
   if (body.config) {
-    const { loadLeadRecoveryConfig } = await import("@/lib/mctb/lead-recovery/config");
-    const lr = await loadLeadRecoveryConfig(workspaceId);
+    const { isLeadRecoveryAiRepliesEnabled } = await import("@/lib/mctb/lead-recovery/config");
     const patch = { ...body.config };
-    if (lr.enabled && lr.policyHealth !== "DISABLED") {
+    if (await isLeadRecoveryAiRepliesEnabled(workspaceId)) {
       patch.responseMode = "ai_conversation";
     }
     config = await saveMctbHandoffConfig(workspaceId, patch);

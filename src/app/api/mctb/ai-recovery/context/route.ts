@@ -6,7 +6,7 @@ import { hasMctbAiBookingEntitlement } from "@/lib/mctb/ai-booking/entitlement";
 import { hasActiveMctbPaidEntitlement } from "@/lib/mctb/entitlement";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { isMctbSetupMessagingReady } from "@/lib/mctb/setup-messaging-ready";
-import { loadLeadRecoveryConfig } from "@/lib/mctb/lead-recovery/config";
+import { loadLeadRecoveryConfigPersisted } from "@/lib/mctb/lead-recovery/config";
 import { senderModeCustomerLabel } from "@/lib/mctb/missed-calls-booking-action";
 import { deriveRequiredActions } from "@/lib/compliance-helpers";
 import { loadComplianceOverview, loadPhoneNumbers } from "@/lib/workspace-data";
@@ -21,7 +21,7 @@ export async function GET() {
     const [business, config, mctbConfig, entitled, paid, links, phoneNumbers, compliance, adminFlags] =
       await Promise.all([
         loadMctbApprovedBusinessInformation(workspaceId),
-        loadLeadRecoveryConfig(workspaceId),
+        loadLeadRecoveryConfigPersisted(workspaceId),
         loadMissedCallTextConfig(workspaceId),
         hasMctbAiBookingEntitlement(workspaceId),
         hasActiveMctbPaidEntitlement(workspaceId),
@@ -71,6 +71,7 @@ export async function GET() {
         recovery: {
           enabled: config.enabled,
           bookingLinkId: config.bookingLinkId,
+          collectCapabilities: config.collectCapabilities,
         },
         booking: {
           configAvailable: bookingConfigAvailable,

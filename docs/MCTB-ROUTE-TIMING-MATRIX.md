@@ -12,7 +12,31 @@ WORKSPACE_ID=ws_1 NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx 
 
 ---
 
-## ws_1 snapshot (2026-09-27, post-Overview scope correction)
+## ws_1 snapshot (2026-09-27, post AI Recovery + Handoff fix)
+
+See `docs/MCTB-AI-RECOVERY-HANDOFF-TIMING-FIX-REPORT.md` for before/after call graphs.
+
+**Customer-visible FAIL count: 0.** Reference row `loadLeadRecoveryConfig (full)` remains slow (~4.6s) for runtime/save — not used on page cold load.
+
+| Route | Phase | ms | Status |
+|-------|-------|---:|--------|
+| /mctb | SSR core | 584 | OK |
+| /mctb | enrichment | 445 | OK |
+| /mctb/missed-calls | list | 690 | OK |
+| /mctb/missed-calls/[id] | detail | 383 | OK |
+| /mctb/conversations | list | 342 | OK |
+| /mctb/conversations | thread | 247 | OK |
+| /mctb/analytics | 30d | 456 | OK |
+| /mctb/voicemail | list | 104 | OK |
+| /mctb/setup | setup GET | 270 | OK |
+| /mctb/ai-recovery | context cold | 470 | OK |
+| /mctb/ai-recovery | config V1 | 509 | OK |
+| /mctb/setup/* | handoff GET | 707 | OK |
+| /mctb/compliance/consent | consent-log | 1132 | WARN |
+
+---
+
+## ws_1 snapshot (2026-09-27, post-Overview scope correction only — superseded)
 
 | Route | Phase | ms | Status | Risk flags |
 |-------|-------|---:|--------|------------|

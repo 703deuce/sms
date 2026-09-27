@@ -213,15 +213,20 @@ async function main() {
   );
 
   // --- /mctb/ai-recovery (Stage 2 parallel fetches) ---
+  const { buildLeadRecoveryV1ConfigGetPayload } = await import(
+    "@/lib/mctb/lead-recovery/v1-config-api-payload"
+  );
+  const { isLeadRecoveryAiRepliesEnabled } = await import("@/lib/mctb/lead-recovery/config");
+
   rows.push(
     await timeRow(
       "/mctb/ai-recovery",
-      "client /api/mctb/ai-recovery/context",
-      ["FULL_LR_CONFIG"],
+      "client /api/mctb/ai-recovery/context (Stage 2 cold load)",
+      [],
       async () => {
         await Promise.all([
           loadMctbApprovedBusinessInformation(workspaceId),
-          loadLeadRecoveryConfig(workspaceId),
+          loadLeadRecoveryConfigPersisted(workspaceId),
           loadMissedCallTextConfig(workspaceId),
           hasMctbAiBookingEntitlement(workspaceId),
           hasActiveMctbPaidEntitlement(workspaceId),
@@ -236,64 +241,42 @@ async function main() {
   rows.push(
     await timeRow(
       "/mctb/ai-recovery",
-      "client /api/mctb/lead-recovery/config GET",
-      ["FULL_LR_CONFIG", "AI_BOOK_READINESS"],
+      "client /api/mctb/lead-recovery/config GET (V1 default)",
+      [],
       async () => {
-        const config = await loadLeadRecoveryConfig(workspaceId);
-        await computeLeadRecoveryPolicyHealth(workspaceId, config);
-        await Promise.all([
-          loadMctbAiBookingConfig(workspaceId),
-          evaluateMctbAiBookingReadiness(workspaceId),
-          getStripeTextToPayCapabilities(workspaceId),
-          loadBusinessBrain(workspaceId),
-        ]);
+        const config = await loadLeadRecoveryConfigPersisted(workspaceId);
+        await buildLeadRecoveryV1ConfigGetPayload(workspaceId, config);
       },
-      "Mirrors route: config+health+readiness+brain",
     ),
   );
   rows.push(
     await timeRow(
       "/mctb/ai-recovery",
-      "page cold load (both fetches parallel)",
-      ["FULL_LR_CONFIG", "AI_BOOK_READINESS", "LR_CONFIG_TWICE"],
+      "page cold load (Stage 2: context only)",
+      [],
       async () => {
         await Promise.all([
-          (async () => {
-            await Promise.all([
-              loadMctbApprovedBusinessInformation(workspaceId),
-              loadLeadRecoveryConfig(workspaceId),
-              loadMissedCallTextConfig(workspaceId),
-              hasMctbAiBookingEntitlement(workspaceId),
-              hasActiveMctbPaidEntitlement(workspaceId),
-              listMctbBookingLinks(workspaceId),
-              loadPhoneNumbers(workspaceId, { includeLinked: true }),
-              loadComplianceOverview(workspaceId),
-              loadAdminMctbTestFlags(workspaceId),
-            ]);
-          })(),
-          (async () => {
-            const config = await loadLeadRecoveryConfig(workspaceId);
-            await computeLeadRecoveryPolicyHealth(workspaceId, config);
-            await Promise.all([
-              loadMctbAiBookingConfig(workspaceId),
-              evaluateMctbAiBookingReadiness(workspaceId),
-              getStripeTextToPayCapabilities(workspaceId),
-              loadBusinessBrain(workspaceId),
-            ]);
-          })(),
+          loadMctbApprovedBusinessInformation(workspaceId),
+          loadLeadRecoveryConfigPersisted(workspaceId),
+          loadMissedCallTextConfig(workspaceId),
+          hasMctbAiBookingEntitlement(workspaceId),
+          hasActiveMctbPaidEntitlement(workspaceId),
+          listMctbBookingLinks(workspaceId),
+          loadPhoneNumbers(workspaceId, { includeLinked: true }),
+          loadComplianceOverview(workspaceId),
+          loadAdminMctbTestFlags(workspaceId),
         ]);
       },
-      "Worst-case wall clock if both APIs fire together",
     ),
   );
 
   // --- setup satellites ---
   rows.push(
-    await timeRow("/mctb/setup/*", "client /api/mctb/handoff GET", ["FULL_LR_CONFIG"], async () => {
+    await timeRow("/mctb/setup/*", "client /api/mctb/handoff GET", [], async () => {
       await ensureMctbHandoffConfig(workspaceId);
       await loadMctbHandoffConfig(workspaceId);
       await loadMctbNotificationRecipients(workspaceId);
-      await loadLeadRecoveryConfig(workspaceId);
+      await isLeadRecoveryAiRepliesEnabled(workspaceId);
     }),
   );
   rows.push(
@@ -355,7 +338,8 @@ async function main() {
 
   for (const r of rows) {
     const status = !r.ok ? "ERROR" : r.ms >= SLOW_MS ? "FAIL" : r.ms >= WARN_MS ? "WARN" : "OK";
-    if (status === "FAIL") failures.push(r);
+    const customerVisible = !r.route.startsWith("(reference)") && !r.route.startsWith("(shell)");
+    if (status === "FAIL" && customerVisible) failures.push(r);
     if (status === "WARN") warnings.push(r);
     const flags = r.flags.length ? r.flags.join(",") : "—";
     console.log(`| ${r.route} | ${r.phase} | ${r.ms} | ${status} | ${flags} |`);
