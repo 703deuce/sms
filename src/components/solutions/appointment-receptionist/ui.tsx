@@ -1,8 +1,11 @@
 "use client";
 
+import { Panel, Pill } from "@/newui-transplant/components/app/kit";
+import { Button as LegacyButton } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Check } from "lucide-react";
 import type { ReactNode } from "react";
+import { OpusChoiceCard, OpusRadioRow } from "./wizard-opus-ui";
 
 export function SelectableCard({
   selected,
@@ -13,6 +16,7 @@ export function SelectableCard({
   children,
   className,
   disabled,
+  variant = "legacy",
 }: {
   selected?: boolean;
   onClick?: () => void;
@@ -22,14 +26,31 @@ export function SelectableCard({
   children?: ReactNode;
   className?: string;
   disabled?: boolean;
+  variant?: "legacy" | "opus";
 }) {
+  if (variant === "opus") {
+    return (
+      <OpusChoiceCard
+        selected={selected}
+        onClick={onClick}
+        title={title}
+        description={description}
+        icon={icon}
+        disabled={disabled}
+        className={className}
+      >
+        {children}
+      </OpusChoiceCard>
+    );
+  }
   return (
-    <button
+    <LegacyButton
       type="button"
+      variant="outline"
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "relative flex w-full flex-col rounded-xl border bg-card p-4 text-left transition",
+        "relative flex h-auto w-full flex-col items-stretch rounded-xl border bg-card p-4 text-left font-normal transition",
         selected
           ? "border-primary shadow-[0_0_0_1px_rgba(16,185,129,0.28)]"
           : "border-border hover:border-primary/40 hover:bg-muted/30",
@@ -56,7 +77,7 @@ export function SelectableCard({
           {children}
         </div>
       </div>
-    </button>
+    </LegacyButton>
   );
 }
 
@@ -65,18 +86,26 @@ export function RadioRow({
   onClick,
   label,
   description,
+  variant = "legacy",
 }: {
   selected: boolean;
   onClick: () => void;
   label: string;
   description?: string;
+  variant?: "legacy" | "opus";
 }) {
+  if (variant === "opus") {
+    return (
+      <OpusRadioRow selected={selected} onClick={onClick} label={label} description={description} />
+    );
+  }
   return (
-    <button
+    <LegacyButton
       type="button"
+      variant="outline"
       onClick={onClick}
       className={cn(
-        "flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left transition",
+        "flex h-auto w-full items-start justify-start gap-3 rounded-lg border px-4 py-3 text-left text-sm font-normal transition",
         selected
           ? "border-primary bg-primary/5"
           : "border-border bg-card hover:border-primary/30",
@@ -96,11 +125,24 @@ export function RadioRow({
           <span className="mt-0.5 block text-xs text-muted-foreground">{description}</span>
         ) : null}
       </span>
-    </button>
+    </LegacyButton>
   );
 }
 
-export function InfoCallout({ children }: { children: ReactNode }) {
+export function InfoCallout({
+  children,
+  variant = "legacy",
+}: {
+  children: ReactNode;
+  variant?: "legacy" | "opus";
+}) {
+  if (variant === "opus") {
+    return (
+      <Panel className="text-xs leading-relaxed text-muted-foreground shadow-none">
+        {children}
+      </Panel>
+    );
+  }
   return (
     <div className="rounded-xl border border-accent/20 bg-accent/5 px-3.5 py-3 text-xs leading-relaxed text-foreground/80">
       {children}
@@ -111,9 +153,11 @@ export function InfoCallout({ children }: { children: ReactNode }) {
 export function StatusPill({
   tone,
   children,
+  variant = "legacy",
 }: {
   tone: "success" | "warning" | "muted" | "info";
   children: ReactNode;
+  variant?: "legacy" | "opus";
 }) {
   const styles = {
     success: "bg-success/10 text-success",
@@ -121,6 +165,17 @@ export function StatusPill({
     muted: "bg-muted text-muted-foreground",
     info: "bg-accent/10 text-accent",
   } as const;
+  if (variant === "opus") {
+    const pillTone =
+      tone === "success"
+        ? "success"
+        : tone === "warning"
+          ? "warning"
+          : tone === "info"
+            ? "primary"
+            : "neutral";
+    return <Pill tone={pillTone}>{children}</Pill>;
+  }
   return (
     <span
       className={cn(
@@ -136,10 +191,21 @@ export function StatusPill({
 export function SidePanel({
   title,
   children,
+  variant = "legacy",
 }: {
   title: string;
   children: ReactNode;
+  variant?: "legacy" | "opus";
 }) {
+  if (variant === "opus") {
+    return (
+      <aside className="hidden w-[300px] shrink-0 xl:block">
+        <Panel title={title} className="sticky top-4 shadow-xs">
+          {children}
+        </Panel>
+      </aside>
+    );
+  }
   return (
     <aside className="hidden w-[300px] shrink-0 xl:block">
       <div className="sticky top-4 space-y-4 rounded-xl border border-border bg-card p-4 shadow-sm">

@@ -9,6 +9,7 @@ import { compileBusinessHoursAmyDisplay } from "@/lib/voice-v3/config/business-h
 import { customerSourceStatusLabel } from "@/lib/voice/knowledge/source-status-label";
 import { upsertKnowledgeItem } from "@/lib/solutions/appointment-receptionist/knowledge-items-helpers";
 import { normalizeWebsiteUrl } from "@/lib/solutions/appointment-receptionist/knowledge-items-helpers";
+import { buildReceptionistEditHref } from "@/lib/voice/receptionist/wizard-step-url";
 
 type KbSource = {
   id: string;
@@ -246,7 +247,12 @@ export function NewUiVoiceKnowledgePage() {
         };
         await persistKnowledgeState(next);
       },
-      onEditHours: () => router.push("/voice/setup"),
+      onEditHours: () => {
+        const params = new URLSearchParams();
+        if (state.agentId) params.set("agentId", state.agentId);
+        if (state.setupId) params.set("setupId", state.setupId);
+        router.push(buildReceptionistEditHref(params, { step: "information" }));
+      },
     };
   }, [
     loading,

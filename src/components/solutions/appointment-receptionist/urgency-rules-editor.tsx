@@ -3,7 +3,12 @@
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
 import type { VoiceV2UrgencyRuleRow } from "@/lib/voice-receptionist-wizard/after-hours-handling-types";
 import { wizardIntakeFieldOptions } from "@/lib/solutions/appointment-receptionist/wizard-intake-field-options";
-import { Input, Label } from "@/components/ui/input";
+import {
+  pickWizardFieldComponents,
+  type WizardPresentation,
+  WizardSelectField,
+} from "./wizard-field-kit";
+import { OpusCompactPanel } from "./wizard-opus-ui";
 
 const OPERATORS: Array<{ value: VoiceV2UrgencyRuleRow["operator"]; label: string }> = [
   { value: "EQUALS", label: "equals" },
@@ -38,10 +43,14 @@ const FALLBACKS = [
 export function UrgencyRulesEditor({
   state,
   patch,
+  presentation = "legacy",
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
+  presentation?: WizardPresentation;
 }) {
+  const { Input, Label, Button } = pickWizardFieldComponents(presentation);
+  const isOpus = presentation === "opus";
   const fieldOptions = wizardIntakeFieldOptions(state);
   const planId = state.defaultTransferPlanId?.trim() || "default_transfer_plan";
   const rules = state.urgencyRules || [];
@@ -58,9 +67,10 @@ export function UrgencyRulesEditor({
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Urgency rules
         </p>
-        <button
+        <Button
           type="button"
-          className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold"
+          variant="outline"
+          size="sm"
           onClick={() =>
             patch({
               urgencyRules: [
@@ -80,7 +90,7 @@ export function UrgencyRulesEditor({
           }
         >
           + Add rule
-        </button>
+        </Button>
       </div>
       {rules.length === 0 ? (
         <p className="text-xs text-muted-foreground">
@@ -89,44 +99,30 @@ export function UrgencyRulesEditor({
         </p>
       ) : null}
       {rules.map((rule, ri) => (
-        <div
-          key={rule.id}
-          className="space-y-2 rounded-lg border border-border p-3 text-xs"
-        >
+        <OpusCompactPanel key={rule.id} isOpus={isOpus} className="text-xs">
           <div className="grid gap-2 sm:grid-cols-2">
-            <div>
-              <Label className="text-[11px]">When field</Label>
-              <select
-                className="mt-1 h-9 w-full rounded-lg border border-border bg-card px-2"
-                value={rule.fieldKey}
-                onChange={(e) => updateRule(ri, { ...rule, fieldKey: e.target.value })}
-              >
-                {fieldOptions.map((f) => (
-                  <option key={f.key} value={f.key} disabled={!f.enabled}>
-                    {f.label} ({f.key}){f.enabled ? "" : " — disabled"}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <Label className="text-[11px]">Operator</Label>
-              <select
-                className="mt-1 h-9 w-full rounded-lg border border-border bg-card px-2"
-                value={rule.operator}
-                onChange={(e) =>
-                  updateRule(ri, {
-                    ...rule,
-                    operator: e.target.value as VoiceV2UrgencyRuleRow["operator"],
-                  })
-                }
-              >
-                {OPERATORS.map((op) => (
-                  <option key={op.value} value={op.value}>
-                    {op.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <WizardSelectField
+              presentation={presentation}
+              label="When field"
+              value={rule.fieldKey}
+              onChange={(v) => updateRule(ri, { ...rule, fieldKey: v })}
+              options={fieldOptions.map((f) => ({
+                value: f.key,
+                label: `${f.label} (${f.key})${f.enabled ? "" : " — disabled"}`,
+              }))}
+            />
+            <WizardSelectField
+              presentation={presentation}
+              label="Operator"
+              value={rule.operator}
+              onChange={(v) =>
+                updateRule(ri, {
+                  ...rule,
+                  operator: v as VoiceV2UrgencyRuleRow["operator"],
+                })
+              }
+              options={OPERATORS.map((op) => ({ value: op.value, label: op.label }))}
+            />
             <div className="sm:col-span-2">
               <Label className="text-[11px]">Value</Label>
               <Input
@@ -137,74 +133,54 @@ export function UrgencyRulesEditor({
                 disabled={rule.operator === "EXISTS" || rule.operator === "NOT_EXISTS"}
               />
             </div>
-            <div>
-              <Label className="text-[11px]">Severity</Label>
-              <select
-                className="mt-1 h-9 w-full rounded-lg border border-border bg-card px-2"
-                value={rule.severity}
-                onChange={(e) =>
-                  updateRule(ri, {
-                    ...rule,
-                    severity: e.target.value as VoiceV2UrgencyRuleRow["severity"],
-                  })
-                }
-              >
-                <option value="URGENT">Urgent</option>
-                <option value="CRITICAL">Critical</option>
-              </select>
-            </div>
-            <div>
-              <Label className="text-[11px]">Action</Label>
-              <select
-                className="mt-1 h-9 w-full rounded-lg border border-border bg-card px-2"
-                value={rule.action}
-                onChange={(e) =>
-                  updateRule(ri, {
-                    ...rule,
-                    action: e.target.value as VoiceV2UrgencyRuleRow["action"],
-                  })
-                }
-              >
-                {ACTIONS.map((a) => (
-                  <option key={a.value} value={a.value}>
-                    {a.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <WizardSelectField
+              presentation={presentation}
+              label="Severity"
+              value={rule.severity}
+              onChange={(v) =>
+                updateRule(ri, {
+                  ...rule,
+                  severity: v as VoiceV2UrgencyRuleRow["severity"],
+                })
+              }
+              options={[
+                { value: "URGENT", label: "Urgent" },
+                { value: "CRITICAL", label: "Critical" },
+              ]}
+            />
+            <WizardSelectField
+              presentation={presentation}
+              label="Action"
+              value={rule.action}
+              onChange={(v) =>
+                updateRule(ri, {
+                  ...rule,
+                  action: v as VoiceV2UrgencyRuleRow["action"],
+                })
+              }
+              options={ACTIONS.map((a) => ({ value: a.value, label: a.label }))}
+            />
             {rule.action === "TRANSFER" ? (
               <>
-                <div>
-                  <Label className="text-[11px]">Transfer plan</Label>
-                  <select
-                    className="mt-1 h-9 w-full rounded-lg border border-border bg-card px-2"
-                    value={rule.transferPlanId || planId}
-                    onChange={(e) =>
-                      updateRule(ri, { ...rule, transferPlanId: e.target.value })
-                    }
-                  >
-                    <option value={planId}>Default transfer plan</option>
-                  </select>
-                </div>
-                <div>
-                  <Label className="text-[11px]">Fallback</Label>
-                  <select
-                    className="mt-1 h-9 w-full rounded-lg border border-border bg-card px-2"
-                    value={rule.fallbackAction || "CALLBACK"}
-                    onChange={(e) =>
-                      updateRule(ri, {
-                        ...rule,
-                        fallbackAction: e.target.value as VoiceV2UrgencyRuleRow["fallbackAction"],
-                      })
-                    }
-                  >
-                    {FALLBACKS.map((f) => (
-                      <option key={f.value} value={f.value}>
-                        {f.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <WizardSelectField
+                  presentation={presentation}
+                  label="Transfer plan"
+                  value={rule.transferPlanId || planId}
+                  onChange={(v) => updateRule(ri, { ...rule, transferPlanId: v })}
+                  options={[{ value: planId, label: "Default transfer plan" }]}
+                />
+                <WizardSelectField
+                  presentation={presentation}
+                  label="Fallback"
+                  value={rule.fallbackAction || "CALLBACK"}
+                  onChange={(v) =>
+                    updateRule(ri, {
+                      ...rule,
+                      fallbackAction: v as VoiceV2UrgencyRuleRow["fallbackAction"],
+                    })
+                  }
+                  options={FALLBACKS.map((f) => ({ value: f.value, label: f.label }))}
+                />
               </>
             ) : null}
             <div className="sm:col-span-2">
@@ -217,16 +193,20 @@ export function UrgencyRulesEditor({
               />
             </div>
           </div>
-          <button
+          <Button
             type="button"
-            className="text-[11px] font-semibold text-rose-600"
+            variant="ghost"
+            size="sm"
+            className="text-destructive"
             onClick={() =>
-              patch({ urgencyRules: rules.filter((_, i) => i !== ri) })
+              patch({
+                urgencyRules: rules.filter((_, i) => i !== ri),
+              })
             }
           >
-            Delete rule
-          </button>
-        </div>
+            Remove rule
+          </Button>
+        </OpusCompactPanel>
       ))}
     </div>
   );

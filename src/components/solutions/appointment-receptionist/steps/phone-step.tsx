@@ -10,6 +10,10 @@ import type {
 import { formatPhone } from "@/lib/utils";
 import { CheckCircle2, Circle, Play } from "lucide-react";
 import { useEffect, useState } from "react";
+import { ButtonLink } from "@/newui-transplant/components/app/button-link";
+import { Panel, Stat } from "@/newui-transplant/components/app/kit";
+import { pickWizardFieldComponents, WizardSelectField } from "../wizard-field-kit";
+import { OpusCalloutPanel, OpusDensePanel, WizardSection } from "../wizard-opus-ui";
 import { InfoCallout, RadioRow, SelectableCard, SidePanel, StatusPill } from "../ui";
 
 type PhoneRow = {
@@ -34,12 +38,18 @@ export function PhoneStep({
   state,
   patch,
   presentation = "legacy",
+  hideLegacyIngressControls = false,
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
-  presentation?: "legacy" | "mctb";
+  presentation?: "legacy" | "mctb" | "opus";
+  /** CFNA after-hours launch — carrier rings business line; hide Transovo ring-team UI. */
+  hideLegacyIngressControls?: boolean;
 }) {
   const isMctb = presentation === "mctb";
+  const isOpus = presentation === "opus";
+  const uiVariant = isOpus ? "opus" : "legacy";
+  const { Input, Label, Textarea, Button } = pickWizardFieldComponents(presentation);
   const [numbers, setNumbers] = useState<PhoneRow[]>([]);
   const [mctbLineReuse, setMctbLineReuse] = useState<{
     ingressE164: string;
@@ -119,39 +129,65 @@ export function PhoneStep({
     );
   }
 
+  const pageTitle = isMctb
+    ? "Where should the agent answer?"
+    : "Where should the receptionist answer?";
+
+  const readinessItems = [
+    { label: "Phone number", ready: Boolean(state.phoneNumberId), optional: false },
+    { label: "Inbound calling", ready: true, optional: false },
+    { label: "AI Voice", ready: true, optional: false },
+    { label: "Call recording", ready: state.callRecording !== "off", optional: true },
+  ];
+  const readinessStrip = isOpus ? (
+    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      {readinessItems.map((item) => (
+        <Stat
+          key={item.label}
+          label={item.label}
+          value={item.ready ? "Ready" : item.optional ? "Optional" : "Needed"}
+        />
+      ))}
+    </div>
+  ) : (
+    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      {readinessItems.map((item) => (
+        <div
+          key={item.label}
+          className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5 text-xs"
+        >
+          {item.ready ? (
+            <CheckCircle2 className="h-4 w-4 text-success" />
+          ) : (
+            <Circle className="h-4 w-4 text-muted-foreground" />
+          )}
+          <div>
+            <p className="font-medium text-foreground">{item.label}</p>
+            <p className={item.ready ? "text-success" : "text-muted-foreground"}>
+              {item.ready ? "Ready" : item.optional ? "Optional" : "Needed"}
+            </p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <div className="flex gap-6">
       <div className="min-w-0 flex-1 space-y-8">
-        <div>
-          <h2 className="font-display text-xl font-semibold tracking-tight">
-            {isMctb ? "Where should the agent answer?" : "Where should the receptionist answer?"}
-          </h2>
-          <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-            {[
-              { label: "Phone number", ready: Boolean(state.phoneNumberId), optional: false },
-              { label: "Inbound calling", ready: true, optional: false },
-              { label: "AI Voice", ready: true, optional: false },
-              { label: "Call recording", ready: state.callRecording !== "off", optional: true },
-            ].map((item) => (
-              <div
-                key={item.label}
-                className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5 text-xs"
-              >
-                {item.ready ? (
-                  <CheckCircle2 className="h-4 w-4 text-success" />
-                ) : (
-                  <Circle className="h-4 w-4 text-muted-foreground" />
-                )}
-                <div>
-                  <p className="font-medium text-foreground">{item.label}</p>
-                  <p className={item.ready ? "text-success" : "text-muted-foreground"}>
-                    {item.ready ? "Ready" : item.optional ? "Optional" : "Needed"}
-                  </p>
-                </div>
-              </div>
-            ))}
+        {isOpus ? (
+          <Panel
+            title={pageTitle}
+            description="Choose the number callers dial and how calls are answered."
+          >
+            {readinessStrip}
+          </Panel>
+        ) : (
+          <div>
+            <h2 className="font-display text-xl font-semibold tracking-tight">{pageTitle}</h2>
+            <div className="mt-4">{readinessStrip}</div>
           </div>
-        </div>
+        )}
 
         {isMctb && mctbLineReuse ? (
           <InfoCallout>
@@ -171,6 +207,7 @@ export function PhoneStep({
         <div className="grid gap-3 md:grid-cols-3">
           {isMctb && mctbLineReuse ? (
             <SelectableCard
+              variant={uiVariant}
               selected={
                 state.phoneNumberId &&
                 state.numberSource === "forward_existing"
@@ -187,6 +224,7 @@ export function PhoneStep({
             />
           ) : null}
           <SelectableCard
+            variant={uiVariant}
             selected={state.numberSource === "existing"}
             onClick={() => patch({ numberSource: "existing" as NumberSource })}
             title="Use existing Transovo number"
@@ -197,12 +235,14 @@ export function PhoneStep({
             }
           />
           <SelectableCard
+            variant={uiVariant}
             selected={state.numberSource === "buy_new"}
             onClick={() => patch({ numberSource: "buy_new" })}
             title="Buy a new number"
             description="Get a new local or toll-free number."
           />
           <SelectableCard
+            variant={uiVariant}
             selected={
               state.numberSource === "forward_existing" ||
               state.numberSource === "connect_existing"
@@ -213,25 +253,37 @@ export function PhoneStep({
           />
         </div>
         {state.numberSource === "buy_new" ? (
-          <div className="mt-3 max-w-md rounded-xl border border-primary/30 bg-card p-4 text-sm">
-            <p className="font-medium">Buy a number in Numbers</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Open Numbers to purchase a DID, then return here and choose
-              &quot;Use existing Transovo number.&quot;
-            </p>
-            <a
-              href="/my-numbers"
-              className="mt-3 inline-flex rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
-            >
-              Open My Numbers
-            </a>
-          </div>
+          isOpus ? (
+            <OpusCalloutPanel title="Buy a number in Numbers" className="mt-3 max-w-md">
+              <p className="text-xs text-muted-foreground">
+                Open Numbers to purchase a DID, then return here and choose &quot;Use existing
+                Transovo number.&quot;
+              </p>
+              <ButtonLink href="/my-numbers" className="mt-3" variant="default">
+                Open My Numbers
+              </ButtonLink>
+            </OpusCalloutPanel>
+          ) : (
+            <div className="mt-3 max-w-md rounded-xl border border-primary/30 bg-card p-4 text-sm">
+              <p className="font-medium">Buy a number in Numbers</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Open Numbers to purchase a DID, then return here and choose
+                &quot;Use existing Transovo number.&quot;
+              </p>
+              <a
+                href="/my-numbers"
+                className="mt-3 inline-flex rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
+              >
+                Open My Numbers
+              </a>
+            </div>
+          )
         ) : null}
         {state.numberSource === "forward_existing" ||
         state.numberSource === "connect_existing" ? (
-          <div className="mt-3 max-w-lg space-y-2 rounded-xl border border-primary/30 bg-card p-4 text-sm">
-            <p className="font-medium">Forward your carrier number to Transovo</p>
-            <ol className="list-decimal space-y-1 pl-4 text-xs text-muted-foreground">
+          isOpus ? (
+            <OpusCalloutPanel title="Forward your carrier number to Transovo" className="mt-3 max-w-lg">
+              <ol className="list-decimal space-y-1 pl-4 text-xs text-muted-foreground">
               <li>Buy or pick a Transovo number below (or in My Numbers).</li>
               <li>
                 In your carrier portal, set call forwarding to that Transovo
@@ -244,9 +296,10 @@ export function PhoneStep({
             {numbers.length ? (
               <div className="mt-2 space-y-1">
                 {numbers.map((n) => (
-                  <button
+                  <RadioRow
                     key={n.id}
-                    type="button"
+                    variant={uiVariant}
+                    selected={state.phoneNumberId === n.id}
                     onClick={() =>
                       patch({
                         phoneNumberId: n.id,
@@ -254,16 +307,14 @@ export function PhoneStep({
                         numberSource: "forward_existing",
                       })
                     }
-                    className={`block w-full rounded-lg border px-2.5 py-1.5 text-left text-xs ${
-                      state.phoneNumberId === n.id
-                        ? "border-primary bg-primary/5 font-medium text-primary"
-                        : "border-border"
-                    }`}
-                  >
-                    Forward to {formatPhone(n.e164)}
-                  </button>
+                    label={`Forward to ${formatPhone(n.e164)}`}
+                  />
                 ))}
               </div>
+            ) : isOpus ? (
+              <ButtonLink href="/my-numbers" className="mt-2">
+                Get a Transovo number first
+              </ButtonLink>
             ) : (
               <a
                 href="/my-numbers"
@@ -272,17 +323,61 @@ export function PhoneStep({
                 Get a Transovo number first
               </a>
             )}
-          </div>
+            </OpusCalloutPanel>
+          ) : (
+            <div className="mt-3 max-w-lg space-y-2 rounded-xl border border-primary/30 bg-card p-4 text-sm">
+              <p className="font-medium">Forward your carrier number to Transovo</p>
+              <ol className="list-decimal space-y-1 pl-4 text-xs text-muted-foreground">
+                <li>Buy or pick a Transovo number below (or in My Numbers).</li>
+                <li>In your carrier portal, set call forwarding to that Transovo number.</li>
+                <li>Select the Transovo number here so Activate publishes AI routing.</li>
+              </ol>
+              {numbers.length ? (
+                <div className="mt-2 space-y-1">
+                  {numbers.map((n) => (
+                    <RadioRow
+                      key={n.id}
+                      variant={uiVariant}
+                      selected={state.phoneNumberId === n.id}
+                      onClick={() =>
+                        patch({
+                          phoneNumberId: n.id,
+                          phoneNumberE164: n.e164,
+                          numberSource: "forward_existing",
+                        })
+                      }
+                      label={`Forward to ${formatPhone(n.e164)}`}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <a
+                  href="/my-numbers"
+                  className="mt-2 inline-flex text-xs font-medium text-primary underline"
+                >
+                  Get a Transovo number first
+                </a>
+              )}
+            </div>
+          )
         ) : null}
         {state.numberSource === "existing" && numbers.length ? (
           <div className="mt-3 space-y-1.5">
             {numbers.map((n) => {
               const ownedByOther =
                 n.aiOwner && n.aiOwner.id !== state.agentId ? n.aiOwner : null;
+              const subline = n.mctbTexmlLocked
+                ? "MCTB TeXML ingress — activate here to route this number to this receptionist"
+                : ownedByOther
+                  ? `Currently answered by ${ownedByOther.name}${ownedByOther.status === "ACTIVE" ? " (live)" : ""} — activate to switch`
+                  : n.aiOwner?.id === state.agentId
+                    ? "Already assigned to this receptionist"
+                    : "Available — activate to put this receptionist on the line";
               return (
-                <button
+                <RadioRow
                   key={n.id}
-                  type="button"
+                  variant={uiVariant}
+                  selected={state.phoneNumberId === n.id}
                   onClick={() => {
                     patch({
                       phoneNumberId: n.id,
@@ -290,54 +385,27 @@ export function PhoneStep({
                       numberSource: "existing",
                     });
                   }}
-                  className={`block w-full max-w-md rounded-lg border px-2.5 py-1.5 text-left text-xs ${
-                    state.phoneNumberId === n.id
-                      ? "border-primary bg-primary/5 font-medium text-primary"
-                      : "border-border"
-                  }`}
-                >
-                  <span className="block">
-                    {formatPhone(n.e164)}
-                    {n.friendlyName ? ` · ${n.friendlyName}` : ""}
-                  </span>
-                  {n.mctbTexmlLocked ? (
-                    <span className="mt-0.5 block font-normal text-amber-700">
-                      MCTB TeXML ingress — activate here to route this number to this receptionist
-                    </span>
-                  ) : null}
-                  {ownedByOther ? (
-                    <span className="mt-0.5 block font-normal text-muted-foreground">
-                      Currently answered by {ownedByOther.name}
-                      {ownedByOther.status === "ACTIVE" ? " (live)" : ""} — activate to switch
-                    </span>
-                  ) : n.aiOwner?.id === state.agentId ? (
-                    <span className="mt-0.5 block font-normal text-muted-foreground">
-                      Already assigned to this receptionist
-                    </span>
-                  ) : (
-                    <span className="mt-0.5 block font-normal text-muted-foreground">
-                      Available — activate to put this receptionist on the line
-                    </span>
-                  )}
-                </button>
+                  label={`${formatPhone(n.e164)}${n.friendlyName ? ` · ${n.friendlyName}` : ""}`}
+                  description={subline}
+                />
               );
             })}
             {otherOwner ? (
-              <InfoCallout>
+              <InfoCallout variant={uiVariant}>
                 Selecting this number switches inbound calls from{" "}
                 <strong>{otherOwner.name}</strong> to this appointment receptionist when you
                 activate. Only one AI agent answers a number at a time.
               </InfoCallout>
             ) : null}
             {selected?.mctbTexmlLocked ? (
-              <InfoCallout>
+              <InfoCallout variant={uiVariant}>
                 This number is currently marked for MCTB TeXML missed-call recovery. When you
                 save or activate this receptionist, Transovo will switch inbound routing to this
                 Voice Agent for this DID only. Other MCTB numbers are unchanged.
               </InfoCallout>
             ) : null}
             {selected?.hasSoftphoneAssignment ? (
-              <InfoCallout>
+              <InfoCallout variant={uiVariant}>
                 This number also has a softphone / team assignment. After you activate,
                 the AI receptionist owns inbound calls; remove the softphone assignment
                 in Numbers if you want humans to answer this DID instead.
@@ -346,10 +414,21 @@ export function PhoneStep({
           </div>
         ) : null}
 
+        {hideLegacyIngressControls ? (
+          <OpusCalloutPanel opus={isOpus} title="How calls reach your AI">
+            <p className="text-sm text-muted-foreground">
+              Your business phone rings on your carrier or PBX as usual. When nobody answers,
+              conditional call forwarding (CFNA) sends the call to your Transovo number below —
+              then Amy answers. Transovo does not control how long your original line rings; set
+              that in your carrier&apos;s forwarding settings.
+            </p>
+          </OpusCalloutPanel>
+        ) : null}
+
         <div className="grid gap-6 lg:grid-cols-2">
-          <div>
-            <h3 className="text-sm font-semibold">Answering behavior</h3>
-            <div className="mt-3 space-y-2">
+          {!hideLegacyIngressControls ? (
+          <WizardSection opus={isOpus} title="Answering behavior">
+            <div className="space-y-2">
               {(
                 [
                   ["ai_immediate", "Answer every incoming call"],
@@ -361,6 +440,7 @@ export function PhoneStep({
               ).map(([id, label]) => (
                 <RadioRow
                   key={id}
+                  variant={uiVariant}
                   selected={state.ringBehavior === id}
                   onClick={() =>
                     patch({
@@ -381,49 +461,52 @@ export function PhoneStep({
                 />
               ))}
             </div>
-          </div>
-          <div className="space-y-3">
-            <h3 className="text-sm font-semibold">Settings</h3>
-            <label className="block text-xs text-muted-foreground">
-              Ring team for
-              <select
-                className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
-                value={state.ringTeamSeconds}
-                onChange={(e) => patch({ ringTeamSeconds: Number(e.target.value) })}
-              >
-                {[10, 15, 20, 30, 45].map((s) => (
-                  <option key={s} value={s}>
-                    {s} seconds
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-xs text-muted-foreground">
-              Call recording
-              <select
-                className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
-                value={state.callRecording}
-                onChange={(e) =>
-                  patch({
-                    callRecording: e.target.value as AppointmentReceptionistWizardState["callRecording"],
-                  })
-                }
-              >
-                <option value="all">Record all calls</option>
-                <option value="inbound_only">Inbound only</option>
-                <option value="off">Off</option>
-              </select>
-            </label>
-          </div>
+          </WizardSection>
+          ) : null}
+          <WizardSection opus={isOpus} title="Settings">
+            <div className="space-y-3">
+            {!hideLegacyIngressControls ? (
+            <WizardSelectField
+              presentation={presentation}
+              label="Ring team for"
+              value={String(state.ringTeamSeconds)}
+              onChange={(v) => patch({ ringTeamSeconds: Number(v) })}
+              options={[10, 15, 20, 30, 45].map((s) => ({
+                value: String(s),
+                label: `${s} seconds`,
+              }))}
+            />
+            ) : null}
+            <WizardSelectField
+              presentation={presentation}
+              label="Call recording"
+              value={state.callRecording}
+              onChange={(v) =>
+                patch({
+                  callRecording: v as AppointmentReceptionistWizardState["callRecording"],
+                })
+              }
+              options={[
+                { value: "all", label: "Record all calls" },
+                { value: "inbound_only", label: "Inbound only" },
+                { value: "off", label: "Off" },
+              ]}
+            />
+            </div>
+          </WizardSection>
         </div>
 
-        <div>
-          <h3 className="text-sm font-semibold">While the receptionist connects</h3>
-          <div className="mt-3 grid gap-4 lg:grid-cols-2">
+        <WizardSection
+          opus={isOpus}
+          title="While the receptionist connects"
+          description="Plays while the AI session initializes."
+        >
+          <div className="grid gap-4 lg:grid-cols-2">
             <div className="space-y-2">
               {GREETING_OPTIONS.map((opt) => (
                 <RadioRow
                   key={opt.id}
+                  variant={uiVariant}
                   selected={state.connectionGreeting === opt.id}
                   onClick={() =>
                     patch({
@@ -439,11 +522,14 @@ export function PhoneStep({
               ))}
             </div>
             {state.connectionGreeting !== "none" ? (
-              <div className="rounded-xl border border-border bg-card p-4">
+              isOpus ? (
+                <OpusDensePanel>
+              <div>
                 <div className="flex items-center gap-3">
-                  <button
+                  <Button
                     type="button"
-                    className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground"
+                    size="icon-lg"
+                    className="rounded-full"
                     aria-label="Preview greeting"
                     onClick={() => {
                       const text =
@@ -457,7 +543,7 @@ export function PhoneStep({
                     }}
                   >
                     <Play className="h-4 w-4 fill-current" />
-                  </button>
+                  </Button>
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-medium">Preview connection greeting</p>
                     <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">
@@ -466,10 +552,10 @@ export function PhoneStep({
                   </div>
                 </div>
                 {state.connectionGreeting === "upload_custom" ? (
-                  <label className="mt-3 block text-xs text-muted-foreground">
-                    Greeting audio URL (HTTPS MP3/WAV)
-                    <input
-                      className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground"
+                  <div className="mt-3">
+                    <Label>Greeting audio URL (HTTPS MP3/WAV)</Label>
+                    <Input
+                      className="mt-1"
                       type="url"
                       placeholder="https://…"
                       value={state.connectionGreetingAudioUrl || ""}
@@ -477,42 +563,113 @@ export function PhoneStep({
                         patch({ connectionGreetingAudioUrl: e.target.value })
                       }
                     />
-                  </label>
+                  </div>
                 ) : null}
                 {state.connectionGreeting === "create_custom" ||
                 state.connectionGreeting === "transovo_professional" ||
                 state.connectionGreeting === "transovo_warm" ? (
-                  <label className="mt-3 block text-xs text-muted-foreground">
-                    {state.connectionGreeting === "create_custom"
-                      ? "Custom greeting text"
-                      : "Greeting text"}
-                    <textarea
-                      className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground"
+                  <div className="mt-3">
+                    <Label>
+                      {state.connectionGreeting === "create_custom"
+                        ? "Custom greeting text"
+                        : "Greeting text"}
+                    </Label>
+                    <Textarea
+                      className="mt-1"
                       rows={3}
                       value={state.connectionGreetingText || ""}
                       onChange={(e) =>
                         patch({ connectionGreetingText: e.target.value })
                       }
                     />
-                  </label>
+                  </div>
                 ) : (
                   <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
                     “{state.connectionGreetingText || DEFAULT_CONNECTION_GREETING}”
                   </p>
                 )}
               </div>
+                </OpusDensePanel>
+              ) : (
+                <div className="rounded-xl border border-border bg-card p-4">
+                  <div>
+                    <div className="flex items-center gap-3">
+                      <Button
+                        type="button"
+                        size="icon-lg"
+                        className="rounded-full"
+                        aria-label="Preview greeting"
+                        onClick={() => {
+                          const text =
+                            state.connectionGreetingText || DEFAULT_CONNECTION_GREETING;
+                          if (typeof window !== "undefined" && window.speechSynthesis) {
+                            window.speechSynthesis.cancel();
+                            const u = new SpeechSynthesisUtterance(text);
+                            window.speechSynthesis.speak(u);
+                          }
+                        }}
+                      >
+                        <Play className="h-4 w-4 fill-current" />
+                      </Button>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium">Preview connection greeting</p>
+                        <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">
+                          {state.connectionGreetingText || DEFAULT_CONNECTION_GREETING}
+                        </p>
+                      </div>
+                    </div>
+                    {state.connectionGreeting === "upload_custom" ? (
+                      <div className="mt-3">
+                        <Label>Greeting audio URL (HTTPS MP3/WAV)</Label>
+                        <Input
+                          className="mt-1"
+                          type="url"
+                          placeholder="https://…"
+                          value={state.connectionGreetingAudioUrl || ""}
+                          onChange={(e) =>
+                            patch({ connectionGreetingAudioUrl: e.target.value })
+                          }
+                        />
+                      </div>
+                    ) : null}
+                    {state.connectionGreeting === "create_custom" ||
+                    state.connectionGreeting === "transovo_professional" ||
+                    state.connectionGreeting === "transovo_warm" ? (
+                      <div className="mt-3">
+                        <Label>
+                          {state.connectionGreeting === "create_custom"
+                            ? "Custom greeting text"
+                            : "Greeting text"}
+                        </Label>
+                        <Textarea
+                          className="mt-1"
+                          rows={3}
+                          value={state.connectionGreetingText || ""}
+                          onChange={(e) =>
+                            patch({ connectionGreetingText: e.target.value })
+                          }
+                        />
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                        “{state.connectionGreetingText || DEFAULT_CONNECTION_GREETING}”
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )
             ) : null}
           </div>
-        </div>
+        </WizardSection>
       </div>
 
-      <SidePanel title="Phone setup">
+      <SidePanel variant={uiVariant} title="Phone setup">
         <div className="space-y-4 text-sm">
           <div>
             <p className="text-xs text-muted-foreground">Selected number</p>
             <div className="mt-1 flex items-center justify-between gap-2">
               <p className="font-medium">{displayNumber}</p>
-              <StatusPill tone={state.phoneNumberId ? "success" : "warning"}>
+              <StatusPill variant={uiVariant} tone={state.phoneNumberId ? "success" : "warning"}>
                 {state.phoneNumberId ? "Ready" : "Needed"}
               </StatusPill>
             </div>
@@ -530,7 +687,7 @@ export function PhoneStep({
               ))}
             </ol>
           </div>
-          <InfoCallout>
+          <InfoCallout variant={uiVariant}>
             Activate publishes this agent to Telnyx and assigns your selected number so
             inbound callers reach this receptionist. Connection greeting plays while the AI
             initializes.

@@ -5,6 +5,7 @@ import {
   getMissingCallbackRequirementKeys,
   resolveConfiguredCallbackRequiredKeys,
 } from "../callback/callback-requirements";
+import { resolveBookingServiceForRuntime } from "../config/resolve-booking-service";
 import { fieldSatisfiesObjectiveRequirement } from "./validate-intake-value";
 
 export type VoiceOperationName =
@@ -50,6 +51,17 @@ function configuredRequiredForOperation(
     return defaultRequiredIntakeKeys(config);
   }
   return [];
+}
+
+function requiredKeysForBookAppointment(
+  config: VoiceV3AgentConfig,
+  context: VoiceV3CallContext,
+): string[] {
+  const globalRequired = defaultRequiredIntakeKeys(config);
+  const service = resolveBookingServiceForRuntime(config, context);
+  const perService = service.requiredIntakeKeys ?? [];
+  const merged = new Set<string>([...globalRequired, ...perService]);
+  return [...merged];
 }
 
 /** Intake requirements follow the active dialog goal — shared facts, operation-specific gaps. */
@@ -98,7 +110,10 @@ export function getMissingFieldsForOperation(
   if (operation === "request_callback") {
     return getMissingCallbackRequirementKeys(config, context);
   }
-  const requiredKeys = configuredRequiredForOperation(config, operation);
+  const requiredKeys =
+    operation === "book_appointment"
+      ? requiredKeysForBookAppointment(config, context)
+      : configuredRequiredForOperation(config, operation);
   const values = context.intake.values;
   return requiredKeys.filter((key) => {
     const field = config.intakeFields.find((f) => f.key === key);

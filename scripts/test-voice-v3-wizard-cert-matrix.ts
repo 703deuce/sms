@@ -9,6 +9,9 @@ import { attachVoiceV3WizardTestCompilation } from "../src/lib/voice-v3/config/w
 import { resolveBookingServiceForRuntime } from "../src/lib/voice-v3/config/resolve-booking-service";
 import { assertWizardManifestComplete } from "../src/lib/voice-v3/config/wizard-manifest-invariant";
 import { WIZARD_V3_MANIFEST_SUMMARY } from "../src/lib/voice-v3/config/wizard-v3-field-manifest";
+import { WIZARD_V3_FIELD_MANIFEST } from "../src/lib/voice-v3/config/wizard-v3-field-manifest";
+import { resolveLaunchClassification } from "../src/lib/voice-v3/config/wizard-v3-runtime-launch-classification";
+import { usesCfnaUnansweredIngressModel } from "../src/lib/solutions/appointment-receptionist/wizard-presets";
 import { buildBasicLiveSessionAcceptParams } from "../src/lib/voice-v3-basic/live-session-config";
 import { buildVoiceV3Prompts } from "../src/lib/voice-v3/prompts/build-voice-v3-prompts";
 import { listVoiceV3AstraToolNamesForConfig } from "../src/lib/voice-v3/tools/voice-tool-catalog";
@@ -166,6 +169,24 @@ function run(): void {
 
   assertWizardManifestComplete();
   assert.equal(WIZARD_V3_MANIFEST_SUMMARY.unmapped, 0);
+  assert.equal(
+    WIZARD_V3_MANIFEST_SUMMARY.DEFERRED_NOT_EXPOSED,
+    4,
+    "CFNA launch hides four ingress/AMD controls as DEFERRED_NOT_EXPOSED",
+  );
+
+  const deferredPaths = WIZARD_V3_FIELD_MANIFEST.filter(
+    (r) => r.executionStatus === "DEFERRED_NOT_EXPOSED",
+  ).map((r) => r.statePath);
+  assert.ok(usesCfnaUnansweredIngressModel("after_hours"));
+  for (const statePath of deferredPaths) {
+    const launch = resolveLaunchClassification(statePath, "DEFERRED_NOT_EXPOSED");
+    assert.equal(
+      launch.classification,
+      "DEFERRED_NOT_EXPOSED",
+      `${statePath} must stay deferred for CFNA after_hours`,
+    );
+  }
 
   const prompts = buildVoiceV3Prompts({
     agentConfig: config,

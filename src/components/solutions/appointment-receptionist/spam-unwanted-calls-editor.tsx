@@ -6,6 +6,10 @@ import type {
   VoiceV3SpamLikelyPolicy,
 } from "@/lib/voice-v3/spam-protection/types";
 import { BlockedCallersManageDialog } from "@/components/voice/blocked-callers-manage-dialog";
+import { Button } from "@/newui-transplant/components/ui/button";
+import { RadioRow } from "@/components/solutions/appointment-receptionist/ui";
+import type { WizardPresentation } from "@/components/solutions/appointment-receptionist/wizard-field-kit";
+import { OpusCompactPanel, WizardSection } from "@/components/solutions/appointment-receptionist/wizard-opus-ui";
 import { useCallback, useEffect, useState } from "react";
 
 const SPAM_OPTIONS: Array<{
@@ -63,13 +67,33 @@ function RadioGroup<T extends string>({
   value,
   options,
   onChange,
+  presentation = "legacy",
 }: {
   name: string;
   value: T | null | undefined;
   options: Array<{ value: T; title: string; recommended?: boolean; helper: string }>;
   onChange: (v: T) => void;
+  presentation?: WizardPresentation;
 }) {
   const selected = value ?? options[0]?.value;
+  if (presentation === "opus") {
+    return (
+      <div className="space-y-2" role="radiogroup" aria-label={name}>
+        {options.map((opt) => (
+          <RadioRow
+            key={opt.value}
+            variant="opus"
+            selected={selected === opt.value}
+            onClick={() => onChange(opt.value)}
+            label={
+              opt.recommended ? `${opt.title} (Recommended)` : opt.title
+            }
+            description={opt.helper}
+          />
+        ))}
+      </div>
+    );
+  }
   return (
     <div className="space-y-3" role="radiogroup" aria-label={name}>
       {options.map((opt) => (
@@ -104,9 +128,11 @@ function RadioGroup<T extends string>({
 export function SpamUnwantedCallsEditor({
   state,
   patch,
+  presentation = "legacy",
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
+  presentation?: WizardPresentation;
 }) {
   const [manageOpen, setManageOpen] = useState(false);
   const [blockedCount, setBlockedCount] = useState<number | null>(null);
@@ -125,15 +151,9 @@ export function SpamUnwantedCallsEditor({
     void refreshBlockedCount();
   }, [refreshBlockedCount]);
 
-  return (
-    <div className="rounded-xl border border-border bg-card p-4">
-      <h3 className="text-sm font-semibold">Spam &amp; unwanted calls</h3>
-      <p className="mt-1 text-xs text-muted-foreground">
-        Reduce unwanted calls before they reach your receptionist. Helps block calls Telnyx
-        identifies as likely spam (US/Canada reputation signals).
-      </p>
-
-      <div className="mt-4 space-y-6">
+  const isOpus = presentation === "opus";
+  const body = (
+      <div className="space-y-6">
         <div>
           <p className="text-sm font-medium">Spam Likely calls</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
@@ -142,6 +162,7 @@ export function SpamUnwantedCallsEditor({
           <div className="mt-3">
             <RadioGroup
               name="spamLikelyPolicy"
+              presentation={presentation}
               value={state.spamLikelyPolicy ?? "BLOCK"}
               options={SPAM_OPTIONS}
               onChange={(v) =>
@@ -162,6 +183,7 @@ export function SpamUnwantedCallsEditor({
           <div className="mt-3">
             <RadioGroup
               name="solicitorPolicy"
+              presentation={presentation}
               value={state.solicitorPolicy ?? "DECLINE"}
               options={SOLICITOR_OPTIONS}
               onChange={(v) =>
@@ -181,7 +203,8 @@ export function SpamUnwantedCallsEditor({
           calls may not be identified, and legitimate calls can occasionally be flagged.
         </p>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
+        <OpusCompactPanel isOpus={isOpus} bodyClassName="px-3 py-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="text-sm">
             <span className="font-medium text-foreground">Blocked callers</span>
             <span className="mt-0.5 block text-xs text-muted-foreground">
@@ -190,15 +213,28 @@ export function SpamUnwantedCallsEditor({
                 : `${blockedCount} number${blockedCount === 1 ? "" : "s"} blocked`}
             </span>
           </div>
-          <button
+          <Button
             type="button"
-            className="rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted"
+            size="sm"
+            variant="outline"
             onClick={() => setManageOpen(true)}
           >
             Manage
-          </button>
-        </div>
+          </Button>
+          </div>
+        </OpusCompactPanel>
       </div>
+  );
+
+  return (
+    <>
+      <WizardSection
+        opus={isOpus}
+        title="Spam & unwanted calls"
+        description="Reduce unwanted calls before they reach your receptionist. Helps block calls Telnyx identifies as likely spam (US/Canada reputation signals)."
+      >
+        {body}
+      </WizardSection>
       <BlockedCallersManageDialog
         open={manageOpen}
         onClose={() => {
@@ -206,6 +242,6 @@ export function SpamUnwantedCallsEditor({
           void refreshBlockedCount();
         }}
       />
-    </div>
+    </>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import type { WizardStepStatus } from "@/lib/mctb/voice-agent/step-readiness";
+import { Button } from "@/newui-transplant/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Check } from "lucide-react";
 
@@ -13,10 +14,59 @@ export function WizardStepper({
 }: {
   steps: Array<{ id: string; label: string }>;
   currentIndex: number;
-  presentation?: "legacy" | "mctb";
+  presentation?: "legacy" | "mctb" | "opus";
   stepStatuses?: Partial<Record<string, WizardStepStatus>>;
   onStepSelect?: (index: number) => void;
 }) {
+  if (presentation === "opus") {
+    return (
+      <nav aria-label="Setup progress" className="-mx-4 overflow-x-auto border-b px-4 md:mx-0 md:px-0">
+        <ol className="flex min-w-max gap-6 md:gap-8">
+          {steps.map((step, index) => {
+            const active = index === currentIndex;
+            const done = index < currentIndex;
+            return (
+              <li key={step.id}>
+                {onStepSelect ? (
+                  <Button
+                    type="button"
+                    variant="link"
+                    onClick={() => onStepSelect(index)}
+                    aria-current={active ? "step" : undefined}
+                    className={cn(
+                      "relative inline-flex h-10 items-center gap-2 rounded-none pb-3 text-sm no-underline hover:no-underline",
+                      active ? "font-medium text-foreground" : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    <span className="tabular-nums text-xs text-muted-foreground">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <span>{step.label}</span>
+                    {active ? (
+                      <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-primary" />
+                    ) : null}
+                  </Button>
+                ) : (
+                  <span
+                    className={cn(
+                      "relative inline-flex h-10 items-center gap-2 pb-3 text-sm",
+                      active ? "font-medium text-foreground" : "text-muted-foreground",
+                    )}
+                  >
+                    <span className="tabular-nums text-xs text-muted-foreground">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <span>{step.label}</span>
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
+    );
+  }
+
   if (presentation === "mctb") {
     return (
       <nav aria-label="Setup progress" className="mctb-va-stepper w-full overflow-x-auto">

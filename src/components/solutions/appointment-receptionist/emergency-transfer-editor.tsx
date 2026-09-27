@@ -14,8 +14,14 @@ import {
   updateTransferPlanStep,
 } from "@/lib/solutions/appointment-receptionist/transfer-wizard-state";
 import { normalizeWizardTransferPhone } from "@/lib/solutions/appointment-receptionist/transfer-utils";
-import { Input, Label } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { RadioRow } from "./ui";
+import { OpusCompactPanel, OpusWarningPanel } from "./wizard-opus-ui";
+import {
+  pickWizardFieldComponents,
+  type WizardPresentation,
+  WizardSelectField,
+  WizardToggleField,
+} from "./wizard-field-kit";
 import { ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
 
 const FALLBACK_OPTIONS: Array<[FallbackAction, string, string]> = [
@@ -27,10 +33,18 @@ const FALLBACK_OPTIONS: Array<[FallbackAction, string, string]> = [
 export function EmergencyTransferEditor({
   state,
   patch,
+  presentation = "legacy",
+  hideVoicemailDetection = false,
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
+  presentation?: WizardPresentation;
+  hideVoicemailDetection?: boolean;
 }) {
+  const ui = pickWizardFieldComponents(presentation);
+  const { Input, Label, Button } = ui;
+  const isOpus = presentation === "opus";
+  const uiVariant = isOpus ? "opus" : "legacy";
   const transferCapability = state.capabilities.includes("transfer_calls");
   const hydrated = useRef(false);
 
@@ -83,50 +97,36 @@ export function EmergencyTransferEditor({
         apply.
       </p>
 
-      <label className="flex items-start gap-2 text-sm">
-        <input
-          type="checkbox"
-          className="mt-1 h-4 w-4 rounded border-border"
-          checked={enabled}
-          onChange={(e) =>
-            patch({
-              voiceV2HumanTransferEnabled: e.target.checked,
-            })
-          }
-        />
-        <span>
-          <span className="font-medium">Enable emergency &amp; human transfer</span>
-          <span className="mt-0.5 block text-xs text-muted-foreground">
-            Authorized contacts only — callers are never transferred to numbers you have not
-            configured here.
-          </span>
-        </span>
-      </label>
+      <WizardToggleField
+        presentation={presentation}
+        label="Enable emergency & human transfer"
+        description="Authorized contacts only — callers are never transferred to numbers you have not configured here."
+        checked={enabled}
+        onCheckedChange={(on) => patch({ voiceV2HumanTransferEnabled: on })}
+      />
 
-      <label className="flex items-start gap-2 text-sm">
-        <input
-          type="checkbox"
-          className="mt-1 h-4 w-4 rounded border-border"
-          checked={state.allowCallerRequestedTransfer !== false}
-          onChange={(e) => patch({ allowCallerRequestedTransfer: e.target.checked })}
-        />
-        <span className="font-medium">Allow caller-requested human</span>
-      </label>
+      <WizardToggleField
+        presentation={presentation}
+        label="Allow caller-requested human"
+        checked={state.allowCallerRequestedTransfer !== false}
+        onCheckedChange={(on) => patch({ allowCallerRequestedTransfer: on })}
+      />
 
       <div className={enabled ? "" : "pointer-events-none opacity-50"}>
-        <Label>Routing</Label>
-        <select
-          className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
+        <WizardSelectField
+          presentation={presentation}
+          label="Routing"
           value={routing}
-          onChange={(e) =>
+          onChange={(v) =>
             apply({
-              transferRouting: e.target.value as "single" | "waterfall",
+              transferRouting: v as "single" | "waterfall",
             })
           }
-        >
-          <option value="single">Single destination</option>
-          <option value="waterfall">Waterfall (try contacts in order)</option>
-        </select>
+          options={[
+            { value: "single", label: "Single destination" },
+            { value: "waterfall", label: "Waterfall (try contacts in order)" },
+          ]}
+        />
         <p className="mt-1 text-xs text-muted-foreground">
           {routing === "waterfall"
             ? "Transovo tries the configured contacts in order until someone answers. If nobody answers, the selected fallback is used."
@@ -134,18 +134,16 @@ export function EmergencyTransferEditor({
         </p>
 
         <div className="mt-3">
-          <Label>Default ring timeout</Label>
-          <select
-            className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
-            value={defaultRing}
-            onChange={(e) => apply({ transferRingSeconds: Number(e.target.value) })}
-          >
-            {TRANSFER_RING_SECONDS_OPTIONS.map((s) => (
-              <option key={s} value={s}>
-                {s} seconds
-              </option>
-            ))}
-          </select>
+          <WizardSelectField
+            presentation={presentation}
+            label="Default ring timeout"
+            value={String(defaultRing)}
+            onChange={(v) => apply({ transferRingSeconds: Number(v) })}
+            options={TRANSFER_RING_SECONDS_OPTIONS.map((s) => ({
+              value: String(s),
+              label: `${s} seconds`,
+            }))}
+          />
           <p className="mt-1 text-xs text-muted-foreground">
             Used when a contact does not set its own ring timeout below.
           </p>
@@ -182,30 +180,32 @@ export function EmergencyTransferEditor({
 
             return (
               <li key={dest.id} className="space-y-0">
-              <div
-                className="rounded-lg border border-border bg-muted/20 p-3 space-y-2"
-              >
+              <OpusCompactPanel isOpus={isOpus}>
                 <div className="flex items-start gap-2">
                   {routing === "waterfall" ? (
                     <div className="flex flex-col gap-0.5 pt-1">
-                      <button
+                      <Button
                         type="button"
-                        className="rounded border border-border bg-card p-0.5 disabled:opacity-30"
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8"
                         disabled={stepIndex === 0}
                         aria-label={`Move ${dest.label} up`}
                         onClick={() => patch(moveTransferPlanStep(state, dest.id, "up"))}
                       >
                         <ChevronUp className="h-4 w-4" />
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        className="rounded border border-border bg-card p-0.5 disabled:opacity-30"
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8"
                         disabled={stepIndex === steps.length - 1}
                         aria-label={`Move ${dest.label} down`}
                         onClick={() => patch(moveTransferPlanStep(state, dest.id, "down"))}
                       >
                         <ChevronDown className="h-4 w-4" />
-                      </button>
+                      </Button>
                     </div>
                   ) : (
                     <span className="mt-2 text-xs font-semibold text-muted-foreground w-6">
@@ -249,53 +249,49 @@ export function EmergencyTransferEditor({
                     ) : null}
 
                     <div className="grid gap-2 sm:grid-cols-2">
-                      <div>
-                        <Label className="text-xs">Transfer mode</Label>
-                        <select
-                          className="mt-1 h-9 w-full rounded-lg border border-border bg-card px-2 text-sm"
-                          value={mode}
-                          onChange={(e) =>
+                      <WizardSelectField
+                        presentation={presentation}
+                        label="Transfer mode"
+                        value={mode}
+                        onChange={(v) =>
+                          patch(
+                            updateTransferPlanStep(state, dest.id, {
+                              transferMode: v as "BASIC" | "WARM",
+                            }),
+                          )
+                        }
+                        options={[
+                          { value: "BASIC", label: "Direct" },
+                          { value: "WARM", label: "Warm" },
+                        ]}
+                      />
+                      <WizardSelectField
+                        presentation={presentation}
+                        label="Ring timeout"
+                        value={usesDefaultTimeout ? "default" : String(stepTimeout)}
+                        onChange={(v) => {
+                          if (v === "default") {
                             patch(
                               updateTransferPlanStep(state, dest.id, {
-                                transferMode: e.target.value as "BASIC" | "WARM",
+                                timeoutSeconds: undefined,
                               }),
-                            )
+                            );
+                          } else {
+                            patch(
+                              updateTransferPlanStep(state, dest.id, {
+                                timeoutSeconds: Number(v),
+                              }),
+                            );
                           }
-                        >
-                          <option value="BASIC">Direct</option>
-                          <option value="WARM">Warm</option>
-                        </select>
-                      </div>
-                      <div>
-                        <Label className="text-xs">Ring timeout</Label>
-                        <select
-                          className="mt-1 h-9 w-full rounded-lg border border-border bg-card px-2 text-sm"
-                          value={usesDefaultTimeout ? "default" : String(stepTimeout)}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            if (v === "default") {
-                              patch(
-                                updateTransferPlanStep(state, dest.id, {
-                                  timeoutSeconds: undefined,
-                                }),
-                              );
-                            } else {
-                              patch(
-                                updateTransferPlanStep(state, dest.id, {
-                                  timeoutSeconds: Number(v),
-                                }),
-                              );
-                            }
-                          }}
-                        >
-                          <option value="default">Default ({defaultRing}s)</option>
-                          {TRANSFER_RING_SECONDS_OPTIONS.map((s) => (
-                            <option key={s} value={s}>
-                              {s} seconds
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                        }}
+                        options={[
+                          { value: "default", label: `Default (${defaultRing}s)` },
+                          ...TRANSFER_RING_SECONDS_OPTIONS.map((s) => ({
+                            value: String(s),
+                            label: `${s} seconds`,
+                          })),
+                        ]}
+                      />
                     </div>
                     <p className="text-xs text-muted-foreground">
                       {mode === "WARM"
@@ -304,7 +300,7 @@ export function EmergencyTransferEditor({
                     </p>
                   </div>
                 </div>
-              </div>
+              </OpusCompactPanel>
               {routing === "waterfall" && stepIndex < steps.length - 1 ? (
                 <p
                   className="py-2 text-center text-xs font-medium text-muted-foreground"
@@ -318,48 +314,50 @@ export function EmergencyTransferEditor({
           })}
         </ul>
 
-        <label className="mt-3 flex items-start gap-2 text-sm">
-          <input
-            type="checkbox"
-            className="mt-1"
-            checked={state.detectVoicemailOnTransfer}
-            onChange={(e) => patch({ detectVoicemailOnTransfer: e.target.checked })}
-          />
-          <span>
-            <span className="font-medium">Detect voicemail on transfer</span>
-            <span className="mt-0.5 block text-xs text-muted-foreground">
-              Return to the receptionist if the transfer reaches voicemail.
-            </span>
-          </span>
-        </label>
+        {!hideVoicemailDetection ? (
+        <WizardToggleField
+          presentation={presentation}
+          label="Detect voicemail on transfer"
+          description="Return to the receptionist if the transfer reaches voicemail."
+          checked={state.detectVoicemailOnTransfer}
+          onCheckedChange={(on) => patch({ detectVoicemailOnTransfer: on })}
+        />
+        ) : null}
 
         <div className="mt-4 border-t border-border pt-3">
-          <Label>If nobody answers (waterfall exhausted or transfer fails)</Label>
+          <Label className="text-sm font-medium">
+            If nobody answers (waterfall exhausted or transfer fails)
+          </Label>
           <div className="mt-2 space-y-2">
             {FALLBACK_OPTIONS.map(([id, label, desc]) => (
-              <label key={id} className="flex cursor-pointer items-start gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="transfer-fallback"
-                  className="mt-1"
-                  checked={state.transferFallback === id}
-                  onChange={() => patch({ transferFallback: id })}
-                />
-                <span>
-                  <span className="font-medium">{label}</span>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">{desc}</span>
-                </span>
-              </label>
+              <RadioRow
+                key={id}
+                variant={uiVariant}
+                selected={state.transferFallback === id}
+                onClick={() => patch({ transferFallback: id })}
+                label={label}
+                description={desc}
+              />
             ))}
           </div>
         </div>
 
         {issues.length > 0 ? (
-          <ul className="mt-4 space-y-1 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-100">
-            {issues.map((i) => (
-              <li key={i.id}>{i.message}</li>
-            ))}
-          </ul>
+          isOpus ? (
+            <OpusWarningPanel title="Fix before activate" className="mt-4">
+              <ul className="space-y-1">
+                {issues.map((i) => (
+                  <li key={i.id}>{i.message}</li>
+                ))}
+              </ul>
+            </OpusWarningPanel>
+          ) : (
+            <ul className="mt-4 space-y-1 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-100">
+              {issues.map((i) => (
+                <li key={i.id}>{i.message}</li>
+              ))}
+            </ul>
+          )
         ) : null}
       </div>
     </div>

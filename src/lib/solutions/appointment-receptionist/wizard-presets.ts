@@ -65,6 +65,16 @@ export const PRESET_CAPABILITY_ALLOWLIST: Record<
   ],
 };
 
+/**
+ * Standard Voice V3 after-hours launch: business line rings on carrier/PBX;
+ * CFNA forwards unanswered calls to Transovo — no Transovo ring-team-first.
+ */
+export function usesCfnaUnansweredIngressModel(
+  preset: string | null | undefined,
+): boolean {
+  return resolvePresetKey(preset) === "after_hours";
+}
+
 export function resolvePresetKey(
   preset: string | null | undefined,
 ): WizardPresetId | "appointment_booking" {
@@ -191,7 +201,8 @@ export function wizardHeadline(preset: string | null | undefined): {
     case "after_hours":
       return {
         title: "Answer After Hours",
-        subtitle: "AI covers nights, weekends, and holidays",
+        subtitle:
+          "Forward unanswered calls from your business line (CFNA) — AI answers after your carrier forwards",
       };
     case "lead_capture":
       return {

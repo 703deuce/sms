@@ -11,9 +11,33 @@ import type {
   VoiceV2OnCallScheduleEntry,
   VoiceV2OperatingMaturityPublishedConfig,
 } from "@/lib/voice-receptionist-wizard/operating-maturity/types";
-import { Button } from "@/components/ui/button";
-import { Input, Label } from "@/components/ui/input";
-import { InfoCallout } from "./ui";
+import {
+  pickWizardFieldComponents,
+  type WizardPresentation,
+  WizardCheckboxInline,
+  WizardHint,
+  WizardSelectField,
+  WizardToggleField,
+} from "./wizard-field-kit";
+import { OpusCompactPanel } from "./wizard-opus-ui";
+
+function LegacySection({
+  title,
+  description,
+  children,
+}: {
+  title?: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="space-y-4 rounded-xl border border-border bg-card p-4">
+      {title ? <h3 className="font-medium">{title}</h3> : null}
+      {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
+      <div className={title || description ? "mt-3 space-y-4" : "space-y-4"}>{children}</div>
+    </section>
+  );
+}
 
 const DAYS: VoiceV2DayOfWeek[] = [
   "monday",
@@ -37,21 +61,23 @@ function patchMaturity(
 export function BusinessScheduleEditor({
   state,
   patch,
+  presentation = "legacy",
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
+  presentation?: WizardPresentation;
 }) {
   const m = ensureWizardOperatingMaturity(state);
   const schedule = m.businessSchedule;
+  const { Input, Label, Button, Panel } = pickWizardFieldComponents(presentation);
+  const isOpus = presentation === "opus";
+  const Section = isOpus ? Panel : LegacySection;
 
   return (
-    <section className="space-y-4 rounded-xl border border-border bg-card p-4">
-      <div>
-        <h3 className="font-medium">Business hours & holidays</h3>
-        <p className="text-sm text-muted-foreground">
-          Used for after-hours operating state. Does not change phone routing.
-        </p>
-      </div>
+    <Section
+      title="Business hours & holidays"
+      description="Used for after-hours operating state. Does not change phone routing."
+    >
       <div>
         <Label htmlFor="biz-tz">Timezone</Label>
         <Input
@@ -79,38 +105,34 @@ export function BusinessScheduleEditor({
           const row = schedule.weekly[day] || { closed: true, ranges: [] };
           const range = row.ranges[0] || { start: "09:00", end: "17:00" };
           return (
-            <div
-              key={day}
-              className="flex flex-wrap items-center gap-3 rounded-lg border border-border p-3 text-sm"
-            >
+            <OpusCompactPanel key={day} isOpus={isOpus} className="text-sm">
+            <div className="flex flex-wrap items-center gap-3">
               <span className="w-24 capitalize font-medium">{day}</span>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={row.closed}
-                  onChange={(e) =>
-                    patchMaturity(
-                      state,
-                      (cur) => ({
-                        ...cur,
-                        businessSchedule: {
-                          ...cur.businessSchedule,
-                          weekly: {
-                            ...cur.businessSchedule.weekly,
-                            [day]: {
-                              ...row,
-                              closed: e.target.checked,
-                              ranges: row.ranges.length ? row.ranges : [range],
-                            },
+              <WizardCheckboxInline
+                presentation={presentation}
+                label="Closed"
+                checked={row.closed}
+                onCheckedChange={(on) =>
+                  patchMaturity(
+                    state,
+                    (cur) => ({
+                      ...cur,
+                      businessSchedule: {
+                        ...cur.businessSchedule,
+                        weekly: {
+                          ...cur.businessSchedule.weekly,
+                          [day]: {
+                            ...row,
+                            closed: on,
+                            ranges: row.ranges.length ? row.ranges : [range],
                           },
                         },
-                      }),
-                      patch,
-                    )
-                  }
-                />
-                Closed
-              </label>
+                      },
+                    }),
+                    patch,
+                  )
+                }
+              />
               {!row.closed ? (
                 <>
                   <Input
@@ -165,10 +187,12 @@ export function BusinessScheduleEditor({
                 </>
               ) : null}
             </div>
+            </OpusCompactPanel>
           );
         })}
       </div>
       <HolidayListEditor
+        presentation={presentation}
         holidays={schedule.holidays}
         onChange={(holidays) =>
           patchMaturity(
@@ -181,24 +205,29 @@ export function BusinessScheduleEditor({
           )
         }
       />
-    </section>
+    </Section>
   );
 }
 
 function HolidayListEditor({
+  presentation = "legacy",
   holidays,
   onChange,
 }: {
+  presentation?: WizardPresentation;
   holidays: VoiceV2HolidayClosure[];
   onChange: (h: VoiceV2HolidayClosure[]) => void;
 }) {
+  const { Input, Button } = pickWizardFieldComponents(presentation);
+  const isOpus = presentation === "opus";
   return (
     <div className="space-y-2">
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         Holiday closures
       </p>
       {holidays.map((h) => (
-        <div key={h.id} className="flex flex-wrap gap-2 rounded-lg border border-border p-2 text-sm">
+        <OpusCompactPanel key={h.id} isOpus={isOpus} bodyClassName="p-2">
+        <div className="flex flex-wrap gap-2 text-sm">
           <Input
             className="min-w-[120px] flex-1"
             value={h.name}
@@ -233,6 +262,7 @@ function HolidayListEditor({
             Remove
           </Button>
         </div>
+        </OpusCompactPanel>
       ))}
       <Button
         type="button"
@@ -260,12 +290,15 @@ function HolidayListEditor({
 export function AfterHoursBehaviorEditor({
   state,
   patch,
+  presentation = "legacy",
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
+  presentation?: WizardPresentation;
 }) {
   const m = ensureWizardOperatingMaturity(state);
   const when = m.afterHoursBehavior.whenClosed;
+  const Section = presentation === "opus" ? pickWizardFieldComponents(presentation).Panel : LegacySection;
 
   const toggle = (key: keyof typeof when, value: boolean) => {
     patchMaturity(
@@ -282,32 +315,29 @@ export function AfterHoursBehaviorEditor({
   };
 
   return (
-    <section className="space-y-3 rounded-xl border border-border bg-card p-4">
-      <h3 className="font-medium">After-hours behavior</h3>
-      <p className="text-sm text-muted-foreground">
-        What Amy may do when operating state is closed, weekend, or holiday.
-      </p>
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={m.afterHoursBehavior.useOperatingStateDuringCalls}
-          onChange={(e) =>
-            patchMaturity(
-              state,
-              (cur) => ({
-                ...cur,
-                afterHoursBehavior: {
-                  ...cur.afterHoursBehavior,
-                  useOperatingStateDuringCalls: e.target.checked,
-                },
-              }),
-              patch,
-            )
-          }
-        />
-        Apply operating state during live calls
-      </label>
-      <div className="grid gap-2 sm:grid-cols-2">
+    <Section
+      title="After-hours behavior"
+      description="What Amy may do when operating state is closed, weekend, or holiday."
+    >
+      <WizardToggleField
+        presentation={presentation}
+        label="Apply operating state during live calls"
+        checked={m.afterHoursBehavior.useOperatingStateDuringCalls}
+        onCheckedChange={(on) =>
+          patchMaturity(
+            state,
+            (cur) => ({
+              ...cur,
+              afterHoursBehavior: {
+                ...cur.afterHoursBehavior,
+                useOperatingStateDuringCalls: on,
+              },
+            }),
+            patch,
+          )
+        }
+      />
+      <div className="grid gap-1 sm:grid-cols-2">
         {(
           [
             ["allowLiveBooking", "Allow live booking"],
@@ -318,34 +348,37 @@ export function AfterHoursBehaviorEditor({
             ["allowNormalTransferDestinations", "Allow normal transfer destinations"],
           ] as const
         ).map(([key, label]) => (
-          <label key={key} className="flex items-start gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="mt-1"
-              checked={when[key]}
-              onChange={(e) => toggle(key, e.target.checked)}
-            />
-            {label}
-          </label>
+          <WizardToggleField
+            key={key}
+            presentation={presentation}
+            label={label}
+            checked={when[key]}
+            onCheckedChange={(on) => toggle(key, on)}
+          />
         ))}
       </div>
-      <InfoCallout>
+      <WizardHint presentation={presentation}>
         On-call escalation uses your published on-call schedule or tonight&apos;s override from
         Operations.
-      </InfoCallout>
-    </section>
+      </WizardHint>
+    </Section>
   );
 }
 
 export function OnCallScheduleEditor({
   state,
   patch,
+  presentation = "legacy",
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
+  presentation?: WizardPresentation;
 }) {
   const m = ensureWizardOperatingMaturity(state);
   const onCall = m.onCallSchedule;
+  const { Input, Button, Panel } = pickWizardFieldComponents(presentation);
+  const isOpus = presentation === "opus";
+  const Section = isOpus ? Panel : LegacySection;
 
   const updateEntries = (entries: VoiceV2OnCallScheduleEntry[]) => {
     patchMaturity(
@@ -359,27 +392,24 @@ export function OnCallScheduleEditor({
   };
 
   return (
-    <section className="space-y-3 rounded-xl border border-border bg-card p-4">
-      <h3 className="font-medium">On-call schedule</h3>
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={onCall.enabled}
-          onChange={(e) =>
-            patchMaturity(
-              state,
-              (cur) => ({
-                ...cur,
-                onCallSchedule: { ...cur.onCallSchedule, enabled: e.target.checked },
-              }),
-              patch,
-            )
-          }
-        />
-        Enable on-call rotation
-      </label>
+    <Section title="On-call schedule">
+      <WizardToggleField
+        presentation={presentation}
+        label="Enable on-call rotation"
+        checked={onCall.enabled}
+        onCheckedChange={(on) =>
+          patchMaturity(
+            state,
+            (cur) => ({
+              ...cur,
+              onCallSchedule: { ...cur.onCallSchedule, enabled: on },
+            }),
+            patch,
+          )
+        }
+      />
       {onCall.entries.map((entry) => (
-        <div key={entry.id} className="space-y-2 rounded-lg border border-border p-3 text-sm">
+        <OpusCompactPanel key={entry.id} isOpus={isOpus} className="text-sm">
           <Input
             value={entry.name || ""}
             placeholder="Label (e.g. Mike)"
@@ -461,7 +491,7 @@ export function OnCallScheduleEditor({
           >
             Remove entry
           </Button>
-        </div>
+        </OpusCompactPanel>
       ))}
       <Button
         type="button"
@@ -485,81 +515,79 @@ export function OnCallScheduleEditor({
       >
         Add on-call window
       </Button>
-    </section>
+    </Section>
   );
 }
 
 export function CallbackSlaEditor({
   state,
   patch,
+  presentation = "legacy",
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
+  presentation?: WizardPresentation;
 }) {
   const m = ensureWizardOperatingMaturity(state);
   const sla = m.callbackSla;
+  const Section = presentation === "opus" ? pickWizardFieldComponents(presentation).Panel : LegacySection;
 
   return (
-    <section className="space-y-3 rounded-xl border border-border bg-card p-4">
-      <h3 className="font-medium">Callback SLA</h3>
-      <p className="text-sm text-muted-foreground">
-        Sets promised deadlines on voice callback requests. When a deadline passes,
-        staff get an in-app notification on Callback requests. Transovo does not
-        auto-dial overdue callbacks.
-      </p>
+    <Section
+      title="Callback SLA"
+      description="Sets promised deadlines on voice callback requests. When a deadline passes, staff get an in-app notification on Callback requests. Transovo does not auto-dial overdue callbacks."
+    >
       <div className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <Label>Normal callbacks</Label>
-          <select
-            className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-            value={sla.normalTarget}
-            onChange={(e) =>
-              patchMaturity(
-                state,
-                (cur) => ({
-                  ...cur,
-                  callbackSla: {
-                    ...cur.callbackSla,
-                    normalTarget: e.target.value as typeof sla.normalTarget,
-                  },
-                }),
-                patch,
-              )
-            }
-          >
-            <option value="30m">30 minutes</option>
-            <option value="1h">1 hour</option>
-            <option value="next_business_day">Next business day</option>
-            <option value="custom">Custom</option>
-          </select>
-        </div>
-        <div>
-          <Label>Urgent callbacks</Label>
-          <select
-            className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-            value={sla.urgentTarget}
-            onChange={(e) =>
-              patchMaturity(
-                state,
-                (cur) => ({
-                  ...cur,
-                  callbackSla: {
-                    ...cur.callbackSla,
-                    urgentTarget: e.target.value as typeof sla.urgentTarget,
-                  },
-                }),
-                patch,
-              )
-            }
-          >
-            <option value="immediate">Immediate</option>
-            <option value="15m">15 minutes</option>
-            <option value="30m">30 minutes</option>
-            <option value="custom">Custom</option>
-          </select>
-        </div>
+        <WizardSelectField
+          presentation={presentation}
+          label="Normal callbacks"
+          value={sla.normalTarget}
+          onChange={(value) =>
+            patchMaturity(
+              state,
+              (cur) => ({
+                ...cur,
+                callbackSla: {
+                  ...cur.callbackSla,
+                  normalTarget: value as typeof sla.normalTarget,
+                },
+              }),
+              patch,
+            )
+          }
+          options={[
+            { value: "30m", label: "30 minutes" },
+            { value: "1h", label: "1 hour" },
+            { value: "next_business_day", label: "Next business day" },
+            { value: "custom", label: "Custom" },
+          ]}
+        />
+        <WizardSelectField
+          presentation={presentation}
+          label="Urgent callbacks"
+          value={sla.urgentTarget}
+          onChange={(value) =>
+            patchMaturity(
+              state,
+              (cur) => ({
+                ...cur,
+                callbackSla: {
+                  ...cur.callbackSla,
+                  urgentTarget: value as typeof sla.urgentTarget,
+                },
+              }),
+              patch,
+            )
+          }
+          options={[
+            { value: "immediate", label: "Immediate" },
+            { value: "15m", label: "15 minutes" },
+            { value: "30m", label: "30 minutes" },
+            { value: "custom", label: "Custom" },
+          ]}
+        />
       </div>
-    </section>
+    </Section>
   );
 }
 

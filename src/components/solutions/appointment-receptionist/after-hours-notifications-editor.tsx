@@ -2,8 +2,13 @@
 
 import { createId } from "@/lib/supabase/id";
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
-import { Button } from "@/components/ui/button";
-import { Input, Label } from "@/components/ui/input";
+import {
+  pickWizardFieldComponents,
+  type WizardPresentation,
+  WizardCheckboxInline,
+  WizardToggleField,
+} from "./wizard-field-kit";
+import { OpusCompactPanel } from "./wizard-opus-ui";
 
 type Patch = (partial: Partial<AppointmentReceptionistWizardState>) => void;
 
@@ -20,10 +25,14 @@ const EVENT_ROWS: Array<{ key: string; label: string }> = [
 export function AfterHoursNotificationsEditor({
   state,
   patch,
+  presentation = "legacy",
 }: {
   state: AppointmentReceptionistWizardState;
   patch: Patch;
+  presentation?: WizardPresentation;
 }) {
+  const { Input, Label, Button } = pickWizardFieldComponents(presentation);
+  const isOpus = presentation === "opus";
   const events = state.afterHoursNotificationEvents ?? {};
   const recipients = state.afterHoursNotificationRecipients ?? [];
 
@@ -79,26 +88,24 @@ export function AfterHoursNotificationsEditor({
             const sms = flags.sms ?? defaultOn;
             const email = flags.email ?? defaultOn;
             return (
-              <li key={row.key} className="rounded-lg border border-border px-3 py-2">
+              <li key={row.key}>
+                <OpusCompactPanel isOpus={isOpus} bodyClassName="px-3 py-2">
                 <p className="text-sm font-medium">{row.label}</p>
                 <div className="mt-2 flex flex-wrap gap-4 text-sm">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={sms}
-                      onChange={(e) => setEventChannel(row.key, "sms", e.target.checked)}
-                    />
-                    SMS
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={email}
-                      onChange={(e) => setEventChannel(row.key, "email", e.target.checked)}
-                    />
-                    Email
-                  </label>
+                  <WizardCheckboxInline
+                    presentation={presentation}
+                    label="SMS"
+                    checked={sms}
+                    onCheckedChange={(on) => setEventChannel(row.key, "sms", on)}
+                  />
+                  <WizardCheckboxInline
+                    presentation={presentation}
+                    label="Email"
+                    checked={email}
+                    onCheckedChange={(on) => setEventChannel(row.key, "email", on)}
+                  />
                 </div>
+                </OpusCompactPanel>
               </li>
             );
           })}
@@ -112,7 +119,7 @@ export function AfterHoursNotificationsEditor({
         </p>
         <div className="mt-3 space-y-3">
           {recipients.map((r) => (
-            <div key={r.id} className="rounded-lg border border-border p-3 space-y-2">
+            <OpusCompactPanel key={r.id} isOpus={isOpus}>
               <div className="flex flex-wrap items-end gap-2">
                 <div className="min-w-[140px] flex-1">
                   <Label>Label</Label>
@@ -121,14 +128,14 @@ export function AfterHoursNotificationsEditor({
                     onChange={(e) => updateRecipient(r.id, { label: e.target.value })}
                   />
                 </div>
-                <label className="flex items-center gap-2 text-sm pb-2">
-                  <input
-                    type="checkbox"
+                <div className="pb-2">
+                  <WizardToggleField
+                    presentation={presentation}
+                    label="Enabled"
                     checked={r.enabled !== false}
-                    onChange={(e) => updateRecipient(r.id, { enabled: e.target.checked })}
+                    onCheckedChange={(on) => updateRecipient(r.id, { enabled: on })}
                   />
-                  Enabled
-                </label>
+                </div>
               </div>
               <div className="grid gap-2 sm:grid-cols-2">
                 <div>
@@ -149,7 +156,7 @@ export function AfterHoursNotificationsEditor({
                   />
                 </div>
               </div>
-            </div>
+            </OpusCompactPanel>
           ))}
           <Button type="button" variant="outline" size="sm" onClick={addRecipient}>
             + Add recipient
