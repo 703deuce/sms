@@ -93,10 +93,11 @@ Inbound consumer SMS (Telnyx)
 
 **Remaining verification (not yet closed):**
 
-- Prove email delivery for `caller_replied` with matrix toggles and real recipient.
-- Confirm idempotency (`mctb-handoff:…:caller_replied` + `mctb-notify:…:email:…`).
+- Prove email delivery for `caller_replied` with matrix toggles and real recipient (production or integration test with `notifyWorkspaceByEmail` stub).
+- Confirm idempotency per inbound (`providerMessageId` in handoff key + `mctb-notify:…:email:…`).
 - Document whether `MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY` affects in-app vs email in prod.
-- **Then** attach urgent classifier after normal reply notification lifecycle.
+- **Do not modify** legacy `processMctbInboundReply` for production Telnyx SMS.
+- **Then** urgent classifier inside orchestration (not a second notification system).
 
 **Desired relationship:**
 
@@ -111,12 +112,34 @@ Inbound reply ──┬→ normal email (and matrix channels)
 
 **Status:** `MCTB_URGENT_AI_CLASSIFIER: MISSING — REQUIRED THIS PASS` (not deferred).
 
-**Reuse:** Lead Recovery already produces `StructuredLeadIntent`; `assessMctbUrgencyFromStructuredIntent` maps intent + `emergencyCriteria` to urgent/normal. Do **not** add a unrelated second AI stack if existing structured-output path can carry `urgentInstructions` + latest message + context.
+### Runtime requirements (before / during implementation)
+
+1. **Independent of conversational AI Recovery** — Urgent Reply Alerts are MCTB notification/escalation. Workspace may have MCTB on, AI Recovery off, Urgent Alerts on. Example: Press-1 → locked recovery text → caller replies “My basement is flooding” → persist → classify → business alert **without** LR conversation. **Do not** gate urgent (or `caller_replied` handoff) behind `leadRecoveryEnabled`.
+
+2. **No extra consumer SMS from urgency** — Especially platform sender: classify → **business** notification only. Consumer messaging stays under sender ownership, template policy, consent, entitlement.
+
+3. **Single notification orchestration (no duplicate emails)** — Reuse `caller_replied` / handoff infrastructure; no parallel stack. Preferred flow:
+
+   ```
+   Inbound reply → persist → record caller_replied lifecycle
+     → urgency evaluation (when enabled)
+     → notification routing (one orchestration pass)
+   NORMAL  → matrix caller-replied email/channels
+   URGENT  → urgent-formatted email + entitled business SMS + persisted urgent UI state
+   ```
+
+   Do **not** send both a normal reply email and a second urgent email for the same inbound message unless explicitly required. Preserve idempotency per channel.
+
+4. **Business urgent instructions = semantic authority** — Reuse existing structured AI infrastructure where it fits. **Do not** reduce the feature to keyword-only reuse of `assessMctbUrgencyFromStructuredIntent` if that cannot answer: “Given this business’s natural-language urgent instructions, this reply, and recent context — urgent?” Return `{ urgent, reason, summary }`. If an old helper cannot express that contract, extend minimally; do not break unrelated Lead Recovery behavior.
+
+**Known trap (caller_replied):** `handleMctbCustomerSmsReply` previously returned `lead_recovery_not_enabled` before handoff side effects — notifications never ran when AI Recovery was off. **Fix in progress on this branch** — handoff runs for all qualified MCTB inbound replies; LR only gates **outbound** conversational SMS.
+
+**Reuse note:** Lead Recovery produces `StructuredLeadIntent`; that may feed urgency when LR runs, but urgency when LR is **off** must use instructions-driven classification (future tranche), not LR-only paths.
 
 **Target contract:**
 
 1. Inbound reply → compliance/routing → persist message  
-2. Normal `caller_replied` notification lifecycle (above)  
+2. `caller_replied` handoff event + orchestrated notifications (after urgency when enabled)  
 3. If urgent alerts enabled → classifier → structured `{ urgent, reason, summary }` → persist  
 4. If urgent → mark conversation/message visible urgent → email per config → **entitled** business SMS to emergency recipient(s)
 
