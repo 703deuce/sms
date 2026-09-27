@@ -41,19 +41,18 @@ function access(
   };
 }
 
-// Voice-only login routing
+// MCTB V1 primary launch: all authenticated users land on MCTB home (Voice hidden).
 assert.equal(
   resolvePostLoginPath(access({ hasVoice: true, hasNumbers: false, hasSms: false })),
-  "/dashboard",
+  "/mctb",
 );
 
-// Numbers-only login routing
+// MCTB primary: entitlements do not change default post-login (still MCTB home).
 assert.equal(
   resolvePostLoginPath(access({ hasVoice: false, hasNumbers: true, hasSms: false })),
-  "/personal",
+  "/mctb",
 );
 
-// Multi-product with last active
 assert.equal(
   resolvePostLoginPath(
     access({
@@ -63,13 +62,12 @@ assert.equal(
       lastActiveProduct: "numbers",
     }),
   ),
-  "/personal",
+  "/mctb",
 );
 
-// Multi-product without last active → SMS dashboard (no product launcher)
 assert.equal(
   resolvePostLoginPath(access({ hasVoice: true, hasNumbers: true, hasSms: false })),
-  "/dashboard",
+  "/mctb",
 );
 
 // Deep link preserved
@@ -100,7 +98,7 @@ assert.equal(isSmsLegacyHidden("/outcomes"), true);
 assert.equal(isSmsShellRoute("/compliance/brand"), true);
 assert.equal(isSmsShellRoute("/outcomes"), false);
 assert.equal(isNumbersMarketplacePath("/numbers/premium"), true);
-assert.equal(productHomePath("voice"), "/dashboard");
+assert.equal(productHomePath("voice"), "/mctb", "Voice product home follows MCTB shell during launch");
 
 // Sidebar separation — no cross-product links in primary nav
 const voiceNav = buildVoiceNav({ showTryIt: false });
@@ -135,8 +133,8 @@ assert.equal(
     hasNumbers: true,
     hasSms: false,
   }),
-  "/mass-texting",
-  "Platform home gates without voice or SMS entitlement",
+  "/mctb",
+  "MCTB primary launch redirects legacy platform home to MCTB",
 );
 assert.equal(
   productAccessDeniedRedirect(
@@ -148,8 +146,17 @@ assert.equal(
     },
     { authenticated: true },
   ),
-  "/api/products/open?product=mass_texting",
-  "Authenticated platform home opens mass texting workspace",
+  "/mctb",
+  "Authenticated legacy platform home redirects to MCTB during launch",
+);
+assert.equal(
+  productAccessDeniedRedirect("/voice/receptionist", {
+    hasVoice: true,
+    hasNumbers: false,
+    hasSms: false,
+  }),
+  "/mctb",
+  "Hidden Voice UI routes redirect to MCTB",
 );
 assert.equal(
   productAccessDeniedRedirect(

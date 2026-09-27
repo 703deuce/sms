@@ -12,6 +12,7 @@ import {
 import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlements";
 import { resolveMctbLaunchProductShell } from "@/lib/mctb/universal-shell";
 import { isAppointmentsV1Primary, isMctbV1Primary, isSmsOnlyAppNav } from "@/lib/workspace/platform-launch";
+import { isVoiceProductCustomerVisible } from "@/lib/products/launch-product-availability";
 
 export type ResolveProductNavInput = {
   pathname: string;
@@ -67,6 +68,13 @@ export function resolveProductSidebarNav(input: ResolveProductNavInput): NavItem
     return buildSmsPlatformNav({ conversationsBadge: input.inboxBadge });
   }
   if (effectiveShell === "ai_after_hours") {
+    if (!isVoiceProductCustomerVisible()) {
+      return buildMctbV1Nav({
+        inboxBadge: input.inboxBadge,
+        hasVoice: false,
+        hasNumbers: input.hasNumbers,
+      });
+    }
     return buildAiAfterHoursNav({
       primaryVoiceAgentId: input.primaryVoiceAgentId ?? null,
     });
@@ -126,6 +134,12 @@ export function resolveProductMobileNav(input: ResolveProductNavInput): NavItem[
     return buildSmsPlatformNav({ conversationsBadge: input.inboxBadge });
   }
   if (effectiveShell === "ai_after_hours") {
+    if (!isVoiceProductCustomerVisible()) {
+      return buildMctbV1MobileNav({
+        inboxBadge: input.inboxBadge,
+        hasVoice: false,
+      });
+    }
     return buildAiAfterHoursNav({
       primaryVoiceAgentId: input.primaryVoiceAgentId ?? null,
     });

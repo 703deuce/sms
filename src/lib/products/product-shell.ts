@@ -10,6 +10,7 @@ import {
   isMctbV1Primary,
   isSmsStandaloneHidden,
 } from "@/lib/workspace/platform-launch";
+import { isVoiceProductCustomerVisible } from "@/lib/products/launch-product-availability";
 
 export type ProductShell = "appointments" | "mass_sms" | "mctb" | "ai_after_hours";
 
@@ -180,7 +181,7 @@ export function defaultProductShell(input: {
   if (isMctbV1Primary() && input.hasMctb) return "mctb";
   if (isAppointmentsV1Primary()) return "appointments";
   if (input.hasMassSms) return "mass_sms";
-  if (input.hasAiAfterHours) return "ai_after_hours";
+  if (input.hasAiAfterHours && isVoiceProductCustomerVisible()) return "ai_after_hours";
   if (input.hasMctb) return "mctb";
   return "appointments";
 }
@@ -223,7 +224,7 @@ export function visibleProductShells(input: {
   const shells: ProductShell[] = [];
   if (input.hasMassSms && !isSmsStandaloneHidden()) shells.push("mass_sms");
   if (input.hasMctb) shells.push("mctb");
-  if (input.hasAiAfterHours) shells.push("ai_after_hours");
+  if (input.hasAiAfterHours && isVoiceProductCustomerVisible()) shells.push("ai_after_hours");
   return shells;
 }
 

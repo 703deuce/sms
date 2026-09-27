@@ -16,6 +16,7 @@ import {
   Wrench,
   type LucideIcon,
 } from 'lucide-react'
+import { isVoiceProductCustomerVisible } from '@/lib/products/launch-product-availability'
 
 export type NavItem = {
   label: string
@@ -27,7 +28,7 @@ export type NavItem = {
 
 export type NavSection = { label: string; items: NavItem[] }
 
-export const NAV: NavSection[] = [
+const FULL_NAV: NavSection[] = [
   {
     label: 'AI Receptionist',
     items: [
@@ -85,6 +86,15 @@ export const INTEGRATION_TABS = [
   { label: 'Webhooks', href: '/integrations/webhooks' },
   { label: 'Developer logs', href: '/integrations/logs' },
 ]
+
+/** Customer-facing sidebar sections (respects launch product visibility). */
+export function resolveCustomerNavSections(): NavSection[] {
+  if (isVoiceProductCustomerVisible()) return FULL_NAV
+  return FULL_NAV.filter((section) => section.label !== 'AI Receptionist')
+}
+
+/** @deprecated Use resolveCustomerNavSections() for app chrome. */
+export const NAV: NavSection[] = FULL_NAV
 
 export const SETTINGS_TABS = [
   { label: 'Business', href: '/settings/business' },

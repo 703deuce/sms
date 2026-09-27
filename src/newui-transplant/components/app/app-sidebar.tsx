@@ -17,7 +17,8 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from '@/newui-transplant/components/ui/sidebar'
-import { NAV, type NavItem } from '@/newui-transplant/lib/nav'
+import { mctbLaunchCustomerHome } from '@/lib/products/launch-product-availability'
+import { resolveCustomerNavSections, type NavItem } from '@/newui-transplant/lib/nav'
 import { BUSINESS } from '@/newui-transplant/lib/sandbox-data'
 import { useOpusWorkspaceData, workspaceInitials } from '@/newui-transplant/context/opus-workspace-data'
 
@@ -36,7 +37,7 @@ export function AppSidebar({ userName }: { userName?: string }) {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="gap-3 px-3 pt-4">
-        <Link href="/voice/overview" className="flex items-center gap-2.5 px-1">
+        <Link href={mctbLaunchCustomerHome()} className="flex items-center gap-2.5 px-1">
           <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
             <PhoneCall className="size-4" aria-hidden="true" />
           </span>
@@ -60,7 +61,7 @@ export function AppSidebar({ userName }: { userName?: string }) {
       </SidebarHeader>
 
       <SidebarContent className="pb-2">
-        {NAV.map((section) => (
+        {resolveCustomerNavSections().map((section) => (
           <SidebarGroup key={section.label}>
             <SidebarGroupLabel className="text-[11px] font-medium uppercase tracking-wider text-sidebar-foreground/50">
               {section.label}
