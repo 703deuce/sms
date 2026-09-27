@@ -1,11 +1,14 @@
 import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
-import { MctbLegacyShellStyles } from "./mctb-legacy-shell-styles";
 
-export default function MctbProductLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <>
-      {!isNewUiStage2Enabled() ? <MctbLegacyShellStyles /> : null}
-      {children}
-    </>
-  );
+export default async function MctbProductLayout({ children }: { children: React.ReactNode }) {
+  if (!isNewUiStage2Enabled()) {
+    const { MctbLegacyShellStyles } = await import("./mctb-legacy-shell-styles");
+    return (
+      <>
+        <MctbLegacyShellStyles />
+        {children}
+      </>
+    );
+  }
+  return children;
 }

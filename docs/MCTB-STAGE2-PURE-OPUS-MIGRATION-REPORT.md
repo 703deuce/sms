@@ -8,11 +8,42 @@
 
 ## Certification
 
+Run **`npm run verify:mctb-stage2-presentation`** for the combined gate (all four metrics + `PURE_OPUS`).
+
 | Gate | Target | Result |
 |------|--------|--------|
-| `MCTB_STAGE2_LEGACY_PRESENTATION_IMPORTS` | 0 | **0** (`npm run verify:mctb-stage2-legacy-imports`) |
-| `MCTB_CUSTOMER_VISIBLE_DEMO_STATE` (connected/public shells) | 0 | **0** (`npm run verify:mctb-stage2-demo-state`) |
-| `MCTB_STAGE2_FRONTEND` | PURE_OPUS | **PURE_OPUS** (Stage 2 path; rollback preserved) |
+| `MCTB_STAGE2_LEGACY_PRESENTATION_IMPORTS` | 0 | **0** |
+| `MCTB_STAGE2_LEGACY_COMPONENTS_RENDERED` | 0 | **0** |
+| `MCTB_STAGE2_LEGACY_CSS_LOADED` | 0 | **0** |
+| `MCTB_CUSTOMER_VISIBLE_DEMO_STATE` | 0 | **0** |
+| `MCTB_STAGE2_FRONTEND` | PURE_OPUS | **PURE_OPUS** |
+
+Certify **PURE_OPUS** only when all four counts are zero. Legacy files may remain in the repo for Stage 2 OFF rollback; they must not load on the Stage 2 customer tree.
+
+---
+
+## Presentation boundary (legacy CSS)
+
+**Requirement:** Stage 2 ON must not load legacy MCTB presentation CSS globally. No `OPUS + LEGACY MCTB CSS` stack.
+
+| Mechanism | Stage 2 ON | Stage 2 OFF |
+|-----------|------------|-------------|
+| `src/app/(app)/mctb/layout.tsx` | No shell CSS; children only | Dynamic `mctb-legacy-shell-styles` (`components/mctb/shell/*.css`) |
+| `src/components/layout/app-shell.tsx` | No static MCTB shell imports | `MctbLegacyAppShellStylesLoader` → `mctb-legacy-app-shell-styles.tsx` when MCTB neutral chrome |
+| `mctb-onboarding-runtime.tsx` | No legacy wizard CSS | Dynamic `mctb-onboarding-legacy-styles` when `!opus` |
+
+**Stylesheet classification (MCTB Stage 2 customer tree)**
+
+| Asset / path | Class | Stage 2 |
+|--------------|-------|---------|
+| `newui-transplant/**` styles + Opus primitives | OPUS | Allowed |
+| App-wide tokens / `bg-background`, transplant shell | GLOBAL APPLICATION FOUNDATION | Allowed |
+| `components/mctb/shell/*.css` | LEGACY MCTB PRESENTATION | Prohibited (gated modules only) |
+| `components/mctb/**/*.css` (feature views) | LEGACY MCTB PRESENTATION | Prohibited on Stage 2 routes |
+| `components/mctb/kimi-ui/reference.css` | LEGACY KIMI PRESENTATION | Prohibited |
+| `integrations/layout.tsx`, `payments/layout.tsx` partial shell CSS | LEGACY MCTB PRESENTATION | Outside `/mctb` Stage 2 tree; not loaded on Opus MCTB routes |
+
+Static analysis roots: `verify-mctb-stage2-presentation.ts` (`STAGE2_CSS_SCAN_FILES` + page import gates). Allowlisted side-effect modules: `mctb-legacy-shell-styles.tsx`, `mctb-legacy-app-shell-styles.tsx`, `mctb-onboarding-legacy-styles.ts`.
 
 ---
 
@@ -56,7 +87,7 @@ Stage 2 **OFF** retains legacy UI + `mctb-legacy-shell-styles` + `public-request
 | `MctbNumberDrawerHost` | `MctbNumberDrawerOpus` + `useMctbNumberDrawerController` | Yes |
 | `AddOnUpgradeCard` (voicemail gate) | `MctbAddOnUpgradeOpus` | Yes |
 | `/f/mctb/[token]` root shadcn | `MctbPublicRequestFormOpusPage` | Yes |
-| Global `components/mctb/shell/*.css` on all MCTB routes | Gated to Stage 2 OFF only | Rollback intact |
+| Global `components/mctb/shell/*.css` (`mctb/layout` + `app-shell`) | Gated to Stage 2 OFF only (dynamic import; not in Opus bundle graph) | Rollback intact |
 
 ---
 
@@ -102,6 +133,7 @@ Client-only extraction: `mctb-number-drawer-controller.ts`.
 ## 8. Verification commands
 
 ```bash
+npm run verify:mctb-stage2-presentation   # all four metrics + PURE_OPUS
 npm run verify:mctb-stage2-legacy-imports
 npm run verify:mctb-stage2-demo-state
 ```
