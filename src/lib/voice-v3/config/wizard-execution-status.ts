@@ -11,7 +11,8 @@ export type WizardV3ExecutionStatus =
   | "UI_METADATA_ONLY"
   | "HIDDEN_STATE_ONLY"
   | "MCTB_ONLY"
-  | "LEGACY_OBSOLETE";
+  | "LEGACY_OBSOLETE"
+  | "DEFERRED_NOT_EXPOSED";
 
 export type WizardV3RepublishBehavior =
   | "next_call"

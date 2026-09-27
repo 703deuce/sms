@@ -14,7 +14,8 @@ export type WizardV3LaunchClassification =
   | "OUT_OF_SCOPE_RETIRED"
   | "MCTB_ONLY"
   | "LEGACY_OBSOLETE"
-  | "UI_METADATA_ONLY";
+  | "UI_METADATA_ONLY"
+  | "DEFERRED_NOT_EXPOSED";
 
 export type WizardV3LaunchClassificationRow = {
   statePath: string;
@@ -72,20 +73,17 @@ const EXACT: Record<string, Omit<WizardV3LaunchClassificationRow, "statePath">> 
     evidence: "Compiled into retrieval.revision for cache busting",
   },
   answerWhen: {
-    classification: "CURRENT_VISIBLE_IMPLEMENTED",
+    classification: "DEFERRED_NOT_EXPOSED",
     evidence:
-      "Activate syncWizardRoutingRules + evaluateInboundRouting on LiveKit resolve_voice_v3_livekit_session",
-    runtimeConsumer: "livekit-ingress-policy.ts",
+      "CFNA launch: carrier/PBX rings business line first; hidden on after_hours wizard — not Transovo ingress gating",
   },
   ringBehavior: {
-    classification: "CURRENT_VISIBLE_IMPLEMENTED",
-    evidence:
-      "Wizard routing mode + human_first team ring delay before GPT-Live session (ingressDelaySeconds)",
-    runtimeConsumer: "livekit-ingress-policy.ts + voice_v3/session.py",
+    classification: "DEFERRED_NOT_EXPOSED",
+    evidence: "CFNA launch: no Transovo ring-team-first; hidden on standard after_hours wizard",
   },
   ringTeamSeconds: {
-    classification: "CHILD_IMPLEMENTED_BY_PARENT",
-    evidence: "VoiceRoutingRule actions.ringSeconds + LiveKit ingress delay",
+    classification: "DEFERRED_NOT_EXPOSED",
+    evidence: "First-leg ring duration is carrier CFNA — not exposed on after_hours launch wizard",
   },
   // —— Outbound SMS ——
   outboundSmsMode: {
@@ -196,10 +194,9 @@ const EXACT: Record<string, Omit<WizardV3LaunchClassificationRow, "statePath">> 
     evidence: "compile-transfer-config defaultMode WARM",
   },
   detectVoicemailOnTransfer: {
-    classification: "CURRENT_VISIBLE_IMPLEMENTED",
+    classification: "DEFERRED_NOT_EXPOSED",
     evidence:
-      "authorize-transfer detect_voicemail_on_transfer; warm consult leg AMD (DIRECT→WARM when enabled)",
-    runtimeConsumer: "transfer_executor.py",
+      "Launch uses transfer timeout + fallback only; AMD toggle hidden — not certified on LiveKit REFER path",
   },
   voiceV2HumanTransferEnabled: {
     classification: "CURRENT_VISIBLE_IMPLEMENTED",
@@ -444,6 +441,12 @@ export function resolveLaunchClassification(
         classification: "LEGACY_OBSOLETE",
         evidence: `Manifest ${manifestExecutionStatus}`,
       };
+    case "DEFERRED_NOT_EXPOSED":
+      return {
+        statePath,
+        classification: "DEFERRED_NOT_EXPOSED",
+        evidence: `Manifest ${manifestExecutionStatus}`,
+      };
     case "CONFIGURED_NOT_IMPLEMENTED":
       return {
         statePath,
@@ -470,6 +473,7 @@ export function summarizeLaunchClassifications(
     MCTB_ONLY: 0,
     LEGACY_OBSOLETE: 0,
     UI_METADATA_ONLY: 0,
+    DEFERRED_NOT_EXPOSED: 0,
   };
   for (const p of statePaths) {
     totals[classifyWizardRuntimeLeaf(p).classification] += 1;

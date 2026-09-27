@@ -135,26 +135,6 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
         forensics.append("AGENTSESSION_START_REQUESTED")
         config = await client.resolve_session_config()
 
-        ingress_delay = int(config.get("ingressDelaySeconds") or 0)
-        if ingress_delay > 0:
-            forensics.append(
-                "VOICE_V3_INGRESS_TEAM_RING_WAIT",
-                delay_seconds=ingress_delay,
-                ingress_mode=str(config.get("ingressMode") or ""),
-            )
-            await asyncio.sleep(float(ingress_delay))
-            eligibility = await backend.call(
-                "assert_voice_v3_livekit_ai_start",
-                {
-                    "workspaceId": str(config.get("workspaceId") or ""),
-                    "callId": str(config.get("callId") or ""),
-                },
-            )
-            if isinstance(eligibility, dict) and not eligibility.get("proceed", True):
-                reason = str(eligibility.get("reason") or "ingress_blocked")
-                forensics.append("VOICE_V3_INGRESS_AI_BLOCKED", reason=reason)
-                raise RuntimeError(f"voice_v3_ingress_ai_blocked:{reason}")
-
         live_session_id = str(config.get("liveSessionId") or "")
         call_ctx = VoiceV3CallContext(
             room_name=ctx.room.name,

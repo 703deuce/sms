@@ -5,6 +5,7 @@ import {
   capabilityOptionsForPreset,
   goalsSidePanelCopy,
   AMY_FIXED_CAPABILITIES,
+  usesCfnaUnansweredIngressModel,
 } from "@/lib/solutions/appointment-receptionist/wizard-presets";
 import type {
   AnswerWhen,
@@ -82,6 +83,7 @@ export function GoalsStep({
 }) {
   const isMctb = presentation === "mctb";
   const isOpus = presentation === "opus";
+  const cfnaIngress = usesCfnaUnansweredIngressModel(state.preset);
   const uiVariant = isOpus ? "opus" : "legacy";
   const { Input, Label, Button } = pickWizardFieldComponents(presentation);
   const options = capabilityOptionsForPreset(state.preset);
@@ -186,9 +188,18 @@ export function GoalsStep({
             <h3 className="text-sm font-semibold text-foreground">
               How should Amy cover the phone?
             </h3>
+            {cfnaIngress ? (
+              <InfoCallout variant={uiVariant}>
+                Unanswered calls on your business line should forward to Transovo using
+                conditional call forwarding (CFNA). You will set that up on the Phone step — Amy
+                answers only after your carrier forwards the call.
+              </InfoCallout>
+            ) : (
             <p className="mt-1 text-sm text-muted-foreground">
               Booking is always on. Choose only the coverage mode for this instance.
             </p>
+            )}
+            {!cfnaIngress ? (
             <div className="mt-3 grid gap-2">
               {OPERATING_MODES.map((opt) => (
                 <RadioRow
@@ -209,6 +220,7 @@ export function GoalsStep({
                 />
               ))}
             </div>
+            ) : null}
           </div>
 
           <div>
@@ -316,7 +328,7 @@ export function GoalsStep({
     </>
   );
 
-  const answerWhenBody = !hideAnswerWhen ? (
+  const answerWhenBody = !hideAnswerWhen && !cfnaIngress ? (
         <div>
           {!isOpus ? (
             <h3 className="text-sm font-semibold text-foreground">

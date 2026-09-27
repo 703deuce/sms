@@ -38,10 +38,13 @@ export function PhoneStep({
   state,
   patch,
   presentation = "legacy",
+  hideLegacyIngressControls = false,
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
   presentation?: "legacy" | "mctb" | "opus";
+  /** CFNA after-hours launch — carrier rings business line; hide Transovo ring-team UI. */
+  hideLegacyIngressControls?: boolean;
 }) {
   const isMctb = presentation === "mctb";
   const isOpus = presentation === "opus";
@@ -411,7 +414,19 @@ export function PhoneStep({
           </div>
         ) : null}
 
+        {hideLegacyIngressControls ? (
+          <OpusCalloutPanel opus={isOpus} title="How calls reach your AI">
+            <p className="text-sm text-muted-foreground">
+              Your business phone rings on your carrier or PBX as usual. When nobody answers,
+              conditional call forwarding (CFNA) sends the call to your Transovo number below —
+              then Amy answers. Transovo does not control how long your original line rings; set
+              that in your carrier&apos;s forwarding settings.
+            </p>
+          </OpusCalloutPanel>
+        ) : null}
+
         <div className="grid gap-6 lg:grid-cols-2">
+          {!hideLegacyIngressControls ? (
           <WizardSection opus={isOpus} title="Answering behavior">
             <div className="space-y-2">
               {(
@@ -447,8 +462,10 @@ export function PhoneStep({
               ))}
             </div>
           </WizardSection>
+          ) : null}
           <WizardSection opus={isOpus} title="Settings">
             <div className="space-y-3">
+            {!hideLegacyIngressControls ? (
             <WizardSelectField
               presentation={presentation}
               label="Ring team for"
@@ -459,6 +476,7 @@ export function PhoneStep({
                 label: `${s} seconds`,
               }))}
             />
+            ) : null}
             <WizardSelectField
               presentation={presentation}
               label="Call recording"

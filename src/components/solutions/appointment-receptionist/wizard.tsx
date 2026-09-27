@@ -10,6 +10,7 @@ import {
   wizardHeadline,
   hireWizardHeadline,
   AMY_FIXED_CAPABILITIES,
+  usesCfnaUnansweredIngressModel,
 } from "@/lib/solutions/appointment-receptionist/wizard-presets";
 import { type AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
 import { toErrorMessage } from "@/lib/errors";
@@ -567,10 +568,16 @@ export function AppointmentReceptionistWizard({
             patch={patch}
             hireMode={hireMode}
             presentation={stepPresentation}
+            hideAnswerWhen={usesCfnaUnansweredIngressModel(state.preset)}
           />
         ) : null}
         {step?.id === "phone" ? (
-          <PhoneStep state={state} patch={patch} presentation={stepPresentation} />
+          <PhoneStep
+            state={state}
+            patch={patch}
+            presentation={stepPresentation}
+            hideLegacyIngressControls={usesCfnaUnansweredIngressModel(state.preset)}
+          />
         ) : null}
         {step?.id === "information" ? (
           <InformationStep state={state} patch={patch} presentation={stepPresentation} />

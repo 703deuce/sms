@@ -201,7 +201,6 @@ export function authorizeVoiceV3Transfer(input: {
     handoff_instructions: handoff,
     outbound_sip_trunk_id: policy.telephony.outboundSipTrunkId,
     outbound_caller_id_e164: policy.telephony.outboundCallerIdE164,
-    detect_voicemail_on_transfer: config.callHandling.detectVoicemailOnTransfer === true,
   };
 
   logVoiceV3TransferEvent("VOICE_V3_TRANSFER_AUTHORIZED", {

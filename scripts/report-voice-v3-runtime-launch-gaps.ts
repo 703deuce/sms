@@ -47,6 +47,7 @@ const byClass: Record<WizardV3LaunchClassification, RowOut[]> = {
   MCTB_ONLY: [],
   LEGACY_OBSOLETE: [],
   UI_METADATA_ONLY: [],
+  DEFERRED_NOT_EXPOSED: [],
 };
 
 for (const r of rows) {
@@ -55,9 +56,13 @@ for (const r of rows) {
 
 const visibleControls = rows.filter(
   (r) =>
-    !["OUT_OF_SCOPE_RETIRED", "HIDDEN_STATE_ONLY", "LEGACY_OBSOLETE", "MCTB_ONLY"].includes(
-      r.launchClassification,
-    ),
+    ![
+      "OUT_OF_SCOPE_RETIRED",
+      "HIDDEN_STATE_ONLY",
+      "LEGACY_OBSOLETE",
+      "MCTB_ONLY",
+      "DEFERRED_NOT_EXPOSED",
+    ].includes(r.launchClassification),
 );
 
 const visibleRuntimeAffecting = visibleControls.filter(

@@ -134,6 +134,8 @@
     "export:voice-v3-control-connection-list": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/export-voice-v3-control-connection-list.ts",
     "report:voice-v3-runtime-launch-gaps": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/report-voice-v3-runtime-launch-gaps.ts",
     "test:voice-v3-runtime-launch-classification": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-voice-v3-runtime-launch-classification.ts",
+    "test:voice-v3-required-fields-book-gate": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-voice-v3-required-fields-book-gate.ts",
+    "test:voice-v3-transfer-cold-warm-cert": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-voice-v3-transfer-cold-warm-cert.ts",
     "test:voice-v3-transfer-system": "tsx scripts/test-voice-v3-transfer-system.ts",
     "test:voice-v3-transfer-wizard-state": "tsx scripts/test-voice-v3-transfer-wizard-state.ts",
     "test:voice-v3-agent": "tsx scripts/test-voice-v3-agent-simulator.ts && tsx scripts/test-voice-v3-agent-claims.ts && tsx scripts/test-voice-v3-agent-foundation.ts && tsx scripts/test-voice-v3-agent-invariants.ts && tsx scripts/test-voice-v3-agent-failure-matrix.ts && tsx scripts/test-voice-v3-s47-complete.ts && tsx scripts/test-voice-v3-agent-closed-loop.ts && NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-voice-v3-closed-loop-intake-multiturn.ts && NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-voice-v3-operation-registration.ts && NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-voice-v3-delegation-protocol-race.ts",

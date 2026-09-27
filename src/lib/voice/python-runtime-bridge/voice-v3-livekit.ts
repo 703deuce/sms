@@ -32,13 +32,6 @@ import {
 import { ensureVoiceV3LiveKitVoiceCall } from "@/lib/voice/python-runtime-bridge/ensure-voice-v3-livekit-voice-call";
 import type { FunctionTool } from "openai/resources/live/live";
 import type { VoiceV3AgentConfig } from "@/lib/voice-v3/config/agent-config";
-import {
-  assertVoiceV3LiveKitAiStartEligible,
-  beginLiveKitTeamRingPhase,
-  evaluateVoiceV3LiveKitIngress,
-  ingressFieldsForSession,
-} from "@/lib/voice-v3/ingress/livekit-ingress-policy";
-import type { VoiceV3LiveKitIngressSessionFields } from "@/lib/voice-v3/ingress/ingress-policy-types";
 
 /** Tools executed natively in the LiveKit Python worker (not Astra FunctionTools). */
 export const VOICE_V3_LIVEKIT_NATIVE_TOOL_NAMES = ["end_call"] as const;
@@ -86,11 +79,6 @@ export type VoiceV3LiveKitSessionConfig = {
   textVerbosity: "low" | "medium" | "high" | null;
   /** OpenAI vector stores for LiveKit GPT-Live FileSearch provider tool. */
   openaiFileSearchVectorStoreIds: string[];
-  ingressDelaySeconds: number;
-  ingressMode: VoiceV3LiveKitIngressSessionFields["ingressMode"];
-  humanCallId?: string | null;
-  effectiveRoutingAction: string;
-  routingRuleId?: string | null;
 };
 
 function liveSessionIdForRoom(roomName: string): string {
@@ -191,28 +179,6 @@ export async function resolveVoiceV3LiveKitSession(
     });
   });
 
-  const ingressPlan = await evaluateVoiceV3LiveKitIngress({
-    workspaceId: routing.workspaceId,
-    agentId: routing.agentId,
-    fromE164: caller,
-    toE164: dialed,
-    agentConfig,
-  });
-
-  let humanCallId: string | null = null;
-  if (ingressPlan.mode === "after_team_ring") {
-    const teamRing = await beginLiveKitTeamRingPhase({
-      workspaceId: routing.workspaceId,
-      voiceCallId: callId,
-      fromE164: caller,
-      toE164: dialed,
-      plan: ingressPlan,
-    });
-    humanCallId = teamRing.humanCallId;
-  }
-
-  const ingressSession = ingressFieldsForSession(ingressPlan, humanCallId);
-
   initVoiceV3CallForensics({
     callId,
     liveSessionId,
@@ -266,10 +232,6 @@ export async function resolveVoiceV3LiveKitSession(
   });
   appendVoiceV3ForensicEvent(liveSessionId, "VOICE_V3_SESSION_CONFIG_RESOLVED", {
     tool_count: toolSchemas.length,
-    ingress_mode: ingressSession.ingressMode,
-    ingress_delay_seconds: ingressSession.ingressDelaySeconds,
-    effective_routing_action: ingressSession.effectiveRoutingAction,
-    routing_rule_id: ingressSession.routingRuleId,
   });
 
   const openaiFileSearchVectorStoreIds =
@@ -293,22 +255,7 @@ export async function resolveVoiceV3LiveKitSession(
     reasoningEffort: VOICE_V3_ASTRA_REASONING_EFFORT,
     textVerbosity: "low",
     openaiFileSearchVectorStoreIds,
-    ingressDelaySeconds: ingressSession.ingressDelaySeconds,
-    ingressMode: ingressSession.ingressMode,
-    humanCallId: ingressSession.humanCallId,
-    effectiveRoutingAction: ingressSession.effectiveRoutingAction,
-    routingRuleId: ingressSession.routingRuleId,
   };
-}
-
-export async function assertVoiceV3LiveKitAiStartForPython(payload: {
-  workspaceId: string;
-  callId: string;
-}): Promise<{ proceed: boolean; reason?: string }> {
-  return assertVoiceV3LiveKitAiStartEligible({
-    workspaceId: String(payload.workspaceId || "").trim(),
-    voiceCallId: String(payload.callId || "").trim(),
-  });
 }
 
 export type VoiceV3LiveKitExecuteToolPayload = {

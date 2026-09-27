@@ -1,7 +1,10 @@
 "use client";
 
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
-import { hasBookingCapability } from "@/lib/solutions/appointment-receptionist/wizard-presets";
+import {
+  hasBookingCapability,
+  usesCfnaUnansweredIngressModel,
+} from "@/lib/solutions/appointment-receptionist/wizard-presets";
 import {
   ArrowRight,
   AlertTriangle,
@@ -155,7 +158,12 @@ export function CallHandlingStep({
             description={`Policy triggers (when Amy may offer a transfer): ${state.transferTriggers.join(" · ")}`}
           >
             <div>
-              <EmergencyTransferEditor state={state} patch={patch} presentation={presentation} />
+              <EmergencyTransferEditor
+                state={state}
+                patch={patch}
+                presentation={presentation}
+                hideVoicemailDetection={usesCfnaUnansweredIngressModel(state.preset)}
+              />
             </div>
             {presentation === "mctb" ? (
               <div className="mt-4 space-y-3 border-t border-border pt-3">

@@ -34,10 +34,12 @@ export function EmergencyTransferEditor({
   state,
   patch,
   presentation = "legacy",
+  hideVoicemailDetection = false,
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
   presentation?: WizardPresentation;
+  hideVoicemailDetection?: boolean;
 }) {
   const ui = pickWizardFieldComponents(presentation);
   const { Input, Label, Button } = ui;
@@ -312,6 +314,7 @@ export function EmergencyTransferEditor({
           })}
         </ul>
 
+        {!hideVoicemailDetection ? (
         <WizardToggleField
           presentation={presentation}
           label="Detect voicemail on transfer"
@@ -319,6 +322,7 @@ export function EmergencyTransferEditor({
           checked={state.detectVoicemailOnTransfer}
           onCheckedChange={(on) => patch({ detectVoicemailOnTransfer: on })}
         />
+        ) : null}
 
         <div className="mt-4 border-t border-border pt-3">
           <Label className="text-sm font-medium">

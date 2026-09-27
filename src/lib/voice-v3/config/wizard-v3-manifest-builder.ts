@@ -130,6 +130,8 @@ function executionStatusFromLaunchClassification(
       return "MCTB_ONLY";
     case "LEGACY_OBSOLETE":
       return "LEGACY_OBSOLETE";
+    case "DEFERRED_NOT_EXPOSED":
+      return "DEFERRED_NOT_EXPOSED";
     case "CURRENT_VISIBLE_STILL_BROKEN":
       return "CONFIGURED_NOT_IMPLEMENTED";
     default:
@@ -184,10 +186,10 @@ export function buildWizardV3FieldManifest(): WizardV3FieldManifestRow[] {
       valueType: "AnswerWhen",
       v3ConfigPath: "telephony.answerWhen",
       destinations: ["PROVIDER_CONFIG", "CONTROL_PLANE_ONLY"],
-      executionStatus: "ACTIVE_EXECUTION",
+      executionStatus: "DEFERRED_NOT_EXPOSED",
       scope: "YES_GENERAL",
-      compilerFunction: "compileVoiceV3AgentConfig.telephony + syncWizardRoutingRules",
-      runtimeConsumer: "evaluateInboundRouting + livekit-ingress-policy",
+      compilerFunction: "compileVoiceV3AgentConfig.telephony (legacy compatibility)",
+      runtimeConsumer: "CFNA ingress — not customer-facing on after_hours launch",
       republishBehavior: "next_call",
     }),
     row({
@@ -212,8 +214,8 @@ export function buildWizardV3FieldManifest(): WizardV3FieldManifestRow[] {
     ["outboundSmsMode", "Outbound SMS mode", "telephony.outboundSmsMode", ["PROVIDER_CONFIG"], "CONFIGURED_NOT_IMPLEMENTED"],
     ["outboundSmsPhoneNumberId", "Outbound SMS number id", "telephony.outboundSmsPhoneNumberId", ["PROVIDER_CONFIG"], "CONFIGURED_NOT_IMPLEMENTED"],
     ["outboundSmsE164", "Outbound SMS E.164", "telephony.outboundSmsE164", ["PROVIDER_CONFIG"], "CONFIGURED_NOT_IMPLEMENTED"],
-    ["ringBehavior", "Ring behavior", "telephony.ringBehavior", ["PROVIDER_CONFIG"], "ACTIVE_EXECUTION"],
-    ["ringTeamSeconds", "Ring team seconds", "telephony.ringTeamSeconds", ["PROVIDER_CONFIG"], "ACTIVE_EXECUTION"],
+    ["ringBehavior", "Ring behavior", "telephony.ringBehavior", ["PROVIDER_CONFIG"], "DEFERRED_NOT_EXPOSED"],
+    ["ringTeamSeconds", "Ring team seconds", "telephony.ringTeamSeconds", ["PROVIDER_CONFIG"], "DEFERRED_NOT_EXPOSED"],
     ["callRecording", "Call recording", "telephony.callRecording", ["PROVIDER_CONFIG"], "ACTIVE_EXECUTION"],
     ["connectionGreeting", "Connection greeting mode", "telephony.connectionGreetingMode", ["PROVIDER_CONFIG"], "ACTIVE_EXECUTION"],
     ["connectionGreetingText", "Connection greeting text", "telephony.connectionGreetingText", ["PROVIDER_CONFIG"], "ACTIVE_EXECUTION"],
@@ -886,11 +888,12 @@ export function buildWizardV3FieldManifest(): WizardV3FieldManifestRow[] {
         destinations: ["DETERMINISTIC_CONFIG", "PROVIDER_CONFIG", "ASTRA_BACKEND_CONTEXT"],
         executionStatus:
           path.startsWith("transfer") ||
-          path === "detectVoicemailOnTransfer" ||
           path === "callbackRequestsEnabled" ||
           path === "callbackRequiredCollectFieldIds"
             ? "ACTIVE_EXECUTION"
-            : "CONFIGURED_NOT_IMPLEMENTED",
+            : path === "detectVoicemailOnTransfer"
+              ? "DEFERRED_NOT_EXPOSED"
+              : "CONFIGURED_NOT_IMPLEMENTED",
         scope: "YES_GENERAL",
         compilerFunction: "compileVoiceV3AgentConfig.callHandling",
         runtimeConsumer:
