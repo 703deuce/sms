@@ -2,6 +2,9 @@
  * Verify MCTB Final Production Pipeline frozen state (DB + Telnyx + entry XML shape).
  *
  *   npm run verify:mctb-final-pipeline
+ *
+ * Current ws_1 platform ingress (not the Aug cert DID +18663464256):
+ *   PHONE_E164=+18666020680 PHONE_866_ID=cmtoszkn26t6z485u3d2w3c51 npm run verify:mctb-final-pipeline
  */
 import { getPrisma } from "../src/lib/db";
 import { loadMissedCallTextConfig } from "../src/lib/agents/missed-call-text-back/config";
