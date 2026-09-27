@@ -4,6 +4,7 @@ import {
   WIZARD_URGENCY_RULE_CONTROL_PATHS,
 } from "./wizard-control-inventory";
 import type { WizardV3ExecutionStatus } from "./wizard-execution-status";
+import { classifyWizardRuntimeLeaf } from "./wizard-v3-runtime-launch-classification";
 
 export type WizardV3Destination =
   | "LIVE_FRONTEND_CONTEXT"
@@ -97,6 +98,60 @@ function microsoftExecution(strategyPath: string): WizardV3ExecutionStatus {
   return strategyPath.includes("MICROSOFT")
     ? "ACTIVE_EXECUTION"
     : "CONFIGURED_NOT_IMPLEMENTED";
+}
+
+function executionStatusFromLaunchClassification(
+  statePath: string,
+  current: WizardV3ExecutionStatus,
+): WizardV3ExecutionStatus {
+  if (
+    current === "ACTIVE_EXECUTION" ||
+    current === "LIVE_PROMPT_CONTROL" ||
+    current === "CONTROL_PLANE_ONLY" ||
+    current === "PROVIDER_CONFIG" ||
+    current === "UNSUPPORTED_BY_CURRENT_LIVE_API"
+  ) {
+    return current;
+  }
+  const { classification, runtimeConsumer } = classifyWizardRuntimeLeaf(statePath);
+  switch (classification) {
+    case "CURRENT_VISIBLE_IMPLEMENTED":
+    case "CHILD_IMPLEMENTED_BY_PARENT":
+      return "ACTIVE_EXECUTION";
+    case "CONTROL_PLANE_ACTIVE":
+      return "ACTIVE_CONTROL_PLANE";
+    case "OUT_OF_SCOPE_RETIRED":
+      return "OUT_OF_SCOPE_RETIRED";
+    case "UI_METADATA_ONLY":
+      return "UI_METADATA_ONLY";
+    case "HIDDEN_STATE_ONLY":
+      return "HIDDEN_STATE_ONLY";
+    case "MCTB_ONLY":
+      return "MCTB_ONLY";
+    case "LEGACY_OBSOLETE":
+      return "LEGACY_OBSOLETE";
+    case "CURRENT_VISIBLE_STILL_BROKEN":
+      return "CONFIGURED_NOT_IMPLEMENTED";
+    default:
+      return current;
+  }
+}
+
+function applyLaunchClassificationToManifest(
+  rows: WizardV3FieldManifestRow[],
+): WizardV3FieldManifestRow[] {
+  return rows.map((r) => {
+    const nextStatus = executionStatusFromLaunchClassification(r.statePath, r.executionStatus);
+    if (nextStatus === r.executionStatus) return r;
+    const launch = classifyWizardRuntimeLeaf(r.statePath);
+    const runtimeConsumer =
+      launch.runtimeConsumer?.trim() ||
+      (launch.classification === "CURRENT_VISIBLE_IMPLEMENTED" ||
+      launch.classification === "CHILD_IMPLEMENTED_BY_PARENT"
+        ? launch.evidence
+        : r.runtimeConsumer);
+    return { ...r, executionStatus: nextStatus, runtimeConsumer };
+  });
 }
 
 /** Exhaustive wizard Steps 1–8 control inventory → V3 manifest. */
@@ -1082,22 +1137,33 @@ export function buildWizardV3FieldManifest(): WizardV3FieldManifestRow[] {
     );
   }
 
-  return rows;
+  return applyLaunchClassificationToManifest(rows);
 }
 
 export function summarizeWizardV3Manifest(rows: WizardV3FieldManifestRow[]) {
-  const totals = {
+  const totals: Record<string, number> = {
     total: rows.length,
     WIRED_V3_CONFIG: rows.length,
     ACTIVE_EXECUTION: 0,
     LIVE_PROMPT_CONTROL: 0,
+    ACTIVE_CONTROL_PLANE: 0,
     CONFIGURED_NOT_IMPLEMENTED: 0,
     CONTROL_PLANE_ONLY: 0,
+    OUT_OF_SCOPE_RETIRED: 0,
+    UI_METADATA_ONLY: 0,
+    HIDDEN_STATE_ONLY: 0,
+    MCTB_ONLY: 0,
+    LEGACY_OBSOLETE: 0,
+    PROVIDER_CONFIG: 0,
     UNSUPPORTED_BY_CURRENT_LIVE_API: 0,
     unmapped: 0,
   };
   for (const r of rows) {
-    totals[r.executionStatus] += 1;
+    if (totals[r.executionStatus] !== undefined) {
+      totals[r.executionStatus] += 1;
+    } else {
+      totals.unmapped += 1;
+    }
   }
   return totals;
 }

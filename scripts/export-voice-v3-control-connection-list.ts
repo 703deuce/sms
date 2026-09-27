@@ -75,12 +75,29 @@ function connectedColumns(executionStatus: string): {
         ? "YES (contract)"
         : "UNVERIFIED";
   let liveAgentOnRepublish = "NO — control plane only";
-  if (executionStatus === "ACTIVE_EXECUTION") {
+  if (
+    executionStatus === "ACTIVE_EXECUTION" ||
+    executionStatus === "LIVE_PROMPT_CONTROL"
+  ) {
     liveAgentOnRepublish = contractPass
-      ? "YES — intended on next new call after Activate"
+      ? executionStatus === "LIVE_PROMPT_CONTROL"
+        ? "YES — GPT-Live instructions on next new session after Activate"
+        : "YES — intended on next new call after Activate"
+      : "UNVERIFIED";
+  } else if (executionStatus === "ACTIVE_CONTROL_PLANE") {
+    liveAgentOnRepublish = contractPass
+      ? "YES — ingress/provisioning on next call or activation"
       : "UNVERIFIED";
   } else if (executionStatus === "CONFIGURED_NOT_IMPLEMENTED") {
     liveAgentOnRepublish = "PARTIAL — in published config; runtime may ignore";
+  } else if (
+    executionStatus === "OUT_OF_SCOPE_RETIRED" ||
+    executionStatus === "UI_METADATA_ONLY" ||
+    executionStatus === "HIDDEN_STATE_ONLY" ||
+    executionStatus === "MCTB_ONLY" ||
+    executionStatus === "LEGACY_OBSOLETE"
+  ) {
+    liveAgentOnRepublish = "NO — not a live Voice V3 runtime control";
   } else if (executionStatus === "FUTURE") {
     liveAgentOnRepublish = "NO — marked future in manifest";
   }
