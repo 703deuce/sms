@@ -98,6 +98,17 @@ PSTN-certified TeXML ingress for CFNA. **Do not change** these behaviors without
 - **`existing_consent`:** `<Play>` voicemail greeting → `<Hangup>` → auto SMS on `texml-status`
 
 Do not route certified MCTB DIDs back to LiveKit FQDN, Call Control-only ingress, or AI assistant TeXML. Guards: `isMctbTexmlIngressLocked()`. Verify: `npm run verify:mctb-final-pipeline`.
+
+### Voice V3 PSTN Microsoft booking (FROZEN — `voice_v3_pstn_booking_microsoft_v1`)
+
+**Read:** `docs/VOICE-V3-PSTN-BOOKING-PIPELINE-FROZEN.md`
+
+PSTN-certified 2026-09-19 on ws_1 / `+15717491060` (wizard → `set_scheduling_preference` → `find_availability` → intake → `book_appointment` → Microsoft Graph). **Do not change** FIND/BOOK dispatch, revalidation, or tool wiring without revision bump + PSTN re-cert.
+
+- **Not in this pipeline:** Voice V2 Telnyx FIND/BOOK webhooks, `book_offered_slot`, `emit_caller_meaning`, MCTB TeXML booking
+- **Verify:** `npm run verify:voice-v3-booking-pipeline-frozen`
+- **Constants:** `src/lib/voice-v3/frozen-booking-pipeline.ts` — runtime logs `pipeline_id` on `VOICE_V3_BOOKING_PIPELINE_ACTIVE`
+
 - **Smart Routing** is a standalone purchasable product as well as a bundle with MCTB. Do not require MCTB to use Smart Routing.
 - Customer keeps their **existing business number** — inbound layer only; no port-required launch.
 - Do not turn this into a PBX, softphone, CRM, SMS marketing platform, AI receptionist, or vanity-number marketplace.
@@ -180,6 +191,14 @@ Telnyx-side tool audit: `node scripts/audit-telnyx-call-tool-transport.mjs` (set
 PR #100 (`continue_workflow` timeout/fillers) does **not** fix zero tool transport — do not merge it until TOOL TRANSPORT passes.
 
 **Known TeXML-direct failure mode:** Telnyx may invoke `get_runtime_context` before a `VoiceCall` row exists (only hangup status_callback created the call). Fix: `ensureVoiceCallForToolWebhook` on `/api/telnyx/voice/tools` + early TeXML lifecycle — see PR #102.
+
+## After-Hours AI Receptionist — master acceptance checklist (mandatory)
+
+**Source of truth:** `docs/TRANSOVO-AFTER-HOURS-AI-RECEPTIONIST-MASTER-ACCEPTANCE-CHECKLIST.md`
+
+Single definition of “the product works” for the After-Hours AI Receptionist (Voice V3 + wizard). Check items only when wired through V3 and **proven end-to-end** — not wizard save, compiler map, or UI alone. All new receptionist scope maps to sections 1–27 in that doc.
+
+Architecture (one Amy, capabilities by config): `docs/VOICE-V2-AFTER-HOURS-PRODUCT-CONTRACT.md`.
 
 ## Voice V2 after-hours product (mandatory)
 

@@ -123,6 +123,8 @@
     "test:voice-v3-astra-scheduling-cert": "tsx scripts/test-voice-v3-astra-scheduling-cert.ts",
     "test:voice-v3-slot-selection": "tsx scripts/test-voice-v3-slot-selection.ts && tsx scripts/test-voice-v3-slot-selection-astra.ts",
     "test:voice-v3-booking": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-voice-v3-booking-scene-invariant.ts && NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-voice-v3-booking.ts",
+    "test:voice-v3-booking-pipeline-frozen-contract": "tsx scripts/test-voice-v3-booking-pipeline-frozen-contract.ts",
+    "verify:voice-v3-booking-pipeline-frozen": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/verify-voice-v3-booking-pipeline-frozen.ts",
     "test:voice-v3-reschedule": "tsx scripts/test-voice-v3-reschedule.ts",
     "test:voice-v3-cancellation": "tsx scripts/test-voice-v3-cancellation.ts",
     "test:voice-v3-microsoft-appointment-management": "tsx scripts/test-voice-v3-microsoft-appointment-management.ts",
