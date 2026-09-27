@@ -221,11 +221,10 @@ export async function handleMctbCustomerSmsReply(input: {
   const config = await loadMissedCallTextConfig(input.workspaceId);
 
   const leadRecoveryConfig = await loadLeadRecoveryConfig(input.workspaceId);
-  if (!leadRecoveryConfig.enabled || leadRecoveryConfig.policyHealth === "DISABLED") {
-    return { handled: false, reason: "lead_recovery_not_enabled" };
-  }
+  const leadRecoveryActive =
+    leadRecoveryConfig.enabled && leadRecoveryConfig.policyHealth !== "DISABLED";
 
-  if (!config.conversationEnabled) {
+  if (leadRecoveryActive && !config.conversationEnabled) {
     console.warn("[mctb/customer-sms] conversationEnabled=false but Lead Recovery is on — replying anyway");
   }
 
@@ -274,6 +273,19 @@ export async function handleMctbCustomerSmsReply(input: {
 
   const customerName =
     [contact?.firstName, contact?.lastName].filter(Boolean).join(" ").trim() || undefined;
+
+  if (!leadRecoveryActive) {
+    await recordMctbLeadRecoveryInboundSideEffects({
+      workspaceId: input.workspaceId,
+      fromE164,
+      body: input.body,
+      conversationId,
+      missedCallEventId: recentEvent.id,
+      providerMessageId: input.providerMessageId,
+      structuredIntent: null,
+    });
+    return { handled: true, action: "mctb_notifications_only" };
+  }
 
   const leadRecovery = await handleMctbLeadRecoveryInboundSms({
     workspaceId: input.workspaceId,

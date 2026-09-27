@@ -10,7 +10,11 @@ import {
 import { recordMctbHandoffEvent, persistUrgencyAssessment } from "./events";
 import { deliverMctbHandoffNotifications } from "./notifications";
 import { buildSnapshotFactsFromCaptured } from "./snapshot";
-import { assessMctbUrgencyFromStructuredIntent, isUrgentClassification } from "./urgency";
+import {
+  assessMctbUrgency,
+  assessMctbUrgencyFromStructuredIntent,
+  isUrgentClassification,
+} from "./urgency";
 import { callbackRequestedFromStructuredIntent } from "./guided-collection";
 import { loadMctbHandoffConfig } from "./config";
 import type { StructuredLeadIntent } from "@/lib/mctb/lead-recovery/types";
@@ -43,7 +47,7 @@ export async function recordMctbLeadRecoveryInboundSideEffects(input: {
 
   const urgencyResult = input.structuredIntent
     ? assessMctbUrgencyFromStructuredIntent({ intent: input.structuredIntent, config })
-    : null;
+    : assessMctbUrgency({ customerText: input.body, config });
   let urgencyRow = null;
   if (urgencyResult) {
     urgencyRow = await persistUrgencyAssessment({
@@ -62,7 +66,8 @@ export async function recordMctbLeadRecoveryInboundSideEffects(input: {
   const callbackRequested = input.structuredIntent
     ? callbackRequestedFromStructuredIntent(input.structuredIntent)
     : false;
-  const callerRepliedKey = `mctb-handoff:${input.conversationId}:caller_replied`;
+  const idemSuffix = input.providerMessageId?.trim() || `${Date.now()}`;
+  const callerRepliedKey = `mctb-handoff:${input.conversationId}:caller_replied:${idemSuffix}`;
 
   const { event: callerRepliedEvent, created: callerRepliedCreated } = await recordMctbHandoffEvent({
     workspaceId: input.workspaceId,
