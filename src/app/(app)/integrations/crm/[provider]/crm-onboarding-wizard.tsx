@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/input";
+import { Panel } from "@/newui-transplant/components/app/kit";
 
 export type WizardPrefs = {
   autoCreateContacts: boolean;
@@ -83,6 +84,7 @@ export function CrmOnboardingWizard(props: {
   syncStatus: string;
   lastSyncAt?: string | null;
   objectsSynced?: Record<string, number>;
+  presentation?: "legacy" | "opus";
 }) {
   const {
     name,
@@ -102,6 +104,7 @@ export function CrmOnboardingWizard(props: {
     syncStatus,
     lastSyncAt,
     objectsSynced,
+    presentation = "legacy",
   } = props;
 
   const toggles: Array<[keyof WizardPrefs, string]> = [
@@ -120,14 +123,16 @@ export function CrmOnboardingWizard(props: {
     ["syncOpportunities", "Opportunity updates"],
   ];
 
-  return (
-    <Card className="mb-4 border-primary/30 bg-primary/5 space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <CardTitle>Set up {name}</CardTitle>
-        <p className="text-xs text-muted-foreground">
-          Step {step} of {STEPS.length}
-        </p>
-      </div>
+  const wizardBody = (
+    <>
+      {presentation === "legacy" ? (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle>Set up {name}</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Step {step} of {STEPS.length}
+          </p>
+        </div>
+      ) : null}
       <ol className="flex flex-wrap gap-2 text-xs">
         {STEPS.map((s) => (
           <li
@@ -420,6 +425,22 @@ export function CrmOnboardingWizard(props: {
           </Button>
         </div>
       ) : null}
-    </Card>
+    </>
+  );
+
+  if (presentation === "opus") {
+    return (
+      <Panel
+        title={`Set up ${name}`}
+        description={`Step ${step} of ${STEPS.length}`}
+        className="mb-4"
+      >
+        <div className="space-y-4">{wizardBody}</div>
+      </Panel>
+    );
+  }
+
+  return (
+    <Card className="mb-4 border-primary/30 bg-primary/5 space-y-4">{wizardBody}</Card>
   );
 }

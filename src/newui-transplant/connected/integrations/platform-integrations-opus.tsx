@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarIntegrationsCard } from "@/components/integrations/calendar-integrations-card";
+import { CalendarIntegrationsOpus } from "@/newui-transplant/connected/integrations/calendar-integrations-opus";
 import {
   PLATFORM_CATEGORY_ORDER,
   PLATFORM_INTEGRATION_CARDS,
@@ -279,7 +279,7 @@ export function PlatformIntegrationsOpus({ focusProvider }: { focusProvider?: st
             <Button type="button" variant="ghost" size="sm" onClick={() => setManageId(null)}>Close</Button>
           }
         >
-          <CalendarIntegrationsCard />
+          <CalendarIntegrationsOpus />
         </Panel>
       ) : null}
 

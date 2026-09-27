@@ -1,4 +1,5 @@
-import { redirect } from "next/navigation";
+import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
+import { NativeProviderOpus } from "@/newui-transplant/connected/integrations/native-provider-opus";
 import { NativeProviderClient } from "./native-provider-client";
 
 export default async function NativeProviderPage({
@@ -7,8 +8,8 @@ export default async function NativeProviderPage({
   params: Promise<{ provider: string }>;
 }) {
   const { provider } = await params;
-  if (provider === "mailchimp") {
-    redirect("/integrations/native");
+  if (isNewUiStage2Enabled()) {
+    return <NativeProviderOpus provider={provider} />;
   }
   return <NativeProviderClient provider={provider} />;
 }
