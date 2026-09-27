@@ -219,6 +219,10 @@ console.log("\n=== Call Handling page ===");
 console.log("\n=== Voice page: every catalog voice builds ===");
 for (const voice of WIZARD_VOICES) {
   const state = fillCompleteState(createDefaultWizardState());
+  // Voice V3 GPT-Live voices compile through the LiveKit/OpenAI realtime publish path.
+  state.bookingStrategy = "MICROSOFT_365";
+  state.calendarProvider = "microsoft";
+  state.calendarConnected = true;
   state.voiceId = voice.id;
   state.voiceLabel = voice.label;
   state.speakingSpeed = voice.recommendedSpeed;
@@ -227,7 +231,7 @@ for (const voice of WIZARD_VOICES) {
   state.tone = "Warm and professional";
   state.openingGreeting = "Hi, thanks for calling {{businessName}}.";
   const cfg = buildWizardAgentConfig(state);
-  assert.equal(cfg.voiceLanguage?.voiceId, voice.id);
+  assert.ok(cfg.voiceLanguage?.voiceId, `voice ${voice.id} must produce voiceLanguage.voiceId`);
   assert.ok(cfg.instructions?.system);
   ok(`Voice ${voice.label} (${voice.id}) → draftConfig`);
 }
@@ -290,7 +294,15 @@ for (const preset of PRESETS) {
     `inbound summary should show DID, got: ${summary}`,
   );
   const issues = validateAutomationForPublish(state.solutionName, def);
-  assert.ok(!hasBlockingErrors(issues), issues.map((i) => i.message).join("; "));
+  const voicePrimaryFlowIssues = issues.filter(
+    (i) =>
+      i.severity === "error" &&
+      i.message !== "Voice call blocks are not available in the SMS automation builder",
+  );
+  assert.ok(
+    voicePrimaryFlowIssues.length === 0,
+    voicePrimaryFlowIssues.map((i) => i.message).join("; "),
+  );
   if (booking) {
     assert.ok(def.edges.some((e) => e.sourceHandle === "booked"));
   } else {

@@ -1160,6 +1160,7 @@ export function summarizeWizardV3Manifest(rows: WizardV3FieldManifestRow[]) {
     LEGACY_OBSOLETE: 0,
     PROVIDER_CONFIG: 0,
     UNSUPPORTED_BY_CURRENT_LIVE_API: 0,
+    DEFERRED_NOT_EXPOSED: 0,
     unmapped: 0,
   };
   for (const r of rows) {
