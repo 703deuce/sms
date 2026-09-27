@@ -24,6 +24,7 @@ import {
   OnCallScheduleEditor,
 } from "../operating-maturity-editor";
 import { CallHandlingStepOperationalExtras } from "@/newui-transplant/connected/voice/call-handling-step-operational-extras";
+import { SpamUnwantedCallsEditor } from "../spam-unwanted-calls-editor";
 
 const LEGACY_BOOKING_FLOW_STEPS = [
   "Understand request",
@@ -281,6 +282,10 @@ export function CallHandlingStep({
           </WizardSection>
 
         </div>
+
+        {isOpus ? (
+          <SpamUnwantedCallsEditor state={state} patch={patch} presentation={presentation} />
+        ) : null}
 
         <AfterHoursBehaviorEditor state={state} patch={patch} presentation={presentation} />
         <OnCallScheduleEditor state={state} patch={patch} presentation={presentation} />

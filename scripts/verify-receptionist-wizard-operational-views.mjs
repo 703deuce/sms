@@ -65,6 +65,9 @@ if (!read("src/newui-transplant/connected/voice/call-handling-operations-panels.
 if (!read("src/newui-transplant/connected/voice/call-handling-operations-panels.tsx").includes("recent-transfers")) {
   fail("recent transfers API must be used");
 }
+if (!chStep.includes("SpamUnwantedCallsEditor")) {
+  fail("call-handling step must mount SpamUnwantedCallsEditor for opus spam/solicitor parity");
+}
 if (nav.includes("href: '/voice/knowledge'")) {
   fail("sidebar must not restore standalone knowledge link");
 }

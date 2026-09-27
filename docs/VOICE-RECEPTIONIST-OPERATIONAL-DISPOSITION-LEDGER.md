@@ -42,8 +42,8 @@
 | Emergency keywords display / add UI | **ALREADY IN WIZARD STEP 5** | `transferTriggers` in `EmergencyTransferEditor` |
 | Warm transfer / whisper | **ALREADY IN WIZARD STEP 5** | Transfer editor + `warmTransfer` |
 | Text summary / after-hours notifications | **ALREADY IN WIZARD STEP 5** | `AfterHoursNotificationsEditor` |
-| Block spam | **ALREADY IN WIZARD STEP 5** | `spamLikelyPolicy` via maturity / policies (no duplicate switch) |
-| Decline solicitors | **ALREADY IN WIZARD STEP 5** | `salesSolicitationEnabled` (MCTB block + wizard) |
+| Block spam (`spamLikelyPolicy`) | **ADDED TO STEP 5** | Was standalone + legacy ops page only; **not** in Opus Step 5 until `SpamUnwantedCallsEditor` mounted in `call-handling-step.tsx` (radio: BLOCK / SCREEN / ALLOW → `patch({ spamLikelyPolicy })`) |
+| Sales & solicitors (`solicitorPolicy`, `salesSolicitationEnabled`, `salesSolicitationAction`) | **ADDED TO STEP 5** | Same editor section (radio: DECLINE / TAKE_MESSAGE / ALLOW); MCTB-only toggle in Step 5 was **not** Opus-visible |
 | Call recording | **ALREADY IN WIZARD STEP 2** | `phone-step.tsx` `callRecording` — **not** duplicated on Step 5 |
 | Recording retention copy | **INTENTIONALLY NOT COPIED** | Informational only on standalone; no separate config |
 | Recent transfers table | **ADDED TO STEP 5** | `VoiceCallHandlingRecentTransfersPanel` + `/api/voice/call-handling/recent-transfers` |
