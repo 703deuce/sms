@@ -36,7 +36,7 @@ import {
 import { InfoCallout, SelectableCard, SidePanel, StatusPill } from "../ui";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { InformationStepOpusOperations } from "@/newui-transplant/connected/voice/information-step-opus-operations";
+import { InformationStepOperationalExtras } from "@/newui-transplant/connected/voice/information-step-operational-extras";
 
 function OpusOrLegacyInset({
   isOpus,
@@ -1007,6 +1007,8 @@ export function InformationStep({
         ) : null}
 
         <BusinessScheduleEditor state={state} patch={patch} presentation={presentation} />
+
+        <InformationStepOperationalExtras state={state} />
       </div>
   );
 
@@ -1037,16 +1039,6 @@ export function InformationStep({
         </InfoCallout>
       </SidePanel>
   );
-
-  if (isOpus) {
-    return (
-      <InformationStepOpusOperations
-        state={state}
-        setupContent={setupColumn}
-        sidePanel={knowledgeSidePanel}
-      />
-    );
-  }
 
   return (
     <div className="flex gap-6">

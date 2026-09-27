@@ -9,7 +9,7 @@ import { compileBusinessHoursAmyDisplay } from "@/lib/voice-v3/config/business-h
 import { customerSourceStatusLabel } from "@/lib/voice/knowledge/source-status-label";
 import { upsertKnowledgeItem } from "@/lib/solutions/appointment-receptionist/knowledge-items-helpers";
 import { normalizeWebsiteUrl } from "@/lib/solutions/appointment-receptionist/knowledge-items-helpers";
-import { buildReceptionistEditHref } from "@/lib/voice/receptionist/wizard-step-subview";
+import { buildReceptionistEditHref } from "@/lib/voice/receptionist/wizard-step-url";
 
 type KbSource = {
   id: string;

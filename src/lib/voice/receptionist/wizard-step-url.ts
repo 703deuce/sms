@@ -78,3 +78,15 @@ export function isReceptionistWizardEditPath(pathname: string): boolean {
 export function isReceptionistWizardAreaPath(pathname: string): boolean {
   return pathname === "/voice/receptionist" || pathname.startsWith("/voice/receptionist/");
 }
+
+/** Preserve agentId/setupId (and other params) when linking into the receptionist editor. */
+export function buildReceptionistEditHref(
+  current: URLSearchParams | string | null | undefined,
+  patch: { step: WizardStepId },
+): string {
+  const params = new URLSearchParams(
+    typeof current === "string" ? current : current?.toString() || "",
+  );
+  params.set("step", receptionistStepQueryFromId(patch.step));
+  return `${RECEPTIONIST_WIZARD_EDIT_PATH}?${params.toString()}`;
+}

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Static checks: Information / Call Handling operational sub-views inside wizard.
+ * Static checks: unique operational functionality inlined in Information / Call Handling steps.
+ * No secondary tabs, ?view=, or extra sidebar levels.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -17,9 +18,8 @@ function fail(msg) {
 }
 
 const required = [
-  "src/lib/voice/receptionist/wizard-step-subview.ts",
-  "src/newui-transplant/connected/voice/information-step-opus-operations.tsx",
-  "src/newui-transplant/connected/voice/call-handling-step-opus-operations.tsx",
+  "src/newui-transplant/connected/voice/information-step-operational-extras.tsx",
+  "src/newui-transplant/connected/voice/call-handling-step-operational-extras.tsx",
   "src/newui-transplant/connected/voice/knowledge-operations-panels.tsx",
   "src/newui-transplant/connected/voice/call-handling-operations-panels.tsx",
   "src/newui-transplant/connected/voice/use-voice-knowledge-operations.ts",
@@ -32,28 +32,31 @@ for (const f of required) {
 const infoStep = read("src/components/solutions/appointment-receptionist/steps/information-step.tsx");
 const chStep = read("src/components/solutions/appointment-receptionist/steps/call-handling-step.tsx");
 const knowledgePage = read("src/newui-transplant/connected/voice/knowledge-page.tsx");
-const subview = read("src/lib/voice/receptionist/wizard-step-subview.ts");
 const nav = read("src/newui-transplant/lib/nav.ts");
+const wizard = read("src/components/solutions/appointment-receptionist/wizard.tsx");
 
-if (!infoStep.includes("InformationStepOpusOperations")) {
-  fail("information-step must use opus operations shell");
+if (!infoStep.includes("InformationStepOperationalExtras")) {
+  fail("information-step must inline operational extras");
 }
-if (!chStep.includes("CallHandlingStepOpusOperations")) {
-  fail("call-handling-step must use opus operations shell");
+if (!chStep.includes("CallHandlingStepOperationalExtras")) {
+  fail("call-handling-step must inline operational extras");
 }
-if (!subview.includes("gaps") || !subview.includes("sources")) {
-  fail("information subviews missing");
+if (infoStep.includes("InformationStepOpusOperations") || chStep.includes("CallHandlingStepOpusOperations")) {
+  fail("tab-based opus operations shell must be removed");
 }
-if (!subview.includes("transfers") || !subview.includes("routing")) {
-  fail("call-handling subviews missing");
+if (fs.existsSync(path.join(root, "src/lib/voice/receptionist/wizard-step-subview.ts"))) {
+  fail("wizard-step-subview.ts should be removed (no ?view= sub-nav)");
+}
+if (wizard.includes('params.delete("view")')) {
+  fail("wizard should not manage ?view= query");
 }
 if (knowledgePage.includes('router.push("/voice/setup")')) {
   fail("knowledge page must not route edit hours to MCTB /voice/setup");
 }
-if (!knowledgePage.includes('buildReceptionistEditHref')) {
+if (!knowledgePage.includes("buildReceptionistEditHref")) {
   fail("knowledge page must use receptionist edit href for hours");
 }
-if (!infoStep.includes("knowledge-gaps") && !read("src/newui-transplant/connected/voice/knowledge-operations-panels.tsx").includes("VoiceKnowledgeGapsPanel")) {
+if (!read("src/newui-transplant/connected/voice/knowledge-operations-panels.tsx").includes("VoiceKnowledgeGapsPanel")) {
   fail("gaps panel missing");
 }
 if (!read("src/newui-transplant/connected/voice/call-handling-operations-panels.tsx").includes("OpusCallRoutingIngressPanel")) {
@@ -65,9 +68,7 @@ if (!read("src/newui-transplant/connected/voice/call-handling-operations-panels.
 if (nav.includes("href: '/voice/knowledge'")) {
   fail("sidebar must not restore standalone knowledge link");
 }
-if (nav.includes("children: RECEPTIONIST_SIDEBAR_CHILDREN")) {
-  /* ok */
-} else {
+if (!nav.includes("children: RECEPTIONIST_SIDEBAR_CHILDREN")) {
   fail("receptionist sidebar children must remain");
 }
 
