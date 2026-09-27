@@ -25,6 +25,7 @@ import {
 import { useEffect } from "react";
 import { InfoCallout, RadioRow, SelectableCard, SidePanel } from "../ui";
 import { Input, Label } from "@/components/ui/input";
+import { Switch } from "@/newui-transplant/components/ui/switch";
 
 const ICONS = {
   MessageCircle,
@@ -67,16 +68,19 @@ export function GoalsStep({
   compactCapabilities = false,
   hideSidePanel = false,
   hideSolutionName = false,
+  hideAnswerWhen = false,
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
   hireMode?: boolean;
-  presentation?: "legacy" | "mctb";
+  presentation?: "legacy" | "mctb" | "opus";
   compactCapabilities?: boolean;
   hideSidePanel?: boolean;
   hideSolutionName?: boolean;
+  hideAnswerWhen?: boolean;
 }) {
   const isMctb = presentation === "mctb";
+  const isOpus = presentation === "opus";
   const options = capabilityOptionsForPreset(state.preset);
   const answerOptions = answerWhenOptionsForPreset(state.preset);
   const panel = goalsSidePanelCopy(state.preset);
@@ -294,6 +298,33 @@ export function GoalsStep({
             </>
           ) : null}
           {compactCapabilities ? (
+            isOpus ? (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {options.map((opt) => {
+                const enabled = state.capabilities.includes(opt.id);
+                const Icon = ICONS[opt.icon as keyof typeof ICONS] ?? MessageCircle;
+                return (
+                  <div
+                    key={opt.id}
+                    className="flex items-start justify-between gap-3 rounded-lg border border-border px-3 py-2.5"
+                  >
+                    <div className="flex min-w-0 gap-2">
+                      <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                      <div>
+                        <p className="text-sm font-medium">{opt.title}</p>
+                        <p className="text-xs text-muted-foreground">{opt.description}</p>
+                      </div>
+                    </div>
+                    <Switch
+                      checked={enabled}
+                      onCheckedChange={() => toggleCap(opt.id)}
+                      aria-label={opt.title}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+            ) : (
             <ul className="divide-y divide-border">
               {options.map((opt) => {
                 const enabled = state.capabilities.includes(opt.id);
@@ -319,6 +350,7 @@ export function GoalsStep({
                 );
               })}
             </ul>
+            )
           ) : (
             <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {options.map((opt) => {
@@ -338,6 +370,7 @@ export function GoalsStep({
           )}
         </div>
 
+        {!hideAnswerWhen ? (
         <div>
           <h3 className="text-sm font-semibold text-foreground">
             When should this agent answer?
@@ -367,9 +400,10 @@ export function GoalsStep({
             ))}
           </div>
         </div>
+        ) : null}
       </div>
 
-      {!hideSidePanel ? (
+      {!hideSidePanel && !isOpus ? (
       <SidePanel title={isMctb ? "Agent summary" : "Recommended setup"}>
         {isMctb ? (
           <ul className="space-y-2 text-xs text-muted-foreground">
