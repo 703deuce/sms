@@ -42,6 +42,10 @@ import {
   type MctbRecoveryGoalId,
 } from "@/lib/mctb/recovery-goals";
 import { MCTB_LAUNCH_TRY_IT_ENABLED } from "@/lib/mctb/launch-flags";
+import {
+  MctbOnboardingOpusView,
+  type MctbOnboardingController,
+} from "@/newui-transplant/connected/mctb/mctb-onboarding-opus-view";
 
 type OnboardingPayload = {
   state: MctbOnboardingState;
@@ -324,17 +328,59 @@ export function MctbOnboardingRuntime({ initialBusinessName = "", shell = "legac
   }
 
   if (loading) {
+    if (opus) {
+      return (
+        <div className="flex min-h-[50vh] items-center justify-center text-sm text-muted-foreground">
+          Loading setup…
+        </div>
+      );
+    }
     return (
-      <div
-        className={
-          opus
-            ? "flex min-h-[50vh] items-center justify-center text-sm text-muted-foreground"
-            : "mctb-onb-root flex min-h-[50vh] items-center justify-center"
-        }
-      >
-        {opus ? "Loading setup…" : <Loader2 className="h-8 w-8 animate-spin text-[#3a3f47]" aria-label="Loading" />}
+      <div className="mctb-onb-root flex min-h-[50vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-[#3a3f47]" aria-label="Loading" />
       </div>
     );
+  }
+
+  if (opus) {
+    const controller: MctbOnboardingController = {
+      data,
+      saving,
+      error,
+      existingConsentEligible,
+      businessName,
+      setBusinessName,
+      websiteUrl,
+      setWebsiteUrl,
+      businessNumber,
+      setBusinessNumber,
+      carrier,
+      setCarrier,
+      messageTemplate,
+      setMessageTemplate,
+      recoveryGoal,
+      setRecoveryGoal,
+      consentMode,
+      setConsentMode,
+      existingConsentAttested,
+      setExistingConsentAttested,
+      forwardRingSeconds,
+      setForwardRingSeconds,
+      setForwardingTestActive,
+      drawerMode,
+      setDrawerMode,
+      step,
+      stageIndex,
+      load,
+      post,
+      previousStep,
+      forwardE164,
+      forwardDisplay,
+      tfvApproved,
+      usesA2pPath,
+      router,
+    };
+    return <MctbOnboardingOpusView controller={controller} />;
   }
 
   if (step === "ready") {

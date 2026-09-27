@@ -46,7 +46,7 @@ type ProviderDef = {
   hasWebhook?: boolean;
 };
 
-const PROVIDERS: ProviderDef[] = [
+export const INTEGRATIONS_DIRECTORY_PROVIDERS: ProviderDef[] = [
   { id: "api", name: "API", description: "REST API for contacts, campaigns, and messages.", icon: Terminal, tone: "bg-slate-900 text-white", kind: "link", href: "/integrations/api" },
   { id: "webhooks", name: "Webhooks", description: "Push delivery, inbound, and subscription events.", icon: Webhook, tone: "bg-blue-100 text-indigo-700", kind: "link", href: "/integrations/webhooks" },
   { id: "zapier", name: "Zapier", description: "Connect Transovo SMS to 5,000+ apps.", icon: Zap, tone: "bg-orange-100 text-orange-600", kind: "link", href: "/integrations/api" },
@@ -247,7 +247,7 @@ export function IntegrationsDirectory({
       )}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {PROVIDERS.map((p) => {
+        {INTEGRATIONS_DIRECTORY_PROVIDERS.map((p) => {
           const Icon = p.icon;
           const connected = isConnected(p);
           const open = openId === p.id;

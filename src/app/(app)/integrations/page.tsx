@@ -15,6 +15,7 @@ import { getPrisma } from "@/lib/db";
 import { Plus, Puzzle } from "lucide-react";
 import Link from "next/link";
 import { IntegrationsHomeClient } from "./integrations-home-client";
+import { IntegrationsHomeOpusClient } from "@/newui-transplant/connected/integrations/integrations-home-opus-client";
 
 const integrationTabs = [
   { label: "Directory", href: "/integrations" },
@@ -116,12 +117,21 @@ export default async function IntegrationsPage({
 
       {stats}
 
-      <IntegrationsHomeClient
-        connectedApi={connectedApi}
-        connectedWebhooks={connectedWebhooks}
-        endpointsCount={endpoints.length}
-        focusProvider={focusProvider}
-      />
+      {opus ? (
+        <IntegrationsHomeOpusClient
+          connectedApi={connectedApi}
+          connectedWebhooks={connectedWebhooks}
+          endpointsCount={endpoints.length}
+          focusProvider={focusProvider}
+        />
+      ) : (
+        <IntegrationsHomeClient
+          connectedApi={connectedApi}
+          connectedWebhooks={connectedWebhooks}
+          endpointsCount={endpoints.length}
+          focusProvider={focusProvider}
+        />
+      )}
     </div>
   );
 }

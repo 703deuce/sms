@@ -6,7 +6,7 @@ import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
 import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
-import { Panel } from "@/newui-transplant/components/app/kit";
+import { IntegrationsLogsOpus } from "@/newui-transplant/connected/integrations/integrations-logs-opus";
 import { titleCaseStatus } from "@/lib/mappers";
 import { loadIntegrationWebhookEvents, requireWorkspaceContext } from "@/lib/workspace-data";
 import { Terminal } from "lucide-react";
@@ -87,12 +87,15 @@ export default async function IntegrationsLogsPage() {
 
   if (opus) {
     return (
-      <Panel
-        title="Developer logs"
-        description="API request history, response codes, and latency for debugging integrations."
-      >
-        {logBody}
-      </Panel>
+      <IntegrationsLogsOpus
+        events={events.map((log) => ({
+          id: log.id,
+          at: log.at.toISOString(),
+          endpointName: log.endpointName,
+          status: log.status,
+          error: log.error,
+        }))}
+      />
     );
   }
 

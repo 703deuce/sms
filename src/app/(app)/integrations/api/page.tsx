@@ -1,10 +1,10 @@
 import { ApiKeysPanel } from "@/components/integrations/api-keys-panel";
+import { ApiKeysOpusPanel } from "@/newui-transplant/connected/integrations/api-keys-opus-panel";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { Tabs } from "@/components/ui/tabs";
 import { loadApiKeys, requireWorkspaceContext } from "@/lib/workspace-data";
 import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
-import { Panel } from "@/newui-transplant/components/app/kit";
 import { Plus } from "lucide-react";
 
 const integrationTabs = [
@@ -29,14 +29,7 @@ export default async function IntegrationsApiPage() {
   const opus = isNewUiStage2Enabled();
 
   if (opus) {
-    return (
-      <Panel
-        title="API keys"
-        description="Create and manage API keys for programmatic access to contacts, campaigns, and messages."
-      >
-        <ApiKeysPanel initialKeys={initialKeys} />
-      </Panel>
-    );
+    return <ApiKeysOpusPanel initialKeys={initialKeys} />;
   }
 
   return (

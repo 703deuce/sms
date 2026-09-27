@@ -1,5 +1,6 @@
 import { UsersSettingsConnected } from "@/features/settings/kimi/users/users-connected";
 import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
+import { TeamSettingsOpus } from "@/newui-transplant/connected/settings/team-settings-opus";
 import type { PendingInvite, TeamMember } from "@/components/settings/kimi-ui/users/types";
 import { loadTeamMembers, requireWorkspaceContext } from "@/lib/workspace-data";
 import { loadPendingInvites } from "@/lib/team/invites";
@@ -45,17 +46,22 @@ export default async function SettingsUsersPage() {
     loadPendingInvites(workspaceId),
   ]);
 
+  if (isNewUiStage2Enabled()) {
+    return (
+      <TeamSettingsOpus
+        initialMembers={teamMembers.map(mapTeamMember)}
+        initialInvites={pendingInvites.map(mapPendingInvite)}
+      />
+    );
+  }
+
   const body = (
     <UsersSettingsConnected
       initialMembers={teamMembers.map(mapTeamMember)}
       initialInvites={pendingInvites.map(mapPendingInvite)}
-      hideChrome={isNewUiStage2Enabled()}
+      hideChrome={false}
     />
   );
-
-  if (isNewUiStage2Enabled()) {
-    return body;
-  }
 
   return <div className="kimi-surface kimi-settings-users">{body}</div>;
 }
