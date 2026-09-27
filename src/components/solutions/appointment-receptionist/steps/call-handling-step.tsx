@@ -2,20 +2,19 @@
 
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
 import { hasBookingCapability } from "@/lib/solutions/appointment-receptionist/wizard-presets";
-import { Label } from "@/components/ui/input";
 import {
   ArrowRight,
   AlertTriangle,
   CheckCircle2,
 } from "lucide-react";
+import { FieldRow } from "@/newui-transplant/components/app/kit";
+import { Switch } from "@/newui-transplant/components/ui/switch";
 import { EmergencyTransferEditor } from "../emergency-transfer-editor";
 import { ensureEmergencyTransferWizardState } from "@/lib/solutions/appointment-receptionist/transfer-wizard-state";
 import { normalizeWizardTransferPhone } from "@/lib/solutions/appointment-receptionist/transfer-utils";
-import { FieldRow } from "@/newui-transplant/components/app/kit";
-import { Switch } from "@/newui-transplant/components/ui/switch";
 import { CallbackRequiredFieldsOpus } from "@/newui-transplant/connected/voice/receptionist-editor/callback-required-fields-opus";
-import { Panel } from "@/newui-transplant/components/app/kit";
 import { WizardSection } from "../wizard-opus-ui";
+import { WizardSelectField, WizardToggleField } from "../wizard-field-kit";
 import { InfoCallout, SidePanel, StatusPill } from "../ui";
 import { UrgencyRulesEditor } from "../urgency-rules-editor";
 import { AfterHoursNotificationsEditor } from "../after-hours-notifications-editor";
@@ -73,9 +72,7 @@ export function CallHandlingStep({
   return (
     <div className="flex gap-6">
       <div className="min-w-0 flex-1 space-y-8">
-        {isOpus ? (
-          <Panel title="How should your agent handle calls?" description={headerDescription} />
-        ) : (
+        {!isOpus ? (
         <div>
           <h2 className="font-display text-xl font-semibold tracking-tight">
             How should your agent handle calls?
@@ -101,11 +98,15 @@ export function CallHandlingStep({
           </div>
           ) : null}
         </div>
-        )}
+        ) : null}
 
         <div className="grid gap-4 lg:grid-cols-3">
           {booking ? (
-          <WizardSection opus={isOpus} title="Booking behavior">
+          <WizardSection
+            opus={isOpus}
+            title={isOpus ? "How should your agent handle calls?" : "Booking behavior"}
+            description={isOpus ? headerDescription : undefined}
+          >
             <div className="space-y-3">
               {(
                 [
@@ -131,22 +132,18 @@ export function CallHandlingStep({
                   ],
                 ] as const
               ).map(([key, label, desc]) => (
-                <label key={key} className="flex items-start gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="mt-1 h-4 w-4 rounded border-border"
-                    checked={b[key]}
-                    onChange={(e) =>
-                      patch({
-                        bookingBehavior: { ...b, [key]: e.target.checked },
-                      })
-                    }
-                  />
-                  <span>
-                    <span className="font-medium">{label}</span>
-                    <span className="mt-0.5 block text-xs text-muted-foreground">{desc}</span>
-                  </span>
-                </label>
+                <WizardToggleField
+                  key={key}
+                  presentation={presentation}
+                  label={label}
+                  description={desc}
+                  checked={b[key]}
+                  onCheckedChange={(on) =>
+                    patch({
+                      bookingBehavior: { ...b, [key]: on },
+                    })
+                  }
+                />
               ))}
             </div>
           </WizardSection>
@@ -159,7 +156,7 @@ export function CallHandlingStep({
             description={`Policy triggers (when Amy may offer a transfer): ${state.transferTriggers.join(" · ")}`}
           >
             <div>
-              <EmergencyTransferEditor state={state} patch={patch} />
+              <EmergencyTransferEditor state={state} patch={patch} presentation={presentation} />
             </div>
             {presentation === "mctb" ? (
               <div className="mt-4 space-y-3 border-t border-border pt-3">
@@ -266,7 +263,7 @@ export function CallHandlingStep({
             title="After-hours notifications"
             description="Send SMS or email when important call outcomes occur."
           >
-              <AfterHoursNotificationsEditor state={state} patch={patch} />
+              <AfterHoursNotificationsEditor state={state} patch={patch} presentation={presentation} />
           </WizardSection>
 
           <WizardSection
@@ -275,68 +272,55 @@ export function CallHandlingStep({
             description="Text callers when an AI conversation ends before their request is resolved."
           >
             <div className="space-y-3">
-              <label className="flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="mt-1"
-                  checked={state.aiCallRecoveryEnabled === true}
-                  onChange={(e) => patch({ aiCallRecoveryEnabled: e.target.checked })}
-                />
-                <span className="font-medium">
-                  Text callers when an AI conversation ends before their request is resolved
-                </span>
-              </label>
+              <WizardToggleField
+                presentation={presentation}
+                label="Text callers when an AI conversation ends before their request is resolved"
+                checked={state.aiCallRecoveryEnabled === true}
+                onCheckedChange={(on) => patch({ aiCallRecoveryEnabled: on })}
+              />
               {state.aiCallRecoveryEnabled ? (
                 <>
-                  <div>
-                    <Label>Messaging permission</Label>
-                    <select
-                      className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
-                      value={state.aiCallRecoveryConsentMode || "DISABLED"}
-                      onChange={(e) =>
-                        patch({
-                          aiCallRecoveryConsentMode: e.target.value as
-                            | "DISABLED"
-                            | "EXISTING_CONSENT"
-                            | "PLATFORM_CAPTURED_CONSENT",
-                        })
-                      }
-                    >
-                      <option value="DISABLED">Disabled</option>
-                      <option value="EXISTING_CONSENT">Existing consent</option>
-                      <option value="PLATFORM_CAPTURED_CONSENT">
-                        Platform-captured consent
-                      </option>
-                    </select>
-                  </div>
-                  <label className="flex items-start gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      className="mt-1"
-                      checked={state.aiCallRecoveryContinueOverSms !== false}
-                      onChange={(e) =>
-                        patch({ aiCallRecoveryContinueOverSms: e.target.checked })
-                      }
-                    />
-                    <span>
-                      Let callers continue the same conversation by text (voice transcript and
-                      captured fields carry over)
-                    </span>
-                  </label>
-                  <div>
-                    <Label>Send delay</Label>
-                    <select
-                      className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
-                      value={String(state.aiCallRecoveryDelaySeconds ?? 0)}
-                      onChange={(e) =>
-                        patch({ aiCallRecoveryDelaySeconds: Number(e.target.value) })
-                      }
-                    >
-                      <option value="0">Immediately (after internal settle)</option>
-                      <option value="15">15 seconds</option>
-                      <option value="30">30 seconds</option>
-                    </select>
-                  </div>
+                  <WizardSelectField
+                    presentation={presentation}
+                    label="Messaging permission"
+                    value={state.aiCallRecoveryConsentMode || "DISABLED"}
+                    onChange={(value) =>
+                      patch({
+                        aiCallRecoveryConsentMode: value as
+                          | "DISABLED"
+                          | "EXISTING_CONSENT"
+                          | "PLATFORM_CAPTURED_CONSENT",
+                      })
+                    }
+                    options={[
+                      { value: "DISABLED", label: "Disabled" },
+                      { value: "EXISTING_CONSENT", label: "Existing consent" },
+                      {
+                        value: "PLATFORM_CAPTURED_CONSENT",
+                        label: "Platform-captured consent",
+                      },
+                    ]}
+                  />
+                  <WizardToggleField
+                    presentation={presentation}
+                    label="Continue the same conversation by text"
+                    description="Voice transcript and captured fields carry over to SMS."
+                    checked={state.aiCallRecoveryContinueOverSms !== false}
+                    onCheckedChange={(on) => patch({ aiCallRecoveryContinueOverSms: on })}
+                  />
+                  <WizardSelectField
+                    presentation={presentation}
+                    label="Send delay"
+                    value={String(state.aiCallRecoveryDelaySeconds ?? 0)}
+                    onChange={(value) =>
+                      patch({ aiCallRecoveryDelaySeconds: Number(value) })
+                    }
+                    options={[
+                      { value: "0", label: "Immediately (after internal settle)" },
+                      { value: "15", label: "15 seconds" },
+                      { value: "30", label: "30 seconds" },
+                    ]}
+                  />
                 </>
               ) : null}
             </div>
@@ -344,9 +328,9 @@ export function CallHandlingStep({
 
         </div>
 
-        <AfterHoursBehaviorEditor state={state} patch={patch} />
-        <OnCallScheduleEditor state={state} patch={patch} />
-        <CallbackSlaEditor state={state} patch={patch} />
+        <AfterHoursBehaviorEditor state={state} patch={patch} presentation={presentation} />
+        <OnCallScheduleEditor state={state} patch={patch} presentation={presentation} />
+        <CallbackSlaEditor state={state} patch={patch} presentation={presentation} />
       </div>
 
       <SidePanel variant={uiVariant} title="Call handling preview">

@@ -6,7 +6,11 @@ import type {
   KnowledgeItemStatus,
   KnowledgeSource,
 } from "@/lib/solutions/appointment-receptionist/types";
-import { Input, Label, Textarea } from "@/components/ui/input";
+import {
+  pickWizardFieldComponents,
+  WizardSelectField,
+  type WizardPresentation,
+} from "../wizard-field-kit";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -26,10 +30,13 @@ type KnowledgeItem = AppointmentReceptionistWizardState["knowledgeItems"][number
 function ConnectExistingKnowledge({
   selectedId,
   onSelect,
+  presentation = "legacy",
 }: {
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  presentation?: WizardPresentation;
 }) {
+  const { Button } = pickWizardFieldComponents(presentation);
   const [rows, setRows] = useState<Array<{ id: string; name: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -79,32 +86,24 @@ function ConnectExistingKnowledge({
           No knowledge bases yet — use Guided profile or Upload first.
         </p>
       ) : (
-        <select
-          className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
+        <WizardSelectField
+          presentation={presentation}
+          label="Knowledge base"
           value={selectedId || ""}
-          onChange={(e) => onSelect(e.target.value || null)}
-        >
-          <option value="">Select a knowledge base…</option>
-          {rows.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.name}
-            </option>
-          ))}
-        </select>
+          onChange={(v) => onSelect(v || null)}
+          options={[
+            { value: "", label: "Select a knowledge base…" },
+            ...rows.map((r) => ({ value: r.id, label: r.name })),
+          ]}
+        />
       )}
       <div className="flex flex-wrap gap-2">
-        <a
-          href="/integrations"
-          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
-        >
-          Open Integrations
-        </a>
-        <a
-          href="/voice/knowledge"
-          className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium"
-        >
-          Open Knowledge bases
-        </a>
+        <Button type="button" variant="default" size="sm" asChild>
+          <a href="/integrations">Open Integrations</a>
+        </Button>
+        <Button type="button" variant="outline" size="sm" asChild>
+          <a href="/voice/knowledge">Open Knowledge bases</a>
+        </Button>
       </div>
     </div>
   );
@@ -231,6 +230,7 @@ export function InformationStep({
   const isMctb = presentation === "mctb";
   const isOpus = presentation === "opus";
   const uiVariant = isOpus ? "opus" : "legacy";
+  const { Input, Label, Textarea, Button } = pickWizardFieldComponents(presentation);
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -718,6 +718,7 @@ export function InformationStep({
 
           {state.knowledgeSource === "connect_data" ? (
             <ConnectExistingKnowledge
+              presentation={presentation}
               selectedId={state.linkedKnowledgeBaseId || null}
               onSelect={(id) => {
                 patch({
@@ -875,7 +876,7 @@ export function InformationStep({
           </div>
         ) : null}
 
-        <BusinessScheduleEditor state={state} patch={patch} />
+        <BusinessScheduleEditor state={state} patch={patch} presentation={presentation} />
       </div>
 
       <SidePanel variant={uiVariant} title="Knowledge quality">

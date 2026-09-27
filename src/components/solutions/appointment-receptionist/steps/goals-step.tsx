@@ -24,11 +24,9 @@ import {
 } from "lucide-react";
 import { useEffect } from "react";
 import { InfoCallout, RadioRow, SelectableCard, SidePanel } from "../ui";
-import { Input, Label } from "@/components/ui/input";
-import { Input as OpusInput } from "@/newui-transplant/components/ui/input";
-import { Label as OpusLabel } from "@/newui-transplant/components/ui/label";
 import { Panel } from "@/newui-transplant/components/app/kit";
 import { Switch } from "@/newui-transplant/components/ui/switch";
+import { pickWizardFieldComponents } from "../wizard-field-kit";
 
 const ICONS = {
   MessageCircle,
@@ -85,6 +83,7 @@ export function GoalsStep({
   const isMctb = presentation === "mctb";
   const isOpus = presentation === "opus";
   const uiVariant = isOpus ? "opus" : "legacy";
+  const { Input, Label } = pickWizardFieldComponents(presentation);
   const options = capabilityOptionsForPreset(state.preset);
   const answerOptions = answerWhenOptionsForPreset(state.preset);
   const panel = goalsSidePanelCopy(state.preset);
@@ -376,8 +375,8 @@ export function GoalsStep({
         <div className="min-w-0 flex-1 space-y-6">
           {!hideSolutionName ? (
             <Panel title="Agent name" description="Shown in Your Team and Automations.">
-              <OpusLabel htmlFor="solution-name">Display name</OpusLabel>
-              <OpusInput
+              <Label htmlFor="solution-name">Display name</Label>
+              <Input
                 id="solution-name"
                 className="mt-1.5 max-w-lg"
                 value={state.solutionName}

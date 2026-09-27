@@ -10,7 +10,11 @@ import {
   isLiveCalendarStatus,
   resolveLiveCalendar,
 } from "@/lib/solutions/appointment-receptionist/live-calendar";
-import { Input, Label } from "@/components/ui/input";
+import {
+  pickWizardFieldComponents,
+  WizardSelectField,
+  WizardToggleField,
+} from "../wizard-field-kit";
 import { CheckCircle2, MoreHorizontal, Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Panel } from "@/newui-transplant/components/app/kit";
@@ -38,6 +42,7 @@ export function AppointmentsStep({
   const isMctb = presentation === "mctb";
   const isOpus = presentation === "opus";
   const uiVariant = isOpus ? "opus" : "legacy";
+  const { Input, Label, Button } = pickWizardFieldComponents(presentation);
   const providerCards = isMctb ? MCTB_BOOKING_PROVIDERS : CALENDARS;
   const selected =
     state.appointmentTypes.find((t) => t.id === state.selectedAppointmentTypeId) ||
@@ -596,22 +601,16 @@ export function AppointmentsStep({
                     onChange={(e) => updateSelected({ name: e.target.value })}
                   />
                 </div>
-                <div>
-                  <Label>Duration</Label>
-                  <select
-                    className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
-                    value={selected.durationMin}
-                    onChange={(e) =>
-                      updateSelected({ durationMin: Number(e.target.value) })
-                    }
-                  >
-                    {[15, 30, 45, 60, 90].map((m) => (
-                      <option key={m} value={m}>
-                        {m} min
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <WizardSelectField
+                  presentation={presentation}
+                  label="Duration"
+                  value={String(selected.durationMin)}
+                  onChange={(v) => updateSelected({ durationMin: Number(v) })}
+                  options={[15, 30, 45, 60, 90].map((m) => ({
+                    value: String(m),
+                    label: `${m} min`,
+                  }))}
+                />
                 <div>
                   <Label>Assigned staff / calendar</Label>
                   <Input
@@ -628,30 +627,26 @@ export function AppointmentsStep({
                 <div className="rounded-lg border border-border px-3 py-2 text-sm">
                   Booking hours: {selected.bookingHours || "Mon - Fri, 8:00 AM - 6:00 PM"}
                 </div>
-                <div>
-                  <Label>Minimum notice</Label>
-                  <select
-                    className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
-                    value={selected.minNotice || "2 hours"}
-                    onChange={(e) => updateSelected({ minNotice: e.target.value })}
-                  >
-                    {["1 hour", "2 hours", "4 hours", "1 day"].map((v) => (
-                      <option key={v}>{v}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <Label>Maximum days ahead</Label>
-                  <select
-                    className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
-                    value={selected.maxDaysAhead || "30 days"}
-                    onChange={(e) => updateSelected({ maxDaysAhead: e.target.value })}
-                  >
-                    {["14 days", "30 days", "60 days", "90 days"].map((v) => (
-                      <option key={v}>{v}</option>
-                    ))}
-                  </select>
-                </div>
+                <WizardSelectField
+                  presentation={presentation}
+                  label="Minimum notice"
+                  value={selected.minNotice || "2 hours"}
+                  onChange={(v) => updateSelected({ minNotice: v })}
+                  options={["1 hour", "2 hours", "4 hours", "1 day"].map((v) => ({
+                    value: v,
+                    label: v,
+                  }))}
+                />
+                <WizardSelectField
+                  presentation={presentation}
+                  label="Maximum days ahead"
+                  value={selected.maxDaysAhead || "30 days"}
+                  onChange={(v) => updateSelected({ maxDaysAhead: v })}
+                  options={["14 days", "30 days", "60 days", "90 days"].map((v) => ({
+                    value: v,
+                    label: v,
+                  }))}
+                />
               </div>
             </div>
 

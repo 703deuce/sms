@@ -14,8 +14,13 @@ import {
   updateTransferPlanStep,
 } from "@/lib/solutions/appointment-receptionist/transfer-wizard-state";
 import { normalizeWizardTransferPhone } from "@/lib/solutions/appointment-receptionist/transfer-utils";
-import { Input, Label } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { RadioRow } from "./ui";
+import {
+  pickWizardFieldComponents,
+  type WizardPresentation,
+  WizardSelectField,
+  WizardToggleField,
+} from "./wizard-field-kit";
 import { ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
 
 const FALLBACK_OPTIONS: Array<[FallbackAction, string, string]> = [
@@ -27,10 +32,15 @@ const FALLBACK_OPTIONS: Array<[FallbackAction, string, string]> = [
 export function EmergencyTransferEditor({
   state,
   patch,
+  presentation = "legacy",
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
+  presentation?: WizardPresentation;
 }) {
+  const ui = pickWizardFieldComponents(presentation);
+  const { Input, Label, Button } = ui;
+  const uiVariant = presentation === "opus" ? "opus" : "legacy";
   const transferCapability = state.capabilities.includes("transfer_calls");
   const hydrated = useRef(false);
 
@@ -83,50 +93,36 @@ export function EmergencyTransferEditor({
         apply.
       </p>
 
-      <label className="flex items-start gap-2 text-sm">
-        <input
-          type="checkbox"
-          className="mt-1 h-4 w-4 rounded border-border"
-          checked={enabled}
-          onChange={(e) =>
-            patch({
-              voiceV2HumanTransferEnabled: e.target.checked,
-            })
-          }
-        />
-        <span>
-          <span className="font-medium">Enable emergency &amp; human transfer</span>
-          <span className="mt-0.5 block text-xs text-muted-foreground">
-            Authorized contacts only — callers are never transferred to numbers you have not
-            configured here.
-          </span>
-        </span>
-      </label>
+      <WizardToggleField
+        presentation={presentation}
+        label="Enable emergency & human transfer"
+        description="Authorized contacts only — callers are never transferred to numbers you have not configured here."
+        checked={enabled}
+        onCheckedChange={(on) => patch({ voiceV2HumanTransferEnabled: on })}
+      />
 
-      <label className="flex items-start gap-2 text-sm">
-        <input
-          type="checkbox"
-          className="mt-1 h-4 w-4 rounded border-border"
-          checked={state.allowCallerRequestedTransfer !== false}
-          onChange={(e) => patch({ allowCallerRequestedTransfer: e.target.checked })}
-        />
-        <span className="font-medium">Allow caller-requested human</span>
-      </label>
+      <WizardToggleField
+        presentation={presentation}
+        label="Allow caller-requested human"
+        checked={state.allowCallerRequestedTransfer !== false}
+        onCheckedChange={(on) => patch({ allowCallerRequestedTransfer: on })}
+      />
 
       <div className={enabled ? "" : "pointer-events-none opacity-50"}>
-        <Label>Routing</Label>
-        <select
-          className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
+        <WizardSelectField
+          presentation={presentation}
+          label="Routing"
           value={routing}
-          onChange={(e) =>
+          onChange={(v) =>
             apply({
-              transferRouting: e.target.value as "single" | "waterfall",
+              transferRouting: v as "single" | "waterfall",
             })
           }
-        >
-          <option value="single">Single destination</option>
-          <option value="waterfall">Waterfall (try contacts in order)</option>
-        </select>
+          options={[
+            { value: "single", label: "Single destination" },
+            { value: "waterfall", label: "Waterfall (try contacts in order)" },
+          ]}
+        />
         <p className="mt-1 text-xs text-muted-foreground">
           {routing === "waterfall"
             ? "Transovo tries the configured contacts in order until someone answers. If nobody answers, the selected fallback is used."
@@ -134,18 +130,16 @@ export function EmergencyTransferEditor({
         </p>
 
         <div className="mt-3">
-          <Label>Default ring timeout</Label>
-          <select
-            className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
-            value={defaultRing}
-            onChange={(e) => apply({ transferRingSeconds: Number(e.target.value) })}
-          >
-            {TRANSFER_RING_SECONDS_OPTIONS.map((s) => (
-              <option key={s} value={s}>
-                {s} seconds
-              </option>
-            ))}
-          </select>
+          <WizardSelectField
+            presentation={presentation}
+            label="Default ring timeout"
+            value={String(defaultRing)}
+            onChange={(v) => apply({ transferRingSeconds: Number(v) })}
+            options={TRANSFER_RING_SECONDS_OPTIONS.map((s) => ({
+              value: String(s),
+              label: `${s} seconds`,
+            }))}
+          />
           <p className="mt-1 text-xs text-muted-foreground">
             Used when a contact does not set its own ring timeout below.
           </p>
@@ -318,38 +312,28 @@ export function EmergencyTransferEditor({
           })}
         </ul>
 
-        <label className="mt-3 flex items-start gap-2 text-sm">
-          <input
-            type="checkbox"
-            className="mt-1"
-            checked={state.detectVoicemailOnTransfer}
-            onChange={(e) => patch({ detectVoicemailOnTransfer: e.target.checked })}
-          />
-          <span>
-            <span className="font-medium">Detect voicemail on transfer</span>
-            <span className="mt-0.5 block text-xs text-muted-foreground">
-              Return to the receptionist if the transfer reaches voicemail.
-            </span>
-          </span>
-        </label>
+        <WizardToggleField
+          presentation={presentation}
+          label="Detect voicemail on transfer"
+          description="Return to the receptionist if the transfer reaches voicemail."
+          checked={state.detectVoicemailOnTransfer}
+          onCheckedChange={(on) => patch({ detectVoicemailOnTransfer: on })}
+        />
 
         <div className="mt-4 border-t border-border pt-3">
-          <Label>If nobody answers (waterfall exhausted or transfer fails)</Label>
+          <Label className="text-sm font-medium">
+            If nobody answers (waterfall exhausted or transfer fails)
+          </Label>
           <div className="mt-2 space-y-2">
             {FALLBACK_OPTIONS.map(([id, label, desc]) => (
-              <label key={id} className="flex cursor-pointer items-start gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="transfer-fallback"
-                  className="mt-1"
-                  checked={state.transferFallback === id}
-                  onChange={() => patch({ transferFallback: id })}
-                />
-                <span>
-                  <span className="font-medium">{label}</span>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">{desc}</span>
-                </span>
-              </label>
+              <RadioRow
+                key={id}
+                variant={uiVariant}
+                selected={state.transferFallback === id}
+                onClick={() => patch({ transferFallback: id })}
+                label={label}
+                description={desc}
+              />
             ))}
           </div>
         </div>

@@ -12,9 +12,7 @@ import { CheckCircle2, Circle, Play } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ButtonLink } from "@/newui-transplant/components/app/button-link";
 import { Panel } from "@/newui-transplant/components/app/kit";
-import { Input as OpusInput } from "@/newui-transplant/components/ui/input";
-import { Label as OpusLabel } from "@/newui-transplant/components/ui/label";
-import { Textarea as OpusTextarea } from "@/newui-transplant/components/ui/textarea";
+import { pickWizardFieldComponents, WizardSelectField } from "../wizard-field-kit";
 import { WizardSection } from "../wizard-opus-ui";
 import { InfoCallout, RadioRow, SelectableCard, SidePanel, StatusPill } from "../ui";
 
@@ -48,6 +46,7 @@ export function PhoneStep({
   const isMctb = presentation === "mctb";
   const isOpus = presentation === "opus";
   const uiVariant = isOpus ? "opus" : "legacy";
+  const { Input, Label, Textarea, Button } = pickWizardFieldComponents(presentation);
   const [numbers, setNumbers] = useState<PhoneRow[]>([]);
   const [mctbLineReuse, setMctbLineReuse] = useState<{
     ingressE164: string;
@@ -417,36 +416,31 @@ export function PhoneStep({
           </WizardSection>
           <WizardSection opus={isOpus} title="Settings">
             <div className="space-y-3">
-            <label className="block text-xs text-muted-foreground">
-              Ring team for
-              <select
-                className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
-                value={state.ringTeamSeconds}
-                onChange={(e) => patch({ ringTeamSeconds: Number(e.target.value) })}
-              >
-                {[10, 15, 20, 30, 45].map((s) => (
-                  <option key={s} value={s}>
-                    {s} seconds
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-xs text-muted-foreground">
-              Call recording
-              <select
-                className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
-                value={state.callRecording}
-                onChange={(e) =>
-                  patch({
-                    callRecording: e.target.value as AppointmentReceptionistWizardState["callRecording"],
-                  })
-                }
-              >
-                <option value="all">Record all calls</option>
-                <option value="inbound_only">Inbound only</option>
-                <option value="off">Off</option>
-              </select>
-            </label>
+            <WizardSelectField
+              presentation={presentation}
+              label="Ring team for"
+              value={String(state.ringTeamSeconds)}
+              onChange={(v) => patch({ ringTeamSeconds: Number(v) })}
+              options={[10, 15, 20, 30, 45].map((s) => ({
+                value: String(s),
+                label: `${s} seconds`,
+              }))}
+            />
+            <WizardSelectField
+              presentation={presentation}
+              label="Call recording"
+              value={state.callRecording}
+              onChange={(v) =>
+                patch({
+                  callRecording: v as AppointmentReceptionistWizardState["callRecording"],
+                })
+              }
+              options={[
+                { value: "all", label: "Record all calls" },
+                { value: "inbound_only", label: "Inbound only" },
+                { value: "off", label: "Off" },
+              ]}
+            />
             </div>
           </WizardSection>
         </div>
@@ -504,68 +498,37 @@ export function PhoneStep({
                   </div>
                 </div>
                 {state.connectionGreeting === "upload_custom" ? (
-                  isOpus ? (
-                    <div className="mt-3">
-                      <OpusLabel>Greeting audio URL (HTTPS MP3/WAV)</OpusLabel>
-                      <OpusInput
-                        className="mt-1"
-                        type="url"
-                        placeholder="https://…"
-                        value={state.connectionGreetingAudioUrl || ""}
-                        onChange={(e) =>
-                          patch({ connectionGreetingAudioUrl: e.target.value })
-                        }
-                      />
-                    </div>
-                  ) : (
-                    <label className="mt-3 block text-xs text-muted-foreground">
-                      Greeting audio URL (HTTPS MP3/WAV)
-                      <input
-                        className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground"
-                        type="url"
-                        placeholder="https://…"
-                        value={state.connectionGreetingAudioUrl || ""}
-                        onChange={(e) =>
-                          patch({ connectionGreetingAudioUrl: e.target.value })
-                        }
-                      />
-                    </label>
-                  )
+                  <div className="mt-3">
+                    <Label>Greeting audio URL (HTTPS MP3/WAV)</Label>
+                    <Input
+                      className="mt-1"
+                      type="url"
+                      placeholder="https://…"
+                      value={state.connectionGreetingAudioUrl || ""}
+                      onChange={(e) =>
+                        patch({ connectionGreetingAudioUrl: e.target.value })
+                      }
+                    />
+                  </div>
                 ) : null}
                 {state.connectionGreeting === "create_custom" ||
                 state.connectionGreeting === "transovo_professional" ||
                 state.connectionGreeting === "transovo_warm" ? (
-                  isOpus ? (
-                    <div className="mt-3">
-                      <OpusLabel>
-                        {state.connectionGreeting === "create_custom"
-                          ? "Custom greeting text"
-                          : "Greeting text"}
-                      </OpusLabel>
-                      <OpusTextarea
-                        className="mt-1"
-                        rows={3}
-                        value={state.connectionGreetingText || ""}
-                        onChange={(e) =>
-                          patch({ connectionGreetingText: e.target.value })
-                        }
-                      />
-                    </div>
-                  ) : (
-                    <label className="mt-3 block text-xs text-muted-foreground">
+                  <div className="mt-3">
+                    <Label>
                       {state.connectionGreeting === "create_custom"
                         ? "Custom greeting text"
                         : "Greeting text"}
-                      <textarea
-                        className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground"
-                        rows={3}
-                        value={state.connectionGreetingText || ""}
-                        onChange={(e) =>
-                          patch({ connectionGreetingText: e.target.value })
-                        }
-                      />
-                    </label>
-                  )
+                    </Label>
+                    <Textarea
+                      className="mt-1"
+                      rows={3}
+                      value={state.connectionGreetingText || ""}
+                      onChange={(e) =>
+                        patch({ connectionGreetingText: e.target.value })
+                      }
+                    />
+                  </div>
                 ) : (
                   <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
                     “{state.connectionGreetingText || DEFAULT_CONNECTION_GREETING}”
