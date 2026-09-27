@@ -131,10 +131,13 @@ export async function GET() {
   ]);
 
   const requiredActions = deriveRequiredActions(compliance.registration, reg);
-  const businessLineE164 =
-    (typeof mctbSettings.businessLineE164 === "string" ? mctbSettings.businessLineE164 : null) ||
-    onboarding.businessNumberE164 ||
-    null;
+  const { resolveMctbWorkspaceBusinessLineE164 } = await import(
+    "@/lib/mctb/resolve-workspace-business-line"
+  );
+  const businessLineE164 = resolveMctbWorkspaceBusinessLineE164(
+    typeof mctbSettings.businessLineE164 === "string" ? mctbSettings.businessLineE164 : null,
+    onboarding.businessNumberE164,
+  );
   const phoneNumbersWithStatus = enrichWorkspacePhoneWithMessagingStatus(phoneNumbers);
   const messagingReady = isMctbSetupMessagingReady({
     phoneNumbers,

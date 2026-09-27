@@ -25,11 +25,9 @@ export function MctbSetupWorkspaceLayout({ children }: { children: React.ReactNo
   }));
 
   return (
-    <>
-      <div className="mx-auto w-full max-w-7xl px-4 pt-2 md:px-8">
-        <LinkTabs tabs={tabs} label="Setup sections" />
-      </div>
-      {children}
-    </>
+    <div className="mx-auto w-full max-w-7xl px-4 pb-8 pt-2 md:px-8 md:pb-10">
+      <LinkTabs tabs={tabs} label="Setup sections" />
+      <div className="pt-4">{children}</div>
+    </div>
   );
 }

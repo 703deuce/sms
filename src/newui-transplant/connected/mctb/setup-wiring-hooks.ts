@@ -331,18 +331,27 @@ export function useMctbTestWiring() {
   const [businessLine, setBusinessLine] = useState("");
 
   const reload = useCallback(async () => {
-    const [setupRes, liveRes, setupData] = await Promise.all([
+    const [setupRes, liveRes, setupData, onboardRes] = await Promise.all([
       fetch("/api/mctb/setup-test", { cache: "no-store" }),
       fetch("/api/mctb/live-test", { cache: "no-store" }),
       fetchMctbSetup().catch(() => null),
+      fetch("/api/mctb/onboarding", { cache: "no-store" }).catch(() => null),
     ]);
     const setupJson = await setupRes.json().catch(() => ({}));
     const liveJson = await liveRes.json().catch(() => ({}));
     if (setupRes.ok && setupJson.status) setSetupTest(setupJson.status);
     if (liveRes.ok && liveJson.data) setLiveTest(liveJson.data);
-    if (setupData?.businessLineE164) {
-      setBusinessLine(formatSetupPhoneLine(setupData.businessLineE164 as string));
-    }
+
+    const onboardJson =
+      onboardRes && onboardRes.ok ? await onboardRes.json().catch(() => null) : null;
+    const { resolveMctbWorkspaceBusinessLineE164 } = await import(
+      "@/lib/mctb/resolve-workspace-business-line"
+    );
+    const lineE164 = resolveMctbWorkspaceBusinessLineE164(
+      (setupData?.businessLineE164 as string) || null,
+      (onboardJson?.state?.businessNumberE164 as string) || null,
+    );
+    setBusinessLine(lineE164 ? formatSetupPhoneLine(lineE164) : "");
   }, []);
 
   useEffect(() => {

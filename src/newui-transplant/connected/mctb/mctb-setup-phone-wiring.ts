@@ -42,7 +42,15 @@ export function useMctbSetupPhoneWiring(senderFallback: string): {
       if (!setupRes.ok || !setupJson.data) return;
 
       const d = setupJson.data;
-      const line = (d.businessLineE164 as string) || d.adminTest?.businessLineE164 || "";
+      const ob = onboardRes.ok ? await onboardRes.json().catch(() => null) : null;
+      const { resolveMctbWorkspaceBusinessLineE164 } = await import(
+        "@/lib/mctb/resolve-workspace-business-line"
+      );
+      const line =
+        resolveMctbWorkspaceBusinessLineE164(
+          (d.businessLineE164 as string) || null,
+          (ob?.state?.businessNumberE164 as string) || null,
+        ) || "";
       const pid = d.runtime?.phoneNumberId as string | null;
       setPhoneNumberId(pid);
       setBusinessLineE164(line || null);
@@ -55,8 +63,7 @@ export function useMctbSetupPhoneWiring(senderFallback: string): {
       const smsPhone = phones.find((p) => p.id === smsId);
       setSelectedSenderE164(smsPhone?.e164 || phones[0]?.e164 || null);
 
-      if (onboardRes.ok) {
-        const ob = await onboardRes.json();
+      if (ob?.state) {
         if (ob.state?.forwardingCarrier) setCarrier(ob.state.forwardingCarrier);
         if (ob.state?.forwardingRingSeconds != null) {
           setRingSeconds(clampRingSeconds(ob.state.forwardingRingSeconds));

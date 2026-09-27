@@ -81,9 +81,11 @@ export function NewUiMctbSetupPhonePage() {
   return <TransplantMctbSetupPhonePage wired={wired} />;
 }
 
+const setupSectionPageClass = "max-w-none px-0 py-0 md:px-0 md:py-0";
+
 export function NewUiMctbSetupConsentPage() {
   return (
-    <Page>
+    <Page className={setupSectionPageClass}>
       <PageHeader title="Consent" description="How callers give permission to receive recovery texts." />
       <ConsentEditor />
     </Page>
@@ -92,7 +94,7 @@ export function NewUiMctbSetupConsentPage() {
 
 export function NewUiMctbSetupTextBackPage() {
   return (
-    <Page>
+    <Page className={setupSectionPageClass}>
       <PageHeader title="Text Back" description="Recovery message customers receive after a missed call." />
       <TextBackEditor />
     </Page>
@@ -227,7 +229,7 @@ export function NewUiMctbSetupNotificationsPage() {
 
 export function NewUiMctbSetupExclusionsPage() {
   return (
-    <Page>
+    <Page className={setupSectionPageClass}>
       <PageHeader title="Exclusions" description="Numbers that should never receive automated recovery texts." />
       <ExclusionsTable />
     </Page>
