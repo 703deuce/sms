@@ -1,18 +1,59 @@
 "use client";
 
 import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, Sparkles } from "lucide-react";
 import { ButtonLink } from "@/newui-transplant/components/app/button-link";
 import { Initials, Page, PageHeader, Panel, Pill, Rows, Stat, TextLink } from "@/newui-transplant/components/app/kit";
 import { RecoveryPill } from "@/newui-transplant/components/app/status";
 import { mapMctbOverviewRecentMissedCalls } from "@/lib/newui-transplant/adapters/mctb-overview";
 import type { MctbOverviewPayload } from "@/lib/mctb/overview-types";
+import type { MctbCapabilities } from "@/lib/mctb/capabilities";
 import { useMctbOverviewEnrichment } from "@/newui-transplant/connected/mctb/overview-enrichment";
+import { MctbRecoveryPauseOpus } from "@/newui-transplant/components/mctb/mctb-recovery-pause-opus";
+import { fetchMctbSetup } from "@/lib/newui-transplant/api/mctb-setup-client";
 
 export function NewUiMctbOverviewPage({ data }: { data: MctbOverviewPayload }) {
   const { leadRecovery } = useMctbOverviewEnrichment(data);
   const recentMissed = mapMctbOverviewRecentMissedCalls(data);
   const kpis = data.kpis;
+  const [capabilities, setCapabilities] = useState<MctbCapabilities | null>(null);
+  const [schedule, setSchedule] = useState<{
+    paused: boolean;
+    pauseUntil: string | null;
+    pauseKind: "manual" | "timed" | null;
+  } | null>(null);
+  const [timezone, setTimezone] = useState("America/New_York");
+
+  const reloadSetup = useCallback(async () => {
+    try {
+      const setup = await fetchMctbSetup({ force: true });
+      const caps = setup.capabilities as MctbCapabilities | undefined;
+      if (caps) setCapabilities(caps);
+      const sch = setup.schedule as {
+        paused?: boolean;
+        pauseUntil?: string | null;
+        pauseKind?: "manual" | "timed" | null;
+      };
+      setSchedule({
+        paused: Boolean(sch?.paused ?? data.status === "paused"),
+        pauseUntil: sch?.pauseUntil ?? data.pausedUntil,
+        pauseKind: sch?.pauseKind ?? null,
+      });
+      const runtime = setup.runtime as { timezone?: string };
+      if (runtime?.timezone) setTimezone(runtime.timezone);
+    } catch {
+      setSchedule({
+        paused: data.status === "paused",
+        pauseUntil: data.pausedUntil,
+        pauseKind: null,
+      });
+    }
+  }, [data.pausedUntil, data.status]);
+
+  useEffect(() => {
+    void reloadSetup();
+  }, [reloadSetup]);
 
   return (
     <Page>
@@ -33,6 +74,33 @@ export function NewUiMctbOverviewPage({ data }: { data: MctbOverviewPayload }) {
         <Stat label="Customer replies" value={String(kpis.repliesToday)} hint="Today" href="/mctb/conversations" />
         <Stat label="Needs reply" value={String(kpis.needsReplyCount)} hint="Waiting on your team" href="/mctb/conversations" />
       </div>
+
+      {capabilities && capabilities.monthlyRecoveryLimit > 0 ? (
+        <div className="mt-4 rounded-xl border bg-card px-4 py-3">
+          <p className="text-sm font-medium">Recovered calls this month</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            <span className="font-mono tabular-nums text-foreground">
+              {capabilities.monthlyRecoveriesUsed} / {capabilities.monthlyRecoveryLimit}
+            </span>
+            {capabilities.monthlyRecoveriesUsed >= capabilities.monthlyRecoveryLimit
+              ? " — limit reached; new recovery texts are suppressed until the next period."
+              : " — qualifying missed calls count toward your plan limit."}
+          </p>
+        </div>
+      ) : null}
+
+      {schedule ? (
+        <div className="mt-4">
+          <MctbRecoveryPauseOpus
+            compact
+            paused={schedule.paused}
+            pauseUntil={schedule.pauseUntil}
+            pauseKind={schedule.pauseKind}
+            timezone={timezone}
+            onUpdated={() => void reloadSetup()}
+          />
+        </div>
+      ) : null}
 
       <div className="mt-4 flex flex-col gap-3 rounded-xl border bg-card p-4 sm:flex-row sm:items-center">
         <span className="flex size-9 items-center justify-center rounded-lg bg-accent text-accent-foreground">

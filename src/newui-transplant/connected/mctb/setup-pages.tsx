@@ -144,6 +144,7 @@ export function NewUiMctbSetupRecoveryPage() {
         onCooldownChange: (label) => recovery.setCooldownMinutes(minutesFromCooldownLabel(label)),
         onMaxMessagesChange: (label) => recovery.setMaxMessages(Number(label) || 1),
         onPausePreset: (p) => void recovery.pausePreset(p),
+        onResume: recovery.resumeRecovery,
         onSave: recovery.save,
       }}
     />
@@ -157,8 +158,10 @@ export function NewUiMctbSetupVoicemailPage() {
     <TransplantMctbSetupVoicemailPage
       wired={{
         greetingText: vm.greetingText,
+        greetingUrl: vm.greetingUrl,
         onGreetingTextChange: vm.setGreetingText,
         greetingActive: vm.greetingActive,
+        onSaveGreetingUrl: vm.saveGreetingUrl,
         sendAfterVoicemail: vm.sendAfterVoicemail,
         onSendAfterVoicemailChange: vm.setSendAfterVoicemail,
         onSaveGreeting: vm.saveGreeting,

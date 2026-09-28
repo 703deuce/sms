@@ -73,6 +73,11 @@ export function useMctbRecoveryWiring() {
     await reload();
   }, [phoneNumberId, triggers, cooldownMinutes, delaySeconds, maxMessages, reload]);
 
+  const resumeRecovery = useCallback(async () => {
+    await saveMctbSetup({ enabled: true, pauseUntil: null });
+    await reload();
+  }, [reload]);
+
   const pausePreset = useCallback(
     async (preset: "1 hour" | "Until tomorrow" | "1 week" | "Indefinitely") => {
       if (preset === "Indefinitely") {
@@ -108,6 +113,7 @@ export function useMctbRecoveryWiring() {
     setMaxMessages,
     save,
     pausePreset,
+    resumeRecovery,
   };
 }
 
@@ -115,6 +121,7 @@ export function useMctbVoicemailWiring() {
   const [loading, setLoading] = useState(true);
   const [phoneNumberId, setPhoneNumberId] = useState<string | null>(null);
   const [greetingText, setGreetingText] = useState("");
+  const [greetingUrl, setGreetingUrl] = useState<string | null>(null);
   const [greetingActive, setGreetingActive] = useState(false);
   const [sendAfterVoicemail, setSendAfterVoicemail] = useState(true);
   const [voicemailBoxId, setVoicemailBoxId] = useState<string | null>(null);
@@ -142,6 +149,7 @@ export function useMctbVoicemailWiring() {
           } | undefined;
           setVoicemailBoxId(box?.id ?? null);
           setGreetingText(box?.greetingText?.trim() || "");
+          setGreetingUrl(box?.greetingUrl ?? null);
           setGreetingActive(Boolean(box?.greetingUrl || box?.greetingText));
           setTranscriptionEnabled(box?.transcriptionEnabled ?? true);
         }
@@ -155,9 +163,9 @@ export function useMctbVoicemailWiring() {
     void reload();
   }, [reload]);
 
-  const saveGreeting = useCallback(async () => {
+  const ensureVoicemailBoxId = useCallback(async (): Promise<string> => {
     if (!phoneNumberId) throw new Error("No phone number configured");
-    let boxId: string | undefined;
+    if (voicemailBoxId) return voicemailBoxId;
     const ensure = await fetch("/api/phone/voicemail", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -165,18 +173,43 @@ export function useMctbVoicemailWiring() {
     });
     const ensureJson = await ensure.json();
     if (!ensure.ok) throw new Error(ensureJson.error || "Could not create voicemail box");
-    boxId = ensureJson.data?.id;
+    const id = ensureJson.data?.id as string;
+    if (!id) throw new Error("Could not create voicemail box");
+    setVoicemailBoxId(id);
+    return id;
+  }, [phoneNumberId, voicemailBoxId]);
+
+  const saveGreeting = useCallback(async (textOverride?: string) => {
+    const boxId = await ensureVoicemailBoxId();
+    const text = (textOverride ?? greetingText).trim();
     const res = await fetch("/api/phone/voicemail", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "update_box", boxId, greetingText }),
+      body: JSON.stringify({ action: "update_box", boxId, greetingText: text }),
     });
     if (!res.ok) {
       const j = await res.json();
       throw new Error(j.error || "Save failed");
     }
     await reload();
-  }, [phoneNumberId, greetingText, reload]);
+  }, [ensureVoicemailBoxId, greetingText, reload]);
+
+  const saveGreetingUrl = useCallback(
+    async (url: string) => {
+      const boxId = await ensureVoicemailBoxId();
+      const res = await fetch("/api/phone/voicemail", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update_box", boxId, greetingUrl: url }),
+      });
+      if (!res.ok) {
+        const j = await res.json();
+        throw new Error(j.error || "Save failed");
+      }
+      await reload();
+    },
+    [ensureVoicemailBoxId, reload],
+  );
 
   const saveTranscription = useCallback(
     async (enabled: boolean) => {
@@ -218,6 +251,8 @@ export function useMctbVoicemailWiring() {
     phoneNumberId,
     greetingText,
     setGreetingText,
+    greetingUrl,
+    saveGreetingUrl,
     greetingActive,
     sendAfterVoicemail,
     setSendAfterVoicemail,

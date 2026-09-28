@@ -22,6 +22,8 @@ export type InboxWiring = {
   onMarkRead?: (ids: string[]) => Promise<void>
   onClose?: (ids: string[]) => Promise<void>
   onSendMessage?: (conversationId: string, text: string) => Promise<void>
+  composerDisabled?: boolean
+  composerDisabledReason?: string
 }
 
 function Bubble({ m }: { m: Message }) {
@@ -267,6 +269,11 @@ export function Inbox({
                   send()
                 }}
               >
+                {wiring?.composerDisabledReason ? (
+                  <p className="mb-2 rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
+                    {wiring.composerDisabledReason}
+                  </p>
+                ) : null}
                 <label htmlFor="composer" className="sr-only">Reply</label>
                 <div className="flex items-end gap-2 rounded-xl border bg-background p-2 focus-within:ring-2 focus-within:ring-ring/40">
                   <Textarea
@@ -274,6 +281,7 @@ export function Inbox({
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
                     onKeyDown={(e) => {
+                      if (wiring?.composerDisabled) return
                       if (e.nativeEvent.isComposing || e.keyCode === 229) return
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault()
@@ -281,10 +289,20 @@ export function Inbox({
                       }
                     }}
                     rows={1}
-                    placeholder={`Reply from ${business.sender}`}
+                    disabled={wiring?.composerDisabled}
+                    placeholder={
+                      wiring?.composerDisabled
+                        ? 'Manual replies unavailable'
+                        : `Reply from ${business.sender}`
+                    }
                     className="min-h-9 resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
                   />
-                  <Button type="submit" size="icon" disabled={!draft.trim()} aria-label="Send">
+                  <Button
+                    type="submit"
+                    size="icon"
+                    disabled={!draft.trim() || wiring?.composerDisabled}
+                    aria-label="Send"
+                  >
                     <SendHorizontal />
                   </Button>
                 </div>

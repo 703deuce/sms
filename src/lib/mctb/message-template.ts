@@ -3,6 +3,7 @@ import { DEFAULT_ONBOARDING_MESSAGE } from "@/lib/mctb/onboarding/types";
 
 /** Authoritative recovery opener for Transovo platform-sender workspaces (TFV/onboarding default). */
 import { getMctbPlatformTemplate } from "@/lib/mctb/platform-message-templates";
+import { resolvePlatformRecoveryOpenerBody } from "@/lib/mctb/platform-recovery-template-choices";
 
 export const MCTB_PLATFORM_SENDER_RECOVERY_OPENER =
   getMctbPlatformTemplate("recovery_opener").body;
@@ -49,16 +50,17 @@ export function resolveMctbMessageTemplate(
   return config.messageTemplate;
 }
 
-/** Recovery SMS opener — platform sender ignores workspace-custom copy. */
+/** Recovery SMS opener — platform sender uses approved template registry (not arbitrary workspace copy). */
 export function resolveMctbRecoveryOpenerTemplate(
   config: MissedCallTextConfigRecord & {
     messageTemplateBusinessHours?: string | null;
     messageTemplateAfterHours?: string | null;
+    platformRecoveryTemplateId?: string | null;
   },
   now = new Date(),
 ): string {
   if (config.senderMode === "PLATFORM") {
-    return MCTB_PLATFORM_SENDER_RECOVERY_OPENER;
+    return resolvePlatformRecoveryOpenerBody(config.platformRecoveryTemplateId);
   }
   return resolveMctbMessageTemplate(config, now);
 }

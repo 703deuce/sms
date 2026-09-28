@@ -87,6 +87,8 @@ export type MissedCallTextConfigRecord = {
   defaultLinkUrl?: string | null;
   leadCaptureEnabled?: boolean;
   requestFormFieldsJson?: unknown;
+  /** Workspace customFieldsConfig.mctb — not a DB column on missedCallTextConfig */
+  platformRecoveryTemplateId?: string | null;
 };
 
 export type MissedCallTextSettingsUpdate = {

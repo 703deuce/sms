@@ -497,6 +497,7 @@ export async function sendNewMessage(input: {
   fromE164?: string;
   mediaUrls?: string[];
   inboxCompose?: boolean;
+  mctbCompose?: boolean;
 }): Promise<{ conversationId?: string }> {
   const res = await fetch("/api/sms/send", {
     method: "POST",
@@ -507,6 +508,7 @@ export async function sendNewMessage(input: {
       from: input.fromE164,
       mediaUrls: input.mediaUrls,
       inboxCompose: input.inboxCompose,
+      mctbCompose: input.mctbCompose,
     }),
   });
   const json = await res.json();

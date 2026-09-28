@@ -164,6 +164,19 @@ export function OnboardingRecoveryControlsSection({ wiring }: { wiring: Recovery
 export async function persistOnboardingRecoveryAndTemplate(messageTemplate: string): Promise<void> {
   const data = await fetchMctbSetup({ force: true });
   const phoneNumberId = (data.runtime as { phoneNumberId?: string })?.phoneNumberId;
+  const senderMode = (data.messaging as { senderMode?: string })?.senderMode;
+  if (senderMode === "PLATFORM") {
+    const { listMctbPlatformRecoveryOpenerChoices } = await import(
+      "@/lib/mctb/platform-recovery-template-choices"
+    );
+    const match =
+      listMctbPlatformRecoveryOpenerChoices().find((c) => c.body === messageTemplate.trim()) ??
+      listMctbPlatformRecoveryOpenerChoices()[0];
+    if (match) {
+      await saveMctbSetup({ platformRecoveryTemplateId: match.id });
+    }
+    return;
+  }
   if (phoneNumberId && messageTemplate.trim()) {
     await saveMctbSetup({
       phoneNumberId,

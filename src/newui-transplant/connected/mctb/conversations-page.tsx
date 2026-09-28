@@ -16,6 +16,8 @@ import {
   patchConversation,
   sendNewMessage,
 } from "@/lib/inbox/kimi-inbox-adapter";
+import { fetchMctbSetup } from "@/lib/newui-transplant/api/mctb-setup-client";
+import type { MctbCapabilities } from "@/lib/mctb/capabilities";
 
 type InboxFilter = "All" | "Needs reply" | "Mine" | "Unassigned" | "Closed" | "Spam";
 
@@ -47,6 +49,7 @@ export function NewUiMctbConversationsPage({
   const [missedCalls, setMissedCalls] = useState<MissedCall[]>([]);
   const [loading, setLoading] = useState(true);
   const [threadLoadingId, setThreadLoadingId] = useState<string | null>(null);
+  const [manualTwoWay, setManualTwoWay] = useState(false);
   const hydratedIds = useRef(new Set<string>());
   const hydrateInFlight = useRef(new Set<string>());
   const hydrationToken = useRef(0);
@@ -122,6 +125,15 @@ export function NewUiMctbConversationsPage({
     void loadList();
   }, [loadList]);
 
+  useEffect(() => {
+    void fetchMctbSetup()
+      .then((data) => {
+        const caps = data.capabilities as MctbCapabilities | undefined;
+        setManualTwoWay(Boolean(caps?.manualTwoWayMessaging));
+      })
+      .catch(() => setManualTwoWay(false));
+  }, []);
+
   const wiring = useMemo(
     () => ({
       filter,
@@ -148,6 +160,7 @@ export function NewUiMctbConversationsPage({
           to: convo.phone,
           message: text,
           inboxCompose: true,
+          mctbCompose: true,
         });
         const refreshed = await fetchConversation(conversationId);
         setConversations((prev) =>
@@ -155,8 +168,12 @@ export function NewUiMctbConversationsPage({
         );
         hydratedIds.current.add(conversationId);
       },
+      composerDisabled: !manualTwoWay,
+      composerDisabledReason: manualTwoWay
+        ? undefined
+        : "Manual replies are locked while Transovo Platform sender is active. Automated recovery and system messages still send. Use your own verified sender to reply from this inbox.",
     }),
-    [filter, conversations, loadList, hydrateThread],
+    [filter, conversations, loadList, hydrateThread, manualTwoWay],
   );
 
   if (loading) {

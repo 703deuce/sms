@@ -16,6 +16,7 @@ export type MctbSetupRecoveryWired = {
   onCooldownChange?: (label: string) => void
   onMaxMessagesChange?: (label: string) => void
   onPausePreset?: (preset: '1 hour' | 'Until tomorrow' | '1 week' | 'Indefinitely') => void
+  onResume?: () => Promise<void>
   onSave?: () => Promise<void>
 }
 
@@ -71,15 +72,23 @@ export function TransplantMctbSetupRecoveryPage({ wired }: { wired?: MctbSetupRe
 
       <Panel title="Pause recovery">
         <p className="mb-3 text-sm text-muted-foreground">
-          {wired?.paused ? 'Recovery is paused.' : 'Recovery is running. Pause temporarily or indefinitely.'}
+          {wired?.paused
+            ? 'Recovery is paused. Forwarded calls use your voicemail fallback — no recovery SMS.'
+            : 'Recovery is running. Pause temporarily or indefinitely.'}
         </p>
-        <div className="flex flex-wrap gap-2">
-          {(['1 hour', 'Until tomorrow', '1 week', 'Indefinitely'] as const).map((p) => (
-            <Button key={p} variant="outline" size="sm" type="button" onClick={() => wired?.onPausePreset?.(p)}>
-              {p}
-            </Button>
-          ))}
-        </div>
+        {wired?.paused ? (
+          <Button type="button" onClick={() => void wired?.onResume?.()}>
+            Resume recovery
+          </Button>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {(['1 hour', 'Until tomorrow', '1 week', 'Indefinitely'] as const).map((p) => (
+              <Button key={p} variant="outline" size="sm" type="button" onClick={() => wired?.onPausePreset?.(p)}>
+                {p}
+              </Button>
+            ))}
+          </div>
+        )}
       </Panel>
 
       <Panel title="Timing & follow-up" className="lg:col-span-2">

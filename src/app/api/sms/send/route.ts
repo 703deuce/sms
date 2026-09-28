@@ -21,6 +21,7 @@ export async function POST(request: Request) {
       mediaUrls?: string[];
       senderPoolId?: string;
       inboxCompose?: boolean;
+      mctbCompose?: boolean;
     };
 
     const workspaceId = await resolveWorkspaceId(auth.session, body.workspaceId);
@@ -36,6 +37,20 @@ export async function POST(request: Request) {
       }
       if (perms.allowStartConversations === false) {
         return NextResponse.json({ error: "Starting conversations is disabled" }, { status: 403 });
+      }
+    }
+
+    if (body.mctbCompose) {
+      const { resolveMctbCapabilities } = await import("@/lib/mctb/capabilities");
+      const caps = await resolveMctbCapabilities(workspaceId);
+      if (!caps.manualTwoWayMessaging) {
+        return NextResponse.json(
+          {
+            error:
+              "Manual replies from Conversations require an approved customer-owned text-back sender.",
+          },
+          { status: 403 },
+        );
       }
     }
     const to = body.to || body.customerPhone;

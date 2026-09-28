@@ -80,7 +80,11 @@ export async function loadMissedCallTextConfig(
       },
     });
   }
-  return configToRecord(row);
+  const { readMctbPlatformRecoveryTemplateId } = await import(
+    "@/lib/mctb/platform-template-persistence"
+  );
+  const platformRecoveryTemplateId = await readMctbPlatformRecoveryTemplateId(workspaceId);
+  return { ...configToRecord(row), platformRecoveryTemplateId };
 }
 
 export async function updateMissedCallTextConfig(input: {

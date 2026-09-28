@@ -9,8 +9,11 @@ import { Textarea } from '@/newui-transplant/components/ui/textarea'
 import { SaveBar } from '@/newui-transplant/components/app/save-bar'
 import { useOpusWorkspaceData } from '@/newui-transplant/context/opus-workspace-data'
 import { saveMctbSetup } from '@/lib/newui-transplant/api/mctb-setup-client'
+import { cn } from '@/lib/utils'
 
 const VARIABLES = ['{first_name}', '{business_name}', '{booking_link}']
+
+type PlatformChoice = { id: string; label: string; body: string }
 
 export function TextBackEditor() {
   const { business } = useOpusWorkspaceData()
@@ -22,8 +25,11 @@ export function TextBackEditor() {
   const [sender, setSender] = useState('—')
   const [senderReady, setSenderReady] = useState(false)
   const [canEdit, setCanEdit] = useState(true)
+  const [customTemplatesEntitled, setCustomTemplatesEntitled] = useState(false)
   const [senderMode, setSenderMode] = useState<'PLATFORM' | 'WORKSPACE'>('WORKSPACE')
   const [managedDescription, setManagedDescription] = useState<string | null>(null)
+  const [platformTemplateId, setPlatformTemplateId] = useState('recovery_opener')
+  const [platformChoices, setPlatformChoices] = useState<PlatformChoice[]>([])
   const [phoneNumberId, setPhoneNumberId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const ref = useRef<HTMLTextAreaElement>(null)
@@ -47,6 +53,15 @@ export function TextBackEditor() {
         typeof data.messaging?.description === 'string' ? data.messaging.description : null,
       )
       setCanEdit(data.messaging?.canEditRecoveryOpener !== false && mode !== 'PLATFORM')
+      const caps = data.capabilities as { customTemplates?: boolean } | undefined
+      setCustomTemplatesEntitled(Boolean(caps?.customTemplates))
+      const choices = (data.messaging as { platformRecoveryOpenerChoices?: PlatformChoice[] })
+        ?.platformRecoveryOpenerChoices
+      if (choices?.length) setPlatformChoices(choices)
+      const tid =
+        (data.messaging as { platformRecoveryTemplateId?: string })?.platformRecoveryTemplateId ||
+        (data.runtime as { platformRecoveryTemplateId?: string })?.platformRecoveryTemplateId
+      if (tid) setPlatformTemplateId(tid)
     } finally {
       setLoading(false)
     }
@@ -62,6 +77,12 @@ export function TextBackEditor() {
     const end = el?.selectionEnd ?? opener.length
     setOpener(opener.slice(0, start) + v + opener.slice(end))
     requestAnimationFrame(() => el?.focus())
+  }
+
+  const onSavePlatformTemplate = async (id: string) => {
+    setPlatformTemplateId(id)
+    await saveMctbSetup({ platformRecoveryTemplateId: id })
+    await load()
   }
 
   const onSave = async () => {
@@ -96,10 +117,10 @@ export function TextBackEditor() {
         </Panel>
 
         <Panel
-          title="Conversation opener"
+          title={senderMode === 'PLATFORM' ? 'Missed-call message' : 'Conversation opener'}
           description={
             senderMode === 'PLATFORM'
-              ? 'Managed by Transovo — approved recovery template (locked for platform sender).'
+              ? 'Choose an approved Transovo template. Wording is platform-managed for compliance.'
               : 'Sent right after the compliance message'
           }
         >
@@ -107,9 +128,33 @@ export function TextBackEditor() {
             <p className="mb-2 text-xs text-muted-foreground">{managedDescription}</p>
           ) : null}
           {senderMode === 'PLATFORM' ? (
+            <div className="space-y-3">
+              {platformChoices.map((tpl) => (
+                <label
+                  key={tpl.id}
+                  className={cn(
+                    'flex cursor-pointer gap-3 rounded-lg border p-3',
+                    platformTemplateId === tpl.id ? 'border-primary ring-1 ring-primary/30' : '',
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="platform-recovery-template"
+                    className="mt-1"
+                    checked={platformTemplateId === tpl.id}
+                    onChange={() => void onSavePlatformTemplate(tpl.id)}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium">{tpl.label}</span>
+                    <span className="mt-1 block text-xs text-muted-foreground">{tpl.body}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          ) : !customTemplatesEntitled ? (
             <p className="flex gap-2 rounded-lg bg-muted/60 px-3 py-2.5 text-sm text-muted-foreground">
               <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-              {opener}
+              Use your own verified sender to customize your missed-call message.
             </p>
           ) : (
             <>

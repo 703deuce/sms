@@ -6,6 +6,8 @@ import { DEFAULT_ONBOARDING_MESSAGE } from "@/lib/mctb/onboarding/types";
 
 export type MctbPlatformTemplateId =
   | "recovery_opener"
+  | "recovery_opener_concise"
+  | "recovery_opener_invite"
   | "stop_confirmation"
   | "help_response";
 
@@ -31,6 +33,26 @@ export const MCTB_PLATFORM_TEMPLATE_REGISTRY: Record<
     requiredCapability: "press_one_consent",
     senderOwnership: "TRANSOVO_PLATFORM",
     body: DEFAULT_ONBOARDING_MESSAGE,
+    allowedSubstitutions: ["{business_name}", "{booking_link}", "{request_link}"],
+    runtimeModule: "src/lib/mctb/message-template.ts",
+  },
+  recovery_opener_concise: {
+    id: "recovery_opener_concise",
+    purpose: "Shorter missed-call recovery SMS after consent",
+    trigger: "missed_call_recovery_send",
+    requiredCapability: "press_one_consent",
+    senderOwnership: "TRANSOVO_PLATFORM",
+    body: "Sorry we missed your call! How can we help? Reply here and we'll get back to you.",
+    allowedSubstitutions: ["{business_name}", "{booking_link}", "{request_link}"],
+    runtimeModule: "src/lib/mctb/message-template.ts",
+  },
+  recovery_opener_invite: {
+    id: "recovery_opener_invite",
+    purpose: "Missed-call recovery SMS inviting a reply",
+    trigger: "missed_call_recovery_send",
+    requiredCapability: "press_one_consent",
+    senderOwnership: "TRANSOVO_PLATFORM",
+    body: "Sorry we missed your call! Text us here and we'll help right away.",
     allowedSubstitutions: ["{business_name}", "{booking_link}", "{request_link}"],
     runtimeModule: "src/lib/mctb/message-template.ts",
   },

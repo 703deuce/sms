@@ -90,6 +90,7 @@ export type MctbSetupPayload = {
   activate?: boolean;
   existingConsentAttested?: boolean;
   senderMode?: "PLATFORM" | "WORKSPACE";
+  platformRecoveryTemplateId?: string;
 };
 
 const DEFAULT_CAMPAIGN_DESCRIPTION =
@@ -173,6 +174,17 @@ export async function GET() {
         }
       : runtime;
 
+  const { readMctbPlatformRecoveryTemplateId } = await import(
+    "@/lib/mctb/platform-template-persistence"
+  );
+  const { listMctbPlatformRecoveryOpenerChoices } = await import(
+    "@/lib/mctb/platform-recovery-template-choices"
+  );
+  const platformRecoveryTemplateId = await readMctbPlatformRecoveryTemplateId(workspaceId);
+  runtimeForClient = {
+    ...runtimeForClient,
+    platformRecoveryTemplateId,
+  };
   if (runtimeForClient.senderMode === "PLATFORM") {
     runtimeForClient = {
       ...runtimeForClient,
@@ -300,6 +312,8 @@ export async function GET() {
         senderMode,
         ...senderPresentation,
         canEditRecoveryOpener: senderMode !== "PLATFORM",
+        platformRecoveryTemplateId,
+        platformRecoveryOpenerChoices: listMctbPlatformRecoveryOpenerChoices(),
       },
     },
   });
@@ -318,6 +332,30 @@ export async function POST(req: Request) {
     delete body.messageTemplate;
     delete body.messageTemplateBusinessHours;
     delete body.messageTemplateAfterHours;
+  }
+
+  if (body.platformRecoveryTemplateId !== undefined) {
+    if (priorRuntime.senderMode !== "PLATFORM") {
+      return NextResponse.json(
+        { error: "Platform recovery templates apply only when using the Transovo platform sender." },
+        { status: 400 },
+      );
+    }
+    const { writeMctbPlatformRecoveryTemplateId } = await import(
+      "@/lib/mctb/platform-template-persistence"
+    );
+    try {
+      await writeMctbPlatformRecoveryTemplateId(
+        workspaceId,
+        body.platformRecoveryTemplateId as import("@/lib/mctb/platform-message-templates").MctbPlatformTemplateId,
+      );
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : "Invalid platform template." },
+        { status: 400 },
+      );
+    }
+    delete body.platformRecoveryTemplateId;
   }
 
   traceMctbDebug("setup", "post_start", {

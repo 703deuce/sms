@@ -618,7 +618,9 @@ export function MctbOnboardingOpusView({ controller: c }: { controller: MctbOnbo
                         name="platform-template"
                         className="mt-1"
                         checked={c.messageTemplate === tpl.body}
-                        onChange={() => c.setMessageTemplate(tpl.body)}
+                        onChange={() => {
+                          c.setMessageTemplate(tpl.body);
+                        }}
                       />
                       <span className="text-sm">{tpl.label}</span>
                     </label>
