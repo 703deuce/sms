@@ -96,7 +96,12 @@ function buildMockOnboardingGet(step: MctbOnboardingStep) {
       title: "Transovo Platform",
       description: "Pre-approved sender for onboarding",
     },
-    firstRun: { shouldAutoOpen: false, trigger: "none", everyLoginTesting: false },
+    firstRun: {
+      shouldAutoOpen: step !== "ready",
+      trigger: step !== "ready" ? "incomplete_onboarding" : "none",
+      everyLoginTesting: false,
+      onboardingComplete: step === "ready",
+    },
     onboardingComplete: step === "ready",
   };
 }
@@ -221,11 +226,15 @@ async function main() {
       const slug = `${String(i + 1).padStart(2, "0")}_${step}`;
       console.log(`Step ${slug}`);
 
-      await page.goto(`${BASE_URL}/onboarding/mctb`, {
+      await page.goto(`${BASE_URL}/mctb`, {
         waitUntil: "domcontentloaded",
         timeout: 120000,
       });
       await page.waitForLoadState("networkidle", { timeout: 45000 }).catch(() => undefined);
+      await page
+        .locator('[data-slot="dialog-content"]')
+        .waitFor({ state: "visible", timeout: 60000 })
+        .catch(() => undefined);
       const crashed = await page
         .getByText(/This page couldn't load/i)
         .isVisible()
