@@ -56,6 +56,7 @@ export function MctbFirstRunWizardHost() {
   useEffect(() => {
     if (!onMctbSurface || !policy) return;
     if (dismissedThisVisit && policy.trigger !== "setup_guide" && !policy.everyLoginTesting) {
+      setOpen(false);
       return;
     }
     if (policy.shouldAutoOpen) setOpen(true);

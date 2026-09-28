@@ -215,6 +215,7 @@ export function useMctbVoicemailWiring() {
 
   return {
     loading,
+    phoneNumberId,
     greetingText,
     setGreetingText,
     greetingActive,

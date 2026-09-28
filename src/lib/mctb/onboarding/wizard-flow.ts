@@ -7,6 +7,7 @@ export const MCTB_WIZARD_PRIMARY_STEPS: MctbOnboardingStep[] = [
   "connect_calls",
   "consent",
   "recovery",
+  "notifications",
   "voicemail",
   "review_test",
 ];
@@ -16,6 +17,7 @@ export const MCTB_WIZARD_PRIMARY_LABELS: Record<string, string> = {
   connect_calls: "Connect calls",
   consent: "Consent",
   recovery: "Recovery",
+  notifications: "Notifications",
   voicemail: "Voicemail",
   review_test: "Review & test",
   ready: "Ready",
@@ -83,6 +85,7 @@ export function inferResumeStep(state: MctbOnboardingState): MctbOnboardingStep 
   }
   if (!completed.has("consent") && !state.consentMode) return "consent";
   if (!state.workspaceTollFreeNumber && !state.trialNumber) return "recovery";
+  if (!completed.has("notifications")) return "notifications";
   if (!completed.has("voicemail")) return "voicemail";
   if (!state.trialActivatedAt && !state.liveTestPassedAt) return "review_test";
   return current;

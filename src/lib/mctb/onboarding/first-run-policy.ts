@@ -1,8 +1,10 @@
-import {
-  MCTB_FIRST_RUN_WIZARD_EVERY_LOGIN,
-  MCTB_FIRST_RUN_WIZARD_UNTIL_COMPLETE,
-} from "@/lib/mctb/launch-flags";
+import { MCTB_FIRST_RUN_WIZARD_UNTIL_COMPLETE } from "@/lib/mctb/launch-flags";
+import { isMctbDevFirstRunWizardEveryLogin } from "@/lib/mctb/onboarding/first-run-dev-override";
 import { isOnboardingComplete, type MctbOnboardingState } from "@/lib/mctb/onboarding/state";
+
+function everyLoginTestingActive(): boolean {
+  return isMctbDevFirstRunWizardEveryLogin();
+}
 
 export type MctbFirstRunWizardTrigger =
   | "every_login_testing"
@@ -27,12 +29,12 @@ export function resolveMctbFirstRunWizardPolicy(input: {
     return {
       shouldAutoOpen: true,
       trigger: "setup_guide",
-      everyLoginTesting: MCTB_FIRST_RUN_WIZARD_EVERY_LOGIN,
+      everyLoginTesting: everyLoginTestingActive(),
       onboardingComplete,
     };
   }
 
-  if (MCTB_FIRST_RUN_WIZARD_EVERY_LOGIN) {
+  if (everyLoginTestingActive()) {
     return {
       shouldAutoOpen: true,
       trigger: "every_login_testing",

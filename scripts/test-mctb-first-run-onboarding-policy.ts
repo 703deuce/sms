@@ -1,16 +1,14 @@
 import assert from "node:assert/strict";
-import {
-  MCTB_FIRST_RUN_WIZARD_EVERY_LOGIN,
-  MCTB_FIRST_RUN_WIZARD_UNTIL_COMPLETE,
-} from "../src/lib/mctb/launch-flags";
+import { MCTB_FIRST_RUN_WIZARD_UNTIL_COMPLETE } from "../src/lib/mctb/launch-flags";
 import { defaultMctbOnboardingState } from "../src/lib/mctb/onboarding/state";
 import { resolveMctbFirstRunWizardPolicy } from "../src/lib/mctb/onboarding/first-run-policy";
 import { listMctbPlatformRecoveryOpenerChoices } from "../src/lib/mctb/platform-recovery-template-choices";
+import { MCTB_WIZARD_PRIMARY_STEPS } from "../src/lib/mctb/onboarding/wizard-flow";
 
 const fresh = defaultMctbOnboardingState();
 
-assert.equal(typeof MCTB_FIRST_RUN_WIZARD_EVERY_LOGIN, "boolean");
 assert.equal(typeof MCTB_FIRST_RUN_WIZARD_UNTIL_COMPLETE, "boolean");
+assert.ok(MCTB_WIZARD_PRIMARY_STEPS.includes("notifications"));
 
 const guide = resolveMctbFirstRunWizardPolicy({
   onboardingState: { ...fresh, currentStep: "ready", trialActivatedAt: new Date().toISOString() },
@@ -19,18 +17,17 @@ const guide = resolveMctbFirstRunWizardPolicy({
 assert.equal(guide.shouldAutoOpen, true);
 assert.equal(guide.trigger, "setup_guide");
 
-if (MCTB_FIRST_RUN_WIZARD_EVERY_LOGIN) {
-  const every = resolveMctbFirstRunWizardPolicy({ onboardingState: fresh });
-  assert.equal(every.shouldAutoOpen, true);
-  assert.equal(every.trigger, "every_login_testing");
+const incomplete = resolveMctbFirstRunWizardPolicy({ onboardingState: fresh });
+if (MCTB_FIRST_RUN_WIZARD_UNTIL_COMPLETE) {
+  assert.equal(incomplete.shouldAutoOpen, true);
+  assert.equal(incomplete.trigger, "incomplete_onboarding");
 }
 
 const complete = resolveMctbFirstRunWizardPolicy({
   onboardingState: { ...fresh, currentStep: "ready", trialActivatedAt: new Date().toISOString() },
 });
-if (!MCTB_FIRST_RUN_WIZARD_EVERY_LOGIN && MCTB_FIRST_RUN_WIZARD_UNTIL_COMPLETE) {
-  assert.equal(complete.shouldAutoOpen, false);
-}
+assert.equal(complete.shouldAutoOpen, false);
+assert.equal(complete.trigger, "none");
 
 const platformChoices = listMctbPlatformRecoveryOpenerChoices();
 assert.ok(platformChoices.length >= 1);

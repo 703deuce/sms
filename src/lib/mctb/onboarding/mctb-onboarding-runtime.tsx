@@ -265,6 +265,7 @@ export function MctbOnboardingRuntime({
       "connect_calls",
       "consent",
       "recovery",
+      "notifications",
       "voicemail",
       "review_test",
     ];

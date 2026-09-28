@@ -19,6 +19,12 @@ import { getRecoveryGoalDefinition, type MctbRecoveryGoalId } from "@/lib/mctb/r
 import Link from "next/link";
 import { useState } from "react";
 import {
+  OnboardingNotificationsStep,
+  OnboardingRecoveryControlsSection,
+  OnboardingVoicemailStep,
+  useOnboardingRecoveryBundle,
+} from "@/newui-transplant/connected/mctb/mctb-onboarding-operational-steps";
+import {
   MctbNumberDrawerOpus,
   type MctbNumberDrawerMode,
 } from "@/newui-transplant/components/mctb/number-drawer-opus";
@@ -161,68 +167,6 @@ function OpusVerificationTimeline({
   );
 }
 
-function LockedCapabilityRow({
-  label,
-  hint,
-  locked,
-}: {
-  label: string;
-  hint: string;
-  locked: boolean;
-}) {
-  return (
-    <li className="flex items-start justify-between gap-3 text-sm">
-      <span className="flex items-center gap-2">
-        {locked ? <Lock className="size-3.5 shrink-0 text-muted-foreground" aria-hidden /> : null}
-        <span>{label}</span>
-      </span>
-      <span className="text-xs text-muted-foreground">{hint}</span>
-    </li>
-  );
-}
-
-function OnboardingEntitlementsAside({ caps }: { caps: MctbCapabilities | null }) {
-  if (!caps) return null;
-  const recovery = caps.recoveryPaid;
-  return (
-    <aside className="mt-4 rounded-lg border bg-muted/20 p-4 text-sm" aria-label="Plan capabilities">
-      <p className="font-medium">Also available on higher plans</p>
-      <ul className="mt-3 space-y-2">
-        <LockedCapabilityRow
-          label="Booking / request link"
-          locked={!caps.bookingLinks}
-          hint={recovery ? "Available" : "Available with Recovery"}
-        />
-        <LockedCapabilityRow
-          label="Urgent reply detection"
-          locked={!caps.urgentClassification}
-          hint={recovery ? "Available" : "Available with Recovery"}
-        />
-        <LockedCapabilityRow
-          label="Immediate urgent business SMS"
-          locked={!caps.urgentBusinessSms}
-          hint={recovery ? "Available" : "Available with Recovery"}
-        />
-        <LockedCapabilityRow
-          label="AI Recovery"
-          locked={!caps.aiRecoveryEntitled}
-          hint={caps.aiRecoveryEntitled ? "Available" : "Requires AI Recovery"}
-        />
-        <LockedCapabilityRow
-          label="Custom recovery messages"
-          locked={!caps.customTemplates}
-          hint={caps.customTemplates ? "Available" : "Requires your own verified sender"}
-        />
-        <LockedCapabilityRow
-          label="Manual two-way messaging"
-          locked={!caps.manualTwoWayMessaging}
-          hint={caps.manualTwoWayMessaging ? "Available" : "Requires your own verified sender"}
-        />
-      </ul>
-    </aside>
-  );
-}
-
 function StepFooter({
   c,
   back,
@@ -251,86 +195,41 @@ function StepFooter({
   );
 }
 
-function VoicemailOpusStep({ c }: { c: MctbOnboardingController }) {
-  const [mode, setMode] = useState<"default" | "custom">("default");
-  const press1 = c.consentMode === "press_1";
-
-  return (
-    <Panel title="Set up voicemail" description="Choose what callers hear when you cannot answer.">
-      <div className="flex flex-wrap gap-2">
-        <Button type="button" variant={mode === "default" ? "default" : "outline"} onClick={() => setMode("default")}>
-          Use Transovo default
-        </Button>
-        <Button type="button" variant={mode === "custom" ? "default" : "outline"} onClick={() => setMode("custom")}>
-          Customize greeting
-        </Button>
-      </div>
-      {mode === "default" ? (
-        <div className="mt-4 rounded-lg border bg-muted/30 p-4 text-sm">
-          <p className="font-medium">Platform default greeting</p>
-          <p className="mt-2 text-muted-foreground">
-            Callers hear a production-safe Transovo greeting. You can customize later in Setup → Voicemail.
-          </p>
-          <Button
-            type="button"
-            className="mt-4"
-            disabled={c.saving}
-            onClick={() => void c.post({ action: "mark_voicemail_configured" })}
-          >
-            Use default greeting
-          </Button>
-        </div>
-      ) : (
-        <div className="mt-4 space-y-3 rounded-lg border p-4 text-sm">
-          <p className="text-muted-foreground">
-            Record, upload, or generate a custom greeting in voicemail setup. Return here when your greeting is saved.
-          </p>
-          <Button type="button" variant="outline" asChild>
-            <Link href={MCTB_ROUTES.setupVoicemail} target="_blank" rel="noreferrer">
-              Open voicemail setup
-            </Link>
-          </Button>
-        </div>
-      )}
-      <aside className="mt-4 rounded-lg border bg-muted/20 p-4 text-sm">
-        <p className="font-medium">Call ending &amp; pause safety</p>
-        <p className="mt-1 text-muted-foreground">
-          {press1
-            ? "If the caller does not press 1, they hear your voicemail greeting and can leave a message."
-            : "Callers reach voicemail according to your configured call flow after the missed call."}
-        </p>
-        <p className="mt-2 text-muted-foreground">
-          If you pause recovery but keep carrier forwarding on, callers still hear this greeting — recovery texts
-          will not send until you resume.
-        </p>
-      </aside>
-      <StepFooter
-        c={c}
-        back
-        primary={{
-          label: "Continue",
-          onClick: () => void c.post({ action: "mark_voicemail_configured" }),
-        }}
-      />
-    </Panel>
-  );
-}
-
 function ReviewTestOpusStep({ c }: { c: MctbOnboardingController }) {
   const checklist: { label: string; value: string; jump: MctbOnboardingStep }[] = [
     ["Business line", c.businessNumber ? formatMctbPhoneLabel(c.businessNumber) : "—", "business_line"],
     ["Forwarding", c.data?.forwardingVerification?.verified ? "Verified" : "Not verified", "connect_calls"],
     ["Consent", c.consentMode === "press_1" ? "Press 1" : "Existing consent", "consent"],
     ["Recovery message", c.messageTemplate ? "Configured" : "—", "recovery"],
+    ["Notifications", "Configured", "notifications"],
     ["Messaging", c.tfvApproved ? "Ready" : "Pending", "recovery"],
   ].map(([label, value, jump]) => ({ label, value, jump: jump as MctbOnboardingStep }));
 
+  const press1 = c.consentMode === "press_1";
+
   return (
     <Panel
-      title="Review & test"
-      description={`Confirm your setup, then run a live test from ${c.businessNumber || "your business line"}.`}
+      title="Test your setup"
+      description={`Call ${c.businessNumber ? formatMctbPhoneLabel(c.businessNumber) : "your business line"} from another phone to verify the live path.`}
     >
-      <ul className="divide-y rounded-lg border">
+      <div className="rounded-lg border bg-muted/20 p-4 text-sm">
+        <p className="font-medium">Live test procedure</p>
+        <ol className="mt-2 list-decimal space-y-1 pl-5 text-muted-foreground">
+          <li>Call your business number from another phone.</li>
+          <li>Do not answer the business line.</li>
+          <li>Wait for the call to forward to Transovo.</li>
+          {press1 ? (
+            <>
+              <li>Listen to the consent disclosure and press 1.</li>
+              <li>Wait for the recovery text on that phone.</li>
+            </>
+          ) : (
+            <li>Let the voicemail greeting play (recovery texts send per your consent mode).</li>
+          )}
+          <li>Reply to the recovery text to confirm two-way messaging.</li>
+        </ol>
+      </div>
+      <ul className="mt-4 divide-y rounded-lg border">
         {checklist.map((row) => (
           <li key={row.label} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
             <span className="text-muted-foreground">{row.label}</span>
@@ -399,6 +298,7 @@ function ReviewTestOpusStep({ c }: { c: MctbOnboardingController }) {
 }
 
 export function MctbOnboardingOpusView({ controller: c }: { controller: MctbOnboardingController }) {
+  const recoveryBundle = useOnboardingRecoveryBundle();
   const selectedCarrier = c.data?.carriers.find((x) => x.id === c.carrier);
 
   if (c.step === "ready") {
@@ -466,7 +366,7 @@ export function MctbOnboardingOpusView({ controller: c }: { controller: MctbOnbo
         </div>
       </header>
 
-      <OpusProgress currentIndex={Math.min(c.stageIndex, 5)} />
+      <OpusProgress currentIndex={Math.min(c.stageIndex, MCTB_WIZARD_PRIMARY_STEPS.length - 1)} />
 
       {c.error ? (
         <p className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
@@ -782,7 +682,7 @@ export function MctbOnboardingOpusView({ controller: c }: { controller: MctbOnbo
               </Button>
             ) : null}
           </div>
-          <OnboardingEntitlementsAside caps={c.capabilities} />
+          <OnboardingRecoveryControlsSection wiring={recoveryBundle.r} />
           <StepFooter
             c={c}
             back
@@ -790,17 +690,24 @@ export function MctbOnboardingOpusView({ controller: c }: { controller: MctbOnbo
               label: "Continue",
               disabled: !c.messageTemplate.trim(),
               onClick: () =>
-                void c.post({
-                  recoveryGoal: c.recoveryGoal,
-                  messageTemplate: c.messageTemplate.trim(),
-                }),
+                void (async () => {
+                  await recoveryBundle.saveAll(c.messageTemplate.trim());
+                  await c.post({
+                    ...(platformSender ? {} : { recoveryGoal: c.recoveryGoal }),
+                    messageTemplate: c.messageTemplate.trim(),
+                  });
+                })(),
             }}
           />
         </Panel>
       ) : null}
 
+      {c.step === "notifications" ? (
+        <OnboardingNotificationsStep c={c} caps={c.capabilities} />
+      ) : null}
+
       {c.step === "voicemail" ? (
-        <VoicemailOpusStep c={c} />
+        <OnboardingVoicemailStep c={c} />
       ) : null}
 
       {c.step === "review_test" ? (

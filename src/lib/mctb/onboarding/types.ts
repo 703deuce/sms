@@ -3,6 +3,7 @@ export type MctbOnboardingStep =
   | "connect_calls"
   | "consent"
   | "recovery"
+  | "notifications"
   | "voicemail"
   | "review_test"
   | "ready"
@@ -140,6 +141,7 @@ export const MCTB_ONBOARDING_STEP_ORDER: MctbOnboardingStep[] = [
   "connect_calls",
   "consent",
   "recovery",
+  "notifications",
   "voicemail",
   "review_test",
   "ready",
@@ -150,6 +152,7 @@ export const MCTB_ONBOARDING_STEP_LABELS: Record<string, string> = {
   connect_calls: "Connect calls",
   consent: "Consent",
   recovery: "Recovery",
+  notifications: "Notifications",
   voicemail: "Voicemail",
   review_test: "Review & test",
   ready: "Ready",

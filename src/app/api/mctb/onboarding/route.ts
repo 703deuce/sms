@@ -297,9 +297,17 @@ export async function POST(req: Request) {
       state = markStepComplete(state, "recovery");
       await saveMctbOnboardingState(auth.workspaceId, {
         ...state,
-        currentStep: state.voicemailConfiguredAt ? "review_test" : "voicemail",
+        currentStep: "notifications",
       });
       await recordFunnelEvent(auth.workspaceId, "MCTB_MESSAGE_CONFIGURED");
+    }
+
+    if (body.action === "complete_notifications") {
+      state = markStepComplete(state, "notifications");
+      state = await saveMctbOnboardingState(auth.workspaceId, {
+        ...state,
+        currentStep: state.voicemailConfiguredAt ? "review_test" : "voicemail",
+      });
     }
 
     if (body.consentMode) {
