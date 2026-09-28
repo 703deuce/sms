@@ -22,7 +22,6 @@ import { loadComplianceOverview, loadPhoneNumbers } from "@/lib/workspace-data";
 import { loadAdminMctbTestFlags } from "@/lib/mctb/admin-test-workspace";
 import { isMctbSetupMessagingReady } from "@/lib/mctb/setup-messaging-ready";
 import { isExistingConsentModeEligible } from "@/lib/mctb/setup-consent-eligibility";
-import { hasActiveMctbPaidEntitlement } from "@/lib/mctb/entitlement";
 import { describeMctbSenderPresentation } from "@/lib/mctb/sender-presentation";
 import { resolveMctbRecoveryOpenerTemplate } from "@/lib/mctb/message-template";
 import { EXISTING_CONSENT_ATTESTATION_VERSION } from "@/lib/mctb/capture/attestation";
@@ -221,9 +220,9 @@ export async function GET() {
 
   const { readMctbRecoveryGoalId } = await import("@/lib/mctb/apply-recovery-goal-config");
   const recoveryGoal = await readMctbRecoveryGoalId(workspaceId);
-  const paidEntitled = await hasActiveMctbPaidEntitlement(workspaceId);
   const { resolveMctbCapabilities } = await import("@/lib/mctb/capabilities");
   const capabilities = await resolveMctbCapabilities(workspaceId);
+  const paidEntitled = capabilities.recoveryPaid;
   const senderMode = runtimeForClient.senderMode || "WORKSPACE";
   const senderPresentation = describeMctbSenderPresentation(senderMode);
 
@@ -408,6 +407,17 @@ export async function POST(req: Request) {
         ? body.enabled
         : undefined;
 
+  if (body.consentMode === "existing_consent") {
+    const { resolveMctbCapabilities } = await import("@/lib/mctb/capabilities");
+    const capsForConsent = await resolveMctbCapabilities(workspaceId);
+    if (!capsForConsent.recoveryPaid) {
+      return NextResponse.json(
+        { error: "Existing Consent requires a Recovery plan." },
+        { status: 403 },
+      );
+    }
+  }
+
   if (
     body.consentMode === "existing_consent" &&
     body.existingConsentAttested !== true
@@ -425,21 +435,21 @@ export async function POST(req: Request) {
         loadComplianceOverview(workspaceId),
         loadPhoneNumbers(workspaceId, { includeLinked: true }),
         loadAdminMctbTestFlags(workspaceId),
-        hasActiveMctbPaidEntitlement(workspaceId),
+        resolveMctbCapabilities(workspaceId).then((c) => c.recoveryPaid),
       ]);
     const requiredForConsent = deriveRequiredActions(
-      complianceForConsent.registration,
-      regForConsent,
-    );
-    if (
-      !isExistingConsentModeEligible({
-        messagingReady: isMctbSetupMessagingReady({
-          phoneNumbers: phoneNumbersForConsent,
-          requiredActions: requiredForConsent,
-          adminFlags: adminFlagsForConsent,
-        }),
-        paidEntitled: paidForConsent,
-      })
+        complianceForConsent.registration,
+        regForConsent,
+      );
+      if (
+        !isExistingConsentModeEligible({
+          messagingReady: isMctbSetupMessagingReady({
+            phoneNumbers: phoneNumbersForConsent,
+            requiredActions: requiredForConsent,
+            adminFlags: adminFlagsForConsent,
+          }),
+          paidEntitled: paidForConsent,
+        })
     ) {
       return NextResponse.json(
         {
