@@ -84,6 +84,26 @@ async function main() {
   const existingRecipient = await prisma.mctbNotificationRecipient.findFirst({
     where: { workspaceId: workspace.id, email: handoffEmail },
   });
+  const missed = await prisma.missedCallEvent.findFirst({
+    where: { workspaceId: workspace.id },
+    select: { id: true },
+  });
+  if (!missed) {
+    const { randomUUID } = await import("node:crypto");
+    await prisma.missedCallEvent.create({
+      data: {
+        id: randomUUID(),
+        workspaceId: workspace.id,
+        callerE164: "+15555550198",
+        businessE164: "+18885550199",
+        reason: "NO_ANSWER",
+        traceId: randomUUID(),
+        idempotencyKey: `cert-missed-${workspace.id}`,
+        status: "DETECTED",
+      },
+    });
+  }
+
   if (!existingRecipient) {
     await prisma.mctbNotificationRecipient.create({
       data: {
