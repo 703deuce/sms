@@ -38,7 +38,9 @@
 | `MCTB_URGENT_CLASSIFIER_FAILURE_FALLBACK` | **PARTIAL** | `classification=classifier_unavailable` → `caller_replied` notify; prove with forced LLM failure |
 | `MCTB_URGENT_CHANNEL_FAILURE_ISOLATION` | **PARTIAL** | Per-channel delivery rows; email/sms loops independent; prove SMS fail + email ok |
 | `MCTB_WORKSPACE_INGRESS_PROVISIONING` | **PARTIAL** | Needs **new-workspace** lifecycle proof + failure semantics |
-| `MCTB_USAGE_FREE_ALLOWANCE` | **AUDIT FIRST** | Find authoritative package/entitlement/usage — do not add independent counter |
+| `MCTB_USAGE_FREE_ALLOWANCE` | **COMPLETE** | `MCTB_RECOVERY` @ `recovery-usage.ts`; `scripts/test-mctb-recovery-usage-idempotency.ts` |
+| `MCTB_CAPABILITIES_RESOLVER` | **COMPLETE** | `resolveMctbCapabilities` + `scripts/test-mctb-capabilities-resolver.ts` |
+| `MCTB_AI_RECOVERY_ENTITLEMENT` | **COMPLETE** (API) | `aiRecoveryEntitled` + `scripts/test-mctb-ai-recovery-entitlement-gate.ts`; Stripe `mctb_ai_recovery` grants |
 | `MCTB_CONSENT_PRESS_1` | **IMPL COMPLETE** | Frozen TeXML; historical/live evidence; preserve |
 | `MCTB_CONSENT_EXISTING` | **VERIFY** | UI smoke ≠ PSTN runtime cert; launch matrix for `existing_consent` branch |
 | `MCTB_END_TO_END_FUNCTIONALITY` | **MISSING** | §38 matrix not run |
