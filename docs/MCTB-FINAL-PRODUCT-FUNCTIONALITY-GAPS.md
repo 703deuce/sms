@@ -288,7 +288,7 @@ npm run audit:mctb-opus-page-wiring
 
 | Step | Flag(s) | Status | Evidence |
 |------|---------|--------|----------|
-| 1 Deploy + `/api/health` commit | — | **PENDING** | Coolify build + `commitSha` |
+| 1 Deploy + `/api/health` commit | — | **PENDING** | `master` @ `680105af` pushed; prod still `8c118a86` as of 2026-09-28T00:22Z — wait for Coolify |
 | 2 Missed-call detail prod rows | `MCTB_MISSED_CALL_DETAIL` | **PENDING** | Row IDs, API 200, UI screenshots |
 | 3 `caller_replied` real email | `MCTB_REPLY_EMAIL_NOTIFICATIONS` | **PENDING** | inbound provider ID, handoff event, `mctbNotificationDelivery`, received email |
 | 4 Urgent settings persist | `MCTB_URGENT_NOTIFICATION_UI` | **PENDING** | save + hard refresh |
