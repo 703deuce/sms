@@ -45,6 +45,7 @@ import {
   MctbOnboardingOpusView,
   type MctbOnboardingController,
 } from "@/newui-transplant/connected/mctb/mctb-onboarding-opus-view";
+import type { MctbCapabilities } from "@/lib/mctb/capabilities";
 
 type OnboardingPayload = {
   state: MctbOnboardingState;
@@ -88,14 +89,26 @@ type OnboardingPayload = {
   forwardTargetE164?: string | null;
   productionForwardE164?: string | null;
   trial?: { daysRemaining?: number; active?: boolean };
+  capabilities?: MctbCapabilities;
+  senderPresentation?: { title: string; description: string };
 };
 
 const DEFAULT_MESSAGE =
   "Sorry we missed your call! Reply here and we'll get back to you shortly.";
 
-type Props = { initialBusinessName?: string; shell?: "legacy" | "opus" };
+type Props = {
+  initialBusinessName?: string;
+  shell?: "legacy" | "opus";
+  presentation?: "page" | "modal";
+  onFinished?: () => void;
+};
 
-export function MctbOnboardingRuntime({ initialBusinessName = "", shell = "legacy" }: Props) {
+export function MctbOnboardingRuntime({
+  initialBusinessName = "",
+  shell = "legacy",
+  presentation = "page",
+  onFinished,
+}: Props) {
   const opus = shell === "opus";
   const router = useRouter();
   const [data, setData] = useState<OnboardingPayload | null>(null);
@@ -144,9 +157,11 @@ export function MctbOnboardingRuntime({ initialBusinessName = "", shell = "legac
       if (json.state.forwardingRingSeconds) setForwardRingSeconds(json.state.forwardingRingSeconds);
       if (json.forwardingVerification?.verified) setForwardingTestActive(false);
     }
-    if (setupRes?.ok) {
+    if (json.capabilities) {
+      setExistingConsentEligible(Boolean(json.capabilities.recoveryPaid));
+    } else if (setupRes?.ok) {
       const setupJson = await setupRes.json();
-      const ready = Boolean(setupJson?.consentMeta?.existingConsentEligible ?? setupJson?.messagingReady);
+      const ready = Boolean(setupJson?.consentMeta?.existingConsentEligible);
       setExistingConsentEligible(ready);
     }
     setLoading(false);
@@ -384,6 +399,10 @@ export function MctbOnboardingRuntime({ initialBusinessName = "", shell = "legac
       tfvApproved,
       usesA2pPath,
       router,
+      presentation,
+      onFinished,
+      capabilities: data?.capabilities ?? null,
+      senderPresentation: data?.senderPresentation ?? null,
     };
     return <MctbOnboardingOpusView controller={controller} />;
   }

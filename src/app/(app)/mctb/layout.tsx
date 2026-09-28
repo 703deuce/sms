@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
 
 export default async function MctbProductLayout({ children }: { children: React.ReactNode }) {
@@ -10,5 +11,15 @@ export default async function MctbProductLayout({ children }: { children: React.
       </>
     );
   }
-  return children;
+  const { MctbFirstRunWizardHost } = await import(
+    "@/components/mctb/onboarding/mctb-first-run-wizard-host"
+  );
+  return (
+    <>
+      <Suspense fallback={null}>
+        <MctbFirstRunWizardHost />
+      </Suspense>
+      {children}
+    </>
+  );
 }

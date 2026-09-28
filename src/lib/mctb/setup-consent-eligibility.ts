@@ -17,7 +17,7 @@ export function existingConsentIneligibleReason(
   paidEntitled = true,
 ): string | null {
   if (!paidEntitled) {
-    return "Existing Consent requires a Recovery plan. Press 1 is included with Free.";
+    return "Available with Recovery. Press 1 is included on your current plan.";
   }
   if (messagingReady) return null;
   return "Use existing permission requires messaging to be ready on your connected number.";

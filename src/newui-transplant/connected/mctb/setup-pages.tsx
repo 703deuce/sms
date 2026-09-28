@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { Page, PageHeader } from "@/newui-transplant/components/app/kit";
+import { Button } from "@/newui-transplant/components/ui/button";
+import { openMctbSetupGuide } from "@/components/mctb/onboarding/mctb-first-run-wizard-host";
 import { ConsentEditor } from "@/newui-transplant/components/mctb/consent-editor";
 import { TextBackEditor } from "@/newui-transplant/components/mctb/text-back-editor";
 import { ExclusionsTable } from "@/newui-transplant/components/mctb/exclusions-table";
@@ -77,7 +79,20 @@ export function NewUiMctbSetupOverviewPage() {
   const { loading, wired } = useMctbSetupOverviewWiring("—");
   if (loading) return <p className="p-6 text-sm text-muted-foreground">Loading setup…</p>;
   if (!wired) return <p className="p-6 text-sm text-muted-foreground">Could not load setup.</p>;
-  return <TransplantMctbSetupPage wired={wired} />;
+  return (
+    <Page>
+      <PageHeader
+        title="Setup"
+        description="Configure forwarding, consent, recovery, and notifications."
+        actions={
+          <Button type="button" variant="outline" onClick={() => openMctbSetupGuide()}>
+            Setup guide
+          </Button>
+        }
+      />
+      <TransplantMctbSetupPage wired={wired} />
+    </Page>
+  );
 }
 
 export function NewUiMctbSetupPhonePage() {

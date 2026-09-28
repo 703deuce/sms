@@ -13,6 +13,8 @@ npx tsx scripts/test-mctb-commercial-stripe-entitlement-lifecycle.ts
 npx tsx scripts/test-mctb-trial-ingress-provision-e2e.ts
 NODE_OPTIONS="${NODE_OPTIONS}" npx tsx scripts/test-mctb-brevo-handoff-delivery-e2e.ts
 npx tsx scripts/test-mctb-pstn-production-readiness.ts
+npx tsx scripts/test-mctb-first-run-onboarding-policy.ts
+npx tsx scripts/test-mctb-paused-call-fallback.ts
 
 echo ""
 echo "Note: test:mctb-timeout-retry-voice-hardening is OUT_OF_SCOPE_MCTB_COMMERCIAL_CERTIFICATION"

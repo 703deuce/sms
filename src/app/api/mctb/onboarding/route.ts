@@ -7,6 +7,7 @@ import { getDemoStatus } from "@/lib/mctb/onboarding/demo";
 import { getLiveTestStatus } from "@/lib/mctb/onboarding/live-test";
 import {
   defaultMctbOnboardingState,
+  isOnboardingComplete,
   loadMctbOnboardingState,
   markStepComplete,
   recordFunnelEvent,
@@ -48,16 +49,21 @@ import {
 } from "@/lib/mctb/onboarding/wizard-flow";
 import { traceMctbDebug, traceMctbDebugError } from "@/lib/mctb/debug";
 import { startMctbTryItSession } from "@/lib/mctb/try-it/start-session";
+import { resolveMctbCapabilities } from "@/lib/mctb/capabilities";
+import { resolveMctbFirstRunWizardPolicy } from "@/lib/mctb/onboarding/first-run-policy";
+import { describeMctbSenderPresentation } from "@/lib/mctb/sender-presentation";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
+    const setupGuideRequested =
+      new URL(req.url).searchParams.get("mctbSetupGuide") === "1";
     traceMctbDebug("onboarding", "get_start", { workspaceId: auth.workspaceId });
 
     await syncTrialTollFreeVerification(auth.workspaceId).catch(() => undefined);
 
-    const [state, demo, trialNumber, liveTest, trialInfo, trialReqs, tfv, forwardingVerification, forwardTargetE164] =
+    const [state, demo, trialNumber, liveTest, trialInfo, trialReqs, tfv, forwardingVerification, forwardTargetE164, capabilities] =
       await Promise.all([
       loadMctbOnboardingState(auth.workspaceId),
       getDemoStatus(auth.workspaceId),
@@ -68,7 +74,16 @@ export async function GET() {
       getTfvStatusForWorkspace(auth.workspaceId),
       getForwardingVerificationStatus(auth.workspaceId).catch(() => null),
       getOnboardingForwardTargetE164ForWorkspace(auth.workspaceId),
+      resolveMctbCapabilities(auth.workspaceId),
     ]);
+
+    const firstRun = resolveMctbFirstRunWizardPolicy({
+      onboardingState: state,
+      setupGuideRequested,
+    });
+    const senderPresentation = describeMctbSenderPresentation(
+      capabilities.platformSenderActive ? "PLATFORM" : "WORKSPACE",
+    );
 
     traceMctbDebug("onboarding", "get_complete", {
       workspaceId: auth.workspaceId,
@@ -113,6 +128,10 @@ export async function GET() {
       forwardTargetE164,
       productionForwardE164: forwardTargetE164,
       defaultBusinessLineE164: getMctbDefaultBusinessLineE164(),
+      capabilities,
+      senderPresentation,
+      firstRun,
+      onboardingComplete: isOnboardingComplete(state),
     });
   } catch (err) {
     traceMctbDebugError("onboarding", "get_failed", err);

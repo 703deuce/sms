@@ -29,3 +29,12 @@ export const MCTB_LAUNCH_COMPACT_SETUP_HOME = true;
 
 /** Overview: operational KPIs + needs attention + recent activity (no duplicate analytics/setup panels). */
 export const MCTB_LAUNCH_COMPACT_OVERVIEW = true;
+
+/**
+ * First-run onboarding wizard: open on every visit to `/mctb` (testing).
+ * Set to `false` and rely on `MCTB_FIRST_RUN_WIZARD_UNTIL_COMPLETE` for one-time activation.
+ */
+export const MCTB_FIRST_RUN_WIZARD_EVERY_LOGIN = true;
+
+/** When every-login is false, auto-open the wizard until onboarding is marked complete. */
+export const MCTB_FIRST_RUN_WIZARD_UNTIL_COMPLETE = true;

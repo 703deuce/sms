@@ -1,7 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { CheckCircle2, FileCheck, ShieldCheck } from "lucide-react";
+import { CheckCircle2, FileCheck, Lock, ShieldCheck } from "lucide-react";
+import type { MctbCapabilities } from "@/lib/mctb/capabilities";
+import { listMctbPlatformRecoveryOpenerChoices } from "@/lib/mctb/platform-recovery-template-choices";
 import type { CarrierForwardingGuide } from "@/lib/mctb/onboarding/carriers";
 import { formatCarrierStep } from "@/lib/mctb/onboarding/carriers";
 import type {
@@ -89,6 +91,10 @@ export type MctbOnboardingController = {
   tfvApproved: boolean;
   usesA2pPath: boolean;
   router: ReturnType<typeof useRouter>;
+  presentation: "page" | "modal";
+  onFinished?: () => void;
+  capabilities: MctbCapabilities | null;
+  senderPresentation: { title: string; description: string } | null;
 };
 
 function OpusProgress({ currentIndex }: { currentIndex: number }) {
@@ -152,6 +158,68 @@ function OpusVerificationTimeline({
         ))}
       </ol>
     </div>
+  );
+}
+
+function LockedCapabilityRow({
+  label,
+  hint,
+  locked,
+}: {
+  label: string;
+  hint: string;
+  locked: boolean;
+}) {
+  return (
+    <li className="flex items-start justify-between gap-3 text-sm">
+      <span className="flex items-center gap-2">
+        {locked ? <Lock className="size-3.5 shrink-0 text-muted-foreground" aria-hidden /> : null}
+        <span>{label}</span>
+      </span>
+      <span className="text-xs text-muted-foreground">{hint}</span>
+    </li>
+  );
+}
+
+function OnboardingEntitlementsAside({ caps }: { caps: MctbCapabilities | null }) {
+  if (!caps) return null;
+  const recovery = caps.recoveryPaid;
+  return (
+    <aside className="mt-4 rounded-lg border bg-muted/20 p-4 text-sm" aria-label="Plan capabilities">
+      <p className="font-medium">Also available on higher plans</p>
+      <ul className="mt-3 space-y-2">
+        <LockedCapabilityRow
+          label="Booking / request link"
+          locked={!caps.bookingLinks}
+          hint={recovery ? "Available" : "Available with Recovery"}
+        />
+        <LockedCapabilityRow
+          label="Urgent reply detection"
+          locked={!caps.urgentClassification}
+          hint={recovery ? "Available" : "Available with Recovery"}
+        />
+        <LockedCapabilityRow
+          label="Immediate urgent business SMS"
+          locked={!caps.urgentBusinessSms}
+          hint={recovery ? "Available" : "Available with Recovery"}
+        />
+        <LockedCapabilityRow
+          label="AI Recovery"
+          locked={!caps.aiRecoveryEntitled}
+          hint={caps.aiRecoveryEntitled ? "Available" : "Requires AI Recovery"}
+        />
+        <LockedCapabilityRow
+          label="Custom recovery messages"
+          locked={!caps.customTemplates}
+          hint={caps.customTemplates ? "Available" : "Requires your own verified sender"}
+        />
+        <LockedCapabilityRow
+          label="Manual two-way messaging"
+          locked={!caps.manualTwoWayMessaging}
+          hint={caps.manualTwoWayMessaging ? "Available" : "Requires your own verified sender"}
+        />
+      </ul>
+    </aside>
   );
 }
 
@@ -225,11 +293,15 @@ function VoicemailOpusStep({ c }: { c: MctbOnboardingController }) {
         </div>
       )}
       <aside className="mt-4 rounded-lg border bg-muted/20 p-4 text-sm">
-        <p className="font-medium">Call ending</p>
+        <p className="font-medium">Call ending &amp; pause safety</p>
         <p className="mt-1 text-muted-foreground">
           {press1
             ? "If the caller does not press 1, they hear your voicemail greeting and can leave a message."
             : "Callers reach voicemail according to your configured call flow after the missed call."}
+        </p>
+        <p className="mt-2 text-muted-foreground">
+          If you pause recovery but keep carrier forwarding on, callers still hear this greeting — recovery texts
+          will not send until you resume.
         </p>
       </aside>
       <StepFooter
@@ -298,6 +370,7 @@ function ReviewTestOpusStep({ c }: { c: MctbOnboardingController }) {
           { id: "missed", label: "Missed call classified", done: Boolean(c.data?.liveTest.checks.missedCall) },
           { id: "consent", label: "Consent handled", done: Boolean(c.data?.liveTest.checks.consentCompleted) },
           { id: "sms", label: "Recovery SMS", done: Boolean(c.data?.liveTest.checks.textSent) },
+          { id: "reply", label: "Caller reply received", done: Boolean(c.data?.liveTest.checks.replyReceived) },
         ]}
       />
       <aside className="mt-4 rounded-lg border bg-muted/20 p-4 text-sm">
@@ -344,7 +417,15 @@ export function MctbOnboardingOpusView({ controller: c }: { controller: MctbOnbo
             }
             action={
               <div className="flex flex-wrap justify-center gap-2">
-                <Button type="button" onClick={() => c.router.push(MCTB_ROUTES.home)}>Go to MCTB</Button>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    if (c.presentation === "modal" && c.onFinished) c.onFinished();
+                    else c.router.push(MCTB_ROUTES.home);
+                  }}
+                >
+                  Go to MCTB
+                </Button>
                 <Button type="button" variant="outline" asChild>
                   <Link href={MCTB_ROUTES.setup}>Review setup</Link>
                 </Button>
@@ -359,15 +440,29 @@ export function MctbOnboardingOpusView({ controller: c }: { controller: MctbOnbo
     );
   }
 
+  const platformSender = Boolean(c.capabilities?.platformSenderActive);
+  const platformTemplates = listMctbPlatformRecoveryOpenerChoices();
+  const rootClass =
+    c.presentation === "modal" ? "mx-auto w-full max-w-3xl px-4 py-4" : "mx-auto w-full max-w-3xl px-4 py-8";
+
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-8">
+    <div className={rootClass}>
       <header className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b pb-4">
         <p className="text-sm font-semibold">Transovo · Missed Call Text Back</p>
         <div className="flex flex-wrap items-center gap-2">
           <a className="text-sm text-primary hover:underline" href="https://help.transovo.com" target="_blank" rel="noreferrer">
             Need help?
           </a>
-          <Button type="button" variant="outline" onClick={() => c.router.push(MCTB_ROUTES.setup)}>Save &amp; exit</Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              if (c.presentation === "modal" && c.onFinished) c.onFinished();
+              else c.router.push(MCTB_ROUTES.setup);
+            }}
+          >
+            Save &amp; exit
+          </Button>
         </div>
       </header>
 
@@ -407,6 +502,29 @@ export function MctbOnboardingOpusView({ controller: c }: { controller: MctbOnbo
             </div>
           </div>
           <p className="mt-4 text-xs text-muted-foreground">Transovo only receives unanswered calls — no porting required.</p>
+          <div className="mt-6 space-y-3 rounded-lg border bg-muted/20 p-4 text-sm">
+            <p className="font-medium">Three numbers to know</p>
+            <Rows
+              items={[
+                {
+                  label: "Your business number",
+                  value: c.businessNumber ? formatMctbPhoneLabel(c.businessNumber) : "Add above",
+                },
+                {
+                  label: "Your Transovo forwarding number",
+                  value: c.forwardDisplay || "Provisioning…",
+                },
+                {
+                  label: "Text-back sender",
+                  value: c.senderPresentation?.title ?? "Transovo Platform",
+                },
+              ]}
+            />
+            <p className="text-xs text-muted-foreground">
+              {c.senderPresentation?.description ??
+                "Unanswered calls forward to Transovo. Recovery texts use the platform sender on Free."}
+            </p>
+          </div>
           <StepFooter
             c={c}
             primary={{
@@ -509,8 +627,18 @@ export function MctbOnboardingOpusView({ controller: c }: { controller: MctbOnbo
           ) : null}
           <div className="space-y-3">
             {[
-              { id: "press_1" as const, title: "Ask callers to press 1", sub: "Recommended · per-call consent", icon: ShieldCheck },
-              { id: "existing_consent" as const, title: "Use permission my business already has", sub: "Attestation required", icon: FileCheck },
+              {
+                id: "press_1" as const,
+                title: "Ask callers to press 1",
+                sub: "Available on your current plan",
+                icon: ShieldCheck,
+              },
+              {
+                id: "existing_consent" as const,
+                title: "I already have consent",
+                sub: c.existingConsentEligible ? "Attestation required" : "Available with Recovery",
+                icon: FileCheck,
+              },
             ].map((opt) => {
               const selected = c.consentMode === opt.id;
               const disabled = opt.id === "existing_consent" && !c.existingConsentEligible;
@@ -523,18 +651,24 @@ export function MctbOnboardingOpusView({ controller: c }: { controller: MctbOnbo
                   className={cn(
                     "flex w-full items-start gap-3 rounded-lg border p-4 text-left transition",
                     selected ? "border-primary ring-1 ring-primary/30" : "hover:border-muted-foreground/30",
-                    disabled && "opacity-50",
+                    disabled && "opacity-60",
                   )}
                 >
-                  <opt.icon className="mt-0.5 size-4 shrink-0" aria-hidden />
+                  {disabled ? (
+                    <Lock className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+                  ) : (
+                    <opt.icon className="mt-0.5 size-4 shrink-0" aria-hidden />
+                  )}
                   <div>
                     <p className="text-sm font-medium">{opt.title}</p>
                     <p className="text-xs text-muted-foreground">{opt.sub}</p>
                   </div>
                   {opt.id === "press_1" ? (
                     <span className="ml-auto">
-                      <Pill tone="primary" dot={false}>Recommended</Pill>
+                      <Pill tone="primary" dot={false}>Included</Pill>
                     </span>
+                  ) : disabled ? (
+                    <span className="ml-auto text-xs text-muted-foreground">Locked</span>
                   ) : null}
                 </button>
               );
@@ -563,28 +697,69 @@ export function MctbOnboardingOpusView({ controller: c }: { controller: MctbOnbo
       ) : null}
 
       {c.step === "recovery" ? (
-        <Panel title="Recovery message & texting" description={`Configure recovery for ${c.forwardDisplay}.`}>
-          <FieldRow label="Recovery goal" description="Shapes the default opener template.">
-            <Select
-              value={c.recoveryGoal}
-              onValueChange={(v) => {
-                const id = v as MctbRecoveryGoalId;
-                c.setRecoveryGoal(id);
-                c.setMessageTemplate(getRecoveryGoalDefinition(id).defaultOpener);
-              }}
-            >
-              <SelectTrigger className="w-[220px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {(["get_reply", "book_appointment", "capture_lead"] as MctbRecoveryGoalId[]).map((id) => (
-                  <SelectItem key={id} value={id}>{getRecoveryGoalDefinition(id).label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FieldRow>
-          <div className="mt-4 space-y-1.5">
-            <Label htmlFor="onb-opener">Recovery opener</Label>
-            <Textarea id="onb-opener" value={c.messageTemplate} onChange={(e) => c.setMessageTemplate(e.target.value)} rows={4} />
-          </div>
+        <Panel title="Missed-call text" description="What callers receive after consent is established.">
+          {platformSender ? (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Transovo Platform sender uses approved templates — you cannot type arbitrary recovery text.
+              </p>
+              {platformTemplates.length > 1 ? (
+                <div className="space-y-2">
+                  {platformTemplates.map((tpl) => (
+                    <label
+                      key={tpl.id}
+                      className={cn(
+                        "flex cursor-pointer gap-3 rounded-lg border p-3",
+                        c.messageTemplate === tpl.body ? "border-primary ring-1 ring-primary/30" : "",
+                      )}
+                    >
+                      <input
+                        type="radio"
+                        name="platform-template"
+                        className="mt-1"
+                        checked={c.messageTemplate === tpl.body}
+                        onChange={() => c.setMessageTemplate(tpl.body)}
+                      />
+                      <span className="text-sm">{tpl.label}</span>
+                    </label>
+                  ))}
+                </div>
+              ) : null}
+              <p className="flex gap-2 rounded-lg bg-muted/60 px-3 py-2.5 text-sm text-muted-foreground">
+                <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                {platformTemplates[0]?.body ?? c.messageTemplate}
+              </p>
+            </div>
+          ) : (
+            <>
+              <FieldRow label="Recovery goal" description="Shapes the default opener template.">
+                <Select
+                  value={c.recoveryGoal}
+                  onValueChange={(v) => {
+                    const id = v as MctbRecoveryGoalId;
+                    c.setRecoveryGoal(id);
+                    c.setMessageTemplate(getRecoveryGoalDefinition(id).defaultOpener);
+                  }}
+                >
+                  <SelectTrigger className="w-[220px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(["get_reply", "book_appointment", "capture_lead"] as MctbRecoveryGoalId[]).map((id) => (
+                      <SelectItem key={id} value={id}>{getRecoveryGoalDefinition(id).label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FieldRow>
+              <div className="mt-4 space-y-1.5">
+                <Label htmlFor="onb-opener">Recovery opener</Label>
+                <Textarea
+                  id="onb-opener"
+                  value={c.messageTemplate}
+                  onChange={(e) => c.setMessageTemplate(e.target.value)}
+                  rows={4}
+                />
+              </div>
+            </>
+          )}
           {c.consentMode === "press_1" ? (
             <p className="mt-2 text-xs text-muted-foreground">
               Press-1 callers receive the locked compliance confirmation before your recovery opener.
@@ -592,7 +767,12 @@ export function MctbOnboardingOpusView({ controller: c }: { controller: MctbOnbo
           ) : null}
           <div className="mt-4 rounded-lg border p-4">
             <p className="text-sm font-medium">Text-back sender</p>
-            <p className="mt-1 font-mono text-sm">{c.data?.trialNumber.display || c.forwardDisplay}</p>
+            <p className="mt-1 text-sm font-medium">{c.senderPresentation?.title ?? "Transovo Platform"}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {platformSender
+                ? "Approved Transovo templates"
+                : `Number: ${c.data?.trialNumber.display || c.forwardDisplay}`}
+            </p>
             <p className="mt-1 text-xs text-muted-foreground">
               Status: {c.tfvApproved ? "Ready" : c.data?.trialNumber.tfvStatusLabel || "Verification pending"}
             </p>
@@ -602,6 +782,7 @@ export function MctbOnboardingOpusView({ controller: c }: { controller: MctbOnbo
               </Button>
             ) : null}
           </div>
+          <OnboardingEntitlementsAside caps={c.capabilities} />
           <StepFooter
             c={c}
             back
