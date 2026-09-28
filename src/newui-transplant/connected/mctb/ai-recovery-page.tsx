@@ -10,6 +10,7 @@ import {
 import type { LeadRecoveryCollectField, LeadRecoveryScenarioKey } from "@/lib/mctb/lead-recovery/types";
 import { LEAD_RECOVERY_SCENARIO_DEFS } from "@/lib/mctb/lead-recovery/scenarios";
 import { MCTB_LAUNCH_HIDE_LR_TEXT_TO_PAY_UI } from "@/lib/mctb/launch-flags";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 
 const DEFAULT_FIELDS: Record<AiRecoverySimplifiedField, boolean> = {
   NAME: true,
@@ -77,28 +78,14 @@ export function NewUiMctbAiRecoveryPage() {
   }, [reload]);
 
   const onSave = useCallback(async () => {
-    let resolvedLinkId = bookingLinkId;
-    if (bookingLinkEnabled && !resolvedLinkId && bookingLinkUrl.trim()) {
-      const createRes = await fetch("/api/mctb/booking-links", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          label: bookingLinkLabel.trim() || "Booking",
-          url: bookingLinkUrl.trim(),
-          active: true,
-          isDefault: true,
-        }),
-      });
-      const created = await createRes.json();
-      if (createRes.ok && created.data?.id) resolvedLinkId = created.data.id as string;
-    }
+    const resolvedLinkId = bookingLinkId;
     await fetch("/api/mctb/ai-recovery/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         enabled,
         fields,
-        bookingLinkEnabled: bookingLinkEnabled && Boolean(resolvedLinkId || bookingLinkUrl.trim()),
+        bookingLinkEnabled: bookingLinkEnabled && Boolean(resolvedLinkId && bookingLinkUrl.trim()),
         bookingLinkId: bookingLinkEnabled ? resolvedLinkId : null,
       }),
     });
@@ -138,11 +125,11 @@ export function NewUiMctbAiRecoveryPage() {
       bookingLinkEnabled,
       bookingLinkUrl,
       bookingLinkLabel,
+      bookingLinkReadOnly: true,
+      bookingLinkEditHref: `${MCTB_ROUTES.textBack}?section=booking`,
       onEnabledChange: setEnabled,
       onFieldChange: (key, value) => setFields((f) => ({ ...f, [key]: value })),
       onBookingLinkEnabledChange: setBookingLinkEnabled,
-      onBookingLinkUrlChange: setBookingLinkUrl,
-      onBookingLinkLabelChange: setBookingLinkLabel,
       scenarios: scenarioDefs.map((def) => ({
         key: def.key,
         title: def.title,

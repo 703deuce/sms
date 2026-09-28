@@ -12,6 +12,8 @@ import type { MctbCapabilities } from "@/lib/mctb/capabilities";
 import { useMctbOverviewEnrichment } from "@/newui-transplant/connected/mctb/overview-enrichment";
 import { MctbRecoveryPauseOpus } from "@/newui-transplant/components/mctb/mctb-recovery-pause-opus";
 import { fetchMctbSetup } from "@/lib/newui-transplant/api/mctb-setup-client";
+import { openMctbSetupGuide } from "@/newui-transplant/connected/mctb/mctb-setup-guide";
+import { Button } from "@/newui-transplant/components/ui/button";
 
 export function NewUiMctbOverviewPage({ data }: { data: MctbOverviewPayload }) {
   const { leadRecovery } = useMctbOverviewEnrichment(data);
@@ -65,7 +67,11 @@ export function NewUiMctbOverviewPage({ data }: { data: MctbOverviewPayload }) {
           </Pill>
         }
         description="Every missed call gets an instant text so the conversation keeps going."
-        actions={<ButtonLink href="/mctb/setup" variant="outline">Manage setup</ButtonLink>}
+        actions={
+          <Button type="button" variant="outline" onClick={() => openMctbSetupGuide()}>
+            Setup guide
+          </Button>
+        }
       />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">

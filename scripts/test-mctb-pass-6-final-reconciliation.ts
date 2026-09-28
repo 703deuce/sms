@@ -52,18 +52,12 @@ assert.ok(aiPage.includes("Booking link"));
 assert.ok(!aiPage.includes("AI Lead Recovery"));
 
 const nav = buildMctbV1Nav({ hasVoice: false });
-const mctbStart = nav.findIndex((i) => i.sectionLabel === "Missed Call Text Back");
-const sharedStart = nav.findIndex((i) => i.sectionLabel === "Shared");
-const labels = nav.slice(mctbStart, sharedStart >= 0 ? sharedStart : undefined).map((i) => i.label);
-assert.deepEqual(labels, [
-  "Overview",
-  "Missed Calls",
-  "Inbox",
-  "AI Recovery",
-  "Voicemail",
-  "Analytics",
-  "Setup",
-]);
+const labels = nav.map((i) => i.label);
+assert.ok(labels.includes("Conversations"));
+assert.ok(labels.includes("Missed-Call Recovery"));
+assert.ok(labels.includes("Text Back"));
+assert.ok(!labels.includes("Setup"));
+assert.ok(!labels.includes("Integrations"));
 
 assert.equal(MCTB_LAUNCH_HIDE_LR_AI_BOOK_UI, true);
 assert.equal(MCTB_LAUNCH_COMPACT_OVERVIEW, true);

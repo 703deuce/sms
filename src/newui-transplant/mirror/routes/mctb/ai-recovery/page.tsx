@@ -18,6 +18,8 @@ export type MctbAiRecoveryWired = {
   bookingLinkEnabled?: boolean
   bookingLinkUrl?: string
   bookingLinkLabel?: string
+  bookingLinkReadOnly?: boolean
+  bookingLinkEditHref?: string
   onEnabledChange?: (value: boolean) => void
   onFieldChange?: (key: AiRecoverySimplifiedField, value: boolean) => void
   onBookingLinkEnabledChange?: (value: boolean) => void
@@ -76,7 +78,7 @@ export function TransplantMctbAiRecoveryPage({ wired }: { wired?: MctbAiRecovery
               />
             </FieldRow>
             <div className="mt-4 flex gap-4 border-t pt-4">
-              <TextLink href="/mctb/conversations">Open Inbox</TextLink>
+              <TextLink href="/mctb/conversations">Open conversations</TextLink>
               <TextLink href="/mctb/missed-calls">View Missed Calls</TextLink>
             </div>
           </Panel>
@@ -116,38 +118,65 @@ export function TransplantMctbAiRecoveryPage({ wired }: { wired?: MctbAiRecovery
           ) : null}
 
           <Panel title="Booking link">
-            <FieldRow label="Share booking link" description="Sent once AI has collected the required details">
-              <Switch
-                checked={bookingOn}
-                onCheckedChange={(v) => wired?.onBookingLinkEnabledChange?.(Boolean(v))}
-                aria-label="Enable booking link"
-              />
-            </FieldRow>
-            <div className="mt-4 grid gap-4 border-t pt-4 sm:grid-cols-2">
-              <div className="grid gap-1.5">
-                <Label htmlFor="bl-url">Link URL</Label>
-                <Input
-                  id="bl-url"
-                  value={bookingUrl}
-                  onChange={(e) => wired?.onBookingLinkUrlChange?.(e.target.value)}
-                />
+            {wired?.bookingLinkReadOnly ? (
+              <div className="space-y-3 text-sm">
+                <FieldRow label="Share booking link" description="Uses the booking link configured in Text Back">
+                  <Switch
+                    checked={bookingOn}
+                    onCheckedChange={(v) => wired?.onBookingLinkEnabledChange?.(Boolean(v))}
+                    aria-label="Enable booking link for AI Recovery"
+                    disabled={!bookingUrl}
+                  />
+                </FieldRow>
+                {bookingUrl ? (
+                  <>
+                    <p className="font-medium">{bookingLabel || 'Book an appointment'}</p>
+                    <p className="font-mono text-xs text-muted-foreground break-all">{bookingUrl}</p>
+                    <p className="text-muted-foreground">AI can send this link when appropriate.</p>
+                  </>
+                ) : (
+                  <p className="text-muted-foreground">No booking link configured.</p>
+                )}
+                <TextLink href={wired.bookingLinkEditHref || '/mctb/text-back?section=booking'}>
+                  {bookingUrl ? 'Edit in Text Back' : 'Configure in Text Back'}
+                </TextLink>
               </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="bl-label">Label</Label>
-                <Input
-                  id="bl-label"
-                  value={bookingLabel}
-                  onChange={(e) => wired?.onBookingLinkLabelChange?.(e.target.value)}
-                />
-              </div>
-            </div>
+            ) : (
+              <>
+                <FieldRow label="Share booking link" description="Sent once AI has collected the required details">
+                  <Switch
+                    checked={bookingOn}
+                    onCheckedChange={(v) => wired?.onBookingLinkEnabledChange?.(Boolean(v))}
+                    aria-label="Enable booking link"
+                  />
+                </FieldRow>
+                <div className="mt-4 grid gap-4 border-t pt-4 sm:grid-cols-2">
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="bl-url">Link URL</Label>
+                    <Input
+                      id="bl-url"
+                      value={bookingUrl}
+                      onChange={(e) => wired?.onBookingLinkUrlChange?.(e.target.value)}
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="bl-label">Label</Label>
+                    <Input
+                      id="bl-label"
+                      value={bookingLabel}
+                      onChange={(e) => wired?.onBookingLinkLabelChange?.(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
           </Panel>
         </div>
 
         <Panel
           title="Business information"
           description="AI uses this to answer questions"
-          action={<ButtonLink href="/voice/knowledge" variant="outline" size="sm">Edit</ButtonLink>}
+          action={<ButtonLink href="/settings/business" variant="outline" size="sm">Edit</ButtonLink>}
           className="h-fit"
         >
           <Rows

@@ -504,7 +504,7 @@ export function WizardTestStep({ c }: { c: MctbOnboardingController }) {
           label: "Review Setup",
           onClick: () => {
             if (c.presentation === "modal" && c.onFinished) c.onFinished();
-            c.router.push(MCTB_ROUTES.setup);
+            c.router.push(`${MCTB_ROUTES.missedCallRecovery}?tab=general`);
           },
         }
       : !started

@@ -11,6 +11,7 @@ import { useOpusWorkspaceData } from '@/newui-transplant/context/opus-workspace-
 import { saveMctbSetup } from '@/lib/newui-transplant/api/mctb-setup-client'
 import { cn } from '@/lib/utils'
 import { getRecoveryGoalDefinition, MCTB_RECOVERY_GOALS, type MctbRecoveryGoalId } from '@/lib/mctb/recovery-goals'
+import { MCTB_ROUTES } from '@/lib/mctb/routes'
 import { FieldRow } from '@/newui-transplant/components/app/kit'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/newui-transplant/components/ui/select'
 
@@ -18,7 +19,13 @@ const VARIABLES = ['{first_name}', '{business_name}', '{booking_link}']
 
 type PlatformChoice = { id: string; label: string; body: string }
 
-export function TextBackEditor() {
+export function TextBackEditor({
+  manageSenderHref = MCTB_ROUTES.phone,
+  consentHref = `${MCTB_ROUTES.missedCallRecovery}?tab=consent`,
+}: {
+  manageSenderHref?: string
+  consentHref?: string
+} = {}) {
   const { business } = useOpusWorkspaceData()
   const [opener, setOpener] = useState(
     'Hi! Sorry we missed your call at {business_name}. How can we help? You can also book here: {booking_link}',
@@ -109,11 +116,12 @@ export function TextBackEditor() {
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-card px-4 py-3 text-sm">
           <span className="text-muted-foreground">Consent mode:</span>
-          <Link href="/mctb/setup/consent" className="font-medium text-primary hover:underline">{consentLabel}</Link>
+          <Link href={consentHref} className="font-medium text-primary hover:underline">{consentLabel}</Link>
           <span className="mx-1 hidden h-4 w-px bg-border sm:block" />
           <span className="text-muted-foreground">Sender:</span>
           <span className="font-mono text-xs">{sender}</span>
           <Pill tone={senderReady ? 'success' : 'warning'}>{senderReady ? 'Ready' : 'Needs attention'}</Pill>
+          <Link href={manageSenderHref} className="text-sm font-medium text-primary hover:underline">Manage sender</Link>
         </div>
 
         <Panel title="System compliance message" description="Sent first. Required and can’t be edited.">

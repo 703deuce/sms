@@ -3,7 +3,7 @@ import { MctbVoicemailWorkspace } from "@/components/mctb/voicemail/mctb-voicema
 import { hasMctbBundledVoicemailAccess } from "@/lib/products/feature-entitlements";
 import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
 import { MctbAddOnUpgradeOpus } from "@/newui-transplant/components/mctb/add-on-upgrade-opus";
-import { NewUiMctbVoicemailPage } from "@/newui-transplant/connected/mctb/voicemail-page";
+import { NewUiMctbVoicemailCombinedPage } from "@/newui-transplant/connected/mctb/mctb-ia-pages";
 import { loadPersonalNumbers } from "@/lib/workspace/personal-data";
 import { requireWorkspaceContext } from "@/lib/workspace-data";
 import { Suspense } from "react";
@@ -26,7 +26,7 @@ export default async function MctbVoicemailPage({
   const { numberId, id } = await searchParams;
 
   if (isNewUiStage2Enabled()) {
-    return <NewUiMctbVoicemailPage numberId={numberId} />;
+    return <NewUiMctbVoicemailCombinedPage numberId={numberId} />;
   }
 
   const numbers = await loadPersonalNumbers(workspaceId);

@@ -11,6 +11,11 @@ export const MCTB_ROUTES = {
   /** @deprecated Voice product — /mctb/voice-agent redirects to /voice/agents */
   voiceAgent: "/mctb/voice-agent",
   analytics: "/mctb/analytics",
+  /** Launch IA — direct configuration (replaces permanent Setup nav). */
+  missedCallRecovery: "/mctb/missed-call-recovery",
+  textBack: "/mctb/text-back",
+  notifications: "/mctb/notifications",
+  phone: "/mctb/phone",
   setup: "/mctb/setup",
   setupStart: "/mctb/setup/start",
   setupPhone: "/mctb/setup/phone",

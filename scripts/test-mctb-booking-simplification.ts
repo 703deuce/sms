@@ -23,15 +23,16 @@ const navHrefs = collectNavHrefs(buildMctbV1Nav({ hasVoice: false }));
 for (const label of ["Calendar", "Appointments", "Booking Setup", "Reminders"]) {
   assert.ok(!navLabels.includes(label), `nav must not include ${label}`);
 }
-assert.ok(navLabels.includes("Inbox"));
-assert.ok(!navLabels.includes("Conversations"));
+assert.ok(navLabels.includes("Conversations"));
+assert.ok(!navLabels.includes("Inbox"));
+assert.ok(!navLabels.includes("Setup"));
 assert.equal(navLabels.filter((l) => l === "Overview").length, 1);
 
 // —— Redirect map ——
-assert.equal(resolveRemovedMctbSchedulingRedirect("/mctb/calendar"), MCTB_ROUTES.conversations);
-assert.equal(resolveRemovedMctbSchedulingRedirect("/mctb/appointments/new"), MCTB_ROUTES.conversations);
-assert.equal(resolveRemovedMctbSchedulingRedirect("/mctb/booking/types"), MCTB_ROUTES.setupRecovery);
-assert.equal(resolveRemovedMctbSchedulingRedirect("/mctb/reminders"), MCTB_ROUTES.setupRecovery);
+assert.equal(resolveRemovedMctbSchedulingRedirect("/mctb/calendar"), "/appointments/calendar");
+assert.equal(resolveRemovedMctbSchedulingRedirect("/mctb/appointments/new"), "/appointments");
+assert.equal(resolveRemovedMctbSchedulingRedirect("/mctb/booking/types"), "/appointments/types");
+assert.equal(resolveRemovedMctbSchedulingRedirect("/mctb/reminders"), "/appointments/reminders");
 
 const redirectPages = [
   "src/app/(app)/mctb/calendar/page.tsx",
@@ -76,8 +77,8 @@ assert.ok(setupBooking.includes("Include booking link in initial recovery"));
 assert.ok(setupBooking.includes("AI Booking"));
 
 // —— Full scheduler preserved (43) ——
-assert.ok(existsSync("src/app/(app)/appointments/page.tsx"));
-const apptPage = readFileSync("src/app/(app)/appointments/page.tsx", "utf8");
+assert.ok(existsSync("src/app/(public)/appointments/page.tsx"));
+const apptPage = readFileSync("src/app/(public)/appointments/page.tsx", "utf8");
 assert.ok(!apptPage.includes('redirect("/mctb/appointments")'), "canonical appointments not replaced by MCTB route");
 
 // —— Docs ——
@@ -88,8 +89,8 @@ assert.ok(existsSync("src/lib/mctb/ai-booking/service.ts"));
 
 // —— Nav match: removed paths should not highlight calendar nav ——
 const kimi = mapProductionNavToKimi(buildMctbV1Nav({ hasVoice: false }));
-assert.equal(findBestNavMatch(kimi, "/mctb/setup/recovery")?.href, "/mctb/setup");
-assert.equal(findBestNavMatch(kimi, "/integrations")?.href, "/integrations");
+assert.equal(findBestNavMatch(kimi, "/mctb/missed-call-recovery")?.href, MCTB_ROUTES.missedCallRecovery);
+assert.equal(findBestNavMatch(kimi, "/mctb/setup/recovery"), null);
 
 // —— Audit flags ——
 const audit = readFileSync("docs/MCTB-BOOKING-SIMPLIFICATION-AUDIT.md", "utf8");

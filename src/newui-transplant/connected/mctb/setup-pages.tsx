@@ -35,6 +35,7 @@ import {
   useMctbVoicemailWiring,
 } from "@/newui-transplant/connected/mctb/setup-wiring-hooks";
 import type { MctbHandoffConfigDto, MctbHandoffEventType } from "@/lib/mctb/handoff/types";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 
 function delayLabelFromSeconds(sec: number): string {
   if (sec <= 0) return "Immediately";
@@ -159,12 +160,10 @@ export function NewUiMctbSetupTextBackPage() {
   );
 }
 
-export function NewUiMctbSetupMissedCallRulesPage() {
+export function NewUiMctbSetupMissedCallRulesPage({ embedded }: { embedded?: boolean } = {}) {
   const recovery = useMctbRecoveryWiring();
   if (recovery.loading) return <p className="p-6 text-sm text-muted-foreground">Loading missed-call rules…</p>;
-  return (
-    <Page className={setupSectionPageClass}>
-      <PageHeader title="Missed-call rules" description="Which call outcomes create a missed-call recovery event." />
+  const body = (
       <TransplantMctbSetupMissedCallRulesPage
         wired={{
           triggers: recovery.triggers.map((t) => ({
@@ -175,6 +174,12 @@ export function NewUiMctbSetupMissedCallRulesPage() {
           onSave: recovery.saveTriggerRulesOnly,
         }}
       />
+  );
+  if (embedded) return body;
+  return (
+    <Page className={setupSectionPageClass}>
+      <PageHeader title="Missed-call rules" description="Which call outcomes create a missed-call recovery event." />
+      {body}
     </Page>
   );
 }
@@ -396,12 +401,12 @@ export function NewUiMctbSetupTestPage() {
     {
       label: "Sender ready",
       ok: Boolean(test.senderReady),
-      href: "/mctb/setup/phone",
+      href: MCTB_ROUTES.phone,
     },
     {
       label: "Text-back opener saved",
       ok: test.openerSaved,
-      href: "/mctb/setup/text-back",
+      href: MCTB_ROUTES.textBack,
     },
   ];
 
