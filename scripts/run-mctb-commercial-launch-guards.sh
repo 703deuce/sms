@@ -7,6 +7,8 @@ echo "=== MCTB commercial launch guards ==="
 npx tsx scripts/test-mctb-capabilities-resolver.ts
 npx tsx scripts/test-mctb-recovery-usage-idempotency.ts
 npx tsx scripts/test-mctb-ai-recovery-entitlement-gate.ts
+npx tsx scripts/test-mctb-existing-consent-attestation.ts
+NODE_OPTIONS="${NODE_OPTIONS} --import ./scripts/preload-server-only.mjs" npx tsx scripts/test-mctb-platform-inbound-tenant-isolation.ts
 npx tsx scripts/test-mctb-urgent-handoff-guards.ts
 npx tsx scripts/test-mctb-caller-replied-inbound-path.ts
 npx tsx scripts/test-mctb-caller-replied-email-delivery-contract.ts

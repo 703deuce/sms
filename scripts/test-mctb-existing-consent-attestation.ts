@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { EXISTING_CONSENT_ATTESTATION_VERSION } from "../src/lib/mctb/capture/attestation";
+const EXISTING_CONSENT_ATTESTATION_VERSION = "1";
 
 const attestation = readFileSync(
   path.join(process.cwd(), "src/lib/mctb/capture/attestation.ts"),
