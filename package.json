@@ -72,7 +72,7 @@
     "test:mctb-571-demo-routing-preserved": "tsx scripts/test-mctb-try-it-ux.ts",
     "test:mctb-571-admin-workspace-assignment": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/mctb-assign-571-admin-workspace.ts",
     "test:mctb-paid-user-hides-try-it-nav": "tsx scripts/test-mctb-try-it-ux.ts",
-    "test:mctb-admin-setup": "tsx scripts/test-mctb-admin-setup.ts",
+    "test:mctb-admin-setup": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-mctb-admin-setup.ts",
     "assign:mctb-571-admin": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/mctb-setup-admin-test-account.ts --apply",
     "replay:mctb-consent-texml": "tsx scripts/replay-mctb-consent-texml-call.ts",
     "test:telnyx-wiring": "tsx scripts/test-telnyx-wiring.ts",

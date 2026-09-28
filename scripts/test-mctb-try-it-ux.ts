@@ -5,6 +5,7 @@
  */
 import assert from "node:assert/strict";
 import { shouldShowTryItNav } from "@/lib/mctb/try-it/visibility";
+import { MCTB_LAUNCH_TRY_IT_ENABLED } from "@/lib/mctb/launch-flags";
 import { buildVoiceNav } from "@/lib/products/voice-nav";
 import { isMctbAppPath } from "@/lib/products/voice-routes";
 import {
@@ -38,8 +39,14 @@ async function main() {
   await test("test:mctb-paid-user-hides-try-it-nav", () => {
   assert.equal(shouldShowTryItNav("growth"), false);
   assert.equal(shouldShowTryItNav("growth", { isPlatformAdmin: true }), true);
-  assert.equal(shouldShowTryItNav("trial"), true);
-  assert.equal(shouldShowTryItNav("onboarding"), true);
+  if (MCTB_LAUNCH_TRY_IT_ENABLED) {
+    assert.equal(shouldShowTryItNav("trial"), true);
+    assert.equal(shouldShowTryItNav("onboarding"), true);
+  } else {
+    assert.equal(shouldShowTryItNav("trial"), false);
+    assert.equal(shouldShowTryItNav("onboarding"), false);
+    assert.equal(shouldShowTryItNav("trial", { adminTestAccount: true }), true);
+  }
   const nav = buildVoiceNav({ showTryIt: false });
   assert.equal(nav.some((item) => item.label === "Try It"), false);
   const trialNav = buildVoiceNav({ showTryIt: true });
