@@ -10,6 +10,9 @@ import { SaveBar } from '@/newui-transplant/components/app/save-bar'
 import { useOpusWorkspaceData } from '@/newui-transplant/context/opus-workspace-data'
 import { saveMctbSetup } from '@/lib/newui-transplant/api/mctb-setup-client'
 import { cn } from '@/lib/utils'
+import { getRecoveryGoalDefinition, MCTB_RECOVERY_GOALS, type MctbRecoveryGoalId } from '@/lib/mctb/recovery-goals'
+import { FieldRow } from '@/newui-transplant/components/app/kit'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/newui-transplant/components/ui/select'
 
 const VARIABLES = ['{first_name}', '{business_name}', '{booking_link}']
 
@@ -31,6 +34,7 @@ export function TextBackEditor() {
   const [platformTemplateId, setPlatformTemplateId] = useState('recovery_opener')
   const [platformChoices, setPlatformChoices] = useState<PlatformChoice[]>([])
   const [phoneNumberId, setPhoneNumberId] = useState<string | null>(null)
+  const [recoveryGoal, setRecoveryGoal] = useState<MctbRecoveryGoalId>('get_reply')
   const [loading, setLoading] = useState(true)
   const ref = useRef<HTMLTextAreaElement>(null)
   const segments = Math.max(1, Math.ceil(opener.length / 160))
@@ -62,6 +66,8 @@ export function TextBackEditor() {
         (data.messaging as { platformRecoveryTemplateId?: string })?.platformRecoveryTemplateId ||
         (data.runtime as { platformRecoveryTemplateId?: string })?.platformRecoveryTemplateId
       if (tid) setPlatformTemplateId(tid)
+      const goal = data.recoveryGoal as MctbRecoveryGoalId | undefined
+      if (goal && MCTB_RECOVERY_GOALS.some((g) => g.id === goal)) setRecoveryGoal(goal)
     } finally {
       setLoading(false)
     }
@@ -88,7 +94,7 @@ export function TextBackEditor() {
   const onSave = async () => {
     if (!phoneNumberId) throw new Error('Configure phone & forwarding before saving text-back.')
     if (!canEdit) throw new Error('Recovery opener cannot be edited for this sender mode.')
-    await saveMctbSetup({ phoneNumberId, messageTemplate: opener, activate: false })
+    await saveMctbSetup({ phoneNumberId, messageTemplate: opener, recoveryGoal, activate: false })
     await load()
   }
 
@@ -158,6 +164,23 @@ export function TextBackEditor() {
             </p>
           ) : (
             <>
+          <FieldRow label="Recovery goal" description="Shapes default opener and request-form preset when you change goals.">
+            <Select
+              value={recoveryGoal}
+              onValueChange={(v) => {
+                const id = v as MctbRecoveryGoalId
+                setRecoveryGoal(id)
+                setOpener(getRecoveryGoalDefinition(id).defaultOpener.replace(/\{\{customer\.firstName\}\}/g, '{first_name}').replace(/\{\{business\.name\}\}/g, '{business_name}').replace(/\{\{link\}\}/g, '{booking_link}'))
+              }}
+            >
+              <SelectTrigger className="w-[220px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {MCTB_RECOVERY_GOALS.map((g) => (
+                  <SelectItem key={g.id} value={g.id}>{g.title}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FieldRow>
           <label htmlFor="opener" className="sr-only">Conversation opener</label>
           <Textarea id="opener" ref={ref} rows={4} value={opener} onChange={(e) => setOpener(e.target.value)} disabled={!canEdit} />
           <div className="mt-2 flex flex-wrap items-center gap-1.5">

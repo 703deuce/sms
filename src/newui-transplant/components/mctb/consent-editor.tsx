@@ -15,6 +15,7 @@ import { SaveBar } from '@/newui-transplant/components/app/save-bar'
 import { cn } from '@/lib/utils'
 import { useOpusWorkspaceData } from '@/newui-transplant/context/opus-workspace-data'
 import { saveMctbSetup } from '@/lib/newui-transplant/api/mctb-setup-client'
+import { MctbConsentPromptPanel } from '@/newui-transplant/components/mctb/mctb-consent-prompt-panel'
 
 const MODES = [
   { id: 'press1' as const, api: 'press_1' as const, title: 'Press 1 to consent', description: 'Callers hear a short prompt and press 1 to get a text. Recommended.' },
@@ -131,15 +132,19 @@ export function ConsentEditor() {
       </Panel>
 
       {mode === 'press1' ? (
-        <Panel title="Disclosure preview" description="Played to callers before the call ends" action={
-          <Button size="sm" variant="outline" type="button" onClick={playDisclosure} disabled={!playbackUrl}>
-            <Play /> Preview audio
-          </Button>
-        }>
-          <blockquote className="rounded-lg border-l-2 border-primary bg-muted/50 px-4 py-3 text-pretty text-sm leading-relaxed">
-            {`"${disclosure}"`}
-          </blockquote>
-        </Panel>
+        <>
+          <MctbConsentPromptPanel phoneNumberId={phoneNumberId} />
+          <Panel title="Published disclosure preview" description="What callers hear on the live path after you publish">
+            <blockquote className="rounded-lg border-l-2 border-primary bg-muted/50 px-4 py-3 text-pretty text-sm leading-relaxed">
+              {`"${disclosure}"`}
+            </blockquote>
+            {playbackUrl ? (
+              <Button size="sm" variant="outline" type="button" className="mt-3" onClick={playDisclosure}>
+                <Play /> Play published audio
+              </Button>
+            ) : null}
+          </Panel>
+        </>
       ) : (
         <Panel title="Certify Existing Consent">
           <p className="text-pretty text-sm leading-relaxed text-muted-foreground">{EXISTING_CONSENT_CERTIFICATION_BODY}</p>
@@ -153,7 +158,7 @@ export function ConsentEditor() {
 
       <div className="flex justify-end">
         <SaveBar
-          label={mode === 'press1' ? 'Publish' : EXISTING_CONSENT_CERTIFICATION_SUBMIT_LABEL}
+          label={mode === 'press1' ? 'Save consent mode' : EXISTING_CONSENT_CERTIFICATION_SUBMIT_LABEL}
           onSave={onSave}
         />
       </div>

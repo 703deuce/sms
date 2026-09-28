@@ -1,7 +1,6 @@
 'use client'
 
 import { FieldRow, Panel } from '@/newui-transplant/components/app/kit'
-import { Checkbox } from '@/newui-transplant/components/ui/checkbox'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/newui-transplant/components/ui/select'
 import { SaveBar } from '@/newui-transplant/components/app/save-bar'
@@ -19,15 +18,6 @@ export type MctbSetupRecoveryWired = {
   onResume?: () => Promise<void>
   onSave?: () => Promise<void>
 }
-
-const DEMO_TRIGGERS = [
-  { label: 'No answer', on: true },
-  { label: 'Busy', on: true },
-  { label: 'Rejected / declined', on: true },
-  { label: 'Unreachable', on: true },
-  { label: 'After voicemail', on: true },
-  { label: 'Blocked caller ID', on: false },
-]
 
 function Choice({
   id,
@@ -51,26 +41,13 @@ function Choice({
 }
 
 export function TransplantMctbSetupRecoveryPage({ wired }: { wired?: MctbSetupRecoveryWired }) {
-  const triggers = wired?.triggers ?? DEMO_TRIGGERS.map((t) => ({ ...t, onChange: () => {} }))
   const delay = wired?.delayLabel ?? '30 seconds'
   const cooldown = wired?.cooldownLabel ?? '24 hours'
   const maxMsg = wired?.maxMessagesLabel ?? '3'
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <Panel title="Recovery triggers" description="Send a recovery text when a call ends like this">
-        <ul className="grid gap-3 sm:grid-cols-2">
-          {triggers.map((t) => (
-            <li key={t.label}>
-              <label className="flex items-center gap-2.5 text-sm">
-                <Checkbox checked={t.on} onCheckedChange={(v) => t.onChange(Boolean(v))} /> {t.label}
-              </label>
-            </li>
-          ))}
-        </ul>
-      </Panel>
-
-      <Panel title="Pause recovery">
+      <Panel title="Pause recovery" className="lg:col-span-2">
         <p className="mb-3 text-sm text-muted-foreground">
           {wired?.paused
             ? 'Recovery is paused. Forwarded calls use your voicemail fallback — no recovery SMS.'

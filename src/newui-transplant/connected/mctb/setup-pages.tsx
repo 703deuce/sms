@@ -10,15 +10,15 @@ import { ExclusionsTable } from "@/newui-transplant/components/mctb/exclusions-t
 import { TransplantMctbSetupPage } from "@/newui-transplant/mirror/routes/mctb/setup/page";
 import { TransplantMctbSetupPhonePage } from "@/newui-transplant/mirror/routes/mctb/setup/phone/page";
 import { TransplantMctbSetupRecoveryPage } from "@/newui-transplant/mirror/routes/mctb/setup/recovery/page";
+import { TransplantMctbSetupMissedCallRulesPage } from "@/newui-transplant/mirror/routes/mctb/setup/missed-call-rules/page";
+import { MctbSetupLinksEditor } from "@/newui-transplant/components/mctb/mctb-setup-links-editor";
 import { TransplantMctbSetupVoicemailPage } from "@/newui-transplant/mirror/routes/mctb/setup/voicemail/page";
 import { TransplantMctbSetupNotificationsPage, formatRecipientMobile } from "@/newui-transplant/mirror/routes/mctb/setup/notifications/page";
-import { TransplantMctbSetupLinksPage } from "@/newui-transplant/mirror/routes/mctb/setup/links/page";
 import { TransplantMctbSetupTestPage } from "@/newui-transplant/mirror/routes/mctb/setup/test/page";
 import { useMctbSetupApi, formatSetupPhoneLine } from "@/newui-transplant/connected/mctb/setup-hooks";
 import { useMctbSetupOverviewWiring } from "@/newui-transplant/connected/mctb/mctb-setup-overview-wiring";
 import { useMctbSetupPhoneWiring } from "@/newui-transplant/connected/mctb/mctb-setup-phone-wiring";
 import {
-  useMctbLinksWiring,
   useMctbNotificationsWiring,
   useMctbRecoveryWiring,
   useMctbTestWiring,
@@ -122,6 +122,26 @@ export function NewUiMctbSetupTextBackPage() {
   );
 }
 
+export function NewUiMctbSetupMissedCallRulesPage() {
+  const recovery = useMctbRecoveryWiring();
+  if (recovery.loading) return <p className="p-6 text-sm text-muted-foreground">Loading missed-call rules…</p>;
+  return (
+    <Page className={setupSectionPageClass}>
+      <PageHeader title="Missed-call rules" description="Which call outcomes create a missed-call recovery event." />
+      <TransplantMctbSetupMissedCallRulesPage
+        wired={{
+          triggers: recovery.triggers.map((t) => ({
+            label: t.label,
+            on: t.on,
+            onChange: t.setOn,
+          })),
+          onSave: recovery.save,
+        }}
+      />
+    </Page>
+  );
+}
+
 export function NewUiMctbSetupRecoveryPage() {
   const recovery = useMctbRecoveryWiring();
   if (recovery.loading) return <p className="p-6 text-sm text-muted-foreground">Loading recovery settings…</p>;
@@ -129,14 +149,7 @@ export function NewUiMctbSetupRecoveryPage() {
     <TransplantMctbSetupRecoveryPage
       wired={{
         paused: recovery.paused,
-        triggers: [
-          ...recovery.triggers.map((t) => ({
-            label: t.label,
-            on: t.on,
-            onChange: t.setOn,
-          })),
-          { label: "Blocked caller ID", on: false, onChange: () => {} },
-        ],
+        triggers: [],
         delayLabel: delayLabelFromSeconds(recovery.delaySeconds),
         cooldownLabel: cooldownLabelFromMinutes(recovery.cooldownMinutes),
         maxMessagesLabel: String(recovery.maxMessages),
@@ -326,21 +339,11 @@ export function NewUiMctbSetupExclusionsPage() {
 }
 
 export function NewUiMctbSetupLinksPage() {
-  const links = useMctbLinksWiring();
-  if (links.loading) return <p className="p-6 text-sm text-muted-foreground">Loading links…</p>;
   return (
-    <TransplantMctbSetupLinksPage
-      wired={{
-        defaultLinkUrl: links.defaultLinkUrl,
-        requestFormEnabled: links.requestFormEnabled,
-        requestFormUrl: links.requestFormUrl,
-        onRequestFormEnabledChange: (v) => {
-          links.setRequestFormEnabled(v);
-          void links.save();
-        },
-        onCopyRequestForm: () => void links.copyRequestForm(),
-      }}
-    />
+    <Page className={setupSectionPageClass}>
+      <PageHeader title="Links & request form" description="Booking URLs, {{link}} variable, and optional public request form." />
+      <MctbSetupLinksEditor />
+    </Page>
   );
 }
 
