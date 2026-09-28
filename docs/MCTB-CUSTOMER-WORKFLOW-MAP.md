@@ -143,6 +143,8 @@ One coherent Setup → Test page:
 | Setup → Test hid setup-test pipeline checkpoints | Pipeline panel + 3s poll | `setup-test-presentation.ts` |
 | Legacy consent editor allowed free-text script | Read-only disclosure (legacy + Opus) | `script-policy.ts` + consent-prompt POST |
 | Voicemail “Active” pill implied script-only saves | `greetingActive` = `greetingUrl` only | `useMctbVoicemailWiring` |
+| Business line read-only on Opus Setup → Phone | Editable tel input + setup/onboarding POST | `mctb-setup-phone-wiring` |
+| Consent preview audio/script load path wrong | `consent-editor` reads `config.scriptText` | consent-prompt GET |
 
 ## Code-completeness gate (before browser/PSTN cert)
 
@@ -152,6 +154,7 @@ One coherent Setup → Test page:
 - [x] AI Recovery: launch customer fields on Opus; advanced policy fields documented API-only.
 - [x] Setup Test: live-test + setup-test wired; try-it gated off launch nav.
 - [x] Reverse audit pass: discovered holes implemented (table above), not deferred.
+- [x] Static customer-control gate: `npx tsx scripts/verify-mctb-opus-customer-controls.ts` — PASS.
 
 ### APIs inventoried (customer-relevant)
 

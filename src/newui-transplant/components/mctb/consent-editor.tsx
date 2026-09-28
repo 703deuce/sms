@@ -54,9 +54,13 @@ export function ConsentEditor() {
       if (promptRes.ok) {
         const promptJson = await promptRes.json()
         const status = promptJson.data ?? promptJson
-        if (typeof status.scriptText === 'string' && status.scriptText.trim()) {
-          setDisclosure(status.scriptText)
-        }
+        const script =
+          typeof status.config?.scriptText === 'string'
+            ? status.config.scriptText
+            : typeof status.scriptText === 'string'
+              ? status.scriptText
+              : ''
+        if (script.trim()) setDisclosure(script)
         if (typeof status.playbackUrl === 'string') setPlaybackUrl(status.playbackUrl)
       }
     } finally {

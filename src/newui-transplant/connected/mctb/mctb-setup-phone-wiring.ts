@@ -8,6 +8,8 @@ import {
   buildDialCodeCopyText,
   clampRingSeconds,
   connectionStatusLabel,
+  isPlausibleUsPhoneInput,
+  normalizeBusinessLineInput,
   resolveConnectionUiStatus,
   type ForwardingVerificationUi,
 } from "@/lib/mctb/setup-phone-forwarding-model";
@@ -54,6 +56,8 @@ export function useMctbSetupPhoneWiring(): {
   const [carrier, setCarrier] = useState<MctbForwardingCarrier>("verizon");
   const [ringSeconds, setRingSeconds] = useState(15);
   const [verification, setVerification] = useState<ForwardingVerificationUi>(null);
+  const [businessLineInput, setBusinessLineInput] = useState("");
+  const [businessLineError, setBusinessLineError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -79,6 +83,7 @@ export function useMctbSetupPhoneWiring(): {
       const pid = runtime?.phoneNumberId ?? null;
       setPhoneNumberId(pid);
       setBusinessLineE164(line || null);
+      setBusinessLineInput(line ? formatMctbPhoneLabel(line) : "");
       setProductionForwardE164((d.productionForwardTargetE164 as string) || null);
       setMessagingReady(Boolean((d.compliance as { messagingReady?: boolean })?.messagingReady));
       setCampaignStatus(
@@ -141,13 +146,25 @@ export function useMctbSetupPhoneWiring(): {
   const carrierGuide = useMemo(() => getCarrierGuide(carrier), [carrier]);
 
   const saveForwarding = useCallback(async () => {
-    await saveMctbSetup({ phoneNumberId, activate: false });
+    setBusinessLineError(null);
+    const line = businessLineInput.trim();
+    if (line && !isPlausibleUsPhoneInput(line)) {
+      setBusinessLineError("Enter a valid US business phone number.");
+      throw new Error("Enter a valid US business phone number.");
+    }
+    const normalized = line ? normalizeBusinessLineInput(line) : "";
+    await saveMctbSetup({
+      phoneNumberId,
+      businessLineE164: normalized || null,
+      activate: false,
+    });
     const res = await fetch("/api/mctb/onboarding", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         forwardingCarrier: carrier,
         forwardingRingSeconds: ringSeconds,
+        businessNumberE164: normalized || undefined,
       }),
     });
     const json = await res.json();
@@ -161,8 +178,12 @@ export function useMctbSetupPhoneWiring(): {
         path: json.forwardingVerification.path || null,
       });
     }
+    if (normalized) {
+      setBusinessLineE164(normalized);
+      setBusinessLineInput(formatMctbPhoneLabel(normalized));
+    }
     await load();
-  }, [phoneNumberId, carrier, ringSeconds, load]);
+  }, [phoneNumberId, carrier, ringSeconds, businessLineInput, load]);
 
   const saveSenderSelection = useCallback(
     async (mode: "PLATFORM" | "WORKSPACE", customerPhoneId?: string | null) => {
@@ -321,6 +342,9 @@ export function useMctbSetupPhoneWiring(): {
         setSelectedCustomerSenderId(choice);
         await saveSenderSelection("WORKSPACE", choice);
       },
+      businessLineInput,
+      businessLineError,
+      onBusinessLineChange: setBusinessLineInput,
       onVerifyAgain: async () => {
         await saveForwarding();
         const res = await fetch("/api/mctb/onboarding", {
@@ -341,6 +365,8 @@ export function useMctbSetupPhoneWiring(): {
   }, [
     loading,
     businessLineE164,
+    businessLineInput,
+    businessLineError,
     forwardTarget,
     phoneNumberId,
     carrier,

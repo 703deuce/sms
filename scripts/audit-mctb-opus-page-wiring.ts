@@ -40,7 +40,7 @@ const INVENTORY: Row[] = [
     route: "/mctb/ai-recovery",
     connected: "ai-recovery-page.tsx",
     dataSource: "GET /api/mctb/ai-recovery/context",
-    savesToRuntime: "POST /api/mctb/lead-recovery/config (+ booking-links)",
+    savesToRuntime: "POST /api/mctb/ai-recovery/settings + lead-recovery/config",
   },
   {
     route: "/mctb/voicemail",
@@ -110,15 +110,21 @@ const INVENTORY: Row[] = [
   },
   {
     route: "/mctb/setup/links",
-    connected: "useMctbLinksWiring",
-    dataSource: "GET /api/mctb/setup",
-    savesToRuntime: "POST /api/mctb/setup (defaultLinkUrl, requestForm)",
+    connected: "mctb-setup-links-editor.tsx",
+    dataSource: "GET /api/mctb/setup + /api/mctb/booking-links",
+    savesToRuntime: "POST /api/mctb/setup + booking-links CRUD",
   },
   {
     route: "/mctb/setup/test",
     connected: "useMctbTestWiring",
     dataSource: "/api/mctb/setup-test, /api/mctb/live-test, /api/mctb/setup",
-    savesToRuntime: "POST /api/mctb/live-test (start test)",
+    savesToRuntime: "POST setup-test + live-test (Start test)",
+  },
+  {
+    route: "/mctb/setup/missed-call-rules",
+    connected: "setup-pages NewUiMctbSetupMissedCallRulesPage",
+    dataSource: "GET /api/mctb/setup",
+    savesToRuntime: "POST /api/mctb/setup triggerRules only (saveTriggerRulesOnly)",
   },
 ];
 

@@ -5,6 +5,7 @@ import { ButtonLink } from '@/newui-transplant/components/app/button-link'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/newui-transplant/components/ui/select'
 import { SaveBar } from '@/newui-transplant/components/app/save-bar'
+import { Input } from '@/newui-transplant/components/ui/input'
 import { BUSINESS } from '@/newui-transplant/lib/sandbox-data'
 
 export type MctbSetupPhoneSenderOption = {
@@ -49,6 +50,9 @@ export type MctbSetupPhoneWired = {
   onVerifyAgain?: () => Promise<void>
   onManageNumbers?: () => void
   onAddNumber?: () => void
+  businessLineInput?: string
+  businessLineError?: string | null
+  onBusinessLineChange?: (value: string) => void
 }
 
 const CARRIERS = ['Verizon', 'AT&T', 'T-Mobile', 'Comcast Business', 'RingCentral', 'Other']
@@ -74,7 +78,23 @@ export function TransplantMctbSetupPhonePage({ wired }: { wired?: MctbSetupPhone
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <Panel title="Your business line" description="The public number customers call">
-        <p className="font-mono text-lg font-semibold">{businessLine}</p>
+        {live && wired?.onBusinessLineChange ? (
+          <>
+            <Input
+              type="tel"
+              value={wired.businessLineInput ?? ''}
+              onChange={(e) => wired.onBusinessLineChange?.(e.target.value)}
+              aria-label="Business line phone number"
+              className="font-mono text-lg font-semibold"
+              autoComplete="tel"
+            />
+            {wired.businessLineError ? (
+              <p className="mt-2 text-sm text-destructive" role="alert">{wired.businessLineError}</p>
+            ) : null}
+          </>
+        ) : (
+          <p className="font-mono text-lg font-semibold">{businessLine}</p>
+        )}
         <p className="mt-1 text-xs text-muted-foreground">
           {wired?.businessLineMeta ?? 'Customers call this number'}
         </p>
