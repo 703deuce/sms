@@ -77,14 +77,20 @@
 
 ```
 Inbound consumer SMS (Telnyx)
-  → src/lib/agents/missed-call-text-back/customer-sms.ts
-  → handleMctbLeadRecoveryInboundSms (persist reply, AI recovery path)
+  → acceptMctbInboundSmsIngress (persist inbound + enqueue durable job)
+  → processMctbInboundSmsJob
+  → handleMctbCustomerSmsReply (customer-sms.ts)
+       ├─ AI Lead Recovery OFF → recordMctbLeadRecoveryInboundSideEffects only (`mctb_notifications_only`)
+       └─ AI Lead Recovery ON  → handleMctbLeadRecoveryInboundSms → side effects → optional outbound consumer SMS
   → recordMctbLeadRecoveryInboundSideEffects
-       → recordMctbHandoffEvent(eventType: caller_replied)
-       → deliverMctbHandoffNotifications
+       → urgency assessment (structured intent and/or reply text + matrix criteria)
+       → recordMctbHandoffEvent(caller_replied) [idempotent per providerMessageId]
+       → deliverMctbHandoffNotifications (single pass per inbound)
             → routingMatrix[eventType] from loadMctbHandoffConfig
-            → email: notifyWorkspaceByEmail + mctbNotificationDelivery
-            → SMS/in_app per matrix + recipient channels
+                 (caller_replied | urgent_detected | callback_requested — not two emails for one reply)
+            → email: notifyWorkspaceByEmail + mctbNotificationDelivery row
+            → in_app skipped when MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY (launch default: email-only team alerts)
+            → team SMS per matrix + recipient event channel policy
 ```
 
 **Setup → Notifications:** Opus matrix includes `caller_replied` (`setup-pages.tsx` / `setup-notifications-model.ts`). Runtime consumer: `config.routingMatrix` in `deliverMctbHandoffNotifications`.
@@ -95,16 +101,22 @@ Inbound consumer SMS (Telnyx)
 
 - Prove email delivery for `caller_replied` with matrix toggles and real recipient (production or integration test with `notifyWorkspaceByEmail` stub).
 - Confirm idempotency per inbound (`providerMessageId` in handoff key + `mctb-notify:…:email:…`).
-- Document whether `MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY` affects in-app vs email in prod.
+- **Launch flag:** `MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY === true` (`src/lib/mctb/launch-flags.ts`) — `deliverMctbHandoffNotifications` skips in-app delivery; **email channel still runs** when matrix + recipient allow.
 - **Do not modify** legacy `processMctbInboundReply` for production Telnyx SMS.
 - **Then** urgent classifier inside orchestration (not a second notification system).
 
-**Desired relationship:**
+**Target orchestration (urgent tranche — one pass, no duplicate emails):**
 
 ```
-Inbound reply ──┬→ normal email (and matrix channels)
-                └→ if urgent alerts enabled → AI classifier → extra escalation (email + entitled business SMS)
+Inbound reply → persist
+  → caller_replied handoff event
+  → urgency evaluation when Urgent Reply Alerts enabled
+  → deliverMctbHandoffNotifications once
+       NORMAL  → caller_replied matrix channels (email, etc.)
+       URGENT  → urgent_detected (or successor) formatting + entitled business SMS
 ```
+
+Today: one `deliverMctbHandoffNotifications` call picks `urgent_detected` vs `caller_replied` before send. Urgent AI tranche must keep that single-pass behavior while moving to instructions-driven classification.
 
 ---
 
@@ -132,7 +144,7 @@ Inbound reply ──┬→ normal email (and matrix channels)
 
 4. **Business urgent instructions = semantic authority** — Reuse existing structured AI infrastructure where it fits. **Do not** reduce the feature to keyword-only reuse of `assessMctbUrgencyFromStructuredIntent` if that cannot answer: “Given this business’s natural-language urgent instructions, this reply, and recent context — urgent?” Return `{ urgent, reason, summary }`. If an old helper cannot express that contract, extend minimally; do not break unrelated Lead Recovery behavior.
 
-**Known trap (caller_replied):** `handleMctbCustomerSmsReply` previously returned `lead_recovery_not_enabled` before handoff side effects — notifications never ran when AI Recovery was off. **Fix in progress on this branch** — handoff runs for all qualified MCTB inbound replies; LR only gates **outbound** conversational SMS.
+**Known trap (caller_replied) — fixed on branch:** `handleMctbCustomerSmsReply` used to return `lead_recovery_not_enabled` before handoff. **Fixed** (`869f33b6`): handoff runs for all qualified MCTB inbound replies; Lead Recovery only gates **outbound** conversational SMS. Guard: `scripts/test-mctb-caller-replied-inbound-path.ts`.
 
 **Reuse note:** Lead Recovery produces `StructuredLeadIntent`; that may feed urgency when LR runs, but urgency when LR is **off** must use instructions-driven classification (future tranche), not LR-only paths.
 
@@ -221,13 +233,15 @@ Showing **(866) 602-0680** on an **existing** workspace does **not** certify aut
 
 ---
 
-## Code landed (initial tranche — branch `cursor/mctb-final-product-gaps-2304`)
+## Code landed (branch `cursor/mctb-final-product-gaps-2304`)
 
 | Item | Files |
 |------|--------|
 | Missed call detail | `missed-call-detail-load.ts`, API route, Opus detail page, adapter |
 | Platform template (partial cert) | `message-template.ts`, `send.ts`, setup GET, `text-back-editor.tsx` |
 | Cooldown UI options | `setup-pages.tsx`, `setup/recovery/page.tsx` |
+| **caller_replied when LR off** | `customer-sms.ts` notifications-only path; side-effects idempotency + `assessMctbUrgency` without intent |
+| Guard | `scripts/test-mctb-caller-replied-inbound-path.ts` |
 
 ---
 
@@ -235,6 +249,8 @@ Showing **(866) 602-0680** on an **existing** workspace does **not** certify aut
 
 ```bash
 npx tsx src/lib/mctb/message-template.test.ts
+npx tsx scripts/test-mctb-caller-replied-inbound-path.ts
+npx tsx scripts/test-mctb-caller-replied-email-delivery-contract.ts
 npm run verify:mctb-stage2-presentation
 npm run verify:mctb-stage2-demo-state
 npm run audit:mctb-opus-page-wiring
