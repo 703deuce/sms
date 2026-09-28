@@ -246,15 +246,11 @@ export function OnboardingNotificationsStep({ c, caps, compact }: NotificationsS
     }
   }, [callerReplyEmail, email, mobile, name, n.config, n.recipients, primary]);
 
-  if (n.loading) {
-    return <p className="text-sm text-muted-foreground">Loading notifications…</p>;
-  }
-
   const recoveryPaid = Boolean(caps?.recoveryPaid);
   const aiEntitled = Boolean(caps?.aiRecoveryEntitled);
 
   useMctbWizardFooter(
-    compact
+    compact && !n.loading
       ? {
           back: true,
           primary: {
@@ -275,6 +271,10 @@ export function OnboardingNotificationsStep({ c, caps, compact }: NotificationsS
         }
       : null,
   );
+
+  if (n.loading) {
+    return <p className="text-sm text-muted-foreground">Loading notifications…</p>;
+  }
 
   const body = (
     <>
