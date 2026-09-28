@@ -464,7 +464,12 @@ export function WizardConnectPhoneStep({ c }: { c: MctbOnboardingController }) {
           <p className="font-medium">{selectedCarrier.label} — No-answer forwarding</p>
           <ol className="mt-2 list-decimal space-y-1 pl-5 text-muted-foreground">
             {selectedCarrier.steps.slice(0, 8).map((s, i) => (
-              <li key={i}>{formatCarrierStep(s, c.forwardE164 ?? "")}</li>
+              <li key={i}>
+                {formatCarrierStep(s, {
+                  transovoE164: c.forwardE164 ?? "",
+                  forwardRingSeconds: c.forwardRingSeconds,
+                })}
+              </li>
             ))}
           </ol>
         </div>
