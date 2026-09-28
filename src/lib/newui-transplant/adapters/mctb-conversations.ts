@@ -3,16 +3,24 @@ import type { Conversation as ApiConversation } from "@/lib/types";
 import type { InboxListItem } from "@/lib/inbox/kimi-inbox-adapter";
 import { relativeAgo } from "@/lib/inbox/kimi-inbox-adapter";
 
-function mapMessage(m: ApiConversation["messages"][number]): Message {
+function mapMessage(
+  m: ApiConversation["messages"][number],
+  urgentPreview?: string | null,
+): Message {
   const text = m.body?.trim() || "";
   const time = m.at
     ? new Date(m.at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
     : "";
+  const urgentReply =
+    Boolean(urgentPreview) &&
+    m.direction === "in" &&
+    text.length > 0 &&
+    (text === urgentPreview || urgentPreview.includes(text) || text.includes(urgentPreview));
   if (m.direction === "note") {
     return { from: "system", text, time };
   }
   if (m.direction === "in") {
-    return { from: "customer", text, time };
+    return { from: "customer", text, time, urgentReply };
   }
   return { from: "business", text, time, status: "Sent" };
 }
@@ -55,6 +63,7 @@ export function mapInboxListItemToNewUiInbox(row: InboxListItem): Conversation {
     consentLabel: "—",
     composerFooter: "",
     missedCallEventId: row.missedCallEventId ?? undefined,
+    mctbUrgent: row.mctbUrgent?.isUrgent ? row.mctbUrgent : null,
   };
 }
 
@@ -76,9 +85,12 @@ export function mapApiConversationToNewUiInbox(convo: ApiConversation): Conversa
     unread: Boolean(convo.unread),
     needsReply,
     tag: convo.productSourceLabel ?? undefined,
-    messages: (convo.messages ?? []).map(mapMessage),
+    messages: (convo.messages ?? []).map((m) =>
+      mapMessage(m, convo.mctbUrgent?.messagePreview ?? null),
+    ),
     consentLabel: consentLabelFromConversation(convo),
     composerFooter: composerFooterFromThread(convo),
     missedCallEventId: convo.missedCallEventId ?? undefined,
+    mctbUrgent: convo.mctbUrgent?.isUrgent ? convo.mctbUrgent : null,
   };
 }

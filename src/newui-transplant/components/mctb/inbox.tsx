@@ -44,7 +44,8 @@ function Bubble({ m }: { m: Message }) {
       >
         {m.text}
       </span>
-      <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+      <span className="flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+        {m.urgentReply ? <Pill tone="warning">Urgent</Pill> : null}
         {m.from === 'ai' ? (
           <>
             <Sparkles className="size-3" aria-hidden="true" /> AI Recovery ·
@@ -213,8 +214,9 @@ export function Inbox({
                         <span className="shrink-0 text-[11px] text-muted-foreground">{c.time}</span>
                       </span>
                       <span className="mt-0.5 block truncate text-xs text-muted-foreground">{c.preview}</span>
-                      {c.needsReply || c.tag ? (
-                        <span className="mt-1.5 flex gap-1">
+                      {c.needsReply || c.tag || c.mctbUrgent?.isUrgent ? (
+                        <span className="mt-1.5 flex flex-wrap gap-1">
+                          {c.mctbUrgent?.isUrgent ? <Pill tone="warning">Urgent</Pill> : null}
                           {c.needsReply ? <Pill tone="warning">Needs reply</Pill> : null}
                           {c.tag ? <Pill tone="neutral" dot={false}>{c.tag}</Pill> : null}
                         </span>
@@ -238,7 +240,10 @@ export function Inbox({
                 </Button>
                 <Initials name={selected.name} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{selected.name}</p>
+                  <p className="flex flex-wrap items-center gap-2 truncate text-sm font-semibold">
+                    {selected.name}
+                    {selected.mctbUrgent?.isUrgent ? <Pill tone="warning">Urgent</Pill> : null}
+                  </p>
                   <p className="font-mono text-xs text-muted-foreground">{selected.phone}</p>
                 </div>
                 <Button variant="outline" size="sm" render={<a href={`tel:${selected.phone}`} />} nativeButton={false}>
@@ -301,6 +306,22 @@ export function Inbox({
                 <p className="mt-2 text-sm font-semibold">{selected.name}</p>
                 <p className="font-mono text-xs text-muted-foreground">{selected.phone}</p>
               </div>
+              {selected.mctbUrgent?.isUrgent ? (
+                <div className="rounded-lg border p-3">
+                  <p className="flex items-center gap-1.5 text-xs font-medium">
+                    <Pill tone="warning">Urgent</Pill>
+                    <span className="text-muted-foreground">Inbound reply</span>
+                  </p>
+                  {selected.mctbUrgent.summary || selected.mctbUrgent.reason ? (
+                    <p className="mt-2 text-xs leading-relaxed text-foreground">
+                      {selected.mctbUrgent.summary || selected.mctbUrgent.reason}
+                    </p>
+                  ) : null}
+                  {selected.mctbUrgent.reason && selected.mctbUrgent.summary ? (
+                    <p className="mt-1 text-[11px] text-muted-foreground">{selected.mctbUrgent.reason}</p>
+                  ) : null}
+                </div>
+              ) : null}
               {missed ? (
                 <div className="rounded-lg border p-3">
                   <p className="flex items-center gap-1.5 text-xs font-medium">

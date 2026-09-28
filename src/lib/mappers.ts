@@ -267,6 +267,10 @@ export function mapConversation(c: {
       "missedCallDetectedAt" in c && c.missedCallDetectedAt
         ? String(c.missedCallDetectedAt)
         : null,
+    mctbUrgent:
+      "mctbUrgent" in c && c.mctbUrgent
+        ? (c.mctbUrgent as Conversation["mctbUrgent"])
+        : null,
     messages: sortedMessages.map((m) => ({
         id: m.id,
         direction: (m.direction === "in" || m.direction === "inbound"

@@ -168,12 +168,14 @@ export async function saveMctbNotificationRecipients(
   workspaceId: string,
   recipients: Array<Omit<MctbNotificationRecipientDto, "id"> & { id?: string }>,
 ): Promise<MctbNotificationRecipientDto[]> {
+  const { validateMctbNotificationRecipientsForSave } = await import("./recipient-validation");
+  const validated = validateMctbNotificationRecipientsForSave(recipients);
   const prisma = getPrisma();
   const existing = await prisma.mctbNotificationRecipient.findMany({
     where: { workspaceId },
     select: { id: true },
   });
-  const keepIds = new Set(recipients.filter((r) => r.id).map((r) => r.id!));
+  const keepIds = new Set(validated.filter((r) => r.id).map((r) => r.id!));
   const toDelete = existing
     .filter((e: { id: string }) => !keepIds.has(e.id))
     .map((e: { id: string }) => e.id);
@@ -183,8 +185,8 @@ export async function saveMctbNotificationRecipients(
     });
   }
   const out: MctbNotificationRecipientDto[] = [];
-  for (let i = 0; i < recipients.length; i++) {
-    const r = recipients[i];
+  for (let i = 0; i < validated.length; i++) {
+    const r = validated[i];
     const isCreate = !r.id || !keepIds.has(r.id);
     const eventChannels = normalizeMctbNotificationRecipientEventChannelsForSave({
       isCreate,

@@ -123,7 +123,17 @@ export async function POST(req: Request) {
   }
   let recipients = await loadMctbNotificationRecipients(workspaceId);
   if (body.recipients) {
-    recipients = await saveMctbNotificationRecipients(workspaceId, body.recipients);
+    try {
+      recipients = await saveMctbNotificationRecipients(workspaceId, body.recipients);
+    } catch (err) {
+      const { MctbNotificationRecipientValidationError } = await import(
+        "@/lib/mctb/handoff/recipient-validation",
+      );
+      if (err instanceof MctbNotificationRecipientValidationError) {
+        return NextResponse.json({ error: err.message }, { status: 400 });
+      }
+      throw err;
+    }
   }
 
   return NextResponse.json({ data: { config, recipients } });

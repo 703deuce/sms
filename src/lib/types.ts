@@ -128,6 +128,14 @@ export type Conversation = {
   } | null;
   missedCallEventId?: string | null;
   missedCallDetectedAt?: string | null;
+  mctbUrgent?: {
+    isUrgent: boolean;
+    reason?: string | null;
+    summary?: string | null;
+    messagePreview?: string | null;
+    assessedAt?: string | null;
+    ruleVersion?: string | null;
+  } | null;
   messages: Array<{
     id: string;
     direction: "in" | "out" | "note";

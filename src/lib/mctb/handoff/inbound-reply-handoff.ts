@@ -25,7 +25,7 @@ export async function evaluateMctbInboundReplyUrgency(input: {
   reason?: string;
   summary?: string;
   ruleVersion: string;
-  classification: "urgent" | "normal";
+  classification: "urgent" | "normal" | "classifier_unavailable";
   confidence: number;
 } | null> {
   if (!input.config.emergencyDetectionEnabled) return null;
@@ -49,11 +49,11 @@ export async function evaluateMctbInboundReplyUrgency(input: {
 
   return {
     urgent: false,
-    reason: "Urgent classifier unavailable — treated as normal reply",
+    reason: "Urgent classifier unavailable — caller-replied notification proceeds as normal",
     summary: input.body.slice(0, 240),
     ruleVersion: "mctb_urgent_reply_ai_unavailable",
-    classification: "normal",
-    confidence: 0.5,
+    classification: "classifier_unavailable",
+    confidence: 0,
   };
 }
 
@@ -107,8 +107,18 @@ export async function processMctbInboundReplyHandoff(input: {
     });
   }
 
-  const urgent = urgencyEval?.urgent ?? false;
+  const urgent = urgencyEval?.classification === "urgent";
   const plan = planInboundReplyNotificationEvent({ callbackRequested, urgent });
+
+  if (urgent && urgencyEval) {
+    captured._mctb_urgent_latest = {
+      reason: urgencyEval.reason ?? null,
+      summary: urgencyEval.summary ?? null,
+      messagePreview: input.body.slice(0, 400),
+      at: new Date().toISOString(),
+      ruleVersion: urgencyEval.ruleVersion,
+    };
+  }
 
   const idemSuffix = input.providerMessageId?.trim() || `${Date.now()}`;
   const callerRepliedKey = `mctb-handoff:${input.conversationId}:caller_replied:${idemSuffix}`;

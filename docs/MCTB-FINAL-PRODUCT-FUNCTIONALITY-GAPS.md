@@ -32,6 +32,11 @@
 | `MCTB_COOLDOWN_UI_RUNTIME` | **PARTIAL — VERIFY ONLY** | No more code unless functional test fails |
 | `MCTB_REPLY_EMAIL_NOTIFICATIONS` | **PARTIAL** | Trace below; wire/repair before urgent |
 | `MCTB_URGENT_AI_CLASSIFIER` | **PARTIAL** | `classifyMctbUrgentReply` + single-pass orchestration; Setup → Notifications UI + test API; prove prod email/SMS |
+| `MCTB_URGENT_CONVERSATION_STATE` | **PARTIAL** | Inbox list/thread `Pill` + context; `_mctb_urgent_latest` + `mctbUrgencyAssessment`; prove after deploy |
+| `MCTB_URGENT_SMS_ENTITLEMENT` | **PARTIAL — AUDITED** | `hasActiveMctbPaidEntitlement` is authoritative (no `mctb.urgent_business_sms` SKU yet); UI + runtime aligned |
+| `MCTB_URGENT_RECIPIENT_VALIDATION` | **PARTIAL** | E.164 normalize/reject, dedupe, disabled filtered at send; prove save + runtime |
+| `MCTB_URGENT_CLASSIFIER_FAILURE_FALLBACK` | **PARTIAL** | `classification=classifier_unavailable` → `caller_replied` notify; prove with forced LLM failure |
+| `MCTB_URGENT_CHANNEL_FAILURE_ISOLATION` | **PARTIAL** | Per-channel delivery rows; email/sms loops independent; prove SMS fail + email ok |
 | `MCTB_WORKSPACE_INGRESS_PROVISIONING` | **PARTIAL** | Needs **new-workspace** lifecycle proof + failure semantics |
 | `MCTB_USAGE_FREE_ALLOWANCE` | **AUDIT FIRST** | Find authoritative package/entitlement/usage — do not add independent counter |
 | `MCTB_CONSENT_PRESS_1` | **IMPL COMPLETE** | Frozen TeXML; historical/live evidence; preserve |
@@ -278,7 +283,7 @@ npm run audit:mctb-opus-page-wiring
 | Setup → Notifications | Events matrix + urgent row | Existing notifications table pattern | No | — | PASS | **PENDING** |
 | Setup → Text Back | Platform template lock | `Panel`, `Pill`, `SaveBar`, `Textarea` (`text-back-editor.tsx`) | No | — | PASS | **PENDING** |
 | Setup → Recovery | Cooldown options | `Panel`, `FieldRow`, `Select` (recovery page) | No | — | PASS | **PENDING** |
-| Conversations urgent badge | Urgent thread indicator | — | — | **Not implemented this pass** | — | N/A |
+| Conversations urgent state | Urgent list/thread indicator + context reason | `Pill` (warning), existing inbox layout (`inbox.tsx`) | No | — | PASS (code) | **PENDING** post-deploy browser |
 
 **Rule:** No page-local mini design system; urgent section uses the same `Panel` + `FieldRow` rhythm as Recovery/Phone setup.
 
@@ -298,5 +303,14 @@ npm run audit:mctb-opus-page-wiring
 | 8 Urgent inbound reply | `MCTB_URGENT_EMAIL`, `MCTB_URGENT_BUSINESS_SMS` | **PENDING** | assessment row + delivery rows |
 | 9 Business SMS entitlement | `MCTB_URGENT_BUSINESS_SMS` | **PARTIAL** | `canSendMctbUrgentBusinessTeamSms` → `hasActiveMctbPaidEntitlement`; runtime suppress + UI disable on `urgent_detected` SMS |
 | 10 Idempotency replay | `MCTB_URGENT_IDEMPOTENCY` | **PENDING** | keys: `mctb-handoff:…:caller_replied:{providerMessageId}`, `mctb-notify:{handoffEventId}:…` |
+| 11 Conversations urgent UI | `MCTB_URGENT_CONVERSATION_STATE` | **PENDING** | list `Pill`, thread header, message marker, context summary after real urgent inbound |
+| 12 SMS entitlement audit | `MCTB_URGENT_SMS_ENTITLEMENT` | **PARTIAL** | `describeMctbUrgentBusinessSmsEntitlement()` — paid MCTB = entitled until granular SKU exists |
+| 13 Recipient validation | `MCTB_URGENT_RECIPIENT_VALIDATION` | **PENDING** | invalid/duplicate rejected on save; caller E.164 not used as team SMS dest |
+| 14 Classifier failure fallback | `MCTB_URGENT_CLASSIFIER_FAILURE_FALLBACK` | **PENDING** | LLM unavailable → `caller_replied` email + `classifier_unavailable` assessment row |
+| 15 Channel failure isolation | `MCTB_URGENT_CHANNEL_FAILURE_ISOLATION` | **PENDING** | urgent email sent + SMS failed recorded; no duplicate email on SMS retry |
 
 **Do not mark COMPLETE** until the evidence column is filled for that step.
+
+**Urgent business SMS entitlement (audit):** No separate `mctb.urgent_business_sms` capability exists in billing today. `canSendMctbUrgentBusinessTeamSms` → `hasActiveMctbPaidEntitlement` (`PAID_MCTB_PLANS` + active Stripe subscription). Documented in `urgent-business-sms-entitlement.ts`. If product later splits tiers, wire the **existing** workspace entitlement mechanism — do not add a parallel flag store.
+
+**Classifier failure:** When semantic LLM returns unavailable, assessment uses `classification: classifier_unavailable` (not a model “normal” decision). Notifications still use `caller_replied` routing so the business does not lose the basic new-reply alert.

@@ -101,6 +101,20 @@ export async function GET(request: Request) {
       contactIds,
     );
 
+    const mctbConversationIds = page
+      .filter(
+        (c: (typeof page)[number]) =>
+          c.missedCallEventId || prismaProductSourceToApp(c.productSource) === "mctb",
+      )
+      .map((c: (typeof page)[number]) => c.id);
+    const { loadMctbConversationUrgencyMap } = await import(
+      "@/lib/mctb/handoff/conversation-urgency-context",
+    );
+    const mctbUrgencyByConversation = await loadMctbConversationUrgencyMap(
+      auth.workspaceId,
+      mctbConversationIds,
+    );
+
     return NextResponse.json({
       data: page.map((c: (typeof page)[number]) => {
         const productSource = prismaProductSourceToApp(c.productSource);
@@ -146,6 +160,7 @@ export async function GET(request: Request) {
                 label: formatAppointmentContextLabel(appt.serviceName, appt.startsAt),
               }
             : null,
+          mctbUrgent: mctbUrgencyByConversation.get(c.id) ?? null,
         };
       }),
       filters,

@@ -37,6 +37,14 @@ export type InboxListItem = {
     startsAt: string;
     label: string;
   } | null;
+  mctbUrgent?: {
+    isUrgent: boolean;
+    reason?: string | null;
+    summary?: string | null;
+    messagePreview?: string | null;
+    assessedAt?: string | null;
+    ruleVersion?: string | null;
+  } | null;
 };
 
 export type KimiInboxContext = {
@@ -236,6 +244,7 @@ export function mapListItemToKimi(
     appointmentContext: item.appointmentContext ?? null,
     missedCallEventId: item.missedCallEventId ?? null,
     missedCallDetectedAt: item.missedCallDetectedAt ?? null,
+    mctbUrgent: item.mctbUrgent ?? null,
   };
 }
 

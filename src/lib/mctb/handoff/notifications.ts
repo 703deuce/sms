@@ -2,6 +2,7 @@ import { getPrisma } from "@/lib/db";
 import { notifyWorkspace } from "@/lib/notifications/in-app";
 import { notifyWorkspaceByEmail } from "@/lib/notifications/workspace-email";
 import { sendQuickSms } from "@/lib/sms/send-quick";
+import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { loadMctbHandoffConfig, loadMctbNotificationRecipients } from "./config";
 import { recipientAllowsNotificationChannel } from "./recipient-event-routing";
 import { MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY } from "@/lib/mctb/launch-flags";
@@ -79,6 +80,15 @@ export async function deliverMctbHandoffNotifications(input: {
         channel: "email",
       }),
   );
+  let callerE164: string | null = null;
+  if (input.facts.callerPhone?.trim()) {
+    try {
+      callerE164 = normalizeE164(input.facts.callerPhone.trim());
+    } catch {
+      callerE164 = null;
+    }
+  }
+
   const smsRecipients = targetRecipients.filter(
     (r) =>
       r.mobileE164 &&
@@ -88,6 +98,20 @@ export async function deliverMctbHandoffNotifications(input: {
         channel: "sms",
       }),
   );
+
+  const smsByDestination = new Map<string, (typeof smsRecipients)[number]>();
+  for (const r of smsRecipients) {
+    if (!r.mobileE164) continue;
+    let dest = r.mobileE164;
+    try {
+      dest = normalizeE164(r.mobileE164);
+    } catch {
+      continue;
+    }
+    if (callerE164 && dest === callerE164) continue;
+    if (!smsByDestination.has(dest)) smsByDestination.set(dest, r);
+  }
+  const uniqueSmsRecipients = [...smsByDestination.values()];
 
   if (blockAllNonUrgent && !channels.email) {
     return { delivered: results, suppressed: true, reason: "quiet_hours" };
@@ -186,7 +210,7 @@ export async function deliverMctbHandoffNotifications(input: {
     (input.eventType !== "urgent_detected" || urgentBusinessSmsEntitled)
   ) {
     const smsBody = renderMctbTeamSms(renderInput);
-    for (const recipient of smsRecipients) {
+    for (const recipient of uniqueSmsRecipients) {
       const idempotencyKey = `${idemBase}:sms:${recipient.id}`;
       const prior = await prisma.mctbNotificationDelivery.findUnique({
         where: { idempotencyKey },

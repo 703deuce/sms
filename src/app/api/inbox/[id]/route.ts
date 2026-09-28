@@ -80,6 +80,14 @@ export async function GET(
       }
     }
 
+    let mctbUrgent = null;
+    if (row.missedCallEventId || row.productSource === "mctb") {
+      const { loadMctbConversationUrgency } = await import(
+        "@/lib/mctb/handoff/conversation-urgency-context",
+      );
+      mctbUrgent = await loadMctbConversationUrgency(auth.workspaceId, id);
+    }
+
     return NextResponse.json({
       data: mapConversation({
         ...row,
@@ -87,6 +95,7 @@ export async function GET(
         repeatCaller,
         appointmentContext,
         missedCallDetectedAt,
+        mctbUrgent,
       }),
     });
   } catch (err) {

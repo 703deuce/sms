@@ -44,6 +44,7 @@ export type Message = {
   text: string;
   time: string;
   status?: string;
+  urgentReply?: boolean;
 };
 
 export type Conversation = {
@@ -60,6 +61,14 @@ export type Conversation = {
   consentLabel?: string;
   composerFooter?: string;
   missedCallEventId?: string;
+  mctbUrgent?: {
+    isUrgent: boolean;
+    reason?: string | null;
+    summary?: string | null;
+    messagePreview?: string | null;
+    assessedAt?: string | null;
+    ruleVersion?: string | null;
+  } | null;
 };
 
 export type VoicemailItem = {
