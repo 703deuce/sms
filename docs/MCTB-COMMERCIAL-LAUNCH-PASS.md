@@ -32,10 +32,29 @@ Sections 0–40 from the launch instruction map to evidence rows in the gaps doc
 
 Push → Coolify green → `/api/health` commit match → then functional/browser proof. Do not certify stale production.
 
+## Certification evidence rows (update only with proof)
+
+| Row | Status | Evidence |
+|-----|--------|----------|
+| `CAPABILITIES` | **COMPLETE** | `npx tsx scripts/test-mctb-capabilities-resolver.ts` — paid tier limits (250/750/2500) + free 25; `resolveMctbCapabilities()` exposes `recoveryPaid`, `aiRecoveryEntitled`, `ownSenderAddOnEntitled` |
+| `FREE_USAGE` | **COMPLETE** | `NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-mctb-recovery-usage-idempotency.ts` — 25th ok, replay idempotent, 26th suppressed |
+| `EXISTING_CONSENT_GATE` | **PARTIAL** | Setup POST + Opus consent editor; Recovery paid required — browser/API cert pending |
+| `AI_RECOVERY_ENTITLEMENT` | **PARTIAL** | API 403 without `mctb_ai_recovery` / limits flag — `lead-recovery/config`, `ai-recovery/settings`, `handoff` `set_launch_ai_replies` |
+| `BREVO_REPLY_EMAIL` | PENDING | — |
+| `FRESH_WORKSPACE_PROVISIONING` | PENDING | — |
+| `PRESS_1_E2E` | PENDING | — |
+| `EXISTING_CONSENT_E2E` | PENDING | — |
+| `URGENT_E2E` | PENDING | — |
+| `OWN_SENDER` | PENDING | Add-on via `mctb_own_sender` subscription or `mctbOwnSenderAddOnEntitled` limit flag |
+| `MCTB_COMMERCIAL_LAUNCH_CERTIFICATION` | **MISSING** | — |
+
+Paid Recovery monthly allowance (configured): starter **250**, growth **750**, pro **2500** — `MCTB_PAID_RECOVERY_LIMIT_BY_TIER` in `recovery-usage-constants.ts`.
+
 ## Automated guards (extend as behavior lands)
 
 ```bash
 npx tsx scripts/test-mctb-capabilities-resolver.ts
+npx tsx scripts/test-mctb-recovery-usage-idempotency.ts
 npx tsx scripts/test-mctb-urgent-handoff-guards.ts
 npx tsx scripts/test-mctb-caller-replied-inbound-path.ts
 npm run verify:mctb-stage2-presentation

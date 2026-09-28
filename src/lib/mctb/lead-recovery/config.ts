@@ -281,6 +281,20 @@ export async function saveLeadRecoveryConfig(
     version: number;
   }>,
 ): Promise<LeadRecoveryWorkspaceConfig> {
+  if (patch.enabled === true) {
+    const { requireMctbCapability, MctbCapabilityDeniedError } = await import(
+      "@/lib/mctb/capabilities"
+    );
+    try {
+      await requireMctbCapability(workspaceId, "aiRecoveryEntitled");
+    } catch (err) {
+      if (err instanceof MctbCapabilityDeniedError) {
+        throw new Error("AI Recovery requires an AI Recovery plan.");
+      }
+      throw err;
+    }
+  }
+
   const prisma = getPrisma();
   const ws = await prisma.workspace.findUnique({
     where: { id: workspaceId },

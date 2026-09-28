@@ -86,6 +86,17 @@ export async function POST(request: Request) {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
     const body = (await request.json()) as Record<string, unknown>;
+
+    if (body.enabled === true) {
+      const { assertMctbCapability } = await import("@/lib/mctb/capabilities");
+      const gate = await assertMctbCapability(auth.workspaceId, "aiRecoveryEntitled");
+      if (!gate.ok) {
+        return NextResponse.json(
+          { error: "AI Recovery requires an AI Recovery plan." },
+          { status: 403 },
+        );
+      }
+    }
     const enabledScenarios =
       body.enabledScenarios && typeof body.enabledScenarios === "object"
         ? (body.enabledScenarios as Partial<Record<LeadRecoveryScenarioKey, boolean>>)

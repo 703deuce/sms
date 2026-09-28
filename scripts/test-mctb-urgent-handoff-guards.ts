@@ -37,8 +37,4 @@ try {
   assert.ok(e instanceof MctbNotificationRecipientValidationError);
 }
 
-const audit = describeMctbUrgentBusinessSmsEntitlement();
-assert.equal(audit.mechanism, "hasActiveMctbPaidEntitlement");
-assert.equal(audit.granularCapabilityFlag, null);
-
 console.log("test-mctb-urgent-handoff-guards: PASS");

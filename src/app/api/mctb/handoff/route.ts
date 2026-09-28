@@ -49,6 +49,16 @@ export async function POST(req: Request) {
   };
 
   if (body.action === "set_launch_ai_replies") {
+    if (body.enabled === true) {
+      const { assertMctbCapability } = await import("@/lib/mctb/capabilities");
+      const gate = await assertMctbCapability(workspaceId, "aiRecoveryEntitled");
+      if (!gate.ok) {
+        return NextResponse.json(
+          { error: "AI Recovery requires an AI Recovery plan." },
+          { status: 403 },
+        );
+      }
+    }
     const { applyLaunchAiRepliesSetting } = await import("@/lib/mctb/launch-lead-recovery");
     const result = await applyLaunchAiRepliesSetting(workspaceId, body.enabled === true);
     const config = await loadMctbHandoffConfig(workspaceId);

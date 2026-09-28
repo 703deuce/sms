@@ -1,18 +1,14 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
-import { hasActiveMctbPaidEntitlement } from "@/lib/mctb/entitlement";
-import { isLeadRecoveryAiRepliesEnabled } from "@/lib/mctb/lead-recovery/config";
-import { hasMctbAiBookingEntitlement } from "@/lib/mctb/ai-booking/entitlement";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { validateExistingConsentAttestation } from "@/lib/mctb/capture/attestation";
-import { MCTB_FREE_MONTHLY_RECOVERY_LIMIT } from "@/lib/mctb/recovery-usage-constants";
+import { resolveMctbCommercialEntitlements } from "@/lib/mctb/commercial-entitlements";
 import { getMctbRecoveryUsageSnapshot } from "@/lib/mctb/recovery-usage";
-import { getWorkspaceProductFeatures } from "@/lib/products/feature-entitlements";
-import { isActiveEntitlement } from "@/lib/products/types";
+import { resolveMctbMonthlyRecoveryLimit } from "@/lib/mctb/recovery-usage-constants";
 
 export type MctbCapabilities = {
-  monthlyRecoveryLimit: number | null;
+  monthlyRecoveryLimit: number;
   monthlyRecoveriesUsed: number;
   pressOneConsent: boolean;
   existingConsentCertification: boolean;
@@ -20,7 +16,13 @@ export type MctbCapabilities = {
   urgentClassification: boolean;
   urgentBusinessEmail: boolean;
   urgentBusinessSms: boolean;
+  /** Purchased AI Recovery SKU — not the same as Recovery paid */
+  aiRecoveryEntitled: boolean;
+  /** @deprecated alias — use aiRecoveryEntitled for gates */
   aiRecovery: boolean;
+  /** Purchased own-sender add-on (carrier approval may still be pending) */
+  ownSenderAddOnEntitled: boolean;
+  /** Active when add-on + WORKSPACE mode + carrier verification approved */
   customerOwnedSender: boolean;
   customTemplates: boolean;
   manualTwoWayMessaging: boolean;
@@ -29,6 +31,15 @@ export type MctbCapabilities = {
 };
 
 export type MctbCapabilityKey = keyof MctbCapabilities;
+
+export class MctbCapabilityDeniedError extends Error {
+  readonly capability: MctbCapabilityKey;
+  constructor(capability: MctbCapabilityKey, message?: string) {
+    super(message ?? `MCTB capability not entitled: ${capability}`);
+    this.name = "MctbCapabilityDeniedError";
+    this.capability = capability;
+  }
+}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -53,40 +64,36 @@ async function customerSenderVerificationApproved(workspaceId: string): Promise<
  * instead of scattering `billingPlan === …` checks.
  */
 export async function resolveMctbCapabilities(workspaceId: string): Promise<MctbCapabilities> {
-  const [features, recoveryPaid, config, usage, existingConsent, aiRecoveryEnabled, aiBooking] =
-    await Promise.all([
-      getWorkspaceProductFeatures(workspaceId),
-      hasActiveMctbPaidEntitlement(workspaceId),
-      loadMissedCallTextConfig(workspaceId),
-      getMctbRecoveryUsageSnapshot(workspaceId),
-      validateExistingConsentAttestation(workspaceId),
-      isLeadRecoveryAiRepliesEnabled(workspaceId),
-      hasMctbAiBookingEntitlement(workspaceId),
-    ]);
+  const [commercial, config, usage, existingConsent, ownSenderApproved] = await Promise.all([
+    resolveMctbCommercialEntitlements(workspaceId),
+    loadMissedCallTextConfig(workspaceId),
+    getMctbRecoveryUsageSnapshot(workspaceId),
+    validateExistingConsentAttestation(workspaceId),
+    customerSenderVerificationApproved(workspaceId),
+  ]);
 
-  const mctbProductActive = isActiveEntitlement(features.mctb);
+  const { mctbProductActive, recoveryPaid, aiRecoveryEntitled, ownSenderAddOnEntitled, paidTier } =
+    commercial;
+
   const senderMode = config.senderMode || "WORKSPACE";
-  const platformSenderActive = senderMode === "PLATFORM";
-  const ownSenderApproved = await customerSenderVerificationApproved(workspaceId);
-  const customerOwnedSender = senderMode === "WORKSPACE" && ownSenderApproved;
+  const platformSenderActive =
+    senderMode === "PLATFORM" || (ownSenderAddOnEntitled && !ownSenderApproved);
+  const customerOwnedSender =
+    ownSenderAddOnEntitled && senderMode === "WORKSPACE" && ownSenderApproved;
 
-  const recoveryPaidTier = recoveryPaid && mctbProductActive;
-  const freeTier = mctbProductActive && !recoveryPaid;
-
-  const monthlyRecoveryLimit = freeTier
-    ? MCTB_FREE_MONTHLY_RECOVERY_LIMIT
-    : recoveryPaidTier
-      ? null
-      : 0;
+  const monthlyRecoveryLimit = resolveMctbMonthlyRecoveryLimit({
+    mctbProductActive,
+    recoveryPaid,
+    paidTier,
+  });
 
   const existingConsentCertification =
-    recoveryPaidTier && existingConsent.valid && existingConsent.existingConsentValid;
+    recoveryPaid && existingConsent.valid && existingConsent.existingConsentValid;
 
-  const urgentClassification = recoveryPaidTier;
-  const urgentBusinessEmail = recoveryPaidTier;
-  const urgentBusinessSms = recoveryPaidTier;
-  const bookingLinks = recoveryPaidTier;
-  const aiRecovery = recoveryPaidTier && (aiRecoveryEnabled || aiBooking);
+  const urgentClassification = recoveryPaid;
+  const urgentBusinessEmail = recoveryPaid;
+  const urgentBusinessSms = recoveryPaid;
+  const bookingLinks = recoveryPaid;
 
   const customTemplates = customerOwnedSender;
   const manualTwoWayMessaging = customerOwnedSender;
@@ -100,12 +107,14 @@ export async function resolveMctbCapabilities(workspaceId: string): Promise<Mctb
     urgentClassification,
     urgentBusinessEmail,
     urgentBusinessSms,
-    aiRecovery,
+    aiRecoveryEntitled,
+    aiRecovery: aiRecoveryEntitled,
+    ownSenderAddOnEntitled,
     customerOwnedSender,
     customTemplates,
     manualTwoWayMessaging,
     platformSenderActive,
-    recoveryPaid: recoveryPaidTier,
+    recoveryPaid,
   };
 }
 
@@ -113,7 +122,11 @@ export async function assertMctbCapability(
   workspaceId: string,
   key: Exclude<
     MctbCapabilityKey,
-    "monthlyRecoveryLimit" | "monthlyRecoveriesUsed" | "platformSenderActive" | "recoveryPaid"
+    | "monthlyRecoveryLimit"
+    | "monthlyRecoveriesUsed"
+    | "platformSenderActive"
+    | "recoveryPaid"
+    | "aiRecovery"
   >,
 ): Promise<{ ok: true; capabilities: MctbCapabilities } | { ok: false; capabilities: MctbCapabilities }> {
   const capabilities = await resolveMctbCapabilities(workspaceId);
@@ -121,4 +134,22 @@ export async function assertMctbCapability(
     return { ok: false, capabilities };
   }
   return { ok: true, capabilities };
+}
+
+export async function requireMctbCapability(
+  workspaceId: string,
+  key: Exclude<
+    MctbCapabilityKey,
+    | "monthlyRecoveryLimit"
+    | "monthlyRecoveriesUsed"
+    | "platformSenderActive"
+    | "recoveryPaid"
+    | "aiRecovery"
+  >,
+): Promise<MctbCapabilities> {
+  const gate = await assertMctbCapability(workspaceId, key);
+  if (!gate.ok) {
+    throw new MctbCapabilityDeniedError(key);
+  }
+  return gate.capabilities;
 }

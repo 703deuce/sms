@@ -44,6 +44,17 @@ export async function POST(request: Request) {
 
     const existing = await loadLeadRecoveryConfig(auth.workspaceId);
 
+    if (enabled) {
+      const { assertMctbCapability } = await import("@/lib/mctb/capabilities");
+      const gate = await assertMctbCapability(auth.workspaceId, "aiRecoveryEntitled");
+      if (!gate.ok) {
+        return NextResponse.json(
+          { error: "AI Recovery requires an AI Recovery plan." },
+          { status: 403 },
+        );
+      }
+    }
+
     if (!enabled) {
       await applyLaunchAiRepliesSetting(auth.workspaceId, false);
       const disabledConfig = await loadLeadRecoveryConfig(auth.workspaceId);
