@@ -27,8 +27,6 @@ import {
   DialogTitle,
 } from "@/newui-transplant/components/ui/dialog";
 
-const setupSectionPageClass = "max-w-none px-0 py-0 md:px-0 md:py-0";
-
 function useTabParam(name: string, allowed: string[], fallback: string) {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -66,7 +64,7 @@ export function NewUiMctbMissedCallRecoveryPage() {
   }, []);
 
   return (
-    <Page className={setupSectionPageClass}>
+    <Page>
       <PageHeader
         title="Missed-Call Recovery"
         description="When unanswered calls should trigger recovery texts, consent, and exclusions."
@@ -119,7 +117,7 @@ export function NewUiMctbTextBackPage() {
   }, [bookingRef]);
 
   return (
-    <Page className={setupSectionPageClass}>
+    <Page>
       <PageHeader
         title="Text Back"
         description="Recovery message and booking link callers receive after a missed call."
@@ -144,7 +142,7 @@ export function NewUiMctbTextBackPage() {
 
 export function NewUiMctbNotificationsDirectPage() {
   return (
-    <Page className={setupSectionPageClass}>
+    <Page>
       <PageHeader
         title="Notifications"
         description="Where your team is notified when callers reply or urgent messages are detected."
@@ -165,7 +163,7 @@ export function NewUiMctbPhoneForwardingPage() {
 
   return (
     <>
-      <Page className={setupSectionPageClass}>
+      <Page>
         <PageHeader
           title="Phone & Forwarding"
           description="Business line, call forwarding, text-back sender, and connection test."

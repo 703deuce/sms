@@ -77,8 +77,9 @@ export function MctbFirstRunWizardHost() {
       }}
     >
       <DialogContent
-        className="flex h-[min(760px,calc(100vh-48px))] w-[min(920px,calc(100vw-48px))] max-w-none flex-col overflow-hidden gap-0 p-0 sm:max-w-none"
-        showCloseButton={true}
+        className="flex h-[min(760px,calc(100vh-64px))] w-[min(760px,calc(100vw-48px))] max-w-none flex-col overflow-hidden gap-0 p-0 sm:max-w-none"
+        overlayClassName="bg-black/40 supports-backdrop-filter:backdrop-blur-[2px]"
+        showCloseButton={policy?.trigger === "setup_guide"}
       >
         <DialogHeader className="sr-only">
           <DialogTitle>{title}</DialogTitle>

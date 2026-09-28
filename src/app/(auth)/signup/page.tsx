@@ -13,6 +13,7 @@ import {
   navigateAfterAuth,
   voiceProductOpenPath,
 } from "@/lib/auth/post-login-navigation";
+import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
 
 type WorkspaceChoice = "PERSONAL" | "BUSINESS";
 
@@ -50,7 +51,11 @@ function SignupForm() {
   const productParam = params.get("product");
   const isMassTextSignup = productParam === "mass_texting" || productParam === "sms";
   const productNext = voiceProductNext(productParam);
-  const defaultNext = numbersPlatformOnly ? "/personal" : "/onboarding/mctb";
+  const defaultNext = numbersPlatformOnly
+    ? "/personal"
+    : isNewUiStage2Enabled()
+      ? "/mctb"
+      : "/onboarding/mctb";
   const resolvedNext = params.get("next") || productNext || defaultNext;
   const displayNext = clientSafeNextPath(resolvedNext, defaultNext);
   const reservationId = useMemo(() => reservationFromNext(params.get("next")), [params]);

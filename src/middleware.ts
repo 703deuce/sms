@@ -243,7 +243,8 @@ export async function middleware(request: NextRequest) {
       return siteRedirect(request, `/api/products/open?product=${product}`);
     }
     if (product === "mctb") {
-      return siteRedirect(request, "/onboarding/mctb");
+      const stage2 = process.env.NEXT_PUBLIC_NEWUI_STAGE2 !== "0";
+      return siteRedirect(request, stage2 ? "/mctb" : "/onboarding/mctb");
     }
     const productKeys = parseProductAccessCookie(
       request.cookies.get(PRODUCT_ACCESS_COOKIE)?.value,

@@ -104,31 +104,40 @@ export function MctbOnboardingOpusView({ controller: c }: { controller: MctbOnbo
 
   if (c.step === "ready") {
     const messagingPending = !c.tfvApproved;
+    const inModal = c.presentation === "modal";
     return (
-      <div className="mx-auto w-full max-w-3xl px-4 py-8">
-        <Panel>
+      <div
+        className={
+          inModal
+            ? "flex min-h-0 flex-1 flex-col items-center justify-center px-6 py-10"
+            : "mx-auto w-full max-w-3xl px-4 py-8"
+        }
+      >
+        <Panel className={inModal ? "w-full max-w-lg" : undefined}>
           <EmptyState
             icon={CheckCircle2}
             title="You're ready"
             description={
               messagingPending
                 ? "Call handling is ready. Messaging verification is still pending — automatic recovery texts will send when approved."
-                : "Your missed-call recovery setup is complete."
+                : "Your missed-call recovery is active."
             }
             action={
               <div className="flex flex-wrap justify-center gap-2">
                 <Button
                   type="button"
                   onClick={() => {
-                    if (c.presentation === "modal" && c.onFinished) c.onFinished();
+                    if (inModal && c.onFinished) c.onFinished();
                     else c.router.push(MCTB_ROUTES.home);
                   }}
                 >
-                  Go to Missed Calls
+                  Go to Overview
                 </Button>
-                <Button type="button" variant="outline" asChild>
-                  <Link href={MCTB_ROUTES.setup}>Review setup</Link>
-                </Button>
+                {!inModal ? (
+                  <Button type="button" variant="outline" asChild>
+                    <Link href={MCTB_ROUTES.phone}>Review phone &amp; forwarding</Link>
+                  </Button>
+                ) : null}
               </div>
             }
           />

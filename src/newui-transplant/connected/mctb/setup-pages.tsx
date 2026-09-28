@@ -140,11 +140,9 @@ export function NewUiMctbSetupPhonePage() {
   );
 }
 
-const setupSectionPageClass = "max-w-none px-0 py-0 md:px-0 md:py-0";
-
 export function NewUiMctbSetupConsentPage() {
   return (
-    <Page className={setupSectionPageClass}>
+    <Page>
       <PageHeader title="Consent" description="How callers give permission to receive recovery texts." />
       <ConsentEditor />
     </Page>
@@ -153,7 +151,7 @@ export function NewUiMctbSetupConsentPage() {
 
 export function NewUiMctbSetupTextBackPage() {
   return (
-    <Page className={setupSectionPageClass}>
+    <Page>
       <PageHeader title="Text Back" description="Recovery message customers receive after a missed call." />
       <TextBackEditor />
     </Page>
@@ -177,7 +175,7 @@ export function NewUiMctbSetupMissedCallRulesPage({ embedded }: { embedded?: boo
   );
   if (embedded) return body;
   return (
-    <Page className={setupSectionPageClass}>
+    <Page>
       <PageHeader title="Missed-call rules" description="Which call outcomes create a missed-call recovery event." />
       {body}
     </Page>
@@ -375,7 +373,7 @@ export function NewUiMctbSetupNotificationsPage() {
 
 export function NewUiMctbSetupExclusionsPage() {
   return (
-    <Page className={setupSectionPageClass}>
+    <Page>
       <PageHeader title="Exclusions" description="Numbers that should never receive automated recovery texts." />
       <ExclusionsTable />
     </Page>
@@ -384,7 +382,7 @@ export function NewUiMctbSetupExclusionsPage() {
 
 export function NewUiMctbSetupLinksPage() {
   return (
-    <Page className={setupSectionPageClass}>
+    <Page>
       <PageHeader title="Links & request form" description="Booking URLs, {{link}} variable, and optional public request form." />
       <MctbSetupLinksEditor />
     </Page>

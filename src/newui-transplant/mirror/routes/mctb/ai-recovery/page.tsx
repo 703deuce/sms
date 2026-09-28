@@ -6,10 +6,12 @@ import { Label } from '@/newui-transplant/components/ui/label'
 import { SaveBar } from '@/newui-transplant/components/app/save-bar'
 import { BUSINESS } from '@/newui-transplant/lib/sandbox-data'
 import type { AiRecoverySimplifiedField } from '@/lib/mctb/ai-recovery/simplified-fields'
+import { formatAiRecoverySenderDescription } from '@/lib/mctb/ai-recovery/sender-copy'
 
 export type MctbAiRecoveryWired = {
   enabled?: boolean
   senderLabel?: string
+  senderE164?: string | null
   businessName?: string
   services?: string
   serviceArea?: string
@@ -50,7 +52,10 @@ const COLLECT: Array<{
 
 export function TransplantMctbAiRecoveryPage({ wired }: { wired?: MctbAiRecoveryWired }) {
   const live = wired !== undefined
-  const sender = wired?.senderLabel ?? (live ? '—' : BUSINESS.sender)
+  const senderDescription = formatAiRecoverySenderDescription(
+    wired?.senderLabel ?? (live ? null : BUSINESS.sender),
+    wired?.senderE164,
+  )
   const enabled = wired?.enabled ?? (live ? false : true)
   const fields = wired?.fields
   const bookingOn = wired?.bookingLinkEnabled ?? (live ? false : true)
@@ -69,7 +74,7 @@ export function TransplantMctbAiRecoveryPage({ wired }: { wired?: MctbAiRecovery
           <Panel>
             <FieldRow
               label="AI Recovery"
-              description={`AI replies from your text-back sender ${sender}. Your team can take over any time from the Inbox.`}
+              description={senderDescription}
             >
               <Switch
                 checked={enabled}

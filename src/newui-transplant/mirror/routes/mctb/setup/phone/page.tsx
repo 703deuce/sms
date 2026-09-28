@@ -53,6 +53,10 @@ export type MctbSetupPhoneWired = {
   businessLineInput?: string
   businessLineError?: string | null
   onBusinessLineChange?: (value: string) => void
+  forwardingDestinationReady?: boolean
+  forwardingInstructionsEnabled?: boolean
+  forwardingVerifyEnabled?: boolean
+  forwardingInstructionsPendingMessage?: string
 }
 
 const CARRIERS = ['Verizon', 'AT&T', 'T-Mobile', 'Comcast Business', 'RingCentral', 'Other']
@@ -69,8 +73,16 @@ export function TransplantMctbSetupPhonePage({ wired }: { wired?: MctbSetupPhone
   const carrierValue = wired?.carrierId ?? carrierOptions[0]?.value ?? 'Verizon'
   const ringOptions = wired?.ringOptions ?? RING
   const ringValue = wired?.ringSeconds ?? '20'
-  const steps = live ? (wired?.instructionSteps ?? []) : []
-  const dialCode = wired?.dialCode ?? (live ? '—' : '—')
+  const instructionsEnabled = wired?.forwardingInstructionsEnabled ?? !live
+  const verifyEnabled = wired?.forwardingVerifyEnabled ?? !live
+  const steps = live && instructionsEnabled ? (wired?.instructionSteps ?? []) : []
+  const dialCode =
+    live && instructionsEnabled ? (wired?.dialCode ?? '—') : live ? '—' : '—'
+  const instructionsPending =
+    live && !instructionsEnabled
+      ? wired?.forwardingInstructionsPendingMessage ??
+        'Add your business line and wait for your Transovo forwarding number before changing carrier forwarding.'
+      : null
   const verificationTone = wired?.verificationPillTone ?? 'warning'
   const verificationLabel = wired?.verificationPillLabel ?? (live ? 'Not verified' : 'Verified')
   const senderOptions = wired?.senderOptions ?? []
@@ -147,15 +159,23 @@ export function TransplantMctbSetupPhonePage({ wired }: { wired?: MctbSetupPhone
       </Panel>
 
       <Panel title="Forwarding instructions" description={wired?.instructionTitle ?? 'Conditional call forwarding'}>
-        <ol className="flex flex-col gap-3 text-sm">
-          {steps.map((step, i) => (
-            <li key={`${i}-${step.slice(0, 24)}`} className="flex gap-3">
-              <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-medium">{i + 1}</span>
-              <span className="text-pretty">{step}</span>
-            </li>
-          ))}
-        </ol>
-        <p className="mt-4 rounded-md bg-muted px-3 py-2 font-mono text-sm">{dialCode}</p>
+        {instructionsPending ? (
+          <p className="text-sm text-muted-foreground">{instructionsPending}</p>
+        ) : (
+          <>
+            <ol className="flex flex-col gap-3 text-sm">
+              {steps.map((step, i) => (
+                <li key={`${i}-${step.slice(0, 24)}`} className="flex gap-3">
+                  <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-medium">{i + 1}</span>
+                  <span className="text-pretty">{step}</span>
+                </li>
+              ))}
+            </ol>
+            {dialCode !== '—' ? (
+              <p className="mt-4 rounded-md bg-muted px-3 py-2 font-mono text-sm">{dialCode}</p>
+            ) : null}
+          </>
+        )}
       </Panel>
 
       <Panel title="Verification" action={<Pill tone={verificationTone}>{verificationLabel}</Pill>}>
@@ -173,10 +193,16 @@ export function TransplantMctbSetupPhonePage({ wired }: { wired?: MctbSetupPhone
           variant="outline"
           size="sm"
           className="mt-4"
+          disabled={live && !verifyEnabled}
           onClick={() => void wired?.onVerifyAgain?.()}
         >
           I&apos;ve turned it on — verify again
         </Button>
+        {live && !verifyEnabled ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Verification unlocks once your Transovo forwarding number is ready and your business line is saved.
+          </p>
+        ) : null}
       </Panel>
 
       <Panel

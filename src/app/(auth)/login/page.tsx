@@ -14,6 +14,7 @@ import {
 } from "@/lib/auth/post-login-navigation";
 import { isMctbV1Primary } from "@/lib/workspace/platform-launch";
 import { mctbShellHome } from "@/lib/products/product-shell";
+import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
 
 function reservationFromNext(nextPath: string | null): string | undefined {
   if (!nextPath) return undefined;
@@ -27,7 +28,7 @@ function reservationFromNext(nextPath: string | null): string | undefined {
 
 function voiceProductNext(product: string | null): string | null {
   if (product === "numbers") return "/personal";
-  if (product === "mctb") return "/onboarding/mctb";
+  if (product === "mctb") return isNewUiStage2Enabled() ? "/mctb" : "/onboarding/mctb";
   if (product === "voice") return isMctbV1Primary() ? mctbShellHome() : "/dashboard";
   if (product === "mass_texting" || product === "sms") {
     return "/api/products/open?product=mass_texting";

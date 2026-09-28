@@ -112,7 +112,7 @@ export function TextBackEditor({
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,7fr)_minmax(240px,3fr)] lg:items-start">
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-card px-4 py-3 text-sm">
           <span className="text-muted-foreground">Consent mode:</span>

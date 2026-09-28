@@ -24,7 +24,7 @@ export function NewUiMctbAiRecoveryPage() {
   const [loading, setLoading] = useState(true);
   const [meta, setMeta] = useState<Pick<
     MctbAiRecoveryWired,
-    "senderLabel" | "businessName" | "services" | "serviceArea" | "hours"
+    "senderLabel" | "senderE164" | "businessName" | "services" | "serviceArea" | "hours"
   > | null>(null);
   const [enabled, setEnabled] = useState(false);
   const [fields, setFields] = useState(DEFAULT_FIELDS);
@@ -37,14 +37,24 @@ export function NewUiMctbAiRecoveryPage() {
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const ctxRes = await fetch("/api/mctb/ai-recovery/context", { cache: "no-store" });
+      const [ctxRes, setupRes] = await Promise.all([
+        fetch("/api/mctb/ai-recovery/context", { cache: "no-store" }),
+        fetch("/api/mctb/setup", { cache: "no-store" }).catch(() => null),
+      ]);
       if (!ctxRes.ok) return;
       const ctxJson = await ctxRes.json();
       const data = ctxJson.data ?? ctxJson;
+      const setupJson = setupRes?.ok ? await setupRes.json().catch(() => null) : null;
+      const setupData = setupJson?.data ?? setupJson;
+      const senderE164 =
+        (setupData?.messaging as { senderE164?: string } | undefined)?.senderE164 ??
+        (setupData?.runtime as { smsPhoneE164?: string } | undefined)?.smsPhoneE164 ??
+        null;
       const bookingLinks = Array.isArray(data.booking?.links) ? data.booking.links : [];
 
       setMeta({
         senderLabel: data.messaging?.senderLabel,
+        senderE164: senderE164 || null,
         businessName: data.business?.name,
         services: data.business?.services?.join(", "),
         serviceArea: data.business?.serviceArea,

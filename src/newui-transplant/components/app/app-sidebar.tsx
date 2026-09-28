@@ -20,7 +20,10 @@ import {
   SidebarMenuSubItem,
   SidebarRail,
 } from '@/newui-transplant/components/ui/sidebar'
-import { mctbLaunchCustomerHome } from '@/lib/products/launch-product-availability'
+import {
+  isVoiceProductCustomerVisible,
+  mctbLaunchCustomerHome,
+} from '@/lib/products/launch-product-availability'
 import { resolveCustomerNavSections, type NavItem, type NavSubItem } from '@/newui-transplant/lib/nav'
 import { useOpusWorkspaceData, workspaceInitials } from '@/newui-transplant/context/opus-workspace-data'
 import {
@@ -161,20 +164,22 @@ export function AppSidebar({ userName }: { userName?: string }) {
         ))}
       </SidebarContent>
 
-      <SidebarFooter className="px-3 pb-4 group-data-[collapsible=icon]:hidden">
-        <div className="rounded-lg border border-sidebar-border bg-sidebar-accent/40 p-3">
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-medium text-sidebar-accent-foreground">AI minutes</span>
-            <span className="text-sidebar-foreground/70">1,284 / 2,000</span>
+      {isVoiceProductCustomerVisible() ? (
+        <SidebarFooter className="px-3 pb-4 group-data-[collapsible=icon]:hidden">
+          <div className="rounded-lg border border-sidebar-border bg-sidebar-accent/40 p-3">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-medium text-sidebar-accent-foreground">AI minutes</span>
+              <span className="text-sidebar-foreground/70">1,284 / 2,000</span>
+            </div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-sidebar-border">
+              <div className="h-full w-[64%] rounded-full bg-sidebar-primary" />
+            </div>
+            <Link href="/settings/billing" className="mt-2 inline-block text-[11px] text-sidebar-primary hover:underline">
+              Manage plan
+            </Link>
           </div>
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-sidebar-border">
-            <div className="h-full w-[64%] rounded-full bg-sidebar-primary" />
-          </div>
-          <Link href="/settings/billing" className="mt-2 inline-block text-[11px] text-sidebar-primary hover:underline">
-            Manage plan
-          </Link>
-        </div>
-      </SidebarFooter>
+        </SidebarFooter>
+      ) : null}
       <SidebarRail />
     </Sidebar>
   )

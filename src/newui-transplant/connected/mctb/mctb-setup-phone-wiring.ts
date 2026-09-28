@@ -264,6 +264,9 @@ export function useMctbSetupPhoneWiring(): {
       })),
     ];
 
+    const forwardReady = Boolean(forwardTarget);
+    const forwardActionsReady = forwardReady && Boolean(businessLineE164);
+
     return {
       businessLine: businessLineE164 ? formatMctbPhoneLabel(businessLineE164) : "Not configured",
       businessLineMeta: "Customers call this number",
@@ -284,6 +287,16 @@ export function useMctbSetupPhoneWiring(): {
       instructionTitle: `${carrierGuide.label} · conditional call forwarding`,
       instructionSteps,
       dialCode: dialCode || "—",
+      forwardingDestinationReady: forwardReady,
+      forwardingInstructionsEnabled: forwardActionsReady,
+      forwardingVerifyEnabled: forwardActionsReady,
+      forwardingInstructionsPendingMessage: !forwardReady
+        ? phoneNumberId
+          ? "Your Transovo forwarding number is still provisioning. Carrier instructions will appear when it is ready."
+          : "Complete phone setup to receive a Transovo forwarding number before configuring call forwarding."
+        : !businessLineE164
+          ? "Save your business line to see carrier-specific forwarding instructions."
+          : undefined,
       verificationPillLabel: connectionStatusLabel(connection),
       verificationPillTone:
         connection === "verified" ? "success" : connection === "failed" ? "warning" : "warning",
