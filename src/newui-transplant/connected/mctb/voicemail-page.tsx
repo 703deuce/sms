@@ -47,7 +47,17 @@ export function NewUiMctbVoicemailPage({ numberId }: { numberId?: string }) {
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading voicemail…</p>
       ) : (
-        <VoicemailBrowser voicemails={voicemails} />
+        <VoicemailBrowser
+          voicemails={voicemails}
+          onMarkReviewed={async (messageId) => {
+            await fetch("/api/phone/voicemail", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "mark_resolved", messageId }),
+            });
+            load();
+          }}
+        />
       )}
     </Page>
   );

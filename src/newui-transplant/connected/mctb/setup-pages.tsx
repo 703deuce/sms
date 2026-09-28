@@ -135,7 +135,7 @@ export function NewUiMctbSetupMissedCallRulesPage() {
             on: t.on,
             onChange: t.setOn,
           })),
-          onSave: recovery.save,
+          onSave: recovery.saveTriggerRulesOnly,
         }}
       />
     </Page>

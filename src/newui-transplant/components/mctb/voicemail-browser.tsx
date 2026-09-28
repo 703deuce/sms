@@ -10,7 +10,13 @@ import { ButtonLink } from '@/newui-transplant/components/app/button-link'
 import type { Voicemail } from '@/newui-transplant/lib/view-models'
 import { cn } from '@/lib/utils'
 
-export function VoicemailBrowser({ voicemails: voicemailsProp }: { voicemails?: Voicemail[] }) {
+export function VoicemailBrowser({
+  voicemails: voicemailsProp,
+  onMarkReviewed,
+}: {
+  voicemails?: Voicemail[]
+  onMarkReviewed?: (id: string) => Promise<void>
+}) {
   const source = voicemailsProp ?? []
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState(source[0]?.id)
@@ -87,6 +93,16 @@ export function VoicemailBrowser({ voicemails: voicemailsProp }: { voicemails?: 
             >
               <MessageSquare /> Open conversation
             </Button>
+            {onMarkReviewed && selected.isNew ? (
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                onClick={() => void onMarkReviewed(selected.id)}
+              >
+                Mark reviewed
+              </Button>
+            ) : null}
           </header>
 
           <div>

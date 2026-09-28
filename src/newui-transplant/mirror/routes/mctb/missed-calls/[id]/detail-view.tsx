@@ -123,6 +123,15 @@ export function TransplantMctbMissedCallDetailView({ wired }: { wired: MctbMisse
                 aria-label="Voicemail recording"
                 src={wired.voicemailRecordingSrc}
               />
+              {wired.voicemailSummary ? (
+                <p className="mt-3 text-sm text-muted-foreground">
+                  <span className="font-medium text-foreground">AI summary: </span>
+                  {wired.voicemailSummary}
+                </p>
+              ) : null}
+              {wired.voicemailTranscript ? (
+                <p className="mt-2 text-sm leading-relaxed">{wired.voicemailTranscript}</p>
+              ) : null}
               {wired.voicemailId ? (
                 <Link href={`/mctb/voicemail/${wired.voicemailId}`} className="mt-2 inline-block text-xs font-medium text-primary hover:underline">Open in Voicemail</Link>
               ) : null}

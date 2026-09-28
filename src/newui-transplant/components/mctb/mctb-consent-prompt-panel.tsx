@@ -177,8 +177,10 @@ export function MctbConsentPromptPanel({ phoneNumberId, disabled }: Props) {
         </Button>
         <SaveBar
           label="Publish disclosure"
-          disabled={disabled || !status?.canPublish || busy === 'publish'}
-          onSave={publish}
+          onSave={async () => {
+            if (disabled || !status?.canPublish) return
+            await publish()
+          }}
         />
       </div>
     </Panel>

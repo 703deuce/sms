@@ -65,6 +65,7 @@ export default async function MctbConversationsPage({
           initialConversationId={initialConversationId}
           initialContactId={initialContactId}
           initialDraft={initialDraft}
+          mctbInboxContext
         />
       </div>
     </Suspense>

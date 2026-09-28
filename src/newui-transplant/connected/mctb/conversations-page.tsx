@@ -18,6 +18,7 @@ import {
 } from "@/lib/inbox/kimi-inbox-adapter";
 import { fetchMctbSetup } from "@/lib/newui-transplant/api/mctb-setup-client";
 import type { MctbCapabilities } from "@/lib/mctb/capabilities";
+import { MCTB_PLATFORM_SENDER_MANUAL_REPLY_MESSAGE } from "@/lib/mctb/inbox-manual-reply-gate";
 
 type InboxFilter = "All" | "Needs reply" | "Mine" | "Unassigned" | "Closed" | "Spam";
 
@@ -169,9 +170,7 @@ export function NewUiMctbConversationsPage({
         hydratedIds.current.add(conversationId);
       },
       composerDisabled: !manualTwoWay,
-      composerDisabledReason: manualTwoWay
-        ? undefined
-        : "Manual replies are locked while Transovo Platform sender is active. Automated recovery and system messages still send. Use your own verified sender to reply from this inbox.",
+      composerDisabledReason: manualTwoWay ? undefined : MCTB_PLATFORM_SENDER_MANUAL_REPLY_MESSAGE,
     }),
     [filter, conversations, loadList, hydrateThread, manualTwoWay],
   );

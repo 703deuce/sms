@@ -1,5 +1,6 @@
+import { formatSuppressionReasonLabel } from "@/lib/mctb/analytics-suppression-labels";
 import { classificationToTriggerLabel } from "@/lib/mctb/missed-calls-list-filters";
-import { formatRecoveryStatus, formatReplyStatus } from "@/lib/mctb/recovery-display";
+import { formatConsentModeLabel, formatRecoveryStatus, formatReplyStatus } from "@/lib/mctb/recovery-display";
 import { formatMctbPhoneLabel } from "@/lib/mctb/phone-display";
 import type { RecoveryStatus } from "@/newui-transplant/lib/view-models";
 
@@ -24,6 +25,8 @@ export type MctbMissedCallDetailWired = {
   showVoicemail: boolean;
   voicemailId?: string;
   voicemailRecordingSrc?: string;
+  voicemailSummary?: string | null;
+  voicemailTranscript?: string | null;
   senderLabel?: string;
   diagnostics: string;
 };
@@ -44,6 +47,20 @@ function toRecoveryStatus(status: string, suppressionReason: string | null): Rec
   return "Sent";
 }
 
+function fmtWhen(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  } catch {
+    return "—";
+  }
+}
+
 export function buildMctbMissedCallDetailWired(
   json: Record<string, unknown>,
   extras?: { senderLabel?: string },
@@ -51,30 +68,45 @@ export function buildMctbMissedCallDetailWired(
   const event = json.event as Record<string, unknown> | undefined;
   if (!event) return null;
 
-  const timeline = json.timeline as { consentMode?: string; steps?: Array<{ label: string; status: string; at?: string | null }> } | undefined;
+  const timeline = json.timeline as {
+    consentMode?: string;
+    traceId?: string | null;
+    steps?: Array<{ label: string; status: string; at?: string | null }>;
+  } | undefined;
   const conversation = json.conversation as {
     id: string;
     messages?: Array<{ body: string; direction: string }>;
   } | null;
-  const consent = json.consent as Record<string, unknown> | null;
+  const consent = json.consent as {
+    consentedAt?: string;
+    consentMethod?: string;
+    consentMode?: string | null;
+    consentScope?: string;
+  } | null;
   const contact = json.contact as { firstName?: string | null; lastName?: string | null } | null;
-  const linkClicks = (json.linkClicks as Array<{ destinationUrl: string | null }>) ?? [];
-  const formSubmissions = (json.formSubmissions as Array<unknown>) ?? [];
-  const voicemail = json.voicemail as { id: string } | null;
+  const linkClicks = (json.linkClicks as Array<{ destinationUrl: string | null; createdAt?: string }>) ?? [];
+  const formSubmissions = (json.formSubmissions as Array<{ submittedAt?: string }>) ?? [];
+  const voicemail = json.voicemail as {
+    id: string;
+    transcriptText?: string | null;
+    aiSummary?: string | null;
+    transcriptStatus?: string | null;
+  } | null;
+  const repeatCaller = json.repeatCaller as { total: number; missedToday: number } | null;
 
   const callerE164 = String(event.callerE164 || "");
   const phone = formatMctbPhoneLabel(callerE164);
   const name = [contact?.firstName, contact?.lastName].filter(Boolean).join(" ").trim();
   const caller = name || phone;
   const detectedAt = String(event.detectedAt || "");
-  const missed = detectedAt
-    ? new Date(detectedAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
-    : "—";
+  const missed = fmtWhen(detectedAt);
 
   const status = String(event.status || "");
   const suppressionReason = (event.suppressionReason as string | null) ?? null;
   const recovery = toRecoveryStatus(status, suppressionReason);
-  const trigger = classificationToTriggerLabel(String(event.classification || event.trigger || "NO_ANSWER"));
+  const trigger = classificationToTriggerLabel(
+    String(event.classification || event.trigger || event.disposition || "NO_ANSWER"),
+  );
   const reply = formatReplyStatus(status) === "Replied";
 
   const stepsFromApi = timeline?.steps ?? [];
@@ -82,13 +114,30 @@ export function buildMctbMissedCallDetailWired(
     stepsFromApi.length > 0
       ? stepsFromApi.map((s) => ({
           label: s.label,
-          detail: s.at ? new Date(s.at).toLocaleString() : s.status,
+          detail: s.at ? fmtWhen(s.at) : s.status,
           done: s.status === "complete",
         }))
       : [
           { label: "Call missed", detail: `${trigger} · ${missed}`, done: true },
-          { label: "Consent", detail: recovery === "Waiting for consent" ? "Waiting for caller to press 1" : "Captured", done: recovery !== "Waiting for consent" },
-          { label: "Recovery text", detail: recovery === "Suppressed" ? "Not sent" : "Delivered", done: recovery !== "Suppressed" && recovery !== "Waiting for consent" },
+          {
+            label: "Consent",
+            detail: recovery === "Waiting for consent" ? "Waiting for caller to press 1" : "Captured",
+            done: recovery !== "Waiting for consent",
+          },
+          {
+            label: "Recovery text",
+            detail:
+              recovery === "Suppressed"
+                ? suppressionReason
+                  ? formatSuppressionReasonLabel(suppressionReason)
+                  : "Not sent"
+                : recovery === "Failed"
+                  ? "Failed to deliver"
+                  : recovery === "Waiting for consent"
+                    ? "Waiting"
+                    : "Sent",
+            done: recovery !== "Suppressed" && recovery !== "Waiting for consent" && recovery !== "Failed",
+          },
           { label: "Reply", detail: reply ? "Customer replied" : "No reply yet", done: reply },
         ];
 
@@ -110,9 +159,67 @@ export function buildMctbMissedCallDetailWired(
         : "No links sent.";
 
   const requestForm =
-    formSubmissions.length > 0 ? "Request form submitted." : "No request form submitted.";
+    formSubmissions.length > 0
+      ? `Request form submitted${formSubmissions[0]?.submittedAt ? ` · ${fmtWhen(formSubmissions[0].submittedAt)}` : ""}.`
+      : "No request form submitted.";
 
-  const consentMode = timeline?.consentMode === "existing_consent" ? "Existing permission" : "Press 1";
+  const consentModeRaw = timeline?.consentMode ?? consent?.consentMode ?? "press_1";
+  const consentModeLabel = formatConsentModeLabel(String(consentModeRaw));
+
+  const repeatLabel =
+    repeatCaller && (repeatCaller.missedToday > 1 || repeatCaller.total > 0)
+      ? repeatCaller.missedToday > 1
+        ? `${repeatCaller.missedToday} missed calls today`
+        : `${repeatCaller.total} prior missed call(s)`
+      : null;
+
+  const textBackRows: Array<{ label: string; value: string }> = [
+    { label: "Delivery", value: formatRecoveryStatus(status, suppressionReason) },
+    { label: "Consent", value: consentModeLabel },
+  ];
+  if (suppressionReason) {
+    textBackRows.push({
+      label: "Suppression reason",
+      value: formatSuppressionReasonLabel(suppressionReason),
+    });
+  }
+  const scheduledAt = event.scheduledSmsAt as string | undefined;
+  const sentAt = event.smsSentAt as string | undefined;
+  if (scheduledAt) textBackRows.push({ label: "Scheduled", value: fmtWhen(scheduledAt) });
+  if (sentAt) textBackRows.push({ label: "Sent", value: fmtWhen(sentAt) });
+
+  const consentRows: Array<{ label: string; value: string }> = [
+    { label: "Mode", value: consentModeLabel },
+    {
+      label: "Status",
+      value: recovery === "Waiting for consent" ? "Pending" : consent ? "Captured" : "Granted",
+    },
+  ];
+  if (consent?.consentedAt) {
+    consentRows.push({ label: "Captured", value: fmtWhen(consent.consentedAt) });
+  }
+  if (consent?.consentScope) {
+    consentRows.push({ label: "Scope", value: consent.consentScope });
+  }
+
+  const callDetailsRows: Array<{ label: string; value: string }> = [
+    { label: "Trigger", value: trigger },
+    {
+      label: "Business line",
+      value: formatMctbPhoneLabel(String(event.businessE164 || event.businessLineE164 || "—")),
+    },
+    { label: "Missed", value: missed },
+  ];
+  if (repeatLabel) callDetailsRows.push({ label: "Repeat caller", value: repeatLabel });
+
+  const traceId = timeline?.traceId ? String(timeline.traceId) : "";
+  const diagnosticsLines = [
+    `event_id: ${event.id}`,
+    `status: ${status}`,
+    suppressionReason ? `suppression: ${suppressionReason}` : null,
+    traceId ? `trace_id: ${traceId}` : null,
+    consent ? "consent: loaded" : "consent: none",
+  ].filter(Boolean);
 
   return {
     id: String(event.id),
@@ -129,30 +236,17 @@ export function buildMctbMissedCallDetailWired(
     conversationId: conversation?.id,
     messages,
     lifecycleSteps,
-    textBackRows: [
-      { label: "Delivery", value: formatRecoveryStatus(status, suppressionReason) },
-      { label: "Consent", value: consentMode },
-    ],
+    textBackRows,
     linkActivity,
     requestForm,
-    callDetailsRows: [
-      { label: "Trigger", value: trigger },
-      {
-        label: "Business line",
-        value: formatMctbPhoneLabel(String(event.businessE164 || event.businessLineE164 || "—")),
-      },
-    ],
-    consentRows: [
-      { label: "Mode", value: consentMode },
-      {
-        label: "Status",
-        value: recovery === "Waiting for consent" ? "Pending" : "Granted",
-      },
-    ],
+    callDetailsRows,
+    consentRows,
     showVoicemail: Boolean(voicemail?.id),
     voicemailId: voicemail?.id,
     voicemailRecordingSrc: voicemail?.id ? `/api/phone/voicemail/${voicemail.id}/recording` : undefined,
+    voicemailSummary: voicemail?.aiSummary ?? null,
+    voicemailTranscript: voicemail?.transcriptText ?? null,
     senderLabel: extras?.senderLabel,
-    diagnostics: `event_id: ${event.id}\nstatus: ${status}\nconsent: ${consent ? "loaded" : "none"}`,
+    diagnostics: diagnosticsLines.join("\n"),
   };
 }

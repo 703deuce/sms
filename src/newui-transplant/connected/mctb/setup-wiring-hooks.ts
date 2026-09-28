@@ -73,6 +73,20 @@ export function useMctbRecoveryWiring() {
     await reload();
   }, [phoneNumberId, triggers, cooldownMinutes, delaySeconds, maxMessages, reload]);
 
+  const saveTriggerRulesOnly = useCallback(async () => {
+    await saveMctbSetup({
+      triggerRules: {
+        noAnswer: triggers.noAnswer,
+        busy: triggers.busy,
+        rejected: triggers.rejected,
+        timeout: triggers.timeout,
+        voicemail: triggers.voicemail,
+      },
+      activate: false,
+    });
+    await reload();
+  }, [triggers, reload]);
+
   const resumeRecovery = useCallback(async () => {
     await saveMctbSetup({ enabled: true, pauseUntil: null });
     await reload();
@@ -112,6 +126,7 @@ export function useMctbRecoveryWiring() {
     maxMessages,
     setMaxMessages,
     save,
+    saveTriggerRulesOnly,
     pausePreset,
     resumeRecovery,
   };

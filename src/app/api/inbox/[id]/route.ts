@@ -142,6 +142,21 @@ export async function PATCH(
       if (perms.allowStartConversations === false && existing.status === "CLOSED") {
         return NextResponse.json({ error: "Cannot reply to closed conversations" }, { status: 403 });
       }
+      const { conversationIsMctbProduct, MCTB_PLATFORM_SENDER_MANUAL_REPLY_MESSAGE } = await import(
+        "@/lib/mctb/inbox-manual-reply-gate"
+      );
+      if (
+        conversationIsMctbProduct({
+          productSource: existing.productSource,
+          missedCallEventId: existing.missedCallEventId,
+        })
+      ) {
+        const { resolveMctbCapabilities } = await import("@/lib/mctb/capabilities");
+        const caps = await resolveMctbCapabilities(auth.workspaceId);
+        if (!caps.manualTwoWayMessaging) {
+          return NextResponse.json({ error: MCTB_PLATFORM_SENDER_MANUAL_REPLY_MESSAGE }, { status: 403 });
+        }
+      }
       const to = existing.contact.phone;
       const replyFrom = body.from || existing.fromE164 || undefined;
       await sendQuickSms({

@@ -80,6 +80,7 @@ export type MctbSetupPayload = {
   } | null;
   pauseUntil?: string | null;
   cooldownMinutes?: number;
+  maxMessagesPerCaller?: number;
   replyNotifications?: boolean;
   directDialForwardE164?: string | null;
   defaultLinkUrl?: string | null;
@@ -608,6 +609,7 @@ export async function POST(req: Request) {
         ? { sms_phone_number_id: smsPhoneNumberIdForPatch }
         : {}),
       cooldown_minutes: body.cooldownMinutes,
+      max_messages_per_caller: body.maxMessagesPerCaller,
       trigger_rules: body.triggerRules
         ? {
             no_answer: body.triggerRules.noAnswer,

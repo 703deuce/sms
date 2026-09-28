@@ -6,7 +6,11 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import {
+  conversationIsMctbProduct,
+  MCTB_PLATFORM_SENDER_MANUAL_REPLY_MESSAGE,
+} from "@/lib/mctb/inbox-manual-reply-gate";
 import type { Conversation as ApiConversation, User } from "@/lib/types";
 import InboxRail, { FilterSel } from "@/components/kimi/conversations/components/InboxRail";
 import ConversationList from "@/components/kimi/conversations/components/ConversationList";
@@ -69,6 +73,8 @@ type Props = {
   initialConversationId?: string | null;
   initialContactId?: string | null;
   initialDraft?: string;
+  /** When true, treat this shell as MCTB product inbox (legacy /mctb/conversations Kimi path). */
+  mctbInboxContext?: boolean;
 };
 
 export function KimiConversationsConnected({
@@ -80,8 +86,10 @@ export function KimiConversationsConnected({
   initialConversationId = null,
   initialContactId = null,
   initialDraft = "",
+  mctbInboxContext = false,
 }: Props) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const urlParams = useMemo(
     () => Object.fromEntries(searchParams.entries()),
@@ -115,6 +123,7 @@ export function KimiConversationsConnected({
     () => resolveInboxPerms(initialPermissions ?? DEFAULT_INBOX_PERMISSIONS),
   );
   const [permissionsReady, setPermissionsReady] = useState(Boolean(initialPermissions));
+  const [mctbManualTwoWay, setMctbManualTwoWay] = useState(true);
 
   useEffect(() => {
     void fetchMessagingRuntimeSettings()
@@ -630,6 +639,35 @@ export function KimiConversationsConnected({
 
   const selected = convos.find((c) => c.id === selectedId) ?? null;
 
+  const mctbReplyContext = useMemo(() => {
+    if (mctbInboxContext || urlProduct === "mctb" || pathname.startsWith("/mctb/conversations")) {
+      return true;
+    }
+    if (selected) {
+      return conversationIsMctbProduct({
+        productSource: selected.productSource,
+        missedCallEventId: selected.missedCallEventId,
+      });
+    }
+    return false;
+  }, [mctbInboxContext, urlProduct, pathname, selected]);
+
+  useEffect(() => {
+    if (!mctbReplyContext) {
+      setMctbManualTwoWay(true);
+      return;
+    }
+    void fetch("/api/mctb/setup", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        const caps = (json?.data?.capabilities ?? json?.capabilities) as {
+          manualTwoWayMessaging?: boolean;
+        } | undefined;
+        setMctbManualTwoWay(Boolean(caps?.manualTwoWayMessaging));
+      })
+      .catch(() => setMctbManualTwoWay(false));
+  }, [mctbReplyContext]);
+
   const campaignFilterLabel = useMemo(() => {
     if (!urlCampaignId) return null;
     const fromConvo = convos.find((c) => c.campaignId === urlCampaignId && c.campaignName);
@@ -817,11 +855,15 @@ export function KimiConversationsConnected({
   const canAssign = permissions.allowAssignment !== false;
   const canTag = permissions.allowTagging !== false;
   const inboxEnabled = permissions.inboxEnabled !== false;
-  const composerBlocked =
+  const closedComposerBlocked =
     !canStartConversations && selected?.status === "closed";
-  const composerBlockedReason = composerBlocked
-    ? "Replies to closed conversations are disabled in inbox settings."
-    : undefined;
+  const mctbComposerBlocked = mctbReplyContext && !mctbManualTwoWay;
+  const composerBlocked = closedComposerBlocked || mctbComposerBlocked;
+  const composerBlockedReason = mctbComposerBlocked
+    ? MCTB_PLATFORM_SENDER_MANUAL_REPLY_MESSAGE
+    : closedComposerBlocked
+      ? "Replies to closed conversations are disabled in inbox settings."
+      : undefined;
   const composeRecipient = (composePicked ? composeTo : composeQuery).trim();
 
   if (!permissionsReady) {
