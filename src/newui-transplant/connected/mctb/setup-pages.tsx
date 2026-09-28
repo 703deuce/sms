@@ -382,8 +382,8 @@ export function NewUiMctbSetupTestPage() {
           test.liveTest?.passed
             ? "Live test passed — forwarding and recovery are working."
             : test.liveTest?.started
-              ? "Place a test call from another phone and let it ring out."
-              : "We'll detect the call automatically.",
+              ? "Place a test call from another phone and let it ring out. We listen via live-test; setup-test records pipeline checkpoints."
+              : "Start test to arm live-test (forwarding call) and setup-test (recovery pipeline checkpoints). Try-it is onboarding-only.",
         liveListening: Boolean(test.liveTest?.started && !test.liveTest?.passed),
         onStartTest: test.startLiveTest,
       }}

@@ -433,12 +433,21 @@ export function useMctbTestWiring() {
   }, [reload]);
 
   const startLiveTest = useCallback(async () => {
+    await fetch("/api/mctb/setup-test", { method: "POST" }).catch(() => undefined);
     const res = await fetch("/api/mctb/live-test", { method: "POST" });
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || "Could not start test");
     if (json.data) setLiveTest(json.data);
     else await reload();
   }, [reload]);
+
+  useEffect(() => {
+    if (!liveTest?.started || liveTest.passed) return;
+    const id = window.setInterval(() => {
+      void reload();
+    }, 8000);
+    return () => window.clearInterval(id);
+  }, [liveTest?.started, liveTest?.passed, reload]);
 
   return {
     loading,

@@ -72,6 +72,7 @@ export async function GET() {
           enabled: config.enabled,
           bookingLinkId: config.bookingLinkId,
           collectCapabilities: config.collectCapabilities,
+          enabledScenarios: config.enabledScenarios,
         },
         booking: {
           configAvailable: bookingConfigAvailable,

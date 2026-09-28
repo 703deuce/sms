@@ -23,6 +23,13 @@ export type MctbAiRecoveryWired = {
   onBookingLinkEnabledChange?: (value: boolean) => void
   onBookingLinkUrlChange?: (value: string) => void
   onBookingLinkLabelChange?: (value: string) => void
+  scenarios?: Array<{
+    key: string
+    title: string
+    description: string
+    enabled: boolean
+    onChange: (value: boolean) => void
+  }>
   onSave?: () => Promise<void>
 }
 
@@ -87,6 +94,26 @@ export function TransplantMctbAiRecoveryPage({ wired }: { wired?: MctbAiRecovery
               ))}
             </div>
           </Panel>
+
+          {wired?.scenarios?.length ? (
+            <Panel title="Conversation scenarios" description="Which kinds of replies AI Recovery may handle">
+              <ul className="divide-y">
+                {wired.scenarios.map((s) => (
+                  <li key={s.key} className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium">{s.title}</span>
+                      <span className="text-xs text-muted-foreground">{s.description}</span>
+                    </span>
+                    <Switch
+                      checked={s.enabled}
+                      onCheckedChange={(v) => s.onChange(Boolean(v))}
+                      aria-label={`Enable ${s.title}`}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          ) : null}
 
           <Panel title="Booking link">
             <FieldRow label="Share booking link" description="Sent once AI has collected the required details">

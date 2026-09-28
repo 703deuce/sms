@@ -285,6 +285,19 @@ export function useMctbSetupPhoneWiring(): {
       ownSenderLockedHint: ownSenderEntitled
         ? undefined
         : "Own Sender add-on required to text from your verified number.",
+      ownSenderRegistrationHref: "/compliance",
+      ownSenderLifecycleSteps: ownSenderEntitled
+        ? [
+            "Choose a verified workspace number below (TFN or 10DLC-approved).",
+            "Complete messaging registration if status is Pending or Rejected.",
+            "Select your number here to activate — runtime and custom opener unlock.",
+            "Switch back to Transovo Platform anytime; policy reverts immediately.",
+          ]
+        : [
+            "Unlock Own Sender on your plan.",
+            "Register a toll-free or 10DLC sender under Compliance.",
+            "Return here to activate the approved number as text-back sender.",
+          ],
       senderRegistrationLabel:
         senderMode === "PLATFORM"
           ? "Platform sender"

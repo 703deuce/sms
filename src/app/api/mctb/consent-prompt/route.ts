@@ -68,8 +68,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, result, data: status });
     }
 
+    const { resolveCanonicalMctbConsentScript } = await import(
+      "@/lib/mctb/consent-prompt/script-policy"
+    );
+    const { getPrisma } = await import("@/lib/db");
+    const ws = await getPrisma().workspace.findUnique({
+      where: { id: workspaceId },
+      select: { name: true, displayName: true },
+    });
+    const businessName = ws?.displayName?.trim() || ws?.name?.trim() || "our business";
+    const canonicalScript = resolveCanonicalMctbConsentScript(businessName);
     const config = await saveMctbConsentPrompt(workspaceId, {
-      ...(body.scriptText !== undefined ? { scriptText: body.scriptText } : {}),
+      scriptText: canonicalScript,
       ...(body.voiceId !== undefined ? { voiceId: body.voiceId } : {}),
       ...(body.speed !== undefined ? { speed: body.speed } : {}),
     });

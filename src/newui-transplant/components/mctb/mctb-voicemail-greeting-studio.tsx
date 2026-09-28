@@ -23,12 +23,16 @@ export function MctbVoicemailGreetingStudio({
   return (
     <Panel
       title="Current voicemail greeting"
-      description="One active greeting is used when callers reach voicemail on the missed-call path."
+      description="One active greeting for the existing-consent voicemail path. Authoritative audio is voicemailBox.greetingUrl, copied to the stable carrier play URL on activate (provisionActiveVoicemailGreeting)."
       action={<Pill tone={greetingActive ? "success" : "warning"}>{greetingActive ? "Active" : "Not active"}</Pill>}
       className="lg:col-span-2"
     >
       <p className="mb-4 text-sm text-muted-foreground">
         Source: <span className="font-medium text-foreground">{sourceLabel}</span>
+      </p>
+      <p className="mb-4 text-xs text-muted-foreground">
+        Record, upload, or generate with ElevenLabs, then use <span className="font-medium">Use this greeting</span> to
+        activate. Callers hear that audio on the certified voicemail play URL — not a separate draft field.
       </p>
       <PersonalGreetingControls
         premiumTabs

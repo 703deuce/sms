@@ -1,6 +1,7 @@
 import { CheckCircle2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Panel, Pill } from '@/newui-transplant/components/app/kit'
+import { ButtonLink } from '@/newui-transplant/components/app/button-link'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/newui-transplant/components/ui/select'
 import { SaveBar } from '@/newui-transplant/components/app/save-bar'
@@ -37,6 +38,8 @@ export type MctbSetupPhoneWired = {
   senderOptions?: MctbSetupPhoneSenderOption[]
   ownSenderEntitled?: boolean
   ownSenderLockedHint?: string
+  ownSenderRegistrationHref?: string
+  ownSenderLifecycleSteps?: string[]
   senderRegistrationLabel?: string
   senderRegistrationTone?: 'success' | 'warning'
   onCarrierChange?: (carrierId: string) => void
@@ -162,6 +165,20 @@ export function TransplantMctbSetupPhonePage({ wired }: { wired?: MctbSetupPhone
         <p className="mt-0.5 text-xs text-muted-foreground">{wired?.senderDetail}</p>
         {wired?.ownSenderLockedHint ? (
           <p className="mt-2 text-xs text-muted-foreground">{wired.ownSenderLockedHint}</p>
+        ) : null}
+        {wired?.ownSenderLifecycleSteps?.length ? (
+          <ol className="mt-3 list-decimal space-y-1 pl-4 text-xs text-muted-foreground">
+            {wired.ownSenderLifecycleSteps.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+        ) : null}
+        {wired?.ownSenderRegistrationHref ? (
+          <p className="mt-3">
+            <ButtonLink href={wired.ownSenderRegistrationHref} size="sm" variant="outline">
+              Messaging registration
+            </ButtonLink>
+          </p>
         ) : null}
         <div role="radiogroup" aria-label="Text-back sender" className="mt-4 grid gap-2">
           {senderOptions.map((opt) => {

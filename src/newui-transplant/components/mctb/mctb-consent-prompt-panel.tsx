@@ -1,12 +1,13 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import { Loader2, Volume2 } from 'lucide-react'
 import { GreetingVoicePicker } from '@/components/smart-routing/greeting-voice-picker'
 import { Panel, Pill } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
-import { Textarea } from '@/newui-transplant/components/ui/textarea'
 import { SaveBar } from '@/newui-transplant/components/app/save-bar'
+import { MCTB_CONSENT_SCRIPT_CUSTOMER_EDIT_HINT } from '@/lib/mctb/consent-prompt/script-policy'
 
 type ConsentPromptStatus = {
   config: {
@@ -56,14 +57,14 @@ export function MctbConsentPromptPanel({ phoneNumberId, disabled }: Props) {
     void load()
   }, [load])
 
-  async function saveDraft() {
+  async function saveVoiceDraft() {
     setBusy('save')
     setError(null)
     try {
       const res = await fetch('/api/mctb/consent-prompt', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ scriptText, voiceId, speed: 1 }),
+        body: JSON.stringify({ voiceId, speed: 1 }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Save failed')
@@ -79,11 +80,11 @@ export function MctbConsentPromptPanel({ phoneNumberId, disabled }: Props) {
     setBusy('generate')
     setError(null)
     try {
-      await saveDraft()
+      await saveVoiceDraft()
       const res = await fetch('/api/mctb/consent-prompt', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action: 'generate', scriptText, voiceId, speed: 1 }),
+        body: JSON.stringify({ action: 'generate', voiceId, speed: 1 }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Audio generation failed')
@@ -127,7 +128,7 @@ export function MctbConsentPromptPanel({ phoneNumberId, disabled }: Props) {
   return (
     <Panel
       title="Press-1 voice disclosure"
-      description="Script and audio callers hear before pressing 1. Compliance copy is versioned — publish after changes."
+      description="What callers hear before pressing 1. This is separate from your voicemail greeting and from SMS compliance text."
       action={
         published ? (
           <Pill tone="success">Published</Pill>
@@ -144,14 +145,18 @@ export function MctbConsentPromptPanel({ phoneNumberId, disabled }: Props) {
       {status?.publishBlockReason && !published ? (
         <p className="mb-3 text-sm text-muted-foreground">{status.publishBlockReason}</p>
       ) : null}
-      <label htmlFor="consent-script" className="mb-1.5 block text-sm font-medium">Disclosure script</label>
-      <Textarea
-        id="consent-script"
-        rows={4}
-        value={scriptText}
-        onChange={(e) => setScriptText(e.target.value)}
-        disabled={disabled}
-      />
+      <p className="mb-2 text-xs text-muted-foreground">{MCTB_CONSENT_SCRIPT_CUSTOMER_EDIT_HINT}</p>
+      <p className="mb-1 text-sm font-medium">Approved disclosure</p>
+      <p className="rounded-lg border bg-muted/40 px-3 py-2.5 text-sm leading-relaxed" id="consent-script">
+        {scriptText}
+      </p>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Business name comes from{' '}
+        <Link href="/settings/business" className="font-medium text-primary hover:underline">
+          Settings → Business
+        </Link>
+        .
+      </p>
       <div className="mt-3">
         <GreetingVoicePicker
           value={voiceId}
@@ -167,9 +172,9 @@ export function MctbConsentPromptPanel({ phoneNumberId, disabled }: Props) {
         </div>
       ) : null}
       <div className="mt-4 flex flex-wrap gap-2">
-        <Button type="button" variant="outline" size="sm" disabled={disabled || busy === 'save'} onClick={() => void saveDraft()}>
+        <Button type="button" variant="outline" size="sm" disabled={disabled || busy === 'save'} onClick={() => void saveVoiceDraft()}>
           {busy === 'save' ? <Loader2 className="size-4 animate-spin" /> : null}
-          Save draft
+          Save voice
         </Button>
         <Button type="button" variant="outline" size="sm" disabled={disabled || busy === 'generate'} onClick={() => void generateAudio()}>
           {busy === 'generate' ? <Loader2 className="size-4 animate-spin" /> : <Volume2 className="size-4" />}

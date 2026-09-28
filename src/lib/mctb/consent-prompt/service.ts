@@ -24,6 +24,7 @@ import {
   saveMctbConsentPrompt,
 } from "./store";
 import { MCTB_CONSENT_FLOW_NAME } from "./types";
+import { resolveCanonicalMctbConsentScript } from "./script-policy";
 
 import type { MctbConsentMode } from "@/lib/mctb/consent-mode";
 import { normalizeMctbConsentMode } from "@/lib/mctb/consent-mode";
@@ -175,12 +176,21 @@ function buildConsentFlowDraft(input: {
   return draft;
 }
 
+async function workspaceDisplayName(workspaceId: string): Promise<string> {
+  const ws = await getPrisma().workspace.findUnique({
+    where: { id: workspaceId },
+    select: { name: true, displayName: true },
+  });
+  return ws?.displayName?.trim() || ws?.name?.trim() || "our business";
+}
+
 export async function generateMctbConsentAudio(
   workspaceId: string,
   input?: { scriptText?: string; voiceId?: string; speed?: number },
 ) {
   const current = await loadMctbConsentPrompt(workspaceId);
-  const scriptText = (input?.scriptText ?? current.scriptText).trim();
+  const businessName = await workspaceDisplayName(workspaceId);
+  const scriptText = resolveCanonicalMctbConsentScript(businessName);
   const voiceId = input?.voiceId ?? current.voiceId;
   const speed = input?.speed ?? current.speed;
 
@@ -349,14 +359,17 @@ export async function initMctbConsentPromptForWorkspace(workspaceId: string) {
 }
 
 export async function getMctbConsentPromptStatus(workspaceId: string) {
-  const [config, mode, flow] = await Promise.all([
+  const [config, mode, flow, businessName] = await Promise.all([
     loadMctbConsentPrompt(workspaceId),
     loadMctbConsentMode(workspaceId),
     findMctbConsentFlow(workspaceId),
+    workspaceDisplayName(workspaceId),
   ]);
+  const canonicalScript = resolveCanonicalMctbConsentScript(businessName);
+  const displayConfig = { ...config, scriptText: canonicalScript };
   const publishGate = canPublishConsentPrompt(config);
   return {
-    config,
+    config: displayConfig,
     mode,
     flowStatus: flow?.status || null,
     flowId: flow?.id || config.flowId,
