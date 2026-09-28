@@ -710,6 +710,8 @@ model PhoneNumber {
   webhookUrl                 String?
   capabilitiesJson           Json?
   settingsJson               Json?
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
   workspace                  Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   assignments                PhoneNumberAssignment[]
   triggerDeployments         TriggerDeployment[]
