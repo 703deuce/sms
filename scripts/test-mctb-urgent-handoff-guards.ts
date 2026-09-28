@@ -7,6 +7,7 @@ import {
   validateMctbNotificationRecipientsForSave,
   MctbNotificationRecipientValidationError,
 } from "../src/lib/mctb/handoff/recipient-validation";
+import { describeMctbUrgentBusinessSmsEntitlement } from "../src/lib/mctb/handoff/urgent-business-sms-entitlement";
 
 assert.equal(
   planInboundReplyNotificationEvent({ callbackRequested: false, urgent: false }).eventType,
@@ -36,5 +37,9 @@ try {
 } catch (e) {
   assert.ok(e instanceof MctbNotificationRecipientValidationError);
 }
+
+const audit = describeMctbUrgentBusinessSmsEntitlement();
+assert.equal(audit.mechanism, "resolveMctbCapabilities.urgentBusinessSms");
+assert.equal(audit.granularCapabilityFlag, null);
 
 console.log("test-mctb-urgent-handoff-guards: PASS");
