@@ -8,11 +8,11 @@ import {
 } from "../src/lib/mctb/setup-overview-model";
 import { isExistingConsentModeEligible } from "../src/lib/mctb/setup-consent-eligibility";
 
-assert.equal(MCTB_SETUP_SECTIONS.length, 10);
+assert.equal(MCTB_SETUP_SECTIONS.length, 11);
 assert.equal(resolveMctbSetupSectionId("/mctb/setup"), "overview");
 assert.equal(resolveMctbSetupSectionId("/mctb/setup/phone"), "phone");
 assert.equal(resolveMctbSetupSectionId("/mctb/setup/consent"), "consent");
-assert.equal(resolveMctbSetupSectionId("/mctb/setup/missed-call-rules"), "recovery");
+assert.equal(resolveMctbSetupSectionId("/mctb/setup/missed-call-rules"), "missed-call-rules");
 assert.equal(resolveMctbSetupSectionId("/mctb/setup/text-back"), "text-back");
 assert.equal(resolveMctbSetupSectionId("/mctb/setup/links"), "links");
 assert.equal(resolveMctbSetupSectionId("/mctb/setup/test"), "test");

@@ -40,6 +40,27 @@ export function MctbSetupBookingSection() {
   const [aiSaving, setAiSaving] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
   const [testSlots, setTestSlots] = useState<string[]>([]);
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
+
+  async function startAiBookingCheckout() {
+    setCheckoutBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/platform/billing/checkout", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ productKey: "mctb_ai_recovery" }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Checkout failed");
+      if (json.data?.url) window.location.href = json.data.url;
+      else throw new Error("Checkout URL missing");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Checkout failed");
+    } finally {
+      setCheckoutBusy(false);
+    }
+  }
 
   const load = useCallback(async () => {
     const [linksRes, setupRes, aiRes] = await Promise.all([
@@ -326,8 +347,13 @@ export function MctbSetupBookingSection() {
             Check live provider availability and complete booking in the conversation. Never invents times.
           </p>
           {!aiEntitled ? (
-            <button type="button" className="mt-2 h-9 rounded-lg border border-[#dde2ea] bg-white px-3 text-[12px] font-semibold text-[#0a0d12]">
-              Upgrade
+            <button
+              type="button"
+              disabled={checkoutBusy}
+              className="mt-2 h-9 rounded-lg border border-[#dde2ea] bg-white px-3 text-[12px] font-semibold text-[#0a0d12] disabled:opacity-60"
+              onClick={() => void startAiBookingCheckout()}
+            >
+              {checkoutBusy ? "Opening checkout…" : "Upgrade to AI Booking"}
             </button>
           ) : (
             <div className="mt-3 space-y-3">

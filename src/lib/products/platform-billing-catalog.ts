@@ -93,9 +93,16 @@ export function addonFeature(productKey: string): TransovoProductFeature | null 
 }
 
 /** Legacy flat list for trial route compatibility. */
+export type PlatformCheckoutFamily =
+  | PlatformProductFamily
+  | "addon"
+  | "verify_pack"
+  | "mctb_ai_recovery"
+  | "mctb_own_sender";
+
 export type PlatformProductListItem = {
   productKey: string;
-  family: PlatformProductFamily | "addon" | "verify_pack";
+  family: PlatformCheckoutFamily;
   tier?: MctbTier | SmartRoutingTier | CallForwardingTier | AiTranscriptionTier;
   displayName: string;
   description: string;
@@ -213,12 +220,20 @@ export function listPlatformPurchasableProducts(): PlatformProductListItem[] {
 }
 
 export function parseCheckoutSelection(productKey: string): {
-  family: PlatformProductFamily | "addon" | "verify_pack";
-  tier?: MctbTier | SmartRoutingTier | CallForwardingTier | AiTranscriptionTier | FaxTier;
+  family: PlatformCheckoutFamily;
+  tier?: MctbTier | SmartRoutingTier | CallForwardingTier | AiTranscriptionTier | FaxTier | string;
   verifyPack?: VerifyCreditPack;
   stripePriceId: string;
   feature: TransovoProductFeature;
 } {
+  if (productKey === "mctb_ai_recovery" || productKey === "mctb_own_sender") {
+    return {
+      family: productKey,
+      tier: "standard",
+      stripePriceId: resolveAddonPriceId(productKey),
+      feature: "mctb",
+    };
+  }
   if (productKey.startsWith("mctb_")) {
     const tier = productKey.replace("mctb_", "") as MctbTier;
     return {
@@ -289,6 +304,9 @@ export function parseCheckoutSelection(productKey: string): {
 
 /** @deprecated Use parseCheckoutSelection — kept for webhook migration. */
 export function grantsForPlatformProduct(productKey: string): TransovoProductFeature[] {
+  if (productKey === "mctb_ai_recovery" || productKey === "mctb_own_sender") {
+    return [];
+  }
   try {
     const sel = parseCheckoutSelection(productKey);
     return [sel.feature];

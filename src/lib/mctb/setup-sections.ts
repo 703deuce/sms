@@ -3,6 +3,7 @@ import { MCTB_ROUTES } from "@/lib/mctb/routes";
 export type MctbSetupSectionId =
   | "overview"
   | "phone"
+  | "missed-call-rules"
   | "consent"
   | "text-back"
   | "recovery"
@@ -32,6 +33,12 @@ export const MCTB_SETUP_SECTIONS: MctbSetupSection[] = [
     label: "Phone & Forwarding",
     href: MCTB_ROUTES.setupPhone,
     description: "Business line, forwarding, and messaging sender",
+  },
+  {
+    id: "missed-call-rules",
+    label: "Missed-call rules",
+    href: MCTB_ROUTES.setupMissedCallRules,
+    description: "Which call outcomes create missed-call events",
   },
   {
     id: "consent",
@@ -88,11 +95,11 @@ export function resolveMctbSetupSectionId(pathname: string): MctbSetupSectionId 
     return "overview";
   }
   if (pathname.startsWith(MCTB_ROUTES.setupPhone)) return "phone";
+  if (pathname.startsWith(MCTB_ROUTES.setupMissedCallRules)) return "missed-call-rules";
   if (pathname.startsWith(MCTB_ROUTES.setupConsent)) return "consent";
   if (pathname.startsWith(MCTB_ROUTES.setupTextBack)) return "text-back";
   if (
     pathname.startsWith(MCTB_ROUTES.setupRecovery) ||
-    pathname.startsWith(MCTB_ROUTES.setupMissedCallRules) ||
     pathname.startsWith("/mctb/setup/follow-up") ||
     pathname.startsWith("/mctb/setup/business-hours")
   ) {

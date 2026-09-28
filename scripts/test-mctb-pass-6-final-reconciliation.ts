@@ -31,11 +31,16 @@ assert.ok(readRoute("app/(app)/mctb/numbers/page.tsx").includes("open=manage"));
 for (const legacy of [
   "app/(app)/mctb/setup/business-hours/page.tsx",
   "app/(app)/mctb/setup/follow-up/page.tsx",
-  "app/(app)/mctb/setup/missed-call-rules/page.tsx",
 ]) {
   assert.ok(readRoute(legacy).includes("redirect"));
   assert.ok(readRoute(legacy).includes("setupRecovery"));
 }
+
+assert.ok(
+  readRoute("app/(app)/mctb/setup/missed-call-rules/page.tsx").includes(
+    "MctbSetupMissedCallRulesView",
+  ),
+);
 
 assert.equal(resolveRemovedMctbSchedulingRedirect("/mctb/calendar"), "/appointments/calendar");
 assert.equal(resolveRemovedMctbSchedulingRedirect("/mctb/appointments"), "/appointments");

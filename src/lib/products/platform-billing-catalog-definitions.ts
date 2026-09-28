@@ -118,6 +118,20 @@ export const ADDON_PRODUCT_DEFS = [
     amountCents: 499,
     feature: "callback_requests" as const,
   },
+  {
+    productKey: "mctb_ai_recovery",
+    displayName: "AI Recovery",
+    description: "Automated SMS follow-up after missed-call recovery replies.",
+    amountCents: 2999,
+    feature: "mctb" as const,
+  },
+  {
+    productKey: "mctb_own_sender",
+    displayName: "Own Sender",
+    description: "Send recovery texts from your verified toll-free or A2P number.",
+    amountCents: 1999,
+    feature: "mctb" as const,
+  },
 ] as const;
 
 export type PlatformCatalogTierIds = {

@@ -114,6 +114,16 @@ export const PLATFORM_BILLING_CATALOG_LIVE: PlatformCatalogIds = {
       "stripeProductId": "prod_V8GrNmxbLQz0ls",
       "stripePriceId": "price_1U80JkKjM2RWgyrvh93xNoY5",
       "monthlyPriceCents": 499
+    },
+    "mctb_ai_recovery": {
+      "stripeProductId": "prod_mctb_ai_recovery_placeholder",
+      "stripePriceId": "price_mctb_ai_recovery_placeholder",
+      "monthlyPriceCents": 2999
+    },
+    "mctb_own_sender": {
+      "stripeProductId": "prod_mctb_own_sender_placeholder",
+      "stripePriceId": "price_mctb_own_sender_placeholder",
+      "monthlyPriceCents": 1999
     }
   }
 } as const;

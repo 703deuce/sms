@@ -109,7 +109,9 @@ export function TransplantMctbSetupRecoveryPage({ wired }: { wired?: MctbSetupRe
             />
           </FieldRow>
         </div>
-        <div className="mt-4 flex justify-end"><SaveBar onSave={wired?.onSave} /></div>
+        <div className="mt-4 flex justify-end">
+          <SaveBar label="Save follow-up rules" onSave={wired?.onSave} />
+        </div>
       </Panel>
     </div>
   )

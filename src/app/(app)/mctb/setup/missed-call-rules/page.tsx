@@ -1,7 +1,11 @@
-import { MCTB_ROUTES } from "@/lib/mctb/routes";
-import { redirect } from "next/navigation";
+import { MctbSetupMissedCallRulesView } from "@/components/mctb/setup/setup-missed-call-rules-view";
+import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
+import { NewUiMctbSetupRecoveryPage } from "@/newui-transplant/connected/mctb/setup-pages";
 
-/** Legacy URL — consolidated into Recovery. */
+/** Missed-call trigger rules (spec 09) — cooldown/pause live under Recovery. */
 export default function MctbSetupMissedCallRulesPage() {
-  redirect(MCTB_ROUTES.setupRecovery);
+  if (isNewUiStage2Enabled()) {
+    return <NewUiMctbSetupRecoveryPage />;
+  }
+  return <MctbSetupMissedCallRulesView />;
 }

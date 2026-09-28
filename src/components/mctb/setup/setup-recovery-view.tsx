@@ -410,7 +410,7 @@ export function MctbSetupRecoveryView() {
         disabled={saving || !dirty}
         onClick={() => void save()}
       >
-        {saving ? "Saving…" : "Save changes"}
+        {saving ? "Saving…" : "Save follow-up rules"}
       </button>
     </div>
   );

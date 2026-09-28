@@ -58,6 +58,11 @@ type SetupApi = {
     canEditRecoveryOpener?: boolean;
   };
   consentMeta?: { paidEntitled?: boolean; existingConsentEligible?: boolean };
+  capabilities?: {
+    monthlyRecoveryLimit?: number;
+    monthlyRecoveriesUsed?: number;
+    recoveryPaid?: boolean;
+  };
 };
 
 export function MctbSetupOverviewView() {
@@ -387,6 +392,19 @@ export function MctbSetupOverviewView() {
               <span className="mctb-setup-status-rail__item-value">
                 {forwardingVerified ? "Verified" : "Pending"}
               </span>
+            </div>
+            <div className="mctb-setup-status-rail__item">
+              <span className="mctb-setup-status-rail__item-label">Recovery texts this month</span>
+              <span className="mctb-setup-status-rail__item-value">
+                {setup.capabilities?.monthlyRecoveriesUsed ?? "—"} /{" "}
+                {setup.capabilities?.monthlyRecoveryLimit ?? "—"}
+              </span>
+              {setup.capabilities &&
+              setup.capabilities.monthlyRecoveryLimit != null &&
+              setup.capabilities.monthlyRecoveriesUsed != null &&
+              setup.capabilities.monthlyRecoveriesUsed >= setup.capabilities.monthlyRecoveryLimit ? (
+                <span className="mctb-setup-status-rail__item-sublabel">Monthly limit reached</span>
+              ) : null}
             </div>
             <div className="mctb-setup-status-rail__item">
               <span className="mctb-setup-status-rail__item-label">Last test</span>

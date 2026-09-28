@@ -103,5 +103,15 @@ export const PLATFORM_BILLING_CATALOG_TEST: PlatformCatalogIds = {
       stripePriceId: "price_test_cb",
       monthlyPriceCents: 499,
     },
+    mctb_ai_recovery: {
+      stripeProductId: "prod_test_mctb_ai_recovery",
+      stripePriceId: "price_test_mctb_ai_recovery",
+      monthlyPriceCents: 2999,
+    },
+    mctb_own_sender: {
+      stripeProductId: "prod_test_mctb_own_sender",
+      stripePriceId: "price_test_mctb_own_sender",
+      monthlyPriceCents: 1999,
+    },
   },
 } as const;
