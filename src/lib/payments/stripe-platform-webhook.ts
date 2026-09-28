@@ -41,6 +41,14 @@ export async function handlePlatformCheckoutCompleted(session: Stripe.Checkout.S
     }
   }
 
+  const { applyMctbCommercialAddonProductKey, isMctbCommercialAddonProductKey } = await import(
+    "@/lib/mctb/commercial-entitlement-grants"
+  );
+  if (isMctbCommercialAddonProductKey(productKey)) {
+    await applyMctbCommercialAddonProductKey(workspaceId, productKey, true);
+    return { handled: true, subsystem: "mctb_commercial_addon" as const, productKey };
+  }
+
   try {
     const sel = parseCheckoutSelection(productKey);
     if (sel.family === "addon") {
@@ -90,6 +98,15 @@ export async function handlePlatformSubscriptionEvent(
         where: { stripeSubscriptionId: subscription.id },
         data: { status: subscription.status, cancelAtPeriodEnd: subscription.cancel_at_period_end },
       });
+      if (family === "mctb_ai_recovery" || family === "mctb_own_sender") {
+        const { applyMctbCommercialAddonProductKey, MCTB_COMMERCIAL_ADDON_PRODUCT_KEYS } =
+          await import("@/lib/mctb/commercial-entitlement-grants");
+        const productKey =
+          family === "mctb_ai_recovery"
+            ? MCTB_COMMERCIAL_ADDON_PRODUCT_KEYS.aiRecovery
+            : MCTB_COMMERCIAL_ADDON_PRODUCT_KEYS.ownSender;
+        await applyMctbCommercialAddonProductKey(workspaceId, productKey, false);
+      }
       const feature =
         family === "mctb" || family === "smart_routing" || family === "fax"
           ? (family as "mctb" | "smart_routing" | "fax")

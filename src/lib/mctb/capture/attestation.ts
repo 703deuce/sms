@@ -72,6 +72,10 @@ export async function recordWorkspaceExistingConsentAttestation(input: {
     attestedAt: new Date().toISOString(),
   };
 
+  const historyRaw = mctb.existingConsentAttestationHistory;
+  const history = Array.isArray(historyRaw) ? [...historyRaw] : [];
+  history.push(attestation);
+
   await prisma.workspace.update({
     where: { id: input.workspaceId },
     data: {
@@ -81,6 +85,7 @@ export async function recordWorkspaceExistingConsentAttestation(input: {
           ...mctb,
           consentMode: MCTB_CONSENT_MODE_EXISTING,
           existingConsentAttestation: attestation,
+          existingConsentAttestationHistory: history.slice(-50),
         },
       },
     },

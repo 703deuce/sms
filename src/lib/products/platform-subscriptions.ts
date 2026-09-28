@@ -31,14 +31,29 @@ export type PlatformSubscriptionRow = {
   status: string;
 };
 
+type PlatformSubscriptionFamily =
+  | PlatformProductFamily
+  | "mctb_ai_recovery"
+  | "mctb_own_sender";
+
 function parseFamilyFromMetadata(
   metadata: Record<string, string | undefined>,
-): PlatformProductFamily | null {
-  const family = metadata.platformProductFamily || metadata.platformProductKey?.split("_")[0];
+): PlatformSubscriptionFamily | null {
+  const productKey = metadata.platformProductKey || "";
+  if (productKey === "mctb_ai_recovery" || metadata.platformProductFamily === "mctb_ai_recovery") {
+    return "mctb_ai_recovery";
+  }
+  if (productKey === "mctb_own_sender" || metadata.platformProductFamily === "mctb_own_sender") {
+    return "mctb_own_sender";
+  }
+  const family = metadata.platformProductFamily || productKey.split("_")[0];
   if (family === "mctb" || family === "smart_routing" || family === "call_forwarding") return family;
   if (family === "ai_transcription") return "ai_transcription";
   if (family === "fax") return "fax";
-  if (metadata.platformProductKey?.startsWith("mctb")) return "mctb";
+  if (productKey.startsWith("mctb_") && productKey !== "mctb_ai_recovery" && productKey !== "mctb_own_sender") {
+    return "mctb";
+  }
+  if (productKey === "mctb") return "mctb";
   if (metadata.platformProductKey?.startsWith("smart_routing")) return "smart_routing";
   if (metadata.platformProductKey?.startsWith("call_forwarding")) return "call_forwarding";
   if (metadata.platformProductKey?.startsWith("ai_transcription")) return "ai_transcription";
@@ -48,8 +63,11 @@ function parseFamilyFromMetadata(
 
 function parseTierFromMetadata(
   metadata: Record<string, string | undefined>,
-  family: PlatformProductFamily,
+  family: PlatformSubscriptionFamily,
 ): string | null {
+  if (family === "mctb_ai_recovery" || family === "mctb_own_sender") {
+    return metadata.platformTier || "standard";
+  }
   if (metadata.platformTier) return metadata.platformTier;
   const key = metadata.platformProductKey || "";
   const prefix = `${family}_`;
@@ -65,7 +83,10 @@ export function isPlatformProductSubscription(
   if (parseFamilyFromMetadata(md)) return true;
   const key = md.platformProductKey || "";
   return (
-    key.startsWith("mctb") ||
+    key === "mctb_ai_recovery" ||
+    key === "mctb_own_sender" ||
+    (key.startsWith("mctb_") && key !== "mctb_ai_recovery" && key !== "mctb_own_sender") ||
+    key === "mctb" ||
     key.startsWith("smart_routing") ||
     key.startsWith("call_forwarding") ||
     key.startsWith("ai_transcription") ||
@@ -142,11 +163,22 @@ export async function upsertPlatformProductSubscriptionFromStripe(
     },
   });
 
-  await grantWorkspaceProductFeature(
-    workspaceId,
-    featureForProductFamily(family),
-    active ? "active" : "inactive",
-  );
+  if (family === "mctb_ai_recovery" || family === "mctb_own_sender") {
+    const { applyMctbCommercialAddonProductKey, MCTB_COMMERCIAL_ADDON_PRODUCT_KEYS } = await import(
+      "@/lib/mctb/commercial-entitlement-grants"
+    );
+    const productKey =
+      family === "mctb_ai_recovery"
+        ? MCTB_COMMERCIAL_ADDON_PRODUCT_KEYS.aiRecovery
+        : MCTB_COMMERCIAL_ADDON_PRODUCT_KEYS.ownSender;
+    await applyMctbCommercialAddonProductKey(workspaceId, productKey, active);
+  } else {
+    await grantWorkspaceProductFeature(
+      workspaceId,
+      featureForProductFamily(family as PlatformProductFamily),
+      active ? "active" : "inactive",
+    );
+  }
 
   if (family === "fax") {
     const { syncFaxAccountFromSubscription } = await import("@/lib/fax/fax-billing");
