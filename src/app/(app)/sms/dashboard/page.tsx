@@ -7,6 +7,7 @@ import { isActiveEntitlement } from "@/lib/products/types";
 import { getSession } from "@/lib/auth";
 import { loadSmsDashboardMetrics } from "@/lib/sms/dashboard-metrics";
 import { requireWorkspaceContext } from "@/lib/workspace-data";
+import { mctbOnboardingEntryPath } from "@/lib/mctb/onboarding/entry-path";
 import { redirect } from "next/navigation";
 
 /** SMS product dashboard — at-a-glance account health (not deep analytics). */
@@ -20,7 +21,7 @@ export default async function SmsDashboardPage() {
   if (ws?.type === "BUSINESS" && String(ws.billingPlan).toLowerCase() === "onboarding") {
     const state = await loadMctbOnboardingState(workspaceId);
     if (!isOnboardingComplete(state)) {
-      redirect("/onboarding/mctb");
+      redirect(mctbOnboardingEntryPath());
     }
   }
 

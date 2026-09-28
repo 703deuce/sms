@@ -1,7 +1,17 @@
 "use client";
 
-import { MctbOnboardingRuntime } from "@/lib/mctb/onboarding/mctb-onboarding-runtime";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 
-export function NewUiMctbOnboardingPage({ initialBusinessName = "" }: { initialBusinessName?: string }) {
-  return <MctbOnboardingRuntime initialBusinessName={initialBusinessName} shell="opus" />;
+/**
+ * Stage 2 onboarding is modal-only on `/mctb` (see `MctbFirstRunWizardHost`).
+ * This export remains for transplant inventory — always routes to Overview.
+ */
+export function NewUiMctbOnboardingPage() {
+  const router = useRouter();
+  useEffect(() => {
+    router.replace(MCTB_ROUTES.home);
+  }, [router]);
+  return null;
 }

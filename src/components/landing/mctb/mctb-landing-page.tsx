@@ -16,9 +16,10 @@ import {
 import { BRAND_NAME } from "@/lib/brand";
 import "../landing.css";
 import "./mctb-landing.css";
+import { mctbSignupNextQuery } from "@/lib/mctb/onboarding/entry-path";
 import { MctbHeroMockup } from "./mctb-hero-mockup";
 
-const SIGNUP = "/signup?next=/onboarding/mctb";
+const SIGNUP = mctbSignupNextQuery();
 
 const NAV = [
   { href: "#features", label: "Features" },

@@ -6,6 +6,7 @@ import {
 } from "@/lib/products/access-guards";
 import type { ProductKey, UserProductAccess } from "@/lib/products/types";
 import { productHomePath } from "@/lib/products/types";
+import { normalizeMctbOnboardingPostLoginPath } from "@/lib/mctb/onboarding/entry-path";
 import { mctbShellHome } from "@/lib/products/product-shell";
 import { isMctbV1Primary, isSmsOnlyAppNav, isSmsStandaloneHidden } from "@/lib/workspace/platform-launch";
 import { isLaunchProductCustomerVisible } from "@/lib/products/launch-product-availability";
@@ -35,7 +36,7 @@ export function resolvePostLoginPath(
   },
 ): string {
   const next = options?.nextPath;
-  if (isSafeNextPath(next)) return next;
+  if (isSafeNextPath(next)) return normalizeMctbOnboardingPostLoginPath(next);
 
   if (isMctbV1Primary() && isLaunchProductCustomerVisible("mctb")) {
     return mctbShellHome();

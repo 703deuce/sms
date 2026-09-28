@@ -62,6 +62,10 @@ assert.ok(!labels.includes("Integrations"));
 assert.equal(MCTB_LAUNCH_HIDE_LR_AI_BOOK_UI, true);
 assert.equal(MCTB_LAUNCH_COMPACT_OVERVIEW, true);
 
+const onboardingPage = readRoute("app/(app)/onboarding/mctb/page.tsx");
+assert.ok(onboardingPage.includes("isNewUiStage2Enabled()"));
+assert.ok(onboardingPage.includes('redirect(MCTB_ROUTES.home)'));
+
 const analytics = readFileSync(join(process.cwd(), "src/lib/mctb/analytics.ts"), "utf8");
 assert.ok(!analytics.includes("linksSent = textsSent"));
 assert.ok(analytics.includes("BOOKING_LINK_SENT"));

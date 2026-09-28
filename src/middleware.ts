@@ -243,7 +243,9 @@ export async function middleware(request: NextRequest) {
       return siteRedirect(request, `/api/products/open?product=${product}`);
     }
     if (product === "mctb") {
-      const stage2 = process.env.NEXT_PUBLIC_NEWUI_STAGE2 !== "0";
+      const stage2 =
+        process.env.NEXT_PUBLIC_NEWUI_SHELL !== "0" &&
+        process.env.NEXT_PUBLIC_NEWUI_STAGE2 !== "0";
       return siteRedirect(request, stage2 ? "/mctb" : "/onboarding/mctb");
     }
     const productKeys = parseProductAccessCookie(
@@ -259,6 +261,18 @@ export async function middleware(request: NextRequest) {
   }
 
   if (session && !isPublic) {
+    if (
+      pathname === "/onboarding/mctb" ||
+      pathname.startsWith("/onboarding/mctb/")
+    ) {
+      const stage2 =
+        process.env.NEXT_PUBLIC_NEWUI_SHELL !== "0" &&
+        process.env.NEXT_PUBLIC_NEWUI_STAGE2 !== "0";
+      if (stage2) {
+        return siteRedirect(request, "/mctb");
+      }
+    }
+
     if (pathname === "/fax") {
       return siteRedirect(request, "/fax/overview");
     }

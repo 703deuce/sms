@@ -20,7 +20,7 @@ export const MCTB_SETUP_FIELD_AUTHORITY = {
     persistence: "updateMissedCallTextConfig → default_link_url, request_form_*",
   },
   recoveryGoal: {
-    surfaces: ["/onboarding/mctb", "/mctb/setup/text-back"],
+    surfaces: ["/onboarding/mctb", "/mctb", "/mctb/setup/text-back"],
     fields: ["recoveryGoal"],
     persistence:
       "workspace.customFieldsConfig.mctb.recoveryGoal + applyMctbRecoveryGoalConfiguration → initial_message + request_form_fields_json",

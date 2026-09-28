@@ -61,6 +61,15 @@ export function MctbFirstRunWizardHost() {
     if (policy.shouldAutoOpen) setOpen(true);
   }, [onMctbSurface, policy, dismissedThisVisit, setupGuide]);
 
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
   const title = useMemo(() => {
     if (policy?.trigger === "setup_guide") return "Setup guide";
     return "Set up Missed Call Text Back";
@@ -86,9 +95,9 @@ export function MctbFirstRunWizardHost() {
       }}
     >
       <DialogContent
-        className="flex h-[min(760px,calc(100vh-64px))] w-[min(760px,calc(100vw-48px))] max-w-none flex-col overflow-hidden gap-0 p-0 sm:max-w-none"
+        className="flex h-[min(760px,calc(100vh-64px))] w-[min(760px,calc(100vw-48px))] max-w-none flex-col overflow-hidden gap-0 p-0 sm:max-w-none max-sm:fixed max-sm:inset-0 max-sm:top-0 max-sm:left-0 max-sm:h-[100dvh] max-sm:w-full max-sm:max-w-none max-sm:translate-none max-sm:rounded-none"
         overlayClassName="bg-black/40 supports-backdrop-filter:backdrop-blur-[2px]"
-        showCloseButton={policy?.trigger === "setup_guide"}
+        showCloseButton={dismissible}
       >
         <DialogHeader className="sr-only">
           <DialogTitle>{title}</DialogTitle>

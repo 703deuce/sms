@@ -2,12 +2,19 @@ import { redirect } from "next/navigation";
 import { getActiveWorkspaceId, getSession } from "@/lib/auth";
 import { getPrisma } from "@/lib/db";
 import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
+import { mctbOnboardingEntryPath } from "@/lib/mctb/onboarding/entry-path";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import { MctbOnboardingWizard } from "@/components/mctb/onboarding-wizard";
 import { loadMctbOnboardingState, isOnboardingComplete } from "@/lib/mctb/onboarding/state";
 
 export default async function MctbOnboardingPage() {
+  if (isNewUiStage2Enabled()) {
+    redirect(MCTB_ROUTES.home);
+  }
+
+  const entry = mctbOnboardingEntryPath();
   const session = await getSession();
-  if (!session) redirect(`/login?next=${encodeURIComponent("/onboarding/mctb")}`);
+  if (!session) redirect(`/login?next=${encodeURIComponent(entry)}`);
 
   const workspaceId = await getActiveWorkspaceId();
   const prisma = getPrisma();
@@ -21,10 +28,6 @@ export default async function MctbOnboardingPage() {
   const state = await loadMctbOnboardingState(workspaceId);
   if (isOnboardingComplete(state) && String(ws?.billingPlan).toLowerCase() === "trial") {
     redirect("/dashboard");
-  }
-
-  if (isNewUiStage2Enabled()) {
-    redirect("/mctb");
   }
 
   return <MctbOnboardingWizard initialBusinessName={ws?.name || ""} />;

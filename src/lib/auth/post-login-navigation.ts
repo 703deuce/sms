@@ -1,3 +1,4 @@
+import { normalizeMctbOnboardingPostLoginPath } from "@/lib/mctb/onboarding/entry-path";
 import { normalizeAppointmentsPostLoginPath } from "@/lib/products/appointments-home-redirect";
 import { mctbShellHome } from "@/lib/products/product-shell";
 import { isMctbV1Primary } from "@/lib/workspace/platform-launch";
@@ -27,7 +28,7 @@ export function clientSafeNextPath(path: string | null | undefined, fallback?: s
   if (!path.startsWith("/") || path.startsWith("//")) return landing;
   if (path.startsWith("/login") || path.startsWith("/signup")) return landing;
   if (path.startsWith("/api/")) return landing;
-  return normalizeAppointmentsPostLoginPath(path);
+  return normalizeMctbOnboardingPostLoginPath(normalizeAppointmentsPostLoginPath(path));
 }
 
 /** Voice product signup should open workspace via server redirect route. */
