@@ -172,11 +172,11 @@ export function MctbOnboardingRuntime({
   }, [load]);
 
   useEffect(() => {
-    if (step !== "connect_calls") return;
+    if (step !== "business_line" && step !== "connect_calls") return;
     if (data?.trialNumber.provisioned) return;
     void provisionTrialNumber();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per connect visit
-  }, [step]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- provision idempotently when wizard opens business/connect
+  }, [step, data?.trialNumber.provisioned]);
 
   useEffect(() => {
     if (step !== "connect_calls" && step !== "review_test") return;
@@ -262,11 +262,11 @@ export function MctbOnboardingRuntime({
   const previousStep = useMemo((): MctbOnboardingStep | null => {
     const order: MctbOnboardingStep[] = [
       "business_line",
-      "connect_calls",
       "consent",
       "recovery",
-      "notifications",
       "voicemail",
+      "notifications",
+      "connect_calls",
       "review_test",
     ];
     const idx = order.indexOf(step);

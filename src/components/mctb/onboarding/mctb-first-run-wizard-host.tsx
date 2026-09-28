@@ -77,14 +77,14 @@ export function MctbFirstRunWizardHost() {
       }}
     >
       <DialogContent
-        className="flex max-h-[min(92vh,880px)] w-full max-w-3xl flex-col overflow-hidden p-0 sm:max-w-3xl"
+        className="flex h-[min(760px,calc(100vh-48px))] w-[min(920px,calc(100vw-48px))] max-w-none flex-col overflow-hidden gap-0 p-0 sm:max-w-none"
         showCloseButton={true}
       >
         <DialogHeader className="sr-only">
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>Guided MCTB configuration using your live workspace settings.</DialogDescription>
         </DialogHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-hidden">
           <MctbOnboardingRuntime
             shell="opus"
             presentation="modal"

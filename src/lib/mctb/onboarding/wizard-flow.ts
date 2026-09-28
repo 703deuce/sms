@@ -1,25 +1,25 @@
 import type { MctbOnboardingState, MctbOnboardingStep } from "@/lib/mctb/onboarding/types";
 import { MCTB_ONBOARDING_STEP_ORDER, MCTB_ONBOARDING_STEP_LABELS } from "@/lib/mctb/onboarding/types";
 
-/** Primary six-step wizard labels shown in the progress rail. */
+/** Primary seven-step wizard (CONFIGURE → CONNECT → VERIFY → LIVE). */
 export const MCTB_WIZARD_PRIMARY_STEPS: MctbOnboardingStep[] = [
   "business_line",
-  "connect_calls",
   "consent",
   "recovery",
-  "notifications",
   "voicemail",
+  "notifications",
+  "connect_calls",
   "review_test",
 ];
 
 export const MCTB_WIZARD_PRIMARY_LABELS: Record<string, string> = {
-  business_line: "Business line",
-  connect_calls: "Connect calls",
+  business_line: "Business",
   consent: "Consent",
-  recovery: "Recovery",
-  notifications: "Notifications",
+  recovery: "Text Back",
   voicemail: "Voicemail",
-  review_test: "Review & test",
+  notifications: "Notifications",
+  connect_calls: "Connect Phone",
+  review_test: "Test & Go Live",
   ready: "Ready",
 };
 
@@ -80,13 +80,11 @@ export function inferResumeStep(state: MctbOnboardingState): MctbOnboardingStep 
   if (!completed.has("business_line") && !state.businessName?.trim()) {
     return "business_line";
   }
-  if (!state.businessNumberE164?.trim() || !state.forwardingConnectedAt) {
-    if (!completed.has("connect_calls")) return "connect_calls";
-  }
-  if (!completed.has("consent") && !state.consentMode) return "consent";
-  if (!state.workspaceTollFreeNumber && !state.trialNumber) return "recovery";
+  if (!completed.has("consent")) return "consent";
+  if (!completed.has("recovery")) return "recovery";
+  if (!completed.has("voicemail") && !state.voicemailConfiguredAt) return "voicemail";
   if (!completed.has("notifications")) return "notifications";
-  if (!completed.has("voicemail")) return "voicemail";
+  if (!completed.has("connect_calls")) return "connect_calls";
   if (!state.trialActivatedAt && !state.liveTestPassedAt) return "review_test";
   return current;
 }

@@ -138,11 +138,11 @@ export type MctbOnboardingState = {
 
 export const MCTB_ONBOARDING_STEP_ORDER: MctbOnboardingStep[] = [
   "business_line",
-  "connect_calls",
   "consent",
   "recovery",
-  "notifications",
   "voicemail",
+  "notifications",
+  "connect_calls",
   "review_test",
   "ready",
 ];

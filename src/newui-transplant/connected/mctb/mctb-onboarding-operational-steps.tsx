@@ -10,7 +10,6 @@ import {
   useMctbRecoveryWiring,
   useMctbVoicemailWiring,
 } from "@/newui-transplant/connected/mctb/setup-wiring-hooks";
-import { ExclusionsTable } from "@/newui-transplant/components/mctb/exclusions-table";
 import { FieldRow, Panel, Pill } from "@/newui-transplant/components/app/kit";
 import { Button } from "@/newui-transplant/components/ui/button";
 import { Checkbox } from "@/newui-transplant/components/ui/checkbox";
@@ -27,6 +26,7 @@ import {
 import type { MctbHandoffConfigDto, MctbNotificationRecipientDto } from "@/lib/mctb/handoff/types";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import type { MctbOnboardingController } from "@/newui-transplant/connected/mctb/mctb-onboarding-opus-view";
+import { useMctbWizardFooter } from "@/newui-transplant/connected/mctb/mctb-onboarding-wizard-shell";
 
 function delayLabelFromSeconds(sec: number): string {
   if (sec <= 0) return "Immediately";
@@ -189,9 +189,10 @@ export async function persistOnboardingRecoveryAndTemplate(messageTemplate: stri
 type NotificationsStepProps = {
   c: MctbOnboardingController;
   caps: MctbCapabilities | null;
+  compact?: boolean;
 };
 
-export function OnboardingNotificationsStep({ c, caps }: NotificationsStepProps) {
+export function OnboardingNotificationsStep({ c, caps, compact }: NotificationsStepProps) {
   const n = useMctbNotificationsWiring();
   const primary = n.recipients[0];
   const [name, setName] = useState(primary?.name || c.businessName || "");
@@ -250,17 +251,43 @@ export function OnboardingNotificationsStep({ c, caps }: NotificationsStepProps)
   }
 
   const recoveryPaid = Boolean(caps?.recoveryPaid);
+  const aiEntitled = Boolean(caps?.aiRecoveryEntitled);
 
-  return (
-    <Panel
-      title="Business notifications"
-      description="Where your team gets alerted when callers reply or something needs attention."
-    >
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5 sm:col-span-2">
-          <Label htmlFor="onb-notify-name">Contact name</Label>
-          <Input id="onb-notify-name" value={name} onChange={(e) => setName(e.target.value)} />
+  useMctbWizardFooter(
+    compact
+      ? {
+          back: true,
+          primary: {
+            label: "Continue",
+            disabled: c.saving || !email.trim(),
+            onClick: () => {
+              void (async () => {
+                setError(null);
+                try {
+                  await saveNotifications();
+                  await c.post({ action: "complete_notifications" });
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : "Save failed");
+                }
+              })();
+            },
+          },
+        }
+      : null,
+  );
+
+  const body = (
+    <>
+      {compact ? (
+        <div className="mb-6">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Step 5</p>
+          <h2 className="mt-1 text-lg font-semibold tracking-tight">Where should we notify you?</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            We&apos;ll use these details when a missed-call lead replies or needs your attention.
+          </p>
         </div>
+      ) : null}
+      <div className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="onb-notify-email">Notification email</Label>
           <Input
@@ -270,9 +297,10 @@ export function OnboardingNotificationsStep({ c, caps }: NotificationsStepProps)
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
+          <p className="text-xs text-muted-foreground">New caller replies and lead details can be sent here.</p>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="onb-notify-mobile">Mobile (optional)</Label>
+          <Label htmlFor="onb-notify-mobile">Mobile number</Label>
           <Input
             id="onb-notify-mobile"
             type="tel"
@@ -280,6 +308,7 @@ export function OnboardingNotificationsStep({ c, caps }: NotificationsStepProps)
             onChange={(e) => setMobile(e.target.value)}
             placeholder="+1…"
           />
+          <p className="text-xs text-muted-foreground">Used for urgent alerts when your plan includes them.</p>
         </div>
       </div>
       <div className="mt-4 flex items-center gap-2 text-sm">
@@ -291,53 +320,64 @@ export function OnboardingNotificationsStep({ c, caps }: NotificationsStepProps)
         <Label htmlFor="onb-caller-reply-email">Email me when a caller replies</Label>
       </div>
 
-      <ul className="mt-6 space-y-2 rounded-lg border bg-muted/20 p-4 text-sm" aria-label="Locked notification capabilities">
-        <li className="flex items-center gap-2 text-muted-foreground">
-          <Lock className="size-3.5 shrink-0" aria-hidden />
-          Urgent reply detection — {recoveryPaid ? "Available" : "Available with Recovery"}
-        </li>
-        <li className="flex items-center gap-2 text-muted-foreground">
-          <Lock className="size-3.5 shrink-0" aria-hidden />
-          Immediate urgent business SMS — {recoveryPaid ? "Available" : "Available with Recovery"}
-        </li>
-        <li className="flex items-center gap-2 text-muted-foreground">
-          <Lock className="size-3.5 shrink-0" aria-hidden />
-          Add a booking/request link — {caps?.bookingLinks ? "Available" : "Available with Recovery"}
-        </li>
-      </ul>
-
-      <div className="mt-6">
-        <ExclusionsTable />
+      <div className="mt-8 border-t pt-6 text-sm">
+        <p className="mb-3 font-medium">Included</p>
+        <ul className="space-y-2 text-muted-foreground">
+          <li>✓ Caller reply notifications</li>
+          <li>
+            {recoveryPaid ? "✓" : "🔒"} Urgent reply detection
+            {!recoveryPaid ? " — Available with Recovery" : ""}
+          </li>
+          <li>
+            {recoveryPaid ? "✓" : "🔒"} Immediate urgent alerts
+            {!recoveryPaid ? " — Available with Recovery" : ""}
+          </li>
+          <li>
+            {aiEntitled ? "✓" : "🔒"} AI follow-up conversations
+            {!aiEntitled ? " — Available with AI Recovery" : ""}
+          </li>
+        </ul>
       </div>
-
-      <OnboardingAiRecoverySection caps={caps} />
 
       {error ? (
         <p className="mt-4 text-sm text-destructive" role="alert">{error}</p>
       ) : null}
 
-      <footer className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-        <Button type="button" variant="outline" disabled={c.saving} onClick={() => void c.post({ step: "recovery" })}>
-          Back
-        </Button>
-        <Button
-          type="button"
-          disabled={c.saving || !email.trim()}
-          onClick={() => {
-            void (async () => {
-              setError(null);
-              try {
-                await saveNotifications();
-                await c.post({ action: "complete_notifications" });
-              } catch (e) {
-                setError(e instanceof Error ? e.message : "Save failed");
-              }
-            })();
-          }}
-        >
-          Continue
-        </Button>
-      </footer>
+      {!compact ? (
+        <footer className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+          <Button type="button" variant="outline" disabled={c.saving} onClick={() => void c.post({ step: "voicemail" })}>
+            Back
+          </Button>
+          <Button
+            type="button"
+            disabled={c.saving || !email.trim()}
+            onClick={() => {
+              void (async () => {
+                setError(null);
+                try {
+                  await saveNotifications();
+                  await c.post({ action: "complete_notifications" });
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : "Save failed");
+                }
+              })();
+            }}
+          >
+            Continue
+          </Button>
+        </footer>
+      ) : null}
+    </>
+  );
+
+  if (compact) return body;
+
+  return (
+    <Panel
+      title="Business notifications"
+      description="Where your team gets alerted when callers reply or something needs attention."
+    >
+      {body}
     </Panel>
   );
 }

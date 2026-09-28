@@ -261,9 +261,11 @@ export async function POST(req: Request) {
       state = markStepComplete(state, "business_line");
       await saveMctbOnboardingState(auth.workspaceId, {
         ...state,
-        currentStep: "connect_calls",
+        currentStep: "consent",
       });
       await recordFunnelEvent(auth.workspaceId, "MCTB_BUSINESS_INFO_COMPLETED");
+      const { provisionTrialMctbNumber } = await import("@/lib/mctb/onboarding/trial-number");
+      void provisionTrialMctbNumber(auth.workspaceId).catch(() => undefined);
     }
 
     if (body.recoveryGoal) {
@@ -297,7 +299,7 @@ export async function POST(req: Request) {
       state = markStepComplete(state, "recovery");
       await saveMctbOnboardingState(auth.workspaceId, {
         ...state,
-        currentStep: "notifications",
+        currentStep: "voicemail",
       });
       await recordFunnelEvent(auth.workspaceId, "MCTB_MESSAGE_CONFIGURED");
     }
@@ -306,7 +308,15 @@ export async function POST(req: Request) {
       state = markStepComplete(state, "notifications");
       state = await saveMctbOnboardingState(auth.workspaceId, {
         ...state,
-        currentStep: state.voicemailConfiguredAt ? "review_test" : "voicemail",
+        currentStep: "connect_calls",
+      });
+    }
+
+    if (body.action === "complete_connect_phone") {
+      state = markStepComplete(state, "connect_calls");
+      state = await saveMctbOnboardingState(auth.workspaceId, {
+        ...state,
+        currentStep: "review_test",
       });
     }
 
@@ -402,7 +412,7 @@ export async function POST(req: Request) {
       state = await saveMctbOnboardingState(auth.workspaceId, {
         ...state,
         voicemailConfiguredAt: new Date().toISOString(),
-        currentStep: "review_test",
+        currentStep: "notifications",
       });
     }
 
@@ -450,10 +460,7 @@ export async function POST(req: Request) {
       state = await loadMctbOnboardingState(auth.workspaceId);
       if (state.forwardingConnectedAt && !state.completedSteps.includes("connect_calls")) {
         state = markStepComplete(state, "connect_calls");
-        const nextAfterConnect = state.completedSteps.includes("consent")
-          ? "recovery"
-          : "consent";
-        await saveMctbOnboardingState(auth.workspaceId, { currentStep: nextAfterConnect });
+        await saveMctbOnboardingState(auth.workspaceId, { currentStep: "review_test" });
         state = await loadMctbOnboardingState(auth.workspaceId);
       }
     }
