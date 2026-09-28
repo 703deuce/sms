@@ -28,24 +28,10 @@ export type MctbSetupNotificationsWired = {
   urgent?: MctbSetupNotificationsUrgentWired
 }
 
-const DEMO_RECIPIENTS = [
-  { name: 'Dana Whitaker', email: 'dana@northsideplumbing.com', mobile: '(512) 555-0161' },
-  { name: 'Jake Morales', email: 'jake@northsideplumbing.com', mobile: '(512) 555-0170' },
-  { name: 'Front office', email: 'office@northsideplumbing.com', mobile: '—' },
-]
-
-const DEMO_EVENTS = [
-  { label: 'Customer replied', email: true, sms: true },
-  { label: 'Needs reply (15 min)', email: true, sms: true },
-  { label: 'New voicemail', email: true, sms: false },
-  { label: 'Delivery failure', email: true, sms: false },
-  { label: 'Forwarding stopped working', email: true, sms: true },
-]
-
 export function TransplantMctbSetupNotificationsPage({ wired }: { wired?: MctbSetupNotificationsWired }) {
   const live = wired !== undefined
-  const recipients = live ? (wired?.recipients ?? []) : DEMO_RECIPIENTS
-  const events = live ? (wired?.events ?? []) : DEMO_EVENTS
+  const recipients = wired?.recipients ?? []
+  const events = wired?.events ?? []
   const urgent = wired?.urgent
 
   return (

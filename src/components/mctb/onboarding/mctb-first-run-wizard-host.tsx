@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { MctbOnboardingRuntime } from "@/lib/mctb/onboarding/mctb-onboarding-runtime";
 import type { MctbFirstRunWizardPolicy } from "@/lib/mctb/onboarding/first-run-policy";
 import { MCTB_SETUP_GUIDE_QUERY } from "@/newui-transplant/connected/mctb/mctb-setup-guide";
@@ -19,6 +19,7 @@ type PolicyResponse = {
 
 export function MctbFirstRunWizardHost() {
   const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const setupGuide = searchParams.get(MCTB_SETUP_GUIDE_QUERY) === "1";
   const onMctbSurface = pathname?.startsWith("/mctb") ?? false;
@@ -26,6 +27,15 @@ export function MctbFirstRunWizardHost() {
   const [policy, setPolicy] = useState<MctbFirstRunWizardPolicy | null>(null);
   const [open, setOpen] = useState(false);
   const [dismissedThisVisit, setDismissedThisVisit] = useState(false);
+
+  const clearSetupGuideParam = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has(MCTB_SETUP_GUIDE_QUERY)) return;
+    url.searchParams.delete(MCTB_SETUP_GUIDE_QUERY);
+    const next = `${url.pathname}${url.search}${url.hash}`;
+    router.replace(next, { scroll: false });
+  }, [router]);
 
   const loadPolicy = useCallback(async (guide: boolean) => {
     const url = guide
@@ -91,7 +101,10 @@ export function MctbFirstRunWizardHost() {
         if (!next && mandatoryFirstRun) return;
         if (!next && !dismissible) return;
         setOpen(next);
-        if (!next) setDismissedThisVisit(true);
+        if (!next) {
+          setDismissedThisVisit(true);
+          clearSetupGuideParam();
+        }
       }}
     >
       <DialogContent
@@ -110,6 +123,7 @@ export function MctbFirstRunWizardHost() {
             onFinished={() => {
               setOpen(false);
               setDismissedThisVisit(true);
+              clearSetupGuideParam();
               void loadPolicy(false);
             }}
           />

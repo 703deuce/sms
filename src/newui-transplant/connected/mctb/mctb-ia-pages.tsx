@@ -73,7 +73,11 @@ export function NewUiMctbMissedCallRecoveryPage() {
         <p className="mb-3 text-sm text-muted-foreground">Usage: {usageLine}</p>
       ) : null}
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList variant="line" aria-label="Missed-call recovery sections">
+        <TabsList
+          variant="line"
+          className="max-w-full w-full justify-start overflow-x-auto"
+          aria-label="Missed-call recovery sections"
+        >
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="rules">Rules</TabsTrigger>
           <TabsTrigger value="consent">Consent</TabsTrigger>
@@ -194,7 +198,11 @@ export function NewUiMctbVoicemailCombinedPage({ numberId }: { numberId?: string
     <Page>
       <PageHeader title="Voicemail" description="Listen to messages and manage your greeting." />
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList variant="line" aria-label="Voicemail sections">
+        <TabsList
+          variant="line"
+          className="max-w-full w-full justify-start overflow-x-auto"
+          aria-label="Voicemail sections"
+        >
           <TabsTrigger value="messages">Messages</TabsTrigger>
           <TabsTrigger value="greeting">Greeting</TabsTrigger>
         </TabsList>
