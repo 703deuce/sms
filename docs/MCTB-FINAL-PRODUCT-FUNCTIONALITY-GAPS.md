@@ -259,3 +259,44 @@ npm run audit:mctb-opus-page-wiring
 ```
 
 After deploy: production-click missed-call detail rows (recovery sent, suppressed, with/without conversation, older/newer).
+
+---
+
+## OPUS UI compliance (required before deploy)
+
+Automated guard (must pass before deploy):
+
+```bash
+npm run verify:mctb-stage2-presentation   # PURE_OPUS, legacy imports/CSS/render = 0
+npm run verify:mctb-stage2-demo-state
+npm run audit:mctb-opus-page-wiring
+```
+
+| Surface | New functionality | Opus components/patterns reused | New component? | Reason if yes | Presentation guard | Visual/browser |
+|---------|-------------------|----------------------------------|----------------|-----------------|---------------|----------------|
+| Setup → Notifications | Urgent Reply Alerts, instructions, Test Urgent Rules | `Panel`, `FieldRow`, `Pill`, `Checkbox`, `Textarea`, `Button` from existing Opus mirror + `@/newui-transplant/components/ui/*` (same as Recovery/Text Back) | No — lives in `mirror/routes/mctb/setup/notifications/page.tsx` | — | PASS (run on branch) | **PENDING** post-deploy |
+| Setup → Notifications | Events matrix + urgent row | Existing notifications table pattern | No | — | PASS | **PENDING** |
+| Setup → Text Back | Platform template lock | `Panel`, `Pill`, `SaveBar`, `Textarea` (`text-back-editor.tsx`) | No | — | PASS | **PENDING** |
+| Setup → Recovery | Cooldown options | `Panel`, `FieldRow`, `Select` (recovery page) | No | — | PASS | **PENDING** |
+| Conversations urgent badge | Urgent thread indicator | — | — | **Not implemented this pass** | — | N/A |
+
+**Rule:** No page-local mini design system; urgent section uses the same `Panel` + `FieldRow` rhythm as Recovery/Phone setup.
+
+---
+
+## Functional proof evidence log (close rows only with records)
+
+| Step | Flag(s) | Status | Evidence |
+|------|---------|--------|----------|
+| 1 Deploy + `/api/health` commit | — | **PENDING** | Coolify build + `commitSha` |
+| 2 Missed-call detail prod rows | `MCTB_MISSED_CALL_DETAIL` | **PENDING** | Row IDs, API 200, UI screenshots |
+| 3 `caller_replied` real email | `MCTB_REPLY_EMAIL_NOTIFICATIONS` | **PENDING** | inbound provider ID, handoff event, `mctbNotificationDelivery`, received email |
+| 4 Urgent settings persist | `MCTB_URGENT_NOTIFICATION_UI` | **PENDING** | save + hard refresh |
+| 5 Test Urgent Rules UI | `MCTB_URGENT_AI_CLASSIFIER` (test path) | **PENDING** | urgent/normal samples + API JSON |
+| 6 Urgent w/ AI Recovery OFF | `MCTB_URGENT_AI_CLASSIFIER` | **PENDING** | LR off, inbound reply, no consumer AI SMS |
+| 7 Normal urgent-enabled reply | — | **PENDING** | single email, not urgent UI |
+| 8 Urgent inbound reply | `MCTB_URGENT_EMAIL`, `MCTB_URGENT_BUSINESS_SMS` | **PENDING** | assessment row + delivery rows |
+| 9 Business SMS entitlement | `MCTB_URGENT_BUSINESS_SMS` | **PARTIAL** | `canSendMctbUrgentBusinessTeamSms` → `hasActiveMctbPaidEntitlement`; runtime suppress + UI disable on `urgent_detected` SMS |
+| 10 Idempotency replay | `MCTB_URGENT_IDEMPOTENCY` | **PENDING** | keys: `mctb-handoff:…:caller_replied:{providerMessageId}`, `mctb-notify:{handoffEventId}:…` |
+
+**Do not mark COMPLETE** until the evidence column is filled for that step.

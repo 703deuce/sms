@@ -231,6 +231,7 @@ export function useMctbNotificationsWiring() {
   const [loading, setLoading] = useState(true);
   const [recipients, setRecipients] = useState<MctbNotificationRecipientDto[]>([]);
   const [config, setConfig] = useState<MctbHandoffConfigDto | null>(null);
+  const [urgentBusinessSmsEntitled, setUrgentBusinessSmsEntitled] = useState(true);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -240,6 +241,9 @@ export function useMctbNotificationsWiring() {
       if (res.ok) {
         setConfig(json.data.config);
         setRecipients(json.data.recipients || []);
+        setUrgentBusinessSmsEntitled(
+          json.data.launch?.urgentBusinessSmsEntitled !== false,
+        );
       }
     } finally {
       setLoading(false);
@@ -264,7 +268,15 @@ export function useMctbNotificationsWiring() {
     await reload();
   }, [config, recipients, reload]);
 
-  return { loading, recipients, config, setConfig, setRecipients, save };
+  return {
+    loading,
+    recipients,
+    config,
+    setConfig,
+    setRecipients,
+    save,
+    urgentBusinessSmsEntitled,
+  };
 }
 
 export function useMctbLinksWiring() {

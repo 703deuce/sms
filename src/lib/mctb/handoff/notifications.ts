@@ -173,7 +173,18 @@ export async function deliverMctbHandoffNotifications(input: {
     }
   }
 
-  if (channels.sms && !suppressNonUrgentSms && !blockAllNonUrgent) {
+  let urgentBusinessSmsEntitled = true;
+  if (input.eventType === "urgent_detected") {
+    const { canSendMctbUrgentBusinessTeamSms } = await import("./urgent-business-sms-entitlement");
+    urgentBusinessSmsEntitled = await canSendMctbUrgentBusinessTeamSms(input.workspaceId);
+  }
+
+  if (
+    channels.sms &&
+    !suppressNonUrgentSms &&
+    !blockAllNonUrgent &&
+    (input.eventType !== "urgent_detected" || urgentBusinessSmsEntitled)
+  ) {
     const smsBody = renderMctbTeamSms(renderInput);
     for (const recipient of smsRecipients) {
       const idempotencyKey = `${idemBase}:sms:${recipient.id}`;
@@ -220,6 +231,14 @@ export async function deliverMctbHandoffNotifications(input: {
         results.push({ channel: "sms", status: "failed", destination: recipient.mobileE164 ?? undefined });
       }
     }
+  }
+
+  if (channels.sms && input.eventType === "urgent_detected" && !urgentBusinessSmsEntitled) {
+    results.push({
+      channel: "sms",
+      status: "suppressed",
+      destination: "urgent_business_sms_not_entitled",
+    });
   }
 
   return { delivered: results, suppressed: false };

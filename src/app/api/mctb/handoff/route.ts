@@ -19,13 +19,18 @@ export async function GET() {
   const config = await loadMctbHandoffConfig(workspaceId);
   const recipients = await loadMctbNotificationRecipients(workspaceId);
   const { isLeadRecoveryAiRepliesEnabled } = await import("@/lib/mctb/lead-recovery/config");
+  const { canSendMctbUrgentBusinessTeamSms } = await import(
+    "@/lib/mctb/handoff/urgent-business-sms-entitlement",
+  );
   const aiRepliesEnabled = await isLeadRecoveryAiRepliesEnabled(workspaceId);
+  const urgentBusinessSmsEntitled = await canSendMctbUrgentBusinessTeamSms(workspaceId);
   return NextResponse.json({
     data: {
       config,
       recipients,
       launch: {
         aiRepliesEnabled,
+        urgentBusinessSmsEntitled,
       },
     },
   });

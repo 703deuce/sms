@@ -1,10 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Page, PageHeader, Panel } from "@/newui-transplant/components/app/kit";
-import { Button } from "@/newui-transplant/components/ui/button";
-import { Checkbox } from "@/newui-transplant/components/ui/checkbox";
-import { Textarea } from "@/newui-transplant/components/ui/textarea";
+import { Page, PageHeader } from "@/newui-transplant/components/app/kit";
 import { ConsentEditor } from "@/newui-transplant/components/mctb/consent-editor";
 import { TextBackEditor } from "@/newui-transplant/components/mctb/text-back-editor";
 import { ExclusionsTable } from "@/newui-transplant/components/mctb/exclusions-table";
@@ -184,10 +181,12 @@ export function NewUiMctbSetupNotificationsPage() {
     if (!n.config) return undefined;
     return OPUS_EVENT_MAP.map((row) => {
       const matrix = row.event ? n.config!.routingMatrix[row.event] : null;
+      const isUrgentRow = row.event === "urgent_detected";
       return {
         label: row.label,
         email: matrix?.email ?? true,
         sms: matrix?.sms ?? false,
+        smsDisabled: isUrgentRow && !n.urgentBusinessSmsEntitled,
         onEmailChange: row.event
           ? (v: boolean) => {
               if (!n.config) return;
@@ -216,65 +215,36 @@ export function NewUiMctbSetupNotificationsPage() {
           : undefined,
       };
     });
-  }, [n.config, n.recipients, n.setConfig, n.save]);
+  }, [n.config, n.recipients, n.setConfig, n.save, n.urgentBusinessSmsEntitled]);
 
   if (n.loading) return <p className="p-6 text-sm text-muted-foreground">Loading notifications…</p>;
 
   return (
-    <div className="flex flex-col gap-4">
-      <Panel
-        title="Urgent Reply Alerts"
-        description="Classify inbound replies using your instructions. Works even when AI Recovery conversation is off. Does not send additional texts to customers."
-      >
-        <div className="flex flex-col gap-4 px-5 py-4">
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox
-              checked={Boolean(n.config?.emergencyDetectionEnabled)}
-              onCheckedChange={(v) => patchHandoffConfig({ emergencyDetectionEnabled: Boolean(v) })}
-              aria-label="Urgent Reply Alerts enabled"
-            />
-            Urgent Reply Alerts
-          </label>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium" htmlFor="mctb-urgent-instructions">
-              What should Transovo consider urgent?
-            </label>
-            <Textarea
-              id="mctb-urgent-instructions"
-              rows={4}
-              value={n.config?.emergencyCriteria || ""}
-              onChange={(e) => {
+    <TransplantMctbSetupNotificationsPage
+      wired={{
+        urgent: n.config
+          ? {
+              enabled: Boolean(n.config.emergencyDetectionEnabled),
+              instructions: n.config.emergencyCriteria || "",
+              urgentBusinessSmsEntitled: n.urgentBusinessSmsEntitled,
+              testMessage: urgentTestMessage,
+              testBusy: urgentTestBusy,
+              testResultLabel: urgentTestResult,
+              onEnabledChange: (v) => patchHandoffConfig({ emergencyDetectionEnabled: v }),
+              onInstructionsChange: (v) => {
                 if (!n.config) return;
-                n.setConfig({ ...n.config, emergencyCriteria: e.target.value });
-              }}
-              onBlur={() => {
+                n.setConfig({ ...n.config, emergencyCriteria: v });
+              },
+              onInstructionsBlur: () => {
                 if (!n.config) return;
                 void fetch("/api/mctb/handoff", {
                   method: "POST",
                   headers: { "content-type": "application/json" },
                   body: JSON.stringify({ config: n.config, recipients: n.recipients }),
                 });
-              }}
-              placeholder="Example: Active flooding, gas smell, no heat in winter, sparks from electrical panel…"
-            />
-          </div>
-          <div className="flex flex-col gap-2 border-t pt-4">
-            <label className="text-sm font-medium" htmlFor="mctb-urgent-test-message">
-              Test Urgent Rules
-            </label>
-            <Textarea
-              id="mctb-urgent-test-message"
-              rows={2}
-              value={urgentTestMessage}
-              onChange={(e) => setUrgentTestMessage(e.target.value)}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="self-start"
-              disabled={urgentTestBusy || !urgentTestMessage.trim()}
-              onClick={() => {
+              },
+              onTestMessageChange: setUrgentTestMessage,
+              onRunTest: () => {
                 setUrgentTestBusy(true);
                 setUrgentTestResult(null);
                 void fetch("/api/mctb/handoff", {
@@ -291,31 +261,20 @@ export function NewUiMctbSetupNotificationsPage() {
                       setUrgentTestResult(json.message || json.error || "Test failed");
                       return;
                     }
-                    setUrgentTestResult(
-                      `${json.label}: ${json.reason}`,
-                    );
+                    setUrgentTestResult(`${json.label}: ${json.reason}`);
                   })
                   .catch(() => setUrgentTestResult("Test failed"))
                   .finally(() => setUrgentTestBusy(false));
-              }}
-            >
-              {urgentTestBusy ? "Testing…" : "Run test"}
-            </Button>
-            {urgentTestResult ? (
-              <p className="text-sm text-muted-foreground" role="status">{urgentTestResult}</p>
-            ) : null}
-          </div>
-        </div>
-      </Panel>
-      <TransplantMctbSetupNotificationsPage
-        wired={{
-          recipients: n.recipients.map((r) => ({
-            name: r.name || r.email || "Recipient",
-            email: r.email || "—",
-            mobile: formatRecipientMobile(r.mobileE164),
-          })),
-          events: events ?? undefined,
-          onAddRecipient: () => {
+              },
+            }
+          : undefined,
+        recipients: n.recipients.map((r) => ({
+          name: r.name || r.email || "Recipient",
+          email: r.email || "—",
+          mobile: formatRecipientMobile(r.mobileE164),
+        })),
+        events: events ?? undefined,
+        onAddRecipient: () => {
             const name = window.prompt("Recipient name");
             if (!name?.trim()) return;
             const email = window.prompt("Email address");
@@ -335,11 +294,10 @@ export function NewUiMctbSetupNotificationsPage() {
               },
             ];
             n.setRecipients(next);
-            void n.save();
-          },
-        }}
-      />
-    </div>
+          void n.save();
+        },
+      }}
+    />
   );
 }
 

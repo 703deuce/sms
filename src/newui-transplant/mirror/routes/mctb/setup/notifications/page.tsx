@@ -1,15 +1,31 @@
 'use client'
 
 import { MoreHorizontal, Plus } from 'lucide-react'
-import { Initials, Panel } from '@/newui-transplant/components/app/kit'
+import { FieldRow, Initials, Panel, Pill } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Checkbox } from '@/newui-transplant/components/ui/checkbox'
+import { Textarea } from '@/newui-transplant/components/ui/textarea'
 import { formatPhone } from '@/lib/utils'
+
+export type MctbSetupNotificationsUrgentWired = {
+  enabled: boolean
+  instructions: string
+  urgentBusinessSmsEntitled: boolean
+  testMessage: string
+  testBusy: boolean
+  testResultLabel: string | null
+  onEnabledChange: (v: boolean) => void
+  onInstructionsChange: (v: string) => void
+  onInstructionsBlur: () => void
+  onTestMessageChange: (v: string) => void
+  onRunTest: () => void
+}
 
 export type MctbSetupNotificationsWired = {
   recipients: Array<{ name: string; email: string; mobile: string }>
-  events: Array<{ label: string; email: boolean; sms: boolean; onEmailChange?: (v: boolean) => void; onSmsChange?: (v: boolean) => void }>
+  events: Array<{ label: string; email: boolean; sms: boolean; smsDisabled?: boolean; onEmailChange?: (v: boolean) => void; onSmsChange?: (v: boolean) => void }>
   onAddRecipient?: () => void
+  urgent?: MctbSetupNotificationsUrgentWired
 }
 
 const DEMO_RECIPIENTS = [
@@ -30,9 +46,77 @@ export function TransplantMctbSetupNotificationsPage({ wired }: { wired?: MctbSe
   const live = wired !== undefined
   const recipients = live ? (wired?.recipients ?? []) : DEMO_RECIPIENTS
   const events = live ? (wired?.events ?? []) : DEMO_EVENTS
+  const urgent = wired?.urgent
 
   return (
     <div className="flex flex-col gap-4">
+      {urgent ? (
+        <Panel
+          title="Urgent Reply Alerts"
+          description="Classify inbound replies from your instructions. Works when AI Recovery is off. Does not text customers."
+        >
+          <div className="divide-y px-5">
+            <FieldRow
+              label="Urgent Reply Alerts"
+              description="Run semantic urgency on each inbound MCTB reply before team notifications."
+            >
+              <Checkbox
+                checked={urgent.enabled}
+                onCheckedChange={(v) => urgent.onEnabledChange(Boolean(v))}
+                aria-label="Urgent Reply Alerts enabled"
+              />
+            </FieldRow>
+            <div className="py-4">
+              <label className="text-sm font-medium" htmlFor="mctb-urgent-instructions">
+                What should Transovo consider urgent?
+              </label>
+              <Textarea
+                id="mctb-urgent-instructions"
+                className="mt-2"
+                rows={4}
+                value={urgent.instructions}
+                onChange={(e) => urgent.onInstructionsChange(e.target.value)}
+                onBlur={urgent.onInstructionsBlur}
+                placeholder="Example: Active flooding, gas smell, no heat in winter…"
+              />
+            </div>
+            {!urgent.urgentBusinessSmsEntitled ? (
+              <p className="pb-4 text-xs text-muted-foreground">
+                Urgent business SMS alerts require an active MCTB paid plan. Email urgent alerts still apply per Events below.
+              </p>
+            ) : null}
+            <div className="py-4">
+              <FieldRow label="Test Urgent Rules" description="Uses the production classifier. Does not message customers or send alerts.">
+                <span />
+              </FieldRow>
+              <Textarea
+                id="mctb-urgent-test-message"
+                className="mt-2"
+                rows={2}
+                value={urgent.testMessage}
+                onChange={(e) => urgent.onTestMessageChange(e.target.value)}
+                aria-label="Sample customer reply for urgent test"
+              />
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={urgent.testBusy || !urgent.testMessage.trim()}
+                  onClick={urgent.onRunTest}
+                >
+                  {urgent.testBusy ? 'Testing…' : 'Run test'}
+                </Button>
+                {urgent.testResultLabel ? (
+                  <Pill tone={urgent.testResultLabel.startsWith('Urgent') ? 'warning' : 'neutral'}>
+                    {urgent.testResultLabel}
+                  </Pill>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </Panel>
+      ) : null}
       <Panel
         title="Team recipients"
         action={
@@ -78,6 +162,7 @@ export function TransplantMctbSetupNotificationsPage({ wired }: { wired?: MctbSe
                 <td className="px-5 py-3 text-center">
                   <Checkbox
                     checked={e.sms}
+                    disabled={e.smsDisabled}
                     onCheckedChange={(v) => e.onSmsChange?.(Boolean(v))}
                     aria-label={`${e.label} by SMS`}
                   />
