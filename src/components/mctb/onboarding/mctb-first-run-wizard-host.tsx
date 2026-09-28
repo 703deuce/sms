@@ -68,10 +68,19 @@ export function MctbFirstRunWizardHost() {
 
   if (!onMctbSurface) return null;
 
+  const mandatoryFirstRun =
+    Boolean(policy?.shouldAutoOpen) && policy?.trigger === "incomplete_onboarding";
+  const dismissible =
+    policy?.trigger === "setup_guide" || Boolean(policy?.everyLoginTesting);
+
   return (
     <Dialog
       open={open}
+      modal
+      disablePointerDismissal={mandatoryFirstRun || !dismissible}
       onOpenChange={(next) => {
+        if (!next && mandatoryFirstRun) return;
+        if (!next && !dismissible) return;
         setOpen(next);
         if (!next) setDismissedThisVisit(true);
       }}

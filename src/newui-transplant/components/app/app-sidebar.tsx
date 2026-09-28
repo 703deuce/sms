@@ -105,7 +105,7 @@ export function AppSidebar({ userName }: { userName?: string }) {
 
       <SidebarContent className="pb-2">
         {resolveCustomerNavSections().map((section) => (
-          <SidebarGroup key={section.label}>
+          <SidebarGroup key={section.label} className="px-2 py-1">
             <SidebarGroupLabel className="text-[11px] font-medium uppercase tracking-wider text-sidebar-foreground/50">
               {section.label}
             </SidebarGroupLabel>

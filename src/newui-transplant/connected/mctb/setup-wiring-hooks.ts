@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchMctbSetup, saveMctbSetup } from "@/lib/newui-transplant/api/mctb-setup-client";
 import { addPauseUntil } from "@/lib/mctb/schedule-shared";
+import { clampMctbMaxMessagesPerCaller } from "@/lib/mctb/recovery-max-messages";
 import type { TriggerKey, TriggerState } from "@/lib/mctb/setup-recovery-model";
 import type { MctbHandoffConfigDto, MctbNotificationRecipientDto } from "@/lib/mctb/handoff/types";
 import type { MctbSetupTestStatus } from "@/lib/mctb/setup-test";
@@ -49,7 +50,7 @@ export function useMctbRecoveryWiring() {
       });
       setCooldownMinutes(Number(r.cooldownMinutes ?? 1440));
       setDelaySeconds(Number(r.delaySeconds ?? 30));
-      setMaxMessages(Number(r.maxMessagesPerCaller ?? 3));
+      setMaxMessages(clampMctbMaxMessagesPerCaller(Number(r.maxMessagesPerCaller ?? 3)));
       setPaused(Boolean(sch?.paused));
       setTimezone(String(r.timezone || "America/New_York"));
     } finally {
@@ -67,7 +68,7 @@ export function useMctbRecoveryWiring() {
       triggerRules: triggers,
       cooldownMinutes,
       delaySeconds,
-      maxMessagesPerCaller: maxMessages,
+      maxMessagesPerCaller: clampMctbMaxMessagesPerCaller(maxMessages),
       activate: false,
     });
     await reload();

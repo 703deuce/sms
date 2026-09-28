@@ -138,7 +138,10 @@ export function OnboardingRecoveryControlsSection({ wiring }: { wiring: Recovery
             </SelectContent>
           </Select>
         </FieldRow>
-        <FieldRow label="Max automated texts" description="Per caller in the cooldown window">
+        <FieldRow
+          label="Max automated recovery texts"
+          description="Same caller within the cooldown window. Does not include Press-1 compliance texts."
+        >
           <Select
             value={String(r.maxMessages)}
             onValueChange={(v) => r.setMaxMessages(Number(v) || 3)}

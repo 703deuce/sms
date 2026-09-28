@@ -1,6 +1,8 @@
 'use client'
 
+import { useMemo } from 'react'
 import { FieldRow, Panel } from '@/newui-transplant/components/app/kit'
+import { mctbMaxMessagesSelectOptions } from '@/lib/mctb/recovery-max-messages'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/newui-transplant/components/ui/select'
 import { SaveBar } from '@/newui-transplant/components/app/save-bar'
@@ -44,6 +46,7 @@ export function TransplantMctbSetupRecoveryPage({ wired }: { wired?: MctbSetupRe
   const delay = wired?.delayLabel ?? '30 seconds'
   const cooldown = wired?.cooldownLabel ?? '24 hours'
   const maxMsg = wired?.maxMessagesLabel ?? '3'
+  const maxMsgOptions = useMemo(() => mctbMaxMessagesSelectOptions(Number(maxMsg) || 3), [maxMsg])
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
@@ -86,11 +89,14 @@ export function TransplantMctbSetupRecoveryPage({ wired }: { wired?: MctbSetupRe
               onValueChange={wired?.onCooldownChange}
             />
           </FieldRow>
-          <FieldRow label="Max automated messages" description="Per missed call, before a human takes over">
+          <FieldRow
+            label="Max automated recovery texts"
+            description="Same caller — within the cooldown window above. Does not include Press-1 compliance texts."
+          >
             <Choice
-              id="Max automated messages"
-              options={['1', '2', '3', '5']}
-              value={maxMsg}
+              id="Max automated recovery texts"
+              options={maxMsgOptions}
+              value={maxMsgOptions.includes(maxMsg) ? maxMsg : maxMsgOptions[maxMsgOptions.length - 1]!}
               onValueChange={wired?.onMaxMessagesChange}
             />
           </FieldRow>

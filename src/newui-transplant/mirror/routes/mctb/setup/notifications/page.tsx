@@ -72,8 +72,8 @@ export function TransplantMctbSetupNotificationsPage({ wired }: { wired?: MctbSe
               </label>
               <Textarea
                 id="mctb-urgent-instructions"
-                className="mt-2"
-                rows={4}
+                className="mt-2 min-h-[5.5rem] max-h-48 resize-y"
+                rows={3}
                 value={urgent.instructions}
                 onChange={(e) => urgent.onInstructionsChange(e.target.value)}
                 onBlur={urgent.onInstructionsBlur}
@@ -91,7 +91,7 @@ export function TransplantMctbSetupNotificationsPage({ wired }: { wired?: MctbSe
               </FieldRow>
               <Textarea
                 id="mctb-urgent-test-message"
-                className="mt-2"
+                className="mt-2 min-h-[2.75rem] max-h-32 resize-y"
                 rows={2}
                 value={urgent.testMessage}
                 onChange={(e) => urgent.onTestMessageChange(e.target.value)}
