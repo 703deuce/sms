@@ -15,7 +15,6 @@ import { TransplantMctbSetupTestPage } from "@/newui-transplant/mirror/routes/mc
 import { useMctbSetupApi, formatSetupPhoneLine } from "@/newui-transplant/connected/mctb/setup-hooks";
 import { useMctbSetupOverviewWiring } from "@/newui-transplant/connected/mctb/mctb-setup-overview-wiring";
 import { useMctbSetupPhoneWiring } from "@/newui-transplant/connected/mctb/mctb-setup-phone-wiring";
-import { useOpusWorkspaceData } from "@/newui-transplant/context/opus-workspace-data";
 import {
   useMctbLinksWiring,
   useMctbNotificationsWiring,
@@ -75,16 +74,14 @@ const OPUS_EVENT_MAP: Array<{ label: string; event?: MctbHandoffEventType }> = [
 ];
 
 export function NewUiMctbSetupOverviewPage() {
-  const { business } = useOpusWorkspaceData();
-  const { loading, wired } = useMctbSetupOverviewWiring(business?.sender || "—");
+  const { loading, wired } = useMctbSetupOverviewWiring("—");
   if (loading) return <p className="p-6 text-sm text-muted-foreground">Loading setup…</p>;
   if (!wired) return <p className="p-6 text-sm text-muted-foreground">Could not load setup.</p>;
   return <TransplantMctbSetupPage wired={wired} />;
 }
 
 export function NewUiMctbSetupPhonePage() {
-  const { business } = useOpusWorkspaceData();
-  const { loading, wired } = useMctbSetupPhoneWiring(business?.sender || "—");
+  const { loading, wired } = useMctbSetupPhoneWiring();
   if (loading) return <p className="p-6 text-sm text-muted-foreground">Loading phone settings…</p>;
   if (!wired) return <p className="p-6 text-sm text-muted-foreground">Could not load phone settings.</p>;
   return <TransplantMctbSetupPhonePage wired={wired} />;
@@ -338,7 +335,7 @@ export function NewUiMctbSetupTestPage() {
     { label: "Forwarding verified", ok: Boolean(test.liveTest?.passed) },
     {
       label: "Sender ready",
-      ok: test.messagingReady,
+      ok: Boolean(test.senderReady),
       href: "/mctb/setup/phone",
     },
     { label: "Consent mode configured", ok: Boolean(test.setupTest?.checks?.consentModeLoaded) },

@@ -96,7 +96,12 @@ export type ChartWeekRow = {
 export type BusinessContext = {
   name: string;
   line: string;
+  /** Transovo forwarding / ingress number (not the public business line). */
+  forwardingLine: string;
+  forwardingLineState: "ready" | "provisioning" | "missing";
   sender: string;
+  senderDetail: string;
+  senderMode: "PLATFORM" | "WORKSPACE";
   timezone: string;
   website: string;
 };

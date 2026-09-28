@@ -1,27 +1,35 @@
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { getPrisma } from "@/lib/db";
 import { loadMctbOnboardingState } from "@/lib/mctb/onboarding/state";
+import { getProductionMctbForwardTargetE164 } from "@/lib/mctb/production-forward-target";
+import { formatMctbPhoneLabel } from "@/lib/mctb/phone-display";
 import { resolveMctbWorkspaceBusinessLineE164 } from "@/lib/mctb/resolve-workspace-business-line";
-import { describeMctbSenderPresentation } from "@/lib/mctb/sender-presentation";
+
+export type MctbForwardingIngressUiState = "ready" | "provisioning" | "missing";
 
 export type MctbShellContextPayload = {
   workspaceName: string;
   businessLineE164: string | null;
+  forwardingIngressE164: string | null;
+  forwardingIngressState: MctbForwardingIngressUiState;
+  senderMode: "PLATFORM" | "WORKSPACE";
   senderE164: string | null;
   senderLabel: string;
+  senderDetail: string;
   timezone: string;
 };
 
 /** Shared MCTB chrome context for Opus shell + setup editors (no Telnyx sweep). */
 export async function loadMctbShellContextData(workspaceId: string): Promise<MctbShellContextPayload> {
   const prisma = getPrisma();
-  const [workspace, runtime, onboarding] = await Promise.all([
+  const [workspace, runtime, onboarding, forwardingIngressE164] = await Promise.all([
     prisma.workspace.findUnique({
       where: { id: workspaceId },
       select: { name: true, customFieldsConfig: true },
     }),
     loadMissedCallTextConfig(workspaceId),
     loadMctbOnboardingState(workspaceId),
+    getProductionMctbForwardTargetE164(workspaceId),
   ]);
 
   const customCfg =
@@ -38,23 +46,45 @@ export async function loadMctbShellContextData(workspaceId: string): Promise<Mct
     onboarding.businessNumberE164,
   );
 
-  const senderMode = runtime.senderMode || "WORKSPACE";
-  const senderPresentation = describeMctbSenderPresentation(senderMode);
-  const smsPhoneId = runtime.smsPhoneNumberId || runtime.phoneNumberId;
+  const senderMode = runtime.senderMode === "PLATFORM" ? "PLATFORM" : "WORKSPACE";
+  const ownedPhones = await prisma.phoneNumber.findMany({
+    where: { workspaceId, status: { not: "Released" } },
+    select: { id: true, e164: true },
+  });
   let senderE164: string | null = null;
-  if (smsPhoneId) {
-    const pn = await prisma.phoneNumber.findFirst({
-      where: { id: smsPhoneId, workspaceId },
-      select: { e164: true },
-    });
-    senderE164 = pn?.e164 ?? null;
+  if (senderMode === "WORKSPACE") {
+    const smsId = runtime.smsPhoneNumberId;
+    if (smsId) {
+      senderE164 = ownedPhones.find((p) => p.id === smsId)?.e164 ?? null;
+    }
+  }
+
+  let forwardingIngressState: MctbForwardingIngressUiState = "missing";
+  if (forwardingIngressE164) {
+    forwardingIngressState = "ready";
+  } else if (runtime.phoneNumberId) {
+    forwardingIngressState = "provisioning";
   }
 
   return {
     workspaceName: workspace?.name ?? "Workspace",
     businessLineE164,
+    forwardingIngressE164,
+    forwardingIngressState,
+    senderMode,
     senderE164,
-    senderLabel: senderPresentation.title,
+    senderLabel:
+      senderMode === "PLATFORM"
+        ? "Transovo Platform"
+        : senderE164
+          ? formatMctbPhoneLabel(senderE164)
+          : "Your verified number",
+    senderDetail:
+      senderMode === "PLATFORM"
+        ? "Managed by Transovo"
+        : senderE164
+          ? formatMctbPhoneLabel(senderE164)
+          : "Select a verified messaging number",
     timezone: runtime.timezone ?? "America/New_York",
   };
 }

@@ -342,6 +342,7 @@ export function useMctbTestWiring() {
   const [liveTest, setLiveTest] = useState<LiveTestStatus | null>(null);
   const [businessLine, setBusinessLine] = useState("");
   const [messagingReady, setMessagingReady] = useState(false);
+  const [senderReady, setSenderReady] = useState(false);
   const [openerSaved, setOpenerSaved] = useState(false);
 
   const reload = useCallback(async () => {
@@ -367,7 +368,12 @@ export function useMctbTestWiring() {
     );
     setBusinessLine(lineE164 ? formatSetupPhoneLine(lineE164) : "");
     const runtime = (setupData?.runtime ?? {}) as { messageTemplate?: string };
-    setMessagingReady(Boolean((setupData as { compliance?: { messagingReady?: boolean } })?.compliance?.messagingReady));
+    const compliance = (setupData as { compliance?: { messagingReady?: boolean } })?.compliance;
+    const messaging = (setupData as { messaging?: { senderMode?: string } })?.messaging;
+    const runtimeSender = (runtime as { senderMode?: string }).senderMode;
+    const senderMode = messaging?.senderMode ?? runtimeSender ?? "WORKSPACE";
+    setMessagingReady(Boolean(compliance?.messagingReady));
+    setSenderReady(senderMode === "PLATFORM" || Boolean(compliance?.messagingReady));
     setOpenerSaved(Boolean(runtime.messageTemplate?.trim()));
   }, []);
 
@@ -389,6 +395,7 @@ export function useMctbTestWiring() {
     liveTest,
     businessLine,
     messagingReady,
+    senderReady,
     openerSaved,
     startLiveTest,
     reload,

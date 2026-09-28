@@ -69,7 +69,7 @@ type ScheduleSlice = {
 };
 
 export function buildSetupGlobalStatus(input: {
-  runtime: RuntimeSlice;
+  runtime: RuntimeSlice & { senderMode?: "PLATFORM" | "WORKSPACE" };
   schedule: ScheduleSlice;
   businessLineE164?: string | null;
   phoneNumbers: Array<{ id: string; e164: string; label?: string | null }>;
@@ -81,6 +81,7 @@ export function buildSetupGlobalStatus(input: {
     input;
   const smsId = runtime.smsPhoneNumberId || runtime.phoneNumberId;
   const smsPhone = phoneNumbers.find((p) => p.id === smsId);
+  const senderMode = runtime.senderMode || "WORKSPACE";
 
   let recoveryLabel = "Recovery active";
   if (schedule.paused || !runtime.enabled) {
@@ -98,7 +99,12 @@ export function buildSetupGlobalStatus(input: {
   return {
     recoveryLabel,
     businessLineLabel: businessLineE164 ? formatMctbPhoneLabel(businessLineE164) : null,
-    senderLabel: smsPhone ? `${formatMctbPhoneLabel(smsPhone.e164)} · ${messagingReady ? "Ready" : "Pending"}` : null,
+    senderLabel:
+      senderMode === "PLATFORM"
+        ? "Transovo Platform · Active"
+        : smsPhone
+          ? `${formatMctbPhoneLabel(smsPhone.e164)} · ${messagingReady ? "Ready" : "Pending"}`
+          : "Your verified number",
     forwardingLabel: forwardingVerified ? "Forwarding verified" : "Forwarding not verified",
     lastTestLabel: lastTestAt ? `Last tested ${formatShortWhen(lastTestAt)}` : "Never tested",
     pauseKind: schedule.pauseKind ?? (schedule.paused ? "manual" : null),

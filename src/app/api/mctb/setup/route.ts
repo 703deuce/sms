@@ -23,6 +23,7 @@ import { loadAdminMctbTestFlags } from "@/lib/mctb/admin-test-workspace";
 import { isMctbSetupMessagingReady } from "@/lib/mctb/setup-messaging-ready";
 import { isExistingConsentModeEligible } from "@/lib/mctb/setup-consent-eligibility";
 import { describeMctbSenderPresentation } from "@/lib/mctb/sender-presentation";
+import { getPhoneMessagingStatus } from "@/lib/messaging/compliance/phone-messaging-status";
 import { resolveMctbRecoveryOpenerTemplate } from "@/lib/mctb/message-template";
 import { EXISTING_CONSENT_ATTESTATION_VERSION } from "@/lib/mctb/capture/attestation";
 import {
@@ -88,6 +89,7 @@ export type MctbSetupPayload = {
   recoveryGoal?: string;
   activate?: boolean;
   existingConsentAttested?: boolean;
+  senderMode?: "PLATFORM" | "WORKSPACE";
 };
 
 const DEFAULT_CAMPAIGN_DESCRIPTION =
@@ -386,6 +388,50 @@ export async function POST(req: Request) {
     body.smsPhoneNumberId = canonicalSmsId;
   }
 
+  if (body.senderMode !== undefined) {
+    const { resolveMctbCapabilities } = await import("@/lib/mctb/capabilities");
+    const caps = await resolveMctbCapabilities(workspaceId);
+    const requested = body.senderMode === "PLATFORM" ? "PLATFORM" : "WORKSPACE";
+    if (requested === "WORKSPACE") {
+      if (!caps.ownSenderAddOnEntitled) {
+        return NextResponse.json(
+          { error: "Own Sender add-on is required to send from your verified number." },
+          { status: 403 },
+        );
+      }
+      const smsId =
+        body.smsPhoneNumberId ?? priorRuntime.smsPhoneNumberId ?? priorRuntime.phoneNumberId;
+      if (!smsId) {
+        return NextResponse.json(
+          { error: "Select a verified messaging number for customer-owned sending." },
+          { status: 400 },
+        );
+      }
+      const phoneNumbersForSender = await loadMctbSetupPhoneOptions(workspaceId);
+      const row = phoneNumbersForSender.find((p) => p.id === smsId);
+      if (!row) {
+        return NextResponse.json({ error: "Selected sender is not in this workspace." }, { status: 400 });
+      }
+      const ms = getPhoneMessagingStatus(row);
+      if (!ms.approved) {
+        return NextResponse.json(
+          { error: "Selected sender is not verified for messaging yet." },
+          { status: 400 },
+        );
+      }
+      if (smsId === priorRuntime.phoneNumberId) {
+        return NextResponse.json(
+          {
+            error:
+              "Your Transovo forwarding number cannot be used as the text-back sender. Choose your approved messaging number.",
+          },
+          { status: 400 },
+        );
+      }
+      body.smsPhoneNumberId = smsId;
+    }
+  }
+
   const sessionUser = await prisma.user.findUnique({
     where: { id: session.userId },
     select: { phone: true },
@@ -511,6 +557,9 @@ export async function POST(req: Request) {
   const runtimeResult = await updateMissedCallTextConfig({
     workspaceId,
     patch: {
+      ...(body.senderMode !== undefined
+        ? { sender_mode: body.senderMode === "PLATFORM" ? "PLATFORM" : "WORKSPACE" }
+        : {}),
       ...(enabledPatch !== undefined ? { enabled: enabledPatch } : {}),
       delay_seconds: body.delaySeconds,
       initial_message: body.messageTemplate,

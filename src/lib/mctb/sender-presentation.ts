@@ -6,9 +6,9 @@ export function describeMctbSenderPresentation(mode: MctbSenderMode | string | n
 } {
   if (mode === "PLATFORM") {
     return {
-      title: "Transovo-managed messaging",
+      title: "Transovo Platform",
       description:
-        "Recovery messages are sent using a Transovo-managed number. Message wording follows approved recovery templates.",
+        "Transovo manages the sending number. Recovery wording follows approved platform templates.",
     };
   }
   return {

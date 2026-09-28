@@ -9,6 +9,7 @@ npx tsx scripts/test-mctb-recovery-usage-idempotency.ts
 npx tsx scripts/test-mctb-recovery-cooldown-eligibility.ts
 npx tsx scripts/test-mctb-setup-recovery.ts
 npx tsx scripts/test-mctb-trial-ingress-provision-contract.ts
+npx tsx scripts/test-mctb-setup-sender-mode-persist.ts
 npx tsx scripts/test-mctb-ai-recovery-entitlement-gate.ts
 npx tsx scripts/test-mctb-existing-consent-attestation.ts
 npx tsx scripts/test-mctb-platform-template-enforcement.ts

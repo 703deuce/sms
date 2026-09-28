@@ -67,6 +67,12 @@ export function AppSidebar({ userName }: { userName?: string }) {
   const { workspaceName, business } = useOpusWorkspaceData()
   const displayName = business?.name || workspaceName || 'Workspace'
   const initials = workspaceInitials(displayName)
+  const forwardingSecondary =
+    business?.forwardingLineState === 'provisioning'
+      ? 'Setting up forwarding number…'
+      : business?.forwardingLineState === 'ready' && business.forwardingLine !== '—'
+        ? `${business.forwardingLine} · Forwarding number`
+        : 'Forwarding number not set'
 
   return (
     <Sidebar collapsible="icon">
@@ -88,7 +94,7 @@ export function AppSidebar({ userName }: { userName?: string }) {
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-xs font-medium text-sidebar-accent-foreground">{displayName}</span>
-            <span className="block text-[11px] text-sidebar-foreground/70">Pro workspace</span>
+            <span className="block truncate text-[11px] text-sidebar-foreground/70">{forwardingSecondary}</span>
           </span>
           <ChevronsUpDown className="size-3.5 text-sidebar-foreground/60" aria-hidden="true" />
         </button>
