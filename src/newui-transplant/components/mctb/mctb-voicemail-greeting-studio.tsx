@@ -1,42 +1,87 @@
 "use client";
 
 import { PersonalGreetingControls } from "@/components/personal/personal-greeting-controls";
+import { PersonalOutlineButton } from "@/components/personal/personal-ui";
 import { Panel, Pill } from "@/newui-transplant/components/app/kit";
+import { clientPlatformVoicemailGreetingPreviewPath } from "@/lib/phone/voicemail-greeting-defaults";
 
 type Props = {
   greetingText: string;
   greetingUrl: string | null;
   greetingActive: boolean;
+  greetingCustomActive: boolean;
   onSaveText: (text: string) => Promise<void>;
   onSaveUrl: (url: string) => Promise<void>;
+  onUsePlatformDefault?: () => Promise<void>;
 };
 
 export function MctbVoicemailGreetingStudio({
   greetingText,
   greetingUrl,
   greetingActive,
+  greetingCustomActive,
   onSaveText,
   onSaveUrl,
+  onUsePlatformDefault,
 }: Props) {
-  const sourceLabel = greetingUrl
-    ? "Active audio (recorded, uploaded, or generated)"
+  const platformPreviewUrl = clientPlatformVoicemailGreetingPreviewPath();
+
+  const sourceLabel = greetingCustomActive
+    ? "Your greeting (recorded, uploaded, or generated)"
     : greetingText
-      ? "Script saved — activate audio with “Use this greeting”"
-      : "Platform default (no custom URL yet)";
+      ? "Transovo default audio — script saved for reference"
+      : "Transovo default greeting";
+
+  const statusPill = !greetingActive
+    ? { tone: "warning" as const, label: "Not ready" }
+    : greetingCustomActive
+      ? { tone: "success" as const, label: "Active — your greeting" }
+      : { tone: "success" as const, label: "Active — Transovo default" };
 
   return (
     <Panel
       title="Current voicemail greeting"
-      description="One active greeting for the existing-consent voicemail path. Authoritative audio is voicemailBox.greetingUrl, copied to the stable carrier play URL on activate (provisionActiveVoicemailGreeting)."
-      action={<Pill tone={greetingActive ? "success" : "warning"}>{greetingActive ? "Active" : "Not active"}</Pill>}
+      description="Callers on the existing-consent path hear one greeting, then can leave a message. You can keep the Transovo default or replace it with generated, recorded, or uploaded audio."
+      action={<Pill tone={statusPill.tone}>{statusPill.label}</Pill>}
       className="lg:col-span-2"
     >
       <p className="mb-4 text-sm text-muted-foreground">
         Source: <span className="font-medium text-foreground">{sourceLabel}</span>
       </p>
+
+      {greetingUrl ? (
+        <div className="mb-4 space-y-1">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Your active greeting
+          </p>
+          <audio className="w-full max-w-md" controls src={greetingUrl} />
+        </div>
+      ) : (
+        <div className="mb-4 space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+          <p className="text-sm text-muted-foreground">
+            No custom greeting yet. Callers hear the Transovo default until you activate your own.
+          </p>
+          <audio className="w-full max-w-md" controls src={platformPreviewUrl} />
+          {onUsePlatformDefault ? (
+            <PersonalOutlineButton onClick={() => void onUsePlatformDefault()}>
+              Use Transovo default
+            </PersonalOutlineButton>
+          ) : null}
+        </div>
+      )}
+
+      {greetingCustomActive && onUsePlatformDefault ? (
+        <div className="mb-4">
+          <PersonalOutlineButton onClick={() => void onUsePlatformDefault()}>
+            Revert to Transovo default
+          </PersonalOutlineButton>
+        </div>
+      ) : null}
+
       <p className="mb-4 text-xs text-muted-foreground">
-        Record, upload, or generate with ElevenLabs, then use <span className="font-medium">Use this greeting</span> to
-        activate. Callers hear that audio on the certified voicemail play URL — not a separate draft field.
+        Generate with ElevenLabs, record with your microphone, or upload MP3/WAV/M4A/WebM — then use{" "}
+        <span className="font-medium">Use this greeting</span> to activate. Audio is copied to the stable carrier play
+        URL used on live calls.
       </p>
       <PersonalGreetingControls
         premiumTabs
@@ -46,7 +91,7 @@ export function MctbVoicemailGreetingStudio({
         onSaveText={onSaveText}
         onSaveUrl={onSaveUrl}
         assetName="MCTB voicemail greeting"
-        emptyHint="Record, upload, or generate a greeting — then activate it for callers."
+        emptyHint="Create a custom greeting below, or keep the Transovo default above."
         scriptPlaceholder="Thanks for calling. Please leave your name, number, and how we can help."
         createButtonLabel="Generate greeting"
       />

@@ -30,6 +30,24 @@ export async function GET(request: Request) {
       boxes = [ensured];
     }
 
+    if (phoneNumberId && boxes[0]) {
+      const { seedStableVoicemailGreetingIfMissing, greetingTokenForE164 } = await import(
+        "@/lib/phone/voicemail-active-greeting"
+      );
+      const phone = await getPrisma().phoneNumber.findFirst({
+        where: { id: phoneNumberId, workspaceId: auth.workspaceId },
+        select: { e164: true },
+      });
+      if (phone?.e164) {
+        await seedStableVoicemailGreetingIfMissing({
+          greetingToken: greetingTokenForE164(phone.e164),
+          workspaceId: auth.workspaceId,
+          greetingUrl: boxes[0].greetingUrl,
+          e164: phone.e164,
+        }).catch(() => undefined);
+      }
+    }
+
     for (const box of boxes) {
       if (box.greetingUrl && !/^https?:\/\//i.test(box.greetingUrl)) {
         const normalized = normalizeVoicemailGreetingUrl(box.greetingUrl);
@@ -135,6 +153,21 @@ export async function POST(request: Request) {
         phoneNumberId,
         auth.session.userId,
       );
+      const { seedStableVoicemailGreetingIfMissing, greetingTokenForE164 } = await import(
+        "@/lib/phone/voicemail-active-greeting"
+      );
+      const phone = await getPrisma().phoneNumber.findFirst({
+        where: { id: phoneNumberId, workspaceId: auth.workspaceId },
+        select: { e164: true },
+      });
+      if (phone?.e164) {
+        await seedStableVoicemailGreetingIfMissing({
+          greetingToken: greetingTokenForE164(phone.e164),
+          workspaceId: auth.workspaceId,
+          greetingUrl: box.greetingUrl,
+          e164: phone.e164,
+        }).catch(() => undefined);
+      }
       return NextResponse.json({ data: box });
     }
 
@@ -278,15 +311,13 @@ export async function POST(request: Request) {
           select: { id: true, e164: true, settingsJson: true },
         });
         if (phone?.e164) {
-          const { greetingTokenForE164, provisionActiveVoicemailGreeting } = await import(
+          const { syncVoicemailActiveGreetingForPhoneNumber } = await import(
             "@/lib/phone/voicemail-active-greeting"
           );
-          const greetingToken = greetingTokenForE164(phone.e164);
-          void provisionActiveVoicemailGreeting({
-            greetingToken,
+          await syncVoicemailActiveGreetingForPhoneNumber({
             workspaceId: auth.workspaceId,
+            phoneNumberId: updated.phoneNumberId,
             greetingUrl: updated.greetingUrl,
-            e164: phone.e164,
           }).catch(() => undefined);
 
           const { warmMctbInboundRoutingProfileForE164 } = await import(

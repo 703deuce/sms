@@ -9,12 +9,14 @@ export type MctbSetupVoicemailWired = {
   greetingUrl?: string | null
   onGreetingTextChange: (v: string) => void
   greetingActive: boolean
+  greetingCustomActive?: boolean
   sendAfterVoicemail: boolean
   onSendAfterVoicemailChange: (v: boolean) => void
   transcriptionEnabled?: boolean
   onTranscriptionEnabledChange?: (v: boolean) => void
   onSaveGreeting?: (textOverride?: string) => Promise<void>
   onSaveGreetingUrl?: (url: string) => Promise<void>
+  onUsePlatformDefaultGreeting?: () => Promise<void>
   onSaveRecoveryToggle?: () => Promise<void>
 }
 
@@ -29,11 +31,13 @@ export function TransplantMctbSetupVoicemailPage({ wired }: { wired?: MctbSetupV
           greetingText={greetingText}
           greetingUrl={wired.greetingUrl ?? null}
           greetingActive={active}
+          greetingCustomActive={wired.greetingCustomActive ?? Boolean(wired.greetingUrl)}
           onSaveText={async (text) => {
             wired.onGreetingTextChange(text)
             await wired.onSaveGreeting?.(text)
           }}
           onSaveUrl={wired.onSaveGreetingUrl}
+          onUsePlatformDefault={wired.onUsePlatformDefaultGreeting}
         />
       ) : null}
       <Panel title="After a voicemail">

@@ -25,6 +25,12 @@ function appBaseUrl(): string {
 export function resolvePlatformVoicemailGreetingPlayUrl(): string {
   const assetId = resolvePlatformVoicemailGreetingAssetId();
   const base = appBaseUrl();
-  const path = `/api/public/smart-routing-audio/${assetId}`;
+  const path = clientPlatformVoicemailGreetingPreviewPath(assetId);
   return base ? `${base}${path}` : path;
+}
+
+/** Relative path — safe for browser preview on the app origin. */
+export function clientPlatformVoicemailGreetingPreviewPath(assetId?: string): string {
+  const id = assetId?.trim() || resolvePlatformVoicemailGreetingAssetId();
+  return `/api/public/smart-routing-audio/${id}`;
 }

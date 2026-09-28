@@ -138,6 +138,7 @@ export function useMctbVoicemailWiring() {
   const [greetingText, setGreetingText] = useState("");
   const [greetingUrl, setGreetingUrl] = useState<string | null>(null);
   const [greetingActive, setGreetingActive] = useState(false);
+  const [greetingCustomActive, setGreetingCustomActive] = useState(false);
   const [sendAfterVoicemail, setSendAfterVoicemail] = useState(true);
   const [voicemailBoxId, setVoicemailBoxId] = useState<string | null>(null);
   const [transcriptionEnabled, setTranscriptionEnabled] = useState(true);
@@ -165,8 +166,8 @@ export function useMctbVoicemailWiring() {
           setVoicemailBoxId(box?.id ?? null);
           setGreetingText(box?.greetingText?.trim() || "");
           setGreetingUrl(box?.greetingUrl ?? null);
-          // Runtime plays greetingUrl → provisionActiveVoicemailGreeting; script-only text does not change caller audio.
-          setGreetingActive(Boolean(box?.greetingUrl));
+          setGreetingCustomActive(Boolean(box?.greetingUrl));
+          setGreetingActive(Boolean(pid));
           setTranscriptionEnabled(box?.transcriptionEnabled ?? true);
         }
       }
@@ -227,6 +228,25 @@ export function useMctbVoicemailWiring() {
     [ensureVoicemailBoxId, reload],
   );
 
+  const usePlatformDefaultGreeting = useCallback(async () => {
+    const boxId = await ensureVoicemailBoxId();
+    const res = await fetch("/api/phone/voicemail", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "update_box",
+        boxId,
+        greetingUrl: null,
+        greetingText: greetingText.trim() || "Please leave a message after the tone.",
+      }),
+    });
+    if (!res.ok) {
+      const j = await res.json();
+      throw new Error(j.error || "Could not restore default greeting");
+    }
+    await reload();
+  }, [ensureVoicemailBoxId, greetingText, reload]);
+
   const saveTranscription = useCallback(
     async (enabled: boolean) => {
       setTranscriptionEnabled(enabled);
@@ -270,6 +290,8 @@ export function useMctbVoicemailWiring() {
     greetingUrl,
     saveGreetingUrl,
     greetingActive,
+    greetingCustomActive,
+    usePlatformDefaultGreeting,
     sendAfterVoicemail,
     setSendAfterVoicemail,
     saveGreeting,

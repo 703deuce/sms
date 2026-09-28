@@ -133,4 +133,60 @@ export function platformVoicemailGreetingPlayUrl(): string {
   return resolvePlatformVoicemailGreetingPlayUrl();
 }
 
+/**
+ * Carriers fetch stable active.mp3 directly — seed platform audio when missing so new boxes work without a custom save.
+ */
+export async function seedStableVoicemailGreetingIfMissing(input: {
+  greetingToken: string;
+  workspaceId: string;
+  greetingUrl: string | null | undefined;
+  e164?: string;
+}): Promise<void> {
+  const token =
+    input.greetingToken?.trim() ||
+    (input.e164 ? greetingTokenForE164(input.e164) : "");
+  if (!token) return;
+
+  const existing = await readVoicemailActiveMp3Bytes(token);
+  if (existing?.length) return;
+
+  await provisionActiveVoicemailGreeting({
+    greetingToken: token,
+    workspaceId: input.workspaceId,
+    greetingUrl: input.greetingUrl,
+    e164: input.e164,
+  });
+}
+
+export async function syncVoicemailActiveGreetingForPhoneNumber(input: {
+  workspaceId: string;
+  phoneNumberId: string;
+  greetingUrl?: string | null;
+}): Promise<void> {
+  const { getPrisma } = await import("@/lib/db");
+  const prisma = getPrisma();
+  const phone = await prisma.phoneNumber.findFirst({
+    where: { id: input.phoneNumberId, workspaceId: input.workspaceId },
+    select: { e164: true },
+  });
+  if (!phone?.e164) return;
+
+  let greetingUrl = input.greetingUrl;
+  if (greetingUrl === undefined) {
+    const box = await prisma.voicemailBox.findFirst({
+      where: { workspaceId: input.workspaceId, phoneNumberId: input.phoneNumberId },
+      select: { greetingUrl: true },
+    });
+    greetingUrl = box?.greetingUrl ?? null;
+  }
+
+  const greetingToken = greetingTokenForE164(phone.e164);
+  await provisionActiveVoicemailGreeting({
+    greetingToken,
+    workspaceId: input.workspaceId,
+    greetingUrl,
+    e164: phone.e164,
+  });
+}
+
 export { ACTIVE_FILENAME };

@@ -116,7 +116,7 @@ export function PersonalGreetingControls({
   async function saveRecording() {
     if (!chunksRef.current.length) return;
     const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-    await uploadBlob(blob, "voicemail-greeting.webm");
+    await uploadBlob(blob, "voicemail-greeting.webm", activationMode === "explicit");
   }
 
   async function onFileSelected(file: File | null) {
