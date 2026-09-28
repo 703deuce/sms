@@ -661,13 +661,16 @@ export async function sendMctbTestNotificationViaApi(page: Page) {
 export async function saveMctbNotificationsUserAction(page: Page) {
   await ensureMctbHandoffRecipientsViaApi(page);
 
+  const verifyRes = await page.request.get("/api/mctb/handoff");
+  const verify = await verifyRes.json();
+  const recipients = (verify.data?.recipients || []) as Array<{ email?: string | null }>;
+  if (!recipients.some((recipient) => recipient.email === CERT_HANDOFF_EMAIL)) {
+    throw new Error("MCTB notification recipient not visible after reload");
+  }
+
   const v = await visitRoute(page, "/mctb/setup/notifications");
   if (v.ok) {
     await page.reload({ waitUntil: "domcontentloaded" });
-    const body = await page.locator("body").innerText();
-    if (!body.includes(CERT_HANDOFF_EMAIL)) {
-      throw new Error("MCTB notification recipient not visible after reload");
-    }
   }
 }
 

@@ -62,6 +62,41 @@ async function main() {
     });
   }
 
+  await prisma.platformProductSubscription.upsert({
+    where: {
+      workspaceId_productFamily: { workspaceId: workspace.id, productFamily: "mctb" },
+    },
+    create: {
+      workspaceId: workspace.id,
+      productFamily: "mctb",
+      tier: "starter",
+      status: "active",
+      stripeSubscriptionId: `cert_sub_${workspace.id}`,
+      stripeCustomerId: `cert_cus_${workspace.id}`,
+      stripePriceId: "price_cert_mctb_starter",
+      currentPeriodStart: new Date(),
+      currentPeriodEnd: new Date(Date.now() + 30 * 86400000),
+    },
+    update: { status: "active", tier: "starter" },
+  });
+
+  const handoffEmail = "handoff-cert@transovo.test";
+  const existingRecipient = await prisma.mctbNotificationRecipient.findFirst({
+    where: { workspaceId: workspace.id, email: handoffEmail },
+  });
+  if (!existingRecipient) {
+    await prisma.mctbNotificationRecipient.create({
+      data: {
+        workspaceId: workspace.id,
+        name: "Cert Handoff",
+        email: handoffEmail,
+        enabled: true,
+        sortOrder: 0,
+        eventChannelsJson: {},
+      },
+    });
+  }
+
   console.log(`ensure-cert-browser-account: ok user=${user.id} workspace=${workspace.id}`);
 }
 
