@@ -2,7 +2,10 @@ import type { MissedCallTextConfigRecord } from "@/lib/agents/missed-call-text-b
 import { DEFAULT_ONBOARDING_MESSAGE } from "@/lib/mctb/onboarding/types";
 
 /** Authoritative recovery opener for Transovo platform-sender workspaces (TFV/onboarding default). */
-export const MCTB_PLATFORM_SENDER_RECOVERY_OPENER = DEFAULT_ONBOARDING_MESSAGE;
+import { getMctbPlatformTemplate } from "@/lib/mctb/platform-message-templates";
+
+export const MCTB_PLATFORM_SENDER_RECOVERY_OPENER =
+  getMctbPlatformTemplate("recovery_opener").body;
 
 function parseHm(hm: string | null | undefined): number | null {
   if (!hm) return null;

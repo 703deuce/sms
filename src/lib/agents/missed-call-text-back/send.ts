@@ -206,20 +206,50 @@ export async function executeMissedCallTextSend(input: {
   });
 
   let trialReservation: { reserved: boolean; segments: number } | null = null;
+  let recoveryUsageReserved = false;
   if (!demoMode) {
-    const reservation = await reserveTrialSmsSegments(input.workspaceId, 1);
-    if (!reservation.reserved) {
-      await prisma.missedCallEvent.update({
-        where: { id: event.id },
-        data: {
-          status: "SUPPRESSED",
-          suppressionReason: "TRIAL_SMS_LIMIT",
-          eligible: false,
-        },
+    const { hasActiveMctbPaidEntitlement } = await import("@/lib/mctb/entitlement");
+    const { reserveMctbRecoveryUnit } = await import("@/lib/mctb/recovery-usage");
+    const paid = await hasActiveMctbPaidEntitlement(input.workspaceId);
+    const excludeUsage =
+      input.eventMetadata?.testSms === true ||
+      input.eventMetadata?.setupSms === true ||
+      input.eventMetadata?.setupTest === true ||
+      input.eventMetadata?.certMode != null;
+
+    if (!paid) {
+      const recoveryReservation = await reserveMctbRecoveryUnit({
+        workspaceId: input.workspaceId,
+        missedCallEventId: event.id,
+        excludeFromUsage: Boolean(excludeUsage),
       });
-      return { ok: false, reason: "TRIAL_SMS_LIMIT" };
+      if (!recoveryReservation.reserved) {
+        await prisma.missedCallEvent.update({
+          where: { id: event.id },
+          data: {
+            status: "SUPPRESSED",
+            suppressionReason: "MCTB_RECOVERY_LIMIT",
+            eligible: false,
+          },
+        });
+        return { ok: false, reason: "MCTB_RECOVERY_LIMIT" };
+      }
+      recoveryUsageReserved = !excludeUsage;
+    } else {
+      const reservation = await reserveTrialSmsSegments(input.workspaceId, 1);
+      if (!reservation.reserved) {
+        await prisma.missedCallEvent.update({
+          where: { id: event.id },
+          data: {
+            status: "SUPPRESSED",
+            suppressionReason: "TRIAL_SMS_LIMIT",
+            eligible: false,
+          },
+        });
+        return { ok: false, reason: "TRIAL_SMS_LIMIT" };
+      }
+      trialReservation = { reserved: true, segments: 1 };
     }
-    trialReservation = { reserved: true, segments: 1 };
   }
 
   const { resolveMctbOutboundSmsRoute } = await import("@/lib/mctb/messaging/outbound-sms-route");
@@ -236,6 +266,10 @@ export async function executeMissedCallTextSend(input: {
       ...input,
       demoMode,
     });
+    if (recoveryUsageReserved) {
+      const { releaseMctbRecoveryReservation } = await import("@/lib/mctb/recovery-usage");
+      await releaseMctbRecoveryReservation(input.workspaceId).catch(() => undefined);
+    }
     if (trialReservation?.reserved) {
       await releaseTrialSmsSegmentReservation(input.workspaceId, trialReservation.segments).catch(
         () => undefined,
@@ -277,6 +311,10 @@ export async function executeMissedCallTextSend(input: {
     missedCallEventId: event.id,
   });
   if (!platformGate.ok) {
+    if (recoveryUsageReserved) {
+      const { releaseMctbRecoveryReservation } = await import("@/lib/mctb/recovery-usage");
+      await releaseMctbRecoveryReservation(input.workspaceId).catch(() => undefined);
+    }
     if (trialReservation?.reserved) {
       await releaseTrialSmsSegmentReservation(input.workspaceId, trialReservation.segments).catch(
         () => undefined,
@@ -428,6 +466,10 @@ export async function executeMissedCallTextSend(input: {
 
     return { ok: true, messageId, status: "queued" };
   } catch (err) {
+    if (recoveryUsageReserved) {
+      const { releaseMctbRecoveryReservation } = await import("@/lib/mctb/recovery-usage");
+      await releaseMctbRecoveryReservation(input.workspaceId).catch(() => undefined);
+    }
     if (trialReservation?.reserved) {
       await releaseTrialSmsSegmentReservation(input.workspaceId, trialReservation.segments).catch(
         () => undefined,

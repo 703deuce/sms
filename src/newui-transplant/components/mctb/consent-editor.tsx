@@ -2,7 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Play } from 'lucide-react'
-import { Panel } from '@/newui-transplant/components/app/kit'
+import { Panel, Pill } from '@/newui-transplant/components/app/kit'
+import {
+  EXISTING_CONSENT_CERTIFICATION_BODY,
+  EXISTING_CONSENT_CERTIFICATION_CHECKBOX_LABEL,
+  EXISTING_CONSENT_CERTIFICATION_RELIANCE,
+  EXISTING_CONSENT_CERTIFICATION_SUBMIT_LABEL,
+} from '@/lib/mctb/existing-consent-certification-copy'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Checkbox } from '@/newui-transplant/components/ui/checkbox'
 import { SaveBar } from '@/newui-transplant/components/app/save-bar'
@@ -11,8 +17,8 @@ import { useOpusWorkspaceData } from '@/newui-transplant/context/opus-workspace-
 import { saveMctbSetup } from '@/lib/newui-transplant/api/mctb-setup-client'
 
 const MODES = [
-  { id: 'press1' as const, api: 'press_1' as const, title: 'Press 1', description: 'Callers hear a short prompt and press 1 to get a text. Recommended.' },
-  { id: 'existing' as const, api: 'existing_consent' as const, title: 'Use permission my business already has', description: 'For existing customers who already agreed to receive texts.' },
+  { id: 'press1' as const, api: 'press_1' as const, title: 'Press 1 to consent', description: 'Callers hear a short prompt and press 1 to get a text. Recommended.' },
+  { id: 'existing' as const, api: 'existing_consent' as const, title: 'I already have consent to text these callers', description: 'For businesses that already obtained permission outside Press-1.' },
 ]
 
 export function ConsentEditor() {
@@ -22,6 +28,7 @@ export function ConsentEditor() {
   const [disclosure, setDisclosure] = useState('')
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(null)
   const [phoneNumberId, setPhoneNumberId] = useState<string | null>(null)
+  const [recoveryPaid, setRecoveryPaid] = useState(false)
   const [loading, setLoading] = useState(true)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
@@ -37,6 +44,7 @@ export function ConsentEditor() {
       const consentMode = setup.consentMode === 'existing_consent' ? 'existing' : 'press1'
       setMode(consentMode)
       setAttested(Boolean(setup.consentMeta?.existingConsentAttestation))
+      setRecoveryPaid(Boolean(setup.capabilities?.recoveryPaid ?? setup.consentMeta?.paidEntitled))
       setPhoneNumberId(setup.runtime?.phoneNumberId ?? null)
       setDisclosure(
         setup.prefills?.press1Consent ||
@@ -87,27 +95,38 @@ export function ConsentEditor() {
     <div className="flex flex-col gap-4">
       <Panel title="How callers give permission">
         <div role="radiogroup" aria-label="Consent mode" className="grid gap-3 md:grid-cols-2">
-          {MODES.map((m) => (
+          {MODES.map((m) => {
+            const locked = m.id === 'existing' && !recoveryPaid
+            return (
             <button
               key={m.id}
               type="button"
               role="radio"
               aria-checked={mode === m.id}
-              onClick={() => setMode(m.id)}
+              disabled={locked}
+              onClick={() => {
+                if (locked) return
+                setMode(m.id)
+              }}
               className={cn(
                 'flex items-start gap-3 rounded-lg border p-4 text-left transition',
                 mode === m.id ? 'border-primary bg-accent/50 ring-1 ring-primary' : 'hover:bg-muted/50',
+                locked && 'cursor-not-allowed opacity-70',
               )}
             >
               <span className={cn('mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border', mode === m.id && 'border-primary')}>
                 {mode === m.id ? <span className="size-2 rounded-full bg-primary" /> : null}
               </span>
-              <span>
-                <span className="block text-sm font-medium">{m.title}</span>
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-center gap-2">
+                  <span className="block text-sm font-medium">{m.title}</span>
+                  {m.id === 'press1' ? <Pill tone="neutral">Included with Free</Pill> : null}
+                  {locked ? <Pill tone="warning">Recovery plan required</Pill> : null}
+                </span>
                 <span className="mt-0.5 block text-pretty text-xs text-muted-foreground">{m.description}</span>
               </span>
             </button>
-          ))}
+          )})}
         </div>
       </Panel>
 
@@ -122,19 +141,21 @@ export function ConsentEditor() {
           </blockquote>
         </Panel>
       ) : (
-        <Panel title="Attestation">
-          <label className="flex items-start gap-3 text-sm">
+        <Panel title="Certify Existing Consent">
+          <p className="text-pretty text-sm leading-relaxed text-muted-foreground">{EXISTING_CONSENT_CERTIFICATION_BODY}</p>
+          <p className="mt-3 text-pretty text-xs text-muted-foreground">{EXISTING_CONSENT_CERTIFICATION_RELIANCE}</p>
+          <label className="mt-4 flex items-start gap-3 text-sm">
             <Checkbox checked={attested} onCheckedChange={(v) => setAttested(Boolean(v))} className="mt-0.5" />
-            <span className="text-pretty">
-              I confirm that callers to this line have previously given my business permission to receive text messages, and I can provide
-              records of that consent if requested.
-            </span>
+            <span className="text-pretty">{EXISTING_CONSENT_CERTIFICATION_CHECKBOX_LABEL}</span>
           </label>
         </Panel>
       )}
 
       <div className="flex justify-end">
-        <SaveBar label={mode === 'press1' ? 'Publish' : 'Save changes'} onSave={onSave} />
+        <SaveBar
+          label={mode === 'press1' ? 'Publish' : EXISTING_CONSENT_CERTIFICATION_SUBMIT_LABEL}
+          onSave={onSave}
+        />
       </div>
     </div>
   )

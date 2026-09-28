@@ -1,6 +1,6 @@
 # MCTB final product functionality — gap matrix
 
-**Status:** Gap-closing pass (extend Opus baseline — do not rebuild MCTB)  
+**Status:** Final commercial launch pass — see `docs/MCTB-COMMERCIAL-LAUNCH-PASS.md`. Extend Opus baseline; close in-scope gaps with evidence (not new audit lists).  
 **Baseline:** Commit `7c97075f` deployed; Sept 27 production Opus browser smoke (17/17 routes, real data). **Preserve Pure Opus shell + frozen TeXML (`mctb_texml_final_v1`).**
 
 **Not launch certification:** UI smoke PASS ≠ commercial launch. Full functional matrix (§38) must pass before “commercially launch-certified.”

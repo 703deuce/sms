@@ -1,4 +1,4 @@
-import { hasActiveMctbPaidEntitlement } from "@/lib/mctb/entitlement";
+import { resolveMctbCapabilities } from "@/lib/mctb/capabilities";
 
 /**
  * Team-facing urgent SMS alerts (business recipients) — not consumer MCTB recovery SMS.
@@ -10,20 +10,21 @@ import { hasActiveMctbPaidEntitlement } from "@/lib/mctb/entitlement";
  * a finer capability — then wire that existing entitlement mechanism here (do not invent a parallel system).
  */
 export async function canSendMctbUrgentBusinessTeamSms(workspaceId: string): Promise<boolean> {
-  return hasActiveMctbPaidEntitlement(workspaceId);
+  const caps = await resolveMctbCapabilities(workspaceId);
+  return caps.urgentBusinessSms;
 }
 
 export type MctbUrgentBusinessSmsEntitlementAudit = {
-  mechanism: "hasActiveMctbPaidEntitlement";
+  mechanism: "resolveMctbCapabilities.urgentBusinessSms";
   granularCapabilityFlag: null;
   note: string;
 };
 
 export function describeMctbUrgentBusinessSmsEntitlement(): MctbUrgentBusinessSmsEntitlementAudit {
   return {
-    mechanism: "hasActiveMctbPaidEntitlement",
+    mechanism: "resolveMctbCapabilities.urgentBusinessSms",
     granularCapabilityFlag: null,
     note:
-      "Paid MCTB workspace = urgent business SMS entitled. No separate SKU at certification time.",
+      "Recovery-paid tier via centralized capability resolver. No separate mctb.urgent_business_sms SKU yet.",
   };
 }

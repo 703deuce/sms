@@ -5,6 +5,9 @@
  */
 import { getPrisma } from "@/lib/db";
 import { getTrialLimits } from "@/lib/platform-flags";
+import { getMctbRecoveryUsageSnapshot } from "@/lib/mctb/recovery-usage";
+import { getWorkspaceProductFeatures } from "@/lib/products/feature-entitlements";
+import { isActiveEntitlement } from "@/lib/products/types";
 import type { Prisma } from "@prisma/client";
 
 export type MctbServiceStatus =
@@ -104,13 +107,21 @@ export async function getMctbEntitlement(workspaceId: string): Promise<MctbEntit
   } else if (serviceStatus !== "ACTIVE") {
     canSendAutomaticRecovery = false;
     reason = serviceStatus.toLowerCase();
-  } else if (
-    !limits.adminUnlimitedMctb &&
-    trialSmsSegmentLimit != null &&
-    trialSmsSegmentsUsed >= trialSmsSegmentLimit
-  ) {
-    canSendAutomaticRecovery = false;
-    reason = "trial_sms_limit_reached";
+  } else if (!limits.adminUnlimitedMctb && !paid) {
+    const features = await getWorkspaceProductFeatures(workspaceId);
+    if (isActiveEntitlement(features.mctb)) {
+      const recovery = await getMctbRecoveryUsageSnapshot(workspaceId);
+      if (recovery.atLimit) {
+        canSendAutomaticRecovery = false;
+        reason = "mctb_recovery_limit_reached";
+      }
+    } else if (
+      trialSmsSegmentLimit != null &&
+      trialSmsSegmentsUsed >= trialSmsSegmentLimit
+    ) {
+      canSendAutomaticRecovery = false;
+      reason = "trial_sms_limit_reached";
+    }
   }
 
   return {

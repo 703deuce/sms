@@ -7,7 +7,6 @@ import {
   validateMctbNotificationRecipientsForSave,
   MctbNotificationRecipientValidationError,
 } from "../src/lib/mctb/handoff/recipient-validation";
-import { describeMctbUrgentBusinessSmsEntitlement } from "../src/lib/mctb/handoff/urgent-business-sms-entitlement";
 
 assert.equal(
   planInboundReplyNotificationEvent({ callbackRequested: false, urgent: false }).eventType,

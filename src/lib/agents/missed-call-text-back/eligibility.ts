@@ -78,7 +78,9 @@ export async function evaluateMissedCallTextEligibility(input: {
         reason:
           entitlement.reason === "trial_sms_limit_reached"
             ? "TRIAL_SMS_LIMIT"
-            : "ENTITLEMENT_SUSPENDED",
+            : entitlement.reason === "mctb_recovery_limit_reached"
+              ? "MCTB_RECOVERY_LIMIT"
+              : "ENTITLEMENT_SUSPENDED",
         classification,
       };
     }

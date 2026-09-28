@@ -114,6 +114,17 @@ export async function POST(req: Request) {
 
   let config = await loadMctbHandoffConfig(workspaceId);
   if (body.config) {
+    const { resolveMctbCapabilities } = await import("@/lib/mctb/capabilities");
+    const caps = await resolveMctbCapabilities(workspaceId);
+    if (
+      body.config.emergencyDetectionEnabled === true &&
+      !caps.urgentClassification
+    ) {
+      return NextResponse.json(
+        { error: "Urgent Reply Alerts require a Recovery plan." },
+        { status: 403 },
+      );
+    }
     const { isLeadRecoveryAiRepliesEnabled } = await import("@/lib/mctb/lead-recovery/config");
     const patch = { ...body.config };
     if (await isLeadRecoveryAiRepliesEnabled(workspaceId)) {

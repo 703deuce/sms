@@ -222,11 +222,14 @@ export async function GET() {
   const { readMctbRecoveryGoalId } = await import("@/lib/mctb/apply-recovery-goal-config");
   const recoveryGoal = await readMctbRecoveryGoalId(workspaceId);
   const paidEntitled = await hasActiveMctbPaidEntitlement(workspaceId);
+  const { resolveMctbCapabilities } = await import("@/lib/mctb/capabilities");
+  const capabilities = await resolveMctbCapabilities(workspaceId);
   const senderMode = runtimeForClient.senderMode || "WORKSPACE";
   const senderPresentation = describeMctbSenderPresentation(senderMode);
 
   return NextResponse.json({
     data: {
+      capabilities,
       recoveryGoal,
       runtime: runtimeForClient,
       schedule: {
