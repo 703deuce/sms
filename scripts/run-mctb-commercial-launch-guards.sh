@@ -6,6 +6,9 @@ export NODE_OPTIONS="${NODE_OPTIONS:-} --import ./scripts/preload-server-only.mj
 echo "=== MCTB commercial launch guards ==="
 npx tsx scripts/test-mctb-capabilities-resolver.ts
 npx tsx scripts/test-mctb-recovery-usage-idempotency.ts
+npx tsx scripts/test-mctb-recovery-cooldown-eligibility.ts
+npx tsx scripts/test-mctb-setup-recovery.ts
+npx tsx scripts/test-mctb-trial-ingress-provision-contract.ts
 npx tsx scripts/test-mctb-ai-recovery-entitlement-gate.ts
 npx tsx scripts/test-mctb-existing-consent-attestation.ts
 npx tsx scripts/test-mctb-platform-template-enforcement.ts

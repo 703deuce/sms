@@ -14,7 +14,7 @@ import { resolveMctbSetupSectionId } from "../src/lib/mctb/setup-sections";
 
 assert.equal(resolveMctbSetupSectionId("/mctb/setup/recovery"), "recovery");
 assert.equal(resolveMctbSetupSectionId("/mctb/setup/missed-call-rules"), "recovery");
-assert.equal(resolveMctbSetupSectionId("/mctb/setup/text-back"), "recovery");
+assert.equal(resolveMctbSetupSectionId("/mctb/setup/text-back"), "text-back");
 
 const triggers = {
   noAnswer: true,

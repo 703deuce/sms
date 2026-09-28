@@ -41,7 +41,8 @@ Push → Coolify green → `/api/health` commit match → then functional/browse
 | `EXISTING_CONSENT_GATE` | **PARTIAL** | Setup POST + Opus consent editor; Recovery paid required — browser/API cert pending |
 | `AI_RECOVERY_ENTITLEMENT` | **PARTIAL** | API 403 without `mctb_ai_recovery` / limits flag — `lead-recovery/config`, `ai-recovery/settings`, `handoff` `set_launch_ai_replies` |
 | `BREVO_REPLY_EMAIL` | PENDING | — |
-| `FRESH_WORKSPACE_PROVISIONING` | PENDING | — |
+| `COOLDOWN_UI_RUNTIME` | **COMPLETE** | `test-mctb-recovery-cooldown-eligibility.ts` in commercial guards |
+| `FRESH_WORKSPACE_PROVISIONING` | **PARTIAL** | `test-mctb-trial-ingress-provision-contract.ts`; live DID acquire pending |
 | `PRESS_1_E2E` | PENDING | — |
 | `EXISTING_CONSENT_E2E` | PENDING | — |
 | `URGENT_E2E` | PENDING | — |

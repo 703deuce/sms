@@ -46,7 +46,7 @@ Automated guard bundle: `bash scripts/run-mctb-commercial-launch-guards.sh`
 | `MCTB_MISSED_CALL_DETAIL` | Open | Prod multi-state proof |
 | `MCTB_PLATFORM_RECOVERY_TEMPLATE` | Open | UI + Setup API + send runtime |
 | `MCTB_CUSTOMER_OWNED_RECOVERY_TEMPLATE` | Open | Entitled own sender only |
-| `MCTB_COOLDOWN_UI_RUNTIME` | Open | Verify checklist |
+| `MCTB_COOLDOWN_UI_RUNTIME` | **COMPLETE** | `scripts/test-mctb-recovery-cooldown-eligibility.ts` (eligibility `COOLDOWN_ACTIVE`); `scripts/test-mctb-setup-recovery.ts` |
 | `MCTB_REPLY_EMAIL_NOTIFICATIONS` | Open | Brevo + delivery rows |
 | `MCTB_URGENT_AI_CLASSIFIER` | Open | Semantic `classifyMctbUrgentReply`; AI Recovery OFF |
 | `MCTB_URGENT_CONVERSATION_STATE` | Open | Inbox Pill + context |
@@ -54,7 +54,7 @@ Automated guard bundle: `bash scripts/run-mctb-commercial-launch-guards.sh`
 | `MCTB_URGENT_RECIPIENT_VALIDATION` | Open | Save + runtime |
 | `MCTB_URGENT_CLASSIFIER_FAILURE_FALLBACK` | Open | `classifier_unavailable` → `caller_replied` |
 | `MCTB_URGENT_CHANNEL_FAILURE_ISOLATION` | Open | Per-channel delivery |
-| `MCTB_WORKSPACE_INGRESS_PROVISIONING` | Open | Fresh workspace lifecycle |
+| `MCTB_WORKSPACE_INGRESS_PROVISIONING` | **PARTIAL** | Static contracts `scripts/test-mctb-trial-ingress-provision-contract.ts`; live Telnyx acquire E2E still required |
 | `MCTB_CONSENT_EXISTING` | Open | Certification + PSTN (user phone if needed) |
 | `MCTB_END_TO_END_FUNCTIONALITY` | Open | Full §38 + four customer lifecycles |
 | `MCTB_COMMERCIAL_LAUNCH_CERTIFICATION` | Open | Production on certified commit |
