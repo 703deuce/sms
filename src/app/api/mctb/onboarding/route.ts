@@ -77,9 +77,13 @@ export async function GET(req: Request) {
       resolveMctbCapabilities(auth.workspaceId),
     ]);
 
+    const forwardingVerified = Boolean(
+      state.forwardingConnectedAt || forwardingVerification?.verified,
+    );
     const firstRun = resolveMctbFirstRunWizardPolicy({
       onboardingState: state,
       setupGuideRequested,
+      forwardingVerified,
     });
     const senderPresentation = describeMctbSenderPresentation(
       capabilities.platformSenderActive ? "PLATFORM" : "WORKSPACE",

@@ -22,8 +22,11 @@ export type MctbFirstRunWizardPolicy = {
 export function resolveMctbFirstRunWizardPolicy(input: {
   onboardingState: MctbOnboardingState;
   setupGuideRequested?: boolean;
+  /** True when CFNA forwarding has not been verified yet (post-wizard setup attention). */
+  forwardingVerified?: boolean;
 }): MctbFirstRunWizardPolicy {
   const onboardingComplete = isOnboardingComplete(input.onboardingState);
+  const forwardingVerified = input.forwardingVerified !== false;
 
   if (input.setupGuideRequested) {
     return {
@@ -47,6 +50,15 @@ export function resolveMctbFirstRunWizardPolicy(input: {
     return {
       shouldAutoOpen: true,
       trigger: "incomplete_onboarding",
+      everyLoginTesting: false,
+      onboardingComplete,
+    };
+  }
+
+  if (MCTB_FIRST_RUN_WIZARD_UNTIL_COMPLETE && onboardingComplete && !forwardingVerified) {
+    return {
+      shouldAutoOpen: true,
+      trigger: "setup_guide",
       everyLoginTesting: false,
       onboardingComplete,
     };

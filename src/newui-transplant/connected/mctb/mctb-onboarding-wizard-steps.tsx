@@ -193,11 +193,12 @@ export function WizardConsentStep({ c }: { c: MctbOnboardingController }) {
           subtitle="When you don't answer, the caller hears a short disclosure and presses 1 to receive your follow-up text."
           badge="Recommended"
           onSelect={() => c.setConsentMode("press_1")}
-        >
-          <div className="ml-7 space-y-3 rounded-lg border bg-muted/20 p-4">
+        />
+        {c.consentMode === "press_1" ? (
+          <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
             <MctbConsentPromptPanel phoneNumberId={phoneNumberId} />
           </div>
-        </SelectionRow>
+        ) : null}
         <SelectionRow
           selected={c.consentMode === "existing_consent"}
           disabled={!c.existingConsentEligible}

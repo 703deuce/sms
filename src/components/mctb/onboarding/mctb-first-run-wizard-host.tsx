@@ -108,7 +108,7 @@ export function MctbFirstRunWizardHost() {
       }}
     >
       <DialogContent
-        className="flex h-[min(760px,calc(100vh-64px))] w-[min(760px,calc(100vw-48px))] max-w-none flex-col overflow-hidden gap-0 p-0 sm:max-w-none max-sm:fixed max-sm:inset-0 max-sm:top-0 max-sm:left-0 max-sm:h-[100dvh] max-sm:w-full max-sm:max-w-none max-sm:translate-none max-sm:rounded-none"
+        className="flex h-[min(760px,calc(100vh-64px))] w-[min(760px,calc(100vw-48px))] max-w-none flex-col overflow-hidden gap-0 border-0 bg-card p-0 text-card-foreground shadow-xl sm:max-w-none max-sm:fixed max-sm:inset-0 max-sm:top-0 max-sm:left-0 max-sm:h-[100dvh] max-sm:w-full max-sm:max-w-none max-sm:translate-none max-sm:rounded-none"
         overlayClassName="bg-black/40 supports-backdrop-filter:backdrop-blur-[2px]"
         showCloseButton={dismissible}
       >
