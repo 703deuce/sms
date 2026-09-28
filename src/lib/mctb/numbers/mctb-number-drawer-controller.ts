@@ -14,6 +14,12 @@ import { useCallback, useEffect, useState } from "react";
 
 export type MctbNumberDrawerMode = "manage" | "add" | "verify" | null;
 
+/** Open the shared MCTB numbers drawer from Setup → Phone (same host as legacy forwarding view). */
+export function openMctbNumberDrawer(mode: Exclude<MctbNumberDrawerMode, null>): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("mctb-open-drawer", { detail: mode }));
+}
+
 type NumbersPayload = {
   numbers: MctbNumberRow[];
   activePhoneNumberId: string | null;

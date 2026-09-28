@@ -165,7 +165,8 @@ export function useMctbVoicemailWiring() {
           setVoicemailBoxId(box?.id ?? null);
           setGreetingText(box?.greetingText?.trim() || "");
           setGreetingUrl(box?.greetingUrl ?? null);
-          setGreetingActive(Boolean(box?.greetingUrl || box?.greetingText));
+          // Runtime plays greetingUrl → provisionActiveVoicemailGreeting; script-only text does not change caller audio.
+          setGreetingActive(Boolean(box?.greetingUrl));
           setTranscriptionEnabled(box?.transcriptionEnabled ?? true);
         }
       }
@@ -442,12 +443,14 @@ export function useMctbTestWiring() {
   }, [reload]);
 
   useEffect(() => {
-    if (!liveTest?.started || liveTest.passed) return;
+    const setupActive = Boolean(setupTest?.started && !setupTest?.verified);
+    const liveActive = Boolean(liveTest?.started && !liveTest?.passed);
+    if (!setupActive && !liveActive) return;
     const id = window.setInterval(() => {
       void reload();
-    }, 8000);
+    }, setupActive ? 3000 : 8000);
     return () => window.clearInterval(id);
-  }, [liveTest?.started, liveTest?.passed, reload]);
+  }, [setupTest?.started, setupTest?.verified, liveTest?.started, liveTest?.passed, reload]);
 
   return {
     loading,

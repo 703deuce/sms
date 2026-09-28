@@ -8,6 +8,11 @@ import { BUSINESS } from '@/newui-transplant/lib/sandbox-data'
 
 export type MctbSetupTestWired = {
   checks: Array<{ label: string; ok: boolean; href?: string }>
+  pipelineSteps?: Array<{ id: string; label: string; done: boolean }>
+  setupTestStarted?: boolean
+  setupTestVerified?: boolean
+  setupTestFailureReason?: string | null
+  consentMode?: string | null
   businessLine: string
   liveStatusTitle: string
   liveStatusDetail: string
@@ -46,11 +51,49 @@ export function TransplantMctbSetupTestPage({ wired }: { wired?: MctbSetupTestWi
           ))}
         </ul>
       </Panel>
+      {wired?.pipelineSteps && wired.pipelineSteps.length > 0 ? (
+        <Panel
+          title="Recovery pipeline checkpoints"
+          description={
+            wired.setupTestVerified
+              ? 'Production path verified for this session.'
+              : wired.setupTestStarted
+                ? 'Armed with setup-test — progress updates as your test call completes.'
+                : 'Start test below to arm setup-test checkpoints.'
+          }
+          className="lg:col-span-2"
+        >
+          <ul className="flex flex-col gap-2">
+            {wired.pipelineSteps.map((step) => (
+              <li key={step.id} className="flex items-center gap-3 text-sm">
+                {step.done ? (
+                  <CheckCircle2 className="size-4 text-success" aria-label="Complete" />
+                ) : (
+                  <AlertCircle className="size-4 text-muted-foreground" aria-label="Pending" />
+                )}
+                <span>{step.label}</span>
+              </li>
+            ))}
+          </ul>
+          {wired.setupTestFailureReason ? (
+            <p className="mt-3 text-sm text-amber-800">{wired.setupTestFailureReason}</p>
+          ) : null}
+          {wired.consentMode ? (
+            <p className="mt-2 text-xs text-muted-foreground">Consent mode: {wired.consentMode}</p>
+          ) : null}
+        </Panel>
+      ) : null}
+
       <Panel title="Live forward test">
         <ol className="flex flex-col gap-3 text-sm">
           <li className="flex gap-3"><span className="font-medium text-muted-foreground">1.</span> From a mobile phone, call <span className="font-mono">{line}</span>.</li>
           <li className="flex gap-3"><span className="font-medium text-muted-foreground">2.</span> Let it ring without answering.</li>
-          <li className="flex gap-3"><span className="font-medium text-muted-foreground">3.</span> Press 1 when prompted and watch for the text.</li>
+          <li className="flex gap-3">
+            <span className="font-medium text-muted-foreground">3.</span>
+            {wired?.consentMode === 'existing_consent'
+              ? 'Listen for voicemail, then watch for the recovery text.'
+              : 'Press 1 when prompted and watch for the text.'}
+          </li>
         </ol>
         <div className="mt-5 flex items-center gap-3 rounded-lg border border-dashed p-4">
           <span className="relative flex size-9 items-center justify-center rounded-full bg-accent">

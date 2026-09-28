@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Page, PageHeader } from "@/newui-transplant/components/app/kit";
 import { Button } from "@/newui-transplant/components/ui/button";
 import { openMctbSetupGuide } from "@/newui-transplant/connected/mctb/mctb-setup-guide";
@@ -18,6 +19,15 @@ import { TransplantMctbSetupTestPage } from "@/newui-transplant/mirror/routes/mc
 import { useMctbSetupApi, formatSetupPhoneLine } from "@/newui-transplant/connected/mctb/setup-hooks";
 import { useMctbSetupOverviewWiring } from "@/newui-transplant/connected/mctb/mctb-setup-overview-wiring";
 import { useMctbSetupPhoneWiring } from "@/newui-transplant/connected/mctb/mctb-setup-phone-wiring";
+import {
+  MctbNumberDrawerOpus,
+  type MctbNumberDrawerMode,
+} from "@/newui-transplant/components/mctb/number-drawer-opus";
+import {
+  openMctbNumberDrawer,
+  useMctbNumberDrawerEvents,
+} from "@/lib/mctb/numbers/mctb-number-drawer-controller";
+import { buildSetupTestPipelineSteps } from "@/lib/mctb/setup-test-presentation";
 import {
   useMctbNotificationsWiring,
   useMctbRecoveryWiring,
@@ -96,10 +106,37 @@ export function NewUiMctbSetupOverviewPage() {
 }
 
 export function NewUiMctbSetupPhonePage() {
-  const { loading, wired } = useMctbSetupPhoneWiring();
+  const searchParams = useSearchParams();
+  const [drawerMode, setDrawerMode] = useState<MctbNumberDrawerMode>(null);
+  const { loading, wired, reload } = useMctbSetupPhoneWiring();
+  useMctbNumberDrawerEvents(setDrawerMode);
+
+  useEffect(() => {
+    const open = searchParams.get("open");
+    if (open === "manage" || open === "add" || open === "verify") {
+      setDrawerMode(open);
+    }
+  }, [searchParams]);
+
   if (loading) return <p className="p-6 text-sm text-muted-foreground">Loading phone settings…</p>;
   if (!wired) return <p className="p-6 text-sm text-muted-foreground">Could not load phone settings.</p>;
-  return <TransplantMctbSetupPhonePage wired={wired} />;
+
+  const wiredWithDrawer = {
+    ...wired,
+    onManageNumbers: () => openMctbNumberDrawer("manage"),
+    onAddNumber: () => openMctbNumberDrawer("add"),
+  };
+
+  return (
+    <>
+      <TransplantMctbSetupPhonePage wired={wiredWithDrawer} />
+      <MctbNumberDrawerOpus
+        open={drawerMode}
+        onClose={() => setDrawerMode(null)}
+        onNumbersChanged={() => void reload()}
+      />
+    </>
+  );
 }
 
 const setupSectionPageClass = "max-w-none px-0 py-0 md:px-0 md:py-0";
@@ -353,29 +390,30 @@ export function NewUiMctbSetupTestPage() {
 
   const checks = [
     { label: "Business line connected", ok: Boolean(test.businessLine && test.businessLine !== "—") },
-    { label: "Forwarding verified", ok: Boolean(test.liveTest?.passed) },
+    { label: "Forwarding verified (live test)", ok: Boolean(test.liveTest?.passed) },
     {
       label: "Sender ready",
       ok: Boolean(test.senderReady),
       href: "/mctb/setup/phone",
     },
-    { label: "Consent mode configured", ok: Boolean(test.setupTest?.checks?.consentModeLoaded) },
     {
       label: "Text-back opener saved",
       ok: test.openerSaved,
       href: "/mctb/setup/text-back",
     },
-    {
-      label: "Voicemail greeting (if used)",
-      ok: Boolean(test.setupTest?.checks?.greetingPlayed),
-      href: "/mctb/setup/voicemail",
-    },
   ];
+
+  const pipelineSteps = buildSetupTestPipelineSteps(test.setupTest);
 
   return (
     <TransplantMctbSetupTestPage
       wired={{
         checks,
+        pipelineSteps,
+        setupTestStarted: Boolean(test.setupTest?.started),
+        setupTestVerified: Boolean(test.setupTest?.verified),
+        setupTestFailureReason: test.setupTest?.failureReason ?? null,
+        consentMode: test.setupTest?.consentMode ?? null,
         businessLine: test.businessLine || "—",
         liveStatusTitle: test.liveTest?.started && !test.liveTest.passed ? "Listening for your test call" : "Ready to listen",
         liveStatusDetail:

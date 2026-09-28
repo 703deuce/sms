@@ -4,7 +4,9 @@ import { Button } from "@/components/ui/button";
 import { GreetingVoicePicker } from "@/components/smart-routing/greeting-voice-picker";
 import { cn } from "@/lib/utils";
 import { Loader2, Volume2 } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { MCTB_CONSENT_SCRIPT_CUSTOMER_EDIT_HINT } from "@/lib/mctb/consent-prompt/script-policy";
 
 type ConsentPromptStatus = {
   config: {
@@ -65,7 +67,7 @@ export function MctbConsentPromptEditor({ disabled = false, phoneNumberId = null
       const res = await fetch("/api/mctb/consent-prompt", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ scriptText, voiceId, speed }),
+        body: JSON.stringify({ voiceId, speed }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Save failed");
@@ -85,7 +87,7 @@ export function MctbConsentPromptEditor({ disabled = false, phoneNumberId = null
       const res = await fetch("/api/mctb/consent-prompt", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "generate", scriptText, voiceId, speed }),
+        body: JSON.stringify({ action: "generate", voiceId, speed }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Audio generation failed");
@@ -136,21 +138,22 @@ export function MctbConsentPromptEditor({ disabled = false, phoneNumberId = null
       <div>
         <p className="text-[15px] font-semibold tracking-tight text-foreground">What callers will hear</p>
         <p className="mt-1 text-[13px] text-muted-foreground">
-          Write your Press-1 disclosure. We generate static audio once — live calls play the saved
-          recording (no runtime text-to-speech).
+          Transovo-approved Press-1 wording with your business name. Customize voice and speed, then
+          generate and publish static audio for live calls.
         </p>
       </div>
 
-      <label className="block space-y-1.5">
-        <span className="text-[12px] font-semibold text-foreground">Spoken consent script</span>
-        <textarea
-          className="min-h-[110px] w-full rounded-lg border border-border bg-background px-3 py-2 text-[14px]"
-          value={scriptText}
-          disabled={disabled}
-          onChange={(e) => setScriptText(e.target.value)}
-          onBlur={() => void saveDraft()}
-        />
-      </label>
+      <p className="text-[12px] text-muted-foreground">{MCTB_CONSENT_SCRIPT_CUSTOMER_EDIT_HINT}</p>
+      <p className="text-[12px] font-semibold text-foreground">Approved disclosure</p>
+      <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-[14px] leading-relaxed">
+        {scriptText}
+      </p>
+      <p className="text-[12px] text-muted-foreground">
+        Business name:{" "}
+        <Link href="/settings/business" className="font-semibold text-primary hover:underline">
+          Settings → Business
+        </Link>
+      </p>
 
       <div>
         <p className="mb-2 text-[12px] font-semibold text-foreground">Voice</p>

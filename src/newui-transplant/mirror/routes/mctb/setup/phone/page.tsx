@@ -47,6 +47,8 @@ export type MctbSetupPhoneWired = {
   onSave?: () => Promise<void>
   onSelectSender?: (choice: 'platform' | string) => void | Promise<void>
   onVerifyAgain?: () => Promise<void>
+  onManageNumbers?: () => void
+  onAddNumber?: () => void
 }
 
 const CARRIERS = ['Verizon', 'AT&T', 'T-Mobile', 'Comcast Business', 'RingCentral', 'Other']
@@ -173,13 +175,23 @@ export function TransplantMctbSetupPhonePage({ wired }: { wired?: MctbSetupPhone
             ))}
           </ol>
         ) : null}
-        {wired?.ownSenderRegistrationHref ? (
-          <p className="mt-3">
+        <div className="mt-3 flex flex-wrap gap-2">
+          {wired?.onManageNumbers ? (
+            <Button type="button" size="sm" variant="outline" onClick={wired.onManageNumbers}>
+              Manage messaging numbers
+            </Button>
+          ) : null}
+          {wired?.onAddNumber ? (
+            <Button type="button" size="sm" variant="outline" onClick={wired.onAddNumber}>
+              Add toll-free or local number
+            </Button>
+          ) : null}
+          {wired?.ownSenderRegistrationHref ? (
             <ButtonLink href={wired.ownSenderRegistrationHref} size="sm" variant="outline">
               Messaging registration
             </ButtonLink>
-          </p>
-        ) : null}
+          ) : null}
+        </div>
         <div role="radiogroup" aria-label="Text-back sender" className="mt-4 grid gap-2">
           {senderOptions.map((opt) => {
             const locked = !opt.selectable && opt.id !== 'platform'

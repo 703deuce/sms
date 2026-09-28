@@ -18,7 +18,11 @@ export function MctbVoicemailGreetingStudio({
   onSaveText,
   onSaveUrl,
 }: Props) {
-  const sourceLabel = greetingUrl ? "Uploaded or recorded audio" : greetingText ? "Generated / script" : "Default";
+  const sourceLabel = greetingUrl
+    ? "Active audio (recorded, uploaded, or generated)"
+    : greetingText
+      ? "Script saved — activate audio with “Use this greeting”"
+      : "Platform default (no custom URL yet)";
 
   return (
     <Panel

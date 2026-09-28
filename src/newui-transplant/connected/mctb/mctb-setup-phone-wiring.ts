@@ -357,5 +357,5 @@ export function useMctbSetupPhoneWiring(): {
     saveSenderSelection,
   ]);
 
-  return { loading, wired };
+  return { loading, wired, reload: load };
 }
