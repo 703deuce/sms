@@ -14,6 +14,7 @@ import { isMctbBundledAiReceptionistPath } from "../src/lib/products/mctb-bundle
 import { resolveMctbSetupIaRedirect } from "../src/lib/mctb/setup-ia-redirects";
 import { findBestNavMatch } from "../src/lib/nav-active";
 import { mapProductionNavToKimi } from "../src/components/kimi/sidebar/map-nav";
+import { resolveCustomerNavSections } from "../src/newui-transplant/lib/nav";
 
 const launchNav = buildMctbV1Nav({ hasVoice: true, hasNumbers: true });
 const launchLabels = launchNav.map((i) => i.label);
@@ -59,7 +60,15 @@ const mctbOnly = buildMctbV1Nav({ hasVoice: false });
 assert.equal(mctbOnly.find((i) => i.label === "Conversations")?.href, MCTB_ROUTES.conversations);
 
 const mobile = buildMctbV1MobileNav({ hasVoice: true });
-assert.deepEqual(mobile.map((i) => i.label), ["Home", "Missed", "Inbox", "Configure"]);
+assert.deepEqual(mobile.map((i) => i.label), ["Home", "Missed", "Chats", "Configure"]);
+
+const opusSections = resolveCustomerNavSections();
+const opusLabels = opusSections.flatMap((s) => s.items.map((i) => i.label));
+assert.ok(!opusLabels.includes("Setup"));
+assert.ok(!opusLabels.includes("Inbox"));
+assert.ok(opusLabels.includes("Conversations"));
+assert.ok(opusSections.some((s) => s.label === "Activity"));
+assert.ok(opusSections.some((s) => s.label === "Configure"));
 
 assert.ok(isMctbBundledAiReceptionistPath("/voice/calls"));
 assert.equal(isMctbUniversalChromeActive("/voice/calls", "ai_after_hours", { hasMctb: true }), true);

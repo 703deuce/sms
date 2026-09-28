@@ -111,7 +111,7 @@ export function buildMctbV1MobileNav(options: MctbNavOptions = {}): NavItem[] {
     { label: "Home", href: MCTB_ROUTES.home, icon: Home },
     { label: "Missed", href: MCTB_ROUTES.missedCalls, icon: PhoneMissed },
     {
-      label: "Inbox",
+      label: "Chats",
       href: MCTB_ROUTES.conversations,
       icon: MessageSquare,
       badge: badge > 0 ? badge : undefined,

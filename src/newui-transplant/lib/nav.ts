@@ -1,21 +1,15 @@
 import {
   BarChart3,
   Bot,
-  CreditCard,
-  Hash,
-  Inbox,
   LayoutDashboard,
   PhoneCall,
-  PhoneMissed,
-  Plug,
-  Settings,
-  Sparkles,
-  Voicemail,
-  Wrench,
   type LucideIcon,
 } from 'lucide-react'
 import { isVoiceProductCustomerVisible } from '@/lib/products/launch-product-availability'
 import { RECEPTIONIST_WIZARD_NAV_ITEMS } from '@/lib/voice/receptionist/wizard-step-url'
+import { buildMctbV1Nav } from '@/lib/products/mctb-nav'
+import type { NavItem as ProductNavItem } from '@/lib/nav'
+import { MCTB_ROUTES } from '@/lib/mctb/routes'
 
 export type NavSubItem = {
   label: string
@@ -47,56 +41,70 @@ export const RECEPTIONIST_SIDEBAR_CHILDREN: NavSubItem[] = RECEPTIONIST_WIZARD_N
 
 export type NavSection = { label: string; items: NavItem[] }
 
-const FULL_NAV: NavSection[] = [
-  {
-    label: 'AI Receptionist',
-    items: [
-      { label: 'Overview', href: '/voice/overview', icon: LayoutDashboard },
-      { label: 'Calls', href: '/voice/calls', icon: PhoneCall, matchPrefix: '/voice/calls' },
-      {
-        label: 'Receptionist',
-        href: '/voice/receptionist',
-        icon: Bot,
-        matchPrefix: '/voice/receptionist',
-        children: RECEPTIONIST_SIDEBAR_CHILDREN,
-      },
-      { label: 'Analytics', href: '/voice/analytics', icon: BarChart3 },
-    ],
-  },
-  {
-    label: 'Missed Call Text Back',
-    items: [
-      { label: 'Overview', href: '/mctb', icon: LayoutDashboard },
-      { label: 'Missed Calls', href: '/mctb/missed-calls', icon: PhoneMissed, matchPrefix: '/mctb/missed-calls' },
-      { label: 'Inbox', href: '/mctb/conversations', icon: Inbox },
-      { label: 'AI Recovery', href: '/mctb/ai-recovery', icon: Sparkles },
-      { label: 'Voicemail', href: '/mctb/voicemail', icon: Voicemail },
-      { label: 'Analytics', href: '/mctb/analytics', icon: BarChart3 },
-      { label: 'Setup', href: '/mctb/setup', icon: Wrench, matchPrefix: '/mctb/setup' },
-    ],
-  },
-  {
-    label: 'Shared',
-    items: [
-      { label: 'Integrations', href: '/integrations', icon: Plug, matchPrefix: '/integrations' },
-      { label: 'Numbers', href: '/voice/numbers', icon: Hash },
-      { label: 'Billing', href: '/settings/billing', icon: CreditCard },
-      { label: 'Settings', href: '/settings', icon: Settings, matchPrefix: '/settings/business' },
-    ],
-  },
-]
+const AI_RECEPTIONIST_SECTION: NavSection = {
+  label: 'AI Receptionist',
+  items: [
+    { label: 'Overview', href: '/voice/overview', icon: LayoutDashboard },
+    { label: 'Calls', href: '/voice/calls', icon: PhoneCall, matchPrefix: '/voice/calls' },
+    {
+      label: 'Receptionist',
+      href: '/voice/receptionist',
+      icon: Bot,
+      matchPrefix: '/voice/receptionist',
+      children: RECEPTIONIST_SIDEBAR_CHILDREN,
+    },
+    { label: 'Analytics', href: '/voice/analytics', icon: BarChart3 },
+  ],
+}
 
+const ACCOUNT_FOOTER_LABELS = new Set(['Settings', 'Billing', 'Help'])
+
+function productNavItemToOpus(item: ProductNavItem): NavItem {
+  const opus: NavItem = {
+    label: item.label,
+    href: item.href,
+    icon: item.icon as LucideIcon,
+  }
+  if (item.badge !== undefined) opus.badge = String(item.badge)
+  if (!item.matchExact) {
+    opus.matchPrefix = item.href
+  }
+  return opus
+}
+
+/** Launch MCTB IA — single source with `buildMctbV1Nav` (desktop legacy + Opus mobile drawer). */
+export function mctbLaunchNavSections(inboxBadge = 0): NavSection[] {
+  const flat = buildMctbV1Nav({ inboxBadge })
+  const sections: NavSection[] = []
+  let bucket: NavItem[] = []
+  let bucketLabel = 'Overview'
+
+  const flush = () => {
+    if (bucket.length > 0) sections.push({ label: bucketLabel, items: bucket })
+    bucket = []
+  }
+
+  for (const item of flat) {
+    if (item.sectionLabel) {
+      flush()
+      bucketLabel = item.sectionLabel
+    } else if (ACCOUNT_FOOTER_LABELS.has(item.label) && bucketLabel === 'Configure') {
+      flush()
+      bucketLabel = 'Account'
+    }
+    bucket.push(productNavItemToOpus(item))
+  }
+  flush()
+  return sections
+}
+
+/** Legacy setup workspace tabs — canonical launch routes (old `/mctb/setup/*` still redirect). */
 export const MCTB_SETUP_SECTIONS = [
-  { label: 'Overview', href: '/mctb/setup' },
-  { label: 'Phone & Forwarding', href: '/mctb/setup/phone' },
-  { label: 'Consent', href: '/mctb/setup/consent' },
-  { label: 'Text Back', href: '/mctb/setup/text-back' },
-  { label: 'Recovery', href: '/mctb/setup/recovery' },
-  { label: 'Voicemail', href: '/mctb/setup/voicemail' },
-  { label: 'Notifications', href: '/mctb/setup/notifications' },
-  { label: 'Exclusions', href: '/mctb/setup/exclusions' },
-  { label: 'Links', href: '/mctb/setup/links' },
-  { label: 'Test', href: '/mctb/setup/test' },
+  { label: 'Missed-Call Recovery', href: MCTB_ROUTES.missedCallRecovery },
+  { label: 'Text Back', href: MCTB_ROUTES.textBack },
+  { label: 'AI Recovery', href: MCTB_ROUTES.aiRecovery },
+  { label: 'Notifications', href: MCTB_ROUTES.notifications },
+  { label: 'Phone & Forwarding', href: MCTB_ROUTES.phone },
 ]
 
 export const INTEGRATION_TABS = [
@@ -112,12 +120,15 @@ export const INTEGRATION_TABS = [
 
 /** Customer-facing sidebar sections (respects launch product visibility). */
 export function resolveCustomerNavSections(): NavSection[] {
-  if (isVoiceProductCustomerVisible()) return FULL_NAV
-  return FULL_NAV.filter((section) => section.label !== 'AI Receptionist')
+  const mctb = mctbLaunchNavSections()
+  if (isVoiceProductCustomerVisible()) {
+    return [AI_RECEPTIONIST_SECTION, ...mctb]
+  }
+  return mctb
 }
 
 /** @deprecated Use resolveCustomerNavSections() for app chrome. */
-export const NAV: NavSection[] = FULL_NAV
+export const NAV: NavSection[] = resolveCustomerNavSections()
 
 export const SETTINGS_TABS = [
   { label: 'Business', href: '/settings/business' },

@@ -16,7 +16,8 @@ function sectionFor(pathname: string) {
       }
     }
   }
-  if (pathname.startsWith('/settings')) return { section: 'Shared', page: 'Settings' }
+  if (pathname.startsWith('/settings')) return { section: 'Account', page: 'Settings' }
+  if (pathname.startsWith('/getting-started')) return { section: 'Account', page: 'Help' }
   return { section: 'Transovo', page: '' }
 }
 

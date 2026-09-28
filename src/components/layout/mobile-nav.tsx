@@ -27,7 +27,7 @@ import {
   PhoneCall,
   PhoneMissed,
   Users,
-  SlidersHorizontal,
+  Shield,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -102,7 +102,7 @@ export function MobileNav({
 
   const mobileIconSets: Record<string, typeof Home[]> = {
     Home: [Home, Calendar, Globe, MessageSquare, Users],
-    mctb: [Home, PhoneMissed, MessageSquare, SlidersHorizontal],
+    mctb: [Home, PhoneMissed, MessageSquare, Shield],
   };
 
   const items = realtorMode
