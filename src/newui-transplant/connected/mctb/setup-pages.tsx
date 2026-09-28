@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Page, PageHeader } from "@/newui-transplant/components/app/kit";
 import { Button } from "@/newui-transplant/components/ui/button";
-import { openMctbSetupGuide } from "@/components/mctb/onboarding/mctb-first-run-wizard-host";
+import { openMctbSetupGuide } from "@/newui-transplant/connected/mctb/mctb-setup-guide";
 import { ConsentEditor } from "@/newui-transplant/components/mctb/consent-editor";
 import { TextBackEditor } from "@/newui-transplant/components/mctb/text-back-editor";
 import { ExclusionsTable } from "@/newui-transplant/components/mctb/exclusions-table";

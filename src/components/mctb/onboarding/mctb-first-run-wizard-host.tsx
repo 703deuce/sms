@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { MctbOnboardingRuntime } from "@/lib/mctb/onboarding/mctb-onboarding-runtime";
 import type { MctbFirstRunWizardPolicy } from "@/lib/mctb/onboarding/first-run-policy";
+import { MCTB_SETUP_GUIDE_QUERY } from "@/newui-transplant/connected/mctb/mctb-setup-guide";
 import {
   Dialog,
   DialogContent,
@@ -11,8 +12,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/newui-transplant/components/ui/dialog";
-
-export const MCTB_SETUP_GUIDE_QUERY = "mctbSetupGuide";
 
 type PolicyResponse = {
   firstRun?: MctbFirstRunWizardPolicy;
@@ -99,13 +98,4 @@ export function MctbFirstRunWizardHost() {
       </DialogContent>
     </Dialog>
   );
-}
-
-/** Imperative opener for Setup overview actions. */
-export function openMctbSetupGuide(): void {
-  if (typeof window === "undefined") return;
-  const url = new URL(window.location.href);
-  url.searchParams.set(MCTB_SETUP_GUIDE_QUERY, "1");
-  window.history.pushState({}, "", url.toString());
-  window.dispatchEvent(new Event("mctb:setup-guide-request"));
 }
