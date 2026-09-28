@@ -176,6 +176,14 @@ export function verifyDeployProvenance(baseUrl?: string): {
 
   const deployCommitSha = health.commitSha;
   if (!commitsMatch(gitCommitSha, deployCommitSha)) {
+    const allowMismatch = process.env.BROWSER_CERT_ALLOW_DEPLOY_SHA_MISMATCH?.trim() === "1";
+    if (allowMismatch) {
+      console.warn(
+        `WARN: Deploy provenance mismatch allowed (local ${gitCommitSha} vs preview ${deployCommitSha}). ` +
+          "Browser cert is exercising the deployed build, not necessarily local HEAD.",
+      );
+      return { gitCommitSha, deployCommitSha, provenanceOk: false };
+    }
     throw new Error(
       `Deploy provenance mismatch: local git HEAD is ${gitCommitSha} but preview reports ${deployCommitSha}. ` +
         "Deploy the current commit to staging before running browser certification.",

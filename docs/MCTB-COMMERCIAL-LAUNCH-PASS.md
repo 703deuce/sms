@@ -1,62 +1,62 @@
 # MCTB final commercial launch pass
 
-**Status:** IN PROGRESS — finish line for commercially launch-ready MCTB (excluding public marketing/landing and per-customer carrier approval wait).
+**Status:** IN PROGRESS — automated certification expanded; **handset PSTN** remains the single user-action gate after merge/deploy.
 
-**Evidence matrix:** `docs/MCTB-FINAL-PRODUCT-FUNCTIONALITY-GAPS.md` (convert rows to COMPLETE | EXTERNAL_APPROVAL_PENDING | BLOCKED only when proven).
+**Evidence matrix:** `docs/MCTB-FINAL-PRODUCT-FUNCTIONALITY-GAPS.md`
 
-**Frozen:** Pure Opus shell, `mctb_texml_final_v1`, both consent branches, existing runtime/Telnyx/Brevo/Stripe paths — extend, do not rebuild.
+**Out of scope:** `docs/MCTB-COMMERCIAL-LAUNCH-OUT-OF-SCOPE.md` (`test:mctb-timeout-retry-voice-hardening` / Voice V3 durable booking).
 
-## Central architecture (this pass)
+**Frozen:** Pure Opus shell, `mctb_texml_final_v1`, both consent branches.
 
-| Concern | Authoritative module |
-|--------|----------------------|
-| Capabilities (tiers) | `src/lib/mctb/capabilities.ts` — `resolveMctbCapabilities()` |
-| Free 25 recoveries / month | `src/lib/mctb/recovery-usage.ts` — `MCTB_RECOVERY` unit at send reserve |
-| Platform templates | `src/lib/mctb/platform-message-templates.ts` |
-| Existing Consent certification copy | `src/lib/mctb/existing-consent-certification-copy.ts` + `capture/attestation.ts` |
-| Urgent / notifications | landed handoff stack (single pass) |
-| 10DLC retail vs Telnyx cost | Stripe/catalog config — do not hard-code $4.50+$15 wholesale in runtime |
+## One-command automated certification
 
-## Product tiers (behavioral contract)
+```bash
+# Full bundle (guards + TeXML + Stripe + ingress + Brevo + PSTN preflight)
+bash scripts/run-mctb-commercial-launch-certification.sh
 
-- **Free:** Press-1, platform sender, locked templates, 25 `MCTB_RECOVERY`/month, Brevo caller-replied email, no Existing Consent / urgent / booking / AI / own sender.
-- **Recovery paid:** higher recovery allowance, Existing Consent + certification, booking links, urgent email/SMS, still platform sender policy.
-- **AI Recovery:** conversational AI (separate from urgent classification).
-- **Own sender add-on:** TFN/10DLC lifecycle; platform sender stays active while pending; verified own sender unlocks custom templates + manual two-way.
+# Repeat runs without purchasing another live Telnyx DID:
+MCTB_CERT_SKIP_LIVE_DID_PURCHASE=1 bash scripts/run-mctb-commercial-launch-certification.sh
+```
 
-## Certification sections (38 matrix)
+Live fresh-workspace ingress (Telnyx acquire + frozen TeXML bind) was proven once via `test-mctb-trial-ingress-provision-e2e.ts` (see gaps log).
 
-Sections 0–40 from the launch instruction map to evidence rows in the gaps doc. **Within our control:** implement, test, set status COMPLETE with records. **Carrier TFV/10DLC:** EXTERNAL_APPROVAL_PENDING when product workflow is proven but approval is outstanding.
+## §38 browser certification (MCTB-01–58)
 
-## Deploy discipline
+```bash
+NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/reset-cert-browser-password.ts
+export BROWSER_CERT_PREVIEW_URL="$APP_URL"
+export CERT_BROWSER_PASSWORD='…'   # cert account — see seed script / reset helper
+export BROWSER_CERT_ALLOW_DEPLOY_SHA_MISMATCH=1   # only when certing deployed SHA ahead of local HEAD
+npm run cert:appointments-mctb-browser -- --only CERT-MCTB --continue-on-fail
+```
 
-Push → Coolify green → `/api/health` commit match → then functional/browser proof. Do not certify stale production.
-
-## Certification evidence rows (update only with proof)
+## Certification evidence rows
 
 | Row | Status | Evidence |
 |-----|--------|----------|
-| `CAPABILITIES` | **COMPLETE** | `npx tsx scripts/test-mctb-capabilities-resolver.ts` — paid tier limits (250/750/2500) + free 25; `resolveMctbCapabilities()` exposes `recoveryPaid`, `aiRecoveryEntitled`, `ownSenderAddOnEntitled` |
-| `FREE_USAGE` | **COMPLETE** | `NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-mctb-recovery-usage-idempotency.ts` — 25th ok, replay idempotent, 26th suppressed |
-| `EXISTING_CONSENT_GATE` | **PARTIAL** | Setup POST + Opus consent editor; Recovery paid required — browser/API cert pending |
-| `AI_RECOVERY_ENTITLEMENT` | **PARTIAL** | API 403 without `mctb_ai_recovery` / limits flag — `lead-recovery/config`, `ai-recovery/settings`, `handoff` `set_launch_ai_replies` |
-| `BREVO_REPLY_EMAIL` | PENDING | — |
-| `COOLDOWN_UI_RUNTIME` | **COMPLETE** | `test-mctb-recovery-cooldown-eligibility.ts` in commercial guards |
-| `FRESH_WORKSPACE_PROVISIONING` | **PARTIAL** | `test-mctb-trial-ingress-provision-contract.ts`; live DID acquire pending |
-| `PRESS_1_E2E` | PENDING | — |
-| `EXISTING_CONSENT_E2E` | PENDING | — |
-| `URGENT_E2E` | PENDING | — |
-| `OWN_SENDER` | PENDING | Add-on via `mctb_own_sender` subscription or `mctbOwnSenderAddOnEntitled` limit flag |
-| `MCTB_COMMERCIAL_LAUNCH_CERTIFICATION` | **MISSING** | — |
+| `CAPABILITIES` | **COMPLETE** | `test-mctb-capabilities-resolver.ts` |
+| `FREE_USAGE` | **COMPLETE** | `test-mctb-recovery-usage-idempotency.ts` |
+| `COOLDOWN_UI_RUNTIME` | **COMPLETE** | `test-mctb-recovery-cooldown-eligibility.ts` |
+| `FRESH_WORKSPACE_PROVISIONING` | **COMPLETE** | `test-mctb-trial-ingress-provision-contract.ts` + live `test-mctb-trial-ingress-provision-e2e.ts` |
+| `STRIPE_ENTITLEMENT_LIFECYCLE` | **COMPLETE** | `test-mctb-commercial-stripe-entitlement-lifecycle.ts` |
+| `BREVO_REPLY_EMAIL` | **COMPLETE** | `test-mctb-brevo-handoff-delivery-e2e.ts` + caller_replied guards |
+| `AI_RECOVERY_ENTITLEMENT` | **COMPLETE** | `test-mctb-ai-recovery-entitlement-gate.ts` + Stripe addon lifecycle |
+| `URGENT_HANDOFF` | **COMPLETE** (automated) | `test-mctb-urgent-handoff-guards.ts` + Brevo urgent row in E2E |
+| `EXISTING_CONSENT_GATE` | **COMPLETE** (product) | `test-mctb-existing-consent-attestation.ts`; PSTN proof pending |
+| `PRESS_1_E2E` | **PSTN handset** | `test-mctb-pstn-production-readiness.ts` + manual script below |
+| `EXISTING_CONSENT_E2E` | **PSTN handset** | same |
+| `OWN_SENDER` | **EXTERNAL_APPROVAL_PENDING** | per-number TFV/10DLC; add-on entitlement in Stripe lifecycle test |
+| `MCTB_COMMERCIAL_LAUNCH_CERTIFICATION` | **IN PROGRESS** | `run-mctb-commercial-launch-certification.sh` PASS; browser CERT-MCTB + deploy SHA |
+| `MCTB_END_TO_END_FUNCTIONALITY` | **PSTN handset** | all automated paths green; two PSTN calls remain |
 
-Paid Recovery monthly allowance (configured): starter **250**, growth **750**, pro **2500** — `MCTB_PAID_RECOVERY_LIMIT_BY_TIER` in `recovery-usage-constants.ts`.
+## Handset PSTN script (after merge/deploy + cert browser PASS)
 
-## Automated guards (extend as behavior lands)
+Use workspace with verified CFNA to ingress TFN, `press_1` or `existing_consent` as configured.
 
-```bash
-npx tsx scripts/test-mctb-capabilities-resolver.ts
-npx tsx scripts/test-mctb-recovery-usage-idempotency.ts
-npx tsx scripts/test-mctb-urgent-handoff-guards.ts
-npx tsx scripts/test-mctb-caller-replied-inbound-path.ts
-npm run verify:mctb-stage2-presentation
-```
+**Press-1:** Call public business line from a second phone; do not answer; hear disclosure; press `1`; expect compliance SMS then recovery opener; reply once; agent inspects missed-call detail + conversation + `mctbNotificationDelivery` rows.
+
+**Existing consent:** Requires Recovery paid + valid certification; call business line; hear voicemail greeting; leave short message; hang up; expect recovery SMS without press-1; inspect voicemail + recovery timeline.
+
+## Deploy discipline
+
+Merge PR → Coolify green → `/api/health` `commitSha` match → re-run certification + browser cert without `BROWSER_CERT_ALLOW_DEPLOY_SHA_MISMATCH`.

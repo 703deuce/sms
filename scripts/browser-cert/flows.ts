@@ -408,7 +408,7 @@ export function resolveFlows(opts: {
     return f ? [f] : [];
   }
   if (opts.only) {
-    if (opts.only.startsWith("BATCH-")) {
+    if (opts.only.startsWith("BATCH-") || opts.only.startsWith("CERT-")) {
       flows = flowsForBatch(opts.only);
     } else {
       const f = ALL_FLOWS.find((x) => x.id === opts.only);
