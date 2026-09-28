@@ -31,7 +31,7 @@
 | `MCTB_CUSTOMER_OWNED_RECOVERY_TEMPLATE` | **PARTIAL** | `messageTemplate` editable; certify persistence + runtime uses custom value |
 | `MCTB_COOLDOWN_UI_RUNTIME` | **PARTIAL — VERIFY ONLY** | No more code unless functional test fails |
 | `MCTB_REPLY_EMAIL_NOTIFICATIONS` | **PARTIAL** | Trace below; wire/repair before urgent |
-| `MCTB_URGENT_AI_CLASSIFIER` | **MISSING — REQUIRED THIS PASS** | Extend `caller_replied` path; reuse existing structured AI where possible |
+| `MCTB_URGENT_AI_CLASSIFIER` | **PARTIAL** | `classifyMctbUrgentReply` + single-pass orchestration; Setup → Notifications UI + test API; prove prod email/SMS |
 | `MCTB_WORKSPACE_INGRESS_PROVISIONING` | **PARTIAL** | Needs **new-workspace** lifecycle proof + failure semantics |
 | `MCTB_USAGE_FREE_ALLOWANCE` | **AUDIT FIRST** | Find authoritative package/entitlement/usage — do not add independent counter |
 | `MCTB_CONSENT_PRESS_1` | **IMPL COMPLETE** | Frozen TeXML; historical/live evidence; preserve |
@@ -220,7 +220,7 @@ Showing **(866) 602-0680** on an **existing** workspace does **not** certify aut
 | Pause / resume | Yes | schedule | `recovery_paused` | Recovery | Not in smoke | PARTIAL | Test semantics |
 | Notifications / handoff | Yes | `/api/mctb/handoff` | `deliverMctbHandoffNotifications` | Setup → Notifications | Trace incomplete | PARTIAL | Verify `caller_replied` email |
 | Reply email on customer reply | Partial | handoff + matrix | `recordMctbLeadRecoveryInboundSideEffects` | Matrix toggle | Not verified | PARTIAL | Trace + prove delivery |
-| **Urgent AI + business SMS** | Partial | assessments | side-effects + notifications | **Notifications** | No | **REQUIRED** | Build on caller_replied path |
+| **Urgent AI + business SMS** | Partial | assessments + `emergencyCriteria` | `processMctbInboundReplyHandoff` | Setup → Notifications | Not E2E | **PARTIAL** | Prove classifier + entitled SMS |
 | Exclusions | Yes | API | eligibility | Setup | Not in smoke | PARTIAL | Runtime proof |
 | Consent Press-1 | Yes | setup + TeXML | frozen | Setup | Live evidence | **IMPL COMPLETE** | Preserve TeXML |
 | Consent existing | Yes | attestation | frozen branch | Setup | Not in launch matrix | **VERIFY** | PSTN lifecycle test |
@@ -240,8 +240,9 @@ Showing **(866) 602-0680** on an **existing** workspace does **not** certify aut
 | Missed call detail | `missed-call-detail-load.ts`, API route, Opus detail page, adapter |
 | Platform template (partial cert) | `message-template.ts`, `send.ts`, setup GET, `text-back-editor.tsx` |
 | Cooldown UI options | `setup-pages.tsx`, `setup/recovery/page.tsx` |
-| **caller_replied when LR off** | `customer-sms.ts` notifications-only path; side-effects idempotency + `assessMctbUrgency` without intent |
-| Guard | `scripts/test-mctb-caller-replied-inbound-path.ts` |
+| **caller_replied when LR off** | `customer-sms.ts` notifications-only path; side-effects idempotency |
+| **Urgent AI orchestration** | `urgent-reply-classifier.ts`, `inbound-reply-handoff.ts`, `test_urgent_rules` API, Notifications UI |
+| Guards | `test-mctb-caller-replied-inbound-path.ts`, `test-mctb-caller-replied-email-delivery-contract.ts`, `test-mctb-inbound-reply-notification-plan.ts` |
 
 ---
 
@@ -251,6 +252,7 @@ Showing **(866) 602-0680** on an **existing** workspace does **not** certify aut
 npx tsx src/lib/mctb/message-template.test.ts
 npx tsx scripts/test-mctb-caller-replied-inbound-path.ts
 npx tsx scripts/test-mctb-caller-replied-email-delivery-contract.ts
+npx tsx scripts/test-mctb-inbound-reply-notification-plan.ts
 npm run verify:mctb-stage2-presentation
 npm run verify:mctb-stage2-demo-state
 npm run audit:mctb-opus-page-wiring

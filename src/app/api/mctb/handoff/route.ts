@@ -38,7 +38,8 @@ export async function POST(req: Request) {
   const body = (await req.json()) as {
     config?: Partial<MctbHandoffConfigDto>;
     recipients?: MctbNotificationRecipientDto[];
-    action?: "test_notification" | "set_launch_ai_replies";
+    action?: "test_notification" | "test_urgent_rules" | "set_launch_ai_replies";
+    sampleMessage?: string;
     enabled?: boolean;
   };
 
@@ -49,6 +50,34 @@ export async function POST(req: Request) {
     const recipients = await loadMctbNotificationRecipients(workspaceId);
     return NextResponse.json({
       data: { config, recipients, launch: { aiRepliesEnabled: result.enabled } },
+    });
+  }
+
+  if (body.action === "test_urgent_rules") {
+    const sample = String(body.sampleMessage || "").trim();
+    if (!sample) {
+      return NextResponse.json({ error: "sampleMessage is required" }, { status: 400 });
+    }
+    const config = await loadMctbHandoffConfig(workspaceId);
+    const { classifyMctbUrgentReply } = await import("@/lib/mctb/handoff/urgent-reply-classifier");
+    const classification = await classifyMctbUrgentReply({
+      instructions: config.emergencyCriteria || "",
+      latestMessage: sample,
+      recentMessages: [],
+    });
+    if (!classification) {
+      return NextResponse.json({
+        ok: false,
+        error: "classifier_unavailable",
+        message: "Urgent classifier could not run (semantic LLM unavailable).",
+      });
+    }
+    return NextResponse.json({
+      ok: true,
+      urgent: classification.urgent,
+      reason: classification.reason,
+      summary: classification.summary,
+      label: classification.urgent ? "Urgent" : "Normal",
     });
   }
 

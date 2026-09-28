@@ -11,6 +11,10 @@ const customerSms = readFileSync(
   "utf8",
 );
 const sideEffects = readFileSync(
+  path.join(process.cwd(), "src/lib/mctb/handoff/inbound-reply-handoff.ts"),
+  "utf8",
+);
+const sideEffectsShim = readFileSync(
   path.join(process.cwd(), "src/lib/mctb/handoff/lead-recovery-inbound-side-effects.ts"),
   "utf8",
 );
@@ -32,8 +36,12 @@ assert.ok(
   "handoff caller_replied idempotency must include provider message id",
 );
 assert.ok(
-  sideEffects.includes("assessMctbUrgency({ customerText: input.body, config })"),
-  "handoff side effects must assess urgency from reply text when no structured intent",
+  sideEffects.includes("classifyMctbUrgentReply"),
+  "inbound handoff must use instructions-driven urgent classifier when alerts enabled",
+);
+assert.ok(
+  sideEffectsShim.includes("processMctbInboundReplyHandoff"),
+  "lead recovery side-effects shim must delegate to inbound handoff orchestrator",
 );
 
 console.log("test-mctb-caller-replied-inbound-path: ok");

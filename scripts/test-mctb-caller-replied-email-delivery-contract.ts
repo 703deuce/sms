@@ -13,7 +13,7 @@ const notifications = readFileSync(
   "utf8",
 );
 const sideEffects = readFileSync(
-  path.join(process.cwd(), "src/lib/mctb/handoff/lead-recovery-inbound-side-effects.ts"),
+  path.join(process.cwd(), "src/lib/mctb/handoff/inbound-reply-handoff.ts"),
   "utf8",
 );
 
