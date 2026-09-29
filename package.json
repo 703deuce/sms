@@ -108,6 +108,7 @@
     "test:video-pipeline-trace": "tsx scripts/test-video-pipeline-trace.ts",
     "verify:mctb-final-pipeline": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/verify-mctb-final-pipeline.ts",
     "test:mctb-commercial-launch-cert": "bash scripts/run-mctb-commercial-launch-certification.sh",
+    "test:mctb-consolidated-nonhuman-matrix": "bash scripts/run-mctb-consolidated-nonhuman-matrix.sh",
     "verify:mctb-stage2-legacy-imports": "tsx scripts/verify-mctb-stage2-legacy-imports.ts",
     "verify:mctb-stage2-demo-state": "tsx scripts/verify-mctb-stage2-demo-state.ts",
     "audit:mctb-opus-page-wiring": "tsx scripts/audit-mctb-opus-page-wiring.ts",
