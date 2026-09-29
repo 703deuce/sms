@@ -124,7 +124,26 @@ export function getBullmqRedisUrl(): string {
 function connection() {
   const url = getBullmqRedisUrl();
   if (!sharedConnection) {
-    sharedConnection = new IORedis(url, { maxRetriesPerRequest: null });
+    sharedConnection = new IORedis(url, {
+      maxRetriesPerRequest: null,
+      enableReadyCheck: true,
+      retryStrategy(times) {
+        const delay = Math.min(200 + times * 300, 5_000);
+        if (times === 1 || times % 10 === 0) {
+          logBullmq("bullmq_redis_reconnecting", { attempt: times, delayMs: delay });
+        }
+        return delay;
+      },
+    });
+    sharedConnection.on("connect", () => {
+      logBullmq("bullmq_redis_connect", {});
+    });
+    sharedConnection.on("ready", () => {
+      logBullmq("bullmq_redis_ready", {});
+    });
+    sharedConnection.on("close", () => {
+      logBullmq("bullmq_redis_connection_closed", {});
+    });
   }
   return sharedConnection;
 }
@@ -456,6 +475,48 @@ export function resetSmsDispatchBullmqMetricsForTests() {
   smsDispatchWorkersReady = false;
   smsDispatchWorkersReadyAt = null;
   readyQueues.clear();
+}
+
+/** Graceful shutdown for embedded worker:all (Coolify deploy SIGTERM). */
+export async function closeBullmqWorkers(): Promise<void> {
+  const workers = [...workerCache.values()];
+  workerCache.clear();
+  for (const worker of workers) {
+    try {
+      await worker.close();
+    } catch (err) {
+      logBullmq("bullmq_worker_close_error", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  readyQueues.clear();
+  smsDispatchWorkersReady = false;
+  smsDispatchWorkersReadyAt = null;
+
+  const queues = [...queueCache.values()];
+  queueCache.clear();
+  for (const queue of queues) {
+    try {
+      await queue.close();
+    } catch {
+      // ignore close races during shutdown
+    }
+  }
+
+  if (sharedConnection) {
+    try {
+      await sharedConnection.quit();
+    } catch {
+      try {
+        sharedConnection.disconnect();
+      } catch {
+        // ignore
+      }
+    }
+    sharedConnection = null;
+  }
+  logBullmq("bullmq_workers_closed", {});
 }
 
 export async function startBullmqWorkers() {

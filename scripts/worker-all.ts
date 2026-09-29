@@ -10,6 +10,7 @@ import { processDueJobs } from "../src/lib/jobs/job-handlers";
 
 const INTERVAL_MS = Number(process.env.WORKER_POLL_MS || 5_000);
 const useBullmq = process.env.QUEUE_DRIVER === "bullmq" && Boolean(process.env.REDIS_URL);
+let shuttingDown = false;
 
 async function tick() {
   try {
@@ -29,11 +30,28 @@ async function main() {
   console.log(`[worker] starting (QUEUE_DRIVER=${process.env.QUEUE_DRIVER || "db"})`);
 
   if (useBullmq) {
-    const { startBullmqWorkers } = await import("../src/lib/jobs/bullmq");
+    const { startBullmqWorkers, syncDbOutboxToBullmq } = await import("../src/lib/jobs/bullmq");
     await startBullmqWorkers();
     console.log("[worker] BullMQ-only mode (DB poll disabled to prevent double-send)");
-    // Keep process alive; also enqueue the minute batch via lightweight cron tick without claiming
+
+    const onShutdown = async (signal: string) => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      console.log(`[worker] ${signal} — closing BullMQ workers`);
+      try {
+        const { closeBullmqWorkers } = await import("../src/lib/jobs/bullmq");
+        await closeBullmqWorkers();
+      } catch (err) {
+        console.error("[worker] BullMQ close failed", err);
+      }
+      process.exit(0);
+    };
+    process.on("SIGTERM", () => void onShutdown("SIGTERM"));
+    process.on("SIGINT", () => void onShutdown("SIGINT"));
+
+    // Keep process alive; minute batch + DB outbox sync (same as worker:sms recovery path).
     setInterval(async () => {
+      if (shuttingDown) return;
       try {
         const { enqueueJob } = await import("../src/lib/messaging/enqueue-advance");
         const minuteKey = new Date().toISOString().slice(0, 16);
@@ -45,6 +63,16 @@ async function main() {
         });
       } catch (err) {
         console.error("[worker] bullmq minute enqueue failed", err);
+      }
+      try {
+        const outbox = await syncDbOutboxToBullmq(50);
+        if (outbox.synced > 0) {
+          console.log(
+            `[worker] syncDbOutboxToBullmq synced=${outbox.synced} examined=${outbox.examined}`,
+          );
+        }
+      } catch (err) {
+        console.error("[worker] syncDbOutboxToBullmq failed", err);
       }
     }, INTERVAL_MS);
     return;

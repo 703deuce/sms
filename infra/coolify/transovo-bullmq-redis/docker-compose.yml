@@ -1,0 +1,56 @@
+# Self-hosted Redis for production BullMQ (Coolify / Docker).
+# Secrets: create .env next to this file with REDIS_PASSWORD=... (never commit).
+# Deploy on Coolify host: /data/coolify/services/transovo-bullmq-redis/
+services:
+  transovo-bullmq-redis:
+    image: redis:7.2-alpine
+    container_name: transovo-bullmq-redis
+    restart: unless-stopped
+    env_file:
+      - .env
+    command:
+      - redis-server
+      - --appendonly
+      - yes
+      - --appendfsync
+      - everysec
+      - --auto-aof-rewrite-percentage
+      - "100"
+      - --auto-aof-rewrite-min-size
+      - 64mb
+      - --save
+      - "900"
+      - "1"
+      - --save
+      - "300"
+      - "10"
+      - --save
+      - "60"
+      - "10000"
+      - --requirepass
+      - ${REDIS_PASSWORD}
+      - --maxmemory
+      - 768mb
+      - --maxmemory-policy
+      - noeviction
+      - --protected-mode
+      - yes
+    volumes:
+      - transovo-bullmq-redis-data:/data
+    networks:
+      coolify:
+        aliases:
+          - transovo-bullmq-redis
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    mem_limit: 896m
+    # No published ports — private coolify network only.
+networks:
+  coolify:
+    external: true
+volumes:
+  transovo-bullmq-redis-data:
