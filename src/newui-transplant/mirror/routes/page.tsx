@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
 
-export function TransplantPage.tsxPage() {
+export function TransplantPage() {
   redirect('/voice/overview')
 }

@@ -50,6 +50,9 @@ async function main() {
   );
   assertBullmqRedisUrl(redisUrl);
 
+  const { verifyBullmqConnection } = await import("../src/lib/jobs/bullmq");
+  await verifyBullmqConnection(15_000);
+
   resetSmsDispatchBullmqMetricsForTests();
   await startSmsDispatchBullmqWorkers();
   assert.equal(getSmsDispatchBullmqStatus().ready, true);

@@ -88,6 +88,11 @@ async function cleanup(workspaceId: string) {
 }
 
 async function main() {
+  const prevBrevo = process.env.BREVO_API_KEY;
+  const prevCapture = process.env.MCTB_HANDOFF_EMAIL_TEST_CAPTURE;
+  process.env.MCTB_HANDOFF_EMAIL_TEST_CAPTURE = "1";
+  process.env.BREVO_API_KEY = "";
+
   const { workspaceId } = await createWorkspaceWithRecipient();
   const prisma = getPrisma();
 
@@ -178,6 +183,10 @@ async function main() {
     console.log("test-mctb-brevo-handoff-delivery-e2e: PASS");
   } finally {
     await cleanup(workspaceId);
+    if (prevCapture === undefined) delete process.env.MCTB_HANDOFF_EMAIL_TEST_CAPTURE;
+    else process.env.MCTB_HANDOFF_EMAIL_TEST_CAPTURE = prevCapture;
+    if (prevBrevo === undefined) delete process.env.BREVO_API_KEY;
+    else process.env.BREVO_API_KEY = prevBrevo;
   }
 }
 

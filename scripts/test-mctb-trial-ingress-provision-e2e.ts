@@ -145,10 +145,20 @@ async function main() {
     console.log("test-mctb-trial-ingress-provision-e2e: PASS");
   } finally {
     await cleanup(workspaceId);
+    if (process.env.QUEUE_DRIVER === "bullmq" && process.env.REDIS_URL) {
+      try {
+        const { closeBullmqWorkers } = await import("../src/lib/jobs/bullmq");
+        await closeBullmqWorkers();
+      } catch {
+        // ignore teardown races
+      }
+    }
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+main()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
