@@ -1,0 +1,11 @@
+{
+  "name": "703deuce/sms",
+  "install": "npm ci",
+  "start": "bash scripts/cloud-agent/bootstrap-on-start.sh",
+  "terminals": [
+    {
+      "name": "bullmq-redis-tunnel",
+      "command": "bash scripts/cloud-agent/redis-tunnel-keeper.sh"
+    }
+  ]
+}

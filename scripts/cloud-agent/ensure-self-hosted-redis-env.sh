@@ -31,11 +31,11 @@ if ! tunnel_running; then
     -o ExitOnForwardFailure=yes \
     -o ServerAliveInterval=30 \
     -o ServerAliveCountMax=3 \
+    -o StrictHostKeyChecking=accept-new \
     -L "127.0.0.1:${LOCAL_PORT}:${REMOTE_BIND}" \
     "$COOLIFY_HOST"
-  # ssh -f leaves sshd child; find our forward listener's ssh process
-  sleep 0.5
-  pgrep -f "ssh -f -N.*${LOCAL_PORT}:${REMOTE_BIND}" | head -1 >"$TUNNEL_PID_FILE" || true
+  sleep 1
+  pgrep -f "ssh.*${LOCAL_PORT}:${REMOTE_BIND}" | head -1 >"$TUNNEL_PID_FILE" || true
 fi
 
 # Build REDIS_URL from production app env (password never printed).
@@ -70,15 +70,43 @@ export REDIS_URL="$SELF_REDIS_URL"
 export QUEUE_DRIVER="${QUEUE_DRIVER:-bullmq}"
 
 mkdir -p "$(dirname "$WORKSPACE_ENV")"
-# Merge into gitignored .env for tools that load dotenv (do not commit).
-if [[ -f "$WORKSPACE_ENV" ]]; then
-  grep -v '^REDIS_URL=' "$WORKSPACE_ENV" | grep -v '^QUEUE_DRIVER=' >"${WORKSPACE_ENV}.tmp" || true
-  mv "${WORKSPACE_ENV}.tmp" "$WORKSPACE_ENV"
+# Merge into gitignored .env (quoted values; consumed by preload-self-hosted-redis.mjs).
+export SELF_REDIS_URL QUEUE_DRIVER WORKSPACE_ENV
+python3 - <<'PY'
+import os, re
+path = os.environ["WORKSPACE_ENV"]
+redis_url = os.environ["SELF_REDIS_URL"]
+queue_driver = os.environ.get("QUEUE_DRIVER", "bullmq")
+lines = []
+if os.path.isfile(path):
+    for line in open(path, encoding="utf-8"):
+        if re.match(r"^REDIS_URL=", line) or re.match(r"^QUEUE_DRIVER=", line):
+            continue
+        lines.append(line.rstrip("\n"))
+lines.append(f'REDIS_URL="{redis_url}"')
+lines.append(f"QUEUE_DRIVER={queue_driver}")
+with open(path, "w", encoding="utf-8") as f:
+    f.write("\n".join(lines) + "\n")
+PY
+
+# Prove tunnel + Redis respond before agents rely on this file.
+if ! python3 - <<'PY'
+import os, socket, sys, urllib.parse
+port = int(os.environ.get("LOCAL_PORT", "63790"))
+s = socket.socket()
+s.settimeout(3)
+try:
+    s.connect(("127.0.0.1", port))
+except OSError:
+    sys.exit(1)
+finally:
+    s.close()
+sys.exit(0)
+PY
+then
+  echo "ensure-self-hosted-redis-env: tunnel port ${LOCAL_PORT} not reachable" >&2
+  exit 1
 fi
-{
-  echo "REDIS_URL=${REDIS_URL}"
-  echo "QUEUE_DRIVER=${QUEUE_DRIVER}"
-} >>"$WORKSPACE_ENV"
 
 # Redacted confirmation only
 python3 - <<'PY'
