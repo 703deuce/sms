@@ -149,7 +149,7 @@ assert.ok(switcher.includes("resolveCanonicalVoiceIngressPhoneNumberId"));
 assert.ok(!switcher.includes("mctbInbound"));
 
 const onboarding = fs.readFileSync(
-  path.join(process.cwd(), "src/components/mctb/onboarding-wizard.tsx"),
+  path.join(process.cwd(), "src/lib/mctb/onboarding/mctb-onboarding-runtime.tsx"),
   "utf8",
 );
 assert.ok(onboarding.includes("MctbRecoveryGoalSetupSection"));
@@ -190,8 +190,11 @@ const customerSms = fs.readFileSync(
   "utf8",
 );
 assert.ok(customerSms.includes("recordMctbInboundSmsOptOut"));
-const stopIdx = customerSms.indexOf("isCarrierProtocolOptOutMessage");
-const lrDisabledIdx = customerSms.indexOf("lead_recovery_not_enabled");
-assert.ok(stopIdx > 0 && lrDisabledIdx > 0 && stopIdx < lrDisabledIdx);
+const replyHandler = customerSms.slice(
+  customerSms.indexOf("export async function handleMctbCustomerSmsReply"),
+);
+const stopIdx = replyHandler.indexOf("isCarrierProtocolOptOutMessage(input.body)");
+const leadRecoveryIdx = replyHandler.indexOf("await loadLeadRecoveryConfig");
+assert.ok(stopIdx > 0 && leadRecoveryIdx > 0 && stopIdx < leadRecoveryIdx);
 
 console.log("test-mctb-simplified-launch: PASS");

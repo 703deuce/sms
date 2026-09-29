@@ -25,7 +25,7 @@ assert.equal(isExistingConsentModeEligible({ messagingReady: true, paidEntitled:
 assert.equal(isExistingConsentModeEligible({ messagingReady: true, paidEntitled: false }), false);
 assert.equal(isExistingConsentModeEligible({ messagingReady: false }), false);
 assert.ok(existingConsentIneligibleReason(false, true)?.includes("messaging"));
-assert.ok(existingConsentIneligibleReason(true, false)?.includes("paid"));
+assert.ok(existingConsentIneligibleReason(true, false)?.includes("Recovery"));
 assert.equal(resolveMctbSetupSectionId("/mctb/setup/text-back"), "text-back");
 
 assert.equal(methodLabel(MCTB_CONSENT_MODE_VERIFIED), "Press 1");

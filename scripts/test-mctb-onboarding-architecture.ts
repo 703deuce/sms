@@ -28,8 +28,8 @@ import { MCTB_CARRIER_GUIDES } from "../src/lib/mctb/onboarding/carriers";
 import { tfvStatusLabel } from "../src/lib/mctb/onboarding/trial-number";
 
 assert.equal(MCTB_ONBOARDING_STEP_ORDER[0], "business_line");
-assert.equal(MCTB_ONBOARDING_STEP_ORDER[1], "connect_calls");
-assert.equal(MCTB_ONBOARDING_STEP_ORDER[4], "voicemail");
+assert.equal(MCTB_ONBOARDING_STEP_ORDER[1], "consent");
+assert.equal(MCTB_ONBOARDING_STEP_ORDER[4], "notifications");
 assert.equal(MCTB_ONBOARDING_STEP_ORDER.at(-1), "ready");
 assert.equal(MCTB_ONBOARDING_STEP_LABELS.business_line, "Business line");
 
@@ -47,7 +47,7 @@ assert.equal(parsed.currentStep, "recovery");
 
 const afterBusiness = markStepComplete(defaults, "business_line");
 assert.ok(afterBusiness.completedSteps.includes("business_line"));
-assert.equal(afterBusiness.currentStep, "connect_calls");
+assert.equal(afterBusiness.currentStep, "consent");
 
 assert.match(getDemoMessageBody(), /Transovo Demo/i);
 assert.equal(getPlatformDemoNumberE164(), "+15714073615");
