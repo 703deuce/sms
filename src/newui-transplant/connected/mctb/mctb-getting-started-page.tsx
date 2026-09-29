@@ -76,7 +76,6 @@ export function MctbGettingStartedPage() {
     );
   }
 
-  const pct = Math.round((data.essentialsComplete / data.essentialsTotal) * 100);
   const headerDescription = data.operationalReady
     ? "Your missed-call recovery is ready. Review your setup or explore additional capabilities."
     : "Finish setting up missed-call recovery and see what Transovo is ready to handle.";
