@@ -75,9 +75,15 @@ Do not print connection credentials in tickets or chat.
 
 ---
 
+## Production hardening (follow-up)
+
+See **`docs/TRANSOVO-BULLMQ-REDIS-HARDENING-ACCEPTANCE.md`** and operator runbook **`docs/operations/MCTB-REDIS-BULLMQ-RUNBOOK.md`**.
+
+Off-host backup: **`OFF_HOST_BACKUP_DESTINATION_REQUIRED`** until operator provides S3/SFTP/restic destination.
+
 ## READY FOR MANUAL MCTB GOLDEN-PATH TEST
 
-**YES**
+**YES** (infrastructure); golden-path is separate operator walkthrough.
 
 ---
 
