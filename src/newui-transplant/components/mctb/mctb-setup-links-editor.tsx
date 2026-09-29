@@ -9,7 +9,7 @@ import {
   mctbRequestFormPublicPath,
   type MctbRequestFormField,
 } from '@/lib/mctb/request-form-shared'
-import { FieldRow, Panel, Pill } from '@/newui-transplant/components/app/kit'
+import { Panel, Pill, SettingRow } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Input } from '@/newui-transplant/components/ui/input'
 import { Switch } from '@/newui-transplant/components/ui/switch'
@@ -216,12 +216,20 @@ export function MctbSetupLinksEditor() {
       </Panel>
 
       <Panel title="Public request form">
-        <FieldRow label="Enable request form" description="Send a structured form link instead of a single URL when appropriate.">
-          <Switch checked={requestFormEnabled} onCheckedChange={setRequestFormEnabled} aria-label="Enable request form" />
-        </FieldRow>
-        <FieldRow label="Lead capture" description="Store submissions as leads when callers complete the form.">
-          <Switch checked={leadCaptureEnabled} onCheckedChange={setLeadCaptureEnabled} aria-label="Lead capture" />
-        </FieldRow>
+        <SettingRow
+          title="Enable request form"
+          description="Send a structured form link instead of a single URL when appropriate."
+          control={
+            <Switch checked={requestFormEnabled} onCheckedChange={setRequestFormEnabled} aria-label="Enable request form" />
+          }
+        />
+        <SettingRow
+          title="Lead capture"
+          description="Store submissions as leads when callers complete the form."
+          control={
+            <Switch checked={leadCaptureEnabled} onCheckedChange={setLeadCaptureEnabled} aria-label="Lead capture" />
+          }
+        />
         {requestFormUrl ? (
           <div className="mt-4 flex gap-2 border-t pt-4">
             <Input readOnly value={`${typeof window !== 'undefined' ? window.location.origin : ''}${requestFormUrl}`} className="font-mono text-xs" aria-label="Request form URL" />

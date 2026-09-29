@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Lock } from 'lucide-react'
-import { Panel, Pill } from '@/newui-transplant/components/app/kit'
+import { Panel, Pill, SettingRow } from '@/newui-transplant/components/app/kit'
+import { OPUS_META_STRIP } from '@/newui-transplant/components/app/opus-surfaces'
+import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Textarea } from '@/newui-transplant/components/ui/textarea'
 import { SaveBar } from '@/newui-transplant/components/app/save-bar'
@@ -12,8 +14,6 @@ import { saveMctbSetup } from '@/lib/newui-transplant/api/mctb-setup-client'
 import { cn } from '@/lib/utils'
 import { getRecoveryGoalDefinition, MCTB_RECOVERY_GOALS, type MctbRecoveryGoalId } from '@/lib/mctb/recovery-goals'
 import { MCTB_ROUTES } from '@/lib/mctb/routes'
-import { FieldRow } from '@/newui-transplant/components/app/kit'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/newui-transplant/components/ui/select'
 
 const VARIABLES = ['{first_name}', '{business_name}', '{booking_link}']
 
@@ -114,7 +114,7 @@ export function TextBackEditor({
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,7fr)_minmax(240px,3fr)] lg:items-start">
       <div className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-card px-4 py-3 text-sm">
+        <div className={OPUS_META_STRIP}>
           <span className="text-muted-foreground">Consent mode:</span>
           <Link href={consentHref} className="font-medium text-primary hover:underline">{consentLabel}</Link>
           <span className="mx-1 hidden h-4 w-px bg-border sm:block" />
@@ -172,23 +172,28 @@ export function TextBackEditor({
             </p>
           ) : (
             <>
-          <FieldRow label="Recovery goal" description="Shapes default opener and request-form preset when you change goals.">
-            <Select
-              value={recoveryGoal}
-              onValueChange={(v) => {
-                const id = v as MctbRecoveryGoalId
-                setRecoveryGoal(id)
-                setOpener(getRecoveryGoalDefinition(id).defaultOpener.replace(/\{\{customer\.firstName\}\}/g, '{first_name}').replace(/\{\{business\.name\}\}/g, '{business_name}').replace(/\{\{link\}\}/g, '{booking_link}'))
-              }}
-            >
-              <SelectTrigger className="w-[220px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {MCTB_RECOVERY_GOALS.map((g) => (
-                  <SelectItem key={g.id} value={g.id}>{g.title}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FieldRow>
+          <SettingRow
+            title="Recovery goal"
+            description="Shapes default opener and request-form preset when you change goals."
+            control={
+              <SimpleSelect
+                label="Recovery goal"
+                className="w-[220px]"
+                value={recoveryGoal}
+                options={MCTB_RECOVERY_GOALS.map((g) => ({ value: g.id, label: g.title }))}
+                onChange={(v) => {
+                  const id = v as MctbRecoveryGoalId
+                  setRecoveryGoal(id)
+                  setOpener(
+                    getRecoveryGoalDefinition(id)
+                      .defaultOpener.replace(/\{\{customer\.firstName\}\}/g, '{first_name}')
+                      .replace(/\{\{business\.name\}\}/g, '{business_name}')
+                      .replace(/\{\{link\}\}/g, '{booking_link}'),
+                  )
+                }}
+              />
+            }
+          />
           <label htmlFor="opener" className="sr-only">Conversation opener</label>
           <Textarea id="opener" ref={ref} rows={4} value={opener} onChange={(e) => setOpener(e.target.value)} disabled={!canEdit} />
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -211,8 +216,8 @@ export function TextBackEditor({
       <aside aria-label="Message preview" className="rounded-[2rem] border-8 border-foreground/90 bg-card p-4 shadow-lg lg:sticky lg:top-20 lg:h-fit">
         <p className="mb-4 text-center text-xs text-muted-foreground">{sender}</p>
         <div className="flex flex-col gap-2">
-          <p className="max-w-[90%] rounded-2xl rounded-bl-md bg-muted px-3 py-2 text-xs leading-relaxed">{compliance}</p>
-          <p className="max-w-[90%] rounded-2xl rounded-bl-md bg-muted px-3 py-2 text-xs leading-relaxed">
+          <p className="max-w-[90%] rounded-2xl rounded-bl-md border bg-card px-3 py-2 text-xs leading-relaxed">{compliance}</p>
+          <p className="max-w-[90%] rounded-2xl rounded-bl-md bg-primary px-3 py-2 text-xs leading-relaxed text-primary-foreground">
             {opener
               .replaceAll('{business_name}', previewName)
               .replaceAll('{first_name}', 'Caller')

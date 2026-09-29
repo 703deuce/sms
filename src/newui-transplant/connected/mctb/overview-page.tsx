@@ -32,6 +32,7 @@ import { useMctbOverviewEnrichment } from "@/newui-transplant/connected/mctb/ove
 import { MctbRecoveryPauseOpus } from "@/newui-transplant/components/mctb/mctb-recovery-pause-opus";
 import { fetchMctbSetup } from "@/lib/newui-transplant/api/mctb-setup-client";
 import { openMctbSetupGuide } from "@/newui-transplant/connected/mctb/mctb-setup-guide";
+import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
 import { Button } from "@/newui-transplant/components/ui/button";
 
 export function NewUiMctbOverviewPage({ data }: { data: MctbOverviewPayload }) {
@@ -101,7 +102,7 @@ export function NewUiMctbOverviewPage({ data }: { data: MctbOverviewPayload }) {
       </div>
 
       {capabilities && capabilities.monthlyRecoveryLimit > 0 ? (
-        <div className="mt-4 rounded-xl border bg-card px-4 py-3">
+        <div className={`mt-4 px-4 py-3 ${OPUS_CARD}`}>
           <p className="text-sm font-medium">Recovered calls this month</p>
           <p className="mt-1 text-sm text-muted-foreground">
             <span className="font-mono tabular-nums text-foreground">

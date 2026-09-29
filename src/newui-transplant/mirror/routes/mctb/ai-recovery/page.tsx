@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { Sparkles } from 'lucide-react'
-import { FieldRow, Page, PageHeader, Panel, Rows, SettingRow, TextLink } from '@/newui-transplant/components/app/kit'
+import { Page, PageHeader, Panel, Rows, SettingRow, TextLink } from '@/newui-transplant/components/app/kit'
 import { ButtonLink } from '@/newui-transplant/components/app/button-link'
 import { Switch } from '@/newui-transplant/components/ui/switch'
 import { Input } from '@/newui-transplant/components/ui/input'
@@ -136,14 +136,18 @@ export function TransplantMctbAiRecoveryPage({ wired }: { wired?: MctbAiRecovery
           <Panel title="Booking link">
             {wired?.bookingLinkReadOnly ? (
               <div className="space-y-3 text-sm">
-                <FieldRow label="Share booking link" description="Uses the booking link configured in Text Back">
-                  <Switch
-                    checked={bookingOn}
-                    onCheckedChange={(v) => wired?.onBookingLinkEnabledChange?.(Boolean(v))}
-                    aria-label="Enable booking link for AI Recovery"
-                    disabled={!bookingUrl}
-                  />
-                </FieldRow>
+                <SettingRow
+                  title="Share booking link"
+                  description="Uses the booking link configured in Text Back"
+                  control={
+                    <Switch
+                      checked={bookingOn}
+                      onCheckedChange={(v) => wired?.onBookingLinkEnabledChange?.(Boolean(v))}
+                      aria-label="Enable booking link for AI Recovery"
+                      disabled={!bookingUrl}
+                    />
+                  }
+                />
                 {bookingUrl ? (
                   <>
                     <p className="font-medium">{bookingLabel || 'Book an appointment'}</p>
@@ -159,13 +163,17 @@ export function TransplantMctbAiRecoveryPage({ wired }: { wired?: MctbAiRecovery
               </div>
             ) : (
               <>
-                <FieldRow label="Share booking link" description="Sent once AI has collected the required details">
-                  <Switch
-                    checked={bookingOn}
-                    onCheckedChange={(v) => wired?.onBookingLinkEnabledChange?.(Boolean(v))}
-                    aria-label="Enable booking link"
-                  />
-                </FieldRow>
+                <SettingRow
+                  title="Share booking link"
+                  description="Sent once AI has collected the required details"
+                  control={
+                    <Switch
+                      checked={bookingOn}
+                      onCheckedChange={(v) => wired?.onBookingLinkEnabledChange?.(Boolean(v))}
+                      aria-label="Enable booking link"
+                    />
+                  }
+                />
                 <div className="mt-4 grid gap-4 border-t pt-4 sm:grid-cols-2">
                   <div className="grid gap-1.5">
                     <Label htmlFor="bl-url">Link URL</Label>

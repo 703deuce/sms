@@ -3,17 +3,11 @@
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { Info } from "lucide-react";
-import { Page, PageHeader, Panel, Pill, Stat, TextLink } from "@/newui-transplant/components/app/kit";
+import { Callout, Page, PageHeader, Panel, Pill, Stat, TextLink } from "@/newui-transplant/components/app/kit";
+import { td, th } from "@/newui-transplant/components/app/opus-tables";
+import { OPUS_SEARCH_INPUT, OPUS_TABLE_HEAD } from "@/newui-transplant/components/app/opus-surfaces";
 import { Button } from "@/newui-transplant/components/ui/button";
-import { Input } from "@/newui-transplant/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/newui-transplant/components/ui/table";
+import { cn } from "@/lib/utils";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 
 type ConsentLogEvent = {
@@ -110,16 +104,17 @@ export function NewUiMctbConsentHistoryPage() {
         actions={<Button variant="outline" asChild><Link href={MCTB_ROUTES.setupConsent}>Consent settings</Link></Button>}
       />
 
-      <Panel className="mb-4 border-primary/20 bg-primary/5">
-        <div className="flex gap-3 text-sm">
-          <Info className="size-4 shrink-0 text-primary" aria-hidden />
-          <p>
-            Each row separates the consenting caller, the customer business number called, and the
-            Transovo ingress number. If the original caller cannot be proven from signaling, the
-            consenter is marked unavailable rather than recording a business line as the caller.
-          </p>
-        </div>
-      </Panel>
+      <div className="mb-4">
+      <Callout
+        tone="info"
+        icon={Info}
+        title="How to read this log"
+      >
+        Each row separates the consenting caller, the customer business number called, and the Transovo
+        ingress number. If the original caller cannot be proven from signaling, the consenter is marked
+        unavailable rather than recording a business line as the caller.
+      </Callout>
+      </div>
 
       <div className="mb-4 grid gap-4 sm:grid-cols-3">
         <Stat label="Total consent events" value={String(summary?.total ?? "—")} />
@@ -127,20 +122,18 @@ export function NewUiMctbConsentHistoryPage() {
         <Stat label="Texts sent after consent today" value={String(summary?.withSmsToday ?? "—")} />
       </div>
 
-      <Panel className="mb-4">
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-muted-foreground">Filter by caller</span>
-            <Input
-              type="search"
-              value={callerFilter}
-              onChange={(e) => setCallerFilter(e.target.value)}
-              placeholder="Phone number"
-              className="w-56"
-            />
-          </label>
-          <Button type="button" onClick={() => void load()}>Search</Button>
-        </div>
+      <Panel className="mb-4" title="Filter" bodyClassName="flex flex-wrap items-end gap-3">
+        <label className="flex min-w-[14rem] flex-1 flex-col gap-1.5 text-sm">
+          <span className="font-medium">Caller number</span>
+          <input
+            type="search"
+            value={callerFilter}
+            onChange={(e) => setCallerFilter(e.target.value)}
+            placeholder="Phone number"
+            className={cn(OPUS_SEARCH_INPUT, "pl-3")}
+          />
+        </label>
+        <Button type="button" onClick={() => void load()}>Search</Button>
       </Panel>
 
       {error ? (
@@ -161,86 +154,86 @@ export function NewUiMctbConsentHistoryPage() {
             </TextLink>
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Caller / Consenting number</TableHead>
-                <TableHead>Business number</TableHead>
-                <TableHead>Transovo number</TableHead>
-                <TableHead>Method</TableHead>
-                <TableHead>Timestamp</TableHead>
-                <TableHead>Follow-up text</TableHead>
-                <TableHead className="text-right">Details</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {events.map((row) => {
-                const expanded = expandedId === row.id;
-                const caller =
-                  row.consentIdentityVerified && row.consentingCallerNumber
-                    ? fmtPhone(row.consentingCallerNumber)
-                    : "Unavailable — identity not verified";
-                return (
-                  <Fragment key={row.id}>
-                    <TableRow>
-                      <TableCell className={row.consentIdentityVerified ? "" : "text-amber-800"}>
-                        {caller}
-                      </TableCell>
-                      <TableCell>
-                        {row.customerBusinessNumber ? fmtPhone(row.customerBusinessNumber) : "—"}
-                      </TableCell>
-                      <TableCell>{fmtPhone(row.transovoIngressNumber || row.businessNumber)}</TableCell>
-                      <TableCell>
-                        <Pill tone="success">{row.consentMethod || "Press 1"}</Pill>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{fmtTime(row.consentedAt)}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {row.smsSentAt ? (
-                          <span className="text-success">Sent {fmtTime(row.smsSentAt)}</span>
-                        ) : row.missedCallEventId ? (
-                          row.missedCallStatus?.replace(/_/g, " ").toLowerCase() || "Queued"
-                        ) : (
-                          "—"
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <button
-                          type="button"
-                          className="text-xs font-semibold text-primary hover:underline"
-                          onClick={() => setExpandedId(expanded ? null : row.id)}
-                        >
-                          {expanded ? "Hide" : "Show"}
-                        </button>
-                      </TableCell>
-                    </TableRow>
-                    {expanded ? (
-                      <TableRow>
-                        <TableCell colSpan={7} className="bg-muted/30">
-                          <div className="grid gap-3 py-2 text-sm sm:grid-cols-2">
-                            <div className="space-y-1">
-                              <p><span className="font-semibold">Identity:</span> {row.consentIdentityVerified ? "Verified" : "Unavailable"}</p>
-                              <p><span className="font-semibold">Method:</span> {row.method.replace(/_/g, " ").toLowerCase()}</p>
-                              <p><span className="font-semibold">Scope:</span> {row.consentScope.replace(/_/g, " ").toLowerCase()}</p>
-                              <p><span className="font-semibold">Consent mode:</span> {row.consentMode?.replace(/_/g, " ") || "—"}</p>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px]">
+              <thead className={OPUS_TABLE_HEAD}>
+                <tr>
+                  <th scope="col" className={th}>Caller / Consenting number</th>
+                  <th scope="col" className={th}>Business number</th>
+                  <th scope="col" className={th}>Transovo number</th>
+                  <th scope="col" className={th}>Method</th>
+                  <th scope="col" className={th}>Timestamp</th>
+                  <th scope="col" className={th}>Follow-up text</th>
+                  <th scope="col" className={cn(th, "text-right")}>Details</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {events.map((row) => {
+                  const expanded = expandedId === row.id;
+                  const caller =
+                    row.consentIdentityVerified && row.consentingCallerNumber
+                      ? fmtPhone(row.consentingCallerNumber)
+                      : "Unavailable — identity not verified";
+                  return (
+                    <Fragment key={row.id}>
+                      <tr className="hover:bg-muted/40">
+                        <td className={cn(td, !row.consentIdentityVerified && "text-amber-800")}>{caller}</td>
+                        <td className={td}>
+                          {row.customerBusinessNumber ? fmtPhone(row.customerBusinessNumber) : "—"}
+                        </td>
+                        <td className={td}>{fmtPhone(row.transovoIngressNumber || row.businessNumber)}</td>
+                        <td className={td}>
+                          <Pill tone="success">{row.consentMethod || "Press 1"}</Pill>
+                        </td>
+                        <td className={cn(td, "text-muted-foreground")}>{fmtTime(row.consentedAt)}</td>
+                        <td className={cn(td, "text-muted-foreground")}>
+                          {row.smsSentAt ? (
+                            <span className="text-success">Sent {fmtTime(row.smsSentAt)}</span>
+                          ) : row.missedCallEventId ? (
+                            row.missedCallStatus?.replace(/_/g, " ").toLowerCase() || "Queued"
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td className={cn(td, "text-right")}>
+                          <button
+                            type="button"
+                            className="text-xs font-semibold text-primary hover:underline"
+                            onClick={() => setExpandedId(expanded ? null : row.id)}
+                          >
+                            {expanded ? "Hide" : "Show"}
+                          </button>
+                        </td>
+                      </tr>
+                      {expanded ? (
+                        <tr>
+                          <td colSpan={7} className="bg-muted/30 px-4 py-3">
+                            <div className="grid gap-3 text-sm sm:grid-cols-2">
+                              <div className="space-y-1">
+                                <p><span className="font-semibold">Identity:</span> {row.consentIdentityVerified ? "Verified" : "Unavailable"}</p>
+                                <p><span className="font-semibold">Method:</span> {row.method.replace(/_/g, " ").toLowerCase()}</p>
+                                <p><span className="font-semibold">Scope:</span> {row.consentScope.replace(/_/g, " ").toLowerCase()}</p>
+                                <p><span className="font-semibold">Consent mode:</span> {row.consentMode?.replace(/_/g, " ") || "—"}</p>
+                              </div>
+                              <div className="space-y-1">
+                                <p><span className="font-semibold">Call reference:</span> <code className="text-xs">{row.callSessionId || "—"}</code></p>
+                                <p><span className="font-semibold">Prompt audio:</span> {row.promptAssetId || "—"}</p>
+                                {row.missedCallEventId ? (
+                                  <TextLink href={MCTB_ROUTES.missedCallDetail(row.missedCallEventId)}>
+                                    View missed call timeline
+                                  </TextLink>
+                                ) : null}
+                              </div>
                             </div>
-                            <div className="space-y-1">
-                              <p><span className="font-semibold">Call reference:</span> <code className="text-xs">{row.callSessionId || "—"}</code></p>
-                              <p><span className="font-semibold">Prompt audio:</span> {row.promptAssetId || "—"}</p>
-                              {row.missedCallEventId ? (
-                                <TextLink href={MCTB_ROUTES.missedCallDetail(row.missedCallEventId)}>
-                                  View missed call timeline
-                                </TextLink>
-                              ) : null}
-                            </div>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ) : null}
-                  </Fragment>
-                );
-              })}
-            </TableBody>
-          </Table>
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </Panel>
     </Page>

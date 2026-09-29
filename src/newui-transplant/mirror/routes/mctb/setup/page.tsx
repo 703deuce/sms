@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { AlertTriangle, ChevronRight, Pause } from 'lucide-react'
 import { Panel, Pill } from '@/newui-transplant/components/app/kit'
+import { OPUS_CARD } from '@/newui-transplant/components/app/opus-surfaces'
 import { ButtonLink } from '@/newui-transplant/components/app/button-link'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { BUSINESS } from '@/newui-transplant/lib/sandbox-data'
@@ -100,7 +101,7 @@ export function TransplantMctbSetupPage({ wired }: { wired?: MctbSetupOverviewWi
         ))}
       </section>
 
-      <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 sm:flex-row sm:items-center">
+      <div className={`${OPUS_CARD} flex flex-col gap-3 p-4 sm:flex-row sm:items-center`}>
         <div className="flex-1">
           <p className="text-sm font-medium">Pause recovery</p>
           <p className="text-xs text-muted-foreground">Temporarily stop sending recovery texts, e.g. during a holiday.</p>

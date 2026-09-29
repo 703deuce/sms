@@ -11,6 +11,7 @@ import {
   SetupProgressBar,
   TextLink,
 } from "@/newui-transplant/components/app/kit";
+import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
 import { Button } from "@/newui-transplant/components/ui/button";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import type { MctbGettingStartedPayload } from "@/lib/mctb/getting-started/types";
@@ -199,7 +200,7 @@ export function MctbGettingStartedPage() {
         </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {data.capabilities.map((cap) => (
-            <div key={cap.id} className="rounded-lg border bg-card px-4 py-3">
+            <div key={cap.id} className={`${OPUS_CARD} px-4 py-3`}>
               <div className="flex items-start gap-2">
                 <RowIcon tone={cap.tone} locked={cap.locked} />
                 <div className="min-w-0 flex-1">

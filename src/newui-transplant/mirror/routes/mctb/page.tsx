@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { CheckCircle2, ChevronRight, Sparkles } from 'lucide-react'
 import { Initials, Page, PageHeader, Panel, Pill, Rows, Stat, TextLink } from '@/newui-transplant/components/app/kit'
+import { OPUS_CARD } from '@/newui-transplant/components/app/opus-surfaces'
 import { ButtonLink } from '@/newui-transplant/components/app/button-link'
 import { RecoveryPill } from '@/newui-transplant/components/app/status'
 import { BUSINESS, CONVERSATIONS, MISSED_CALLS } from '@/newui-transplant/lib/sandbox-data'
@@ -31,7 +32,7 @@ export function TransplantMctbPage() {
         <Stat label="Needs reply" value={String(needsReply)} hint="Waiting on your team" href="/mctb/conversations" />
       </div>
 
-      <div className="mt-4 flex flex-col gap-3 rounded-xl border bg-card p-4 sm:flex-row sm:items-center">
+      <div className={`mt-4 flex flex-col gap-3 p-4 sm:flex-row sm:items-center ${OPUS_CARD}`}>
         <span className="flex size-9 items-center justify-center rounded-lg bg-accent text-accent-foreground">
           <Sparkles className="size-4" aria-hidden="true" />
         </span>

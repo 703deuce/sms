@@ -1,7 +1,10 @@
 'use client'
 
 import { MoreHorizontal, Plus } from 'lucide-react'
-import { FieldRow, Initials, Panel, Pill } from '@/newui-transplant/components/app/kit'
+import { Initials, Panel, Pill, SettingRow } from '@/newui-transplant/components/app/kit'
+import { td, th } from '@/newui-transplant/components/app/opus-tables'
+import { OPUS_TABLE_HEAD } from '@/newui-transplant/components/app/opus-surfaces'
+import { cn } from '@/lib/utils'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Checkbox } from '@/newui-transplant/components/ui/checkbox'
 import { Textarea } from '@/newui-transplant/components/ui/textarea'
@@ -42,16 +45,17 @@ export function TransplantMctbSetupNotificationsPage({ wired }: { wired?: MctbSe
           description="Classify inbound replies from your instructions. Works when AI Recovery is off. Does not text customers."
         >
           <div className="divide-y px-5">
-            <FieldRow
-              label="Urgent Reply Alerts"
+            <SettingRow
+              title="Urgent Reply Alerts"
               description="Run semantic urgency on each inbound MCTB reply before team notifications."
-            >
-              <Checkbox
-                checked={urgent.enabled}
-                onCheckedChange={(v) => urgent.onEnabledChange(Boolean(v))}
-                aria-label="Urgent Reply Alerts enabled"
-              />
-            </FieldRow>
+              control={
+                <Checkbox
+                  checked={urgent.enabled}
+                  onCheckedChange={(v) => urgent.onEnabledChange(Boolean(v))}
+                  aria-label="Urgent Reply Alerts enabled"
+                />
+              }
+            />
             <div className="py-4">
               <label className="text-sm font-medium" htmlFor="mctb-urgent-instructions">
                 What should Transovo consider urgent?
@@ -72,9 +76,11 @@ export function TransplantMctbSetupNotificationsPage({ wired }: { wired?: MctbSe
               </p>
             ) : null}
             <div className="py-4">
-              <FieldRow label="Test Urgent Rules" description="Uses the production classifier. Does not message customers or send alerts.">
-                <span />
-              </FieldRow>
+              <SettingRow
+                title="Test Urgent Rules"
+                description="Uses the production classifier. Does not message customers or send alerts."
+                control={<span />}
+              />
               <Textarea
                 id="mctb-urgent-test-message"
                 className="mt-2 min-h-[2.75rem] max-h-32 resize-y"
@@ -126,26 +132,26 @@ export function TransplantMctbSetupNotificationsPage({ wired }: { wired?: MctbSe
         </ul>
       </Panel>
       <Panel title="Events" description="Choose how the team is notified" bodyClassName="p-0">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b text-left text-xs text-muted-foreground">
-              <th scope="col" className="px-5 py-2.5 font-medium">Event</th>
-              <th scope="col" className="w-20 px-3 py-2.5 text-center font-medium">Email</th>
-              <th scope="col" className="w-20 px-5 py-2.5 text-center font-medium">SMS</th>
+        <table className="w-full">
+          <thead className={OPUS_TABLE_HEAD}>
+            <tr>
+              <th scope="col" className={th}>Event</th>
+              <th scope="col" className={cn(th, 'w-20 text-center')}>Email</th>
+              <th scope="col" className={cn(th, 'w-20 text-center')}>SMS</th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {events.map((e) => (
-              <tr key={e.label}>
-                <td className="px-5 py-3">{e.label}</td>
-                <td className="px-3 py-3 text-center">
+              <tr key={e.label} className="hover:bg-muted/40">
+                <td className={td}>{e.label}</td>
+                <td className={cn(td, 'text-center')}>
                   <Checkbox
                     checked={e.email}
                     onCheckedChange={(v) => e.onEmailChange?.(Boolean(v))}
                     aria-label={`${e.label} by email`}
                   />
                 </td>
-                <td className="px-5 py-3 text-center">
+                <td className={cn(td, 'text-center')}>
                   <Checkbox
                     checked={e.sms}
                     disabled={e.smsDisabled}

@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ArrowLeft, Check, ChevronDown, MessageSquare, Phone } from 'lucide-react'
 import { Page, PageHeader, Panel, Pill, Rows } from '@/newui-transplant/components/app/kit'
+import { OPUS_CARD } from '@/newui-transplant/components/app/opus-surfaces'
 import { ButtonLink } from '@/newui-transplant/components/app/button-link'
 import { RecoveryPill } from '@/newui-transplant/components/app/status'
 import { BUSINESS, CONVERSATIONS, MISSED_CALLS } from '@/newui-transplant/lib/sandbox-data'
@@ -141,7 +142,7 @@ export async function TransplantMctbMissedCallsIdPage({ params }: { params: Prom
               <Link href="/mctb/voicemail" className="mt-2 inline-block text-xs font-medium text-primary hover:underline">Open in Voicemail</Link>
             </Panel>
           ) : null}
-          <details className="group rounded-xl border bg-card">
+          <details className={`group ${OPUS_CARD}`}>
             <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-4 text-sm font-semibold">
               Diagnostics
               <ChevronDown className="size-4 text-muted-foreground transition group-open:rotate-180" aria-hidden="true" />

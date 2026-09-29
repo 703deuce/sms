@@ -1,9 +1,9 @@
 import { CheckCircle2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Panel, Pill } from '@/newui-transplant/components/app/kit'
+import { Field, Panel, Pill } from '@/newui-transplant/components/app/kit'
+import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
 import { ButtonLink } from '@/newui-transplant/components/app/button-link'
 import { Button } from '@/newui-transplant/components/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/newui-transplant/components/ui/select'
 import { SaveBar } from '@/newui-transplant/components/app/save-bar'
 import { Input } from '@/newui-transplant/components/ui/input'
 import { BUSINESS } from '@/newui-transplant/lib/sandbox-data'
@@ -128,32 +128,26 @@ export function TransplantMctbSetupPhonePage({ wired }: { wired?: MctbSetupPhone
 
       <Panel title="Carrier & ring timing">
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="grid gap-1.5">
-            <span className="text-sm font-medium" id="carrier-label">Carrier</span>
-            <Select
+          <Field label="Carrier" htmlFor="mctb-carrier">
+            <SimpleSelect
+              id="mctb-carrier"
+              label="Carrier"
+              className="w-full"
               value={carrierValue}
-              onValueChange={(v) => wired?.onCarrierChange?.(v)}
-              items={carrierOptions.map((c) => ({ label: c.label, value: c.value }))}
-            >
-              <SelectTrigger aria-labelledby="carrier-label" className="w-full"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {carrierOptions.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-1.5">
-            <span className="text-sm font-medium" id="ring-label">Ring before forwarding</span>
-            <Select
+              options={carrierOptions.map((c) => ({ value: c.value, label: c.label }))}
+              onChange={(v) => wired?.onCarrierChange?.(v)}
+            />
+          </Field>
+          <Field label="Ring before forwarding" htmlFor="mctb-ring">
+            <SimpleSelect
+              id="mctb-ring"
+              label="Ring before forwarding"
+              className="w-full"
               value={ringValue}
-              onValueChange={(v) => wired?.onRingChange?.(v)}
-              items={ringOptions.map((r) => ({ label: `${r} seconds`, value: r }))}
-            >
-              <SelectTrigger aria-labelledby="ring-label" className="w-full"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {ringOptions.map((r) => <SelectItem key={r} value={r}>{r} seconds</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
+              options={ringOptions.map((r) => ({ value: r, label: `${r} seconds` }))}
+              onChange={(v) => wired?.onRingChange?.(v)}
+            />
+          </Field>
         </div>
         <div className="mt-4 flex justify-end"><SaveBar onSave={wired?.onSave} /></div>
       </Panel>

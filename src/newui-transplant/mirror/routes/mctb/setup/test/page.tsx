@@ -36,10 +36,14 @@ export function TransplantMctbSetupTestPage({ wired }: { wired?: MctbSetupTestWi
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <Panel title="Setup checkpoints" description={`${checks.filter((c) => c.ok).length} of ${checks.length} ready`}>
-        <ul className="flex flex-col gap-3">
+      <Panel
+        title="Setup checkpoints"
+        description={`${checks.filter((c) => c.ok).length} of ${checks.length} ready`}
+        bodyClassName="p-0"
+      >
+        <ul className="divide-y">
           {checks.map((c) => (
-            <li key={c.label} className="flex items-center gap-3 text-sm">
+            <li key={c.label} className="flex items-center gap-3 px-5 py-3 text-sm">
               {c.ok ? (
                 <CheckCircle2 className="size-4 text-success" aria-label="Ready" />
               ) : (

@@ -1,7 +1,7 @@
 'use client'
 
 import { Copy, Link2, Plus } from 'lucide-react'
-import { FieldRow, Panel, Pill } from '@/newui-transplant/components/app/kit'
+import { Panel, Pill, SettingRow } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Input } from '@/newui-transplant/components/ui/input'
 import { Switch } from '@/newui-transplant/components/ui/switch'
@@ -59,13 +59,17 @@ export function TransplantMctbSetupLinksPage({ wired }: { wired?: MctbSetupLinks
         </ul>
       </Panel>
       <Panel title="Public request form">
-        <FieldRow label="Enable request form" description="Customers can describe what they need from a link in your text">
-          <Switch
-            checked={wired?.requestFormEnabled ?? true}
-            onCheckedChange={(v) => wired?.onRequestFormEnabledChange?.(v)}
-            aria-label="Enable request form"
-          />
-        </FieldRow>
+        <SettingRow
+          title="Enable request form"
+          description="Customers can describe what they need from a link in your text"
+          control={
+            <Switch
+              checked={wired?.requestFormEnabled ?? true}
+              onCheckedChange={(v) => wired?.onRequestFormEnabledChange?.(v)}
+              aria-label="Enable request form"
+            />
+          }
+        />
         <div className="mt-4 flex gap-2 border-t pt-4">
           <Input
             readOnly

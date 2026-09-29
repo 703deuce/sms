@@ -1,6 +1,6 @@
 'use client'
 
-import { FieldRow, Panel } from '@/newui-transplant/components/app/kit'
+import { Panel, SettingRow } from '@/newui-transplant/components/app/kit'
 import { Switch } from '@/newui-transplant/components/ui/switch'
 import { MctbVoicemailGreetingStudio } from '@/newui-transplant/components/mctb/mctb-voicemail-greeting-studio'
 
@@ -41,27 +41,35 @@ export function TransplantMctbSetupVoicemailPage({ wired }: { wired?: MctbSetupV
         />
       ) : null}
       <Panel title="After a voicemail">
-        <FieldRow label="Send recovery text" description="Text the caller after they leave a message">
-          <Switch
-            checked={wired?.sendAfterVoicemail ?? true}
-            onCheckedChange={(v) => {
-              wired?.onSendAfterVoicemailChange(v)
-              void wired?.onSaveRecoveryToggle?.()
-            }}
-            aria-label="Send recovery text after voicemail"
-          />
-        </FieldRow>
+        <SettingRow
+          title="Send recovery text"
+          description="Text the caller after they leave a message"
+          control={
+            <Switch
+              checked={wired?.sendAfterVoicemail ?? true}
+              onCheckedChange={(v) => {
+                wired?.onSendAfterVoicemailChange(v)
+                void wired?.onSaveRecoveryToggle?.()
+              }}
+              aria-label="Send recovery text after voicemail"
+            />
+          }
+        />
       </Panel>
       <Panel title="Transcription">
-        <FieldRow label="Transcribe voicemail" description="Adds a transcript and AI summary">
-          <Switch
-            checked={wired?.transcriptionEnabled ?? true}
-            onCheckedChange={(v) => {
-              wired?.onTranscriptionEnabledChange?.(v)
-            }}
-            aria-label="Transcribe voicemail"
-          />
-        </FieldRow>
+        <SettingRow
+          title="Transcribe voicemail"
+          description="Adds a transcript and AI summary"
+          control={
+            <Switch
+              checked={wired?.transcriptionEnabled ?? true}
+              onCheckedChange={(v) => {
+                wired?.onTranscriptionEnabledChange?.(v)
+              }}
+              aria-label="Transcribe voicemail"
+            />
+          }
+        />
       </Panel>
     </div>
   )

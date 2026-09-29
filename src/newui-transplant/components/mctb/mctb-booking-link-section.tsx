@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { MctbBookingLinkDto } from "@/lib/mctb/booking-links/service";
 import { bookingLinkHostname, validateBookingLinkUrl } from "@/lib/mctb/booking-links/validate-url";
-import { FieldRow, Panel } from "@/newui-transplant/components/app/kit";
+import { Panel, SettingRow } from "@/newui-transplant/components/app/kit";
 import { Input } from "@/newui-transplant/components/ui/input";
 import { Switch } from "@/newui-transplant/components/ui/switch";
 import { SaveBar } from "@/newui-transplant/components/app/save-bar";
@@ -107,12 +107,13 @@ export function MctbBookingLinkSection() {
 
   return (
     <div className="flex flex-col gap-4">
-      <FieldRow
-        label="Send a booking link"
+      <SettingRow
+        title="Send a booking link"
         description="Transovo can text callers your existing online booking page."
-      >
-        <Switch checked={sendEnabled} onCheckedChange={setSendEnabled} aria-label="Send a booking link" />
-      </FieldRow>
+        control={
+          <Switch checked={sendEnabled} onCheckedChange={setSendEnabled} aria-label="Send a booking link" />
+        }
+      />
       {sendEnabled ? (
         <>
           <div className="grid gap-4 sm:grid-cols-2">

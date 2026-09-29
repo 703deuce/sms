@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { ArrowLeft, Check, ChevronDown, MessageSquare, Phone } from 'lucide-react'
 import { Page, PageHeader, Panel, Pill, Rows } from '@/newui-transplant/components/app/kit'
+import { OPUS_CARD } from '@/newui-transplant/components/app/opus-surfaces'
 import { ButtonLink } from '@/newui-transplant/components/app/button-link'
 import { RecoveryPill } from '@/newui-transplant/components/app/status'
 import { cn } from '@/lib/utils'
@@ -141,7 +142,7 @@ export function TransplantMctbMissedCallDetailView({ wired }: { wired: MctbMisse
               ) : null}
             </Panel>
           ) : null}
-          <details className="group rounded-xl border bg-card">
+          <details className={`group ${OPUS_CARD}`}>
             <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-4 text-sm font-semibold">
               Diagnostics
               <ChevronDown className="size-4 text-muted-foreground transition group-open:rotate-180" aria-hidden="true" />

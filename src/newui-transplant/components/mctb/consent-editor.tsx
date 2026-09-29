@@ -128,7 +128,7 @@ export function ConsentEditor() {
                   {m.id === 'press1' ? <Pill tone="neutral">Included with Free</Pill> : null}
                   {locked ? <Pill tone="warning">Recovery plan required</Pill> : null}
                 </span>
-                <span className="mt-0.5 block text-pretty text-xs text-muted-foreground">{m.description}</span>
+                <span className="mt-0.5 block text-pretty text-sm text-muted-foreground">{m.description}</span>
               </span>
             </button>
           )})}

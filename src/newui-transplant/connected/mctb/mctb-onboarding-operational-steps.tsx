@@ -10,19 +10,14 @@ import {
   useMctbRecoveryWiring,
   useMctbVoicemailWiring,
 } from "@/newui-transplant/connected/mctb/setup-wiring-hooks";
-import { FieldRow, Panel, Pill } from "@/newui-transplant/components/app/kit";
+import { OPUS_INSET_LIST } from "@/newui-transplant/components/app/opus-surfaces";
+import { Panel, Pill, SettingRow } from "@/newui-transplant/components/app/kit";
+import { SimpleSelect } from "@/newui-transplant/components/app/simple-select";
 import { Button } from "@/newui-transplant/components/ui/button";
 import { Checkbox } from "@/newui-transplant/components/ui/checkbox";
 import { Input } from "@/newui-transplant/components/ui/input";
 import { Label } from "@/newui-transplant/components/ui/label";
 import { Textarea } from "@/newui-transplant/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/newui-transplant/components/ui/select";
 import type { MctbHandoffConfigDto, MctbNotificationRecipientDto } from "@/lib/mctb/handoff/types";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import type { MctbOnboardingController } from "@/newui-transplant/connected/mctb/mctb-onboarding-opus-view";
@@ -107,55 +102,49 @@ export function OnboardingRecoveryControlsSection({ wiring }: { wiring: Recovery
           Pause recovery
         </Button>
       )}
-      <div className="divide-y rounded-lg border bg-card">
-        <FieldRow label="Send delay" description="Wait before texting in case your team calls back">
-          <Select
-            value={delayLabel}
-            onValueChange={(v) => r.setDelaySeconds(secondsFromDelayLabel(v))}
-          >
-            <SelectTrigger className="w-40" aria-label="Send delay">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {["Immediately", "30 seconds", "1 minute", "5 minutes"].map((o) => (
-                <SelectItem key={o} value={o}>{o}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </FieldRow>
-        <FieldRow label="Cooldown" description="Do not text the same caller again within this window">
-          <Select
-            value={cooldownLabel}
-            onValueChange={(v) => r.setCooldownMinutes(minutesFromCooldownLabel(v))}
-          >
-            <SelectTrigger className="w-40" aria-label="Cooldown">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {["30 minutes", "1 hour", "3 hours", "6 hours", "12 hours", "24 hours", "7 days"].map((o) => (
-                <SelectItem key={o} value={o}>{o}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </FieldRow>
-        <FieldRow
-          label="Max automated recovery texts"
+      <div className={`${OPUS_INSET_LIST} px-5`}>
+        <SettingRow
+          title="Send delay"
+          description="Wait before texting in case your team calls back"
+          control={
+            <SimpleSelect
+              label="Send delay"
+              className="w-40"
+              value={delayLabel}
+              options={["Immediately", "30 seconds", "1 minute", "5 minutes"].map((o) => ({ value: o, label: o }))}
+              onChange={(v) => r.setDelaySeconds(secondsFromDelayLabel(v))}
+            />
+          }
+        />
+        <SettingRow
+          title="Cooldown"
+          description="Do not text the same caller again within this window"
+          control={
+            <SimpleSelect
+              label="Cooldown"
+              className="w-40"
+              value={cooldownLabel}
+              options={["30 minutes", "1 hour", "3 hours", "6 hours", "12 hours", "24 hours", "7 days"].map((o) => ({
+                value: o,
+                label: o,
+              }))}
+              onChange={(v) => r.setCooldownMinutes(minutesFromCooldownLabel(v))}
+            />
+          }
+        />
+        <SettingRow
+          title="Max automated recovery texts"
           description="Same caller within the cooldown window. Does not include Press-1 compliance texts."
-        >
-          <Select
-            value={String(r.maxMessages)}
-            onValueChange={(v) => r.setMaxMessages(Number(v) || 3)}
-          >
-            <SelectTrigger className="w-24" aria-label="Max automated texts">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {[1, 2, 3, 4, 5].map((n) => (
-                <SelectItem key={n} value={String(n)}>{n}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </FieldRow>
+          control={
+            <SimpleSelect
+              label="Max automated recovery texts"
+              className="w-24"
+              value={String(r.maxMessages)}
+              options={[1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: String(n) }))}
+              onChange={(v) => r.setMaxMessages(Number(v) || 3)}
+            />
+          }
+        />
       </div>
       <Button type="button" size="sm" variant="secondary" onClick={() => void r.save()}>
         Save recovery controls
