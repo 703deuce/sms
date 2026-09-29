@@ -12,6 +12,10 @@ const OUT = process.env.OUT_DIR?.trim() || "/opt/cursor/artifacts";
 const ROUTES: Array<{ name: string; path: string }> = [
   { name: "mctb_opus_overview", path: "/mctb" },
   { name: "mctb_getting_started", path: "/getting-started" },
+  { name: "mctb_opus_missed_call_recovery", path: "/mctb/missed-call-recovery" },
+  { name: "mctb_opus_text_back_ia", path: "/mctb/text-back" },
+  { name: "mctb_opus_notifications", path: "/mctb/notifications" },
+  { name: "mctb_opus_phone", path: "/mctb/phone" },
   { name: "mctb_opus_setup_overview", path: "/mctb/setup" },
   { name: "mctb_opus_text_back", path: "/mctb/setup/text-back" },
   { name: "mctb_opus_consent", path: "/mctb/setup/consent" },
@@ -46,6 +50,31 @@ async function waitReady(page: import("playwright").Page, path: string) {
       .catch(() => undefined);
     await page
       .getByText(/missed calls today|needs attention/i)
+      .first()
+      .waitFor({ state: "visible", timeout: 60000 })
+      .catch(() => undefined);
+  } else if (path === "/mctb/missed-call-recovery") {
+    await page
+      .getByRole("heading", { name: /missed-call recovery/i })
+      .first()
+      .waitFor({ state: "visible", timeout: 60000 })
+      .catch(() => undefined);
+    await page.getByRole("tab", { name: /general/i }).waitFor({ state: "visible", timeout: 30000 }).catch(() => undefined);
+  } else if (path === "/mctb/text-back") {
+    await page
+      .getByRole("heading", { name: /text back/i })
+      .first()
+      .waitFor({ state: "visible", timeout: 60000 })
+      .catch(() => undefined);
+  } else if (path === "/mctb/notifications") {
+    await page
+      .getByRole("heading", { name: /notifications/i })
+      .first()
+      .waitFor({ state: "visible", timeout: 60000 })
+      .catch(() => undefined);
+  } else if (path === "/mctb/phone") {
+    await page
+      .getByRole("heading", { name: /phone & forwarding/i })
       .first()
       .waitFor({ state: "visible", timeout: 60000 })
       .catch(() => undefined);
