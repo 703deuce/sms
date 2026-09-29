@@ -1,6 +1,7 @@
 'use client'
 
-import { Panel } from '@/newui-transplant/components/app/kit'
+import { Panel, SettingRow } from '@/newui-transplant/components/app/kit'
+import { OPUS_INSET_LIST } from '@/newui-transplant/components/app/opus-surfaces'
 import { Checkbox } from '@/newui-transplant/components/ui/checkbox'
 import { SaveBar } from '@/newui-transplant/components/app/save-bar'
 
@@ -18,12 +19,19 @@ export function TransplantMctbSetupMissedCallRulesPage({ wired }: { wired?: Mctb
       description="Create a recovery event when a forwarded call ends like this. Cooldown and pause live under Recovery."
       bodyClassName="p-0"
     >
-      <ul className="grid gap-0 divide-y sm:grid-cols-2 sm:divide-y-0">
+      <ul className={OPUS_INSET_LIST}>
         {triggers.map((t) => (
-          <li key={t.label} className="px-5 py-3 sm:border-b sm:last:border-b-0">
-            <label className="flex items-center gap-2.5 text-sm font-medium">
-              <Checkbox checked={t.on} onCheckedChange={(v) => t.onChange(Boolean(v))} /> {t.label}
-            </label>
+          <li key={t.label} className="px-5">
+            <SettingRow
+              title={t.label}
+              control={
+                <Checkbox
+                  checked={t.on}
+                  onCheckedChange={(v) => t.onChange(Boolean(v))}
+                  aria-label={t.label}
+                />
+              }
+            />
           </li>
         ))}
       </ul>

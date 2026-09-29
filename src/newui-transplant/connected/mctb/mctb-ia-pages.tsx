@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Page, PageHeader } from "@/newui-transplant/components/app/kit";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/newui-transplant/components/ui/tabs";
+import { Page, PageHeader, Panel } from "@/newui-transplant/components/app/kit";
+import { OpusLineTabs } from "@/newui-transplant/components/app/segmented-nav";
+import { OPUS_META_STRIP } from "@/newui-transplant/components/app/opus-surfaces";
 import { TextBackEditor } from "@/newui-transplant/components/mctb/text-back-editor";
 import { MctbBookingLinkSection } from "@/newui-transplant/components/mctb/mctb-booking-link-section";
 import { ConsentEditor } from "@/newui-transplant/components/mctb/consent-editor";
@@ -26,6 +27,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/newui-transplant/components/ui/dialog";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/newui-transplant/components/ui/tabs";
 
 function useTabParam(name: string, allowed: string[], fallback: string) {
   const searchParams = useSearchParams();
@@ -70,41 +77,61 @@ export function NewUiMctbMissedCallRecoveryPage() {
         description="When unanswered calls should trigger recovery texts, consent, and exclusions."
       />
       {usageLine ? (
-        <p className="mb-3 text-sm text-muted-foreground">Usage: {usageLine}</p>
+        <div className={`mb-4 ${OPUS_META_STRIP}`}>
+          <span className="text-muted-foreground">Usage</span>
+          <span className="font-medium tabular-nums">{usageLine}</span>
+        </div>
       ) : null}
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList
-          variant="line"
-          className="max-w-full w-full justify-start overflow-x-auto"
-          aria-label="Missed-call recovery sections"
+      <OpusLineTabs
+        label="Missed-call recovery sections"
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          { value: "general", label: "General" },
+          { value: "rules", label: "Rules" },
+          { value: "consent", label: "Consent" },
+          { value: "exclusions", label: "Exclusions" },
+        ]}
+      />
+      {tab === "general" ? (
+        <div
+          id="opus-tabpanel-general"
+          role="tabpanel"
+          aria-labelledby="opus-tab-general"
+          className="mt-4"
         >
-          <TabsTrigger value="general">General</TabsTrigger>
-          <TabsTrigger value="rules">Rules</TabsTrigger>
-          <TabsTrigger value="consent">Consent</TabsTrigger>
-          <TabsTrigger value="exclusions">Exclusions</TabsTrigger>
-        </TabsList>
-        <TabsContent value="general" className="mt-4">
-          <p className="mb-4 text-sm text-muted-foreground">
-            Unanswered calls can still reach Transovo voicemail, but recovery texts are paused while recovery is
-            paused.
-          </p>
+          <Panel
+            title="Recovery controls"
+            description="Unanswered calls can still reach Transovo voicemail, but recovery texts are paused while recovery is paused."
+            className="mb-4"
+          >
+            <p className="text-sm text-muted-foreground">
+              Pause, timing, cooldown, and max automated texts apply to future recovery sends only.
+            </p>
+          </Panel>
           <NewUiMctbSetupRecoveryPage />
-        </TabsContent>
-        <TabsContent value="rules" className="mt-4">
+        </div>
+      ) : null}
+      {tab === "rules" ? (
+        <div id="opus-tabpanel-rules" role="tabpanel" aria-labelledby="opus-tab-rules" className="mt-4">
           <NewUiMctbSetupMissedCallRulesPage embedded />
-        </TabsContent>
-        <TabsContent value="consent" className="mt-4">
-          <div className="mb-4 flex flex-wrap items-center gap-3">
+        </div>
+      ) : null}
+      {tab === "consent" ? (
+        <div id="opus-tabpanel-consent" role="tabpanel" aria-labelledby="opus-tab-consent" className="mt-4">
+          <div className="mb-4 flex flex-wrap items-center justify-end gap-3">
             <ButtonLink href={MCTB_ROUTES.complianceConsent} variant="outline" size="sm">
               View consent history
             </ButtonLink>
           </div>
           <ConsentEditor />
-        </TabsContent>
-        <TabsContent value="exclusions" className="mt-4">
+        </div>
+      ) : null}
+      {tab === "exclusions" ? (
+        <div id="opus-tabpanel-exclusions" role="tabpanel" aria-labelledby="opus-tab-exclusions" className="mt-4">
           <ExclusionsTable />
-        </TabsContent>
-      </Tabs>
+        </div>
+      ) : null}
     </Page>
   );
 }
@@ -126,19 +153,15 @@ export function NewUiMctbTextBackPage() {
         title="Text Back"
         description="Recovery message and booking link callers receive after a missed call."
       />
-      <div className="flex flex-col gap-8">
-        <section aria-labelledby="text-back-message">
-          <h2 id="text-back-message" className="text-sm font-medium">Message</h2>
-          <div className="mt-3 border-t pt-4">
-            <TextBackEditor manageSenderHref={MCTB_ROUTES.phone} />
-          </div>
-        </section>
-        <section id="booking-link" aria-labelledby="text-back-booking">
-          <h2 id="text-back-booking" className="text-sm font-medium">Booking link</h2>
-          <div className="mt-3 border-t pt-4">
-            <MctbBookingLinkSection />
-          </div>
-        </section>
+      <div className="flex flex-col gap-6">
+        <TextBackEditor manageSenderHref={MCTB_ROUTES.phone} />
+        <Panel
+          id="booking-link"
+          title="Booking link"
+          description="Optional link inserted as {booking_link} in your recovery message."
+        >
+          <MctbBookingLinkSection />
+        </Panel>
       </div>
     </Page>
   );

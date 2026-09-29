@@ -46,6 +46,49 @@ export function TabNav({
   )
 }
 
+/** In-page line tabs (newui2) — use for query-param or local state, not route links. */
+export function OpusLineTabs({
+  tabs,
+  value,
+  onChange,
+  label,
+}: {
+  tabs: Array<{ value: string; label: string }>
+  value: string
+  onChange: (value: string) => void
+  label: string
+}) {
+  return (
+    <div className="border-b">
+      <div role="tablist" aria-label={label} className="flex min-w-0 gap-5 overflow-x-auto">
+        {tabs.map((tab) => {
+          const selected = value === tab.value
+          return (
+            <button
+              key={tab.value}
+              type="button"
+              role="tab"
+              id={`opus-tab-${tab.value}`}
+              aria-selected={selected}
+              aria-controls={`opus-tabpanel-${tab.value}`}
+              onClick={() => onChange(tab.value)}
+              className={cn(
+                'relative shrink-0 pb-3 text-sm font-medium transition-colors',
+                selected ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {tab.label}
+              {selected ? (
+                <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-primary" aria-hidden="true" />
+              ) : null}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export function Segmented({
   options,
   value,

@@ -1,6 +1,7 @@
 import { CheckCircle2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Field, Panel, Pill } from '@/newui-transplant/components/app/kit'
+import { OPUS_CARD, OPUS_META_STRIP } from '@/newui-transplant/components/app/opus-surfaces'
 import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
 import { ButtonLink } from '@/newui-transplant/components/app/button-link'
 import { Button } from '@/newui-transplant/components/ui/button'
@@ -88,7 +89,17 @@ export function TransplantMctbSetupPhonePage({ wired }: { wired?: MctbSetupPhone
   const senderOptions = wired?.senderOptions ?? []
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="flex flex-col gap-4">
+      <div className={OPUS_META_STRIP}>
+        <span className="text-muted-foreground">Business line</span>
+        <span className="font-mono text-sm font-medium">{businessLine}</span>
+        <span className="mx-1 hidden h-4 w-px bg-border sm:block" aria-hidden="true" />
+        <span className="text-muted-foreground">Forwarding destination</span>
+        <span className="font-mono text-sm font-medium">{forwardDest}</span>
+        <span className="mx-1 hidden h-4 w-px bg-border sm:block" aria-hidden="true" />
+        <Pill tone={verificationTone}>{verificationLabel}</Pill>
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
       <Panel title="Your business line" description="The public number customers call">
         {live && wired?.onBusinessLineChange ? (
           <>
@@ -247,7 +258,8 @@ export function TransplantMctbSetupPhonePage({ wired }: { wired?: MctbSetupPhone
                   void wired?.onSelectSender?.(opt.id)
                 }}
                 className={cn(
-                  'flex items-start gap-3 rounded-lg border p-3 text-left transition',
+                  OPUS_CARD,
+                  'flex items-start gap-3 p-3 text-left transition',
                   opt.active ? 'border-primary bg-accent/50 ring-1 ring-primary' : 'hover:bg-muted/50',
                   locked && 'cursor-not-allowed opacity-70',
                 )}
@@ -278,6 +290,7 @@ export function TransplantMctbSetupPhonePage({ wired }: { wired?: MctbSetupPhone
           </p>
         ) : null}
       </Panel>
+      </div>
     </div>
   )
 }

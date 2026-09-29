@@ -3,7 +3,7 @@
 import { MoreHorizontal, Plus } from 'lucide-react'
 import { Initials, Panel, Pill, SettingRow } from '@/newui-transplant/components/app/kit'
 import { td, th } from '@/newui-transplant/components/app/opus-tables'
-import { OPUS_TABLE_HEAD } from '@/newui-transplant/components/app/opus-surfaces'
+import { OPUS_INSET_LIST, OPUS_TABLE_HEAD } from '@/newui-transplant/components/app/opus-surfaces'
 import { cn } from '@/lib/utils'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Checkbox } from '@/newui-transplant/components/ui/checkbox'
@@ -43,6 +43,7 @@ export function TransplantMctbSetupNotificationsPage({ wired }: { wired?: MctbSe
         <Panel
           title="Urgent Reply Alerts"
           description="Classify inbound replies from your instructions. Works when AI Recovery is off. Does not text customers."
+          bodyClassName="p-0"
         >
           <div className="divide-y px-5">
             <SettingRow
@@ -118,9 +119,14 @@ export function TransplantMctbSetupNotificationsPage({ wired }: { wired?: MctbSe
         }
         bodyClassName="p-0"
       >
-        <ul className="divide-y">
+        <ul className={OPUS_INSET_LIST}>
+          {recipients.length === 0 ? (
+            <li className="px-5 py-8 text-center text-sm text-muted-foreground">
+              No team recipients yet. Add someone who should get reply alerts.
+            </li>
+          ) : null}
           {recipients.map((r) => (
-            <li key={r.name} className="flex items-center gap-3 px-5 py-3">
+            <li key={`${r.name}-${r.email}`} className="flex items-center gap-3 px-5 py-3">
               <Initials name={r.name} />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium">{r.name}</p>
