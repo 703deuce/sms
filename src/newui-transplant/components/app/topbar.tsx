@@ -1,7 +1,9 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
+import Link from 'next/link'
 import { Bell, HelpCircle, Search } from 'lucide-react'
+import { MctbHeaderIdentity } from '@/newui-transplant/components/app/mctb-header-identity'
 import { SidebarTrigger } from '@/newui-transplant/components/ui/sidebar'
 import { Separator } from '@/newui-transplant/components/ui/separator'
 import { Button } from '@/newui-transplant/components/ui/button'
@@ -17,7 +19,8 @@ function sectionFor(pathname: string) {
     }
   }
   if (pathname.startsWith('/settings')) return { section: 'Account', page: 'Settings' }
-  if (pathname.startsWith('/getting-started')) return { section: 'Account', page: 'Help' }
+  if (pathname.startsWith('/getting-started')) return { section: 'Overview', page: 'Getting Started' }
+  if (pathname.startsWith('/help')) return { section: 'Account', page: 'Help' }
   return { section: 'Transovo', page: '' }
 }
 
@@ -36,13 +39,12 @@ export function Topbar({ userName }: { userName?: string }) {
     <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b bg-background/85 px-4 backdrop-blur md:px-6">
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="h-5" />
-      <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-sm">
-        <span className="hidden truncate text-muted-foreground sm:inline">{section}</span>
+      <MctbHeaderIdentity />
+      <nav aria-label="Breadcrumb" className="hidden min-w-0 items-center gap-1.5 text-sm lg:flex">
+        <span className="truncate text-muted-foreground">{section}</span>
         {page ? (
           <>
-            <span className="hidden text-muted-foreground/50 sm:inline" aria-hidden="true">
-              /
-            </span>
+            <span className="text-muted-foreground/50" aria-hidden="true">/</span>
             <span className="truncate font-medium">{page}</span>
           </>
         ) : null}
@@ -60,9 +62,7 @@ export function Topbar({ userName }: { userName?: string }) {
             ⌘K
           </kbd>
         </label>
-        <Button variant="ghost" size="icon" aria-label="Help">
-          <HelpCircle />
-        </Button>
+        <Button variant="ghost" size="icon" aria-label="Help" render={<Link href="/help"><HelpCircle /></Link>} />
         <Button variant="ghost" size="icon" aria-label="Notifications" className="relative">
           <Bell />
           <span className="absolute right-2 top-2 size-1.5 rounded-full bg-primary" aria-hidden="true" />

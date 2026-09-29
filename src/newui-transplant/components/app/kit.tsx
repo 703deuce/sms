@@ -3,7 +3,7 @@ import { ArrowDownRight, ArrowUpRight, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export function Page({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <main className={cn('mx-auto w-full max-w-7xl px-4 py-6 md:px-8 md:py-8', className)}>{children}</main>
+  return <main className={cn('mx-auto w-full max-w-7xl px-4 py-5 md:px-8 md:py-6', className)}>{children}</main>
 }
 
 export function PageHeader({
@@ -20,7 +20,7 @@ export function PageHeader({
   meta?: React.ReactNode
 }) {
   return (
-    <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+    <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2.5">
           <h1 className="text-balance text-2xl font-semibold tracking-tight">{title}</h1>

@@ -13,6 +13,8 @@ import {
 import { GettingStartedConnected } from "@/features/help/kimi/getting-started/getting-started-connected";
 import { gettingStartedData, type GettingStartedData } from "@/components/help/kimi-ui/getting-started/types";
 import { getPrisma } from "@/lib/db";
+import { isMctbV1Primary } from "@/lib/workspace/platform-launch";
+import { MctbGettingStartedPage } from "@/newui-transplant/connected/mctb/mctb-getting-started-page";
 
 function buildGettingStartedData(
   workspaceName: string,
@@ -36,6 +38,10 @@ function buildGettingStartedData(
 }
 
 export default async function GettingStartedPage() {
+  if (isMctbV1Primary()) {
+    return <MctbGettingStartedPage />;
+  }
+
   const { workspaceId } = await requireWorkspaceContext();
   const workspace = await getPrisma().workspace.findUnique({
     where: { id: workspaceId },

@@ -5,6 +5,7 @@ import {
   HelpCircle,
   Home,
   LayoutDashboard,
+  ListChecks,
   MessageSquare,
   Phone,
   PhoneMissed,
@@ -36,6 +37,12 @@ export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
       label: "Overview",
       href: MCTB_ROUTES.home,
       icon: LayoutDashboard,
+      matchExact: true,
+    },
+    {
+      label: "Getting Started",
+      href: "/getting-started",
+      icon: ListChecks,
       matchExact: true,
     },
     {
@@ -98,7 +105,7 @@ export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
     },
     {
       label: "Help",
-      href: "/getting-started",
+      href: "/help",
       icon: HelpCircle,
     },
   ];
@@ -123,7 +130,8 @@ export function buildMctbV1MobileNav(options: MctbNavOptions = {}): NavItem[] {
 export function getMctbPageTitle(pathname: string): string {
   if (pathname.startsWith("/settings/billing")) return "Billing";
   if (pathname.startsWith("/settings")) return "Settings";
-  if (pathname.startsWith("/getting-started")) return "Help";
+  if (pathname.startsWith("/getting-started")) return "Getting Started";
+  if (pathname.startsWith("/help")) return "Help";
 
   if (pathname === MCTB_ROUTES.home) return "Missed Call Text Back";
   if (pathname === MCTB_ROUTES.missedCalls) return "";

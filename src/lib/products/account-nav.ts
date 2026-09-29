@@ -10,6 +10,6 @@ export function buildAccountNavItems(): NavItem[] {
       icon: Settings,
       sectionLabel: "Account",
     },
-    { label: "Help", href: "/getting-started", icon: HelpCircle },
+    { label: "Help", href: "/help", icon: HelpCircle },
   ];
 }
