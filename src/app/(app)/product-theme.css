@@ -1,5 +1,5 @@
-/* TransOvo product shell — Soft Cool Slate (Appointments V1) */
-.product-theme {
+/* TransOvo product shell — Soft Cool Slate (Appointments V1). Never apply on Opus/MCTB shell. */
+.product-theme:not([data-newui-shell]) {
   --primary: #1b1e23;
   --primary-foreground: #ffffff;
   --primary-hover: #262a31;
@@ -8,7 +8,7 @@
   --background: #f6f7f8;
 }
 
-.product-theme .bg-mesh {
+.product-theme:not([data-newui-shell]) .bg-mesh {
   background-color: #f6f7f8;
   background-image: none;
 }
