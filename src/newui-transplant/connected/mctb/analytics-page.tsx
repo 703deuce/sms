@@ -67,9 +67,9 @@ export function NewUiMctbAnalyticsPage({ initialData, initialRange }: { initialD
         <TrendArea
           data={chartRows}
           series={[
-            { key: "missed", label: "Missed", color: "var(--chart-2)" },
+            { key: "missed", label: "Missed", color: "var(--chart-4)" },
             { key: "texts", label: "Texts", color: "var(--chart-1)" },
-            { key: "replies", label: "Replies", color: "var(--chart-3)" },
+            { key: "replies", label: "Replies", color: "var(--chart-2)" },
           ]}
           height={240}
         />

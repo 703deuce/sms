@@ -2,9 +2,28 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, Sparkles } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  MessageSquareReply,
+  MessagesSquare,
+  PhoneMissed,
+  Send,
+  Sparkles,
+} from "lucide-react";
 import { ButtonLink } from "@/newui-transplant/components/app/button-link";
-import { Initials, Page, PageHeader, Panel, Pill, Rows, Stat, TextLink } from "@/newui-transplant/components/app/kit";
+import {
+  Callout,
+  FeatureEmphasisStrip,
+  Initials,
+  Page,
+  PageHeader,
+  Panel,
+  Pill,
+  Rows,
+  Stat,
+  TextLink,
+} from "@/newui-transplant/components/app/kit";
 import { RecoveryPill } from "@/newui-transplant/components/app/status";
 import { mapMctbOverviewRecentMissedCalls } from "@/lib/newui-transplant/adapters/mctb-overview";
 import type { MctbOverviewPayload } from "@/lib/mctb/overview-types";
@@ -74,11 +93,11 @@ export function NewUiMctbOverviewPage({ data }: { data: MctbOverviewPayload }) {
         }
       />
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Stat label="Missed calls" value={String(kpis.missedCallsToday)} hint={kpis.windowLabel} href="/mctb/missed-calls" />
-        <Stat label="Recovery texts sent" value={String(kpis.recoveryTextsToday)} hint="Today" href="/mctb/missed-calls" />
-        <Stat label="Customer replies" value={String(kpis.repliesToday)} hint="Today" href="/mctb/conversations" />
-        <Stat label="Needs reply" value={String(kpis.needsReplyCount)} hint="Waiting on your team" href="/mctb/conversations" />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Stat label="Missed calls" value={String(kpis.missedCallsToday)} hint={kpis.windowLabel} href="/mctb/missed-calls" icon={PhoneMissed} />
+        <Stat label="Recovery texts sent" value={String(kpis.recoveryTextsToday)} hint="Today" href="/mctb/missed-calls" icon={Send} />
+        <Stat label="Customer replies" value={String(kpis.repliesToday)} hint="Today" href="/mctb/conversations" icon={MessageSquareReply} />
+        <Stat label="Needs reply" value={String(kpis.needsReplyCount)} hint="Waiting on your team" href="/mctb/conversations" icon={MessagesSquare} />
       </div>
 
       {capabilities && capabilities.monthlyRecoveryLimit > 0 ? (
@@ -108,21 +127,38 @@ export function NewUiMctbOverviewPage({ data }: { data: MctbOverviewPayload }) {
         </div>
       ) : null}
 
-      <div className="mt-4 flex flex-col gap-3 rounded-xl border bg-card p-4 sm:flex-row sm:items-center">
-        <span className="flex size-9 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-          <Sparkles className="size-4" aria-hidden="true" />
-        </span>
-        <div className="flex-1">
-          <p className="flex items-center gap-2 text-sm font-medium">
-            AI Recovery{" "}
-            <Pill tone={leadRecovery.enabled ? "success" : "neutral"}>
-              {leadRecovery.enabled ? "On" : "Off"}
-            </Pill>
-          </p>
-          <p className="text-xs text-muted-foreground">{leadRecovery.policySummary}</p>
-        </div>
-        <TextLink href="/mctb/ai-recovery">Manage</TextLink>
+      <div className="mt-4">
+        <FeatureEmphasisStrip
+          icon={Sparkles}
+          title={leadRecovery.enabled ? "AI Recovery is on" : "AI Recovery is off"}
+          badge={
+            leadRecovery.enabled ? (
+              <Pill tone="success" dot={false} className="h-auto bg-success/20 text-[oklch(0.82_0.12_158)] ring-0">
+                {leadRecovery.statusLabel}
+              </Pill>
+            ) : (
+              <Pill tone="neutral" dot={false} className="ring-0">Off</Pill>
+            )
+          }
+          description={leadRecovery.policySummary}
+          action={<TextLink href="/mctb/ai-recovery">Manage</TextLink>}
+        />
       </div>
+
+      {leadRecovery.status === "needs_attention" && leadRecovery.attentionReason ? (
+        <div className="mt-3">
+          <Callout
+            tone="warning"
+            icon={AlertTriangle}
+            title={leadRecovery.attentionReason}
+            action={
+              leadRecovery.attentionHref ? (
+                <TextLink href={leadRecovery.attentionHref}>Review</TextLink>
+              ) : undefined
+            }
+          />
+        </div>
+      ) : null}
 
       {data.status === "active" &&
       data.setupComplete &&

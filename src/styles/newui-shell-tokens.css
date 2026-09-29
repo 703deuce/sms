@@ -1,52 +1,53 @@
 /**
- * Authoritative Brightline/Transovo Opus palette — copied from newui/app/globals.css :root (light).
- * Scoped under [data-newui-shell] so legacy Kimi/scheduling chrome in src/app/globals.css stays unchanged.
- * Keep in sync with newui/app/globals.css when the approved design updates.
+ * Opus MCTB shell palette — reconciled from design sources:
+ * - Primary authority: newui2/app/globals.css (:root)
+ * - Structural reference: newui/ (components, not a separate “brand” lock-in)
+ * Scoped under [data-newui-shell]; legacy Kimi chrome in src/app/globals.css unchanged.
  */
 [data-newui-shell] {
   color-scheme: light;
-  --background: oklch(0.985 0.002 95);
-  --foreground: oklch(0.2 0.01 260);
+  --background: oklch(0.982 0.003 265);
+  --foreground: oklch(0.2 0.025 270);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.2 0.01 260);
+  --card-foreground: oklch(0.2 0.025 270);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.2 0.01 260);
-  --primary: oklch(0.52 0.12 168);
+  --popover-foreground: oklch(0.2 0.025 270);
+  --primary: oklch(0.51 0.22 277);
   --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.965 0.003 95);
-  --secondary-foreground: oklch(0.25 0.01 260);
-  --muted: oklch(0.965 0.003 95);
-  --muted-foreground: oklch(0.52 0.01 260);
-  --accent: oklch(0.955 0.025 168);
-  --accent-foreground: oklch(0.32 0.08 168);
-  --destructive: oklch(0.58 0.2 25);
-  --success: oklch(0.58 0.13 155);
-  --warning: oklch(0.72 0.15 70);
-  --border: oklch(0.915 0.004 95);
-  --input: oklch(0.9 0.004 95);
-  --ring: oklch(0.52 0.12 168);
-  --chart-1: oklch(0.52 0.12 168);
-  --chart-2: oklch(0.72 0.1 190);
-  --chart-3: oklch(0.72 0.15 70);
-  --chart-4: oklch(0.45 0.02 260);
-  --chart-5: oklch(0.82 0.06 168);
+  --secondary: oklch(0.955 0.012 275);
+  --secondary-foreground: oklch(0.3 0.08 277);
+  --muted: oklch(0.965 0.005 265);
+  --muted-foreground: oklch(0.52 0.02 265);
+  --accent: oklch(0.955 0.02 277);
+  --accent-foreground: oklch(0.38 0.16 277);
+  --destructive: oklch(0.58 0.22 25);
+  --success: oklch(0.6 0.15 158);
+  --warning: oklch(0.72 0.16 70);
+  --border: oklch(0.92 0.007 265);
+  --input: oklch(0.9 0.008 265);
+  --ring: oklch(0.51 0.22 277);
+  --chart-1: oklch(0.51 0.22 277);
+  --chart-2: oklch(0.7 0.14 190);
+  --chart-3: oklch(0.6 0.15 158);
+  --chart-4: oklch(0.72 0.16 70);
+  --chart-5: oklch(0.8 0.06 277);
   --radius: 0.625rem;
-  --sidebar: oklch(0.19 0.012 260);
-  --sidebar-foreground: oklch(0.8 0.008 260);
-  --sidebar-primary: oklch(0.7 0.13 168);
-  --sidebar-primary-foreground: oklch(0.15 0.01 260);
-  --sidebar-accent: oklch(0.26 0.012 260);
-  --sidebar-accent-foreground: oklch(0.98 0 0);
-  --sidebar-border: oklch(0.28 0.012 260);
-  --sidebar-ring: oklch(0.7 0.13 168);
-  /* Legacy shell aliases used by some shared components */
-  --primary-hover: oklch(0.45 0.12 168);
-  --danger: oklch(0.58 0.2 25);
+  --sidebar: oklch(0.17 0.02 272);
+  --sidebar-foreground: oklch(0.93 0.01 270);
+  --sidebar-muted: oklch(0.62 0.02 270);
+  --sidebar-primary: oklch(0.66 0.18 277);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.24 0.025 272);
+  --sidebar-accent-foreground: oklch(0.99 0 0);
+  --sidebar-border: oklch(0.27 0.02 272);
+  --sidebar-ring: oklch(0.66 0.18 277);
+  --primary-hover: oklch(0.44 0.22 277);
+  --danger: oklch(0.58 0.22 25);
   --danger-foreground: oklch(0.99 0 0);
   --success-foreground: oklch(0.99 0 0);
-  --warning-foreground: oklch(0.32 0.08 70);
+  --warning-foreground: oklch(0.38 0.13 60);
   --header: oklch(1 0 0);
-  --shadow: 0 1px 2px oklch(0.2 0.01 260 / 0.04), 0 4px 16px oklch(0.2 0.01 260 / 0.04);
+  --shadow: 0 1px 2px oklch(0.2 0.025 270 / 0.04), 0 4px 16px oklch(0.2 0.025 270 / 0.04);
 }
 
 [data-newui-shell] .newui-shell-sidebar {

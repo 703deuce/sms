@@ -41,7 +41,11 @@ function Bubble({ m }: { m: Message }) {
       <span
         className={cn(
           'max-w-[80%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed',
-          outbound ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md bg-muted',
+          outbound
+            ? m.from === 'ai'
+              ? 'rounded-br-md bg-sidebar text-sidebar-foreground'
+              : 'rounded-br-md bg-primary text-primary-foreground'
+            : 'rounded-bl-md border bg-card',
         )}
       >
         {m.text}
@@ -151,7 +155,7 @@ export function Inbox({
               onClick={() => setFilter(f)}
               className={cn(
                 'rounded-md px-2.5 py-1 text-xs font-medium whitespace-nowrap transition-colors',
-                filter === f ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                filter === f ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
             >
               {f}
@@ -252,7 +256,7 @@ export function Inbox({
                   <Phone /> Call
                 </Button>
               </header>
-              <ol className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-5">
+              <ol className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto bg-muted/30 px-4 py-5">
                 {production &&
                 threadLoadingId === selected.id &&
                 messages.length === 0 ? (
