@@ -318,26 +318,44 @@ export function EmptyState({
 }
 
 /** Grouped configuration block — hierarchy without stacking full cards. */
+export function OpusIconBadge({ icon: Icon, className }: { icon: LucideIcon; className?: string }) {
+  return (
+    <span
+      className={cn(
+        'flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary',
+        className,
+      )}
+    >
+      <Icon className="size-4" aria-hidden="true" />
+    </span>
+  )
+}
+
 export function ConfigSection({
   title,
   description,
+  icon: Icon,
   children,
   className,
   insetClassName,
 }: {
   title: string
   description?: string
+  icon?: LucideIcon
   children: React.ReactNode
   className?: string
   insetClassName?: string
 }) {
   return (
     <section className={cn('flex flex-col gap-2.5', className)}>
-      <div>
-        <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
-        {description ? (
-          <p className="mt-0.5 text-pretty text-sm text-muted-foreground">{description}</p>
-        ) : null}
+      <div className="flex items-start gap-3">
+        {Icon ? <OpusIconBadge icon={Icon} className="mt-0.5" /> : null}
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
+          {description ? (
+            <p className="mt-0.5 text-pretty text-sm text-muted-foreground">{description}</p>
+          ) : null}
+        </div>
       </div>
       <div className={cn(OPUS_CONFIG_INSET, 'p-4 sm:p-5', insetClassName)}>{children}</div>
     </section>

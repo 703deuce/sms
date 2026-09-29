@@ -2,7 +2,26 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { OpusStatusAnchor, Page, PageHeader, Panel } from "@/newui-transplant/components/app/kit";
+import {
+  FeatureEmphasisStrip,
+  Page,
+  PageHeader,
+  Panel,
+  Pill,
+  Stat,
+  TextLink,
+} from "@/newui-transplant/components/app/kit";
+import {
+  Activity,
+  Bell,
+  MessageSquareText,
+  PauseCircle,
+  PhoneForwarded,
+  PlayCircle,
+  ShieldCheck,
+  Users,
+} from "lucide-react";
+import { useMctbSetupPhoneWiring } from "@/newui-transplant/connected/mctb/mctb-setup-phone-wiring";
 import { OpusLineTabs } from "@/newui-transplant/components/app/segmented-nav";
 import { useMctbRecoveryWiring } from "@/newui-transplant/connected/mctb/setup-wiring-hooks";
 import { TextBackEditor } from "@/newui-transplant/components/mctb/text-back-editor";
@@ -49,7 +68,8 @@ function useTabParam(name: string, allowed: string[], fallback: string) {
 export function NewUiMctbMissedCallRecoveryPage() {
   const { tab, setTab } = useTabParam("tab", ["general", "rules", "consent", "exclusions"], "general");
   const recovery = useMctbRecoveryWiring();
-  const [usageLine, setUsageLine] = useState<string | null>(null);
+  const [usageUsed, setUsageUsed] = useState<number | null>(null);
+  const [usageLimit, setUsageLimit] = useState<number | null>(null);
 
   useEffect(() => {
     void fetchMctbSetup()
@@ -60,31 +80,63 @@ export function NewUiMctbMissedCallRecoveryPage() {
         };
         const limit = Number(caps?.monthlyRecoveryLimit ?? 0);
         const used = Number(caps?.monthlyRecoveryUsed ?? 0);
-        if (limit > 0) setUsageLine(`${used} of ${limit} recoveries this month`);
+        if (limit > 0) {
+          setUsageLimit(limit);
+          setUsageUsed(used);
+        }
       })
       .catch(() => undefined);
   }, []);
+
+  const paused = recovery.paused;
 
   return (
     <Page>
       <PageHeader
         title="Missed-Call Recovery"
         description="When unanswered calls should trigger recovery texts, consent, and exclusions."
+        status={
+          <Pill tone={paused ? "warning" : "success"}>{paused ? "Paused" : "Running"}</Pill>
+        }
       />
-      <div className="mb-4 flex flex-col gap-3">
-        <OpusStatusAnchor
+      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-3">
+        <Stat
           label="Recovery"
-          status={recovery.paused ? "Paused" : "Running"}
-          tone={recovery.paused ? "warning" : "success"}
-        >
-          {usageLine ? (
-            <>
-              <span className="mx-1 hidden h-4 w-px bg-border sm:block" aria-hidden="true" />
-              <span className="text-muted-foreground">Usage</span>
-              <span className="font-medium tabular-nums">{usageLine}</span>
-            </>
-          ) : null}
-        </OpusStatusAnchor>
+          value={paused ? "Paused" : "Running"}
+          hint={paused ? "Texts stopped" : "Automated texts on"}
+          icon={paused ? PauseCircle : PlayCircle}
+        />
+        {usageLimit != null && usageUsed != null ? (
+          <Stat
+            label="This month"
+            value={`${usageUsed}`}
+            hint={`of ${usageLimit} recoveries`}
+            icon={Activity}
+          />
+        ) : null}
+        <Stat
+          label="Follow-up"
+          value={`${recovery.maxMessages}`}
+          hint="Max texts per caller"
+          icon={MessageSquareText}
+        />
+      </div>
+      <div className="mb-4">
+        <FeatureEmphasisStrip
+          icon={paused ? PauseCircle : PlayCircle}
+          title={paused ? "Recovery is paused" : "Recovery is running"}
+          badge={
+            <Pill tone={paused ? "warning" : "success"} dot={false} className="ring-0">
+              {paused ? "Paused" : "Active"}
+            </Pill>
+          }
+          description={
+            paused
+              ? "Forwarded calls can still reach voicemail. No automated recovery texts until you resume."
+              : "Qualifying missed calls receive recovery texts after your delay and consent rules."
+          }
+          action={<TextLink href={`${MCTB_ROUTES.missedCallRecovery}?tab=rules`}>Edit rules</TextLink>}
+        />
       </div>
       <OpusLineTabs
         label="Missed-call recovery sections"
@@ -135,6 +187,11 @@ export function NewUiMctbTextBackPage() {
   const searchParams = useSearchParams();
   const section = searchParams.get("section");
   const bookingRef = useMemo(() => (section === "booking" ? "booking-link" : undefined), [section]);
+  const [textBackMeta, setTextBackMeta] = useState({
+    consentLabel: "—",
+    senderReady: false,
+    segments: 1,
+  });
 
   useEffect(() => {
     if (bookingRef && typeof document !== "undefined") {
@@ -142,16 +199,55 @@ export function NewUiMctbTextBackPage() {
     }
   }, [bookingRef]);
 
+  useEffect(() => {
+    void fetchMctbSetup()
+      .then((data) => {
+        const consent =
+          data.consentMode === "existing_consent" ? "Existing permission" : "Press 1";
+        const ready = Boolean(data.compliance?.messagingReady);
+        const opener = String(data.runtime?.messageTemplate ?? "");
+        const segments = Math.max(1, Math.ceil(opener.length / 160));
+        setTextBackMeta({ consentLabel: consent, senderReady: ready, segments });
+      })
+      .catch(() => undefined);
+  }, []);
+
   return (
     <Page>
       <PageHeader
         title="Text Back"
         description="Recovery message and booking link callers receive after a missed call."
+        status={<Pill tone="primary">Customer-facing</Pill>}
       />
+      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-3">
+        <Stat label="Consent mode" value={textBackMeta.consentLabel} hint="Recovery permission" icon={ShieldCheck} />
+        <Stat
+          label="Sender"
+          value={textBackMeta.senderReady ? "Ready" : "Needs attention"}
+          hint="Text-back number"
+          icon={PhoneForwarded}
+        />
+        <Stat
+          label="Opener size"
+          value={`${textBackMeta.segments}`}
+          hint={`segment${textBackMeta.segments === 1 ? "" : "s"} (est.)`}
+          icon={MessageSquareText}
+        />
+      </div>
+      <div className="mb-4">
+        <FeatureEmphasisStrip
+          icon={MessageSquareText}
+          title="Two-message sequence when Press 1 is on"
+          badge={<Pill tone="info" dot={false} className="ring-0">Preview matches send order</Pill>}
+          description="Compliance confirmation first, then your conversation opener. Existing-permission mode skips the compliance bubble in preview when not applicable."
+          action={<TextLink href={`${MCTB_ROUTES.missedCallRecovery}?tab=consent`}>Edit consent</TextLink>}
+        />
+      </div>
       <div className="flex flex-col gap-6">
         <TextBackEditor manageSenderHref={MCTB_ROUTES.phone} />
         <Panel
           id="booking-link"
+          className="border-primary/15 shadow-[0_8px_24px_-12px_rgba(88,28,135,0.25)]"
           title="Booking link"
           description="Optional link inserted as {booking_link} in your recovery message."
         >
@@ -163,12 +259,53 @@ export function NewUiMctbTextBackPage() {
 }
 
 export function NewUiMctbNotificationsDirectPage() {
+  const [recipientCount, setRecipientCount] = useState<number | null>(null);
+  const [urgentOn, setUrgentOn] = useState(false);
+
+  useEffect(() => {
+    void fetch("/api/mctb/handoff", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((json) => {
+        const data = json.data ?? json;
+        const recipients = Array.isArray(data.recipients) ? data.recipients : [];
+        setRecipientCount(recipients.length);
+        setUrgentOn(Boolean(data.config?.emergencyDetectionEnabled));
+      })
+      .catch(() => undefined);
+  }, []);
+
   return (
     <Page>
       <PageHeader
         title="Notifications"
         description="Where your team is notified when callers reply or urgent messages are detected."
+        status={<Pill tone="info">Team alerts</Pill>}
       />
+      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-3">
+        <Stat
+          label="Recipients"
+          value={recipientCount == null ? "—" : String(recipientCount)}
+          hint="Team members"
+          icon={Users}
+        />
+        <Stat
+          label="Urgent detection"
+          value={urgentOn ? "On" : "Off"}
+          hint="Semantic reply alerts"
+          icon={Bell}
+        />
+        <Stat label="Channels" value="Email + SMS" hint="Per event below" icon={Activity} />
+      </div>
+      <div className="mb-4">
+        <FeatureEmphasisStrip
+          icon={Bell}
+          title="Know when customers need you"
+          badge={<Pill tone={urgentOn ? "warning" : "neutral"} dot={false} className="ring-0">
+            {urgentOn ? "Urgent rules on" : "Urgent rules off"}
+          </Pill>}
+          description="Reply and voicemail events notify your team. Urgent Reply Alerts classify inbound messages before alerts fire."
+        />
+      </div>
       <NewUiMctbSetupNotificationsPage />
     </Page>
   );
@@ -178,10 +315,16 @@ export function NewUiMctbPhoneForwardingPage() {
   const searchParams = useSearchParams();
   const testOpen = searchParams.get("test") === "1";
   const [testDialog, setTestDialog] = useState(testOpen);
+  const { wired: phoneWired, loading: phoneMetaLoading } = useMctbSetupPhoneWiring();
 
   useEffect(() => {
     setTestDialog(testOpen);
   }, [testOpen]);
+
+  const verificationTone = phoneWired?.verificationPillTone ?? "warning";
+  const verificationLabel = phoneWired?.verificationPillLabel ?? "Loading…";
+  const businessLine = phoneWired?.businessLine ?? "—";
+  const senderTitle = phoneWired?.senderOptions?.find((o) => o.active)?.title ?? "—";
 
   return (
     <>
@@ -189,12 +332,46 @@ export function NewUiMctbPhoneForwardingPage() {
         <PageHeader
           title="Phone & Forwarding"
           description="Business line, call forwarding, text-back sender, and connection test."
+          status={
+            phoneMetaLoading ? (
+              <Pill tone="neutral">Loading</Pill>
+            ) : (
+              <Pill tone={verificationTone}>{verificationLabel}</Pill>
+            )
+          }
           actions={
             <ButtonLink href={`${MCTB_ROUTES.phone}?test=1`} variant="outline" size="sm">
               Test connection
             </ButtonLink>
           }
         />
+        <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-3">
+          <Stat label="Business line" value={phoneMetaLoading ? "…" : businessLine} hint="Public number" icon={PhoneForwarded} />
+          <Stat
+            label="Forwarding"
+            value={verificationTone === "success" ? "Verified" : "Not verified"}
+            hint="Carrier path to Transovo"
+            icon={Activity}
+          />
+          <Stat label="Active sender" value={phoneMetaLoading ? "…" : senderTitle} hint="Recovery texts" icon={MessageSquareText} />
+        </div>
+        <div className="mb-4">
+          <FeatureEmphasisStrip
+            icon={PhoneForwarded}
+            title={verificationTone === "success" ? "Calls reach Transovo when you miss them" : "Verify forwarding to go live"}
+            badge={
+              <Pill tone={verificationTone} dot={false} className="ring-0">
+                {verificationLabel}
+              </Pill>
+            }
+            description="Your business line stays public. Unanswered calls forward to Transovo for recovery texts and voicemail."
+            action={
+              verificationTone !== "success" ? (
+                <TextLink href={`${MCTB_ROUTES.phone}?test=1`}>Test connection</TextLink>
+              ) : undefined
+            }
+          />
+        </div>
         <NewUiMctbSetupPhonePage />
       </Page>
       <Dialog open={testDialog} onOpenChange={setTestDialog}>

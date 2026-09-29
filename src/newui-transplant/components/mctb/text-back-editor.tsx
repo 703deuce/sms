@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Lock, ShieldCheck } from 'lucide-react'
-import { ConfigSection, Pill, SettingRow } from '@/newui-transplant/components/app/kit'
+import { Lock, MessageSquareText, ShieldCheck } from 'lucide-react'
+import { ConfigSection, FeatureEmphasisStrip, Pill, SettingRow } from '@/newui-transplant/components/app/kit'
 import { OPUS_CARD, OPUS_META_STRIP, OPUS_SYSTEM_LOCK_SURFACE } from '@/newui-transplant/components/app/opus-surfaces'
 import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
 import { Button } from '@/newui-transplant/components/ui/button'
@@ -114,6 +114,22 @@ export function TextBackEditor({
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,7fr)_minmax(240px,3fr)] lg:items-start">
       <div className="flex flex-col gap-4">
+        <FeatureEmphasisStrip
+          icon={MessageSquareText}
+          title="What callers see after a missed call"
+          badge={
+            <Pill tone={senderReady ? 'success' : 'warning'} dot={false} className="ring-0">
+              {senderReady ? 'Sender ready' : 'Sender needs attention'}
+            </Pill>
+          }
+          description={`Consent: ${consentLabel}. Compliance text sends first when required, then your recovery opener.`}
+          action={
+            <Link href={manageSenderHref} className="text-sm font-medium text-sidebar-primary hover:underline">
+              Manage sender
+            </Link>
+          }
+        />
+
         <div className={cn(OPUS_META_STRIP, 'gap-x-4 gap-y-2')}>
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-muted-foreground">Consent</span>
@@ -127,12 +143,10 @@ export function TextBackEditor({
             <span className="font-medium">{senderMode === 'PLATFORM' ? 'Transovo Platform' : sender}</span>
             <Pill tone={senderReady ? 'success' : 'warning'}>{senderReady ? 'Ready' : 'Needs attention'}</Pill>
           </div>
-          <Link href={manageSenderHref} className="ml-auto text-sm font-medium text-primary hover:underline">
-            Manage sender
-          </Link>
         </div>
 
         <ConfigSection
+          icon={ShieldCheck}
           title="System compliance message"
           description="Required first message — managed by Transovo for carrier compliance."
           insetClassName="p-0"
@@ -145,6 +159,7 @@ export function TextBackEditor({
         </ConfigSection>
 
         <ConfigSection
+          icon={MessageSquareText}
           title={senderMode === 'PLATFORM' ? 'Approved missed-call template' : 'Conversation opener'}
           description={
             senderMode === 'PLATFORM'

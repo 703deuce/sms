@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { ArrowDown, CheckCircle2, ChevronDown, ChevronUp, PhoneForwarded } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { ConfigSection, Field, Pill } from '@/newui-transplant/components/app/kit'
+import { ConfigSection, FeatureEmphasisStrip, Field, Pill } from '@/newui-transplant/components/app/kit'
 import { OPUS_CARD, OPUS_CONFIG_INSET } from '@/newui-transplant/components/app/opus-surfaces'
 import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
 import { ButtonLink } from '@/newui-transplant/components/app/button-link'
@@ -144,7 +144,12 @@ export function TransplantMctbSetupPhonePage({ wired }: { wired?: MctbSetupPhone
 
   return (
     <div className="flex flex-col gap-8">
-      <div className={cn(OPUS_CONFIG_INSET, 'grid gap-4 p-4 sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-6 sm:p-5')}>
+      <div
+        className={cn(
+          OPUS_CARD,
+          'grid gap-4 border-primary/10 p-4 shadow-[0_8px_24px_-12px_rgba(88,28,135,0.2)] sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-6 sm:p-5',
+        )}
+      >
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Business line</p>
           {live && wired?.onBusinessLineChange ? (
@@ -182,7 +187,11 @@ export function TransplantMctbSetupPhonePage({ wired }: { wired?: MctbSetupPhone
         </div>
       </div>
 
-      <ConfigSection title="Forwarding setup" description="Carrier timing and conditional forwarding steps.">
+      <ConfigSection
+        icon={PhoneForwarded}
+        title="Forwarding setup"
+        description="Carrier timing and conditional forwarding steps."
+      >
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Carrier" htmlFor="mctb-carrier">
@@ -237,6 +246,7 @@ export function TransplantMctbSetupPhonePage({ wired }: { wired?: MctbSetupPhone
       </ConfigSection>
 
       <ConfigSection
+        icon={CheckCircle2}
         title="Connection verification"
         description="Evidence that calls reach Transovo when you do not answer."
         insetClassName={cn(
@@ -275,28 +285,32 @@ export function TransplantMctbSetupPhonePage({ wired }: { wired?: MctbSetupPhone
       </ConfigSection>
 
       <ConfigSection
+        icon={PhoneForwarded}
         title="Text-back sender"
         description="Recovery texts send from the active sender. Other numbers remain available to switch."
+        insetClassName="flex flex-col gap-4"
       >
         {activeSender ? (
-          <div className={cn(OPUS_CARD, 'border-primary/40 bg-primary/5 p-4')}>
-            <div className="flex flex-wrap items-start gap-3">
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
-                <PhoneForwarded className="size-4" aria-hidden="true" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm font-semibold">{activeSender.title}</p>
-                  <Pill tone="success">Active</Pill>
-                  {activeSender.statusLabel ? <Pill tone="neutral">{activeSender.statusLabel}</Pill> : null}
-                </div>
-                <p className="mt-1 text-sm text-muted-foreground">{activeSender.description}</p>
-                {wired?.senderDetail ? (
-                  <p className="mt-1 text-xs text-muted-foreground">{wired.senderDetail}</p>
+          <FeatureEmphasisStrip
+            icon={PhoneForwarded}
+            title={activeSender.title}
+            badge={
+              <>
+                <Pill tone="success" dot={false} className="bg-sidebar-primary/20 text-sidebar-foreground ring-0">
+                  Active sender
+                </Pill>
+                {activeSender.statusLabel ? (
+                  <Pill tone="neutral" dot={false} className="ring-0 opacity-90">
+                    {activeSender.statusLabel}
+                  </Pill>
                 ) : null}
-              </div>
-            </div>
-          </div>
+              </>
+            }
+            description={
+              [activeSender.description, wired?.senderDetail].filter(Boolean).join(' · ') ||
+              'This number sends recovery texts after missed calls.'
+            }
+          />
         ) : (
           <p className="text-sm text-muted-foreground">{wired?.senderHeadline ?? 'No sender selected'}</p>
         )}

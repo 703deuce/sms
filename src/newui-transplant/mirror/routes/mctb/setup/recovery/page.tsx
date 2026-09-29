@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { PauseCircle, PlayCircle } from 'lucide-react'
+import { Clock, PauseCircle, PlayCircle } from 'lucide-react'
 import { ConfigSection, SettingRow } from '@/newui-transplant/components/app/kit'
 import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
 import { mctbMaxMessagesSelectOptions } from '@/lib/mctb/recovery-max-messages'
@@ -34,16 +34,12 @@ export function TransplantMctbSetupRecoveryPage({ wired }: { wired?: MctbSetupRe
   return (
     <div className="flex flex-col gap-8">
       <ConfigSection
+        icon={paused ? PauseCircle : PlayCircle}
         title="Pause recovery"
         description="Stop automated recovery texts. Forwarded calls can still reach voicemail."
       >
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex min-w-0 flex-1 gap-3">
-            {paused ? (
-              <PauseCircle className="mt-0.5 size-5 shrink-0 text-warning" aria-hidden="true" />
-            ) : (
-              <PlayCircle className="mt-0.5 size-5 shrink-0 text-success" aria-hidden="true" />
-            )}
+          <div className="flex min-w-0 flex-1">
             <p className="text-sm text-muted-foreground">
               {paused
                 ? 'Recovery is paused. No recovery SMS will send until you resume.'
@@ -81,6 +77,7 @@ export function TransplantMctbSetupRecoveryPage({ wired }: { wired?: MctbSetupRe
       </ConfigSection>
 
       <ConfigSection
+        icon={Clock}
         title="Timing & follow-up"
         description="Delay, cooldown, and repeat-send limits apply to future recovery attempts."
         insetClassName="p-0"

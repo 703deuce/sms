@@ -32,14 +32,6 @@ export type MctbSetupNotificationsWired = {
   urgent?: MctbSetupNotificationsUrgentWired
 }
 
-function SectionIcon({ icon: Icon }: { icon: typeof Bell }) {
-  return (
-    <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-      <Icon className="size-4" aria-hidden="true" />
-    </span>
-  )
-}
-
 export function TransplantMctbSetupNotificationsPage({ wired }: { wired?: MctbSetupNotificationsWired }) {
   const recipients = wired?.recipients ?? []
   const events = wired?.events ?? []
@@ -49,13 +41,12 @@ export function TransplantMctbSetupNotificationsPage({ wired }: { wired?: MctbSe
     <div className="flex flex-col gap-8">
       {urgent ? (
         <ConfigSection
+          icon={Bolt}
           title="Urgent Reply Alerts"
           description="Classify inbound replies from your instructions. Works when AI Recovery is off. Does not text customers."
         >
           <div className="flex flex-col gap-5">
-            <div className="flex items-start gap-3">
-              <SectionIcon icon={Bolt} />
-              <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-sm font-medium">Enable urgency detection</p>
                   <p className="text-sm text-muted-foreground">
@@ -67,7 +58,6 @@ export function TransplantMctbSetupNotificationsPage({ wired }: { wired?: MctbSe
                   onCheckedChange={(v) => urgent.onEnabledChange(Boolean(v))}
                   aria-label="Urgent Reply Alerts enabled"
                 />
-              </div>
             </div>
 
             <div className={cn(OPUS_CONFIG_INSET, 'bg-background/60 p-4')}>
@@ -130,14 +120,12 @@ export function TransplantMctbSetupNotificationsPage({ wired }: { wired?: MctbSe
         </ConfigSection>
       ) : null}
 
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <SectionIcon icon={Users} />
-          <div>
-            <h3 className="text-sm font-semibold">Team recipients</h3>
-            <p className="text-sm text-muted-foreground">Who receives reply and alert notifications.</p>
-          </div>
-        </div>
+      <ConfigSection
+        icon={Users}
+        title="Team recipients"
+        description="Who receives reply and alert notifications."
+        insetClassName="p-0"
+      >
         <Panel
           action={
             <Button size="sm" variant="outline" type="button" onClick={() => wired?.onAddRecipient?.()}>
@@ -164,16 +152,14 @@ export function TransplantMctbSetupNotificationsPage({ wired }: { wired?: MctbSe
             ))}
           </ul>
         </Panel>
-      </div>
+      </ConfigSection>
 
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <SectionIcon icon={Bell} />
-          <div>
-            <h3 className="text-sm font-semibold">Reply notifications</h3>
-            <p className="text-sm text-muted-foreground">Choose email and SMS for each event type.</p>
-          </div>
-        </div>
+      <ConfigSection
+        icon={Bell}
+        title="Reply notifications"
+        description="Choose email and SMS for each event type."
+        insetClassName="p-0"
+      >
         <Panel bodyClassName="p-0">
           <table className="w-full">
             <thead className={OPUS_TABLE_HEAD}>
@@ -211,7 +197,7 @@ export function TransplantMctbSetupNotificationsPage({ wired }: { wired?: MctbSe
             </tbody>
           </table>
         </Panel>
-      </div>
+      </ConfigSection>
     </div>
   )
 }

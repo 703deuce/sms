@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import type { MctbBookingLinkDto } from "@/lib/mctb/booking-links/service";
 import { bookingLinkHostname, validateBookingLinkUrl } from "@/lib/mctb/booking-links/validate-url";
-import { ConfigSection, Pill, SettingRow } from "@/newui-transplant/components/app/kit";
-import { OPUS_CONFIG_INSET } from "@/newui-transplant/components/app/opus-surfaces";
+import { FeatureEmphasisStrip, Pill, SettingRow } from "@/newui-transplant/components/app/kit";
+import { OPUS_CARD, OPUS_CONFIG_INSET } from "@/newui-transplant/components/app/opus-surfaces";
+import { Link2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/newui-transplant/components/ui/input";
 import { Switch } from "@/newui-transplant/components/ui/switch";
@@ -109,13 +110,20 @@ export function MctbBookingLinkSection() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className={cn(OPUS_CONFIG_INSET, 'flex flex-wrap items-center gap-2 px-4 py-3 text-sm')}>
-        <span className="text-muted-foreground">Status</span>
-        <Pill tone={sendEnabled ? "success" : "neutral"}>{sendEnabled ? "Link on" : "Link off"}</Pill>
-        {sendEnabled && url.trim() ? (
-          <span className="truncate text-muted-foreground">{bookingLinkHostname(url.trim())}</span>
-        ) : null}
-      </div>
+      <FeatureEmphasisStrip
+        icon={Link2}
+        title={sendEnabled ? "Booking link in recovery texts" : "Booking link is off"}
+        badge={
+          <Pill tone={sendEnabled ? "success" : "neutral"} dot={false} className="ring-0">
+            {sendEnabled ? "Link on" : "Link off"}
+          </Pill>
+        }
+        description={
+          sendEnabled && url.trim()
+            ? `Inserts as {booking_link} — ${bookingLinkHostname(url.trim())}`
+            : "Turn on to append your scheduling URL when callers text back."
+        }
+      />
       <SettingRow
         title="Send a booking link"
         description="Transovo can text callers your existing online booking page."
@@ -146,7 +154,7 @@ export function MctbBookingLinkSection() {
               />
             </div>
           </div>
-          <div className={cn(OPUS_CONFIG_INSET, 'border-dashed bg-background/50 px-4 py-3')}>
+          <div className={cn(OPUS_CARD, 'border-dashed border-primary/15 bg-primary/5 px-4 py-3')}>
             <p className="text-xs font-medium text-muted-foreground">Preview in message</p>
             <p className="mt-1 text-sm">{preview}</p>
           </div>
