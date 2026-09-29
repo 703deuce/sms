@@ -19,6 +19,7 @@ import { Checkbox } from "@/newui-transplant/components/ui/checkbox";
 import { Input } from "@/newui-transplant/components/ui/input";
 import { Label } from "@/newui-transplant/components/ui/label";
 import { cn } from "@/lib/utils";
+import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
 import type { MctbOnboardingController } from "@/newui-transplant/connected/mctb/mctb-onboarding-opus-view";
 import {
   useMctbWizardFooter,
@@ -54,8 +55,9 @@ function SelectionRow({
         disabled={disabled}
         onClick={onSelect}
         className={cn(
-          "flex w-full items-start gap-3 rounded-lg border px-4 py-3 text-left transition",
-          selected ? "border-primary ring-1 ring-primary/25" : "hover:border-muted-foreground/30",
+          OPUS_CARD,
+          "flex w-full items-start gap-3 px-4 py-3 text-left transition",
+          selected ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "hover:bg-muted/30",
           disabled && "cursor-not-allowed opacity-60",
         )}
       >

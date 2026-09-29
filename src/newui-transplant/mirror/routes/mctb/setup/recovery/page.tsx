@@ -1,12 +1,12 @@
 'use client'
 
 import { useMemo } from 'react'
-import { Panel, SettingRow } from '@/newui-transplant/components/app/kit'
+import { PauseCircle, PlayCircle } from 'lucide-react'
+import { ConfigSection, SettingRow } from '@/newui-transplant/components/app/kit'
 import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
 import { mctbMaxMessagesSelectOptions } from '@/lib/mctb/recovery-max-messages'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { SaveBar } from '@/newui-transplant/components/app/save-bar'
-
 export type MctbSetupRecoveryWired = {
   paused?: boolean
   triggers: Array<{ label: string; on: boolean; onChange: (v: boolean) => void }>
@@ -21,38 +21,71 @@ export type MctbSetupRecoveryWired = {
   onSave?: () => Promise<void>
 }
 
+const PAUSE_PRESETS = ['1 hour', 'Until tomorrow', '1 week', 'Indefinitely'] as const
+
 export function TransplantMctbSetupRecoveryPage({ wired }: { wired?: MctbSetupRecoveryWired }) {
   const delay = wired?.delayLabel ?? '30 seconds'
   const cooldown = wired?.cooldownLabel ?? '24 hours'
   const maxMsg = wired?.maxMessagesLabel ?? '3'
   const maxMsgOptions = useMemo(() => mctbMaxMessagesSelectOptions(Number(maxMsg) || 3), [maxMsg])
   const maxResolved = maxMsgOptions.includes(maxMsg) ? maxMsg : maxMsgOptions[maxMsgOptions.length - 1]!
+  const paused = Boolean(wired?.paused)
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <Panel title="Pause recovery" className="lg:col-span-2">
-        <p className="mb-3 text-sm text-muted-foreground">
-          {wired?.paused
-            ? 'Recovery is paused. Forwarded calls use your voicemail fallback — no recovery SMS.'
-            : 'Recovery is running. Pause temporarily or indefinitely.'}
-        </p>
-        {wired?.paused ? (
-          <Button type="button" onClick={() => void wired?.onResume?.()}>
-            Resume recovery
-          </Button>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {(['1 hour', 'Until tomorrow', '1 week', 'Indefinitely'] as const).map((p) => (
-              <Button key={p} variant="outline" size="sm" type="button" onClick={() => wired?.onPausePreset?.(p)}>
-                {p}
-              </Button>
-            ))}
+    <div className="flex flex-col gap-8">
+      <ConfigSection
+        title="Pause recovery"
+        description="Stop automated recovery texts. Forwarded calls can still reach voicemail."
+      >
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 flex-1 gap-3">
+            {paused ? (
+              <PauseCircle className="mt-0.5 size-5 shrink-0 text-warning" aria-hidden="true" />
+            ) : (
+              <PlayCircle className="mt-0.5 size-5 shrink-0 text-success" aria-hidden="true" />
+            )}
+            <p className="text-sm text-muted-foreground">
+              {paused
+                ? 'Recovery is paused. No recovery SMS will send until you resume.'
+                : 'Recovery is active. Pause temporarily if your team cannot respond.'}
+            </p>
           </div>
-        )}
-      </Panel>
+          {paused ? (
+            <Button type="button" className="shrink-0" onClick={() => void wired?.onResume?.()}>
+              Resume recovery
+            </Button>
+          ) : (
+            <div
+              className="flex shrink-0 flex-col gap-2 sm:items-end"
+              role="group"
+              aria-label="Pause recovery for"
+            >
+              <span className="text-xs font-medium text-muted-foreground">Pause for</span>
+              <div className="flex flex-wrap gap-1.5">
+                {PAUSE_PRESETS.map((p) => (
+                  <Button
+                    key={p}
+                    variant="secondary"
+                    size="sm"
+                    type="button"
+                    className="h-8 bg-background shadow-sm"
+                    onClick={() => wired?.onPausePreset?.(p)}
+                  >
+                    {p}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </ConfigSection>
 
-      <Panel title="Timing & follow-up" className="lg:col-span-2" bodyClassName="p-0">
-        <div className="divide-y px-5">
+      <ConfigSection
+        title="Timing & follow-up"
+        description="Delay, cooldown, and repeat-send limits apply to future recovery attempts."
+        insetClassName="p-0"
+      >
+        <div className="divide-y px-4 sm:px-5">
           <SettingRow
             title="Recovery delay"
             description="Wait before sending, in case your team calls back first"
@@ -84,7 +117,7 @@ export function TransplantMctbSetupRecoveryPage({ wired }: { wired?: MctbSetupRe
           />
           <SettingRow
             title="Max automated recovery texts"
-            description="Same caller — within the cooldown window above. Does not include Press-1 compliance texts."
+            description="Same caller within the cooldown window. Excludes Press-1 compliance texts."
             control={
               <SimpleSelect
                 label="Max automated recovery texts"
@@ -96,10 +129,10 @@ export function TransplantMctbSetupRecoveryPage({ wired }: { wired?: MctbSetupRe
             }
           />
         </div>
-        <div className="flex justify-end border-t px-5 py-4">
+        <div className="flex justify-end border-t border-border/60 px-4 py-4 sm:px-5">
           <SaveBar label="Save follow-up rules" onSave={wired?.onSave} />
         </div>
-      </Panel>
+      </ConfigSection>
     </div>
   )
 }

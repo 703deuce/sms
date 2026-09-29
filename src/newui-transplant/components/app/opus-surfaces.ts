@@ -16,3 +16,15 @@ export const OPUS_META_STRIP =
 
 /** Inset choice list inside a panel (settings rows). */
 export const OPUS_INSET_LIST = 'divide-y rounded-lg border bg-card'
+
+/** Subtle tinted block for grouped configuration (not a full card stack). */
+export const OPUS_CONFIG_INSET =
+  'rounded-xl border border-border/70 bg-muted/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]'
+
+/** System-managed / locked copy surfaces (compliance, platform-managed). */
+export const OPUS_SYSTEM_LOCK_SURFACE =
+  'rounded-lg border border-dashed border-muted-foreground/30 bg-muted/45 px-3.5 py-3'
+
+/** Compact operational status anchor (recovery running, verification). */
+export const OPUS_STATUS_ANCHOR =
+  'flex flex-wrap items-center gap-3 rounded-xl border bg-card px-4 py-3 text-sm shadow-[0_1px_2px_rgba(16,18,40,0.04)]'

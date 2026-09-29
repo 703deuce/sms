@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import type { MctbBookingLinkDto } from "@/lib/mctb/booking-links/service";
 import { bookingLinkHostname, validateBookingLinkUrl } from "@/lib/mctb/booking-links/validate-url";
-import { Panel, SettingRow } from "@/newui-transplant/components/app/kit";
+import { ConfigSection, Pill, SettingRow } from "@/newui-transplant/components/app/kit";
+import { OPUS_CONFIG_INSET } from "@/newui-transplant/components/app/opus-surfaces";
+import { cn } from "@/lib/utils";
 import { Input } from "@/newui-transplant/components/ui/input";
 import { Switch } from "@/newui-transplant/components/ui/switch";
 import { SaveBar } from "@/newui-transplant/components/app/save-bar";
@@ -107,6 +109,13 @@ export function MctbBookingLinkSection() {
 
   return (
     <div className="flex flex-col gap-4">
+      <div className={cn(OPUS_CONFIG_INSET, 'flex flex-wrap items-center gap-2 px-4 py-3 text-sm')}>
+        <span className="text-muted-foreground">Status</span>
+        <Pill tone={sendEnabled ? "success" : "neutral"}>{sendEnabled ? "Link on" : "Link off"}</Pill>
+        {sendEnabled && url.trim() ? (
+          <span className="truncate text-muted-foreground">{bookingLinkHostname(url.trim())}</span>
+        ) : null}
+      </div>
       <SettingRow
         title="Send a booking link"
         description="Transovo can text callers your existing online booking page."
@@ -137,9 +146,10 @@ export function MctbBookingLinkSection() {
               />
             </div>
           </div>
-          <Panel title="Preview" className="border-dashed">
-            <p className="text-sm text-muted-foreground">{preview}</p>
-          </Panel>
+          <div className={cn(OPUS_CONFIG_INSET, 'border-dashed bg-background/50 px-4 py-3')}>
+            <p className="text-xs font-medium text-muted-foreground">Preview in message</p>
+            <p className="mt-1 text-sm">{preview}</p>
+          </div>
         </>
       ) : null}
       {error ? <p className="text-sm text-destructive">{error}</p> : null}

@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { MCTB_WIZARD_PRIMARY_STEPS } from "@/lib/mctb/onboarding/wizard-flow";
 import { cn } from "@/lib/utils";
+import { OPUS_CARD, OPUS_CONFIG_INSET } from "@/newui-transplant/components/app/opus-surfaces";
 import { Button } from "@/newui-transplant/components/ui/button";
 
 export type WizardFooterConfig = {
@@ -71,7 +72,12 @@ export function MctbOnboardingWizardShell({
   const modal = presentation === "modal";
 
   const header = (
-    <header className={cn("shrink-0 border-b px-6 py-4", modal ? "bg-background" : "mb-6")}>
+    <header
+      className={cn(
+        "shrink-0 border-b px-6 py-4",
+        modal ? "bg-background" : cn("mb-6", OPUS_CARD, "border-b-0 px-5 py-4"),
+      )}
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-base font-semibold tracking-tight">Set up Missed Call Text Back</h1>
@@ -88,7 +94,13 @@ export function MctbOnboardingWizardShell({
   );
 
   const footerBar = footer ? (
-    <footer className="flex shrink-0 items-center justify-between gap-3 border-t bg-background px-6 py-4">
+    <footer
+      className={cn(
+        "flex shrink-0 items-center justify-between gap-3 border-t bg-background px-6 py-4",
+        !modal && OPUS_CARD,
+        !modal && "mt-0 border-t-0",
+      )}
+    >
       <div>
         {footer.back && onBack ? (
           <Button type="button" variant="outline" disabled={saving} onClick={onBack}>
@@ -163,12 +175,12 @@ export function WizardStepIntro({
   description: string;
 }) {
   return (
-    <div className="mb-6">
+    <div className={cn("mb-6 border-l-4 border-l-primary py-3 pl-4", OPUS_CONFIG_INSET)}>
       {eyebrow ? (
         <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{eyebrow}</p>
       ) : null}
       <h2 className="mt-1 text-lg font-semibold tracking-tight">{title}</h2>
-      <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+      <p className="mt-1 text-pretty text-sm text-muted-foreground">{description}</p>
     </div>
   );
 }

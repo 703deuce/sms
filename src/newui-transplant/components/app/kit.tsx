@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { ArrowDownRight, ArrowUpRight, ChevronRight, type LucideIcon } from 'lucide-react'
-import { OPUS_CARD } from '@/newui-transplant/components/app/opus-surfaces'
+import { OPUS_CARD, OPUS_CONFIG_INSET, OPUS_STATUS_ANCHOR } from '@/newui-transplant/components/app/opus-surfaces'
 import { cn } from '@/lib/utils'
 
 export function Page({ children, className }: { children: React.ReactNode; className?: string }) {
@@ -313,6 +313,64 @@ export function EmptyState({
         <p className="max-w-sm text-pretty text-sm text-muted-foreground">{description}</p>
       </div>
       {action}
+    </div>
+  )
+}
+
+/** Grouped configuration block — hierarchy without stacking full cards. */
+export function ConfigSection({
+  title,
+  description,
+  children,
+  className,
+  insetClassName,
+}: {
+  title: string
+  description?: string
+  children: React.ReactNode
+  className?: string
+  insetClassName?: string
+}) {
+  return (
+    <section className={cn('flex flex-col gap-2.5', className)}>
+      <div>
+        <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
+        {description ? (
+          <p className="mt-0.5 text-pretty text-sm text-muted-foreground">{description}</p>
+        ) : null}
+      </div>
+      <div className={cn(OPUS_CONFIG_INSET, 'p-4 sm:p-5', insetClassName)}>{children}</div>
+    </section>
+  )
+}
+
+export function OpusStatusAnchor({
+  label,
+  status,
+  tone = 'neutral',
+  children,
+}: {
+  label: string
+  status: string
+  tone?: Tone
+  children?: React.ReactNode
+}) {
+  const dot =
+    tone === 'success'
+      ? 'bg-success'
+      : tone === 'warning'
+        ? 'bg-warning'
+        : tone === 'danger'
+          ? 'bg-destructive'
+          : 'bg-muted-foreground'
+  return (
+    <div className={OPUS_STATUS_ANCHOR}>
+      <span className="font-medium text-foreground">{label}</span>
+      <span className="inline-flex items-center gap-1.5 font-medium">
+        <span className={cn('size-2 rounded-full', dot)} aria-hidden="true" />
+        {status}
+      </span>
+      {children}
     </div>
   )
 }

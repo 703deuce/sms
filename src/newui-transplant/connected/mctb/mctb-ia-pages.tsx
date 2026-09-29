@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Page, PageHeader, Panel } from "@/newui-transplant/components/app/kit";
+import { OpusStatusAnchor, Page, PageHeader, Panel } from "@/newui-transplant/components/app/kit";
 import { OpusLineTabs } from "@/newui-transplant/components/app/segmented-nav";
-import { OPUS_META_STRIP } from "@/newui-transplant/components/app/opus-surfaces";
+import { useMctbRecoveryWiring } from "@/newui-transplant/connected/mctb/setup-wiring-hooks";
 import { TextBackEditor } from "@/newui-transplant/components/mctb/text-back-editor";
 import { MctbBookingLinkSection } from "@/newui-transplant/components/mctb/mctb-booking-link-section";
 import { ConsentEditor } from "@/newui-transplant/components/mctb/consent-editor";
@@ -48,6 +48,7 @@ function useTabParam(name: string, allowed: string[], fallback: string) {
 
 export function NewUiMctbMissedCallRecoveryPage() {
   const { tab, setTab } = useTabParam("tab", ["general", "rules", "consent", "exclusions"], "general");
+  const recovery = useMctbRecoveryWiring();
   const [usageLine, setUsageLine] = useState<string | null>(null);
 
   useEffect(() => {
@@ -70,12 +71,21 @@ export function NewUiMctbMissedCallRecoveryPage() {
         title="Missed-Call Recovery"
         description="When unanswered calls should trigger recovery texts, consent, and exclusions."
       />
-      {usageLine ? (
-        <div className={`mb-4 ${OPUS_META_STRIP}`}>
-          <span className="text-muted-foreground">Usage</span>
-          <span className="font-medium tabular-nums">{usageLine}</span>
-        </div>
-      ) : null}
+      <div className="mb-4 flex flex-col gap-3">
+        <OpusStatusAnchor
+          label="Recovery"
+          status={recovery.paused ? "Paused" : "Running"}
+          tone={recovery.paused ? "warning" : "success"}
+        >
+          {usageLine ? (
+            <>
+              <span className="mx-1 hidden h-4 w-px bg-border sm:block" aria-hidden="true" />
+              <span className="text-muted-foreground">Usage</span>
+              <span className="font-medium tabular-nums">{usageLine}</span>
+            </>
+          ) : null}
+        </OpusStatusAnchor>
+      </div>
       <OpusLineTabs
         label="Missed-call recovery sections"
         value={tab}
@@ -94,15 +104,6 @@ export function NewUiMctbMissedCallRecoveryPage() {
           aria-labelledby="opus-tab-general"
           className="mt-4"
         >
-          <Panel
-            title="Recovery controls"
-            description="Unanswered calls can still reach Transovo voicemail, but recovery texts are paused while recovery is paused."
-            className="mb-4"
-          >
-            <p className="text-sm text-muted-foreground">
-              Pause, timing, cooldown, and max automated texts apply to future recovery sends only.
-            </p>
-          </Panel>
           <NewUiMctbSetupRecoveryPage />
         </div>
       ) : null}

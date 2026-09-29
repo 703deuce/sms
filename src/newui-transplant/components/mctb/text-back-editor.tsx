@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Lock } from 'lucide-react'
-import { Panel, Pill, SettingRow } from '@/newui-transplant/components/app/kit'
-import { OPUS_CARD, OPUS_META_STRIP } from '@/newui-transplant/components/app/opus-surfaces'
+import { Lock, ShieldCheck } from 'lucide-react'
+import { ConfigSection, Pill, SettingRow } from '@/newui-transplant/components/app/kit'
+import { OPUS_CARD, OPUS_META_STRIP, OPUS_SYSTEM_LOCK_SURFACE } from '@/newui-transplant/components/app/opus-surfaces'
 import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Textarea } from '@/newui-transplant/components/ui/textarea'
@@ -114,29 +114,44 @@ export function TextBackEditor({
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,7fr)_minmax(240px,3fr)] lg:items-start">
       <div className="flex flex-col gap-4">
-        <div className={OPUS_META_STRIP}>
-          <span className="text-muted-foreground">Consent mode:</span>
-          <Link href={consentHref} className="font-medium text-primary hover:underline">{consentLabel}</Link>
-          <span className="mx-1 hidden h-4 w-px bg-border sm:block" />
-          <span className="text-muted-foreground">Sender:</span>
-          <span className="font-mono text-xs">{sender}</span>
-          <Pill tone={senderReady ? 'success' : 'warning'}>{senderReady ? 'Ready' : 'Needs attention'}</Pill>
-          <Link href={manageSenderHref} className="text-sm font-medium text-primary hover:underline">Manage sender</Link>
+        <div className={cn(OPUS_META_STRIP, 'gap-x-4 gap-y-2')}>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-muted-foreground">Consent</span>
+            <Link href={consentHref} className="font-semibold text-foreground hover:text-primary hover:underline">
+              {consentLabel}
+            </Link>
+          </div>
+          <span className="hidden h-4 w-px bg-border sm:block" aria-hidden="true" />
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-muted-foreground">Sender</span>
+            <span className="font-medium">{senderMode === 'PLATFORM' ? 'Transovo Platform' : sender}</span>
+            <Pill tone={senderReady ? 'success' : 'warning'}>{senderReady ? 'Ready' : 'Needs attention'}</Pill>
+          </div>
+          <Link href={manageSenderHref} className="ml-auto text-sm font-medium text-primary hover:underline">
+            Manage sender
+          </Link>
         </div>
 
-        <Panel title="System compliance message" description="Sent first. Required and can’t be edited.">
-          <p className="flex gap-2 rounded-lg bg-muted/60 px-3 py-2.5 text-sm text-muted-foreground">
-            <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" /> {compliance}
-          </p>
-        </Panel>
+        <ConfigSection
+          title="System compliance message"
+          description="Required first message — managed by Transovo for carrier compliance."
+          insetClassName="p-0"
+        >
+          <div className={cn(OPUS_SYSTEM_LOCK_SURFACE, 'flex gap-3 border-0 bg-sidebar/5 m-1')}>
+            <ShieldCheck className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <p className="text-sm leading-relaxed text-muted-foreground">{compliance}</p>
+            <Lock className="mt-0.5 size-3.5 shrink-0 text-muted-foreground/70" aria-hidden="true" />
+          </div>
+        </ConfigSection>
 
-        <Panel
-          title={senderMode === 'PLATFORM' ? 'Missed-call message' : 'Conversation opener'}
+        <ConfigSection
+          title={senderMode === 'PLATFORM' ? 'Approved missed-call template' : 'Conversation opener'}
           description={
             senderMode === 'PLATFORM'
               ? 'Choose an approved Transovo template. Wording is platform-managed for compliance.'
               : 'Sent right after the compliance message'
           }
+          insetClassName="bg-card/80"
         >
           {senderMode === 'PLATFORM' && managedDescription ? (
             <p className="mb-2 text-xs text-muted-foreground">{managedDescription}</p>
@@ -149,7 +164,9 @@ export function TextBackEditor({
                   className={cn(
                     OPUS_CARD,
                     'flex cursor-pointer gap-3 p-3',
-                    platformTemplateId === tpl.id ? 'border-primary ring-1 ring-primary/30' : '',
+                    platformTemplateId === tpl.id
+                      ? 'border-primary bg-primary/5 ring-2 ring-primary/25'
+                      : 'opacity-90 hover:opacity-100',
                   )}
                 >
                   <input
@@ -211,7 +228,7 @@ export function TextBackEditor({
           <div className="mt-4 flex justify-end"><SaveBar onSave={onSave} /></div>
             </>
           )}
-        </Panel>
+        </ConfigSection>
       </div>
 
       <aside aria-label="Message preview" className="rounded-[2rem] border-8 border-foreground/90 bg-card p-4 shadow-lg lg:sticky lg:top-20 lg:h-fit">
