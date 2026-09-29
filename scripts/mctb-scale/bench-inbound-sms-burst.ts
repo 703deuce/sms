@@ -7,6 +7,9 @@ import { randomUUID } from "node:crypto";
 import { getPrisma } from "@/lib/db";
 import { grantWorkspaceProductFeature } from "@/lib/products/feature-entitlements";
 import { acceptMctbInboundSmsIngress } from "@/lib/mctb/messaging/inbound-sms-ingress";
+import { assertBenchDatabaseAllowed } from "./bench-guard";
+
+assertBenchDatabaseAllowed();
 
 const RATES = (process.env.MCTB_BENCH_SMS_RATES || "10,25,50")
   .split(",")

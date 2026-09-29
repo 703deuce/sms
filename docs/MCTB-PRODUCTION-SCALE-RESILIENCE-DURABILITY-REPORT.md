@@ -3,7 +3,7 @@
 **Date:** 2026-09-29  
 **Scope:** Measure existing architecture first — no Kubernetes/Kafka/microservice redesign. Voice V3 and frozen TeXML unchanged. No real high-volume Telnyx/SMS/Brevo traffic.
 
-**Functional baseline:** `npm run test:mctb-consolidated-nonhuman-matrix` — **61/61 PASS** (separate layer).
+**Functional baseline:** `npm run test:mctb-consolidated-nonhuman-matrix` — **61/61 PASS** (revalidated 2026-09-29 UTC).
 
 **Benchmark harness (safe, stubbed):** `scripts/mctb-scale/` + `bash scripts/mctb-scale/run-scale-smoke-suite.sh`
 
@@ -122,6 +122,8 @@ Inventory required per bucket/provider in Supabase storage or S3 — **operator 
 | Inbound SMS accept burst | **Harness added** | `bench-inbound-sms-burst.ts` — bounded concurrency; no Telnyx |
 | Redis memory / job projection | **Harness added** | `bench-redis-memory-probe.ts` — delayed smoke jobs; **do not FLUSH production Redis** |
 | Redis restart / delayed / idempotent wake | **PASS** (prior) | `scripts/bullmq-redis-hardening-smoke.ts`, hardening acceptance doc |
+| **Redis memory snapshot (read-only)** | **MEASURED** | 8.28M / 768M (**1.1%**), 2743 keys, `noeviction` — see `docs/MCTB-SCALE-BENCHMARK-RESULTS.json` |
+| Outbox / SMS / memory write benches | **BLOCKED on prod DB** | `bench-guard.ts` requires staging or `MCTB_BENCH_ALLOW_PRODUCTION_DB=1` |
 | Dashboard concurrent users 50–5000 | **NOT RUN** | Requires `autocannon`/k6 against staging URL + auth — not production |
 | Simulated 1000 call-event webhooks/sec | **NOT RUN** | Add stub webhook replay script on staging (future) |
 
@@ -145,6 +147,9 @@ Inventory required per bucket/provider in Supabase storage or S3 — **operator 
 | Change | Type |
 |--------|------|
 | `scripts/mctb-scale/*` benchmark harness + `run-scale-smoke-suite.sh` | Tooling |
+| `bench-guard.ts` — block accidental production Supabase bench writes | Safety |
+| `redis-stats.ts` + `host-production-redis-stats.sh` — read-only Redis envelope | Tooling |
+| `docs/MCTB-SCALE-BENCHMARK-RESULTS.json` — measured Redis snapshot | Evidence |
 | This report + copy-paste companion | Documentation |
 | No production architecture change | By design |
 
@@ -194,11 +199,11 @@ Inventory required per bucket/provider in Supabase storage or S3 — **operator 
 
 ## RATE LIMITING / BACKPRESSURE
 
-- **Telnyx webhooks:** Must not be throttled like browser abuse — verify middleware does not apply generic IP rate limits to provider webhook routes.
-- **Outbound SMS/email:** Provider 429 → retry/backoff; jobs remain in Postgres.
-- **Public forms:** Existing public booking rate-limit patterns — apply MCTB public form if implemented.
+- **Telnyx webhooks:** `src/middleware.ts` treats `/api/telnyx/**` as **public** (no session gate). There is **no** global HTTP rate limiter in middleware on those paths — legitimate Telnyx bursts are not classified as browser abuse at the edge.
+- **Outbound SMS/email:** Tenant/campaign/sender dispatch rate limits live in `src/lib/messaging/dispatch/rate-limiter.ts` (queue/backoff, not silent drop of durable Postgres jobs).
+- **Public forms:** Opt-in via `PUBLIC_BOOKING_RATE_LIMIT_ENABLED` for public booking; MCTB public request forms should follow the same pattern if extended.
 
-**Action:** Audit `middleware` / route matchers for `/api/telnyx/**` — document in follow-up if gaps found.
+**Residual risk:** Reverse proxy / WAF outside the app is not audited here — operator should confirm Traefik/Coolify has no blanket rate limit on webhook paths.
 
 ---
 
@@ -247,8 +252,10 @@ Functional matrix includes **tenant isolation** tests. Re-run under concurrent l
 2. **Off-host backup:** Provide S3/SFTP/restic destination for Redis tarballs (and any future Postgres exports if desired).
 3. **Stop/remove** container `compassionate_lalande` if orphan.
 4. **Deploy** latest `master` (functional + scale harness) when ready — single deploy.
-5. **Run benchmarks on Coolify host** (or staging): `bash scripts/mctb-scale/run-scale-smoke-suite.sh` — paste JSON into `docs/MCTB-SCALE-BENCHMARK-RESULTS.json`.
-6. **Disk:** Keep root <80%; prune **disposable** Docker build cache only.
+5. **Run write benchmarks on staging DB** (not production Supabase): `bash scripts/mctb-scale/run-scale-smoke-suite.sh` — merge JSON into `docs/MCTB-SCALE-BENCHMARK-RESULTS.json`.
+6. **Redis read-only check anytime:** `bash scripts/mctb-scale/host-production-redis-stats.sh`.
+7. **Deploy** `master` so production image includes scale harness (`commitSha` was `ad7ca4aa` on 2026-09-29 — behind `master`).
+8. **Disk:** Keep root <80%; prune **disposable** Docker build cache only.
 
 ---
 
