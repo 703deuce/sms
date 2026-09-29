@@ -1,6 +1,6 @@
 {
   "name": "703deuce/sms",
-  "install": "npm ci",
+  "install": "npm ci && bash scripts/cloud-agent/bootstrap-on-start.sh",
   "start": "bash scripts/cloud-agent/bootstrap-on-start.sh",
   "terminals": [
     {
