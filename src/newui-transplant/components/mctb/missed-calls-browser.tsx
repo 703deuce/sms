@@ -4,8 +4,6 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { MessageSquare, MoreHorizontal, Phone, PhoneMissed, Search, X } from 'lucide-react'
 import { Button } from '@/newui-transplant/components/ui/button'
-import { Input } from '@/newui-transplant/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/newui-transplant/components/ui/select'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,41 +12,35 @@ import {
   DropdownMenuTrigger,
 } from '@/newui-transplant/components/ui/dropdown-menu'
 import { EmptyState, Initials } from '@/newui-transplant/components/app/kit'
+import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
+import { td, th } from '@/newui-transplant/components/app/opus-tables'
 import { RecoveryPill } from '@/newui-transplant/components/app/status'
 import type { MctbMissedCallsListWiring } from '@/newui-transplant/mirror/routes/mctb/missed-calls/page'
 import type { MissedCall } from '@/newui-transplant/lib/view-models'
+import { cn } from '@/lib/utils'
 
-const opts = (values: string[]) => values.map((v) => ({ label: v, value: v }))
-const RECOVERY = opts(['All', 'Needs attention', 'Replied', 'Waiting for consent', 'Suppressed', 'Failed'])
-const DATES = opts(['Today', 'Last 7 days', 'Last 30 days', 'All time'])
-const TRIGGERS = opts(['All', 'No answer', 'Busy', 'Rejected', 'Unreachable', 'Voicemail'])
-const SORTS = opts(['Newest first', 'Oldest first'])
-
-function FilterSelect({
-  label,
-  value,
-  onChange,
-  items,
-}: {
-  label: string
-  value: string
-  onChange: (v: string) => void
-  items: { label: string; value: string }[]
-}) {
-  return (
-    <Select value={value} onValueChange={(v) => v && onChange(v as string)} items={items}>
-      <SelectTrigger aria-label={label} className="min-w-32">
-        <span className="text-muted-foreground">{label}:</span>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {items.map((i) => (
-          <SelectItem key={i.value} value={i.value}>{i.label}</SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  )
-}
+const RECOVERY = [
+  { value: 'All', label: 'All outcomes' },
+  { value: 'Needs attention', label: 'Needs attention' },
+  { value: 'Replied', label: 'Replied' },
+  { value: 'Waiting for consent', label: 'Waiting for consent' },
+  { value: 'Suppressed', label: 'Suppressed' },
+  { value: 'Failed', label: 'Failed' },
+]
+const DATES = [
+  { value: 'Today', label: 'Today' },
+  { value: 'Last 7 days', label: 'Last 7 days' },
+  { value: 'Last 30 days', label: 'Last 30 days' },
+  { value: 'All time', label: 'All time' },
+]
+const TRIGGERS = [
+  { value: 'All', label: 'All triggers' },
+  ...['No answer', 'Busy', 'Rejected', 'Unreachable', 'Voicemail'].map((t) => ({ value: t, label: t })),
+]
+const SORTS = [
+  { value: 'Newest first', label: 'Newest first' },
+  { value: 'Oldest first', label: 'Oldest first' },
+]
 
 export function MissedCallsBrowser({
   missedCalls,
@@ -107,73 +99,79 @@ export function MissedCallsBrowser({
   const total = wiring?.total ?? missedCalls.length
 
   return (
-    <div className="rounded-xl border bg-card shadow-xs">
-      <div className="flex flex-wrap items-center gap-2 border-b px-5 py-3">
-        <div className="relative w-full sm:w-64">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-          <Input
+    <div className="rounded-xl border bg-card shadow-[0_1px_2px_rgba(16,18,40,0.04)]">
+      <div className="flex flex-col gap-3 border-b p-4 lg:flex-row lg:items-center">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <label htmlFor="missed-search" className="sr-only">Search caller or number</label>
+          <input
+            id="missed-search"
+            type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search caller or number"
-            aria-label="Search caller or number"
-            className="pl-8"
+            className="h-9 w-full rounded-lg border bg-background pr-3 pl-9 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
           />
         </div>
-        <FilterSelect label="Recovery" value={recovery} onChange={setRecovery} items={RECOVERY} />
-        <FilterSelect label="Date" value={date} onChange={setDate} items={DATES} />
-        <FilterSelect label="Trigger" value={trigger} onChange={setTrigger} items={TRIGGERS} />
-        <FilterSelect label="Sort" value={sort} onChange={setSort} items={SORTS} />
-        {dirty ? (
-          <Button variant="ghost" size="sm" onClick={clear}>
-            <X /> Clear filters
-          </Button>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          <SimpleSelect label="Recovery outcome" options={RECOVERY} value={recovery} onChange={setRecovery} className="w-44" />
+          <SimpleSelect label="Date range" options={DATES} value={date} onChange={setDate} className="w-36" />
+          <SimpleSelect label="Trigger" options={TRIGGERS} value={trigger} onChange={setTrigger} className="w-36" />
+          <SimpleSelect label="Sort" options={SORTS} value={sort} onChange={setSort} className="w-36" />
+          {dirty ? (
+            <Button variant="ghost" size="sm" onClick={clear}>
+              <X aria-hidden="true" /> Clear
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       {rows.length ? (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[820px] text-sm">
-            <thead>
-              <tr className="border-b text-left text-xs text-muted-foreground">
-                <th scope="col" className="px-5 py-2.5 font-medium">Caller</th>
-                <th scope="col" className="px-3 py-2.5 font-medium">Missed</th>
-                <th scope="col" className="px-3 py-2.5 font-medium">Trigger</th>
-                <th scope="col" className="px-3 py-2.5 font-medium">Recovery</th>
-                <th scope="col" className="px-3 py-2.5 font-medium">Reply</th>
-                <th scope="col" className="px-3 py-2.5 font-medium">Business line</th>
-                <th scope="col" className="w-12 px-3 py-2.5"><span className="sr-only">Actions</span></th>
+          <table className="w-full min-w-[820px]">
+            <thead className="border-b bg-muted/40">
+              <tr>
+                <th scope="col" className={th}>Caller</th>
+                <th scope="col" className={th}>Missed</th>
+                <th scope="col" className={th}>Trigger</th>
+                <th scope="col" className={th}>Recovery</th>
+                <th scope="col" className={th}>Reply</th>
+                <th scope="col" className={th}>Business line</th>
+                <th scope="col" className={th}>
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {rows.map((m) => (
-                <tr key={m.id} className="hover:bg-muted/50">
-                  <td className="px-5 py-3">
-                    <Link href={`/mctb/missed-calls/${m.id}`} className="flex items-center gap-3">
+                <tr key={m.id} className="group relative hover:bg-muted/40">
+                  <td className={td}>
+                    <Link href={`/mctb/missed-calls/${m.id}`} className="flex items-center gap-3 after:absolute after:inset-0">
                       <Initials name={m.caller} />
-                      <span className="min-w-0">
-                        <span className="block font-medium hover:underline">{m.caller}</span>
-                        <span className="block font-mono text-xs text-muted-foreground">{m.phone}</span>
+                      <span className="flex min-w-0 flex-col">
+                        <span className="font-medium">{m.caller}</span>
+                        <span className="font-mono text-xs text-muted-foreground tabular-nums">{m.phone}</span>
                       </span>
                     </Link>
                   </td>
-                  <td className="px-3 py-3 whitespace-nowrap text-muted-foreground">{m.missed}</td>
-                  <td className="px-3 py-3">{m.trigger}</td>
-                  <td className="px-3 py-3"><RecoveryPill status={m.recovery} /></td>
-                  <td className="max-w-[200px] truncate px-3 py-3 text-muted-foreground">{m.reply ?? '—'}</td>
-                  <td className="px-3 py-3 text-muted-foreground">{m.line}</td>
-                  <td className="px-3 py-3">
+                  <td className={cn(td, 'text-muted-foreground')}>{m.missed}</td>
+                  <td className={td}>{m.trigger}</td>
+                  <td className={td}><RecoveryPill status={m.recovery} /></td>
+                  <td className={cn(td, 'max-w-64 truncate text-muted-foreground')}>{m.reply ?? '—'}</td>
+                  <td className={cn(td, 'text-muted-foreground')}>{m.line}</td>
+                  <td className={cn(td, 'w-8 text-right')}>
                     <DropdownMenu>
-                      <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={`Actions for ${m.caller}`} />}>
-                        <MoreHorizontal />
+                      <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={`Actions for ${m.caller}`} className="relative z-10" />}>
+                        <MoreHorizontal aria-hidden="true" />
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem render={<Link href={`/mctb/missed-calls/${m.id}`} />}>Open</DropdownMenuItem>
                         <DropdownMenuItem render={<a href={`tel:${m.phone}`} />}>
-                          <Phone /> Call back
+                          <Phone aria-hidden="true" /> Call back
                         </DropdownMenuItem>
                         {m.conversationId ? (
                           <DropdownMenuItem render={<Link href={`/mctb/conversations?conversation=${m.conversationId}`} />}>
-                            <MessageSquare /> Open conversation
+                            <MessageSquare aria-hidden="true" /> Open conversation
                           </DropdownMenuItem>
                         ) : null}
                         <DropdownMenuSeparator />
@@ -197,18 +195,17 @@ export function MissedCallsBrowser({
         <EmptyState
           icon={PhoneMissed}
           title="No missed calls match"
-          description="Adjust the filters or clear them to see all missed calls."
+          description="Try clearing filters or widening the date range."
           action={<Button variant="outline" size="sm" onClick={clear}>Clear filters</Button>}
         />
       )}
 
-      <div className="flex items-center justify-between border-t px-5 py-3 text-xs text-muted-foreground">
+      <div className="flex items-center justify-between border-t px-4 py-3 text-sm text-muted-foreground">
         <span>
-          {rows.length} of {total} · {date}
+          Showing <span className="font-medium text-foreground tabular-nums">{rows.length}</span> of {total}
+          {date !== 'Last 7 days' ? ` · ${date}` : ''}
         </span>
-        <span>
-          Page {page} of {pageCount}
-        </span>
+        <span className="tabular-nums">Page {page} of {pageCount}</span>
       </div>
     </div>
   )

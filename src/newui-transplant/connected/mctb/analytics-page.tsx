@@ -6,7 +6,7 @@ import { Page, PageHeader, Panel, Stat, TextLink } from "@/newui-transplant/comp
 import { TrendArea } from "@/newui-transplant/components/app/charts";
 import { mergeDailyTrends } from "@/lib/newui-transplant/adapters/chart-series";
 import type { MctbAnalyticsRange } from "@/lib/mctb/analytics";
-import { cn } from "@/lib/utils";
+import { Segmented } from "@/newui-transplant/components/app/segmented-nav";
 
 type AnalyticsPayload = Awaited<ReturnType<typeof import("@/lib/mctb/analytics").loadMctbAnalytics>>;
 
@@ -37,22 +37,13 @@ export function NewUiMctbAnalyticsPage({ initialData, initialRange }: { initialD
         title="Analytics"
         description="Recovery performance for missed calls."
         actions={
-          <div role="group" aria-label="Date range" className="inline-flex rounded-lg border bg-card p-0.5">
-            {(["7d", "30d", "90d"] as MctbAnalyticsRange[]).map((r) => (
-              <button
-                key={r}
-                type="button"
-                aria-pressed={range === r}
-                onClick={() => refresh(r)}
-                className={cn(
-                  "rounded-md px-3 py-1 text-xs font-medium transition-colors",
-                  range === r ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {r === "7d" ? "7 days" : r === "30d" ? "30 days" : "90 days"}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            label="Date range"
+            options={["7d", "30d", "90d"]}
+            value={range}
+            onChange={(r) => refresh(r as MctbAnalyticsRange)}
+            formatLabel={(r) => (r === "7d" ? "7 days" : r === "30d" ? "30 days" : "90 days")}
+          />
         }
       />
 

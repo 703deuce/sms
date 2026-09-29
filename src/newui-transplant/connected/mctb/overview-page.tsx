@@ -24,7 +24,7 @@ import {
   Stat,
   TextLink,
 } from "@/newui-transplant/components/app/kit";
-import { RecoveryPill } from "@/newui-transplant/components/app/status";
+import { MissedCallsCompactTable } from "@/newui-transplant/components/app/opus-tables";
 import { mapMctbOverviewRecentMissedCalls } from "@/lib/newui-transplant/adapters/mctb-overview";
 import type { MctbOverviewPayload } from "@/lib/mctb/overview-types";
 import type { MctbCapabilities } from "@/lib/mctb/capabilities";
@@ -178,32 +178,7 @@ export function NewUiMctbOverviewPage({ data }: { data: MctbOverviewPayload }) {
           className="lg:col-span-3"
           bodyClassName="p-0"
         >
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[520px] text-sm">
-              <thead>
-                <tr className="border-b text-left text-xs text-muted-foreground">
-                  <th scope="col" className="px-5 py-2.5 font-medium">Caller</th>
-                  <th scope="col" className="px-3 py-2.5 font-medium">Missed</th>
-                  <th scope="col" className="px-3 py-2.5 font-medium">Recovery</th>
-                  <th scope="col" className="px-3 py-2.5 font-medium">Reply</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {recentMissed.slice(0, 5).map((m) => (
-                  <tr key={m.id} className="relative hover:bg-muted/50">
-                    <td className="px-5 py-3">
-                      <Link href={`/mctb/missed-calls/${m.id}`} className="font-medium after:absolute after:inset-0">
-                        {m.caller}
-                      </Link>
-                    </td>
-                    <td className="px-3 py-3 whitespace-nowrap text-muted-foreground">{m.missed}</td>
-                    <td className="px-3 py-3"><RecoveryPill status={m.recovery} /></td>
-                    <td className="max-w-[180px] truncate px-3 py-3 text-muted-foreground">{m.reply ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <MissedCallsCompactTable rows={recentMissed.slice(0, 5)} />
         </Panel>
 
         <Panel

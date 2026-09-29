@@ -1,9 +1,12 @@
+import Link from 'next/link'
+import { Sparkles } from 'lucide-react'
 import { FieldRow, Page, PageHeader, Panel, Rows, TextLink } from '@/newui-transplant/components/app/kit'
 import { ButtonLink } from '@/newui-transplant/components/app/button-link'
 import { Switch } from '@/newui-transplant/components/ui/switch'
 import { Input } from '@/newui-transplant/components/ui/input'
 import { Label } from '@/newui-transplant/components/ui/label'
 import { SaveBar } from '@/newui-transplant/components/app/save-bar'
+import { cn } from '@/lib/utils'
 import { BUSINESS } from '@/newui-transplant/lib/sandbox-data'
 import type { AiRecoverySimplifiedField } from '@/lib/mctb/ai-recovery/simplified-fields'
 import { formatAiRecoverySenderDescription } from '@/lib/mctb/ai-recovery/sender-copy'
@@ -69,24 +72,32 @@ export function TransplantMctbAiRecoveryPage({ wired }: { wired?: MctbAiRecovery
         description="Let AI continue the text conversation after a missed call, collect details, and share your booking link."
         actions={<SaveBar onSave={wired?.onSave} />}
       />
-      <div className="grid gap-4 lg:grid-cols-3">
+      <section className="relative overflow-hidden rounded-xl border bg-sidebar p-6 text-sidebar-foreground">
+        <div className="pointer-events-none absolute -bottom-24 -left-10 size-72 rounded-full bg-[oklch(0.6_0.2_280)] opacity-25 blur-3xl" aria-hidden="true" />
+        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-sidebar-primary/25 text-[oklch(0.85_0.1_277)]">
+            <Sparkles className="size-5" aria-hidden="true" />
+          </span>
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <p className="font-semibold">AI Recovery</p>
+            <p className="max-w-xl text-pretty text-sm text-sidebar-foreground/70">{senderDescription}</p>
+            <p className="text-sm text-sidebar-foreground/70">
+              Replies stop when a teammate responds in the{' '}
+              <Link href="/mctb/conversations" className="underline underline-offset-4">Inbox</Link> or the customer opts out. Track outcomes on{' '}
+              <Link href="/mctb/missed-calls" className="underline underline-offset-4">Missed Calls</Link>.
+            </p>
+          </div>
+          <Switch
+            checked={enabled}
+            onCheckedChange={(v) => wired?.onEnabledChange?.(Boolean(v))}
+            aria-label="Enable AI Recovery"
+            className="shrink-0"
+          />
+        </div>
+      </section>
+
+      <div className={cn('mt-4 grid gap-4 lg:grid-cols-3', !enabled && 'pointer-events-none opacity-50')} aria-disabled={!enabled}>
         <div className="flex flex-col gap-4 lg:col-span-2">
-          <Panel>
-            <FieldRow
-              label="AI Recovery"
-              description={senderDescription}
-            >
-              <Switch
-                checked={enabled}
-                onCheckedChange={(v) => wired?.onEnabledChange?.(Boolean(v))}
-                aria-label="Enable AI Recovery"
-              />
-            </FieldRow>
-            <div className="mt-4 flex gap-4 border-t pt-4">
-              <TextLink href="/mctb/conversations">Open conversations</TextLink>
-              <TextLink href="/mctb/missed-calls">View Missed Calls</TextLink>
-            </div>
-          </Panel>
 
           <Panel title="Information to collect" description="AI asks only for what’s enabled, one question at a time">
             <div className="divide-y">

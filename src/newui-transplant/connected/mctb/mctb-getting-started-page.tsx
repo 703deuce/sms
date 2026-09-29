@@ -8,6 +8,7 @@ import {
   PageHeader,
   Panel,
   Pill,
+  SetupProgressBar,
   TextLink,
 } from "@/newui-transplant/components/app/kit";
 import { Button } from "@/newui-transplant/components/ui/button";
@@ -106,9 +107,7 @@ export function MctbGettingStartedPage() {
       >
         {!data.operationalReady ? (
           <>
-            <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-              <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
-            </div>
+            <SetupProgressBar value={data.essentialsComplete} max={data.essentialsTotal} />
             {data.nextEssentialTitle ? (
               <p className="text-sm text-muted-foreground">
                 Next: <span className="font-medium text-foreground">{data.nextEssentialTitle}</span>

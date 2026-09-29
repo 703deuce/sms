@@ -50,5 +50,12 @@ assert.match(globals, /--color-chart-1: var\(--chart-1\)/);
 assert.match(kit, /FeatureEmphasisStrip/);
 assert.match(kit, /Callout/);
 assert.match(kit, /'info'/);
+assert.match(kit, /SetupProgressBar/);
+
+const tables = readFileSync(join(root, "src/newui-transplant/components/app/opus-tables.tsx"), "utf8");
+const simpleSelect = readFileSync(join(root, "src/newui-transplant/components/app/simple-select.tsx"), "utf8");
+assert.match(tables, /MissedCallsCompactTable/);
+assert.match(tables, /bg-muted\/40/);
+assert.match(simpleSelect, /SimpleSelect/);
 
 console.log("test-opus-visual-token-parity: PASS");
