@@ -19,6 +19,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
   SidebarRail,
+  SidebarCollapseButton,
 } from '@/newui-transplant/components/ui/sidebar'
 import {
   isVoiceProductCustomerVisible,
@@ -68,21 +69,30 @@ export function AppSidebar({ userName }: { userName?: string }) {
   const searchParams = useSearchParams()
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="gap-2 px-3 pb-1 pt-3">
-        <Link href={mctbLaunchCustomerHome()} className="flex items-center gap-2.5 px-1">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-            <PhoneCall className="size-4" aria-hidden="true" />
-          </span>
-          <span className="text-[15px] font-semibold tracking-tight text-sidebar-accent-foreground group-data-[collapsible=icon]:hidden">
-            Transovo
-          </span>
-        </Link>
+      <SidebarHeader className="gap-1 px-2 pb-1 pt-2.5">
+        <div className="flex items-center gap-1 group-data-[collapsible=icon]:justify-center">
+          <Link
+            href={mctbLaunchCustomerHome()}
+            className="flex min-w-0 flex-1 items-center gap-2 px-0.5 group-data-[collapsible=icon]:flex-none"
+          >
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+              <PhoneCall className="size-4" aria-hidden="true" />
+            </span>
+            <span className="truncate text-[15px] font-semibold tracking-tight text-sidebar-accent-foreground group-data-[collapsible=icon]:hidden">
+              Transovo
+            </span>
+          </Link>
+          <SidebarCollapseButton className="group-data-[collapsible=icon]:hidden" />
+        </div>
+        <div className="hidden justify-center px-1 pt-1 group-data-[collapsible=icon]:flex">
+          <SidebarCollapseButton />
+        </div>
       </SidebarHeader>
 
       <SidebarContent className="pb-2 pt-0">
         {resolveCustomerNavSections().map((section) => (
-          <SidebarGroup key={section.label} className="px-2 py-0.5">
-            <SidebarGroupLabel className="px-2 pb-0.5 pt-1 text-[10px] font-medium uppercase tracking-wider text-sidebar-foreground/50">
+          <SidebarGroup key={section.label} className="px-1.5 py-0.5">
+            <SidebarGroupLabel className="px-1.5 pb-0.5 pt-1 text-[10px] font-medium uppercase tracking-wider text-sidebar-foreground/50">
               {section.label}
             </SidebarGroupLabel>
             <SidebarGroupContent>

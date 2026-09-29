@@ -23,14 +23,40 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/newui-transplant/components/ui/tooltip"
-import { PanelLeftIcon } from "lucide-react"
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react"
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
+const SIDEBAR_LOCAL_STORAGE_KEY = "transovo.sidebarCollapsed"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
-const SIDEBAR_WIDTH = "16rem"
-const SIDEBAR_WIDTH_MOBILE = "18rem"
+/** Expanded rail width — was 16rem (256px); narrowed ~16% for label breathing room without shrinking type. */
+export const SIDEBAR_WIDTH_EXPANDED = "13.5rem"
+const SIDEBAR_WIDTH = SIDEBAR_WIDTH_EXPANDED
+const SIDEBAR_WIDTH_MOBILE = "17rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
+
+function readInitialSidebarOpen(): boolean {
+  if (typeof document === "undefined") return true
+  try {
+    const collapsed = window.localStorage.getItem(SIDEBAR_LOCAL_STORAGE_KEY)
+    if (collapsed === "1") return false
+    if (collapsed === "0") return true
+  } catch {
+    // ignore
+  }
+  const match = document.cookie.match(/(?:^|;\s*)sidebar_state=([^;]+)/)
+  if (match) return match[1] === "true"
+  return true
+}
+
+function persistSidebarOpen(open: boolean) {
+  try {
+    window.localStorage.setItem(SIDEBAR_LOCAL_STORAGE_KEY, open ? "0" : "1")
+  } catch {
+    // ignore
+  }
+  document.cookie = `${SIDEBAR_COOKIE_NAME}=${open}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
+}
 
 type SidebarContextProps = {
   state: "expanded" | "collapsed"
@@ -71,7 +97,7 @@ function SidebarProvider({
 
   // This is the internal state of the sidebar.
   // We use openProp and setOpenProp for control from outside the component.
-  const [_open, _setOpen] = React.useState(defaultOpen)
+  const [_open, _setOpen] = React.useState(() => readInitialSidebarOpen())
   const open = openProp ?? _open
   const setOpen = React.useCallback(
     (value: boolean | ((value: boolean) => boolean)) => {
@@ -82,8 +108,7 @@ function SidebarProvider({
         _setOpen(openState)
       }
 
-      // This sets the cookie to keep the sidebar state.
-      document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
+      persistSidebarOpen(openState)
     },
     [setOpenProp, open]
   )
@@ -256,38 +281,76 @@ function SidebarTrigger({
   onClick,
   ...props
 }: React.ComponentProps<typeof Button>) {
-  const { toggleSidebar } = useSidebar()
+  const { toggleSidebar, state } = useSidebar()
+  const expanded = state === "expanded"
+  const label = expanded ? "Collapse sidebar" : "Expand sidebar"
+  const Icon = expanded ? PanelLeftClose : PanelLeftOpen
 
   return (
-    <Button
-      data-sidebar="trigger"
-      data-slot="sidebar-trigger"
-      variant="ghost"
-      size="icon-sm"
-      className={cn(className)}
-      onClick={(event) => {
-        onClick?.(event)
-        toggleSidebar()
-      }}
-      {...props}
-    >
-      <PanelLeftIcon />
-      <span className="sr-only">Toggle Sidebar</span>
-    </Button>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            data-sidebar="trigger"
+            data-slot="sidebar-trigger"
+            variant="ghost"
+            size="icon-sm"
+            className={cn(className)}
+            onClick={(event) => {
+              onClick?.(event)
+              toggleSidebar()
+            }}
+            aria-label={label}
+            {...props}
+          >
+            <Icon className="size-4" aria-hidden="true" />
+          </Button>
+        }
+      />
+      <TooltipContent side="bottom" align="start">{label}</TooltipContent>
+    </Tooltip>
+  )
+}
+
+function SidebarCollapseButton({ className }: { className?: string }) {
+  const { toggleSidebar, state } = useSidebar()
+  const expanded = state === "expanded"
+  const label = expanded ? "Collapse sidebar" : "Expand sidebar"
+  const Icon = expanded ? PanelLeftClose : PanelLeftOpen
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className={cn("shrink-0 text-sidebar-foreground/70", className)}
+            onClick={() => toggleSidebar()}
+            aria-label={label}
+          >
+            <Icon className="size-4" aria-hidden="true" />
+          </Button>
+        }
+      />
+      <TooltipContent side="right" align="center">{label}</TooltipContent>
+    </Tooltip>
   )
 }
 
 function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
-  const { toggleSidebar } = useSidebar()
+  const { toggleSidebar, state } = useSidebar()
+  const label = state === "expanded" ? "Collapse sidebar" : "Expand sidebar"
 
   return (
     <button
       data-sidebar="rail"
       data-slot="sidebar-rail"
-      aria-label="Toggle Sidebar"
+      aria-label={label}
       tabIndex={-1}
       onClick={toggleSidebar}
-      title="Toggle Sidebar"
+      title={label}
       className={cn(
         "absolute inset-y-0 z-20 hidden w-4 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:start-1/2 after:w-[2px] hover:after:bg-sidebar-border sm:flex ltr:-translate-x-1/2 rtl:-translate-x-1/2",
         "in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize",
@@ -475,7 +538,7 @@ function SidebarMenuItem({ className, ...props }: React.ComponentProps<"li">) {
 }
 
 const sidebarMenuButtonVariants = cva(
-  "peer/menu-button group/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-open:hover:bg-sidebar-accent data-open:hover:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-accent-foreground [&_svg]:size-4 [&_svg]:shrink-0 [&>span:last-child]:truncate",
+  "peer/menu-button group/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md px-2 py-2 text-left text-sm ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-open:hover:bg-sidebar-accent data-open:hover:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-accent-foreground [&_svg]:size-4 [&_svg]:shrink-0 [&>span:last-child]:truncate",
   {
     variants: {
       variant: {
@@ -718,6 +781,7 @@ export {
   SidebarProvider,
   SidebarRail,
   SidebarSeparator,
+  SidebarCollapseButton,
   SidebarTrigger,
   useSidebar,
 }

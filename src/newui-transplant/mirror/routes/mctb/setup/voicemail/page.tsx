@@ -40,7 +40,8 @@ export function TransplantMctbSetupVoicemailPage({ wired }: { wired?: MctbSetupV
           onUsePlatformDefault={wired.onUsePlatformDefaultGreeting}
         />
       ) : null}
-      <Panel title="After a voicemail">
+      <Panel title="After a voicemail" bodyClassName="p-0">
+        <div className="px-5">
         <SettingRow
           title="Send recovery text"
           description="Text the caller after they leave a message"
@@ -55,8 +56,10 @@ export function TransplantMctbSetupVoicemailPage({ wired }: { wired?: MctbSetupV
             />
           }
         />
+        </div>
       </Panel>
-      <Panel title="Transcription">
+      <Panel title="Transcription" bodyClassName="p-0">
+        <div className="px-5">
         <SettingRow
           title="Transcribe voicemail"
           description="Adds a transcript and AI summary"
@@ -70,6 +73,7 @@ export function TransplantMctbSetupVoicemailPage({ wired }: { wired?: MctbSetupV
             />
           }
         />
+        </div>
       </Panel>
     </div>
   )

@@ -27,12 +27,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/newui-transplant/components/ui/dialog";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/newui-transplant/components/ui/tabs";
 
 function useTabParam(name: string, allowed: string[], fallback: string) {
   const searchParams = useSearchParams();
@@ -219,23 +213,44 @@ export function NewUiMctbVoicemailCombinedPage({ numberId }: { numberId?: string
 
   return (
     <Page>
-      <PageHeader title="Voicemail" description="Listen to messages and manage your greeting." />
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList
-          variant="line"
-          className="max-w-full w-full justify-start overflow-x-auto"
-          aria-label="Voicemail sections"
+      <PageHeader
+        title="Voicemail"
+        description="Listen to messages and manage your greeting."
+        actions={
+          <ButtonLink href={MCTB_ROUTES.setupVoicemail} variant="outline" size="sm">
+            Voicemail settings
+          </ButtonLink>
+        }
+      />
+      <OpusLineTabs
+        label="Voicemail sections"
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          { value: "messages", label: "Messages" },
+          { value: "greeting", label: "Greeting" },
+        ]}
+      />
+      {tab === "messages" ? (
+        <div
+          id="opus-tabpanel-messages"
+          role="tabpanel"
+          aria-labelledby="opus-tab-messages"
+          className="mt-4"
         >
-          <TabsTrigger value="messages">Messages</TabsTrigger>
-          <TabsTrigger value="greeting">Greeting</TabsTrigger>
-        </TabsList>
-        <TabsContent value="messages" className="mt-4">
           <NewUiMctbVoicemailMessagesPanel numberId={numberId} />
-        </TabsContent>
-        <TabsContent value="greeting" className="mt-4">
+        </div>
+      ) : null}
+      {tab === "greeting" ? (
+        <div
+          id="opus-tabpanel-greeting"
+          role="tabpanel"
+          aria-labelledby="opus-tab-greeting"
+          className="mt-4"
+        >
           <NewUiMctbVoicemailGreetingPanel />
-        </TabsContent>
-      </Tabs>
+        </div>
+      ) : null}
     </Page>
   );
 }

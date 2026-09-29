@@ -7,7 +7,7 @@ import { Button } from '@/newui-transplant/components/ui/button'
 import { EmptyState, Initials } from '@/newui-transplant/components/app/kit'
 import { ButtonLink } from '@/newui-transplant/components/app/button-link'
 import type { Voicemail } from '@/newui-transplant/lib/view-models'
-import { OPUS_CARD, OPUS_SEARCH_INPUT } from '@/newui-transplant/components/app/opus-surfaces'
+import { OPUS_CARD, OPUS_INSET_LIST, OPUS_SEARCH_INPUT } from '@/newui-transplant/components/app/opus-surfaces'
 import { cn } from '@/lib/utils'
 
 export function VoicemailBrowser({
@@ -57,7 +57,7 @@ export function VoicemailBrowser({
             />
           </div>
         </div>
-        <ul className="max-h-[520px] divide-y overflow-y-auto">
+        <ul className={cn('max-h-[min(520px,60vh)] overflow-y-auto', OPUS_INSET_LIST, 'rounded-none border-0 border-t')}>
           {list.map((v) => (
             <li key={v.id}>
               <button
@@ -125,13 +125,15 @@ export function VoicemailBrowser({
             />
           </div>
 
-          <div className="rounded-lg bg-accent/50 p-4">
-            <h3 className="flex items-center gap-1.5 text-xs font-medium text-accent-foreground">
+          <section className="flex flex-col gap-2 rounded-xl bg-accent/60 p-4">
+            <h3 className="flex items-center gap-1.5 text-xs font-semibold text-accent-foreground">
               <Sparkles className="size-3.5" aria-hidden="true" /> AI summary
             </h3>
-            <p className="mt-1.5 text-pretty text-sm">{selected.summary}</p>
-            <p className="mt-2 text-[11px] text-muted-foreground">Generated from the recording and may contain mistakes.</p>
-          </div>
+            <p className="text-pretty text-sm">{selected.summary}</p>
+            <p className="text-[11px] text-muted-foreground">
+              Generated from the transcript. Review the recording before acting.
+            </p>
+          </section>
 
           <div>
             <h3 className="mb-2 text-xs font-medium text-muted-foreground">Transcript</h3>

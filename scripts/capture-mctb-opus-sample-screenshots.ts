@@ -16,6 +16,7 @@ const ROUTES: Array<{ name: string; path: string }> = [
   { name: "mctb_opus_text_back_ia", path: "/mctb/text-back" },
   { name: "mctb_opus_notifications", path: "/mctb/notifications" },
   { name: "mctb_opus_phone", path: "/mctb/phone" },
+  { name: "mctb_opus_voicemail", path: "/mctb/voicemail" },
   { name: "mctb_opus_setup_overview", path: "/mctb/setup" },
   { name: "mctb_opus_text_back", path: "/mctb/setup/text-back" },
   { name: "mctb_opus_consent", path: "/mctb/setup/consent" },
@@ -69,6 +70,12 @@ async function waitReady(page: import("playwright").Page, path: string) {
   } else if (path === "/mctb/notifications") {
     await page
       .getByRole("heading", { name: /notifications/i })
+      .first()
+      .waitFor({ state: "visible", timeout: 60000 })
+      .catch(() => undefined);
+  } else if (path === "/mctb/voicemail") {
+    await page
+      .getByRole("heading", { name: /^voicemail$/i })
       .first()
       .waitFor({ state: "visible", timeout: 60000 })
       .catch(() => undefined);
