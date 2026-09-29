@@ -4,7 +4,7 @@ import { getPrisma } from "@/lib/db";
 import { updateMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { saveMissedCallTextBack } from "@/lib/solutions/missed-call-text-back/save";
 import { getDemoStatus } from "@/lib/mctb/onboarding/demo";
-import { getLiveTestStatus } from "@/lib/mctb/onboarding/live-test";
+import { getLiveTestStatus, startLiveTestSession } from "@/lib/mctb/onboarding/live-test";
 import {
   defaultMctbOnboardingState,
   isOnboardingComplete,
@@ -257,8 +257,12 @@ export async function POST(req: Request) {
         industry: body.industry || state.industry,
       });
       if (body.businessNumberE164) {
+        const { persistMctbWorkspaceBusinessLineE164 } = await import(
+          "@/lib/mctb/tenant-production-binding"
+        );
+        await persistMctbWorkspaceBusinessLineE164(auth.workspaceId, body.businessNumberE164);
+        state = await loadMctbOnboardingState(auth.workspaceId);
         state = await saveMctbOnboardingState(auth.workspaceId, {
-          businessNumberE164: body.businessNumberE164,
           forwardingCarrier: body.forwardingCarrier || state.forwardingCarrier,
         });
       }
@@ -317,11 +321,29 @@ export async function POST(req: Request) {
     }
 
     if (body.action === "complete_connect_phone") {
+      const lineToPersist = body.businessNumberE164?.trim() || state.businessNumberE164?.trim();
+      if (lineToPersist) {
+        const { persistMctbWorkspaceBusinessLineE164 } = await import(
+          "@/lib/mctb/tenant-production-binding"
+        );
+        await persistMctbWorkspaceBusinessLineE164(auth.workspaceId, lineToPersist);
+      }
+      state = await loadMctbOnboardingState(auth.workspaceId);
+      try {
+        await startForwardingVerificationTest(auth.workspaceId);
+      } catch (err) {
+        traceMctbDebug("onboarding", "forwarding_test_start_skipped", {
+          workspaceId: auth.workspaceId,
+          reason: err instanceof Error ? err.message : String(err),
+        });
+      }
       state = markStepComplete(state, "connect_calls");
-      state = await saveMctbOnboardingState(auth.workspaceId, {
+      await saveMctbOnboardingState(auth.workspaceId, {
         ...state,
         currentStep: "review_test",
       });
+      await startLiveTestSession(auth.workspaceId).catch(() => undefined);
+      state = await loadMctbOnboardingState(auth.workspaceId);
     }
 
     if (body.consentMode) {

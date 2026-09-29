@@ -10,7 +10,7 @@ import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import { formatMctbPhoneLabel } from "@/lib/mctb/phone-display";
 import { existingConsentIneligibleReason } from "@/lib/mctb/setup-consent-eligibility";
 import { clientPlatformVoicemailGreetingPreviewPath } from "@/lib/phone/voicemail-greeting-defaults";
-import { buildSetupTestPipelineSteps } from "@/lib/mctb/setup-test-presentation";
+import { buildOnboardingLiveTestSteps } from "@/lib/mctb/onboarding/live-test-presentation";
 import { MctbConsentPromptPanel } from "@/newui-transplant/components/mctb/mctb-consent-prompt-panel";
 import { MctbVoicemailGreetingStudio } from "@/newui-transplant/components/mctb/mctb-voicemail-greeting-studio";
 import { Pill, Rows } from "@/newui-transplant/components/app/kit";
@@ -394,7 +394,7 @@ export function WizardConnectPhoneStep({ c }: { c: MctbOnboardingController }) {
   useMctbWizardFooter({
     back: true,
     primary: {
-      label: "I've connected my phone",
+      label: "I've set up forwarding",
       disabled: !ack || !c.businessNumber.trim(),
       onClick: () =>
         void (async () => {
@@ -486,10 +486,21 @@ export function WizardConnectPhoneStep({ c }: { c: MctbOnboardingController }) {
 export function WizardTestStep({ c }: { c: MctbOnboardingController }) {
   const test = useMctbTestWiring();
   const press1 = c.consentMode === "press_1";
-  const pipeline = buildSetupTestPipelineSteps(test.setupTest);
   const liveChecks = test.liveTest?.checks ?? c.data?.liveTest.checks ?? {};
+  const timeline = buildOnboardingLiveTestSteps({
+    checks: {
+      callDetected: Boolean(liveChecks.callDetected),
+      forwardingVerified: Boolean(liveChecks.forwardingVerified),
+      missedCall: Boolean(liveChecks.missedCall),
+      consentCompleted: Boolean(liveChecks.consentCompleted),
+      textSent: Boolean(liveChecks.textSent),
+      textDelivered: Boolean(liveChecks.textDelivered),
+      replyReceived: Boolean(liveChecks.replyReceived),
+    },
+    consentMode: press1 ? "press_1" : "existing_consent",
+  });
   const passed = Boolean(test.liveTest?.passed || c.data?.liveTest.passed);
-  const started = Boolean(test.setupTest?.started || test.liveTest?.started);
+  const started = Boolean(test.liveTest?.started);
 
   useMctbWizardFooter({
     back: true,
@@ -584,30 +595,21 @@ export function WizardTestStep({ c }: { c: MctbOnboardingController }) {
       </ol>
       {started ? (
         <div className="mt-6 space-y-2">
-          <p className="text-sm font-medium">Testing your setup</p>
-          {pipeline.length > 0 ? (
-            <ul className="space-y-1.5">
-              {pipeline.map((row) => (
-                <li key={row.id} className="flex items-center gap-2 text-sm">
-                  <Pill tone={row.done ? "success" : "neutral"} dot={false}>{row.done ? "✓" : "○"}</Pill>
-                  <span className={row.done ? "text-foreground" : "text-muted-foreground"}>{row.label}</span>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          <ul className="mt-3 space-y-1.5">
-            {[
-              { id: "call", label: "Test call reached Transovo", done: liveChecks.callDetected },
-              { id: "reply", label: "Waiting for your reply", done: liveChecks.replyReceived },
-            ].map((row) => (
+          <p className="text-sm font-medium">What Transovo observes</p>
+          <ul className="space-y-1.5" aria-live="polite">
+            {timeline.map((row) => (
               <li key={row.id} className="flex items-center gap-2 text-sm">
                 <Pill tone={row.done ? "success" : "neutral"} dot={false}>{row.done ? "✓" : "○"}</Pill>
                 <span className={row.done ? "text-foreground" : "text-muted-foreground"}>{row.label}</span>
               </li>
             ))}
           </ul>
-          {!liveChecks.callDetected && started ? (
-            <p className="mt-3 text-sm text-muted-foreground">We haven&apos;t received the forwarded call yet.</p>
+          {started && !liveChecks.forwardingVerified ? (
+            <p className="mt-3 text-sm text-muted-foreground">
+              We haven&apos;t seen a call forwarded from your business line yet. Call{' '}
+              <span className="font-medium text-foreground">{bizDisplay}</span> from another phone and let it ring
+              without answering.
+            </p>
           ) : null}
         </div>
       ) : null}

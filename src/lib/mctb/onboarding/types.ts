@@ -81,6 +81,7 @@ export type MctbLiveTestSession = {
   startedAt: string;
   businessNumberE164?: string | null;
   callDetectedAt?: string | null;
+  forwardingVerifiedAt?: string | null;
   missedCallAt?: string | null;
   consentCompletedAt?: string | null;
   textSentAt?: string | null;

@@ -1,5 +1,7 @@
 import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+import { mctbSameE164 } from "@/lib/mctb/phone/e164-match";
+import { normalizeCompletedSteps } from "@/lib/mctb/onboarding/wizard-flow";
 import { loadMctbOnboardingState, recordFunnelEvent, saveMctbOnboardingState } from "./state";
 import { getOnboardingForwardTargetE164ForWorkspace } from "./forward-target";
 import { resolvePlatformDemoOwnerWorkspaceId } from "./platform-demo";
@@ -25,15 +27,7 @@ function digits(e164: string): string {
   return e164.replace(/\D/g, "");
 }
 
-function sameNumber(a: string | null | undefined, b: string | null | undefined): boolean {
-  if (!a || !b) return false;
-  const da = digits(a);
-  const db = digits(b);
-  if (da === db) return true;
-  if (da.length === 10 && db === `1${da}`) return true;
-  if (db.length === 10 && da === `1${db}`) return true;
-  return false;
-}
+const sameNumber = mctbSameE164;
 
 function classifyPath(
   forwardedFrom: string | null | undefined,
@@ -204,8 +198,11 @@ export async function getForwardingVerificationStatus(
 
 export async function startForwardingVerificationTest(workspaceId: string): Promise<void> {
   const state = await loadMctbOnboardingState(workspaceId);
-  if (!state.completedSteps.includes("demo")) {
-    throw new Error("Complete the direct-call demo before testing forwarding.");
+  const completed = normalizeCompletedSteps(state.completedSteps);
+  const wizardReady =
+    completed.includes("consent") && Boolean(state.businessNumberE164?.trim());
+  if (!state.completedSteps.includes("demo") && !wizardReady) {
+    throw new Error("Complete consent and your business line before testing forwarding.");
   }
   if (!state.businessNumberE164?.trim()) {
     throw new Error("Enter your business phone number before testing forwarding.");

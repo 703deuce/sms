@@ -126,7 +126,7 @@ export function MctbOnboardingWizardShell({
       <div className="flex h-full min-h-0 flex-col bg-card text-card-foreground">
         {header}
         <div className="relative z-0 min-h-0 flex-1 overflow-y-auto overscroll-contain bg-card px-6 py-5">
-          <div className="mx-auto w-full max-w-[640px] pb-2">{children}</div>
+          <div className="mx-auto w-full max-w-[640px] pb-28">{children}</div>
         </div>
         {footerBar}
       </div>

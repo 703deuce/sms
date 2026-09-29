@@ -300,7 +300,9 @@ export function OnboardingNotificationsStep({ c, caps, compact }: NotificationsS
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
-          <p className="text-xs text-muted-foreground">New caller replies and lead details can be sent here.</p>
+          <p className="text-xs text-muted-foreground">
+            Standard missed-call reply notifications — who texted back and what they said.
+          </p>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="onb-notify-mobile">Mobile number</Label>
@@ -311,7 +313,9 @@ export function OnboardingNotificationsStep({ c, caps, compact }: NotificationsS
             onChange={(e) => setMobile(e.target.value)}
             placeholder="+1…"
           />
-          <p className="text-xs text-muted-foreground">Used for urgent alerts when your plan includes them.</p>
+          <p className="text-xs text-muted-foreground">
+            Separate from reply email: used only for urgent / high-priority SMS alerts when your plan includes them.
+          </p>
         </div>
       </div>
       <div className="mt-4 flex items-center gap-2 text-sm">
@@ -320,7 +324,7 @@ export function OnboardingNotificationsStep({ c, caps, compact }: NotificationsS
           checked={callerReplyEmail}
           onCheckedChange={(v) => setCallerReplyEmail(Boolean(v))}
         />
-        <Label htmlFor="onb-caller-reply-email">Email me when a caller replies</Label>
+        <Label htmlFor="onb-caller-reply-email">Email me when a caller replies (standard reply notification)</Label>
       </div>
 
       <div className="mt-8 border-t pt-6 text-sm">

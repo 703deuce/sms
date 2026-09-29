@@ -24,6 +24,46 @@ function readBusinessLineE164(
   return fromMctb || fromOnboarding || null;
 }
 
+/** Persist public business line for Setup / live test — does not mark forwarding verified. */
+export async function persistMctbWorkspaceBusinessLineE164(
+  workspaceId: string,
+  businessLineE164: string,
+): Promise<string> {
+  const prisma = getPrisma();
+  let normalized = businessLineE164.trim();
+  try {
+    normalized = normalizeE164(normalized);
+  } catch {
+    // keep raw when normalization fails; setup editors can fix
+  }
+
+  const ws = await prisma.workspace.findUnique({
+    where: { id: workspaceId },
+    select: { customFieldsConfig: true },
+  });
+  const customCfg = asRecord(ws?.customFieldsConfig);
+  const mctb = asRecord(customCfg.mctb);
+
+  await prisma.workspace.update({
+    where: { id: workspaceId },
+    data: {
+      customFieldsConfig: {
+        ...customCfg,
+        mctb: {
+          ...mctb,
+          businessLineE164: normalized,
+        },
+      },
+    },
+  });
+
+  await saveMctbOnboardingState(workspaceId, {
+    businessNumberE164: normalized,
+  });
+
+  return normalized;
+}
+
 export type MctbTenantProductionBindingResult = {
   ok: boolean;
   platformDemoLinked: boolean;

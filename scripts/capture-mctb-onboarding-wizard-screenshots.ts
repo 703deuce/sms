@@ -1,7 +1,14 @@
 /**
- * Desktop screenshots of each MCTB onboarding wizard step (production-safe).
+ * Desktop screenshots of each MCTB onboarding wizard step.
  *
- *   CERT_BROWSER_PASSWORD='…' UI_AGENT_BASE_URL=<host> npx tsx scripts/capture-mctb-onboarding-wizard-screenshots.ts
+ * Visual regression only — mocks GET /api/mctb/onboarding unless you opt out.
+ * Do not use mocked output as proof of real workspace provisioning.
+ *
+ *   MCTB_ONBOARDING_SCREENSHOT_MOCKS=1 CERT_BROWSER_PASSWORD='…' UI_AGENT_BASE_URL=<host> \
+ *     npx tsx scripts/capture-mctb-onboarding-wizard-screenshots.ts
+ *
+ * Real workspace (no API mocks):
+ *   UI_AGENT_BASE_URL=<host> npx tsx scripts/capture-mctb-onboarding-wizard-screenshots.ts
  */
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -215,9 +222,18 @@ async function main() {
   });
   const page = await context.newPage();
 
+  const useMocks =
+    process.env.MCTB_ONBOARDING_SCREENSHOT_MOCKS?.trim() === "1" ||
+    process.env.MCTB_ONBOARDING_SCREENSHOT_MOCKS?.trim()?.toLowerCase() === "true";
+
   const steps: MctbOnboardingStep[] = [...MCTB_WIZARD_PRIMARY_STEPS, "ready"];
   let mockStep: MctbOnboardingStep = "business_line";
-  installOnboardingMocks(page, () => mockStep);
+  if (useMocks) {
+    console.log("Using mocked onboarding API (fixture data). Set MCTB_ONBOARDING_SCREENSHOT_MOCKS=0 for real workspace.");
+    installOnboardingMocks(page, () => mockStep);
+  } else {
+    console.log("Real onboarding API — workspace must have incomplete onboarding for modal steps.");
+  }
 
   try {
     for (let i = 0; i < steps.length; i++) {

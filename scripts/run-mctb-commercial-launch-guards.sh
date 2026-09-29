@@ -20,6 +20,8 @@ npx tsx scripts/test-mctb-caller-replied-email-delivery-contract.ts
 npx tsx scripts/test-mctb-inbound-reply-notification-plan.ts
 npx tsx scripts/test-mctb-onboarding-entry-path.ts
 npx tsx scripts/test-mctb-first-run-wizard-policy.ts
+npx tsx scripts/test-mctb-live-test-forwarding-evidence.ts
+npx tsx scripts/test-mctb-onboarding-business-line-persist.ts
 npx tsx src/lib/mctb/message-template.test.ts
 npm run verify:mctb-stage2-presentation
 echo "=== ALL MCTB COMMERCIAL GUARDS PASS ==="
