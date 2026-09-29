@@ -7,6 +7,7 @@ import { Button } from '@/newui-transplant/components/ui/button'
 import { EmptyState, Initials } from '@/newui-transplant/components/app/kit'
 import { ButtonLink } from '@/newui-transplant/components/app/button-link'
 import type { Voicemail } from '@/newui-transplant/lib/view-models'
+import { OPUS_CARD, OPUS_SEARCH_INPUT } from '@/newui-transplant/components/app/opus-surfaces'
 import { cn } from '@/lib/utils'
 
 export function VoicemailBrowser({
@@ -28,7 +29,7 @@ export function VoicemailBrowser({
 
   if (!source.length) {
     return (
-      <div className="rounded-xl border bg-card">
+      <div className={OPUS_CARD}>
         <EmptyState
           icon={Voicemail}
           title="No voicemails yet"
@@ -40,7 +41,7 @@ export function VoicemailBrowser({
   }
 
   return (
-    <div className="grid overflow-hidden rounded-xl border bg-card shadow-[0_1px_2px_rgba(16,18,40,0.04)] md:grid-cols-[320px_1fr]">
+    <div className={cn('grid overflow-hidden md:grid-cols-[320px_1fr]', OPUS_CARD)}>
       <div className="flex flex-col border-b md:border-r md:border-b-0">
         <div className="border-b p-3">
           <div className="relative">
@@ -52,7 +53,7 @@ export function VoicemailBrowser({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search voicemail"
-              className="h-9 w-full rounded-lg border bg-background pr-3 pl-9 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
+              className={OPUS_SEARCH_INPUT}
             />
           </div>
         </div>

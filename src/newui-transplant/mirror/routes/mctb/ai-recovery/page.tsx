@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { Sparkles } from 'lucide-react'
-import { FieldRow, Page, PageHeader, Panel, Rows, TextLink } from '@/newui-transplant/components/app/kit'
+import { FieldRow, Page, PageHeader, Panel, Rows, SettingRow, TextLink } from '@/newui-transplant/components/app/kit'
 import { ButtonLink } from '@/newui-transplant/components/app/button-link'
 import { Switch } from '@/newui-transplant/components/ui/switch'
 import { Input } from '@/newui-transplant/components/ui/input'
@@ -102,13 +102,13 @@ export function TransplantMctbAiRecoveryPage({ wired }: { wired?: MctbAiRecovery
           <Panel title="Information to collect" description="AI asks only for what’s enabled, one question at a time">
             <div className="divide-y">
               {COLLECT.map((c) => (
-                <FieldRow key={c.label} label={c.label} description={c.description}>
+                <SettingRow key={c.label} title={c.label} description={c.description} control={
                   <Switch
                     checked={fields?.[c.key] ?? c.defaultOn}
                     onCheckedChange={(v) => wired?.onFieldChange?.(c.key, Boolean(v))}
                     aria-label={`Collect ${c.label}`}
                   />
-                </FieldRow>
+                } />
               ))}
             </div>
           </Panel>

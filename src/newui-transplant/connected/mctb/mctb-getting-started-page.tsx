@@ -153,13 +153,9 @@ export function MctbGettingStartedPage() {
       </Panel>
 
       <section className="mt-8">
-        <h2 className="text-sm font-semibold">Essential setup</h2>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          Everything required for Missed Call Text Back to operate correctly.
-        </p>
-        <ul className="mt-4 divide-y rounded-lg border bg-card">
+        <Panel title="Essential setup" description="Everything required for Missed Call Text Back to operate correctly." bodyClassName="divide-y p-0">
           {data.essentials.map((row) => (
-            <li key={row.id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div key={row.id} className="flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 gap-3">
                 <RowIcon tone={row.tone} />
                 <div className="min-w-0">
@@ -171,9 +167,9 @@ export function MctbGettingStartedPage() {
                 <Pill tone={toneForPill(row.tone)} dot={false}>{row.statusLabel}</Pill>
                 <TextLink href={row.href}>{row.actionLabel} →</TextLink>
               </div>
-            </li>
+            </div>
           ))}
-        </ul>
+        </Panel>
       </section>
 
       {data.attention.length > 0 ? (

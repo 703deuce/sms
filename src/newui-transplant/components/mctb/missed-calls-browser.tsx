@@ -17,6 +17,7 @@ import { td, th } from '@/newui-transplant/components/app/opus-tables'
 import { RecoveryPill } from '@/newui-transplant/components/app/status'
 import type { MctbMissedCallsListWiring } from '@/newui-transplant/mirror/routes/mctb/missed-calls/page'
 import type { MissedCall } from '@/newui-transplant/lib/view-models'
+import { OPUS_CARD, OPUS_SEARCH_INPUT, OPUS_TABLE_HEAD } from '@/newui-transplant/components/app/opus-surfaces'
 import { cn } from '@/lib/utils'
 
 const RECOVERY = [
@@ -99,7 +100,7 @@ export function MissedCallsBrowser({
   const total = wiring?.total ?? missedCalls.length
 
   return (
-    <div className="rounded-xl border bg-card shadow-[0_1px_2px_rgba(16,18,40,0.04)]">
+    <div className={OPUS_CARD}>
       <div className="flex flex-col gap-3 border-b p-4 lg:flex-row lg:items-center">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
@@ -110,7 +111,7 @@ export function MissedCallsBrowser({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search caller or number"
-            className="h-9 w-full rounded-lg border bg-background pr-3 pl-9 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
+            className={OPUS_SEARCH_INPUT}
           />
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -129,7 +130,7 @@ export function MissedCallsBrowser({
       {rows.length ? (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[820px]">
-            <thead className="border-b bg-muted/40">
+            <thead className={OPUS_TABLE_HEAD}>
               <tr>
                 <th scope="col" className={th}>Caller</th>
                 <th scope="col" className={th}>Missed</th>

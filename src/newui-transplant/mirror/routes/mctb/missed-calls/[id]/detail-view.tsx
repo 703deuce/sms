@@ -74,8 +74,12 @@ export function TransplantMctbMissedCallDetailView({ wired }: { wired: MctbMisse
                   <li key={i} className={cn('flex', m.from === 'customer' ? 'justify-start' : 'justify-end')}>
                     <span
                       className={cn(
-                        'max-w-[80%] rounded-2xl px-3.5 py-2 text-sm',
-                        m.from === 'customer' ? 'bg-muted' : 'bg-primary text-primary-foreground',
+                        'max-w-[80%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed',
+                        m.from === 'customer'
+                          ? 'rounded-bl-md border bg-card'
+                          : m.from === 'ai'
+                            ? 'rounded-br-md bg-sidebar text-sidebar-foreground'
+                            : 'rounded-br-md bg-primary text-primary-foreground',
                       )}
                     >
                       {m.text}

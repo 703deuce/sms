@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { Panel } from '@/newui-transplant/components/app/kit'
+import { td, th } from '@/newui-transplant/components/app/opus-tables'
+import { OPUS_TABLE_HEAD } from '@/newui-transplant/components/app/opus-surfaces'
+import { cn } from '@/lib/utils'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Input } from '@/newui-transplant/components/ui/input'
 import { Label } from '@/newui-transplant/components/ui/label'
@@ -106,24 +109,24 @@ export function ExclusionsTable() {
         <p className="p-5 text-sm text-muted-foreground">Loading exclusions…</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[520px] text-sm">
-            <thead>
-              <tr className="border-b text-left text-xs text-muted-foreground">
-                <th scope="col" className="px-5 py-3 font-medium">Number</th>
-                <th scope="col" className="px-3 py-3 font-medium">Label</th>
-                <th scope="col" className="px-3 py-3 font-medium">Source</th>
-                <th scope="col" className="px-3 py-3 font-medium">Added</th>
-                <th scope="col" className="px-3 py-3 font-medium"><span className="sr-only">Actions</span></th>
+          <table className="w-full min-w-[520px]">
+            <thead className={OPUS_TABLE_HEAD}>
+              <tr>
+                <th scope="col" className={th}>Number</th>
+                <th scope="col" className={th}>Label</th>
+                <th scope="col" className={th}>Source</th>
+                <th scope="col" className={th}>Added</th>
+                <th scope="col" className={th}><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {rows.map((row) => (
-                <tr key={row.id}>
-                  <td className="px-5 py-3 font-mono text-xs">{row.number}</td>
-                  <td className="px-3 py-3">{row.label}</td>
-                  <td className="px-3 py-3 text-muted-foreground">{row.source}</td>
-                  <td className="px-3 py-3 text-muted-foreground">{row.added}</td>
-                  <td className="px-3 py-3 text-right">
+                <tr key={row.id} className="hover:bg-muted/40">
+                  <td className={cn(td, 'font-mono text-xs')}>{row.number}</td>
+                  <td className={td}>{row.label}</td>
+                  <td className={cn(td, 'text-muted-foreground')}>{row.source}</td>
+                  <td className={cn(td, 'text-muted-foreground')}>{row.added}</td>
+                  <td className={cn(td, 'text-right')}>
                     <Button
                       type="button"
                       size="icon-sm"

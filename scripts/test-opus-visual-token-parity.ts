@@ -51,6 +51,13 @@ assert.match(kit, /FeatureEmphasisStrip/);
 assert.match(kit, /Callout/);
 assert.match(kit, /'info'/);
 assert.match(kit, /SetupProgressBar/);
+assert.match(kit, /SettingRow/);
+assert.match(kit, /KeyValueRow/);
+
+const surfaces = readFileSync(join(root, "src/newui-transplant/components/app/opus-surfaces.ts"), "utf8");
+assert.match(surfaces, /OPUS_CARD/);
+assert.match(surfaces, /OPUS_TABLE_HEAD/);
+assert.match(surfaces, /shadow-\[0_1px_2px_rgba\(16,18,40,0\.04\)\]/);
 
 const tables = readFileSync(join(root, "src/newui-transplant/components/app/opus-tables.tsx"), "utf8");
 const simpleSelect = readFileSync(join(root, "src/newui-transplant/components/app/simple-select.tsx"), "utf8");

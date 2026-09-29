@@ -5,9 +5,9 @@ import Link from 'next/link'
 import { ArrowLeft, CheckCheck, Inbox as InboxIcon, Phone, PhoneMissed, Search, SendHorizontal, Sparkles } from 'lucide-react'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Checkbox } from '@/newui-transplant/components/ui/checkbox'
-import { Input } from '@/newui-transplant/components/ui/input'
 import { Textarea } from '@/newui-transplant/components/ui/textarea'
 import { EmptyState, Initials, Pill } from '@/newui-transplant/components/app/kit'
+import { OPUS_CARD, OPUS_SEARCH_INPUT } from '@/newui-transplant/components/app/opus-surfaces'
 import { BUSINESS, CONVERSATIONS, MISSED_CALLS } from '@/newui-transplant/lib/sandbox-data'
 import type { BusinessContext, Conversation, Message, MissedCall } from '@/newui-transplant/lib/view-models'
 import { cn } from '@/lib/utils'
@@ -142,39 +142,43 @@ export function Inbox({
   }
 
   return (
-    <main className="flex h-[calc(100svh-3.5rem)] min-h-0 flex-col">
-      <div className="flex items-center gap-2 overflow-x-auto border-b bg-card px-4 py-2 md:px-6">
-        <h1 className="mr-2 text-sm font-semibold">Inbox</h1>
-        <div role="tablist" aria-label="Conversation filters" className="flex gap-1">
-          {FILTERS.map((f) => (
-            <button
-              key={f}
-              role="tab"
-              type="button"
-              aria-selected={filter === f}
-              onClick={() => setFilter(f)}
-              className={cn(
-                'rounded-md px-2.5 py-1 text-xs font-medium whitespace-nowrap transition-colors',
-                filter === f ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-              )}
-            >
-              {f}
-              {f === 'Needs reply' ? (
-                <span className="ml-1.5 tabular-nums text-muted-foreground">{conversations.filter((c) => c.needsReply).length}</span>
-              ) : null}
-            </button>
-          ))}
-        </div>
-        <span className="ml-auto hidden text-xs text-muted-foreground md:inline">Missed Call Text Back</span>
-      </div>
-
-      <div className="grid min-h-0 flex-1 md:grid-cols-[320px_1fr] xl:grid-cols-[320px_1fr_280px]">
-        <aside className={cn('flex min-h-0 flex-col border-r bg-card', mobileThread && 'hidden md:flex')}>
-          <div className="border-b p-3">
+    <main className="flex min-h-0 flex-col">
+      <div
+        className={cn(
+          'grid h-[calc(100dvh-13rem)] min-h-[520px] overflow-hidden md:grid-cols-[300px_1fr] xl:grid-cols-[300px_1fr_280px]',
+          OPUS_CARD,
+        )}
+      >
+        <aside className={cn('flex min-h-0 flex-col border-r', mobileThread && selectedId ? 'hidden md:flex' : 'flex')}>
+          <div className="flex flex-col gap-3 border-b p-3">
             <div className="relative">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search" aria-label="Search conversations" className="pl-8" />
+              <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+              <label htmlFor="inbox-search" className="sr-only">Search conversations</label>
+              <input
+                id="inbox-search"
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search conversations"
+                className={OPUS_SEARCH_INPUT}
+              />
             </div>
+            <nav aria-label="Inbox filters" className="flex gap-1 overflow-x-auto">
+              {FILTERS.map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  aria-current={filter === f ? 'page' : undefined}
+                  onClick={() => setFilter(f)}
+                  className={cn(
+                    'h-7 shrink-0 rounded-md px-2.5 text-xs leading-7 font-medium',
+                    filter === f ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                  )}
+                >
+                  {f}
+                </button>
+              ))}
+            </nav>
             {checked.size ? (
               <div className="mt-2 flex items-center gap-2 text-xs">
                 <span className="text-muted-foreground">{checked.size} selected</span>
@@ -223,7 +227,7 @@ export function Inbox({
                       {c.needsReply || c.tag || c.mctbUrgent?.isUrgent ? (
                         <span className="mt-1.5 flex flex-wrap gap-1">
                           {c.mctbUrgent?.isUrgent ? <Pill tone="warning">Urgent</Pill> : null}
-                          {c.needsReply ? <Pill tone="warning">Needs reply</Pill> : null}
+                          {c.needsReply ? <Pill tone="primary" className="h-5 px-2 text-[11px]">Needs reply</Pill> : null}
                           {c.tag ? <Pill tone="neutral" dot={false}>{c.tag}</Pill> : null}
                         </span>
                       ) : null}
@@ -237,10 +241,10 @@ export function Inbox({
           )}
         </aside>
 
-        <section aria-label="Conversation thread" className={cn('flex min-h-0 flex-col bg-background', !mobileThread && 'hidden md:flex')}>
+        <section aria-label="Conversation thread" className={cn('flex min-h-0 flex-col', !mobileThread && !selectedId && 'hidden md:flex')}>
           {selected ? (
             <>
-              <header className="flex items-center gap-3 border-b bg-card px-4 py-3">
+              <header className="flex items-center gap-3 border-b px-4 py-3">
                 <Button variant="ghost" size="icon-sm" className="md:hidden" onClick={() => setMobileThread(false)} aria-label="Back to list">
                   <ArrowLeft />
                 </Button>
@@ -320,7 +324,7 @@ export function Inbox({
           )}
         </section>
 
-        <aside aria-label="Contact context" className="hidden min-h-0 overflow-y-auto border-l bg-card p-4 xl:block">
+        <aside aria-label="Contact context" className="hidden min-h-0 overflow-y-auto border-l p-4 xl:block">
           {selected ? (
             <div className="flex flex-col gap-5">
               <div className="flex flex-col items-center text-center">

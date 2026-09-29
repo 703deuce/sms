@@ -2,7 +2,9 @@
 
 import { useCallback, useState } from "react";
 import { Panel, Pill } from "@/newui-transplant/components/app/kit";
+import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
 import { Button } from "@/newui-transplant/components/ui/button";
+import { cn } from "@/lib/utils";
 import { saveMctbSetup } from "@/lib/newui-transplant/api/mctb-setup-client";
 import { addPauseUntil } from "@/lib/mctb/schedule-shared";
 
@@ -48,7 +50,7 @@ export function MctbRecoveryPauseOpus({
 
   if (compact) {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card px-4 py-3">
+      <div className={cn('flex flex-wrap items-center justify-between gap-3 px-4 py-3', OPUS_CARD)}>
         <div>
           <p className="text-sm font-medium">Missed call recovery</p>
           <p className="text-xs text-muted-foreground">

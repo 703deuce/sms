@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { Initials } from '@/newui-transplant/components/app/kit'
+import { OPUS_TABLE_HEAD } from '@/newui-transplant/components/app/opus-surfaces'
 import { RecoveryPill } from '@/newui-transplant/components/app/status'
 import type { MissedCall } from '@/newui-transplant/lib/view-models'
 import { cn } from '@/lib/utils'
@@ -11,7 +12,7 @@ export function MissedCallsCompactTable({ rows }: { rows: MissedCall[] }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full">
-        <thead className="border-b bg-muted/40">
+        <thead className={OPUS_TABLE_HEAD}>
           <tr>
             <th scope="col" className={th}>Caller</th>
             <th scope="col" className={th}>Missed</th>

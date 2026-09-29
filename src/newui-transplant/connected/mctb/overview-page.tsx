@@ -20,7 +20,7 @@ import {
   PageHeader,
   Panel,
   Pill,
-  Rows,
+  KeyValueRow,
   Stat,
   TextLink,
 } from "@/newui-transplant/components/app/kit";
@@ -190,13 +190,13 @@ export function NewUiMctbOverviewPage({ data }: { data: MctbOverviewPayload }) {
           <ul className="divide-y">
             {data.recentConversations.slice(0, 5).map((c) => (
               <li key={c.id}>
-                <Link href={`/mctb/conversations?conversation=${c.id}`} className="flex items-center gap-3 px-5 py-3 hover:bg-muted/50">
+                <Link href={`/mctb/conversations?conversation=${c.id}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/50">
                   <Initials name={c.label} />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{c.label}</p>
-                    <p className="truncate text-xs text-muted-foreground">{c.preview}</p>
+                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="truncate text-sm font-medium">{c.label}</span>
+                    <span className="truncate text-xs text-muted-foreground">{c.preview}</span>
                   </div>
-                  {c.needsReply ? <Pill tone="warning">Needs reply</Pill> : null}
+                  {c.needsReply ? <span className="mt-1.5 size-2 shrink-0 rounded-full bg-primary" aria-label="Needs reply" /> : null}
                 </Link>
               </li>
             ))}
@@ -204,16 +204,12 @@ export function NewUiMctbOverviewPage({ data }: { data: MctbOverviewPayload }) {
         </Panel>
       </div>
 
-      <Panel className="mt-4" title="Setup health">
-        <Rows
-          items={[
-            { label: "Business line", value: data.setupHealth.businessLine || "—", href: "/mctb/setup/phone" },
-            { label: "Forwarding", value: data.setupHealth.forwardingLabel, href: "/mctb/setup/phone" },
-            { label: "Consent", value: data.setupHealth.consentLabel, href: "/mctb/setup/consent" },
-            { label: "Sender", value: data.setupHealth.senderLabel, href: "/mctb/setup/phone" },
-            { label: "Recovery", value: data.setupHealth.recoveryLabel, href: "/mctb/setup/recovery" },
-          ]}
-        />
+      <Panel className="mt-4" title="Setup health" bodyClassName="divide-y p-0 px-5">
+        <KeyValueRow label="Business line" value={data.setupHealth.businessLine || "—"} href="/mctb/setup/phone" />
+        <KeyValueRow label="Forwarding" value={data.setupHealth.forwardingLabel} href="/mctb/setup/phone" />
+        <KeyValueRow label="Consent" value={data.setupHealth.consentLabel} href="/mctb/setup/consent" />
+        <KeyValueRow label="Sender" value={data.setupHealth.senderLabel} href="/mctb/setup/phone" />
+        <KeyValueRow label="Recovery" value={data.setupHealth.recoveryLabel} href="/mctb/setup/recovery" />
       </Panel>
     </Page>
   );
