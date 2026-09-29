@@ -11,6 +11,7 @@ const OUT = process.env.OUT_DIR?.trim() || "/opt/cursor/artifacts";
 
 const ROUTES: Array<{ name: string; path: string }> = [
   { name: "mctb_opus_overview", path: "/mctb" },
+  { name: "mctb_getting_started", path: "/getting-started" },
   { name: "mctb_opus_setup_overview", path: "/mctb/setup" },
   { name: "mctb_opus_text_back", path: "/mctb/setup/text-back" },
   { name: "mctb_opus_consent", path: "/mctb/setup/consent" },
@@ -26,7 +27,18 @@ async function waitReady(page: import("playwright").Page, path: string) {
     await page.waitForTimeout(400);
   }
 
-  if (path === "/mctb") {
+  if (path === "/getting-started") {
+    await page
+      .getByRole("heading", { name: /getting started/i })
+      .first()
+      .waitFor({ state: "visible", timeout: 60000 })
+      .catch(() => undefined);
+    await page
+      .getByText(/essential setup|missed-call recovery/i)
+      .first()
+      .waitFor({ state: "visible", timeout: 60000 })
+      .catch(() => undefined);
+  } else if (path === "/mctb") {
     await page
       .getByRole("heading", { name: /overview/i })
       .first()
