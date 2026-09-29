@@ -11,3 +11,5 @@ Operator runbook: `docs/operations/MCTB-REDIS-BULLMQ-RUNBOOK.md`
 - Volume: Docker named volume `transovo-bullmq-redis_transovo-bullmq-redis-data`
 
 Sync changes from this repo directory when updating Redis infrastructure (no secrets in Git).
+
+**Cloud Agent / CI:** `127.0.0.1:63790` on the Coolify host is loopback-only for SSH tunneling (`scripts/cloud-agent/ensure-self-hosted-redis-env.sh`). It is not exposed on the public internet.

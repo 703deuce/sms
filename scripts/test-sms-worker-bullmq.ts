@@ -181,7 +181,15 @@ async function main() {
   await prisma.workspace.delete({ where: { id: workspace.id } }).catch(() => {});
 
   console.log("test-sms-worker-bullmq: ok");
+
+  const { closeBullmqWorkers } = await import("../src/lib/jobs/bullmq");
+  await closeBullmqWorkers();
 }
+
+process.on("unhandledRejection", (err) => {
+  console.error(err);
+  process.exit(1);
+});
 
 main().catch((err) => {
   console.error(err);

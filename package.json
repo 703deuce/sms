@@ -51,7 +51,7 @@
     "worker:all": "tsx scripts/worker-all.ts",
     "worker:sms": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/worker-sms.ts",
     "test:sms-worker": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-sms-worker.ts && NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-sms-worker-cert.ts",
-    "test:sms-worker-bullmq": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-sms-worker-bullmq.ts",
+    "test:sms-worker-bullmq": "bash scripts/cloud-agent/run-test-sms-worker-bullmq.sh",
     "test:call-handling-mode": "tsx scripts/test-call-handling-mode.ts",
     "test:call-handling-mctb-isolation": "tsx scripts/test-call-handling-mctb-isolation.ts",
     "test:call-forwarding-sms-extract": "tsx scripts/test-call-forwarding-sms-extract.ts",
