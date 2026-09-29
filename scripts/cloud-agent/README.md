@@ -6,7 +6,8 @@ Production BullMQ uses Coolify `transovo-bullmq-redis`. Cloud Agents reach it vi
 
 `.cursor/environment.json`:
 
-- **`start`** — `bootstrap-on-start.sh` (tunnel + `/workspace/.env`)
+- **`install`** — `npm ci` then `bootstrap-on-start.sh` (tunnel + `/workspace/.env` on every fresh install)
+- **`start`** — same bootstrap (re-run after snapshot boot)
 - **`terminals`** — `redis-tunnel-keeper.sh` (reopens tunnel if it drops)
 - **`scripts/preload-server-only.mjs`** — overrides dashboard `REDIS_URL` (e.g. legacy Upstash) when `.env` points at the tunnel
 
