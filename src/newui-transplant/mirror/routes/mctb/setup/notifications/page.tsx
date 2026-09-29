@@ -26,9 +26,18 @@ export type MctbSetupNotificationsUrgentWired = {
 }
 
 export type MctbSetupNotificationsWired = {
-  recipients: Array<{ name: string; email: string; mobile: string }>
-  events: Array<{ label: string; email: boolean; sms: boolean; smsDisabled?: boolean; onEmailChange?: (v: boolean) => void; onSmsChange?: (v: boolean) => void }>
+  recipients: Array<{ id: string; name: string; email: string; mobile: string }>
+  events: Array<{
+    label: string
+    email: boolean
+    sms: boolean
+    smsDisabled?: boolean
+    smsDisabledReason?: 'launch_email_only' | 'urgent_sms_requires_plan'
+    onEmailChange?: (v: boolean) => void
+    onSmsChange?: (v: boolean) => void
+  }>
   onAddRecipient?: () => void
+  onEditRecipient?: (id: string) => void
   urgent?: MctbSetupNotificationsUrgentWired
 }
 
@@ -141,13 +150,21 @@ export function TransplantMctbSetupNotificationsPage({ wired }: { wired?: MctbSe
               </li>
             ) : null}
             {recipients.map((r) => (
-              <li key={`${r.name}-${r.email}`} className="flex items-center gap-3 px-5 py-3 hover:bg-muted/30">
+              <li key={r.id} className="flex items-center gap-3 px-5 py-3 hover:bg-muted/30">
                 <Initials name={r.name} />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium">{r.name}</p>
                   <p className="truncate text-xs text-muted-foreground">{r.email} · {r.mobile}</p>
                 </div>
-                <Button size="icon-sm" variant="ghost" aria-label={`Edit ${r.name}`}><MoreHorizontal /></Button>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  type="button"
+                  aria-label={`Edit ${r.name}`}
+                  onClick={() => wired?.onEditRecipient?.(r.id)}
+                >
+                  <MoreHorizontal />
+                </Button>
               </li>
             ))}
           </ul>
@@ -169,7 +186,7 @@ export function TransplantMctbSetupNotificationsPage({ wired }: { wired?: MctbSe
                   <span className="text-primary">Email</span>
                 </th>
                 <th scope="col" className={cn(th, 'w-24 text-center')}>
-                  SMS
+                  <span className="text-muted-foreground">SMS</span>
                 </th>
               </tr>
             </thead>
@@ -185,12 +202,26 @@ export function TransplantMctbSetupNotificationsPage({ wired }: { wired?: MctbSe
                     />
                   </td>
                   <td className={cn(td, 'text-center')}>
-                    <Checkbox
-                      checked={e.sms}
-                      disabled={e.smsDisabled}
-                      onCheckedChange={(v) => e.onSmsChange?.(Boolean(v))}
-                      aria-label={`${e.label} by SMS`}
-                    />
+                    {e.smsDisabled ? (
+                      <span
+                        className="text-xs text-muted-foreground"
+                        title={
+                          e.smsDisabledReason === 'urgent_sms_requires_plan'
+                            ? 'Urgent business SMS requires a paid Recovery plan.'
+                            : e.smsDisabledReason === 'launch_email_only'
+                              ? 'SMS alerts for this event are not available at launch. Email notifications apply.'
+                              : 'SMS not available for this event.'
+                        }
+                      >
+                        —
+                      </span>
+                    ) : (
+                      <Checkbox
+                        checked={e.sms}
+                        onCheckedChange={(v) => e.onSmsChange?.(Boolean(v))}
+                        aria-label={`${e.label} by SMS`}
+                      />
+                    )}
                   </td>
                 </tr>
               ))}

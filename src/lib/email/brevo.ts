@@ -20,7 +20,19 @@ export type SendEmailResult = {
   error?: string;
 };
 
+/** Used by MCTB handoff certification scripts only (see MCTB_HANDOFF_EMAIL_TEST_CAPTURE). */
+const handoffTestEmailCapture: string[] = [];
+
+export function drainMctbHandoffTestEmailCapture(): string[] {
+  const copy = [...handoffTestEmailCapture];
+  handoffTestEmailCapture.length = 0;
+  return copy;
+}
+
 export async function sendTransactionalEmail(input: SendEmailInput): Promise<SendEmailResult> {
+  if (process.env.MCTB_HANDOFF_EMAIL_TEST_CAPTURE === "1") {
+    handoffTestEmailCapture.push(input.to);
+  }
   const apiKey = process.env.BREVO_API_KEY?.trim();
   const fromEmail = process.env.REVIEW_REQUEST_FROM_EMAIL?.trim() || process.env.BREVO_FROM_EMAIL?.trim();
   const fromName = process.env.REVIEW_REQUEST_FROM_NAME?.trim() || "Transovo";

@@ -22,8 +22,16 @@ assert.ok(
   "inbound side effects must call deliverMctbHandoffNotifications",
 );
 assert.ok(
-  notifications.includes("notifyWorkspaceByEmail"),
-  "handoff notifications must use workspace email delivery",
+  notifications.includes("brevoEmail.sendTransactionalEmail"),
+  "handoff notifications must send to configured recipient via transactional email",
+);
+assert.ok(
+  notifications.includes("to: recipient.email!"),
+  "handoff email must target the configured notification recipient address",
+);
+assert.ok(
+  !notifications.includes("notifyWorkspaceByEmail"),
+  "handoff notifications must not fan out to all workspace member emails",
 );
 assert.ok(
   notifications.includes("mctbNotificationDelivery"),

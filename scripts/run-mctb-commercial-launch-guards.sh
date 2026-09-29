@@ -17,6 +17,7 @@ NODE_OPTIONS="${NODE_OPTIONS} --import ./scripts/preload-server-only.mjs" npx ts
 npx tsx scripts/test-mctb-urgent-handoff-guards.ts
 npx tsx scripts/test-mctb-caller-replied-inbound-path.ts
 npx tsx scripts/test-mctb-caller-replied-email-delivery-contract.ts
+npx tsx scripts/test-mctb-handoff-recipient-email-destination.ts
 npx tsx scripts/test-mctb-inbound-reply-notification-plan.ts
 npx tsx scripts/test-mctb-onboarding-entry-path.ts
 npx tsx scripts/test-mctb-first-run-wizard-policy.ts

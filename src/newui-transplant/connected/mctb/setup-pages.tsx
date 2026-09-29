@@ -28,6 +28,7 @@ import {
   useMctbNumberDrawerEvents,
 } from "@/lib/mctb/numbers/mctb-number-drawer-controller";
 import { buildSetupTestPipelineSteps } from "@/lib/mctb/setup-test-presentation";
+import { MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY } from "@/lib/mctb/launch-flags";
 import {
   useMctbNotificationsWiring,
   useMctbRecoveryWiring,
@@ -83,7 +84,6 @@ const OPUS_EVENT_MAP: Array<{ label: string; event?: MctbHandoffEventType }> = [
   { label: "Needs reply (15 min)", event: "human_required" },
   { label: "New voicemail", event: "voicemail_received" },
   { label: "Delivery failure", event: "recovery_failure" },
-  { label: "Forwarding stopped working" },
 ];
 
 export function NewUiMctbSetupOverviewPage() {
@@ -252,16 +252,30 @@ export function NewUiMctbSetupNotificationsPage() {
     return OPUS_EVENT_MAP.map((row) => {
       const matrix = row.event ? n.config!.routingMatrix[row.event] : null;
       const isUrgentRow = row.event === "urgent_detected";
+      const smsLaunchDisabled =
+        MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY && row.event !== "urgent_detected";
+      const smsDisabled =
+        !row.event || smsLaunchDisabled || (isUrgentRow && !n.urgentBusinessSmsEntitled);
       return {
         label: row.label,
-        email: matrix?.email ?? true,
-        sms: matrix?.sms ?? false,
-        smsDisabled: isUrgentRow && !n.urgentBusinessSmsEntitled,
+        email: matrix?.channels?.email ?? matrix?.email ?? true,
+        sms: smsDisabled ? false : (matrix?.channels?.sms ?? matrix?.sms ?? false),
+        smsDisabled,
+        smsDisabledReason: smsLaunchDisabled
+          ? "launch_email_only"
+          : isUrgentRow && !n.urgentBusinessSmsEntitled
+            ? "urgent_sms_requires_plan"
+            : undefined,
         onEmailChange: row.event
           ? (v: boolean) => {
               if (!n.config) return;
               const next = { ...n.config, routingMatrix: { ...n.config.routingMatrix } };
-              next.routingMatrix[row.event!] = { ...(matrix || {}), email: v };
+              const prev = matrix || { channels: {}, recipientIds: [] as string[] };
+              next.routingMatrix[row.event!] = {
+                ...prev,
+                channels: { ...(prev.channels || {}), email: v },
+                recipientIds: prev.recipientIds ?? [],
+              };
               n.setConfig(next);
               void fetch("/api/mctb/handoff", {
                 method: "POST",
@@ -273,8 +287,14 @@ export function NewUiMctbSetupNotificationsPage() {
         onSmsChange: row.event
           ? (v: boolean) => {
               if (!n.config) return;
+              if (smsDisabled) return;
               const next = { ...n.config, routingMatrix: { ...n.config.routingMatrix } };
-              next.routingMatrix[row.event!] = { ...(matrix || {}), sms: v };
+              const prev = matrix || { channels: {}, recipientIds: [] as string[] };
+              next.routingMatrix[row.event!] = {
+                ...prev,
+                channels: { ...(prev.channels || {}), sms: v },
+                recipientIds: prev.recipientIds ?? [],
+              };
               n.setConfig(next);
               void fetch("/api/mctb/handoff", {
                 method: "POST",
@@ -339,10 +359,36 @@ export function NewUiMctbSetupNotificationsPage() {
             }
           : undefined,
         recipients: n.recipients.map((r) => ({
+          id: r.id,
           name: r.name || r.email || "Recipient",
           email: r.email || "—",
           mobile: formatRecipientMobile(r.mobileE164),
         })),
+        onEditRecipient: (id: string) => {
+          const current = n.recipients.find((r) => r.id === id);
+          if (!current) return;
+          const name = window.prompt("Recipient name", current.name || "");
+          if (name === null) return;
+          const email = window.prompt("Email address", current.email || "");
+          if (email === null) return;
+          const mobile = window.prompt(
+            "Mobile (E.164, optional)",
+            current.mobileE164 || "",
+          );
+          if (mobile === null) return;
+          const next = n.recipients.map((r) =>
+            r.id === id
+              ? {
+                  ...r,
+                  name: name.trim() || r.name,
+                  email: email.trim() || null,
+                  mobileE164: mobile.trim() || null,
+                }
+              : r,
+          );
+          n.setRecipients(next);
+          void n.save();
+        },
         events: events ?? undefined,
         onAddRecipient: () => {
             const name = window.prompt("Recipient name");

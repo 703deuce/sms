@@ -1,6 +1,6 @@
 import { getPrisma } from "@/lib/db";
 import { notifyWorkspace } from "@/lib/notifications/in-app";
-import { notifyWorkspaceByEmail } from "@/lib/notifications/workspace-email";
+import * as brevoEmail from "@/lib/email/brevo";
 import { sendQuickSms } from "@/lib/sms/send-quick";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { loadMctbHandoffConfig, loadMctbNotificationRecipients } from "./config";
@@ -156,13 +156,16 @@ export async function deliverMctbHandoffNotifications(input: {
       if (prior) continue;
       const email = renderMctbTeamEmail(renderInput);
       try {
-        await notifyWorkspaceByEmail(input.workspaceId, {
-          type: input.urgent ? "mctb_urgent" : "mctb_handoff",
-          title: email.subject,
+        const sendResult = await brevoEmail.sendTransactionalEmail({
+          to: recipient.email!,
           subject: email.subject,
           htmlContent: email.html,
           textContent: email.text,
+          workspaceId: input.workspaceId,
         });
+        if (sendResult.status === "failed") {
+          throw new Error(sendResult.error || "email_failed");
+        }
         await prisma.mctbNotificationDelivery.create({
           data: {
             workspaceId: input.workspaceId,
