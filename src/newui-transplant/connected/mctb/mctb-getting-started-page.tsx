@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, Circle, Lock, AlertCircle } from "lucide-react";
 import {
+  Callout,
   Page,
   PageHeader,
   Panel,
@@ -11,7 +12,7 @@ import {
   SetupProgressBar,
   TextLink,
 } from "@/newui-transplant/components/app/kit";
-import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
+import { OPUS_CARD, OPUS_INSET_LIST } from "@/newui-transplant/components/app/opus-surfaces";
 import { Button } from "@/newui-transplant/components/ui/button";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import type { MctbGettingStartedPayload } from "@/lib/mctb/getting-started/types";
@@ -154,9 +155,10 @@ export function MctbGettingStartedPage() {
       </Panel>
 
       <section className="mt-8">
-        <Panel title="Essential setup" description="Everything required for Missed Call Text Back to operate correctly." bodyClassName="divide-y p-0">
+        <Panel title="Essential setup" description="Everything required for Missed Call Text Back to operate correctly." bodyClassName="p-0">
+          <ul className={OPUS_INSET_LIST}>
           {data.essentials.map((row) => (
-            <div key={row.id} className="flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <li key={row.id} className="flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 gap-3">
                 <RowIcon tone={row.tone} />
                 <div className="min-w-0">
@@ -168,25 +170,26 @@ export function MctbGettingStartedPage() {
                 <Pill tone={toneForPill(row.tone)} dot={false}>{row.statusLabel}</Pill>
                 <TextLink href={row.href}>{row.actionLabel} →</TextLink>
               </div>
-            </div>
+            </li>
           ))}
+          </ul>
         </Panel>
       </section>
 
       {data.attention.length > 0 ? (
         <section className="mt-8">
           <h2 className="text-sm font-semibold">Needs attention</h2>
-          <ul className="mt-3 space-y-2">
+          <ul className="mt-3 space-y-3">
             {data.attention.map((item) => (
-              <li
-                key={item.id}
-                className="flex flex-col gap-2 rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-medium">{item.message}</p>
-                  {item.detail ? <p className="text-xs text-muted-foreground">{item.detail}</p> : null}
-                </div>
-                <TextLink href={item.href}>{item.actionLabel} →</TextLink>
+              <li key={item.id}>
+                <Callout
+                  tone="warning"
+                  icon={AlertCircle}
+                  title={item.message}
+                  action={<TextLink href={item.href}>{item.actionLabel} →</TextLink>}
+                >
+                  {item.detail ? <p>{item.detail}</p> : null}
+                </Callout>
               </li>
             ))}
           </ul>

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Play } from 'lucide-react'
 import { Panel, Pill } from '@/newui-transplant/components/app/kit'
+import { OPUS_CARD } from '@/newui-transplant/components/app/opus-surfaces'
 import {
   EXISTING_CONSENT_CERTIFICATION_BODY,
   EXISTING_CONSENT_CERTIFICATION_CHECKBOX_LABEL,
@@ -114,7 +115,8 @@ export function ConsentEditor() {
                 setMode(m.id)
               }}
               className={cn(
-                'flex items-start gap-3 rounded-lg border p-4 text-left transition',
+                OPUS_CARD,
+                'flex items-start gap-3 p-4 text-left transition',
                 mode === m.id ? 'border-primary bg-accent/50 ring-1 ring-primary' : 'hover:bg-muted/50',
                 locked && 'cursor-not-allowed opacity-70',
               )}

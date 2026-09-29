@@ -23,6 +23,7 @@ npx tsx scripts/test-mctb-first-run-wizard-policy.ts
 npx tsx scripts/test-mctb-live-test-forwarding-evidence.ts
 npx tsx scripts/test-mctb-onboarding-business-line-persist.ts
 npx tsx scripts/test-mctb-getting-started-shell.ts
+npx tsx scripts/test-mctb-getting-started-readiness.ts
 npx tsx scripts/test-opus-visual-token-parity.ts
 npx tsx src/lib/mctb/message-template.test.ts
 npm run verify:mctb-stage2-presentation

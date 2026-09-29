@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Lock } from 'lucide-react'
 import { Panel, Pill, SettingRow } from '@/newui-transplant/components/app/kit'
-import { OPUS_META_STRIP } from '@/newui-transplant/components/app/opus-surfaces'
+import { OPUS_CARD, OPUS_META_STRIP } from '@/newui-transplant/components/app/opus-surfaces'
 import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Textarea } from '@/newui-transplant/components/ui/textarea'
@@ -147,7 +147,8 @@ export function TextBackEditor({
                 <label
                   key={tpl.id}
                   className={cn(
-                    'flex cursor-pointer gap-3 rounded-lg border p-3',
+                    OPUS_CARD,
+                    'flex cursor-pointer gap-3 p-3',
                     platformTemplateId === tpl.id ? 'border-primary ring-1 ring-primary/30' : '',
                   )}
                 >

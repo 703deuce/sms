@@ -10,7 +10,7 @@ import {
   useMctbRecoveryWiring,
   useMctbVoicemailWiring,
 } from "@/newui-transplant/connected/mctb/setup-wiring-hooks";
-import { OPUS_INSET_LIST } from "@/newui-transplant/components/app/opus-surfaces";
+import { OPUS_CARD, OPUS_INSET_LIST } from "@/newui-transplant/components/app/opus-surfaces";
 import { Panel, Pill, SettingRow } from "@/newui-transplant/components/app/kit";
 import { SimpleSelect } from "@/newui-transplant/components/app/simple-select";
 import { Button } from "@/newui-transplant/components/ui/button";
@@ -85,7 +85,7 @@ export function OnboardingRecoveryControlsSection({ wiring }: { wiring: Recovery
   }
 
   return (
-    <div className="mt-6 space-y-4 rounded-lg border bg-muted/10 p-4">
+    <div className={`mt-6 space-y-4 bg-muted/10 p-4 ${OPUS_CARD}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-medium">Recovery behavior</p>
         <Pill tone={r.paused ? "warning" : "success"}>{r.paused ? "Paused" : "On"}</Pill>
@@ -399,7 +399,7 @@ function OnboardingAiRecoverySection({ caps }: { caps: MctbCapabilities | null }
 
   if (!entitled) {
     return (
-      <div className="mt-6 flex items-start gap-2 rounded-lg border bg-muted/20 p-4 text-sm text-muted-foreground">
+      <div className={`mt-6 flex items-start gap-2 bg-muted/20 p-4 text-sm text-muted-foreground ${OPUS_CARD}`}>
         <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden />
         <div>
           <p className="font-medium text-foreground">AI Recovery</p>
@@ -412,7 +412,7 @@ function OnboardingAiRecoverySection({ caps }: { caps: MctbCapabilities | null }
   if (loading) return null;
 
   return (
-    <div className="mt-6 rounded-lg border p-4 text-sm">
+    <div className={`mt-6 p-4 text-sm ${OPUS_CARD}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="font-medium">AI Recovery</p>
         <label className="flex items-center gap-2">

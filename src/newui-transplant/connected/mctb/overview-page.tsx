@@ -36,7 +36,16 @@ import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
 import { Button } from "@/newui-transplant/components/ui/button";
 
 export function NewUiMctbOverviewPage({ data }: { data: MctbOverviewPayload }) {
-  const { leadRecovery } = useMctbOverviewEnrichment(data);
+  const { leadRecovery: leadRecoveryRaw } = useMctbOverviewEnrichment(data);
+  const leadRecovery = leadRecoveryRaw ?? data.leadRecovery ?? {
+    enabled: false,
+    activePolicyCount: 0,
+    status: "disabled" as const,
+    statusLabel: "Off",
+    policySummary: "AI Recovery is not configured.",
+    attentionReason: null,
+    attentionHref: null,
+  };
   const recentMissed = mapMctbOverviewRecentMissedCalls(data);
   const kpis = data.kpis;
   const [capabilities, setCapabilities] = useState<MctbCapabilities | null>(null);

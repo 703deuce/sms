@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Loader2, Volume2 } from 'lucide-react'
 import { GreetingVoicePicker } from '@/components/smart-routing/greeting-voice-picker'
 import { Panel, Pill } from '@/newui-transplant/components/app/kit'
+import { OPUS_INSET_LIST } from '@/newui-transplant/components/app/opus-surfaces'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { SaveBar } from '@/newui-transplant/components/app/save-bar'
 import { MCTB_CONSENT_SCRIPT_CUSTOMER_EDIT_HINT } from '@/lib/mctb/consent-prompt/script-policy'
@@ -147,7 +148,7 @@ export function MctbConsentPromptPanel({ phoneNumberId, disabled }: Props) {
       ) : null}
       <p className="mb-2 text-xs text-muted-foreground">{MCTB_CONSENT_SCRIPT_CUSTOMER_EDIT_HINT}</p>
       <p className="mb-1 text-sm font-medium">Approved disclosure</p>
-      <p className="rounded-lg border bg-muted/40 px-3 py-2.5 text-sm leading-relaxed" id="consent-script">
+      <p className={`${OPUS_INSET_LIST} bg-muted/40 px-3 py-2.5 text-sm leading-relaxed`} id="consent-script">
         {scriptText}
       </p>
       <p className="mt-2 text-xs text-muted-foreground">

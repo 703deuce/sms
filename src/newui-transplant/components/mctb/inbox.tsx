@@ -333,7 +333,7 @@ export function Inbox({
                 <p className="font-mono text-xs text-muted-foreground">{selected.phone}</p>
               </div>
               {selected.mctbUrgent?.isUrgent ? (
-                <div className="rounded-lg border p-3">
+                <div className={`p-3 ${OPUS_CARD}`}>
                   <p className="flex items-center gap-1.5 text-xs font-medium">
                     <Pill tone="warning">Urgent</Pill>
                     <span className="text-muted-foreground">Inbound reply</span>
@@ -349,7 +349,7 @@ export function Inbox({
                 </div>
               ) : null}
               {missed ? (
-                <div className="rounded-lg border p-3">
+                <div className={`p-3 ${OPUS_CARD}`}>
                   <p className="flex items-center gap-1.5 text-xs font-medium">
                     <PhoneMissed className="size-3.5 text-destructive" aria-hidden="true" /> Missed call
                   </p>

@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { Page, PageHeader, Panel, Stat, TextLink } from "@/newui-transplant/components/app/kit";
 import { TrendArea } from "@/newui-transplant/components/app/charts";
 import { td, th } from "@/newui-transplant/components/app/opus-tables";
-import { OPUS_TABLE_HEAD } from "@/newui-transplant/components/app/opus-surfaces";
+import { OPUS_CARD, OPUS_TABLE_HEAD } from "@/newui-transplant/components/app/opus-surfaces";
 import { Segmented } from "@/newui-transplant/components/app/segmented-nav";
 import { mergeDailyTrends } from "@/lib/newui-transplant/adapters/chart-series";
 import type { MctbAnalyticsRange } from "@/lib/mctb/analytics";
@@ -118,7 +118,7 @@ export function NewUiMctbAnalyticsPage({ initialData, initialRange }: { initialD
             ["Link clicks", String(data.linkClicks)],
             ["Opt-outs", String(data.optOuts)],
           ].map(([label, value]) => (
-            <div key={label} className="flex flex-col gap-1 rounded-lg border p-3">
+            <div key={label} className={`flex flex-col gap-1 p-3 ${OPUS_CARD}`}>
               <span className="text-xs text-muted-foreground">{label}</span>
               <span className="text-lg font-semibold tabular-nums">{value}</span>
             </div>

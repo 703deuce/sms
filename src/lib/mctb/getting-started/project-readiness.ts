@@ -82,7 +82,7 @@ export async function projectMctbGettingStarted(workspaceId: string): Promise<Mc
     onboarding.consentMode ||
     "press_1";
 
-  const schedule = readMctbScheduleFromCustomFields(customCfg);
+  const schedule = readMctbScheduleFromCustomFields(customCfg, runtime);
   const recoveryPaused = isMctbSchedulePaused(schedule, runtime) || !runtime.enabled;
   const forwardingVerified = Boolean(
     onboarding.forwardingConnectedAt || forwardingVerification?.verified,

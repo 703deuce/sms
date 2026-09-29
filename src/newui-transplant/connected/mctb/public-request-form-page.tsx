@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Panel } from "@/newui-transplant/components/app/kit";
+import { Page, Panel } from "@/newui-transplant/components/app/kit";
 import { Button } from "@/newui-transplant/components/ui/button";
 import { Input } from "@/newui-transplant/components/ui/input";
 import { Label } from "@/newui-transplant/components/ui/label";
@@ -84,7 +84,7 @@ export function MctbPublicRequestFormOpusPage({ token }: { token: string }) {
   }
 
   return (
-    <div className="mx-auto max-w-lg px-4 py-8">
+    <Page className="mx-auto max-w-lg px-4 py-8">
       <Panel>
         <h1 className="text-lg font-semibold">{workspaceName}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -125,6 +125,6 @@ export function MctbPublicRequestFormOpusPage({ token }: { token: string }) {
           </Button>
         </form>
       </Panel>
-    </div>
+    </Page>
   );
 }

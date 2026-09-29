@@ -99,7 +99,7 @@ export function TransplantMctbAiRecoveryPage({ wired }: { wired?: MctbAiRecovery
       <div className={cn('mt-4 grid gap-4 lg:grid-cols-3', !enabled && 'pointer-events-none opacity-50')} aria-disabled={!enabled}>
         <div className="flex flex-col gap-4 lg:col-span-2">
 
-          <Panel title="Information to collect" description="AI asks only for what’s enabled, one question at a time">
+          <Panel title="Information to collect" description="AI asks only for what’s enabled, one question at a time" bodyClassName="p-0">
             <div className="divide-y">
               {COLLECT.map((c) => (
                 <SettingRow key={c.label} title={c.label} description={c.description} control={
@@ -114,22 +114,23 @@ export function TransplantMctbAiRecoveryPage({ wired }: { wired?: MctbAiRecovery
           </Panel>
 
           {wired?.scenarios?.length ? (
-            <Panel title="Conversation scenarios" description="Which kinds of replies AI Recovery may handle">
-              <ul className="divide-y">
+            <Panel title="Conversation scenarios" description="Which kinds of replies AI Recovery may handle" bodyClassName="p-0">
+              <div className="divide-y">
                 {wired.scenarios.map((s) => (
-                  <li key={s.key} className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0">
-                    <span className="min-w-0">
-                      <span className="block text-sm font-medium">{s.title}</span>
-                      <span className="text-xs text-muted-foreground">{s.description}</span>
-                    </span>
-                    <Switch
-                      checked={s.enabled}
-                      onCheckedChange={(v) => s.onChange(Boolean(v))}
-                      aria-label={`Enable ${s.title}`}
-                    />
-                  </li>
+                  <SettingRow
+                    key={s.key}
+                    title={s.title}
+                    description={s.description}
+                    control={
+                      <Switch
+                        checked={s.enabled}
+                        onCheckedChange={(v) => s.onChange(Boolean(v))}
+                        aria-label={`Enable ${s.title}`}
+                      />
+                    }
+                  />
                 ))}
-              </ul>
+              </div>
             </Panel>
           ) : null}
 

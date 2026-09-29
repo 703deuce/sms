@@ -6,13 +6,7 @@ import { Panel, Pill, Rows } from "@/newui-transplant/components/app/kit";
 import { Button } from "@/newui-transplant/components/ui/button";
 import { Input } from "@/newui-transplant/components/ui/input";
 import { Label } from "@/newui-transplant/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/newui-transplant/components/ui/select";
+import { SimpleSelect } from "@/newui-transplant/components/app/simple-select";
 import {
   Sheet,
   SheetContent,
@@ -175,18 +169,16 @@ export function MctbNumberDrawerOpus(props: Props) {
                       placeholder="703"
                     />
                   </div>
-                  <div className="space-y-1.5">
-                    <Label>Number type</Label>
-                    <Select value={c.numberType} onValueChange={(v) => c.setNumberType(v as "local" | "toll_free")}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="toll_free">Toll-free</SelectItem>
-                        <SelectItem value="local">Local</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <SimpleSelect
+                    id="mctb-drawer-number-type"
+                    label="Number type"
+                    value={c.numberType}
+                    onValueChange={(v) => c.setNumberType(v as "local" | "toll_free")}
+                    options={[
+                      { value: "toll_free", label: "Toll-free" },
+                      { value: "local", label: "Local" },
+                    ]}
+                  />
                   <Button type="button" className="w-full" disabled={c.busy} onClick={() => void c.runSearch()}>
                     Search
                   </Button>

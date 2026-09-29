@@ -3,6 +3,7 @@
 import { PersonalGreetingControls } from "@/components/personal/personal-greeting-controls";
 import { PersonalOutlineButton } from "@/components/personal/personal-ui";
 import { Panel, Pill } from "@/newui-transplant/components/app/kit";
+import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
 import { clientPlatformVoicemailGreetingPreviewPath } from "@/lib/phone/voicemail-greeting-defaults";
 
 type Props = {
@@ -55,7 +56,7 @@ export function MctbVoicemailGreetingStudio({
           <audio className="w-full max-w-md" controls src={greetingUrl} />
         </div>
       ) : (
-        <div className="mb-4 space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+        <div className={`mb-4 space-y-2 bg-muted/30 p-3 ${OPUS_CARD}`}>
           <p className="text-sm text-muted-foreground">
             No custom greeting yet. Callers hear the Transovo default until you activate your own.
           </p>
