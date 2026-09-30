@@ -49,6 +49,7 @@ export function NewUiMctbConversationsPage({
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [missedCalls, setMissedCalls] = useState<MissedCall[]>([]);
   const [loading, setLoading] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
   const [threadLoadingId, setThreadLoadingId] = useState<string | null>(null);
   const [manualTwoWay, setManualTwoWay] = useState(false);
   const hydratedIds = useRef(new Set<string>());
@@ -103,6 +104,7 @@ export function NewUiMctbConversationsPage({
 
   const loadList = useCallback(async () => {
     setLoading(true);
+    setListError(null);
     hydratedIds.current.clear();
     try {
       const query = filterToQuery(filter);
@@ -115,9 +117,10 @@ export function NewUiMctbConversationsPage({
 
       const toHydrate = initialConversationId ?? mapped[0]?.id;
       if (toHydrate) void hydrateThread(toHydrate);
-    } catch {
+    } catch (e) {
       setConversations([]);
       setMissedCalls([]);
+      setListError(e instanceof Error ? e.message : "Could not load conversations");
       setLoading(false);
     }
   }, [filter, initialConversationId, buildMissedCallsFromRows, hydrateThread]);
@@ -178,6 +181,21 @@ export function NewUiMctbConversationsPage({
 
   if (loading) {
     return <p className="p-6 text-sm text-muted-foreground">Loading conversations…</p>;
+  }
+
+  if (listError) {
+    return (
+      <div className="p-6 text-sm">
+        <p className="text-destructive" role="alert">{listError}</p>
+        <button
+          type="button"
+          className="mt-3 text-sm font-medium text-primary underline"
+          onClick={() => void loadList()}
+        >
+          Retry
+        </button>
+      </div>
+    );
   }
 
   return (

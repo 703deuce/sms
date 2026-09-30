@@ -42,8 +42,10 @@ export async function saveMctbSetup(patch: Record<string, unknown>): Promise<voi
 
 export async function fetchMctbExclusions(): Promise<unknown[]> {
   const res = await fetch("/api/mctb/exclusions", { cache: "no-store" });
-  if (!res.ok) return [];
-  const j = await res.json();
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((j as { error?: string }).error || "Could not load exclusions");
+  }
   return (j.data ?? j.exclusions ?? []) as unknown[];
 }
 

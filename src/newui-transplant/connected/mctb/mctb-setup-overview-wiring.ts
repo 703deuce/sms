@@ -46,10 +46,12 @@ type SetupApi = {
 
 export function useMctbSetupOverviewWiring(senderFallback: string): {
   loading: boolean;
+  loadError: string | null;
   wired: MctbSetupOverviewWired | undefined;
   reload: () => Promise<void>;
 } {
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [setup, setSetup] = useState<SetupApi | null>(null);
   const [exclusionCount, setExclusionCount] = useState(0);
   const [notificationSummary, setNotificationSummary] = useState("Not loaded");
@@ -64,6 +66,7 @@ export function useMctbSetupOverviewWiring(senderFallback: string): {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [setupRes, onboardRes] = await Promise.all([
         fetch("/api/mctb/setup", { cache: "no-store" }),
@@ -72,8 +75,7 @@ export function useMctbSetupOverviewWiring(senderFallback: string): {
 
       const setupJson = await setupRes.json();
       if (!setupRes.ok || !setupJson.data) {
-        setSetup(null);
-        return;
+        throw new Error((setupJson as { error?: string }).error || "Could not load setup");
       }
 
       const data = setupJson.data as SetupApi;
@@ -145,8 +147,9 @@ export function useMctbSetupOverviewWiring(senderFallback: string): {
         }
       }
 
-    } catch {
+    } catch (e) {
       setSetup(null);
+      setLoadError(e instanceof Error ? e.message : "Could not load setup");
     } finally {
       setLoading(false);
     }
@@ -293,5 +296,5 @@ export function useMctbSetupOverviewWiring(senderFallback: string): {
     load,
   ]);
 
-  return { loading, wired, reload: load };
+  return { loading, loadError, wired, reload: load };
 }

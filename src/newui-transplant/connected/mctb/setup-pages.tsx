@@ -88,9 +88,18 @@ const OPUS_EVENT_MAP: Array<{ label: string; event?: MctbHandoffEventType }> = [
 ];
 
 export function NewUiMctbSetupOverviewPage() {
-  const { loading, wired } = useMctbSetupOverviewWiring("—");
+  const { loading, loadError, wired, reload } = useMctbSetupOverviewWiring("—");
   if (loading) return <p className="p-6 text-sm text-muted-foreground">Loading setup…</p>;
-  if (!wired) return <p className="p-6 text-sm text-muted-foreground">Could not load setup.</p>;
+  if (!wired) {
+    return (
+      <div className="p-6 text-sm">
+        <p className="text-destructive" role="alert">{loadError || "Could not load setup."}</p>
+        <Button type="button" className="mt-3" variant="outline" size="sm" onClick={() => void reload()}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
   return (
     <Page>
       <PageHeader
@@ -110,7 +119,7 @@ export function NewUiMctbSetupOverviewPage() {
 export function NewUiMctbSetupPhonePage() {
   const searchParams = useSearchParams();
   const [drawerMode, setDrawerMode] = useState<MctbNumberDrawerMode>(null);
-  const { loading, wired, reload } = useMctbSetupPhoneWiring();
+  const { loading, loadError, wired, reload } = useMctbSetupPhoneWiring();
   useMctbNumberDrawerEvents(setDrawerMode);
 
   useEffect(() => {
@@ -121,7 +130,16 @@ export function NewUiMctbSetupPhonePage() {
   }, [searchParams]);
 
   if (loading) return <p className="p-6 text-sm text-muted-foreground">Loading phone settings…</p>;
-  if (!wired) return <p className="p-6 text-sm text-muted-foreground">Could not load phone settings.</p>;
+  if (!wired) {
+    return (
+      <div className="p-6 text-sm">
+        <p className="text-destructive" role="alert">{loadError || "Could not load phone settings."}</p>
+        <Button type="button" className="mt-3" variant="outline" size="sm" onClick={() => void reload()}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   const wiredWithDrawer = {
     ...wired,
@@ -336,6 +354,17 @@ export function NewUiMctbSetupNotificationsPage() {
   }, [n.config, n.recipients, n.setConfig, n.save, n.urgentBusinessSmsEntitled]);
 
   if (n.loading) return <p className="p-6 text-sm text-muted-foreground">Loading notifications…</p>;
+
+  if (n.loadError && !n.config) {
+    return (
+      <div className="p-6 text-sm">
+        <p className="text-destructive" role="alert">{n.loadError}</p>
+        <Button type="button" className="mt-3" variant="outline" size="sm" onClick={() => void n.reload()}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <>

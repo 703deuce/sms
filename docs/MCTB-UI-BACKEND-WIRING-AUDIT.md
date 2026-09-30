@@ -1,7 +1,7 @@
 # MCTB UI → backend wiring audit (code review)
 
 **Date:** 2026-09-30  
-**Method:** Static trace from `src/newui-transplant/connected/mctb/*` and shared MCTB components to `src/app/api/mctb/*` and runtime libs. **Twenty exhaustive review rounds** (pass 1: `docs/MCTB-UI-BACKEND-WIRING-AUDIT-10-ROUNDS.md`, pass 2: `docs/MCTB-UI-BACKEND-WIRING-AUDIT-10-ROUNDS-PASS-2.md`) plus earlier passes (surface → races/cache → E2E). **No browser certification** unless separately requested.  
+**Method:** Static trace from `src/newui-transplant/connected/mctb/*` and shared MCTB components to `src/app/api/mctb/*` and runtime libs. **Thirty exhaustive review rounds** (pass 1–3: `…-10-ROUNDS.md`, `…-PASS-2.md`, `…-PASS-3.md`) plus earlier passes (surface → races/cache → E2E). **No browser certification** unless separately requested.  
 **Out of scope (per request):** Integrations, org Settings, Help, generic billing.
 
 ---
@@ -112,6 +112,7 @@ Legacy `/mctb/setup/*` routes redirect into the IA routes above; wired component
 | 4–6 | Full round-trip | Voicemail filter param, reviewed state, header refresh events, onboarding error path |
 | 7–10 | Full inventory re-scan | `MCTB-UI-BACKEND-WIRING-AUDIT-10-ROUNDS.md` |
 | 11–20 | Second full re-scan | `MCTB-UI-BACKEND-WIRING-AUDIT-10-ROUNDS-PASS-2.md` |
+| 21–30 | Third full re-scan | `MCTB-UI-BACKEND-WIRING-AUDIT-10-ROUNDS-PASS-3.md` |
 
 ### Fixed (ten-round pass)
 
@@ -151,6 +152,17 @@ Legacy `/mctb/setup/*` routes redirect into the IA routes above; wired component
 31. **Booking links reload** — ignored parallel `!res.ok`. **Fix:** throw + error state.
 32. **Notifications recipients** — `void n.save`. **Fix:** `recipientSaveError`.
 33. **Conversations send** — missing phone silent return; stale capabilities cache. **Fix:** throw + `force` setup fetch.
+
+### Fixed (pass 3 — rounds 21–30)
+
+34. **`fetchMctbExclusions`** — HTTP error returned empty list. **Fix:** throw (exclusions table shows error).
+35. **Phone wiring** — failed load rendered blank form. **Fix:** `loadError` + Retry.
+36. **Setup overview** — generic load failure. **Fix:** `loadError` + Retry.
+37. **Recovery pause (overview)** — silent save failure. **Fix:** `actionError` on `MctbRecoveryPauseOpus`.
+38. **Conversations list** — empty inbox on fetch error. **Fix:** `listError` + Retry.
+39. **Notifications wiring** — handoff GET ignored `!res.ok`. **Fix:** `loadError` + Retry; IA meta banner.
+40. **Missed call detail** — error without retry. **Fix:** Retry control.
+41. **`useMctbLinksWiring`** — unhandled setup fetch failure. **Fix:** `loadError`.
 
 ### By design (not bugs)
 

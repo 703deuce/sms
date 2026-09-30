@@ -43,9 +43,31 @@ export function NewUiMctbMissedCallDetailPage({ eventId }: { eventId: string }) 
   if (loading) return <p className="p-6 text-sm text-muted-foreground">Loading missed call…</p>;
   if (error) {
     return (
-      <p className="p-6 text-sm text-muted-foreground" role="alert">
-        {error}
-      </p>
+      <div className="p-6 text-sm">
+        <p className="text-destructive" role="alert">{error}</p>
+        <button
+          type="button"
+          className="mt-3 text-sm font-medium text-primary underline"
+          onClick={() => {
+            setLoading(true);
+            setError(null);
+            fetch(`/api/mctb/missed-calls/${eventId}`, { cache: "no-store" })
+              .then(async (r) => {
+                const json = await r.json();
+                if (!r.ok) throw new Error(json.error || "Failed to load missed call");
+                if (!json.event) throw new Error("Missed call record is incomplete");
+                setDetailJson(json);
+              })
+              .catch((err) => {
+                setDetailJson(null);
+                setError(err instanceof Error ? err.message : "Failed to load missed call");
+              })
+              .finally(() => setLoading(false));
+          }}
+        >
+          Retry
+        </button>
+      </div>
     );
   }
   if (!wired) return <p className="p-6 text-sm text-muted-foreground">Missed call not found.</p>;

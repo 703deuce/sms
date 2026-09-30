@@ -301,6 +301,7 @@ export function useMctbVoicemailWiring() {
 
 export function useMctbNotificationsWiring() {
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [recipients, setRecipients] = useState<MctbNotificationRecipientDto[]>([]);
   const recipientsRef = useRef<MctbNotificationRecipientDto[]>([]);
   const [config, setConfig] = useState<MctbHandoffConfigDto | null>(null);
@@ -323,20 +324,24 @@ export function useMctbNotificationsWiring() {
 
   const reload = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const res = await fetch("/api/mctb/handoff", { cache: "no-store" });
-      const json = await res.json();
-      if (res.ok) {
-        setConfigSynced(json.data.config);
-        setRecipients(json.data.recipients || []);
-        setUrgentBusinessSmsEntitled(
-          json.data.launch?.urgentBusinessSmsEntitled !== false,
-        );
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error((json as { error?: string }).error || "Could not load notifications");
       }
+      setConfigSynced(json.data.config);
+      setRecipients(json.data.recipients || []);
+      setUrgentBusinessSmsEntitled(json.data.launch?.urgentBusinessSmsEntitled !== false);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Could not load notifications");
+      setConfigSynced(null);
+      setRecipientsSynced([]);
     } finally {
       setLoading(false);
     }
-  }, [setConfigSynced]);
+  }, [setConfigSynced, setRecipientsSynced]);
 
   useEffect(() => {
     void reload();
@@ -365,6 +370,7 @@ export function useMctbNotificationsWiring() {
 
   return {
     loading,
+    loadError,
     recipients,
     config,
     setConfig: setConfigSynced,
@@ -378,6 +384,7 @@ export function useMctbNotificationsWiring() {
 
 export function useMctbLinksWiring() {
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [phoneNumberId, setPhoneNumberId] = useState<string | null>(null);
   const [defaultLinkUrl, setDefaultLinkUrl] = useState("");
   const [requestFormEnabled, setRequestFormEnabled] = useState(false);
@@ -385,6 +392,7 @@ export function useMctbLinksWiring() {
 
   const reload = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const data = await fetchMctbSetup({ force: true });
       const r = data.runtime as Record<string, unknown>;
@@ -397,6 +405,8 @@ export function useMctbLinksWiring() {
       } else {
         setRequestFormUrl("");
       }
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Could not load links settings");
     } finally {
       setLoading(false);
     }
@@ -423,6 +433,7 @@ export function useMctbLinksWiring() {
 
   return {
     loading,
+    loadError,
     defaultLinkUrl,
     setDefaultLinkUrl,
     requestFormEnabled,

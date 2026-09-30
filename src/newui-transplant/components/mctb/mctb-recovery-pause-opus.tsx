@@ -26,15 +26,18 @@ export function MctbRecoveryPauseOpus({
   compact,
 }: Props) {
   const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const run = useCallback(
     async (patch: Record<string, unknown>) => {
       setBusy(true);
+      setActionError(null);
       try {
         await saveMctbSetup(patch);
         onUpdated?.();
-      } catch {
-        // saveMctbSetup throws; keep UI state until user retries
+      } catch (e) {
+        setActionError(e instanceof Error ? e.message : "Could not update recovery status");
+        onUpdated?.();
       } finally {
         setBusy(false);
       }
@@ -52,7 +55,11 @@ export function MctbRecoveryPauseOpus({
 
   if (compact) {
     return (
-      <div className={cn('flex flex-wrap items-center justify-between gap-3 px-4 py-3', OPUS_CARD)}>
+      <div className={cn('flex flex-col gap-2 px-4 py-3', OPUS_CARD)}>
+        {actionError ? (
+          <p className="text-sm text-destructive" role="alert">{actionError}</p>
+        ) : null}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-sm font-medium">Missed call recovery</p>
           <p className="text-xs text-muted-foreground">
@@ -80,11 +87,15 @@ export function MctbRecoveryPauseOpus({
           )}
         </div>
       </div>
+      </div>
     );
   }
 
   return (
     <Panel title="Missed call recovery">
+      {actionError ? (
+        <p className="mb-3 text-sm text-destructive" role="alert">{actionError}</p>
+      ) : null}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="flex items-center gap-2 text-sm font-medium">

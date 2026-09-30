@@ -33,9 +33,12 @@ function resolveSenderMode(d: Record<string, unknown>): "PLATFORM" | "WORKSPACE"
 
 export function useMctbSetupPhoneWiring(): {
   loading: boolean;
+  loadError: string | null;
   wired: MctbSetupPhoneWired | undefined;
+  reload: () => Promise<void>;
 } {
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [phoneNumberId, setPhoneNumberId] = useState<string | null>(null);
   const [businessLineE164, setBusinessLineE164] = useState<string | null>(null);
   const [productionForwardE164, setProductionForwardE164] = useState<string | null>(null);
@@ -61,13 +64,16 @@ export function useMctbSetupPhoneWiring(): {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [setupRes, onboardRes] = await Promise.all([
         fetch("/api/mctb/setup", { cache: "no-store" }),
         fetch("/api/mctb/onboarding", { cache: "no-store" }),
       ]);
       const setupJson = await setupRes.json();
-      if (!setupRes.ok || !setupJson.data) return;
+      if (!setupRes.ok || !setupJson.data) {
+        throw new Error((setupJson as { error?: string }).error || "Could not load phone settings");
+      }
 
       const d = setupJson.data as Record<string, unknown>;
       const ob = onboardRes.ok ? await onboardRes.json().catch(() => null) : null;
@@ -133,6 +139,8 @@ export function useMctbSetupPhoneWiring(): {
             : null,
         );
       }
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Could not load phone settings");
     } finally {
       setLoading(false);
     }
@@ -204,7 +212,7 @@ export function useMctbSetupPhoneWiring(): {
   );
 
   const wired = useMemo((): MctbSetupPhoneWired | undefined => {
-    if (loading) return undefined;
+    if (loading || loadError) return undefined;
 
     const connection = resolveConnectionUiStatus(
       verification,
@@ -377,6 +385,7 @@ export function useMctbSetupPhoneWiring(): {
     };
   }, [
     loading,
+    loadError,
     businessLineE164,
     businessLineInput,
     businessLineError,
@@ -396,5 +405,5 @@ export function useMctbSetupPhoneWiring(): {
     saveSenderSelection,
   ]);
 
-  return { loading, wired, reload: load };
+  return { loading, loadError, wired, reload: load };
 }

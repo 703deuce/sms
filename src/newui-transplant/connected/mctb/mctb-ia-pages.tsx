@@ -277,18 +277,24 @@ export function NewUiMctbTextBackPage() {
 export function NewUiMctbNotificationsDirectPage() {
   const [recipientCount, setRecipientCount] = useState<number | null>(null);
   const [urgentOn, setUrgentOn] = useState(false);
+  const [handoffMetaError, setHandoffMetaError] = useState<string | null>(null);
 
   const refreshHandoffMeta = useCallback(() => {
+    setHandoffMetaError(null);
     void fetch("/api/mctb/handoff", { cache: "no-store" })
       .then(async (r) => {
-        if (!r.ok) return;
-        const json = await r.json();
+        const json = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          throw new Error((json as { error?: string }).error || "Could not load notification summary");
+        }
         const data = json.data ?? json;
         const recipients = Array.isArray(data.recipients) ? data.recipients : [];
         setRecipientCount(recipients.length);
         setUrgentOn(Boolean(data.config?.emergencyDetectionEnabled));
       })
-      .catch(() => undefined);
+      .catch((e) => {
+        setHandoffMetaError(e instanceof Error ? e.message : "Could not load notification summary");
+      });
   }, []);
 
   useEffect(() => {
@@ -305,6 +311,9 @@ export function NewUiMctbNotificationsDirectPage() {
         description="Where your team is notified when callers reply or urgent messages are detected."
         status={<Pill tone="info">Team alerts</Pill>}
       />
+      {handoffMetaError ? (
+        <p className="mb-3 text-sm text-destructive" role="alert">{handoffMetaError}</p>
+      ) : null}
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-3">
         <Stat
           label="Recipients"
