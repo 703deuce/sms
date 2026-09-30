@@ -33,9 +33,13 @@ export async function POST(request: Request) {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
-    const body = await request.json();
-    const phone = normalizeE164(String(body.phone || ""));
-    const reason = String(body.reason || "Do not text").trim();
+    const body = (await request.json()) as Record<string, unknown>;
+    const phoneRaw = body.phone ?? body.phoneE164 ?? "";
+    const phone = normalizeE164(String(phoneRaw));
+    if (!phone) {
+      return jsonError(new Error("Valid phone number is required"), 400);
+    }
+    const reason = String(body.reason ?? body.label ?? "Do not text").trim();
     traceMctbDebug("exclusions", "post_start", {
       workspaceId: auth.workspaceId,
       phone,
