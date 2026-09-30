@@ -117,10 +117,16 @@ export function NewUiMctbSetupOverviewPage() {
   );
 }
 
-export function NewUiMctbSetupPhonePage() {
+export type MctbSetupPhoneWiringState = ReturnType<typeof useMctbSetupPhoneWiring>;
+
+export function MctbSetupPhonePageInner({
+  loading,
+  loadError,
+  wired,
+  reload,
+}: MctbSetupPhoneWiringState) {
   const searchParams = useSearchParams();
   const [drawerMode, setDrawerMode] = useState<MctbNumberDrawerMode>(null);
-  const { loading, loadError, wired, reload } = useMctbSetupPhoneWiring();
   useMctbNumberDrawerEvents(setDrawerMode);
 
   useEffect(() => {
@@ -158,6 +164,11 @@ export function NewUiMctbSetupPhonePage() {
       />
     </>
   );
+}
+
+export function NewUiMctbSetupPhonePage() {
+  const wiring = useMctbSetupPhoneWiring();
+  return <MctbSetupPhonePageInner {...wiring} />;
 }
 
 export function NewUiMctbSetupConsentPage() {

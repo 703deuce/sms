@@ -22,6 +22,7 @@ import {
   Users,
 } from "lucide-react";
 import { useMctbSetupPhoneWiring } from "@/newui-transplant/connected/mctb/mctb-setup-phone-wiring";
+import { MctbSetupPhonePageInner } from "@/newui-transplant/connected/mctb/setup-pages";
 import { OpusLineTabs } from "@/newui-transplant/components/app/segmented-nav";
 import { useMctbRecoveryWiring } from "@/newui-transplant/connected/mctb/setup-wiring-hooks";
 import { TextBackEditor } from "@/newui-transplant/components/mctb/text-back-editor";
@@ -362,7 +363,8 @@ export function NewUiMctbPhoneForwardingPage() {
   const searchParams = useSearchParams();
   const testOpen = searchParams.get("test") === "1";
   const [testDialog, setTestDialog] = useState(testOpen);
-  const { wired: phoneWired, loading: phoneMetaLoading } = useMctbSetupPhoneWiring();
+  const phoneWiring = useMctbSetupPhoneWiring();
+  const { wired: phoneWired, loading: phoneMetaLoading } = phoneWiring;
 
   useEffect(() => {
     setTestDialog(testOpen);
@@ -419,7 +421,7 @@ export function NewUiMctbPhoneForwardingPage() {
             }
           />
         </div>
-        <NewUiMctbSetupPhonePage />
+        <MctbSetupPhonePageInner {...phoneWiring} />
         <div className="mt-8">
           <MctbOwnSenderA2pPanel />
         </div>

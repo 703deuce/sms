@@ -45,6 +45,9 @@ export type MctbSetupPhoneWired = {
   ownSenderLockedHint?: string
   ownSenderRegistrationHref?: string
   ownSenderLifecycleSteps?: string[]
+  showOwnSenderSubscribe?: boolean
+  ownSenderSubscribeBusy?: boolean
+  onOwnSenderSubscribe?: () => void | Promise<void>
   senderRegistrationLabel?: string
   senderRegistrationTone?: 'success' | 'warning'
   onCarrierChange?: (carrierId: string) => void
@@ -327,6 +330,16 @@ export function TransplantMctbSetupPhonePage({ wired }: { wired?: MctbSetupPhone
         ) : null}
 
         <div className="mt-4 flex flex-wrap gap-2">
+          {wired?.showOwnSenderSubscribe ? (
+            <Button
+              type="button"
+              size="sm"
+              disabled={wired.ownSenderSubscribeBusy}
+              onClick={() => void wired.onOwnSenderSubscribe?.()}
+            >
+              {wired.ownSenderSubscribeBusy ? 'Opening checkout…' : 'Add Own Local Number — $10/mo'}
+            </Button>
+          ) : null}
           {wired?.onManageNumbers ? (
             <Button type="button" size="sm" variant="outline" onClick={wired.onManageNumbers}>
               Manage messaging numbers

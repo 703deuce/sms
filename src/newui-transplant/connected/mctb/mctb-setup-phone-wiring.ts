@@ -61,6 +61,7 @@ export function useMctbSetupPhoneWiring(): {
   const [verification, setVerification] = useState<ForwardingVerificationUi>(null);
   const [businessLineInput, setBusinessLineInput] = useState("");
   const [businessLineError, setBusinessLineError] = useState<string | null>(null);
+  const [ownSenderCheckoutBusy, setOwnSenderCheckoutBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -334,19 +335,33 @@ export function useMctbSetupPhoneWiring(): {
       ownSenderEntitled,
       ownSenderLockedHint: ownSenderEntitled
         ? undefined
-        : "Own Sender add-on required to text from your verified number.",
-      ownSenderRegistrationHref: "/compliance",
+        : "Own Local Number is $10/month on top of your MCTB plan (Free, Text Back, or AI Recovery), plus $19.50 one-time A2P at checkout.",
+      showOwnSenderSubscribe: !ownSenderEntitled,
+      ownSenderSubscribeBusy: ownSenderCheckoutBusy,
+      onOwnSenderSubscribe: async () => {
+        setOwnSenderCheckoutBusy(true);
+        try {
+          const { startPlatformProductCheckout } = await import("@/lib/mctb/start-platform-checkout");
+          await startPlatformProductCheckout({
+            productKey: "mctb_own_sender",
+            successPath: "/mctb/phone",
+          });
+        } finally {
+          setOwnSenderCheckoutBusy(false);
+        }
+      },
+      ownSenderRegistrationHref: ownSenderEntitled ? "/compliance" : undefined,
       ownSenderLifecycleSteps: ownSenderEntitled
         ? [
-            "Choose a verified workspace number below (TFN or 10DLC-approved).",
-            "Complete messaging registration if status is Pending or Rejected.",
-            "Select your number here to activate — runtime and custom opener unlock.",
+            "Complete the A2P registration form below (Transovo submits to the carrier manually).",
+            "Choose a verified workspace number (TFN or 10DLC-approved).",
+            "Select your number here to activate — runtime and custom opener unlock when approved.",
             "Switch back to Transovo Platform anytime; policy reverts immediately.",
           ]
         : [
-            "Unlock Own Sender on your plan.",
-            "Register a toll-free or 10DLC sender under Compliance.",
-            "Return here to activate the approved number as text-back sender.",
+            "Subscribe to Own Local Number ($10/mo on top of your current plan + $19.50 one-time A2P).",
+            "Complete the A2P intake form on this page after checkout.",
+            "When the carrier approves messaging, select your number as text-back sender.",
           ],
       senderRegistrationLabel:
         senderMode === "PLATFORM"
@@ -407,6 +422,7 @@ export function useMctbSetupPhoneWiring(): {
     selectedCustomerSenderId,
     customerSenders,
     ownSenderEntitled,
+    ownSenderCheckoutBusy,
     messagingReady,
     campaignStatus,
     saveForwarding,

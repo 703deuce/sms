@@ -1,10 +1,7 @@
-import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
-import { NewUiVoiceAnalyticsPage } from "@/newui-transplant/connected/voice/analytics-page";
-import { VoiceAnalyticsDashboard } from "@/components/voice/voice-analytics-dashboard";
+import { redirect } from "next/navigation";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 
+/** Legacy Voice analytics → canonical MCTB analytics. */
 export default function VoiceAnalyticsPage() {
-  if (isNewUiStage2Enabled()) {
-    return <NewUiVoiceAnalyticsPage />;
-  }
-  return <VoiceAnalyticsDashboard />;
+  redirect(MCTB_ROUTES.analytics);
 }

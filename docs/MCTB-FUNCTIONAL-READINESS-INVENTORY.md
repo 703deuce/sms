@@ -125,26 +125,24 @@ Repository-backed inventory for **Transovo Missed Call Text Back (MCTB)**.
 - **Config:** `/mctb/missed-call-recovery` (pause, timing, rules, consent tab, exclusions), `/mctb/text-back` (templates + preview), `/mctb/phone` (carrier, verify, sender, test dialog), `/mctb/setup/*` mirrors.
 - **Compliance:** `/mctb/compliance/consent` after real calls.
 - **STOP/HELP** on live sender.
-- **Free tier limit:** recovery usage toward 25 logical recoveries (overview strip + suppression on 26th).
+- **Free tier limit:** recovery usage toward 10 logical recoveries (overview strip + suppression when over limit).
 - **Urgent (paid workspace only):** config + test + live urgent reply path.
 - **AI Recovery (entitled workspace only):** gate + enable path.
 - **Deploy sanity:** production on **`17ed246a`** — you are testing current UI polish commit.
 
 ---
 
-## B. NEEDS FIXING BEFORE I TEST IT (as designed)
+## B. INTENTIONAL LIMITS (not broken wiring)
 
-| Item | Why |
-|------|-----|
-| Notification **recipient email** delivery | Loop records handoff recipient but sends via `notifyWorkspaceByEmail` (workspace members), not `recipient.email`. |
-| Notification **Edit (⋯)** on recipients | Button has no `onClick`. |
-| Event matrix **SMS** toggles (launch) | `MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY` forces non-email channels off — UI may imply SMS works. |
-| **“Forwarding stopped working”** notification row | No mapped handoff event / runtime. |
-| **Booking link** on Free | `bookingLinks` capability requires paid — expect lock, not full E2E on Free. |
-| **Existing consent** on Free | Needs paid + certification attestation. |
-| **Auto number on workspace create only** | Provision is tied to onboarding actions, not instant on signup. |
+| Item | Behavior |
+|------|----------|
+| Event matrix **SMS** toggles | Launch flag `MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY` — only **email** team alerts are delivered; SMS columns show disabled state in New UI. |
+| **Booking link** on Free | Paid capability — API **403** if not entitled (not a fake save). |
+| **Existing consent** on Free | Allowed on **platform sender** with attestation; own-number path needs approved messaging. |
+| **Auto number on signup** | Provision runs from onboarding / phone setup actions, not workspace create alone. |
+| **Own number live texting** | Requires add-on subscription + A2P intake + **carrier approval** before WORKSPACE sender is fully active. |
 
-*Do not block your core PSTN/SMS path; fix or consciously accept before testing notifications/booking on Free.*
+*Core setup → persist → runtime is wired; rows above are product policy or external approval.*
 
 ---
 

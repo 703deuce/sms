@@ -7,6 +7,8 @@ import { Input } from "@/newui-transplant/components/ui/input";
 import { Label } from "@/newui-transplant/components/ui/label";
 import { Textarea } from "@/newui-transplant/components/ui/textarea";
 import { FileText } from "lucide-react";
+import { startPlatformProductCheckout } from "@/lib/mctb/start-platform-checkout";
+import Link from "next/link";
 type MctbOwnSenderA2pIntake = {
   status: string;
   legalBusinessName: string;
@@ -30,6 +32,7 @@ export function MctbOwnSenderA2pPanel() {
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [intake, setIntake] = useState<MctbOwnSenderA2pIntake | null>(null);
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -91,9 +94,29 @@ export function MctbOwnSenderA2pPanel() {
         description="After you subscribe to Own Local Number, complete this form. Transovo submits your carrier registration manually — approval is not automatic."
       >
         <p className="text-sm text-muted-foreground">
-          Add Own Local Number from Settings → Billing. It is $10/month on top of your current MCTB plan
-          (Free, Text Back, or AI Recovery), plus a one-time $19.50 A2P fee at checkout.
+          Own Local Number is $10/month on top of your current MCTB plan (Free $0, Text Back $9.99, or AI
+          Recovery $19.99), plus a one-time $19.50 A2P fee at checkout.
         </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button
+            type="button"
+            size="sm"
+            disabled={checkoutBusy}
+            onClick={() => {
+              setCheckoutBusy(true);
+              void startPlatformProductCheckout({
+                productKey: "mctb_own_sender",
+                successPath: "/mctb/phone",
+              }).catch((err) => setFormError(err instanceof Error ? err.message : "Checkout failed"))
+                .finally(() => setCheckoutBusy(false));
+            }}
+          >
+            {checkoutBusy ? "Opening checkout…" : "Subscribe — $10/mo + $19.50 A2P"}
+          </Button>
+          <Button type="button" size="sm" variant="outline" asChild>
+            <Link href="/settings/billing">View all plans</Link>
+          </Button>
+        </div>
       </ConfigSection>
     );
   }

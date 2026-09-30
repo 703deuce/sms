@@ -195,19 +195,14 @@ Roughly 30 `/api/mctb/*` routes; customer UIs exist for setup, overview, handoff
 
 ---
 
-## What still blocks “paying customer tomorrow”
+## Remaining external / policy boundaries
 
-1. **Own Sender checkout CTA** on Phone/Numbers (catalog fixed; UI still hint-only).
-2. **Inbox manual send gating** for Platform sender (`manualTwoWayMessaging`).
-3. **Real Stripe price IDs** for `mctb_ai_recovery` / `mctb_own_sender` (placeholders in live catalog until sync).
-4. **Deploy + cert seed** for consent POST 500 / legacy redirects (branch ahead of production).
-5. **Handset PSTN** for both consent modes (cannot be done in cloud VM).
-6. **Optional:** Split trigger editor out of New UI recovery page to match page specs 09/12 fully.
+1. **Carrier A2P / TFV approval** after Transovo submits intake — not instant on save.
+2. **Telnyx inventory** for number provision — environment-dependent.
+3. **Launch email-only team notifications** — SMS matrix disabled by flag until post-launch.
 
 ---
 
 ## Bottom line
 
-A green test for a capability is not the same as proving every customer-facing feature is implemented end-to-end. Core MCTB recovery is largely real; commercial add-on **purchase wiring** and **Platform manual messaging policy** were the main code gaps identified. First pass fixed billing/catalog/checkout for AI Recovery and Own Sender SKUs, missed-call-rules route, recovery usage on Setup overview, cert-aligned save label, and AI Booking Upgrade checkout.
-
-**Suggested next implementation (highest value):** Own Sender checkout on Phone setup + MCTB-aware inbox composer gating for Platform mode.
+Customer setup surfaces persist through canonical APIs (`/api/mctb/setup`, handoff, onboarding, exclusions) into `missedCallTextConfig` and related stores; runtime send, TeXML, and eligibility read the same sources. Own Local Number is **$10/mo stacked** on the base plan via a separate Stripe subscription; Phone setup includes checkout + A2P intake. Platform-sender manual inbox replies are gated via `manualTwoWayMessaging` in the MCTB conversations shell.
