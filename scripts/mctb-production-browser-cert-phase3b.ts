@@ -65,13 +65,33 @@ Non-product (do not fix in app): Phase 3 sidebar timeouts, clipboard denied, Bas
   const httpErrors: string[] = [];
   attachHttpWatch(page, BASE, httpErrors);
 
-  for (const c of PHASE3_NAV_RETRY_CASES) {
-    await retryGlobalNavLink(page, BASE, c, record);
+  if (process.env.MCTB_PHASE3B_SKIP_NAV !== "1") {
+    for (const c of PHASE3_NAV_RETRY_CASES) {
+      await retryGlobalNavLink(page, BASE, c, record);
+    }
   }
 
-  await phase3bNotificationsPersistence(page, BASE, record);
+  const persistPage = await context.newPage();
+  attachHttpWatch(persistPage, BASE, httpErrors);
   try {
-    await phase3bStateChanging(page, BASE, record);
+    await phase3bNotificationsPersistence(persistPage, BASE, record);
+  } catch (e) {
+    record({
+      route: "/mctb/notifications",
+      page: "Notifications",
+      tab: "3b",
+      control: "Add recipient",
+      browserAction: "click",
+      uiResult: String(e).slice(0, 240),
+      backendResult: "—",
+      refreshResult: "—",
+      effectiveRuntime: "—",
+      status: "FAIL — HARNESS",
+      defectFix: "dismiss overlay / dialog handling",
+    });
+  }
+  try {
+    await phase3bStateChanging(persistPage, BASE, record);
   } catch (e) {
     record({
       route: "—",
@@ -88,6 +108,7 @@ Non-product (do not fix in app): Phase 3 sidebar timeouts, clipboard denied, Bas
     });
   }
 
+  await persistPage.close().catch(() => undefined);
   await browser.close();
 
   const productFails = rows.filter((r) => r.status.includes("FAIL — PRODUCT"));

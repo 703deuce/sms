@@ -20,7 +20,7 @@ Do **not**: fix → push → wait for Coolify → retest one control → repeat.
 
 | Item | Value |
 |------|--------|
-| **Production `/api/health` commitSha (last checked)** | `74bd0108b7ca641f35122bdfd291d8237e91afdd` |
+| **Production `/api/health` commitSha (Phase 3b)** | `443a46c1c5cbb761801cd1b30196c2ca06bfe224` |
 | **Includes prior browser fixes** | `ae862d56`, `c935c42c`, `e7d2d8e9`, exclusions payload fixes, etc. |
 | **`master` after phase 2 + notification fix (may not be deployed yet)** | `443a46c1` (fast-forward merge of `cursor/mctb-browser-cert-continue-f350`) |
 | **Workspace** | `ws_1` |
@@ -165,12 +165,30 @@ Do **not**: fix → push → wait for Coolify → retest one control → repeat.
 
 ---
 
+## Phase 3 — every button actually clicked (in progress)
+
+**Problem:** Phase 2 recorded ~1,487 rows as `PASS — UI (manifest)` — that only **listed** controls in the DOM; it did **not** click every button/link/toggle.
+
+**Fix:** New runner performs **live** interaction (click, fill, toggle restore, link navigate+back):
+
+```bash
+NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' \
+MCTB_PROD_CERT_BASE_URL=<production-origin> \
+MCTB_PROD_CERT_EMAIL=<admin> \
+npx tsx scripts/mctb-production-browser-cert-exercise-all.ts
+```
+
+**Output matrix:** `docs/MCTB-PRODUCTION-BROWSER-CERTIFICATION-EXERCISE.md`  
+**Status values:** `PASS — UI + LIVE EXERCISE` = actually used in browser; timeouts/FAIL = needs fix or harness tweak (e.g. sidebar links need scroll-into-view).
+
+---
+
 ## Recommended next steps
 
-1. Confirm production `/api/health` → **`443a46c1`** (or later).
-2. Run **`--only-notifications`** only; expect PASS if fix is live.
-3. Update matrix FAIL rows to PASS or append retest rows; remove or annotate stale analytics FAIL.
-4. Run full batch script once more if desired; then physical golden path when browser-testable controls = 0.
+1. Let **Phase 3 exercise** finish; reconcile FAIL rows (product bugs vs harness).
+2. Batch-fix all failures locally; **report before** next `master` push.
+3. Deploy **`443a46c1`** (notifications fix); re-run notifications CRUD in exercise runner.
+4. When exercise matrix has **0 FAIL** for browser-testable controls → physical golden path.
 
 ---
 

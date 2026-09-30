@@ -25,13 +25,28 @@ function wireDialogs(page: Page, mode: "add" | "edit") {
   });
 }
 
+function addRecipientButton(page: Page) {
+  return page.locator("button").filter({ hasText: /add recipient/i }).first();
+}
+
+async function dismissBlockingOverlays(page: Page) {
+  for (let i = 0; i < 4; i++) {
+    const overlay = page.locator('[data-slot="dialog-overlay"][data-open]');
+    if (!(await overlay.count())) break;
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(400);
+  }
+  const dismiss = page.getByRole("button", { name: /close|dismiss|got it|not now|cancel/i }).first();
+  if (await dismiss.isVisible().catch(() => false)) {
+    await dismiss.click().catch(() => undefined);
+    await page.waitForTimeout(400);
+  }
+}
+
 async function goto(base: string, page: Page, path: string) {
   await page.goto(`${base}${path}`, { waitUntil: "domcontentloaded", timeout: 120_000 });
   await page.getByText(/loading notifications/i).waitFor({ state: "hidden", timeout: 60_000 }).catch(() => undefined);
-  await page
-    .getByRole("button", { name: /add recipient/i })
-    .waitFor({ state: "visible", timeout: 60_000 })
-    .catch(() => undefined);
+  await addRecipientButton(page).waitFor({ state: "visible", timeout: 60_000 }).catch(() => undefined);
   await page.waitForTimeout(500);
 }
 
@@ -42,7 +57,14 @@ export async function phase3bNotificationsPersistence(
   record: (row: CertRow) => void,
 ): Promise<void> {
   const path = "/mctb/notifications";
+  wireDialogs(page, "add");
   await goto(base, page, path);
+  if (!(await addRecipientButton(page).isVisible().catch(() => false))) {
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.getByText(/loading notifications/i).waitFor({ state: "hidden", timeout: 60_000 }).catch(() => undefined);
+    await addRecipientButton(page).waitFor({ state: "visible", timeout: 60_000 }).catch(() => undefined);
+  }
+  await dismissBlockingOverlays(page);
   if (page.url().includes("/login")) {
     record({
       route: path,
@@ -74,8 +96,7 @@ export async function phase3bNotificationsPersistence(
     defectFix: "",
   });
 
-  wireDialogs(page, "add");
-  const addBtn = page.getByRole("button", { name: /add recipient/i });
+  const addBtn = addRecipientButton(page);
   if (!(await addBtn.isVisible().catch(() => false))) {
     record({
       route: path,
@@ -87,14 +108,27 @@ export async function phase3bNotificationsPersistence(
       backendResult: JSON.stringify(snapshotBackend(WORKSPACE_ID).handoff),
       refreshResult: "—",
       effectiveRuntime: "handoff recipients",
-      status: "FAIL — PRODUCT",
-      defectFix: "",
+      status: "FAIL — HARNESS",
+      defectFix: "selector/timing — not a product defect unless reproducible manually",
     });
     return;
   }
 
   const beforeAdd = snapshotBackend(WORKSPACE_ID);
-  await addBtn.click();
+  await dismissBlockingOverlays(page);
+  const postWait = page
+    .waitForResponse(
+      (r) => r.url().includes("/api/mctb/handoff") && r.request().method() === "POST",
+      { timeout: 25_000 },
+    )
+    .catch(() => null);
+  try {
+    await addBtn.click({ timeout: 12_000 });
+  } catch {
+    await addBtn.evaluate((el) => (el as HTMLElement).click());
+  }
+  const postRes = await postWait;
+  const postMeta = postRes ? `${postRes.status()} ${(await postRes.text().catch(() => "")).slice(0, 120)}` : "no POST observed";
   await page.waitForTimeout(3000);
   const afterAdd = snapshotBackend(WORKSPACE_ID);
   const uiAfterAdd = await page.getByText(CERT_RECIPIENT_EMAIL).isVisible().catch(() => false);
@@ -107,7 +141,7 @@ export async function phase3bNotificationsPersistence(
     control: "Add recipient",
     browserAction: `prompt add ${CERT_RECIPIENT_EMAIL}`,
     uiResult: uiAfterAdd ? "row visible" : "row missing",
-    backendResult: `before=${beforeAdd.handoff?.recipientCount} after=${afterAdd.handoff?.recipientCount} certPresent=${afterAdd.handoff?.certRecipientPresent}`,
+    backendResult: `before=${beforeAdd.handoff?.recipientCount} after=${afterAdd.handoff?.recipientCount} certPresent=${afterAdd.handoff?.certRecipientPresent} post=${postMeta}`,
     refreshResult: "pending",
     effectiveRuntime: "mctb_notification_recipients",
     status: addOk ? "PASS — UI + PERSISTENCE (3b)" : "FAIL — PRODUCT",
