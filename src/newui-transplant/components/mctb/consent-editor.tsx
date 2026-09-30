@@ -32,6 +32,7 @@ export function ConsentEditor() {
   const [phoneNumberId, setPhoneNumberId] = useState<string | null>(null)
   const [recoveryPaid, setRecoveryPaid] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   const load = useCallback(async () => {
@@ -76,14 +77,27 @@ export function ConsentEditor() {
   const apiMode = MODES.find((m) => m.id === mode)?.api ?? 'press_1'
 
   const onSave = async () => {
-    if (!phoneNumberId) throw new Error('Select an MCTB forwarding number on Phone & Forwarding before saving consent.')
-    await saveMctbSetup({
-      phoneNumberId,
-      consentMode: apiMode,
-      existingConsentAttested: apiMode === 'existing_consent' ? attested : undefined,
-      activate: false,
-    })
-    await load()
+    setSaveError(null)
+    if (!phoneNumberId) {
+      setSaveError('Select an MCTB forwarding number on Phone & Forwarding before saving consent.')
+      return
+    }
+    if (apiMode === 'existing_consent' && !attested) {
+      setSaveError('Check the certification box to confirm you already have consent before saving.')
+      return
+    }
+    try {
+      await saveMctbSetup({
+        phoneNumberId,
+        consentMode: apiMode,
+        existingConsentAttested: apiMode === 'existing_consent' ? true : undefined,
+        activate: false,
+      })
+      await load()
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Save failed')
+      throw err
+    }
   }
 
   const playDisclosure = () => {
@@ -113,6 +127,7 @@ export function ConsentEditor() {
               onClick={() => {
                 if (locked) return
                 setMode(m.id)
+                setSaveError(null)
               }}
               className={cn(
                 OPUS_CARD,
@@ -162,6 +177,11 @@ export function ConsentEditor() {
         </Panel>
       )}
 
+      {saveError ? (
+        <p className="text-sm text-destructive" role="alert">
+          {saveError}
+        </p>
+      ) : null}
       <div className="flex justify-end">
         <SaveBar
           label={mode === 'press1' ? 'Save consent mode' : EXISTING_CONSENT_CERTIFICATION_SUBMIT_LABEL}

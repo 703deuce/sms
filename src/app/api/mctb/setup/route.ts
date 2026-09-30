@@ -31,7 +31,11 @@ import {
   sanitizeMctbSetupPhoneNumberId,
 } from "@/lib/mctb/setup-phone-validation";
 import { getProductionMctbForwardTargetE164 } from "@/lib/mctb/production-forward-target";
-import { loadMctbOnboardingState } from "@/lib/mctb/onboarding/state";
+import {
+  loadMctbOnboardingState,
+  parseMctbOnboardingState,
+} from "@/lib/mctb/onboarding/state";
+import { normalizeMctbConsentMode } from "@/lib/mctb/consent-mode";
 import {
   defaultWeeklySchedule,
   readMctbScheduleFromCustomFields,
@@ -219,14 +223,17 @@ export async function GET() {
     });
   }
 
+  const resolvedConsentMode = normalizeMctbConsentMode(
+    mctbSettings.consentMode ??
+      setupMeta.consentMode ??
+      parseMctbOnboardingState(customCfg).consentMode,
+  );
+
   traceMctbDebug("setup", "get_complete", {
     workspaceId,
     runtimePhoneNumberId: runtimeForClient.phoneNumberId,
     runtimeSmsPhoneNumberId: runtimeForClient.smsPhoneNumberId,
-    consentMode:
-      (mctbSettings.consentMode as MctbConsentMode | undefined) ||
-      (setupMeta.consentMode as MctbConsentMode | undefined) ||
-      "press_1",
+    consentMode: resolvedConsentMode,
     enabled: runtimeForClient.enabled,
     paused: isMctbSchedulePaused(effectiveSchedule, runtime),
     phoneOptions: summarizeMctbPhoneOptions(phoneNumbersWithStatus),
@@ -285,10 +292,7 @@ export async function GET() {
         campaignDescription: DEFAULT_CAMPAIGN_DESCRIPTION,
         press1Consent: PRESS_1_CONSENT,
       },
-      consentMode:
-        (mctbSettings.consentMode as MctbConsentMode | undefined) ||
-        (setupMeta.consentMode as MctbConsentMode | undefined) ||
-        "press_1",
+      consentMode: resolvedConsentMode,
       consentMeta: {
         paidEntitled,
         existingConsentEligible: isExistingConsentModeEligible({
@@ -782,21 +786,39 @@ export async function POST(req: Request) {
         businessNumberE164: body.businessLineE164.trim(),
         forwardingConnectedAt: new Date().toISOString(),
       });
-    } else if (businessLineForBinding) {
-      const { saveMctbOnboardingState } = await import("@/lib/mctb/onboarding/state");
-      await saveMctbOnboardingState(workspaceId, {
-        businessNumberE164: businessLineForBinding,
-        forwardingConnectedAt: new Date().toISOString(),
-      });
     }
+
+    const wsFresh = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { customFieldsConfig: true },
+    });
+    const customCfgFresh =
+      wsFresh?.customFieldsConfig && typeof wsFresh.customFieldsConfig === "object"
+        ? (wsFresh.customFieldsConfig as Record<string, unknown>)
+        : customCfg;
+    const mctbFresh =
+      customCfgFresh.mctb && typeof customCfgFresh.mctb === "object"
+        ? (customCfgFresh.mctb as Record<string, unknown>)
+        : mctb;
+    if (scheduleModePatch !== undefined) {
+      mctbFresh.scheduleMode = scheduleModePatch;
+    }
+    const onboardingFresh = parseMctbOnboardingState(customCfgFresh);
+    const onboardingNext =
+      body.consentMode
+        ? { ...onboardingFresh, consentMode: body.consentMode }
+        : onboardingFresh;
 
     await prisma.workspace.update({
       where: { id: workspaceId },
       data: {
         customFieldsConfig: {
-          ...customCfg,
+          ...customCfgFresh,
+          ...(body.consentMode
+            ? { mctbOnboarding: JSON.parse(JSON.stringify(onboardingNext)) }
+            : {}),
           mctb: {
-            ...mctb,
+            ...mctbFresh,
             ...(body.consentMode ? { consentMode: body.consentMode } : {}),
             ...(body.replyNotifications !== undefined
               ? { replyNotifications: body.replyNotifications }

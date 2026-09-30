@@ -32,6 +32,8 @@ export function SaveBar({
             await onSave()
             setSaved(true)
             setTimeout(() => setSaved(false), 2000)
+          } catch {
+            // Caller surfaces field-level errors (e.g. consent editor).
           } finally {
             setBusy(false)
           }

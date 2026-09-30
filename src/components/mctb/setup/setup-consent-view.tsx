@@ -217,7 +217,9 @@ export function MctbSetupConsentView() {
           phoneNumberId,
           consentMode: draftMode,
           existingConsentAttested:
-            draftMode === MCTB_CONSENT_MODE_EXISTING ? true : undefined,
+            draftMode === MCTB_CONSENT_MODE_EXISTING
+              ? Boolean(savedAttestation || modalAttestChecked)
+              : undefined,
           activate: false,
         }),
       });
