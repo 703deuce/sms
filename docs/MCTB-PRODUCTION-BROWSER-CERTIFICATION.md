@@ -1,5 +1,8 @@
 # MCTB Production Browser Certification
 
+> **Note:** Rows marked `PASS — UI (manifest)` in Phase 2 are **not** “every button clicked.”  
+> Authoritative live exercise: **`docs/MCTB-PRODUCTION-BROWSER-CERTIFICATION-EXERCISE.md`** (runner: `scripts/mctb-production-browser-cert-exercise-all.ts`).
+
 **Base URL:** (production — see run env MCTB_PROD_CERT_BASE_URL)  
 **Workspace:** ws_1  
 **Production SHA (start):** c935c42c537fb5806c10135186c11c513332568b  
@@ -1592,3 +1595,5 @@
 | /mctb/text-back | Text back (launch) | main | button: Save changes | manifest enumerate | visible interactive | — | — | — | PASS — UI (manifest) |  |
 | /mctb/text-back | Text back (launch) | — | route interactive manifest | goto + tabs + DOM enumerate | HTTP 200 | — | — | — | PASS — UI |  |
 | /mctb | Mobile | 390px | Nav + primary actions reachable | viewport pass | page rendered | — | — | — | PASS — RESPONSIVE |  |
+| /mctb/setup/notifications | Setup Notifications | Recipients | Add recipient | prompt flow mctb-browser-cert@transovo.test | row visible | recipientCount=0 certPresent=false | — | handoff recipients | FAIL — UI / BACKEND |  |
+| /mctb/setup/notifications | Setup Notifications | Recipients | Add recipient refresh | reload | missing after refresh | {"recipientCount":0,"emergencyDetectionEnabled":false,"certRecipientPresent":false} | FAIL | — | FAIL — PERSISTENCE |  |

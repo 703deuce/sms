@@ -156,11 +156,12 @@ Do **not**: fix → push → wait for Coolify → retest one control → repeat.
 
 | Question | Answer |
 |----------|--------|
-| Phase 1 automated scope | **PASS** (27 rows) |
-| Phase 2 full UI manifest | **Mostly recorded** (~1530 rows); **notifications persistence FAIL** on prod `74bd0108` |
-| Fix for notifications on `master` | **Yes** (`443a46c1`) — **browser retest pending prod deploy** |
-| `remaining browser-testable controls = 0` | **No** — notifications add/persist until retest PASS on deployed SHA |
-| Ready for physical golden path (PSTN/SMS/handset) | **Not yet** per your bar — finish browser cert including notifications after deploy |
+| Phase 1 automated scope | **PASS** (27 rows) — real clicks on those flows only |
+| Phase 2 “manifest” rows (~1487× `PASS — UI (manifest)`) | **NOT full button coverage** — DOM listed, **not** every control clicked |
+| Phase 3 live exercise | **Required** — runner `scripts/mctb-production-browser-cert-exercise-all.ts` → matrix `docs/MCTB-PRODUCTION-BROWSER-CERTIFICATION-EXERCISE.md` |
+| Notifications persistence | **FAIL** on prod `74bd0108`; fix on `master` `443a46c1` pending deploy + retest |
+| `remaining browser-testable controls = 0` | **No** until Phase 3 exercise matrix is complete with no FAIL rows |
+| Ready for physical golden path | **Not yet** — finish **live** browser exercise on deployed SHA first |
 
 ---
 
