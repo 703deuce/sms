@@ -48,7 +48,12 @@ export async function addMctbExclusion(input: { phoneE164: string; label?: strin
   const res = await fetch("/api/mctb/exclusions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
+    body: JSON.stringify({
+      phoneE164: input.phoneE164,
+      phone: input.phoneE164,
+      label: input.label,
+      reason: input.label,
+    }),
   });
   if (!res.ok) throw new Error("Could not add exclusion");
 }
