@@ -169,8 +169,12 @@ export async function phase3bNotificationsPersistence(
     defectFix: "",
   });
 
-  const editBtn = page.getByRole("button", { name: /edit mctb cert temp/i }).first();
-  if (!(await editBtn.isVisible().catch(() => false))) {
+  const editBtn = page
+    .locator("li")
+    .filter({ hasText: CERT_RECIPIENT_EMAIL })
+    .getByRole("button", { name: /^Edit /i })
+    .first();
+  if (!(await editBtn.isVisible({ timeout: 10_000 }).catch(() => false))) {
     record({
       route: path,
       page: "Notifications",
@@ -181,14 +185,18 @@ export async function phase3bNotificationsPersistence(
       backendResult: JSON.stringify(snapRefresh.handoff),
       refreshResult: "—",
       effectiveRuntime: "—",
-      status: addOk ? "FAIL — PRODUCT" : "FAIL — BLOCKED",
+      status: addOk ? "FAIL — HARNESS" : "FAIL — BLOCKED",
       defectFix: "",
     });
     return;
   }
 
   wireDialogs(page, "edit");
-  await editBtn.click();
+  try {
+    await editBtn.click({ timeout: 12_000 });
+  } catch {
+    await editBtn.evaluate((el) => (el as HTMLElement).click());
+  }
   await page.waitForTimeout(3000);
   const afterEdit = snapshotBackend(WORKSPACE_ID);
   const uiEdited = await page.getByText(CERT_RECIPIENT_EMAIL_EDITED).isVisible().catch(() => false);

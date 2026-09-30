@@ -29,8 +29,8 @@ Do **not** open app fixes for: Phase 3’s 21 sidebar link timeouts (pre-3b harn
 | Control | Result | Notes |
 |---------|--------|--------|
 | Delete recipient | **PASS — CAPABILITY-N/A** | No delete control in UI (edit via overflow only) |
-| Add recipient | **FAIL — PRODUCT** | `window.prompt` flow completes; **`POST /api/mctb/handoff` → 200**; snapshot `recipientCount=0`, `certRecipientPresent=false`; row not shown after wait |
-| Edit recipient | **FAIL — BLOCKED** | Depends on add |
+| Add recipient | **PASS** on `b800c0a2` | `recipientCount` 0→1, `certRecipientPresent=true`, row visible after save |
+| Edit recipient | Re-run with `45096162` harness (row-scoped Edit button) | Prior miss was selector (`Edit ${name}`), not persistence |
 | Urgent toggle | Not reached | Blocked on add |
 
 **Evidence (harness):** `post=200` with handoff JSON in `backendResult`; read-only DB snapshot unchanged for cert email.
