@@ -518,13 +518,16 @@ export async function POST(req: Request) {
   }
 
   if (body.consentMode === "existing_consent") {
+    const { resolveMctbCapabilities: resolveCapsForEligibility } = await import(
+      "@/lib/mctb/capabilities"
+    );
     const [phoneNumbersForConsent, complianceForConsent, regForConsent, adminFlagsForConsent, paidForConsent] =
       await Promise.all([
         loadMctbSetupPhoneOptionsWithTelnyxSync(workspaceId),
         loadComplianceOverview(workspaceId),
         loadPhoneNumbers(workspaceId, { includeLinked: true }),
         loadAdminMctbTestFlags(workspaceId),
-        resolveMctbCapabilities(workspaceId).then((c) => c.recoveryPaid),
+        resolveCapsForEligibility(workspaceId).then((c) => c.recoveryPaid),
       ]);
     const requiredForConsent = deriveRequiredActions(
         complianceForConsent.registration,
