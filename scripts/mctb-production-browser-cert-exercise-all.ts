@@ -105,6 +105,7 @@ async function exerciseRoute(page: Page, path: string, label: string, httpErrors
       record,
       done,
       httpErrors,
+      skipGlobalSidebarLinks: true,
     });
     const more = page.getByRole("button", { name: /more|overflow|options|\.\.\./i });
     if (await more.first().isVisible().catch(() => false)) {
@@ -117,6 +118,7 @@ async function exerciseRoute(page: Page, path: string, label: string, httpErrors
         record,
         done,
         httpErrors,
+        skipGlobalSidebarLinks: true,
       });
       await page.keyboard.press("Escape").catch(() => undefined);
     }
@@ -136,6 +138,7 @@ async function mobilePass(page: Page, httpErrors: string[]): Promise<void> {
       record,
       done,
       httpErrors,
+      skipGlobalSidebarLinks: true,
     });
   }
   await page.setViewportSize({ width: 1440, height: 900 });

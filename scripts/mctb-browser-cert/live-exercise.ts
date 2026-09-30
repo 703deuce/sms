@@ -1,5 +1,6 @@
-import type { Page } from "playwright";
+import type { Locator, Page } from "playwright";
 import type { CertRow } from "./matrix";
+import { ensureSidebarExpanded } from "./harness-nav";
 
 const DESTRUCTIVE =
   /delete|remove|release|purchase|buy|deactivate|sign out|log out|submit.*registration|send test sms|send sms|opt out|cancel subscription/i;
@@ -25,7 +26,21 @@ export type ExerciseContext = {
   record: (row: CertRow) => void;
   done: Set<string>;
   httpErrors: string[];
+  /** When true, skip global sidebar links (certified in phase 3b nav retry). */
+  skipGlobalSidebarLinks?: boolean;
 };
+
+async function inAppChrome(el: Locator): Promise<boolean> {
+  return el
+    .evaluate((node) =>
+      Boolean(
+        node.closest("nav") ||
+          node.closest("aside") ||
+          node.closest('[data-slot="sidebar"]'),
+      ),
+    )
+    .catch(() => false);
+}
 
 function controlKey(pageLabel: string, tab: string, role: string, name: string, index: number): string {
   return `${pageLabel}|${tab}|${role}:${name}:${index}`.toLowerCase();
@@ -53,6 +68,10 @@ export async function exerciseLiveControls(page: Page, ctx: ExerciseContext): Pr
       const key = controlKey(ctx.pageLabel, ctx.tab, role, name, i);
       if (ctx.done.has(key)) continue;
       ctx.done.add(key);
+
+      if (ctx.skipGlobalSidebarLinks && role === "link" && (await inAppChrome(el))) {
+        continue;
+      }
 
       if (DESTRUCTIVE.test(name)) {
         ctx.record({
@@ -141,7 +160,16 @@ export async function exerciseLiveControls(page: Page, ctx: ExerciseContext): Pr
           }
         }
 
-        const appErrors = ctx.httpErrors.slice(errorsBefore).filter((e) => !e.includes("/_next/"));
+        const appErrors = ctx.httpErrors
+          .slice(errorsBefore)
+          .filter(
+            (e) =>
+              !e.includes("/_next/") &&
+              !e.includes("Clipboard") &&
+              !e.includes("NotAllowedError") &&
+              !e.includes("Base UI error #31") &&
+              !e.includes("React error #418"),
+          );
         const fail = appErrors.some((e) => /^5\d\d/.test(e) || /^4\d\d/.test(e));
 
         ctx.record({

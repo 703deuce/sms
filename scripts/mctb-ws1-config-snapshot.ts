@@ -134,6 +134,9 @@ async function main() {
           certRecipientPresent: handoffRecipients.some(
             (r) => r.email === "mctb-browser-cert@transovo.test",
           ),
+          certRecipientEditedPresent: handoffRecipients.some(
+            (r) => r.email === "mctb-browser-cert-edited@transovo.test",
+          ),
         },
       },
       null,
