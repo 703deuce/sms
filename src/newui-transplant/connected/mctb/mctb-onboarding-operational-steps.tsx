@@ -343,8 +343,8 @@ export function OnboardingNotificationsStep({ c, caps, compact }: NotificationsS
         <ul className="space-y-2 text-muted-foreground">
           <li>✓ Caller reply notifications</li>
           <li>
-            {recoveryPaid ? "✓" : "🔒"} Urgent reply detection
-            {!recoveryPaid ? " — Available with AI Recovery" : ""}
+            {aiEntitled ? "✓" : "🔒"} Urgent reply detection
+            {!aiEntitled ? " — Available with AI Recovery" : ""}
           </li>
           <li>
             {caps?.aiRecoveryEntitled ? "✓" : "🔒"} Immediate urgent alerts
