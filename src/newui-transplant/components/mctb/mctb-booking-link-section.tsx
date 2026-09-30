@@ -31,6 +31,12 @@ export function MctbBookingLinkSection() {
       ]);
       const linksJson = await linksRes.json();
       const setupJson = await setupRes.json();
+      if (!linksRes.ok) {
+        throw new Error((linksJson as { error?: string }).error || "Could not load booking links");
+      }
+      if (!setupRes.ok) {
+        throw new Error((setupJson as { error?: string }).error || "Could not load setup");
+      }
       const setup = setupJson.data ?? setupJson;
       const r = setup.runtime as Record<string, unknown>;
       setPhoneNumberId((r.phoneNumberId as string) ?? null);
@@ -45,6 +51,8 @@ export function MctbBookingLinkSection() {
       setUrl(activeUrl);
       setLabel(primary?.label || "Book an appointment");
       setLinkId(primary?.id ?? null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not load booking link");
     } finally {
       setLoading(false);
     }

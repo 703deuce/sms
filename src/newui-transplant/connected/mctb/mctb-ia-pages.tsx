@@ -70,9 +70,11 @@ export function NewUiMctbMissedCallRecoveryPage() {
   const recovery = useMctbRecoveryWiring();
   const [usageUsed, setUsageUsed] = useState<number | null>(null);
   const [usageLimit, setUsageLimit] = useState<number | null>(null);
+  const [usageError, setUsageError] = useState<string | null>(null);
 
   useEffect(() => {
-    void fetchMctbSetup()
+    setUsageError(null);
+    void fetchMctbSetup({ force: true })
       .then((data) => {
         const caps = data.capabilities as {
           monthlyRecoveryLimit?: number;
@@ -85,7 +87,9 @@ export function NewUiMctbMissedCallRecoveryPage() {
           setUsageUsed(used);
         }
       })
-      .catch(() => undefined);
+      .catch((e) => {
+        setUsageError(e instanceof Error ? e.message : "Could not load usage");
+      });
   }, []);
 
   const paused = recovery.paused;
@@ -99,6 +103,9 @@ export function NewUiMctbMissedCallRecoveryPage() {
           <Pill tone={paused ? "warning" : "success"}>{paused ? "Paused" : "Running"}</Pill>
         }
       />
+      {usageError ? (
+        <p className="mb-3 text-sm text-destructive" role="alert">{usageError}</p>
+      ) : null}
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-3">
         <Stat
           label="Recovery"
@@ -209,7 +216,9 @@ export function NewUiMctbTextBackPage() {
         const segments = Math.max(1, Math.ceil(opener.length / 160));
         setTextBackMeta({ consentLabel: consent, senderReady: ready, segments });
       })
-      .catch(() => undefined);
+      .catch(() => {
+        setTextBackMeta({ consentLabel: "—", senderReady: false, segments: 1 });
+      });
   }, []);
 
   useEffect(() => {

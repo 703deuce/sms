@@ -1,4 +1,13 @@
 /** Build voicemail inbox API URL (server expects `phoneNumberId`, not `numberId`). */
+export async function fetchMctbVoicemailInboxPayload(phoneNumberId?: string): Promise<unknown> {
+  const res = await fetch(mctbVoicemailInboxUrl(phoneNumberId), { cache: "no-store" });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((json as { error?: string }).error || "Could not load voicemail");
+  }
+  return json;
+}
+
 export function mctbVoicemailInboxUrl(phoneNumberId?: string): string {
   const params = new URLSearchParams();
   if (phoneNumberId?.trim()) {

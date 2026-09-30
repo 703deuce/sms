@@ -82,6 +82,7 @@ export function useOnboardingRecoveryBundle() {
 
 export function OnboardingRecoveryControlsSection({ wiring }: { wiring: RecoveryWiring }) {
   const r = wiring;
+  const [recoveryActionError, setRecoveryActionError] = useState<string | null>(null);
   const delayLabel = delayLabelFromSeconds(r.delaySeconds);
   const cooldownLabel = cooldownLabelFromMinutes(r.cooldownMinutes);
 
@@ -98,12 +99,35 @@ export function OnboardingRecoveryControlsSection({ wiring }: { wiring: Recovery
       <p className="text-xs text-muted-foreground">
         Pausing stops automated recovery texts. Forwarded calls still reach your voicemail fallback.
       </p>
+      {recoveryActionError ? (
+        <p className="text-sm text-destructive" role="alert">{recoveryActionError}</p>
+      ) : null}
       {r.paused ? (
-        <Button type="button" size="sm" variant="outline" onClick={() => void saveMctbSetup({ enabled: true })}>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            setRecoveryActionError(null);
+            void r.resumeRecovery().catch((e) =>
+              setRecoveryActionError(e instanceof Error ? e.message : "Could not resume recovery"),
+            );
+          }}
+        >
           Resume recovery
         </Button>
       ) : (
-        <Button type="button" size="sm" variant="outline" onClick={() => void r.pausePreset("Indefinitely")}>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            setRecoveryActionError(null);
+            void r.pausePreset("Indefinitely").catch((e) =>
+              setRecoveryActionError(e instanceof Error ? e.message : "Could not pause recovery"),
+            );
+          }}
+        >
           Pause recovery
         </Button>
       )}
@@ -379,6 +403,9 @@ export function OnboardingNotificationsStep({ c, caps, compact }: NotificationsS
 function OnboardingAiRecoverySection({ caps }: { caps: MctbCapabilities | null }) {
   const [enabled, setEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveBusy, setSaveBusy] = useState(false);
   const entitled = Boolean(caps?.aiRecoveryEntitled);
 
   useEffect(() => {
@@ -386,11 +413,18 @@ function OnboardingAiRecoverySection({ caps }: { caps: MctbCapabilities | null }
       setLoading(false);
       return;
     }
+    setLoadError(null);
     void fetch("/api/mctb/ai-recovery/context", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j) => {
+      .then(async (r) => {
+        const j = await r.json();
+        if (!r.ok) {
+          throw new Error((j as { error?: string }).error || "Could not load AI Recovery");
+        }
         const data = j.data ?? j;
         setEnabled(Boolean(data.recovery?.enabled));
+      })
+      .catch((e) => {
+        setLoadError(e instanceof Error ? e.message : "Could not load AI Recovery");
       })
       .finally(() => setLoading(false));
   }, [entitled]);
@@ -409,6 +443,14 @@ function OnboardingAiRecoverySection({ caps }: { caps: MctbCapabilities | null }
 
   if (loading) return null;
 
+  if (loadError) {
+    return (
+      <p className={`mt-6 p-4 text-sm text-destructive ${OPUS_CARD}`} role="alert">
+        {loadError}
+      </p>
+    );
+  }
+
   return (
     <div className={`mt-6 p-4 text-sm ${OPUS_CARD}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -424,25 +466,34 @@ function OnboardingAiRecoverySection({ caps }: { caps: MctbCapabilities | null }
           Advanced settings
         </Link>
       </p>
+      {saveError ? (
+        <p className="mt-2 text-sm text-destructive" role="alert">{saveError}</p>
+      ) : null}
       <Button
         type="button"
         size="sm"
         variant="outline"
         className="mt-3"
-        onClick={() =>
+        disabled={saveBusy}
+        onClick={() => {
+          setSaveError(null);
+          setSaveBusy(true);
           void fetch("/api/mctb/ai-recovery/settings", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ enabled }),
           })
             .then(async (res) => {
+              const j = await res.json().catch(() => ({}));
               if (!res.ok) {
-                const j = await res.json().catch(() => ({}));
                 throw new Error((j as { error?: string }).error || "Save failed");
               }
             })
-            .catch(() => undefined)
-        }
+            .catch((e) => {
+              setSaveError(e instanceof Error ? e.message : "Save failed");
+            })
+            .finally(() => setSaveBusy(false));
+        }}
       >
         Save AI Recovery
       </Button>

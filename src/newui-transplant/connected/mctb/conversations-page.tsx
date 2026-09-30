@@ -127,7 +127,7 @@ export function NewUiMctbConversationsPage({
   }, [loadList]);
 
   useEffect(() => {
-    void fetchMctbSetup()
+    void fetchMctbSetup({ force: true })
       .then((data) => {
         const caps = data.capabilities as MctbCapabilities | undefined;
         setManualTwoWay(Boolean(caps?.manualTwoWayMessaging));
@@ -157,7 +157,7 @@ export function NewUiMctbConversationsPage({
       onSendMessage: async (conversationId: string, text: string) => {
         const fresh = await fetchConversation(conversationId);
         const to = fresh.phone?.trim();
-        if (!to) return;
+        if (!to) throw new Error("This conversation has no phone number to text.");
         await sendNewMessage({
           to,
           message: text,

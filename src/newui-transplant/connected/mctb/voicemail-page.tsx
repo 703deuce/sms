@@ -6,18 +6,20 @@ import { VoicemailBrowser } from "@/newui-transplant/components/mctb/voicemail-b
 import { mapVoicemailApiToNewUi, type VoicemailApiMessage } from "@/lib/newui-transplant/adapters/mctb-voicemail";
 import { parseVoicemailApiPayload } from "@/lib/personal/voicemail-mappers";
 import {
+  fetchMctbVoicemailInboxPayload,
   markVoicemailMessageReviewed,
-  mctbVoicemailInboxUrl,
 } from "@/lib/newui-transplant/mctb-voicemail-fetch";
 
 export function NewUiMctbVoicemailPage({ numberId }: { numberId?: string }) {
   const [items, setItems] = useState<VoicemailApiMessage[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
-    fetch(mctbVoicemailInboxUrl(numberId), { cache: "no-store" })
-      .then((r) => r.json())
+    setLoadError(null);
+    void fetchMctbVoicemailInboxPayload(numberId)
       .then((j) => {
         const parsed = parseVoicemailApiPayload(j);
         const rows = (parsed.messages ?? []).map((m) => ({
@@ -33,7 +35,10 @@ export function NewUiMctbVoicemailPage({ numberId }: { numberId?: string }) {
         }));
         setItems(rows);
       })
-      .catch(() => setItems([]))
+      .catch((err) => {
+        setItems([]);
+        setLoadError(err instanceof Error ? err.message : "Could not load voicemail");
+      })
       .finally(() => setLoading(false));
   }, [numberId]);
 
@@ -46,14 +51,25 @@ export function NewUiMctbVoicemailPage({ numberId }: { numberId?: string }) {
   return (
     <Page>
       <PageHeader title="Voicemail" description="Listen, read transcripts, and follow up on caller messages." />
+      {loadError ? (
+        <p className="text-sm text-destructive" role="alert">{loadError}</p>
+      ) : null}
+      {actionError ? (
+        <p className="mt-2 text-sm text-destructive" role="alert">{actionError}</p>
+      ) : null}
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading voicemail…</p>
       ) : (
         <VoicemailBrowser
           voicemails={voicemails}
           onMarkReviewed={async (messageId) => {
-            await markVoicemailMessageReviewed(messageId);
-            load();
+            setActionError(null);
+            try {
+              await markVoicemailMessageReviewed(messageId);
+              load();
+            } catch (err) {
+              setActionError(err instanceof Error ? err.message : "Could not update voicemail");
+            }
           }}
         />
       )}

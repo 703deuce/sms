@@ -233,6 +233,16 @@ export function NewUiMctbSetupNotificationsPage() {
   const n = useMctbNotificationsWiring();
   const handoffConfigRef = useRef<MctbHandoffConfigDto | null>(null);
   const [handoffPersistError, setHandoffPersistError] = useState<string | null>(null);
+  const [recipientSaveError, setRecipientSaveError] = useState<string | null>(null);
+
+  const saveRecipients = (
+    next: Array<Omit<MctbNotificationRecipientDto, "id"> & { id?: string }>,
+  ) => {
+    setRecipientSaveError(null);
+    void n.save(next).catch((err) => {
+      setRecipientSaveError(err instanceof Error ? err.message : "Could not save recipients");
+    });
+  };
   const [urgentTestMessage, setUrgentTestMessage] = useState(
     "My basement is flooding and I need someone now.",
   );
@@ -332,6 +342,9 @@ export function NewUiMctbSetupNotificationsPage() {
       {handoffPersistError ? (
         <p className="mx-6 mt-4 text-sm text-destructive" role="alert">{handoffPersistError}</p>
       ) : null}
+      {recipientSaveError ? (
+        <p className="mx-6 mt-2 text-sm text-destructive" role="alert">{recipientSaveError}</p>
+      ) : null}
     <TransplantMctbSetupNotificationsPage
       wired={{
         urgent: n.config
@@ -409,7 +422,7 @@ export function NewUiMctbSetupNotificationsPage() {
               : r,
           );
           n.setRecipients(next as MctbNotificationRecipientDto[]);
-          void n.save(next);
+          saveRecipients(next);
         },
         events: events ?? undefined,
         onAddRecipient: () => {
@@ -431,7 +444,7 @@ export function NewUiMctbSetupNotificationsPage() {
               },
             ];
             n.setRecipients(next as MctbNotificationRecipientDto[]);
-            void n.save(next);
+            saveRecipients(next);
         },
       }}
     />

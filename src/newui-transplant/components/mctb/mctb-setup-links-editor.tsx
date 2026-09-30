@@ -41,6 +41,12 @@ export function MctbSetupLinksEditor() {
       ])
       const linksJson = await linksRes.json()
       const setupJson = await setupRes.json()
+      if (!linksRes.ok) {
+        throw new Error((linksJson as { error?: string }).error || 'Could not load booking links')
+      }
+      if (!setupRes.ok) {
+        throw new Error((setupJson as { error?: string }).error || 'Could not load setup')
+      }
       const setup = setupJson.data ?? setupJson
       setRecoveryPaid(Boolean(setup.capabilities?.recoveryPaid ?? setup.consentMeta?.paidEntitled))
       const r = setup.runtime as Record<string, unknown>
@@ -56,6 +62,8 @@ export function MctbSetupLinksEditor() {
       const token = r.requestFormToken as string | undefined
       setRequestFormUrl(token ? mctbRequestFormPublicPath(token) : null)
       setLinks((linksJson.data || []) as MctbBookingLinkDto[])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not load links')
     } finally {
       setLoading(false)
     }

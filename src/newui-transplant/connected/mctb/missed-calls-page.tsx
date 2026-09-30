@@ -35,17 +35,24 @@ export function NewUiMctbMissedCallsPage({
   const [data, setData] = useState<MctbMissedCallsListData | null>(initialData ?? null);
   const [query, setQuery] = useState<ListQuery>(initialQuery);
   const [loading, setLoading] = useState(!initialData);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [exclusionError, setExclusionError] = useState<string | null>(null);
   const skipInitialFetch = useRef(Boolean(initialData));
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const url = buildMissedCallsListUrl({ ...query, pageSize: 50 });
       const res = await fetch(url, { cache: "no-store" });
       const j = await res.json();
+      if (!res.ok) {
+        throw new Error((j as { error?: string }).error || "Could not load missed calls");
+      }
       setData((j.data ?? j) as MctbMissedCallsListData);
-    } catch {
+    } catch (err) {
       setData(null);
+      setLoadError(err instanceof Error ? err.message : "Could not load missed calls");
     } finally {
       setLoading(false);
     }
@@ -64,7 +71,11 @@ export function NewUiMctbMissedCallsPage({
   }
 
   if (!data) {
-    return <p className="p-6 text-sm text-muted-foreground">Could not load missed calls.</p>;
+    return (
+      <p className="p-6 text-sm text-destructive" role="alert">
+        {loadError || "Could not load missed calls."}
+      </p>
+    );
   }
 
   const missedCalls = mapMctbMissedCallsListToNewUi(data);
@@ -72,6 +83,10 @@ export function NewUiMctbMissedCallsPage({
   const pagination = data.pagination;
 
   return (
+    <>
+      {exclusionError ? (
+        <p className="px-6 pt-4 text-sm text-destructive" role="alert">{exclusionError}</p>
+      ) : null}
     <TransplantMctbMissedCallsPage
       wired={{
         stats: {
@@ -98,11 +113,18 @@ export function NewUiMctbMissedCallsPage({
           onSortChange: (sort) => setQuery((prev) => ({ ...prev, sort, page: 1 })),
           onPageChange: (page) => setQuery((prev) => ({ ...prev, page })),
           onAddExclusion: async (phoneE164, label) => {
-            await addMctbExclusion({ phoneE164, label });
-            await load();
+            setExclusionError(null);
+            try {
+              await addMctbExclusion({ phoneE164, label });
+              await load();
+            } catch (err) {
+              setExclusionError(err instanceof Error ? err.message : "Could not add exclusion");
+              throw err;
+            }
           },
         },
       }}
     />
+    </>
   );
 }

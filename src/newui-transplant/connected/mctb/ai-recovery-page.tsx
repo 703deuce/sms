@@ -33,16 +33,20 @@ export function NewUiMctbAiRecoveryPage() {
   const [bookingLinkUrl, setBookingLinkUrl] = useState("");
   const [bookingLinkLabel, setBookingLinkLabel] = useState("");
   const [enabledScenarios, setEnabledScenarios] = useState<Partial<Record<LeadRecoveryScenarioKey, boolean>>>({});
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [ctxRes, setupRes] = await Promise.all([
         fetch("/api/mctb/ai-recovery/context", { cache: "no-store" }),
         fetch("/api/mctb/setup", { cache: "no-store" }).catch(() => null),
       ]);
-      if (!ctxRes.ok) return;
-      const ctxJson = await ctxRes.json();
+      const ctxJson = await ctxRes.json().catch(() => ({}));
+      if (!ctxRes.ok) {
+        throw new Error((ctxJson as { error?: string }).error || "Could not load AI Recovery");
+      }
       const data = ctxJson.data ?? ctxJson;
       const setupJson = setupRes?.ok ? await setupRes.json().catch(() => null) : null;
       const setupData = setupJson?.data ?? setupJson;
@@ -78,6 +82,9 @@ export function NewUiMctbAiRecoveryPage() {
         Record<LeadRecoveryScenarioKey, boolean>
       >;
       setEnabledScenarios(scenarios);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Could not load AI Recovery");
+      setMeta(null);
     } finally {
       setLoading(false);
     }
@@ -177,6 +184,10 @@ export function NewUiMctbAiRecoveryPage() {
 
   if (loading && !wired) {
     return <p className="p-6 text-sm text-muted-foreground">Loading AI Recovery…</p>;
+  }
+
+  if (loadError && !wired) {
+    return <p className="p-6 text-sm text-destructive" role="alert">{loadError}</p>;
   }
 
   return <TransplantMctbAiRecoveryPage wired={wired} />;

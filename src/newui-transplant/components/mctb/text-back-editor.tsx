@@ -43,14 +43,19 @@ export function TextBackEditor({
   const [phoneNumberId, setPhoneNumberId] = useState<string | null>(null)
   const [recoveryGoal, setRecoveryGoal] = useState<MctbRecoveryGoalId>('get_reply')
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const ref = useRef<HTMLTextAreaElement>(null)
   const segments = Math.max(1, Math.ceil(opener.length / 160))
 
   const load = useCallback(async () => {
     setLoading(true)
+    setLoadError(null)
     try {
       const res = await fetch('/api/mctb/setup', { cache: 'no-store' })
       const json = await res.json()
+      if (!res.ok) {
+        throw new Error((json as { error?: string }).error || 'Could not load text-back settings')
+      }
       const data = json.data ?? json
       setPhoneNumberId(data.runtime?.phoneNumberId ?? null)
       if (data.runtime?.messageTemplate) setOpener(data.runtime.messageTemplate)
@@ -75,6 +80,8 @@ export function TextBackEditor({
       if (tid) setPlatformTemplateId(tid)
       const goal = data.recoveryGoal as MctbRecoveryGoalId | undefined
       if (goal && MCTB_RECOVERY_GOALS.some((g) => g.id === goal)) setRecoveryGoal(goal)
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'Could not load text-back settings')
     } finally {
       setLoading(false)
     }
@@ -117,6 +124,10 @@ export function TextBackEditor({
 
   if (loading) {
     return <p className="text-sm text-muted-foreground">Loading text-back settings…</p>
+  }
+
+  if (loadError) {
+    return <p className="text-sm text-destructive" role="alert">{loadError}</p>
   }
 
   return (

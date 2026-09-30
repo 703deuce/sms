@@ -1,7 +1,7 @@
 # MCTB UI → backend wiring audit (code review)
 
 **Date:** 2026-09-30  
-**Method:** Static trace from `src/newui-transplant/connected/mctb/*` and shared MCTB components to `src/app/api/mctb/*` and runtime libs. **Ten exhaustive review rounds** (see `docs/MCTB-UI-BACKEND-WIRING-AUDIT-10-ROUNDS.md`) plus earlier passes (surface → races/cache → E2E). **No browser certification** unless separately requested.  
+**Method:** Static trace from `src/newui-transplant/connected/mctb/*` and shared MCTB components to `src/app/api/mctb/*` and runtime libs. **Twenty exhaustive review rounds** (pass 1: `docs/MCTB-UI-BACKEND-WIRING-AUDIT-10-ROUNDS.md`, pass 2: `docs/MCTB-UI-BACKEND-WIRING-AUDIT-10-ROUNDS-PASS-2.md`) plus earlier passes (surface → races/cache → E2E). **No browser certification** unless separately requested.  
 **Out of scope (per request):** Integrations, org Settings, Help, generic billing.
 
 ---
@@ -110,7 +110,8 @@ Legacy `/mctb/setup/*` routes redirect into the IA routes above; wired component
 | 2 | Races & cache | Handoff recipient+config races, setup cache on recovery toggle, serialized handoff POST |
 | 3 | Async / edge | Test poll ordering, conversation send phone authority, transcription without box |
 | 4–6 | Full round-trip | Voicemail filter param, reviewed state, header refresh events, onboarding error path |
-| 7–10 | Full inventory re-scan | See `MCTB-UI-BACKEND-WIRING-AUDIT-10-ROUNDS.md` |
+| 7–10 | Full inventory re-scan | `MCTB-UI-BACKEND-WIRING-AUDIT-10-ROUNDS.md` |
+| 11–20 | Second full re-scan | `MCTB-UI-BACKEND-WIRING-AUDIT-10-ROUNDS-PASS-2.md` |
 
 ### Fixed (ten-round pass)
 
@@ -138,6 +139,19 @@ Legacy `/mctb/setup/*` routes redirect into the IA routes above; wired component
 
 23. **Wizard test step** — `startLiveTest` errors hidden. **Fix:** `c.setError`.
 
+### Fixed (pass 2 — rounds 11–20)
+
+24. **Voicemail inbox** — HTTP errors on load/mark-reviewed. **Fix:** `fetchMctbVoicemailInboxPayload` + alerts.
+25. **Missed calls list** — `!res.ok` and exclusion errors. **Fix:** load/exclusion error state.
+26. **Onboarding recovery resume** — incomplete resume patch + silent pause. **Fix:** `resumeRecovery()` / error UI.
+27. **Onboarding AI Recovery** — silent load/save. **Fix:** load/save errors + busy state.
+28. **Recovery IA usage stat** — silent fetch failure. **Fix:** `usageError` + forced setup fetch.
+29. **AI Recovery page** — empty UI on context failure. **Fix:** `loadError`.
+30. **Text-back / consent load** — ignored setup `!res.ok`. **Fix:** `loadError`.
+31. **Booking links reload** — ignored parallel `!res.ok`. **Fix:** throw + error state.
+32. **Notifications recipients** — `void n.save`. **Fix:** `recipientSaveError`.
+33. **Conversations send** — missing phone silent return; stale capabilities cache. **Fix:** throw + `force` setup fetch.
+
 ### By design (not bugs)
 
 - **Recovery delay/cooldown/max** and **missed-call rule checkboxes** update React state until user clicks **Save** / **Save rules** — then `POST /api/mctb/setup`.
@@ -146,8 +160,8 @@ Legacy `/mctb/setup/*` routes redirect into the IA routes above; wired component
 
 ### Low risk / monitor
 
-- **Recovery IA usage stat** (`mctb-ia-pages.tsx`): optional monthly cap fetch failure hides stat only.
-- **Onboarding AI recovery toggle** (`mctb-onboarding-operational-steps.tsx`): settings POST errors not surfaced (optional path).
+- **Consent disclosure audio preview** (`consent-editor.tsx`): `audio.play()` rejection ignored (browser autoplay policy).
+- **Optional enrichment fetches** (`overview-enrichment.tsx`, handoff header meta): failures degrade quietly without blocking workflows.
 - **setup client cache** (`fetchMctbSetup` 8s TTL): pages that need fresh state after save call `reload()` or `{ force: true }` (overview does).
 - **AI Recovery** disabled path: lead-recovery config POST skipped when `enabled` false — intentional; `POST /api/mctb/ai-recovery/settings` with `enabled: false` disables via `applyLaunchAiRepliesSetting`.
 - **Onboarding AI toggle** (`mctb-onboarding-operational-steps.tsx`): `void fetch` on settings without surfacing errors — same class as handoff fire-and-forget.

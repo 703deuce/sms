@@ -33,16 +33,21 @@ export function ConsentEditor() {
   const [recoveryPaid, setRecoveryPaid] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
+    setLoadError(null)
     try {
       const [setupRes, promptRes] = await Promise.all([
         fetch('/api/mctb/setup', { cache: 'no-store' }),
         fetch('/api/mctb/consent-prompt', { cache: 'no-store' }),
       ])
       const setupJson = await setupRes.json()
+      if (!setupRes.ok) {
+        throw new Error((setupJson as { error?: string }).error || 'Could not load consent settings')
+      }
       const setup = setupJson.data ?? setupJson
       const consentMode = setup.consentMode === 'existing_consent' ? 'existing' : 'press1'
       setMode(consentMode)
@@ -65,6 +70,8 @@ export function ConsentEditor() {
         if (script.trim()) setDisclosure(script)
         if (typeof status.playbackUrl === 'string') setPlaybackUrl(status.playbackUrl)
       }
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'Could not load consent settings')
     } finally {
       setLoading(false)
     }
@@ -117,6 +124,10 @@ export function ConsentEditor() {
 
   if (loading) {
     return <p className="text-sm text-muted-foreground">Loading consent settings…</p>
+  }
+
+  if (loadError) {
+    return <p className="text-sm text-destructive" role="alert">{loadError}</p>
   }
 
   return (
