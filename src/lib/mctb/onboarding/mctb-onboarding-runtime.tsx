@@ -157,12 +157,18 @@ export function MctbOnboardingRuntime({
       if (json.state.forwardingRingSeconds) setForwardRingSeconds(json.state.forwardingRingSeconds);
       if (json.forwardingVerification?.verified) setForwardingTestActive(false);
     }
-    if (json.capabilities) {
-      setExistingConsentEligible(Boolean(json.capabilities.recoveryPaid));
-    } else if (setupRes?.ok) {
-      const setupJson = await setupRes.json();
-      const ready = Boolean(setupJson?.consentMeta?.existingConsentEligible);
+    if (setupRes?.ok) {
+      const setupJson = (await setupRes.json()) as {
+        data?: { consentMeta?: { existingConsentEligible?: boolean } };
+        consentMeta?: { existingConsentEligible?: boolean };
+      };
+      const ready = Boolean(
+        setupJson?.data?.consentMeta?.existingConsentEligible ??
+          setupJson?.consentMeta?.existingConsentEligible,
+      );
       setExistingConsentEligible(ready);
+    } else if (json.capabilities) {
+      setExistingConsentEligible(Boolean(json.capabilities.pressOneConsent));
     }
     setLoading(false);
   }, []);
@@ -256,7 +262,10 @@ export function MctbOnboardingRuntime({
   const forwardE164 =
     data?.productionForwardE164 || data?.forwardTargetE164 || data?.liveTest.forwardTargetE164;
   const forwardDisplay = forwardE164 ? formatMctbPhoneLabel(forwardE164) : "your MCTB number";
-  const tfvApproved = data?.tfv.approved || data?.trialNumber.messagingApproved === true;
+  const tfvApproved =
+    data?.capabilities?.platformSenderActive ||
+    data?.tfv.approved ||
+    data?.trialNumber.messagingApproved === true;
   const usesA2pPath = data?.tfv.numberClass === "TELNYX_LOCAL_A2P";
 
   const previousStep = useMemo((): MctbOnboardingStep | null => {
@@ -652,7 +661,11 @@ export function MctbOnboardingRuntime({
             <div className="mctb-onb-panel__body">
               {!existingConsentEligible ? (
                 <p className="mb-3 text-[12.5px] text-[#626872]">
-                  {existingConsentIneligibleReason(false)}
+                  {existingConsentIneligibleReason(
+                    false,
+                    Boolean(data?.capabilities?.platformSenderActive),
+                    Boolean(data?.capabilities?.pressOneConsent),
+                  )}
                 </p>
               ) : null}
               <MctbConsentModeCards

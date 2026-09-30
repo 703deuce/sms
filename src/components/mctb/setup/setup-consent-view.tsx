@@ -72,7 +72,8 @@ export function MctbSetupConsentView() {
   const [savedAttestation, setSavedAttestation] = useState<ConsentAttestationMeta>(null);
   const [messagingReady, setMessagingReady] = useState(false);
   const [existingConsentEligible, setExistingConsentEligible] = useState(false);
-  const [paidEntitled, setPaidEntitled] = useState(true);
+  const [platformSenderActive, setPlatformSenderActive] = useState(false);
+  const [mctbProductActive, setMctbProductActive] = useState(true);
   const [recoveryEnabled, setRecoveryEnabled] = useState(false);
   const [messageTemplate, setMessageTemplate] = useState("");
   const [paused, setPaused] = useState(false);
@@ -117,7 +118,8 @@ export function MctbSetupConsentView() {
       setDraftMode(mode);
       setBaseline({ mode });
       setMessagingReady(Boolean(data.compliance?.messagingReady));
-      setPaidEntitled(data.consentMeta?.paidEntitled !== false);
+      setPlatformSenderActive(Boolean(data.capabilities?.platformSenderActive));
+      setMctbProductActive(Boolean(data.capabilities?.pressOneConsent ?? true));
       setExistingConsentEligible(Boolean(data.consentMeta?.existingConsentEligible));
       setSavedAttestation(data.consentMeta?.existingConsentAttestation ?? null);
       setRecoveryEnabled(Boolean(data.runtime?.enabled));
@@ -161,7 +163,9 @@ export function MctbSetupConsentView() {
       baseline?.mode === MCTB_CONSENT_MODE_EXISTING ? existingConsentEligible : true,
   });
 
-  const ineligibleCopy = existingConsentIneligibleReason(messagingReady, paidEntitled);
+  const ineligibleCopy = existingConsentEligible
+    ? null
+    : existingConsentIneligibleReason(messagingReady, platformSenderActive, mctbProductActive);
   const callerFlow =
     draftMode === MCTB_CONSENT_MODE_VERIFIED ? PRESS_1_CALLER_FLOW : EXISTING_CONSENT_CALLER_FLOW;
   const miniFlow =

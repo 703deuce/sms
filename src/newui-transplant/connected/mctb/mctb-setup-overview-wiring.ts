@@ -194,7 +194,7 @@ export function useMctbSetupOverviewWiring(senderFallback: string): {
       consentMode: setup.consentMode,
       existingConsentBlocked:
         setup.consentMode === "existing_consent" &&
-        (!setup.compliance.messagingReady || setup.consentMeta?.paidEntitled === false),
+        setup.consentMeta?.existingConsentEligible === false,
       voicemailConfigured:
         !voicemailSummary.includes("Not") && voicemailSummary !== "Configure in Voicemail",
     });
@@ -226,7 +226,7 @@ export function useMctbSetupOverviewWiring(senderFallback: string): {
       voicemailTranscriptionOn,
       existingConsentBlocked:
         setup.consentMode === "existing_consent" &&
-        (!setup.compliance.messagingReady || setup.consentMeta?.paidEntitled === false),
+        setup.consentMeta?.existingConsentEligible === false,
     });
 
     const mapRow = (r: (typeof rows)[number]) => ({

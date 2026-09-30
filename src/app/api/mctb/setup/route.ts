@@ -247,6 +247,7 @@ export async function GET() {
   const paidEntitled = capabilities.recoveryPaid;
   const senderMode = runtimeForClient.senderMode || "WORKSPACE";
   const senderPresentation = describeMctbSenderPresentation(senderMode);
+  const platformSenderActive = capabilities.platformSenderActive;
 
   return NextResponse.json({
     data: {
@@ -297,7 +298,8 @@ export async function GET() {
         paidEntitled,
         existingConsentEligible: isExistingConsentModeEligible({
           messagingReady,
-          paidEntitled,
+          platformSenderActive,
+          mctbProductActive: capabilities.pressOneConsent,
         }),
         existingConsentAttestation: (() => {
           const raw = mctbSettings.existingConsentAttestation;
@@ -496,17 +498,6 @@ export async function POST(req: Request) {
         ? body.enabled
         : undefined;
 
-  if (body.consentMode === "existing_consent") {
-    const { resolveMctbCapabilities } = await import("@/lib/mctb/capabilities");
-    const capsForConsent = await resolveMctbCapabilities(workspaceId);
-    if (!capsForConsent.recoveryPaid) {
-      return NextResponse.json(
-        { error: "Existing Consent requires a Recovery plan." },
-        { status: 403 },
-      );
-    }
-  }
-
   if (
     body.consentMode === "existing_consent" &&
     body.existingConsentAttested !== true
@@ -521,13 +512,13 @@ export async function POST(req: Request) {
     const { resolveMctbCapabilities: resolveCapsForEligibility } = await import(
       "@/lib/mctb/capabilities"
     );
-    const [phoneNumbersForConsent, complianceForConsent, regForConsent, adminFlagsForConsent, paidForConsent] =
+    const [phoneNumbersForConsent, complianceForConsent, regForConsent, adminFlagsForConsent, capsForConsent] =
       await Promise.all([
         loadMctbSetupPhoneOptionsWithTelnyxSync(workspaceId),
         loadComplianceOverview(workspaceId),
         loadPhoneNumbers(workspaceId, { includeLinked: true }),
         loadAdminMctbTestFlags(workspaceId),
-        resolveCapsForEligibility(workspaceId).then((c) => c.recoveryPaid),
+        resolveCapsForEligibility(workspaceId),
       ]);
     const requiredForConsent = deriveRequiredActions(
         complianceForConsent.registration,
@@ -540,13 +531,14 @@ export async function POST(req: Request) {
             requiredActions: requiredForConsent,
             adminFlags: adminFlagsForConsent,
           }),
-          paidEntitled: paidForConsent,
+          platformSenderActive: capsForConsent.platformSenderActive,
+          mctbProductActive: capsForConsent.pressOneConsent,
         })
     ) {
       return NextResponse.json(
         {
           error:
-            "Existing consent requires an eligible business messaging setup. Complete messaging compliance and use an approved sender.",
+            "Existing permission with your own number requires approved messaging on that number, or switch to Transovo platform sender.",
         },
         { status: 400 },
       );

@@ -266,17 +266,17 @@ export async function projectMctbGettingStarted(workspaceId: string): Promise<Mc
       detail: "Use permission your business already has instead of Press 1.",
       statusLabel: capabilities.existingConsentCertification
         ? "Active"
-        : capabilities.recoveryPaid
+        : capabilities.pressOneConsent
           ? "Available"
           : "Locked",
       tone: capabilities.existingConsentCertification
         ? "active"
-        : capabilities.recoveryPaid
+        : capabilities.pressOneConsent
           ? "ready"
           : "locked",
       href: `${MCTB_ROUTES.missedCallRecovery}?tab=consent`,
       actionLabel: capabilities.existingConsentCertification ? "Review" : "Configure",
-      locked: !capabilities.recoveryPaid && !capabilities.existingConsentCertification,
+      locked: !capabilities.pressOneConsent,
     },
     {
       id: "booking_link",

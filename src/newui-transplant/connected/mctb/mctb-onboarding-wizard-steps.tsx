@@ -187,7 +187,9 @@ export function WizardConsentStep({ c }: { c: MctbOnboardingController }) {
         description="Choose how Transovo confirms permission before sending a missed-call follow-up."
       />
       {!c.existingConsentEligible ? (
-        <p className="mb-4 text-xs text-muted-foreground">{existingConsentIneligibleReason(false)}</p>
+        <p className="mb-4 text-xs text-muted-foreground">
+          {existingConsentIneligibleReason(false, Boolean(c.capabilities?.platformSenderActive))}
+        </p>
       ) : null}
       <div className="space-y-4">
         <SelectionRow
@@ -207,7 +209,7 @@ export function WizardConsentStep({ c }: { c: MctbOnboardingController }) {
           disabled={!c.existingConsentEligible}
           title="I already have consent"
           subtitle="For businesses that already maintain the required permission to text callers."
-          badge={c.existingConsentEligible ? undefined : "Recovery required"}
+          badge={c.existingConsentEligible ? undefined : "Unavailable"}
           onSelect={() => c.setConsentMode("existing_consent")}
         >
           <label className="ml-7 flex items-start gap-2 text-sm">

@@ -1,4 +1,5 @@
 import { getPrisma } from "@/lib/db";
+import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { getTrialLimits } from "@/lib/platform-flags";
 import { grantCredits } from "@/lib/settings/billing";
 import { isPhoneMessagingApproved } from "@/lib/messaging/compliance/messaging-compliance";
@@ -13,6 +14,11 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+async function usesPlatformSenderForWorkspace(workspaceId: string): Promise<boolean> {
+  const config = await loadMissedCallTextConfig(workspaceId);
+  return config.senderMode === "PLATFORM";
 }
 
 async function loadTrialNumberMessagingGate(workspaceId: string, phoneNumberId: string | null) {
@@ -52,6 +58,7 @@ export async function getTrialActivationRequirements(
     workspaceId,
     workspaceNumber?.phoneNumberId || null,
   );
+  const usesPlatformSender = await usesPlatformSenderForWorkspace(workspaceId);
 
   const gate = evaluateTrialActivationGates({
     trialPhoneE164: workspaceNumber?.e164 || null,
@@ -63,10 +70,11 @@ export async function getTrialActivationRequirements(
     trialAlreadyStarted: false,
     messagingApproved: messagingGate.messagingApproved,
     numberClass: messagingGate.numberClass,
+    usesPlatformSender,
   });
 
   return {
-    tfvApproved: tfv.approved || messagingGate.messagingApproved,
+    tfvApproved: usesPlatformSender || tfv.approved || messagingGate.messagingApproved,
     forwardingConnected: Boolean(state.forwardingConnectedAt && state.businessNumberE164),
     liveTestPassed: Boolean(state.liveTestPassedAt),
     missing: gate.missing,
@@ -101,6 +109,7 @@ export async function activateMctbTrial(workspaceId: string): Promise<{
     workspaceId,
     workspaceNumber?.phoneNumberId || null,
   );
+  const usesPlatformSender = await usesPlatformSenderForWorkspace(workspaceId);
   const gate = evaluateTrialActivationGates({
     trialPhoneE164: workspaceNumber?.e164 || null,
     trialPhoneNumberId: workspaceNumber?.phoneNumberId || null,
@@ -111,6 +120,7 @@ export async function activateMctbTrial(workspaceId: string): Promise<{
     trialAlreadyStarted: false,
     messagingApproved: messagingGate.messagingApproved,
     numberClass: messagingGate.numberClass,
+    usesPlatformSender,
   });
 
   if (!gate.canActivate) {

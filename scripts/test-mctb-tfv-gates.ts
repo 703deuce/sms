@@ -97,6 +97,15 @@ assert.equal(
 assert.equal(evaluateTrialActivationGates(baseGate).canActivate, true);
 assert.equal(canActivateTrialFromGates(baseGate), true);
 
+assert.equal(
+  evaluateTrialActivationGates({
+    ...baseGate,
+    tfvStatus: "PENDING",
+    usesPlatformSender: true,
+  }).canActivate,
+  true,
+);
+
 assert.equal(canActivateTrialFromGates({ ...baseGate, trialAlreadyStarted: true }), true);
 
 const extRefA = buildMctbTfvExternalReferenceId("ws_a", "cmt3abc1234567890phon01");

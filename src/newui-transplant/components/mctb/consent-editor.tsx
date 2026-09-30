@@ -30,7 +30,7 @@ export function ConsentEditor() {
   const [disclosure, setDisclosure] = useState('')
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(null)
   const [phoneNumberId, setPhoneNumberId] = useState<string | null>(null)
-  const [recoveryPaid, setRecoveryPaid] = useState(false)
+  const [existingConsentEligible, setExistingConsentEligible] = useState(true)
   const [loading, setLoading] = useState(true)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -52,7 +52,10 @@ export function ConsentEditor() {
       const consentMode = setup.consentMode === 'existing_consent' ? 'existing' : 'press1'
       setMode(consentMode)
       setAttested(Boolean(setup.consentMeta?.existingConsentAttestation))
-      setRecoveryPaid(Boolean(setup.capabilities?.recoveryPaid ?? setup.consentMeta?.paidEntitled))
+      setExistingConsentEligible(
+        setup.consentMeta?.existingConsentEligible !== false &&
+          Boolean(setup.capabilities?.pressOneConsent ?? true),
+      )
       setPhoneNumberId(setup.runtime?.phoneNumberId ?? null)
       setDisclosure(
         setup.prefills?.press1Consent ||
@@ -135,7 +138,7 @@ export function ConsentEditor() {
       <Panel title="How callers give permission">
         <div role="radiogroup" aria-label="Consent mode" className="grid gap-3 md:grid-cols-2">
           {MODES.map((m) => {
-            const locked = m.id === 'existing' && !recoveryPaid
+            const locked = m.id === 'existing' && !existingConsentEligible
             return (
             <button
               key={m.id}

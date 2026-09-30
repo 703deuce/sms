@@ -1,24 +1,28 @@
 /**
  * UI + API eligibility for Existing Consent mode.
- * Canonical gate: approved messaging sender + no blocking compliance actions
- * (same signal as Setup Overview `existingConsentBlocked`).
+ * Free plan: Press-1 and existing permission (with attestation) are both available.
+ * Platform sender: no workspace A2P/TFV — Transovo numbers are pre-verified.
+ * Own number (WORKSPACE sender): requires approved messaging on the connected number.
  */
 export function isExistingConsentModeEligible(input: {
   messagingReady: boolean;
-  /** Free / trial workspaces cannot enable existing permission (Pass 1B). */
-  paidEntitled?: boolean;
+  platformSenderActive?: boolean;
+  /** MCTB product entitled (including free plan). */
+  mctbProductActive?: boolean;
 }): boolean {
-  if (input.paidEntitled === false) return false;
-  return input.messagingReady;
+  if (input.platformSenderActive) return true;
+  if (input.messagingReady) return true;
+  if (input.mctbProductActive) return true;
+  return false;
 }
 
 export function existingConsentIneligibleReason(
   messagingReady: boolean,
-  paidEntitled = true,
+  platformSenderActive = false,
+  mctbProductActive = false,
 ): string | null {
-  if (!paidEntitled) {
-    return "Available with Recovery. Press 1 is included on your current plan.";
+  if (isExistingConsentModeEligible({ messagingReady, platformSenderActive, mctbProductActive })) {
+    return null;
   }
-  if (messagingReady) return null;
-  return "Use existing permission requires messaging to be ready on your connected number.";
+  return "Missed Call Text Back is not active on this workspace.";
 }

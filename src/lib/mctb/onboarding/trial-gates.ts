@@ -13,6 +13,8 @@ export type TrialActivationGateInput = {
   messagingApproved?: boolean;
   /** TWILIO_TOLL_FREE vs TELNYX_LOCAL_A2P */
   numberClass?: "TWILIO_TOLL_FREE" | "TELNYX_LOCAL_A2P";
+  /** Transovo platform sender — customer does not complete TFV/A2P on a workspace-owned number. */
+  usesPlatformSender?: boolean;
 };
 
 export type TrialActivationGateResult = {
@@ -32,19 +34,21 @@ export function evaluateTrialActivationGates(
     missing.push("demo_number_not_allowed");
   }
 
-  if (!input.tfvPhoneNumberId || input.tfvPhoneNumberId !== input.trialPhoneNumberId) {
-    missing.push("tfv_workspace_isolation");
-  }
-
-  const usesA2pPath =
-    input.numberClass === "TELNYX_LOCAL_A2P" || input.messagingApproved === true;
-
-  if (usesA2pPath) {
-    if (!input.messagingApproved) {
-      missing.push("a2p_approved");
+  if (!input.usesPlatformSender) {
+    if (!input.tfvPhoneNumberId || input.tfvPhoneNumberId !== input.trialPhoneNumberId) {
+      missing.push("tfv_workspace_isolation");
     }
-  } else if (!isTfvApproved(input.tfvStatus)) {
-    missing.push("tfv_approved");
+
+    const usesA2pPath =
+      input.numberClass === "TELNYX_LOCAL_A2P" || input.messagingApproved === true;
+
+    if (usesA2pPath) {
+      if (!input.messagingApproved) {
+        missing.push("a2p_approved");
+      }
+    } else if (!isTfvApproved(input.tfvStatus)) {
+      missing.push("tfv_approved");
+    }
   }
 
   if (!input.forwardingConnected) {

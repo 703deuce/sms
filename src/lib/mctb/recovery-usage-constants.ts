@@ -1,5 +1,5 @@
 /** Free tier: logical missed-call recoveries per monthly period (not SMS segments). */
-export const MCTB_FREE_MONTHLY_RECOVERY_LIMIT = 25;
+export const MCTB_FREE_MONTHLY_RECOVERY_LIMIT = 10;
 
 /**
  * Paid Recovery plan allowance per Stripe/catalog tier (logical MCTB_RECOVERY units / month).
