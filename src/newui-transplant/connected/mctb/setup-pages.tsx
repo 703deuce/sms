@@ -399,7 +399,6 @@ export function NewUiMctbSetupNotificationsPage() {
             const next = [
               ...n.recipients,
               {
-                id: `new-${Date.now()}`,
                 name: name.trim(),
                 email: email.trim(),
                 mobileE164: mobile?.trim() || null,
@@ -410,7 +409,7 @@ export function NewUiMctbSetupNotificationsPage() {
               },
             ];
             n.setRecipients(next);
-          void n.save();
+            void n.save();
         },
       }}
     />

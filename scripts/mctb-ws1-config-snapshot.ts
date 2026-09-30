@@ -83,6 +83,18 @@ async function main() {
     select: { id: true },
   });
 
+  const handoffRow = await prisma.mctbHandoffConfig.findUnique({
+    where: { workspaceId: WORKSPACE_ID },
+    select: {
+      emergencyDetectionEnabled: true,
+      emergencyCriteria: true,
+    },
+  });
+  const handoffRecipients = await prisma.mctbNotificationRecipient.findMany({
+    where: { workspaceId: WORKSPACE_ID },
+    select: { id: true, email: true, name: true },
+  });
+
   console.log(
     JSON.stringify(
       {
@@ -115,6 +127,13 @@ async function main() {
           count: exclusionCount,
           certTestPresent: Boolean(certExclusion),
           certTestId: certExclusion?.id ?? null,
+        },
+        handoff: {
+          recipientCount: handoffRecipients.length,
+          emergencyDetectionEnabled: Boolean(handoffRow?.emergencyDetectionEnabled),
+          certRecipientPresent: handoffRecipients.some(
+            (r) => r.email === "mctb-browser-cert@transovo.test",
+          ),
         },
       },
       null,

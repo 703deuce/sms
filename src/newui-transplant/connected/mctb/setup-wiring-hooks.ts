@@ -330,11 +330,13 @@ export function useMctbNotificationsWiring() {
   }, [reload]);
 
   const save = useCallback(async () => {
-    if (!config) return;
     const res = await fetch("/api/mctb/handoff", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ config, recipients }),
+      body: JSON.stringify({
+        ...(config ? { config } : {}),
+        recipients,
+      }),
     });
     if (!res.ok) {
       const j = await res.json();
