@@ -153,7 +153,35 @@ On failure: failed SHA, deployment UUID, root cause with log excerpt, fix commit
 - Expose `COOLIFY_SSH_KEY` or app secrets  
 - Unrelated infrastructure changes  
 
-**Disk:** BuildKit cache is capped (~15 GB target). Before large repeated builds: `df -h /` and `docker system df`. Investigate growth before pushing again.
+**Disk:** Before stacking multiple `master` builds, run `df -h /` and `docker system df`. Failed builds still consume containerd snapshot space until garbage-collected.
+
+### Safe disk cleanup (read-only discovery first)
+
+On `coolify-server`, **do not** remove running containers or DB volumes.
+
+```bash
+# Unused app image tag (0 containers) — example only; verify with docker ps / docker images first
+docker rmi ds8s3hjin60qs6g7s0iqkixs:<old-sha-tag>
+
+docker image prune -a -f          # unused images only
+docker volume prune -f            # dangling volumes only (not coolify-db / app data)
+docker builder prune -af
+docker buildx prune -af
+```
+
+Typical reclaim: one old ~5GB web image + ~3–4GB dangling volumes. `docker system df` may still show ~50GB+ “build cache” in containerd overlay snapshots; `builder prune` often reports `0B` until Docker/containerd GC runs. **66GB+ free on `/` is usually enough for one web build**; avoid five back-to-back deploys.
+
+### Coolify UI 500: “The payload is invalid”
+
+This is usually **Laravel `DecryptException` on corrupted `environment_variables` rows**, not application code. Deployments fail the same way when Coolify reads env for Nixpacks.
+
+Find broken rows (keys only, inside `coolify` container):
+
+```bash
+docker exec coolify php -r '...' # scan EnvironmentVariable::find($id)->value; list failing ids
+```
+
+On 2026-09-30 production, application `1` had corrupt ciphertext for `REDIS_URL` (id 65) and `EMBEDDED_JOB_WORKER` (id 485). Fix: copy plaintext from the **running** web container env, then `DB::update` with `encrypt($plain)` (Coolify uses `encrypt()`, not raw `Crypt::encryptString`). Re-scan until all rows decrypt. Coolify deployment UI and new builds work again.
 
 ## Quick reference commands
 
