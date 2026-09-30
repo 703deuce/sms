@@ -89,7 +89,7 @@ export async function resolveMctbCapabilities(workspaceId: string): Promise<Mctb
   });
 
   const existingConsentCertification =
-    recoveryPaid && existingConsent.valid && existingConsent.existingConsentValid;
+    existingConsent.valid && existingConsent.existingConsentValid;
 
   const bookingLinks = recoveryPaid || aiRecoveryEntitled;
   const urgentClassification = aiRecoveryEntitled;

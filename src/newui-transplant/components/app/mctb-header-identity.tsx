@@ -22,7 +22,7 @@ function ingressStatus(state: string | undefined) {
 }
 
 export function MctbHeaderIdentity() {
-  const { business, workspaceName, loading } = useOpusWorkspaceData();
+  const { business, workspaceName, loading, planUsage } = useOpusWorkspaceData();
   const name = business?.name || workspaceName || "Workspace";
   const line = business?.line && business.line !== "—" ? business.line : null;
   const ingress = ingressStatus(business?.forwardingLineState);
@@ -86,7 +86,23 @@ export function MctbHeaderIdentity() {
             <Pill tone="success" dot={false}>Active</Pill>
           </span>
         </div>
+        {planUsage ? (
+          <>
+            <DropdownMenuSeparator />
+            <div className="px-2 py-1.5 text-sm">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Plan &amp; usage</p>
+              <p className="font-medium">{planUsage.planLabel}</p>
+              <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">{planUsage.usageShortLabel}</p>
+              <span className="mt-1 inline-block">
+                <Pill tone={planUsage.atLimit ? "warning" : "success"} dot={false}>
+                  {planUsage.atLimit ? "Monthly limit reached" : "Recoveries this month"}
+                </Pill>
+              </span>
+            </div>
+          </>
+        ) : null}
         <DropdownMenuSeparator />
+        <DropdownMenuItem render={<Link href="/settings/billing">Billing &amp; plans →</Link>} />
         <DropdownMenuItem render={<Link href={MCTB_ROUTES.phone}>Phone &amp; Forwarding settings →</Link>} />
       </DropdownMenuContent>
     </DropdownMenu>

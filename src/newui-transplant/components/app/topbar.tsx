@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { Bell, HelpCircle, Search } from 'lucide-react'
 import { MctbHeaderIdentity } from '@/newui-transplant/components/app/mctb-header-identity'
+import { MctbPlanUsageChip } from '@/newui-transplant/components/app/mctb-plan-usage-chip'
 import { SidebarTrigger } from '@/newui-transplant/components/ui/sidebar'
 import { Separator } from '@/newui-transplant/components/ui/separator'
 import { Button } from '@/newui-transplant/components/ui/button'
@@ -49,7 +50,8 @@ export function Topbar({ userName }: { userName?: string }) {
           </>
         ) : null}
       </nav>
-      <div className="ml-auto flex items-center gap-1.5">
+      <div className="ml-auto flex min-w-0 items-center gap-2">
+        <MctbPlanUsageChip />
         <label className="relative hidden md:block">
           <span className="sr-only">Search</span>
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />

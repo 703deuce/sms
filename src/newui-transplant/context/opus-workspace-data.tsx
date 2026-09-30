@@ -3,17 +3,24 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { BusinessContext } from "@/newui-transplant/lib/view-models";
 import { businessContextFromWorkspace } from "@/lib/newui-transplant/adapters/business-context";
+import type { MctbPlanUsagePresentation } from "@/lib/mctb/plan-display";
 
 type OpusWorkspaceData = {
   workspaceName: string;
   business: BusinessContext | null;
+  planUsage: MctbPlanUsagePresentation | null;
+  planUsageLoading: boolean;
   loading: boolean;
+  refreshPlanUsage: () => void;
 };
 
 const OpusWorkspaceContext = createContext<OpusWorkspaceData>({
   workspaceName: "Workspace",
   business: null,
+  planUsage: null,
+  planUsageLoading: true,
   loading: true,
+  refreshPlanUsage: () => undefined,
 });
 
 export function OpusWorkspaceDataProvider({
@@ -24,12 +31,18 @@ export function OpusWorkspaceDataProvider({
   children: ReactNode;
 }) {
   const [business, setBusiness] = useState<BusinessContext | null>(null);
+  const [planUsage, setPlanUsage] = useState<MctbPlanUsagePresentation | null>(null);
   const [loading, setLoading] = useState(true);
+  const [planUsageLoading, setPlanUsageLoading] = useState(true);
+  const [refreshToken, setRefreshToken] = useState(0);
+
+  const refreshPlanUsage = () => setRefreshToken((n) => n + 1);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
+      setPlanUsageLoading(true);
       try {
         const res = await fetch("/api/mctb/shell-context", { cache: "no-store" });
         const json = await res.json();
@@ -49,6 +62,7 @@ export function OpusWorkspaceDataProvider({
             website: null,
           }),
         );
+        setPlanUsage(data.planUsage ?? null);
       } catch {
         if (!cancelled) {
           setBusiness(
@@ -56,19 +70,38 @@ export function OpusWorkspaceDataProvider({
               name: workspaceName,
             }),
           );
+          setPlanUsage(null);
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setPlanUsageLoading(false);
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [workspaceName]);
+  }, [workspaceName, refreshToken]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refreshPlanUsage();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
 
   const value = useMemo(
-    () => ({ workspaceName, business, loading }),
-    [workspaceName, business, loading],
+    () => ({
+      workspaceName,
+      business,
+      planUsage,
+      planUsageLoading,
+      loading,
+      refreshPlanUsage,
+    }),
+    [workspaceName, business, planUsage, planUsageLoading, loading],
   );
 
   return <OpusWorkspaceContext.Provider value={value}>{children}</OpusWorkspaceContext.Provider>;

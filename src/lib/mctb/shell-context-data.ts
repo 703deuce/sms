@@ -1,9 +1,16 @@
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { getPrisma } from "@/lib/db";
+import { resolveMctbCapabilities } from "@/lib/mctb/capabilities";
 import { loadMctbOnboardingState } from "@/lib/mctb/onboarding/state";
 import { getProductionMctbForwardTargetE164 } from "@/lib/mctb/production-forward-target";
 import { formatMctbPhoneLabel } from "@/lib/mctb/phone-display";
 import { resolveMctbWorkspaceBusinessLineE164 } from "@/lib/mctb/resolve-workspace-business-line";
+import {
+  buildMctbPlanUsagePresentation,
+  type MctbPlanUsagePresentation,
+} from "@/lib/mctb/plan-display";
+import { currentMctbRecoveryPeriodKey } from "@/lib/mctb/recovery-usage-constants";
+import { getMctbRecoveryUsageSnapshot } from "@/lib/mctb/recovery-usage";
 
 export type MctbForwardingIngressUiState = "ready" | "provisioning" | "missing";
 
@@ -17,12 +24,21 @@ export type MctbShellContextPayload = {
   senderLabel: string;
   senderDetail: string;
   timezone: string;
+  planUsage: MctbPlanUsagePresentation;
+  capabilities: {
+    bookingLinks: boolean;
+    urgentClassification: boolean;
+    aiRecoveryEntitled: boolean;
+    recoveryPaid: boolean;
+    pressOneConsent: boolean;
+  };
 };
 
 /** Shared MCTB chrome context for Opus shell + setup editors (no Telnyx sweep). */
 export async function loadMctbShellContextData(workspaceId: string): Promise<MctbShellContextPayload> {
   const prisma = getPrisma();
-  const [workspace, runtime, onboarding, forwardingIngressE164] = await Promise.all([
+  const [workspace, runtime, onboarding, forwardingIngressE164, capabilities, usageSnapshot] =
+    await Promise.all([
     prisma.workspace.findUnique({
       where: { id: workspaceId },
       select: { name: true, customFieldsConfig: true },
@@ -30,6 +46,8 @@ export async function loadMctbShellContextData(workspaceId: string): Promise<Mct
     loadMissedCallTextConfig(workspaceId),
     loadMctbOnboardingState(workspaceId),
     getProductionMctbForwardTargetE164(workspaceId),
+    resolveMctbCapabilities(workspaceId),
+    getMctbRecoveryUsageSnapshot(workspaceId),
   ]);
 
   const customCfg =
@@ -66,6 +84,15 @@ export async function loadMctbShellContextData(workspaceId: string): Promise<Mct
     forwardingIngressState = "provisioning";
   }
 
+  const planUsage = buildMctbPlanUsagePresentation({
+    recoveryPaid: capabilities.recoveryPaid,
+    aiRecoveryEntitled: capabilities.aiRecoveryEntitled,
+    monthlyRecoveriesUsed: capabilities.monthlyRecoveriesUsed,
+    monthlyRecoveryLimit: capabilities.monthlyRecoveryLimit,
+    atLimit: usageSnapshot.atLimit,
+    periodKey: usageSnapshot.periodKey || currentMctbRecoveryPeriodKey(),
+  });
+
   return {
     workspaceName: workspace?.name ?? "Workspace",
     businessLineE164,
@@ -86,5 +113,13 @@ export async function loadMctbShellContextData(workspaceId: string): Promise<Mct
           ? formatMctbPhoneLabel(senderE164)
           : "Select a verified messaging number",
     timezone: runtime.timezone ?? "America/New_York",
+    planUsage,
+    capabilities: {
+      bookingLinks: capabilities.bookingLinks,
+      urgentClassification: capabilities.urgentClassification,
+      aiRecoveryEntitled: capabilities.aiRecoveryEntitled,
+      recoveryPaid: capabilities.recoveryPaid,
+      pressOneConsent: capabilities.pressOneConsent,
+    },
   };
 }

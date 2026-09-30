@@ -381,6 +381,23 @@ export async function POST(req: Request) {
     pauseUntil: body.pauseUntil ?? null,
   });
 
+  const { resolveMctbCapabilities } = await import("@/lib/mctb/capabilities");
+  const setupCapabilities = await resolveMctbCapabilities(workspaceId);
+  const bookingFieldsRequested =
+    body.defaultLinkUrl !== undefined ||
+    body.requestFormEnabled !== undefined ||
+    body.leadCaptureEnabled !== undefined ||
+    body.requestFormFieldsJson !== undefined;
+  if (bookingFieldsRequested && !setupCapabilities.bookingLinks) {
+    return NextResponse.json(
+      {
+        error:
+          "Booking links and request forms require a Text Back or AI Recovery plan. Upgrade in Billing.",
+      },
+      { status: 403 },
+    );
+  }
+
   if (body.recoveryGoal) {
     const { parseRecoveryGoalId } = await import("@/lib/mctb/recovery-goals");
     const { applyMctbRecoveryGoalConfiguration } = await import(
