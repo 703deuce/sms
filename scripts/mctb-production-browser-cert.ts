@@ -19,7 +19,7 @@ const EMAIL =
   process.env.MCTB_PROD_CERT_EMAIL?.trim() ||
   process.env.ADMIN_EMAILS?.split(",")[0]?.trim() ||
   "";
-const ARTIFACT_DIR = process.env.MCTB_PROD_CERT_ARTIFACTS || "/opt/cursor/artifacts/mctb-prod-browser-cert";
+const ARTIFACT_DIR = process.env.MCTB_PROD_CERT_ARTIFACTS || "/tmp/mctb-prod-browser-cert";
 const MATRIX_PATH =
   process.env.MCTB_PROD_CERT_MATRIX ||
   join(process.cwd(), "docs/MCTB-PRODUCTION-BROWSER-CERTIFICATION.md");
@@ -260,7 +260,14 @@ async function testRecoveryPause(page: Page, context?: BrowserContext): Promise<
     waitUntil: "domcontentloaded",
     timeout: 120_000,
   });
-  await page.waitForTimeout(5000);
+  await page.waitForTimeout(8000);
+  const resumeFirst = page.getByRole("button", { name: /resume recovery/i }).first();
+  if (await resumeFirst.isVisible().catch(() => false)) {
+    const waitResume = waitSetupPost(page);
+    await resumeFirst.click();
+    await waitResume.catch(() => null);
+    await page.waitForTimeout(2000);
+  }
   const pauseBtn = page.getByRole("button", { name: "1 hour", exact: true });
   let pauseVisible = false;
   try {
@@ -656,9 +663,7 @@ async function main() {
   const onlyRecovery = process.argv.includes("--only-recovery");
   let routesOk = 0;
   if (onlyRecovery) {
-    const recoveryPage = await context.newPage();
-    await testRecoveryPause(recoveryPage, context);
-    await recoveryPage.close();
+    await testRecoveryPause(page);
     await browser.close();
     const failCount = rows.filter((r) => r.status.startsWith("FAIL")).length;
     console.log(JSON.stringify({ failCount, rows }, null, 2));
@@ -677,9 +682,7 @@ async function main() {
 
   await testConsentMode(page);
   if (!onlyConsent) {
-    const recoveryPage = await context.newPage();
-    await testRecoveryPause(recoveryPage, context);
-    await recoveryPage.close();
+    await testRecoveryPause(page);
   }
 
   await browser.close();
