@@ -25,7 +25,21 @@
 | Scheduler ID / UUID | `2` / `tgjridm6vrmrgljkfrr0rpjn` |
 | Scheduler URL | `http://tgjridm6vrmrgljkfrr0rpjn.128.140.102.51.sslip.io` |
 
-Both apps build from **`703deuce/sms` @ `master`**. A push to `master` **auto-deploys the web app only**; the scheduler (`application_id` `2`) has auto-deploy **off** — redeploy it manually when `worker:sms` / shared deps change. Scheduler builds set **`COOLIFY_SKIP_NEXT_BUILD=1`** (build-time) so Nixpacks runs `prisma generate` only, not `next build`. Configure via `scripts/coolify-configure-scheduler-build.sh` on the Coolify host.
+Both apps build from **`703deuce/sms` @ `master`**. A push to `master` **auto-deploys the primary web app only** (this is what Coolify bills / triggers on git webhook). **Nothing else auto-redeploys** from that push.
+
+| Service | Auto-deploy on `master` push? | Operator action |
+|---------|--------------------------------|-----------------|
+| **Web** (`ds8s3hjin60qs6g7s0iqkixs`) | **Yes** | Verify `/api/health` `commitSha` after build |
+| **SMS / BullMQ worker** (`transovo-sms-worker`, `worker:sms`) | **No** | **Manual redeploy** in Coolify when job handlers, `bullmq.ts`, or CRM/MCTB queue code changes |
+| **Voice / LiveKit worker** (`transovo-voice`, scheduler slot) | **No** | **Manual redeploy** when voice-runtime or voice worker scripts change |
+| **Redis** (managed or Coolify service) | **No** | Config / capacity only — not tied to git push |
+| **Scheduler** (`trransovo-smscheduler`, id `2`) | **No** (auto-deploy off) | **Manual redeploy** when `worker:sms` / shared deps change |
+
+Do **not** assume a merged `master` commit updated workers or Redis. Say **redeploy** the relevant Coolify application(s), not “queue a deploy” for workers. Repo code on `master` is shared; **runtime** on SMS/voice workers catches up only after you redeploy those apps.
+
+Scheduler builds set **`COOLIFY_SKIP_NEXT_BUILD=1`** (build-time) so Nixpacks runs `prisma generate` only, not `next build`. Configure via `scripts/coolify-configure-scheduler-build.sh` on the Coolify host.
+
+See also: `docs/COOLIFY-TRANSOVO-VOICE-WORKER.md` (apps 1–3 split).
 
 Coolify project: `my-first-project` · Platform: Coolify `4.3.19` on host `sms` (`128.140.102.51`).
 
