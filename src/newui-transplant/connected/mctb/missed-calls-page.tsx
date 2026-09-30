@@ -72,9 +72,18 @@ export function NewUiMctbMissedCallsPage({
 
   if (!data) {
     return (
-      <p className="p-6 text-sm text-destructive" role="alert">
-        {loadError || "Could not load missed calls."}
-      </p>
+      <div className="p-6 text-sm">
+        <p className="text-destructive" role="alert">
+          {loadError || "Could not load missed calls."}
+        </p>
+        <button
+          type="button"
+          className="mt-3 text-sm font-medium text-primary underline"
+          onClick={() => void load()}
+        >
+          Retry
+        </button>
+      </div>
     );
   }
 

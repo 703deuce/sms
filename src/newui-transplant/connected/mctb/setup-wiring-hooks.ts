@@ -195,6 +195,14 @@ export function useMctbVoicemailWiring() {
     void reload();
   }, [reload]);
 
+  useEffect(() => {
+    const onSetup = () => {
+      void reload();
+    };
+    window.addEventListener("mctb-setup-updated", onSetup);
+    return () => window.removeEventListener("mctb-setup-updated", onSetup);
+  }, [reload]);
+
   const ensureVoicemailBoxId = useCallback(async (): Promise<string> => {
     if (!phoneNumberId) throw new Error("No phone number configured");
     if (voicemailBoxId) return voicemailBoxId;
@@ -426,9 +434,17 @@ export function useMctbLinksWiring() {
     void reload();
   }, [reload]);
 
+  useEffect(() => {
+    const onSetup = () => {
+      void reload();
+    };
+    window.addEventListener("mctb-setup-updated", onSetup);
+    return () => window.removeEventListener("mctb-setup-updated", onSetup);
+  }, [reload]);
+
   const save = useCallback(async () => {
     await saveMctbSetup({
-      phoneNumberId,
+      ...(phoneNumberId ? { phoneNumberId } : {}),
       defaultLinkUrl: defaultLinkUrl.trim() || null,
       requestFormEnabled,
       activate: false,
@@ -501,6 +517,14 @@ export function useMctbTestWiring() {
 
   useEffect(() => {
     void reload().finally(() => setLoading(false));
+  }, [reload]);
+
+  useEffect(() => {
+    const onSetup = () => {
+      void reload();
+    };
+    window.addEventListener("mctb-setup-updated", onSetup);
+    return () => window.removeEventListener("mctb-setup-updated", onSetup);
   }, [reload]);
 
   const startLiveTest = useCallback(async () => {

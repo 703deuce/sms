@@ -32,8 +32,32 @@ export const MISSED_CALLS_PAGE_SIZE_DEFAULT = GLOBAL_TABLE_DEFAULT_PAGE_SIZE;
 export function parseMissedCallsListQuery(
   searchParams: URLSearchParams,
 ): MissedCallsListQuery {
-  const status = searchParams.get("status") as MissedCallsStatusFilter | null;
-  const date = searchParams.get("date") as MissedCallsDateFilter | null;
+  const statusParam = searchParams.get("status") as MissedCallsStatusFilter | null;
+  const recoveryLegacy = searchParams.get("recovery");
+  const status =
+    statusParam === "needs_attention" ||
+    statusParam === "replied" ||
+    statusParam === "waiting_consent" ||
+    statusParam === "suppressed" ||
+    statusParam === "failed"
+      ? statusParam
+      : recoveryLegacy === "suppressed"
+        ? "suppressed"
+        : recoveryLegacy === "failed"
+          ? "failed"
+          : recoveryLegacy === "replied"
+            ? "replied"
+            : null;
+  const dateParam = searchParams.get("date") as MissedCallsDateFilter | null;
+  const rangeLegacy = searchParams.get("range");
+  const date =
+    dateParam === "today" || dateParam === "7d" || dateParam === "30d" || dateParam === "all"
+      ? dateParam
+      : rangeLegacy === "7d"
+        ? "7d"
+        : rangeLegacy === "30d" || rangeLegacy === "90d"
+          ? "30d"
+          : null;
   const consentMode = searchParams.get("consentMode") as "press_1" | "existing_consent" | null;
   const sort = searchParams.get("sort") as MissedCallsSort | null;
   const page = Number(searchParams.get("page") || "1");
@@ -41,16 +65,8 @@ export function parseMissedCallsListQuery(
 
   return {
     q: searchParams.get("q")?.trim() || undefined,
-    status:
-      status === "needs_attention" ||
-      status === "replied" ||
-      status === "waiting_consent" ||
-      status === "suppressed" ||
-      status === "failed"
-        ? status
-        : "all",
-    date:
-      date === "today" || date === "7d" || date === "30d" || date === "all" ? date : "all",
+    status: status ?? "all",
+    date: date ?? "all",
     trigger: searchParams.get("trigger")?.trim() || undefined,
     consentMode:
       consentMode === "press_1" || consentMode === "existing_consent" ? consentMode : undefined,

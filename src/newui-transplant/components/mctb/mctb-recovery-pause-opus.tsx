@@ -37,7 +37,6 @@ export function MctbRecoveryPauseOpus({
         onUpdated?.();
       } catch (e) {
         setActionError(e instanceof Error ? e.message : "Could not update recovery status");
-        onUpdated?.();
       } finally {
         setBusy(false);
       }

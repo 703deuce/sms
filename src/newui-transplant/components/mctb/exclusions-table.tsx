@@ -44,15 +44,18 @@ export function ExclusionsTable() {
   const [number, setNumber] = useState('')
   const [label, setLabel] = useState('')
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
 
   const reload = useCallback(async () => {
     setLoading(true)
+    setLoadError(null)
     try {
       const list = await fetchMctbExclusions()
       setRows(list.map((r) => mapExclusionRow(r as Record<string, unknown>)))
-    } catch {
+    } catch (e) {
       setRows([])
+      setLoadError(e instanceof Error ? e.message : 'Could not load exclusions')
     } finally {
       setLoading(false)
     }
@@ -114,6 +117,9 @@ export function ExclusionsTable() {
         </Dialog>
       }
     >
+      {loadError ? (
+        <p className="px-5 pt-4 text-sm text-destructive" role="alert">{loadError}</p>
+      ) : null}
       {actionError && !open ? (
         <p className="px-5 pt-4 text-sm text-destructive" role="alert">{actionError}</p>
       ) : null}

@@ -1,7 +1,7 @@
 # MCTB UI → backend wiring audit (code review)
 
 **Date:** 2026-09-30  
-**Method:** Static trace from `src/newui-transplant/connected/mctb/*` and shared MCTB components to `src/app/api/mctb/*` and runtime libs. **Forty review rounds** (pass 1–4: `…-10-ROUNDS.md` through `…-PASS-4.md`; pass 4 = functional save/load bugs) plus earlier passes (surface → races/cache → E2E). **No browser certification** unless separately requested.  
+**Method:** Static trace from `src/newui-transplant/connected/mctb/*` and shared MCTB components to `src/app/api/mctb/*` and runtime libs. **Fifty review rounds** (pass 1–5: `…-10-ROUNDS.md` through `…-PASS-5.md`; passes 4–5 = functional save/load + user journeys) plus earlier passes (surface → races/cache → E2E). **No browser certification** unless separately requested.  
 **Out of scope (per request):** Integrations, org Settings, Help, generic billing.
 
 ---
@@ -171,6 +171,17 @@ Legacy `/mctb/setup/*` routes redirect into the IA routes above; wired component
 44. **Missed-call recovery IA** — duplicate `useMctbRecoveryWiring()` (header vs tabs). **Fix:** one hook; pass into tab editors; hook listens for `mctb-setup-updated`.
 45. **Conversations needs reply** — list/thread/KPI mismatch. **Fix:** `mctbInboxNeedsReply` (OPEN + unread); server-side filter for Needs reply tab.
 46. **Setup overview** — stale rows after saves on other pages. **Fix:** `mctb-setup-updated` reload.
+
+### Fixed (pass 5 — rounds 41–50, user journeys)
+
+47. **Recovery pause (Overview)** — `onUpdated` on failed save showed wrong state. **Fix:** success-only refresh.
+48. **Overview + Getting started** — stale pause/checklist after setup saves elsewhere. **Fix:** `mctb-setup-updated`.
+49. **Overview Needs reply KPI** — link omitted `filter=needs_reply`. **Fix:** conversations deep link.
+50. **Analytics drilldowns** — wrong query params; missed-calls client ignored SSR filters. **Fix:** `date`/`status`, legacy aliases, `initialQuery` from SSR.
+51. **Exclusions load** — errors looked like empty list. **Fix:** `loadError`.
+52. **Booking link / links** — `defaultLinkUrl` skipped without `phoneNumberId`. **Fix:** partial setup POST.
+53. **Phone / voicemail / test** — stale after setup changes on other pages. **Fix:** `mctb-setup-updated` reload.
+54. **Missed calls list** — no Retry on fetch failure. **Fix:** Retry control.
 
 ### By design (not bugs)
 

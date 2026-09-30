@@ -1,4 +1,63 @@
-import type { MissedCallsDateFilter, MissedCallsStatusFilter } from "@/lib/mctb/missed-calls-list-filters";
+import type {
+  MissedCallsDateFilter,
+  MissedCallsListQuery,
+  MissedCallsStatusFilter,
+} from "@/lib/mctb/missed-calls-list-filters";
+
+export type MissedCallsUiListQuery = {
+  q: string;
+  recovery: string;
+  date: string;
+  trigger: string;
+  sort: string;
+  page: number;
+};
+
+/** Map analytics range to the closest missed-calls date filter (list has no 90d bucket). */
+export function missedCallsDateFromAnalyticsRange(range: "7d" | "30d" | "90d"): MissedCallsDateFilter {
+  if (range === "7d") return "7d";
+  if (range === "30d") return "30d";
+  return "30d";
+}
+
+export function missedCallsListQueryToUi(query: MissedCallsListQuery): MissedCallsUiListQuery {
+  const date =
+    query.date === "today"
+      ? "Today"
+      : query.date === "7d"
+        ? "Last 7 days"
+        : query.date === "30d"
+          ? "Last 30 days"
+          : "All";
+  const recovery =
+    query.status === "needs_attention"
+      ? "Needs attention"
+      : query.status === "replied"
+        ? "Replied"
+        : query.status === "waiting_consent"
+          ? "Waiting for consent"
+          : query.status === "suppressed"
+            ? "Suppressed"
+            : query.status === "failed"
+              ? "Failed"
+              : "All";
+  const triggerFromApi: Record<string, string> = {
+    NO_ANSWER: "No answer",
+    BUSY: "Busy",
+    REJECTED: "Rejected",
+    TIMEOUT: "Unreachable",
+    VOICEMAIL: "Voicemail",
+  };
+  const trigger = query.trigger ? triggerFromApi[query.trigger] ?? "All" : "All";
+  return {
+    q: query.q ?? "",
+    recovery,
+    date,
+    trigger,
+    sort: query.sort === "detectedAt_asc" ? "Oldest first" : "Newest first",
+    page: query.page ?? 1,
+  };
+}
 
 export function missedCallsUiDateToApi(date: string): MissedCallsDateFilter {
   if (date === "Today") return "today";

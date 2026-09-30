@@ -86,6 +86,14 @@ export function NewUiMctbOverviewPage({ data }: { data: MctbOverviewPayload }) {
     void reloadSetup();
   }, [reloadSetup]);
 
+  useEffect(() => {
+    const onSetup = () => {
+      void reloadSetup();
+    };
+    window.addEventListener("mctb-setup-updated", onSetup);
+    return () => window.removeEventListener("mctb-setup-updated", onSetup);
+  }, [reloadSetup]);
+
   return (
     <Page>
       <PageHeader
@@ -107,7 +115,7 @@ export function NewUiMctbOverviewPage({ data }: { data: MctbOverviewPayload }) {
         <Stat label="Missed calls" value={String(kpis.missedCallsToday)} hint={kpis.windowLabel} href="/mctb/missed-calls" icon={PhoneMissed} />
         <Stat label="Recovery texts sent" value={String(kpis.recoveryTextsToday)} hint="Today" href="/mctb/missed-calls" icon={Send} />
         <Stat label="Customer replies" value={String(kpis.repliesToday)} hint="Today" href="/mctb/conversations" icon={MessageSquareReply} />
-        <Stat label="Needs reply" value={String(kpis.needsReplyCount)} hint="Waiting on your team" href="/mctb/conversations" icon={MessagesSquare} />
+        <Stat label="Needs reply" value={String(kpis.needsReplyCount)} hint="Waiting on your team" href="/mctb/conversations?filter=needs_reply" icon={MessagesSquare} />
       </div>
 
       {capabilities && capabilities.monthlyRecoveryLimit > 0 ? (

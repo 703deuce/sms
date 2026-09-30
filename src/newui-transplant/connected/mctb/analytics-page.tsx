@@ -9,6 +9,7 @@ import { OPUS_CARD, OPUS_TABLE_HEAD } from "@/newui-transplant/components/app/op
 import { Segmented } from "@/newui-transplant/components/app/segmented-nav";
 import { mergeDailyTrends } from "@/lib/newui-transplant/adapters/chart-series";
 import type { MctbAnalyticsRange } from "@/lib/mctb/analytics";
+import { missedCallsDateFromAnalyticsRange } from "@/lib/newui-transplant/missed-calls-query";
 import { cn } from "@/lib/utils";
 
 type AnalyticsPayload = Awaited<ReturnType<typeof import("@/lib/mctb/analytics").loadMctbAnalytics>>;
@@ -59,6 +60,7 @@ export function NewUiMctbAnalyticsPage({ initialData, initialRange }: { initialD
 
   const suppressionRows = Object.entries(data.suppressionByReason);
   const suppressedTotal = suppressionRows.reduce((s, [, n]) => s + n, 0) || 1;
+  const missedCallsDateParam = missedCallsDateFromAnalyticsRange(range);
 
   return (
     <Page>
@@ -81,9 +83,21 @@ export function NewUiMctbAnalyticsPage({ initialData, initialRange }: { initialD
       ) : null}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Missed calls" value={String(data.totalMissed)} href={`/mctb/missed-calls?range=${range}`} />
-        <Stat label="Recovery texts sent" value={String(data.textsSent)} href="/mctb/missed-calls" />
-        <Stat label="Customers replied" value={String(data.replies)} href="/mctb/conversations" />
+        <Stat
+          label="Missed calls"
+          value={String(data.totalMissed)}
+          href={`/mctb/missed-calls?date=${missedCallsDateParam}`}
+        />
+        <Stat
+          label="Recovery texts sent"
+          value={String(data.textsSent)}
+          href={`/mctb/missed-calls?date=${missedCallsDateParam}`}
+        />
+        <Stat
+          label="Customers replied"
+          value={String(data.replies)}
+          href={`/mctb/missed-calls?status=replied&date=${missedCallsDateParam}`}
+        />
         <Stat label="Reply rate" value={pct(data.replies, data.textsSent)} />
       </div>
 
@@ -152,7 +166,10 @@ export function NewUiMctbAnalyticsPage({ initialData, initialRange }: { initialD
                   <tr key={reason}>
                     <td className={td}>{reason}</td>
                     <td className={cn(td, "text-right tabular-nums")}>
-                      <Link href="/mctb/missed-calls?recovery=suppressed" className="font-medium text-primary hover:underline">
+                      <Link
+                        href={`/mctb/missed-calls?status=suppressed&date=${missedCallsDateParam}`}
+                        className="font-medium text-primary hover:underline"
+                      >
                         {count}
                       </Link>
                     </td>

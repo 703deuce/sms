@@ -62,6 +62,14 @@ export function MctbBookingLinkSection() {
     void reload();
   }, [reload]);
 
+  useEffect(() => {
+    const onSetup = () => {
+      void reload();
+    };
+    window.addEventListener("mctb-setup-updated", onSetup);
+    return () => window.removeEventListener("mctb-setup-updated", onSetup);
+  }, [reload]);
+
   const onSave = async () => {
     setError(null);
     if (sendEnabled) {
@@ -90,16 +98,14 @@ export function MctbBookingLinkSection() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Could not save booking link");
       if (json.data?.id) setLinkId(json.data.id as string);
-      if (phoneNumberId) {
-        await saveMctbSetup({
-          phoneNumberId,
-          defaultLinkUrl: url.trim(),
-          activate: false,
-        });
-      }
-    } else if (phoneNumberId) {
       await saveMctbSetup({
-        phoneNumberId,
+        ...(phoneNumberId ? { phoneNumberId } : {}),
+        defaultLinkUrl: url.trim(),
+        activate: false,
+      });
+    } else {
+      await saveMctbSetup({
+        ...(phoneNumberId ? { phoneNumberId } : {}),
         defaultLinkUrl: null,
         activate: false,
       });

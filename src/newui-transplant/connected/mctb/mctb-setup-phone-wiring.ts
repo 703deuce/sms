@@ -150,6 +150,14 @@ export function useMctbSetupPhoneWiring(): {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    const onSetup = () => {
+      void load();
+    };
+    window.addEventListener("mctb-setup-updated", onSetup);
+    return () => window.removeEventListener("mctb-setup-updated", onSetup);
+  }, [load]);
+
   const forwardTarget = productionForwardE164;
   const carrierGuide = useMemo(() => getCarrierGuide(carrier), [carrier]);
 
