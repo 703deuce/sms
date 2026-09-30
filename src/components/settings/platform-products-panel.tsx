@@ -11,6 +11,7 @@ import {
   bundleMonthlyTotalCents,
 } from "@/lib/products/platform-bundle-pricing";
 import type { MctbTier, SmartRoutingTier, AiTranscriptionTier } from "@/lib/products/platform-billing-catalog-definitions";
+import { MCTB_OWN_NUMBER_STACKING_SUMMARY } from "@/lib/mctb/commercial-pricing";
 import { useEffect, useMemo, useState } from "react";
 
 type FeatureSnapshot = Record<TransovoProductFeature, ProductAccessStatus>;
@@ -450,9 +451,7 @@ export function PlatformProductsPanel({
           <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Missed Call Text Back add-ons
           </h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Text Back ($9.99/mo) is the base paid plan. Add-ons are monthly subscriptions unless noted.
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">{MCTB_OWN_NUMBER_STACKING_SUMMARY}</p>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             {mctbAddonProducts.map((product) => {
               const family = product.family;

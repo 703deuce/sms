@@ -61,12 +61,22 @@
 
 ---
 
-## Own Local Number — optional add-on (outside the three packages)
+## Own Local Number — optional add-on (stacks on any base plan)
 
 | | |
 |---|---|
-| **Recurring (subscription)** | +$10/month |
+| **Recurring (subscription)** | **+$10/month on top of** your base plan |
 | **One-time (at checkout)** | +$19.50 A2P registration fee |
+
+**Monthly totals with Own Local Number (subscriptions only, before tax):**
+
+| Base plan | Base | + Own number | **Total / month** |
+|-----------|-----:|-------------:|------------------:|
+| Free | $0 | +$10 | **$10** |
+| Text Back | $9.99 | +$10 | **$19.99** |
+| AI Recovery | $19.99 | +$10 | **$29.99** |
+
+Each line item is a **separate Stripe subscription** (or free for MCTB base on Free). Own number does not replace Text Back or AI Recovery.
 
 - Customer’s **own registered local business texting number** (workspace sender), not the shared Transovo platform toll-free sender.
 - **$9.99 Text Back** and **$19.99 AI Recovery** are **monthly subscriptions** (not one-time purchases).

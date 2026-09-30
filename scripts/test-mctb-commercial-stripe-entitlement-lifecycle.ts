@@ -21,6 +21,12 @@ import {
 } from "../src/lib/mctb/recovery-usage-constants";
 import { grantWorkspaceProductFeature } from "../src/lib/products/feature-entitlements";
 import { handlePlatformCheckoutCompleted, handlePlatformSubscriptionEvent } from "../src/lib/payments/stripe-platform-webhook";
+import {
+  mctbEstimatedMonthlyTotalCents,
+  MCTB_OWN_SENDER_MONTHLY_CENTS,
+  MCTB_TEXT_BACK_MONTHLY_CENTS,
+  MCTB_AI_RECOVERY_MONTHLY_CENTS,
+} from "../src/lib/mctb/commercial-pricing";
 
 const DATABASE_URL = process.env.DATABASE_URL?.trim();
 if (!DATABASE_URL) {
@@ -50,6 +56,29 @@ async function cleanup(workspaceId: string) {
   await prisma.workspaceLimits.deleteMany({ where: { workspaceId } });
   await prisma.workspaceProductFeature.deleteMany({ where: { workspaceId } });
   await prisma.workspace.delete({ where: { id: workspaceId } }).catch(() => undefined);
+}
+
+function mockAddonSubscription(
+  workspaceId: string,
+  productFamily: "mctb_ai_recovery" | "mctb_own_sender",
+  productKey: string,
+): Stripe.Subscription {
+  return {
+    id: `sub_test_${randomUUID().slice(0, 8)}`,
+    object: "subscription",
+    status: "active",
+    cancel_at_period_end: false,
+    metadata: {
+      workspaceId,
+      platformProductFamily: productFamily,
+      platformProductKey: productKey,
+      platformTier: "default",
+    },
+    customer: "cus_test",
+    items: { object: "list", data: [], has_more: false, url: "" },
+    current_period_start: Math.floor(Date.now() / 1000),
+    current_period_end: Math.floor(Date.now() / 1000) + 86400 * 30,
+  } as Stripe.Subscription;
 }
 
 function mockMctbSubscription(
@@ -83,6 +112,31 @@ async function main() {
     assert.equal(caps.monthlyRecoveryLimit, MCTB_FREE_MONTHLY_RECOVERY_LIMIT);
     assert.equal(caps.aiRecoveryEntitled, false);
     assert.equal(caps.ownSenderAddOnEntitled, false);
+
+    assert.equal(
+      mctbEstimatedMonthlyTotalCents({ basePlan: "free", ownSenderAddOn: true }),
+      MCTB_OWN_SENDER_MONTHLY_CENTS,
+    );
+    assert.equal(
+      mctbEstimatedMonthlyTotalCents({ basePlan: "text_back", ownSenderAddOn: true }),
+      MCTB_TEXT_BACK_MONTHLY_CENTS + MCTB_OWN_SENDER_MONTHLY_CENTS,
+    );
+    assert.equal(
+      mctbEstimatedMonthlyTotalCents({ basePlan: "ai_recovery", ownSenderAddOn: true }),
+      MCTB_AI_RECOVERY_MONTHLY_CENTS + MCTB_OWN_SENDER_MONTHLY_CENTS,
+    );
+
+    const ownOnly = mockAddonSubscription(
+      workspaceId,
+      "mctb_own_sender",
+      MCTB_COMMERCIAL_ADDON_PRODUCT_KEYS.ownSender,
+    );
+    await handlePlatformSubscriptionEvent(ownOnly);
+    caps = await resolveMctbCapabilities(workspaceId);
+    assert.equal(caps.recoveryPaid, false, "own sender alone does not imply Text Back paid");
+    assert.equal(caps.ownSenderAddOnEntitled, true);
+    assert.equal(caps.monthlyRecoveryLimit, MCTB_FREE_MONTHLY_RECOVERY_LIMIT);
+    await handlePlatformSubscriptionEvent({ ...ownOnly, status: "canceled" } as Stripe.Subscription);
 
     const subStarter = mockMctbSubscription(workspaceId, "starter");
     const upsert = await handlePlatformSubscriptionEvent(subStarter);

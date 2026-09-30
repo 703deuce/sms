@@ -91,8 +91,8 @@ export function MctbOwnSenderA2pPanel() {
         description="After you subscribe to Own Local Number, complete this form. Transovo submits your carrier registration manually — approval is not automatic."
       >
         <p className="text-sm text-muted-foreground">
-          Add Own Local Number from Settings → Billing. Checkout includes a one-time $19.50 A2P registration
-          fee plus $10/month for your dedicated local texting number.
+          Add Own Local Number from Settings → Billing. It is $10/month on top of your current MCTB plan
+          (Free, Text Back, or AI Recovery), plus a one-time $19.50 A2P fee at checkout.
         </p>
       </ConfigSection>
     );
