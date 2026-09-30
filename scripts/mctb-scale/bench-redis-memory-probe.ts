@@ -9,6 +9,9 @@ import { getPrisma } from "@/lib/db";
 import { enqueueBullmq } from "@/lib/jobs/bullmq";
 import { MCTB_QUEUE_NAME } from "@/lib/mctb/messaging/inbound-sms-ingress";
 import { JOB_PRIORITY_MCTB_INBOUND_SMS } from "@/lib/jobs/job-priority";
+import { assertBenchDatabaseAllowed } from "./bench-guard";
+
+assertBenchDatabaseAllowed();
 
 const LEVELS = (process.env.MCTB_BENCH_REDIS_JOB_COUNTS || "50,100,200")
   .split(",")

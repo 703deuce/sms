@@ -40,6 +40,10 @@
 
 **Prior measured (Redis hardening):** restart survival, delayed jobs, idempotent double-wake — PASS (`docs/TRANSOVO-BULLMQ-REDIS-HARDENING-ACCEPTANCE.md`).
 
+**Measured 2026-09-29 (read-only):** BullMQ Redis **8.28M / 768M** (~1.1%), **2743** keys — `docs/MCTB-SCALE-BENCHMARK-RESULTS.json`.
+
+**Write benchmarks:** blocked against production Supabase by default (`bench-guard.ts`); run on **staging** DB.
+
 **Not run this pass:** concurrent dashboard 50–5000 users, 1000 call webhooks/sec, full Postgres restore drill.
 
 ---

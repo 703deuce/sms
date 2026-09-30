@@ -111,6 +111,8 @@
     "test:mctb-commercial-launch-cert": "bash scripts/run-mctb-commercial-launch-certification.sh",
     "test:mctb-consolidated-nonhuman-matrix": "bash scripts/run-mctb-consolidated-nonhuman-matrix.sh",
     "test:mctb-scale-smoke": "bash scripts/mctb-scale/run-scale-smoke-suite.sh",
+    "test:mctb-redis-stats": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/mctb-scale/redis-stats.ts",
+    "test:mctb-postgres-outbox-rebuild": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/operations/postgres-outbox-redis-rebuild-smoke.ts",
     "verify:mctb-stage2-legacy-imports": "tsx scripts/verify-mctb-stage2-legacy-imports.ts",
     "verify:mctb-stage2-demo-state": "tsx scripts/verify-mctb-stage2-demo-state.ts",
     "audit:mctb-opus-page-wiring": "tsx scripts/audit-mctb-opus-page-wiring.ts",
