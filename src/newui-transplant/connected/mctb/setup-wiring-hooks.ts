@@ -1,7 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { fetchMctbSetup, saveMctbSetup } from "@/lib/newui-transplant/api/mctb-setup-client";
+import {
+  fetchMctbSetup,
+  postMctbHandoff,
+  saveMctbSetup,
+} from "@/lib/newui-transplant/api/mctb-setup-client";
 import { addPauseUntil } from "@/lib/mctb/schedule-shared";
 import { clampMctbMaxMessagesPerCaller } from "@/lib/mctb/recovery-max-messages";
 import type { TriggerKey, TriggerState } from "@/lib/mctb/setup-recovery-model";
@@ -37,7 +41,7 @@ export function useMctbRecoveryWiring() {
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await fetchMctbSetup();
+      const data = await fetchMctbSetup({ force: true });
       const r = data.runtime as Record<string, unknown>;
       const sch = data.schedule as { paused?: boolean };
       setPhoneNumberId((r.phoneNumberId as string) ?? null);
@@ -147,7 +151,7 @@ export function useMctbVoicemailWiring() {
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await fetchMctbSetup();
+      const data = await fetchMctbSetup({ force: true });
       const r = data.runtime as Record<string, unknown>;
       const pid = (r.phoneNumberId as string) ?? null;
       setPhoneNumberId(pid);
@@ -251,11 +255,11 @@ export function useMctbVoicemailWiring() {
   const saveTranscription = useCallback(
     async (enabled: boolean) => {
       setTranscriptionEnabled(enabled);
-      if (!voicemailBoxId) return;
+      const boxId = voicemailBoxId ?? (await ensureVoicemailBoxId());
       const res = await fetch("/api/phone/voicemail", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "update_box", boxId: voicemailBoxId, transcriptionEnabled: enabled }),
+        body: JSON.stringify({ action: "update_box", boxId, transcriptionEnabled: enabled }),
       });
       if (!res.ok) {
         const j = await res.json();
@@ -263,21 +267,14 @@ export function useMctbVoicemailWiring() {
       }
       await reload();
     },
-    [voicemailBoxId, reload],
+    [voicemailBoxId, ensureVoicemailBoxId, reload],
   );
 
   const saveRecoveryToggle = useCallback(async () => {
-    const data = await fetchMctbSetup();
-    const r = data.runtime as Record<string, unknown>;
+    if (!phoneNumberId) throw new Error("No phone number configured");
     await saveMctbSetup({
       phoneNumberId,
-      triggerRules: {
-        noAnswer: Boolean(r.sendAfterNoAnswer),
-        busy: Boolean(r.sendAfterBusy),
-        rejected: Boolean(r.sendAfterRejected),
-        timeout: Boolean(r.sendAfterTimeout),
-        voicemail: sendAfterVoicemail,
-      },
+      triggerRules: { voicemail: sendAfterVoicemail },
       activate: false,
     });
     await reload();
@@ -305,6 +302,7 @@ export function useMctbVoicemailWiring() {
 export function useMctbNotificationsWiring() {
   const [loading, setLoading] = useState(true);
   const [recipients, setRecipients] = useState<MctbNotificationRecipientDto[]>([]);
+  const recipientsRef = useRef<MctbNotificationRecipientDto[]>([]);
   const [config, setConfig] = useState<MctbHandoffConfigDto | null>(null);
   const configRef = useRef<MctbHandoffConfigDto | null>(null);
   const [urgentBusinessSmsEntitled, setUrgentBusinessSmsEntitled] = useState(true);
@@ -313,6 +311,15 @@ export function useMctbNotificationsWiring() {
     configRef.current = next;
     setConfig(next);
   }, []);
+
+  const setRecipientsSynced = useCallback((next: MctbNotificationRecipientDto[]) => {
+    recipientsRef.current = next;
+    setRecipients(next);
+  }, []);
+
+  useEffect(() => {
+    recipientsRef.current = recipients;
+  }, [recipients]);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -335,24 +342,22 @@ export function useMctbNotificationsWiring() {
     void reload();
   }, [reload]);
 
+  const persistConfig = useCallback(async (handoffConfig: MctbHandoffConfigDto) => {
+    configRef.current = handoffConfig;
+    setConfigSynced(handoffConfig);
+    await postMctbHandoff({ config: handoffConfig });
+  }, [setConfigSynced]);
+
   const save = useCallback(
     async (
       recipientsOverride?: Array<Omit<MctbNotificationRecipientDto, "id"> & { id?: string }>,
     ) => {
-    const payloadRecipients = recipientsOverride ?? recipients;
+    const payloadRecipients = recipientsOverride ?? recipientsRef.current ?? recipients;
     const latestConfig = configRef.current ?? config;
-    const res = await fetch("/api/mctb/handoff", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        ...(latestConfig ? { config: latestConfig } : {}),
-        recipients: payloadRecipients,
-      }),
+    await postMctbHandoff({
+      ...(latestConfig ? { config: latestConfig } : {}),
+      recipients: payloadRecipients,
     });
-    if (!res.ok) {
-      const j = await res.json();
-      throw new Error(j.error || "Save failed");
-    }
     await reload();
   },
   [config, recipients, reload],
@@ -363,7 +368,8 @@ export function useMctbNotificationsWiring() {
     recipients,
     config,
     setConfig: setConfigSynced,
-    setRecipients,
+    setRecipients: setRecipientsSynced,
+    persistConfig,
     save,
     urgentBusinessSmsEntitled,
   };
@@ -379,7 +385,7 @@ export function useMctbLinksWiring() {
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await fetchMctbSetup();
+      const data = await fetchMctbSetup({ force: true });
       const r = data.runtime as Record<string, unknown>;
       setPhoneNumberId((r.phoneNumberId as string) ?? null);
       setDefaultLinkUrl(String(r.defaultLinkUrl || ""));
@@ -434,14 +440,17 @@ export function useMctbTestWiring() {
   const [messagingReady, setMessagingReady] = useState(false);
   const [senderReady, setSenderReady] = useState(false);
   const [openerSaved, setOpenerSaved] = useState(false);
+  const reloadGeneration = useRef(0);
 
   const reload = useCallback(async () => {
+    const generation = ++reloadGeneration.current;
     const [setupRes, liveRes, setupData, onboardRes] = await Promise.all([
       fetch("/api/mctb/setup-test", { cache: "no-store" }),
       fetch("/api/mctb/live-test", { cache: "no-store" }),
-      fetchMctbSetup().catch(() => null),
+      fetchMctbSetup({ force: true }).catch(() => null),
       fetch("/api/mctb/onboarding", { cache: "no-store" }).catch(() => null),
     ]);
+    if (generation !== reloadGeneration.current) return;
     const setupJson = await setupRes.json().catch(() => ({}));
     const liveJson = await liveRes.json().catch(() => ({}));
     if (setupRes.ok && setupJson.status) setSetupTest(setupJson.status);
@@ -456,6 +465,7 @@ export function useMctbTestWiring() {
       (setupData?.businessLineE164 as string) || null,
       (onboardJson?.state?.businessNumberE164 as string) || null,
     );
+    if (generation !== reloadGeneration.current) return;
     setBusinessLine(lineE164 ? formatSetupPhoneLine(lineE164) : "");
     const runtime = (setupData?.runtime ?? {}) as { messageTemplate?: string };
     const compliance = (setupData as { compliance?: { messagingReady?: boolean } })?.compliance;

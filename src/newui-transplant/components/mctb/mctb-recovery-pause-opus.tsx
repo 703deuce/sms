@@ -33,6 +33,8 @@ export function MctbRecoveryPauseOpus({
       try {
         await saveMctbSetup(patch);
         onUpdated?.();
+      } catch {
+        // saveMctbSetup throws; keep UI state until user retries
       } finally {
         setBusy(false);
       }

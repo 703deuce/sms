@@ -62,3 +62,22 @@ export async function deleteMctbExclusion(id: string): Promise<void> {
   const res = await fetch(`/api/mctb/exclusions?id=${encodeURIComponent(id)}`, { method: "DELETE" });
   if (!res.ok) throw new Error("Could not remove exclusion");
 }
+
+/** Serialize handoff POSTs so config toggles cannot race recipient saves. */
+let mctbHandoffWriteChain: Promise<void> = Promise.resolve();
+
+export function postMctbHandoff(body: Record<string, unknown>): Promise<void> {
+  const run = async () => {
+    const res = await fetch("/api/mctb/handoff", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      throw new Error((j as { error?: string }).error || "Handoff save failed");
+    }
+  };
+  mctbHandoffWriteChain = mctbHandoffWriteChain.catch(() => undefined).then(run);
+  return mctbHandoffWriteChain;
+}

@@ -437,6 +437,13 @@ function OnboardingAiRecoverySection({ caps }: { caps: MctbCapabilities | null }
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ enabled }),
           })
+            .then(async (res) => {
+              if (!res.ok) {
+                const j = await res.json().catch(() => ({}));
+                throw new Error((j as { error?: string }).error || "Save failed");
+              }
+            })
+            .catch(() => undefined)
         }
       >
         Save AI Recovery

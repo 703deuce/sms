@@ -242,21 +242,13 @@ export function NewUiMctbSetupNotificationsPage() {
     handoffConfigRef.current = n.config;
   }, [n.config]);
 
-  const persistHandoff = (config: MctbHandoffConfigDto, recipients = n.recipients) => {
-    void fetch("/api/mctb/handoff", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ config, recipients }),
-    });
-  };
-
   const patchHandoffConfig = (patch: Partial<MctbHandoffConfigDto>) => {
     const base = handoffConfigRef.current ?? n.config;
     if (!base) return;
     const next = { ...base, ...patch };
     handoffConfigRef.current = next;
     n.setConfig(next);
-    persistHandoff(next);
+    void n.persistConfig(next).catch(() => undefined);
   };
 
   const events = useMemo(() => {
@@ -296,7 +288,7 @@ export function NewUiMctbSetupNotificationsPage() {
               };
               handoffConfigRef.current = next;
               n.setConfig(next);
-              persistHandoff(next);
+              void n.persistConfig(next).catch(() => undefined);
             }
           : undefined,
         onSmsChange: row.event
@@ -318,12 +310,12 @@ export function NewUiMctbSetupNotificationsPage() {
               };
               handoffConfigRef.current = next;
               n.setConfig(next);
-              persistHandoff(next);
+              void n.persistConfig(next).catch(() => undefined);
             }
           : undefined,
       };
     });
-  }, [n.config, n.recipients, n.setConfig, n.save, n.urgentBusinessSmsEntitled]);
+  }, [n.config, n.recipients, n.setConfig, n.persistConfig, n.save, n.urgentBusinessSmsEntitled]);
 
   if (n.loading) return <p className="p-6 text-sm text-muted-foreground">Loading notifications…</p>;
 
@@ -349,7 +341,7 @@ export function NewUiMctbSetupNotificationsPage() {
               onInstructionsBlur: () => {
                 const cfg = handoffConfigRef.current;
                 if (!cfg) return;
-                persistHandoff(cfg);
+                void n.persistConfig(cfg).catch(() => undefined);
               },
               onTestMessageChange: setUrgentTestMessage,
               onRunTest: () => {

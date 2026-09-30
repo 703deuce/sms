@@ -1,7 +1,7 @@
 # MCTB UI → backend wiring audit (code review)
 
 **Date:** 2026-09-30  
-**Method:** Static trace from `src/newui-transplant/connected/mctb/*` and shared MCTB components to `src/app/api/mctb/*` and runtime libs. **No browser certification run** for this pass.  
+**Method:** Static trace from `src/newui-transplant/connected/mctb/*` and shared MCTB components to `src/app/api/mctb/*` and runtime libs. **Three review passes** (surface wiring → races/cache → edge/async). **No browser certification** unless separately requested.  
 **Out of scope (per request):** Integrations, org Settings, Help, generic billing.
 
 ---
@@ -11,7 +11,7 @@
 | Verdict | Count |
 |--------|--------|
 | Wired end-to-end (control → API → persisted/runtime) | Most launch surfaces |
-| Fixed in this pass (stale state / silent failure / race) | 4 areas |
+| Fixed in review passes (stale state / silent failure / race / cache) | 10+ items |
 | Requires explicit Save (by design) | Recovery timing, missed-call rules, text-back opener, consent mode |
 | Read-only / navigational | Overview KPIs, analytics, consent history, missed-call list/detail |
 
@@ -68,7 +68,36 @@ Legacy `/mctb/setup/*` routes redirect into the IA routes above; wired component
    `onSave` ignored HTTP failures. **Fix:** check `res.ok` and throw with API error body (SaveBar can surface).
 
 4. **Notifications — recipient save vs routing matrix race**  
-   `save(recipients)` used React `config` from closure; a routing toggle updated `configRef` / `setConfig` and could still be in flight when add/edit recipient posted an older `config`, wiping matrix changes. **Fix:** `useMctbNotificationsWiring` keeps `configRef` synced on every `setConfig`; `save()` posts `configRef.current ?? config`.
+   `save(recipients)` used React `config` from closure; a routing toggle could interleave with add/edit recipient. **Fix:** `configRef` + `recipientsRef`; serialized `postMctbHandoff()`.
+
+5. **Notifications — config-only POST included `recipients`**  
+   Every routing/urgent toggle re-saved the full recipient list from a possibly stale render, racing add/edit. **Fix:** `persistConfig()` posts `{ config }` only (API preserves recipients when omitted).
+
+6. **Voicemail — “text after voicemail” toggle**  
+   `saveRecoveryToggle` re-read `triggerRules` from `fetchMctbSetup()` (8s client cache) and could revert rule changes made on Missed-call Rules. **Fix:** POST partial `triggerRules: { voicemail }` only.
+
+7. **Voicemail — transcription toggle before box exists**  
+   `saveTranscription` returned early when `voicemailBoxId` was null after optimistic UI update. **Fix:** `ensureVoicemailBoxId()` before POST.
+
+8. **Setup hooks — stale setup cache on reload**  
+   Recovery / voicemail / links `reload()` used cached setup. **Fix:** `fetchMctbSetup({ force: true })` in those hooks.
+
+9. **Conversations — send used list closure phone**  
+   `onSendMessage` used `conversations.find` phone; could be stale after contact merge. **Fix:** `fetchConversation(id)` for authoritative `phone` before send.
+
+10. **Live test polling — out-of-order reload**  
+    Interval `reload()` could apply older poll after newer. **Fix:** `reloadGeneration` guard + forced setup fetch in test wiring.
+
+11. **Handoff writes — concurrent POSTs**  
+    Fire-and-forget `fetch` on toggles vs awaited `save()`. **Fix:** `postMctbHandoff` serializes writes in client.
+
+### Pass log (what each pass targeted)
+
+| Pass | Focus | Examples found |
+|------|--------|----------------|
+| 1 | Control → API → persistence | Missing error checks, Save vs immediate-action, mirror `wired` props |
+| 2 | Races & cache | Handoff recipient+config races, setup cache on recovery toggle, serialized handoff POST |
+| 3 | Async / edge | Test poll ordering, conversation send phone authority, transcription without box |
 
 ### By design (not bugs)
 
@@ -78,7 +107,7 @@ Legacy `/mctb/setup/*` routes redirect into the IA routes above; wired component
 
 ### Low risk / monitor
 
-- **Notifications** `void fetch` on handoff does not await or surface errors in UI (fire-and-forget). Runtime usually updates; consider toast on `!res.ok` later.
+- **Notifications** routing toggles: errors from `persistConfig` are swallowed in UI (`.catch(() => undefined)`); runtime usually updates; consider toast on failure.
 - **setup client cache** (`fetchMctbSetup` 8s TTL): pages that need fresh state after save call `reload()` or `{ force: true }` (overview does).
 - **AI Recovery** disabled path: lead-recovery config POST skipped when `enabled` false — intentional; `POST /api/mctb/ai-recovery/settings` with `enabled: false` disables via `applyLaunchAiRepliesSetting`.
 - **Onboarding AI toggle** (`mctb-onboarding-operational-steps.tsx`): `void fetch` on settings without surfacing errors — same class as handoff fire-and-forget.

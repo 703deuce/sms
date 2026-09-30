@@ -155,10 +155,11 @@ export function NewUiMctbConversationsPage({
         await loadList();
       },
       onSendMessage: async (conversationId: string, text: string) => {
-        const convo = conversations.find((c) => c.id === conversationId);
-        if (!convo) return;
+        const fresh = await fetchConversation(conversationId);
+        const to = fresh.phone?.trim();
+        if (!to) return;
         await sendNewMessage({
-          to: convo.phone,
+          to,
           message: text,
           inboxCompose: true,
           mctbCompose: true,
