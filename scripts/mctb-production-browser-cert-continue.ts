@@ -936,6 +936,7 @@ async function main() {
   skipKeys = loadSkipKeys(MATRIX_PATH);
   appendPhase2Header(MATRIX_PATH, shaStart, WORKSPACE_ID);
   const onlyNotifications = process.argv.includes("--only-notifications");
+  const skipManifest = process.argv.includes("--skip-manifest") || onlyNotifications;
 
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, ignoreHTTPSErrors: true });
@@ -970,8 +971,10 @@ async function main() {
   await testNumbersInventory(page);
   await testValidationEmptySave(page);
 
-  for (const r of ROUTES) {
-    await manifestRoute(page, r.path, r.label);
+  if (!skipManifest) {
+    for (const r of ROUTES) {
+      await manifestRoute(page, r.path, r.label);
+    }
   }
 
   await testMobileViewport(context);
