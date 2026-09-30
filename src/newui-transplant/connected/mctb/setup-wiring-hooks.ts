@@ -22,6 +22,8 @@ const TRIGGER_LABELS: Record<TriggerKey, string> = {
   voicemail: "After voicemail",
 };
 
+export type MctbRecoveryWiring = ReturnType<typeof useMctbRecoveryWiring>;
+
 export function useMctbRecoveryWiring() {
   const [loading, setLoading] = useState(true);
   const [phoneNumberId, setPhoneNumberId] = useState<string | null>(null);
@@ -64,6 +66,14 @@ export function useMctbRecoveryWiring() {
 
   useEffect(() => {
     void reload();
+  }, [reload]);
+
+  useEffect(() => {
+    const onSetup = () => {
+      void reload();
+    };
+    window.addEventListener("mctb-setup-updated", onSetup);
+    return () => window.removeEventListener("mctb-setup-updated", onSetup);
   }, [reload]);
 
   const save = useCallback(async () => {

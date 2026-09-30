@@ -72,25 +72,38 @@ export function NewUiMctbMissedCallRecoveryPage() {
   const [usageLimit, setUsageLimit] = useState<number | null>(null);
   const [usageError, setUsageError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadUsage = useCallback(() => {
     setUsageError(null);
     void fetchMctbSetup({ force: true })
       .then((data) => {
         const caps = data.capabilities as {
           monthlyRecoveryLimit?: number;
-          monthlyRecoveryUsed?: number;
+          monthlyRecoveriesUsed?: number;
         };
         const limit = Number(caps?.monthlyRecoveryLimit ?? 0);
-        const used = Number(caps?.monthlyRecoveryUsed ?? 0);
+        const used = Number(caps?.monthlyRecoveriesUsed ?? 0);
         if (limit > 0) {
           setUsageLimit(limit);
           setUsageUsed(used);
+        } else {
+          setUsageLimit(null);
+          setUsageUsed(null);
         }
       })
       .catch((e) => {
         setUsageError(e instanceof Error ? e.message : "Could not load usage");
       });
   }, []);
+
+  useEffect(() => {
+    loadUsage();
+  }, [loadUsage]);
+
+  useEffect(() => {
+    const onSetup = () => loadUsage();
+    window.addEventListener("mctb-setup-updated", onSetup);
+    return () => window.removeEventListener("mctb-setup-updated", onSetup);
+  }, [loadUsage]);
 
   const paused = recovery.paused;
 
@@ -163,12 +176,12 @@ export function NewUiMctbMissedCallRecoveryPage() {
           aria-labelledby="opus-tab-general"
           className="mt-4"
         >
-          <NewUiMctbSetupRecoveryPage />
+          <NewUiMctbSetupRecoveryPage recovery={recovery} />
         </div>
       ) : null}
       {tab === "rules" ? (
         <div id="opus-tabpanel-rules" role="tabpanel" aria-labelledby="opus-tab-rules" className="mt-4">
-          <NewUiMctbSetupMissedCallRulesPage embedded />
+          <NewUiMctbSetupMissedCallRulesPage embedded recovery={recovery} />
         </div>
       ) : null}
       {tab === "consent" ? (

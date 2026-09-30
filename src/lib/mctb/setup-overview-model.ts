@@ -286,8 +286,8 @@ export function buildSetupSummaryRows(input: {
   const triggerBits: string[] = [];
   if (r.sendAfterNoAnswer) triggerBits.push("No answer");
   if (r.sendAfterBusy) triggerBits.push("Busy");
-  if (r.sendAfterRejected) triggerBits.push("Unreachable");
-  if (r.sendAfterTimeout) triggerBits.push("Timeout");
+  if (r.sendAfterRejected) triggerBits.push("Rejected");
+  if (r.sendAfterTimeout) triggerBits.push("Unreachable");
   const recoverySecondary = paused
     ? "Recovery paused"
     : triggersOn

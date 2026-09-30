@@ -3,6 +3,11 @@ import type { Conversation as ApiConversation } from "@/lib/types";
 import type { InboxListItem } from "@/lib/inbox/kimi-inbox-adapter";
 import { relativeAgo } from "@/lib/inbox/kimi-inbox-adapter";
 
+/** Matches overview KPIs and missed-calls summary: OPEN + unread (MCTB product). */
+export function mctbInboxNeedsReply(unread: boolean, status: string): boolean {
+  return unread && status.toLowerCase() === "open";
+}
+
 function mapMessage(
   m: ApiConversation["messages"][number],
   urgentPreview?: string | null,
@@ -48,8 +53,7 @@ export function mapInboxListItemToNewUiInbox(row: InboxListItem): Conversation {
     row.fromE164 ||
     "Unknown";
   const phone = row.contact?.phone || row.fromE164 || "";
-  const status = (row.status || "").toLowerCase();
-  const needsReply = row.unread && (status === "open" || status === "pending");
+  const needsReply = mctbInboxNeedsReply(row.unread, row.status || "");
   return {
     id: row.id,
     name,
@@ -69,8 +73,7 @@ export function mapInboxListItemToNewUiInbox(row: InboxListItem): Conversation {
 
 export function mapApiConversationToNewUiInbox(convo: ApiConversation): Conversation {
   const name = convo.contactName?.trim() || convo.phone || "Unknown";
-  const needsReply =
-    convo.status === "Open" || convo.status === "Pending";
+  const needsReply = mctbInboxNeedsReply(Boolean(convo.unread), convo.status);
   return {
     id: convo.id,
     name,

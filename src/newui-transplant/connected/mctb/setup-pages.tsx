@@ -32,9 +32,9 @@ import { MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY } from "@/lib/mctb/launch-flags";
 import type { MctbNotificationRecipientDto } from "@/lib/mctb/handoff/types";
 import {
   useMctbNotificationsWiring,
-  useMctbRecoveryWiring,
   useMctbTestWiring,
   useMctbVoicemailWiring,
+  type MctbRecoveryWiring,
 } from "@/newui-transplant/connected/mctb/setup-wiring-hooks";
 import type { MctbHandoffConfigDto, MctbHandoffEventType } from "@/lib/mctb/handoff/types";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
@@ -177,8 +177,13 @@ export function NewUiMctbSetupTextBackPage() {
   );
 }
 
-export function NewUiMctbSetupMissedCallRulesPage({ embedded }: { embedded?: boolean } = {}) {
-  const recovery = useMctbRecoveryWiring();
+export function NewUiMctbSetupMissedCallRulesPage({
+  embedded,
+  recovery,
+}: {
+  embedded?: boolean;
+  recovery: MctbRecoveryWiring;
+}) {
   if (recovery.loading) return <p className="p-6 text-sm text-muted-foreground">Loading missed-call rules…</p>;
   const body = (
       <TransplantMctbSetupMissedCallRulesPage
@@ -201,8 +206,7 @@ export function NewUiMctbSetupMissedCallRulesPage({ embedded }: { embedded?: boo
   );
 }
 
-export function NewUiMctbSetupRecoveryPage() {
-  const recovery = useMctbRecoveryWiring();
+export function NewUiMctbSetupRecoveryPage({ recovery }: { recovery: MctbRecoveryWiring }) {
   if (recovery.loading) return <p className="p-6 text-sm text-muted-foreground">Loading recovery settings…</p>;
   return (
     <TransplantMctbSetupRecoveryPage

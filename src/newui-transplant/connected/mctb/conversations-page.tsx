@@ -23,6 +23,9 @@ import { MCTB_PLATFORM_SENDER_MANUAL_REPLY_MESSAGE } from "@/lib/mctb/inbox-manu
 type InboxFilter = "All" | "Needs reply" | "Mine" | "Unassigned" | "Closed" | "Spam";
 
 function filterToQuery(filter: InboxFilter) {
+  if (filter === "Needs reply") {
+    return { product: "mctb", unread: true, status: "open" as const, take: 50 };
+  }
   if (filter === "Mine") return inboxQueryFromFilter({ kind: "mine", key: "open" }, "mctb", { take: 50 });
   if (filter === "Unassigned") return inboxQueryFromFilter({ kind: "all", key: "unassigned" }, "mctb", { take: 50 });
   if (filter === "Closed") return inboxQueryFromFilter({ kind: "all", key: "closed" }, "mctb", { take: 50 });
@@ -109,8 +112,7 @@ export function NewUiMctbConversationsPage({
     try {
       const query = filterToQuery(filter);
       const page = await fetchInboxListPage(query);
-      let mapped = page.rows.map(mapInboxListItemToNewUiInbox);
-      if (filter === "Needs reply") mapped = mapped.filter((c) => c.needsReply);
+      const mapped = page.rows.map(mapInboxListItemToNewUiInbox);
       setConversations(mapped);
       setMissedCalls(buildMissedCallsFromRows(mapped));
       setLoading(false);

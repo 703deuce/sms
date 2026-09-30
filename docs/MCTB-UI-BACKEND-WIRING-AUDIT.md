@@ -1,7 +1,7 @@
 # MCTB UI → backend wiring audit (code review)
 
 **Date:** 2026-09-30  
-**Method:** Static trace from `src/newui-transplant/connected/mctb/*` and shared MCTB components to `src/app/api/mctb/*` and runtime libs. **Thirty exhaustive review rounds** (pass 1–3: `…-10-ROUNDS.md`, `…-PASS-2.md`, `…-PASS-3.md`) plus earlier passes (surface → races/cache → E2E). **No browser certification** unless separately requested.  
+**Method:** Static trace from `src/newui-transplant/connected/mctb/*` and shared MCTB components to `src/app/api/mctb/*` and runtime libs. **Forty review rounds** (pass 1–4: `…-10-ROUNDS.md` through `…-PASS-4.md`; pass 4 = functional save/load bugs) plus earlier passes (surface → races/cache → E2E). **No browser certification** unless separately requested.  
 **Out of scope (per request):** Integrations, org Settings, Help, generic billing.
 
 ---
@@ -164,6 +164,14 @@ Legacy `/mctb/setup/*` routes redirect into the IA routes above; wired component
 40. **Missed call detail** — error without retry. **Fix:** Retry control.
 41. **`useMctbLinksWiring`** — unhandled setup fetch failure. **Fix:** `loadError`.
 
+### Fixed (pass 4 — rounds 31–40, functional)
+
+42. **Missed-call recovery usage stat** — wrong capability key `monthlyRecoveryUsed`. **Fix:** `monthlyRecoveriesUsed` + refresh on setup-updated.
+43. **Setup overview recovery summary** — rejected/timeout trigger labels swapped vs editor. **Fix:** `setup-overview-model.ts` labels.
+44. **Missed-call recovery IA** — duplicate `useMctbRecoveryWiring()` (header vs tabs). **Fix:** one hook; pass into tab editors; hook listens for `mctb-setup-updated`.
+45. **Conversations needs reply** — list/thread/KPI mismatch. **Fix:** `mctbInboxNeedsReply` (OPEN + unread); server-side filter for Needs reply tab.
+46. **Setup overview** — stale rows after saves on other pages. **Fix:** `mctb-setup-updated` reload.
+
 ### By design (not bugs)
 
 - **Recovery delay/cooldown/max** and **missed-call rule checkboxes** update React state until user clicks **Save** / **Save rules** — then `POST /api/mctb/setup`.
@@ -177,7 +185,7 @@ Legacy `/mctb/setup/*` routes redirect into the IA routes above; wired component
 - **setup client cache** (`fetchMctbSetup` 8s TTL): pages that need fresh state after save call `reload()` or `{ force: true }` (overview does).
 - **AI Recovery** disabled path: lead-recovery config POST skipped when `enabled` false — intentional; `POST /api/mctb/ai-recovery/settings` with `enabled: false` disables via `applyLaunchAiRepliesSetting`.
 - **Onboarding AI toggle** (`mctb-onboarding-operational-steps.tsx`): `void fetch` on settings without surfacing errors — same class as handoff fire-and-forget.
-- **Missed-call recovery tabs:** General vs Rules each mount their own `useMctbRecoveryWiring()`; switching tabs reloads from API (no shared dirty state across tabs — acceptable).
+- **Missed-call recovery tabs:** General and Rules share one `useMctbRecoveryWiring()` instance on the IA page (pass 4).
 - **Legacy routes:** `/mctb/numbers` → phone drawer; `/mctb/ai-lead-recovery` → `/mctb/ai-recovery`; `/mctb/reminders` and scheduling stubs redirect per `removed-scheduling-routes`.
 - **Out-of-launch surfaces preserved:** `/mctb/appointments`, `/mctb/booking`, `/mctb/calendar`, `/mctb/voice-agent` — not in V1 launch IA; audit focused on connected `newui-transplant/connected/mctb` launch routes above.
 
