@@ -30,7 +30,8 @@ Postgres `job_queue` is the **durable outbox** paired with BullMQ transport. Bul
 | Class | Statuses (schema) | Policy |
 |-------|-------------------|--------|
 | **Actionable** | `pending`, `processing`, `deferred` | **Never** age-deleted; old actionable → ops alert (`oldestActionable` in health snapshot) |
-| **Successful terminal** | `completed` | Delete after **30 days** (`JOB_QUEUE_COMPLETED_RETENTION_DAYS`) |
+| **Successful scheduler/tick** (`processDueJobs` types) | `completed` | Delete after **48 hours** (`JOB_QUEUE_SCHEDULER_COMPLETED_RETENTION_HOURS`) |
+| **Successful normal** operational/customer jobs | `completed` | Delete after **30 days** (`JOB_QUEUE_COMPLETED_RETENTION_DAYS`) |
 | **Failure terminal** | `failed` | Delete after **90 days** (`JOB_QUEUE_FAILED_RETENTION_DAYS`) |
 
 Compliance, billing, MCTB history, messages, and consent live in **business tables** — not in completed queue rows.
@@ -67,11 +68,11 @@ Postgres outbox remains authoritative for recovery; BullMQ retention is for Redi
 
 **Measured scheduler load (code):** ~20 global maintenance/batch job types enqueued per `processDueJobs` call, once per minute ≈ **28,800 completed rows/day** for null-workspace ticks alone (if all complete).
 
-With **30-day** completed retention:
+With **48-hour** scheduler + **30-day** normal completed retention:
 
 | Scale | Scheduler completed cap (order of magnitude) | Notes |
 |-------|-----------------------------------------------|--------|
-| Current (1 prod workspace) | ~864k scheduler + workspace sends | Bounded rolling window vs unbounded |
+| Current (1 prod workspace) | **~57,600** scheduler + workspace sends at 30d | ~28,800 scheduler rows/day measured |
 | 100 customers | Same scheduler cap + **per-customer send/automation rows** (usage-dependent) | Label: **projection** from measured tick rate + assumed send volume |
 | 1,000 / 5,000 / 10,000 | Scheduler cap unchanged; workspace-scoped rows grow with **actual** SMS/automation/MCTB enqueue rate | Use `scripts/operations/analyze-job-queue.ts` on production for jobs/customer after cleanup |
 

@@ -1211,6 +1211,8 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       const { runJobQueueTerminalPruneMaintenance } = await import("@/lib/jobs/job-queue-lifecycle");
       return runJobQueueTerminalPruneMaintenance();
     }
+    case "job_queue_lifecycle_scheduler_fixture":
+      return { ok: true, skipped: true, reason: "test_fixture" };
     default:
       throw new Error(`Unknown job type: ${jobType}`);
   }
