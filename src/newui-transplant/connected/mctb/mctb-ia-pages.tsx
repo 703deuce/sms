@@ -28,6 +28,7 @@ import { TextBackEditor } from "@/newui-transplant/components/mctb/text-back-edi
 import { MctbBookingLinkSection } from "@/newui-transplant/components/mctb/mctb-booking-link-section";
 import { ConsentEditor } from "@/newui-transplant/components/mctb/consent-editor";
 import { ExclusionsTable } from "@/newui-transplant/components/mctb/exclusions-table";
+import { MctbOwnSenderA2pPanel } from "@/newui-transplant/components/mctb/mctb-own-sender-a2p-panel";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import { ButtonLink } from "@/newui-transplant/components/app/button-link";
 import {
@@ -419,6 +420,9 @@ export function NewUiMctbPhoneForwardingPage() {
           />
         </div>
         <NewUiMctbSetupPhonePage />
+        <div className="mt-8">
+          <MctbOwnSenderA2pPanel />
+        </div>
       </Page>
       <Dialog open={testDialog} onOpenChange={setTestDialog}>
         <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">

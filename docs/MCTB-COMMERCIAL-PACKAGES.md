@@ -65,14 +65,17 @@
 
 | | |
 |---|---|
-| **Recurring** | +$10/month |
-| **One-time** | +$19.50 A2P registration |
+| **Recurring (subscription)** | +$10/month |
+| **One-time (at checkout)** | +$19.50 A2P registration fee |
 
 - Customer’s **own registered local business texting number** (workspace sender), not the shared Transovo platform toll-free sender.
-- Unlocks **human-controlled texting** appropriate to their registered A2P use case once carrier approval completes.
+- **$9.99 Text Back** and **$19.99 AI Recovery** are **monthly subscriptions** (not one-time purchases).
+- **$10/mo Own Local Number** is a **subscription**; **$19.50** is a **one-time** line item bundled at Stripe checkout for A2P registration.
+- After checkout, the customer completes the **A2P intake form** on **Phone & Forwarding**. Transovo **submits registration manually** to the carrier — approval is not automatic in-app.
+- Unlocks **human-controlled texting** once carrier approval completes.
 - Checkout copy should state that **carrier/message usage charges may apply** if billed pass-through.
 
-**Stripe / entitlement mapping:** `product_family = mctb_own_sender`. Code flag: `ownSenderAddOnEntitled`. Customer completes **their** A2P — platform sender path does not.
+**Stripe / entitlement mapping:** `product_family = mctb_own_sender`. Code flag: `ownSenderAddOnEntitled`. Intake: `customFieldsConfig.mctb.ownSenderA2pIntake`.
 
 ---
 

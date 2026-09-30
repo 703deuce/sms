@@ -75,6 +75,10 @@ export async function loadMctbOverview(workspaceId: string): Promise<MctbOvervie
 }
 
 async function loadMctbOverviewShared(workspaceId: string): Promise<Omit<MctbOverviewPayload, "leadRecovery" | "callHandling" | "performanceSnapshot">> {
+  void import("@/lib/mctb/forwarding-degraded-notify").then((m) =>
+    m.maybeNotifyForwardingDegraded(workspaceId).catch(() => undefined),
+  );
+
   const prisma = getPrisma();
 
   const ws = await prisma.workspace.findUnique({

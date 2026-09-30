@@ -73,6 +73,9 @@ export function PlatformProductsPanel({
   }, []);
 
   const mctbProducts = products.filter((p) => p.family === "mctb");
+  const mctbAddonProducts = products.filter(
+    (p) => p.family === "mctb_ai_recovery" || p.family === "mctb_own_sender",
+  );
   const srProducts = products.filter((p) => p.family === "smart_routing");
   const cfProducts = products.filter((p) => p.family === "call_forwarding");
   const atProducts = products.filter((p) => p.family === "ai_transcription");
@@ -442,6 +445,58 @@ export function PlatformProductsPanel({
       <p className="mt-3 text-xs text-muted-foreground">
         Additional Smart Routing minutes above your plan: $0.02 / conversation minute.
       </p>
+      {mctbAddonProducts.length > 0 ? (
+        <div className="mt-6">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Missed Call Text Back add-ons
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Text Back ($9.99/mo) is the base paid plan. Add-ons are monthly subscriptions unless noted.
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {mctbAddonProducts.map((product) => {
+              const family = product.family;
+              const isActive = subscriptions.some(
+                (s) =>
+                  s.productFamily === family &&
+                  ["active", "trialing", "past_due"].includes(s.status),
+              );
+              const oneTime =
+                product.oneTimeAmountCents != null
+                  ? formatCurrency(product.oneTimeAmountCents / 100)
+                  : null;
+              return (
+                <div key={product.productKey} className="rounded-lg border border-border p-4">
+                  <p className="font-medium">{product.displayName}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{product.description}</p>
+                  <p className="mt-3 text-sm font-semibold tabular-nums">
+                    {formatCurrency(product.amountCents / 100)}
+                    <span className="text-xs font-normal text-muted-foreground"> / month</span>
+                    {oneTime ? (
+                      <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                        + {oneTime} one-time A2P registration at checkout
+                      </span>
+                    ) : null}
+                  </p>
+                  <div className="mt-3 flex gap-2">
+                    {!isActive ? (
+                      <Button
+                        size="sm"
+                        disabled={checkoutKey === product.productKey}
+                        onClick={() => startCheckout(product.productKey)}
+                      >
+                        Subscribe
+                      </Button>
+                    ) : (
+                      <span className="text-sm font-medium text-emerald-700">Active</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
       {addonProducts.length > 0 ? (
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
           {addonProducts.map((product) => (

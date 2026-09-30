@@ -141,7 +141,7 @@ export const ADDON_PRODUCT_DEFS = [
     productKey: "mctb_own_sender",
     displayName: "Own Local Number",
     description:
-      "Your registered local business texting number (+$19.50 one-time A2P registration at checkout).",
+      "$10/month subscription for your local texting number, plus $19.50 one-time A2P registration at checkout. Complete the A2P form in Phone & Forwarding — Transovo submits registration manually.",
     amountCents: 1000,
     feature: "mctb" as const,
   },

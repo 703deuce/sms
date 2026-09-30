@@ -47,9 +47,12 @@ export function renderMctbTeamEmail(input: NotificationRenderInput): {
   text: string;
 } {
   const urgent = input.urgent;
-  const subject = urgent
-    ? `URGENT missed-call lead — ${input.businessName}`
-    : `New missed-call lead — ${input.businessName}`;
+  const subject =
+    input.eventType === "forwarding_degraded"
+      ? `Call forwarding may have stopped — ${input.businessName}`
+      : urgent
+        ? `URGENT missed-call lead — ${input.businessName}`
+        : `New missed-call lead — ${input.businessName}`;
 
   const factRows = [
     ["Caller", input.facts.callerName || "Unknown"],

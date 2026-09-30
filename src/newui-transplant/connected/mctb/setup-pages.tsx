@@ -85,6 +85,7 @@ const OPUS_EVENT_MAP: Array<{ label: string; event?: MctbHandoffEventType }> = [
   { label: "Needs reply (15 min)", event: "human_required" },
   { label: "New voicemail", event: "voicemail_received" },
   { label: "Delivery failure", event: "recovery_failure" },
+  { label: "Forwarding stopped working", event: "forwarding_degraded" },
 ];
 
 export function NewUiMctbSetupOverviewPage() {

@@ -116,6 +116,7 @@ export type PlatformProductListItem = {
   displayName: string;
   description: string;
   amountCents: number;
+  oneTimeAmountCents?: number;
   includedMinutes?: number;
   feature: TransovoProductFeature;
 };
@@ -156,8 +157,9 @@ export function listPlatformPurchasableProducts(): PlatformProductListItem[] {
       family: "mctb_own_sender",
       displayName: "Own Local Number",
       description:
-        "Your registered local texting number (+$19.50 one-time A2P registration at checkout).",
+        "$10/month for your local number + $19.50 one-time A2P registration (manual carrier submission after you complete the in-app form).",
       amountCents: ownSenderAddon.monthlyPriceCents,
+      oneTimeAmountCents: ownSenderAddon.oneTimePriceCents,
       feature: "mctb",
     });
   }

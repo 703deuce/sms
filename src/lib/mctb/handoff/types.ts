@@ -19,6 +19,7 @@ export const MCTB_HANDOFF_EVENT_TYPES = [
   "appointment_booked",
   "voicemail_received",
   "recovery_failure",
+  "forwarding_degraded",
 ] as const;
 
 export type MctbHandoffEventType = (typeof MCTB_HANDOFF_EVENT_TYPES)[number];

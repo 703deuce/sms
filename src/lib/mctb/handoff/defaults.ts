@@ -23,6 +23,10 @@ export const DEFAULT_ROUTING_MATRIX: MctbRoutingMatrix = {
   urgent_detected: { channels: { sms: true, email: true, in_app: true }, recipientIds: [] },
   human_required: { channels: { sms: true, email: true, in_app: true }, recipientIds: [] },
   appointment_booked: { channels: { email: true, in_app: true }, recipientIds: [] },
+  forwarding_degraded: { channels: { email: true, in_app: true }, recipientIds: [] },
+  missed_call_detected: { channels: { in_app: true }, recipientIds: [] },
+  recovery_failure: { channels: { email: true, in_app: true }, recipientIds: [] },
+  voicemail_received: { channels: { email: true, in_app: true }, recipientIds: [] },
 };
 
 export function defaultHandoffConfig(): MctbHandoffConfigDto {
