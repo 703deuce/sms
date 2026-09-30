@@ -29,6 +29,7 @@ import {
 } from "@/lib/mctb/numbers/mctb-number-drawer-controller";
 import { buildSetupTestPipelineSteps } from "@/lib/mctb/setup-test-presentation";
 import { MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY } from "@/lib/mctb/launch-flags";
+import type { MctbNotificationRecipientDto } from "@/lib/mctb/handoff/types";
 import {
   useMctbNotificationsWiring,
   useMctbRecoveryWiring,
@@ -386,8 +387,8 @@ export function NewUiMctbSetupNotificationsPage() {
                 }
               : r,
           );
-          n.setRecipients(next);
-          void n.save();
+          n.setRecipients(next as MctbNotificationRecipientDto[]);
+          void n.save(next);
         },
         events: events ?? undefined,
         onAddRecipient: () => {
@@ -408,8 +409,8 @@ export function NewUiMctbSetupNotificationsPage() {
                 sortOrder: n.recipients.length,
               },
             ];
-            n.setRecipients(next);
-            void n.save();
+            n.setRecipients(next as MctbNotificationRecipientDto[]);
+            void n.save(next);
         },
       }}
     />

@@ -202,8 +202,8 @@ export function OnboardingNotificationsStep({ c, caps, compact }: NotificationsS
   const saveNotifications = useCallback(async () => {
     if (!n.config) throw new Error("Notifications not loaded");
     if (!email.trim()) throw new Error("Notification email is required.");
-    const recipient: MctbNotificationRecipientDto = {
-      id: primary?.id || `onb-${Date.now()}`,
+    const recipient = {
+      ...(primary?.id ? { id: primary.id } : {}),
       name: name.trim() || "Primary contact",
       email: email.trim(),
       mobileE164: mobile.trim() || null,
@@ -211,7 +211,7 @@ export function OnboardingNotificationsStep({ c, caps, compact }: NotificationsS
       eventChannels: primary?.eventChannels || {},
       enabled: true,
       sortOrder: 0,
-    };
+    } as MctbNotificationRecipientDto;
     const recipients =
       n.recipients.length > 0
         ? [recipient, ...n.recipients.slice(1)]

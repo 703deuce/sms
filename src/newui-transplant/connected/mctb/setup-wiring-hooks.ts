@@ -329,13 +329,17 @@ export function useMctbNotificationsWiring() {
     void reload();
   }, [reload]);
 
-  const save = useCallback(async () => {
+  const save = useCallback(
+    async (
+      recipientsOverride?: Array<Omit<MctbNotificationRecipientDto, "id"> & { id?: string }>,
+    ) => {
+    const payloadRecipients = recipientsOverride ?? recipients;
     const res = await fetch("/api/mctb/handoff", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         ...(config ? { config } : {}),
-        recipients,
+        recipients: payloadRecipients,
       }),
     });
     if (!res.ok) {
@@ -343,7 +347,9 @@ export function useMctbNotificationsWiring() {
       throw new Error(j.error || "Save failed");
     }
     await reload();
-  }, [config, recipients, reload]);
+  },
+  [config, recipients, reload],
+  );
 
   return {
     loading,
