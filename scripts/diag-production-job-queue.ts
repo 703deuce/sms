@@ -3,9 +3,11 @@
  * NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/diag-production-job-queue.ts
  */
 import { getPrisma } from "@/lib/db";
+import { getJobQueueHealthSnapshot } from "@/lib/jobs/job-queue-lifecycle";
 
 async function main() {
   const prisma = getPrisma();
+  const lifecycleHealth = await getJobQueueHealthSnapshot();
   const now = new Date();
 
   const statuses = await prisma.jobQueue.groupBy({
@@ -104,6 +106,7 @@ async function main() {
     JSON.stringify(
       {
         probedAt: now.toISOString(),
+        lifecycleHealth,
         env: {
           QUEUE_DRIVER: process.env.QUEUE_DRIVER || null,
           REDIS_URL_SET: Boolean(process.env.REDIS_URL?.trim()),

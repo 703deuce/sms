@@ -605,8 +605,8 @@ export async function enqueueBullmq(
   const added = await queue.add(jobName, payload, {
     jobId,
     delay: opts?.delay,
-    removeOnComplete: 1000,
-    removeOnFail: 5000,
+    removeOnComplete: Math.max(100, Number(process.env.BULLMQ_REMOVE_ON_COMPLETE || 1000)),
+    removeOnFail: Math.max(100, Number(process.env.BULLMQ_REMOVE_ON_FAIL || 5000)),
     attempts: isRegistration ? 500 : 8,
     backoff: { type: "exponential", delay: 15_000 },
   });

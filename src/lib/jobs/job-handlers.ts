@@ -1207,6 +1207,10 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       );
       return executeVoiceV2CallbackSlaOverdueScan();
     }
+    case "job_queue_terminal_prune": {
+      const { runJobQueueTerminalPruneMaintenance } = await import("@/lib/jobs/job-queue-lifecycle");
+      return runJobQueueTerminalPruneMaintenance();
+    }
     default:
       throw new Error(`Unknown job type: ${jobType}`);
   }
@@ -1370,6 +1374,18 @@ export async function processDueJobs(limit = 25) {
     payload: { dayKey, limit: 25 },
     idempotencyKey: `voice-dlq-reprocess:${dayKey}`,
   });
+
+  const utcHour = new Date().getUTCHours();
+  const utcMinute = new Date().getUTCMinutes();
+  if (utcHour === 4 && utcMinute === 15) {
+    await enqueueJob({
+      jobType: "job_queue_terminal_prune",
+      queueName: "maintenance",
+      payload: { dayKey },
+      idempotencyKey: `job-queue-terminal-prune:${dayKey}`,
+      priority: 90,
+    });
+  }
 
   // When BullMQ is the consumer, cron enqueues the minute batch and re-syncs the DB outbox.
   // Do not claim/process DB jobs locally — that would double-send with workers.
