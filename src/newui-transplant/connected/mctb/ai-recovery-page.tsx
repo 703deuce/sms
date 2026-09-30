@@ -89,7 +89,7 @@ export function NewUiMctbAiRecoveryPage() {
 
   const onSave = useCallback(async () => {
     const resolvedLinkId = bookingLinkId;
-    await fetch("/api/mctb/ai-recovery/settings", {
+    const settingsRes = await fetch("/api/mctb/ai-recovery/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -99,12 +99,24 @@ export function NewUiMctbAiRecoveryPage() {
         bookingLinkId: bookingLinkEnabled ? resolvedLinkId : null,
       }),
     });
+    const settingsJson = await settingsRes.json().catch(() => ({}));
+    if (!settingsRes.ok) {
+      throw new Error(
+        (settingsJson as { error?: string }).error || "Could not save AI Recovery settings",
+      );
+    }
     if (enabled) {
-      await fetch("/api/mctb/lead-recovery/config", {
+      const lrRes = await fetch("/api/mctb/lead-recovery/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ enabled: true, enabledScenarios }),
       });
+      const lrJson = await lrRes.json().catch(() => ({}));
+      if (!lrRes.ok) {
+        throw new Error(
+          (lrJson as { error?: string }).error || "Could not save lead recovery scenarios",
+        );
+      }
     }
     await reload();
   }, [

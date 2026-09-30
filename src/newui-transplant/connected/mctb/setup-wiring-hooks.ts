@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchMctbSetup, saveMctbSetup } from "@/lib/newui-transplant/api/mctb-setup-client";
 import { addPauseUntil } from "@/lib/mctb/schedule-shared";
 import { clampMctbMaxMessagesPerCaller } from "@/lib/mctb/recovery-max-messages";
@@ -306,7 +306,13 @@ export function useMctbNotificationsWiring() {
   const [loading, setLoading] = useState(true);
   const [recipients, setRecipients] = useState<MctbNotificationRecipientDto[]>([]);
   const [config, setConfig] = useState<MctbHandoffConfigDto | null>(null);
+  const configRef = useRef<MctbHandoffConfigDto | null>(null);
   const [urgentBusinessSmsEntitled, setUrgentBusinessSmsEntitled] = useState(true);
+
+  const setConfigSynced = useCallback((next: MctbHandoffConfigDto | null) => {
+    configRef.current = next;
+    setConfig(next);
+  }, []);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -314,7 +320,7 @@ export function useMctbNotificationsWiring() {
       const res = await fetch("/api/mctb/handoff", { cache: "no-store" });
       const json = await res.json();
       if (res.ok) {
-        setConfig(json.data.config);
+        setConfigSynced(json.data.config);
         setRecipients(json.data.recipients || []);
         setUrgentBusinessSmsEntitled(
           json.data.launch?.urgentBusinessSmsEntitled !== false,
@@ -323,7 +329,7 @@ export function useMctbNotificationsWiring() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setConfigSynced]);
 
   useEffect(() => {
     void reload();
@@ -334,11 +340,12 @@ export function useMctbNotificationsWiring() {
       recipientsOverride?: Array<Omit<MctbNotificationRecipientDto, "id"> & { id?: string }>,
     ) => {
     const payloadRecipients = recipientsOverride ?? recipients;
+    const latestConfig = configRef.current ?? config;
     const res = await fetch("/api/mctb/handoff", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        ...(config ? { config } : {}),
+        ...(latestConfig ? { config: latestConfig } : {}),
         recipients: payloadRecipients,
       }),
     });
@@ -355,7 +362,7 @@ export function useMctbNotificationsWiring() {
     loading,
     recipients,
     config,
-    setConfig,
+    setConfig: setConfigSynced,
     setRecipients,
     save,
     urgentBusinessSmsEntitled,

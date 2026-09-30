@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Page, PageHeader } from "@/newui-transplant/components/app/kit";
 import { Button } from "@/newui-transplant/components/ui/button";
@@ -231,21 +231,32 @@ export function NewUiMctbSetupVoicemailPage() {
 
 export function NewUiMctbSetupNotificationsPage() {
   const n = useMctbNotificationsWiring();
+  const handoffConfigRef = useRef<MctbHandoffConfigDto | null>(null);
   const [urgentTestMessage, setUrgentTestMessage] = useState(
     "My basement is flooding and I need someone now.",
   );
   const [urgentTestResult, setUrgentTestResult] = useState<string | null>(null);
   const [urgentTestBusy, setUrgentTestBusy] = useState(false);
 
-  const patchHandoffConfig = (patch: Partial<MctbHandoffConfigDto>) => {
-    if (!n.config) return;
-    const next = { ...n.config, ...patch };
-    n.setConfig(next);
+  useEffect(() => {
+    handoffConfigRef.current = n.config;
+  }, [n.config]);
+
+  const persistHandoff = (config: MctbHandoffConfigDto, recipients = n.recipients) => {
     void fetch("/api/mctb/handoff", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ config: next, recipients: n.recipients }),
+      body: JSON.stringify({ config, recipients }),
     });
+  };
+
+  const patchHandoffConfig = (patch: Partial<MctbHandoffConfigDto>) => {
+    const base = handoffConfigRef.current ?? n.config;
+    if (!base) return;
+    const next = { ...base, ...patch };
+    handoffConfigRef.current = next;
+    n.setConfig(next);
+    persistHandoff(next);
   };
 
   const events = useMemo(() => {
@@ -269,39 +280,45 @@ export function NewUiMctbSetupNotificationsPage() {
             : undefined,
         onEmailChange: row.event
           ? (v: boolean) => {
-              if (!n.config) return;
-              const next = { ...n.config, routingMatrix: { ...n.config.routingMatrix } };
-              const prev = matrix || { channels: {}, recipientIds: [] as string[] };
-              next.routingMatrix[row.event!] = {
-                ...prev,
-                channels: { ...(prev.channels || {}), email: v },
-                recipientIds: prev.recipientIds ?? [],
+              const base = handoffConfigRef.current ?? n.config;
+              if (!base) return;
+              const prev = base.routingMatrix[row.event!] || { channels: {}, recipientIds: [] as string[] };
+              const next = {
+                ...base,
+                routingMatrix: {
+                  ...base.routingMatrix,
+                  [row.event!]: {
+                    ...prev,
+                    channels: { ...(prev.channels || {}), email: v },
+                    recipientIds: prev.recipientIds ?? [],
+                  },
+                },
               };
+              handoffConfigRef.current = next;
               n.setConfig(next);
-              void fetch("/api/mctb/handoff", {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({ config: next, recipients: n.recipients }),
-              });
+              persistHandoff(next);
             }
           : undefined,
         onSmsChange: row.event
           ? (v: boolean) => {
-              if (!n.config) return;
+              const base = handoffConfigRef.current ?? n.config;
+              if (!base) return;
               if (smsDisabled) return;
-              const next = { ...n.config, routingMatrix: { ...n.config.routingMatrix } };
-              const prev = matrix || { channels: {}, recipientIds: [] as string[] };
-              next.routingMatrix[row.event!] = {
-                ...prev,
-                channels: { ...(prev.channels || {}), sms: v },
-                recipientIds: prev.recipientIds ?? [],
+              const prev = base.routingMatrix[row.event!] || { channels: {}, recipientIds: [] as string[] };
+              const next = {
+                ...base,
+                routingMatrix: {
+                  ...base.routingMatrix,
+                  [row.event!]: {
+                    ...prev,
+                    channels: { ...(prev.channels || {}), sms: v },
+                    recipientIds: prev.recipientIds ?? [],
+                  },
+                },
               };
+              handoffConfigRef.current = next;
               n.setConfig(next);
-              void fetch("/api/mctb/handoff", {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({ config: next, recipients: n.recipients }),
-              });
+              persistHandoff(next);
             }
           : undefined,
       };
@@ -323,16 +340,16 @@ export function NewUiMctbSetupNotificationsPage() {
               testResultLabel: urgentTestResult,
               onEnabledChange: (v) => patchHandoffConfig({ emergencyDetectionEnabled: v }),
               onInstructionsChange: (v) => {
-                if (!n.config) return;
-                n.setConfig({ ...n.config, emergencyCriteria: v });
+                const base = handoffConfigRef.current ?? n.config;
+                if (!base) return;
+                const next = { ...base, emergencyCriteria: v };
+                handoffConfigRef.current = next;
+                n.setConfig(next);
               },
               onInstructionsBlur: () => {
-                if (!n.config) return;
-                void fetch("/api/mctb/handoff", {
-                  method: "POST",
-                  headers: { "content-type": "application/json" },
-                  body: JSON.stringify({ config: n.config, recipients: n.recipients }),
-                });
+                const cfg = handoffConfigRef.current;
+                if (!cfg) return;
+                persistHandoff(cfg);
               },
               onTestMessageChange: setUrgentTestMessage,
               onRunTest: () => {
