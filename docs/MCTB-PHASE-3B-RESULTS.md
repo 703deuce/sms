@@ -35,7 +35,9 @@ Do **not** open app fixes for: Phase 3’s 21 sidebar link timeouts (pre-3b harn
 
 **Evidence (harness):** `post=200` with handoff JSON in `backendResult`; read-only DB snapshot unchanged for cert email.
 
-This is a **genuine product persistence failure** on deployed `443a46c1`, not an automation artifact (dialogs fire, API returns 200, DB still empty).
+**Root cause (fixed on `master` after `443a46c1`):** `onAddRecipient` called `setRecipients(next)` then `save()` in the same tick; `save()` read **stale** React state and POSTed the **previous** `recipients` array (often empty). **Fix:** `save(recipientsOverride)` and `void n.save(next)` on add/edit.
+
+Pre-fix runs looked like “200 but no rows” because the server echoed unchanged data.
 
 ## Phase 3b — state-changing (partial)
 
