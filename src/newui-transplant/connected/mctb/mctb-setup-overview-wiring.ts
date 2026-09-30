@@ -91,8 +91,6 @@ export function useMctbSetupOverviewWiring(senderFallback: string): {
         }
       }
 
-      setLoading(false);
-
       const [exclRes, handoffRes, liveRes] = await Promise.all([
         fetch("/api/mctb/exclusions", { cache: "no-store" }),
         fetch("/api/mctb/handoff", { cache: "no-store" }),
@@ -266,12 +264,16 @@ export function useMctbSetupOverviewWiring(senderFallback: string): {
         fixHref: a.href,
       })),
       onPauseToggle: async () => {
-        if (recoveryActive) {
-          await saveMctbSetup({ enabled: false, pauseUntil: null });
-        } else {
-          await saveMctbSetup({ enabled: true, pauseUntil: null });
+        try {
+          if (recoveryActive) {
+            await saveMctbSetup({ enabled: false, pauseUntil: null });
+          } else {
+            await saveMctbSetup({ enabled: true, pauseUntil: null });
+          }
+          await load();
+        } catch {
+          await load();
         }
-        await load();
       },
       pauseButtonLabel: recoveryActive ? "Pause" : "Resume",
     };

@@ -483,7 +483,11 @@ export function useMctbTestWiring() {
   }, [reload]);
 
   const startLiveTest = useCallback(async () => {
-    await fetch("/api/mctb/setup-test", { method: "POST" }).catch(() => undefined);
+    const setupRes = await fetch("/api/mctb/setup-test", { method: "POST" });
+    if (!setupRes.ok) {
+      const j = await setupRes.json().catch(() => ({}));
+      throw new Error(typeof j.error === "string" ? j.error : "Could not start setup test");
+    }
     const res = await fetch("/api/mctb/live-test", { method: "POST" });
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || "Could not start test");

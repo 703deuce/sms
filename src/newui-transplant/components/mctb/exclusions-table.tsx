@@ -44,6 +44,7 @@ export function ExclusionsTable() {
   const [number, setNumber] = useState('')
   const [label, setLabel] = useState('')
   const [loading, setLoading] = useState(true)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const reload = useCallback(async () => {
     setLoading(true)
@@ -76,11 +77,16 @@ export function ExclusionsTable() {
               onSubmit={async (e) => {
                 e.preventDefault()
                 if (!number.trim()) return
-                await addMctbExclusion({ phoneE164: number.trim(), label: label.trim() || undefined })
-                setNumber('')
-                setLabel('')
-                setOpen(false)
-                await reload()
+                setActionError(null)
+                try {
+                  await addMctbExclusion({ phoneE164: number.trim(), label: label.trim() || undefined })
+                  setNumber('')
+                  setLabel('')
+                  setOpen(false)
+                  await reload()
+                } catch (err) {
+                  setActionError(err instanceof Error ? err.message : 'Could not add exclusion')
+                }
               }}
               className="flex flex-col gap-4"
             >
@@ -96,6 +102,9 @@ export function ExclusionsTable() {
                 <Label htmlFor="ex-label">Label (optional)</Label>
                 <Input id="ex-label" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Vendor" />
               </div>
+              {actionError ? (
+                <p className="text-sm text-destructive" role="alert">{actionError}</p>
+              ) : null}
               <DialogFooter>
                 <DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>
                 <Button type="submit">Add number</Button>
@@ -105,6 +114,9 @@ export function ExclusionsTable() {
         </Dialog>
       }
     >
+      {actionError && !open ? (
+        <p className="px-5 pt-4 text-sm text-destructive" role="alert">{actionError}</p>
+      ) : null}
       {loading ? (
         <p className="p-5 text-sm text-muted-foreground">Loading exclusions…</p>
       ) : (
@@ -133,8 +145,13 @@ export function ExclusionsTable() {
                       variant="ghost"
                       aria-label={`Remove ${row.number}`}
                       onClick={async () => {
-                        await deleteMctbExclusion(row.id)
-                        await reload()
+                        setActionError(null)
+                        try {
+                          await deleteMctbExclusion(row.id)
+                          await reload()
+                        } catch (err) {
+                          setActionError(err instanceof Error ? err.message : 'Could not remove exclusion')
+                        }
                       }}
                     >
                       <Trash2 />

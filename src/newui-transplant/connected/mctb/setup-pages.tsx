@@ -232,11 +232,19 @@ export function NewUiMctbSetupVoicemailPage() {
 export function NewUiMctbSetupNotificationsPage() {
   const n = useMctbNotificationsWiring();
   const handoffConfigRef = useRef<MctbHandoffConfigDto | null>(null);
+  const [handoffPersistError, setHandoffPersistError] = useState<string | null>(null);
   const [urgentTestMessage, setUrgentTestMessage] = useState(
     "My basement is flooding and I need someone now.",
   );
   const [urgentTestResult, setUrgentTestResult] = useState<string | null>(null);
   const [urgentTestBusy, setUrgentTestBusy] = useState(false);
+
+  const persistHandoffConfig = (next: MctbHandoffConfigDto) => {
+    setHandoffPersistError(null);
+    void n.persistConfig(next).catch((err) => {
+      setHandoffPersistError(err instanceof Error ? err.message : "Could not save notification settings");
+    });
+  };
 
   useEffect(() => {
     handoffConfigRef.current = n.config;
@@ -248,7 +256,7 @@ export function NewUiMctbSetupNotificationsPage() {
     const next = { ...base, ...patch };
     handoffConfigRef.current = next;
     n.setConfig(next);
-    void n.persistConfig(next).catch(() => undefined);
+    persistHandoffConfig(next);
   };
 
   const events = useMemo(() => {
@@ -288,7 +296,7 @@ export function NewUiMctbSetupNotificationsPage() {
               };
               handoffConfigRef.current = next;
               n.setConfig(next);
-              void n.persistConfig(next).catch(() => undefined);
+              persistHandoffConfig(next);
             }
           : undefined,
         onSmsChange: row.event
@@ -310,16 +318,20 @@ export function NewUiMctbSetupNotificationsPage() {
               };
               handoffConfigRef.current = next;
               n.setConfig(next);
-              void n.persistConfig(next).catch(() => undefined);
+              persistHandoffConfig(next);
             }
           : undefined,
       };
     });
-  }, [n.config, n.recipients, n.setConfig, n.persistConfig, n.save, n.urgentBusinessSmsEntitled]);
+  }, [n.config, n.recipients, n.setConfig, n.save, n.urgentBusinessSmsEntitled]);
 
   if (n.loading) return <p className="p-6 text-sm text-muted-foreground">Loading notifications…</p>;
 
   return (
+    <>
+      {handoffPersistError ? (
+        <p className="mx-6 mt-4 text-sm text-destructive" role="alert">{handoffPersistError}</p>
+      ) : null}
     <TransplantMctbSetupNotificationsPage
       wired={{
         urgent: n.config
@@ -341,7 +353,7 @@ export function NewUiMctbSetupNotificationsPage() {
               onInstructionsBlur: () => {
                 const cfg = handoffConfigRef.current;
                 if (!cfg) return;
-                void n.persistConfig(cfg).catch(() => undefined);
+                persistHandoffConfig(cfg);
               },
               onTestMessageChange: setUrgentTestMessage,
               onRunTest: () => {
@@ -423,6 +435,7 @@ export function NewUiMctbSetupNotificationsPage() {
         },
       }}
     />
+    </>
   );
 }
 

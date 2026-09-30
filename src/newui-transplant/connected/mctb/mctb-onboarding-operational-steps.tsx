@@ -9,6 +9,7 @@ import {
   postMctbHandoff,
   saveMctbSetup,
 } from "@/lib/newui-transplant/api/mctb-setup-client";
+import { ensureVoicemailNumberBox } from "@/lib/newui-transplant/mctb-voicemail-fetch";
 import {
   useMctbNotificationsWiring,
   useMctbRecoveryWiring,
@@ -455,12 +456,8 @@ export function OnboardingVoicemailStep({ c }: { c: MctbOnboardingController }) 
   const press1 = c.consentMode === "press_1";
 
   const ensureDefault = useCallback(async () => {
-    if (!vm.phoneNumberId) return;
-    await fetch("/api/phone/voicemail", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "ensure_number_box", phoneNumberId: vm.phoneNumberId }),
-    });
+    if (!vm.phoneNumberId) throw new Error("Configure phone & forwarding before voicemail.");
+    await ensureVoicemailNumberBox(vm.phoneNumberId);
   }, [vm.phoneNumberId]);
 
   return (
@@ -512,9 +509,13 @@ export function OnboardingVoicemailStep({ c }: { c: MctbOnboardingController }) 
           disabled={c.saving || vm.loading}
           onClick={() =>
             void (async () => {
-              if (mode === "default") await ensureDefault();
-              else if (vm.greetingText.trim()) await vm.saveGreeting();
-              await c.post({ action: "mark_voicemail_configured" });
+              try {
+                if (mode === "default") await ensureDefault();
+                else if (vm.greetingText.trim()) await vm.saveGreeting();
+                await c.post({ action: "mark_voicemail_configured" });
+              } catch (e) {
+                c.setError(e instanceof Error ? e.message : "Could not save voicemail step");
+              }
             })()
           }
         >

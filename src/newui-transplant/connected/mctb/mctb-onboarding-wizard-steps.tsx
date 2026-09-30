@@ -10,6 +10,7 @@ import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import { formatMctbPhoneLabel } from "@/lib/mctb/phone-display";
 import { existingConsentIneligibleReason } from "@/lib/mctb/setup-consent-eligibility";
 import { clientPlatformVoicemailGreetingPreviewPath } from "@/lib/phone/voicemail-greeting-defaults";
+import { ensureVoicemailNumberBox } from "@/lib/newui-transplant/mctb-voicemail-fetch";
 import { buildOnboardingLiveTestSteps } from "@/lib/mctb/onboarding/live-test-presentation";
 import { MctbConsentPromptPanel } from "@/newui-transplant/components/mctb/mctb-consent-prompt-panel";
 import { MctbVoicemailGreetingStudio } from "@/newui-transplant/components/mctb/mctb-voicemail-greeting-studio";
@@ -312,12 +313,8 @@ export function WizardVoicemailStep({ c }: { c: MctbOnboardingController }) {
   }, [vm.greetingUrl]);
 
   const ensureDefault = useCallback(async () => {
-    if (!vm.phoneNumberId) return;
-    await fetch("/api/phone/voicemail", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "ensure_number_box", phoneNumberId: vm.phoneNumberId }),
-    });
+    if (!vm.phoneNumberId) throw new Error("Configure phone & forwarding before voicemail.");
+    await ensureVoicemailNumberBox(vm.phoneNumberId);
   }, [vm.phoneNumberId]);
 
   useMctbWizardFooter({
@@ -327,8 +324,12 @@ export function WizardVoicemailStep({ c }: { c: MctbOnboardingController }) {
       disabled: vm.loading,
       onClick: () =>
         void (async () => {
-          if (mode === "default") await ensureDefault();
-          await c.post({ action: "mark_voicemail_configured" });
+          try {
+            if (mode === "default") await ensureDefault();
+            await c.post({ action: "mark_voicemail_configured" });
+          } catch (e) {
+            c.setError(e instanceof Error ? e.message : "Could not save voicemail step");
+          }
         })(),
     },
   });
@@ -520,7 +521,10 @@ export function WizardTestStep({ c }: { c: MctbOnboardingController }) {
         }
       : {
           label: started ? "Try again" : "Start test",
-          onClick: () => void test.startLiveTest().catch(() => undefined),
+          onClick: () =>
+            void test.startLiveTest().catch((e) =>
+              c.setError(e instanceof Error ? e.message : "Could not start test"),
+            ),
         },
     secondary: passed
       ? {

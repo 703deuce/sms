@@ -84,6 +84,14 @@ export function TextBackEditor({
     load()
   }, [load])
 
+  useEffect(() => {
+    const onSetup = () => {
+      void load()
+    }
+    window.addEventListener('mctb-setup-updated', onSetup)
+    return () => window.removeEventListener('mctb-setup-updated', onSetup)
+  }, [load])
+
   const insert = (v: string) => {
     const el = ref.current
     const start = el?.selectionStart ?? opener.length

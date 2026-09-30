@@ -1,7 +1,7 @@
 # MCTB UI → backend wiring audit (code review)
 
 **Date:** 2026-09-30  
-**Method:** Static trace from `src/newui-transplant/connected/mctb/*` and shared MCTB components to `src/app/api/mctb/*` and runtime libs. **Three review passes** (surface wiring → races/cache → edge/async). **No browser certification** unless separately requested.  
+**Method:** Static trace from `src/newui-transplant/connected/mctb/*` and shared MCTB components to `src/app/api/mctb/*` and runtime libs. **Ten exhaustive review rounds** (see `docs/MCTB-UI-BACKEND-WIRING-AUDIT-10-ROUNDS.md`) plus earlier passes (surface → races/cache → E2E). **No browser certification** unless separately requested.  
 **Out of scope (per request):** Integrations, org Settings, Help, generic billing.
 
 ---
@@ -91,6 +91,17 @@ Legacy `/mctb/setup/*` routes redirect into the IA routes above; wired component
 11. **Handoff writes — concurrent POSTs**  
     Fire-and-forget `fetch` on toggles vs awaited `save()`. **Fix:** `postMctbHandoff` serializes writes in client.
 
+### E2E flow audit (round 2 — UI → API → persistence → UI feedback)
+
+| Flow | Break found | Fix |
+|------|-------------|-----|
+| Voicemail inbox `?numberId=` deep link | Client sent `numberId` query; API only filters on `phoneNumberId` → wrong/all messages | `mctbVoicemailInboxUrl()` maps to `phoneNumberId` |
+| Mark voicemail reviewed | POST errors ignored; list refreshed anyway | `markVoicemailMessageReviewed()` checks `res.ok` |
+| Text Back page KPI strip | Header stats fetched once; Save did not refresh strip | Listen for `mctb-setup-updated` after `saveMctbSetup` |
+| Notifications page KPI strip | Recipient/urgent counts stale after edits | Listen for `mctb-handoff-updated` after `postMctbHandoff` |
+| Onboarding text-back Continue | `saveAll()` failure did not surface; wizard could feel stuck | `setError` on controller + try/catch on step |
+| Onboarding notifications save | Raw `fetch` bypassed serialized handoff queue | `postMctbHandoff` + `reload()` |
+
 ### Pass log (what each pass targeted)
 
 | Pass | Focus | Examples found |
@@ -98,6 +109,34 @@ Legacy `/mctb/setup/*` routes redirect into the IA routes above; wired component
 | 1 | Control → API → persistence | Missing error checks, Save vs immediate-action, mirror `wired` props |
 | 2 | Races & cache | Handoff recipient+config races, setup cache on recovery toggle, serialized handoff POST |
 | 3 | Async / edge | Test poll ordering, conversation send phone authority, transcription without box |
+| 4–6 | Full round-trip | Voicemail filter param, reviewed state, header refresh events, onboarding error path |
+| 7–10 | Full inventory re-scan | See `MCTB-UI-BACKEND-WIRING-AUDIT-10-ROUNDS.md` |
+
+### Fixed (ten-round pass)
+
+12. **Setup overview — premature `loading: false`** — Summary rows showed “Not loaded” until secondary fetches finished. **Fix:** single `setLoading(false)` in `finally` after exclusions/handoff/live-test/voicemail summaries.
+
+13. **Analytics — silent range failure** — Failed fetch left UI on new range with old data. **Fix:** `res.ok` check, revert range, `role="alert"` message.
+
+14. **`useMctbSetupApi.reload`** — Used 8s cached setup after saves. **Fix:** `fetchMctbSetup({ force: true })`.
+
+15. **Getting started — resume recovery** — Failed POST with no feedback. **Fix:** `resumeError` state.
+
+16. **Setup overview pause toggle** — Failed save still implied success. **Fix:** `load()` on catch to resync.
+
+17. **Live test — setup-test POST** — Errors swallowed; live-test ran anyway. **Fix:** throw before live-test POST.
+
+18. **Links editor — set default** — Could POST with null `phoneNumberId`. **Fix:** guard + throw.
+
+19. **Onboarding voicemail — ensure_number_box** — Ignored HTTP failures. **Fix:** `ensureVoicemailNumberBox()` + `setError` on Continue.
+
+20. **Exclusions table** — Add/delete failures uncaught. **Fix:** inline errors.
+
+21. **Notifications — persistConfig** — Swallowed errors. **Fix:** `handoffPersistError` banner.
+
+22. **Text-back / consent editors** — Stale after external setup save. **Fix:** `mctb-setup-updated` listener.
+
+23. **Wizard test step** — `startLiveTest` errors hidden. **Fix:** `c.setError`.
 
 ### By design (not bugs)
 
@@ -107,7 +146,8 @@ Legacy `/mctb/setup/*` routes redirect into the IA routes above; wired component
 
 ### Low risk / monitor
 
-- **Notifications** routing toggles: errors from `persistConfig` are swallowed in UI (`.catch(() => undefined)`); runtime usually updates; consider toast on failure.
+- **Recovery IA usage stat** (`mctb-ia-pages.tsx`): optional monthly cap fetch failure hides stat only.
+- **Onboarding AI recovery toggle** (`mctb-onboarding-operational-steps.tsx`): settings POST errors not surfaced (optional path).
 - **setup client cache** (`fetchMctbSetup` 8s TTL): pages that need fresh state after save call `reload()` or `{ force: true }` (overview does).
 - **AI Recovery** disabled path: lead-recovery config POST skipped when `enabled` false — intentional; `POST /api/mctb/ai-recovery/settings` with `enabled: false` disables via `applyLaunchAiRepliesSetting`.
 - **Onboarding AI toggle** (`mctb-onboarding-operational-steps.tsx`): `void fetch` on settings without surfacing errors — same class as handoff fire-and-forget.

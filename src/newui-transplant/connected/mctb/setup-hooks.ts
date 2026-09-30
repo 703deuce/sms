@@ -28,7 +28,7 @@ export function useMctbSetupApi() {
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const json = await fetchMctbSetup();
+      const json = await fetchMctbSetup({ force: true });
       setData(json as MctbSetupApiData);
     } catch {
       setData(null);

@@ -39,6 +39,7 @@ export function MctbGettingStartedPage() {
   const [data, setData] = useState<MctbGettingStartedPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [resumeError, setResumeError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -136,11 +137,22 @@ export function MctbGettingStartedPage() {
           </div>
         )}
         {data.recoveryPaused ? (
-          <div className="flex flex-wrap gap-2 border-t pt-3">
+          <div className="flex flex-col gap-2 border-t pt-3">
+            {resumeError ? (
+              <p className="text-sm text-destructive" role="alert">{resumeError}</p>
+            ) : null}
+            <div className="flex flex-wrap gap-2">
             <Button
               type="button"
               size="sm"
-              onClick={() => void saveMctbSetup({ enabled: true, pauseUntil: null }).then(() => load())}
+              onClick={() => {
+                setResumeError(null);
+                void saveMctbSetup({ enabled: true, pauseUntil: null })
+                  .then(() => load())
+                  .catch((e) =>
+                    setResumeError(e instanceof Error ? e.message : "Could not resume recovery"),
+                  );
+              }}
             >
               Resume recovery
             </Button>
@@ -150,6 +162,7 @@ export function MctbGettingStartedPage() {
               variant="outline"
               render={<Link href={MCTB_ROUTES.missedCallRecovery}>Review recovery settings</Link>}
             />
+            </div>
           </div>
         ) : null}
       </Panel>

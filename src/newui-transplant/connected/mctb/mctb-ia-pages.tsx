@@ -271,8 +271,9 @@ export function NewUiMctbNotificationsDirectPage() {
 
   const refreshHandoffMeta = useCallback(() => {
     void fetch("/api/mctb/handoff", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((json) => {
+      .then(async (r) => {
+        if (!r.ok) return;
+        const json = await r.json();
         const data = json.data ?? json;
         const recipients = Array.isArray(data.recipients) ? data.recipients : [];
         setRecipientCount(recipients.length);

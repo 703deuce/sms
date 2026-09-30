@@ -21,12 +21,20 @@ function pct(a: number, b: number) {
 export function NewUiMctbAnalyticsPage({ initialData, initialRange }: { initialData: AnalyticsPayload; initialRange: MctbAnalyticsRange }) {
   const [range, setRange] = useState<MctbAnalyticsRange>(initialRange);
   const [data, setData] = useState(initialData);
+  const [rangeError, setRangeError] = useState<string | null>(null);
 
   const refresh = async (next: MctbAnalyticsRange) => {
+    const prevRange = range;
     setRange(next);
+    setRangeError(null);
     const res = await fetch(`/api/mctb/analytics?range=${next}`, { cache: "no-store" });
-    const j = await res.json();
-    if (j.data) setData(j.data as AnalyticsPayload);
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || !j.data) {
+      setRange(prevRange);
+      setRangeError(typeof j.error === "string" ? j.error : "Could not load analytics for that range.");
+      return;
+    }
+    setData(j.data as AnalyticsPayload);
   };
 
   const chartRows = useMemo(() => {
@@ -67,6 +75,10 @@ export function NewUiMctbAnalyticsPage({ initialData, initialRange }: { initialD
           />
         }
       />
+
+      {rangeError ? (
+        <p className="mt-3 text-sm text-destructive" role="alert">{rangeError}</p>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Missed calls" value={String(data.totalMissed)} href={`/mctb/missed-calls?range=${range}`} />

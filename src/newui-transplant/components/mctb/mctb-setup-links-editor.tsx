@@ -132,6 +132,7 @@ export function MctbSetupLinksEditor() {
   }
 
   const setDefaultFromLink = async (row: MctbBookingLinkDto) => {
+    if (!phoneNumberId) throw new Error('Configure Phone & Forwarding first.')
     setDefaultLinkUrl(row.url)
     await saveMctbSetup({
       phoneNumberId,
