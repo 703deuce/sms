@@ -344,11 +344,11 @@ export function OnboardingNotificationsStep({ c, caps, compact }: NotificationsS
           <li>✓ Caller reply notifications</li>
           <li>
             {recoveryPaid ? "✓" : "🔒"} Urgent reply detection
-            {!recoveryPaid ? " — Available with Recovery" : ""}
+            {!recoveryPaid ? " — Available with AI Recovery" : ""}
           </li>
           <li>
-            {recoveryPaid ? "✓" : "🔒"} Immediate urgent alerts
-            {!recoveryPaid ? " — Available with Recovery" : ""}
+            {caps?.aiRecoveryEntitled ? "✓" : "🔒"} Immediate urgent alerts
+            {!caps?.aiRecoveryEntitled ? " — Available with AI Recovery" : ""}
           </li>
           <li>
             {aiEntitled ? "✓" : "🔒"} AI follow-up conversations

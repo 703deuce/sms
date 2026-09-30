@@ -24,7 +24,7 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 export type MctbCommercialEntitlements = {
   mctbProductActive: boolean;
-  /** Recovery (paid) plan — Existing Consent, urgent, booking links, higher allowance */
+  /** Text Back paid plan ($9.99) — booking links + 50 recoveries/mo */
   recoveryPaid: boolean;
   paidTier: string | null;
   /** Distinct SKU — may enable conversational AI when config is on */

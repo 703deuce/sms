@@ -13,7 +13,12 @@ import {
   applyMctbCommercialAddonProductKey,
   MCTB_COMMERCIAL_ADDON_PRODUCT_KEYS,
 } from "../src/lib/mctb/commercial-entitlement-grants";
-import { resolveMctbMonthlyRecoveryLimit, MCTB_PAID_RECOVERY_LIMIT_BY_TIER } from "../src/lib/mctb/recovery-usage-constants";
+import {
+  resolveMctbMonthlyRecoveryLimit,
+  MCTB_TEXT_BACK_MONTHLY_RECOVERY_LIMIT,
+  MCTB_AI_RECOVERY_MONTHLY_RECOVERY_LIMIT,
+  MCTB_FREE_MONTHLY_RECOVERY_LIMIT,
+} from "../src/lib/mctb/recovery-usage-constants";
 import { grantWorkspaceProductFeature } from "../src/lib/products/feature-entitlements";
 import { handlePlatformCheckoutCompleted, handlePlatformSubscriptionEvent } from "../src/lib/payments/stripe-platform-webhook";
 
@@ -75,7 +80,7 @@ async function main() {
   try {
     let caps = await resolveMctbCapabilities(workspaceId);
     assert.equal(caps.recoveryPaid, false, "free workspace starts unpaid recovery");
-    assert.equal(caps.monthlyRecoveryLimit, 25);
+    assert.equal(caps.monthlyRecoveryLimit, MCTB_FREE_MONTHLY_RECOVERY_LIMIT);
     assert.equal(caps.aiRecoveryEntitled, false);
     assert.equal(caps.ownSenderAddOnEntitled, false);
 
@@ -85,17 +90,17 @@ async function main() {
 
     caps = await resolveMctbCapabilities(workspaceId);
     assert.equal(caps.recoveryPaid, true);
-    assert.equal(caps.monthlyRecoveryLimit, MCTB_PAID_RECOVERY_LIMIT_BY_TIER.starter);
+    assert.equal(caps.monthlyRecoveryLimit, MCTB_TEXT_BACK_MONTHLY_RECOVERY_LIMIT);
 
     const subGrowth = mockMctbSubscription(workspaceId, "growth");
     await handlePlatformSubscriptionEvent(subGrowth);
     caps = await resolveMctbCapabilities(workspaceId);
-    assert.equal(caps.monthlyRecoveryLimit, MCTB_PAID_RECOVERY_LIMIT_BY_TIER.growth);
+    assert.equal(caps.monthlyRecoveryLimit, MCTB_TEXT_BACK_MONTHLY_RECOVERY_LIMIT);
 
     const subPro = mockMctbSubscription(workspaceId, "pro");
     await handlePlatformSubscriptionEvent(subPro);
     caps = await resolveMctbCapabilities(workspaceId);
-    assert.equal(caps.monthlyRecoveryLimit, MCTB_PAID_RECOVERY_LIMIT_BY_TIER.pro);
+    assert.equal(caps.monthlyRecoveryLimit, MCTB_TEXT_BACK_MONTHLY_RECOVERY_LIMIT);
 
     await applyMctbCommercialAddonProductKey(
       workspaceId,
@@ -104,7 +109,9 @@ async function main() {
     );
     caps = await resolveMctbCapabilities(workspaceId);
     assert.equal(caps.aiRecoveryEntitled, true);
-    assert.equal(caps.urgentClassification, true, "urgent stays on Recovery paid, not AI SKU");
+    assert.equal(caps.monthlyRecoveryLimit, MCTB_AI_RECOVERY_MONTHLY_RECOVERY_LIMIT);
+    assert.equal(caps.urgentClassification, true, "urgency detection is AI Recovery only");
+    assert.equal(caps.bookingLinks, true);
 
     await applyMctbCommercialAddonProductKey(
       workspaceId,
@@ -148,7 +155,7 @@ async function main() {
         recoveryPaid: false,
         paidTier: null,
       }),
-      25,
+      MCTB_FREE_MONTHLY_RECOVERY_LIMIT,
     );
 
     console.log("test-mctb-commercial-stripe-entitlement-lifecycle: PASS");

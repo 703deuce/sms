@@ -1,14 +1,15 @@
 import assert from "node:assert/strict";
 import {
   currentMctbRecoveryPeriodKey,
+  MCTB_AI_RECOVERY_MONTHLY_RECOVERY_LIMIT,
   MCTB_FREE_MONTHLY_RECOVERY_LIMIT,
-  MCTB_PAID_RECOVERY_LIMIT_BY_TIER,
+  MCTB_TEXT_BACK_MONTHLY_RECOVERY_LIMIT,
   resolveMctbMonthlyRecoveryLimit,
 } from "../src/lib/mctb/recovery-usage-constants";
 import { getMctbPlatformTemplate } from "../src/lib/mctb/platform-message-templates";
 
 assert.match(currentMctbRecoveryPeriodKey(new Date("2026-09-15T12:00:00Z")), /^\d{4}-\d{2}$/);
-assert.equal(MCTB_FREE_MONTHLY_RECOVERY_LIMIT, 25);
+assert.equal(MCTB_FREE_MONTHLY_RECOVERY_LIMIT, 10);
 
 assert.equal(
   resolveMctbMonthlyRecoveryLimit({
@@ -16,15 +17,15 @@ assert.equal(
     recoveryPaid: false,
     paidTier: null,
   }),
-  25,
+  10,
 );
 assert.equal(
   resolveMctbMonthlyRecoveryLimit({
     mctbProductActive: true,
     recoveryPaid: true,
-    paidTier: "growth",
+    paidTier: "starter",
   }),
-  MCTB_PAID_RECOVERY_LIMIT_BY_TIER.growth,
+  MCTB_TEXT_BACK_MONTHLY_RECOVERY_LIMIT,
 );
 assert.equal(
   resolveMctbMonthlyRecoveryLimit({
@@ -32,7 +33,16 @@ assert.equal(
     recoveryPaid: true,
     paidTier: null,
   }),
-  MCTB_PAID_RECOVERY_LIMIT_BY_TIER.starter,
+  MCTB_TEXT_BACK_MONTHLY_RECOVERY_LIMIT,
+);
+assert.equal(
+  resolveMctbMonthlyRecoveryLimit({
+    mctbProductActive: true,
+    recoveryPaid: false,
+    aiRecoveryEntitled: true,
+    paidTier: null,
+  }),
+  MCTB_AI_RECOVERY_MONTHLY_RECOVERY_LIMIT,
 );
 assert.equal(
   resolveMctbMonthlyRecoveryLimit({

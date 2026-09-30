@@ -52,6 +52,7 @@ export async function getMctbRecoveryUsageSnapshot(
   const limit = resolveMctbMonthlyRecoveryLimit({
     mctbProductActive: commercial.mctbProductActive,
     recoveryPaid: commercial.recoveryPaid,
+    aiRecoveryEntitled: commercial.aiRecoveryEntitled,
     paidTier: commercial.paidTier,
   });
   const atLimit = used >= limit;
@@ -126,6 +127,7 @@ export async function reserveMctbRecoveryUnit(input: {
   const limit = resolveMctbMonthlyRecoveryLimit({
     mctbProductActive: commercial.mctbProductActive,
     recoveryPaid: commercial.recoveryPaid,
+    aiRecoveryEntitled: commercial.aiRecoveryEntitled,
     paidTier: commercial.paidTier,
   });
 

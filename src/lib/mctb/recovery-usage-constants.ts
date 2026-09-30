@@ -1,28 +1,36 @@
 /** Free tier: logical missed-call recoveries per monthly period (not SMS segments). */
 export const MCTB_FREE_MONTHLY_RECOVERY_LIMIT = 10;
 
+/** Text Back ($9.99/mo) — paid MCTB platform subscription. */
+export const MCTB_TEXT_BACK_MONTHLY_RECOVERY_LIMIT = 50;
+
+/** AI Recovery ($19.99/mo) — includes higher recovery allowance. */
+export const MCTB_AI_RECOVERY_MONTHLY_RECOVERY_LIMIT = 100;
+
 /**
- * Paid Recovery plan allowance per Stripe/catalog tier (logical MCTB_RECOVERY units / month).
- * Marketing price lives in Stripe; these limits are product-authoritative for launch.
+ * Legacy Stripe tier keys on `mctb` product family — all map to Text Back allowance at launch.
+ * Prefer catalog tier `text_back` for new subscriptions.
  */
 export const MCTB_PAID_RECOVERY_LIMIT_BY_TIER: Record<string, number> = {
-  starter: 250,
-  growth: 750,
-  pro: 2500,
+  text_back: MCTB_TEXT_BACK_MONTHLY_RECOVERY_LIMIT,
+  starter: MCTB_TEXT_BACK_MONTHLY_RECOVERY_LIMIT,
+  growth: MCTB_TEXT_BACK_MONTHLY_RECOVERY_LIMIT,
+  pro: MCTB_TEXT_BACK_MONTHLY_RECOVERY_LIMIT,
 };
 
-/** When paid tier is unknown but recovery is entitled, use starter-equivalent allowance. */
-export const MCTB_PAID_RECOVERY_LIMIT_FALLBACK = MCTB_PAID_RECOVERY_LIMIT_BY_TIER.starter;
+/** When paid tier is unknown but recovery is entitled, use Text Back allowance. */
+export const MCTB_PAID_RECOVERY_LIMIT_FALLBACK = MCTB_TEXT_BACK_MONTHLY_RECOVERY_LIMIT;
 
 export function resolveMctbMonthlyRecoveryLimit(input: {
   mctbProductActive: boolean;
   recoveryPaid: boolean;
+  aiRecoveryEntitled?: boolean;
   paidTier: string | null;
 }): number {
   if (!input.mctbProductActive) return 0;
-  if (!input.recoveryPaid) return MCTB_FREE_MONTHLY_RECOVERY_LIMIT;
-  const tier = String(input.paidTier || "starter").toLowerCase();
-  return MCTB_PAID_RECOVERY_LIMIT_BY_TIER[tier] ?? MCTB_PAID_RECOVERY_LIMIT_FALLBACK;
+  if (input.aiRecoveryEntitled) return MCTB_AI_RECOVERY_MONTHLY_RECOVERY_LIMIT;
+  if (input.recoveryPaid) return MCTB_TEXT_BACK_MONTHLY_RECOVERY_LIMIT;
+  return MCTB_FREE_MONTHLY_RECOVERY_LIMIT;
 }
 
 /** Calendar month bucket in UTC (authoritative period until billing-period hook is wired). */

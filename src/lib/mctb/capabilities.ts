@@ -84,16 +84,17 @@ export async function resolveMctbCapabilities(workspaceId: string): Promise<Mctb
   const monthlyRecoveryLimit = resolveMctbMonthlyRecoveryLimit({
     mctbProductActive,
     recoveryPaid,
+    aiRecoveryEntitled,
     paidTier,
   });
 
   const existingConsentCertification =
     recoveryPaid && existingConsent.valid && existingConsent.existingConsentValid;
 
-  const urgentClassification = recoveryPaid;
-  const urgentBusinessEmail = recoveryPaid;
-  const urgentBusinessSms = recoveryPaid;
-  const bookingLinks = recoveryPaid;
+  const bookingLinks = recoveryPaid || aiRecoveryEntitled;
+  const urgentClassification = aiRecoveryEntitled;
+  const urgentBusinessEmail = aiRecoveryEntitled;
+  const urgentBusinessSms = aiRecoveryEntitled;
 
   const customTemplates = customerOwnedSender;
   const manualTwoWayMessaging = customerOwnedSender;

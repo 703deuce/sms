@@ -2,6 +2,8 @@
 
 **Audience:** Product, support, engineering (copy-friendly).
 
+**Packages & pricing matrix:** see **`docs/MCTB-COMMERCIAL-PACKAGES.md`** (Free / Text Back $9.99 / AI Recovery $19.99 / Own Number add-on / Voice ladder).
+
 ---
 
 ## Commercial model (authoritative intent)
