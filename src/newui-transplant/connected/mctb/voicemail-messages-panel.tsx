@@ -4,16 +4,19 @@ import { useCallback, useEffect, useState } from "react";
 import { VoicemailBrowser } from "@/newui-transplant/components/mctb/voicemail-browser";
 import { mapVoicemailApiToNewUi, type VoicemailApiMessage } from "@/lib/newui-transplant/adapters/mctb-voicemail";
 import { parseVoicemailApiPayload } from "@/lib/personal/voicemail-mappers";
+import {
+  markVoicemailMessageReviewed,
+  mctbVoicemailInboxUrl,
+} from "@/lib/newui-transplant/mctb-voicemail-fetch";
 
+/** `numberId` is the workspace phone number id (URL query `numberId` on /mctb/voicemail). */
 export function NewUiMctbVoicemailMessagesPanel({ numberId }: { numberId?: string }) {
   const [items, setItems] = useState<VoicemailApiMessage[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(() => {
     setLoading(true);
-    const params = new URLSearchParams();
-    if (numberId) params.set("numberId", numberId);
-    fetch(`/api/phone/voicemail?${params}`, { cache: "no-store" })
+    fetch(mctbVoicemailInboxUrl(numberId), { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => {
         const parsed = parseVoicemailApiPayload(j);
@@ -48,11 +51,7 @@ export function NewUiMctbVoicemailMessagesPanel({ numberId }: { numberId?: strin
     <VoicemailBrowser
       voicemails={voicemails}
       onMarkReviewed={async (messageId) => {
-        await fetch("/api/phone/voicemail", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "mark_resolved", messageId }),
-        });
+        await markVoicemailMessageReviewed(messageId);
         load();
       }}
     />

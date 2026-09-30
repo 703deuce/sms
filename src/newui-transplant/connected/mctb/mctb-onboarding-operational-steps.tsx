@@ -4,7 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Lock } from "lucide-react";
 import type { MctbCapabilities } from "@/lib/mctb/capabilities";
-import { saveMctbSetup, fetchMctbSetup } from "@/lib/newui-transplant/api/mctb-setup-client";
+import {
+  fetchMctbSetup,
+  postMctbHandoff,
+  saveMctbSetup,
+} from "@/lib/newui-transplant/api/mctb-setup-client";
 import {
   useMctbNotificationsWiring,
   useMctbRecoveryWiring,
@@ -227,16 +231,9 @@ export function OnboardingNotificationsStep({ c, caps, compact }: NotificationsS
         },
       },
     };
-    const res = await fetch("/api/mctb/handoff", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ config, recipients }),
-    });
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({}));
-      throw new Error((j as { error?: string }).error || "Could not save notifications");
-    }
-  }, [callerReplyEmail, email, mobile, name, n.config, n.recipients, primary]);
+    await postMctbHandoff({ config, recipients });
+    await n.reload();
+  }, [callerReplyEmail, email, mobile, name, n.config, n.recipients, n.reload, primary]);
 
   const recoveryPaid = Boolean(caps?.recoveryPaid);
   const aiEntitled = Boolean(caps?.aiRecoveryEntitled);

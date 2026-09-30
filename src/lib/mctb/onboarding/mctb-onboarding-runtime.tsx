@@ -368,6 +368,7 @@ export function MctbOnboardingRuntime({
       data,
       saving,
       error,
+      setError,
       existingConsentEligible,
       businessName,
       setBusinessName,

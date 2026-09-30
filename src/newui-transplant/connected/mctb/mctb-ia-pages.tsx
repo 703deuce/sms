@@ -199,8 +199,8 @@ export function NewUiMctbTextBackPage() {
     }
   }, [bookingRef]);
 
-  useEffect(() => {
-    void fetchMctbSetup()
+  const refreshTextBackMeta = useCallback(() => {
+    void fetchMctbSetup({ force: true })
       .then((data) => {
         const consent =
           data.consentMode === "existing_consent" ? "Existing permission" : "Press 1";
@@ -211,6 +211,13 @@ export function NewUiMctbTextBackPage() {
       })
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    refreshTextBackMeta();
+    const onSetup = () => refreshTextBackMeta();
+    window.addEventListener("mctb-setup-updated", onSetup);
+    return () => window.removeEventListener("mctb-setup-updated", onSetup);
+  }, [refreshTextBackMeta]);
 
   return (
     <Page>
@@ -262,7 +269,7 @@ export function NewUiMctbNotificationsDirectPage() {
   const [recipientCount, setRecipientCount] = useState<number | null>(null);
   const [urgentOn, setUrgentOn] = useState(false);
 
-  useEffect(() => {
+  const refreshHandoffMeta = useCallback(() => {
     void fetch("/api/mctb/handoff", { cache: "no-store" })
       .then((r) => r.json())
       .then((json) => {
@@ -273,6 +280,13 @@ export function NewUiMctbNotificationsDirectPage() {
       })
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    refreshHandoffMeta();
+    const onHandoff = () => refreshHandoffMeta();
+    window.addEventListener("mctb-handoff-updated", onHandoff);
+    return () => window.removeEventListener("mctb-handoff-updated", onHandoff);
+  }, [refreshHandoffMeta]);
 
   return (
     <Page>

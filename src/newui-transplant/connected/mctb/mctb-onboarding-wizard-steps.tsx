@@ -236,8 +236,12 @@ export function WizardTextBackStep({ c }: { c: MctbOnboardingController }) {
       disabled: !c.messageTemplate.trim(),
       onClick: () =>
         void (async () => {
-          await recoveryBundle.saveAll(c.messageTemplate.trim());
-          await c.post({ messageTemplate: c.messageTemplate.trim() });
+          try {
+            await recoveryBundle.saveAll(c.messageTemplate.trim());
+            await c.post({ messageTemplate: c.messageTemplate.trim() });
+          } catch (e) {
+            c.setError(e instanceof Error ? e.message : "Could not save text-back settings");
+          }
         })(),
     },
   });

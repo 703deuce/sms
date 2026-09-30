@@ -35,6 +35,9 @@ export async function saveMctbSetup(patch: Record<string, unknown>): Promise<voi
     const j = await res.json().catch(() => ({}));
     throw new Error((j as { error?: string }).error || "Save failed");
   }
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("mctb-setup-updated"));
+  }
 }
 
 export async function fetchMctbExclusions(): Promise<unknown[]> {
@@ -79,5 +82,9 @@ export function postMctbHandoff(body: Record<string, unknown>): Promise<void> {
     }
   };
   mctbHandoffWriteChain = mctbHandoffWriteChain.catch(() => undefined).then(run);
-  return mctbHandoffWriteChain;
+  return mctbHandoffWriteChain.then(() => {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("mctb-handoff-updated"));
+    }
+  });
 }

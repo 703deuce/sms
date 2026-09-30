@@ -371,6 +371,7 @@ export function useMctbNotificationsWiring() {
     setRecipients: setRecipientsSynced,
     persistConfig,
     save,
+    reload,
     urgentBusinessSmsEntitled,
   };
 }

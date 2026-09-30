@@ -58,6 +58,7 @@ export type MctbOnboardingController = {
   } | null;
   saving: boolean;
   error: string | null;
+  setError: (message: string | null) => void;
   existingConsentEligible: boolean;
   businessName: string;
   setBusinessName: (v: string) => void;
