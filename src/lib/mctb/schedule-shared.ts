@@ -161,10 +161,12 @@ export function readMctbScheduleFromCustomFields(
     weeklySchedule = defaultWeeklySchedule(config.timezone);
   }
 
-  const pauseUntil =
-    typeof mctb.pauseUntil === "string" && mctb.pauseUntil.trim()
-      ? mctb.pauseUntil.trim()
-      : null;
+  const pauseUntil = (() => {
+    const raw = mctb.pauseUntil;
+    if (typeof raw === "string" && raw.trim()) return raw.trim();
+    if (raw instanceof Date && !Number.isNaN(raw.getTime())) return raw.toISOString();
+    return null;
+  })();
   const manuallyPaused = mctb.manuallyPaused === true || (!config.enabled && !pauseUntil);
 
   return { scheduleMode, weeklySchedule, pauseUntil, manuallyPaused };

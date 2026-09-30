@@ -252,64 +252,36 @@ async function testConsentMode(page: Page): Promise<void> {
   }
 }
 
-async function testRecoveryPause(page: Page): Promise<void> {
-  await page.goto(`${BASE}/mctb`, { waitUntil: "domcontentloaded", timeout: 120_000 });
-  await page.waitForTimeout(2000);
-  await shot(page, "recovery-overview-initial");
-
-  let pauseBtn = page.getByRole("button", { name: /pause 1 hour/i });
-  if (!(await pauseBtn.isVisible({ timeout: 8_000 }).catch(() => false))) {
-    await page.goto(`${BASE}/mctb/setup/recovery`, { waitUntil: "domcontentloaded", timeout: 120_000 });
-    await page.waitForTimeout(2000);
-    const openPause = page.getByRole("button", { name: /pause recovery/i }).first();
-    if (await openPause.isVisible({ timeout: 10_000 }).catch(() => false)) {
-      await openPause.click();
-      await page.waitForTimeout(500);
-      const dialog = page.getByRole("dialog", { name: /pause recovery/i });
-      await dialog.getByText("1 hour").click().catch(() => undefined);
-      const confirm = dialog.getByRole("button", { name: /^pause recovery$/i });
-      if (await confirm.isVisible().catch(() => false)) {
-        const wait = waitSetupPost(page);
-        await confirm.click();
-        await wait;
-        await page.waitForTimeout(2000);
-        const afterPause = snapshotBackend();
-        const paused = afterPause.effective?.recoveryPaused;
-        record({
-          page: "Setup → Recovery",
-          tab: "—",
-          control: "Pause recovery (menu)",
-          browserAction: "open menu, 1h, confirm",
-          uiResult: "submitted",
-          backendResult: `recoveryPaused=${paused}`,
-          refreshResult: "—",
-          effectiveRuntime: String(afterPause.effective?.pauseKind ?? paused),
-          status:
-            paused === true
-              ? "PASS — UI + PERSISTENCE + EFFECTIVE CONFIG"
-              : "FAIL — PERSISTENCE",
-          defectFix: "",
-        });
-        const resumeBtn = page.getByRole("button", { name: /resume recovery/i }).first();
-        if (await resumeBtn.isVisible().catch(() => false)) {
-          const waitResume = waitSetupPost(page);
-          await resumeBtn.click();
-          await waitResume;
-        }
-        await shot(page, "recovery-setup-pause");
-        return;
-      }
-    }
+async function testRecoveryPause(page: Page, context?: BrowserContext): Promise<void> {
+  if (context) {
+    await context.request.post(`${BASE}/api/workspace`, { data: { workspaceId: WORKSPACE_ID } });
   }
+  await page.goto(`${BASE}/mctb/missed-call-recovery?tab=general`, {
+    waitUntil: "domcontentloaded",
+    timeout: 120_000,
+  });
+  await page.waitForTimeout(5000);
+  const pauseBtn = page.getByRole("button", { name: "1 hour", exact: true });
+  let pauseVisible = false;
+  try {
+    await pauseBtn.waitFor({ state: "visible", timeout: 60_000 });
+    pauseVisible = true;
+  } catch {
+    pauseVisible = false;
+  }
+  await shot(page, "recovery-hub-general");
 
-  const before = snapshotBackend();
-  if (!(await pauseBtn.isVisible({ timeout: 5_000 }).catch(() => false))) {
+  if (!pauseVisible) {
+    const dbgUrl = page.url();
+    const dbgSnippet = await page.locator("body").innerText().catch(() => "").then((t) => t.slice(0, 200));
+    console.error(JSON.stringify({ recoveryPauseDebug: { url: dbgUrl, snippet: dbgSnippet } }));
+    await shot(page, "recovery-pause-fail");
     record({
-      page: "Setup → Recovery",
-      tab: "—",
+      page: "Missed-call recovery",
+      tab: "general",
       control: "Pause 1 hour",
       browserAction: "n/a",
-      uiResult: "control not visible",
+      uiResult: `control not visible; url=${dbgUrl}`,
       backendResult: "—",
       refreshResult: "—",
       effectiveRuntime: "—",
@@ -319,25 +291,41 @@ async function testRecoveryPause(page: Page): Promise<void> {
     return;
   }
 
-  const waitPause = waitSetupPost(page);
+  const waitPause = page.waitForResponse(
+    (r) => {
+      if (!r.url().includes("/api/mctb/setup") || r.request().method() !== "POST") return false;
+      try {
+        const body = r.request().postDataJSON() as { pauseUntil?: string; enabled?: boolean };
+        return Boolean(body.pauseUntil) || body.enabled === false;
+      } catch {
+        return false;
+      }
+    },
+    { timeout: 45_000 },
+  );
   await pauseBtn.click();
-  const pauseHttp = await waitPause;
-  await page.waitForTimeout(2000);
-  const afterPause = snapshotBackend();
-  const paused = afterPause.effective?.recoveryPaused;
+  const pauseRes = await waitPause.catch(() => null);
+  const pauseHttp = pauseRes?.status() ?? null;
+  let afterPause = snapshotBackend();
+  let paused = afterPause.effective?.recoveryPaused;
+  for (let i = 0; i < 8 && !paused; i++) {
+    await page.waitForTimeout(1000);
+    afterPause = snapshotBackend();
+    paused = afterPause.effective?.recoveryPaused;
+  }
 
-  await page.reload();
-  await page.waitForTimeout(1500);
-  const pausedPill = await page.getByText(/^paused$/i).first().isVisible().catch(() => false);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(2000);
+  const pausedUi = await page.getByText(/recovery is paused/i).first().isVisible().catch(() => false);
 
   record({
-    page: "Setup → Recovery",
-    tab: "—",
-    control: "Pause for 1 hour",
-    browserAction: "click pause 1h",
+    page: "Missed-call recovery",
+    tab: "general",
+    control: "Pause 1 hour",
+    browserAction: "click 1 hour preset",
     uiResult: pauseHttp === 200 ? "save OK" : `http ${pauseHttp ?? "?"}`,
     backendResult: `recoveryPaused=${paused} pauseKind=${afterPause.effective?.pauseKind}`,
-    refreshResult: pausedPill ? "Paused visible" : "Active still shown",
+    refreshResult: pausedUi ? "paused copy visible" : "active copy still shown",
     effectiveRuntime: String(afterPause.effective?.pauseKind ?? paused),
     status:
       pauseHttp === 200 && paused === true
@@ -355,8 +343,8 @@ async function testRecoveryPause(page: Page): Promise<void> {
     await page.waitForTimeout(2000);
     const afterResume = snapshotBackend();
     record({
-      page: "Setup → Recovery",
-      tab: "—",
+      page: "Missed-call recovery",
+      tab: "general",
       control: "Resume recovery",
       browserAction: "click resume",
       uiResult: resumeHttp === 200 ? "save OK" : `http ${resumeHttp ?? "?"}`,
@@ -660,16 +648,27 @@ async function main() {
     viewport: { width: 1440, height: 900 },
     ignoreHTTPSErrors: true,
   });
+  context.setDefaultTimeout(90_000);
   await authenticate(context);
   const page = await context.newPage();
 
   const onlyConsent = process.argv.includes("--only-consent");
+  const onlyRecovery = process.argv.includes("--only-recovery");
   let routesOk = 0;
+  if (onlyRecovery) {
+    const recoveryPage = await context.newPage();
+    await testRecoveryPause(recoveryPage, context);
+    await recoveryPage.close();
+    await browser.close();
+    const failCount = rows.filter((r) => r.status.startsWith("FAIL")).length;
+    console.log(JSON.stringify({ failCount, rows }, null, 2));
+    process.exit(failCount > 0 ? 2 : 0);
+  }
+
   if (!onlyConsent) {
     for (const r of MCTB_ROUTES) {
       if (await visitMctbRoute(page, r.path, r.label)) routesOk++;
     }
-    await testRecoveryPause(page);
     await testExclusionsCrud(page);
     await testTextBackPlatformTemplate(page);
     await testMissedCallsList(page);
@@ -677,6 +676,11 @@ async function main() {
   }
 
   await testConsentMode(page);
+  if (!onlyConsent) {
+    const recoveryPage = await context.newPage();
+    await testRecoveryPause(recoveryPage, context);
+    await recoveryPage.close();
+  }
 
   await browser.close();
 

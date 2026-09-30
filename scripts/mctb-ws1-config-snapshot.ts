@@ -10,6 +10,7 @@ import { parseMctbOnboardingState } from "@/lib/mctb/onboarding/state";
 import { normalizeMctbConsentMode } from "@/lib/mctb/consent-mode";
 import {
   isMctbAutomationActive,
+  isMctbSchedulePaused,
   loadMctbScheduleSettings,
   resolveMctbPauseKind,
 } from "@/lib/mctb/schedule";
@@ -40,6 +41,7 @@ async function main() {
   const schedule = await loadMctbScheduleSettings(WORKSPACE_ID, runtime);
   const automationActive = isMctbAutomationActive(schedule, runtime);
   const pauseKind = resolveMctbPauseKind(schedule, runtime);
+  const recoveryPaused = isMctbSchedulePaused(schedule, runtime);
   const texmlHandlerMode = resolveMctbTexmlHandlerMode({
     consentMode,
     automationActive,
@@ -102,7 +104,7 @@ async function main() {
           loadMctbConsentMode: consentMode,
           runtimeEnabled: runtime?.enabled ?? null,
           runtimePhoneNumberId: runtime?.phoneNumberId ?? null,
-          recoveryPaused: pauseKind !== null,
+          recoveryPaused,
           pauseKind,
           automationActive,
           texmlHandlerMode,
