@@ -15,10 +15,40 @@ export type EnqueueJobInput = {
   wake?: boolean;
 };
 
+const WORKSPACE_COLUMN_FROM_PAYLOAD_TYPES = new Set([
+  "send_campaign_sms",
+  "send_campaign_email",
+  "crm_push_event",
+  "crm_sync",
+  "crm_webhook_process",
+  "crm_bulk_sync",
+  "crm_metadata_refresh",
+  "crm_automation_action",
+  "integration_automation_event",
+  "integration_action",
+  "integration_webhook_process",
+  "voice_post_call",
+  "voice_v3_call_history",
+]);
+
 export async function enqueueJob(input: EnqueueJobInput) {
   const prisma = getPrisma();
   const runAfter = input.runAfter ?? new Date();
   const queueName = input.queueName ?? "default";
+
+  let workspaceId = input.workspaceId;
+  if (
+    !workspaceId &&
+    WORKSPACE_COLUMN_FROM_PAYLOAD_TYPES.has(input.jobType) &&
+    input.payload &&
+    typeof input.payload === "object" &&
+    !Array.isArray(input.payload)
+  ) {
+    const fromPayload = (input.payload as Record<string, unknown>).workspaceId;
+    if (typeof fromPayload === "string" && fromPayload.trim()) {
+      workspaceId = fromPayload.trim();
+    }
+  }
 
   let job;
   if (input.idempotencyKey) {
@@ -56,7 +86,7 @@ export async function enqueueJob(input: EnqueueJobInput) {
           lastError: null,
           completedAt: null,
           lockedAt: null,
-          workspaceId: input.workspaceId,
+          workspaceId,
           queueName,
           jobType: input.jobType,
           maxAttempts: input.maxAttempts ?? existing.maxAttempts,
@@ -71,7 +101,7 @@ export async function enqueueJob(input: EnqueueJobInput) {
       data: {
         jobType: input.jobType,
         queueName,
-        workspaceId: input.workspaceId,
+        workspaceId,
         payload: input.payload,
         idempotencyKey: input.idempotencyKey,
         runAfter,

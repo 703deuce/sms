@@ -541,6 +541,9 @@ export async function startBullmqWorkers() {
     "ext-close",
     "ext-freshdesk",
     "ext-klaviyo",
+    /** Legacy provider id "internal" — appointment/automation events must not strand on ext-internal. */
+    "ext-internal",
+    "voice-outbound",
   ] as const;
 
   startWorkersForQueues(queues);

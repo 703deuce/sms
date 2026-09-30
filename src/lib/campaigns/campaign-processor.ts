@@ -150,7 +150,7 @@ export async function enqueueDueCampaignMessages(workspaceId?: string) {
       jobType: msg.channel === "email" ? "send_campaign_email" : "send_campaign_sms",
       queueName: msg.channel === "email" ? "email-send" : "sms-send",
       workspaceId: msg.workspaceId,
-      payload: { messageId: msg.id },
+      payload: { messageId: msg.id, workspaceId: msg.workspaceId },
       idempotencyKey,
     });
     enqueued += 1;
