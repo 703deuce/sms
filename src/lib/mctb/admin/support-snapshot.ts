@@ -7,6 +7,7 @@ import { loadMctbOnboardingState } from "@/lib/mctb/onboarding/state";
 import { getWorkspaceTollFreeNumber } from "@/lib/mctb/workspace-toll-free";
 import { loadWorkspaceTfvForPhone } from "@/lib/mctb/tfv/store";
 import { mapTfvRecordToUiStatus, tfvStatusLabel } from "@/lib/mctb/onboarding/trial-number";
+import { loadMctbOwnSenderA2pIntake } from "@/lib/mctb/own-sender-a2p-intake";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -63,6 +64,12 @@ export type MctbSupportSnapshot = {
     trialNumberReleasedAt: string | null;
     trialNumberReleaseScheduled: boolean;
   };
+  ownSenderA2pIntake: {
+    status: string;
+    submittedAt: string | null;
+    legalBusinessName: string | null;
+    contactEmail: string | null;
+  };
 };
 
 export async function loadMctbSupportSnapshot(workspaceId: string): Promise<MctbSupportSnapshot | null> {
@@ -80,9 +87,10 @@ export async function loadMctbSupportSnapshot(workspaceId: string): Promise<Mctb
   });
   if (!ws) return null;
 
-  const [state, entitlement, phoneRow, lastMissed, lastConvMsg] = await Promise.all([
+  const [state, entitlement, ownSenderA2p, phoneRow, lastMissed, lastConvMsg] = await Promise.all([
     loadMctbOnboardingState(workspaceId),
     getMctbEntitlement(workspaceId),
+    loadMctbOwnSenderA2pIntake(workspaceId),
     (async () => {
       const wn = getWorkspaceTollFreeNumber(await loadMctbOnboardingState(workspaceId));
       if (!wn?.phoneNumberId) return null;
@@ -169,6 +177,12 @@ export async function loadMctbSupportSnapshot(workspaceId: string): Promise<Mctb
       trialNumberHoldUntil: (limits.trialNumberHoldUntil as string) || null,
       trialNumberReleasedAt: (limits.trialNumberReleasedAt as string) || null,
       trialNumberReleaseScheduled: Boolean(limits.trialNumberReleaseScheduled),
+    },
+    ownSenderA2pIntake: {
+      status: ownSenderA2p.status,
+      submittedAt: ownSenderA2p.submittedAt || null,
+      legalBusinessName: ownSenderA2p.legalBusinessName || null,
+      contactEmail: ownSenderA2p.contactEmail || null,
     },
   };
 }

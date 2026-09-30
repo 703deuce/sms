@@ -211,6 +211,12 @@ export async function POST(request: Request) {
         "@/lib/mctb/provisioning/seed-workspace"
       );
       await ensureMctbWorkspaceSeeded(workspace.id);
+      const { ensureMctbWorkspaceIngressReady } = await import(
+        "@/lib/mctb/provisioning/ensure-workspace-ingress"
+      );
+      await ensureMctbWorkspaceIngressReady(workspace.id).catch((err) => {
+        console.error("[auth/signup] MCTB ingress provision", workspace.id, err);
+      });
       const { recordFunnelEvent } = await import("@/lib/mctb/onboarding/state");
       await recordFunnelEvent(workspace.id, "MCTB_SIGNUP_COMPLETED", {
         product: "mctb",

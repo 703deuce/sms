@@ -5,6 +5,7 @@ import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { loadAdminCustomerById } from "@/lib/admin-data";
 import { loadMctbSupportSnapshot } from "@/lib/mctb/admin/support-snapshot";
+import { loadMctbOwnSenderA2pIntake } from "@/lib/mctb/own-sender-a2p-intake";
 import { loadPlatformAdminSnapshot } from "@/lib/platform/admin-snapshot";
 import { loadDashboardMetrics } from "@/lib/workspace-data";
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/utils";
@@ -26,6 +27,10 @@ export default async function AdminCustomerDetailPage({
 
   const metrics = await loadDashboardMetrics(id);
   const mctbSnapshot = await loadMctbSupportSnapshot(id);
+  const ownSenderA2pIntake =
+    mctbSnapshot?.ownSenderA2pIntake.status === "submitted"
+      ? await loadMctbOwnSenderA2pIntake(id)
+      : null;
   const platformSnapshot = await loadPlatformAdminSnapshot(id);
   const usageCost = customer.messages * 0.015;
   const telnyxCost = customer.messages * 0.0085;
@@ -109,6 +114,45 @@ export default async function AdminCustomerDetailPage({
               {mctbSnapshot.tfv.failureReason ? (
                 <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-amber-950">
                   TFV: {mctbSnapshot.tfv.failureReason}
+                </div>
+              ) : null}
+              {ownSenderA2pIntake ? (
+                <div className="rounded-md border border-border p-3 space-y-2">
+                  <p className="font-medium">Own Local Number A2P intake (manual carrier submit)</p>
+                  <dl className="grid gap-1 text-xs">
+                    <div>
+                      <dt className="text-muted-foreground">Legal name</dt>
+                      <dd>{ownSenderA2pIntake.legalBusinessName}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">EIN / Tax ID</dt>
+                      <dd>{ownSenderA2pIntake.einOrTaxId || "—"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Address</dt>
+                      <dd>
+                        {ownSenderA2pIntake.businessAddressLine1},{" "}
+                        {ownSenderA2pIntake.businessCity}, {ownSenderA2pIntake.businessState}{" "}
+                        {ownSenderA2pIntake.businessPostalCode}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Contact</dt>
+                      <dd>
+                        {ownSenderA2pIntake.contactEmail}
+                        {ownSenderA2pIntake.contactPhone
+                          ? ` · ${ownSenderA2pIntake.contactPhone}`
+                          : ""}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Use case</dt>
+                      <dd className="whitespace-pre-wrap">{ownSenderA2pIntake.useCaseDescription}</dd>
+                    </div>
+                  </dl>
+                  <Link href="/admin/a2p" className="text-primary hover:underline text-xs">
+                    View all submissions →
+                  </Link>
                 </div>
               ) : null}
             </dl>

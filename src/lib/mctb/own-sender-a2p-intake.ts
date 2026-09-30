@@ -162,5 +162,48 @@ export async function saveMctbOwnSenderA2pIntake(
     data: { customFieldsConfig: merged as object },
   });
 
+  if (input.submit && prior.status !== "submitted") {
+    const { notifyMctbOwnSenderA2pSubmitted } = await import(
+      "@/lib/mctb/own-sender-a2p-intake-notify"
+    );
+    void notifyMctbOwnSenderA2pSubmitted({ workspaceId, intake: next }).catch((err) => {
+      console.error("[mctb] own-sender A2P submit notify failed", workspaceId, err);
+    });
+  }
+
   return next;
+}
+
+export type MctbOwnSenderA2pAdminRow = {
+  workspaceId: string;
+  workspaceName: string;
+  submittedAt: string | null;
+  intake: MctbOwnSenderA2pIntake;
+};
+
+/** Submitted Own Local Number A2P intake forms for manual carrier submission. */
+export async function listMctbOwnSenderA2pSubmissionsForAdmin(
+  limit = 200,
+): Promise<MctbOwnSenderA2pAdminRow[]> {
+  const prisma = getPrisma();
+  const rows = await prisma.$queryRaw<
+    Array<{ id: string; name: string; intake: unknown }>
+  >`
+    SELECT w.id, w.name, w."customFieldsConfig"->'mctb'->'ownSenderA2pIntake' AS intake
+    FROM "Workspace" w
+    WHERE w.type = 'BUSINESS'
+      AND w."customFieldsConfig"->'mctb'->'ownSenderA2pIntake'->>'status' = 'submitted'
+    ORDER BY w."customFieldsConfig"->'mctb'->'ownSenderA2pIntake'->>'submittedAt' DESC NULLS LAST
+    LIMIT ${limit}
+  `;
+
+  return rows.map((row) => ({
+    workspaceId: row.id,
+    workspaceName: row.name,
+    submittedAt:
+      typeof asRecord(row.intake).submittedAt === "string"
+        ? String(asRecord(row.intake).submittedAt)
+        : null,
+    intake: parseIntake(row.intake),
+  }));
 }

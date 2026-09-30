@@ -6,10 +6,14 @@ import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { titleCaseStatus } from "@/lib/mappers";
 import { loadAdminRegistrations } from "@/lib/admin-data";
+import { listMctbOwnSenderA2pSubmissionsForAdmin } from "@/lib/mctb/own-sender-a2p-intake";
 import Link from "next/link";
 
 export default async function AdminA2pPage() {
-  const registrations = await loadAdminRegistrations();
+  const [registrations, mctbOwnSenderIntakes] = await Promise.all([
+    loadAdminRegistrations(),
+    listMctbOwnSenderA2pSubmissionsForAdmin(),
+  ]);
 
   const pendingBrands = registrations.filter(
     (r) => ["pending", "in_review", "submitted"].includes((r.brandStatus || "").toLowerCase()),
@@ -28,6 +32,50 @@ export default async function AdminA2pPage() {
         description="Brand and campaign registrations across all customer workspaces."
         actions={<Button variant="outline">Export queue</Button>}
       />
+
+      <Card className="mb-6">
+        <CardTitle>MCTB Own Local Number intake ({mctbOwnSenderIntakes.length})</CardTitle>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Customer-submitted A2P details from the Own Local Number add-on wizard. Submit these to the
+          carrier manually.
+        </p>
+        {mctbOwnSenderIntakes.length === 0 ? (
+          <EmptyState
+            title="No MCTB own-number submissions"
+            description="Submissions appear when a customer completes the Own Local Number A2P form."
+          />
+        ) : (
+          <Table className="mt-4">
+            <THead>
+              <TR>
+                <TH>Customer</TH>
+                <TH>Legal business</TH>
+                <TH>Contact</TH>
+                <TH>Submitted</TH>
+              </TR>
+            </THead>
+            <TBody>
+              {mctbOwnSenderIntakes.map((row) => (
+                <TR key={row.workspaceId}>
+                  <TD>
+                    <Link
+                      href={`/admin/customers/${row.workspaceId}`}
+                      className="font-medium hover:text-primary"
+                    >
+                      {row.workspaceName}
+                    </Link>
+                  </TD>
+                  <TD className="text-muted-foreground">{row.intake.legalBusinessName || "—"}</TD>
+                  <TD className="text-muted-foreground">{row.intake.contactEmail || "—"}</TD>
+                  <TD className="text-muted-foreground">
+                    {row.submittedAt ? new Date(row.submittedAt).toLocaleString() : "—"}
+                  </TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        )}
+      </Card>
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>
