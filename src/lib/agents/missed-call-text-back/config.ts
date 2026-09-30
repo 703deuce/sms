@@ -50,7 +50,7 @@ export function configToRecord(row: {
 }): MissedCallTextConfigRecord {
   return {
     smsPhoneNumberId: null,
-    senderMode: "WORKSPACE",
+    senderMode: "PLATFORM",
     messageTemplateBusinessHours: null,
     messageTemplateAfterHours: null,
     requireCarrierForward: true,

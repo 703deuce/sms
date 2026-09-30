@@ -307,6 +307,46 @@ export async function createPlatformCheckoutSession(input: {
 
   const customerId = await getOrCreateStripeCustomer(input.workspaceId);
 
+  if (input.productKey === "mctb_own_sender") {
+    const catalog = getPlatformBillingCatalog();
+    const addon = catalog.addons.mctb_own_sender;
+    if (!addon) throw new Error("Own Local Number add-on is not configured");
+    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
+      { price: addon.stripePriceId, quantity: 1 },
+    ];
+    if (addon.stripeOneTimePriceId) {
+      lineItems.push({ price: addon.stripeOneTimePriceId, quantity: 1 });
+    }
+    const successParams = new URLSearchParams({
+      platform_checkout: "success",
+      product: input.productKey,
+    });
+    if (input.nextProductKey) successParams.set("next_product", input.nextProductKey);
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      customer: customerId,
+      line_items: lineItems,
+      success_url: `${input.origin}${input.successPath || "/settings/billing"}?${successParams}`,
+      cancel_url: `${input.origin}/settings/billing?platform_checkout=cancel`,
+      metadata: {
+        workspaceId: input.workspaceId,
+        userId: input.userId,
+        platformProductKey: input.productKey,
+        platformProductFamily: "mctb_own_sender",
+        platformTier: "default",
+      },
+      subscription_data: {
+        metadata: {
+          workspaceId: input.workspaceId,
+          platformProductKey: input.productKey,
+          platformProductFamily: "mctb_own_sender",
+          platformTier: "default",
+        },
+      },
+    });
+    return { url: session.url, sessionId: session.id };
+  }
+
   const willHaveBoth =
     (selection.family === "mctb" &&
       (await prismaHasActiveFamily(input.workspaceId, "smart_routing"))) ||

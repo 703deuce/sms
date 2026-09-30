@@ -429,9 +429,9 @@ export function MctbOnboardingRuntime({
             ? "Call handling is ready. Messaging verification is still pending — automatic recovery texts will send when approved."
             : "Your missed-call recovery setup is complete."}
         </p>
-        {data?.trial?.daysRemaining != null ? (
-          <p className="mt-2 text-sm font-medium">Trial active · {data.trial.daysRemaining} days remaining</p>
-        ) : null}
+        <p className="mt-2 text-sm font-medium text-muted-foreground">
+          Free plan · 10 recoveries per month on the Transovo platform sender
+        </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <Button type="button" onClick={() => router.push(MCTB_ROUTES.home)}>Go to MCTB</Button>
           <Button type="button" variant="outline" asChild>

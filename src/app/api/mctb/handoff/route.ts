@@ -131,7 +131,7 @@ export async function POST(req: Request) {
       !caps.urgentClassification
     ) {
       return NextResponse.json(
-        { error: "Urgent Reply Alerts require a Recovery plan." },
+        { error: "Urgent Reply Alerts require an AI Recovery plan." },
         { status: 403 },
       );
     }

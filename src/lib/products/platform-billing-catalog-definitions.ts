@@ -1,6 +1,6 @@
 /** Product definitions — prices and tiers. Stripe IDs live in catalog-ids-*.ts */
 
-export type MctbTier = "starter" | "growth" | "pro";
+export type MctbTier = "text_back" | "starter" | "growth" | "pro";
 export type SmartRoutingTier = "starter" | "business" | "pro";
 export type CallForwardingTier = "standard";
 export type AiTranscriptionTier = "starter" | "business" | "pro";
@@ -13,7 +13,10 @@ export type PlatformProductFamily =
   | "ai_transcription"
   | "fax";
 
-export const MCTB_TIERS: MctbTier[] = ["starter", "growth", "pro"];
+/** Purchasable MCTB subscription tier; legacy Stripe/webhook tiers alias to the same price. */
+export const MCTB_PRIMARY_TIER: MctbTier = "text_back";
+
+export const MCTB_TIERS: MctbTier[] = ["text_back", "starter", "growth", "pro"];
 export const SMART_ROUTING_TIERS: SmartRoutingTier[] = ["starter", "business", "pro"];
 export const CALL_FORWARDING_TIERS: CallForwardingTier[] = ["standard"];
 export const AI_TRANSCRIPTION_TIERS: AiTranscriptionTier[] = ["starter", "business", "pro"];
@@ -21,9 +24,17 @@ export const FAX_TIERS: FaxTier[] = ["starter", "business", "pro"];
 export const VERIFY_CREDIT_PACKS: VerifyCreditPack[] = ["1000", "5000", "10000", "50000"];
 
 export const MCTB_TIER_PRICES_CENTS: Record<MctbTier, number> = {
-  starter: 1999,
-  growth: 2999,
-  pro: 4999,
+  text_back: 999,
+  starter: 999,
+  growth: 999,
+  pro: 999,
+};
+
+export const MCTB_TIER_DISPLAY_NAMES: Record<MctbTier, string> = {
+  text_back: "Text Back",
+  starter: "Text Back",
+  growth: "Text Back",
+  pro: "Text Back",
 };
 
 export const SMART_ROUTING_TIER_PRICES_CENTS: Record<SmartRoutingTier, number> = {
@@ -101,7 +112,7 @@ export const AI_TRANSCRIPTION_PRODUCT_NAME = SMART_ROUTING_PRODUCT_NAME.replace(
 );
 export const DUAL_PRODUCT_COUPON_NAME = "Transovo MCTB + Smart Routing 20%";
 
-export const BILLING_VERSION = "1";
+export const BILLING_VERSION = "2";
 
 export const ADDON_PRODUCT_DEFS = [
   {
@@ -121,18 +132,23 @@ export const ADDON_PRODUCT_DEFS = [
   {
     productKey: "mctb_ai_recovery",
     displayName: "AI Recovery",
-    description: "Automated SMS follow-up after missed-call recovery replies.",
-    amountCents: 2999,
+    description:
+      "100 recoveries/mo. AI handles replies, custom intake, urgency detection, and lead summary.",
+    amountCents: 1999,
     feature: "mctb" as const,
   },
   {
     productKey: "mctb_own_sender",
-    displayName: "Own Sender",
-    description: "Send recovery texts from your verified toll-free or A2P number.",
-    amountCents: 1999,
+    displayName: "Own Local Number",
+    description:
+      "Your registered local business texting number (+$19.50 one-time A2P registration at checkout).",
+    amountCents: 1000,
     feature: "mctb" as const,
   },
 ] as const;
+
+/** One-time fee bundled at Own Local Number checkout (carrier A2P registration). */
+export const MCTB_OWN_SENDER_A2P_REGISTRATION_CENTS = 1950;
 
 export type PlatformCatalogTierIds = {
   stripePriceId: string;
@@ -180,6 +196,8 @@ export type PlatformCatalogIds = {
       stripeProductId: string;
       stripePriceId: string;
       monthlyPriceCents: number;
+      stripeOneTimePriceId?: string;
+      oneTimePriceCents?: number;
     }
   >;
 };

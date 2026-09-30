@@ -3,87 +3,91 @@ import type { PlatformCatalogIds } from "./platform-billing-catalog-definitions"
 
 export const PLATFORM_BILLING_CATALOG_LIVE: PlatformCatalogIds = {
   "mctb": {
-    "stripeProductId": "prod_V8GrjJJP57iafr",
+    "stripeProductId": "prod_VMCHPYMStHBStX",
     "tiers": {
+      "text_back": {
+        "stripePriceId": "price_1ULTtIKjM2RWgyrvURlhs3yQ",
+        "monthlyPriceCents": 999
+      },
       "starter": {
-        "stripePriceId": "price_1U80JJKjM2RWgyrvl2eauxrZ",
-        "monthlyPriceCents": 1999
+        "stripePriceId": "price_1ULTtJKjM2RWgyrvNtS8hjoO",
+        "monthlyPriceCents": 999
       },
       "growth": {
-        "stripePriceId": "price_1U80JJKjM2RWgyrvcJgnws2c",
-        "monthlyPriceCents": 2999
+        "stripePriceId": "price_1ULTtJKjM2RWgyrvuJqWJ1hl",
+        "monthlyPriceCents": 999
       },
       "pro": {
-        "stripePriceId": "price_1U80JJKjM2RWgyrv3c2oLTTs",
-        "monthlyPriceCents": 4999
+        "stripePriceId": "price_1ULTtJKjM2RWgyrvVdhokrqA",
+        "monthlyPriceCents": 999
       }
     }
   },
   "smart_routing": {
-    "stripeProductId": "prod_V8GrAizpUU8b63",
+    "stripeProductId": "prod_VMCHCscvYpixX4",
     "tiers": {
       "starter": {
-        "stripePriceId": "price_1U80JKKjM2RWgyrvTA9YAk95",
+        "stripePriceId": "price_1ULTtKKjM2RWgyrvomqjdPAl",
         "monthlyPriceCents": 1999,
         "includedMinutes": 750
       },
       "business": {
-        "stripePriceId": "price_1U80JKKjM2RWgyrvssUNi12L",
+        "stripePriceId": "price_1ULTtKKjM2RWgyrvmeeHtq0i",
         "monthlyPriceCents": 3999,
         "includedMinutes": 2000
       },
       "pro": {
-        "stripePriceId": "price_1U80JKKjM2RWgyrvV51vpu7K",
+        "stripePriceId": "price_1ULTtLKjM2RWgyrvFulJ6a38",
         "monthlyPriceCents": 6999,
         "includedMinutes": 4000
       }
     }
   },
   "call_forwarding": {
-    "stripeProductId": "prod_V8OoJZEcLqHRbd",
+    "stripeProductId": "prod_VMCHG9T0f1XU81",
     "tiers": {
       "standard": {
-        "stripePriceId": "price_1U880iKjM2RWgyrvUDvhHpIe",
+        "stripePriceId": "price_1ULTtLKjM2RWgyrvStjYvnb5",
         "monthlyPriceCents": 2999,
         "includedMinutes": 2000
       }
     }
   },
   "ai_transcription": {
-    "stripeProductId": "prod_V8HGvQuxjhyCvL",
+    "stripeProductId": "prod_VMCHUpKvvKkVzO",
     "tiers": {
       "starter": {
-        "stripePriceId": "price_1U80hiKjM2RWgyrvSM8oFa7d",
+        "stripePriceId": "price_1ULTtMKjM2RWgyrvzSVpJVZZ",
         "monthlyPriceCents": 799,
         "includedMinutes": 750
       },
       "business": {
-        "stripePriceId": "price_1U80hjKjM2RWgyrvKBbKR7XG",
+        "stripePriceId": "price_1ULTtMKjM2RWgyrvfCmchUH1",
         "monthlyPriceCents": 1999,
         "includedMinutes": 2000
       },
       "pro": {
-        "stripePriceId": "price_1U80hjKjM2RWgyrvbKZyutoT",
+        "stripePriceId": "price_1ULTtMKjM2RWgyrvx037scTl",
         "monthlyPriceCents": 3999,
         "includedMinutes": 4000
       }
     }
   },
   "fax": {
-    "stripeProductId": "prod_fax_placeholder",
+    "stripeProductId": "prod_VMCH2gn8nmhXmo",
     "tiers": {
       "starter": {
-        "stripePriceId": "price_fax_starter_placeholder",
+        "stripePriceId": "price_1ULTtNKjM2RWgyrvruugtWfw",
         "monthlyPriceCents": 999,
         "includedPages": 200
       },
       "business": {
-        "stripePriceId": "price_fax_business_placeholder",
+        "stripePriceId": "price_1ULTtNKjM2RWgyrvWgX7puEW",
         "monthlyPriceCents": 1499,
         "includedPages": 500
       },
       "pro": {
-        "stripePriceId": "price_fax_pro_placeholder",
+        "stripePriceId": "price_1ULTtOKjM2RWgyrvbR6m4lxM",
         "monthlyPriceCents": 2499,
         "includedPages": 1000
       }
@@ -92,38 +96,56 @@ export const PLATFORM_BILLING_CATALOG_LIVE: PlatformCatalogIds = {
   "verify": {
     "stripeProductId": "prod_verify_placeholder",
     "packs": {
-      "1000": { "stripePriceId": "price_verify_1000_placeholder", "amountCents": 999, "credits": 1000 },
-      "5000": { "stripePriceId": "price_verify_5000_placeholder", "amountCents": 1999, "credits": 5000 },
-      "10000": { "stripePriceId": "price_verify_10000_placeholder", "amountCents": 3499, "credits": 10000 },
-      "50000": { "stripePriceId": "price_verify_50000_placeholder", "amountCents": 9900, "credits": 50000 }
+      "1000": {
+        "stripePriceId": "price_verify_1000_placeholder",
+        "amountCents": 999,
+        "credits": 1000
+      },
+      "5000": {
+        "stripePriceId": "price_verify_5000_placeholder",
+        "amountCents": 1999,
+        "credits": 5000
+      },
+      "10000": {
+        "stripePriceId": "price_verify_10000_placeholder",
+        "amountCents": 3499,
+        "credits": 10000
+      },
+      "50000": {
+        "stripePriceId": "price_verify_50000_placeholder",
+        "amountCents": 9900,
+        "credits": 50000
+      }
     }
   },
   "discounts": {
     "dualProduct": {
-      "stripeCouponId": "metJ8xAZ",
+      "stripeCouponId": "I2ART2Bs",
       "percentOff": 20
     }
   },
   "addons": {
     "visual_voicemail": {
-      "stripeProductId": "prod_V8GrBbWbQUft2R",
-      "stripePriceId": "price_1U80JjKjM2RWgyrviWAmmZY1",
+      "stripeProductId": "prod_VMCHBIE6EhrtNp",
+      "stripePriceId": "price_1ULTtOKjM2RWgyrvvanEObYa",
       "monthlyPriceCents": 999
     },
     "callback_requests": {
-      "stripeProductId": "prod_V8GrNmxbLQz0ls",
-      "stripePriceId": "price_1U80JkKjM2RWgyrvh93xNoY5",
+      "stripeProductId": "prod_VMCHXFPnS9ZYqS",
+      "stripePriceId": "price_1ULTtPKjM2RWgyrvLFinWTBo",
       "monthlyPriceCents": 499
     },
     "mctb_ai_recovery": {
-      "stripeProductId": "prod_mctb_ai_recovery_placeholder",
-      "stripePriceId": "price_mctb_ai_recovery_placeholder",
-      "monthlyPriceCents": 2999
+      "stripeProductId": "prod_VMCHO111j2RKz5",
+      "stripePriceId": "price_1ULTtQKjM2RWgyrvatKywqJM",
+      "monthlyPriceCents": 1999
     },
     "mctb_own_sender": {
-      "stripeProductId": "prod_mctb_own_sender_placeholder",
-      "stripePriceId": "price_mctb_own_sender_placeholder",
-      "monthlyPriceCents": 1999
+      "stripeProductId": "prod_VMCISLE1o5oh0P",
+      "stripePriceId": "price_1ULTtQKjM2RWgyrvbHevvJFx",
+      "monthlyPriceCents": 1000,
+      "stripeOneTimePriceId": "price_1ULTtQKjM2RWgyrvJFrj0QkM",
+      "oneTimePriceCents": 1950
     }
   }
 } as const;

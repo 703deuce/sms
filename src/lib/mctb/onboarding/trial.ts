@@ -1,7 +1,6 @@
 import { getPrisma } from "@/lib/db";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { getTrialLimits } from "@/lib/platform-flags";
-import { grantCredits } from "@/lib/settings/billing";
 import { isPhoneMessagingApproved } from "@/lib/messaging/compliance/messaging-compliance";
 import { classifyProductionNumber } from "@/lib/messaging/compliance/phone-number-class";
 import { loadMctbOnboardingState, recordFunnelEvent, saveMctbOnboardingState } from "./state";
@@ -127,30 +126,23 @@ export async function activateMctbTrial(workspaceId: string): Promise<{
     return { ok: false, reason: gate.missing.join(",") };
   }
 
-  const trial = await getTrialLimits();
-  const trialDays = trial.days || 14;
   const startedAt = new Date();
-  const endsAt = new Date(startedAt.getTime() + trialDays * 24 * 60 * 60 * 1000);
-
   const existingLimits = asRecord(ws.workspaceLimits?.limits);
   await prisma.workspaceLimits.upsert({
     where: { workspaceId },
     create: {
       workspaceId,
       limits: {
-        dailyCap: trial.messages || 500,
-        maxNumbers: trial.numbers || 1,
-        trialDays,
-        requireCard: trial.requireCard,
-        trialStartedAt: startedAt.toISOString(),
-        trialEndsAt: endsAt.toISOString(),
+        ...existingLimits,
+        mctbServiceStatus: "ACTIVE",
+        mctbFreeActivatedAt: startedAt.toISOString(),
       },
     },
     update: {
       limits: {
         ...existingLimits,
-        trialStartedAt: startedAt.toISOString(),
-        trialEndsAt: endsAt.toISOString(),
+        mctbServiceStatus: "ACTIVE",
+        mctbFreeActivatedAt: startedAt.toISOString(),
       },
     },
   });
@@ -158,30 +150,20 @@ export async function activateMctbTrial(workspaceId: string): Promise<{
   await prisma.workspace.update({
     where: { id: workspaceId },
     data: {
-      billingPlan: trial.requireCard ? "trial_pending_card" : "trial",
+      billingPlan: "free",
     },
   });
-
-  if (trial.credits > 0) {
-    const cents = Math.round(trial.credits * 100);
-    try {
-      await grantCredits(workspaceId, cents, `Trial credit grant ($${trial.credits})`, "trial");
-    } catch {
-      // credits may already exist from onboarding
-    }
-  }
 
   await saveMctbOnboardingState(workspaceId, {
     trialActivatedAt: startedAt.toISOString(),
     currentStep: "complete",
     completedSteps: [...MCTB_ONBOARDING_STEP_ORDER],
   });
-  await recordFunnelEvent(workspaceId, "MCTB_TRIAL_ACTIVATED", {
-    trialStartedAt: startedAt.toISOString(),
-    trialEndsAt: endsAt.toISOString(),
+  await recordFunnelEvent(workspaceId, "MCTB_FREE_PLAN_ACTIVATED", {
+    activatedAt: startedAt.toISOString(),
   });
 
-  return { ok: true, trialEndsAt: endsAt.toISOString() };
+  return { ok: true };
 }
 
 export async function isWorkspaceInOnboarding(workspaceId: string): Promise<boolean> {

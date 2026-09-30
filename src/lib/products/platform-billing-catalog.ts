@@ -28,7 +28,10 @@ export function getPlatformBillingCatalog(): PlatformCatalogIds {
 }
 
 export function resolveMctbPriceId(tier: MctbTier): string {
-  return getPlatformBillingCatalog().mctb.tiers[tier].stripePriceId;
+  const tiers = getPlatformBillingCatalog().mctb.tiers;
+  const row = tiers[tier] ?? tiers.text_back ?? tiers.starter;
+  if (!row) throw new Error(`Unknown MCTB tier: ${tier}`);
+  return row.stripePriceId;
 }
 
 export function resolveSmartRoutingPriceId(tier: SmartRoutingTier): string {
@@ -63,6 +66,12 @@ export function resolveAddonPriceId(productKey: string): string {
   const addon = getPlatformBillingCatalog().addons[productKey];
   if (!addon) throw new Error(`Unknown addon product: ${productKey}`);
   return addon.stripePriceId;
+}
+
+export function resolveAddonOneTimePriceId(productKey: string): string | null {
+  const addon = getPlatformBillingCatalog().addons[productKey];
+  if (!addon?.stripeOneTimePriceId) return null;
+  return addon.stripeOneTimePriceId;
 }
 
 export function dualProductCouponId(): string {
@@ -115,15 +124,40 @@ export function listPlatformPurchasableProducts(): PlatformProductListItem[] {
   const catalog = getPlatformBillingCatalog();
   const items: PlatformProductListItem[] = [];
 
-  for (const tier of ["starter", "growth", "pro"] as MctbTier[]) {
-    const row = catalog.mctb.tiers[tier];
+  const textBackRow = catalog.mctb.tiers.text_back ?? catalog.mctb.tiers.starter;
+  items.push({
+    productKey: "mctb_text_back",
+    family: "mctb",
+    tier: "text_back",
+    displayName: "Text Back",
+    description:
+      "50 missed-call recoveries per month, booking links, Press-1 and existing-consent modes.",
+    amountCents: textBackRow.monthlyPriceCents,
+    feature: "mctb",
+  });
+
+  const aiRecoveryAddon = catalog.addons.mctb_ai_recovery;
+  if (aiRecoveryAddon) {
     items.push({
-      productKey: `mctb_${tier}`,
-      family: "mctb",
-      tier,
-      displayName: `MCTB ${tier.charAt(0).toUpperCase()}${tier.slice(1)}`,
-      description: "Recover missed calls with automatic or Press-1 consent text back.",
-      amountCents: row.monthlyPriceCents,
+      productKey: "mctb_ai_recovery",
+      family: "mctb_ai_recovery",
+      displayName: "AI Recovery",
+      description:
+        "100 recoveries per month with AI reply, intake, urgency detection, and lead summary.",
+      amountCents: aiRecoveryAddon.monthlyPriceCents,
+      feature: "mctb",
+    });
+  }
+
+  const ownSenderAddon = catalog.addons.mctb_own_sender;
+  if (ownSenderAddon) {
+    items.push({
+      productKey: "mctb_own_sender",
+      family: "mctb_own_sender",
+      displayName: "Own Local Number",
+      description:
+        "Your registered local texting number (+$19.50 one-time A2P registration at checkout).",
+      amountCents: ownSenderAddon.monthlyPriceCents,
       feature: "mctb",
     });
   }
@@ -204,6 +238,9 @@ export function listPlatformPurchasableProducts(): PlatformProductListItem[] {
 
   for (const def of ADDON_PRODUCT_DEFS) {
     if (!isPlatformFamilyPurchasable("addon")) continue;
+    if (def.productKey === "mctb_ai_recovery" || def.productKey === "mctb_own_sender") {
+      continue;
+    }
     const addon = catalog.addons[def.productKey];
     if (!addon) continue;
     items.push({

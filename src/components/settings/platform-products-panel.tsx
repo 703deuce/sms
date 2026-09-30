@@ -47,7 +47,7 @@ export function PlatformProductsPanel({
   const [checkoutKey, setCheckoutKey] = useState<string | null>(null);
   const [trialKey, setTrialKey] = useState<string | null>(null);
   const [message, setMessage] = useState("");
-  const [selectedMctb, setSelectedMctb] = useState<MctbTier>("starter");
+  const [selectedMctb, setSelectedMctb] = useState<MctbTier>("text_back");
   const [selectedSr, setSelectedSr] = useState<SmartRoutingTier>("starter");
   const [selectedAt, setSelectedAt] = useState<AiTranscriptionTier>("starter");
 
@@ -171,7 +171,7 @@ export function PlatformProductsPanel({
             >
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <p className="font-medium capitalize">{tier}</p>
+                  <p className="font-medium">{product.displayName}</p>
                   <p className="mt-1 text-xs text-muted-foreground">{product.description}</p>
                   {product.includedMinutes ? (
                     <p className="mt-1 text-xs text-muted-foreground">
@@ -199,23 +199,13 @@ export function PlatformProductsPanel({
                   {selected === tier ? "Selected" : "Select"}
                 </Button>
                 {!isActive ? (
-                  <>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={trialKey === product.productKey}
-                      onClick={() => startTrial(product.productKey)}
-                    >
-                      Trial
-                    </Button>
-                    <Button
-                      size="sm"
-                      disabled={checkoutKey === product.productKey}
-                      onClick={() => startCheckout(product.productKey)}
-                    >
-                      Subscribe
-                    </Button>
-                  </>
+                  <Button
+                    size="sm"
+                    disabled={checkoutKey === product.productKey}
+                    onClick={() => startCheckout(product.productKey)}
+                  >
+                    Subscribe
+                  </Button>
                 ) : null}
               </div>
             </div>

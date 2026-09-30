@@ -165,7 +165,8 @@ export function ConsentEditor() {
                 <span className="flex flex-wrap items-center gap-2">
                   <span className="block text-sm font-medium">{m.title}</span>
                   {m.id === 'press1' ? <Pill tone="neutral">Included with Free</Pill> : null}
-                  {locked ? <Pill tone="warning">Recovery plan required</Pill> : null}
+                  {m.id === 'existing' ? <Pill tone="neutral">Included with Free</Pill> : null}
+                  {locked ? <Pill tone="warning">Complete setup to enable</Pill> : null}
                 </span>
                 <span className="mt-0.5 block text-pretty text-sm text-muted-foreground">{m.description}</span>
               </span>

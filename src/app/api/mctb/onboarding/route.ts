@@ -61,6 +61,11 @@ export async function GET(req: Request) {
       new URL(req.url).searchParams.get("mctbSetupGuide") === "1";
     traceMctbDebug("onboarding", "get_start", { workspaceId: auth.workspaceId });
 
+    const { ensureMctbPlatformSenderDefault } = await import(
+      "@/lib/mctb/ensure-platform-sender-default"
+    );
+    await ensureMctbPlatformSenderDefault(auth.workspaceId).catch(() => undefined);
+
     await syncTrialTollFreeVerification(auth.workspaceId).catch(() => undefined);
 
     const [state, demo, trialNumber, liveTest, trialInfo, trialReqs, tfv, forwardingVerification, forwardTargetE164, capabilities] =
@@ -256,6 +261,11 @@ export async function POST(req: Request) {
         websiteUrl: body.websiteUrl || state.websiteUrl,
         industry: body.industry || state.industry,
       });
+      const { ensureMctbPlatformSenderDefault: ensurePlatformSender } = await import(
+        "@/lib/mctb/ensure-platform-sender-default"
+      );
+      await ensurePlatformSender(auth.workspaceId).catch(() => undefined);
+
       if (body.businessNumberE164) {
         const { persistMctbWorkspaceBusinessLineE164 } = await import(
           "@/lib/mctb/tenant-production-binding"

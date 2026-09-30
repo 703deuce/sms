@@ -165,7 +165,7 @@ export const MCTB_ONBOARDING_STEP_LABELS: Record<string, string> = {
   pending: "Verification pending",
   connect: "Connect your business line",
   live_test: "Live test",
-  complete: "Trial active",
+  complete: "Free plan active",
 };
 
 export const DEFAULT_DEMO_MESSAGE =

@@ -26,7 +26,8 @@ export default async function MctbOnboardingPage() {
   if (ws?.type === "PERSONAL") redirect("/personal");
 
   const state = await loadMctbOnboardingState(workspaceId);
-  if (isOnboardingComplete(state) && String(ws?.billingPlan).toLowerCase() === "trial") {
+  const plan = String(ws?.billingPlan || "").toLowerCase();
+  if (isOnboardingComplete(state) && (plan === "trial" || plan === "free")) {
     redirect("/dashboard");
   }
 

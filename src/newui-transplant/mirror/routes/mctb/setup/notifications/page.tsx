@@ -207,7 +207,7 @@ export function TransplantMctbSetupNotificationsPage({ wired }: { wired?: MctbSe
                         className="text-xs text-muted-foreground"
                         title={
                           e.smsDisabledReason === 'urgent_sms_requires_plan'
-                            ? 'Urgent business SMS requires a paid Recovery plan.'
+                            ? 'Urgent business SMS requires an AI Recovery plan.'
                             : e.smsDisabledReason === 'launch_email_only'
                               ? 'SMS alerts for this event are not available at launch. Email notifications apply.'
                               : 'SMS not available for this event.'

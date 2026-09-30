@@ -172,7 +172,7 @@ export function MctbSetupLinksEditor() {
             </Button>
           ) : (
             <Pill tone="warning">
-              <Lock className="mr-1 size-3" aria-hidden /> Recovery plan
+              <Lock className="mr-1 size-3" aria-hidden /> Text Back plan
             </Pill>
           )
         }
@@ -182,7 +182,7 @@ export function MctbSetupLinksEditor() {
           <p className="px-5 py-6 text-sm text-muted-foreground">
             {recoveryPaid
               ? 'No booking links yet. Add a link to use in recovery or AI booking flows.'
-              : 'Booking links unlock with Recovery. You can still configure the default URL and request form below.'}
+              : 'Booking links unlock with Text Back ($9.99/mo). You can still configure the default URL and request form below.'}
           </p>
         ) : (
           <ul className="divide-y">

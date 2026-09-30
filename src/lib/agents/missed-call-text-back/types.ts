@@ -154,7 +154,7 @@ export const DEFAULT_MCTB_CONFIG: Omit<
   conversationEnabled: true,
   phoneNumberId: null,
   smsPhoneNumberId: null,
-  senderMode: "WORKSPACE",
+  senderMode: "PLATFORM",
   messageTemplateBusinessHours: null,
   messageTemplateAfterHours: null,
   requireCarrierForward: true,

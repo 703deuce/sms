@@ -109,6 +109,10 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const workspaceId = await getActiveWorkspaceId();
   traceMctbDebug("setup", "get_start", { workspaceId, userId: session.userId });
+  const { ensureMctbPlatformSenderDefault } = await import(
+    "@/lib/mctb/ensure-platform-sender-default"
+  );
+  await ensureMctbPlatformSenderDefault(workspaceId).catch(() => undefined);
   const prisma = getPrisma();
 
   const ws = await prisma.workspace.findUnique({

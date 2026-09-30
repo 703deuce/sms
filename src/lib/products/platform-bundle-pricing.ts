@@ -20,19 +20,13 @@ export function bundleMonthlyTotalCents(
   return { subtotalCents, discountCents, totalCents: subtotalCents - discountCents };
 }
 
-/** All nine tier combinations with 20% bundle discount applied. */
+/** Text Back ($9.99) × Smart Routing tiers with 20% bundle discount. */
 export const BUNDLE_PRICING_MATRIX: Array<{
   mctbTier: MctbTier;
   srTier: SmartRoutingTier;
   expectedTotalDollars: number;
 }> = [
-  { mctbTier: "starter", srTier: "starter", expectedTotalDollars: 31.98 },
-  { mctbTier: "starter", srTier: "business", expectedTotalDollars: 47.98 },
-  { mctbTier: "starter", srTier: "pro", expectedTotalDollars: 71.98 },
-  { mctbTier: "growth", srTier: "starter", expectedTotalDollars: 39.98 },
-  { mctbTier: "growth", srTier: "business", expectedTotalDollars: 55.98 },
-  { mctbTier: "growth", srTier: "pro", expectedTotalDollars: 79.98 },
-  { mctbTier: "pro", srTier: "starter", expectedTotalDollars: 55.98 },
-  { mctbTier: "pro", srTier: "business", expectedTotalDollars: 71.98 },
-  { mctbTier: "pro", srTier: "pro", expectedTotalDollars: 95.98 },
+  { mctbTier: "text_back", srTier: "starter", expectedTotalDollars: 23.98 },
+  { mctbTier: "text_back", srTier: "business", expectedTotalDollars: 39.98 },
+  { mctbTier: "text_back", srTier: "pro", expectedTotalDollars: 63.98 },
 ];

@@ -5,9 +5,10 @@ export const PLATFORM_BILLING_CATALOG_TEST: PlatformCatalogIds = {
   mctb: {
     stripeProductId: "prod_test_mctb_placeholder",
     tiers: {
-      starter: { stripePriceId: "price_test_mctb_starter", monthlyPriceCents: 1999 },
-      growth: { stripePriceId: "price_test_mctb_growth", monthlyPriceCents: 2999 },
-      pro: { stripePriceId: "price_test_mctb_pro", monthlyPriceCents: 4999 },
+      text_back: { stripePriceId: "price_test_mctb_text_back", monthlyPriceCents: 999 },
+      starter: { stripePriceId: "price_test_mctb_text_back", monthlyPriceCents: 999 },
+      growth: { stripePriceId: "price_test_mctb_text_back", monthlyPriceCents: 999 },
+      pro: { stripePriceId: "price_test_mctb_text_back", monthlyPriceCents: 999 },
     },
   },
   smart_routing: {
@@ -106,12 +107,14 @@ export const PLATFORM_BILLING_CATALOG_TEST: PlatformCatalogIds = {
     mctb_ai_recovery: {
       stripeProductId: "prod_test_mctb_ai_recovery",
       stripePriceId: "price_test_mctb_ai_recovery",
-      monthlyPriceCents: 2999,
+      monthlyPriceCents: 1999,
     },
     mctb_own_sender: {
       stripeProductId: "prod_test_mctb_own_sender",
       stripePriceId: "price_test_mctb_own_sender",
-      monthlyPriceCents: 1999,
+      monthlyPriceCents: 1000,
+      stripeOneTimePriceId: "price_test_mctb_own_sender_a2p",
+      oneTimePriceCents: 1950,
     },
   },
 } as const;

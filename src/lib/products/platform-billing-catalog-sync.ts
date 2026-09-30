@@ -6,6 +6,7 @@ import {
   DUAL_PRODUCT_COUPON_NAME,
   DUAL_PRODUCT_DISCOUNT_PERCENT,
   MCTB_PRODUCT_NAME,
+  MCTB_OWN_SENDER_A2P_REGISTRATION_CENTS,
   MCTB_TIER_PRICES_CENTS,
   MCTB_TIERS,
   SMART_ROUTING_INCLUDED_MINUTES,
@@ -499,11 +500,27 @@ export async function syncPlatformBillingCatalogToStripe(options?: {
           {},
           audit,
         );
-    addons[def.productKey] = {
+    const addonEntry: PlatformCatalogIds["addons"][string] = {
       stripeProductId: addonProduct.id,
       stripePriceId: addonPrice.id,
       monthlyPriceCents: def.amountCents,
     };
+    if (def.productKey === "mctb_own_sender") {
+      const oneTimePrice = dryRun
+        ? ({ id: "price_addon_mctb_own_sender_a2p_dry_run" } as Stripe.Price)
+        : await ensureOneTimePrice(
+            stripe,
+            addonProduct.id,
+            def.productKey,
+            "a2p_registration",
+            MCTB_OWN_SENDER_A2P_REGISTRATION_CENTS,
+            {},
+            audit,
+          );
+      addonEntry.stripeOneTimePriceId = oneTimePrice.id;
+      addonEntry.oneTimePriceCents = MCTB_OWN_SENDER_A2P_REGISTRATION_CENTS;
+    }
+    addons[def.productKey] = addonEntry;
   }
 
   return {

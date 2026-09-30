@@ -73,7 +73,7 @@ export async function resolveMctbCommercialEntitlements(
   const recoveryPaid =
     mctbProductActive && (recoveryPaidLegacy || subscriptionActive(MCTB_PLATFORM_PRODUCT_FAMILY, subs));
 
-  const paidTier = mctbSub?.tier ?? (recoveryPaid ? "starter" : null);
+  const paidTier = mctbSub?.tier ?? (recoveryPaid ? "text_back" : null);
 
   const aiRecoveryEntitled =
     adminFull ||

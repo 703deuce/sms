@@ -81,6 +81,7 @@ export async function getMctbEntitlement(workspaceId: string): Promise<MctbEntit
 
   let serviceStatus: MctbServiceStatus = "ACTIVE";
   if (plan === "onboarding") serviceStatus = "ONBOARDING";
+  else if (plan === "free") serviceStatus = "ACTIVE";
   else if (storedStatus.startsWith("SUSPENDED_")) serviceStatus = storedStatus;
   else if (plan === "expired" || plan === "canceled") serviceStatus = "SUSPENDED_TRIAL_EXPIRED";
   else if (plan === "suspended" || plan === "past_due") serviceStatus = "SUSPENDED_PAST_DUE";

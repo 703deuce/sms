@@ -114,4 +114,6 @@ Do **not** add another MCTB tier unless post-launch usage proves it necessary.
 
 **Related docs:** `docs/MCTB-NEW-USER-ONBOARDING-REALITY-CHECK.md` (onboarding + platform sender).
 
-**Legacy naming:** Code may still say “trial”, `starter`/`growth`/`pro` Stripe tiers, or `activateMctbTrial` — treat as **free activation** or **Text Back** mapping until catalog/UI copy is fully renamed.
+**Stripe catalog:** `billing_version=2` — `mctb_text_back` ($9.99), addon `mctb_ai_recovery` ($19.99), addon `mctb_own_sender` ($10/mo + $19.50 one-time A2P). Legacy webhook tiers `starter`/`growth`/`pro` alias to the same Text Back price until retired.
+
+**Legacy naming:** `activateMctbTrial` is the free-plan completion handler (sets `billingPlan: free`); prefer “Free plan” in UI copy.
