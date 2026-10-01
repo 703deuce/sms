@@ -36,6 +36,10 @@ run_suite() {
   fi
 }
 
+run_suite "production-topology" env \
+  MCTB_PROD_CERT_BASE_URL="$BASE" \
+  npx tsx scripts/verify-mctb-production-topology.ts
+
 run_suite "browser-notifications-only" env \
   NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' \
   MCTB_PROD_CERT_BASE_URL="$BASE" \

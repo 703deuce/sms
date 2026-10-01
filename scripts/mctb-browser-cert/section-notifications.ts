@@ -1,9 +1,14 @@
 import type { Page } from "playwright";
 import type { CertRow } from "./matrix";
 import { snapshotBackend } from "./snapshot";
+import {
+  CERT_RECIPIENT_EMAIL,
+  CERT_WORKSPACE_ID,
+  certRecipientAlreadyInBackend,
+  wireRecipientPromptDialogs,
+} from "./notifications-cert-recipient";
 
-const CERT_RECIPIENT_EMAIL = "mctb-browser-cert@transovo.test";
-const WORKSPACE_ID = process.env.MCTB_PROD_CERT_WORKSPACE_ID?.trim() || "ws_1";
+const WORKSPACE_ID = CERT_WORKSPACE_ID;
 
 async function goto(base: string, page: Page, path: string) {
   await page.goto(`${base}${path}`, { waitUntil: "domcontentloaded", timeout: 120_000 });
@@ -23,24 +28,21 @@ export async function testNotificationsCrud(
   await goto(base, page, path);
   const before = snapshotBackend(WORKSPACE_ID);
 
-  page.on("dialog", async (dialog) => {
-    if (dialog.type() === "prompt") {
-      const msg = dialog.message().toLowerCase();
-      if (msg.includes("name")) await dialog.accept("MCTB Cert Temp");
-      else if (msg.includes("email")) await dialog.accept(CERT_RECIPIENT_EMAIL);
-      else if (msg.includes("mobile")) await dialog.accept("+15550118877");
-      else await dialog.accept("ok");
-    } else {
-      await dialog.dismiss();
-    }
-  });
-
   const addBtn = page.getByRole("button", { name: /add recipient/i });
   if (await addBtn.isVisible().catch(() => false)) {
-    await addBtn.click();
-    await page.waitForTimeout(2500);
+    const already = certRecipientAlreadyInBackend(WORKSPACE_ID);
+    let visible = await page.getByText(CERT_RECIPIENT_EMAIL).isVisible().catch(() => false);
+    if (!already) {
+      wireRecipientPromptDialogs(page, "add");
+      await addBtn.click();
+      await page.waitForTimeout(2500);
+      visible = await page.getByText(CERT_RECIPIENT_EMAIL).isVisible().catch(() => false);
+    } else if (!visible) {
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page.getByText(/loading notifications/i).waitFor({ state: "hidden", timeout: 30_000 }).catch(() => undefined);
+      visible = await page.getByText(CERT_RECIPIENT_EMAIL).isVisible().catch(() => false);
+    }
     const afterAdd = snapshotBackend(WORKSPACE_ID);
-    const visible = await page.getByText(CERT_RECIPIENT_EMAIL).isVisible().catch(() => false);
     record({
       route: path,
       page: "Setup Notifications",

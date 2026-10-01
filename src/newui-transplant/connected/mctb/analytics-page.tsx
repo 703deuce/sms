@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Page, PageHeader, Panel, Stat, TextLink } from "@/newui-transplant/components/app/kit";
 import { TrendArea } from "@/newui-transplant/components/app/charts";
 import { td, th } from "@/newui-transplant/components/app/opus-tables";
@@ -17,6 +17,15 @@ type AnalyticsPayload = Awaited<ReturnType<typeof import("@/lib/mctb/analytics")
 function pct(a: number, b: number) {
   if (b <= 0) return "0%";
   return `${Math.round((a / b) * 100)}%`;
+}
+
+function ClientMounted({ children }: { children: ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) {
+    return <div className="h-[240px] w-full rounded-lg bg-muted" aria-hidden="true" />;
+  }
+  return children;
 }
 
 export function NewUiMctbAnalyticsPage({ initialData, initialRange }: { initialData: AnalyticsPayload; initialRange: MctbAnalyticsRange }) {
@@ -58,7 +67,13 @@ export function NewUiMctbAnalyticsPage({ initialData, initialRange }: { initialD
     [data],
   );
 
-  const suppressionRows = Object.entries(data.suppressionByReason);
+  const suppressionRows = useMemo(
+    () =>
+      Object.entries(data.suppressionByReason).sort(([a], [b]) =>
+        a.localeCompare(b, "en"),
+      ),
+    [data.suppressionByReason],
+  );
   const suppressedTotal = suppressionRows.reduce((s, [, n]) => s + n, 0) || 1;
   const missedCallsDateParam = missedCallsDateFromAnalyticsRange(range);
 
@@ -123,15 +138,17 @@ export function NewUiMctbAnalyticsPage({ initialData, initialRange }: { initialD
       </Panel>
 
       <Panel className="mt-4" title="Recovery over time">
-        <TrendArea
-          data={chartRows}
-          series={[
-            { key: "missed", label: "Missed", color: "var(--chart-4)" },
-            { key: "texts", label: "Texts", color: "var(--chart-1)" },
-            { key: "replies", label: "Replies", color: "var(--chart-2)" },
-          ]}
-          height={240}
-        />
+        <ClientMounted>
+          <TrendArea
+            data={chartRows}
+            series={[
+              { key: "missed", label: "Missed", color: "var(--chart-4)" },
+              { key: "texts", label: "Texts", color: "var(--chart-1)" },
+              { key: "replies", label: "Replies", color: "var(--chart-2)" },
+            ]}
+            height={240}
+          />
+        </ClientMounted>
       </Panel>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
