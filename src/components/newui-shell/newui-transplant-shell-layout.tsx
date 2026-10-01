@@ -6,6 +6,11 @@ import { TooltipProvider } from "@/newui-transplant/components/ui/tooltip";
 import { AppSidebar } from "@/newui-transplant/components/app/app-sidebar";
 import { Topbar } from "@/newui-transplant/components/app/topbar";
 import { OpusWorkspaceDataProvider } from "@/newui-transplant/context/opus-workspace-data";
+import { cn } from "@/lib/utils";
+
+/** Scrollable main column inside fixed h-dvh shell (mobile + desktop). */
+const DEFAULT_MAIN_SCROLL_CLASS =
+  "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain";
 
 /**
  * Phase 1 — exact Opus shell (sidebar + topbar from newui/). Production session/workspace
@@ -46,11 +51,13 @@ export function NewUiTransplantShellLayout({
   return (
     <TooltipProvider>
       <OpusWorkspaceDataProvider workspaceName={wsName}>
-        <SidebarProvider className="flex min-h-0 flex-1">
+        <SidebarProvider className="flex h-full min-h-0 w-full flex-1 overflow-hidden">
           <AppSidebar userName={userName} />
-          <SidebarInset className="min-w-0 bg-background">
-            <Topbar userName={userName} />
-            <div className={mainClassName ?? "flex-1"}>{children}</div>
+          <SidebarInset className="min-h-0 min-w-0 flex-1 bg-background">
+            <div className="shrink-0">
+              <Topbar userName={userName} />
+            </div>
+            <div className={cn(DEFAULT_MAIN_SCROLL_CLASS, mainClassName)}>{children}</div>
           </SidebarInset>
         </SidebarProvider>
       </OpusWorkspaceDataProvider>
