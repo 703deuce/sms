@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
-import { updateMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import {
   enrichWorkspacePhoneWithMessagingStatus,
   loadMctbSetupPhoneOptions,
 } from "@/lib/numbers/workspace-accessible-numbers";
-import { provisionTrialMctbNumber } from "@/lib/mctb/onboarding/trial-number";
+import { ensureMctbWorkspaceIngressReady } from "@/lib/mctb/provisioning/ensure-workspace-ingress";
+import { wireMctbWorkspaceIngressPhone } from "@/lib/mctb/provisioning/wire-workspace-ingress-phone";
 import { getTfvStatusForWorkspace, syncTrialTollFreeVerification } from "@/lib/mctb/tfv/service";
 import { tfvStatusLabel, mapTfvRecordToUiStatus } from "@/lib/mctb/onboarding/trial-number";
 import { getPrisma } from "@/lib/db";
@@ -65,28 +65,26 @@ export async function POST(req: Request) {
     };
 
     if (body.action === "provision_auto") {
-      const result = await provisionTrialMctbNumber(auth.workspaceId);
+      const result = await ensureMctbWorkspaceIngressReady(auth.workspaceId);
       if (!result.ok) {
         return NextResponse.json({ error: result.error || "Provisioning failed" }, { status: 400 });
       }
-      return NextResponse.json({ ok: true, trialNumber: result.trialNumber });
+      return NextResponse.json({
+        ok: true,
+        forwardE164: result.e164,
+        phoneNumberId: result.phoneNumberId,
+      });
     }
 
     if (body.action === "select" && body.phoneNumberId) {
-      const prisma = getPrisma();
-      const phone = await prisma.phoneNumber.findFirst({
-        where: { id: body.phoneNumberId, workspaceId: auth.workspaceId },
-        select: { id: true },
-      });
-      if (!phone) {
-        return NextResponse.json({ error: "Number not found" }, { status: 404 });
+      const wired = await wireMctbWorkspaceIngressPhone(auth.workspaceId, body.phoneNumberId);
+      if (!wired.ok) {
+        return NextResponse.json({ error: wired.error || "Could not wire ingress" }, { status: 400 });
       }
-      await updateMissedCallTextConfig({
-        workspaceId: auth.workspaceId,
-        patch: { phone_number_id: body.phoneNumberId },
-        actor: auth.session.userId,
-        source: "mctb_number_drawer",
-      });
+      const { ensureMctbPlatformSenderDefault } = await import(
+        "@/lib/mctb/ensure-platform-sender-default"
+      );
+      await ensureMctbPlatformSenderDefault(auth.workspaceId).catch(() => undefined);
       return NextResponse.json({ ok: true, phoneNumberId: body.phoneNumberId });
     }
 

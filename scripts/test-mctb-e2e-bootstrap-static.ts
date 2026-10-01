@@ -23,5 +23,7 @@ assert.doesNotMatch(
   read("src/app/api/mctb/setup/route.ts"),
   /sms_phone_number_id: sanitizedSmsPhoneNumberId \|\| sanitizedPhoneNumberId/,
 );
+assert.match(read("src/app/api/mctb/numbers/route.ts"), /ensureMctbWorkspaceIngressReady/);
+assert.doesNotMatch(read("src/app/api/mctb/numbers/route.ts"), /provisionTrialMctbNumber/);
 
 console.log("test-mctb-e2e-bootstrap-static: PASS");

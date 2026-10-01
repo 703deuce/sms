@@ -62,6 +62,7 @@ export function useMctbSetupPhoneWiring(): {
   const [businessLineInput, setBusinessLineInput] = useState("");
   const [businessLineError, setBusinessLineError] = useState<string | null>(null);
   const [ownSenderCheckoutBusy, setOwnSenderCheckoutBusy] = useState(false);
+  const [ingressProvisionError, setIngressProvisionError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -92,6 +93,12 @@ export function useMctbSetupPhoneWiring(): {
       setBusinessLineE164(line || null);
       setBusinessLineInput(line ? formatMctbPhoneLabel(line) : "");
       setProductionForwardE164((d.productionForwardTargetE164 as string) || null);
+      const ingress = d.ingressProvisioning as { ok?: boolean; error?: string | null } | undefined;
+      if (ingress && ingress.ok === false && ingress.error) {
+        setIngressProvisionError(ingress.error);
+      } else {
+        setIngressProvisionError(null);
+      }
       setMessagingReady(Boolean((d.compliance as { messagingReady?: boolean })?.messagingReady));
       setCampaignStatus(
         ((d.compliance as { campaignStatus?: string })?.campaignStatus as string) || null,
@@ -307,13 +314,15 @@ export function useMctbSetupPhoneWiring(): {
       forwardingDestinationReady: forwardReady,
       forwardingInstructionsEnabled: forwardActionsReady,
       forwardingVerifyEnabled: forwardActionsReady,
-      forwardingInstructionsPendingMessage: !forwardReady
-        ? phoneNumberId
-          ? "Your Transovo forwarding number is still provisioning. Carrier instructions will appear when it is ready."
-          : "Complete phone setup to receive a Transovo forwarding number before configuring call forwarding."
-        : !businessLineE164
-          ? "Save your business line to see carrier-specific forwarding instructions."
-          : undefined,
+      forwardingInstructionsPendingMessage: ingressProvisionError
+        ? `We could not assign your forwarding number yet (${ingressProvisionError}). Refresh this page in a moment or contact support if it persists.`
+        : !forwardReady
+          ? phoneNumberId
+            ? "Your Transovo forwarding number is still provisioning. Carrier instructions will appear when it is ready."
+            : "Complete phone setup to receive a Transovo forwarding number before configuring call forwarding."
+          : !businessLineE164
+            ? "Save your business line to see carrier-specific forwarding instructions."
+            : undefined,
       verificationPillLabel: connectionStatusLabel(connection),
       verificationPillTone:
         connection === "verified" ? "success" : connection === "failed" ? "warning" : "warning",

@@ -221,7 +221,10 @@ export async function POST(req: Request) {
       });
     }
 
-    if (body.action === "provision_trial_number") {
+    if (
+      body.action === "provision_trial_number" ||
+      body.action === "provision_workspace_ingress"
+    ) {
       const { ensureMctbWorkspaceIngressReady } = await import(
         "@/lib/mctb/provisioning/ensure-workspace-ingress"
       );
