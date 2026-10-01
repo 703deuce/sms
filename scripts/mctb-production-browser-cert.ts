@@ -22,7 +22,7 @@ const EMAIL =
 const ARTIFACT_DIR = process.env.MCTB_PROD_CERT_ARTIFACTS || "/tmp/mctb-prod-browser-cert";
 const MATRIX_PATH =
   process.env.MCTB_PROD_CERT_MATRIX ||
-  join(process.cwd(), "docs/MCTB-PRODUCTION-BROWSER-CERTIFICATION.md");
+  join(ARTIFACT_DIR, "MCTB-PRODUCTION-BROWSER-CERTIFICATION-RUN.md");
 
 const CERT_EXCLUSION_E164 = "+15550119999";
 
