@@ -12,7 +12,7 @@ import {
   prismaProductKeyToApp,
   productOfferPath,
 } from "@/lib/products/paths";
-import { ensureMctbWorkspaceSeeded } from "@/lib/mctb/provisioning/seed-workspace";
+import { ensureMctbWorkspaceBootstrap } from "@/lib/mctb/provisioning/workspace-bootstrap";
 import { createWorkspaceForUser } from "@/lib/workspace/create-workspace";
 import type { WorkspaceType } from "@/lib/workspace/types";
 
@@ -310,7 +310,7 @@ export async function ensureProductWorkspace(
       }
     }
     if (product === "voice") {
-      await ensureMctbWorkspaceSeeded(best.workspaceId);
+      await ensureMctbWorkspaceBootstrap(best.workspaceId).catch(() => undefined);
     }
     await ensureWorkspaceEntitlements(best.workspaceId);
     return {
@@ -336,7 +336,7 @@ export async function ensureProductWorkspace(
       }
       await ensureWorkspaceEntitlements(ownedWithNumbers.id);
       if (product === "voice") {
-        await ensureMctbWorkspaceSeeded(ownedWithNumbers.id);
+        await ensureMctbWorkspaceBootstrap(ownedWithNumbers.id).catch(() => undefined);
       }
       return {
         workspaceId: ownedWithNumbers.id,
@@ -351,7 +351,7 @@ export async function ensureProductWorkspace(
     preferredType,
   );
   if (product === "voice") {
-    await ensureMctbWorkspaceSeeded(workspace.id);
+    await ensureMctbWorkspaceBootstrap(workspace.id).catch(() => undefined);
   }
   await ensureWorkspaceEntitlements(workspace.id);
   return {

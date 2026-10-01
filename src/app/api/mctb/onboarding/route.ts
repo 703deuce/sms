@@ -66,6 +66,15 @@ export async function GET(req: Request) {
     );
     await ensureMctbPlatformSenderDefault(auth.workspaceId).catch(() => undefined);
 
+    const { ensureMctbWorkspaceIngressReady } = await import(
+      "@/lib/mctb/provisioning/ensure-workspace-ingress"
+    );
+    await ensureMctbWorkspaceIngressReady(auth.workspaceId).catch((err) => {
+      traceMctbDebugError("onboarding", "ingress_ensure_failed", err, {
+        workspaceId: auth.workspaceId,
+      });
+    });
+
     await syncTrialTollFreeVerification(auth.workspaceId).catch(() => undefined);
 
     const [state, demo, trialNumber, liveTest, trialInfo, trialReqs, tfv, forwardingVerification, forwardTargetE164, capabilities] =
@@ -213,12 +222,16 @@ export async function POST(req: Request) {
     }
 
     if (body.action === "provision_trial_number") {
-      const result = await provisionTrialMctbNumber(auth.workspaceId);
+      const { ensureMctbWorkspaceIngressReady } = await import(
+        "@/lib/mctb/provisioning/ensure-workspace-ingress"
+      );
+      const result = await ensureMctbWorkspaceIngressReady(auth.workspaceId);
       if (!result.ok) {
         return NextResponse.json({ error: result.error || "Provisioning failed" }, { status: 400 });
       }
       state = await loadMctbOnboardingState(auth.workspaceId);
-      return NextResponse.json({ ok: true, state, trialNumber: result.trialNumber });
+      const trialNumber = state.workspaceTollFreeNumber || state.trialNumber;
+      return NextResponse.json({ ok: true, state, trialNumber });
     }
 
     if (body.action === "provision_telnyx_local") {
@@ -282,8 +295,10 @@ export async function POST(req: Request) {
         currentStep: "consent",
       });
       await recordFunnelEvent(auth.workspaceId, "MCTB_BUSINESS_INFO_COMPLETED");
-      const { provisionTrialMctbNumber } = await import("@/lib/mctb/onboarding/trial-number");
-      void provisionTrialMctbNumber(auth.workspaceId).catch(() => undefined);
+      const { ensureMctbWorkspaceIngressReady } = await import(
+        "@/lib/mctb/provisioning/ensure-workspace-ingress"
+      );
+      void ensureMctbWorkspaceIngressReady(auth.workspaceId).catch(() => undefined);
     }
 
     if (body.recoveryGoal) {

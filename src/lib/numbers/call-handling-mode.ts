@@ -264,8 +264,10 @@ export async function setCallHandlingMode(
   } else if (mode === "mctb") {
     const { grantWorkspaceProductFeature } = await import("@/lib/products/feature-entitlements");
     await grantWorkspaceProductFeature(workspaceId, "mctb", "trial");
-    const { ensureMctbWorkspaceSeeded } = await import("@/lib/mctb/provisioning/seed-workspace");
-    await ensureMctbWorkspaceSeeded(workspaceId);
+    const { ensureMctbWorkspaceBootstrap } = await import(
+      "@/lib/mctb/provisioning/workspace-bootstrap"
+    );
+    await ensureMctbWorkspaceBootstrap(workspaceId).catch(() => undefined);
     await transitionNumberService(workspaceId, numberId, "set_mctb_owner");
     await pauseActiveSmartRoutingFlowsOnNumber(workspaceId, numberId);
     await assignMctbPhoneNumber(workspaceId, numberId);

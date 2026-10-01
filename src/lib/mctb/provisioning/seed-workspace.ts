@@ -61,10 +61,4 @@ export async function ensureMctbWorkspaceSeeded(workspaceId: string): Promise<vo
     },
   });
 
-  const { ensureMctbWorkspaceIngressReady } = await import(
-    "@/lib/mctb/provisioning/ensure-workspace-ingress"
-  );
-  void ensureMctbWorkspaceIngressReady(workspaceId).catch((err) => {
-    console.error("[mctb] auto ingress provision failed", workspaceId, err);
-  });
 }

@@ -207,16 +207,13 @@ export async function POST(request: Request) {
     await updateProductIntent(user.id, productIntent);
 
     if (workspaceType === "BUSINESS" && productIntent === "voice") {
-      const { ensureMctbWorkspaceSeeded } = await import(
-        "@/lib/mctb/provisioning/seed-workspace"
+      const { ensureMctbWorkspaceBootstrap } = await import(
+        "@/lib/mctb/provisioning/workspace-bootstrap"
       );
-      await ensureMctbWorkspaceSeeded(workspace.id);
-      const { ensureMctbWorkspaceIngressReady } = await import(
-        "@/lib/mctb/provisioning/ensure-workspace-ingress"
-      );
-      await ensureMctbWorkspaceIngressReady(workspace.id).catch((err) => {
-        console.error("[auth/signup] MCTB ingress provision", workspace.id, err);
-      });
+      const boot = await ensureMctbWorkspaceBootstrap(workspace.id);
+      if (!boot.ok) {
+        console.error("[auth/signup] MCTB bootstrap", workspace.id, boot.error);
+      }
       const { recordFunnelEvent } = await import("@/lib/mctb/onboarding/state");
       await recordFunnelEvent(workspace.id, "MCTB_SIGNUP_COMPLETED", {
         product: "mctb",

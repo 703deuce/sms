@@ -113,6 +113,13 @@ export async function GET() {
     "@/lib/mctb/ensure-platform-sender-default"
   );
   await ensureMctbPlatformSenderDefault(workspaceId).catch(() => undefined);
+  const { ensureMctbWorkspaceIngressReady } = await import(
+    "@/lib/mctb/provisioning/ensure-workspace-ingress"
+  );
+  const ingressStatus = await ensureMctbWorkspaceIngressReady(workspaceId).catch((err) => {
+    traceMctbDebugError("setup", "ingress_ensure_failed", err, { workspaceId });
+    return { ok: false as const, provisioned: false, error: String(err) };
+  });
   const prisma = getPrisma();
 
   const ws = await prisma.workspace.findUnique({
@@ -215,11 +222,23 @@ export async function GET() {
       beforeSmsPhoneNumberId: runtime.smsPhoneNumberId,
       afterSmsPhoneNumberId: sanitizedSmsPhoneNumberId,
     });
+    const { reconcileMctbSmsPhoneNumberId } = await import("@/lib/mctb/runtime-sms-phone-id");
+    const repairedSms = await reconcileMctbSmsPhoneNumberId({
+      senderMode: runtimeForClient.senderMode,
+      phoneNumberId: sanitizedPhoneNumberId,
+      smsPhoneNumberId: sanitizedSmsPhoneNumberId,
+    });
+    const smsForRepair =
+      repairedSms && repairedSms !== sanitizedPhoneNumberId
+        ? repairedSms
+        : runtimeForClient.senderMode === "PLATFORM"
+          ? undefined
+          : sanitizedSmsPhoneNumberId || undefined;
     void updateMissedCallTextConfig({
       workspaceId,
       patch: {
         phone_number_id: sanitizedPhoneNumberId,
-        sms_phone_number_id: sanitizedSmsPhoneNumberId || sanitizedPhoneNumberId,
+        ...(smsForRepair ? { sms_phone_number_id: smsForRepair } : {}),
       },
       source: "mctb_setup_stale_phone_repair",
     }).catch((err) => {
@@ -319,6 +338,11 @@ export async function GET() {
       },
       productionForwardTargetE164: productionForwardE164,
       businessLineE164,
+      ingressProvisioning: {
+        ok: ingressStatus.ok !== false,
+        error: ingressStatus.error ?? null,
+        forwardE164: ingressStatus.e164 ?? productionForwardE164,
+      },
       messaging: {
         senderMode,
         ...senderPresentation,
@@ -606,12 +630,13 @@ export async function POST(req: Request) {
       activate: body.activate ?? null,
     });
   }
-  const smsPhoneNumberIdForPatch =
-    body.smsPhoneNumberId !== undefined
-      ? body.smsPhoneNumberId
-      : phoneNumberChanged && body.phoneNumberId !== undefined
-        ? body.phoneNumberId
-        : undefined;
+  const { smsPatchWhenIngressChanges } = await import("@/lib/mctb/runtime-sms-phone-id");
+  const smsPhoneNumberIdForPatch = await smsPatchWhenIngressChanges({
+    priorRuntime,
+    bodySenderMode: body.senderMode,
+    phoneNumberChanged,
+    explicitSmsPhoneNumberId: body.smsPhoneNumberId,
+  });
 
   const runtimeResult = await updateMissedCallTextConfig({
     workspaceId,

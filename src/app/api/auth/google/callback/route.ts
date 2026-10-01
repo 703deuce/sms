@@ -69,10 +69,13 @@ export async function GET(request: Request) {
       const voiceWs = await ensureProductWorkspace(account.userId, "voice");
       workspaceId = voiceWs.workspaceId;
       workspaceType = voiceWs.workspaceType;
-      const { ensureMctbWorkspaceSeeded } = await import(
-        "@/lib/mctb/provisioning/seed-workspace"
+      const { ensureMctbWorkspaceBootstrap } = await import(
+        "@/lib/mctb/provisioning/workspace-bootstrap"
       );
-      await ensureMctbWorkspaceSeeded(workspaceId);
+      const boot = await ensureMctbWorkspaceBootstrap(workspaceId);
+      if (!boot.ok) {
+        console.error("[auth/google] MCTB bootstrap", workspaceId, boot.error);
+      }
       if (account.created || isMctbPath) {
         await grantProductEntitlement(workspaceId, "voice", "active");
         await updateLastActiveProduct(account.userId, "voice");

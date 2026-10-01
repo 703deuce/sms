@@ -50,8 +50,10 @@ export async function GET(request: Request) {
   const workspace = await ensureProductWorkspace(session.userId, product);
 
   if (product === "voice") {
-    const { ensureMctbWorkspaceSeeded } = await import("@/lib/mctb/provisioning/seed-workspace");
-    await ensureMctbWorkspaceSeeded(workspace.workspaceId);
+    const { ensureMctbWorkspaceBootstrap } = await import(
+      "@/lib/mctb/provisioning/workspace-bootstrap"
+    );
+    await ensureMctbWorkspaceBootstrap(workspace.workspaceId).catch(() => undefined);
     await grantProductEntitlement(workspace.workspaceId, "voice", "active");
   } else if (product === "numbers") {
     await grantProductEntitlement(workspace.workspaceId, "numbers", "active");

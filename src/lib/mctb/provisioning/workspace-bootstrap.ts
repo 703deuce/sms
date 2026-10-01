@@ -1,0 +1,20 @@
+import "server-only";
+
+import { ensureMctbWorkspaceSeeded } from "@/lib/mctb/provisioning/seed-workspace";
+import {
+  ensureMctbWorkspaceIngressReady,
+  type EnsureMctbWorkspaceIngressResult,
+} from "@/lib/mctb/provisioning/ensure-workspace-ingress";
+
+export type MctbWorkspaceBootstrapResult = EnsureMctbWorkspaceIngressResult & {
+  seeded: boolean;
+};
+
+/** Signup / product-open / OAuth: onboarding state + ws_1-style toll-free ingress. */
+export async function ensureMctbWorkspaceBootstrap(
+  workspaceId: string,
+): Promise<MctbWorkspaceBootstrapResult> {
+  await ensureMctbWorkspaceSeeded(workspaceId);
+  const ingress = await ensureMctbWorkspaceIngressReady(workspaceId);
+  return { seeded: true, ...ingress };
+}
