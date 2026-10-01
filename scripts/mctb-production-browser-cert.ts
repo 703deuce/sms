@@ -212,6 +212,7 @@ async function testConsentMode(page: Page): Promise<void> {
   let uiResult = "no save button";
   let saveOk = false;
   let setupStatus: number | null = null;
+  let phoneErr = false;
   if (await saveBtn.isVisible({ timeout: 10_000 }).catch(() => false)) {
     setupStatus = await clickAndWaitSetupPost(page, () => saveBtn.click());
     await page.waitForTimeout(1500);
@@ -226,20 +227,13 @@ async function testConsentMode(page: Page): Promise<void> {
         : savedVisible || setupStatus === 200
           ? "save OK"
           : `clicked save (http ${setupStatus ?? "?"})`;
-    const phoneErr = await page
+    phoneErr = await page
       .getByText(/forwarding number on phone/i)
       .first()
       .isVisible()
       .catch(() => false);
     if (phoneErr) uiResult = "blocked: no MCTB phone number configured";
-    const persistedAfterClick = snapshotBackend();
-    const persistedMode = String(persistedAfterClick.persisted?.mctbConsentMode ?? "");
-    saveOk = Boolean(
-      (setupStatus === 200 || persistedMode === "existing_consent") && !err?.trim() && !phoneErr,
-    );
-    if (setupStatus !== 200 && persistedMode === "existing_consent") {
-      uiResult = uiResult.includes("save OK") ? uiResult : "save OK (backend persisted; POST not observed)";
-    }
+    saveOk = Boolean(setupStatus === 200 && !err?.trim() && !phoneErr);
   }
 
   await shot(page, "consent-after-save-existing");
@@ -249,6 +243,12 @@ async function testConsentMode(page: Page): Promise<void> {
   const persisted = after.persisted?.mctbConsentMode;
   const texmlAfter = after.effective?.texmlHandlerMode;
   const texmlExpected = expectedTexmlHandlerMode(after);
+  if (!saveOk && persisted === "existing_consent" && afterMode === "existing_consent" && !phoneErr) {
+    saveOk = true;
+    uiResult = uiResult.includes("save OK")
+      ? uiResult
+      : "save OK (backend persisted; POST not observed)";
+  }
 
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.waitForTimeout(2000);
