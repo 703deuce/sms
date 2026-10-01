@@ -133,6 +133,9 @@ export type MctbOnboardingState = {
   liveTestSession?: MctbLiveTestSession | null;
   liveTestPassedAt?: string | null;
   trialActivatedAt?: string | null;
+  /** Set when live test passed but activateMctbTrial has not succeeded yet or last attempt failed. */
+  trialActivationPendingAt?: string | null;
+  trialActivationLastError?: string | null;
   voicemailConfiguredAt?: string | null;
   funnelEvents?: Record<string, string>;
 };

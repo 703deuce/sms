@@ -29,6 +29,12 @@ import {
   isPreferredMctbIngressTollFreeE164,
   pickTelnyxTollFreeIngressE164,
 } from "@/lib/mctb/provisioning/telnyx-toll-free-ingress-pool";
+import {
+  clearMctbIngressProvisionPendingE164,
+  readMctbIngressProvisionPendingE164,
+  writeMctbIngressProvisionPendingE164,
+  withMctbWorkspaceIngressProvisionLock,
+} from "@/lib/mctb/provisioning/workspace-ingress-provision-lock";
 
 export type ProvisionMctbWorkspaceTollFreeIngressResult = {
   ok: boolean;
@@ -100,6 +106,14 @@ async function purchaseTelnyxTollFree(workspaceId: string): Promise<string | nul
 export async function provisionMctbWorkspaceTollFreeIngress(
   workspaceId: string,
 ): Promise<ProvisionMctbWorkspaceTollFreeIngressResult> {
+  return withMctbWorkspaceIngressProvisionLock(workspaceId, () =>
+    provisionMctbWorkspaceTollFreeIngressLocked(workspaceId),
+  );
+}
+
+async function provisionMctbWorkspaceTollFreeIngressLocked(
+  workspaceId: string,
+): Promise<ProvisionMctbWorkspaceTollFreeIngressResult> {
   const existing = await workspaceIngressAlreadyReady(workspaceId);
   if (existing.ready && existing.phoneNumberId && existing.e164) {
     return {
@@ -119,12 +133,22 @@ export async function provisionMctbWorkspaceTollFreeIngress(
     };
   }
 
-  let e164 = await pickTelnyxTollFreeIngressE164(workspaceId);
-  let source: ProvisionMctbWorkspaceTollFreeIngressResult["source"] = e164 ? "pool" : undefined;
+  let e164 = await readMctbIngressProvisionPendingE164(workspaceId);
+  let source: ProvisionMctbWorkspaceTollFreeIngressResult["source"] = e164
+    ? "purchased"
+    : undefined;
+
+  if (!e164) {
+    e164 = await pickTelnyxTollFreeIngressE164(workspaceId);
+    source = e164 ? "pool" : undefined;
+  }
 
   if (!e164) {
     e164 = await purchaseTelnyxTollFree(workspaceId);
     source = e164 ? "purchased" : undefined;
+    if (e164) {
+      await writeMctbIngressProvisionPendingE164(workspaceId, e164);
+    }
   }
 
   if (!e164) {
@@ -237,6 +261,8 @@ export async function provisionMctbWorkspaceTollFreeIngress(
     routing: "mctb_texml_toll_free",
     source,
   });
+
+  await clearMctbIngressProvisionPendingE164(workspaceId).catch(() => undefined);
 
   phone = await prisma.phoneNumber.findFirst({
     where: { id: phone.id },

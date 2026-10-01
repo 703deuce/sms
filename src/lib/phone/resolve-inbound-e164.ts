@@ -34,9 +34,5 @@ export async function resolveInboundPhoneRowByE164(
   });
   if (ownerRow) return ownerRow;
 
-  return prisma.phoneNumber.findFirst({
-    where: { e164: { in: variants }, status: { not: "Released" } },
-    select: { id: true, workspaceId: true, e164: true },
-    orderBy: { purchasedAt: "desc" },
-  });
+  return null;
 }

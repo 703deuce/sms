@@ -122,10 +122,24 @@ export async function resolveBestMctbIngressPhoneRow(
     const aLive = Boolean(a.phone.providerNumberId);
     const bLive = Boolean(b.phone.providerNumberId);
     if (aLive !== bLive) return aLive ? -1 : 1;
-    return 0;
+    return a.phone.id.localeCompare(b.phone.id);
   });
   const best = scored[0];
   if (!best || best.score < 0) return null;
+
+  const runnerUp = scored[1];
+  if (
+    runnerUp &&
+    runnerUp.score === best.score &&
+    runnerUp.phone.workspaceId !== best.phone.workspaceId
+  ) {
+    traceMctbDebug("provision", "ingress_phone_row_ambiguous", {
+      e164: toE164,
+      workspaces: [best.phone.workspaceId, runnerUp.phone.workspaceId],
+      score: best.score,
+    });
+    return null;
+  }
 
   traceMctbDebug("provision", "ingress_phone_row_resolved", {
     e164: toE164,

@@ -73,16 +73,31 @@ export async function evaluateMissedCallTextEligibility(input: {
 
     const entitlement = await getMctbEntitlement(input.workspaceId);
     if (!entitlement.canSendAutomaticRecovery) {
-      return {
-        eligible: false,
-        reason:
-          entitlement.reason === "trial_sms_limit_reached"
-            ? "TRIAL_SMS_LIMIT"
-            : entitlement.reason === "mctb_recovery_limit_reached"
-              ? "MCTB_RECOVERY_LIMIT"
-              : "ENTITLEMENT_SUSPENDED",
-        classification,
-      };
+      const onboardingLiveTestAuthorized =
+        entitlement.serviceStatus === "ONBOARDING" &&
+        entitlement.reason === "onboarding" &&
+        (await import("@/lib/mctb/onboarding/live-test-recovery-send").then((m) =>
+          m.authorizeOnboardingLiveTestRecoverySend({
+            workspaceId: input.workspaceId,
+            idempotencyKey: input.idempotencyKey,
+            callerE164: input.callerE164,
+            businessE164: input.businessE164,
+            phoneNumberId: input.phoneNumberId,
+            forwardedFromE164: input.forwardedFromE164,
+          }),
+        ));
+      if (!onboardingLiveTestAuthorized) {
+        return {
+          eligible: false,
+          reason:
+            entitlement.reason === "trial_sms_limit_reached"
+              ? "TRIAL_SMS_LIMIT"
+              : entitlement.reason === "mctb_recovery_limit_reached"
+                ? "MCTB_RECOVERY_LIMIT"
+                : "ENTITLEMENT_SUSPENDED",
+          classification,
+        };
+      }
     }
 
     if (classification === "outbound" || classification === "answered") {

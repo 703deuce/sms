@@ -276,9 +276,16 @@ export async function markLiveTestPassed(
       missedCallEventId: missedCallEventId || session?.missedCallEventId,
     },
     currentStep: "ready",
+    trialActivationLastError: null,
   });
   await recordFunnelEvent(workspaceId, "MCTB_LIVE_TEST_PASSED", { missedCallEventId });
 
   const { activateMctbTrial } = await import("./trial");
-  await activateMctbTrial(workspaceId);
+  const activation = await activateMctbTrial(workspaceId);
+  if (!activation.ok) {
+    await saveMctbOnboardingState(workspaceId, {
+      trialActivationLastError: activation.reason || "activation_failed",
+      trialActivationPendingAt: now,
+    });
+  }
 }

@@ -256,14 +256,13 @@ export async function POST(req: Request) {
     if (body.action === "activate_trial") {
       const result = await activateMctbTrial(auth.workspaceId);
       if (!result.ok) {
+        await saveMctbOnboardingState(auth.workspaceId, {
+          trialActivationLastError: result.reason || "activation_failed",
+          trialActivationPendingAt: new Date().toISOString(),
+        });
         return NextResponse.json({ error: result.reason || "Trial not ready" }, { status: 400 });
       }
-      state = await saveMctbOnboardingState(auth.workspaceId, {
-        currentStep: "ready",
-        trialActivatedAt: new Date().toISOString(),
-      });
-      state = markStepComplete(state, "review_test");
-      await saveMctbOnboardingState(auth.workspaceId, state);
+      state = await loadMctbOnboardingState(auth.workspaceId);
       return NextResponse.json({ ok: true, state, trialEndsAt: result.trialEndsAt });
     }
 

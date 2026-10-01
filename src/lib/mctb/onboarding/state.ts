@@ -174,8 +174,9 @@ export async function recordFunnelEvent(
 }
 
 export function isOnboardingComplete(state: MctbOnboardingState): boolean {
+  if (!state.trialActivatedAt) return false;
   const step = normalizeStep(state.currentStep);
-  return Boolean(state.trialActivatedAt) || step === "ready" || step === "complete";
+  return step === "complete" || Boolean(state.trialActivatedAt);
 }
 
 export function deriveOnboardingProgress(state: MctbOnboardingState) {
