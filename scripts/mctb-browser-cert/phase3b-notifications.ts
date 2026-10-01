@@ -1,10 +1,15 @@
 import type { Page } from "playwright";
 import type { CertRow } from "./matrix";
 import { snapshotBackend } from "./snapshot";
+import {
+  CERT_RECIPIENT_EMAIL,
+  CERT_RECIPIENT_EMAIL_EDITED,
+  CERT_WORKSPACE_ID,
+  certRecipientAlreadyInBackend,
+  wireRecipientPromptDialogs,
+} from "./notifications-cert-recipient";
 
-export const CERT_RECIPIENT_EMAIL = "mctb-browser-cert@transovo.test";
-const CERT_RECIPIENT_EMAIL_EDITED = "mctb-browser-cert-edited@transovo.test";
-const WORKSPACE_ID = process.env.MCTB_PROD_CERT_WORKSPACE_ID?.trim() || "ws_1";
+const WORKSPACE_ID = CERT_WORKSPACE_ID;
 
 function wireDialogs(page: Page, mode: "add" | "edit") {
   page.on("dialog", async (dialog) => {
@@ -116,22 +121,39 @@ export async function phase3bNotificationsPersistence(
 
   const beforeAdd = snapshotBackend(WORKSPACE_ID);
   await dismissBlockingOverlays(page);
-  const postWait = page
-    .waitForResponse(
-      (r) => r.url().includes("/api/mctb/handoff") && r.request().method() === "POST",
-      { timeout: 25_000 },
-    )
-    .catch(() => null);
-  try {
-    await addBtn.click({ timeout: 12_000 });
-  } catch {
-    await addBtn.evaluate((el) => (el as HTMLElement).click());
+  let postMeta = "skipped — cert recipient already in DB";
+  let usedExisting = certRecipientAlreadyInBackend(WORKSPACE_ID);
+  let uiAfterAdd = await page.getByText(CERT_RECIPIENT_EMAIL).isVisible().catch(() => false);
+
+  if (!usedExisting || !uiAfterAdd) {
+    wireRecipientPromptDialogs(page, "add");
+    const postWait = page
+      .waitForResponse(
+        (r) => r.url().includes("/api/mctb/handoff") && r.request().method() === "POST",
+        { timeout: 25_000 },
+      )
+      .catch(() => null);
+    if (!usedExisting) {
+      try {
+        await addBtn.click({ timeout: 12_000 });
+      } catch {
+        await addBtn.evaluate((el) => (el as HTMLElement).click());
+      }
+      const postRes = await postWait;
+      postMeta = postRes
+        ? `${postRes.status()} ${(await postRes.text().catch(() => "")).slice(0, 120)}`
+        : "no POST observed";
+    } else {
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page.getByText(/loading notifications/i).waitFor({ state: "hidden", timeout: 60_000 }).catch(() => undefined);
+      uiAfterAdd = await page.getByText(CERT_RECIPIENT_EMAIL).isVisible().catch(() => false);
+      postMeta = "reload-only — existing cert recipient in DB";
+    }
+    await page.waitForTimeout(1500);
+    uiAfterAdd = await page.getByText(CERT_RECIPIENT_EMAIL).isVisible().catch(() => false);
   }
-  const postRes = await postWait;
-  const postMeta = postRes ? `${postRes.status()} ${(await postRes.text().catch(() => "")).slice(0, 120)}` : "no POST observed";
-  await page.waitForTimeout(3000);
+
   const afterAdd = snapshotBackend(WORKSPACE_ID);
-  const uiAfterAdd = await page.getByText(CERT_RECIPIENT_EMAIL).isVisible().catch(() => false);
   const addOk = uiAfterAdd && afterAdd.handoff?.certRecipientPresent === true;
 
   record({

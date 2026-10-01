@@ -6,6 +6,7 @@ import {
   postMctbHandoff,
   saveMctbSetup,
 } from "@/lib/newui-transplant/api/mctb-setup-client";
+import { parseMctbHandoffResponse } from "@/lib/mctb/handoff/parse-handoff-response";
 import { addPauseUntil } from "@/lib/mctb/schedule-shared";
 import { clampMctbMaxMessagesPerCaller } from "@/lib/mctb/recovery-max-messages";
 import type { TriggerKey, TriggerState } from "@/lib/mctb/setup-recovery-model";
@@ -340,29 +341,50 @@ export function useMctbNotificationsWiring() {
     recipientsRef.current = recipients;
   }, [recipients]);
 
+  const applyHandoffPayload = useCallback(
+    (payload: ReturnType<typeof parseMctbHandoffResponse>) => {
+      if (payload.config) {
+        setConfigSynced(payload.config);
+      }
+      setRecipientsSynced(payload.recipients);
+      setUrgentBusinessSmsEntitled(payload.launch?.urgentBusinessSmsEntitled !== false);
+    },
+    [setConfigSynced, setRecipientsSynced],
+  );
+
   const reload = useCallback(async () => {
-    setLoading(true);
+    const blockUi =
+      configRef.current == null && (recipientsRef.current?.length ?? 0) === 0;
+    if (blockUi) setLoading(true);
     setLoadError(null);
     try {
-      const res = await fetch("/api/mctb/handoff", { cache: "no-store" });
+      const res = await fetch("/api/mctb/handoff", {
+        cache: "no-store",
+        headers: { Pragma: "no-cache" },
+      });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error((json as { error?: string }).error || "Could not load notifications");
       }
-      setConfigSynced(json.data.config);
-      setRecipients(json.data.recipients || []);
-      setUrgentBusinessSmsEntitled(json.data.launch?.urgentBusinessSmsEntitled !== false);
+      applyHandoffPayload(parseMctbHandoffResponse(json));
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "Could not load notifications");
-      setConfigSynced(null);
-      setRecipientsSynced([]);
+      // Keep last-known recipients/config on refresh failure — do not wipe UI after a successful save.
     } finally {
       setLoading(false);
     }
-  }, [setConfigSynced, setRecipientsSynced]);
+  }, [applyHandoffPayload]);
 
   useEffect(() => {
     void reload();
+  }, [reload]);
+
+  useEffect(() => {
+    const onHandoffUpdated = () => {
+      void reload();
+    };
+    window.addEventListener("mctb-handoff-updated", onHandoffUpdated);
+    return () => window.removeEventListener("mctb-handoff-updated", onHandoffUpdated);
   }, [reload]);
 
   const persistConfig = useCallback(async (handoffConfig: MctbHandoffConfigDto) => {
@@ -377,13 +399,16 @@ export function useMctbNotificationsWiring() {
     ) => {
     const payloadRecipients = recipientsOverride ?? recipientsRef.current ?? recipients;
     const latestConfig = configRef.current ?? config;
-    await postMctbHandoff({
+    const saved = await postMctbHandoff({
       ...(latestConfig ? { config: latestConfig } : {}),
       recipients: payloadRecipients,
     });
+    if (saved) {
+      applyHandoffPayload(saved);
+    }
     await reload();
   },
-  [config, recipients, reload],
+  [config, recipients, reload, applyHandoffPayload],
   );
 
   return {

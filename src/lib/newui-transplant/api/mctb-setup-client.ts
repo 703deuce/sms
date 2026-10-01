@@ -1,3 +1,10 @@
+import {
+  parseMctbHandoffResponse,
+  type MctbHandoffPayload,
+} from "@/lib/mctb/handoff/parse-handoff-response";
+
+export type { MctbHandoffPayload };
+
 let setupInflight: Promise<Record<string, unknown>> | null = null;
 let setupCache: { at: number; data: Record<string, unknown> } | null = null;
 const SETUP_CACHE_MS = 8_000;
@@ -71,22 +78,25 @@ export async function deleteMctbExclusion(id: string): Promise<void> {
 /** Serialize handoff POSTs so config toggles cannot race recipient saves. */
 let mctbHandoffWriteChain: Promise<void> = Promise.resolve();
 
-export function postMctbHandoff(body: Record<string, unknown>): Promise<void> {
+export function postMctbHandoff(body: Record<string, unknown>): Promise<MctbHandoffPayload | null> {
+  let savedPayload: MctbHandoffPayload | null = null;
   const run = async () => {
     const res = await fetch("/api/mctb/handoff", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
+    const j = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const j = await res.json().catch(() => ({}));
       throw new Error((j as { error?: string }).error || "Handoff save failed");
     }
+    savedPayload = parseMctbHandoffResponse(j);
   };
   mctbHandoffWriteChain = mctbHandoffWriteChain.catch(() => undefined).then(run);
   return mctbHandoffWriteChain.then(() => {
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("mctb-handoff-updated"));
     }
+    return savedPayload;
   });
 }

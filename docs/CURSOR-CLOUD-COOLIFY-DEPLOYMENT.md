@@ -30,7 +30,7 @@ Both apps build from **`703deuce/sms` @ `master`**. A push to `master` **auto-de
 | Service | Auto-deploy on `master` push? | Operator action |
 |---------|--------------------------------|-----------------|
 | **Web** (`ds8s3hjin60qs6g7s0iqkixs`) | **Yes** | Verify `/api/health` `commitSha` after build |
-| **SMS / BullMQ worker** (`transovo-sms-worker`, `worker:sms`) | **No** | **Manual redeploy** in Coolify when job handlers, `bullmq.ts`, or CRM/MCTB queue code changes |
+| **SMS / BullMQ worker** (`transovo-sms-worker`, `worker:sms`) | **Yes (GitHub `master`)** via `.github/workflows/deploy-sms-worker.yml` when `COOLIFY_SSH_KEY` is set; otherwise **manual** Coolify redeploy (app id **3**) | Verify worker `commitSha` on `/health` (port **8082**) matches web `/api/health` — see `scripts/verify-mctb-production-topology.ts` and optional web env `MCTB_SMS_WORKER_HEALTH_URL` |
 | **Voice / LiveKit worker** (`transovo-voice`, scheduler slot) | **No** | **Manual redeploy** when voice-runtime or voice worker scripts change |
 | **Redis** (managed or Coolify service) | **No** | Config / capacity only — not tied to git push |
 | **Scheduler** (`trransovo-smscheduler`, id `2`) | **No** (auto-deploy off) | **Manual redeploy** when `worker:sms` / shared deps change |

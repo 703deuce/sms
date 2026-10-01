@@ -23,6 +23,19 @@ const JOB_BATCH = Number(process.env.SMS_WORKER_JOB_BATCH || 40);
 const USE_BULLMQ =
   process.env.QUEUE_DRIVER === "bullmq" && Boolean(process.env.REDIS_URL?.trim());
 
+function resolveDeployedCommitSha(): string | null {
+  for (const value of [
+    process.env.SOURCE_COMMIT,
+    process.env.COOLIFY_GIT_COMMIT,
+    process.env.GIT_COMMIT,
+    process.env.COMMIT_SHA,
+  ]) {
+    const trimmed = value?.trim();
+    if (trimmed) return trimmed;
+  }
+  return null;
+}
+
 let shuttingDown = false;
 let cycleInFlight = false;
 let lastCycleAt = 0;
@@ -68,6 +81,8 @@ function startHealthServer() {
       res.end(
         JSON.stringify({
           ok: healthy,
+          service: "transovo-sms-worker",
+          commitSha: resolveDeployedCommitSha(),
           workerKey: WORKER_KEY,
           workerId: WORKER_ID,
           queueDriver: USE_BULLMQ ? "bullmq" : "db",

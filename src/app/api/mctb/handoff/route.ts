@@ -11,6 +11,9 @@ import { deliverMctbHandoffNotifications } from "@/lib/mctb/handoff/notification
 import { recordMctbHandoffEvent } from "@/lib/mctb/handoff/events";
 import type { MctbHandoffConfigDto, MctbNotificationRecipientDto } from "@/lib/mctb/handoff/types";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

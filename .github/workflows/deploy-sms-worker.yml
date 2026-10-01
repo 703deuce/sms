@@ -1,0 +1,35 @@
+name: Deploy SMS worker (Coolify)
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  queue-sms-worker-deploy:
+    runs-on: ubuntu-latest
+    if: github.repository == '703deuce/sms'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Queue Coolify SMS worker deployment
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+          COOLIFY_SSH_KEY: ${{ secrets.COOLIFY_SSH_KEY }}
+        run: |
+          if [[ -z "${COOLIFY_SSH_KEY:-}" ]]; then
+            echo "COOLIFY_SSH_KEY not configured — skip automatic SMS worker deploy."
+            echo "Manually redeploy transovo-sms-worker (Coolify app id 3) for commit ${COMMIT_SHA}."
+            exit 0
+          fi
+          install -m 600 -D /dev/null ~/.ssh/cursor_coolify
+          printf '%s\n' "$COOLIFY_SSH_KEY" > ~/.ssh/cursor_coolify
+          chmod 600 ~/.ssh/cursor_coolify
+          {
+            echo "Host coolify-server"
+            echo "  HostName 128.140.102.51"
+            echo "  User root"
+            echo "  IdentityFile ~/.ssh/cursor_coolify"
+            echo "  StrictHostKeyChecking accept-new"
+          } >> ~/.ssh/config
+          chmod 600 ~/.ssh/config
+          ssh coolify-server "VOICE_GIT_COMMIT=${COMMIT_SHA} bash -s -- --deploy-sms" \
+            < scripts/coolify-restore-transovo-voice-worker.sh
