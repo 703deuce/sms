@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { MctbOnboardingRuntime } from "@/lib/mctb/onboarding/mctb-onboarding-runtime";
-import type { MctbFirstRunWizardPolicy } from "@/lib/mctb/onboarding/first-run-policy";
+import {
+  isMctbDedicatedSetupPath,
+  shouldShowMctbFirstRunWizardModal,
+  type MctbFirstRunWizardPolicy,
+} from "@/lib/mctb/onboarding/first-run-policy";
 import { MCTB_SETUP_GUIDE_QUERY } from "@/newui-transplant/connected/mctb/mctb-setup-guide";
 import {
   Dialog,
@@ -64,12 +68,24 @@ export function MctbFirstRunWizardHost() {
 
   useEffect(() => {
     if (!onMctbSurface || !policy) return;
+    if (
+      isMctbDedicatedSetupPath(pathname) &&
+      policy.trigger === "incomplete_onboarding" &&
+      !setupGuide
+    ) {
+      setOpen(false);
+      return;
+    }
     if (dismissedThisVisit && policy.trigger !== "setup_guide" && !policy.everyLoginTesting) {
       setOpen(false);
       return;
     }
-    if (policy.shouldAutoOpen) setOpen(true);
-  }, [onMctbSurface, policy, dismissedThisVisit, setupGuide]);
+    if (shouldShowMctbFirstRunWizardModal(policy, pathname, setupGuide)) {
+      setOpen(true);
+    } else {
+      setOpen(false);
+    }
+  }, [onMctbSurface, policy, dismissedThisVisit, setupGuide, pathname]);
 
   useEffect(() => {
     if (!open) return;

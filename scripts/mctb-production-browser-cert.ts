@@ -127,18 +127,31 @@ async function waitSetupPost(page: Page): Promise<number | null> {
   return setupRes?.status() ?? null;
 }
 
+async function dismissBlockingOnboardingModal(page: Page): Promise<void> {
+  const dialog = page.locator('[data-slot="dialog-portal"]');
+  if (!(await dialog.isVisible().catch(() => false))) return;
+  await page.keyboard.press("Escape").catch(() => undefined);
+  await page.waitForTimeout(400);
+  const close = page.getByRole("button", { name: /close/i });
+  if (await close.isVisible().catch(() => false)) {
+    await close.click().catch(() => undefined);
+    await page.waitForTimeout(400);
+  }
+}
+
 async function testConsentMode(page: Page): Promise<void> {
   await page.goto(`${BASE}/mctb/setup/consent`, { waitUntil: "domcontentloaded", timeout: 120_000 });
   await page.waitForURL(/missed-call-recovery|setup\/consent/, { timeout: 60_000 }).catch(() => undefined);
-  await page.getByText(/press 1 to consent/i).first().waitFor({ timeout: 60_000 });
+  await dismissBlockingOnboardingModal(page);
+  await page.getByRole("radio", { name: /press 1/i }).first().waitFor({ timeout: 60_000 });
   await page.waitForTimeout(1500);
   await shot(page, "consent-initial");
 
   const before = snapshotBackend();
   const beforeMode = before.effective?.loadMctbConsentMode;
 
-  const existingRadio = page.getByRole("radio", { name: /already have consent/i });
-  const press1Radio = page.getByRole("radio", { name: /press 1/i });
+  const existingRadio = page.getByRole("radio", { name: /already have consent/i }).first();
+  const press1Radio = page.getByRole("radio", { name: /press 1/i }).first();
 
   await existingRadio.click({ timeout: 30_000 }).catch(async () => {
     await page.getByText(/already have consent/i).first().click();

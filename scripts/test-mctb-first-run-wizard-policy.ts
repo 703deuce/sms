@@ -1,6 +1,9 @@
 #!/usr/bin/env tsx
 import assert from "node:assert/strict";
-import { resolveMctbFirstRunWizardPolicy } from "../src/lib/mctb/onboarding/first-run-policy";
+import {
+  resolveMctbFirstRunWizardPolicy,
+  shouldShowMctbFirstRunWizardModal,
+} from "../src/lib/mctb/onboarding/first-run-policy";
 import type { MctbOnboardingState } from "../src/lib/mctb/onboarding/types";
 
 const readyState = {
@@ -32,5 +35,22 @@ const donePolicy = resolveMctbFirstRunWizardPolicy({
   forwardingVerified: true,
 });
 assert.equal(donePolicy.shouldAutoOpen, false);
+
+assert.equal(
+  shouldShowMctbFirstRunWizardModal(incompletePolicy, "/mctb", false),
+  true,
+);
+assert.equal(
+  shouldShowMctbFirstRunWizardModal(incompletePolicy, "/mctb/missed-call-recovery", false),
+  false,
+);
+assert.equal(
+  shouldShowMctbFirstRunWizardModal(incompletePolicy, "/mctb/missed-calls", false),
+  true,
+);
+assert.equal(
+  shouldShowMctbFirstRunWizardModal(forwardingPolicy, "/mctb/missed-call-recovery", true),
+  true,
+);
 
 console.log("test-mctb-first-run-wizard-policy: OK");
