@@ -13,8 +13,16 @@ const src = readFileSync(
 
 assert.match(src, /ensureMctbWorkspaceIngressReady/);
 assert.match(src, /getTrialNumberStatus/);
-assert.match(src, /provisionTrialMctbNumber/);
+assert.match(src, /provisionMctbWorkspaceTollFreeIngress/);
 assert.match(src, /provisionMctbPhoneTexmlIngressModeForWorkspace/);
+
+const tollFreeSrc = readFileSync(
+  join(root, "src/lib/mctb/provisioning/provision-workspace-toll-free-ingress.ts"),
+  "utf8",
+);
+assert.match(tollFreeSrc, /routePhoneToMctbCallHandlingIngress/);
+assert.match(tollFreeSrc, /setActiveCallHandler/);
+assert.match(tollFreeSrc, /ensureMctbPlatformSenderDefault/);
 
 const intakeSrc = readFileSync(join(root, "src/lib/mctb/own-sender-a2p-intake.ts"), "utf8");
 assert.match(intakeSrc, /listMctbOwnSenderA2pSubmissionsForAdmin/);
