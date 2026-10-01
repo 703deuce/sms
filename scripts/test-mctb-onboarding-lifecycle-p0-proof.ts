@@ -493,6 +493,78 @@ async function testExistingConsentGating(
   });
   assert.equal(allowed, true, "legitimate attested existing_consent may authorize live-test send");
 
+  const ineligibleWs = await createWorkspace(prisma);
+  const ineligiblePhone = await prisma.phoneNumber.create({
+    data: {
+      workspaceId: ineligibleWs,
+      e164: "+18885559005",
+      type: "local",
+      provider: "telnyx",
+      providerNumberId: `prov-${randomUUID()}`,
+      settingsJson: ingressSettings(),
+    },
+  });
+  await updateMissedCallTextConfig({
+    workspaceId: ineligibleWs,
+    patch: { enabled: true, sender_mode: "WORKSPACE", phone_number_id: ineligiblePhone.id },
+    source: "p0-proof-consent-ineligible",
+  });
+  await saveMctbOnboardingState(ineligibleWs, {
+    consentMode: "existing_consent",
+    businessNumberE164: businessLine,
+    forwardingConnectedAt: sessionStart,
+    liveTestSession: { startedAt: sessionStart, businessNumberE164: businessLine },
+    workspaceTollFreeNumber: {
+      e164: ineligiblePhone.e164,
+      phoneNumberId: ineligiblePhone.id,
+      provider: "telnyx",
+      numberType: "local",
+      voiceStatus: "ready",
+      messagingVerificationStatus: "not_started",
+      provisionedAt: sessionStart,
+    },
+  });
+  const ineligibleUser = await prisma.user.create({
+    data: { email: `p0i-${randomUUID()}@example.com`, name: "Ineligible" },
+  });
+  await recordWorkspaceExistingConsentAttestation({
+    workspaceId: ineligibleWs,
+    attestedByUserId: ineligibleUser.id,
+  });
+  const ineligibleKey = `p0-ec-inel-${randomUUID()}`;
+  await prisma.missedCallEvent.create({
+    data: {
+      workspaceId: ineligibleWs,
+      callerE164: caller,
+      businessE164: ineligiblePhone.e164,
+      reason: "missed_no_answer",
+      traceId: randomUUID(),
+      idempotencyKey: ineligibleKey,
+      status: "DETECTED",
+      detectedAt: new Date(),
+      metadata: { forwardedFrom: businessLine },
+    },
+  });
+  const ineligibleAuth = await authorizeOnboardingLiveTestRecoverySend({
+    workspaceId: ineligibleWs,
+    idempotencyKey: ineligibleKey,
+    callerE164: caller,
+    businessE164: ineligiblePhone.e164,
+    forwardedFromE164: businessLine,
+  });
+  assert.equal(
+    ineligibleAuth,
+    false,
+    "existing_consent with attestation but without mode eligibility must DENY",
+  );
+
+  await prisma.missedCallEvent.deleteMany({ where: { workspaceId: ineligibleWs } });
+  await prisma.user.delete({ where: { id: ineligibleUser.id } });
+  await prisma.missedCallTextConfig.deleteMany({ where: { workspaceId: ineligibleWs } });
+  await prisma.phoneNumber.deleteMany({ where: { workspaceId: ineligibleWs } });
+  await prisma.workspaceProductFeature.deleteMany({ where: { workspaceId: ineligibleWs } });
+  await prisma.workspace.delete({ where: { id: ineligibleWs } });
+
   await prisma.missedCallEvent.deleteMany({ where: { workspaceId } });
   await prisma.user.delete({ where: { id: user.id } });
   await prisma.missedCallTextConfig.deleteMany({ where: { workspaceId } });

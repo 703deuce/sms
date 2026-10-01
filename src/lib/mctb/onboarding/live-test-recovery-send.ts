@@ -48,10 +48,15 @@ async function consentSatisfiedForLiveTest(input: {
   sessionConsentAt?: string | null;
 }): Promise<boolean> {
   if (input.consentMode === MCTB_CONSENT_MODE_EXISTING) {
-    const [caps, attestation] = await Promise.all([
+    const { isWorkspaceExistingConsentModeEligible } = await import(
+      "@/lib/mctb/existing-consent-mode-eligibility"
+    );
+    const [modeEligible, caps, attestation] = await Promise.all([
+      isWorkspaceExistingConsentModeEligible(input.workspaceId),
       resolveMctbCapabilities(input.workspaceId),
       validateExistingConsentAttestation(input.workspaceId),
     ]);
+    if (!modeEligible) return false;
     if (!caps.existingConsentCertification) return false;
     if (!attestation.valid || !attestation.existingConsentValid) return false;
     return true;
