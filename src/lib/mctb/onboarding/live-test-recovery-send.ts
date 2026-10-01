@@ -4,6 +4,9 @@ import { getPrisma } from "@/lib/db";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { getMctbEntitlement } from "@/lib/mctb/entitlement";
 import { mctbSameE164 } from "@/lib/mctb/phone/e164-match";
+import { validateExistingConsentAttestation } from "@/lib/mctb/capture/attestation";
+import { resolveMctbCapabilities } from "@/lib/mctb/capabilities";
+import { MCTB_CONSENT_MODE_EXISTING } from "@/lib/mctb/consent-mode";
 import { loadMctbOnboardingState } from "./state";
 import { getProductionMctbForwardTargetE164 } from "./phone-numbers";
 
@@ -44,7 +47,15 @@ async function consentSatisfiedForLiveTest(input: {
   sessionStartedAt: string;
   sessionConsentAt?: string | null;
 }): Promise<boolean> {
-  if (input.consentMode === "existing_consent") return true;
+  if (input.consentMode === MCTB_CONSENT_MODE_EXISTING) {
+    const [caps, attestation] = await Promise.all([
+      resolveMctbCapabilities(input.workspaceId),
+      validateExistingConsentAttestation(input.workspaceId),
+    ]);
+    if (!caps.existingConsentCertification) return false;
+    if (!attestation.valid || !attestation.existingConsentValid) return false;
+    return true;
+  }
   if (input.sessionConsentAt) return true;
 
   const prisma = getPrisma();

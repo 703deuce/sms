@@ -18,6 +18,22 @@ type PhoneRow = {
   status: string | null;
 };
 
+export type MctbIngressPhoneRowAmbiguity = {
+  e164: string;
+  workspaceIds: string[];
+  score: number;
+};
+
+let lastIngressPhoneRowAmbiguity: MctbIngressPhoneRowAmbiguity | null = null;
+
+export function getLastMctbIngressPhoneRowAmbiguityForTest(): MctbIngressPhoneRowAmbiguity | null {
+  return lastIngressPhoneRowAmbiguity;
+}
+
+export function clearMctbIngressPhoneRowAmbiguityForTest(): void {
+  lastIngressPhoneRowAmbiguity = null;
+}
+
 function readSettings(settingsJson: unknown): Record<string, unknown> {
   return settingsJson && typeof settingsJson === "object" && !Array.isArray(settingsJson)
     ? (settingsJson as Record<string, unknown>)
@@ -91,6 +107,7 @@ async function scoreIngressPhoneRow(phone: PhoneRow): Promise<number> {
 export async function resolveBestMctbIngressPhoneRow(
   toE164: string,
 ): Promise<PhoneRow | null> {
+  lastIngressPhoneRowAmbiguity = null;
   const variants = mctbTexmlE164Variants(toE164);
   if (!variants.length) return null;
 
@@ -133,9 +150,14 @@ export async function resolveBestMctbIngressPhoneRow(
     runnerUp.score === best.score &&
     runnerUp.phone.workspaceId !== best.phone.workspaceId
   ) {
+    lastIngressPhoneRowAmbiguity = {
+      e164: toE164,
+      workspaceIds: [best.phone.workspaceId, runnerUp.phone.workspaceId],
+      score: best.score,
+    };
     traceMctbDebug("provision", "ingress_phone_row_ambiguous", {
       e164: toE164,
-      workspaces: [best.phone.workspaceId, runnerUp.phone.workspaceId],
+      workspaces: lastIngressPhoneRowAmbiguity.workspaceIds,
       score: best.score,
     });
     return null;

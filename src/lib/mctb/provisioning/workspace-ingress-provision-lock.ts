@@ -97,21 +97,40 @@ export async function clearMctbIngressProvisionPendingE164(workspaceId: string):
   });
 }
 
+const inProcessIngressLockTails = new Map<string, Promise<unknown>>();
+
+async function withInProcessIngressProvisionLock<T>(
+  workspaceId: string,
+  work: () => Promise<T>,
+): Promise<T> {
+  const previous = inProcessIngressLockTails.get(workspaceId) ?? Promise.resolve();
+  const run = previous.then(() => work());
+  inProcessIngressLockTails.set(
+    workspaceId,
+    run.then(
+      () => undefined,
+      () => undefined,
+    ),
+  );
+  return run;
+}
+
 /**
  * One workspace → at most one concurrent Telnyx ingress purchase/provision flow.
- * Uses Postgres advisory locks when available; callers must re-check idempotent state inside.
+ * Prefers Postgres advisory locks; falls back to an in-process mutex when advisory SQL is unavailable
+ * (compat/test). Callers must re-check idempotent state inside the critical section.
  */
 export async function withMctbWorkspaceIngressProvisionLock<T>(
   workspaceId: string,
   work: () => Promise<T>,
 ): Promise<T> {
   const acquired = await pgAdvisoryLock(workspaceId);
-  if (!acquired) {
-    throw new Error("mctb_ingress_provision_lock_unavailable");
+  if (acquired) {
+    try {
+      return await work();
+    } finally {
+      await pgAdvisoryUnlock(workspaceId);
+    }
   }
-  try {
-    return await work();
-  } finally {
-    await pgAdvisoryUnlock(workspaceId);
-  }
+  return withInProcessIngressProvisionLock(workspaceId, work);
 }

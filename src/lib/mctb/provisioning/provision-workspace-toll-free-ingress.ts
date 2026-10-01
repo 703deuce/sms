@@ -45,6 +45,28 @@ export type ProvisionMctbWorkspaceTollFreeIngressResult = {
   source?: "existing" | "pool" | "purchased";
 };
 
+/** Injectable boundaries for automated provisioning proofs (tests only). */
+export type MctbTollFreeIngressProvisionTestDeps = {
+  pickTelnyxTollFreeIngressE164?: (workspaceId: string) => Promise<string | null>;
+  purchaseTelnyxTollFree?: (workspaceId: string) => Promise<string | null>;
+  importTelnyxNumbersIntoWorkspace?: typeof importTelnyxNumbersIntoWorkspace;
+  routePhoneToMctbCallHandlingIngress?: typeof routePhoneToMctbCallHandlingIngress;
+  verifyMctbTexmlIngressRoute?: typeof verifyMctbTexmlIngressRoute;
+  setActiveCallHandler?: typeof setActiveCallHandler;
+};
+
+let tollFreeIngressProvisionTestDeps: MctbTollFreeIngressProvisionTestDeps | null = null;
+
+export function setMctbTollFreeIngressProvisionTestDeps(
+  deps: MctbTollFreeIngressProvisionTestDeps | null,
+): void {
+  tollFreeIngressProvisionTestDeps = deps;
+}
+
+export function getMctbTollFreeIngressProvisionTestDeps(): MctbTollFreeIngressProvisionTestDeps | null {
+  return tollFreeIngressProvisionTestDeps;
+}
+
 async function workspaceIngressAlreadyReady(
   workspaceId: string,
 ): Promise<{ ready: boolean; phoneNumberId?: string; e164?: string }> {
@@ -75,14 +97,16 @@ async function workspaceIngressAlreadyReady(
     return { ready: false };
   }
 
-  const verify = await verifyMctbTexmlIngressRoute({
+  const verifyFn =
+    tollFreeIngressProvisionTestDeps?.verifyMctbTexmlIngressRoute ?? verifyMctbTexmlIngressRoute;
+  const verify = await verifyFn({
     e164: phone.e164,
     providerNumberId: phone.providerNumberId,
   });
   return verify.ok ? { ready: true, phoneNumberId, e164: phone.e164 } : { ready: false };
 }
 
-async function purchaseTelnyxTollFree(workspaceId: string): Promise<string | null> {
+async function purchaseTelnyxTollFreeDefault(workspaceId: string): Promise<string | null> {
   await messagingOnboarding.start(workspaceId).catch(() => undefined);
   for (const areaCode of MCTB_TRIAL_TOLL_FREE_AREA_CODES) {
     try {
@@ -97,6 +121,12 @@ async function purchaseTelnyxTollFree(workspaceId: string): Promise<string | nul
     }
   }
   return null;
+}
+
+async function purchaseTelnyxTollFree(workspaceId: string): Promise<string | null> {
+  const fn =
+    tollFreeIngressProvisionTestDeps?.purchaseTelnyxTollFree ?? purchaseTelnyxTollFreeDefault;
+  return fn(workspaceId);
 }
 
 /**
@@ -139,7 +169,10 @@ async function provisionMctbWorkspaceTollFreeIngressLocked(
     : undefined;
 
   if (!e164) {
-    e164 = await pickTelnyxTollFreeIngressE164(workspaceId);
+    const pickFn =
+      tollFreeIngressProvisionTestDeps?.pickTelnyxTollFreeIngressE164 ??
+      pickTelnyxTollFreeIngressE164;
+    e164 = await pickFn(workspaceId);
     source = e164 ? "pool" : undefined;
   }
 
@@ -157,11 +190,23 @@ async function provisionMctbWorkspaceTollFreeIngressLocked(
 
   const prisma = getPrisma();
 
-  await importTelnyxNumbersIntoWorkspace({
-    workspaceId,
-    e164s: [e164],
-    attachConnection: false,
-  });
+  const importFn =
+    tollFreeIngressProvisionTestDeps?.importTelnyxNumbersIntoWorkspace ??
+    importTelnyxNumbersIntoWorkspace;
+  try {
+    await importFn({
+      workspaceId,
+      e164s: [e164],
+      attachConnection: false,
+    });
+  } catch (err) {
+    console.warn("[mctb] toll_free_ingress_import_failed", workspaceId, e164, err);
+    return {
+      ok: false,
+      error: "ingress_import_failed",
+      e164,
+    };
+  }
 
   let phone = await prisma.phoneNumber.findFirst({
     where: { workspaceId, e164 },
@@ -191,7 +236,10 @@ async function provisionMctbWorkspaceTollFreeIngressLocked(
     });
   }
 
-  const route = await routePhoneToMctbCallHandlingIngress({
+  const routeFn =
+    tollFreeIngressProvisionTestDeps?.routePhoneToMctbCallHandlingIngress ??
+    routePhoneToMctbCallHandlingIngress;
+  const route = await routeFn({
     workspaceId,
     phoneNumberId: phone.id,
     friendlyName: `MCTB ingress ${workspaceId}`,
@@ -213,7 +261,9 @@ async function provisionMctbWorkspaceTollFreeIngressLocked(
     source: "mctb_toll_free_ingress",
   });
 
-  await setActiveCallHandler({
+  const setHandlerFn =
+    tollFreeIngressProvisionTestDeps?.setActiveCallHandler ?? setActiveCallHandler;
+  await setHandlerFn({
     workspaceId,
     voiceIngressPhoneNumberId: phone.id,
     handler: "mctb",

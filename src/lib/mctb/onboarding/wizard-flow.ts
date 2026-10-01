@@ -37,6 +37,7 @@ const LEGACY_TO_CANONICAL: Record<string, MctbOnboardingStep> = {
 
 export function normalizeOnboardingStep(step: unknown): MctbOnboardingStep {
   const raw = String(step || "business_line");
+  if (raw === "complete") return "complete";
   if (LEGACY_TO_CANONICAL[raw]) return LEGACY_TO_CANONICAL[raw];
   if ((MCTB_ONBOARDING_STEP_ORDER as string[]).includes(raw)) {
     return raw as MctbOnboardingStep;

@@ -102,6 +102,11 @@ export async function activateMctbTrial(workspaceId: string): Promise<{
   }
 
   const state = await loadMctbOnboardingState(workspaceId);
+  if (state.trialActivatedAt && plan === "free") {
+    const limits = asRecord(ws.workspaceLimits?.limits);
+    return { ok: true, trialEndsAt: String(limits.trialEndsAt || "") };
+  }
+
   const workspaceNumber = getWorkspaceTollFreeNumber(state);
   const tfv = await getTfvStatusForWorkspace(workspaceId);
   const messagingGate = await loadTrialNumberMessagingGate(
