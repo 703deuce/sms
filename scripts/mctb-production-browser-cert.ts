@@ -65,6 +65,8 @@ function expectedTexmlHandlerMode(snap: Snapshot): "press_1" | "voicemail" {
 }
 
 async function ensureRecoveryResumedViaUi(page: Page): Promise<void> {
+  const snap = snapshotBackend();
+  if (snap.effective?.recoveryPaused !== true) return;
   await page.goto(`${BASE}/mctb/missed-call-recovery?tab=general`, {
     waitUntil: "domcontentloaded",
     timeout: 120_000,
