@@ -1,6 +1,7 @@
 import { MCTB_FIRST_RUN_WIZARD_UNTIL_COMPLETE } from "@/lib/mctb/launch-flags";
 import { isMctbDevFirstRunWizardEveryLogin } from "@/lib/mctb/onboarding/first-run-dev-override";
-import { isOnboardingComplete, type MctbOnboardingState } from "@/lib/mctb/onboarding/state";
+import { isOnboardingComplete } from "@/lib/mctb/onboarding/completion";
+import type { MctbOnboardingState } from "@/lib/mctb/onboarding/types";
 
 function everyLoginTestingActive(): boolean {
   return isMctbDevFirstRunWizardEveryLogin();
