@@ -117,13 +117,20 @@ async function visitMctbRoute(page: Page, path: string, label: string): Promise<
   return ok;
 }
 
+function isMctbSetupPostResponse(r: { url: () => string; request: () => { method: () => string } }) {
+  return r.url().includes("/api/mctb/setup") && r.request().method() === "POST";
+}
+
 async function waitSetupPost(page: Page): Promise<number | null> {
-  const setupRes = await page
-    .waitForResponse(
-      (r) => r.url().includes("/api/mctb/setup") && r.request().method() === "POST",
-      { timeout: 45_000 },
-    )
-    .catch(() => null);
+  const setupRes = await page.waitForResponse(isMctbSetupPostResponse, { timeout: 45_000 }).catch(() => null);
+  return setupRes?.status() ?? null;
+}
+
+async function clickAndWaitSetupPost(page: Page, click: () => Promise<void>): Promise<number | null> {
+  const setupRes = await Promise.all([
+    page.waitForResponse(isMctbSetupPostResponse, { timeout: 45_000 }),
+    click(),
+  ]).then(([res]) => res).catch(() => null);
   return setupRes?.status() ?? null;
 }
 
@@ -153,6 +160,16 @@ async function testConsentMode(page: Page): Promise<void> {
   const existingRadio = page.getByRole("radio", { name: /already have consent/i }).first();
   const press1Radio = page.getByRole("radio", { name: /press 1/i }).first();
 
+  const existingAlready = await existingRadio.isChecked().catch(() => false);
+  if (existingAlready) {
+    await press1Radio.click({ timeout: 30_000 }).catch(() => undefined);
+    const restorePress1Btn = page.getByRole("button", { name: /save consent mode/i });
+    if (await restorePress1Btn.isVisible().catch(() => false)) {
+      await clickAndWaitSetupPost(page, () => restorePress1Btn.click());
+      await page.waitForTimeout(1500);
+    }
+  }
+
   await existingRadio.click({ timeout: 30_000 }).catch(async () => {
     await page.getByText(/already have consent/i).first().click();
   });
@@ -171,9 +188,7 @@ async function testConsentMode(page: Page): Promise<void> {
   let saveOk = false;
   let setupStatus: number | null = null;
   if (await saveBtn.isVisible({ timeout: 10_000 }).catch(() => false)) {
-    const setupWait = waitSetupPost(page);
-    await saveBtn.click();
-    setupStatus = await setupWait;
+    setupStatus = await clickAndWaitSetupPost(page, () => saveBtn.click());
     await page.waitForTimeout(1500);
     const err =
       (await page.getByText(/save failed|could not save|before saving/i).first().textContent().catch(() => null)) ||
@@ -186,7 +201,13 @@ async function testConsentMode(page: Page): Promise<void> {
         : savedVisible || setupStatus === 200
           ? "save OK"
           : `clicked save (http ${setupStatus ?? "?"})`;
-    saveOk = Boolean(setupStatus === 200 && !err?.trim());
+    const phoneErr = await page
+      .getByText(/forwarding number on phone/i)
+      .first()
+      .isVisible()
+      .catch(() => false);
+    if (phoneErr) uiResult = "blocked: no MCTB phone number configured";
+    saveOk = Boolean(setupStatus === 200 && !err?.trim() && !phoneErr);
   }
 
   await shot(page, "consent-after-save-existing");
@@ -233,9 +254,7 @@ async function testConsentMode(page: Page): Promise<void> {
     await restoreBtn.scrollIntoViewIfNeeded().catch(() => undefined);
     let restoreHttp: number | null = null;
     if (await restoreBtn.isVisible().catch(() => false)) {
-      const wait = waitSetupPost(page);
-      await restoreBtn.click();
-      restoreHttp = await wait;
+      restoreHttp = await clickAndWaitSetupPost(page, () => restoreBtn.click());
       await page.waitForTimeout(2000);
     }
     const restored = snapshotBackend();
@@ -273,15 +292,22 @@ async function testRecoveryPause(page: Page, context?: BrowserContext): Promise<
     waitUntil: "domcontentloaded",
     timeout: 120_000,
   });
-  await page.waitForTimeout(8000);
+  await dismissBlockingOnboardingModal(page);
+  await page
+    .getByText(/loading recovery settings/i)
+    .waitFor({ state: "hidden", timeout: 90_000 })
+    .catch(() => undefined);
+  await page.waitForTimeout(1500);
   const resumeFirst = page.getByRole("button", { name: /resume recovery/i }).first();
   if (await resumeFirst.isVisible().catch(() => false)) {
-    const waitResume = waitSetupPost(page);
-    await resumeFirst.click();
-    await waitResume.catch(() => null);
+    await clickAndWaitSetupPost(page, () => resumeFirst.click());
     await page.waitForTimeout(2000);
   }
-  const pauseBtn = page.getByRole("button", { name: "1 hour", exact: true });
+  const pauseBtn = page
+    .getByRole("group", { name: /pause recovery for/i })
+    .getByRole("button", { name: "1 hour", exact: true })
+    .or(page.getByRole("button", { name: "Pause 1 hour", exact: true }))
+    .or(page.getByRole("button", { name: "1 hour", exact: true }));
   let pauseVisible = false;
   try {
     await pauseBtn.waitFor({ state: "visible", timeout: 60_000 });
@@ -313,7 +339,7 @@ async function testRecoveryPause(page: Page, context?: BrowserContext): Promise<
 
   const waitPause = page.waitForResponse(
     (r) => {
-      if (!r.url().includes("/api/mctb/setup") || r.request().method() !== "POST") return false;
+      if (!isMctbSetupPostResponse(r)) return false;
       try {
         const body = r.request().postDataJSON() as { pauseUntil?: string; enabled?: boolean };
         return Boolean(body.pauseUntil) || body.enabled === false;
@@ -323,8 +349,7 @@ async function testRecoveryPause(page: Page, context?: BrowserContext): Promise<
     },
     { timeout: 45_000 },
   );
-  await pauseBtn.click();
-  const pauseRes = await waitPause.catch(() => null);
+  const pauseRes = await Promise.all([waitPause, pauseBtn.click()]).then(([res]) => res).catch(() => null);
   const pauseHttp = pauseRes?.status() ?? null;
   let afterPause = snapshotBackend();
   let paused = afterPause.effective?.recoveryPaused;
@@ -357,9 +382,7 @@ async function testRecoveryPause(page: Page, context?: BrowserContext): Promise<
 
   const resumeBtn = page.getByRole("button", { name: /resume recovery/i }).first();
   if (await resumeBtn.isVisible().catch(() => false)) {
-    const waitResume = waitSetupPost(page);
-    await resumeBtn.click();
-    const resumeHttp = await waitResume;
+    const resumeHttp = await clickAndWaitSetupPost(page, () => resumeBtn.click());
     await page.waitForTimeout(2000);
     const afterResume = snapshotBackend();
     record({
@@ -676,7 +699,7 @@ async function main() {
   const onlyRecovery = process.argv.includes("--only-recovery");
   let routesOk = 0;
   if (onlyRecovery) {
-    await testRecoveryPause(page);
+    await testRecoveryPause(page, context);
     await browser.close();
     const failCount = rows.filter((r) => r.status.startsWith("FAIL")).length;
     console.log(JSON.stringify({ failCount, rows }, null, 2));
@@ -695,7 +718,7 @@ async function main() {
 
   await testConsentMode(page);
   if (!onlyConsent) {
-    await testRecoveryPause(page);
+    await testRecoveryPause(page, context);
   }
 
   await browser.close();

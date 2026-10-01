@@ -18,7 +18,11 @@ export function mergeDailyTrends(input: {
   const booked = byDate(input.booked);
 
   return input.days.map((date) => {
-    const dayLabel = new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday: "short" });
+    // Fixed locale + UTC so SSR and client hydration match (avoids React #418).
+    const dayLabel = new Date(`${date}T12:00:00Z`).toLocaleDateString("en-US", {
+      weekday: "short",
+      timeZone: "UTC",
+    });
     return {
       day: dayLabel,
       calls: calls.get(date) ?? 0,
