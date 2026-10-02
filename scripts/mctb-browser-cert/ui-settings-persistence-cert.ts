@@ -417,10 +417,19 @@ export async function certVoicemailGreeting(
   await gotoMctb(page, base, route);
   const greetingTab = page.getByRole("tab", { name: /^greeting$/i }).first();
   if (await greetingTab.isVisible().catch(() => false)) await greetingTab.click();
-  await page.getByText(/loading/i).first().waitFor({ state: "hidden", timeout: 90_000 }).catch(() => undefined);
-  const writeTab = page.getByRole("button", { name: /write & generate/i }).first();
+  await page
+    .getByText(/loading voicemail settings/i)
+    .waitFor({ state: "hidden", timeout: 90_000 })
+    .catch(() => undefined);
+  const greetingPanel = page.locator("#opus-tabpanel-greeting").or(page.getByRole("tabpanel").last());
+  await greetingPanel
+    .getByText(/greeting source|current voicemail greeting/i)
+    .first()
+    .waitFor({ state: "visible", timeout: 60_000 })
+    .catch(() => undefined);
+  const writeTab = greetingPanel.getByRole("button", { name: /write & generate/i }).first();
   if (await writeTab.isVisible().catch(() => false)) await writeTab.click();
-  const ta = page.locator("textarea").first();
+  const ta = greetingPanel.locator("textarea").first();
   await ta.waitFor({ state: "visible", timeout: 30_000 }).catch(() => undefined);
   if (!(await ta.isVisible().catch(() => false))) {
     const r = skip(hole, "Greeting editor not visible (no phone number?)");
@@ -441,11 +450,20 @@ export async function certVoicemailGreeting(
   const trial = orig.includes(VOICEMAIL_PROBE) ? orig : `${orig} ${VOICEMAIL_PROBE}`.trim();
   await ta.fill(trial);
 
-  const generateBtn = page
+  const generateBtn = greetingPanel
     .getByRole("button", { name: /generate preview|generate greeting|generate greeting with this voice/i })
     .first();
   if (!(await generateBtn.isVisible().catch(() => false))) {
-    const r = skip(hole, "Voicemail studio generate control not available");
+    const studioMissing = !(await greetingPanel
+      .getByText(/current voicemail greeting/i)
+      .isVisible()
+      .catch(() => false));
+    const r = skip(
+      hole,
+      studioMissing
+        ? "Voicemail greeting studio not mounted (check phone number / onSaveGreeting wiring)"
+        : "Voicemail studio generate control not available in greeting panel",
+    );
     recordMatrixG(record, hole, {
       route,
       page: "Voicemail greeting",
@@ -460,7 +478,7 @@ export async function certVoicemailGreeting(
   }
   await generateBtn.click();
   await page.waitForTimeout(8000);
-  const useBtn = page.getByRole("button", { name: /use this greeting/i }).first();
+  const useBtn = greetingPanel.getByRole("button", { name: /use this greeting/i }).first();
   if (!(await useBtn.isVisible().catch(() => false))) {
     const r = skip(hole, "Preview generation did not complete (TTS/provider)");
     recordMatrixG(record, hole, {
@@ -490,13 +508,17 @@ export async function certVoicemailGreeting(
   await hardReload(page);
   const greetingTab2 = page.getByRole("tab", { name: /^greeting$/i }).first();
   if (await greetingTab2.isVisible().catch(() => false)) await greetingTab2.click();
-  const ta2 = page.locator("textarea").first();
+  const greetingPanel2 = page.locator("#opus-tabpanel-greeting").or(page.getByRole("tabpanel").last());
+  const ta2 = greetingPanel2.locator("textarea").first();
   const uiAfter = (await ta2.inputValue().catch(() => "")).includes(VOICEMAIL_PROBE);
 
   await ta2.fill(orig);
-  await generateBtn.click().catch(() => undefined);
+  const generateBtn2 = greetingPanel2
+    .getByRole("button", { name: /generate preview|generate greeting/i })
+    .first();
+  await generateBtn2.click().catch(() => undefined);
   await page.waitForTimeout(8000);
-  const useRestore = page.getByRole("button", { name: /use this greeting/i }).first();
+  const useRestore = greetingPanel2.getByRole("button", { name: /use this greeting/i }).first();
   if (await useRestore.isVisible().catch(() => false)) await useRestore.click().catch(() => undefined);
   await page.waitForTimeout(2000);
   const restored = !String(snapshotBackend(workspaceId).voicemail?.greetingText ?? "").includes(VOICEMAIL_PROBE);

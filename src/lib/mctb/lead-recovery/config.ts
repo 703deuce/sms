@@ -303,7 +303,14 @@ export async function saveLeadRecoveryConfig(
   const root = asRecord(ws?.customFieldsConfig);
   const mctb = asRecord(root.mctb);
   const prev = readRawLeadRecovery(ws?.customFieldsConfig);
-  const next = { ...prev, ...patch, version: patch.version ?? (typeof prev.version === "number" ? prev.version : 1) };
+  const definedPatch = Object.fromEntries(
+    Object.entries(patch).filter(([, value]) => value !== undefined),
+  ) as typeof patch;
+  const next = {
+    ...prev,
+    ...definedPatch,
+    version: definedPatch.version ?? (typeof prev.version === "number" ? prev.version : 1),
+  };
   const customFieldsConfig = {
     ...root,
     mctb: {
