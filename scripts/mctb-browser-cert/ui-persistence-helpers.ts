@@ -98,6 +98,34 @@ export async function pollHandoffEmail(
   return ((snapshotBackend(workspaceId).handoff?.emails as string[]) ?? []).includes(email);
 }
 
+export async function pollHandoffField(
+  workspaceId: string,
+  field: string,
+  expected: unknown,
+  attempts = 20,
+): Promise<boolean> {
+  for (let i = 0; i < attempts; i++) {
+    const v = snapshotBackend(workspaceId).handoff?.[field];
+    if (v === expected) return true;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  return snapshotBackend(workspaceId).handoff?.[field] === expected;
+}
+
+export async function pollPersistedField(
+  workspaceId: string,
+  field: string,
+  expected: unknown,
+  attempts = 20,
+): Promise<boolean> {
+  for (let i = 0; i < attempts; i++) {
+    const v = snapshotBackend(workspaceId).persisted?.[field];
+    if (v === expected) return true;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  return snapshotBackend(workspaceId).persisted?.[field] === expected;
+}
+
 export async function pollOnboardingField(
   workspaceId: string,
   field: string,
@@ -167,25 +195,52 @@ export function restoreCertWorkspaceBaseline(baseline: CertWorkspaceBaseline): v
   });
 }
 
-export function recordMatrixG(
+function recordMatrixPersist(
   record: (row: CertRow) => void,
+  matrix: "G" | "H",
   hole: string,
   row: Omit<CertRow, "tab"> & { tab?: string },
   result: UiPersistenceHoleResult,
 ): void {
+  const tag = matrix === "G" ? "G — UI persistence" : "H — remaining settings";
+  const passLabel = matrix === "G" ? "PASS — UI PERSISTENCE (G)" : "PASS — UI PERSISTENCE (H)";
+  const failLabel = matrix === "G" ? "FAIL — UI PERSISTENCE (G)" : "FAIL — UI PERSISTENCE (H)";
   record({
     route: row.route,
     page: row.page,
-    tab: row.tab ?? "G — UI persistence",
+    tab: row.tab ?? tag,
     control: `[${hole}] ${row.control}`,
     browserAction: row.browserAction,
     uiResult: row.uiResult,
     backendResult: row.backendResult,
     refreshResult: row.refreshResult,
     effectiveRuntime: row.effectiveRuntime,
-    status: result.status === "PASS" ? "PASS — UI PERSISTENCE (G)" : result.status === "SKIP" ? "SKIP — CAPABILITY" : "FAIL — UI PERSISTENCE (G)",
+    status:
+      result.status === "PASS"
+        ? passLabel
+        : result.status === "SKIP"
+          ? "SKIP — CAPABILITY"
+          : failLabel,
     defectFix: result.detail,
   });
+}
+
+export function recordMatrixG(
+  record: (row: CertRow) => void,
+  hole: string,
+  row: Omit<CertRow, "tab"> & { tab?: string },
+  result: UiPersistenceHoleResult,
+): void {
+  recordMatrixPersist(record, "G", hole, row, result);
+}
+
+export function recordMatrixH(
+  record: (row: CertRow) => void,
+  hole: string,
+  row: Omit<CertRow, "tab"> & { tab?: string },
+  result: UiPersistenceHoleResult,
+): void {
+  recordMatrixPersist(record, "H", hole, row, result);
 }
 
 export function backendRuntime(workspaceId: string): Record<string, unknown> {
@@ -196,4 +251,14 @@ export async function hardReload(page: Page): Promise<void> {
   await page.reload({ waitUntil: "domcontentloaded" });
   await dismissBlockingOnboardingModal(page);
   await page.waitForTimeout(1500);
+}
+
+/** Radix-style combobox (role=combobox), not native &lt;select&gt;. */
+export async function selectComboboxOption(
+  page: Page,
+  triggerLocator: ReturnType<Page["locator"]>,
+  optionPattern: RegExp,
+): Promise<void> {
+  await triggerLocator.click();
+  await page.getByRole("option", { name: optionPattern }).first().click();
 }

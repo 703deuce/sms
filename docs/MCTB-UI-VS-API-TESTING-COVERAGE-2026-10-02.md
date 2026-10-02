@@ -255,7 +255,7 @@ Check **`GET /api/health` → `commitSha`** matches what you deployed before tru
 | API saves config correctly | Commercial guards + setup `test-mctb-setup-*` — **yes** for MCTB core |
 | Customer clicked Save in browser and backend updated | **Main cert** — consent, pause, exclusions; **continue** — links, partial notifications; **not all routes** |
 | Fresh signup → wizard → live call works | **Manual** + optional lifecycle P0 DB scripts |
-| Every launch settings URL Save + reload | **Matrix G** — `npm run test:mctb-ui-persistence-cert` (8 holes: change → Save → backend → refresh → restore baseline) |
+| Every launch settings URL Save + reload | **Matrix G** — `npm run test:mctb-ui-persistence-cert` (8 holes); **G+H full** — `npm run test:mctb-browser-settings-cert` (G minus duplicate notifications + H remaining + main-cert registry skips) |
 | Settings change affects next real call | **Manual PSTN/SMS** |
 
 ---
@@ -265,6 +265,7 @@ Check **`GET /api/health` → `commitSha`** matches what you deployed before tru
 - `docs/MCTB-E2E-AUDIT-HANDOFF-2026-10-01.md` — latest documented 27/27 main browser cert
 - `docs/MCTB-PRODUCTION-BROWSER-CERTIFICATION.md` — full matrix markdown (includes notifications FAIL rows)
 - `docs/MCTB-UI-PERSISTENCE-CERT-RESULTS.md` — Matrix G UI persistence cert output (`MCTB_PROD_CERT_*` + `npm run test:mctb-ui-persistence-cert`)
+- `docs/MCTB-BROWSER-SETTINGS-FULL-CERT-RESULTS.md` — Full settings browser cert (`npm run test:mctb-browser-settings-cert`)
 - `docs/MCTB-NEW-ACCOUNT-TO-LIVE-CALL-FLOW-2026-10-02.md` — signup → wizard → forwarding → live call
 - `docs/MCTB-FULL-APP-AUDIT-2026-10-02.md` — backend + tenant audit
 - `docs/certification/APPOINTMENTS-MCTB-SETTINGS-COVERAGE.md` — generated field-level map (`npx tsx scripts/generate-settings-coverage-proof.ts`)

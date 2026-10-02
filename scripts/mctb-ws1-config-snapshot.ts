@@ -17,6 +17,7 @@ import {
 import { resolveMctbTexmlHandlerMode } from "@/lib/mctb/texml-ingress/texml-mode-provision";
 import { loadLeadRecoveryConfigPersisted } from "@/lib/mctb/lead-recovery/config";
 import { deriveSimplifiedFieldEnabled } from "@/lib/mctb/ai-recovery/simplified-fields";
+import { readMctbRecoveryGoalId } from "@/lib/mctb/apply-recovery-goal-config";
 
 const WORKSPACE_ID = process.env.WORKSPACE_ID?.trim() || "ws_1";
 const CERT_EXCLUSION_E164 = "+15550119999";
@@ -99,6 +100,7 @@ async function main() {
 
   const leadRecovery = await loadLeadRecoveryConfigPersisted(WORKSPACE_ID);
   const aiFieldToggles = deriveSimplifiedFieldEnabled(leadRecovery.collectCapabilities ?? []);
+  const recoveryGoal = await readMctbRecoveryGoalId(WORKSPACE_ID);
 
   let voicemailGreetingText: string | null = null;
   let voicemailBoxId: string | null = null;
@@ -130,6 +132,7 @@ async function main() {
             (mctb.platformRecoveryTemplateId as string | undefined) ??
             (runtime as { platformRecoveryTemplateId?: string })?.platformRecoveryTemplateId ??
             null,
+          recoveryGoal,
         },
         effective: {
           loadMctbConsentMode: consentMode,
@@ -172,6 +175,8 @@ async function main() {
           platformRecoveryTemplateId:
             (runtime as { platformRecoveryTemplateId?: string })?.platformRecoveryTemplateId ??
             null,
+          defaultLinkUrl: runtime?.defaultLinkUrl ?? null,
+          requestFormEnabled: Boolean(runtime?.requestFormEnabled),
         },
         onboarding: {
           forwardingCarrier: onboardingState.forwardingCarrier ?? null,
