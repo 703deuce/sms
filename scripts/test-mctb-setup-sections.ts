@@ -74,7 +74,13 @@ assert.equal(readiness.ready, 5);
 assert.equal(resolveSetupChipTone("Configured", "neutral"), "neutral");
 assert.equal(resolveSetupChipTone("Verified", "ok"), "positive");
 
-assert.equal(isExistingConsentModeEligible({ messagingReady: true, paidEntitled: true }), true);
-assert.equal(isExistingConsentModeEligible({ messagingReady: true, paidEntitled: false }), false);
+assert.equal(
+  isExistingConsentModeEligible({ messagingReady: true, mctbProductActive: true }),
+  true,
+);
+assert.equal(
+  isExistingConsentModeEligible({ messagingReady: false, mctbProductActive: false }),
+  false,
+);
 
 console.log("test-mctb-setup-sections: ok");

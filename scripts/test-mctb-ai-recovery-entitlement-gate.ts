@@ -7,6 +7,7 @@ import path from "node:path";
 
 const files = [
   "src/app/api/mctb/lead-recovery/config/route.ts",
+  "src/app/api/mctb/lead-recovery/simulate/route.ts",
   "src/app/api/mctb/ai-recovery/settings/route.ts",
   "src/app/api/mctb/handoff/route.ts",
   "src/lib/mctb/lead-recovery/config.ts",

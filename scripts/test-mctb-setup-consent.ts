@@ -18,15 +18,62 @@ import {
   EXISTING_CONSENT_CALLER_FLOW,
 } from "../src/lib/mctb/setup-consent-model";
 import { resolveMctbSetupSectionId } from "../src/lib/mctb/setup-sections";
+import {
+  MCTB_FREE_MONTHLY_RECOVERY_LIMIT,
+  MCTB_TEXT_BACK_MONTHLY_RECOVERY_LIMIT,
+  resolveMctbMonthlyRecoveryLimit,
+} from "../src/lib/mctb/recovery-usage-constants";
 
 assert.equal(resolveMctbSetupSectionId("/mctb/setup/consent"), "consent");
 
-assert.equal(isExistingConsentModeEligible({ messagingReady: true, paidEntitled: true }), true);
-assert.equal(isExistingConsentModeEligible({ messagingReady: true, paidEntitled: false }), false);
-assert.equal(isExistingConsentModeEligible({ messagingReady: false }), false);
-assert.ok(existingConsentIneligibleReason(false, true)?.includes("messaging"));
-assert.ok(existingConsentIneligibleReason(true, false)?.includes("Recovery"));
+// Free + platform sender or messaging ready: existing consent selectable (not paid-gated).
+assert.equal(
+  isExistingConsentModeEligible({ messagingReady: true, mctbProductActive: true }),
+  true,
+);
+assert.equal(
+  isExistingConsentModeEligible({
+    messagingReady: true,
+    mctbProductActive: false,
+    platformSenderActive: false,
+  }),
+  true,
+  "messagingReady alone qualifies",
+);
+assert.equal(
+  isExistingConsentModeEligible({
+    messagingReady: false,
+    platformSenderActive: true,
+    mctbProductActive: true,
+  }),
+  true,
+);
+assert.equal(isExistingConsentModeEligible({ messagingReady: false, mctbProductActive: false }), false);
+assert.equal(existingConsentIneligibleReason(false, true, true), null);
+const denied = existingConsentIneligibleReason(false, false, false);
+assert.ok(denied?.includes("not active"));
+assert.ok(!denied?.includes("Text Back or AI Recovery"));
+assert.ok(!denied?.toLowerCase().includes("upgrade"));
 assert.equal(resolveMctbSetupSectionId("/mctb/setup/text-back"), "text-back");
+
+assert.equal(
+  resolveMctbMonthlyRecoveryLimit({
+    mctbProductActive: true,
+    recoveryPaid: false,
+    aiRecoveryEntitled: false,
+    paidTier: null,
+  }),
+  MCTB_FREE_MONTHLY_RECOVERY_LIMIT,
+);
+assert.equal(
+  resolveMctbMonthlyRecoveryLimit({
+    mctbProductActive: true,
+    recoveryPaid: true,
+    aiRecoveryEntitled: false,
+    paidTier: "text_back",
+  }),
+  MCTB_TEXT_BACK_MONTHLY_RECOVERY_LIMIT,
+);
 
 assert.equal(methodLabel(MCTB_CONSENT_MODE_VERIFIED), "Press 1");
 assert.equal(methodLabel(MCTB_CONSENT_MODE_EXISTING), "Existing consent");
