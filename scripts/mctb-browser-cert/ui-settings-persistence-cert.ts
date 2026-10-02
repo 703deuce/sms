@@ -418,6 +418,8 @@ export async function certVoicemailGreeting(
   const greetingTab = page.getByRole("tab", { name: /^greeting$/i }).first();
   if (await greetingTab.isVisible().catch(() => false)) await greetingTab.click();
   await page.getByText(/loading/i).first().waitFor({ state: "hidden", timeout: 90_000 }).catch(() => undefined);
+  const writeTab = page.getByRole("button", { name: /write & generate/i }).first();
+  if (await writeTab.isVisible().catch(() => false)) await writeTab.click();
   const ta = page.locator("textarea").first();
   await ta.waitFor({ state: "visible", timeout: 30_000 }).catch(() => undefined);
   if (!(await ta.isVisible().catch(() => false))) {
