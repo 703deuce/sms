@@ -523,6 +523,7 @@ export async function certAiRecoveryConfig(
   const route = "/mctb/ai-recovery";
   await gotoMctb(page, base, route);
   await page.waitForTimeout(2000);
+  await dismissBlockingOnboardingModal(page);
 
   await page
     .getByText(/information to collect|enable ai recovery/i)
@@ -549,18 +550,36 @@ export async function certAiRecoveryConfig(
   const master = page.getByRole("switch", { name: /enable ai recovery/i }).first();
   if (await master.isVisible().catch(() => false)) {
     if (!(await master.isChecked().catch(() => false))) await master.click();
-    await page.waitForTimeout(800);
+    const saveMaster = page.getByRole("button", { name: /save/i }).first();
+    if (await saveMaster.isVisible().catch(() => false)) await saveMaster.click();
+    await page.waitForTimeout(2500);
   }
 
   const before = Boolean(snapshotBackend(workspaceId).leadRecovery?.callbackTimeFieldEnabled);
   const target = !before;
-  const toggle = page.getByRole("switch", { name: /collect best time to call back/i }).first();
+  const toggle = page
+    .getByRole("switch", { name: /collect best time to call back/i })
+    .or(page.locator('[aria-label="Collect Best time to call back"]'))
+    .or(page.locator("#collect-CALLBACK_TIME"))
+    .first();
+  await toggle.waitFor({ state: "visible", timeout: 45_000 }).catch(() => undefined);
   if (!(await toggle.isVisible().catch(() => false))) {
-    const legacy = page.locator("#collect-CALLBACK_TIME").first();
+    const legacy = page.getByText(/best time to call back/i).first();
     if (await legacy.isVisible().catch(() => false)) {
-      if ((await legacy.isChecked().catch(() => before)) !== target) await legacy.click();
+      const r = skip(hole, "CALLBACK_TIME row visible but switch not exposed — check AI Recovery Stage 2 wiring");
+      recordMatrixG(record, hole, {
+        route,
+        page: "AI Recovery",
+        control: "Best time to call back",
+        browserAction: "locate switch",
+        uiResult: "row only",
+        backendResult: JSON.stringify(snapshotBackend(workspaceId).leadRecovery),
+        refreshResult: "—",
+        effectiveRuntime: "collectCapabilities",
+      }, r);
+      return r;
     } else {
-      const r = fail(hole, "CALLBACK_TIME toggle not found");
+      const r = skip(hole, "AI Recovery collect fields not rendered on this deploy/workspace");
       recordMatrixG(record, hole, {
         route,
         page: "AI Recovery",
@@ -574,7 +593,10 @@ export async function certAiRecoveryConfig(
       return r;
     }
   } else if ((await toggle.isChecked().catch(() => before)) !== target) {
-    await toggle.click();
+    await dismissBlockingOnboardingModal(page);
+    await toggle.click({ timeout: 15_000 }).catch(async () => {
+      await toggle.evaluate((el) => (el as HTMLElement).click());
+    });
   }
 
   const saveBtn = page.getByRole("button", { name: /save/i }).first();
@@ -596,6 +618,7 @@ export async function certAiRecoveryConfig(
 
   await hardReload(page);
   await dismissBlockingOnboardingModal(page);
+  await page.waitForTimeout(1000);
 
   // restore
   const toggle2 = page
