@@ -1,7 +1,7 @@
 # MCTB full-app audit — settings, persistence, tenant isolation, standards
 
 **Date:** 2026-10-02  
-**Baseline:** `77107ec5` (master); follow-up wizard normalization fix pending push  
+**Baseline:** `77107ec5` + wizard terminal fix (`53837cd7`)  
 **Scope:** Missed Call Text Back — backend save paths, tenant boundaries, Transovo security/IA rules (automated + code review). Not a repeat of browser/590 matrix or PSTN certification.
 
 ---
@@ -14,7 +14,7 @@
 | **Settings persist to backend** | **PASS** (contract tests) — setup sections (phone, recovery, exclusions, notifications, links, sender mode, consent model) have dedicated persistence scripts; all **PASS** in commercial guards. |
 | **Tenant isolation** | **PASS** — platform inbound isolation test + new API isolation test (missed-call detail + booking links). |
 | **Existing Consent on Free** | **PASS** (runtime on master) — **not** paid-gated; attestation still required. Stale **test** expectations were wrong and are **fixed** in this pass. |
-| **Transovo standards (automated)** | **PASS** — stage-2 presentation, legacy import boundaries, commercial guards; consolidated matrix **60/61** until onboarding wizard test aligned with `complete` step (fixed in follow-up commit). |
+| **Transovo standards (automated)** | **PASS** — stage-2 presentation, legacy import boundaries, commercial guards; consolidated matrix **61/61** after onboarding `complete` step alignment. |
 
 ---
 
@@ -66,9 +66,11 @@ Each setup area maps to **`POST /api/mctb/setup`**, **`/api/mctb/handoff`**, **`
 
 ---
 
-## Bug fixed in this pass
+## Bugs fixed in this pass
 
-**Stale tests implied paid-only Existing Consent** while `setup-consent-eligibility.ts` on master correctly allows Free + platform sender / messaging ready. Tests `test-mctb-setup-consent.ts` and `test-mctb-setup-sections.ts` updated to match product + implementation.
+1. **Stale tests implied paid-only Existing Consent** while `setup-consent-eligibility.ts` on master correctly allows Free + platform sender / messaging ready. Tests `test-mctb-setup-consent.ts` and `test-mctb-setup-sections.ts` updated to match product + implementation.
+
+2. **Onboarding wizard test drift** — `normalizeOnboardingStep("complete")` returns `complete` (post–trial activation). Test expected legacy `ready`; `isWizardTerminalStep` / `inferResumeStep` / `wizardStageIndex` now treat `complete` as terminal alongside `ready`.
 
 ---
 
