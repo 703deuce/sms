@@ -28,6 +28,8 @@ export const MCTB_DEDICATED_SETUP_PATH_PREFIXES = [
   "/mctb/phone",
   "/mctb/text-back",
   "/mctb/notifications",
+  "/mctb/ai-recovery",
+  "/mctb/voicemail",
 ] as const;
 
 export function isMctbDedicatedSetupPath(pathname: string | null | undefined): boolean {

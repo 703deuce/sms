@@ -24,6 +24,8 @@ export function SaveBar({
         ) : null}
       </span>
       <Button
+        type="button"
+        aria-label={label}
         disabled={busy}
         onClick={async () => {
           if (!onSave) return

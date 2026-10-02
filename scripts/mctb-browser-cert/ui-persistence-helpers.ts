@@ -9,6 +9,44 @@ export type UiPersistenceHoleResult = {
   detail: string;
 };
 
+/** Stage 2 SaveBar uses @base-ui/react/button — not always exposed to getByRole in Playwright. */
+export function saveChangesButton(page: Page) {
+  return page
+    .locator('button[data-slot="button"], button')
+    .filter({ hasText: /^save changes$/i })
+    .first();
+}
+
+/** Primary save on AI Recovery (Stage 2 SaveBar + legacy header). */
+export async function clickAiRecoverySave(page: Page): Promise<boolean> {
+  await dismissBlockingOnboardingModal(page);
+  await page
+    .getByText(/information to collect|enable ai recovery/i)
+    .first()
+    .waitFor({ state: "visible", timeout: 90_000 })
+    .catch(() => undefined);
+  const save = saveChangesButton(page);
+  await save.scrollIntoViewIfNeeded().catch(() => undefined);
+  if (!(await save.isVisible().catch(() => false))) return false;
+  await dismissBlockingOnboardingModal(page);
+  const clickSave = () => save.click({ timeout: 30_000 });
+  await Promise.all([
+    page.waitForResponse(
+      (r) =>
+        (r.url().includes("/api/mctb/ai-recovery/settings") ||
+          r.url().includes("/api/mctb/lead-recovery")) &&
+        r.request().method() === "POST",
+      { timeout: 60_000 },
+    ),
+    clickSave(),
+  ]).catch(async () => {
+    await dismissBlockingOnboardingModal(page);
+    await clickSave();
+  });
+  await page.waitForTimeout(1500);
+  return true;
+}
+
 export async function dismissBlockingOnboardingModal(page: Page): Promise<void> {
   for (let i = 0; i < 4; i++) {
     const overlay = page.locator('[data-slot="dialog-overlay"]');

@@ -10,6 +10,7 @@ import {
   backendRuntime,
   clickSaveAndWaitApi,
   cooldownLabelFromMinutes,
+  clickAiRecoverySave,
   dismissBlockingOnboardingModal,
   gotoMctb,
   hardReload,
@@ -427,7 +428,10 @@ export async function certVoicemailGreeting(
     .first()
     .waitFor({ state: "visible", timeout: 60_000 })
     .catch(() => undefined);
-  const writeTab = greetingPanel.getByRole("button", { name: /write & generate/i }).first();
+  const writeTab = greetingPanel
+    .locator("button")
+    .filter({ hasText: /write & generate/i })
+    .first();
   if (await writeTab.isVisible().catch(() => false)) await writeTab.click();
   const ta = greetingPanel.locator("textarea").first();
   await ta.waitFor({ state: "visible", timeout: 30_000 }).catch(() => undefined);
@@ -449,10 +453,16 @@ export async function certVoicemailGreeting(
   const orig = await ta.inputValue();
   const trial = orig.includes(VOICEMAIL_PROBE) ? orig : `${orig} ${VOICEMAIL_PROBE}`.trim();
   await ta.fill(trial);
+  await ta.press("Tab").catch(() => undefined);
+  await page.waitForTimeout(300);
 
   const generateBtn = greetingPanel
-    .getByRole("button", { name: /generate preview|generate greeting|generate greeting with this voice/i })
+    .locator("button")
+    .filter({
+      hasText: /generate preview|generate greeting|generate greeting with this voice/i,
+    })
     .first();
+  await generateBtn.scrollIntoViewIfNeeded().catch(() => undefined);
   if (!(await generateBtn.isVisible().catch(() => false))) {
     const studioMissing = !(await greetingPanel
       .getByText(/current voicemail greeting/i)
@@ -476,9 +486,9 @@ export async function certVoicemailGreeting(
     }, r);
     return r;
   }
-  await generateBtn.click();
+  await generateBtn.click({ timeout: 15_000 });
   await page.waitForTimeout(8000);
-  const useBtn = greetingPanel.getByRole("button", { name: /use this greeting/i }).first();
+  const useBtn = greetingPanel.locator("button").filter({ hasText: /use this greeting/i }).first();
   if (!(await useBtn.isVisible().catch(() => false))) {
     const r = skip(hole, "Preview generation did not complete (TTS/provider)");
     recordMatrixG(record, hole, {
@@ -514,11 +524,12 @@ export async function certVoicemailGreeting(
 
   await ta2.fill(orig);
   const generateBtn2 = greetingPanel2
-    .getByRole("button", { name: /generate preview|generate greeting/i })
+    .locator("button")
+    .filter({ hasText: /generate preview|generate greeting/i })
     .first();
   await generateBtn2.click().catch(() => undefined);
   await page.waitForTimeout(8000);
-  const useRestore = greetingPanel2.getByRole("button", { name: /use this greeting/i }).first();
+  const useRestore = greetingPanel2.locator("button").filter({ hasText: /use this greeting/i }).first();
   if (await useRestore.isVisible().catch(() => false)) await useRestore.click().catch(() => undefined);
   await page.waitForTimeout(2000);
   const restored = !String(snapshotBackend(workspaceId).voicemail?.greetingText ?? "").includes(VOICEMAIL_PROBE);
@@ -577,8 +588,7 @@ export async function certAiRecoveryConfig(
   if (await master.isVisible().catch(() => false)) {
     if (!(await master.isChecked().catch(() => false))) await master.click();
     await page.waitForTimeout(400);
-    const saveMaster = page.getByRole("button", { name: /save/i }).first();
-    if (await saveMaster.isVisible().catch(() => false)) await saveMaster.click();
+    await clickAiRecoverySave(page);
     for (let i = 0; i < 20; i++) {
       if (snapshotBackend(workspaceId).leadRecovery?.enabled) break;
       await page.waitForTimeout(500);
@@ -633,19 +643,20 @@ export async function certAiRecoveryConfig(
     await page.waitForTimeout(400);
   }
 
-  const saveBtn = page.getByRole("button", { name: /save/i }).first();
-  if (await saveBtn.isVisible().catch(() => false)) {
-    await Promise.all([
-      page.waitForResponse(
-        (r) =>
-          (r.url().includes("/api/mctb/ai-recovery/settings") ||
-            r.url().includes("/api/mctb/lead-recovery")) &&
-          r.request().method() === "POST",
-        { timeout: 60_000 },
-      ),
-      saveBtn.click(),
-    ]).catch(() => saveBtn.click());
-    await page.waitForTimeout(1500);
+  const saved = await clickAiRecoverySave(page);
+  if (!saved) {
+    const r = fail(hole, "Save changes control not visible on AI Recovery page");
+    recordMatrixG(record, hole, {
+      route,
+      page: "AI Recovery",
+      control: "Save changes",
+      browserAction: "locate save",
+      uiResult: "missing",
+      backendResult: JSON.stringify({ before, target }),
+      refreshResult: "FAIL",
+      effectiveRuntime: "collectCapabilities",
+    }, r);
+    return r;
   }
   const pollCallbackCap = async (expected: boolean) => {
     for (let i = 0; i < 25; i++) {
@@ -673,9 +684,7 @@ export async function certAiRecoveryConfig(
     .first();
   if (await toggle2.isVisible().catch(() => false)) {
     if ((await toggle2.isChecked().catch(() => after)) !== before) await toggle2.click();
-    const saveBtn2 = page.getByRole("button", { name: /save/i }).first();
-    if (await saveBtn2.isVisible().catch(() => false)) await saveBtn2.click();
-    await page.waitForTimeout(2000);
+    await clickAiRecoverySave(page);
   }
   const restored = await pollCallbackCap(before);
 
