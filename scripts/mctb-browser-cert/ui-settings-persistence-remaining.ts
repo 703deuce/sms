@@ -1,6 +1,6 @@
 import type { Page } from "playwright";
 import type { CertRow } from "./matrix";
-import { snapshotBackend } from "./snapshot";
+import { refreshSnapshotBackend, snapshotBackend } from "./snapshot";
 import {
   CERT_RECIPIENT_EMAIL,
   ensureCertRecipientVisibleInUi,
@@ -433,13 +433,21 @@ export async function certPlatformRecoveryTemplate(
     return r;
   }
 
-  await page.waitForTimeout(3000);
-  const targetId = String(
-    snapshotBackend(workspaceId).persisted?.platformRecoveryTemplateId ??
-      backendRuntime(workspaceId).platformRecoveryTemplateId ??
-      "",
-  );
-  const backendOk = Boolean(targetId && targetId !== origId);
+  let targetId = "";
+  let backendOk = false;
+  for (let i = 0; i < 30; i++) {
+    const snap = await refreshSnapshotBackend(workspaceId);
+    targetId = String(
+      snap.persisted?.platformRecoveryTemplateId ??
+        snap.runtime?.platformRecoveryTemplateId ??
+        "",
+    );
+    if (targetId && targetId !== origId) {
+      backendOk = true;
+      break;
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
 
   await hardReload(page);
   let selectedCount = 0;
@@ -459,13 +467,18 @@ export async function certPlatformRecoveryTemplate(
     );
     if (nowId === origId) break;
   }
-  await page.waitForTimeout(2000);
-  const restoredId = String(
-    snapshotBackend(workspaceId).persisted?.platformRecoveryTemplateId ??
-      backendRuntime(workspaceId).platformRecoveryTemplateId ??
-      "",
-  );
-  const restored = restoredId === origId;
+  let restored = false;
+  for (let i = 0; i < 30; i++) {
+    const snap = await refreshSnapshotBackend(workspaceId);
+    const restoredId = String(
+      snap.persisted?.platformRecoveryTemplateId ?? snap.runtime?.platformRecoveryTemplateId ?? "",
+    );
+    if (restoredId === origId) {
+      restored = true;
+      break;
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
 
   const ok = backendOk && selected && restored;
   const r = ok ? pass(hole, "platform template switch + restore") : fail(hole, `backend=${backendOk} ui=${selected} restore=${restored}`);

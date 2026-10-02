@@ -453,8 +453,16 @@ export async function certVoicemailGreeting(
   const orig = await ta.inputValue();
   const trial = orig.includes(VOICEMAIL_PROBE) ? orig : `${orig} ${VOICEMAIL_PROBE}`.trim();
   await ta.fill(trial);
+  await ta.dispatchEvent("input", { bubbles: true });
+  await ta.dispatchEvent("change", { bubbles: true });
   await ta.press("Tab").catch(() => undefined);
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(500);
+  const filled = await ta.inputValue();
+  if (!filled.includes(VOICEMAIL_PROBE)) {
+    await ta.click();
+    await ta.press("Control+A");
+    await ta.type(trial, { delay: 5 });
+  }
 
   const generateBtn = greetingPanel
     .locator("button")
@@ -487,13 +495,9 @@ export async function certVoicemailGreeting(
     return r;
   }
   await generateBtn.click({ timeout: 15_000 });
-  await greetingPanel
-    .getByText(/generated preview ready|use this greeting/i)
-    .first()
-    .waitFor({ state: "visible", timeout: 120_000 })
-    .catch(() => undefined);
-  await page.waitForTimeout(2000);
-  const useBtn = greetingPanel.locator("button").filter({ hasText: /use this greeting/i }).first();
+  const useBtn = page.locator("button").filter({ hasText: /use this greeting/i }).first();
+  await useBtn.waitFor({ state: "visible", timeout: 120_000 }).catch(() => undefined);
+  await page.waitForTimeout(1000);
   if (!(await useBtn.isVisible().catch(() => false))) {
     const r = skip(hole, "Preview generation did not complete (TTS/provider)");
     recordMatrixG(record, hole, {
@@ -535,7 +539,7 @@ export async function certVoicemailGreeting(
     .first();
   await generateBtn2.click().catch(() => undefined);
   await page.waitForTimeout(8000);
-  const useRestore = greetingPanel2.locator("button").filter({ hasText: /use this greeting/i }).first();
+  const useRestore = page.locator("button").filter({ hasText: /use this greeting/i }).first();
   if (await useRestore.isVisible().catch(() => false)) await useRestore.click().catch(() => undefined);
   await page.waitForTimeout(2000);
   const pollVoicemailProbe = async (expectPresent: boolean) => {
