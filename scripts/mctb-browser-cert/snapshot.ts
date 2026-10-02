@@ -5,6 +5,10 @@ export type Ws1Snapshot = {
   effective?: Record<string, unknown>;
   exclusions?: Record<string, unknown>;
   handoff?: Record<string, unknown>;
+  runtime?: Record<string, unknown>;
+  onboarding?: Record<string, unknown>;
+  voicemail?: Record<string, unknown>;
+  leadRecovery?: Record<string, unknown>;
 };
 
 export function snapshotBackend(workspaceId: string): Ws1Snapshot {

@@ -15,6 +15,8 @@ import {
   resolveMctbPauseKind,
 } from "@/lib/mctb/schedule";
 import { resolveMctbTexmlHandlerMode } from "@/lib/mctb/texml-ingress/texml-mode-provision";
+import { loadLeadRecoveryConfigPersisted } from "@/lib/mctb/lead-recovery/config";
+import { deriveSimplifiedFieldEnabled } from "@/lib/mctb/ai-recovery/simplified-fields";
 
 const WORKSPACE_ID = process.env.WORKSPACE_ID?.trim() || "ws_1";
 const CERT_EXCLUSION_E164 = "+15550119999";
@@ -95,6 +97,23 @@ async function main() {
     select: { id: true, email: true, name: true },
   });
 
+  const leadRecovery = await loadLeadRecoveryConfigPersisted(WORKSPACE_ID);
+  const aiFieldToggles = deriveSimplifiedFieldEnabled(leadRecovery.collectCapabilities ?? []);
+
+  let voicemailGreetingText: string | null = null;
+  let voicemailBoxId: string | null = null;
+  if (runtime?.phoneNumberId) {
+    const box = await prisma.voicemailBox.findFirst({
+      where: { workspaceId: WORKSPACE_ID, phoneNumberId: runtime.phoneNumberId },
+      select: { id: true, greetingText: true },
+      orderBy: { createdAt: "asc" },
+    });
+    voicemailBoxId = box?.id ?? null;
+    voicemailGreetingText = box?.greetingText?.trim() || null;
+  }
+
+  const onboardingState = onboarding;
+
   console.log(
     JSON.stringify(
       {
@@ -137,6 +156,36 @@ async function main() {
           certRecipientEditedPresent: handoffRecipients.some(
             (r) => r.email === "mctb-browser-cert-edited@transovo.test",
           ),
+          emails: handoffRecipients.map((r) => r.email),
+        },
+        runtime: {
+          sendAfterNoAnswer: runtime?.sendAfterNoAnswer ?? null,
+          sendAfterBusy: runtime?.sendAfterBusy ?? null,
+          sendAfterRejected: runtime?.sendAfterRejected ?? null,
+          sendAfterTimeout: runtime?.sendAfterTimeout ?? null,
+          sendAfterVoicemail: runtime?.sendAfterVoicemail ?? null,
+          delaySeconds: runtime?.delaySeconds ?? null,
+          messageTemplate: runtime?.messageTemplate ?? null,
+          cooldownMinutes: runtime?.cooldownMinutes ?? null,
+          maxMessagesPerCaller: runtime?.maxMessagesPerCaller ?? null,
+          senderMode: runtime?.senderMode ?? null,
+          platformRecoveryTemplateId:
+            (runtime as { platformRecoveryTemplateId?: string })?.platformRecoveryTemplateId ??
+            null,
+        },
+        onboarding: {
+          forwardingCarrier: onboardingState.forwardingCarrier ?? null,
+          forwardingRingSeconds: onboardingState.forwardingRingSeconds ?? null,
+          businessNumberE164: onboardingState.businessNumberE164 ?? null,
+        },
+        voicemail: {
+          boxId: voicemailBoxId,
+          greetingText: voicemailGreetingText,
+        },
+        leadRecovery: {
+          enabled: leadRecovery.enabled,
+          callbackTimeFieldEnabled: aiFieldToggles.CALLBACK_TIME,
+          collectCapabilities: leadRecovery.collectCapabilities ?? [],
         },
       },
       null,
