@@ -439,7 +439,9 @@ export async function certVoicemailGreeting(
   const trial = orig.includes(VOICEMAIL_PROBE) ? orig : `${orig} ${VOICEMAIL_PROBE}`.trim();
   await ta.fill(trial);
 
-  const generateBtn = page.getByRole("button", { name: /generate preview|generate greeting/i }).first();
+  const generateBtn = page
+    .getByRole("button", { name: /generate preview|generate greeting|generate greeting with this voice/i })
+    .first();
   if (!(await generateBtn.isVisible().catch(() => false))) {
     const r = skip(hole, "Voicemail studio generate control not available");
     recordMatrixG(record, hole, {
@@ -599,6 +601,7 @@ export async function certAiRecoveryConfig(
     await toggle.click({ timeout: 15_000 }).catch(async () => {
       await toggle.evaluate((el) => (el as HTMLElement).click());
     });
+    await page.waitForTimeout(400);
   }
 
   const saveBtn = page.getByRole("button", { name: /save/i }).first();

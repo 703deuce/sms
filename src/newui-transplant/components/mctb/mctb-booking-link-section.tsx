@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { MctbBookingLinkDto } from "@/lib/mctb/booking-links/service";
 import { bookingLinkHostname, validateBookingLinkUrl } from "@/lib/mctb/booking-links/validate-url";
 import { FeatureEmphasisStrip, Pill, SettingRow } from "@/newui-transplant/components/app/kit";
+import { mctbRequestFormPublicPath } from "@/lib/mctb/request-form-shared";
 import { OPUS_CARD, OPUS_CONFIG_INSET } from "@/newui-transplant/components/app/opus-surfaces";
 import { Link2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -20,6 +21,12 @@ export function MctbBookingLinkSection() {
   const [url, setUrl] = useState("");
   const [label, setLabel] = useState("Book an appointment");
   const [linkId, setLinkId] = useState<string | null>(null);
+  const [requestFormEnabled, setRequestFormEnabled] = useState(false);
+  const requestFormEnabledRef = useRef(requestFormEnabled);
+  useEffect(() => {
+    requestFormEnabledRef.current = requestFormEnabled;
+  }, [requestFormEnabled]);
+  const [requestFormUrl, setRequestFormUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
@@ -51,6 +58,9 @@ export function MctbBookingLinkSection() {
       setUrl(activeUrl);
       setLabel(primary?.label || "Book an appointment");
       setLinkId(primary?.id ?? null);
+      setRequestFormEnabled(Boolean(r.requestFormEnabled));
+      const token = r.requestFormToken as string | undefined;
+      setRequestFormUrl(token ? mctbRequestFormPublicPath(token) : null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load booking link");
     } finally {
@@ -101,12 +111,14 @@ export function MctbBookingLinkSection() {
       await saveMctbSetup({
         ...(phoneNumberId ? { phoneNumberId } : {}),
         defaultLinkUrl: url.trim(),
+        requestFormEnabled: requestFormEnabledRef.current,
         activate: false,
       });
     } else {
       await saveMctbSetup({
         ...(phoneNumberId ? { phoneNumberId } : {}),
         defaultLinkUrl: null,
+        requestFormEnabled: requestFormEnabledRef.current,
         activate: false,
       });
     }
@@ -175,6 +187,29 @@ export function MctbBookingLinkSection() {
         </>
       ) : null}
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      <div className={cn(OPUS_CARD, OPUS_CONFIG_INSET, "flex flex-col gap-3")}>
+        <p className="text-sm font-medium">Public request form</p>
+        <SettingRow
+          title="Enable request form"
+          description="Send a structured form link instead of a single URL when appropriate."
+          control={
+            <Switch
+              checked={requestFormEnabled}
+              onCheckedChange={(v) => {
+                requestFormEnabledRef.current = v;
+                setRequestFormEnabled(v);
+              }}
+              aria-label="Enable request form"
+            />
+          }
+        />
+        {requestFormUrl ? (
+          <p className="text-xs font-mono text-muted-foreground break-all" aria-label="Request form URL">
+            {typeof window !== "undefined" ? window.location.origin : ""}
+            {requestFormUrl}
+          </p>
+        ) : null}
+      </div>
       <div className="flex justify-end border-t pt-4">
         <SaveBar onSave={onSave} />
       </div>

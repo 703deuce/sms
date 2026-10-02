@@ -101,8 +101,7 @@ export async function POST(request: Request) {
       body.enabledScenarios && typeof body.enabledScenarios === "object"
         ? (body.enabledScenarios as Partial<Record<LeadRecoveryScenarioKey, boolean>>)
         : undefined;
-    const config = await saveLeadRecoveryConfig(auth.workspaceId, {
-      enabled: body.enabled === true,
+    const patch: Parameters<typeof saveLeadRecoveryConfig>[1] = {
       enabledScenarios,
       enabledIntents: enabledScenarios
         ? intentsForEnabledScenarios(enabledScenarios)
@@ -157,7 +156,11 @@ export async function POST(request: Request) {
             ? null
             : undefined,
       version: typeof body.version === "number" ? body.version : undefined,
-    });
+    };
+    if (typeof body.enabled === "boolean") {
+      patch.enabled = body.enabled;
+    }
+    const config = await saveLeadRecoveryConfig(auth.workspaceId, patch);
     const health = await computeLeadRecoveryPolicyHealth(auth.workspaceId, config);
     return NextResponse.json({ data: { config, health } });
   } catch (err) {

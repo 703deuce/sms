@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TransplantMctbAiRecoveryPage } from "@/newui-transplant/mirror/routes/mctb/ai-recovery/page";
 import type { MctbAiRecoveryWired } from "@/newui-transplant/mirror/routes/mctb/ai-recovery/page";
 import {
@@ -28,6 +28,14 @@ export function NewUiMctbAiRecoveryPage() {
   > | null>(null);
   const [enabled, setEnabled] = useState(false);
   const [fields, setFields] = useState(DEFAULT_FIELDS);
+  const enabledRef = useRef(enabled);
+  const fieldsRef = useRef(fields);
+  useEffect(() => {
+    enabledRef.current = enabled;
+  }, [enabled]);
+  useEffect(() => {
+    fieldsRef.current = fields;
+  }, [fields]);
   const [bookingLinkEnabled, setBookingLinkEnabled] = useState(false);
   const [bookingLinkId, setBookingLinkId] = useState<string | null>(null);
   const [bookingLinkUrl, setBookingLinkUrl] = useState("");
@@ -95,13 +103,15 @@ export function NewUiMctbAiRecoveryPage() {
   }, [reload]);
 
   const onSave = useCallback(async () => {
+    const enabledNow = enabledRef.current;
+    const fieldsNow = fieldsRef.current;
     const resolvedLinkId = bookingLinkId;
     const settingsRes = await fetch("/api/mctb/ai-recovery/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        enabled,
-        fields,
+        enabled: enabledNow,
+        fields: fieldsNow,
         bookingLinkEnabled: bookingLinkEnabled && Boolean(resolvedLinkId && bookingLinkUrl.trim()),
         bookingLinkId: bookingLinkEnabled ? resolvedLinkId : null,
       }),
@@ -112,7 +122,7 @@ export function NewUiMctbAiRecoveryPage() {
         (settingsJson as { error?: string }).error || "Could not save AI Recovery settings",
       );
     }
-    if (enabled) {
+    if (enabledNow) {
       const lrRes = await fetch("/api/mctb/lead-recovery/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -131,9 +141,7 @@ export function NewUiMctbAiRecoveryPage() {
     bookingLinkId,
     bookingLinkLabel,
     bookingLinkUrl,
-    enabled,
     enabledScenarios,
-    fields,
     reload,
   ]);
 
@@ -156,8 +164,16 @@ export function NewUiMctbAiRecoveryPage() {
       bookingLinkLabel,
       bookingLinkReadOnly: true,
       bookingLinkEditHref: `${MCTB_ROUTES.textBack}?section=booking`,
-      onEnabledChange: setEnabled,
-      onFieldChange: (key, value) => setFields((f) => ({ ...f, [key]: value })),
+      onFieldChange: (key, value) =>
+        setFields((f) => {
+          const next = { ...f, [key]: value };
+          fieldsRef.current = next;
+          return next;
+        }),
+      onEnabledChange: (value) => {
+        enabledRef.current = value;
+        setEnabled(value);
+      },
       onBookingLinkEnabledChange: setBookingLinkEnabled,
       scenarios: scenarioDefs.map((def) => ({
         key: def.key,
