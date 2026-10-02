@@ -10,14 +10,19 @@ export type UiPersistenceHoleResult = {
 };
 
 export async function dismissBlockingOnboardingModal(page: Page): Promise<void> {
-  const dialog = page.locator('[data-slot="dialog-portal"]');
-  if (!(await dialog.isVisible().catch(() => false))) return;
-  await page.keyboard.press("Escape").catch(() => undefined);
-  await page.waitForTimeout(400);
-  const close = page.getByRole("button", { name: /close/i });
-  if (await close.isVisible().catch(() => false)) {
-    await close.click().catch(() => undefined);
+  for (let i = 0; i < 4; i++) {
+    const overlay = page.locator('[data-slot="dialog-overlay"]');
+    const portal = page.locator('[data-slot="dialog-portal"]');
+    const blocking = await overlay.isVisible().catch(() => false);
+    if (!blocking && !(await portal.isVisible().catch(() => false))) return;
+    await page.keyboard.press("Escape").catch(() => undefined);
     await page.waitForTimeout(400);
+    const close = page.getByRole("button", { name: /close|not now|dismiss|skip/i }).first();
+    if (await close.isVisible().catch(() => false)) {
+      await close.click().catch(() => undefined);
+      await page.waitForTimeout(500);
+    }
+    await overlay.waitFor({ state: "hidden", timeout: 5000 }).catch(() => undefined);
   }
 }
 
