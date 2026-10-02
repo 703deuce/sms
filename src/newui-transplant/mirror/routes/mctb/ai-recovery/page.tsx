@@ -104,6 +104,7 @@ export function TransplantMctbAiRecoveryPage({ wired }: { wired?: MctbAiRecovery
               {COLLECT.map((c) => (
                 <SettingRow key={c.label} title={c.label} description={c.description} control={
                   <Switch
+                    id={c.key === "CALLBACK_TIME" ? "collect-CALLBACK_TIME" : undefined}
                     checked={fields?.[c.key] ?? c.defaultOn}
                     onCheckedChange={(v) => wired?.onFieldChange?.(c.key, Boolean(v))}
                     aria-label={`Collect ${c.label}`}
