@@ -84,7 +84,7 @@ export async function certBusyTriggerRule(
 
   if ((await busyCb.isChecked().catch(() => target)) !== orig) await busyCb.click();
   await clickSaveAndWaitApi(page, /save rules|save changes|save/i);
-  const restored = Boolean(backendRuntime(workspaceId).sendAfterBusy) === orig;
+  const restored = await pollRuntimeField(workspaceId, "sendAfterBusy", orig);
 
   const ok = backendOk && uiOk && restored && (http === null || http < 400);
   const r = ok ? pass(hole, "busy toggle + restore") : fail(hole, `backend=${backendOk} ui=${uiOk} restore=${restored}`);
@@ -149,7 +149,7 @@ export async function certBookingLinkUrl(
   await page.locator("#mctb-booking-url").fill(origUrl);
   if (!origUrl && (await sendSwitch.isChecked().catch(() => true))) await sendSwitch.click();
   await clickSaveAndWaitApi(page, /save/i);
-  const restored = String(backendRuntime(workspaceId).defaultLinkUrl ?? "") === origUrl;
+  const restored = await pollRuntimeField(workspaceId, "defaultLinkUrl", origUrl);
 
   const ok = urlOk && urlUi && restored;
   const r = ok ? pass(hole, "booking URL persist") : fail(hole, `url=${urlOk} ui=${urlUi} restore=${restored}`);
@@ -212,7 +212,7 @@ export async function certRequestFormToggle(
 
   if ((await formSwitch.isChecked().catch(() => targetForm)) !== origForm) await formSwitch.click();
   await clickSaveAndWaitApi(page, /save form settings|save/i);
-  const restored = Boolean(backendRuntime(workspaceId).requestFormEnabled) === origForm;
+  const restored = await pollRuntimeField(workspaceId, "requestFormEnabled", origForm);
 
   const ok = formOk && formUi && restored;
   const r = ok ? pass(hole, "request form toggle") : fail(hole, `form=${formOk} ui=${formUi} restore=${restored}`);
@@ -280,7 +280,7 @@ export async function certForwardingCarrier(
     carrierLabels[orig] ?? new RegExp(orig, "i"),
   );
   await clickSaveAndWaitApi(page, /save/i, ["/api/mctb/setup", "/api/mctb/onboarding"]);
-  const restored = String(snapshotBackend(workspaceId).onboarding?.forwardingCarrier ?? orig) === orig;
+  const restored = await pollOnboardingField(workspaceId, "forwardingCarrier", orig);
 
   const ok = backendOk && restored;
   const r = ok ? pass(hole, `carrier ${orig} → ${target} → restore`) : fail(hole, `save=${backendOk} restore=${restored}`);

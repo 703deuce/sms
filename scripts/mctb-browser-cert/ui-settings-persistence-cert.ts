@@ -100,7 +100,7 @@ export async function certMissedCallTriggerRules(
     if (now !== origVoicemail) await cbAfter.click();
     await clickSaveAndWaitApi(page, /save rules|save changes|save/i);
   }
-  const restored = Boolean(backendRuntime(workspaceId).sendAfterVoicemail) === origVoicemail;
+  const restored = await pollRuntimeField(workspaceId, "sendAfterVoicemail", origVoicemail);
 
   const ok = backendOk && uiOk && restored && (http === null || http < 400);
   const r = ok ? pass(hole, "toggle voicemail + restore") : fail(hole, `backend=${backendOk} ui=${uiOk} restore=${restored} http=${http}`);
@@ -517,7 +517,8 @@ export async function certVoicemailGreeting(
   ]).catch(() => useBtn.click());
   await page.waitForTimeout(2000);
 
-  const afterText = String(snapshotBackend(workspaceId).voicemail?.greetingText ?? "");
+  const snapAfterSave = await refreshSnapshotBackend(workspaceId);
+  const afterText = String(snapAfterSave.voicemail?.greetingText ?? "");
   const backendOk = afterText.includes(VOICEMAIL_PROBE);
 
   await hardReload(page);
@@ -537,7 +538,18 @@ export async function certVoicemailGreeting(
   const useRestore = greetingPanel2.locator("button").filter({ hasText: /use this greeting/i }).first();
   if (await useRestore.isVisible().catch(() => false)) await useRestore.click().catch(() => undefined);
   await page.waitForTimeout(2000);
-  const restored = !String(snapshotBackend(workspaceId).voicemail?.greetingText ?? "").includes(VOICEMAIL_PROBE);
+  const pollVoicemailProbe = async (expectPresent: boolean) => {
+    for (let i = 0; i < 25; i++) {
+      const snap = await refreshSnapshotBackend(workspaceId);
+      const has = String(snap.voicemail?.greetingText ?? "").includes(VOICEMAIL_PROBE);
+      if (has === expectPresent) return true;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    const snap = await refreshSnapshotBackend(workspaceId);
+    const has = String(snap.voicemail?.greetingText ?? "").includes(VOICEMAIL_PROBE);
+    return has === expectPresent;
+  };
+  const restored = await pollVoicemailProbe(false);
 
   const ok = backendOk && uiAfter && restored;
   const r = ok ? pass(hole, "greeting text UI persistence") : fail(hole, `backend=${backendOk} ui=${uiAfter} restore=${restored}`);
@@ -591,17 +603,23 @@ export async function certAiRecoveryConfig(
 
   const master = page.getByRole("switch", { name: /enable ai recovery/i }).first();
   if (await master.isVisible().catch(() => false)) {
-    if (!(await master.isChecked().catch(() => false))) await master.click();
-    await page.waitForTimeout(400);
-    await clickAiRecoverySave(page);
-    for (let i = 0; i < 20; i++) {
-      if (snapshotBackend(workspaceId).leadRecovery?.enabled) break;
-      await page.waitForTimeout(500);
+    await master.scrollIntoViewIfNeeded().catch(() => undefined);
+    const masterOn = await master.isChecked().catch(() => false);
+    if (!masterOn) {
+      await master.click();
+      await page.waitForTimeout(400);
+      await clickAiRecoverySave(page);
+      for (let i = 0; i < 20; i++) {
+        const snap = await refreshSnapshotBackend(workspaceId);
+        if (snap.leadRecovery?.enabled) break;
+        await page.waitForTimeout(500);
+      }
+      await page.waitForTimeout(1000);
     }
-    await page.waitForTimeout(1000);
   }
 
-  const capsBefore = (snapshotBackend(workspaceId).leadRecovery?.collectCapabilities as string[]) ?? [];
+  const capsSnap = await refreshSnapshotBackend(workspaceId);
+  const capsBefore = (capsSnap.leadRecovery?.collectCapabilities as string[]) ?? [];
   const before =
     capsBefore.includes("CALLBACK_TIME") || capsBefore.includes("CALLBACK_NUMBER");
   const target = !before;
@@ -682,13 +700,20 @@ export async function certAiRecoveryConfig(
 
   await hardReload(page);
   await dismissBlockingOnboardingModal(page);
+  await page
+    .getByText(/information to collect/i)
+    .first()
+    .waitFor({ state: "visible", timeout: 60_000 })
+    .catch(() => undefined);
   await page.waitForTimeout(1000);
 
   // restore
   const toggle2 = callbackSwitch();
   if (await toggle2.isVisible().catch(() => false)) {
     await toggle2.scrollIntoViewIfNeeded().catch(() => undefined);
-    if ((await toggle2.isChecked().catch(() => after)) !== before) await toggle2.click();
+    const uiAfterReload = await toggle2.isChecked().catch(() => after);
+    if (uiAfterReload !== before) await toggle2.click({ timeout: 15_000 });
+    await page.waitForTimeout(400);
     await clickAiRecoverySave(page);
   }
   const restored = await pollCallbackCap(before);
