@@ -555,7 +555,9 @@ export async function certAiRecoveryConfig(
     await page.waitForTimeout(2500);
   }
 
-  const before = Boolean(snapshotBackend(workspaceId).leadRecovery?.callbackTimeFieldEnabled);
+  const capsBefore = (snapshotBackend(workspaceId).leadRecovery?.collectCapabilities as string[]) ?? [];
+  const before =
+    capsBefore.includes("CALLBACK_TIME") || capsBefore.includes("CALLBACK_NUMBER");
   const target = !before;
   const toggle = page
     .getByRole("switch", { name: /collect best time to call back/i })
@@ -613,8 +615,20 @@ export async function certAiRecoveryConfig(
     ]).catch(() => saveBtn.click());
     await page.waitForTimeout(1500);
   }
-  const backendOk = await pollLeadRecoveryField(workspaceId, "callbackTimeFieldEnabled", target);
-  const after = Boolean(snapshotBackend(workspaceId).leadRecovery?.callbackTimeFieldEnabled);
+  const pollCallbackCap = async (expected: boolean) => {
+    for (let i = 0; i < 25; i++) {
+      const caps = (snapshotBackend(workspaceId).leadRecovery?.collectCapabilities as string[]) ?? [];
+      const on = caps.includes("CALLBACK_TIME") || caps.includes("CALLBACK_NUMBER");
+      if (on === expected) return true;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    const caps = (snapshotBackend(workspaceId).leadRecovery?.collectCapabilities as string[]) ?? [];
+    return (caps.includes("CALLBACK_TIME") || caps.includes("CALLBACK_NUMBER")) === expected;
+  };
+  const backendOk = await pollCallbackCap(target);
+  const capsAfter = (snapshotBackend(workspaceId).leadRecovery?.collectCapabilities as string[]) ?? [];
+  const after =
+    capsAfter.includes("CALLBACK_TIME") || capsAfter.includes("CALLBACK_NUMBER");
 
   await hardReload(page);
   await dismissBlockingOnboardingModal(page);
@@ -631,7 +645,7 @@ export async function certAiRecoveryConfig(
     if (await saveBtn2.isVisible().catch(() => false)) await saveBtn2.click();
     await page.waitForTimeout(2000);
   }
-  const restored = await pollLeadRecoveryField(workspaceId, "callbackTimeFieldEnabled", before);
+  const restored = await pollCallbackCap(before);
 
   const ok = backendOk && restored;
   const r = ok ? pass(hole, "CALLBACK_TIME field toggle") : fail(hole, `backend=${backendOk} restore=${restored}`);
