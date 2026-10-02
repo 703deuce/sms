@@ -10,7 +10,7 @@ import { MCTB_WIZARD_PRIMARY_STEPS } from "../src/lib/mctb/onboarding/wizard-flo
 assert.equal(normalizeOnboardingStep("business"), "business_line");
 assert.equal(normalizeOnboardingStep("connect"), "connect_calls");
 assert.equal(normalizeOnboardingStep("live_test"), "review_test");
-assert.equal(normalizeOnboardingStep("complete"), "ready");
+assert.equal(normalizeOnboardingStep("complete"), "complete");
 assert.equal(MCTB_WIZARD_PRIMARY_STEPS.length, 7);
 
 const fresh = defaultMctbOnboardingState();

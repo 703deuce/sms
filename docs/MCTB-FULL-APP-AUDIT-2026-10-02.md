@@ -1,7 +1,7 @@
 # MCTB full-app audit — settings, persistence, tenant isolation, standards
 
 **Date:** 2026-10-02  
-**Baseline:** `ac3651b6` (master)  
+**Baseline:** `77107ec5` (master); follow-up wizard normalization fix pending push  
 **Scope:** Missed Call Text Back — backend save paths, tenant boundaries, Transovo security/IA rules (automated + code review). Not a repeat of browser/590 matrix or PSTN certification.
 
 ---
@@ -14,7 +14,7 @@
 | **Settings persist to backend** | **PASS** (contract tests) — setup sections (phone, recovery, exclusions, notifications, links, sender mode, consent model) have dedicated persistence scripts; all **PASS** in commercial guards. |
 | **Tenant isolation** | **PASS** — platform inbound isolation test + new API isolation test (missed-call detail + booking links). |
 | **Existing Consent on Free** | **PASS** (runtime on master) — **not** paid-gated; attestation still required. Stale **test** expectations were wrong and are **fixed** in this pass. |
-| **Transovo standards (automated)** | **PASS** — stage-2 presentation, legacy import boundaries, commercial guards, consolidated matrix (58+ steps; prior consent-test drift caused 3 false matrix failures). |
+| **Transovo standards (automated)** | **PASS** — stage-2 presentation, legacy import boundaries, commercial guards; consolidated matrix **60/61** until onboarding wizard test aligned with `complete` step (fixed in follow-up commit). |
 
 ---
 

@@ -57,7 +57,7 @@ export function normalizeCompletedSteps(steps: unknown): MctbOnboardingStep[] {
 
 export function wizardStageIndex(step: MctbOnboardingStep): number {
   const canonical = normalizeOnboardingStep(step);
-  if (canonical === "ready") return MCTB_WIZARD_PRIMARY_STEPS.length;
+  if (canonical === "ready" || canonical === "complete") return MCTB_WIZARD_PRIMARY_STEPS.length;
   const idx = MCTB_WIZARD_PRIMARY_STEPS.indexOf(canonical);
   return idx >= 0 ? idx : 0;
 }
@@ -68,13 +68,14 @@ export function wizardStageLabel(step: MctbOnboardingStep): string {
 }
 
 export function isWizardTerminalStep(step: MctbOnboardingStep): boolean {
-  return normalizeOnboardingStep(step) === "ready";
+  const canonical = normalizeOnboardingStep(step);
+  return canonical === "ready" || canonical === "complete";
 }
 
 /** Infer best resume step from saved configuration when currentStep is stale. */
 export function inferResumeStep(state: MctbOnboardingState): MctbOnboardingStep {
   const current = normalizeOnboardingStep(state.currentStep);
-  if (current === "ready") return "ready";
+  if (current === "ready" || current === "complete") return current;
 
   const completed = new Set(normalizeCompletedSteps(state.completedSteps));
 
