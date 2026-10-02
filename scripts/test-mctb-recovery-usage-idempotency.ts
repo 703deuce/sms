@@ -74,7 +74,11 @@ async function runDbProof(): Promise<void> {
     workspaceId,
     missedCallEventId: eventId,
   });
-  assert.equal(first.reserved, true, "25th recovery should reserve");
+  assert.equal(
+    first.reserved,
+    true,
+    `${MCTB_FREE_MONTHLY_RECOVERY_LIMIT}th recovery should reserve (seeded at limit-1)`,
+  );
 
   const second = await reserveMctbRecoveryUnit({
     workspaceId,
@@ -97,7 +101,9 @@ async function runDbProof(): Promise<void> {
   await prisma.workspaceLimits.deleteMany({ where: { workspaceId } });
   await prisma.workspace.delete({ where: { id: workspaceId } });
 
-  console.log("test-mctb-recovery-usage-idempotency: DB PASS (25th ok, replay free, 26th blocked)");
+  console.log(
+    `test-mctb-recovery-usage-idempotency: DB PASS (${MCTB_FREE_MONTHLY_RECOVERY_LIMIT}th ok, replay free, ${MCTB_FREE_MONTHLY_RECOVERY_LIMIT + 1}th blocked)`,
+  );
 }
 
 if (!DATABASE_URL) {

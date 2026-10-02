@@ -9,6 +9,11 @@ export async function POST(request: Request) {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
+    const { assertMctbCapability } = await import("@/lib/mctb/capabilities");
+    const gate = await assertMctbCapability(auth.workspaceId, "aiRecoveryEntitled");
+    if (!gate.ok) {
+      return NextResponse.json({ error: gate.message || "AI Recovery is not enabled." }, { status: 403 });
+    }
     const body = (await request.json()) as {
       message?: string;
       context?: {
