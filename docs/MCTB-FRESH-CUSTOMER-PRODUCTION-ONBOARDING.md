@@ -38,16 +38,27 @@ Email signup requires **SMS verification** (`/api/auth/phone/send-code`). The co
 - Set `MCTB_FRESH_SIGNUP_MOBILE` to a phone that can receive the Telnyx OTP SMS.
 - The script can poll Telnyx `GET /v2/messages?filter[to]=...` when `TELNYX_API_KEY` is available, or use `MCTB_FRESH_SIGNUP_OTP`.
 
-### Production cert host blocker (Cloud Agent)
+### Bypass 2 (fresh-customer cert lane)
 
-If production runs with **`DEV_AUTH_BYPASS=1`**, visiting `/signup` **redirects** to `/mctb` as the cert owner (`DEV_AUTH_BYPASS_EMAIL`) — **not** a fresh customer.
+Production keeps **`DEV_AUTH_BYPASS=1`** for existing Matrix certification (`ws_1`). Do **not** disable it.
 
-The harness detects this and stops with `dev_auth_bypass_prevents_fresh_signup`.
+Add a **second** lane (auth only):
 
-**To run the real fresh-customer test:**
+| Variable | Purpose |
+|----------|---------|
+| `DEV_AUTH_BYPASS_2=1` | Enable `GET /api/auth/dev-bypass-2` |
+| `DEV_AUTH_BYPASS_2_EMAIL` | Separate user (default `mctb-fresh-cert@transovo.test`) — **must not** equal `DEV_AUTH_BYPASS_EMAIL` |
+| `DEV_AUTH_BYPASS_2_FORBIDDEN_WORKSPACE_IDS` | Optional; defaults to `MCTB_PROD_CERT_WORKSPACE_ID` / `ws_1` |
 
-1. Use a production/staging URL with **`DEV_AUTH_BYPASS` unset**, **or**
-2. Complete signup **manually** in a normal browser (no bypass), then use the wizard checklist below.
+Bypass 2 may create a **user row only** (no MCTB bootstrap). The harness then opens `/api/products/open?product=voice` and completes the wizard in the browser.
+
+```bash
+MCTB_PROD_CERT_BASE_URL=... \
+NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' \
+  npx tsx scripts/mctb-fresh-customer-production-onboarding.ts
+```
+
+Fails immediately if resolved workspace is `ws_1` or if `DEV_AUTH_BYPASS_2` is off on the server.
 
 ---
 

@@ -34,27 +34,45 @@ export async function getActiveWorkspaceType(): Promise<WorkspaceTypeCookie> {
   return "BUSINESS";
 }
 
+function parseSessionCookie(raw: string | undefined): Session | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(decodeURIComponent(raw)) as Session;
+  } catch {
+    return null;
+  }
+}
+
 export async function getActiveWorkspaceId() {
   const jar = await cookies();
   const fromCookie = jar.get(WORKSPACE_COOKIE)?.value;
-  const dev = await resolveDevAutoSession();
-  if (dev && !fromCookie) return dev.workspaceId;
+  const sessionFromCookie = parseSessionCookie(jar.get(SESSION_COOKIE)?.value);
 
-  const session = await getSession();
-  if (!session) return fromCookie || dev?.workspaceId || "";
-
-  try {
-    const { resolvePreferredBusinessWorkspaceId } = await import(
-      "@/lib/workspace/preferred-business-workspace"
-    );
-    return await resolvePreferredBusinessWorkspaceId(session.userId, fromCookie);
-  } catch {
+  // Real session cookie wins over DEV_AUTH_BYPASS auto-session (fresh-cert lane / bypass 2).
+  if (sessionFromCookie) {
+    try {
+      const { resolvePreferredBusinessWorkspaceId } = await import(
+        "@/lib/workspace/preferred-business-workspace"
+      );
+      const resolved = await resolvePreferredBusinessWorkspaceId(
+        sessionFromCookie.userId,
+        fromCookie,
+      );
+      if (resolved) return resolved;
+    } catch {
+      /* fall through */
+    }
     if (fromCookie) return fromCookie;
     const membership = await getPrisma().membership.findFirst({
-      where: { userId: session.userId },
+      where: { userId: sessionFromCookie.userId },
     });
     return membership?.workspaceId || "";
   }
+
+  const dev = await resolveDevAutoSession();
+  if (dev) return fromCookie || dev.workspaceId;
+
+  return fromCookie || "";
 }
 
 export function encodeSession(session: Session) {

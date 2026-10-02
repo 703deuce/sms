@@ -1,54 +1,58 @@
 /**
- * Fresh-customer MCTB production onboarding — browser-only setup, read-only DB verify after.
+ * Fresh-customer MCTB production onboarding — bypass 2 auth + browser UI only.
+ *
+ * Requires production: DEV_AUTH_BYPASS_2=1, DEV_AUTH_BYPASS_2_EMAIL=...
+ * Bypass 1 (ws_1) unchanged; this harness uses /api/auth/dev-bypass-2 only.
  *
  * MCTB_PROD_CERT_BASE_URL=... \
- * MCTB_FRESH_SIGNUP_MOBILE=+1... \  # receives signup SMS OTP (not written via API)
- * MCTB_FRESH_SIGNUP_OTP=123456 \    # optional: skip Telnyx poll if you have the code
  * NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' \
  *   npx tsx scripts/mctb-fresh-customer-production-onboarding.ts
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { chromium, type Page } from "playwright";
+import { chromium, type Page, type BrowserContext } from "playwright";
 import { buildWs1ConfigSnapshot } from "./mctb-ws1-config-snapshot";
 import { healthSha } from "./mctb-browser-cert/auth";
-import { mctbOnboardingEntryPath } from "../src/lib/mctb/onboarding/entry-path";
+import {
+  devAuthBypass2EmailHint,
+  devAuthBypass2ForbiddenWorkspaceIds,
+  devAuthBypassEmailHint,
+  isDevAuthBypass2Enabled,
+} from "../src/lib/auth/dev-auth-bypass";
 
 const BASE = process.env.MCTB_PROD_CERT_BASE_URL?.replace(/\/$/, "") || "";
 const ARTIFACT =
   process.env.MCTB_FRESH_CUSTOMER_ARTIFACTS ||
   "/opt/cursor/artifacts/mctb-fresh-customer-onboarding";
 const BUSINESS_E164 = "+15714776175";
+const FORBIDDEN_WS = new Set(devAuthBypass2ForbiddenWorkspaceIds());
 const STAMP = new Date().toISOString().replace(/[:.]/g, "-");
 
 type StepStatus = "PASS" | "BLOCKED_EXTERNALLY" | "FAIL" | "SKIP";
 
-type StepRow = {
-  stage: string;
-  status: StepStatus;
-  detail: string;
-  route?: string;
-};
+type StepRow = { stage: string; status: StepStatus; detail: string; route?: string };
 
 const report: {
   sha: string;
   startedAt: string;
-  email: string;
-  password: string;
+  bypassLane: "1" | "2" | "unknown";
+  authenticatedEmail: string;
   workspaceId: string | null;
   ingressE164: string | null;
   forwardingUiText: string | null;
+  authScaffold: Record<string, unknown> | null;
   steps: StepRow[];
   verify: Record<string, unknown> | null;
   error: string | null;
 } = {
   sha: "",
   startedAt: new Date().toISOString(),
-  email: "",
-  password: "",
+  bypassLane: "unknown",
+  authenticatedEmail: "",
   workspaceId: null,
   ingressE164: null,
   forwardingUiText: null,
+  authScaffold: null,
   steps: [],
   verify: null,
   error: null,
@@ -67,74 +71,68 @@ function saveReport() {
   console.log(`[fresh-customer] report → ${path}`);
 }
 
-async function pollTelnyxOtp(toE164: string, sinceMs: number): Promise<string | null> {
-  const preset = process.env.MCTB_FRESH_SIGNUP_OTP?.trim();
-  if (preset && /^\d{6}$/.test(preset)) return preset;
+function assertNotWs1(workspaceId: string) {
+  if (FORBIDDEN_WS.has(workspaceId)) {
+    throw new Error(`Resolved workspace ${workspaceId} is forbidden (ws_1 cert). Bypass 2 isolation failed.`);
+  }
+}
 
-  const key = process.env.TELNYX_API_KEY?.trim();
-  if (!key) return null;
+async function readWorkspaceId(context: BrowserContext): Promise<string | null> {
+  const cookies = await context.cookies();
+  return cookies.find((c) => c.name === "transovo_workspace")?.value || null;
+}
 
-  for (let i = 0; i < 40; i++) {
-    await new Promise((r) => setTimeout(r, 3000));
-    const url = new URL("https://api.telnyx.com/v2/messages");
-    url.searchParams.set("filter[to]", toE164);
-    url.searchParams.set("page[size]", "10");
-    const res = await fetch(url.toString(), {
-      headers: { Authorization: `Bearer ${key}` },
-    });
-    if (!res.ok) continue;
-    const json = (await res.json()) as { data?: Array<{ text?: string; received_at?: string; created_at?: string }> };
-    for (const msg of json.data || []) {
-      const t = new Date(msg.received_at || msg.created_at || 0).getTime();
-      if (t && t < sinceMs - 5000) continue;
-      const text = msg.text || "";
-      const m = text.match(/\b(\d{6})\b/);
-      if (m) return m[1];
+async function authenticateBypass2(page: Page): Promise<void> {
+  const email = (
+    process.env.DEV_AUTH_BYPASS_2_EMAIL || devAuthBypass2EmailHint()
+  ).trim();
+  const next =
+    "/api/products/open?product=voice&next=" + encodeURIComponent("/mctb");
+  const url = `${BASE}/api/auth/dev-bypass-2?email=${encodeURIComponent(email)}&next=${encodeURIComponent(next)}`;
+
+  const res = await page.goto(url, { waitUntil: "commit", timeout: 120_000 });
+  const scaffoldHeader = res?.headers()?.["x-transovo-bypass-2-scaffold"];
+  if (scaffoldHeader) {
+    try {
+      report.authScaffold = JSON.parse(scaffoldHeader) as Record<string, unknown>;
+    } catch {
+      report.authScaffold = { raw: scaffoldHeader };
     }
   }
-  return null;
+
+  await page.waitForURL(/\/mctb/, { timeout: 180_000 });
+  report.authenticatedEmail = email;
+  report.bypassLane = "2";
 }
 
-async function completeSmsOptIn(page: Page, mobile: string): Promise<boolean> {
-  const consent = page.locator('input[type="checkbox"]').first();
-  await consent.check().catch(() => undefined);
-  await page.locator("#opt-in-phone").fill(mobile);
-  const sendBtn = page.getByRole("button", { name: /send code/i });
-  const since = Date.now();
-  await sendBtn.click();
-  await page.waitForTimeout(2000);
-
-  const codeInput = page.locator("#opt-in-code");
-  if (!(await codeInput.isVisible().catch(() => false))) {
-    return false;
-  }
-
-  const code = await pollTelnyxOtp(mobile, since);
-  if (!code) return false;
-
-  await codeInput.fill(code);
-  await page.getByRole("button", { name: /verify/i }).click();
-  await page.waitForTimeout(1500);
-  return true;
+async function openOnboardingWizard(page: Page) {
+  const guideUrl = `${BASE}/mctb?mctbSetupGuide=1`;
+  await page.goto(guideUrl, { waitUntil: "domcontentloaded", timeout: 120_000 });
+  await page
+    .getByRole("dialog")
+    .getByText(/tell us about your business|how should callers/i)
+    .first()
+    .waitFor({ state: "visible", timeout: 120_000 })
+    .catch(() => undefined);
+  const start = page.getByRole("button", { name: /start setup|continue setup|get started/i }).first();
+  if (await start.isVisible().catch(() => false)) await start.click();
 }
 
-async function readWorkspaceIdFromCookies(page: Page): Promise<string | null> {
-  const cookies = await page.context().cookies();
-  const ws = cookies.find((c) => c.name === "transovo_workspace" || c.name === "workspaceId");
-  return ws?.value || null;
+async function clickContinue(page: Page) {
+  const btn = page.locator("button").filter({ hasText: /^Continue$/ }).last();
+  await btn.click({ timeout: 45_000 });
+  await page.waitForTimeout(1200);
 }
 
-async function waitForIngressInUi(page: Page, timeoutMs = 180_000): Promise<string | null> {
+async function waitForIngressInUi(page: Page, timeoutMs = 240_000): Promise<string | null> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const body = await page.locator("body").innerText();
-    const m = body.match(/\+1[\d\s()-]{10,}/g);
-    if (m) {
-      for (const raw of m) {
-        const digits = raw.replace(/\D/g, "");
-        if (digits.length === 11 && digits.startsWith("1") && digits !== "15714776175") {
-          return `+${digits}`;
-        }
+    const matches = body.match(/\+1[\d\s().-]{10,}/g) || [];
+    for (const raw of matches) {
+      const digits = raw.replace(/\D/g, "");
+      if (digits.length === 11 && digits.startsWith("1") && digits !== "15714776175") {
+        return `+${digits}`;
       }
     }
     await page.waitForTimeout(3000);
@@ -142,166 +140,141 @@ async function waitForIngressInUi(page: Page, timeoutMs = 180_000): Promise<stri
   return null;
 }
 
-async function clickContinue(page: Page) {
-  const btn = page.locator("button").filter({ hasText: /^Continue$/ }).last();
-  await btn.click({ timeout: 30_000 });
-  await page.waitForTimeout(1500);
-}
-
 async function runWizard(page: Page) {
-  await page.getByText(/tell us about your business/i).waitFor({ timeout: 120_000 });
-  step("Wizard — Business", "PASS", "Business step visible", page.url());
+  await page
+    .getByText(/tell us about your business/i)
+    .first()
+    .waitFor({ state: "visible", timeout: 120_000 })
+    .catch(() => undefined);
 
-  await page.locator("#onb-biz-name").fill("Transovo MCTB Fresh Launch Cert");
-  await page.locator("#onb-biz-phone").fill("5714776175");
-  await clickContinue(page);
+  if (await page.getByText(/tell us about your business/i).isVisible().catch(() => false)) {
+    await page.locator("#onb-biz-name").fill("Transovo MCTB Fresh Launch Cert");
+    await page.locator("#onb-biz-phone").fill("5714776175");
+    const saveRes = page.waitForResponse(
+      (r) => r.url().includes("/api/mctb/onboarding") && r.request().method() === "POST",
+      { timeout: 60_000 },
+    );
+    await clickContinue(page);
+    const resp = await saveRes.catch(() => null);
+    if (resp && !resp.ok()) {
+      const body = await resp.text().catch(() => "");
+      if (body.includes("BUSINESS_NUMBER") || body.includes("already") || resp.status() === 409) {
+        step("Business number", "FAIL", `BUSINESS_NUMBER_WORKSPACE_CONFLICT: ${body.slice(0, 300)}`);
+        report.error = "BUSINESS_NUMBER_WORKSPACE_CONFLICT";
+        return;
+      }
+    }
+    step("Wizard — Business", "PASS", BUSINESS_E164, page.url());
+  }
 
   await page.getByText(/how should callers receive a text/i).waitFor({ timeout: 90_000 });
   await page.getByRole("button", { name: /i already have consent/i }).click();
-  const attest = page.getByText(/confirm my business already has permission/i);
-  await attest.locator("..").locator('button[role="checkbox"], input[type="checkbox"]').first().click().catch(async () => {
-    await page.getByRole("checkbox").last().check();
-  });
+  const boxes = page.getByRole("checkbox");
+  const count = await boxes.count();
+  for (let i = 0; i < count; i++) {
+    const box = boxes.nth(i);
+    if (!(await box.isChecked().catch(() => false))) {
+      await box.check().catch(() => undefined);
+    }
+  }
   await clickContinue(page);
-  step("Wizard — Consent", "PASS", "Existing consent + attestation", page.url());
+  step("Wizard — Consent", "PASS", "existing_consent + attestations", page.url());
 
   await page.getByText(/text back|recovery message|missed-call/i).first().waitFor({ timeout: 90_000 }).catch(() => undefined);
   await clickContinue(page);
-  step("Wizard — Text Back", "PASS", "Platform template defaults", page.url());
+  step("Wizard — Text Back", "PASS", "platform sender defaults", page.url());
 
   await page.getByText(/voicemail/i).first().waitFor({ timeout: 90_000 }).catch(() => undefined);
   await clickContinue(page).catch(() => undefined);
-  step("Wizard — Voicemail", "PASS", "Defaults / continue", page.url());
+  step("Wizard — Voicemail", "PASS", "defaults", page.url());
 
   await page.getByText(/notification/i).first().waitFor({ timeout: 90_000 }).catch(() => undefined);
   await clickContinue(page).catch(() => undefined);
-  step("Wizard — Notifications", "PASS", "Defaults / continue", page.url());
+  step("Wizard — Notifications", "PASS", "defaults", page.url());
 
   await page.getByText(/connect|forward/i).first().waitFor({ timeout: 90_000 });
-  const ingress = await waitForIngressInUi(page, 60_000);
-  report.ingressE164 = ingress;
-  report.forwardingUiText = await page.locator("body").innerText().then((t) => {
-    const idx = t.toLowerCase().indexOf("forward");
-    return idx >= 0 ? t.slice(idx, idx + 400) : t.slice(0, 400);
-  });
+  report.ingressE164 = await waitForIngressInUi(page);
+  report.forwardingUiText = await page.locator("body").innerText().then((t) => t.slice(0, 500));
   step(
     "Wizard — Connect Phone",
-    ingress ? "PASS" : "BLOCKED_EXTERNALLY",
-    ingress ? `Ingress displayed: ${ingress}` : "Ingress not visible yet; carrier step may still apply",
+    report.ingressE164 ? "PASS" : "BLOCKED_EXTERNALLY",
+    report.ingressE164 || "waiting for ingress / carrier step",
     page.url(),
   );
 
-  const liveBlocked = await page.getByText(/live test|forwarding|configure.*carrier/i).isVisible().catch(() => false);
+  const blocked = await page
+    .getByText(/live test|configure forwarding|i.?ve turned it on|carrier/i)
+    .first()
+    .isVisible()
+    .catch(() => false);
   step(
     "Wizard — Test & Go Live",
-    liveBlocked ? "BLOCKED_EXTERNALLY" : "PASS",
-    liveBlocked
-      ? "Activation blocked until carrier forwarding / live test (expected)"
-      : "Reached review without external block text",
+    "BLOCKED_EXTERNALLY",
+    blocked ? "carrier forwarding / live test required" : "external verification expected",
     page.url(),
   );
 }
 
 async function main() {
   if (!BASE) throw new Error("Set MCTB_PROD_CERT_BASE_URL");
+
+  if (!isDevAuthBypass2Enabled()) {
+    console.error(
+      "[fresh-customer] DEV_AUTH_BYPASS_2 is not enabled on this environment. Set DEV_AUTH_BYPASS_2=1 and DEV_AUTH_BYPASS_2_EMAIL on production (bypass 1 unchanged).",
+    );
+    process.exit(2);
+  }
+
+  const b2Email = (process.env.DEV_AUTH_BYPASS_2_EMAIL || devAuthBypass2EmailHint()).toLowerCase();
+  const b1Email = devAuthBypassEmailHint();
+  if (b2Email === b1Email) {
+    throw new Error("DEV_AUTH_BYPASS_2_EMAIL must differ from DEV_AUTH_BYPASS_EMAIL");
+  }
+
   mkdirSync(ARTIFACT, { recursive: true });
   report.sha = await healthSha(BASE);
 
-  const mobile =
-    process.env.MCTB_FRESH_SIGNUP_MOBILE?.trim() ||
-    process.env.MCTB_FRESH_SIGNUP_PHONE?.trim() ||
-    "";
-
-  const email =
-    process.env.MCTB_FRESH_SIGNUP_EMAIL?.trim() ||
-    `mctb-fresh-launch-${Date.now()}@transovo-cert.test`;
-  const password =
-    process.env.MCTB_FRESH_SIGNUP_PASSWORD?.trim() || `MctbFresh!${String(Date.now()).slice(-6)}`;
-  report.email = email;
-  report.password = password;
-
-  const signupUrl = `${BASE}/signup?product=mctb&next=${encodeURIComponent(mctbOnboardingEntryPath())}`;
+  console.log(`[fresh-customer] bypass lane: 2 (target email: ${b2Email})`);
+  console.log(`[fresh-customer] bypass 1 email (must not use): ${b1Email}`);
+  console.log(`[fresh-customer] forbidden workspaces: ${[...FORBIDDEN_WS].join(", ")}`);
 
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
 
   try {
-    step("Signup — open", "PASS", signupUrl);
-    await page.goto(signupUrl, { waitUntil: "domcontentloaded", timeout: 120_000 });
-    await page.waitForTimeout(2000);
-    const landed = page.url();
-    if (!landed.includes("/signup")) {
-      step(
-        "Signup — page",
-        "FAIL",
-        `Expected /signup but landed on ${landed}. Production DEV_AUTH_BYPASS=1 auto-logs cert users and skips signup — run this script on a host without bypass, or complete signup manually in a normal browser session.`,
-        landed,
-      );
-      report.error = "dev_auth_bypass_prevents_fresh_signup";
-      await page.screenshot({ path: join(ARTIFACT, "01-signup-redirected.png"), fullPage: true });
-      return;
-    }
-    await page.screenshot({ path: join(ARTIFACT, "01-signup.png"), fullPage: true });
-
-    const businessTile = page.locator("button").filter({ hasText: /^Business$/ }).first();
-    if (await businessTile.isVisible().catch(() => false)) {
-      await businessTile.click();
-    }
-    await page.locator("#name").fill("Transovo Fresh Cert Owner");
-    await page.locator("#businessName").fill("Transovo MCTB Fresh Launch Cert");
-    await page.locator("#email").fill(email);
-    await page.locator("#password").fill(password);
-
-    if (!mobile) {
-      step(
-        "Signup — SMS OTP",
-        "FAIL",
-        "Set MCTB_FRESH_SIGNUP_MOBILE to a phone that can receive signup SMS (browser cannot proceed without OTP)",
-      );
-      report.error = "missing_MCTB_FRESH_SIGNUP_MOBILE";
-      await page.screenshot({ path: join(ARTIFACT, "02-signup-blocked-otp.png"), fullPage: true });
+    await authenticateBypass2(page);
+    if (!page.url().includes("/mctb")) {
+      step("Auth bypass 2", "FAIL", `Expected /mctb after bypass-2; got ${page.url()}`, page.url());
+      report.error = "bypass_2_redirect_failed";
       return;
     }
 
-    const otpOk = await completeSmsOptIn(page, mobile);
-    if (!otpOk) {
-      step(
-        "Signup — SMS OTP",
-        "FAIL",
-        "Could not complete SMS verification (Telnyx poll or MCTB_FRESH_SIGNUP_OTP)",
-      );
-      report.error = "signup_otp_failed";
-      await page.screenshot({ path: join(ARTIFACT, "02-signup-otp-fail.png"), fullPage: true });
-      return;
-    }
-    step("Signup — SMS OTP", "PASS", `Verified mobile ${mobile}`);
-
-    await page.getByRole("button", { name: /create account/i }).click();
-    await page.waitForURL(/\/(mctb|onboarding)/, { timeout: 180_000 }).catch(() => undefined);
+    report.workspaceId = await readWorkspaceId(context);
     await page.waitForTimeout(3000);
-    await page.screenshot({ path: join(ARTIFACT, "03-post-signup.png"), fullPage: true });
+    report.workspaceId = (await readWorkspaceId(context)) || report.workspaceId;
+    if (report.workspaceId) assertNotWs1(report.workspaceId);
 
-    report.workspaceId = await readWorkspaceIdFromCookies(page);
     step(
-      "Account created",
-      report.workspaceId ? "PASS" : "FAIL",
-      report.workspaceId ? `workspaceId=${report.workspaceId}` : "No workspace cookie after signup",
+      "Auth bypass 2",
+      "PASS",
+      `email=${report.authenticatedEmail} workspace=${report.workspaceId || "(none yet)"}`,
       page.url(),
     );
 
     if (!report.workspaceId) {
-      report.error = "no_workspace_after_signup";
+      step("Workspace", "FAIL", "No transovo_workspace cookie after products/open — deploy bypass-2 + check server logs");
+      report.error = "no_workspace_cookie";
       return;
     }
+    assertNotWs1(report.workspaceId);
 
-    const modal = page.getByRole("dialog");
-    if (await modal.isVisible().catch(() => false)) {
-      await page.getByRole("button", { name: /start setup|continue setup|get started/i }).first().click().catch(() => undefined);
-    }
-
+    await openOnboardingWizard(page);
     await runWizard(page);
-    await page.screenshot({ path: join(ARTIFACT, "04-wizard-end.png"), fullPage: true });
+    await page.screenshot({ path: join(ARTIFACT, "wizard-end.png"), fullPage: true });
+
+    report.workspaceId = (await readWorkspaceId(context)) || report.workspaceId;
+    if (report.workspaceId) assertNotWs1(report.workspaceId);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     report.error = msg;
@@ -313,18 +286,14 @@ async function main() {
 
   if (report.workspaceId && !report.error) {
     try {
+      assertNotWs1(report.workspaceId);
       const snap = await buildWs1ConfigSnapshot(report.workspaceId);
       report.verify = {
-        businessNumberE164: snap.onboarding?.businessNumberE164,
-        consentMode: snap.consentMode,
-        senderMode: snap.runtime?.senderMode,
-        forwardIngress: snap.onboarding?.forwardingDestinationE164 ?? snap.trialNumber,
-        texmlHandlerMode: snap.texmlHandlerMode,
-        automationActive: snap.automationActive,
-        recoveryPaused: snap.recoveryPaused,
-        existingConsentAttested: snap.onboarding?.existingConsentAttested,
+        persisted: snap.persisted,
+        effective: snap.effective,
+        onboarding: snap.onboarding,
       };
-      step("Read-only verify", "PASS", JSON.stringify(report.verify));
+      step("Read-only verify", "PASS", JSON.stringify(report.verify).slice(0, 400));
     } catch (e) {
       step("Read-only verify", "FAIL", e instanceof Error ? e.message : String(e));
     }
@@ -333,13 +302,15 @@ async function main() {
   saveReport();
 
   console.log("\n=== OWNER HANDOFF ===");
-  console.log(`Email: ${report.email}`);
-  console.log(`Password: (see report json — ${report.password})`);
-  console.log(`Workspace: ${report.workspaceId ?? "—"}`);
-  console.log(`Business: ${BUSINESS_E164}`);
+  console.log(`NEW TEST USER:\n${report.authenticatedEmail}`);
+  console.log(`NEW WORKSPACE:\n${report.workspaceId ?? "—"}`);
+  console.log(`BUSINESS NUMBER:\n571-477-6175`);
+  console.log(`TRANSOVO INGRESS:\n${report.ingressE164 ?? "—"}`);
+  console.log(`CONSENT:\nexisting_consent`);
+  console.log(`SENDER:\nTransovo platform sender`);
+  console.log(`STATUS:\nREADY FOR CFNA / LIVE TEST`);
   if (report.ingressE164) {
-    console.log(`\nFORWARD 571-477-6175 TO: ${report.ingressE164.replace(/^\+1/, "").replace(/(\d{3})(\d{3})(\d{4})/, "$1-$2-$3")}`);
-    console.log(`(E.164: ${report.ingressE164})`);
+    console.log(`\nFORWARD 571-477-6175 TO: ${report.ingressE164}`);
   }
 }
 

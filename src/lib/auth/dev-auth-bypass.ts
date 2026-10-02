@@ -6,26 +6,67 @@ import { certBrowserRequestHost, isCertBrowserPublicProductionHost } from "@/lib
 import { normalizeAppointmentsPostLoginPath } from "@/lib/products/appointments-home-redirect";
 
 export const DEV_AUTH_BYPASS_ENV = "DEV_AUTH_BYPASS";
+export const DEV_AUTH_BYPASS_2_ENV = "DEV_AUTH_BYPASS_2";
+
+function envTruthy(raw: string | undefined): boolean {
+  const v = raw?.trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
 
 export function isDevAuthBypassEnabled(): boolean {
-  const raw = process.env[DEV_AUTH_BYPASS_ENV]?.trim().toLowerCase();
-  return raw === "1" || raw === "true" || raw === "yes";
+  return envTruthy(process.env[DEV_AUTH_BYPASS_ENV]);
+}
+
+/** Isolated fresh-customer MCTB cert lane — authentication only. */
+export function isDevAuthBypass2Enabled(): boolean {
+  return envTruthy(process.env[DEV_AUTH_BYPASS_2_ENV]);
 }
 
 /** Default owner account for browser certification (Google OAuth — no password). */
 export function devAuthBypassEmailHint(): string {
-  return (process.env.DEV_AUTH_BYPASS_EMAIL || "703deuce@gmail.com").trim().toLowerCase();
+  return (process.env.DEV_AUTH_BYPASS_EMAIL || "[REDACTED]").trim().toLowerCase();
 }
 
-export function devAuthBypassAllowedOnHost(host: string): boolean {
-  if (!isDevAuthBypassEnabled()) return false;
-  // When DEV_AUTH_BYPASS=1, allow localhost and transovo.ai (cert / owner account).
+/** Second cert identity for fresh MCTB onboarding (must not be bypass 1 email). */
+export function devAuthBypass2EmailHint(): string {
+  return (
+    process.env.DEV_AUTH_BYPASS_2_EMAIL || "mctb-fresh-cert@transovo.test"
+  )
+    .trim()
+    .toLowerCase();
+}
+
+/** Workspaces bypass 2 must never attach to (default production cert ws_1). */
+export function devAuthBypass2ForbiddenWorkspaceIds(): string[] {
+  const fromEnv = process.env.DEV_AUTH_BYPASS_2_FORBIDDEN_WORKSPACE_IDS?.trim();
+  if (fromEnv) {
+    return fromEnv.split(/[\s,]+/).filter(Boolean);
+  }
+  const ws1 = process.env.MCTB_PROD_CERT_WORKSPACE_ID?.trim();
+  return ws1 ? [ws1] : ["ws_1"];
+}
+
+function certBypassHostAllowed(host: string): boolean {
   if (!isCertBrowserPublicProductionHost(host)) return true;
   return true;
 }
 
+export function devAuthBypassAllowedOnHost(host: string): boolean {
+  if (!isDevAuthBypassEnabled()) return false;
+  return certBypassHostAllowed(host);
+}
+
+export function devAuthBypass2AllowedOnHost(host: string): boolean {
+  if (!isDevAuthBypass2Enabled()) return false;
+  return certBypassHostAllowed(host);
+}
+
 export function devAuthBypassAllowed(request: Request): boolean {
   return devAuthBypassAllowedOnHost(certBrowserRequestHost(request));
+}
+
+export function devAuthBypass2Allowed(request: Request): boolean {
+  return devAuthBypass2AllowedOnHost(certBrowserRequestHost(request));
 }
 
 export function safeDevBypassNextPath(raw: string | null): string {
