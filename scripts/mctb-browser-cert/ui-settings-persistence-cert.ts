@@ -487,7 +487,12 @@ export async function certVoicemailGreeting(
     return r;
   }
   await generateBtn.click({ timeout: 15_000 });
-  await page.waitForTimeout(8000);
+  await greetingPanel
+    .getByText(/generated preview ready|use this greeting/i)
+    .first()
+    .waitFor({ state: "visible", timeout: 120_000 })
+    .catch(() => undefined);
+  await page.waitForTimeout(2000);
   const useBtn = greetingPanel.locator("button").filter({ hasText: /use this greeting/i }).first();
   if (!(await useBtn.isVisible().catch(() => false))) {
     const r = skip(hole, "Preview generation did not complete (TTS/provider)");
@@ -600,11 +605,9 @@ export async function certAiRecoveryConfig(
   const before =
     capsBefore.includes("CALLBACK_TIME") || capsBefore.includes("CALLBACK_NUMBER");
   const target = !before;
-  const toggle = page
-    .getByRole("switch", { name: /collect best time to call back/i })
-    .or(page.locator('[aria-label="Collect Best time to call back"]'))
-    .or(page.locator("#collect-CALLBACK_TIME"))
-    .first();
+  const callbackSwitch = () =>
+    page.getByRole("switch", { name: /collect best time to call back/i }).first();
+  const toggle = callbackSwitch();
   await toggle.waitFor({ state: "visible", timeout: 45_000 }).catch(() => undefined);
   if (!(await toggle.isVisible().catch(() => false))) {
     const legacy = page.getByText(/best time to call back/i).first();
@@ -635,12 +638,14 @@ export async function certAiRecoveryConfig(
       }, r);
       return r;
     }
-  } else if ((await toggle.isChecked().catch(() => before)) !== target) {
+  } else {
     await dismissBlockingOnboardingModal(page);
-    await toggle.click({ timeout: 15_000 }).catch(async () => {
-      await toggle.evaluate((el) => (el as HTMLElement).click());
-    });
-    await page.waitForTimeout(400);
+    await toggle.scrollIntoViewIfNeeded().catch(() => undefined);
+    const uiChecked = await toggle.isChecked().catch(() => before);
+    if (uiChecked !== target) {
+      await toggle.click({ timeout: 15_000 });
+      await page.waitForTimeout(400);
+    }
   }
 
   const saved = await clickAiRecoverySave(page);
@@ -678,11 +683,9 @@ export async function certAiRecoveryConfig(
   await page.waitForTimeout(1000);
 
   // restore
-  const toggle2 = page
-    .getByRole("switch", { name: /collect best time to call back/i })
-    .or(page.locator("#collect-CALLBACK_TIME"))
-    .first();
+  const toggle2 = callbackSwitch();
   if (await toggle2.isVisible().catch(() => false)) {
+    await toggle2.scrollIntoViewIfNeeded().catch(() => undefined);
     if ((await toggle2.isChecked().catch(() => after)) !== before) await toggle2.click();
     await clickAiRecoverySave(page);
   }
