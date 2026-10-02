@@ -88,13 +88,19 @@ export function MctbFirstRunWizardHost() {
   }, [onMctbSurface, policy, dismissedThisVisit, setupGuide, pathname]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !onMctbSurface) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = prev;
     };
-  }, [open]);
+  }, [open, onMctbSurface]);
+
+  useEffect(() => {
+    if (!onMctbSurface) {
+      document.body.style.overflow = "";
+    }
+  }, [onMctbSurface]);
 
   const title = useMemo(() => {
     if (policy?.trigger === "setup_guide") return "Setup guide";
@@ -132,7 +138,7 @@ export function MctbFirstRunWizardHost() {
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>Guided MCTB configuration using your live workspace settings.</DialogDescription>
         </DialogHeader>
-        <div className="min-h-0 flex-1 overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <MctbOnboardingRuntime
             shell="opus"
             presentation="modal"
