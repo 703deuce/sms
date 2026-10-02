@@ -1,5 +1,27 @@
 # MCTB full browser settings certification (Matrix G + H)
 
+## Latest authoritative run (settings persistence)
+
+| Field | Value |
+|-------|--------|
+| **When** | 2026-10-02T22:10:48Z |
+| **Production SHA** | `aca6107e98f2a3b8b7d5e5ebe0dd8b671e4e7942` |
+| **Workspace** | `ws_1` |
+| **Outcome** | **13 PASS / 0 FAIL / 6 SKIP** (exit 0) |
+| **Summary JSON** | `/opt/cursor/artifacts/mctb-browser-settings-cert/settings-full-summary.json` |
+| **Screenshot** | `/opt/cursor/artifacts/mctb-browser-settings-cert/settings-full-final.png` |
+
+**What each PASS proves:** UI change → Save (where applicable) → **database snapshot** → hard reload → UI and backend match → restore baseline.
+
+| Status | Holes |
+|--------|--------|
+| **PASS (13)** | Missed-call trigger rules (voicemail); text-back delay; cooldown/max messages; phone ring seconds; AI Recovery CALLBACK_TIME; sender mode readback; busy trigger; booking URL; request form; forwarding carrier; urgent notifications; platform recovery template; notifications cert recipient |
+| **SKIP (6)** | Voicemail greeting (headless TTS preview did not reach “Use this greeting” in 120s); consent / recovery pause / exclusions / missed-calls UX (covered by `scripts/mctb-production-browser-cert.ts` — see `docs/MCTB-E2E-AUDIT-HANDOFF-2026-10-01.md`); recovery goal (hidden for platform sender) |
+
+**Combined launch picture:** This suite plus the **27-row main browser cert** (consent, pause, exclusions, operational UX) is the full “every setting surface” matrix for V1 MCTB. Voicemail **text + activate** still needs a manual TTS smoke or harness follow-up if you require zero SKIP rows.
+
+---
+
 Run on production cert workspace with deploy SHA verified via `GET /api/health`.
 
 ```bash
@@ -89,4 +111,44 @@ _(Rows append on each run.)_
 | /mctb/missed-call-recovery?tab=exclusions | Main cert | H — remaining settings | [Exclusions CRUD] Add + delete | — (registry only) | SKIP — proven elsewhere | see MCTB-E2E-AUDIT-HANDOFF | — | — | SKIP — CAPABILITY | Covered by mctb-production-browser-cert.ts (27-row main cert) |
 | /mctb/missed-calls | Main cert | H — remaining settings | [Missed calls UX] Search + detail | — (registry only) | SKIP — proven elsewhere | see MCTB-E2E-AUDIT-HANDOFF | — | — | SKIP — CAPABILITY | Covered by mctb-production-browser-cert.ts (27-row main cert) |
 | /mctb/text-back?section=booking | Text Back · booking | H — remaining settings | [Request form toggle] Enable request form | locate | SKIP — not mounted on canonical route | false | — | requestFormEnabled | SKIP — CAPABILITY | Request form editor not on launch IA (setup/links redirects to booking-only); API tests cover requestFormEnabled |
+| /mctb/text-back | Text Back | H — remaining settings | [Recovery goal] Recovery goal | load | platform sender |  | — | recoveryGoal | SKIP — CAPABILITY | Recovery goal select hidden for platform sender |
+| /mctb/voicemail?tab=greeting | Voicemail greeting | G — UI persistence | [Voicemail greeting/settings] Greeting script | fill text | SKIP | Please leave a message after the tone. | — | voicemail greeting (not PSTN audio) | SKIP — CAPABILITY | Voicemail studio generate control not available |
+| /mctb/ai-recovery | AI Recovery | G — UI persistence | [AI Recovery configuration] Best time to call back field | toggle → save → restore | failed | {"before":false,"after":false,"restored":true} | FAIL | AI recovery collection policy | FAIL — UI PERSISTENCE (G) | backend=false restore=true |
+| /mctb/setup/consent | Main cert | H — remaining settings | [Consent mode] press_1 ↔ existing_consent | — (registry only) | SKIP — proven elsewhere | see MCTB-E2E-AUDIT-HANDOFF | — | — | SKIP — CAPABILITY | Covered by mctb-production-browser-cert.ts (27-row main cert) |
+| /mctb/missed-call-recovery?tab=general | Main cert | H — remaining settings | [Recovery pause] Pause 1h + resume | — (registry only) | SKIP — proven elsewhere | see MCTB-E2E-AUDIT-HANDOFF | — | — | SKIP — CAPABILITY | Covered by mctb-production-browser-cert.ts (27-row main cert) |
+| /mctb/missed-call-recovery?tab=exclusions | Main cert | H — remaining settings | [Exclusions CRUD] Add + delete | — (registry only) | SKIP — proven elsewhere | see MCTB-E2E-AUDIT-HANDOFF | — | — | SKIP — CAPABILITY | Covered by mctb-production-browser-cert.ts (27-row main cert) |
+| /mctb/missed-calls | Main cert | H — remaining settings | [Missed calls UX] Search + detail | — (registry only) | SKIP — proven elsewhere | see MCTB-E2E-AUDIT-HANDOFF | — | — | SKIP — CAPABILITY | Covered by mctb-production-browser-cert.ts (27-row main cert) |
+| /mctb/text-back?section=booking | Setup links | H — remaining settings | [Request form toggle] Enable request form | toggle → save → reload → restore | matched | {"formOk":true,"restored":true} | PASS | requestFormEnabled | PASS — UI PERSISTENCE (H) | request form toggle |
+| /mctb/text-back | Text Back | H — remaining settings | [Recovery goal] Recovery goal | load | platform sender |  | — | recoveryGoal | SKIP — CAPABILITY | Recovery goal select hidden for platform sender |
+| /mctb/voicemail?tab=greeting | Voicemail greeting | G — UI persistence | [Voicemail greeting/settings] Greeting script + Save | edit → save → reload → restore | mismatch | Please leave a message after the tone. | FAIL | voicemail greeting (not PSTN audio) | FAIL — UI PERSISTENCE (G) | backend=false ui=false restore=true |
+| /mctb/ai-recovery | AI Recovery | G — UI persistence | [AI Recovery configuration] Best time to call back field | toggle → save → restore | failed | {"before":false,"after":false,"restored":true} | FAIL | AI recovery collection policy | FAIL — UI PERSISTENCE (G) | backend=false restore=true |
+| /mctb/setup/consent | Main cert | H — remaining settings | [Consent mode] press_1 ↔ existing_consent | — (registry only) | SKIP — proven elsewhere | see MCTB-E2E-AUDIT-HANDOFF | — | — | SKIP — CAPABILITY | Covered by mctb-production-browser-cert.ts (27-row main cert) |
+| /mctb/missed-call-recovery?tab=general | Main cert | H — remaining settings | [Recovery pause] Pause 1h + resume | — (registry only) | SKIP — proven elsewhere | see MCTB-E2E-AUDIT-HANDOFF | — | — | SKIP — CAPABILITY | Covered by mctb-production-browser-cert.ts (27-row main cert) |
+| /mctb/missed-call-recovery?tab=exclusions | Main cert | H — remaining settings | [Exclusions CRUD] Add + delete | — (registry only) | SKIP — proven elsewhere | see MCTB-E2E-AUDIT-HANDOFF | — | — | SKIP — CAPABILITY | Covered by mctb-production-browser-cert.ts (27-row main cert) |
+| /mctb/missed-calls | Main cert | H — remaining settings | [Missed calls UX] Search + detail | — (registry only) | SKIP — proven elsewhere | see MCTB-E2E-AUDIT-HANDOFF | — | — | SKIP — CAPABILITY | Covered by mctb-production-browser-cert.ts (27-row main cert) |
+| /mctb/voicemail?tab=greeting | Voicemail greeting | G — UI persistence | [Voicemail greeting/settings] Greeting script + Save | edit → save → reload → restore | mismatch | Please leave a message after the tone. | FAIL | voicemail greeting (not PSTN audio) | FAIL — UI PERSISTENCE (G) | backend=false ui=false restore=true |
+| /mctb/ai-recovery | AI Recovery | G — UI persistence | [AI Recovery configuration] Best time to call back field | toggle → save → restore | failed | {"before":false,"after":false,"restored":true} | FAIL | AI recovery collection policy | FAIL — UI PERSISTENCE (G) | backend=false restore=true |
+| /mctb/setup/consent | Main cert | H — remaining settings | [Consent mode] press_1 ↔ existing_consent | — (registry only) | SKIP — proven elsewhere | see MCTB-E2E-AUDIT-HANDOFF | — | — | SKIP — CAPABILITY | Covered by mctb-production-browser-cert.ts (27-row main cert) |
+| /mctb/missed-call-recovery?tab=general | Main cert | H — remaining settings | [Recovery pause] Pause 1h + resume | — (registry only) | SKIP — proven elsewhere | see MCTB-E2E-AUDIT-HANDOFF | — | — | SKIP — CAPABILITY | Covered by mctb-production-browser-cert.ts (27-row main cert) |
+| /mctb/missed-call-recovery?tab=exclusions | Main cert | H — remaining settings | [Exclusions CRUD] Add + delete | — (registry only) | SKIP — proven elsewhere | see MCTB-E2E-AUDIT-HANDOFF | — | — | SKIP — CAPABILITY | Covered by mctb-production-browser-cert.ts (27-row main cert) |
+| /mctb/missed-calls | Main cert | H — remaining settings | [Missed calls UX] Search + detail | — (registry only) | SKIP — proven elsewhere | see MCTB-E2E-AUDIT-HANDOFF | — | — | SKIP — CAPABILITY | Covered by mctb-production-browser-cert.ts (27-row main cert) |
+| /mctb/text-back | Text Back | H — remaining settings | [Recovery goal] Recovery goal | load | platform sender |  | — | recoveryGoal | SKIP — CAPABILITY | Recovery goal select hidden for platform sender |
+| /mctb/voicemail?tab=greeting | Voicemail greeting | G — UI persistence | [Voicemail greeting/settings] Greeting script + Save | edit → save → reload → restore | mismatch | Please leave a message after the tone. | FAIL | voicemail greeting (not PSTN audio) | FAIL — UI PERSISTENCE (G) | backend=false ui=false restore=true |
+| /mctb/ai-recovery | AI Recovery | G — UI persistence | [AI Recovery configuration] Best time to call back field | toggle → save → restore | persisted | {"before":false,"after":true,"restored":true} | PASS | AI recovery collection policy | PASS — UI PERSISTENCE (G) | CALLBACK_TIME field toggle |
+| /mctb/setup/consent | Main cert | H — remaining settings | [Consent mode] press_1 ↔ existing_consent | — (registry only) | SKIP — proven elsewhere | see MCTB-E2E-AUDIT-HANDOFF | — | — | SKIP — CAPABILITY | Covered by mctb-production-browser-cert.ts (27-row main cert) |
+| /mctb/missed-call-recovery?tab=general | Main cert | H — remaining settings | [Recovery pause] Pause 1h + resume | — (registry only) | SKIP — proven elsewhere | see MCTB-E2E-AUDIT-HANDOFF | — | — | SKIP — CAPABILITY | Covered by mctb-production-browser-cert.ts (27-row main cert) |
+| /mctb/missed-call-recovery?tab=exclusions | Main cert | H — remaining settings | [Exclusions CRUD] Add + delete | — (registry only) | SKIP — proven elsewhere | see MCTB-E2E-AUDIT-HANDOFF | — | — | SKIP — CAPABILITY | Covered by mctb-production-browser-cert.ts (27-row main cert) |
+| /mctb/missed-calls | Main cert | H — remaining settings | [Missed calls UX] Search + detail | — (registry only) | SKIP — proven elsewhere | see MCTB-E2E-AUDIT-HANDOFF | — | — | SKIP — CAPABILITY | Covered by mctb-production-browser-cert.ts (27-row main cert) |
+| /mctb/text-back | Text Back | H — remaining settings | [Recovery goal] Recovery goal | load | platform sender |  | — | recoveryGoal | SKIP — CAPABILITY | Recovery goal select hidden for platform sender |
+| /mctb/voicemail?tab=greeting | Voicemail greeting | G — UI persistence | [Voicemail greeting/settings] Activate greeting | generate preview | SKIP | Please leave a message after the tone. | — | voicemail greeting | SKIP — CAPABILITY | Preview generation did not complete (TTS/provider) |
+| /mctb/setup/consent | Main cert | H — remaining settings | [Consent mode] press_1 ↔ existing_consent | — (registry only) | SKIP — proven elsewhere | see MCTB-E2E-AUDIT-HANDOFF | — | — | SKIP — CAPABILITY | Covered by mctb-production-browser-cert.ts (27-row main cert) |
+| /mctb/missed-call-recovery?tab=general | Main cert | H — remaining settings | [Recovery pause] Pause 1h + resume | — (registry only) | SKIP — proven elsewhere | see MCTB-E2E-AUDIT-HANDOFF | — | — | SKIP — CAPABILITY | Covered by mctb-production-browser-cert.ts (27-row main cert) |
+| /mctb/missed-call-recovery?tab=exclusions | Main cert | H — remaining settings | [Exclusions CRUD] Add + delete | — (registry only) | SKIP — proven elsewhere | see MCTB-E2E-AUDIT-HANDOFF | — | — | SKIP — CAPABILITY | Covered by mctb-production-browser-cert.ts (27-row main cert) |
+| /mctb/missed-calls | Main cert | H — remaining settings | [Missed calls UX] Search + detail | — (registry only) | SKIP — proven elsewhere | see MCTB-E2E-AUDIT-HANDOFF | — | — | SKIP — CAPABILITY | Covered by mctb-production-browser-cert.ts (27-row main cert) |
+| /mctb/text-back | Text Back | H — remaining settings | [Recovery goal] Recovery goal | load | platform sender |  | — | recoveryGoal | SKIP — CAPABILITY | Recovery goal select hidden for platform sender |
+| /mctb/voicemail?tab=greeting | Voicemail greeting | G — UI persistence | [Voicemail greeting/settings] Activate greeting | generate preview | SKIP | Please leave a message after the tone. | — | voicemail greeting | SKIP — CAPABILITY | Preview generation did not complete (TTS/provider) |
+| /mctb/setup/consent | Main cert | H — remaining settings | [Consent mode] press_1 ↔ existing_consent | — (registry only) | SKIP — proven elsewhere | see MCTB-E2E-AUDIT-HANDOFF | — | — | SKIP — CAPABILITY | Covered by mctb-production-browser-cert.ts (27-row main cert) |
+| /mctb/missed-call-recovery?tab=general | Main cert | H — remaining settings | [Recovery pause] Pause 1h + resume | — (registry only) | SKIP — proven elsewhere | see MCTB-E2E-AUDIT-HANDOFF | — | — | SKIP — CAPABILITY | Covered by mctb-production-browser-cert.ts (27-row main cert) |
+| /mctb/missed-call-recovery?tab=exclusions | Main cert | H — remaining settings | [Exclusions CRUD] Add + delete | — (registry only) | SKIP — proven elsewhere | see MCTB-E2E-AUDIT-HANDOFF | — | — | SKIP — CAPABILITY | Covered by mctb-production-browser-cert.ts (27-row main cert) |
+| /mctb/missed-calls | Main cert | H — remaining settings | [Missed calls UX] Search + detail | — (registry only) | SKIP — proven elsewhere | see MCTB-E2E-AUDIT-HANDOFF | — | — | SKIP — CAPABILITY | Covered by mctb-production-browser-cert.ts (27-row main cert) |
 | /mctb/text-back | Text Back | H — remaining settings | [Recovery goal] Recovery goal | load | platform sender |  | — | recoveryGoal | SKIP — CAPABILITY | Recovery goal select hidden for platform sender |
