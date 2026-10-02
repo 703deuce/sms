@@ -1,6 +1,6 @@
 import type { Page } from "playwright";
 import type { CertRow } from "./matrix";
-import { snapshotBackend } from "./snapshot";
+import { refreshSnapshotBackend, snapshotBackend } from "./snapshot";
 import {
   CERT_RECIPIENT_EMAIL,
   ensureCertRecipientVisibleInUi,
@@ -665,12 +665,14 @@ export async function certAiRecoveryConfig(
   }
   const pollCallbackCap = async (expected: boolean) => {
     for (let i = 0; i < 25; i++) {
-      const caps = (snapshotBackend(workspaceId).leadRecovery?.collectCapabilities as string[]) ?? [];
+      const snap = await refreshSnapshotBackend(workspaceId);
+      const caps = (snap.leadRecovery?.collectCapabilities as string[]) ?? [];
       const on = caps.includes("CALLBACK_TIME") || caps.includes("CALLBACK_NUMBER");
       if (on === expected) return true;
       await new Promise((r) => setTimeout(r, 500));
     }
-    const caps = (snapshotBackend(workspaceId).leadRecovery?.collectCapabilities as string[]) ?? [];
+    const snap = await refreshSnapshotBackend(workspaceId);
+    const caps = (snap.leadRecovery?.collectCapabilities as string[]) ?? [];
     return (caps.includes("CALLBACK_TIME") || caps.includes("CALLBACK_NUMBER")) === expected;
   };
   const backendOk = await pollCallbackCap(target);

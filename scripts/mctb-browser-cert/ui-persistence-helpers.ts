@@ -1,7 +1,7 @@
 import { execSync } from "node:child_process";
 import type { Page } from "playwright";
 import type { CertRow } from "./matrix";
-import { snapshotBackend } from "./snapshot";
+import { refreshSnapshotBackend, snapshotBackend } from "./snapshot";
 
 export type UiPersistenceHoleResult = {
   hole: string;
@@ -84,15 +84,25 @@ export async function clickSaveAndWaitApi(
   saveName: RegExp = /save/i,
   urlPart: string | string[] = "/api/mctb/setup",
 ): Promise<number | null> {
-  const save = page.getByRole("button", { name: saveName }).first();
-  if (!(await save.isVisible().catch(() => false))) return null;
+  const save = page
+    .locator('button[data-slot="button"], button')
+    .filter({ hasText: saveName })
+    .first();
+  if (!(await save.isVisible().catch(() => false))) {
+    const byRole = page.getByRole("button", { name: saveName }).first();
+    if (!(await byRole.isVisible().catch(() => false))) return null;
+  }
+  const saveBtn =
+    (await save.isVisible().catch(() => false))
+      ? save
+      : page.getByRole("button", { name: saveName }).first();
   const parts = Array.isArray(urlPart) ? urlPart : [urlPart];
   const res = await Promise.all([
     page.waitForResponse(
       (r) => parts.some((p) => isPostTo(r, p)),
       { timeout: 60_000 },
     ),
-    save.click(),
+    saveBtn.click(),
   ])
     .then(([r]) => r)
     .catch(() => null);
@@ -107,11 +117,13 @@ export async function pollRuntimeField(
   attempts = 20,
 ): Promise<boolean> {
   for (let i = 0; i < attempts; i++) {
-    const v = backendRuntime(workspaceId)[field];
+    const snap = await refreshSnapshotBackend(workspaceId);
+    const v = snap.runtime?.[field];
     if (v === expected) return true;
     await new Promise((r) => setTimeout(r, 500));
   }
-  return backendRuntime(workspaceId)[field] === expected;
+  const snap = await refreshSnapshotBackend(workspaceId);
+  return snap.runtime?.[field] === expected;
 }
 
 export async function pollLeadRecoveryField(
@@ -121,11 +133,13 @@ export async function pollLeadRecoveryField(
   attempts = 20,
 ): Promise<boolean> {
   for (let i = 0; i < attempts; i++) {
-    const v = snapshotBackend(workspaceId).leadRecovery?.[field];
+    const snap = await refreshSnapshotBackend(workspaceId);
+    const v = snap.leadRecovery?.[field];
     if (v === expected) return true;
     await new Promise((r) => setTimeout(r, 500));
   }
-  return snapshotBackend(workspaceId).leadRecovery?.[field] === expected;
+  const snap = await refreshSnapshotBackend(workspaceId);
+  return snap.leadRecovery?.[field] === expected;
 }
 
 export async function pollHandoffEmail(
@@ -134,11 +148,13 @@ export async function pollHandoffEmail(
   attempts = 20,
 ): Promise<boolean> {
   for (let i = 0; i < attempts; i++) {
-    const emails = (snapshotBackend(workspaceId).handoff?.emails as string[]) ?? [];
+    const snap = await refreshSnapshotBackend(workspaceId);
+    const emails = (snap.handoff?.emails as string[]) ?? [];
     if (emails.includes(email)) return true;
     await new Promise((r) => setTimeout(r, 500));
   }
-  return ((snapshotBackend(workspaceId).handoff?.emails as string[]) ?? []).includes(email);
+  const snap = await refreshSnapshotBackend(workspaceId);
+  return ((snap.handoff?.emails as string[]) ?? []).includes(email);
 }
 
 export async function pollHandoffField(
@@ -148,11 +164,13 @@ export async function pollHandoffField(
   attempts = 20,
 ): Promise<boolean> {
   for (let i = 0; i < attempts; i++) {
-    const v = snapshotBackend(workspaceId).handoff?.[field];
+    const snap = await refreshSnapshotBackend(workspaceId);
+    const v = snap.handoff?.[field];
     if (v === expected) return true;
     await new Promise((r) => setTimeout(r, 500));
   }
-  return snapshotBackend(workspaceId).handoff?.[field] === expected;
+  const snap = await refreshSnapshotBackend(workspaceId);
+  return snap.handoff?.[field] === expected;
 }
 
 export async function pollPersistedField(
@@ -162,11 +180,13 @@ export async function pollPersistedField(
   attempts = 20,
 ): Promise<boolean> {
   for (let i = 0; i < attempts; i++) {
-    const v = snapshotBackend(workspaceId).persisted?.[field];
+    const snap = await refreshSnapshotBackend(workspaceId);
+    const v = snap.persisted?.[field];
     if (v === expected) return true;
     await new Promise((r) => setTimeout(r, 500));
   }
-  return snapshotBackend(workspaceId).persisted?.[field] === expected;
+  const snap = await refreshSnapshotBackend(workspaceId);
+  return snap.persisted?.[field] === expected;
 }
 
 export async function pollOnboardingField(
@@ -176,11 +196,13 @@ export async function pollOnboardingField(
   attempts = 20,
 ): Promise<boolean> {
   for (let i = 0; i < attempts; i++) {
-    const v = snapshotBackend(workspaceId).onboarding?.[field];
+    const snap = await refreshSnapshotBackend(workspaceId);
+    const v = snap.onboarding?.[field];
     if (v === expected) return true;
     await new Promise((r) => setTimeout(r, 500));
   }
-  return snapshotBackend(workspaceId).onboarding?.[field] === expected;
+  const snap = await refreshSnapshotBackend(workspaceId);
+  return snap.onboarding?.[field] === expected;
 }
 
 export function minutesFromCooldownLabel(label: string): number {

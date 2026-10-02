@@ -22,14 +22,14 @@ import { readMctbRecoveryGoalId } from "@/lib/mctb/apply-recovery-goal-config";
 const WORKSPACE_ID = process.env.WORKSPACE_ID?.trim() || "ws_1";
 const CERT_EXCLUSION_E164 = "+15550119999";
 
-async function main() {
+export async function buildWs1ConfigSnapshot(workspaceId: string) {
   const prisma = getPrisma();
   const ws = await prisma.workspace.findUnique({
-    where: { id: WORKSPACE_ID },
+    where: { id: workspaceId },
     select: { id: true, name: true, customFieldsConfig: true },
   });
   if (!ws) {
-    console.error(JSON.stringify({ error: "workspace_not_found", workspaceId: WORKSPACE_ID }));
+    throw new Error(`workspace_not_found:${workspaceId}`);
     process.exit(1);
   }
   const cfg =
@@ -39,9 +39,9 @@ async function main() {
   const mctb =
     cfg.mctb && typeof cfg.mctb === "object" ? (cfg.mctb as Record<string, unknown>) : {};
   const onboarding = parseMctbOnboardingState(cfg);
-  const consentMode = await loadMctbConsentMode(WORKSPACE_ID);
-  const runtime = await loadMissedCallTextConfig(WORKSPACE_ID);
-  const schedule = await loadMctbScheduleSettings(WORKSPACE_ID, runtime);
+  const consentMode = await loadMctbConsentMode(workspaceId);
+  const runtime = await loadMissedCallTextConfig(workspaceId);
+  const schedule = await loadMctbScheduleSettings(workspaceId, runtime);
   const automationActive = isMctbAutomationActive(schedule, runtime);
   const pauseKind = resolveMctbPauseKind(schedule, runtime);
   const recoveryPaused = isMctbSchedulePaused(schedule, runtime);
@@ -54,7 +54,7 @@ async function main() {
   const phoneId = runtime?.phoneNumberId;
   if (phoneId) {
     const phone = await prisma.phoneNumber.findFirst({
-      where: { id: phoneId, workspaceId: WORKSPACE_ID },
+      where: { id: phoneId, workspaceId },
       select: { settingsJson: true },
     });
     const settings =
@@ -72,14 +72,14 @@ async function main() {
 
   const exclusionCount = await prisma.suppression.count({
     where: {
-      workspaceId: WORKSPACE_ID,
+      workspaceId,
       source: "mctb_exclusion",
     },
   });
 
   const certExclusion = await prisma.suppression.findFirst({
     where: {
-      workspaceId: WORKSPACE_ID,
+      workspaceId,
       source: "mctb_exclusion",
       phone: CERT_EXCLUSION_E164,
     },
@@ -87,26 +87,26 @@ async function main() {
   });
 
   const handoffRow = await prisma.mctbHandoffConfig.findUnique({
-    where: { workspaceId: WORKSPACE_ID },
+    where: { workspaceId },
     select: {
       emergencyDetectionEnabled: true,
       emergencyCriteria: true,
     },
   });
   const handoffRecipients = await prisma.mctbNotificationRecipient.findMany({
-    where: { workspaceId: WORKSPACE_ID },
+    where: { workspaceId },
     select: { id: true, email: true, name: true },
   });
 
-  const leadRecovery = await loadLeadRecoveryConfigPersisted(WORKSPACE_ID);
+  const leadRecovery = await loadLeadRecoveryConfigPersisted(workspaceId);
   const aiFieldToggles = deriveSimplifiedFieldEnabled(leadRecovery.collectCapabilities ?? []);
-  const recoveryGoal = await readMctbRecoveryGoalId(WORKSPACE_ID);
+  const recoveryGoal = await readMctbRecoveryGoalId(workspaceId);
 
   let voicemailGreetingText: string | null = null;
   let voicemailBoxId: string | null = null;
   if (runtime?.phoneNumberId) {
     const box = await prisma.voicemailBox.findFirst({
-      where: { workspaceId: WORKSPACE_ID, phoneNumberId: runtime.phoneNumberId },
+      where: { workspaceId, phoneNumberId: runtime.phoneNumberId },
       select: { id: true, greetingText: true },
       orderBy: { createdAt: "asc" },
     });
@@ -116,11 +116,9 @@ async function main() {
 
   const onboardingState = onboarding;
 
-  console.log(
-    JSON.stringify(
-      {
+  return {
         probedAt: new Date().toISOString(),
-        workspaceId: WORKSPACE_ID,
+        workspaceId,
         workspaceName: ws.name,
         persisted: {
           mctbConsentMode: normalizeMctbConsentMode(mctb.consentMode),
@@ -192,21 +190,28 @@ async function main() {
           callbackTimeFieldEnabled: aiFieldToggles.CALLBACK_TIME,
           collectCapabilities: leadRecovery.collectCapabilities ?? [],
         },
-      },
-      null,
-      2,
-    ),
-  );
+      };
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    const p = getPrisma();
-    if (p && typeof (p as { $disconnect?: () => Promise<void> }).$disconnect === "function") {
-      await (p as { $disconnect: () => Promise<void> }).$disconnect();
-    }
-  });
+async function runCli() {
+  const snap = await buildWs1ConfigSnapshot(WORKSPACE_ID);
+  console.log(JSON.stringify(snap, null, 2));
+}
+
+const isCli =
+  typeof process.argv[1] === "string" &&
+  process.argv[1].replace(/\\/g, "/").endsWith("mctb-ws1-config-snapshot.ts");
+
+if (isCli) {
+  runCli()
+    .catch((e) => {
+      console.error(e);
+      process.exit(1);
+    })
+    .finally(async () => {
+      const p = getPrisma();
+      if (p && typeof (p as { $disconnect?: () => Promise<void> }).$disconnect === "function") {
+        await (p as { $disconnect: () => Promise<void> }).$disconnect();
+      }
+    });
+}

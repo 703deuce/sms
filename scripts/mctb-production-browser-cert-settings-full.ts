@@ -60,10 +60,15 @@ async function runHole(
   hole: string,
   fn: () => Promise<UiPersistenceHoleResult>,
 ): Promise<UiPersistenceHoleResult> {
+  console.log(`[settings-cert] start: ${hole}`);
   try {
-    return await fn();
+    const result = await fn();
+    console.log(`[settings-cert] done: ${hole} → ${result.status} (${result.detail})`);
+    return result;
   } catch (e) {
-    return { hole, status: "FAIL", detail: e instanceof Error ? e.message : String(e) };
+    const detail = e instanceof Error ? e.message : String(e);
+    console.log(`[settings-cert] done: ${hole} → FAIL (${detail})`);
+    return { hole, status: "FAIL", detail };
   }
 }
 
