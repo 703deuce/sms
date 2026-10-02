@@ -43,8 +43,11 @@ export async function POST(request: Request) {
           : undefined;
 
     const existing = await loadLeadRecoveryConfig(auth.workspaceId);
+    const fieldToggles = parseFieldToggles(body);
+    const hasFieldsPayload = body.fields != null && typeof body.fields === "object";
+    const persistFieldsDespiteStaleMasterFlag = !enabled && existing.enabled && hasFieldsPayload;
 
-    if (enabled) {
+    if (enabled || persistFieldsDespiteStaleMasterFlag) {
       const { assertMctbCapability } = await import("@/lib/mctb/capabilities");
       const gate = await assertMctbCapability(auth.workspaceId, "aiRecoveryEntitled");
       if (!gate.ok) {
@@ -55,7 +58,7 @@ export async function POST(request: Request) {
       }
     }
 
-    if (!enabled) {
+    if (!enabled && !persistFieldsDespiteStaleMasterFlag) {
       await applyLaunchAiRepliesSetting(auth.workspaceId, false);
       const disabledConfig = await loadLeadRecoveryConfig(auth.workspaceId);
       const health = await computeLeadRecoveryPolicyHealth(auth.workspaceId, disabledConfig);
@@ -64,7 +67,7 @@ export async function POST(request: Request) {
 
     const patch = buildAiRecoverySavePatch({
       enabled: true,
-      fieldToggles: parseFieldToggles(body),
+      fieldToggles,
       bookingLinkEnabled,
       bookingLinkId: bookingLinkId ?? existing.bookingLinkId,
       existing,

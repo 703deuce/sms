@@ -554,9 +554,14 @@ export async function certAiRecoveryConfig(
   const master = page.getByRole("switch", { name: /enable ai recovery/i }).first();
   if (await master.isVisible().catch(() => false)) {
     if (!(await master.isChecked().catch(() => false))) await master.click();
+    await page.waitForTimeout(400);
     const saveMaster = page.getByRole("button", { name: /save/i }).first();
     if (await saveMaster.isVisible().catch(() => false)) await saveMaster.click();
-    await page.waitForTimeout(2500);
+    for (let i = 0; i < 20; i++) {
+      if (snapshotBackend(workspaceId).leadRecovery?.enabled) break;
+      await page.waitForTimeout(500);
+    }
+    await page.waitForTimeout(1000);
   }
 
   const capsBefore = (snapshotBackend(workspaceId).leadRecovery?.collectCapabilities as string[]) ?? [];
