@@ -171,6 +171,29 @@ docker buildx prune -af
 
 Typical reclaim: one old ~5GB web image + ~3–4GB dangling volumes. `docker system df` may still show ~50GB+ “build cache” in containerd overlay snapshots; `builder prune` often reports `0B` until Docker/containerd GC runs. **66GB+ free on `/` is usually enough for one web build**; avoid five back-to-back deploys.
 
+### Deploy fails in under ~60s: `cURL error 28` to `https://api.github.com/zen`
+
+Coolify’s deployment job checks GitHub reachability before clone. **Transient egress/DNS blips** to `api.github.com` fail the whole deploy (log never reaches Nixpacks/`next build`). This is **not** an application compile error.
+
+**Symptoms:** `application_deployment_queues.status = failed`, log length ≈ few KB, message contains `api.github.com/zen` and `Operation timed out after 30001 milliseconds`.
+
+**Verify (on `coolify-server`):**
+
+```bash
+curl -sS -m 15 -o /dev/null -w '%{http_code}\n' https://api.github.com/zen
+docker run --rm coollabsio/coolify-helper:1.0.17 curl -sS -m 15 -o /dev/null -w '%{http_code}\n' https://api.github.com/zen
+```
+
+Both should return `200`. If yes, **re-queue one deploy** with the **full 40-character** commit SHA (never a guessed/partial SHA):
+
+```bash
+COMMIT=$(git rev-parse HEAD) bash scripts/coolify-queue-web-deploy.sh --wait
+```
+
+Avoid stacking multiple deploys for the same push (webhook + manual queue) while disk is tight — wait for `finished` or `failed` before queuing again.
+
+**2026-10-03:** Deployments `3317`–`3320` failed on zen timeout; `3321` succeeded after re-queue (~12 min build). Production `commitSha` matched `adb5b3db…`.
+
 ### Coolify UI 500: “The payload is invalid”
 
 This is usually **Laravel `DecryptException` on corrupted `environment_variables` rows**, not application code. Deployments fail the same way when Coolify reads env for Nixpacks.
