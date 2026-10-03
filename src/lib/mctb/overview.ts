@@ -153,8 +153,10 @@ async function loadMctbOverviewShared(workspaceId: string): Promise<Omit<MctbOve
 
   const forwardingVerified = Boolean(onboarding.forwardingConnectedAt);
   const hasRuntimeNumber = Boolean(runtime.phoneNumberId);
+  const onboardingComplete = isOnboardingComplete(onboarding);
   const setupComplete =
-    isOnboardingComplete(onboarding) || (hasRuntimeNumber && forwardingVerified && messagingReady);
+    onboardingComplete ||
+    (hasRuntimeNumber && forwardingVerified && messagingReady);
 
   const consentMode = normalizeMctbConsentMode(
     mctbSettings.consentMode ??
@@ -171,6 +173,9 @@ async function loadMctbOverviewShared(workspaceId: string): Promise<Omit<MctbOve
   if (!setupComplete) {
     status = "setup_incomplete";
     statusLabel = "Setup incomplete";
+  } else if (!messagingReady && onboardingComplete) {
+    status = "messaging_blocked";
+    statusLabel = "Messaging blocked";
   } else if (paused) {
     status = "paused";
     statusLabel = "Paused";

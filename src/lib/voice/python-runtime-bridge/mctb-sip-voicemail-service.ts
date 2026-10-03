@@ -4,25 +4,23 @@ import { getPrisma } from "@/lib/db";
 import { ensureMctbVoicemailBoxProvisioned } from "@/lib/mctb/voicemail-provisioning";
 import { attachVoicemailRecordingAndTranscribe } from "@/lib/phone/voicemail-service";
 import { uploadCallRecordingToStorage, createSignedRecordingUrl } from "@/lib/smart-routing/call-recording-storage";
-
-const SUPABASE_RECORDING_PREFIX = "supabase://";
+import {
+  buildVoicemailStorageRecordingUrl,
+  parseAnyVoicemailRecordingStorageRef,
+} from "@/lib/voice/python-runtime-bridge/mctb-sip-voicemail-storage";
 
 export function formatSupabaseRecordingRef(bucket: string, path: string): string {
-  return `${SUPABASE_RECORDING_PREFIX}${bucket}/${path}`;
+  return buildVoicemailStorageRecordingUrl(bucket, path);
 }
 
 export async function resolveVoicemailRecordingFetchUrl(
   recordingUrl: string,
 ): Promise<string> {
-  if (!recordingUrl.startsWith(SUPABASE_RECORDING_PREFIX)) {
+  const storageRef = parseAnyVoicemailRecordingStorageRef(recordingUrl);
+  if (!storageRef) {
     return recordingUrl;
   }
-  const rest = recordingUrl.slice(SUPABASE_RECORDING_PREFIX.length);
-  const slash = rest.indexOf("/");
-  if (slash <= 0) return recordingUrl;
-  const bucket = rest.slice(0, slash);
-  const path = rest.slice(slash + 1);
-  return createSignedRecordingUrl(bucket, path, 3600);
+  return createSignedRecordingUrl(storageRef.bucket, storageRef.path, 3600);
 }
 
 export type BeginMctbSipVoicemailInput = {

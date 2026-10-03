@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 
 /** Scrollable main column inside fixed h-dvh shell (mobile + desktop). */
 const DEFAULT_MAIN_SCROLL_CLASS =
-  "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain";
+  "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain touch-pan-y [-webkit-overflow-scrolling:touch]";
 
 /**
  * Phase 1 — exact Opus shell (sidebar + topbar from newui/). Production session/workspace
