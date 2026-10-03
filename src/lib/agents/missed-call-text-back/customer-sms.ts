@@ -42,10 +42,19 @@ async function sendMctbCustomerOutboundSms(input: {
   if (!gate.ok) {
     throw new Error("PLATFORM_SENDER_PAIR_COLLISION");
   }
+  const { finalizeMctbPlatformConsumerSmsBody } = await import(
+    "@/lib/mctb/messaging/platform-sender-consumer-disclosure"
+  );
+  const body = await finalizeMctbPlatformConsumerSmsBody({
+    workspaceId: input.workspaceId,
+    consumerE164: input.toE164,
+    body: input.body,
+    route,
+  });
   const result = await sendQuickSms({
     workspaceId: input.workspaceId,
     to: input.toE164,
-    body: input.body,
+    body,
     from: route.fromE164,
     idempotencyKey: input.idempotencyKey,
     senderRoute: {

@@ -117,27 +117,6 @@ export function MctbFirstRunWizardHost() {
     }
   }, [onMctbSurface, policy, dismissedThisVisit, setupGuide, pathname]);
 
-  useEffect(() => {
-    if (!onMctbSurface) {
-      document.body.style.overflow = "";
-      document.documentElement.style.overflow = "";
-      return;
-    }
-    if (!open) {
-      document.body.style.overflow = "";
-      document.documentElement.style.overflow = "";
-      return;
-    }
-    const prevBody = document.body.style.overflow;
-    const prevHtml = document.documentElement.style.overflow;
-    document.body.style.overflow = "hidden";
-    document.documentElement.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prevBody || "";
-      document.documentElement.style.overflow = prevHtml || "";
-    };
-  }, [open, onMctbSurface]);
-
   const title = useMemo(() => {
     if (policy?.trigger === "setup_guide") return "Setup guide";
     return "Set up Missed Call Text Back";

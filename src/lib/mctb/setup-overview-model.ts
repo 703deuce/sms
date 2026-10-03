@@ -101,7 +101,7 @@ export function buildSetupGlobalStatus(input: {
     businessLineLabel: businessLineE164 ? formatMctbPhoneLabel(businessLineE164) : null,
     senderLabel:
       senderMode === "PLATFORM"
-        ? "Transovo Platform · Active"
+        ? "Platform sender · Active"
         : smsPhone
           ? `${formatMctbPhoneLabel(smsPhone.e164)} · ${messagingReady ? "Ready" : "Pending"}`
           : "Your verified number",

@@ -3,8 +3,11 @@ import { ArrowDownRight, ArrowUpRight, ChevronRight, type LucideIcon } from 'luc
 import { OPUS_CARD, OPUS_CONFIG_INSET, OPUS_STATUS_ANCHOR } from '@/newui-transplant/components/app/opus-surfaces'
 import { cn } from '@/lib/utils'
 
+/** Page content region — landmark is the shell `main` (SidebarInset); avoid nested `<main>`. */
 export function Page({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <main className={cn('mx-auto w-full max-w-7xl px-4 py-5 md:px-8 md:py-6', className)}>{children}</main>
+  return (
+    <div className={cn('mx-auto w-full max-w-7xl px-4 py-5 md:px-8 md:py-6', className)}>{children}</div>
+  )
 }
 
 export function PageHeader({

@@ -198,7 +198,7 @@ export async function executeMissedCallTextSend(input: {
         destinationUrl,
       });
 
-  const body = tracked.body;
+  let body = tracked.body;
 
   await prisma.missedCallEvent.update({
     where: { id: event.id },
@@ -327,6 +327,16 @@ export async function executeMissedCallTextSend(input: {
     });
     return { ok: false, reason: "PLATFORM_SENDER_PAIR_COLLISION" };
   }
+
+  const { finalizeMctbPlatformConsumerSmsBody } = await import(
+    "@/lib/mctb/messaging/platform-sender-consumer-disclosure"
+  );
+  body = await finalizeMctbPlatformConsumerSmsBody({
+    workspaceId: input.workspaceId,
+    consumerE164: event.callerE164,
+    body,
+    route,
+  });
 
   await appendMctbTrace({
     workspaceId: input.workspaceId,

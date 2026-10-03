@@ -54,6 +54,6 @@ export async function resolveMissedCallBookingActionEligibility(
 export function senderModeCustomerLabel(
   mode: "PLATFORM" | "WORKSPACE" | string | null | undefined,
 ): string {
-  if (mode === "PLATFORM") return "Transovo recovery number";
+  if (mode === "PLATFORM") return "Platform sender";
   return "Your connected messaging number";
 }

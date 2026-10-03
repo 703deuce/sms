@@ -271,11 +271,11 @@ export function useMctbSetupPhoneWiring(): {
     const workspaceSender = customerSenders.find((s) => s.phoneNumberId === selectedCustomerSenderId);
     const senderHeadline =
       senderMode === "PLATFORM"
-        ? "Transovo Platform"
+        ? "Platform sender"
         : workspaceSender?.displayNumber || "Your verified number";
     const senderDetail =
       senderMode === "PLATFORM"
-        ? "Managed by Transovo"
+        ? "Transovo manages the sending number for recovery texts"
         : workspaceSender
           ? `${workspaceSender.complianceLabel}${workspaceSender.approved ? "" : " · Cannot activate yet"}`
           : "Select a verified messaging number";
@@ -283,8 +283,8 @@ export function useMctbSetupPhoneWiring(): {
     const senderOptions = [
       {
         id: "platform" as const,
-        title: "Transovo Platform",
-        description: "Transovo manages the sending number.",
+        title: "Platform sender",
+        description: "Transovo manages the sending number for recovery texts.",
         active: senderMode === "PLATFORM",
         selectable: true,
         statusLabel: senderMode === "PLATFORM" ? "Active" : undefined,

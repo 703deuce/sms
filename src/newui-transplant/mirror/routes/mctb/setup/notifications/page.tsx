@@ -1,7 +1,7 @@
 'use client'
 
 import { Bell, Bolt, FlaskConical, MoreHorizontal, Plus, Users } from 'lucide-react'
-import { ConfigSection, Initials, Panel, Pill } from '@/newui-transplant/components/app/kit'
+import { ConfigSection, Initials, Panel, Pill, TextLink } from '@/newui-transplant/components/app/kit'
 import { td, th } from '@/newui-transplant/components/app/opus-tables'
 import { OPUS_CONFIG_INSET, OPUS_INSET_LIST, OPUS_TABLE_HEAD } from '@/newui-transplant/components/app/opus-surfaces'
 import { cn } from '@/lib/utils'
@@ -13,14 +13,14 @@ import { formatPhone } from '@/lib/utils'
 
 export type MctbSetupNotificationsUrgentWired = {
   enabled: boolean
-  instructions: string
+  /** Read-only preview of criteria stored in AI Recovery / business knowledge */
+  criteriaPreview: string | null
+  criteriaEditHref: string
   urgentBusinessSmsEntitled: boolean
   testMessage: string
   testBusy: boolean
   testResultLabel: string | null
   onEnabledChange: (v: boolean) => void
-  onInstructionsChange: (v: string) => void
-  onInstructionsBlur: () => void
   onTestMessageChange: (v: string) => void
   onRunTest: () => void
 }
@@ -52,7 +52,7 @@ export function TransplantMctbSetupNotificationsPage({ wired }: { wired?: MctbSe
         <ConfigSection
           icon={Bolt}
           title="Urgent Reply Alerts"
-          description="Classify inbound replies from your instructions. Works when AI Recovery is off. Does not text customers."
+          description="Notify your team when an inbound reply looks urgent. Criteria live in AI Recovery — turn alerts on or off here."
         >
           <div className="flex flex-col gap-5">
             <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -70,19 +70,18 @@ export function TransplantMctbSetupNotificationsPage({ wired }: { wired?: MctbSe
             </div>
 
             <div className={cn(OPUS_CONFIG_INSET, 'bg-background/60 p-4')}>
-              <label className="text-sm font-medium" htmlFor="mctb-urgent-instructions">
-                What should Transovo consider urgent?
-              </label>
-              <p className="mt-0.5 text-xs text-muted-foreground">Used when classifying inbound replies.</p>
-              <Textarea
-                id="mctb-urgent-instructions"
-                className="mt-2 min-h-[5.5rem] max-h-48 resize-y bg-background"
-                rows={3}
-                value={urgent.instructions}
-                onChange={(e) => urgent.onInstructionsChange(e.target.value)}
-                onBlur={urgent.onInstructionsBlur}
-                placeholder="Example: Active flooding, gas smell, no heat in winter…"
-              />
+              <p className="text-sm font-medium">What counts as urgent</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Defined in AI Recovery (business knowledge). Update it there — not on this page.
+              </p>
+              {urgent.criteriaPreview?.trim() ? (
+                <p className="mt-2 line-clamp-4 text-sm text-muted-foreground">{urgent.criteriaPreview.trim()}</p>
+              ) : (
+                <p className="mt-2 text-sm text-muted-foreground">No urgent criteria saved yet.</p>
+              )}
+              <p className="mt-3">
+                <TextLink href={urgent.criteriaEditHref}>Edit urgent criteria in AI Recovery</TextLink>
+              </p>
             </div>
 
             {!urgent.urgentBusinessSmsEntitled ? (
