@@ -88,6 +88,70 @@ Duplicate workspace shells and numbers from repeat Google logins were removed.
 
 ---
 
+## Why three things (User, Workspace, Membership)? Shouldn’t free plan always mean a membership?
+
+**Short answer:** In product terms there is **one customer account** (one email). Under the hood we use **three linked rows** on purpose — not three “kinds of account.” They should **always** be created together. They were **not** supposed to diverge. When they did, it was a **bug**, not a free-plan vs trial product rule.
+
+### What each row is for (not three signup products)
+
+| Row | Job | Analogy |
+|-----|-----|--------|
+| **User** | Login identity (email, password/Google) | Your login |
+| **Workspace** | Tenant: numbers, MCTB config, missed calls, **free 10 / paid recovery**, billing | Your business’s data bucket |
+| **Membership** | “This user may access this workspace” (OWNER, etc.) | Key that ties login → bucket |
+
+**Free plan** (10 recoveries/month) is **not** a fourth account type. It is **configuration on the workspace** (feature entitlements, usage counters, `billingPlan` / commercial state). You still need a **Membership** so login knows **which** workspace to open.
+
+So: **free plan does not replace Membership.** Free plan answers “what limits does this workspace have?” Membership answers “which workspace does this email get after login?”
+
+### What should happen on every signup (intended)
+
+```
+email signup or first Google login
+  → 1 User
+  → 1 Workspace (ownerUserId = that user)
+  → 1 Membership (OWNER linking user ↔ workspace)
+  → then MCTB/free/paid flags on that workspace
+```
+
+There is **no** valid steady state of “customer exists but has no membership” in the intended design.
+
+### Why you saw workspace without membership (not legacy trial)
+
+This was **not** because we intentionally support “workspace only” or because **free trial** is a separate legacy mode that skips membership.
+
+What happened:
+
+1. **Code always *tried* to create Membership** — signup and many workspace creates used Prisma nested `memberships: { create: … }`.
+2. **Our Supabase/Prisma compat layer only inserted the Workspace row** and **dropped** the nested membership create (silent failure).
+3. Login code mostly checks **Membership**, not `ownerUserId`. So the app behaved as if the customer had **no workspace**, even though a **Workspace** row existed with `ownerUserId` set.
+4. **Google OAuth** then treated “no memberships” as **brand-new customer** and created **another** Workspace (+ number). Repeat login → repeat. Same **User**, multiple **Workspaces**, still broken **Membership** links until fixed.
+
+**Legacy “trial” naming** (`billingPlan: trial`, old `trialActivatedAt`, etc.) is about **commercial state on the workspace** (card required, onboarding, transition to free/paid). It does **not** explain missing Membership rows. Those are orthogonal.
+
+### Why three workspaces felt like three accounts
+
+| What you saw | What it actually was |
+|--------------|----------------------|
+| Three toll-free numbers | Three **Workspace** rows (same **User**) |
+| Onboarding again | New empty workspace, no link to finished MCTB workspace |
+| “Three different things” | One **User**, three **Workspaces**, **zero Membership** until repair — not three emails |
+
+After fix + cleanup: **one User, one Workspace, one Membership** for that email; free/paid limits stay on that workspace.
+
+### Going forward (invariant)
+
+**Rule:** If `workspace.ownerUserId` is set, there **must** be an OWNER **Membership** for that user.
+
+Enforced by:
+
+- Prisma-compat running nested membership creates
+- Explicit `membership.create` / `ensureOwnerMembership` on signup and workspace helpers
+- Returning login paths that **never** create a new workspace for an existing email
+- Optional backfill: `scripts/backfill-owner-memberships.ts`
+
+---
+
 ## Related code and scripts
 
 | Item | Path |
