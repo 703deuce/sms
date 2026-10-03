@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   inferResumeStep,
   normalizeOnboardingStep,
+  onboardingStepRequiresSavedConsent,
   wizardStageIndex,
 } from "../src/lib/mctb/onboarding/wizard-flow";
 import { defaultMctbOnboardingState } from "../src/lib/mctb/onboarding/state";
@@ -34,5 +35,17 @@ const skippedConsent = {
   currentStep: "review_test" as const,
 };
 assert.equal(inferResumeStep(skippedConsent), "consent");
+
+assert.equal(
+  onboardingStepRequiresSavedConsent(skippedConsent, "review_test"),
+  true,
+);
+assert.equal(
+  onboardingStepRequiresSavedConsent(
+    { ...fresh, completedSteps: ["consent"] },
+    "recovery",
+  ),
+  false,
+);
 
 console.log("test-mctb-onboarding-wizard-flow: ok");

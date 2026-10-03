@@ -100,3 +100,20 @@ export function productionActivationProgress(state: MctbOnboardingState): boolea
     Boolean(state.workspaceTollFreeNumber || state.trialNumber)
   );
 }
+
+/** Block wizard step jumps past consent until consent step is completed (or same POST saves consent). */
+export function onboardingStepRequiresSavedConsent(
+  state: MctbOnboardingState,
+  targetStep: MctbOnboardingStep,
+): boolean {
+  const target = normalizeOnboardingStep(targetStep);
+  if (
+    target === "ready" ||
+    target === "complete" ||
+    target === "business_line" ||
+    target === "consent"
+  ) {
+    return false;
+  }
+  return !normalizeCompletedSteps(state.completedSteps).includes("consent");
+}

@@ -47,6 +47,7 @@ import {
   MCTB_WIZARD_PRIMARY_LABELS,
   inferResumeStep,
   normalizeOnboardingStep,
+  onboardingStepRequiresSavedConsent,
   wizardStageIndex,
 } from "@/lib/mctb/onboarding/wizard-flow";
 import { traceMctbDebug, traceMctbDebugError } from "@/lib/mctb/debug";
@@ -594,6 +595,15 @@ export async function POST(req: Request) {
 
     if (body.step) {
       const nextStep = normalizeOnboardingStep(body.step);
+      if (
+        onboardingStepRequiresSavedConsent(state, nextStep) &&
+        !body.consentMode
+      ) {
+        return NextResponse.json(
+          { error: "Choose a consent method before continuing setup." },
+          { status: 400 },
+        );
+      }
       if (nextStep === "recovery" && body.action === "provision_trial_number") {
         state = markStepComplete(state, "recovery");
       }
