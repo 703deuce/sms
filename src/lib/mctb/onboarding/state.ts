@@ -118,9 +118,17 @@ export async function saveMctbOnboardingState(
     completedSteps: patch.completedSteps ?? current.completedSteps,
     funnelEvents: { ...current.funnelEvents, ...(patch.funnelEvents || {}) },
   };
+  const baseCfg = asRecord(ws?.customFieldsConfig);
+  const mctb =
+    baseCfg.mctb && typeof baseCfg.mctb === "object"
+      ? (baseCfg.mctb as Record<string, unknown>)
+      : {};
   const customFieldsConfig = jsonSafe({
-    ...asRecord(ws?.customFieldsConfig),
+    ...baseCfg,
     mctbOnboarding: next,
+    ...(patch.consentMode
+      ? { mctb: { ...mctb, consentMode: patch.consentMode } }
+      : {}),
   });
   await prisma.workspace.update({
     where: { id: workspaceId },

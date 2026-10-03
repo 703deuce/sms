@@ -45,7 +45,9 @@ import {
 import {
   MCTB_WIZARD_PRIMARY_STEPS,
   MCTB_WIZARD_PRIMARY_LABELS,
+  inferResumeStep,
   normalizeOnboardingStep,
+  wizardStageIndex,
 } from "@/lib/mctb/onboarding/wizard-flow";
 import { traceMctbDebug, traceMctbDebugError } from "@/lib/mctb/debug";
 import { startMctbTryItSession } from "@/lib/mctb/try-it/start-session";
@@ -65,9 +67,20 @@ export async function GET(req: Request) {
       "@/lib/mctb/provisioning/get-workspace-ingress-status"
     );
 
-    const [state, demo, trialNumber, liveTest, trialInfo, trialReqs, tfv, forwardingVerification, forwardTargetE164, capabilities, workspaceIngress] =
+    let state = await loadMctbOnboardingState(auth.workspaceId);
+    const resumeStep = inferResumeStep(state);
+    const currentCanonical = normalizeOnboardingStep(state.currentStep);
+    if (
+      resumeStep !== currentCanonical &&
+      resumeStep !== "ready" &&
+      resumeStep !== "complete" &&
+      wizardStageIndex(resumeStep) < wizardStageIndex(currentCanonical)
+    ) {
+      state = await saveMctbOnboardingState(auth.workspaceId, { currentStep: resumeStep });
+    }
+
+    const [demo, trialNumber, liveTest, trialInfo, trialReqs, tfv, forwardingVerification, forwardTargetE164, capabilities, workspaceIngress] =
       await Promise.all([
-      loadMctbOnboardingState(auth.workspaceId),
       getDemoStatus(auth.workspaceId),
       getTrialNumberStatus(auth.workspaceId),
       getLiveTestStatus(auth.workspaceId),
@@ -92,6 +105,23 @@ export async function GET(req: Request) {
       capabilities.platformSenderActive ? "PLATFORM" : "WORKSPACE",
     );
 
+    const prisma = getPrisma();
+    const wsCfg = await prisma.workspace.findUnique({
+      where: { id: auth.workspaceId },
+      select: { customFieldsConfig: true },
+    });
+    const mctbCfg =
+      wsCfg?.customFieldsConfig &&
+      typeof wsCfg.customFieldsConfig === "object" &&
+      (wsCfg.customFieldsConfig as Record<string, unknown>).mctb &&
+      typeof (wsCfg.customFieldsConfig as Record<string, unknown>).mctb === "object"
+        ? ((wsCfg.customFieldsConfig as Record<string, unknown>).mctb as Record<string, unknown>)
+        : {};
+    const existingConsentAttestationRecorded =
+      mctbCfg.existingConsentAttestation &&
+      typeof mctbCfg.existingConsentAttestation === "object" &&
+      (mctbCfg.existingConsentAttestation as Record<string, unknown>).accepted === true;
+
     traceMctbDebug("onboarding", "get_complete", {
       workspaceId: auth.workspaceId,
       currentStep: state.currentStep,
@@ -101,6 +131,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       state,
+      existingConsentAttestationRecorded,
       steps: MCTB_ONBOARDING_STEP_ORDER,
       stepLabels: MCTB_ONBOARDING_STEP_LABELS,
       wizardPrimarySteps: MCTB_WIZARD_PRIMARY_STEPS,
@@ -179,6 +210,9 @@ export async function POST(req: Request) {
 
     const prisma = getPrisma();
     let state = await loadMctbOnboardingState(auth.workspaceId);
+
+    const consentNotChosen = () =>
+      !state.completedSteps.includes("consent") && !body.consentMode;
 
     if (body.action === "start_demo") {
       const user = await prisma.user.findUnique({
@@ -306,6 +340,12 @@ export async function POST(req: Request) {
     }
 
     if (body.messageTemplate) {
+      if (consentNotChosen()) {
+        return NextResponse.json(
+          { error: "Choose a consent method before configuring text back." },
+          { status: 400 },
+        );
+      }
       if (!body.recoveryGoal) {
         await updateMissedCallTextConfig({
           workspaceId: auth.workspaceId,
@@ -326,6 +366,12 @@ export async function POST(req: Request) {
     }
 
     if (body.action === "complete_notifications") {
+      if (consentNotChosen()) {
+        return NextResponse.json(
+          { error: "Choose a consent method before continuing setup." },
+          { status: 400 },
+        );
+      }
       state = markStepComplete(state, "notifications");
       state = await saveMctbOnboardingState(auth.workspaceId, {
         ...state,
@@ -334,6 +380,12 @@ export async function POST(req: Request) {
     }
 
     if (body.action === "complete_connect_phone") {
+      if (consentNotChosen()) {
+        return NextResponse.json(
+          { error: "Choose a consent method before connecting your phone." },
+          { status: 400 },
+        );
+      }
       const lineToPersist = body.businessNumberE164?.trim() || state.businessNumberE164?.trim();
       if (lineToPersist) {
         const { persistMctbWorkspaceBusinessLineE164 } = await import(
@@ -441,6 +493,17 @@ export async function POST(req: Request) {
       });
       const { syncMctbConsentRouting } = await import("@/lib/mctb/consent-prompt/service");
       await syncMctbConsentRouting(auth.workspaceId, auth.session.userId).catch(() => undefined);
+      const { provisionMctbPhoneTexmlIngressModeForWorkspace } = await import(
+        "@/lib/mctb/texml-ingress/texml-mode-provision"
+      );
+      await provisionMctbPhoneTexmlIngressModeForWorkspace(auth.workspaceId).catch(
+        (err) => {
+          traceMctbDebug("onboarding", "texml_mode_after_consent_failed", {
+            workspaceId: auth.workspaceId,
+            reason: err instanceof Error ? err.message : String(err),
+          });
+        },
+      );
       if (body.consentMode === "existing_consent") {
         const { recordWorkspaceExistingConsentAttestation } = await import(
           "@/lib/mctb/capture/attestation"
@@ -450,9 +513,16 @@ export async function POST(req: Request) {
           attestedByUserId: auth.session.userId,
         }).catch(() => undefined);
       }
+      state = await loadMctbOnboardingState(auth.workspaceId);
     }
 
     if (body.action === "mark_voicemail_configured") {
+      if (consentNotChosen()) {
+        return NextResponse.json(
+          { error: "Choose a consent method before continuing setup." },
+          { status: 400 },
+        );
+      }
       state = markStepComplete(state, "voicemail");
       state = await saveMctbOnboardingState(auth.workspaceId, {
         ...state,

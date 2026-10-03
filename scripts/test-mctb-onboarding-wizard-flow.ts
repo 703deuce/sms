@@ -26,4 +26,13 @@ const partial = {
 };
 assert.equal(inferResumeStep(partial), "consent");
 
+const skippedConsent = {
+  ...fresh,
+  businessName: "Acme",
+  businessNumberE164: "+15715550188",
+  completedSteps: ["recovery" as const, "connect_calls" as const],
+  currentStep: "review_test" as const,
+};
+assert.equal(inferResumeStep(skippedConsent), "consent");
+
 console.log("test-mctb-onboarding-wizard-flow: ok");

@@ -153,6 +153,11 @@ export function MctbOnboardingRuntime({
       if (json.state.websiteUrl) setWebsiteUrl(json.state.websiteUrl);
       if (json.state.messageTemplate) setMessageTemplate(json.state.messageTemplate);
       if (json.state.consentMode) setConsentMode(json.state.consentMode);
+      if (
+        (json as { existingConsentAttestationRecorded?: boolean }).existingConsentAttestationRecorded
+      ) {
+        setExistingConsentAttested(true);
+      }
       if (json.state.forwardingCarrier) setCarrier(json.state.forwardingCarrier);
       if (json.state.businessNumberE164) setBusinessNumber(json.state.businessNumberE164);
       if (json.state.forwardingRingSeconds) setForwardRingSeconds(json.state.forwardingRingSeconds);
