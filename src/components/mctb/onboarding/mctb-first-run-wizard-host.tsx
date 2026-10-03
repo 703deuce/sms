@@ -138,7 +138,7 @@ export function MctbFirstRunWizardHost() {
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>Guided MCTB configuration using your live workspace settings.</DialogDescription>
         </DialogHeader>
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
           <MctbOnboardingRuntime
             shell="opus"
             presentation="modal"

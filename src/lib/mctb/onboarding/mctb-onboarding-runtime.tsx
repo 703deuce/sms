@@ -45,6 +45,7 @@ import {
   MctbOnboardingOpusView,
   type MctbOnboardingController,
 } from "@/newui-transplant/connected/mctb/mctb-onboarding-opus-view";
+import { formatMctbOnboardingUserError } from "@/lib/mctb/onboarding/user-facing-errors";
 import type { MctbCapabilities } from "@/lib/mctb/capabilities";
 
 type OnboardingPayload = {
@@ -233,7 +234,11 @@ export function MctbOnboardingRuntime({
       await load();
       return json;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(
+        formatMctbOnboardingUserError(
+          err instanceof Error ? err.message : "Something went wrong",
+        ),
+      );
       return null;
     } finally {
       setSaving(false);
@@ -253,7 +258,11 @@ export function MctbOnboardingRuntime({
       if (!res.ok) throw new Error(json.error || "Could not assign number");
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not assign number");
+      setError(
+        formatMctbOnboardingUserError(
+          err instanceof Error ? err.message : "Could not assign number",
+        ),
+      );
     } finally {
       setSaving(false);
     }

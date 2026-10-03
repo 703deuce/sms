@@ -97,6 +97,7 @@ export function MctbOnboardingWizardShell({
     <footer
       className={cn(
         "flex shrink-0 items-center justify-between gap-3 border-t bg-background px-6 py-4",
+        modal && "z-10 pb-[max(1rem,env(safe-area-inset-bottom))]",
         !modal && OPUS_CARD,
         !modal && "mt-0 border-t-0",
       )}
@@ -137,8 +138,11 @@ export function MctbOnboardingWizardShell({
     return (
       <div className="flex h-full min-h-0 flex-col bg-card text-card-foreground">
         {header}
-        <div className="relative z-0 min-h-0 flex-1 overflow-y-auto overscroll-contain bg-card px-6 py-5">
-          <div className="mx-auto w-full max-w-[640px] pb-28">{children}</div>
+        <div
+          className="relative z-0 min-h-0 flex-1 overflow-y-auto overscroll-y-contain bg-card px-6 py-5 touch-pan-y"
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
+          <div className="mx-auto w-full max-w-[640px] pb-6">{children}</div>
         </div>
         {footerBar}
       </div>

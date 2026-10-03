@@ -164,7 +164,10 @@ export function MctbOnboardingOpusView({ controller: c }: { controller: MctbOnbo
     </>
   );
 
+  const modalLayout = c.presentation === "modal";
+
   return (
+    <div className={modalLayout ? "flex h-full min-h-0 flex-1 flex-col overflow-hidden" : undefined}>
     <MctbOnboardingWizardFooterProvider onFooterChange={setFooter}>
       <MctbOnboardingWizardShell
         presentation={c.presentation}
@@ -182,5 +185,6 @@ export function MctbOnboardingOpusView({ controller: c }: { controller: MctbOnbo
         onNumbersChanged={() => void c.load()}
       />
     </MctbOnboardingWizardFooterProvider>
+    </div>
   );
 }
