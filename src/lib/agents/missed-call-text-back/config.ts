@@ -53,7 +53,7 @@ export function configToRecord(row: {
     senderMode: "PLATFORM",
     messageTemplateBusinessHours: null,
     messageTemplateAfterHours: null,
-    requireCarrierForward: true,
+    requireCarrierForward: false,
     directDialForwardE164: null,
     requestFormEnabled: false,
     requestFormToken: null,

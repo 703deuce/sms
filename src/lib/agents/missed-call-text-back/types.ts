@@ -157,7 +157,7 @@ export const DEFAULT_MCTB_CONFIG: Omit<
   senderMode: "PLATFORM",
   messageTemplateBusinessHours: null,
   messageTemplateAfterHours: null,
-  requireCarrierForward: true,
+  requireCarrierForward: false,
   directDialForwardE164: null,
   requestFormEnabled: false,
   requestFormToken: null,

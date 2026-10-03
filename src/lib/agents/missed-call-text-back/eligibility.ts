@@ -116,17 +116,19 @@ export async function evaluateMissedCallTextEligibility(input: {
     }
 
     if (config.phoneNumberId && input.phoneNumberId && config.phoneNumberId !== input.phoneNumberId) {
-      // Inactive sibling DID (e.g. 866 provisioned but 571 is active) — no SMS.
-      return { eligible: false, reason: "TRIGGER_DISABLED", classification };
-    }
-
-    if (config.requireCarrierForward && !input.eventOnly) {
-      const { isPlatformDemoNumber } = await import("@/lib/mctb/onboarding/demo");
-      const transovo = input.transovoNumberE164 || input.businessE164;
-      const directDial = !input.forwardedFromE164?.trim();
-      if (directDial && !isPlatformDemoNumber(transovo)) {
-        return { eligible: false, reason: "NOT_FORWARD_EVENT", classification };
+      const prisma = getPrisma();
+      const calledIngress = await prisma.phoneNumber.findFirst({
+        where: { id: input.phoneNumberId, workspaceId: input.workspaceId },
+        select: { id: true, status: true },
+      });
+      if (
+        !calledIngress ||
+        String(calledIngress.status || "").toLowerCase() === "released"
+      ) {
+        return { eligible: false, reason: "TRIGGER_DISABLED", classification };
       }
+      // Called DID is still workspace-owned (e.g. customer forwards to an earlier ingress TFN).
+      // Do not suppress recovery — carriers often omit ForwardedFrom on status callbacks.
     }
 
     if (config.suppressKnownSpam) {

@@ -52,7 +52,10 @@ export async function assessWorkspaceDedicatedMctbIngress(
 ): Promise<WorkspaceDedicatedMctbIngressAssessment> {
   const ingressMode = resolveMctbWorkspaceIngressMode();
   const runtime = await loadMissedCallTextConfig(workspaceId);
-  const phoneNumberId = runtime.phoneNumberId?.trim();
+  const state = await loadMctbOnboardingState(workspaceId);
+  const workspaceTollFree = getWorkspaceTollFreeNumber(state);
+  const phoneNumberId =
+    workspaceTollFree?.phoneNumberId?.trim() || runtime.phoneNumberId?.trim();
   if (!phoneNumberId) {
     return { valid: false, reason: "missing_runtime_phone_number_id" };
   }
@@ -86,20 +89,6 @@ export async function assessWorkspaceDedicatedMctbIngress(
     return {
       valid: false,
       reason: "canonical_platform_sender",
-      phoneNumberId: phone.id,
-      e164: phone.e164,
-    };
-  }
-
-  const state = await loadMctbOnboardingState(workspaceId);
-  const workspaceTollFree = getWorkspaceTollFreeNumber(state);
-  if (
-    workspaceTollFree?.phoneNumberId &&
-    workspaceTollFree.phoneNumberId !== phone.id
-  ) {
-    return {
-      valid: false,
-      reason: "runtime_onboarding_mismatch",
       phoneNumberId: phone.id,
       e164: phone.e164,
     };
