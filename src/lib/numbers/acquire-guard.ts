@@ -20,7 +20,9 @@ export async function assertCanPurchaseNumber(
     return {
       ok: false,
       error:
-        "Number purchase is disabled in this environment. Set TRANSOVO_ALLOW_NUMBER_PURCHASE=1 only for intentional live purchases.",
+        process.env.NODE_ENV === "production"
+          ? "Number purchase is disabled on this server (TRANSOVO_DISABLE_NUMBER_PURCHASE)."
+          : "Number purchase is disabled in this environment. Set TRANSOVO_ALLOW_NUMBER_PURCHASE=1 for intentional live purchases.",
       code: "PURCHASE_DISABLED",
     };
   }
