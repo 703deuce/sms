@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
+import { workspaceHasMctbProductContext } from "@/lib/mctb/ensure-mctb-product-feature";
 import { hasActiveMctbPaidEntitlement } from "@/lib/mctb/entitlement";
 import {
   getWorkspaceProductFeatures,
@@ -60,15 +61,18 @@ function subscriptionActive(productFamily: string, subs: { productFamily: string
 export async function resolveMctbCommercialEntitlements(
   workspaceId: string,
 ): Promise<MctbCommercialEntitlements> {
-  const [features, recoveryPaidLegacy, subs, limitsFlags, adminFull] = await Promise.all([
+  const [features, recoveryPaidLegacy, subs, limitsFlags, adminFull, mctbContext] =
+    await Promise.all([
     getWorkspaceProductFeatures(workspaceId),
     hasActiveMctbPaidEntitlement(workspaceId),
     listActivePlatformSubscriptions(workspaceId),
     loadLimitsEntitlementFlags(workspaceId),
     workspaceHasAdminFullEntitlements(workspaceId),
+    workspaceHasMctbProductContext(workspaceId),
   ]);
 
-  const mctbProductActive = isActiveEntitlement(features.mctb);
+  const mctbProductActive =
+    isActiveEntitlement(features.mctb) || mctbContext || adminFull;
   const mctbSub = subs.find((s) => s.productFamily === MCTB_PLATFORM_PRODUCT_FAMILY);
   const recoveryPaid =
     mctbProductActive && (recoveryPaidLegacy || subscriptionActive(MCTB_PLATFORM_PRODUCT_FAMILY, subs));

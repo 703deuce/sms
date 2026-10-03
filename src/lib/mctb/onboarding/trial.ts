@@ -6,6 +6,7 @@ import { classifyProductionNumber } from "@/lib/messaging/compliance/phone-numbe
 import { loadMctbOnboardingState, recordFunnelEvent, saveMctbOnboardingState } from "./state";
 import { getTfvStatusForWorkspace } from "@/lib/mctb/tfv/service";
 import { getWorkspaceTollFreeNumber } from "@/lib/mctb/workspace-toll-free";
+import { grantMctbProductFeatureActive } from "@/lib/mctb/ensure-mctb-product-feature";
 import { evaluateTrialActivationGates } from "./trial-gates";
 import { MCTB_ONBOARDING_STEP_ORDER } from "./types";
 
@@ -158,6 +159,8 @@ export async function activateMctbTrial(workspaceId: string): Promise<{
       billingPlan: "free",
     },
   });
+
+  await grantMctbProductFeatureActive(workspaceId);
 
   await saveMctbOnboardingState(workspaceId, {
     trialActivatedAt: startedAt.toISOString(),

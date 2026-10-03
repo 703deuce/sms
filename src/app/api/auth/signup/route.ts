@@ -86,8 +86,12 @@ export async function POST(request: Request) {
       body.productIntent ??
       pathIntent ??
       (body.workspaceType === "PERSONAL" ? "numbers" : "voice");
-    const workspaceType: WorkspaceType =
-      productIntent === "numbers" || body.workspaceType === "PERSONAL"
+    const isMctbSignup = productIntent === "voice";
+    const workspaceType: WorkspaceType = isMctbSignup
+      ? body.workspaceType === "PERSONAL"
+        ? "PERSONAL"
+        : "BUSINESS"
+      : productIntent === "numbers" || body.workspaceType === "PERSONAL"
         ? "PERSONAL"
         : "BUSINESS";
     const businessName =
@@ -133,27 +137,26 @@ export async function POST(request: Request) {
         slug,
         type: workspaceType,
         ownerUserId: user.id,
-        billingPlan:
-          workspaceType === "BUSINESS" && productIntent === "voice"
-            ? "onboarding"
-            : trial.requireCard
-              ? "trial_pending_card"
-              : "trial",
+        billingPlan: isMctbSignup
+          ? "onboarding"
+          : trial.requireCard
+            ? "trial_pending_card"
+            : "trial",
         creditBalanceCents: 0,
-        customFieldsConfig:
-          workspaceType === "BUSINESS" && productIntent === "voice"
-            ? {
-                mctbOnboarding: {
-                  version: 1,
-                  currentStep: "business",
-                  completedSteps: [],
-                  startedAt: new Date().toISOString(),
-                  messageTemplate: "Sorry we missed your call! Reply here and we'll get back to you shortly.",
-                  consentMode: "press_1",
-                  funnelEvents: { signup_completed: new Date().toISOString() },
-                },
-              }
-            : undefined,
+        customFieldsConfig: isMctbSignup
+          ? {
+              mctbOnboarding: {
+                version: 1,
+                currentStep: "business",
+                completedSteps: [],
+                startedAt: new Date().toISOString(),
+                messageTemplate:
+                  "Sorry we missed your call! Reply here and we'll get back to you shortly.",
+                consentMode: "press_1",
+                funnelEvents: { signup_completed: new Date().toISOString() },
+              },
+            }
+          : undefined,
         memberships: {
           create: { userId: user.id, role: "OWNER" },
         },
@@ -176,7 +179,7 @@ export async function POST(request: Request) {
     });
     await ensureOwnerMembership(user.id, workspace.id);
 
-    if (trial.credits > 0 && !(workspaceType === "BUSINESS" && productIntent === "voice")) {
+    if (trial.credits > 0 && !isMctbSignup) {
       const cents = Math.round(trial.credits * 100);
       try {
         await grantCredits(workspace.id, cents, `Trial credit grant ($${trial.credits})`, "trial");
@@ -208,7 +211,7 @@ export async function POST(request: Request) {
     }
     await updateProductIntent(user.id, productIntent);
 
-    if (workspaceType === "BUSINESS" && productIntent === "voice") {
+    if (isMctbSignup) {
       const { ensureMctbWorkspaceBootstrap } = await import(
         "@/lib/mctb/provisioning/workspace-bootstrap"
       );
