@@ -9,6 +9,15 @@ import { SidebarTrigger } from '@/newui-transplant/components/ui/sidebar'
 import { Separator } from '@/newui-transplant/components/ui/separator'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Avatar, AvatarFallback } from '@/newui-transplant/components/ui/avatar'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/newui-transplant/components/ui/dropdown-menu'
+import { performClientLogout } from '@/lib/auth/logout-client'
 import { resolveCustomerNavSections } from '@/newui-transplant/lib/nav'
 
 function sectionFor(pathname: string) {
@@ -69,9 +78,31 @@ export function Topbar({ userName }: { userName?: string }) {
           <Bell />
           <span className="absolute right-2 top-2 size-1.5 rounded-full bg-primary" aria-hidden="true" />
         </Button>
-        <Avatar className="ml-1 size-8">
-          <AvatarFallback className="bg-accent text-xs font-medium text-accent-foreground">{initials}</AvatarFallback>
-        </Avatar>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button variant="ghost" size="icon" className="ml-1 rounded-full" aria-label="Account menu">
+                <Avatar className="size-8">
+                  <AvatarFallback className="bg-accent text-xs font-medium text-accent-foreground">{initials}</AvatarFallback>
+                </Avatar>
+              </Button>
+            }
+          />
+          <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuLabel className="truncate font-normal">
+              {userName?.trim() || 'Signed in'}
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem render={<Link href="/settings">Settings</Link>} />
+            <DropdownMenuItem
+              onClick={() => {
+                void performClientLogout('/login')
+              }}
+            >
+              Log out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   )

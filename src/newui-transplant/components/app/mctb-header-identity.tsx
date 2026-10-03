@@ -14,6 +14,7 @@ import {
 } from "@/newui-transplant/components/ui/dropdown-menu";
 import { Pill } from "@/newui-transplant/components/app/kit";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
+import { performClientLogout } from "@/lib/auth/logout-client";
 
 function ingressStatus(state: string | undefined) {
   if (state === "provisioning") return { label: "Provisioning", tone: "warning" as const };
@@ -104,6 +105,14 @@ export function MctbHeaderIdentity() {
         <DropdownMenuSeparator />
         <DropdownMenuItem render={<Link href="/settings/billing">Billing &amp; plans →</Link>} />
         <DropdownMenuItem render={<Link href={MCTB_ROUTES.phone}>Phone &amp; Forwarding settings →</Link>} />
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={() => {
+            void performClientLogout("/login");
+          }}
+        >
+          Log out
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

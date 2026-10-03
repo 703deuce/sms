@@ -32,5 +32,9 @@ if (prev2 !== undefined) process.env.DEV_AUTH_BYPASS_2 = prev2;
 else delete process.env.DEV_AUTH_BYPASS_2;
 if (prevWs !== undefined) process.env.MCTB_PROD_CERT_WORKSPACE_ID = prevWs;
 else delete process.env.MCTB_PROD_CERT_WORKSPACE_ID;
+if (prevBypass !== undefined) process.env.DEV_AUTH_BYPASS = prevBypass;
+else delete process.env.DEV_AUTH_BYPASS;
+if (prevAuto !== undefined) process.env.DEV_AUTH_BYPASS_AUTO = prevAuto;
+else delete process.env.DEV_AUTH_BYPASS_AUTO;
 
 console.log("test-dev-auth-bypass-2: ok");
