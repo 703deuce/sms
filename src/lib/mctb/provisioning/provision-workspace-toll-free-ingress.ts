@@ -11,12 +11,10 @@ import {
   saveMctbOnboardingState,
 } from "@/lib/mctb/onboarding/state";
 import type { MctbTrialNumberInfo } from "@/lib/mctb/onboarding/types";
-import { MCTB_TRIAL_TOLL_FREE_AREA_CODES } from "@/lib/mctb/onboarding/constants";
 import { routePhoneToMctbCallHandlingIngress } from "@/lib/mctb/texml-ingress/provision";
 import { verifyMctbTexmlIngressRoute } from "@/lib/mctb/texml-ingress/texml-route";
 import { assessWorkspaceDedicatedMctbIngress } from "@/lib/mctb/provisioning/workspace-ingress-validity";
-import { messagingOnboarding } from "@/lib/messaging/service";
-import { telnyxProvider } from "@/lib/messaging/telnyx/provider";
+import { purchaseTelnyxTollFreeForMctbIngress } from "@/lib/mctb/provisioning/purchase-telnyx-toll-free-ingress";
 import {
   isPlatformMctbSenderPhoneRecord,
   parseMctbPhoneRole,
@@ -25,7 +23,6 @@ import {
 import { importTelnyxNumbersIntoWorkspace } from "@/lib/voice/telnyx/number-import";
 import {
   isNorthAmericaTollFreeE164,
-  isPreferredMctbIngressTollFreeE164,
   pickTelnyxTollFreeIngressE164,
 } from "@/lib/mctb/provisioning/telnyx-toll-free-ingress-pool";
 import {
@@ -81,20 +78,7 @@ async function workspaceIngressAlreadyReady(
 }
 
 async function purchaseTelnyxTollFreeDefault(workspaceId: string): Promise<string | null> {
-  await messagingOnboarding.start(workspaceId).catch(() => undefined);
-  for (const areaCode of MCTB_TRIAL_TOLL_FREE_AREA_CODES) {
-    try {
-      const results = await telnyxProvider.searchNumbers(areaCode);
-      const candidate = results.find((n) => isPreferredMctbIngressTollFreeE164(n.phoneNumber))
-        ?.phoneNumber;
-      if (!candidate) continue;
-      await messagingOnboarding.purchaseNumber(workspaceId, candidate, "telnyx");
-      return candidate;
-    } catch {
-      continue;
-    }
-  }
-  return null;
+  return purchaseTelnyxTollFreeForMctbIngress(workspaceId);
 }
 
 async function purchaseTelnyxTollFree(workspaceId: string): Promise<string | null> {

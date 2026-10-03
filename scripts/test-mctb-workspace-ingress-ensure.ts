@@ -15,6 +15,10 @@ assert.match(src, /ensureMctbWorkspaceIngressReady/);
 assert.match(src, /assessWorkspaceDedicatedMctbIngress/);
 assert.match(src, /provisionMctbWorkspaceTollFreeIngress/);
 assert.doesNotMatch(src, /provisionMctbPhoneTexmlIngressModeForWorkspace/);
+assert.match(
+  readFileSync(join(root, "src/lib/mctb/provisioning/purchase-telnyx-toll-free-ingress.ts"), "utf8"),
+  /source: "premium"/,
+);
 
 const tollFreeSrc = readFileSync(
   join(root, "src/lib/mctb/provisioning/provision-workspace-toll-free-ingress.ts"),
