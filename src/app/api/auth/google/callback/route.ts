@@ -59,13 +59,20 @@ export async function GET(request: Request) {
     const pathProduct = preferredProductFromPath(nextPath);
     const isMctbPath =
       nextPath.includes("/onboarding/mctb") ||
+      nextPath.startsWith("/mctb") ||
       nextPath.startsWith("/voice/setup") ||
       nextPath.startsWith("/voice/missed-calls");
 
     let workspaceId = account.workspaceId;
     let workspaceType = account.workspaceType;
 
-    if (isMctbPath || (pathProduct === "voice" && account.created)) {
+    const wantsVoiceWorkspace =
+      isMctbPath ||
+      pathProduct === "voice" ||
+      access.lastActiveProduct === "voice" ||
+      access.productIntent === "voice";
+
+    if (wantsVoiceWorkspace) {
       const voiceWs = await ensureProductWorkspace(account.userId, "voice");
       workspaceId = voiceWs.workspaceId;
       workspaceType = voiceWs.workspaceType;
@@ -96,10 +103,9 @@ export async function GET(request: Request) {
       }
     }
 
-    const refreshedAccess =
-      isMctbPath || (pathProduct === "voice" && account.created)
-        ? await getUserProductAccess(account.userId)
-        : access;
+    const refreshedAccess = wantsVoiceWorkspace
+      ? await getUserProductAccess(account.userId)
+      : access;
     const redirectPath = resolvePostLoginPath(refreshedAccess, { nextPath });
 
     const session = {

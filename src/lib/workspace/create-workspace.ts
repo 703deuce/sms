@@ -22,34 +22,37 @@ export async function createWorkspaceForUser(
   const taken = await getPrisma().workspace.findUnique({ where: { slug } });
   if (taken) slug = `${slug}-${Date.now().toString(36)}`;
 
-  const data: {
-    name: string;
-    slug: string;
-    type: WorkspaceType;
-    ownerUserId: string;
-    memberships: { create: { userId: string; role: "OWNER" } };
-    messagingRegistration?: { create: Record<string, never> };
-    workspaceLimits?: { create: { limits: Record<string, unknown> } };
-  } = {
-    name: name.trim(),
-    slug,
-    type,
-    ownerUserId: userId,
-    memberships: { create: { userId, role: "OWNER" } },
-  };
+  const prisma = getPrisma();
+  const workspace = await prisma.workspace.create({
+    data: {
+      name: name.trim(),
+      slug,
+      type,
+      ownerUserId: userId,
+    },
+  });
+
+  await prisma.membership.create({
+    data: { userId, workspaceId: workspace.id, role: "OWNER" },
+  });
 
   if (type === "BUSINESS") {
-    data.messagingRegistration = { create: {} };
-    data.workspaceLimits = {
-      create: {
-        limits: {
-          dailyCap: 500,
-          maxNumbers: 1,
-          trialDays: 14,
+    await prisma.messagingRegistration.create({ data: { workspaceId: workspace.id } }).catch(
+      () => undefined,
+    );
+    await prisma.workspaceLimits
+      .create({
+        data: {
+          workspaceId: workspace.id,
+          limits: {
+            dailyCap: 500,
+            maxNumbers: 1,
+            trialDays: 14,
+          },
         },
-      },
-    };
+      })
+      .catch(() => undefined);
   }
 
-  return getPrisma().workspace.create({ data });
+  return workspace;
 }

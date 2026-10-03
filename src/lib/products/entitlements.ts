@@ -284,6 +284,33 @@ export async function resolveWorkspaceForProduct(
   };
 }
 
+/**
+ * Create missing Membership rows for workspaces the user owns but cannot access
+ * (legacy paths set ownerUserId without membership).
+ */
+export async function repairOwnedWorkspaceMemberships(userId: string): Promise<number> {
+  const prisma = getPrisma();
+  const owned = await prisma.workspace.findMany({
+    where: { ownerUserId: userId },
+    select: { id: true },
+  });
+  if (!owned.length) return 0;
+
+  let created = 0;
+  for (const ws of owned) {
+    const existing = await prisma.membership.findFirst({
+      where: { userId, workspaceId: ws.id },
+      select: { id: true },
+    });
+    if (existing) continue;
+    await prisma.membership.create({
+      data: { userId, workspaceId: ws.id, role: "OWNER" },
+    });
+    created += 1;
+  }
+  return created;
+}
+
 /** Ensure the user has a workspace for the requested product (creates one if missing). */
 export async function ensureProductWorkspace(
   userId: string,
@@ -291,6 +318,7 @@ export async function ensureProductWorkspace(
 ): Promise<{ workspaceId: string; workspaceType: WorkspaceType }> {
   const prisma = getPrisma();
   const preferredType: WorkspaceType = product === "numbers" ? "PERSONAL" : "BUSINESS";
+  await repairOwnedWorkspaceMemberships(userId);
   const allMemberships = await prisma.membership.findMany({
     where: { userId },
     include: { workspace: { select: { id: true, type: true } } },
@@ -319,30 +347,43 @@ export async function ensureProductWorkspace(
     };
   }
 
-  const ownedWithNumbers = await prisma.workspace.findFirst({
+  const ownedOfType = await prisma.workspace.findMany({
     where: { ownerUserId: userId, type: preferredType },
     select: { id: true, type: true },
   });
-  if (ownedWithNumbers) {
-    const count = await prisma.phoneNumber.count({ where: { workspaceId: ownedWithNumbers.id } });
-    if (count > 0) {
-      const existingMembership = await prisma.membership.findFirst({
-        where: { userId, workspaceId: ownedWithNumbers.id },
-      });
-      if (!existingMembership) {
-        await prisma.membership.create({
-          data: { userId, workspaceId: ownedWithNumbers.id, role: "OWNER" },
-        });
+  if (ownedOfType.length) {
+    let best = ownedOfType[0]!;
+    let bestScore = -1;
+    for (const ws of ownedOfType) {
+      const phoneCount = await prisma.phoneNumber.count({ where: { workspaceId: ws.id } });
+      const mctbFeature = await prisma.workspaceProductFeature
+        .findFirst({
+          where: { workspaceId: ws.id, featureKey: "MCTB", status: "ACTIVE" },
+          select: { id: true },
+        })
+        .catch(() => null);
+      const score = phoneCount * 10 + (mctbFeature ? 1000 : 0);
+      if (score > bestScore) {
+        bestScore = score;
+        best = ws;
       }
-      await ensureWorkspaceEntitlements(ownedWithNumbers.id);
-      if (product === "voice") {
-        await ensureMctbWorkspaceBootstrap(ownedWithNumbers.id).catch(() => undefined);
-      }
-      return {
-        workspaceId: ownedWithNumbers.id,
-        workspaceType: ownedWithNumbers.type === "PERSONAL" ? "PERSONAL" : "BUSINESS",
-      };
     }
+    const existingMembership = await prisma.membership.findFirst({
+      where: { userId, workspaceId: best.id },
+    });
+    if (!existingMembership) {
+      await prisma.membership.create({
+        data: { userId, workspaceId: best.id, role: "OWNER" },
+      });
+    }
+    await ensureWorkspaceEntitlements(best.id);
+    if (product === "voice") {
+      await ensureMctbWorkspaceBootstrap(best.id).catch(() => undefined);
+    }
+    return {
+      workspaceId: best.id,
+      workspaceType: best.type === "PERSONAL" ? "PERSONAL" : "BUSINESS",
+    };
   }
 
   const workspace = await createWorkspaceForUser(

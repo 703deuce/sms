@@ -3,9 +3,11 @@ import { createHmac, randomBytes } from "crypto";
 import { hash } from "bcryptjs";
 import { getPrisma } from "@/lib/db";
 import {
+  ensureProductWorkspace,
   ensureWorkspaceEntitlements,
   getUserProductAccess,
   grantProductEntitlement,
+  repairOwnedWorkspaceMemberships,
 } from "@/lib/products/entitlements";
 import { updateProductIntent } from "@/lib/products/session";
 import type { ProductKey } from "@/lib/products/types";
@@ -205,10 +207,18 @@ export async function findOrCreateUserFromGoogle(profile: GoogleProfile): Promis
     await prisma.user.update({ where: { id: user.id }, data: { name: profile.name } });
   }
 
-  const memberships = await prisma.membership.findMany({
+  let memberships = await prisma.membership.findMany({
     where: { userId: user.id },
     include: { workspace: true },
   });
+
+  if (!memberships.length) {
+    await repairOwnedWorkspaceMemberships(user.id);
+    memberships = await prisma.membership.findMany({
+      where: { userId: user.id },
+      include: { workspace: true },
+    });
+  }
 
   if (memberships.length) {
     const access = await getUserProductAccess(user.id);
@@ -220,18 +230,13 @@ export async function findOrCreateUserFromGoogle(profile: GoogleProfile): Promis
           : access.hasNumbers
             ? "numbers"
             : "voice";
-    const membership =
-      memberships.find(
-        (m: { workspace: { type: string } }) =>
-          m.workspace.type === (preferred === "numbers" ? "PERSONAL" : "BUSINESS"),
-      ) ?? memberships[0];
-    await ensureWorkspaceEntitlements(membership.workspaceId);
+    const resolved = await ensureProductWorkspace(user.id, preferred);
     return {
       userId: user.id,
       email: user.email,
       name: user.name,
-      workspaceId: membership.workspaceId,
-      workspaceType: membership.workspace.type === "PERSONAL" ? "PERSONAL" : "BUSINESS",
+      workspaceId: resolved.workspaceId,
+      workspaceType: resolved.workspaceType,
       created,
     };
   }
@@ -245,10 +250,10 @@ export async function findOrCreateUserFromGoogle(profile: GoogleProfile): Promis
       ownerUserId: user.id,
       billingPlan: "trial",
       creditBalanceCents: 0,
-      memberships: {
-        create: { userId: user.id, role: "OWNER" },
-      },
     },
+  });
+  await prisma.membership.create({
+    data: { userId: user.id, workspaceId: workspace.id, role: "OWNER" },
   });
 
   await grantProductEntitlement(workspace.id, "numbers");
