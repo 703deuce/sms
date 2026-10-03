@@ -154,6 +154,10 @@ export async function processMissedInboundCall(input: ProcessMissedCallInput) {
     }).catch(() => undefined);
   }
 
+  const eligibilityMetadata = {
+    ...usageMetadata,
+    ...(input.eventMetadata || {}),
+  };
   const eligibility = await evaluateMissedCallTextEligibility({
     workspaceId: input.workspaceId,
     callerE164: caller,
@@ -163,16 +167,16 @@ export async function processMissedInboundCall(input: ProcessMissedCallInput) {
     demoMode: input.demoMode,
     eventOnly: input.eventOnly,
     forwardedFromE164:
-      typeof input.eventMetadata?.forwardedFromE164 === "string"
-        ? input.eventMetadata.forwardedFromE164
-        : typeof input.eventMetadata?.forwardedFrom === "string"
-          ? input.eventMetadata.forwardedFrom
+      typeof eligibilityMetadata.forwardedFromE164 === "string"
+        ? eligibilityMetadata.forwardedFromE164
+        : typeof eligibilityMetadata.forwardedFrom === "string"
+          ? eligibilityMetadata.forwardedFrom
           : null,
     transovoNumberE164:
-      typeof input.eventMetadata?.transovoNumberE164 === "string"
-        ? input.eventMetadata.transovoNumberE164
+      typeof eligibilityMetadata.transovoNumberE164 === "string"
+        ? eligibilityMetadata.transovoNumberE164
         : businessE164,
-    eventMetadata: input.eventMetadata,
+    eventMetadata: eligibilityMetadata,
     call: input.call,
   });
 

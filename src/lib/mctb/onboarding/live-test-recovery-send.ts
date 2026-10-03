@@ -3,7 +3,13 @@ import "server-only";
 import { getPrisma } from "@/lib/db";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { getMctbEntitlement } from "@/lib/mctb/entitlement";
-import { mctbSameE164 } from "@/lib/mctb/phone/e164-match";
+import { mctbDidE164Variants } from "@/lib/mctb/messaging/caller-e164";
+import {
+  evaluateMctbLiveTestForwardingVerified,
+  isMctbLiveTestCallBusinessE164,
+  MCTB_LIVE_TEST_SESSION_LOOKBACK_MS,
+  readMctbLiveTestForwardedFrom,
+} from "@/lib/mctb/onboarding/live-test-forwarding";
 import { validateExistingConsentAttestation } from "@/lib/mctb/capture/attestation";
 import { resolveMctbCapabilities } from "@/lib/mctb/capabilities";
 import { MCTB_CONSENT_MODE_EXISTING } from "@/lib/mctb/consent-mode";
@@ -18,27 +24,6 @@ export type OnboardingLiveTestRecoverySendInput = {
   phoneNumberId?: string | null;
   forwardedFromE164?: string | null;
 };
-
-function readForwardedFrom(metadata: Record<string, unknown>): string | null {
-  const raw = metadata.forwardedFrom ?? metadata.forwardedFromE164;
-  return typeof raw === "string" && raw.trim() ? raw.trim() : null;
-}
-
-function forwardingVerifiedForLiveTest(input: {
-  forwardedFrom: string | null;
-  businessLineE164: string | null;
-  forwardTargetE164: string;
-}): boolean {
-  if (input.businessLineE164?.trim()) {
-    return Boolean(
-      input.forwardedFrom && mctbSameE164(input.forwardedFrom, input.businessLineE164),
-    );
-  }
-  if (input.forwardedFrom) {
-    return !mctbSameE164(input.forwardedFrom, input.forwardTargetE164);
-  }
-  return false;
-}
 
 async function consentSatisfiedForLiveTest(input: {
   workspaceId: string;
@@ -64,11 +49,15 @@ async function consentSatisfiedForLiveTest(input: {
   if (input.sessionConsentAt) return true;
 
   const prisma = getPrisma();
-  const since = new Date(input.sessionStartedAt);
+  const since = new Date(
+    new Date(input.sessionStartedAt).getTime() - MCTB_LIVE_TEST_SESSION_LOOKBACK_MS,
+  );
+  const { mctbCallerE164Variants } = await import("@/lib/mctb/messaging/caller-e164");
+  const callerVariants = mctbCallerE164Variants(input.callerE164);
   const consentEvent = await prisma.smartRoutingSmsConsentEvent.findFirst({
     where: {
       workspaceId: input.workspaceId,
-      callerNumber: input.callerE164,
+      callerNumber: { in: callerVariants },
       consentedAt: { gte: since },
     },
     orderBy: { consentedAt: "desc" },
@@ -106,7 +95,15 @@ export async function authorizeOnboardingLiveTestRecoverySend(
   if (!session?.startedAt) return false;
 
   const forwardTargetE164 = await getProductionMctbForwardTargetE164(input.workspaceId);
-  if (!forwardTargetE164 || !mctbSameE164(input.businessE164, forwardTargetE164)) {
+  const businessLineE164 = state.businessNumberE164?.trim() || null;
+  if (
+    !forwardTargetE164 ||
+    !isMctbLiveTestCallBusinessE164({
+      businessE164: input.businessE164,
+      forwardTargetE164,
+      businessLineE164,
+    })
+  ) {
     return false;
   }
 
@@ -134,19 +131,30 @@ export async function authorizeOnboardingLiveTestRecoverySend(
     return false;
   }
 
-  const since = new Date(session.startedAt);
+  const since = new Date(
+    new Date(session.startedAt).getTime() - MCTB_LIVE_TEST_SESSION_LOOKBACK_MS,
+  );
   if (event.detectedAt < since) {
     return false;
   }
 
   if (session.missedCallEventId && session.missedCallEventId !== event.id) {
-    return false;
+    const locked = await prisma.missedCallEvent.findUnique({
+      where: { id: session.missedCallEventId },
+      select: { smsSentAt: true, workspaceId: true },
+    });
+    if (locked?.workspaceId === input.workspaceId && locked.smsSentAt) {
+      return false;
+    }
   }
 
+  const businessE164Filter = businessLineE164
+    ? mctbDidE164Variants(businessLineE164).map((e164) => ({ businessE164: e164 }))
+    : [];
   const priorSent = await prisma.missedCallEvent.count({
     where: {
       workspaceId: input.workspaceId,
-      businessE164: forwardTargetE164,
+      OR: [{ businessE164: forwardTargetE164 }, ...businessE164Filter],
       smsSentAt: { not: null },
       detectedAt: { gte: since },
       id: { not: event.id },
@@ -165,13 +173,14 @@ export async function authorizeOnboardingLiveTestRecoverySend(
   }
 
   const forwardedFrom =
-    input.forwardedFromE164?.trim() || readForwardedFrom(metadata);
-  const businessLineE164 = state.businessNumberE164?.trim() || null;
+    input.forwardedFromE164?.trim() || readMctbLiveTestForwardedFrom(metadata);
   if (
-    !forwardingVerifiedForLiveTest({
+    !evaluateMctbLiveTestForwardingVerified({
+      businessE164: event.businessE164,
       forwardedFrom,
-      businessLineE164,
       forwardTargetE164,
+      businessLineE164,
+      allowIngressWithoutForwardHeader: true,
     })
   ) {
     return false;

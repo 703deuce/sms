@@ -8,6 +8,7 @@ import {
 import { loadMissedCallTextConfig } from "./config";
 import { getMctbEntitlement } from "@/lib/mctb/entitlement";
 import { evaluateCallerIdForMctb } from "@/lib/mctb/spam-filter";
+import { mctbCallerE164Variants } from "@/lib/mctb/messaging/caller-e164";
 import type { InboundCallClassification, MctbSuppressionReason } from "./types";
 
 export type EligibilityResult = {
@@ -66,13 +67,19 @@ export async function evaluateMissedCallTextEligibility(input: {
     return { eligible: false, reason: "INVALID_PHONE", classification };
   }
 
+  const testRecovery = !input.demoMode
+    ? await import("@/lib/mctb/onboarding/test-recovery-context").then((m) =>
+        m.isMctbTestRecoveryContext(input.workspaceId, input.eventMetadata),
+      )
+    : false;
+
   if (!input.demoMode) {
     if (!config.enabled) {
       return { eligible: false, reason: "FEATURE_DISABLED", classification };
     }
 
     const entitlement = await getMctbEntitlement(input.workspaceId);
-    if (!entitlement.canSendAutomaticRecovery) {
+    if (!testRecovery && !entitlement.canSendAutomaticRecovery) {
       const onboardingLiveTestAuthorized =
         entitlement.serviceStatus === "ONBOARDING" &&
         entitlement.reason === "onboarding" &&
@@ -152,10 +159,16 @@ export async function evaluateMissedCallTextEligibility(input: {
   }
 
   if (config.suppressBlockedNumbers) {
+    const blockedVariants = mctbCallerE164Variants(caller);
     const blocked = await prisma.suppression.findFirst({
       where: {
         workspaceId: input.workspaceId,
-        OR: [{ phone: caller }, { suppressionKey: `${input.workspaceId}:p:${caller}` }],
+        OR: [
+          { phone: { in: blockedVariants } },
+          ...blockedVariants.map((v) => ({
+            suppressionKey: `${input.workspaceId}:p:${v}`,
+          })),
+        ],
       },
     });
     if (blocked) {
@@ -164,8 +177,9 @@ export async function evaluateMissedCallTextEligibility(input: {
   }
 
   if (config.suppressOptedOutNumbers) {
+    const optOutVariants = mctbCallerE164Variants(caller);
     const contact = await prisma.contact.findFirst({
-      where: { workspaceId: input.workspaceId, phone: caller },
+      where: { workspaceId: input.workspaceId, phone: { in: optOutVariants } },
       select: { status: true },
     });
     if (contact && contact.status !== "SUBSCRIBED") {
@@ -188,15 +202,18 @@ export async function evaluateMissedCallTextEligibility(input: {
 
   const cooldownSince = new Date(Date.now() - config.cooldownMinutes * 60_000);
   const skipCooldown =
+    testRecovery ||
     input.eventMetadata?.testSms === true ||
+    input.eventMetadata?.liveTest === true ||
     input.eventMetadata?.certMode === "C" ||
     input.eventMetadata?.certMode === "C3" ||
     config.cooldownMinutes <= 0;
   if (!skipCooldown) {
+    const callerVariants = mctbCallerE164Variants(caller);
     const recentSent = await prisma.missedCallEvent.count({
       where: {
         workspaceId: input.workspaceId,
-        callerE164: caller,
+        callerE164: { in: callerVariants },
         smsSentAt: { gte: cooldownSince },
       },
     });
@@ -205,7 +222,7 @@ export async function evaluateMissedCallTextEligibility(input: {
     }
   }
 
-  if (!input.demoMode) {
+  if (!input.demoMode && !testRecovery) {
     const { loadMctbScheduleSettings, isMctbSchedulePaused, isWithinMctbSendWindow } =
       await import("@/lib/mctb/schedule");
     const scheduleSettings = await loadMctbScheduleSettings(input.workspaceId, config);

@@ -96,14 +96,18 @@ async function releaseExpiredActiveAssignments(input: {
   }
 }
 
-export async function findActivePlatformSenderAssignment(input: {
+export async function findActivePlatformSenderAssignments(input: {
   consumerE164: string;
   platformPhoneNumberId: string;
-}): Promise<{
-  id: string;
-  workspaceId: string;
-  conversationId: string | null;
-} | null> {
+  workspaceId?: string;
+}): Promise<
+  Array<{
+    id: string;
+    workspaceId: string;
+    conversationId: string | null;
+    lastUsedAt: Date;
+  }>
+> {
   const consumerE164 = normalizeMctbCallerE164(input.consumerE164);
   const prisma = getPrisma();
   const now = new Date();
@@ -112,15 +116,38 @@ export async function findActivePlatformSenderAssignment(input: {
     platformPhoneNumberId: input.platformPhoneNumberId,
     now,
   });
-  const row = await prisma.mctbPlatformSenderAssignment.findFirst({
+  return prisma.mctbPlatformSenderAssignment.findMany({
     where: {
       consumerE164,
       platformPhoneNumberId: input.platformPhoneNumberId,
       state: "ACTIVE",
+      ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
     },
-    select: { id: true, workspaceId: true, conversationId: true },
+    select: { id: true, workspaceId: true, conversationId: true, lastUsedAt: true },
+    orderBy: { lastUsedAt: "desc" },
   });
-  return row;
+}
+
+/** Single active row when unambiguous (one workspace or workspace scoped). */
+export async function findActivePlatformSenderAssignment(input: {
+  consumerE164: string;
+  platformPhoneNumberId: string;
+  workspaceId?: string;
+}): Promise<{
+  id: string;
+  workspaceId: string;
+  conversationId: string | null;
+} | null> {
+  const rows = await findActivePlatformSenderAssignments(input);
+  if (rows.length === 1) {
+    const row = rows[0]!;
+    return { id: row.id, workspaceId: row.workspaceId, conversationId: row.conversationId };
+  }
+  if (input.workspaceId && rows.length > 0) {
+    const row = rows[0]!;
+    return { id: row.id, workspaceId: row.workspaceId, conversationId: row.conversationId };
+  }
+  return null;
 }
 
 export async function claimPlatformSenderAssignment(input: {
@@ -159,7 +186,12 @@ export async function claimPlatformSenderAssignment(input: {
     });
 
     const active = await tx.mctbPlatformSenderAssignment.findFirst({
-      where: { consumerE164, platformPhoneNumberId, state: "ACTIVE" },
+      where: {
+        workspaceId: input.workspaceId,
+        consumerE164,
+        platformPhoneNumberId,
+        state: "ACTIVE",
+      },
     });
 
     if (active) {
@@ -213,22 +245,20 @@ export async function claimPlatformSenderAssignment(input: {
         throw err;
       }
       const winner = await tx.mctbPlatformSenderAssignment.findFirst({
-        where: { consumerE164, platformPhoneNumberId, state: "ACTIVE" },
+        where: {
+          workspaceId: input.workspaceId,
+          consumerE164,
+          platformPhoneNumberId,
+          state: "ACTIVE",
+        },
       });
       if (!winner) {
         throw err;
       }
-      if (winner.workspaceId === input.workspaceId) {
-        return {
-          status: "REUSED" as const,
-          assignmentId: winner.id,
-          platformPhoneNumberId,
-        };
-      }
       return {
-        status: "COLLISION" as const,
-        ownerWorkspaceId: winner.workspaceId,
+        status: "REUSED" as const,
         assignmentId: winner.id,
+        platformPhoneNumberId,
       };
     }
   });
@@ -386,12 +416,13 @@ export async function resolvePlatformMctbInboundReplyWithAssignment(input: {
   }
 > {
   const consumerE164 = normalizeMctbCallerE164(input.consumerE164);
-  const active = await findActivePlatformSenderAssignment({
+  const activeRows = await findActivePlatformSenderAssignments({
     consumerE164,
     platformPhoneNumberId: input.platformSender.phoneNumberId,
   });
 
-  if (active) {
+  if (activeRows.length === 1) {
+    const active = activeRows[0]!;
     logAssignmentDecision({
       decision: "INBOUND_RESOLVED",
       resolutionSource: "ACTIVE_ASSIGNMENT",
@@ -405,6 +436,15 @@ export async function resolvePlatformMctbInboundReplyWithAssignment(input: {
       reason: "platform_reply_resolved",
       resolutionSource: "ACTIVE_ASSIGNMENT",
     };
+  }
+
+  if (activeRows.length > 1) {
+    logAssignmentDecision({
+      decision: "INBOUND_AMBIGUOUS_ASSIGNMENTS",
+      consumerE164,
+      platformPhoneNumberId: input.platformSender.phoneNumberId,
+      workspaceIds: activeRows.map((r) => r.workspaceId),
+    });
   }
 
   const legacy = await resolvePlatformMctbInboundReply({

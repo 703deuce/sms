@@ -64,8 +64,11 @@ export async function resolveDemoWorkspaceForCaller(
   }
 
   const prisma = getPrisma();
+  const { mctbCallerE164Variants } = await import("@/lib/mctb/messaging/caller-e164");
+  const { mctbSameE164 } = await import("@/lib/mctb/phone/e164-match");
+  const callerVariants = mctbCallerE164Variants(caller);
   const user = await prisma.user.findFirst({
-    where: { phone: caller },
+    where: { phone: { in: callerVariants } },
     select: { id: true },
   });
   if (user) {
@@ -77,7 +80,7 @@ export async function resolveDemoWorkspaceForCaller(
     for (const membership of memberships) {
       const state = await loadMctbOnboardingState(membership.workspaceId);
       const session = state.demoSession;
-      if (!session || session.callerE164 !== caller) continue;
+      if (!session || !mctbSameE164(session.callerE164, caller)) continue;
       if (!isActiveDemoStatus(session.status)) continue;
       if (isDemoSessionExpired(session)) continue;
       return { workspaceId: membership.workspaceId, session };

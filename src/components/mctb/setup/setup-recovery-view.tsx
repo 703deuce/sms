@@ -114,7 +114,7 @@ export function MctbSetupRecoveryView() {
     pauseKind: null,
   });
   const [timezone, setTimezone] = useState("America/New_York");
-  const [consentMode, setConsentMode] = useState<MctbConsentMode>("press_1");
+  const [consentMode, setConsentMode] = useState<MctbConsentMode | null>(null);
   const [messagingReady, setMessagingReady] = useState(false);
   const [messagePreview, setMessagePreview] = useState("");
   const [followUpEnabled, setFollowUpEnabled] = useState(false);
@@ -175,7 +175,7 @@ export function MctbSetupRecoveryView() {
         pauseUntil: sch?.pauseUntil ?? null,
         pauseKind: sch?.pauseKind ?? null,
       });
-      setConsentMode(data.consentMode || "press_1");
+      if (data.consentMode) setConsentMode(data.consentMode);
       setMessagingReady(Boolean(data.compliance?.messagingReady));
       setMessagePreview(r.messageTemplate?.trim() || sol?.config?.firstMessage?.trim() || "");
       setFollowUpEnabled(Boolean(sol?.config?.followUpEnabled));
@@ -352,7 +352,9 @@ export function MctbSetupRecoveryView() {
     setSaved(false);
   }
 
-  const consentRail = formatConsentRailValue(consentMode);
+  const consentRail = consentMode
+    ? formatConsentRailValue(consentMode)
+    : { primary: "—", secondary: "Loading consent mode" };
   const cooldownLabel = formatCooldownDisplay(cooldownMinutes);
   const repeatCallerLabel = formatRepeatCallerSummary(cooldownMinutes);
   const flowOutcomeLabel = cooldownFlowOutcomeLabel(cooldownMinutes);

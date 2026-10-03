@@ -124,19 +124,12 @@ export function MctbFirstRunWizardHost() {
 
   if (!onMctbSurface) return null;
 
-  const mandatoryFirstRun =
-    Boolean(policy?.shouldAutoOpen) && policy?.trigger === "incomplete_onboarding";
-  const dismissible =
-    policy?.trigger === "setup_guide" || Boolean(policy?.everyLoginTesting);
-
   return (
     <Dialog
       open={open}
       modal
-      disablePointerDismissal={mandatoryFirstRun || !dismissible}
+      disablePointerDismissal={false}
       onOpenChange={(next) => {
-        if (!next && mandatoryFirstRun) return;
-        if (!next && !dismissible) return;
         setOpen(next);
         if (!next) {
           setDismissedThisVisit(true);
@@ -148,7 +141,7 @@ export function MctbFirstRunWizardHost() {
       <DialogContent
         className="flex h-[min(760px,calc(100vh-64px))] w-[min(760px,calc(100vw-48px))] max-w-none flex-col overflow-hidden gap-0 border-0 bg-card p-0 text-card-foreground shadow-xl sm:max-w-none max-sm:fixed max-sm:inset-0 max-sm:top-0 max-sm:left-0 max-sm:h-[100dvh] max-sm:w-full max-sm:max-w-none max-sm:translate-none max-sm:rounded-none"
         overlayClassName="bg-black/40 supports-backdrop-filter:backdrop-blur-[2px]"
-        showCloseButton={dismissible}
+        showCloseButton
       >
         <DialogHeader className="sr-only">
           <DialogTitle>{title}</DialogTitle>

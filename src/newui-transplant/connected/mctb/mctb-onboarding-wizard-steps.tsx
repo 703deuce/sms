@@ -504,9 +504,10 @@ export function WizardConnectPhoneStep({ c }: { c: MctbOnboardingController }) {
 
 export function WizardTestStep({ c }: { c: MctbOnboardingController }) {
   const test = useMctbTestWiring();
-  const persistedConsent =
-    (c.data?.state as { consentMode?: string } | undefined)?.consentMode ?? c.consentMode;
+  /** Server onboarding state only — local wizard default is press_1 before hydration. */
+  const persistedConsent = c.data?.state?.consentMode;
   const press1 = persistedConsent === "press_1";
+  const existingConsent = persistedConsent === "existing_consent";
   const liveChecks = test.liveTest?.checks ?? c.data?.liveTest.checks ?? {};
   const timeline = buildOnboardingLiveTestSteps({
     checks: {
@@ -518,7 +519,7 @@ export function WizardTestStep({ c }: { c: MctbOnboardingController }) {
       textDelivered: Boolean(liveChecks.textDelivered),
       replyReceived: Boolean(liveChecks.replyReceived),
     },
-    consentMode: press1 ? "press_1" : "existing_consent",
+    consentMode: press1 ? "press_1" : existingConsent ? "existing_consent" : null,
   });
   const passed = Boolean(test.liveTest?.passed || c.data?.liveTest.passed);
   const started = Boolean(test.liveTest?.started);
@@ -548,12 +549,17 @@ export function WizardTestStep({ c }: { c: MctbOnboardingController }) {
             c.router.push(`${MCTB_ROUTES.missedCallRecovery}?tab=general`);
           },
         }
-      : !started
-        ? undefined
-        : {
-            label: "Check forwarding instructions",
-            onClick: () => void c.post({ step: "connect_calls" }),
-          },
+      : c.presentation === "modal" && c.onFinished
+        ? {
+            label: "Close",
+            onClick: () => c.onFinished(),
+          }
+        : !started
+          ? undefined
+          : {
+              label: "Check forwarding instructions",
+              onClick: () => void c.post({ step: "connect_calls" }),
+            },
   });
 
   const bizDisplay =
@@ -612,7 +618,9 @@ export function WizardTestStep({ c }: { c: MctbOnboardingController }) {
         <li>
           {press1
             ? "When Transovo answers, press 1 when prompted."
-            : "When Transovo answers, let the voicemail greeting play."}
+            : existingConsent || !persistedConsent
+              ? "When Transovo answers, let the voicemail greeting play."
+              : "When Transovo answers, follow the voice prompt."}
         </li>
         <li>Confirm the recovery text arrives.</li>
         <li>Reply to the text so we can verify the conversation.</li>

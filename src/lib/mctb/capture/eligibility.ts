@@ -175,6 +175,12 @@ export async function evaluateMctbRecoveryEligibility(input: {
 
   const businessE164 = input.event.forwardedFromE164 || input.event.transovoNumberE164;
 
+  const { buildMissedCallRecoveryUsageMetadata } = await import("@/lib/mctb/recovery-usage");
+  const recoveryMeta = await buildMissedCallRecoveryUsageMetadata(input.workspaceId, {
+    consentMode,
+    captureMode: "TEXML",
+  });
+
   const base = await evaluateMissedCallTextEligibility({
     workspaceId: input.workspaceId,
     callerE164: caller,
@@ -185,6 +191,7 @@ export async function evaluateMctbRecoveryEligibility(input: {
     eventOnly: true,
     forwardedFromE164: input.event.forwardedFromE164,
     transovoNumberE164: input.event.transovoNumberE164,
+    eventMetadata: recoveryMeta,
     call: texmlCall,
   });
 

@@ -1,6 +1,11 @@
 import { getPrisma } from "@/lib/db";
-import { mctbSameE164 } from "@/lib/mctb/phone/e164-match";
+import { mctbCallerE164Variants, mctbDidE164Variants } from "@/lib/mctb/messaging/caller-e164";
 import { isPlatformDemoNumber } from "./demo";
+import {
+  evaluateMctbLiveTestForwardingVerified,
+  MCTB_LIVE_TEST_SESSION_LOOKBACK_MS,
+  readMctbLiveTestForwardedFrom,
+} from "./live-test-forwarding";
 import { loadMctbOnboardingState, recordFunnelEvent, saveMctbOnboardingState } from "./state";
 import { getProductionMctbForwardTargetE164 } from "./phone-numbers";
 
@@ -26,11 +31,6 @@ export type LiveTestStatus = {
   businessNumberE164: string | null;
 };
 
-function readForwardedFrom(metadata: Record<string, unknown>): string | null {
-  const raw = metadata.forwardedFrom;
-  return typeof raw === "string" && raw.trim() ? raw.trim() : null;
-}
-
 function evaluateMissedCallForLiveTest(input: {
   event: {
     id: string;
@@ -50,25 +50,16 @@ function evaluateMissedCallForLiveTest(input: {
     input.event.metadata && typeof input.event.metadata === "object"
       ? (input.event.metadata as Record<string, unknown>)
       : {};
-  const forwardedFrom = readForwardedFrom(meta);
+  const forwardedFrom = readMctbLiveTestForwardedFrom(meta);
 
   const callDetected = true;
-  let forwardingVerified = true;
-  if (input.businessLineE164?.trim()) {
-    if (forwardedFrom) {
-      forwardingVerified = mctbSameE164(forwardedFrom, input.businessLineE164);
-    } else if (
-      mctbSameE164(input.event.businessE164, input.businessLineE164)
-    ) {
-      forwardingVerified = true;
-    } else if (input.allowIngressWithoutForwardHeader) {
-      forwardingVerified = true;
-    } else {
-      forwardingVerified = false;
-    }
-  } else if (forwardedFrom) {
-    forwardingVerified = !mctbSameE164(forwardedFrom, input.forwardTargetE164);
-  }
+  const forwardingVerified = evaluateMctbLiveTestForwardingVerified({
+    businessE164: input.event.businessE164,
+    forwardedFrom,
+    forwardTargetE164: input.forwardTargetE164,
+    businessLineE164: input.businessLineE164,
+    allowIngressWithoutForwardHeader: input.allowIngressWithoutForwardHeader,
+  });
 
   const missedCall =
     ["missed_no_answer", "missed_busy", "voicemail"].includes(input.event.reason) ||
@@ -154,11 +145,12 @@ export async function getLiveTestStatus(workspaceId: string): Promise<LiveTestSt
   const prisma = getPrisma();
   const sessionStarted = new Date(session.startedAt);
   /** Credit a call placed just before "Start test" (common during onboarding). */
-  const since = new Date(sessionStarted.getTime() - 15 * 60 * 1000);
+  const since = new Date(sessionStarted.getTime() - MCTB_LIVE_TEST_SESSION_LOOKBACK_MS);
 
-  const businessLineFilter = businessLineE164?.trim()
-    ? [{ businessE164: businessLineE164.trim() }]
+  const businessLineVariants = businessLineE164?.trim()
+    ? mctbDidE164Variants(businessLineE164.trim())
     : [];
+  const businessLineFilter = businessLineVariants.map((e164) => ({ businessE164: e164 }));
 
   const events = await prisma.missedCallEvent.findMany({
     where: {
@@ -170,7 +162,7 @@ export async function getLiveTestStatus(workspaceId: string): Promise<LiveTestSt
     take: 12,
   });
 
-  const event = events[0];
+  let event = events[0];
   if (!event) return empty;
 
   const metadata =
@@ -183,29 +175,35 @@ export async function getLiveTestStatus(workspaceId: string): Promise<LiveTestSt
     !state.liveTestSession?.startedAt;
   if (isDemoOnly) return empty;
 
-  const evaluated = evaluateMissedCallForLiveTest({
-    event,
-    forwardTargetE164,
-    businessLineE164,
-    allowIngressWithoutForwardHeader: true,
-  });
+  const evaluateForLiveTest = (row: (typeof events)[number]) =>
+    evaluateMissedCallForLiveTest({
+      event: row,
+      forwardTargetE164,
+      businessLineE164,
+      allowIngressWithoutForwardHeader: true,
+    });
 
+  const scoreEval = (ev: ReturnType<typeof evaluateForLiveTest>) =>
+    (ev.forwardingVerified ? 8 : 0) + (ev.textSent ? 4 : 0) + (ev.missedCall ? 1 : 0);
+
+  let evaluated = evaluateForLiveTest(event);
   let textSentInSession = evaluated.textSent;
   let textSourceEvent = event;
-  if (!textSentInSession) {
-    for (const candidate of events) {
-      const ev = evaluateMissedCallForLiveTest({
-        event: candidate,
-        forwardTargetE164,
-        businessLineE164,
-        allowIngressWithoutForwardHeader: true,
-      });
-      if (ev.forwardingVerified && ev.textSent) {
-        textSentInSession = true;
-        textSourceEvent = candidate;
-        break;
-      }
+  for (const candidate of events) {
+    const ev = evaluateForLiveTest(candidate);
+    if (scoreEval(ev) > scoreEval(evaluated)) {
+      evaluated = ev;
+      event = candidate;
     }
+    if (ev.forwardingVerified && ev.textSent) {
+      textSentInSession = true;
+      textSourceEvent = candidate;
+    }
+  }
+
+  const stickyForwardingVerified = Boolean(session?.forwardingVerifiedAt);
+  if (!evaluated.forwardingVerified && stickyForwardingVerified) {
+    evaluated = { ...evaluated, forwardingVerified: true };
   }
 
   if (!evaluated.forwardingVerified) {
@@ -222,15 +220,16 @@ export async function getLiveTestStatus(workspaceId: string): Promise<LiveTestSt
   const textDelivered = textSentInSession;
 
   let replyReceived = Boolean(session?.replyReceivedAt);
-  if (!replyReceived && textSentInSession && textSourceEvent.smsSentAt) {
+  if (!replyReceived && textSentInSession && textSourceEvent.smsSentAt && textSourceEvent.callerE164) {
+    const callerVariants = mctbCallerE164Variants(textSourceEvent.callerE164);
     const contact = await prisma.contact.findFirst({
-      where: { workspaceId, phone: textSourceEvent.callerE164 },
+      where: { workspaceId, phone: { in: callerVariants } },
       select: { id: true },
     });
     if (contact) {
       const reply = await prisma.conversationMessage.findFirst({
         where: {
-          direction: "inbound",
+          direction: { in: ["inbound", "in"] },
           createdAt: { gte: textSourceEvent.smsSentAt },
           conversation: { workspaceId, contactId: contact.id },
         },
@@ -242,14 +241,20 @@ export async function getLiveTestStatus(workspaceId: string): Promise<LiveTestSt
 
   let consentCompleted = state.consentMode === "existing_consent";
   if (!consentCompleted && state.consentMode === "press_1") {
-    const consentEvent = await prisma.smartRoutingSmsConsentEvent.findFirst({
-      where: {
-        workspaceId,
-        callerNumber: event.callerE164,
-        consentedAt: { gte: since },
-      },
-      orderBy: { consentedAt: "desc" },
-    });
+    const callerVariants = event.callerE164
+      ? mctbCallerE164Variants(event.callerE164)
+      : [];
+    const consentEvent =
+      callerVariants.length > 0
+        ? await prisma.smartRoutingSmsConsentEvent.findFirst({
+            where: {
+              workspaceId,
+              callerNumber: { in: callerVariants },
+              consentedAt: { gte: since },
+            },
+            orderBy: { consentedAt: "desc" },
+          })
+        : null;
     consentCompleted = Boolean(consentEvent || session?.consentCompletedAt);
   } else if (!consentCompleted) {
     consentCompleted = Boolean(session?.consentCompletedAt);
@@ -261,18 +266,19 @@ export async function getLiveTestStatus(workspaceId: string): Promise<LiveTestSt
     consentCompleted &&
     textSentInSession;
 
+  const anchorEvent = textSourceEvent.smsSentAt ? textSourceEvent : event;
   const nowIso = new Date().toISOString();
   const sessionPatch = {
     ...session!,
-    callDetectedAt: session?.callDetectedAt || event.detectedAt.toISOString(),
+    callDetectedAt: session?.callDetectedAt || anchorEvent.detectedAt.toISOString(),
     forwardingVerifiedAt: session?.forwardingVerifiedAt || nowIso,
-    missedCallAt: session?.missedCallAt || event.detectedAt.toISOString(),
+    missedCallAt: session?.missedCallAt || anchorEvent.detectedAt.toISOString(),
     textSentAt:
       textSourceEvent.smsSentAt?.toISOString() || session?.textSentAt,
     replyReceivedAt: replyReceived ? session?.replyReceivedAt || nowIso : session?.replyReceivedAt,
     consentCompletedAt:
       consentCompleted && !session?.consentCompletedAt ? nowIso : session?.consentCompletedAt,
-    missedCallEventId: event.id,
+    missedCallEventId: textSentInSession ? textSourceEvent.id : session?.missedCallEventId ?? anchorEvent.id,
   };
 
   const persistSession: Parameters<typeof saveMctbOnboardingState>[1] = {

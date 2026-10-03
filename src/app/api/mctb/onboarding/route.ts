@@ -143,7 +143,7 @@ export async function GET(req: Request) {
         ...demo,
         description:
           "Call your workspace MCTB number directly from your verified mobile — no forwarding required for this test.",
-        consentMode: state.consentMode || "press_1",
+        consentMode: state.consentMode ?? null,
         requiresForwarding: false,
       },
       trialNumber,
@@ -507,6 +507,10 @@ export async function POST(req: Request) {
           });
         },
       );
+      const { warmMctbInboundRoutingProfileForWorkspace } = await import(
+        "@/lib/mctb/texml-ingress/routing-profile"
+      );
+      await warmMctbInboundRoutingProfileForWorkspace(auth.workspaceId).catch(() => undefined);
       if (body.consentMode === "existing_consent") {
         const { recordWorkspaceExistingConsentAttestation } = await import(
           "@/lib/mctb/capture/attestation"

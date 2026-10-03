@@ -195,15 +195,21 @@ async function testCollisionPreSendBoundary(fx: Awaited<ReturnType<typeof setupP
     route: routeB,
     consumerE164: consumer,
   });
-  assert.equal(gate.ok, false);
-  if (gate.ok) throw new Error("expected collision");
-  assert.equal(gate.reason, "PLATFORM_SENDER_PAIR_COLLISION");
+  assert.equal(gate.ok, true);
+  if (!gate.ok) throw new Error("expected workspace B to claim its own assignment");
 
-  const active = await findActivePlatformSenderAssignment({
+  const activeA = await findActivePlatformSenderAssignment({
     consumerE164: consumer,
     platformPhoneNumberId: fx.platformPhoneId,
+    workspaceId: fx.wsA,
   });
-  assert.equal(active?.workspaceId, fx.wsA);
+  const activeB = await findActivePlatformSenderAssignment({
+    consumerE164: consumer,
+    platformPhoneNumberId: fx.platformPhoneId,
+    workspaceId: fx.wsB,
+  });
+  assert.equal(activeA?.workspaceId, fx.wsA);
+  assert.equal(activeB?.workspaceId, fx.wsB);
 
   const sendSrc = readFileSync("src/lib/agents/missed-call-text-back/send.ts", "utf8");
   const gateMarker = "gateMctbPlatformOutboundSend";
@@ -220,7 +226,7 @@ async function testCollisionPreSendBoundary(fx: Awaited<ReturnType<typeof setupP
   const jobSend = jobSrc.indexOf("sendQuickSms({", jobGate);
   assert.ok(jobGate >= 0 && jobThrow > jobGate && jobSend > jobThrow);
 
-  console.log("PASS collision pre-send boundary (gate blocks before sendQuickSms in send + job)");
+  console.log("PASS per-workspace outbound gate (no cross-tenant caller block)");
 }
 
 /** Legacy deploy compatibility without assignment rows. */

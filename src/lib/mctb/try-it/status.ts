@@ -6,6 +6,8 @@ import { loadMctbConsentMode } from "@/lib/mctb/consent-prompt/service";
 import { getDemoStatus } from "@/lib/mctb/onboarding/demo";
 import type { TryItProgressChecks, TryItStatus } from "@/lib/mctb/try-it/types";
 import type { MctbConsentMode } from "@/lib/mctb/onboarding/types";
+import { mctbCallerE164Variants } from "@/lib/mctb/messaging/caller-e164";
+import { mctbSameE164 } from "@/lib/mctb/phone/e164-match";
 
 export type { TryItProgressChecks, TryItStatus } from "@/lib/mctb/try-it/types";
 
@@ -47,9 +49,11 @@ async function buildTraceChecks(input: {
 
   const kinds = new Set(traces.map((t: TraceRow) => t.kind));
   const caller = event?.callerE164 || null;
-  const consentForCaller = consentEvents.find(
-    (row: { callerNumber: string | null }) => row.callerNumber === caller,
-  );
+  const callerVariants = caller ? mctbCallerE164Variants(caller) : [];
+  const consentForCaller = consentEvents.find((row: { callerNumber: string | null }) => {
+    if (!row.callerNumber || callerVariants.length === 0) return false;
+    return callerVariants.some((v) => mctbSameE164(v, row.callerNumber));
+  });
 
   const existingConsent = isExistingConsentMode(input.consentMode);
   const smsSent =

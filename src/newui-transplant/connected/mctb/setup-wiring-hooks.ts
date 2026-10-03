@@ -14,7 +14,6 @@ import type { MctbHandoffConfigDto, MctbNotificationRecipientDto } from "@/lib/m
 import type { MctbSetupTestStatus } from "@/lib/mctb/setup-test";
 import type { LiveTestStatus } from "@/lib/mctb/onboarding/live-test";
 import { resolveMctbLiveRecoveryProvenForUi } from "@/lib/mctb/forwarding-verified-ui";
-import type { LiveTestStatus } from "@/lib/mctb/onboarding/live-test";
 import { formatSetupPhoneLine } from "@/newui-transplant/connected/mctb/setup-hooks";
 
 const TRIGGER_LABELS: Record<TriggerKey, string> = {

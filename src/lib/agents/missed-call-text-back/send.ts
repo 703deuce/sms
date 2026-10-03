@@ -16,6 +16,7 @@ import {
 } from "@/lib/mctb/template-vars";
 import { wrapMctbMessageUrlsWithTracking } from "@/lib/mctb/link-tracking";
 import { traceMctbPipeline, traceMctbPipelineSkip } from "@/lib/mctb/pipeline-trace";
+import { mctbCallerE164Variants } from "@/lib/mctb/messaging/caller-e164";
 
 function renderTemplate(template: string, vars: Record<string, string>): string {
   return renderMctbMessageTemplate(template, vars);
@@ -140,6 +141,7 @@ export async function executeMissedCallTextSend(input: {
     eventOnly: isEventOnly,
     forwardedFromE164,
     transovoNumberE164,
+    eventMetadata: eventMeta,
     call: {
       direction: "inbound",
       disposition: event.disposition,
@@ -170,11 +172,16 @@ export async function executeMissedCallTextSend(input: {
     return { ok: false, reason: eligibility.reason };
   }
 
+  const callerVariants = event.callerE164
+    ? mctbCallerE164Variants(event.callerE164)
+    : [];
   const contact = event.contactId
     ? await prisma.contact.findUnique({ where: { id: event.contactId } })
-    : await prisma.contact.findFirst({
-        where: { workspaceId: input.workspaceId, phone: event.callerE164 },
-      });
+    : callerVariants.length > 0
+      ? await prisma.contact.findFirst({
+          where: { workspaceId: input.workspaceId, phone: { in: callerVariants } },
+        })
+      : null;
 
   const templateVars = resolveMctbTemplateVars({
     config,

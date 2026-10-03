@@ -131,8 +131,8 @@ export async function getMctbSetupTestStatus(workspaceId: string): Promise<MctbS
   );
 
   const events = await prisma.missedCallEvent.findMany({
-    where: { workspaceId, createdAt: { gte: since } },
-    orderBy: { createdAt: "desc" },
+    where: { workspaceId, detectedAt: { gte: since } },
+    orderBy: { detectedAt: "desc" },
     take: 5,
   });
 
@@ -157,10 +157,16 @@ export async function getMctbSetupTestStatus(workspaceId: string): Promise<MctbS
   });
 
   const kinds = new Set(traces.map((t: { kind: string }) => t.kind));
+  const { mctbCallerE164Variants } = await import("@/lib/mctb/messaging/caller-e164");
+  const setupTestCallerVariants = latest.callerE164
+    ? mctbCallerE164Variants(latest.callerE164)
+    : [];
   const consentEvents = await prisma.smartRoutingSmsConsentEvent.findMany({
     where: {
       workspaceId,
-      callerNumber: latest.callerE164,
+      ...(setupTestCallerVariants.length > 0
+        ? { callerNumber: { in: setupTestCallerVariants } }
+        : { callerNumber: latest.callerE164 }),
       consentedAt: { gte: since },
     },
     take: 1,

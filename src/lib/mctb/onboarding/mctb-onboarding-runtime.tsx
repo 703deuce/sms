@@ -131,7 +131,7 @@ export function MctbOnboardingRuntime({
   const [carrier, setCarrier] = useState<MctbForwardingCarrier>("verizon");
   const [messageTemplate, setMessageTemplate] = useState(DEFAULT_MESSAGE);
   const [recoveryGoal, setRecoveryGoal] = useState<MctbRecoveryGoalId>("get_reply");
-  const [consentMode, setConsentMode] = useState<MctbConsentMode>("press_1");
+  const [consentMode, setConsentMode] = useState<MctbConsentMode | null>(null);
   const [existingConsentAttested, setExistingConsentAttested] = useState(false);
   const [forwardRingSeconds, setForwardRingSeconds] = useState(15);
   const [forwardingTestActive, setForwardingTestActive] = useState(false);
@@ -697,7 +697,7 @@ export function MctbOnboardingRuntime({
                 </p>
               ) : null}
               <MctbConsentModeCards
-                value={consentMode}
+                value={consentMode ?? data?.state?.consentMode ?? "existing_consent"}
                 onChange={(mode) => {
                   if (mode === "existing_consent" && !existingConsentEligible) return;
                   setConsentMode(mode);
