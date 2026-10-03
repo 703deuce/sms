@@ -502,14 +502,20 @@ function OnboardingAiRecoverySection({ caps }: { caps: MctbCapabilities | null }
 }
 
 export function OnboardingVoicemailStep({ c }: { c: MctbOnboardingController }) {
-  const vm = useMctbVoicemailWiring();
+  const ingressPhoneNumberId =
+    c.data?.trialNumber?.phoneNumberId?.trim() ||
+    (c.data as { workspaceIngress?: { phoneNumberId?: string } } | null)?.workspaceIngress
+      ?.phoneNumberId?.trim() ||
+    null;
+  const vm = useMctbVoicemailWiring({ phoneNumberId: ingressPhoneNumberId });
   const [mode, setMode] = useState<"default" | "custom">("default");
   const press1 = c.consentMode === "press_1";
 
   const ensureDefault = useCallback(async () => {
-    if (!vm.phoneNumberId) throw new Error("Configure phone & forwarding before voicemail.");
-    await ensureVoicemailNumberBox(vm.phoneNumberId);
-  }, [vm.phoneNumberId]);
+    const pid = ingressPhoneNumberId || vm.phoneNumberId;
+    if (!pid) throw new Error("Configure phone & forwarding before voicemail.");
+    await ensureVoicemailNumberBox(pid);
+  }, [ingressPhoneNumberId, vm.phoneNumberId]);
 
   return (
     <Panel title="Voicemail & call fallback" description="What callers hear when recovery cannot proceed or you pause MCTB.">

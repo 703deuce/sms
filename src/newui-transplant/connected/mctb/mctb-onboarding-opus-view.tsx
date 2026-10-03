@@ -55,6 +55,11 @@ export type MctbOnboardingController = {
     liveTest: { passed: boolean; checks: Record<string, boolean> };
     tfv: { status: string; approved: boolean; failureReason?: string | null };
     trial?: { daysRemaining?: number };
+    workspaceIngress?: {
+      phoneNumberId?: string;
+      e164?: string;
+      forwardTargetE164?: string | null;
+    };
   } | null;
   saving: boolean;
   error: string | null;

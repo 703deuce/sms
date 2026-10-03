@@ -305,8 +305,17 @@ export function WizardTextBackStep({ c }: { c: MctbOnboardingController }) {
   );
 }
 
+function onboardingIngressPhoneNumberId(c: MctbOnboardingController): string | null {
+  const trialId = c.data?.trialNumber?.phoneNumberId?.trim();
+  if (trialId) return trialId;
+  const ingress = (c.data as { workspaceIngress?: { phoneNumberId?: string } } | null)
+    ?.workspaceIngress?.phoneNumberId?.trim();
+  return ingress || null;
+}
+
 export function WizardVoicemailStep({ c }: { c: MctbOnboardingController }) {
-  const vm = useMctbVoicemailWiring();
+  const ingressPhoneNumberId = onboardingIngressPhoneNumberId(c);
+  const vm = useMctbVoicemailWiring({ phoneNumberId: ingressPhoneNumberId });
   const [mode, setMode] = useState<"default" | "custom">(vm.greetingUrl ? "custom" : "default");
   const platformPreview = clientPlatformVoicemailGreetingPreviewPath();
 
@@ -315,9 +324,10 @@ export function WizardVoicemailStep({ c }: { c: MctbOnboardingController }) {
   }, [vm.greetingUrl]);
 
   const ensureDefault = useCallback(async () => {
-    if (!vm.phoneNumberId) throw new Error("Configure phone & forwarding before voicemail.");
-    await ensureVoicemailNumberBox(vm.phoneNumberId);
-  }, [vm.phoneNumberId]);
+    const pid = ingressPhoneNumberId || vm.phoneNumberId;
+    if (!pid) throw new Error("Configure phone & forwarding before voicemail.");
+    await ensureVoicemailNumberBox(pid);
+  }, [ingressPhoneNumberId, vm.phoneNumberId]);
 
   useMctbWizardFooter({
     back: true,

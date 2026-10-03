@@ -31,6 +31,7 @@ import {
   writeMctbIngressProvisionPendingE164,
   withMctbWorkspaceIngressProvisionLock,
 } from "@/lib/mctb/provisioning/workspace-ingress-provision-lock";
+import { syncCanonicalMctbWorkspaceIngress } from "@/lib/mctb/provisioning/sync-canonical-workspace-ingress";
 
 export type ProvisionMctbWorkspaceTollFreeIngressResult = {
   ok: boolean;
@@ -102,6 +103,7 @@ export async function provisionMctbWorkspaceTollFreeIngress(
 async function provisionMctbWorkspaceTollFreeIngressLocked(
   workspaceId: string,
 ): Promise<ProvisionMctbWorkspaceTollFreeIngressResult> {
+  await syncCanonicalMctbWorkspaceIngress(workspaceId).catch(() => undefined);
   const existing = await workspaceIngressAlreadyReady(workspaceId);
   if (existing.ready && existing.phoneNumberId && existing.e164) {
     return {

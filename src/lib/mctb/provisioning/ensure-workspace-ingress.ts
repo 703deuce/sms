@@ -4,6 +4,7 @@ import { provisionTrialMctbNumber } from "@/lib/mctb/onboarding/trial-number";
 import { resolveMctbWorkspaceIngressMode } from "@/lib/mctb/provisioning/workspace-ingress-mode";
 import { provisionMctbWorkspaceTollFreeIngress } from "@/lib/mctb/provisioning/provision-workspace-toll-free-ingress";
 import { assessWorkspaceDedicatedMctbIngress } from "@/lib/mctb/provisioning/workspace-ingress-validity";
+import { syncCanonicalMctbWorkspaceIngress } from "@/lib/mctb/provisioning/sync-canonical-workspace-ingress";
 
 export type EnsureMctbWorkspaceIngressResult = {
   ok: boolean;
@@ -20,6 +21,7 @@ export type EnsureMctbWorkspaceIngressResult = {
 export async function ensureMctbWorkspaceIngressReady(
   workspaceId: string,
 ): Promise<EnsureMctbWorkspaceIngressResult> {
+  await syncCanonicalMctbWorkspaceIngress(workspaceId).catch(() => undefined);
   const existing = await assessWorkspaceDedicatedMctbIngress(workspaceId);
   if (existing.valid && existing.phoneNumberId && existing.e164) {
     return {

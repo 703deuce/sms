@@ -524,6 +524,21 @@ export async function POST(req: Request) {
           { status: 400 },
         );
       }
+      const { syncCanonicalMctbWorkspaceIngress } = await import(
+        "@/lib/mctb/provisioning/sync-canonical-workspace-ingress"
+      );
+      const { ensureNumberVoicemailBox } = await import("@/lib/phone/voicemail-service");
+      const ingress = await syncCanonicalMctbWorkspaceIngress(auth.workspaceId).catch(() => ({
+        ok: false as const,
+        synced: false,
+      }));
+      if (ingress.phoneNumberId) {
+        await ensureNumberVoicemailBox(
+          auth.workspaceId,
+          ingress.phoneNumberId,
+          auth.session.userId,
+        ).catch(() => undefined);
+      }
       state = markStepComplete(state, "voicemail");
       state = await saveMctbOnboardingState(auth.workspaceId, {
         ...state,

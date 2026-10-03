@@ -148,7 +148,8 @@ export function useMctbRecoveryWiring() {
   };
 }
 
-export function useMctbVoicemailWiring() {
+export function useMctbVoicemailWiring(input?: { phoneNumberId?: string | null }) {
+  const phoneNumberIdOverride = input?.phoneNumberId?.trim() || null;
   const [loading, setLoading] = useState(true);
   const [phoneNumberId, setPhoneNumberId] = useState<string | null>(null);
   const [greetingText, setGreetingText] = useState("");
@@ -164,7 +165,7 @@ export function useMctbVoicemailWiring() {
     try {
       const data = await fetchMctbSetup({ force: true });
       const r = data.runtime as Record<string, unknown>;
-      const pid = (r.phoneNumberId as string) ?? null;
+      const pid = phoneNumberIdOverride || ((r.phoneNumberId as string) ?? null);
       setPhoneNumberId(pid);
       setSendAfterVoicemail(Boolean(r.sendAfterVoicemail ?? true));
       if (pid) {
@@ -190,7 +191,7 @@ export function useMctbVoicemailWiring() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [phoneNumberIdOverride]);
 
   useEffect(() => {
     void reload();

@@ -47,6 +47,7 @@ import {
 } from "@/newui-transplant/connected/mctb/mctb-onboarding-opus-view";
 import { formatMctbOnboardingUserError } from "@/lib/mctb/onboarding/user-facing-errors";
 import type { MctbCapabilities } from "@/lib/mctb/capabilities";
+import { parseRecoveryGoalId } from "@/lib/mctb/recovery-goals";
 
 type OnboardingPayload = {
   state: MctbOnboardingState;
@@ -92,6 +93,12 @@ type OnboardingPayload = {
   trial?: { daysRemaining?: number; active?: boolean };
   capabilities?: MctbCapabilities;
   senderPresentation?: { title: string; description: string };
+  workspaceIngress?: {
+    phoneNumberId?: string;
+    e164?: string;
+    forwardTargetE164?: string | null;
+    provisioned?: boolean;
+  };
 };
 
 const DEFAULT_MESSAGE =
@@ -165,14 +172,21 @@ export function MctbOnboardingRuntime({
     }
     if (setupRes?.ok) {
       const setupJson = (await setupRes.json()) as {
-        data?: { consentMeta?: { existingConsentEligible?: boolean } };
+        data?: {
+          consentMeta?: { existingConsentEligible?: boolean };
+          recoveryGoal?: string;
+        };
         consentMeta?: { existingConsentEligible?: boolean };
+        recoveryGoal?: string;
       };
       const ready = Boolean(
         setupJson?.data?.consentMeta?.existingConsentEligible ??
           setupJson?.consentMeta?.existingConsentEligible,
       );
       setExistingConsentEligible(ready);
+      const goalRaw = setupJson?.data?.recoveryGoal ?? setupJson?.recoveryGoal;
+      const goalId = parseRecoveryGoalId(goalRaw);
+      if (goalId) setRecoveryGoal(goalId);
     } else if (json.capabilities) {
       setExistingConsentEligible(Boolean(json.capabilities.pressOneConsent));
     }

@@ -15,6 +15,7 @@ import { assertLiveTwilioConfigured } from "@/lib/messaging/twilio-config";
 import { MCTB_TRIAL_TOLL_FREE_AREA_CODES } from "./constants";
 import { provisionMctbCustomerTelnyxLocalNumber } from "@/lib/mctb/provisioning/provision-customer-local";
 import { assessWorkspaceDedicatedMctbIngress } from "@/lib/mctb/provisioning/workspace-ingress-validity";
+import { syncCanonicalMctbWorkspaceIngress } from "@/lib/mctb/provisioning/sync-canonical-workspace-ingress";
 import { resolveMctbWorkspaceIngressMode } from "@/lib/mctb/provisioning/workspace-ingress-mode";
 import {
   isPlatformMctbSenderPhoneRecord,
@@ -60,6 +61,7 @@ export function mapTfvRecordToUiStatus(status: TollFreeVerificationStatus): Mctb
 }
 
 export async function getTrialNumberStatus(workspaceId: string) {
+  await syncCanonicalMctbWorkspaceIngress(workspaceId).catch(() => undefined);
   const state = await loadMctbOnboardingState(workspaceId);
   const prisma = getPrisma();
 
