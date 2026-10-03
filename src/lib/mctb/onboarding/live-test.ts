@@ -170,7 +170,7 @@ export async function getLiveTestStatus(workspaceId: string): Promise<LiveTestSt
     take: 12,
   });
 
-  const event = events[0];
+  let event = events[0];
   if (!event) return empty;
 
   const metadata =
@@ -183,29 +183,35 @@ export async function getLiveTestStatus(workspaceId: string): Promise<LiveTestSt
     !state.liveTestSession?.startedAt;
   if (isDemoOnly) return empty;
 
-  const evaluated = evaluateMissedCallForLiveTest({
-    event,
-    forwardTargetE164,
-    businessLineE164,
-    allowIngressWithoutForwardHeader: true,
-  });
+  const evaluateForLiveTest = (row: (typeof events)[number]) =>
+    evaluateMissedCallForLiveTest({
+      event: row,
+      forwardTargetE164,
+      businessLineE164,
+      allowIngressWithoutForwardHeader: true,
+    });
 
+  const scoreEval = (ev: ReturnType<typeof evaluateForLiveTest>) =>
+    (ev.forwardingVerified ? 8 : 0) + (ev.textSent ? 4 : 0) + (ev.missedCall ? 1 : 0);
+
+  let evaluated = evaluateForLiveTest(event);
   let textSentInSession = evaluated.textSent;
   let textSourceEvent = event;
-  if (!textSentInSession) {
-    for (const candidate of events) {
-      const ev = evaluateMissedCallForLiveTest({
-        event: candidate,
-        forwardTargetE164,
-        businessLineE164,
-        allowIngressWithoutForwardHeader: true,
-      });
-      if (ev.forwardingVerified && ev.textSent) {
-        textSentInSession = true;
-        textSourceEvent = candidate;
-        break;
-      }
+  for (const candidate of events) {
+    const ev = evaluateForLiveTest(candidate);
+    if (scoreEval(ev) > scoreEval(evaluated)) {
+      evaluated = ev;
+      event = candidate;
     }
+    if (ev.forwardingVerified && ev.textSent) {
+      textSentInSession = true;
+      textSourceEvent = candidate;
+    }
+  }
+
+  const stickyForwardingVerified = Boolean(session?.forwardingVerifiedAt);
+  if (!evaluated.forwardingVerified && stickyForwardingVerified) {
+    evaluated = { ...evaluated, forwardingVerified: true };
   }
 
   if (!evaluated.forwardingVerified) {

@@ -116,7 +116,7 @@ async function main() {
     assert.equal(activeCount, 1);
     console.log("PASS B same-workspace reuse");
 
-    // C — concurrent collision
+    // C — different workspaces may own the same caller on the shared platform sender
     await releasePlatformSenderAssignment({
       consumerE164: CONSUMER,
       platformPhoneNumberId: fx.platformPhoneId,
@@ -128,13 +128,17 @@ async function main() {
       consumerE164: CONSUMER,
       platformPhoneNumberId: fx.platformPhoneId,
     });
-    const collision = await claimPlatformSenderAssignment({
+    const parallel = await claimPlatformSenderAssignment({
       workspaceId: fx.wsB,
       consumerE164: CONSUMER,
       platformPhoneNumberId: fx.platformPhoneId,
     });
-    assert.equal(collision.status, "COLLISION");
-    console.log("PASS C concurrent collision");
+    assert.equal(parallel.status, "CLAIMED");
+    const parallelActiveCount = await getPrisma().mctbPlatformSenderAssignment.count({
+      where: { consumerE164: CONSUMER, platformPhoneNumberId: fx.platformPhoneId, state: "ACTIVE" },
+    });
+    assert.equal(parallelActiveCount, 2);
+    console.log("PASS C per-workspace parallel ownership");
 
     // D — atomic race
     await releasePlatformSenderAssignment({
@@ -180,8 +184,8 @@ async function main() {
         state: "ACTIVE",
       },
     });
-    assert.equal(raceActive, 1);
-    console.log("PASS D atomic race");
+    assert.equal(raceActive, 2);
+    console.log("PASS D atomic race (one ACTIVE row per workspace)");
 
     // F — legacy ambiguous
     const amb = resolvePlatformInboundReplyFromContexts([
