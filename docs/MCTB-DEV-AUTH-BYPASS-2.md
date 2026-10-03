@@ -4,6 +4,8 @@
 
 `DEV_AUTH_BYPASS_2` authenticates browser automation as a **separate** certification user so we can run the **fresh-customer MCTB onboarding** test without disabling `DEV_AUTH_BYPASS=1` or touching `ws_1`.
 
+**Normal Google login:** `DEV_AUTH_BYPASS=1` alone no longer auto-logs everyone into `ws_1`. Only `DEV_AUTH_BYPASS_AUTO=1` (cert automation) skips the login UI and injects the bypass user without a session cookie. Human testing: use `/login` or `GET /api/auth/dev-bypass-2` for the fresh-customer lane.
+
 ## What bypass 2 does
 
 | Allowed | Not allowed |

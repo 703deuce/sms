@@ -6,7 +6,10 @@ import type { Session, WorkspaceTypeCookie } from "@/lib/auth";
 import { getPrisma } from "@/lib/db";
 import { getUserProductAccess } from "@/lib/products/entitlements";
 import type { UserProductAccess } from "@/lib/products/types";
-import { devAuthBypassEmailHint, isDevAuthBypassEnabled } from "@/lib/auth/dev-auth-bypass";
+import {
+  devAuthBypassEmailHint,
+  isDevAuthBypassAutoEnabled,
+} from "@/lib/auth/dev-auth-bypass";
 
 export type DevAutoSession = {
   session: Session;
@@ -35,7 +38,7 @@ export function clearDevAutoSessionCache() {
 
 /** Returns a cached dev session or null when bypass is off / user missing. */
 export async function resolveDevAutoSession(): Promise<DevAutoSession | null> {
-  if (!isDevAuthBypassEnabled()) return null;
+  if (!isDevAuthBypassAutoEnabled()) return null;
   if (cached !== undefined) return cached;
 
   try {

@@ -12,7 +12,9 @@ import {
 } from "@/lib/workspace/capabilities";
 import { isSmsMarketingHiddenAtLaunch, isPortInHiddenAtLaunch, isNumbersPlatformOnlyLaunch } from "@/lib/workspace/platform-launch";
 import { isVerifyLaunchEnabled } from "@/lib/products/v1-product-status";
-import { isDevAuthBypassEnabled } from "@/lib/auth/dev-auth-bypass";
+import {
+  isDevAuthBypassAutoEnabled,
+} from "@/lib/auth/dev-auth-bypass";
 import { shouldRedirectAppointmentsRootToOverview } from "@/lib/products/appointments-home-redirect";
 
 function isInternalRequestHost(request: NextRequest): boolean {
@@ -216,7 +218,7 @@ export async function middleware(request: NextRequest) {
     pathname === "/api/voice/telnyx-official-baseline";
 
   // DEV_AUTH_BYPASS=1: skip login entirely — server resolves session from DEV_AUTH_BYPASS_EMAIL.
-  if (!session && !isPublic && !(smokeBootstrap && smokeOpsPath) && !isDevAuthBypassEnabled()) {
+  if (!session && !isPublic && !(smokeBootstrap && smokeOpsPath) && !isDevAuthBypassAutoEnabled()) {
     // API routes without a session should 401 JSON, not HTML login redirect.
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -227,7 +229,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (!session && isDevAuthBypassEnabled() && authPages.has(pathname)) {
+  if (!session && isDevAuthBypassAutoEnabled() && authPages.has(pathname)) {
     const next = request.nextUrl.searchParams.get("next");
     const target = next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
     return siteRedirect(request, target);

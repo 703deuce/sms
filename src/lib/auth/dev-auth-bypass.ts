@@ -6,6 +6,8 @@ import { certBrowserRequestHost, isCertBrowserPublicProductionHost } from "@/lib
 import { normalizeAppointmentsPostLoginPath } from "@/lib/products/appointments-home-redirect";
 
 export const DEV_AUTH_BYPASS_ENV = "DEV_AUTH_BYPASS";
+/** When 1 with DEV_AUTH_BYPASS, auto-session + skip login UI (cert automation only). */
+export const DEV_AUTH_BYPASS_AUTO_ENV = "DEV_AUTH_BYPASS_AUTO";
 export const DEV_AUTH_BYPASS_2_ENV = "DEV_AUTH_BYPASS_2";
 
 function envTruthy(raw: string | undefined): boolean {
@@ -15,6 +17,14 @@ function envTruthy(raw: string | undefined): boolean {
 
 export function isDevAuthBypassEnabled(): boolean {
   return envTruthy(process.env[DEV_AUTH_BYPASS_ENV]);
+}
+
+/**
+ * Implicit ws_1-style session without visiting /login or /api/auth/dev-bypass.
+ * Off by default — set DEV_AUTH_BYPASS_AUTO=1 only for browser cert automation.
+ */
+export function isDevAuthBypassAutoEnabled(): boolean {
+  return isDevAuthBypassEnabled() && envTruthy(process.env[DEV_AUTH_BYPASS_AUTO_ENV]);
 }
 
 /** Isolated fresh-customer MCTB cert lane — authentication only. */

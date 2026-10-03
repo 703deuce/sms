@@ -3,10 +3,21 @@ import {
   devAuthBypass2EmailHint,
   devAuthBypass2ForbiddenWorkspaceIds,
   isDevAuthBypass2Enabled,
+  isDevAuthBypassAutoEnabled,
+  isDevAuthBypassEnabled,
 } from "../src/lib/auth/dev-auth-bypass";
 
 const prev2 = process.env.DEV_AUTH_BYPASS_2;
 const prevWs = process.env.MCTB_PROD_CERT_WORKSPACE_ID;
+const prevBypass = process.env.DEV_AUTH_BYPASS;
+const prevAuto = process.env.DEV_AUTH_BYPASS_AUTO;
+
+process.env.DEV_AUTH_BYPASS = "1";
+delete process.env.DEV_AUTH_BYPASS_AUTO;
+assert.equal(isDevAuthBypassEnabled(), true);
+assert.equal(isDevAuthBypassAutoEnabled(), false);
+process.env.DEV_AUTH_BYPASS_AUTO = "1";
+assert.equal(isDevAuthBypassAutoEnabled(), true);
 
 process.env.DEV_AUTH_BYPASS_2 = "1";
 process.env.MCTB_PROD_CERT_WORKSPACE_ID = "ws_1";
