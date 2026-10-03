@@ -10,7 +10,11 @@ import {
   formatRecoveryStatus,
   formatReplyStatus,
 } from "@/lib/mctb/recovery-display";
-import { isMctbSetupMessagingReady } from "@/lib/mctb/setup-messaging-ready";
+import {
+  isMctbOperationalMessagingReady,
+  isMctbSetupMessagingReady,
+} from "@/lib/mctb/setup-messaging-ready";
+import { resolveMctbCapabilities } from "@/lib/mctb/capabilities";
 import { loadMctbSetupPhoneOptions } from "@/lib/numbers/workspace-accessible-numbers";
 import {
   isMctbSchedulePaused,
@@ -104,6 +108,7 @@ async function loadMctbOverviewShared(workspaceId: string): Promise<Omit<MctbOve
     compliance,
     workspaceNumbers,
     adminFlags,
+    capabilities,
     overviewKpis,
     recentEvents,
     recentConversations,
@@ -115,6 +120,7 @@ async function loadMctbOverviewShared(workspaceId: string): Promise<Omit<MctbOve
     workspaceNumbersPromise.then((nums) => loadComplianceOverview(workspaceId, { phoneNumbers: nums })),
     workspaceNumbersPromise,
     loadAdminMctbTestFlags(workspaceId),
+    resolveMctbCapabilities(workspaceId),
     loadMctbOverviewKpis(workspaceId),
     prisma.missedCallEvent.findMany({
       where: { workspaceId },
@@ -140,6 +146,10 @@ async function loadMctbOverviewShared(workspaceId: string): Promise<Omit<MctbOve
     phoneNumbers,
     requiredActions,
     adminFlags,
+  });
+  const operationalMessagingReady = isMctbOperationalMessagingReady({
+    messagingReady,
+    platformSenderActive: capabilities.platformSenderActive,
   });
 
   const scheduleSettings = readMctbScheduleFromCustomFields(customCfg, runtime);
@@ -168,20 +178,22 @@ async function loadMctbOverviewShared(workspaceId: string): Promise<Omit<MctbOve
   const smsPhone = phoneNumbers.find((p) => p.id === runtime.smsPhoneNumberId);
   const senderMode = runtime.senderMode === "PLATFORM" ? "PLATFORM" : "WORKSPACE";
   const senderReady =
-    messagingReady && (senderMode === "PLATFORM" || Boolean(smsPhone));
+    senderMode === "PLATFORM"
+      ? capabilities.platformSenderActive
+      : messagingReady && Boolean(smsPhone);
 
   let status: MctbOverviewStatus = "active";
   let statusLabel = "Active";
   if (!setupComplete) {
     status = "setup_incomplete";
     statusLabel = "Setup incomplete";
-  } else if (!messagingReady && onboardingComplete) {
+  } else if (!operationalMessagingReady && onboardingComplete) {
     status = "messaging_blocked";
     statusLabel = "Messaging blocked";
   } else if (paused) {
     status = "paused";
     statusLabel = "Paused";
-  } else if (!messagingReady) {
+  } else if (!operationalMessagingReady) {
     status = "messaging_blocked";
     statusLabel = "Messaging blocked";
   }

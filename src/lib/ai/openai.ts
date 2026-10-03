@@ -6,6 +6,8 @@
  *   OPENAI_MODEL   — optional, defaults to gpt-5-nano
  */
 
+import { chatCompletionBodyExtras } from "@/lib/ai/llm-providers";
+
 export function getOpenAiApiKey() {
   return process.env.OPENAI_API_KEY?.trim() || "";
 }
@@ -22,6 +24,7 @@ export async function openAiChatCompletion(
   const apiKey = getOpenAiApiKey();
   if (!apiKey) return null;
 
+  const model = options?.model?.trim() || getOpenAiModel();
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -29,9 +32,11 @@ export async function openAiChatCompletion(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: options?.model?.trim() || getOpenAiModel(),
-      temperature: options?.temperature ?? 0.4,
-      max_tokens: options?.maxTokens ?? 800,
+      model,
+      ...chatCompletionBodyExtras("openai", model, {
+        temperature: options?.temperature ?? 0.4,
+        maxTokens: options?.maxTokens ?? 800,
+      }),
       messages: [
         { role: "system", content: system },
         { role: "user", content: user },

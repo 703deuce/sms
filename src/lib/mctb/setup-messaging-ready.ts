@@ -21,3 +21,14 @@ export function isMctbSetupMessagingReady(input: {
   if (input.adminFlags && isAdminMctbTestWorkspace(input.adminFlags)) return true;
   return input.requiredActions.length === 0;
 }
+
+/**
+ * Whether MCTB can send recovery SMS in practice (workspace TFV/A2P or platform sender path).
+ * Use for Overview / setup health — not for workspace-only compliance gates.
+ */
+export function isMctbOperationalMessagingReady(input: {
+  messagingReady: boolean;
+  platformSenderActive?: boolean;
+}): boolean {
+  return input.messagingReady || Boolean(input.platformSenderActive);
+}
