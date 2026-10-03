@@ -17,9 +17,29 @@ import {
   DialogTitle,
 } from "@/newui-transplant/components/ui/dialog";
 
+const MCTB_FIRST_RUN_DISMISSED_SESSION_KEY = "mctb-first-run-wizard-dismissed";
+
 type PolicyResponse = {
   firstRun?: MctbFirstRunWizardPolicy;
 };
+
+function readFirstRunDismissedFromSession(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return sessionStorage.getItem(MCTB_FIRST_RUN_DISMISSED_SESSION_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function persistFirstRunDismissedToSession(): void {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(MCTB_FIRST_RUN_DISMISSED_SESSION_KEY, "1");
+  } catch {
+    // ignore quota / private mode
+  }
+}
 
 export function MctbFirstRunWizardHost() {
   const pathname = usePathname();
@@ -30,7 +50,9 @@ export function MctbFirstRunWizardHost() {
 
   const [policy, setPolicy] = useState<MctbFirstRunWizardPolicy | null>(null);
   const [open, setOpen] = useState(false);
-  const [dismissedThisVisit, setDismissedThisVisit] = useState(false);
+  const [dismissedThisVisit, setDismissedThisVisit] = useState(() =>
+    readFirstRunDismissedFromSession(),
+  );
 
   const clearSetupGuideParam = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -53,7 +75,9 @@ export function MctbFirstRunWizardHost() {
 
   useEffect(() => {
     if (!onMctbSurface) return;
-    setDismissedThisVisit(false);
+    if (!setupGuide) {
+      setDismissedThisVisit(readFirstRunDismissedFromSession());
+    }
     void loadPolicy(setupGuide);
   }, [onMctbSurface, setupGuide, loadPolicy]);
 
@@ -76,9 +100,15 @@ export function MctbFirstRunWizardHost() {
       setOpen(false);
       return;
     }
-    if (dismissedThisVisit && policy.trigger !== "setup_guide" && !policy.everyLoginTesting) {
-      setOpen(false);
-      return;
+    if (dismissedThisVisit && !policy.everyLoginTesting) {
+      if (setupGuide) {
+        // User opened setup guide intentionally (?setup_guide=1).
+      } else if (policy.trigger === "incomplete_onboarding") {
+        // Mandatory first-run — keep open until onboarding completes.
+      } else {
+        setOpen(false);
+        return;
+      }
     }
     if (shouldShowMctbFirstRunWizardModal(policy, pathname, setupGuide)) {
       setOpen(true);
@@ -131,6 +161,7 @@ export function MctbFirstRunWizardHost() {
         setOpen(next);
         if (!next) {
           setDismissedThisVisit(true);
+          persistFirstRunDismissedToSession();
           clearSetupGuideParam();
         }
       }}
@@ -151,6 +182,7 @@ export function MctbFirstRunWizardHost() {
             onFinished={() => {
               setOpen(false);
               setDismissedThisVisit(true);
+              persistFirstRunDismissedToSession();
               clearSetupGuideParam();
               void loadPolicy(false);
             }}

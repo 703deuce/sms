@@ -95,7 +95,9 @@ export async function GET(req: Request) {
     ]);
 
     const forwardingVerified = Boolean(
-      state.forwardingConnectedAt || forwardingVerification?.verified,
+      state.forwardingConnectedAt ||
+        forwardingVerification?.verified ||
+        state.liveTestPassedAt,
     );
     const firstRun = resolveMctbFirstRunWizardPolicy({
       onboardingState: state,
