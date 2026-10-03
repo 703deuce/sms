@@ -4,14 +4,14 @@ import { hash } from "bcryptjs";
 import { getPrisma } from "@/lib/db";
 import {
   ensureProductWorkspace,
-  ensureWorkspaceEntitlements,
   getUserProductAccess,
   grantProductEntitlement,
-  repairOwnedWorkspaceMemberships,
 } from "@/lib/products/entitlements";
 import { updateProductIntent } from "@/lib/products/session";
 import type { ProductKey } from "@/lib/products/types";
 import type { WorkspaceType } from "@/lib/workspace/types";
+import { createWorkspaceForUser } from "@/lib/workspace/create-workspace";
+import { ensureOwnerMembershipsForOwnedWorkspaces } from "@/lib/workspace/owner-membership";
 
 const GOOGLE_AUTH_SCOPES = ["openid", "email", "profile"].join(" ");
 
@@ -207,20 +207,7 @@ export async function findOrCreateUserFromGoogle(profile: GoogleProfile): Promis
     await prisma.user.update({ where: { id: user.id }, data: { name: profile.name } });
   }
 
-  let memberships = await prisma.membership.findMany({
-    where: { userId: user.id },
-    include: { workspace: true },
-  });
-
-  if (!memberships.length) {
-    await repairOwnedWorkspaceMemberships(user.id);
-    memberships = await prisma.membership.findMany({
-      where: { userId: user.id },
-      include: { workspace: true },
-    });
-  }
-
-  if (memberships.length) {
+  const resolveExistingUserWorkspace = async (): Promise<GoogleAuthUserResult> => {
     const access = await getUserProductAccess(user.id);
     const preferred: ProductKey =
       access.hasNumbers && !access.hasVoice
@@ -239,23 +226,32 @@ export async function findOrCreateUserFromGoogle(profile: GoogleProfile): Promis
       workspaceType: resolved.workspaceType,
       created,
     };
+  };
+
+  let memberships = await prisma.membership.findMany({
+    where: { userId: user.id },
+    include: { workspace: true },
+  });
+
+  if (memberships.length) {
+    return resolveExistingUserWorkspace();
   }
 
-  const workspaceType: WorkspaceType = "PERSONAL";
-  const workspace = await prisma.workspace.create({
-    data: {
-      name: workspaceType === "PERSONAL" ? "Personal" : `${profile.name}'s Workspace`,
-      slug: `personal-${user.id.slice(-10)}-${Date.now().toString(36)}`,
-      type: workspaceType,
-      ownerUserId: user.id,
-      billingPlan: "trial",
-      creditBalanceCents: 0,
-    },
-  });
-  await prisma.membership.create({
-    data: { userId: user.id, workspaceId: workspace.id, role: "OWNER" },
-  });
+  // Returning Google login: same email must never spawn another workspace.
+  if (!created) {
+    await ensureOwnerMembershipsForOwnedWorkspaces(user.id);
+    memberships = await prisma.membership.findMany({
+      where: { userId: user.id },
+      include: { workspace: true },
+    });
+    if (memberships.length) {
+      return resolveExistingUserWorkspace();
+    }
+    return resolveExistingUserWorkspace();
+  }
 
+  // First-time Google signup: one user row, one initial workspace.
+  const workspace = await createWorkspaceForUser(user.id, "Personal", "PERSONAL");
   await grantProductEntitlement(workspace.id, "numbers");
   await updateProductIntent(user.id, "numbers");
 
@@ -264,7 +260,7 @@ export async function findOrCreateUserFromGoogle(profile: GoogleProfile): Promis
     email: user.email,
     name: user.name,
     workspaceId: workspace.id,
-    workspaceType,
+    workspaceType: "PERSONAL",
     created: true,
   };
 }

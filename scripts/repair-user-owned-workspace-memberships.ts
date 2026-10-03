@@ -1,9 +1,10 @@
 /**
  * One-off / ops: link all workspaces owned by a user into Membership (OWNER).
- * Usage: TARGET_EMAIL=user@example.com npx tsx scripts/repair-user-owned-workspace-memberships.ts
+ * Usage: set TARGET_EMAIL then run this script with tsx.
  */
 import { getPrisma } from "@/lib/db";
-import { repairOwnedWorkspaceMemberships, ensureProductWorkspace } from "@/lib/products/entitlements";
+import { ensureProductWorkspace } from "@/lib/products/entitlements";
+import { ensureOwnerMembershipsForOwnedWorkspaces } from "@/lib/workspace/owner-membership";
 
 const email = (process.env.TARGET_EMAIL || "").trim().toLowerCase();
 if (!email) {
@@ -19,7 +20,7 @@ async function main() {
     process.exit(1);
   }
 
-  const created = await repairOwnedWorkspaceMemberships(user.id);
+  const created = await ensureOwnerMembershipsForOwnedWorkspaces(user.id);
   const voice = await ensureProductWorkspace(user.id, "voice");
 
   console.log(

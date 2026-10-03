@@ -1562,6 +1562,58 @@ async function applyInclude(rows: Row[], include: Args | undefined, model: strin
   return out;
 }
 
+type NestedCreateRule = { childModel: string; parentFk: string };
+
+/** Prisma nested `create` on insert — must run after parent row exists. */
+const CREATE_NESTED: Record<string, Record<string, NestedCreateRule>> = {
+  workspace: {
+    memberships: { childModel: "membership", parentFk: "workspaceId" },
+    messagingRegistration: { childModel: "messagingRegistration", parentFk: "workspaceId" },
+    workspaceLimits: { childModel: "workspaceLimits", parentFk: "workspaceId" },
+  },
+};
+
+function splitNestedCreates(
+  model: string,
+  data: Args,
+): { scalars: Args; nested: Array<{ rule: NestedCreateRule; childData: Args }> } {
+  const rules = CREATE_NESTED[model] ?? {};
+  const scalars: Args = {};
+  const nested: Array<{ rule: NestedCreateRule; childData: Args }> = [];
+  for (const [key, value] of Object.entries(data ?? {})) {
+    if (isObject(value) && value.create != null && rules[key]) {
+      const payloads = Array.isArray(value.create) ? value.create : [value.create];
+      for (const payload of payloads) {
+        nested.push({
+          rule: rules[key],
+          childData: isObject(payload) ? (payload as Args) : {},
+        });
+      }
+      continue;
+    }
+    if (
+      isObject(value) &&
+      ("create" in value || "createMany" in value || "connect" in value || "disconnect" in value)
+    ) {
+      continue;
+    }
+    scalars[key] = value;
+  }
+  return { scalars, nested };
+}
+
+async function runNestedCreates(
+  parentModel: string,
+  parentId: string,
+  nested: Array<{ rule: NestedCreateRule; childData: Args }>,
+): Promise<void> {
+  for (const item of nested) {
+    await modelApi(item.rule.childModel).create({
+      data: { ...item.childData, [item.rule.parentFk]: parentId },
+    });
+  }
+}
+
 function prepareData(data: Args, { isCreate, model }: { isCreate: boolean; model?: string }): Row {
   const out: Row = {};
   for (const [k, v] of Object.entries(data)) {
@@ -1571,6 +1623,13 @@ function prepareData(data: Args, { isCreate, model }: { isCreate: boolean; model
     }
     if (isObject(v) && "increment" in v) {
       out[k] = v; // handled by caller
+      continue;
+    }
+    if (
+      isObject(v) &&
+      ("create" in v || "createMany" in v || "disconnect" in v) &&
+      !(isCreate && model && CREATE_NESTED[model]?.[k])
+    ) {
       continue;
     }
     out[k] = serializeValue(v);
@@ -1665,12 +1724,16 @@ function modelApi(model: string): ModelApi {
     async create({ data, include }: Args) {
       return withTransientPostgrestRetry(async () => {
         const db = getSupabaseAdmin();
-        const row = prepareData(data, { isCreate: true, model });
+        const { scalars, nested } = splitNestedCreates(model, data as Args);
+        const row = prepareData(scalars, { isCreate: true, model });
         let transientRetries = 0;
         for (let attempt = 0; ; attempt++) {
           const { data: created, error } = await db.from(t).insert(row).select("*").single();
           if (!error) {
             const revived = reviveRow(created as Row);
+            if (nested.length) {
+              await runNestedCreates(model, revived.id as string, nested);
+            }
             const hydrated = await applyInclude([revived], include, model);
             return hydrated[0];
           }

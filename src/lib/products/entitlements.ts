@@ -14,6 +14,10 @@ import {
 } from "@/lib/products/paths";
 import { ensureMctbWorkspaceBootstrap } from "@/lib/mctb/provisioning/workspace-bootstrap";
 import { createWorkspaceForUser } from "@/lib/workspace/create-workspace";
+import {
+  ensureOwnerMembership,
+  ensureOwnerMembershipsForOwnedWorkspaces,
+} from "@/lib/workspace/owner-membership";
 import type { WorkspaceType } from "@/lib/workspace/types";
 
 export {
@@ -284,31 +288,9 @@ export async function resolveWorkspaceForProduct(
   };
 }
 
-/**
- * Create missing Membership rows for workspaces the user owns but cannot access
- * (legacy paths set ownerUserId without membership).
- */
+/** @deprecated Use ensureOwnerMembershipsForOwnedWorkspaces from @/lib/workspace/owner-membership */
 export async function repairOwnedWorkspaceMemberships(userId: string): Promise<number> {
-  const prisma = getPrisma();
-  const owned = await prisma.workspace.findMany({
-    where: { ownerUserId: userId },
-    select: { id: true },
-  });
-  if (!owned.length) return 0;
-
-  let created = 0;
-  for (const ws of owned) {
-    const existing = await prisma.membership.findFirst({
-      where: { userId, workspaceId: ws.id },
-      select: { id: true },
-    });
-    if (existing) continue;
-    await prisma.membership.create({
-      data: { userId, workspaceId: ws.id, role: "OWNER" },
-    });
-    created += 1;
-  }
-  return created;
+  return ensureOwnerMembershipsForOwnedWorkspaces(userId);
 }
 
 /** Ensure the user has a workspace for the requested product (creates one if missing). */
@@ -318,7 +300,6 @@ export async function ensureProductWorkspace(
 ): Promise<{ workspaceId: string; workspaceType: WorkspaceType }> {
   const prisma = getPrisma();
   const preferredType: WorkspaceType = product === "numbers" ? "PERSONAL" : "BUSINESS";
-  await repairOwnedWorkspaceMemberships(userId);
   const allMemberships = await prisma.membership.findMany({
     where: { userId },
     include: { workspace: { select: { id: true, type: true } } },
@@ -372,9 +353,7 @@ export async function ensureProductWorkspace(
       where: { userId, workspaceId: best.id },
     });
     if (!existingMembership) {
-      await prisma.membership.create({
-        data: { userId, workspaceId: best.id, role: "OWNER" },
-      });
+      await ensureOwnerMembership(userId, best.id);
     }
     await ensureWorkspaceEntitlements(best.id);
     if (product === "voice") {
@@ -384,6 +363,12 @@ export async function ensureProductWorkspace(
       workspaceId: best.id,
       workspaceType: best.type === "PERSONAL" ? "PERSONAL" : "BUSINESS",
     };
+  }
+
+  const ownedCount = await prisma.workspace.count({ where: { ownerUserId: userId } });
+  if (ownedCount > 0) {
+    await ensureOwnerMembershipsForOwnedWorkspaces(userId);
+    return ensureProductWorkspace(userId, product);
   }
 
   const workspace = await createWorkspaceForUser(
