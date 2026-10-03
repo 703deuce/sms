@@ -34,7 +34,7 @@ export function VoicemailBrowser({
           icon={Voicemail}
           title="No voicemails yet"
           description="When callers leave a message, recordings and AI summaries appear here."
-          action={<ButtonLink href="/mctb/setup/voicemail" size="sm">Configure voicemail</ButtonLink>}
+          action={<ButtonLink href="/mctb/setup/voicemail" size="sm">Voicemail settings</ButtonLink>}
         />
       </div>
     )

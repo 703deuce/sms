@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { Page, PageHeader } from "@/newui-transplant/components/app/kit";
 import { VoicemailBrowser } from "@/newui-transplant/components/mctb/voicemail-browser";
-import { mapVoicemailApiToNewUi, type VoicemailApiMessage } from "@/lib/newui-transplant/adapters/mctb-voicemail";
+import {
+  mapPersonalVoicemailToMctbApi,
+  mapVoicemailApiToNewUi,
+} from "@/lib/newui-transplant/adapters/mctb-voicemail";
 import { parseVoicemailApiPayload } from "@/lib/personal/voicemail-mappers";
 import {
   fetchMctbVoicemailInboxPayload,
@@ -11,7 +14,7 @@ import {
 } from "@/lib/newui-transplant/mctb-voicemail-fetch";
 
 export function NewUiMctbVoicemailPage({ numberId }: { numberId?: string }) {
-  const [items, setItems] = useState<VoicemailApiMessage[]>([]);
+  const [items, setItems] = useState<ReturnType<typeof mapPersonalVoicemailToMctbApi>[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -22,18 +25,7 @@ export function NewUiMctbVoicemailPage({ numberId }: { numberId?: string }) {
     void fetchMctbVoicemailInboxPayload(numberId)
       .then((j) => {
         const parsed = parseVoicemailApiPayload(j);
-        const rows = (parsed.messages ?? []).map((m) => ({
-          id: m.id,
-          fromE164: m.fromE164,
-          contactName: m.contactName,
-          durationSeconds: m.durationSeconds,
-          createdAt: m.createdAt,
-          isRead: m.isRead,
-          aiSummary: m.aiSummary,
-          transcript: m.transcriptText,
-          hasRecording: m.hasRecording,
-        }));
-        setItems(rows);
+        setItems((parsed.messages ?? []).map(mapPersonalVoicemailToMctbApi));
       })
       .catch((err) => {
         setItems([]);

@@ -79,6 +79,20 @@ export function mapVoicemailMessage(row: {
   };
 }
 
+/** Accept either `{ data: { boxes, messages } }` (session API routes) or the inner payload. */
+export function unwrapVoicemailApiEnvelope(data: unknown): unknown {
+  if (!data || typeof data !== "object") return data;
+  const record = data as Record<string, unknown>;
+  const inner = record.data;
+  if (inner && typeof inner === "object" && !Array.isArray(inner)) {
+    const innerRecord = inner as Record<string, unknown>;
+    if ("messages" in innerRecord || "boxes" in innerRecord || "summary" in innerRecord) {
+      return inner;
+    }
+  }
+  return data;
+}
+
 export function parseVoicemailApiPayload(data: unknown): {
   boxes: PersonalVoicemailBox[];
   messages: PersonalVoicemailMessage[];
@@ -89,11 +103,12 @@ export function parseVoicemailApiPayload(data: unknown): {
     unreadCount: 0,
     minutesThisMonth: 0,
   };
-  if (!data || typeof data !== "object") {
+  const unwrapped = unwrapVoicemailApiEnvelope(data);
+  if (!unwrapped || typeof unwrapped !== "object") {
     return { boxes: [], messages: [], summary: emptySummary };
   }
 
-  const payload = data as {
+  const payload = unwrapped as {
     summary?: VoicemailInboxSummary;
     boxes?: PersonalVoicemailBox[];
     messages?: Array<{

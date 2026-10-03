@@ -1,4 +1,5 @@
 import type { VoicemailItem } from "@/newui-transplant/lib/view-models";
+import type { PersonalVoicemailMessage } from "@/lib/personal/voicemail-mappers";
 import { formatPhone } from "@/lib/utils";
 
 export type VoicemailApiMessage = {
@@ -13,6 +14,20 @@ export type VoicemailApiMessage = {
   hasRecording?: boolean;
   conversationId?: string | null;
 };
+
+export function mapPersonalVoicemailToMctbApi(row: PersonalVoicemailMessage): VoicemailApiMessage {
+  return {
+    id: row.id,
+    fromE164: row.callerNumber,
+    contactName: row.callerDisplayName,
+    durationSeconds: row.durationSec,
+    createdAt: row.createdAt,
+    isRead: row.isRead,
+    aiSummary: row.summary,
+    transcript: row.transcript,
+    hasRecording: row.hasRecording,
+  };
+}
 
 export function mapVoicemailApiToNewUi(row: VoicemailApiMessage): VoicemailItem {
   const phone = row.fromE164 ? formatPhone(row.fromE164) : "—";
