@@ -180,7 +180,7 @@ export async function isWorkspaceInOnboarding(workspaceId: string): Promise<bool
     where: { id: workspaceId },
     select: { billingPlan: true, type: true },
   });
-  if (!ws || ws.type === "PERSONAL") return false;
+  if (!ws) return false;
   const plan = String(ws.billingPlan || "").toLowerCase();
   return plan === "onboarding";
 }

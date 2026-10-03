@@ -8,6 +8,7 @@ import { updateProductIntent } from "@/lib/products/session";
 import type { ProductKey } from "@/lib/products/types";
 import type { WorkspaceType } from "@/lib/workspace/types";
 import { createWorkspaceForUser } from "@/lib/workspace/create-workspace";
+import { isMctbV1Primary } from "@/lib/workspace/platform-launch";
 
 const GOOGLE_AUTH_SCOPES = ["openid", "email", "profile"].join(" ");
 
@@ -235,6 +236,24 @@ export async function findOrCreateUserFromGoogle(profile: GoogleProfile): Promis
   }
 
   // First-time Google signup: one user row, one initial workspace.
+  if (isMctbV1Primary()) {
+    const workspace = await createWorkspaceForUser(user.id, "Business", "BUSINESS");
+    await grantProductEntitlement(workspace.id, "voice");
+    await updateProductIntent(user.id, "voice");
+    const { ensureMctbWorkspaceBootstrap } = await import(
+      "@/lib/mctb/provisioning/workspace-bootstrap"
+    );
+    await ensureMctbWorkspaceBootstrap(workspace.id).catch(() => undefined);
+    return {
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+      workspaceId: workspace.id,
+      workspaceType: "BUSINESS",
+      created: true,
+    };
+  }
+
   const workspace = await createWorkspaceForUser(user.id, "Personal", "PERSONAL");
   await grantProductEntitlement(workspace.id, "numbers");
   await updateProductIntent(user.id, "numbers");

@@ -63,3 +63,12 @@ export function isAppointmentsV1Primary(): boolean {
 export function isMctbV1Primary(): boolean {
   return MCTB_V1_PRIMARY;
 }
+
+/**
+ * Personal workspace type is not offered on the current MCTB-first launch.
+ * New signups and MCTB onboarding always use BUSINESS tenants.
+ */
+export function isPersonalWorkspaceOffered(): boolean {
+  if (MCTB_V1_PRIMARY) return false;
+  return isNumbersPlatformOnlyLaunch();
+}

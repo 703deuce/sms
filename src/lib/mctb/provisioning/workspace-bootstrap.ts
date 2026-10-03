@@ -1,5 +1,6 @@
 import "server-only";
 
+import { ensureBusinessWorkspaceForMctb } from "@/lib/mctb/ensure-business-workspace-for-mctb";
 import { grantMctbProductFeatureActive } from "@/lib/mctb/ensure-mctb-product-feature";
 import { ensureMctbWorkspaceSeeded } from "@/lib/mctb/provisioning/seed-workspace";
 import {
@@ -15,6 +16,7 @@ export type MctbWorkspaceBootstrapResult = EnsureMctbWorkspaceIngressResult & {
 export async function ensureMctbWorkspaceBootstrap(
   workspaceId: string,
 ): Promise<MctbWorkspaceBootstrapResult> {
+  await ensureBusinessWorkspaceForMctb(workspaceId);
   await ensureMctbWorkspaceSeeded(workspaceId);
   await grantMctbProductFeatureActive(workspaceId);
   const ingress = await ensureMctbWorkspaceIngressReady(workspaceId);

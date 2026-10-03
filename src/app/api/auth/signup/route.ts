@@ -18,6 +18,10 @@ import {
 } from "@/lib/auth/phone-otp";
 import { getPrisma } from "@/lib/db";
 import { getMaintenanceState, getTrialLimits } from "@/lib/platform-flags";
+import {
+  isMctbV1Primary,
+  isPersonalWorkspaceOffered,
+} from "@/lib/workspace/platform-launch";
 import { grantCredits } from "@/lib/settings/billing";
 import { ensureOwnerMembership } from "@/lib/workspace/owner-membership";
 
@@ -85,15 +89,17 @@ export async function POST(request: Request) {
     const productIntent: ProductKey =
       body.productIntent ??
       pathIntent ??
-      (body.workspaceType === "PERSONAL" ? "numbers" : "voice");
+      (isMctbV1Primary()
+        ? "voice"
+        : body.workspaceType === "PERSONAL"
+          ? "numbers"
+          : "voice");
     const isMctbSignup = productIntent === "voice";
-    const workspaceType: WorkspaceType = isMctbSignup
-      ? body.workspaceType === "PERSONAL"
-        ? "PERSONAL"
-        : "BUSINESS"
-      : productIntent === "numbers" || body.workspaceType === "PERSONAL"
-        ? "PERSONAL"
-        : "BUSINESS";
+    const allowPersonal =
+      isPersonalWorkspaceOffered() &&
+      productIntent === "numbers" &&
+      body.workspaceType === "PERSONAL";
+    const workspaceType: WorkspaceType = allowPersonal ? "PERSONAL" : "BUSINESS";
     const businessName =
       workspaceType === "PERSONAL"
         ? "Personal"

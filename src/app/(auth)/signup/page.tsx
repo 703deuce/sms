@@ -4,7 +4,11 @@ import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { SmsOptIn } from "@/components/auth/sms-opt-in";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
-import { isNumbersPlatformOnlyLaunch } from "@/lib/workspace/platform-launch";
+import {
+  isMctbV1Primary,
+  isNumbersPlatformOnlyLaunch,
+  isPersonalWorkspaceOffered,
+} from "@/lib/workspace/platform-launch";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useMemo, useState } from "react";
@@ -18,6 +22,8 @@ import { mctbOnboardingEntryPath } from "@/lib/mctb/onboarding/entry-path";
 type WorkspaceChoice = "PERSONAL" | "BUSINESS";
 
 const numbersPlatformOnly = isNumbersPlatformOnlyLaunch();
+const mctbPrimary = isMctbV1Primary();
+const personalWorkspaceOffered = isPersonalWorkspaceOffered();
 
 function reservationFromNext(nextPath: string | null): string | undefined {
   if (!nextPath) return undefined;
@@ -59,9 +65,7 @@ function SignupForm() {
   const [error, setError] = useState("");
   const [phone, setPhone] = useState("");
   const [phoneVerified, setPhoneVerified] = useState(false);
-  const [workspaceType, setWorkspaceType] = useState<WorkspaceChoice>(
-    numbersPlatformOnly ? "PERSONAL" : "BUSINESS",
-  );
+  const [workspaceType, setWorkspaceType] = useState<WorkspaceChoice>("BUSINESS");
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -110,7 +114,9 @@ function SignupForm() {
               ? "Start your Mass Texting trial. No Missed Call Text Back setup required."
             : numbersPlatformOnly
               ? "Buy numbers, forward calls, route with Smart Routing, and manage voicemail."
-              : "One account for Personal numbers or full business communications."}
+              : mctbPrimary
+                ? "Set up Missed Call Text Back for your business line."
+                : "One account for Personal numbers or full business communications."}
         </p>
       </div>
 
@@ -125,7 +131,7 @@ function SignupForm() {
         </p>
       </div>
 
-      {!numbersPlatformOnly && !isMassTextSignup ? (
+      {personalWorkspaceOffered && !isMassTextSignup ? (
         <div className="mb-6 grid gap-3 sm:grid-cols-2">
           <button
             type="button"

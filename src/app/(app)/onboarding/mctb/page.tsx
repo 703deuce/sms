@@ -4,6 +4,8 @@ import { getPrisma } from "@/lib/db";
 import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
 import { mctbOnboardingEntryPath } from "@/lib/mctb/onboarding/entry-path";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
+import { ensureBusinessWorkspaceForMctb } from "@/lib/mctb/ensure-business-workspace-for-mctb";
+import { isMctbV1Primary } from "@/lib/workspace/platform-launch";
 import { MctbOnboardingWizard } from "@/components/mctb/onboarding-wizard";
 import { loadMctbOnboardingState, isOnboardingComplete } from "@/lib/mctb/onboarding/state";
 
@@ -23,7 +25,13 @@ export default async function MctbOnboardingPage() {
     select: { type: true, billingPlan: true, name: true },
   });
 
-  if (ws?.type === "PERSONAL") redirect("/personal");
+  if (ws?.type === "PERSONAL") {
+    if (isMctbV1Primary()) {
+      await ensureBusinessWorkspaceForMctb(workspaceId);
+    } else {
+      redirect("/personal");
+    }
+  }
 
   const state = await loadMctbOnboardingState(workspaceId);
   const plan = String(ws?.billingPlan || "").toLowerCase();
