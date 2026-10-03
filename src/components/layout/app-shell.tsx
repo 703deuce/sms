@@ -308,7 +308,7 @@ export function AppShell({
   if (newUiShell && !realtorMode && !legacyAutomation) {
     return wrapCallHandling(
       <div
-        className="flex h-dvh overflow-hidden bg-background"
+        className="flex h-dvh min-h-0 flex-col overflow-hidden bg-background"
         data-newui-shell="true"
       >
         <ProductActivityTracker />

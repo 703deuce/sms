@@ -41,7 +41,7 @@ export function VoicemailBrowser({
   }
 
   return (
-    <div className={cn('grid overflow-hidden md:grid-cols-[320px_1fr]', OPUS_CARD)}>
+    <div className={cn('flex flex-col overflow-visible md:grid md:overflow-hidden md:grid-cols-[320px_1fr]', OPUS_CARD)}>
       <div className="flex flex-col border-b md:border-r md:border-b-0">
         <div className="border-b p-3">
           <div className="relative">

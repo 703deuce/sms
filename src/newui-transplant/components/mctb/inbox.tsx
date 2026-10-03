@@ -145,7 +145,7 @@ export function Inbox({
     <main className="flex min-h-0 flex-col">
       <div
         className={cn(
-          'grid h-[calc(100dvh-13rem)] min-h-[520px] overflow-hidden md:grid-cols-[300px_1fr] xl:grid-cols-[300px_1fr_280px]',
+          'grid min-h-0 overflow-hidden max-md:overflow-visible md:h-[calc(100dvh-13rem)] md:min-h-[520px] md:grid-cols-[300px_1fr] xl:grid-cols-[300px_1fr_280px]',
           OPUS_CARD,
         )}
       >
