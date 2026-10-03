@@ -519,9 +519,16 @@ export function NewUiMctbSetupTestPage() {
   const test = useMctbTestWiring();
   if (test.loading) return <p className="p-6 text-sm text-muted-foreground">Loading test…</p>;
 
+  const liveChecks = test.liveTest?.checks;
+  const forwardingVerifiedLive =
+    Boolean(liveChecks?.callDetected && liveChecks?.forwardingVerified) ||
+    Boolean(test.setupTest?.verified);
+  const recoveryPipelineProven =
+    Boolean(test.liveTest?.passed) || Boolean(test.setupTest?.verified);
+
   const checks = [
     { label: "Business line connected", ok: Boolean(test.businessLine && test.businessLine !== "—") },
-    { label: "Forwarding verified (live test)", ok: Boolean(test.liveTest?.passed) },
+    { label: "Forwarding verified (live test)", ok: forwardingVerifiedLive },
     {
       label: "Sender ready",
       ok: Boolean(test.senderReady),
@@ -546,14 +553,17 @@ export function NewUiMctbSetupTestPage() {
         setupTestFailureReason: test.setupTest?.failureReason ?? null,
         consentMode: test.setupTest?.consentMode ?? null,
         businessLine: test.businessLine || "—",
-        liveStatusTitle: test.liveTest?.started && !test.liveTest.passed ? "Listening for your test call" : "Ready to listen",
+        liveStatusTitle:
+          test.liveTest?.started && !recoveryPipelineProven
+            ? "Listening for your test call"
+            : "Ready to listen",
         liveStatusDetail:
-          test.liveTest?.passed
+          recoveryPipelineProven
             ? "Live test passed — forwarding and recovery are working."
             : test.liveTest?.started
-              ? "Place a test call from another phone and let it ring out. We listen via live-test; setup-test records pipeline checkpoints."
+              ? "Call your business line from another phone and let it ring out (no answer). We listen via live-test; setup-test records pipeline checkpoints."
               : "Start test to arm live-test (forwarding call) and setup-test (recovery pipeline checkpoints). Try-it is onboarding-only.",
-        liveListening: Boolean(test.liveTest?.started && !test.liveTest?.passed),
+        liveListening: Boolean(test.liveTest?.started && !recoveryPipelineProven),
         onStartTest: test.startLiveTest,
       }}
     />

@@ -255,12 +255,12 @@ export async function getLiveTestStatus(workspaceId: string): Promise<LiveTestSt
     consentCompleted = Boolean(session?.consentCompletedAt);
   }
 
+  /** Recovery path proven when call forwards, classifies as missed, and recovery SMS sends — reply is tracked separately. */
   const passed =
     evaluated.forwardingVerified &&
     evaluated.missedCall &&
     consentCompleted &&
-    textSentInSession &&
-    replyReceived;
+    textSentInSession;
 
   const nowIso = new Date().toISOString();
   const sessionPatch = {
@@ -276,11 +276,18 @@ export async function getLiveTestStatus(workspaceId: string): Promise<LiveTestSt
     missedCallEventId: event.id,
   };
 
+  const persistSession: Parameters<typeof saveMctbOnboardingState>[1] = {
+    liveTestSession: sessionPatch,
+  };
+  if (evaluated.forwardingVerified && !state.forwardingConnectedAt) {
+    persistSession.forwardingConnectedAt = nowIso;
+  }
+
   if (passed && !state.liveTestPassedAt) {
-    await saveMctbOnboardingState(workspaceId, { liveTestSession: sessionPatch });
+    await saveMctbOnboardingState(workspaceId, persistSession);
     await markLiveTestPassed(workspaceId, event.id);
-  } else if (event.id !== session?.missedCallEventId) {
-    await saveMctbOnboardingState(workspaceId, { liveTestSession: sessionPatch });
+  } else if (event.id !== session?.missedCallEventId || persistSession.forwardingConnectedAt) {
+    await saveMctbOnboardingState(workspaceId, persistSession);
   }
 
   return {
@@ -309,7 +316,7 @@ export async function markLiveTestPassed(
   if (state.liveTestPassedAt) return;
 
   const session = state.liveTestSession;
-  if (!session?.textSentAt || !session.replyReceivedAt) {
+  if (!session?.textSentAt) {
     return;
   }
 
