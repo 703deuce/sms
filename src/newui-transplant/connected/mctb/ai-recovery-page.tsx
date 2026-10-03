@@ -41,6 +41,20 @@ export function NewUiMctbAiRecoveryPage() {
   const [bookingLinkUrl, setBookingLinkUrl] = useState("");
   const [bookingLinkLabel, setBookingLinkLabel] = useState("");
   const [enabledScenarios, setEnabledScenarios] = useState<Partial<Record<LeadRecoveryScenarioKey, boolean>>>({});
+  const [aboutBusiness, setAboutBusiness] = useState("");
+  const [emergencyCriteria, setEmergencyCriteria] = useState("");
+  const aboutRef = useRef(aboutBusiness);
+  const emergencyRef = useRef(emergencyCriteria);
+  const scenariosRef = useRef(enabledScenarios);
+  useEffect(() => {
+    aboutRef.current = aboutBusiness;
+  }, [aboutBusiness]);
+  useEffect(() => {
+    emergencyRef.current = emergencyCriteria;
+  }, [emergencyCriteria]);
+  useEffect(() => {
+    scenariosRef.current = enabledScenarios;
+  }, [enabledScenarios]);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
@@ -90,6 +104,14 @@ export function NewUiMctbAiRecoveryPage() {
         Record<LeadRecoveryScenarioKey, boolean>
       >;
       setEnabledScenarios(scenarios);
+      setAboutBusiness(
+        typeof data.business?.aboutBusiness === "string" ? data.business.aboutBusiness : "",
+      );
+      setEmergencyCriteria(
+        typeof data.business?.emergencyCriteria === "string"
+          ? data.business.emergencyCriteria
+          : "",
+      );
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "Could not load AI Recovery");
       setMeta(null);
@@ -122,11 +144,29 @@ export function NewUiMctbAiRecoveryPage() {
         (settingsJson as { error?: string }).error || "Could not save AI Recovery settings",
       );
     }
+    const scenariosNow = scenariosRef.current;
+    const emergenciesOn = Boolean(scenariosNow.emergencies);
+    const knowledgeRes = await fetch("/api/mctb/ai-recovery/knowledge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        aboutBusiness: aboutRef.current,
+        emergencyCriteria: emergencyRef.current,
+        emergencyDetectionEnabled: emergenciesOn,
+      }),
+    });
+    const knowledgeJson = await knowledgeRes.json().catch(() => ({}));
+    if (!knowledgeRes.ok) {
+      throw new Error(
+        (knowledgeJson as { error?: string }).error || "Could not save business knowledge",
+      );
+    }
+
     if (enabledNow) {
       const lrRes = await fetch("/api/mctb/lead-recovery/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled: true, enabledScenarios }),
+        body: JSON.stringify({ enabled: true, enabledScenarios: scenariosNow }),
       });
       const lrJson = await lrRes.json().catch(() => ({}));
       if (!lrRes.ok) {
@@ -141,7 +181,6 @@ export function NewUiMctbAiRecoveryPage() {
     bookingLinkId,
     bookingLinkLabel,
     bookingLinkUrl,
-    enabledScenarios,
     reload,
   ]);
 
@@ -164,6 +203,11 @@ export function NewUiMctbAiRecoveryPage() {
       bookingLinkLabel,
       bookingLinkReadOnly: true,
       bookingLinkEditHref: `${MCTB_ROUTES.textBack}?section=booking`,
+      aboutBusiness,
+      onAboutBusinessChange: setAboutBusiness,
+      emergencyCriteria,
+      onEmergencyCriteriaChange: setEmergencyCriteria,
+      emergenciesScenarioEnabled: Boolean(enabledScenarios.emergencies),
       onFieldChange: (key, value) =>
         setFields((f) => {
           const next = { ...f, [key]: value };
@@ -194,6 +238,8 @@ export function NewUiMctbAiRecoveryPage() {
     bookingLinkUrl,
     bookingLinkLabel,
     enabledScenarios,
+    aboutBusiness,
+    emergencyCriteria,
     scenarioDefs,
     onSave,
   ]);

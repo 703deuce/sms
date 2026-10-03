@@ -106,6 +106,8 @@ export type BusinessBrain = {
   approvedPolicies: string[];
   prohibitedClaims: string[];
   knowledgeFacts: Array<{ label: string; summary: string; status?: string }>;
+  /** Free-form business knowledge for MCTB AI Recovery (shared workspace brain) */
+  aboutBusiness?: string | null;
 };
 
 export type HealthLevel = "healthy" | "warning" | "failed" | "degraded" | "unknown";

@@ -111,4 +111,11 @@ Likewise: "Don't cancel my appointment." ≠ CANCEL_REQUEST. "Don't stop the pay
 - Context: business "Should I cancel the appointment?" → customer "Don't cancel" → KEEP PENDING_BOOKING.
 - Context: last intent BOOKING_REQUEST, missing ADDRESS, message "123 Main St" → extracted_entities ADDRESS, primary stays BOOKING_REQUEST.
 
-Respect negation. Do not invent business policy. Do not output policy-required field lists.`;
+Respect negation. Do not invent business policy. Do not output policy-required field lists.
+
+Urgency vs emergency (when approved_business_information is present):
+- HIGH urgency: customer wants fast help (today, ASAP) but may NOT match business emergency_definition.
+- EMERGENCY urgency: only when the situation matches emergency_definition in approved_business_information OR unmistakable immediate threat to life/safety (e.g. gas leak, fire) — never from generic "urgent" wording alone.
+- If emergency_definition is empty or missing, prefer HIGH or NORMAL over EMERGENCY unless life-safety is explicit.
+
+Use approved_business_information.prompt_block for business facts — not general world knowledge.`;

@@ -188,6 +188,10 @@ export async function loadBusinessBrain(
           "Do not claim an appointment is booked unless create_appointment succeeded",
         ],
     knowledgeFacts: knowledgeFacts.slice(0, 40),
+    aboutBusiness:
+      typeof stored.aboutBusiness === "string" && stored.aboutBusiness.trim()
+        ? String(stored.aboutBusiness).trim()
+        : null,
   };
 }
 

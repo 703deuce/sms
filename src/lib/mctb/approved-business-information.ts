@@ -17,6 +17,7 @@ export type MctbApprovedBusinessInformation = {
   locations: Array<{ name: string; address?: string }>;
   website: string | null;
   knowledge_facts: Array<{ label: string; summary: string }>;
+  about_business: string | null;
   /** Bounded text for Lead Recovery semantic / FAQ answering */
   prompt_block: string;
 };
@@ -55,10 +56,14 @@ export async function loadMctbApprovedBusinessInformation(
 
   const business_hours = brain.businessHoursSummary?.trim() || null;
   const website = brain.website?.trim() || null;
+  const about_business = brain.aboutBusiness?.trim() || null;
 
   const lines: string[] = [
     `Business name: ${brain.businessName}`,
   ];
+  if (about_business) {
+    lines.push("", "About the business:", about_business.slice(0, 4_000));
+  }
   if (business_hours) lines.push(`Business hours: ${business_hours}`);
   if (website) lines.push(`Website: ${website}`);
   if (services.length) lines.push(`Services offered: ${services.join(", ")}`);
@@ -82,6 +87,7 @@ export async function loadMctbApprovedBusinessInformation(
     locations,
     website,
     knowledge_facts,
+    about_business,
     prompt_block,
   };
 }

@@ -33,6 +33,8 @@ export type MctbStructuredConversationState = {
 export type MctbApprovedBusinessInformationContext = {
   business_name: string;
   prompt_block: string;
+  about_business: string | null;
+  emergency_criteria: string | null;
   has_hours: boolean;
   has_services: boolean;
   fact_count: number;
@@ -187,8 +189,8 @@ export async function buildMctbSemanticConversationContext(input: {
     getMctbAiBookingSessionStore().get(input.conversationId),
     loadInboxConversationThread(input.conversationId),
     lrConfig.enabled && lrConfig.policyHealth !== "DISABLED"
-      ? import("@/lib/mctb/approved-business-information").then((m) =>
-          m.loadMctbApprovedBusinessInformation(input.workspaceId),
+      ? import("@/lib/mctb/lead-recovery/knowledge-prompt").then((m) =>
+          m.loadMctbLeadRecoveryKnowledgeBundle(input.workspaceId),
         )
       : Promise.resolve(null),
   ]);
@@ -196,11 +198,13 @@ export async function buildMctbSemanticConversationContext(input: {
   const approved_business_information: MctbApprovedBusinessInformationContext | null =
     approvedRaw
       ? {
-          business_name: approvedRaw.business_name,
-          prompt_block: approvedRaw.prompt_block,
-          has_hours: Boolean(approvedRaw.business_hours),
-          has_services: approvedRaw.services.length > 0,
-          fact_count: approvedRaw.knowledge_facts.length,
+          business_name: approvedRaw.approved.business_name,
+          prompt_block: approvedRaw.runtime_prompt_block,
+          about_business: approvedRaw.about_business,
+          emergency_criteria: approvedRaw.emergency_criteria,
+          has_hours: Boolean(approvedRaw.approved.business_hours),
+          has_services: approvedRaw.approved.services.length > 0,
+          fact_count: approvedRaw.approved.knowledge_facts.length,
         }
       : null;
 
@@ -270,13 +274,21 @@ export async function buildMctbSemanticConversationContext(input: {
 export function leadRecoveryIntentUserPayload(
   ctx: MctbSemanticConversationContext,
 ): Record<string, unknown> {
+  const biz = ctx.approved_business_information;
   return {
     conversation: ctx.conversation,
     structured_state: ctx.structured_state,
     latest_customer_message: ctx.latest_customer_message,
-    approved_business_information: ctx.approved_business_information,
+    approved_business_information: biz
+      ? {
+          business_name: biz.business_name,
+          prompt_block: biz.prompt_block,
+          about_business: biz.about_business,
+          emergency_definition: biz.emergency_criteria,
+        }
+      : null,
     context_precedence_note:
-      "Authoritative order: structured_state and approved_business_information > workspace policy > conversation transcript > model inference. Transcript is context only.",
+      "Authoritative order: structured_state and approved_business_information > workspace policy > conversation transcript > model inference. Transcript is context only. Urgency (wants help soon) ≠ EMERGENCY unless it matches the business emergency_definition.",
   };
 }
 

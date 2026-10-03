@@ -5,6 +5,7 @@ import { ButtonLink } from '@/newui-transplant/components/app/button-link'
 import { Switch } from '@/newui-transplant/components/ui/switch'
 import { Input } from '@/newui-transplant/components/ui/input'
 import { Label } from '@/newui-transplant/components/ui/label'
+import { Textarea } from '@/newui-transplant/components/ui/textarea'
 import { SaveBar } from '@/newui-transplant/components/app/save-bar'
 import { cn } from '@/lib/utils'
 import { BUSINESS } from '@/newui-transplant/lib/sandbox-data'
@@ -19,6 +20,11 @@ export type MctbAiRecoveryWired = {
   services?: string
   serviceArea?: string
   hours?: string
+  aboutBusiness?: string
+  onAboutBusinessChange?: (value: string) => void
+  emergencyCriteria?: string
+  onEmergencyCriteriaChange?: (value: string) => void
+  emergenciesScenarioEnabled?: boolean
   fields?: Record<AiRecoverySimplifiedField, boolean>
   bookingLinkEnabled?: boolean
   bookingLinkUrl?: string
@@ -49,7 +55,7 @@ const COLLECT: Array<{
   { key: 'NAME', label: 'Name', description: 'Ask for the caller’s name', defaultOn: true },
   { key: 'REASON', label: 'What they need', description: 'Service or reason for calling', defaultOn: true },
   { key: 'ADDRESS', label: 'Service location', description: 'Address or neighborhood', defaultOn: true },
-  { key: 'URGENCY', label: 'Urgency', description: 'Is this an emergency?', defaultOn: true },
+  { key: 'URGENCY', label: 'Urgency', description: 'How soon they need help (not the same as an emergency)', defaultOn: true },
   { key: 'CALLBACK_TIME', label: 'Best time to call back', description: 'Preferred callback window', defaultOn: false },
 ]
 
@@ -99,6 +105,23 @@ export function TransplantMctbAiRecoveryPage({ wired }: { wired?: MctbAiRecovery
       <div className={cn('mt-4 grid gap-4 lg:grid-cols-3', !enabled && 'pointer-events-none opacity-50')} aria-disabled={!enabled}>
         <div className="flex flex-col gap-4 lg:col-span-2">
 
+          <Panel
+            title="About your business"
+            description="Tell AI Recovery what it should know so it can answer customers accurately. Include services, service area, hours, pricing guidance, policies, FAQs, or anything customers commonly ask about."
+          >
+            <div className="grid gap-1.5">
+              <Label htmlFor="lr-about-business">Business knowledge</Label>
+              <Textarea
+                id="lr-about-business"
+                rows={8}
+                className="min-h-[10rem] resize-y"
+                placeholder="Example: We provide residential plumbing throughout Fairfax and Prince William counties. We repair leaks, water heaters, toilets, faucets, drains, and sewer lines. Monday–Friday 8 AM–6 PM. After-hours emergency service for active leaks, flooding, sewage backups, and loss of water."
+                value={wired?.aboutBusiness ?? ''}
+                onChange={(e) => wired?.onAboutBusinessChange?.(e.target.value)}
+              />
+            </div>
+          </Panel>
+
           <Panel title="Information to collect" description="AI asks only for what’s enabled, one question at a time" bodyClassName="p-0">
             <div className="divide-y">
               {COLLECT.map((c) => (
@@ -132,6 +155,24 @@ export function TransplantMctbAiRecoveryPage({ wired }: { wired?: MctbAiRecovery
                   />
                 ))}
               </div>
+              {wired.emergenciesScenarioEnabled ? (
+                <div className="border-t p-4">
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="lr-emergency-criteria">What counts as an emergency?</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Describe urgent situations for your business and what AI Recovery should do. Urgency (needs help soon) is not the same as an emergency.
+                    </p>
+                    <Textarea
+                      id="lr-emergency-criteria"
+                      rows={5}
+                      className="min-h-[7rem] resize-y"
+                      placeholder="Example: Treat active flooding, burst pipes, sewage backing into the home, or complete loss of water as urgent. Collect name, address, and callback number. Notify the on-call team. Do not promise an arrival time."
+                      value={wired.emergencyCriteria ?? ''}
+                      onChange={(e) => wired.onEmergencyCriteriaChange?.(e.target.value)}
+                    />
+                  </div>
+                </div>
+              ) : null}
             </Panel>
           ) : null}
 
@@ -200,9 +241,9 @@ export function TransplantMctbAiRecoveryPage({ wired }: { wired?: MctbAiRecovery
         </div>
 
         <Panel
-          title="Business information"
-          description="AI uses this to answer questions"
-          action={<ButtonLink href="/settings/business" variant="outline" size="sm">Edit</ButtonLink>}
+          title="Structured business details"
+          description="From your workspace profile — supplements About your business"
+          action={<ButtonLink href="/settings/business" variant="outline" size="sm">Edit profile</ButtonLink>}
           className="h-fit"
         >
           <Rows

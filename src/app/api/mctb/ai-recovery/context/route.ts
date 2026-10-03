@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { loadMctbApprovedBusinessInformation } from "@/lib/mctb/approved-business-information";
+import { loadMctbHandoffConfig } from "@/lib/mctb/handoff/config";
+import { loadBusinessBrain } from "@/lib/agents/appointment-booking/business-brain";
 import { listMctbBookingLinks } from "@/lib/mctb/booking-links/service";
 import { hasMctbAiBookingEntitlement } from "@/lib/mctb/ai-booking/entitlement";
 import { hasActiveMctbPaidEntitlement } from "@/lib/mctb/entitlement";
@@ -18,9 +20,11 @@ export async function GET() {
     if ("error" in auth) return auth.error;
 
     const workspaceId = auth.workspaceId;
-    const [business, config, mctbConfig, entitled, paid, links, phoneNumbers, compliance, adminFlags] =
+    const [business, brain, handoff, config, mctbConfig, entitled, paid, links, phoneNumbers, compliance, adminFlags] =
       await Promise.all([
         loadMctbApprovedBusinessInformation(workspaceId),
+        loadBusinessBrain(workspaceId),
+        loadMctbHandoffConfig(workspaceId),
         loadLeadRecoveryConfigPersisted(workspaceId),
         loadMissedCallTextConfig(workspaceId),
         hasMctbAiBookingEntitlement(workspaceId),
@@ -60,6 +64,8 @@ export async function GET() {
           services: business.services.slice(0, 6),
           serviceArea,
           website: business.website,
+          aboutBusiness: brain.aboutBusiness ?? "",
+          emergencyCriteria: handoff.emergencyCriteria ?? "",
           editHref: "/settings/business",
           knowledgeEditHref: "/voice/knowledge",
         },

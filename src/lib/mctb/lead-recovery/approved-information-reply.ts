@@ -133,7 +133,13 @@ export async function generateApprovedInformationSmsReply(input: {
   const approved =
     input.approved ?? (await loadMctbApprovedBusinessInformation(input.workspaceId));
 
-  if (!approved.prompt_block.trim()) {
+  const { loadMctbLeadRecoveryKnowledgeBundle } = await import(
+    "@/lib/mctb/lead-recovery/knowledge-prompt"
+  );
+  const knowledgeBundle = await loadMctbLeadRecoveryKnowledgeBundle(input.workspaceId);
+  const runtimeBlock = knowledgeBundle.runtime_prompt_block;
+
+  if (!runtimeBlock.trim()) {
     return {
       reply: faqFallbackMessage(input.config),
       grounded: false,
@@ -159,7 +165,7 @@ export async function generateApprovedInformationSmsReply(input: {
   const llm = await mctbSemanticStructuredJson<{ grounded: boolean; reply: string }>({
     system: APPROVED_INFO_SYSTEM,
     user: JSON.stringify({
-      approved_business_information: approved.prompt_block,
+      approved_business_information: runtimeBlock,
       customer_message: input.customerMessage,
       primary_intent: intent,
     }),
