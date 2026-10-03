@@ -19,6 +19,7 @@ import {
 import { getPrisma } from "@/lib/db";
 import { getMaintenanceState, getTrialLimits } from "@/lib/platform-flags";
 import { grantCredits } from "@/lib/settings/billing";
+import { ensureOwnerMembership } from "@/lib/workspace/owner-membership";
 
 function slugify(input: string) {
   return (
@@ -173,6 +174,7 @@ export async function POST(request: Request) {
           : {}),
       },
     });
+    await ensureOwnerMembership(user.id, workspace.id);
 
     if (trial.credits > 0 && !(workspaceType === "BUSINESS" && productIntent === "voice")) {
       const cents = Math.round(trial.credits * 100);

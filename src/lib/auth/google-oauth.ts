@@ -2,16 +2,12 @@ import { getIntegrationAppUrl } from "@/lib/integrations/framework/app-url";
 import { createHmac, randomBytes } from "crypto";
 import { hash } from "bcryptjs";
 import { getPrisma } from "@/lib/db";
-import {
-  ensureProductWorkspace,
-  getUserProductAccess,
-  grantProductEntitlement,
-} from "@/lib/products/entitlements";
+import { getUserProductAccess, grantProductEntitlement } from "@/lib/products/entitlements";
+import { resolveAuthenticatedWorkspace } from "@/lib/auth/resolve-session-workspace";
 import { updateProductIntent } from "@/lib/products/session";
 import type { ProductKey } from "@/lib/products/types";
 import type { WorkspaceType } from "@/lib/workspace/types";
 import { createWorkspaceForUser } from "@/lib/workspace/create-workspace";
-import { ensureOwnerMembershipsForOwnedWorkspaces } from "@/lib/workspace/owner-membership";
 
 const GOOGLE_AUTH_SCOPES = ["openid", "email", "profile"].join(" ");
 
@@ -217,7 +213,7 @@ export async function findOrCreateUserFromGoogle(profile: GoogleProfile): Promis
           : access.hasNumbers
             ? "numbers"
             : "voice";
-    const resolved = await ensureProductWorkspace(user.id, preferred);
+    const resolved = await resolveAuthenticatedWorkspace(user.id, preferred);
     return {
       userId: user.id,
       email: user.email,
@@ -228,25 +224,13 @@ export async function findOrCreateUserFromGoogle(profile: GoogleProfile): Promis
     };
   };
 
-  let memberships = await prisma.membership.findMany({
-    where: { userId: user.id },
-    include: { workspace: true },
-  });
-
-  if (memberships.length) {
+  // Returning Google login: same email must never spawn another workspace.
+  if (!created) {
     return resolveExistingUserWorkspace();
   }
 
-  // Returning Google login: same email must never spawn another workspace.
-  if (!created) {
-    await ensureOwnerMembershipsForOwnedWorkspaces(user.id);
-    memberships = await prisma.membership.findMany({
-      where: { userId: user.id },
-      include: { workspace: true },
-    });
-    if (memberships.length) {
-      return resolveExistingUserWorkspace();
-    }
+  const membershipCount = await prisma.membership.count({ where: { userId: user.id } });
+  if (membershipCount > 0) {
     return resolveExistingUserWorkspace();
   }
 

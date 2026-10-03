@@ -6,10 +6,10 @@ import { PHONE_VERIFIED_COOKIE, readVerifiedPhone } from "@/lib/auth/phone-otp";
 import { getPrisma } from "@/lib/db";
 import { consumeBackupCode, decryptSecret, verifyTotp } from "@/lib/auth/totp";
 import { CERT_BROWSER_EMAIL } from "@/lib/cert/appointments-mctb-browser-cert-constants";
+import { resolveAuthenticatedWorkspace, userHasAnyWorkspaceAccess } from "@/lib/auth/resolve-session-workspace";
 import {
   getUserProductAccess,
   grantProductEntitlement,
-  resolveWorkspaceForProduct,
 } from "@/lib/products/entitlements";
 import { grantWorkspaceProductFeature } from "@/lib/products/feature-entitlements";
 import { preferredProductFromPath, resolvePostLoginPath } from "@/lib/products/routing";
@@ -70,13 +70,14 @@ export async function POST(request: Request) {
       }
     }
 
+    if (!(await userHasAnyWorkspaceAccess(user.id))) {
+      return NextResponse.json({ error: "No workspace for this account" }, { status: 403 });
+    }
+
     const memberships = await prisma.membership.findMany({
       where: { userId: user.id },
       include: { workspace: true },
     });
-    if (!memberships.length) {
-      return NextResponse.json({ error: "No workspace for this account" }, { status: 403 });
-    }
 
     if (email === CERT_BROWSER_EMAIL) {
       const certMembership =
@@ -104,13 +105,19 @@ export async function POST(request: Request) {
             ? "numbers"
             : "voice");
 
-    const resolvedWorkspace = await resolveWorkspaceForProduct(user.id, preferredProduct);
+    const resolvedWorkspace = await resolveAuthenticatedWorkspace(user.id, preferredProduct);
     const membership =
-      resolvedWorkspace != null
-        ? memberships.find(
-            (m: { workspaceId: string }) => m.workspaceId === resolvedWorkspace.workspaceId,
-          ) ?? memberships[0]
-        : memberships[0];
+      memberships.find(
+        (m: { workspaceId: string }) => m.workspaceId === resolvedWorkspace.workspaceId,
+      ) ??
+      (await prisma.membership.findFirst({
+        where: { userId: user.id, workspaceId: resolvedWorkspace.workspaceId },
+        include: { workspace: true },
+      })) ??
+      memberships[0];
+    if (!membership) {
+      return NextResponse.json({ error: "No workspace for this account" }, { status: 403 });
+    }
 
     const workspaceType: WorkspaceType =
       membership.workspace.type === "PERSONAL" ? "PERSONAL" : "BUSINESS";
