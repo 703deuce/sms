@@ -13,6 +13,8 @@ import type { TriggerKey, TriggerState } from "@/lib/mctb/setup-recovery-model";
 import type { MctbHandoffConfigDto, MctbNotificationRecipientDto } from "@/lib/mctb/handoff/types";
 import type { MctbSetupTestStatus } from "@/lib/mctb/setup-test";
 import type { LiveTestStatus } from "@/lib/mctb/onboarding/live-test";
+import { resolveMctbLiveRecoveryProvenForUi } from "@/lib/mctb/forwarding-verified-ui";
+import type { LiveTestStatus } from "@/lib/mctb/onboarding/live-test";
 import { formatSetupPhoneLine } from "@/newui-transplant/connected/mctb/setup-hooks";
 
 const TRIGGER_LABELS: Record<TriggerKey, string> = {
@@ -505,6 +507,7 @@ export function useMctbTestWiring() {
   const [senderReady, setSenderReady] = useState(false);
   const [openerSaved, setOpenerSaved] = useState(false);
   const reloadGeneration = useRef(0);
+  const recoveryProvenRef = useRef(false);
 
   const reload = useCallback(async () => {
     const generation = ++reloadGeneration.current;
@@ -519,6 +522,16 @@ export function useMctbTestWiring() {
     const liveJson = await liveRes.json().catch(() => ({}));
     if (setupRes.ok && setupJson.status) setSetupTest(setupJson.status);
     if (liveRes.ok && liveJson.data) setLiveTest(liveJson.data);
+
+    const recoveryProven = resolveMctbLiveRecoveryProvenForUi({
+      liveTest: liveRes.ok ? (liveJson.data as LiveTestStatus) : null,
+      setupTest: setupRes.ok ? (setupJson.status as MctbSetupTestStatus) : null,
+    });
+    const wasProven = recoveryProvenRef.current;
+    recoveryProvenRef.current = recoveryProven;
+    if (recoveryProven && !wasProven && typeof window !== "undefined") {
+      window.dispatchEvent(new Event("mctb-setup-updated"));
+    }
 
     const onboardJson =
       onboardRes && onboardRes.ok ? await onboardRes.json().catch(() => null) : null;
@@ -572,14 +585,24 @@ export function useMctbTestWiring() {
   }, [liveTest?.started, reload]);
 
   useEffect(() => {
-    const setupActive = Boolean(setupTest?.started && !setupTest?.verified);
-    const liveActive = Boolean(liveTest?.started && !liveTest?.passed);
-    if (!setupActive && !liveActive) return;
+    const recoveryProven = resolveMctbLiveRecoveryProvenForUi({ liveTest, setupTest });
+    const listenActive = Boolean(
+      (setupTest?.started && !setupTest?.verified) ||
+        (liveTest?.started && !recoveryProven),
+    );
+    if (!listenActive) return;
     const id = window.setInterval(() => {
       void reload();
-    }, setupActive ? 3000 : 8000);
+    }, 3000);
     return () => window.clearInterval(id);
-  }, [setupTest?.started, setupTest?.verified, liveTest?.started, liveTest?.passed, reload]);
+  }, [
+    setupTest?.started,
+    setupTest?.verified,
+    liveTest?.started,
+    liveTest?.passed,
+    liveTest?.checks,
+    reload,
+  ]);
 
   return {
     loading,

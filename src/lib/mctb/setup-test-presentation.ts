@@ -9,15 +9,22 @@ export function buildSetupTestPipelineSteps(
   if (!status?.started) return [];
   const c = status.checks;
   const press1 = status.consentMode === "press_1";
+  const forceDone = Boolean(status.verified);
   return [
-    { id: "did", label: "Call reached MCTB number", done: c.transovoDidReceived },
-    { id: "ws", label: "Workspace resolved", done: c.workspaceResolved },
-    { id: "mode", label: "Consent mode loaded", done: c.consentModeLoaded },
-    { id: "greeting", label: "Voicemail / greeting played (if applicable)", done: c.greetingPlayed },
-    ...(press1 ? [{ id: "p1", label: "Press 1 received", done: c.press1Received }] : []),
-    { id: "consent", label: "Consent recorded", done: c.consentRecorded },
-    { id: "event", label: "Missed call event created", done: c.missedCallEventCreated },
-    { id: "queue", label: "Recovery SMS queued", done: c.smsQueued },
-    { id: "provider", label: "SMS accepted by provider", done: c.smsProviderAccepted },
+    { id: "did", label: "Call reached MCTB number", done: forceDone || c.transovoDidReceived },
+    { id: "ws", label: "Workspace resolved", done: forceDone || c.workspaceResolved },
+    { id: "mode", label: "Consent mode loaded", done: forceDone || c.consentModeLoaded },
+    {
+      id: "greeting",
+      label: "Voicemail / greeting played (if applicable)",
+      done: forceDone || c.greetingPlayed,
+    },
+    ...(press1
+      ? [{ id: "p1", label: "Press 1 received", done: forceDone || c.press1Received }]
+      : []),
+    { id: "consent", label: "Consent recorded", done: forceDone || c.consentRecorded },
+    { id: "event", label: "Missed call event created", done: forceDone || c.missedCallEventCreated },
+    { id: "queue", label: "Recovery SMS queued", done: forceDone || c.smsQueued },
+    { id: "provider", label: "SMS accepted by provider", done: forceDone || c.smsProviderAccepted },
   ];
 }

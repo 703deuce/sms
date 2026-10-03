@@ -13,6 +13,7 @@ import {
   resolveConnectionUiStatus,
   type ForwardingVerificationUi,
 } from "@/lib/mctb/setup-phone-forwarding-model";
+import { resolveMctbForwardingVerifiedForUi } from "@/lib/mctb/forwarding-verified-ui";
 import { saveMctbSetup } from "@/lib/newui-transplant/api/mctb-setup-client";
 import type { MctbSetupPhoneWired } from "@/newui-transplant/mirror/routes/mctb/setup/phone/page";
 
@@ -135,14 +136,29 @@ export function useMctbSetupPhoneWiring(): {
         if (ob.state?.forwardingRingSeconds != null) {
           setRingSeconds(clampRingSeconds(ob.state.forwardingRingSeconds));
         }
+        const forwardingVerifiedUi = resolveMctbForwardingVerifiedForUi({
+          forwardingConnectedAt: ob.state?.forwardingConnectedAt as string | null | undefined,
+          liveTestPassedAt: ob.state?.liveTestPassedAt as string | null | undefined,
+          forwardingVerificationVerified: Boolean(ob.forwardingVerification?.verified),
+        });
+        const detectedAt =
+          (ob.state?.forwardingConnectedAt as string | null | undefined) ||
+          ob.forwardingVerification?.detectedAt ||
+          (ob.state?.liveTestPassedAt as string | null | undefined) ||
+          null;
         setVerification(
-          ob.forwardingVerification
+          ob.forwardingVerification || forwardingVerifiedUi
             ? {
-                testStarted: Boolean(ob.forwardingVerification.testStarted),
-                callDetected: Boolean(ob.forwardingVerification.callDetected),
-                verified: Boolean(ob.forwardingVerification.verified),
-                detectedAt: ob.forwardingVerification.detectedAt || null,
-                path: ob.forwardingVerification.path || null,
+                testStarted: Boolean(
+                  ob.forwardingVerification?.testStarted ||
+                    (ob.state?.liveTestSession as { startedAt?: string } | null)?.startedAt,
+                ),
+                callDetected: Boolean(
+                  ob.forwardingVerification?.callDetected || forwardingVerifiedUi,
+                ),
+                verified: forwardingVerifiedUi,
+                detectedAt,
+                path: ob.forwardingVerification?.path || null,
               }
             : null,
         );

@@ -88,15 +88,6 @@ export function resolveMctbFirstRunWizardPolicy(input: {
     };
   }
 
-  if (MCTB_FIRST_RUN_WIZARD_UNTIL_COMPLETE && onboardingComplete && !forwardingVerified) {
-    return {
-      shouldAutoOpen: true,
-      trigger: "setup_guide",
-      everyLoginTesting: false,
-      onboardingComplete,
-    };
-  }
-
   return {
     shouldAutoOpen: false,
     trigger: "none",

@@ -206,6 +206,13 @@ export async function getMctbSetupTestStatus(workspaceId: string): Promise<MctbS
     const mctb =
       cfg.mctb && typeof cfg.mctb === "object" ? (cfg.mctb as Record<string, unknown>) : {};
     const verifiedAt = new Date().toISOString();
+    const { loadMctbOnboardingState, saveMctbOnboardingState } = await import(
+      "@/lib/mctb/onboarding/state"
+    );
+    const onboarding = await loadMctbOnboardingState(workspaceId);
+    if (!onboarding.forwardingConnectedAt) {
+      await saveMctbOnboardingState(workspaceId, { forwardingConnectedAt: verifiedAt });
+    }
     await prisma.workspace.update({
       where: { id: workspaceId },
       data: {

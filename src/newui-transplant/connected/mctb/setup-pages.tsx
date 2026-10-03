@@ -559,9 +559,9 @@ export function NewUiMctbSetupTestPage() {
             : "Ready to listen",
         liveStatusDetail:
           recoveryPipelineProven
-            ? "Live test passed — forwarding and recovery are working."
+            ? "Live test passed — your call reached Transovo and a recovery text was sent."
             : test.liveTest?.started
-              ? "Call your business line from another phone and let it ring out (no answer). We listen via live-test; setup-test records pipeline checkpoints."
+              ? "Call your business line from another phone and let it ring out (no answer). Replying to the text is optional — we detect the call and recovery SMS automatically."
               : "Start test to arm live-test (forwarding call) and setup-test (recovery pipeline checkpoints). Try-it is onboarding-only.",
         liveListening: Boolean(test.liveTest?.started && !recoveryPipelineProven),
         onStartTest: test.startLiveTest,

@@ -255,7 +255,6 @@ export async function getLiveTestStatus(workspaceId: string): Promise<LiveTestSt
     consentCompleted = Boolean(session?.consentCompletedAt);
   }
 
-  /** Recovery path proven when call forwards, classifies as missed, and recovery SMS sends — reply is tracked separately. */
   const passed =
     evaluated.forwardingVerified &&
     evaluated.missedCall &&
@@ -323,6 +322,7 @@ export async function markLiveTestPassed(
   const now = new Date().toISOString();
   await saveMctbOnboardingState(workspaceId, {
     liveTestPassedAt: now,
+    forwardingConnectedAt: state.forwardingConnectedAt || now,
     liveTestSession: {
       ...(session || { startedAt: now }),
       passedAt: now,
