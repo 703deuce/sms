@@ -4,6 +4,8 @@ import { getPrisma } from "@/lib/db";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { resolveMctbPhoneNumberIdForWorkspace } from "@/lib/mctb/platform-production-routing";
 import { isPhoneMctbSipIngress } from "@/lib/mctb/sip-ingress/sync";
+import { loadMctbOnboardingState } from "@/lib/mctb/onboarding/state";
+import { getWorkspaceTollFreeNumber } from "@/lib/mctb/workspace-toll-free";
 import { assessWorkspaceDedicatedMctbIngress } from "@/lib/mctb/provisioning/workspace-ingress-validity";
 import {
   isPlatformMctbSenderPhoneRecord,
@@ -51,6 +53,12 @@ export async function getProductionMctbForwardTargetE164(
   const assessment = await assessWorkspaceDedicatedMctbIngress(workspaceId);
   if (assessment.valid && assessment.e164) {
     return assessment.e164;
+  }
+
+  const onboarding = await loadMctbOnboardingState(workspaceId);
+  const provisionedTollFree = getWorkspaceTollFreeNumber(onboarding)?.e164?.trim();
+  if (provisionedTollFree) {
+    return provisionedTollFree;
   }
 
   const prisma = getPrisma();

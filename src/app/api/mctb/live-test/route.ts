@@ -21,12 +21,17 @@ export async function GET() {
   }
 }
 
-export async function POST() {
+export async function POST(req: Request) {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
-    traceMctbDebug("live-test", "post_start", { workspaceId: auth.workspaceId });
-    await startLiveTestSession(auth.workspaceId);
+    const body = await req.json().catch(() => ({}));
+    const restart = Boolean(
+      (body as { restart?: boolean }).restart ||
+        new URL(req.url).searchParams.get("restart") === "1",
+    );
+    traceMctbDebug("live-test", "post_start", { workspaceId: auth.workspaceId, restart });
+    await startLiveTestSession(auth.workspaceId, { restart });
     const status = await getLiveTestStatus(auth.workspaceId);
     traceMctbDebug("live-test", "post_complete", {
       workspaceId: auth.workspaceId,

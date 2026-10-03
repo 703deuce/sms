@@ -494,7 +494,9 @@ export function WizardConnectPhoneStep({ c }: { c: MctbOnboardingController }) {
 
 export function WizardTestStep({ c }: { c: MctbOnboardingController }) {
   const test = useMctbTestWiring();
-  const press1 = c.consentMode === "press_1";
+  const persistedConsent =
+    (c.data?.state as { consentMode?: string } | undefined)?.consentMode ?? c.consentMode;
+  const press1 = persistedConsent === "press_1";
   const liveChecks = test.liveTest?.checks ?? c.data?.liveTest.checks ?? {};
   const timeline = buildOnboardingLiveTestSteps({
     checks: {

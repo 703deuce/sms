@@ -558,12 +558,17 @@ export function useMctbTestWiring() {
       const j = await setupRes.json().catch(() => ({}));
       throw new Error(typeof j.error === "string" ? j.error : "Could not start setup test");
     }
-    const res = await fetch("/api/mctb/live-test", { method: "POST" });
+    const restart = Boolean(liveTest?.started);
+    const res = await fetch("/api/mctb/live-test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ restart }),
+    });
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || "Could not start test");
     if (json.data) setLiveTest(json.data);
     else await reload();
-  }, [reload]);
+  }, [liveTest?.started, reload]);
 
   useEffect(() => {
     const setupActive = Boolean(setupTest?.started && !setupTest?.verified);

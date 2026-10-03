@@ -34,6 +34,7 @@ function readForwardedFrom(metadata: Record<string, unknown>): string | null {
 function evaluateMissedCallForLiveTest(input: {
   event: {
     id: string;
+    businessE164: string;
     callerE164: string | null;
     reason: string;
     status: string;
@@ -42,6 +43,8 @@ function evaluateMissedCallForLiveTest(input: {
   };
   forwardTargetE164: string;
   businessLineE164: string | null;
+  /** Onboarding: ingress reached without diversion header (common on some carriers). */
+  allowIngressWithoutForwardHeader?: boolean;
 }): { callDetected: boolean; forwardingVerified: boolean; missedCall: boolean; textSent: boolean } {
   const meta =
     input.event.metadata && typeof input.event.metadata === "object"
@@ -52,9 +55,17 @@ function evaluateMissedCallForLiveTest(input: {
   const callDetected = true;
   let forwardingVerified = true;
   if (input.businessLineE164?.trim()) {
-    forwardingVerified = Boolean(
-      forwardedFrom && mctbSameE164(forwardedFrom, input.businessLineE164),
-    );
+    if (forwardedFrom) {
+      forwardingVerified = mctbSameE164(forwardedFrom, input.businessLineE164);
+    } else if (
+      mctbSameE164(input.event.businessE164, input.businessLineE164)
+    ) {
+      forwardingVerified = true;
+    } else if (input.allowIngressWithoutForwardHeader) {
+      forwardingVerified = true;
+    } else {
+      forwardingVerified = false;
+    }
   } else if (forwardedFrom) {
     forwardingVerified = !mctbSameE164(forwardedFrom, input.forwardTargetE164);
   }
@@ -62,20 +73,27 @@ function evaluateMissedCallForLiveTest(input: {
   const missedCall =
     ["missed_no_answer", "missed_busy", "voicemail"].includes(input.event.reason) ||
     input.event.status !== "SUPPRESSED";
-  const textSent = Boolean(input.event.smsSentAt || input.event.status === "SENT");
+  const sentStatuses = new Set(["SENT", "DELIVERED", "SCHEDULED", "SENDING"]);
+  const textSent = Boolean(
+    input.event.smsSentAt || sentStatuses.has(String(input.event.status || "").toUpperCase()),
+  );
 
   return { callDetected, forwardingVerified, missedCall, textSent };
 }
 
-export async function startLiveTestSession(workspaceId: string): Promise<void> {
+export async function startLiveTestSession(
+  workspaceId: string,
+  options?: { restart?: boolean },
+): Promise<void> {
   const state = await loadMctbOnboardingState(workspaceId);
-  if (state.liveTestSession?.startedAt) return;
+  if (state.liveTestSession?.startedAt && !options?.restart) return;
 
   await saveMctbOnboardingState(workspaceId, {
     liveTestSession: {
       startedAt: new Date().toISOString(),
       businessNumberE164: state.businessNumberE164,
     },
+    liveTestPassedAt: options?.restart ? null : state.liveTestPassedAt,
     currentStep: "review_test",
   });
   const forwardTargetE164 = await getProductionMctbForwardTargetE164(workspaceId);
@@ -134,17 +152,25 @@ export async function getLiveTestStatus(workspaceId: string): Promise<LiveTestSt
   if (!forwardTargetE164 || !session?.startedAt) return empty;
 
   const prisma = getPrisma();
-  const since = new Date(session.startedAt);
+  const sessionStarted = new Date(session.startedAt);
+  /** Credit a call placed just before "Start test" (common during onboarding). */
+  const since = new Date(sessionStarted.getTime() - 15 * 60 * 1000);
 
-  const event = await prisma.missedCallEvent.findFirst({
+  const businessLineFilter = businessLineE164?.trim()
+    ? [{ businessE164: businessLineE164.trim() }]
+    : [];
+
+  const events = await prisma.missedCallEvent.findMany({
     where: {
       workspaceId,
       detectedAt: { gte: since },
-      businessE164: forwardTargetE164,
+      OR: [{ businessE164: forwardTargetE164 }, ...businessLineFilter],
     },
     orderBy: { detectedAt: "desc" },
+    take: 12,
   });
 
+  const event = events[0];
   if (!event) return empty;
 
   const metadata =
@@ -161,7 +187,26 @@ export async function getLiveTestStatus(workspaceId: string): Promise<LiveTestSt
     event,
     forwardTargetE164,
     businessLineE164,
+    allowIngressWithoutForwardHeader: true,
   });
+
+  let textSentInSession = evaluated.textSent;
+  let textSourceEvent = event;
+  if (!textSentInSession) {
+    for (const candidate of events) {
+      const ev = evaluateMissedCallForLiveTest({
+        event: candidate,
+        forwardTargetE164,
+        businessLineE164,
+        allowIngressWithoutForwardHeader: true,
+      });
+      if (ev.forwardingVerified && ev.textSent) {
+        textSentInSession = true;
+        textSourceEvent = candidate;
+        break;
+      }
+    }
+  }
 
   if (!evaluated.forwardingVerified) {
     return {
@@ -174,19 +219,19 @@ export async function getLiveTestStatus(workspaceId: string): Promise<LiveTestSt
     };
   }
 
-  const textDelivered = evaluated.textSent;
+  const textDelivered = textSentInSession;
 
   let replyReceived = Boolean(session?.replyReceivedAt);
-  if (!replyReceived && evaluated.textSent && event.smsSentAt) {
+  if (!replyReceived && textSentInSession && textSourceEvent.smsSentAt) {
     const contact = await prisma.contact.findFirst({
-      where: { workspaceId, phone: event.callerE164 },
+      where: { workspaceId, phone: textSourceEvent.callerE164 },
       select: { id: true },
     });
     if (contact) {
       const reply = await prisma.conversationMessage.findFirst({
         where: {
           direction: "inbound",
-          createdAt: { gte: event.smsSentAt },
+          createdAt: { gte: textSourceEvent.smsSentAt },
           conversation: { workspaceId, contactId: contact.id },
         },
         orderBy: { createdAt: "desc" },
@@ -214,7 +259,7 @@ export async function getLiveTestStatus(workspaceId: string): Promise<LiveTestSt
     evaluated.forwardingVerified &&
     evaluated.missedCall &&
     consentCompleted &&
-    evaluated.textSent &&
+    textSentInSession &&
     replyReceived;
 
   const nowIso = new Date().toISOString();
@@ -223,7 +268,8 @@ export async function getLiveTestStatus(workspaceId: string): Promise<LiveTestSt
     callDetectedAt: session?.callDetectedAt || event.detectedAt.toISOString(),
     forwardingVerifiedAt: session?.forwardingVerifiedAt || nowIso,
     missedCallAt: session?.missedCallAt || event.detectedAt.toISOString(),
-    textSentAt: event.smsSentAt?.toISOString() || session?.textSentAt,
+    textSentAt:
+      textSourceEvent.smsSentAt?.toISOString() || session?.textSentAt,
     replyReceivedAt: replyReceived ? session?.replyReceivedAt || nowIso : session?.replyReceivedAt,
     consentCompletedAt:
       consentCompleted && !session?.consentCompletedAt ? nowIso : session?.consentCompletedAt,
@@ -245,7 +291,7 @@ export async function getLiveTestStatus(workspaceId: string): Promise<LiveTestSt
       forwardingVerified: evaluated.forwardingVerified,
       missedCall: evaluated.missedCall,
       consentCompleted,
-      textSent: evaluated.textSent,
+      textSent: textSentInSession,
       textDelivered,
       replyReceived,
     },

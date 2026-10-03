@@ -1,5 +1,7 @@
 import "server-only";
 
+import { loadMctbOnboardingState } from "@/lib/mctb/onboarding/state";
+import { getWorkspaceTollFreeNumber } from "@/lib/mctb/workspace-toll-free";
 import {
   assessWorkspaceDedicatedMctbIngress,
   type WorkspaceMctbIngressInvalidReason,
@@ -19,7 +21,11 @@ export type WorkspaceIngressStatus = {
 /** Read-only ingress status for onboarding/setup GET handlers. */
 export async function getWorkspaceIngressStatus(workspaceId: string): Promise<WorkspaceIngressStatus> {
   const assessment = await assessWorkspaceDedicatedMctbIngress(workspaceId);
-  const forwardTargetE164 = assessment.valid && assessment.e164 ? assessment.e164 : null;
+  let forwardTargetE164 = assessment.valid && assessment.e164 ? assessment.e164 : null;
+  if (!forwardTargetE164) {
+    const onboarding = await loadMctbOnboardingState(workspaceId);
+    forwardTargetE164 = getWorkspaceTollFreeNumber(onboarding)?.e164?.trim() || null;
+  }
   return {
     provisioned: assessment.valid,
     validIngress: assessment.valid,
