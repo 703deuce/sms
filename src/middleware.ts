@@ -4,7 +4,8 @@ import {
   PRODUCT_ACCESS_COOKIE,
 } from "@/lib/products/access-cookie";
 import { productAccessDeniedRedirect } from "@/lib/products/access-guards";
-import { isVoiceProductPath } from "@/lib/products/voice-routes";
+import { isMctbAppPath, isVoiceProductPath } from "@/lib/products/voice-routes";
+import { isMctbV1Primary } from "@/lib/workspace/platform-launch";
 import { publicRedirectUrl } from "@/lib/integrations/framework/app-url";
 import {
   isBusinessOnlyPath,
@@ -25,6 +26,10 @@ function isInternalRequestHost(request: NextRequest): boolean {
 }
 
 /** Same-origin redirect when possible; only rewrite origin for docker bind addresses. */
+function workspaceCookieOptions() {
+  return { httpOnly: true, path: "/", sameSite: "lax" as const };
+}
+
 function siteRedirect(request: NextRequest, path: string) {
   if (!isInternalRequestHost(request)) {
     const url = request.nextUrl.clone();
@@ -36,6 +41,7 @@ function siteRedirect(request: NextRequest, path: string) {
   return NextResponse.redirect(publicRedirectUrl(path, request));
 }
 
+const WORKSPACE_COOKIE = "transovo_workspace";
 const WORKSPACE_TYPE_COOKIE = "transovo_workspace_type";
 
 const publicExact = new Set([
@@ -279,7 +285,10 @@ export async function middleware(request: NextRequest) {
       return siteRedirect(request, "/fax/overview");
     }
 
-    const wsType = request.cookies.get(WORKSPACE_TYPE_COOKIE)?.value;
+    const wsTypeRaw = request.cookies.get(WORKSPACE_TYPE_COOKIE)?.value;
+    const mctbPrimary = isMctbV1Primary();
+    const wsType =
+      mctbPrimary && wsTypeRaw === "PERSONAL" ? "BUSINESS" : wsTypeRaw;
     const productKeys = parseProductAccessCookie(
       request.cookies.get(PRODUCT_ACCESS_COOKIE)?.value,
     );
@@ -297,6 +306,14 @@ export async function middleware(request: NextRequest) {
       // Partial cookie (e.g. numbers-only) while business workspace cookie is active.
       if (!hasVoice && wsType === "BUSINESS") hasVoice = true;
       if (!hasNumbers && wsType === "PERSONAL") hasNumbers = true;
+    }
+
+    if (mctbPrimary && (isMctbAppPath(pathname) || pathname === "/dashboard" || pathname.startsWith("/dashboard/"))) {
+      hasVoice = true;
+    }
+
+    if (mctbPrimary && (pathname === "/personal" || pathname.startsWith("/personal/"))) {
+      return siteRedirect(request, "/mctb");
     }
 
     const denied = productAccessDeniedRedirect(
@@ -325,11 +342,11 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url);
     }
     if (wsType === "PERSONAL" && isBusinessOnlyPath(pathname)) {
-      if (isVoiceProductPath(pathname)) {
-        // Voice preview while workspace cookie catches up after /api/products/open.
+      if (isVoiceProductPath(pathname) || isMctbAppPath(pathname)) {
+        // Voice/MCTB preview while workspace cookie catches up after /api/products/open.
       } else {
         const url = request.nextUrl.clone();
-        url.pathname = "/personal";
+        url.pathname = mctbPrimary ? "/mctb" : "/personal";
         return NextResponse.redirect(url);
       }
     }
@@ -344,7 +361,20 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  return NextResponse.next();
+  const response = NextResponse.next();
+  if (
+    session &&
+    isMctbV1Primary() &&
+    request.cookies.get(WORKSPACE_TYPE_COOKIE)?.value === "PERSONAL"
+  ) {
+    const workspaceId = request.cookies.get(WORKSPACE_COOKIE)?.value;
+    if (workspaceId) {
+      const opts = workspaceCookieOptions();
+      response.cookies.set(WORKSPACE_TYPE_COOKIE, "BUSINESS", opts);
+      response.cookies.set(WORKSPACE_COOKIE, workspaceId, opts);
+    }
+  }
+  return response;
 }
 
 export const config = {

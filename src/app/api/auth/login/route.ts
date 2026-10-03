@@ -17,6 +17,7 @@ import { applyProductAccessCookie } from "@/lib/products/session";
 import { applyWorkspaceCookies } from "@/lib/workspace/cookies";
 import type { ProductKey } from "@/lib/products/types";
 import type { WorkspaceType } from "@/lib/workspace/types";
+import { isMctbV1Primary } from "@/lib/workspace/platform-launch";
 
 export async function POST(request: Request) {
   try {
@@ -97,13 +98,15 @@ export async function POST(request: Request) {
     const pathProduct = preferredProductFromPath(body.next || "");
     const preferredProduct: ProductKey =
       pathProduct ??
-      (access.hasNumbers && !access.hasVoice
-        ? "numbers"
-        : access.hasVoice
-          ? "voice"
-          : access.hasNumbers
-            ? "numbers"
-            : "voice");
+      (isMctbV1Primary()
+        ? "voice"
+        : access.hasNumbers && !access.hasVoice
+          ? "numbers"
+          : access.hasVoice
+            ? "voice"
+            : access.hasNumbers
+              ? "numbers"
+              : "voice");
 
     const resolvedWorkspace = await resolveAuthenticatedWorkspace(user.id, preferredProduct);
     const membership =
@@ -119,8 +122,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No workspace for this account" }, { status: 403 });
     }
 
+    if (isMctbV1Primary()) {
+      const { ensureBusinessWorkspaceForMctb } = await import(
+        "@/lib/mctb/ensure-business-workspace-for-mctb"
+      );
+      await ensureBusinessWorkspaceForMctb(membership.workspaceId).catch(() => undefined);
+    }
+
     const workspaceType: WorkspaceType =
-      membership.workspace.type === "PERSONAL" ? "PERSONAL" : "BUSINESS";
+      isMctbV1Primary() || membership.workspace.type !== "PERSONAL"
+        ? "BUSINESS"
+        : "PERSONAL";
 
     const redirectPath = resolvePostLoginPath(access, { nextPath: body.next });
 

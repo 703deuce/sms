@@ -206,8 +206,9 @@ export async function findOrCreateUserFromGoogle(profile: GoogleProfile): Promis
 
   const resolveExistingUserWorkspace = async (): Promise<GoogleAuthUserResult> => {
     const access = await getUserProductAccess(user.id);
-    const preferred: ProductKey =
-      access.hasNumbers && !access.hasVoice
+    const preferred: ProductKey = isMctbV1Primary()
+      ? "voice"
+      : access.hasNumbers && !access.hasVoice
         ? "numbers"
         : access.hasVoice
           ? "voice"
@@ -215,12 +216,22 @@ export async function findOrCreateUserFromGoogle(profile: GoogleProfile): Promis
             ? "numbers"
             : "voice";
     const resolved = await resolveAuthenticatedWorkspace(user.id, preferred);
+    if (isMctbV1Primary()) {
+      const { ensureBusinessWorkspaceForMctb } = await import(
+        "@/lib/mctb/ensure-business-workspace-for-mctb"
+      );
+      await ensureBusinessWorkspaceForMctb(resolved.workspaceId).catch(() => undefined);
+      const { ensureMctbWorkspaceBootstrap } = await import(
+        "@/lib/mctb/provisioning/workspace-bootstrap"
+      );
+      await ensureMctbWorkspaceBootstrap(resolved.workspaceId).catch(() => undefined);
+    }
     return {
       userId: user.id,
       email: user.email,
       name: user.name,
       workspaceId: resolved.workspaceId,
-      workspaceType: resolved.workspaceType,
+      workspaceType: isMctbV1Primary() ? "BUSINESS" : resolved.workspaceType,
       created,
     };
   };

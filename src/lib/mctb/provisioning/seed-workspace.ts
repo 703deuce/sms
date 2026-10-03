@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
+import { ensureBusinessWorkspaceForMctb } from "@/lib/mctb/ensure-business-workspace-for-mctb";
 import type { MctbOnboardingState } from "@/lib/mctb/onboarding/types";
 import { parseMctbOnboardingState } from "@/lib/mctb/onboarding/state";
 
@@ -9,6 +10,7 @@ const DEFAULT_MESSAGE =
 
 /** Ensure a BUSINESS workspace has MCTB onboarding state and billing plan for wizard entry. */
 export async function ensureMctbWorkspaceSeeded(workspaceId: string): Promise<void> {
+  await ensureBusinessWorkspaceForMctb(workspaceId);
   const prisma = getPrisma();
   const ws = await prisma.workspace.findUnique({
     where: { id: workspaceId },

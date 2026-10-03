@@ -56,6 +56,9 @@ export function isVoiceShellRoute(pathname: string): boolean {
 }
 
 export function isMctbAppPath(pathname: string): boolean {
+  if (pathname === "/mctb" || pathname.startsWith("/mctb/")) {
+    return true;
+  }
   if (pathname === "/onboarding/mctb" || pathname.startsWith("/onboarding/mctb/")) {
     return true;
   }

@@ -20,6 +20,7 @@ import {
   resolveOwnedWorkspaceForUser,
 } from "@/lib/workspace/owner-membership";
 import type { WorkspaceType } from "@/lib/workspace/types";
+import { isMctbV1Primary } from "@/lib/workspace/platform-launch";
 
 export {
   PRODUCT_ACCESS_COOKIE,
@@ -282,10 +283,19 @@ export async function resolveWorkspaceForProduct(
     ) ?? memberships[0];
   if (!match) return null;
 
+  if (product === "voice" && isMctbV1Primary()) {
+    await ensureMctbWorkspaceBootstrap(match.workspaceId).catch(() => undefined);
+  }
   await ensureWorkspaceEntitlements(match.workspaceId);
+  const wsType =
+    product === "voice" && isMctbV1Primary()
+      ? "BUSINESS"
+      : match.workspace.type === "PERSONAL"
+        ? "PERSONAL"
+        : "BUSINESS";
   return {
     workspaceId: match.workspaceId,
-    workspaceType: match.workspace.type === "PERSONAL" ? "PERSONAL" : "BUSINESS",
+    workspaceType: wsType,
   };
 }
 

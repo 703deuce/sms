@@ -122,6 +122,8 @@ async function main() {
   assert.equal(isMctbAppPath("/voice/setup"), true);
   assert.equal(isMctbAppPath("/voice/try-it"), true);
   assert.equal(isMctbAppPath("/voice/missed-calls"), true);
+  assert.equal(isMctbAppPath("/mctb"), true);
+  assert.equal(isMctbAppPath("/mctb/missed-calls"), true);
   });
 
   console.log("\nAll Try It UX tests passed.");
