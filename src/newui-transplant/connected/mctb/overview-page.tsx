@@ -95,7 +95,7 @@ export function NewUiMctbOverviewPage({ data }: { data: MctbOverviewPayload }) {
   }, [reloadSetup]);
 
   return (
-    <Page>
+    <Page className="pb-24 lg:pb-6">
       <PageHeader
         title="Overview"
         status={

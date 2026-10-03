@@ -395,24 +395,13 @@ export function NewUiMctbSetupNotificationsPage() {
         urgent: n.config
           ? {
               enabled: Boolean(n.config.emergencyDetectionEnabled),
-              instructions: n.config.emergencyCriteria || "",
+              criteriaPreview: n.config.emergencyCriteria || null,
+              criteriaEditHref: "/mctb/ai-recovery",
               urgentBusinessSmsEntitled: n.urgentBusinessSmsEntitled,
               testMessage: urgentTestMessage,
               testBusy: urgentTestBusy,
               testResultLabel: urgentTestResult,
               onEnabledChange: (v) => patchHandoffConfig({ emergencyDetectionEnabled: v }),
-              onInstructionsChange: (v) => {
-                const base = handoffConfigRef.current ?? n.config;
-                if (!base) return;
-                const next = { ...base, emergencyCriteria: v };
-                handoffConfigRef.current = next;
-                n.setConfig(next);
-              },
-              onInstructionsBlur: () => {
-                const cfg = handoffConfigRef.current;
-                if (!cfg) return;
-                persistHandoffConfig(cfg);
-              },
               onTestMessageChange: setUrgentTestMessage,
               onRunTest: () => {
                 setUrgentTestBusy(true);

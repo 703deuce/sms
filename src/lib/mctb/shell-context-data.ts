@@ -102,13 +102,13 @@ export async function loadMctbShellContextData(workspaceId: string): Promise<Mct
     senderE164,
     senderLabel:
       senderMode === "PLATFORM"
-        ? "Transovo Platform"
+        ? "Platform sender"
         : senderE164
           ? formatMctbPhoneLabel(senderE164)
           : "Your verified number",
     senderDetail:
       senderMode === "PLATFORM"
-        ? "Managed by Transovo"
+        ? "Transovo manages the sending number for recovery texts"
         : senderE164
           ? formatMctbPhoneLabel(senderE164)
           : "Select a verified messaging number",

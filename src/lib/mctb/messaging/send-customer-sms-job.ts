@@ -18,12 +18,6 @@ export async function executeMctbSendCustomerSmsJob(payload: Record<string, unkn
   }
 
   const prisma = getPrisma();
-  const existingOutbound = await prisma.conversationMessage.findFirst({
-    where: { conversationId, direction: "outbound", body },
-    orderBy: { createdAt: "desc" },
-    select: { id: true, providerMessageId: true },
-  });
-
   const config = await loadMissedCallTextConfig(workspaceId);
   const route = await resolveMctbOutboundSmsRoute({
     workspaceId,
@@ -46,10 +40,27 @@ export async function executeMctbSendCustomerSmsJob(payload: Record<string, unkn
     throw new Error("PLATFORM_SENDER_PAIR_COLLISION");
   }
 
+  const { finalizeMctbPlatformConsumerSmsBody } = await import(
+    "@/lib/mctb/messaging/platform-sender-consumer-disclosure"
+  );
+  const outboundBody = await finalizeMctbPlatformConsumerSmsBody({
+    workspaceId,
+    consumerE164: toE164,
+    body,
+    route,
+    conversationId,
+  });
+
+  const existingOutbound = await prisma.conversationMessage.findFirst({
+    where: { conversationId, direction: "outbound", body: outboundBody },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, providerMessageId: true },
+  });
+
   const sendResult = await sendQuickSms({
     workspaceId,
     to: toE164,
-    body,
+    body: outboundBody,
     from: route.fromE164,
     idempotencyKey,
     senderRoute: {
@@ -70,7 +81,7 @@ export async function executeMctbSendCustomerSmsJob(payload: Record<string, unkn
         data: {
           conversationId,
           direction: "outbound",
-          body,
+          body: outboundBody,
           userName: "AI",
           providerMessageId,
         },

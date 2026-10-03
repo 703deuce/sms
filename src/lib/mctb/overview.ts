@@ -166,7 +166,9 @@ async function loadMctbOverviewShared(workspaceId: string): Promise<Omit<MctbOve
   );
 
   const smsPhone = phoneNumbers.find((p) => p.id === runtime.smsPhoneNumberId);
-  const senderReady = messagingReady && Boolean(smsPhone);
+  const senderMode = runtime.senderMode === "PLATFORM" ? "PLATFORM" : "WORKSPACE";
+  const senderReady =
+    messagingReady && (senderMode === "PLATFORM" || Boolean(smsPhone));
 
   let status: MctbOverviewStatus = "active";
   let statusLabel = "Active";
@@ -230,7 +232,9 @@ async function loadMctbOverviewShared(workspaceId: string): Promise<Omit<MctbOve
       forwardingLabel: forwardingVerified ? "Verified" : "Not verified",
       consentLabel: MCTB_CONSENT_MODE_LABELS[consentMode].title,
       senderLabel: senderReady
-        ? `${smsPhone ? formatMctbPhoneLabel(smsPhone.e164) : "Sender"} · Ready`
+        ? senderMode === "PLATFORM"
+          ? "Platform sender · Ready"
+          : `${smsPhone ? formatMctbPhoneLabel(smsPhone.e164) : "Sender"} · Ready`
         : "Needs attention",
       recoveryLabel,
       voicemailLabel: runtime.sendAfterVoicemail ? "Enabled" : null,

@@ -311,7 +311,7 @@ export function TransplantMctbSetupPhonePage({ wired }: { wired?: MctbSetupPhone
             }
             description={
               [activeSender.description, wired?.senderDetail].filter(Boolean).join(' · ') ||
-              'This number sends recovery texts after missed calls.'
+              'Sends recovery texts after missed calls.'
             }
           />
         ) : (
