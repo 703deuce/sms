@@ -11,7 +11,7 @@
 |-------|--------|
 | **LOCAL ELIGIBLE POOL** | **0** assignable for `ws_1` (2 Telnyx-owned TFNs in account; both blocked — platform sender + voice agent) |
 | **TELNYX TFN SEARCH** | **available** (all configured NPAs return inventory via `GET /available_phone_numbers`) |
-| **ROOT CAUSE OF `no_telnyx_toll_free_available`** | Purchase fallback called `messagingOnboarding.purchaseNumber()` with **standard** acquire guard. Workspaces that already have a messaging registration (e.g. `ws_1` with `+15717491060`) hit `MESSAGING_NUMBER_EXISTS`; errors were swallowed in a loop → returned `null`. **Not** Telnyx inventory exhaustion. |
+| **ROOT CAUSE OF `no_telnyx_toll_free_available`** | (1) **Production:** Coolify web container had `CI=true`, and `isNumberPurchaseAllowed()` treated CI like GitHub Actions — purchases blocked with `PURCHASE_DISABLED` before Telnyx was called. **Not** inventory. Fixed: `NODE_ENV=production` always allows purchase unless `TRANSOVO_DISABLE_NUMBER_PURCHASE=1`. (2) **Earlier code path:** messaging onboarding purchase + `MESSAGING_NUMBER_EXISTS` for workspaces with an SMS sender — fixed via `purchaseTelnyxTollFreeForMctbIngress` + premium guard. |
 | **CODE DEFECT** | **yes** — wrong purchase channel for MCTB dedicated ingress |
 | **FILES CHANGED** | `src/lib/mctb/provisioning/purchase-telnyx-toll-free-ingress.ts` (new), `provision-workspace-toll-free-ingress.ts`, `scripts/diagnose-mctb-toll-free-purchase.ts`, `scripts/test-mctb-workspace-ingress-ensure.ts` |
 | **READY_TO_PROVISION_TFN** | **YES** (after fix + `TRANSOVO_ALLOW_NUMBER_PURCHASE=1`; Telnyx search returns TFNs; premium acquire guard passes for `ws_1`) |
