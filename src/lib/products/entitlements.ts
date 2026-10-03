@@ -17,6 +17,7 @@ import { createWorkspaceForUser } from "@/lib/workspace/create-workspace";
 import {
   ensureOwnerMembership,
   ensureOwnerMembershipsForOwnedWorkspaces,
+  resolveOwnedWorkspaceForUser,
 } from "@/lib/workspace/owner-membership";
 import type { WorkspaceType } from "@/lib/workspace/types";
 
@@ -365,10 +366,20 @@ export async function ensureProductWorkspace(
     };
   }
 
+  const ownedFallback = await resolveOwnedWorkspaceForUser(userId, product);
+  if (ownedFallback) {
+    if (product === "voice") {
+      await ensureMctbWorkspaceBootstrap(ownedFallback.workspaceId).catch(() => undefined);
+    }
+    await ensureWorkspaceEntitlements(ownedFallback.workspaceId);
+    return ownedFallback;
+  }
+
   const ownedCount = await prisma.workspace.count({ where: { ownerUserId: userId } });
   if (ownedCount > 0) {
-    await ensureOwnerMembershipsForOwnedWorkspaces(userId);
-    return ensureProductWorkspace(userId, product);
+    throw new Error(
+      "Refusing to create workspace: user already owns workspace(s) (missing membership repair failed)",
+    );
   }
 
   const workspace = await createWorkspaceForUser(

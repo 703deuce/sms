@@ -145,10 +145,14 @@ After fix + cleanup: **one User, one Workspace, one Membership** for that email;
 
 Enforced by:
 
-- Prisma-compat running nested membership creates
-- Explicit `membership.create` / `ensureOwnerMembership` on signup and workspace helpers
-- Returning login paths that **never** create a new workspace for an existing email
-- Optional backfill: `scripts/backfill-owner-memberships.ts`
+1. **Atomic owner workspace create** — membership failure deletes the workspace row (no half-created customer).
+2. **Existing email ≠ new customer** — Google/password return paths never create a workspace because Membership is missing.
+3. **Recover via `ownerUserId`** — `resolveOwnedWorkspaceForUser` / `resolveAuthenticatedWorkspace` restore OWNER membership and continue to that workspace.
+4. **No “fix” by creating another workspace** — if the user already owns any workspace, `ensureProductWorkspace` refuses to create another.
+5. **Provisioning after tenant identity** — Google callback runs MCTB bootstrap only after workspace is resolved; login recovery does not buy numbers.
+6. **Regression tests** — `scripts/test-auth-missing-membership-regression.ts` (production failure boundary) + `scripts/test-auth-account-identity-contract.ts`.
+
+Also: Prisma-compat nested creates, `ensureOwnerMembership` on signup, backfill `scripts/backfill-owner-memberships.ts`.
 
 ---
 

@@ -4,7 +4,10 @@ import { ensureProductWorkspace, resolveWorkspaceForProduct } from "@/lib/produc
 import type { ProductKey } from "@/lib/products/types";
 import type { WorkspaceType } from "@/lib/workspace/types";
 import { getPrisma } from "@/lib/db";
-import { ensureOwnerMembershipsForOwnedWorkspaces } from "@/lib/workspace/owner-membership";
+import {
+  ensureOwnerMembershipsForOwnedWorkspaces,
+  resolveOwnedWorkspaceForUser,
+} from "@/lib/workspace/owner-membership";
 
 /**
  * Single path for password login, Google OAuth, and session restore:
@@ -28,12 +31,16 @@ export async function resolveAuthenticatedWorkspace(
     return fromMembership;
   }
 
-  const ownedAfter = await prisma.workspace.count({ where: { ownerUserId: userId } });
-  if (ownedAfter > 0) {
-    await ensureOwnerMembershipsForOwnedWorkspaces(userId);
-    const retry = await resolveWorkspaceForProduct(userId, product);
-    if (retry) return retry;
-    return ensureProductWorkspace(userId, product);
+  const ownedResolved = await resolveOwnedWorkspaceForUser(userId, product);
+  if (ownedResolved) {
+    return ownedResolved;
+  }
+
+  const ownedCount = await prisma.workspace.count({ where: { ownerUserId: userId } });
+  if (ownedCount > 0) {
+    throw new Error(
+      "Account inconsistent: user owns workspace(s) but workspace could not be resolved",
+    );
   }
 
   return ensureProductWorkspace(userId, product);

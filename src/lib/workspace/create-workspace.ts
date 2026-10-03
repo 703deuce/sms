@@ -32,9 +32,14 @@ export async function createWorkspaceForUser(
     },
   });
 
-  await prisma.membership.create({
-    data: { userId, workspaceId: workspace.id, role: "OWNER" },
-  });
+  try {
+    await prisma.membership.create({
+      data: { userId, workspaceId: workspace.id, role: "OWNER" },
+    });
+  } catch (err) {
+    await prisma.workspace.delete({ where: { id: workspace.id } }).catch(() => undefined);
+    throw err;
+  }
 
   if (type === "BUSINESS") {
     await prisma.messagingRegistration.create({ data: { workspaceId: workspace.id } }).catch(

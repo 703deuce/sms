@@ -14,6 +14,7 @@ import {
   grantProductEntitlement,
   resolveWorkspaceForProduct,
 } from "@/lib/products/entitlements";
+import { resolveAuthenticatedWorkspace } from "@/lib/auth/resolve-session-workspace";
 import { preferredProductFromPath, resolvePostLoginPath } from "@/lib/products/routing";
 import { applyProductAccessCookie, updateLastActiveProduct, updateProductIntent } from "@/lib/products/session";
 
@@ -73,7 +74,9 @@ export async function GET(request: Request) {
       access.productIntent === "voice";
 
     if (wantsVoiceWorkspace) {
-      const voiceWs = await ensureProductWorkspace(account.userId, "voice");
+      const voiceWs = account.created
+        ? await ensureProductWorkspace(account.userId, "voice")
+        : await resolveAuthenticatedWorkspace(account.userId, "voice");
       workspaceId = voiceWs.workspaceId;
       workspaceType = voiceWs.workspaceType;
       const { ensureMctbWorkspaceBootstrap } = await import(
