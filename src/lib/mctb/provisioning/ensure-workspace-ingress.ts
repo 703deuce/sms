@@ -1,12 +1,9 @@
 import "server-only";
 
-import { ensureMctbPlatformSenderDefault } from "@/lib/mctb/ensure-platform-sender-default";
-import { getTrialNumberStatus, provisionTrialMctbNumber } from "@/lib/mctb/onboarding/trial-number";
-import { getWorkspaceTollFreeNumber } from "@/lib/mctb/workspace-toll-free";
-import { loadMctbOnboardingState } from "@/lib/mctb/onboarding/state";
+import { provisionTrialMctbNumber } from "@/lib/mctb/onboarding/trial-number";
 import { resolveMctbWorkspaceIngressMode } from "@/lib/mctb/provisioning/workspace-ingress-mode";
 import { provisionMctbWorkspaceTollFreeIngress } from "@/lib/mctb/provisioning/provision-workspace-toll-free-ingress";
-import { isNorthAmericaTollFreeE164 } from "@/lib/mctb/provisioning/telnyx-toll-free-ingress-pool";
+import { assessWorkspaceDedicatedMctbIngress } from "@/lib/mctb/provisioning/workspace-ingress-validity";
 
 export type EnsureMctbWorkspaceIngressResult = {
   ok: boolean;
@@ -17,77 +14,53 @@ export type EnsureMctbWorkspaceIngressResult = {
 };
 
 /**
- * Idempotent: every BUSINESS MCTB workspace gets a Telnyx ingress DID wired for the
- * frozen TeXML pipeline before setup completes.
+ * Idempotent provisioning: assign/configure dedicated MCTB ingress when missing or invalid.
+ * Does not perform TeXML repair when ingress is already valid — use explicit repair tooling for that.
  */
 export async function ensureMctbWorkspaceIngressReady(
   workspaceId: string,
 ): Promise<EnsureMctbWorkspaceIngressResult> {
+  const existing = await assessWorkspaceDedicatedMctbIngress(workspaceId);
+  if (existing.valid && existing.phoneNumberId && existing.e164) {
+    return {
+      ok: true,
+      provisioned: true,
+      phoneNumberId: existing.phoneNumberId,
+      e164: existing.e164,
+    };
+  }
+
   const ingressMode = resolveMctbWorkspaceIngressMode();
-  let phoneNumberId: string | undefined;
-  let e164: string | undefined;
 
   if (ingressMode === "toll_free_texml") {
-    const prior = await getTrialNumberStatus(workspaceId);
-    const needsTollFree =
-      !prior.provisioned ||
-      !prior.trialNumber?.e164 ||
-      !isNorthAmericaTollFreeE164(prior.trialNumber.e164);
-
-    if (needsTollFree) {
-      const result = await provisionMctbWorkspaceTollFreeIngress(workspaceId);
-      if (!result.ok) {
-        return {
-          ok: false,
-          provisioned: false,
-          error: result.error || "toll_free_ingress_provision_failed",
-        };
-      }
-      phoneNumberId = result.phoneNumberId;
-      e164 = result.e164;
-    } else {
-      phoneNumberId = prior.trialNumber?.phoneNumberId;
-      e164 = prior.trialNumber?.e164;
+    const result = await provisionMctbWorkspaceTollFreeIngress(workspaceId);
+    if (!result.ok) {
+      return {
+        ok: false,
+        provisioned: false,
+        error: result.error || "toll_free_ingress_provision_failed",
+      };
     }
-  } else {
-    const prior = await getTrialNumberStatus(workspaceId);
-    phoneNumberId = prior.trialNumber?.phoneNumberId;
-    e164 = prior.trialNumber?.e164;
-
-    if (!prior.provisioned) {
-      const result = await provisionTrialMctbNumber(workspaceId);
-      if (!result.ok) {
-        return {
-          ok: false,
-          provisioned: false,
-          error: result.error || "trial_number_provision_failed",
-        };
-      }
-      phoneNumberId = result.trialNumber?.phoneNumberId;
-      e164 = result.trialNumber?.e164;
-    }
+    return {
+      ok: true,
+      provisioned: true,
+      phoneNumberId: result.phoneNumberId,
+      e164: result.e164,
+    };
   }
 
-  await ensureMctbPlatformSenderDefault(workspaceId).catch(() => undefined);
-
-  const state = await loadMctbOnboardingState(workspaceId);
-  const workspaceNumber = getWorkspaceTollFreeNumber(state);
-  const pid = phoneNumberId || workspaceNumber?.phoneNumberId;
-  if (pid) {
-    const { provisionMctbPhoneTexmlIngressModeForWorkspace } = await import(
-      "@/lib/mctb/texml-ingress/texml-mode-provision"
-    );
-    const { warmMctbInboundRoutingProfileForWorkspace } = await import(
-      "@/lib/mctb/texml-ingress/routing-profile"
-    );
-    await provisionMctbPhoneTexmlIngressModeForWorkspace(workspaceId, pid).catch(() => undefined);
-    await warmMctbInboundRoutingProfileForWorkspace(workspaceId).catch(() => undefined);
+  const result = await provisionTrialMctbNumber(workspaceId);
+  if (!result.ok) {
+    return {
+      ok: false,
+      provisioned: false,
+      error: result.error || "trial_number_provision_failed",
+    };
   }
-
   return {
     ok: true,
     provisioned: true,
-    phoneNumberId: pid || undefined,
-    e164: e164 || workspaceNumber?.e164,
+    phoneNumberId: result.trialNumber?.phoneNumberId,
+    e164: result.trialNumber?.e164,
   };
 }

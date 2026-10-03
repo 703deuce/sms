@@ -109,17 +109,10 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const workspaceId = await getActiveWorkspaceId();
   traceMctbDebug("setup", "get_start", { workspaceId, userId: session.userId });
-  const { ensureMctbPlatformSenderDefault } = await import(
-    "@/lib/mctb/ensure-platform-sender-default"
+  const { getWorkspaceIngressStatus } = await import(
+    "@/lib/mctb/provisioning/get-workspace-ingress-status"
   );
-  await ensureMctbPlatformSenderDefault(workspaceId).catch(() => undefined);
-  const { ensureMctbWorkspaceIngressReady } = await import(
-    "@/lib/mctb/provisioning/ensure-workspace-ingress"
-  );
-  const ingressStatus = await ensureMctbWorkspaceIngressReady(workspaceId).catch((err) => {
-    traceMctbDebugError("setup", "ingress_ensure_failed", err, { workspaceId });
-    return { ok: false as const, provisioned: false, error: String(err) };
-  });
+  const ingressStatus = await getWorkspaceIngressStatus(workspaceId);
   const prisma = getPrisma();
 
   const ws = await prisma.workspace.findUnique({
@@ -339,9 +332,11 @@ export async function GET() {
       productionForwardTargetE164: productionForwardE164,
       businessLineE164,
       ingressProvisioning: {
-        ok: ingressStatus.ok !== false,
-        error: ingressStatus.error ?? null,
-        forwardE164: ingressStatus.e164 ?? productionForwardE164,
+        ok: ingressStatus.validIngress,
+        error: ingressStatus.validIngress
+          ? null
+          : ingressStatus.invalidReason ?? "ingress_not_provisioned",
+        forwardE164: ingressStatus.forwardTargetE164 ?? productionForwardE164,
       },
       messaging: {
         senderMode,

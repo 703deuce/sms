@@ -16,8 +16,9 @@ assert.match(read("src/app/api/auth/signup/route.ts"), /ensureMctbWorkspaceBoots
 assert.match(read("src/app/api/auth/google/callback/route.ts"), /ensureMctbWorkspaceBootstrap/);
 assert.match(read("src/app/api/products/open/route.ts"), /ensureMctbWorkspaceBootstrap/);
 assert.match(read("src/lib/products/entitlements.ts"), /ensureMctbWorkspaceBootstrap/);
-assert.match(read("src/app/api/mctb/setup/route.ts"), /ensureMctbWorkspaceIngressReady/);
+assert.match(read("src/app/api/mctb/setup/route.ts"), /getWorkspaceIngressStatus/);
 assert.match(read("src/app/api/mctb/onboarding/route.ts"), /ensureMctbWorkspaceIngressReady/);
+assert.match(read("src/app/api/mctb/onboarding/route.ts"), /getWorkspaceIngressStatus/);
 assert.match(read("src/lib/mctb/runtime-sms-phone-id.ts"), /reconcileMctbSmsPhoneNumberId/);
 assert.doesNotMatch(
   read("src/app/api/mctb/setup/route.ts"),

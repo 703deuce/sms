@@ -4,6 +4,12 @@ import { getPrisma } from "@/lib/db";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { resolveMctbPhoneNumberIdForWorkspace } from "@/lib/mctb/platform-production-routing";
 import { isPhoneMctbSipIngress } from "@/lib/mctb/sip-ingress/sync";
+import { assessWorkspaceDedicatedMctbIngress } from "@/lib/mctb/provisioning/workspace-ingress-validity";
+import {
+  isPlatformMctbSenderPhoneRecord,
+  parseMctbPhoneRole,
+} from "@/lib/messaging/compliance/phone-number-class";
+import { resolveCanonicalMctbPlatformSender } from "@/lib/mctb/messaging/platform-sender-config";
 
 /** Optional cert override when no workspace DID assigned yet. */
 export function getMctbProductionForwardTestE164(): string | null {
@@ -22,12 +28,36 @@ export function getMctbDefaultBusinessLineE164(): string | null {
  * Always the workspace-assigned number from Setup (runtime.phoneNumberId) —
  * never hardcoded; 571 only appears when that is the number on the account.
  */
+function isForbiddenPlatformIngressCandidate(input: {
+  phoneNumberId: string;
+  settingsJson: unknown;
+  canonicalPlatformSenderId: string | null;
+}): boolean {
+  if (isPlatformMctbSenderPhoneRecord({ settingsJson: input.settingsJson })) {
+    return true;
+  }
+  if (parseMctbPhoneRole(input.settingsJson) === "platform_mctb_sender") {
+    return true;
+  }
+  if (input.canonicalPlatformSenderId && input.canonicalPlatformSenderId === input.phoneNumberId) {
+    return true;
+  }
+  return false;
+}
+
 export async function getProductionMctbForwardTargetE164(
   workspaceId: string,
 ): Promise<string | null> {
-  const prisma = getPrisma();
-  const runtime = await loadMissedCallTextConfig(workspaceId);
+  const assessment = await assessWorkspaceDedicatedMctbIngress(workspaceId);
+  if (assessment.valid && assessment.e164) {
+    return assessment.e164;
+  }
 
+  const prisma = getPrisma();
+  const canonical = await resolveCanonicalMctbPlatformSender();
+  const canonicalId = canonical?.phoneNumberId ?? null;
+
+  const runtime = await loadMissedCallTextConfig(workspaceId);
   if (runtime.phoneNumberId) {
     const phoneId = await resolveMctbPhoneNumberIdForWorkspace({
       workspaceId,
@@ -36,9 +66,17 @@ export async function getProductionMctbForwardTargetE164(
     if (phoneId) {
       const pn = await prisma.phoneNumber.findFirst({
         where: { id: phoneId },
-        select: { e164: true, status: true },
+        select: { id: true, e164: true, status: true, settingsJson: true },
       });
-      if (pn?.e164 && String(pn.status || "").toLowerCase() !== "released") {
+      if (
+        pn?.e164 &&
+        String(pn.status || "").toLowerCase() !== "released" &&
+        !isForbiddenPlatformIngressCandidate({
+          phoneNumberId: pn.id,
+          settingsJson: pn.settingsJson,
+          canonicalPlatformSenderId: canonicalId,
+        })
+      ) {
         return pn.e164;
       }
     }
@@ -51,12 +89,20 @@ export async function getProductionMctbForwardTargetE164(
       status: { not: "Released" },
     },
     orderBy: { purchasedAt: "desc" },
-    select: { e164: true, settingsJson: true },
+    select: { id: true, e164: true, settingsJson: true },
     take: 10,
   });
 
   for (const phone of phones) {
-    if (phone.e164 && isPhoneMctbSipIngress(phone.settingsJson)) {
+    if (
+      phone.e164 &&
+      isPhoneMctbSipIngress(phone.settingsJson) &&
+      !isForbiddenPlatformIngressCandidate({
+        phoneNumberId: phone.id,
+        settingsJson: phone.settingsJson,
+        canonicalPlatformSenderId: canonicalId,
+      })
+    ) {
       return phone.e164;
     }
   }

@@ -1,5 +1,5 @@
 /**
- * Smoke: ensureMctbWorkspaceIngressReady is exported and idempotent guard uses getTrialNumberStatus.
+ * Smoke: ensureMctbWorkspaceIngressReady is exported and reuses canonical ingress validity.
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -12,9 +12,9 @@ const src = readFileSync(
 );
 
 assert.match(src, /ensureMctbWorkspaceIngressReady/);
-assert.match(src, /getTrialNumberStatus/);
+assert.match(src, /assessWorkspaceDedicatedMctbIngress/);
 assert.match(src, /provisionMctbWorkspaceTollFreeIngress/);
-assert.match(src, /provisionMctbPhoneTexmlIngressModeForWorkspace/);
+assert.doesNotMatch(src, /provisionMctbPhoneTexmlIngressModeForWorkspace/);
 
 const tollFreeSrc = readFileSync(
   join(root, "src/lib/mctb/provisioning/provision-workspace-toll-free-ingress.ts"),

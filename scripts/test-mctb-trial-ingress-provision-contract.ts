@@ -41,8 +41,13 @@ assert.match(
 assert.match(texmlProvision, /mctbTexmlEntryVoiceUrl/, "save-time ingress must bind frozen mctb-entry URL");
 assert.match(
   onboardingApi,
-  /ensureMctbWorkspaceIngressReady/,
-  "onboarding must reach canonical ingress provisioning",
+  /provision_workspace_ingress[\s\S]*ensureMctbWorkspaceIngressReady/,
+  "onboarding POST provision must call canonical ingress ensure",
+);
+assert.match(
+  onboardingApi,
+  /getWorkspaceIngressStatus/,
+  "onboarding GET must use read-only ingress status",
 );
 assert.match(
   numbersApi,
@@ -51,8 +56,8 @@ assert.match(
 );
 assert.match(
   trialSrc,
-  /if \(existing\.provisioned && existing\.trialNumber\)/,
-  "trial TFN provision must short-circuit when workspace already has ingress",
+  /assessWorkspaceDedicatedMctbIngress/,
+  "trial TFN provision must short-circuit on valid dedicated ingress",
 );
 
 async function main() {

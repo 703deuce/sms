@@ -14,6 +14,11 @@ import { twilioAdapter } from "@/lib/messaging/twilio-adapter";
 import { assertLiveTwilioConfigured } from "@/lib/messaging/twilio-config";
 import { MCTB_TRIAL_TOLL_FREE_AREA_CODES } from "./constants";
 import { provisionMctbCustomerTelnyxLocalNumber } from "@/lib/mctb/provisioning/provision-customer-local";
+import { assessWorkspaceDedicatedMctbIngress } from "@/lib/mctb/provisioning/workspace-ingress-validity";
+import { resolveMctbWorkspaceIngressMode } from "@/lib/mctb/provisioning/workspace-ingress-mode";
+import {
+  isPlatformMctbSenderPhoneRecord,
+} from "@/lib/messaging/compliance/phone-number-class";
 import {
   loadMctbOnboardingState,
   markStepComplete,
@@ -100,7 +105,25 @@ export async function getTrialNumberStatus(workspaceId: string) {
     };
   };
 
+  const dedicatedIngress =
+    resolveMctbWorkspaceIngressMode() === "toll_free_texml"
+      ? await assessWorkspaceDedicatedMctbIngress(workspaceId)
+      : null;
+
   if (workspaceNumber?.e164) {
+    if (dedicatedIngress && !dedicatedIngress.valid) {
+      return {
+        provisioned: false,
+        trialNumber: null,
+        display: null,
+        voiceStatus: null,
+        messagingVerificationStatus: "not_started" as MctbTfvStatus,
+        tfvStatusLabel: tfvStatusLabel("not_started"),
+        ingressInvalid: true,
+        ingressInvalidReason: dedicatedIngress.reason ?? null,
+      };
+    }
+
     const messaging = await resolveMessagingStatus(
       workspaceNumber.phoneNumberId,
       workspaceNumber.e164,
@@ -125,28 +148,20 @@ export async function getTrialNumberStatus(workspaceId: string) {
     };
   }
 
-  const existingPn = await prisma.phoneNumber.findFirst({
-    where: {
-      workspaceId,
-      type: { in: ["TollFree", "Toll-free"] },
-      status: { not: "Released" },
-    },
-    orderBy: { purchasedAt: "desc" },
-    select: { id: true, e164: true, provider: true },
-  });
-
-  if (existingPn) {
-    const messaging = await resolveMessagingStatus(existingPn.id, existingPn.e164);
+  if (dedicatedIngress?.valid && dedicatedIngress.e164 && dedicatedIngress.phoneNumberId) {
+    const messaging = await resolveMessagingStatus(
+      dedicatedIngress.phoneNumberId,
+      dedicatedIngress.e164,
+    );
     const info: MctbTrialNumberInfo = {
-      e164: existingPn.e164,
-      phoneNumberId: existingPn.id,
-      provider: existingPn.provider === "telnyx" ? "telnyx" : "twilio",
-      numberType: existingPn.provider === "telnyx" ? "local" : "toll_free",
+      e164: dedicatedIngress.e164,
+      phoneNumberId: dedicatedIngress.phoneNumberId,
+      provider: "telnyx",
+      numberType: "toll_free",
       voiceStatus: "ready",
       messagingVerificationStatus: messaging.uiStatus,
       provisionedAt: new Date().toISOString(),
     };
-    await saveMctbOnboardingState(workspaceId, withWorkspaceTollFreeNumber(state, info));
     return {
       provisioned: true,
       trialNumber: info,
@@ -229,9 +244,31 @@ export async function provisionTrialTollFreeNumber(workspaceId: string): Promise
   trialNumber?: MctbTrialNumberInfo;
   error?: string;
 }> {
+  const dedicated = await assessWorkspaceDedicatedMctbIngress(workspaceId);
+  if (dedicated.valid && dedicated.phoneNumberId && dedicated.e164) {
+    return {
+      ok: true,
+      trialNumber: {
+        e164: dedicated.e164,
+        phoneNumberId: dedicated.phoneNumberId,
+        provider: "telnyx",
+        numberType: "toll_free",
+        voiceStatus: "ready",
+        messagingVerificationStatus: "not_started",
+        provisionedAt: new Date().toISOString(),
+      },
+    };
+  }
+
   const existing = await getTrialNumberStatus(workspaceId);
   if (existing.provisioned && existing.trialNumber) {
-    return { ok: true, trialNumber: existing.trialNumber };
+    const phone = await getPrisma().phoneNumber.findFirst({
+      where: { id: existing.trialNumber.phoneNumberId, workspaceId },
+      select: { settingsJson: true },
+    });
+    if (phone && !isPlatformMctbSenderPhoneRecord({ settingsJson: phone.settingsJson })) {
+      return { ok: true, trialNumber: existing.trialNumber };
+    }
   }
 
   try {

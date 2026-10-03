@@ -1,12 +1,9 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
-import { updateMissedCallTextConfig, loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
+import { updateMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { setActiveCallHandler } from "@/lib/call-handling/set-active-call-handler";
 import { ensureMctbPlatformSenderDefault } from "@/lib/mctb/ensure-platform-sender-default";
-import {
-  getTrialNumberStatus,
-} from "@/lib/mctb/onboarding/trial-number";
 import {
   loadMctbOnboardingState,
   markStepComplete,
@@ -17,6 +14,7 @@ import type { MctbTrialNumberInfo } from "@/lib/mctb/onboarding/types";
 import { MCTB_TRIAL_TOLL_FREE_AREA_CODES } from "@/lib/mctb/onboarding/constants";
 import { routePhoneToMctbCallHandlingIngress } from "@/lib/mctb/texml-ingress/provision";
 import { verifyMctbTexmlIngressRoute } from "@/lib/mctb/texml-ingress/texml-route";
+import { assessWorkspaceDedicatedMctbIngress } from "@/lib/mctb/provisioning/workspace-ingress-validity";
 import { messagingOnboarding } from "@/lib/messaging/service";
 import { telnyxProvider } from "@/lib/messaging/telnyx/provider";
 import {
@@ -70,40 +68,15 @@ export function getMctbTollFreeIngressProvisionTestDeps(): MctbTollFreeIngressPr
 async function workspaceIngressAlreadyReady(
   workspaceId: string,
 ): Promise<{ ready: boolean; phoneNumberId?: string; e164?: string }> {
-  const status = await getTrialNumberStatus(workspaceId);
-  const e164 = status.trialNumber?.e164;
-  const phoneNumberId = status.trialNumber?.phoneNumberId;
-  if (!status.provisioned || !e164 || !phoneNumberId) {
+  const assessment = await assessWorkspaceDedicatedMctbIngress(workspaceId);
+  if (!assessment.valid || !assessment.phoneNumberId || !assessment.e164) {
     return { ready: false };
   }
-  if (!isNorthAmericaTollFreeE164(e164)) {
-    return { ready: false };
-  }
-
-  const prisma = getPrisma();
-  const phone = await prisma.phoneNumber.findFirst({
-    where: { id: phoneNumberId, workspaceId },
-    select: { e164: true, providerNumberId: true, provider: true, settingsJson: true },
-  });
-  if (!phone?.providerNumberId || String(phone.provider || "").toLowerCase() !== "telnyx") {
-    return { ready: false };
-  }
-  if (parseMctbPhoneRole(phone.settingsJson) === "platform_mctb_sender") {
-    return { ready: false };
-  }
-
-  const runtime = await loadMissedCallTextConfig(workspaceId);
-  if (runtime.phoneNumberId !== phoneNumberId) {
-    return { ready: false };
-  }
-
-  const verifyFn =
-    tollFreeIngressProvisionTestDeps?.verifyMctbTexmlIngressRoute ?? verifyMctbTexmlIngressRoute;
-  const verify = await verifyFn({
-    e164: phone.e164,
-    providerNumberId: phone.providerNumberId,
-  });
-  return verify.ok ? { ready: true, phoneNumberId, e164: phone.e164 } : { ready: false };
+  return {
+    ready: true,
+    phoneNumberId: assessment.phoneNumberId,
+    e164: assessment.e164,
+  };
 }
 
 async function purchaseTelnyxTollFreeDefault(workspaceId: string): Promise<string | null> {

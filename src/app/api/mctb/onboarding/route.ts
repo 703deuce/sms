@@ -61,23 +61,11 @@ export async function GET(req: Request) {
       new URL(req.url).searchParams.get("mctbSetupGuide") === "1";
     traceMctbDebug("onboarding", "get_start", { workspaceId: auth.workspaceId });
 
-    const { ensureMctbPlatformSenderDefault } = await import(
-      "@/lib/mctb/ensure-platform-sender-default"
+    const { getWorkspaceIngressStatus } = await import(
+      "@/lib/mctb/provisioning/get-workspace-ingress-status"
     );
-    await ensureMctbPlatformSenderDefault(auth.workspaceId).catch(() => undefined);
 
-    const { ensureMctbWorkspaceIngressReady } = await import(
-      "@/lib/mctb/provisioning/ensure-workspace-ingress"
-    );
-    await ensureMctbWorkspaceIngressReady(auth.workspaceId).catch((err) => {
-      traceMctbDebugError("onboarding", "ingress_ensure_failed", err, {
-        workspaceId: auth.workspaceId,
-      });
-    });
-
-    await syncTrialTollFreeVerification(auth.workspaceId).catch(() => undefined);
-
-    const [state, demo, trialNumber, liveTest, trialInfo, trialReqs, tfv, forwardingVerification, forwardTargetE164, capabilities] =
+    const [state, demo, trialNumber, liveTest, trialInfo, trialReqs, tfv, forwardingVerification, forwardTargetE164, capabilities, workspaceIngress] =
       await Promise.all([
       loadMctbOnboardingState(auth.workspaceId),
       getDemoStatus(auth.workspaceId),
@@ -89,6 +77,7 @@ export async function GET(req: Request) {
       getForwardingVerificationStatus(auth.workspaceId).catch(() => null),
       getOnboardingForwardTargetE164ForWorkspace(auth.workspaceId),
       resolveMctbCapabilities(auth.workspaceId),
+      getWorkspaceIngressStatus(auth.workspaceId),
     ]);
 
     const forwardingVerified = Boolean(
@@ -143,8 +132,9 @@ export async function GET(req: Request) {
       carriers: MCTB_CARRIER_GUIDES,
       forwardingVerification,
       demoIngressE164: demo.demoNumberE164 || null,
-      forwardTargetE164,
-      productionForwardE164: forwardTargetE164,
+      forwardTargetE164: workspaceIngress.forwardTargetE164 ?? forwardTargetE164,
+      productionForwardE164: workspaceIngress.forwardTargetE164 ?? forwardTargetE164,
+      workspaceIngress,
       defaultBusinessLineE164: getMctbDefaultBusinessLineE164(),
       capabilities,
       senderPresentation,
@@ -297,10 +287,6 @@ export async function POST(req: Request) {
         currentStep: "consent",
       });
       await recordFunnelEvent(auth.workspaceId, "MCTB_BUSINESS_INFO_COMPLETED");
-      const { ensureMctbWorkspaceIngressReady } = await import(
-        "@/lib/mctb/provisioning/ensure-workspace-ingress"
-      );
-      void ensureMctbWorkspaceIngressReady(auth.workspaceId).catch(() => undefined);
     }
 
     if (body.recoveryGoal) {
