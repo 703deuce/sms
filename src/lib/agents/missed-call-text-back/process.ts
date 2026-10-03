@@ -112,6 +112,12 @@ export async function processMissedInboundCall(input: ProcessMissedCallInput) {
     };
   }
 
+  const { buildMissedCallRecoveryUsageMetadata } = await import("@/lib/mctb/recovery-usage");
+  const usageMetadata = await buildMissedCallRecoveryUsageMetadata(input.workspaceId, {
+    ...(input.demoMode ? { demoMode: true } : {}),
+    ...(input.eventMetadata || {}),
+  });
+
   const event = await prisma.missedCallEvent.create({
     data: {
       workspaceId: input.workspaceId,
@@ -126,10 +132,7 @@ export async function processMissedInboundCall(input: ProcessMissedCallInput) {
       status: "DETECTED",
       traceId,
       idempotencyKey,
-      metadata: {
-        ...(input.demoMode ? { demoMode: true } : {}),
-        ...(input.eventMetadata || {}),
-      },
+      metadata: usageMetadata,
     },
   });
 

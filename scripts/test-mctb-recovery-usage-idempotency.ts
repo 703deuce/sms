@@ -41,19 +41,25 @@ async function runDbProof(): Promise<void> {
   } catch {
     // compat layer may omit table in some environments
   }
+  const { saveMctbOnboardingState } = await import("../src/lib/mctb/onboarding/state");
+  await saveMctbOnboardingState(workspaceId, {
+    currentStep: "ready",
+    liveTestPassedAt: new Date().toISOString(),
+  });
+
   await prisma.workspaceLimits.upsert({
     where: { workspaceId },
     create: {
       workspaceId,
       limits: {
         mctbRecoveriesPeriodKey: currentMctbRecoveryPeriodKey(),
-        mctbRecoveriesUsed: MCTB_FREE_MONTHLY_RECOVERY_LIMIT - 1,
+        mctbRecoveriesUsed: 0,
       },
     },
     update: {
       limits: {
         mctbRecoveriesPeriodKey: currentMctbRecoveryPeriodKey(),
-        mctbRecoveriesUsed: MCTB_FREE_MONTHLY_RECOVERY_LIMIT - 1,
+        mctbRecoveriesUsed: 0,
       },
     },
   });
@@ -70,6 +76,27 @@ async function runDbProof(): Promise<void> {
     },
   });
 
+  for (let i = 0; i < MCTB_FREE_MONTHLY_RECOVERY_LIMIT - 1; i += 1) {
+    const extraEventId = randomUUID();
+    await prisma.missedCallEvent.create({
+      data: {
+        id: extraEventId,
+        workspaceId,
+        callerE164: "+15555550123",
+        businessE164: "+15555550999",
+        reason: "NO_ANSWER",
+        traceId: randomUUID(),
+        idempotencyKey: `test-${randomUUID()}`,
+        status: "DETECTED",
+      },
+    });
+    const r = await reserveMctbRecoveryUnit({
+      workspaceId,
+      missedCallEventId: extraEventId,
+    });
+    assert.equal(r.reserved, true, `recovery ${i + 1} should reserve`);
+  }
+
   const first = await reserveMctbRecoveryUnit({
     workspaceId,
     missedCallEventId: eventId,
@@ -77,7 +104,7 @@ async function runDbProof(): Promise<void> {
   assert.equal(
     first.reserved,
     true,
-    `${MCTB_FREE_MONTHLY_RECOVERY_LIMIT}th recovery should reserve (seeded at limit-1)`,
+    `${MCTB_FREE_MONTHLY_RECOVERY_LIMIT}th recovery should reserve`,
   );
 
   const second = await reserveMctbRecoveryUnit({
@@ -88,13 +115,13 @@ async function runDbProof(): Promise<void> {
   assert.equal(second.reason, "idempotent_replay");
 
   const snap = await getMctbRecoveryUsageSnapshot(workspaceId);
-  assert.equal(snap.usedInPeriod, MCTB_FREE_MONTHLY_RECOVERY_LIMIT, "only one unit consumed");
+  assert.equal(snap.usedInPeriod, MCTB_FREE_MONTHLY_RECOVERY_LIMIT, "only billable units consumed");
 
   const third = await reserveMctbRecoveryUnit({
     workspaceId,
     missedCallEventId: randomUUID(),
   });
-  assert.equal(third.reserved, false, "26th distinct recovery should hit limit");
+  assert.equal(third.reserved, false, `${MCTB_FREE_MONTHLY_RECOVERY_LIMIT + 1}th distinct recovery should hit limit`);
   assert.equal(third.reason, "mctb_recovery_limit_reached");
 
   await prisma.missedCallEvent.deleteMany({ where: { workspaceId } });

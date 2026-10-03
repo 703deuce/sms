@@ -270,7 +270,7 @@ export function AppShell({
   /** Opus shell: full-bleed main column — no legacy px-4/pt-5 frame or mctb-page-canvas inset. */
   const newUiMainClassName = fixedViewport
     ? "flex min-h-0 flex-1 flex-col overflow-hidden"
-    : "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-0 pb-28 pt-0 lg:pb-8";
+    : "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain touch-pan-y px-0 pb-28 pt-0 [-webkit-overflow-scrolling:touch] lg:pb-8";
 
   const mainClassName = newUiShell
     ? newUiMainClassName

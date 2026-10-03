@@ -623,6 +623,10 @@ export async function POST(req: Request) {
         state = markStepComplete(state, "recovery");
       }
       state = await saveMctbOnboardingState(auth.workspaceId, { currentStep: nextStep });
+      // Billing: move workspace off `onboarding` plan onto free MCTB (10/mo allowance) — not a time-limited trial.
+      if (nextStep === "ready" || nextStep === "complete") {
+        await activateMctbTrial(auth.workspaceId).catch(() => undefined);
+      }
     }
 
     await syncTrialTollFreeVerification(auth.workspaceId).catch(() => undefined);

@@ -3,6 +3,8 @@ import "server-only";
 import { getPrisma } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import { resolveMctbCommercialEntitlements } from "@/lib/mctb/commercial-entitlements";
+import { isOnboardingComplete } from "@/lib/mctb/onboarding/completion";
+import { loadMctbOnboardingState } from "@/lib/mctb/onboarding/state";
 import {
   currentMctbRecoveryPeriodKey,
   MCTB_FREE_MONTHLY_RECOVERY_LIMIT,
@@ -34,6 +36,96 @@ export type MctbRecoveryUsageSnapshot = {
   atLimit: boolean;
 };
 
+function isTestRecoveryMetadata(metadata: unknown): boolean {
+  const meta = asRecord(metadata);
+  return (
+    meta.liveTest === true ||
+    meta.setupTest === true ||
+    meta.excludeFromRecoveryUsage === true ||
+    meta.testSms === true ||
+    meta.setupSms === true
+  );
+}
+
+/**
+ * Setup / live-test traffic must not consume monthly recovery allowance (free 10 or paid 50/100).
+ * Not gated on legacy `trialActivatedAt` — that field only records free-plan billing transition.
+ */
+export async function shouldExcludeMissedCallFromRecoveryUsage(input: {
+  workspaceId: string;
+  eventMetadata?: Record<string, unknown> | null;
+  detectedAt?: Date | null;
+}): Promise<boolean> {
+  if (isTestRecoveryMetadata(input.eventMetadata)) return true;
+  const onboarding = await loadMctbOnboardingState(input.workspaceId);
+  const detectedAt = input.detectedAt ?? null;
+
+  if (!isOnboardingComplete(onboarding)) return true;
+
+  if (onboarding.liveTestSession?.startedAt && !onboarding.liveTestPassedAt) return true;
+
+  if (
+    detectedAt &&
+    onboarding.liveTestPassedAt &&
+    onboarding.liveTestSession?.startedAt
+  ) {
+    const sessionStart = new Date(onboarding.liveTestSession.startedAt);
+    const sessionEnd = new Date(onboarding.liveTestPassedAt);
+    if (detectedAt >= sessionStart && detectedAt <= sessionEnd) return true;
+  }
+
+  return false;
+}
+
+export async function buildMissedCallRecoveryUsageMetadata(
+  workspaceId: string,
+  extra?: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const onboarding = await loadMctbOnboardingState(workspaceId);
+  const meta: Record<string, unknown> = { ...(extra || {}) };
+  if (!isOnboardingComplete(onboarding)) {
+    meta.excludeFromRecoveryUsage = true;
+  }
+  if (onboarding.liveTestSession?.startedAt && !onboarding.liveTestPassedAt) {
+    meta.liveTest = true;
+    meta.excludeFromRecoveryUsage = true;
+  }
+  return meta;
+}
+
+async function listRecoveryReservedEvents(
+  workspaceId: string,
+  periodKey: string,
+): Promise<Array<{ metadata: unknown; detectedAt: Date }>> {
+  const prisma = getPrisma();
+  const events = await prisma.missedCallEvent.findMany({
+    where: { workspaceId },
+    select: { metadata: true, detectedAt: true },
+  });
+  return events.filter((event) => {
+    const meta = asRecord(event.metadata);
+    return meta[EVENT_META_RESERVED_PERIOD] === periodKey;
+  });
+}
+
+async function countBillableRecoveryReservations(
+  workspaceId: string,
+  periodKey: string,
+): Promise<number> {
+  const reserved = await listRecoveryReservedEvents(workspaceId, periodKey);
+  let count = 0;
+  for (const event of reserved) {
+    const meta = asRecord(event.metadata);
+    const excluded = await shouldExcludeMissedCallFromRecoveryUsage({
+      workspaceId,
+      eventMetadata: meta,
+      detectedAt: event.detectedAt,
+    });
+    if (!excluded) count += 1;
+  }
+  return count;
+}
+
 export async function getMctbRecoveryUsageSnapshot(
   workspaceId: string,
 ): Promise<MctbRecoveryUsageSnapshot> {
@@ -48,6 +140,39 @@ export async function getMctbRecoveryUsageSnapshot(
   const storedPeriod = String(limits[USAGE_PERIOD_KEY] || "");
   let used = Number(limits[USAGE_USED] || 0);
   if (storedPeriod !== periodKey) used = 0;
+
+  const reservedEvents = await listRecoveryReservedEvents(workspaceId, periodKey);
+  if (reservedEvents.length > 0) {
+    let excludedReserved = 0;
+    for (const event of reservedEvents) {
+      const excluded = await shouldExcludeMissedCallFromRecoveryUsage({
+        workspaceId,
+        eventMetadata: asRecord(event.metadata),
+        detectedAt: event.detectedAt,
+      });
+      if (excluded) excludedReserved += 1;
+    }
+    if (excludedReserved > 0) {
+      const adjusted = Math.max(0, used - excludedReserved);
+      if (adjusted !== used) {
+        used = adjusted;
+        if (storedPeriod === periodKey) {
+          await prisma.workspaceLimits
+            .upsert({
+              where: { workspaceId },
+              create: {
+                workspaceId,
+                limits: { ...limits, [USAGE_PERIOD_KEY]: periodKey, [USAGE_USED]: adjusted },
+              },
+              update: {
+                limits: { ...limits, [USAGE_PERIOD_KEY]: periodKey, [USAGE_USED]: adjusted },
+              },
+            })
+            .catch(() => undefined);
+        }
+      }
+    }
+  }
 
   const limit = resolveMctbMonthlyRecoveryLimit({
     mctbProductActive: commercial.mctbProductActive,
@@ -112,8 +237,15 @@ export async function reserveMctbRecoveryUnit(input: {
   workspaceId: string;
   missedCallEventId?: string | null;
   excludeFromUsage?: boolean;
+  eventMetadata?: Record<string, unknown> | null;
 }): Promise<MctbRecoveryReservationResult> {
-  if (input.excludeFromUsage) {
+  const excludeForTest =
+    input.excludeFromUsage ||
+    (await shouldExcludeMissedCallFromRecoveryUsage({
+      workspaceId: input.workspaceId,
+      eventMetadata: input.eventMetadata ?? null,
+    }));
+  if (excludeForTest) {
     const snap = await getMctbRecoveryUsageSnapshot(input.workspaceId);
     return {
       reserved: true,

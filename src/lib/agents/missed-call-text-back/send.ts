@@ -210,15 +210,19 @@ export async function executeMissedCallTextSend(input: {
   if (!demoMode) {
     const { reserveMctbRecoveryUnit } = await import("@/lib/mctb/recovery-usage");
     const excludeUsage =
-      input.eventMetadata?.testSms === true ||
-      input.eventMetadata?.setupSms === true ||
-      input.eventMetadata?.setupTest === true ||
-      input.eventMetadata?.certMode != null;
+      eventMeta.liveTest === true ||
+      eventMeta.setupTest === true ||
+      eventMeta.excludeFromRecoveryUsage === true ||
+      eventMeta.testSms === true ||
+      eventMeta.setupSms === true ||
+      eventMeta.setupTest === true ||
+      eventMeta.certMode != null;
 
     const recoveryReservation = await reserveMctbRecoveryUnit({
       workspaceId: input.workspaceId,
       missedCallEventId: event.id,
       excludeFromUsage: Boolean(excludeUsage),
+      eventMetadata: eventMeta,
     });
     if (!recoveryReservation.reserved) {
       await prisma.missedCallEvent.update({

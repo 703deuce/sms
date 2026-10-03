@@ -468,10 +468,10 @@ ${appUrl ? `<p><a href="${appUrl}/mctb/voicemail">Open voicemail inbox</a></p>` 
   if (!shouldTranscribe) return updated;
 
   let transcriptionRecordingUrl = input.recordingUrl;
-  const { parseVoicemailStorageRecordingUrl } = await import(
+  const { parseAnyVoicemailRecordingStorageRef } = await import(
     "@/lib/voice/python-runtime-bridge/mctb-sip-voicemail-storage"
   );
-  const storageRef = parseVoicemailStorageRecordingUrl(input.recordingUrl);
+  const storageRef = parseAnyVoicemailRecordingStorageRef(input.recordingUrl);
   if (storageRef) {
     const { createSignedRecordingUrl } = await import("@/lib/smart-routing/call-recording-storage");
     transcriptionRecordingUrl = await createSignedRecordingUrl(storageRef.bucket, storageRef.path, 600);
