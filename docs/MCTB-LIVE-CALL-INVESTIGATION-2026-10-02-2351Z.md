@@ -135,4 +135,25 @@ Three roles (do not conflate in UI copy):
 
 ---
 
-*Generated from production DB + Coolify read-only inspection, 2026-10-03 UTC.*
+---
+
+## Post-incident ops (2026-10-03 ~00:29 UTC)
+
+**Disk prune on Coolify (`128.140.102.51`):**
+
+- Before: `/` **100% full** (0 bytes free).
+- Action: `docker image prune -a -f` — removed **15 unused app build images** (~**65.92 GB** reclaimed).
+- After: **~61 GB free** (~58% used on 150G volume).
+- Running containers unchanged (web, scheduler, Redis, Coolify stack).
+
+**Redis (`transovo-bullmq-redis`):**
+
+- AOF tail was corrupted from disk-full (`Bad file format` on `appendonly.aof.26.incr.aof`).
+- Stopped container → `redis-check-aof --fix` on manifest → truncated bad tail (~5.7 MB) → restarted.
+- Status: **healthy**, `Ready to accept connections`.
+
+**Scheduler/worker:** restarted `tgjridm6vrmrgljkfrr0rpjn-*` so BullMQ clients reconnect.
+
+**Follow-up:** Pending `mctb_texml_existing_consent_capture` rows may need a drain pass or manual replay if still `pending` after workers catch up; place another test call once queues move.
+
+*Generated from production DB + Coolify inspection, 2026-10-03 UTC.*
