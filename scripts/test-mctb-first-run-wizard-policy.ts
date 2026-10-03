@@ -23,9 +23,17 @@ const incompletePolicy = resolveMctbFirstRunWizardPolicy({ onboardingState: inco
 assert.equal(incompletePolicy.shouldAutoOpen, true);
 assert.equal(incompletePolicy.trigger, "incomplete_onboarding");
 
+const completeUnverifiedForwarding = resolveMctbFirstRunWizardPolicy({
+  onboardingState: readyState,
+  forwardingVerified: false,
+});
+assert.equal(completeUnverifiedForwarding.shouldAutoOpen, false);
+assert.equal(completeUnverifiedForwarding.trigger, "none");
+
 const forwardingPolicy = resolveMctbFirstRunWizardPolicy({
   onboardingState: readyState,
   forwardingVerified: false,
+  setupGuideRequested: true,
 });
 assert.equal(forwardingPolicy.shouldAutoOpen, true);
 assert.equal(forwardingPolicy.trigger, "setup_guide");

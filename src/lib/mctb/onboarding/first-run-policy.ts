@@ -59,7 +59,6 @@ export function resolveMctbFirstRunWizardPolicy(input: {
   forwardingVerified?: boolean;
 }): MctbFirstRunWizardPolicy {
   const onboardingComplete = isOnboardingComplete(input.onboardingState);
-  const forwardingVerified = input.forwardingVerified !== false;
 
   if (input.setupGuideRequested) {
     return {
@@ -88,14 +87,7 @@ export function resolveMctbFirstRunWizardPolicy(input: {
     };
   }
 
-  if (MCTB_FIRST_RUN_WIZARD_UNTIL_COMPLETE && onboardingComplete && !forwardingVerified) {
-    return {
-      shouldAutoOpen: true,
-      trigger: "setup_guide",
-      everyLoginTesting: false,
-      onboardingComplete,
-    };
-  }
+  // Post-wizard forwarding gaps are surfaced on Overview / Setup — not via repeating modal on every MCTB page.
 
   return {
     shouldAutoOpen: false,
