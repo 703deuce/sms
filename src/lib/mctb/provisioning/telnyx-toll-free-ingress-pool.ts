@@ -1,7 +1,10 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
-import { parseMctbPhoneRole } from "@/lib/messaging/compliance/phone-number-class";
+import {
+  isPlatformMctbSenderPhoneRecord,
+  parseMctbPhoneRole,
+} from "@/lib/messaging/compliance/phone-number-class";
 import { isMctbTexmlIngressConnection } from "@/lib/mctb/texml-ingress/texml-route";
 import { listTelnyxOwnedNumbers } from "@/lib/voice/telnyx/number-import";
 import { workspaceNumberUsesTexmlDirect } from "@/lib/voice/telnyx/texml-direct-route";
@@ -88,6 +91,9 @@ export async function listTelnyxTollFreeIngressCandidates(
 
     const blockers: string[] = [];
     if (mctbRole === "platform_mctb_sender") blockers.push("platform_mctb_sender");
+    if (db && isPlatformMctbSenderPhoneRecord({ settingsJson: db.settingsJson })) {
+      blockers.push("platform_mctb_sender");
+    }
     if (mctbIngressWs && mctbIngressWs !== forWorkspaceId) {
       blockers.push(`mctb_ingress_for_${mctbIngressWs}`);
     }

@@ -18,6 +18,7 @@ import { assessWorkspaceDedicatedMctbIngress } from "@/lib/mctb/provisioning/wor
 import { messagingOnboarding } from "@/lib/messaging/service";
 import { telnyxProvider } from "@/lib/messaging/telnyx/provider";
 import {
+  isPlatformMctbSenderPhoneRecord,
   parseMctbPhoneRole,
   tollFreeComplianceSettings,
 } from "@/lib/messaging/compliance/phone-number-class";
@@ -141,12 +142,27 @@ async function provisionMctbWorkspaceTollFreeIngressLocked(
     ? "purchased"
     : undefined;
 
+  const prisma = getPrisma();
+
   if (!e164) {
     const pickFn =
       tollFreeIngressProvisionTestDeps?.pickTelnyxTollFreeIngressE164 ??
       pickTelnyxTollFreeIngressE164;
     e164 = await pickFn(workspaceId);
     source = e164 ? "pool" : undefined;
+    if (e164) {
+      const pickedRow = await prisma.phoneNumber.findFirst({
+        where: { workspaceId, e164 },
+        select: { settingsJson: true },
+      });
+      if (
+        pickedRow &&
+        isPlatformMctbSenderPhoneRecord({ settingsJson: pickedRow.settingsJson })
+      ) {
+        e164 = null;
+        source = undefined;
+      }
+    }
   }
 
   if (!e164) {
@@ -160,8 +176,6 @@ async function provisionMctbWorkspaceTollFreeIngressLocked(
   if (!e164) {
     return { ok: false, error: "no_telnyx_toll_free_available" };
   }
-
-  const prisma = getPrisma();
 
   const importFn =
     tollFreeIngressProvisionTestDeps?.importTelnyxNumbersIntoWorkspace ??
@@ -189,8 +203,32 @@ async function provisionMctbWorkspaceTollFreeIngressLocked(
   if (!phone?.providerNumberId) {
     return { ok: false, error: "ingress_phone_row_missing" };
   }
-  if (parseMctbPhoneRole(phone.settingsJson) === "platform_mctb_sender") {
-    return { ok: false, error: "refuse_platform_sender_as_ingress" };
+  if (
+    parseMctbPhoneRole(phone.settingsJson) === "platform_mctb_sender" ||
+    isPlatformMctbSenderPhoneRecord({ settingsJson: phone.settingsJson })
+  ) {
+    if (source === "pool") {
+      const purchased = await purchaseTelnyxTollFree(workspaceId);
+      if (!purchased) {
+        return { ok: false, error: "refuse_platform_sender_as_ingress", e164: phone.e164 };
+      }
+      await writeMctbIngressProvisionPendingE164(workspaceId, purchased);
+      e164 = purchased;
+      source = "purchased";
+      await importFn({ workspaceId, e164s: [e164], attachConnection: false });
+      phone = await prisma.phoneNumber.findFirst({
+        where: { workspaceId, e164 },
+        select: { id: true, e164: true, providerNumberId: true, settingsJson: true },
+      });
+      if (!phone?.providerNumberId) {
+        return { ok: false, error: "ingress_phone_row_missing" };
+      }
+      if (isPlatformMctbSenderPhoneRecord({ settingsJson: phone.settingsJson })) {
+        return { ok: false, error: "refuse_platform_sender_as_ingress", e164: phone.e164 };
+      }
+    } else {
+      return { ok: false, error: "refuse_platform_sender_as_ingress", e164: phone.e164 };
+    }
   }
 
   if (source === "purchased") {
