@@ -45,7 +45,7 @@ export function LrCollectFieldsOpus({
   return (
     <div className="space-y-4">
       <FieldRow
-        label="Allow other clarifying questions"
+        label="Allow relevant follow-up questions"
         description="When needed, the agent can ask a one-off question that is not listed below (for example a detail the customer mentioned)."
       >
         <Switch

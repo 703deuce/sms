@@ -9,7 +9,10 @@ import {
   applyConversationTruncationPolicy,
   type MctbConversationTurn,
 } from "@/lib/mctb/conversation-thread";
+import { inferMctbAiRecoveryGoalType } from "@/lib/mctb/ai-recovery/recovery-goal";
+import { loadLeadRecoveryConfigPersisted } from "@/lib/mctb/lead-recovery/config";
 import { loadMctbLeadRecoveryKnowledgeBundle } from "@/lib/mctb/lead-recovery/knowledge-prompt";
+import { getPrisma } from "@/lib/db";
 import { isCarrierProtocolOptOutMessage } from "@/lib/mctb/lead-recovery/protocol-intent";
 import { finalizeMctbAgentSmsReply } from "@/lib/mctb/sms-channel";
 import { loadMctbInboxConversationThread } from "@/lib/mctb/semantic-conversation-context";
@@ -25,20 +28,24 @@ export type MctbSimpleSmsAgentInput = {
 
 const SIMPLE_SMS_SYSTEM = `You are the business's helpful SMS assistant continuing a missed-call text conversation.
 
-Use ONLY the BUSINESS KNOWLEDGE block for business-specific facts (hours, services, location, policies). Do not invent information.
+The user message includes business_knowledge with BUSINESS facts, RECOVERY GOAL (primary objective), and INFORMATION TO COLLECT (objectives — skip what the thread already contains).
 
-Read the conversation thread so you know what was already said. Do not repeat the opener verbatim.
+Use ONLY business_knowledge for business-specific facts. Do not invent information.
+
+Read the conversation thread so you know what was already said. Do not repeat the opener verbatim. Do not re-ask for details the customer already gave.
 
 Your job:
-1. Answer the customer's latest question in one or two short sentences.
-2. If knowledge does not cover it, say the team will follow up — do not guess.
-3. Plain text only. Target about 160 characters (one SMS segment). Hard maximum 280 characters.
-4. Do NOT include any URLs or links in your reply (booking links are added by the system only when appropriate).
-5. Do NOT address the customer by name unless they clearly introduced themselves in this thread.
-6. Do NOT add STOP, HELP, opt-out, or compliance footer text (the first business text already included that).
-7. No markdown and no sign-off names — never end with ", FirstName" or similar.
+1. Work toward the RECOVERY GOAL primary objective.
+2. Answer the customer's latest question in one or two short sentences when relevant.
+3. If knowledge does not cover it, say the team will follow up — do not guess.
+4. Plain text only. Target about 160 characters (one SMS segment). Hard maximum 280 characters.
+5. Do NOT include any URLs or links in your reply (booking links are added by the system only when appropriate).
+6. Do NOT address the customer by name unless they clearly introduced themselves in this thread.
+7. Do NOT add STOP, HELP, opt-out, or compliance footer text (the first business text already included that).
+8. No markdown and no sign-off names — never end with ", FirstName" or similar.
 
-BOOKING: Only set include_booking_link true when BOOKING is enabled and the customer wants to schedule. Never paste a URL yourself.
+BOOKING: Only set include_booking_link true when booking.enabled is true and the customer wants to schedule. Never paste a URL yourself.
+Never claim a callback, booking, or team action is complete unless it actually happened.
 
 Return JSON: { "reply": string, "include_booking_link": boolean }`;
 
@@ -171,19 +178,31 @@ export async function handleMctbSimpleSmsAgentInbound(
     return { handled: false };
   }
 
-  const [knowledge, inbox, bookingConfig] = await Promise.all([
+  const [knowledge, inbox, bookingConfig, lrConfig] = await Promise.all([
     loadMctbLeadRecoveryKnowledgeBundle(input.workspaceId, {
-      includeCollectPrompts: false,
+      includeCollectPrompts: true,
     }),
     loadMctbInboxConversationThread(input.conversationId),
     loadMctbAiBookingConfig(input.workspaceId),
+    loadLeadRecoveryConfigPersisted(input.workspaceId),
   ]);
 
-  const bookingOn = bookingEnabledForPrompt(bookingConfig);
+  const recoveryGoal = inferMctbAiRecoveryGoalType(lrConfig);
   let bookingUrl: string | null = null;
-  if (bookingOn) {
-    bookingUrl = await resolveFallbackBookingUrl(input.workspaceId, bookingConfig);
+  if (lrConfig.bookingLinkId) {
+    const prisma = getPrisma();
+    const row = await prisma.mctbBookingLink.findFirst({
+      where: { workspaceId: input.workspaceId, id: lrConfig.bookingLinkId, active: true },
+    });
+    bookingUrl = row?.url?.trim() || null;
   }
+  if (!bookingUrl) {
+    const bookingOnLegacy = bookingEnabledForPrompt(bookingConfig);
+    if (bookingOnLegacy) {
+      bookingUrl = await resolveFallbackBookingUrl(input.workspaceId, bookingConfig);
+    }
+  }
+  const bookingOn = recoveryGoal === "SCHEDULE" && Boolean(bookingUrl?.trim());
 
   const result = await runMctbSimpleSmsAgentTurn({
     customerMessage: input.body,

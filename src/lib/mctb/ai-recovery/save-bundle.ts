@@ -16,7 +16,12 @@ import {
 } from "@/lib/mctb/lead-recovery/config";
 import { computeLeadRecoveryPolicyHealth } from "@/lib/mctb/lead-recovery/policy-health";
 import { loadMctbLeadRecoveryKnowledgeBundle } from "@/lib/mctb/lead-recovery/knowledge-prompt";
-import type { LeadRecoveryScenarioKey, MctbSmsCollectFieldDef } from "@/lib/mctb/lead-recovery/types";
+import { normalizeCustomRecoveryGoal } from "@/lib/mctb/ai-recovery/recovery-goal";
+import type {
+  LeadRecoveryScenarioKey,
+  MctbAiRecoveryGoalType,
+  MctbSmsCollectFieldDef,
+} from "@/lib/mctb/lead-recovery/types";
 
 const MAX_ABOUT = 12_000;
 const MAX_EMERGENCY = 4_000;
@@ -33,6 +38,8 @@ export type AiRecoverySaveBundleInput = {
   aboutBusiness?: string;
   emergencyCriteria?: string;
   emergencyDetectionEnabled?: boolean;
+  recoveryGoalType?: MctbAiRecoveryGoalType;
+  customRecoveryGoal?: string | null;
 };
 
 export type AiRecoverySaveBundleResult = {
@@ -111,6 +118,13 @@ export async function saveAiRecoveryBundle(
     };
   }
 
+  const recoveryGoalType =
+    input.recoveryGoalType ?? existing.recoveryGoalType ?? "FOLLOW_UP";
+  const customRecoveryGoal =
+    input.customRecoveryGoal !== undefined
+      ? normalizeCustomRecoveryGoal(input.customRecoveryGoal)
+      : existing.customRecoveryGoal ?? null;
+
   const patch = buildAiRecoverySavePatch({
     enabled: true,
     fieldToggles,
@@ -119,6 +133,8 @@ export async function saveAiRecoveryBundle(
       : undefined,
     allowDynamicCustomQuestions: input.allowDynamicCustomQuestions,
     enabledScenarios: input.enabledScenarios,
+    recoveryGoalType,
+    customRecoveryGoal,
     bookingLinkEnabled: input.bookingLinkEnabled === true,
     bookingLinkId: input.bookingLinkId ?? existing.bookingLinkId,
     existing,

@@ -8,6 +8,7 @@ import { hasMctbAiBookingEntitlement } from "@/lib/mctb/ai-booking/entitlement";
 import { hasActiveMctbPaidEntitlement } from "@/lib/mctb/entitlement";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { isMctbSetupMessagingReady } from "@/lib/mctb/setup-messaging-ready";
+import { inferMctbAiRecoveryGoalType } from "@/lib/mctb/ai-recovery/recovery-goal";
 import { loadLeadRecoveryConfigPersisted } from "@/lib/mctb/lead-recovery/config";
 import { senderModeCustomerLabel } from "@/lib/mctb/missed-calls-booking-action";
 import { deriveRequiredActions } from "@/lib/compliance-helpers";
@@ -81,6 +82,8 @@ export async function GET() {
           smsCollectFields: config.smsCollectFields,
           allowDynamicCustomQuestions: config.allowDynamicCustomQuestions,
           enabledScenarios: config.enabledScenarios,
+          recoveryGoalType: inferMctbAiRecoveryGoalType(config),
+          customRecoveryGoal: config.customRecoveryGoal ?? null,
         },
         booking: {
           configAvailable: bookingConfigAvailable,

@@ -18,6 +18,11 @@ import {
   smsCollectFieldsToCapabilities,
 } from "@/lib/mctb/ai-recovery/collect-field-schema";
 import { normalizeConversationalAiRecoveryConfig } from "@/lib/mctb/ai-recovery/conversational-sms-config";
+import {
+  inferMctbAiRecoveryGoalType,
+  normalizeCustomRecoveryGoal,
+  parseMctbAiRecoveryGoalType,
+} from "@/lib/mctb/ai-recovery/recovery-goal";
 import { launchFaqIntentPolicyOverrides } from "@/lib/mctb/lead-recovery/launch-faq-policies";
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -210,10 +215,15 @@ export async function loadLeadRecoveryConfigPersisted(
     ? (raw.collectCapabilities as LeadRecoveryCollectField[])
     : [];
 
+  const customRecoveryGoal = normalizeCustomRecoveryGoal(raw.customRecoveryGoal);
+  const recoveryGoalTypeStored = parseMctbAiRecoveryGoalType(raw.recoveryGoalType);
+
   const baseConfig: LeadRecoveryWorkspaceConfig = normalizeConversationalAiRecoveryConfig({
     enabled,
     version: typeof raw.version === "number" ? raw.version : 1,
     globalMode,
+    recoveryGoalType: recoveryGoalTypeStored ?? undefined,
+    customRecoveryGoal,
     enabledScenarios,
     enabledIntents,
     intentPolicies,
@@ -255,7 +265,11 @@ export async function loadLeadRecoveryConfigPersisted(
     scenarioHealth: {},
   });
 
-  return baseConfig;
+  const resolvedGoal = inferMctbAiRecoveryGoalType(baseConfig);
+  return {
+    ...baseConfig,
+    recoveryGoalType: resolvedGoal,
+  };
 }
 
 /** Authoritative enabled flag without policy/provider health (Handoff, shell hints). */
@@ -295,6 +309,8 @@ export async function saveLeadRecoveryConfig(
     bookingLinkId: string | null;
     smsCollectFields: LeadRecoveryWorkspaceConfig["smsCollectFields"];
     allowDynamicCustomQuestions: boolean;
+    recoveryGoalType: LeadRecoveryWorkspaceConfig["recoveryGoalType"];
+    customRecoveryGoal: string | null;
     version: number;
   }>,
 ): Promise<LeadRecoveryWorkspaceConfig> {

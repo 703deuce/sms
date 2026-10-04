@@ -5,6 +5,10 @@ import {
   type MctbApprovedBusinessInformation,
 } from "@/lib/mctb/approved-business-information";
 import { loadMctbHandoffConfig } from "@/lib/mctb/handoff/config";
+import {
+  composeRecoveryGoalPromptBlock,
+  inferMctbAiRecoveryGoalType,
+} from "@/lib/mctb/ai-recovery/recovery-goal";
 
 export const LEAD_RECOVERY_KNOWLEDGE_GROUNDING_RULES = `Use only the business knowledge sections below as factual sources for business-specific answers and urgency/emergency classification.
 Never invent services, service areas, prices, hours, policies, availability, or emergency handling contrary to the business definition.
@@ -101,6 +105,12 @@ export async function loadMctbLeadRecoveryKnowledgeBundle(
     emergencyDetectionEnabled: handoff.emergencyDetectionEnabled,
   });
 
+  const recoveryGoal = inferMctbAiRecoveryGoalType(lrConfig);
+  runtime_prompt_block += `\n\n${composeRecoveryGoalPromptBlock({
+    goal: recoveryGoal,
+    customRecoveryGoal: lrConfig.customRecoveryGoal,
+  })}`;
+
   const includeCollect = options?.includeCollectPrompts !== false;
   const { enabledSmsCollectPrompts } = await import(
     "@/lib/mctb/ai-recovery/collect-field-schema"
@@ -113,7 +123,9 @@ export async function loadMctbLeadRecoveryKnowledgeBundle(
       (p) =>
         `- ${p.label}${p.required ? " (required)" : ""}: ${p.prompt}${p.custom ? " [custom]" : ""}`,
     );
-    runtime_prompt_block += `\n\nINFORMATION TO COLLECT (when needed — one question at a time, after answering the customer):\n${lines.join("\n")}`;
+    runtime_prompt_block += `\n\nINFORMATION TO COLLECT (objectives — not a rigid questionnaire; skip fields already answered in the thread):\n${lines.join("\n")}`;
+    runtime_prompt_block +=
+      "\nDo not re-ask for information the customer already provided. Ask only for missing items, one at a time when needed.";
     if (lrConfig.allowDynamicCustomQuestions) {
       runtime_prompt_block +=
         "\nYou may ask one brief clarifying question not listed above when it clearly helps follow up (e.g. a detail the customer raised). Do not invent required compliance fields.";
