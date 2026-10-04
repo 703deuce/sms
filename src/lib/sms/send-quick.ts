@@ -296,16 +296,17 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
     providerAccepted = true;
     providerSid = result.sid;
 
+    // Persist provider id before any other post-send work so Telnyx delivery webhooks can match.
     try {
       await prisma.message.update({
         where: { id: pending.id },
         data: {
-          status: result.status || "sent",
           providerId: result.sid,
+          status: result.status || "sent",
         },
       });
     } catch (persistErr) {
-      console.warn("[sendQuickSms] post-accept persist failed", persistErr);
+      console.warn("[sendQuickSms] post-accept providerId persist failed", persistErr);
     }
 
     try {

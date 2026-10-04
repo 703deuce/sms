@@ -7,6 +7,7 @@ import { getPrisma } from "@/lib/db";
 import { markRecipientFact } from "@/lib/campaigns/sequence-runner";
 import { normalizeDeliveryError } from "@/lib/messaging/delivery-errors";
 import type { ParsedDeliveryStatus } from "@/lib/messaging/provider";
+import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 
 /** Monotonic ranks — never downgrade (clicked is sticky via separate path). */
 export const DELIVERY_STATUS_RANK: Record<string, number> = {
@@ -40,7 +41,70 @@ export type ApplyDeliveryStatusInput = {
   errorCode?: string | null;
   errorDetail?: string | null;
   provider?: "twilio" | "telnyx" | null;
+  /** Telnyx: match in-flight rows still keyed as idem:mctb-recovery:* before providerId is saved. */
+  toE164?: string | null;
+  fromE164?: string | null;
 };
+
+const IDEM_PROVIDER_PREFIX = "idem:";
+const MCTB_RECOVERY_IDEM_PREFIX = "mctb-recovery:";
+
+async function resolveOutboundMessageForDeliveryUpdate(
+  input: ApplyDeliveryStatusInput,
+): Promise<{ id: string } | null> {
+  const prisma = getPrisma();
+  const sid = input.providerMessageId;
+  if (!sid) return null;
+
+  const direct = await prisma.message.findFirst({
+    where: { providerId: sid },
+    select: { id: true },
+  });
+  if (direct) return direct;
+
+  let to: string | null = null;
+  if (input.toE164) {
+    try {
+      to = normalizeE164(input.toE164);
+    } catch {
+      to = input.toE164.trim();
+    }
+  }
+  if (!to) return null;
+
+  const since = new Date(Date.now() - 30 * 60 * 1000);
+  const candidates = await prisma.message.findMany({
+    where: {
+      to,
+      providerId: { startsWith: IDEM_PROVIDER_PREFIX },
+      idempotencyKey: { startsWith: MCTB_RECOVERY_IDEM_PREFIX },
+      createdAt: { gte: since },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 5,
+    select: { id: true, from: true },
+  });
+
+  if (input.fromE164) {
+    let fromNorm: string | null = null;
+    try {
+      fromNorm = normalizeE164(input.fromE164);
+    } catch {
+      fromNorm = input.fromE164.trim();
+    }
+    const matched = candidates.find((row) => {
+      if (!fromNorm || !row.from) return true;
+      try {
+        return normalizeE164(row.from) === fromNorm;
+      } catch {
+        return row.from === fromNorm;
+      }
+    });
+    return matched ? { id: matched.id } : candidates[0] ? { id: candidates[0].id } : null;
+  }
+
+  return candidates[0] ? { id: candidates[0].id } : null;
+}
 
 export type ApplyDeliveryStatusResult = {
   ok: true;
@@ -77,10 +141,20 @@ export async function applyOutboundDeliveryStatus(
   if (status === "delivered") messagePatch.deliveredAt = now;
   if (TERMINAL_FAILURE.has(status)) messagePatch.failedAt = now;
 
-  const messageUpdate = await prisma.message.updateMany({
+  let messageUpdate = await prisma.message.updateMany({
     where: { providerId: sid },
     data: messagePatch,
   });
+
+  if (messageUpdate.count === 0) {
+    const correlated = await resolveOutboundMessageForDeliveryUpdate(input);
+    if (correlated) {
+      messageUpdate = await prisma.message.updateMany({
+        where: { id: correlated.id },
+        data: { ...messagePatch, providerId: sid },
+      });
+    }
+  }
 
   const campaignMsg = await prisma.campaignMessage.findFirst({ where: { providerId: sid } });
   if (!campaignMsg) {
@@ -172,5 +246,7 @@ export async function applyParsedDeliveryStatus(
     errorCode: parsed.errorCode,
     errorDetail: parsed.errorDetail,
     provider,
+    toE164: parsed.toE164,
+    fromE164: parsed.fromE164,
   });
 }

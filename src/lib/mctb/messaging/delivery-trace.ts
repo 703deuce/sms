@@ -29,8 +29,11 @@ export async function bridgeMctbRecoveryDeliveryWebhook(input: {
 }
 
 /**
- * Bridge Telnyx delivery webhooks into MCTB event traces when the outbound
+ * Bridge provider delivery webhooks into MCTB event traces when the outbound
  * message belongs to a missed-call recovery send.
+ *
+ * Primary production path: Telnyx platform sender → `/api/telnyx/messaging`.
+ * Legacy preserved Twilio platform sender → `/api/twilio/message-status`.
  */
 export async function appendMctbDeliveryTraceFromProviderStatus(input: {
   providerMessageId: string;

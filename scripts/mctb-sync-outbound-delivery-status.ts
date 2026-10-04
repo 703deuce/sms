@@ -1,13 +1,13 @@
 /**
- * One-off: pull Twilio message status and apply delivery + MCTB trace (platform sender path).
+ * Pull Telnyx delivery status for an outbound Message row (MCTB platform sender path).
  *
  * Usage:
  *   MESSAGE_ID=cmut0yxqh0q1x420b2r2h5w2e npx tsx scripts/mctb-sync-outbound-delivery-status.ts
  */
 import { getPrisma } from "@/lib/db";
-import { getLiveParentClient } from "@/lib/messaging/twilio-client";
 import { applyOutboundDeliveryStatus } from "@/lib/messaging/delivery-status";
 import { bridgeMctbRecoveryDeliveryWebhook } from "@/lib/mctb/messaging/delivery-trace";
+import { lookupTelnyxMessageStatus } from "@/lib/messaging/telnyx/lookup-message-status";
 
 const messageId = process.env.MESSAGE_ID?.trim();
 if (!messageId) {
@@ -19,27 +19,31 @@ async function main() {
   const prisma = getPrisma();
   const msg = await prisma.message.findUnique({ where: { id: messageId } });
   if (!msg?.providerId || msg.providerId.startsWith("idem:") || msg.providerId.startsWith("pending:")) {
-    console.error("Message missing real providerId", msg?.providerId);
+    console.error("Message missing Telnyx providerId", msg?.providerId);
     process.exit(1);
   }
 
-  const client = getLiveParentClient();
-  const twilioMsg = await client.messages(msg.providerId).fetch();
-  const status = (twilioMsg.status || "unknown").toLowerCase();
+  const lookup = await lookupTelnyxMessageStatus(msg.providerId);
+  if (!lookup) {
+    console.error("Telnyx lookup failed for", msg.providerId);
+    process.exit(1);
+  }
 
   const result = await applyOutboundDeliveryStatus({
     providerMessageId: msg.providerId,
-    status,
-    providerStatus: twilioMsg.status,
-    errorCode: twilioMsg.errorCode?.toString() || null,
-    errorDetail: twilioMsg.errorMessage || null,
-    provider: "twilio",
+    status: lookup.status,
+    providerStatus: lookup.providerStatus,
+    errorCode: lookup.errorCode,
+    errorDetail: lookup.errorDetail,
+    provider: "telnyx",
+    toE164: msg.to,
+    fromE164: msg.from,
   });
 
   const mctb = await bridgeMctbRecoveryDeliveryWebhook({
     providerMessageId: msg.providerId,
     status: result.status,
-    errorDetail: twilioMsg.errorMessage || null,
+    errorDetail: lookup.errorDetail,
   });
 
   console.log(
@@ -47,8 +51,9 @@ async function main() {
       {
         messageId,
         providerId: msg.providerId,
-        twilioStatus: twilioMsg.status,
+        telnyxStatus: lookup.providerStatus,
         applied: result.status,
+        updatedMessage: result.updatedMessage,
         mctbTrace: mctb,
       },
       null,
