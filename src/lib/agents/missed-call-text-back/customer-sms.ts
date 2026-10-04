@@ -1,6 +1,6 @@
 /**
- * MCTB customer SMS replies (Telnyx) — AI Lead Recovery is the only conversational agent.
- * AI booking runs inside LR via AI_BOOK (no parallel SMS agents or legacy handoff modes).
+ * MCTB customer SMS replies (Telnyx) — multi-agent SMS pipeline first (router + grounded FAQ),
+ * then Lead Recovery policy fallback. Live calendar booking when fulfillmentMode=calendar.
  */
 
 import { getPrisma } from "@/lib/db";

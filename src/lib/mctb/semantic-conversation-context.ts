@@ -30,6 +30,14 @@ export type MctbStructuredConversationState = {
   pending_slot_id: string | null;
 };
 
+export type MctbConfiguredCollectPrompt = {
+  id: string;
+  label: string;
+  prompt: string;
+  required: boolean;
+  custom: boolean;
+};
+
 export type MctbApprovedBusinessInformationContext = {
   business_name: string;
   prompt_block: string;
@@ -38,6 +46,8 @@ export type MctbApprovedBusinessInformationContext = {
   has_hours: boolean;
   has_services: boolean;
   fact_count: number;
+  information_to_collect: MctbConfiguredCollectPrompt[];
+  allow_dynamic_collect_questions: boolean;
 };
 
 export type MctbSemanticConversationContext = {
@@ -195,6 +205,9 @@ export async function buildMctbSemanticConversationContext(input: {
       : Promise.resolve(null),
   ]);
 
+  const { enabledSmsCollectPrompts } = await import(
+    "@/lib/mctb/ai-recovery/collect-field-schema"
+  );
   const approved_business_information: MctbApprovedBusinessInformationContext | null =
     approvedRaw
       ? {
@@ -205,6 +218,8 @@ export async function buildMctbSemanticConversationContext(input: {
           has_hours: Boolean(approvedRaw.approved.business_hours),
           has_services: approvedRaw.approved.services.length > 0,
           fact_count: approvedRaw.approved.knowledge_facts.length,
+          information_to_collect: enabledSmsCollectPrompts(lrConfig.smsCollectFields ?? []),
+          allow_dynamic_collect_questions: lrConfig.allowDynamicCustomQuestions !== false,
         }
       : null;
 
@@ -285,6 +300,8 @@ export function leadRecoveryIntentUserPayload(
           prompt_block: biz.prompt_block,
           about_business: biz.about_business,
           emergency_definition: biz.emergency_criteria,
+          information_to_collect: biz.information_to_collect,
+          allow_dynamic_collect_questions: biz.allow_dynamic_collect_questions,
         }
       : null,
     context_precedence_note:

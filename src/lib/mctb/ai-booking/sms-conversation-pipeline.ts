@@ -20,8 +20,110 @@ import { loadLeadRecoveryConfig } from "@/lib/mctb/lead-recovery/config";
 import { executeLeadRecoveryActions } from "@/lib/mctb/lead-recovery/action-runtime";
 import { evaluateLeadRecoveryPolicy } from "@/lib/mctb/lead-recovery/policy-engine";
 import { loadLeadRecoveryState } from "@/lib/mctb/lead-recovery/state-store";
-import type { StructuredLeadIntent } from "@/lib/mctb/lead-recovery/types";
+import type {
+  LeadRecoveryIntent,
+  LeadRecoveryWorkspaceConfig,
+  StructuredLeadIntent,
+} from "@/lib/mctb/lead-recovery/types";
 import { finalizeMctbOutboundSms } from "@/lib/mctb/sms-channel";
+
+const PIPELINE_FAQ_FIRST_INTENTS = new Set<LeadRecoveryIntent>([
+  "BUSINESS_HOURS",
+  "BUSINESS_FAQ",
+  "BUSINESS_LOCATION",
+  "SERVICE_AREA_CHECK",
+]);
+
+const PIPELINE_POLICY_INTENTS = new Set<LeadRecoveryIntent>([
+  "SERVICE_REQUEST",
+  "CALLBACK_REQUEST",
+  "PRICING_QUESTION",
+  "ESTIMATE_REQUEST",
+  "EMERGENCY_OR_URGENT",
+  "EXISTING_CUSTOMER_ISSUE",
+  "CANCEL_REQUEST",
+  "PAYMENT_REQUEST",
+  "PAYMENT_STATUS_QUESTION",
+  "COMPLAINT",
+  "RESCHEDULE_REQUEST",
+  "SENSITIVE_OR_HIGH_RISK",
+]);
+
+function scenarioAllowsIntent(
+  config: LeadRecoveryWorkspaceConfig,
+  intent: LeadRecoveryIntent,
+): boolean {
+  if (!config.enabledIntents.includes(intent)) return false;
+  if (intent === "EMERGENCY_OR_URGENT") return config.enabledScenarios.emergencies === true;
+  if (intent === "PAYMENT_REQUEST" || intent === "PAYMENT_STATUS_QUESTION") {
+    return config.enabledScenarios.payments === true;
+  }
+  if (
+    intent === "PRICING_QUESTION" ||
+    intent === "ESTIMATE_REQUEST"
+  ) {
+    return config.enabledScenarios.pricing === true;
+  }
+  if (intent === "EXISTING_CUSTOMER_ISSUE" || intent === "CANCEL_REQUEST") {
+    return config.enabledScenarios.existing_customer === true;
+  }
+  if (intent === "SERVICE_REQUEST" || intent === "CALLBACK_REQUEST") {
+    return config.enabledScenarios.take_message === true;
+  }
+  return true;
+}
+
+async function tryLeadRecoveryPolicyRuntime(input: {
+  pipeline: MctbSmsConversationPipelineInput;
+  lrConfig: LeadRecoveryWorkspaceConfig;
+  classified: StructuredLeadIntent;
+}): Promise<MctbAiBookingInboundResult | null> {
+  const state = await loadLeadRecoveryState({
+    workspaceId: input.pipeline.workspaceId,
+    conversationId: input.pipeline.conversationId,
+  });
+  const collectActive =
+    state.phase === "COLLECT" ||
+    state.missingFields.length > 0 ||
+    state.pendingAction?.action === "COLLECT_FIELD";
+
+  const primary = input.classified.primary_intent;
+
+  if (!collectActive && PIPELINE_FAQ_FIRST_INTENTS.has(primary)) {
+    return null;
+  }
+  if (!collectActive && primary === "GENERAL_INQUIRY") {
+    return null;
+  }
+  if (!collectActive && !PIPELINE_POLICY_INTENTS.has(primary)) {
+    return null;
+  }
+  if (!collectActive && !scenarioAllowsIntent(input.lrConfig, primary)) {
+    return null;
+  }
+
+  const { handleMctbLeadRecoveryInboundSms } = await import(
+    "@/lib/mctb/lead-recovery/conversation-runtime"
+  );
+  const lr = await handleMctbLeadRecoveryInboundSms({
+    workspaceId: input.pipeline.workspaceId,
+    conversationId: input.pipeline.conversationId,
+    contactId: input.pipeline.contactId,
+    customerPhone: input.pipeline.customerPhone,
+    customerName: input.pipeline.customerName,
+    customerEmail: input.pipeline.customerEmail,
+    body: input.pipeline.body,
+    timezone: input.pipeline.timezone,
+  });
+  if (!lr.handled || !lr.reply?.trim()) {
+    return null;
+  }
+  return {
+    handled: true,
+    reply: finalizeMctbOutboundSms(lr.reply),
+    action: lr.action || "lead_recovery",
+  };
+}
 
 export type MctbSmsConversationPipelineInput = {
   workspaceId: string;
@@ -149,6 +251,13 @@ export async function handleMctbSmsConversationPipeline(
     lrConfig,
   });
   if (compliance) return compliance;
+
+  const policyRuntime = await tryLeadRecoveryPolicyRuntime({
+    pipeline: input,
+    lrConfig,
+    classified,
+  });
+  if (policyRuntime) return policyRuntime;
 
   const session = await getMctbAiBookingSessionStore().get(input.conversationId);
   const offeredSlots = session?.offeredSlots ?? [];

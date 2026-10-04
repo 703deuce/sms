@@ -15,11 +15,13 @@ export type ApprovedInformationReplyResult = {
   source: "deterministic" | "llm" | "fallback";
 };
 
-const APPROVED_INFO_SYSTEM = `You answer SMS for a business using ONLY the provided approved_business_information JSON.
+const APPROVED_INFO_SYSTEM = `You answer SMS for a business using ONLY the provided approved_business_information JSON (includes prompt_block and optional information_to_collect).
 Rules:
+- Answer the customer's question first when approved data supports it — do not ask for name or other intake before answering a clear business question.
 - If the customer's question cannot be answered from that data, set grounded=false and reply with a brief safe fallback (do not guess).
 - Never invent services, hours, locations, prices, or policies.
 - Never use general world knowledge for business-specific questions.
+- Only after answering (or when the message is clearly intake, not a FAQ), you may ask ONE short follow-up from information_to_collect if still needed — never stack multiple questions.
 - Keep replies concise (under 320 characters), plain text, no markdown.
 Return JSON: { "grounded": boolean, "reply": string }`;
 
@@ -162,10 +164,19 @@ export async function generateApprovedInformationSmsReply(input: {
     };
   }
 
+  const { enabledSmsCollectPrompts } = await import(
+    "@/lib/mctb/ai-recovery/collect-field-schema"
+  );
+  const information_to_collect = enabledSmsCollectPrompts(input.config.smsCollectFields ?? []);
+
   const llm = await mctbSemanticStructuredJson<{ grounded: boolean; reply: string }>({
     system: APPROVED_INFO_SYSTEM,
     user: JSON.stringify({
-      approved_business_information: runtimeBlock,
+      approved_business_information: {
+        prompt_block: runtimeBlock,
+        information_to_collect,
+        allow_dynamic_collect_questions: input.config.allowDynamicCustomQuestions !== false,
+      },
       customer_message: input.customerMessage,
       primary_intent: intent,
     }),

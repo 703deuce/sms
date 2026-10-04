@@ -135,6 +135,7 @@ export function NewUiMctbAiRecoveryPage() {
         enabled: enabledNow,
         smsCollectFields: smsFieldsRef.current,
         allowDynamicCustomQuestions: allowDynamicRef.current,
+        enabledScenarios: scenariosRef.current,
         bookingLinkEnabled: bookingLinkEnabled && Boolean(resolvedLinkId && bookingLinkUrl.trim()),
         bookingLinkId: bookingLinkEnabled ? resolvedLinkId : null,
       }),
@@ -163,19 +164,6 @@ export function NewUiMctbAiRecoveryPage() {
       );
     }
 
-    if (enabledNow) {
-      const lrRes = await fetch("/api/mctb/lead-recovery/config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled: true, enabledScenarios: scenariosNow }),
-      });
-      const lrJson = await lrRes.json().catch(() => ({}));
-      if (!lrRes.ok) {
-        throw new Error(
-          (lrJson as { error?: string }).error || "Could not save lead recovery scenarios",
-        );
-      }
-    }
     await reload();
   }, [
     bookingLinkEnabled,

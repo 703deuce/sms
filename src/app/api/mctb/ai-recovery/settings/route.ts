@@ -13,6 +13,7 @@ import { computeLeadRecoveryPolicyHealth } from "@/lib/mctb/lead-recovery/policy
 import { applyLaunchAiRepliesSetting } from "@/lib/mctb/launch-lead-recovery";
 import { saveMctbHandoffConfig } from "@/lib/mctb/handoff/config";
 import { normalizeSmsCollectFields } from "@/lib/mctb/ai-recovery/collect-field-schema";
+import type { LeadRecoveryScenarioKey } from "@/lib/mctb/lead-recovery/types";
 
 function parseFieldToggles(body: Record<string, unknown>): Record<AiRecoverySimplifiedField, boolean> {
   const fields = body.fields;
@@ -74,11 +75,17 @@ export async function POST(request: Request) {
         ? undefined
         : body.allowDynamicCustomQuestions !== false;
 
+    const enabledScenarios =
+      body.enabledScenarios && typeof body.enabledScenarios === "object"
+        ? (body.enabledScenarios as Partial<Record<LeadRecoveryScenarioKey, boolean>>)
+        : undefined;
+
     const patch = buildAiRecoverySavePatch({
       enabled: true,
       fieldToggles,
       smsCollectFields,
       allowDynamicCustomQuestions,
+      enabledScenarios,
       bookingLinkEnabled,
       bookingLinkId: bookingLinkId ?? existing.bookingLinkId,
       existing,

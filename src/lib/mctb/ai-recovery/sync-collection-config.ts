@@ -7,7 +7,11 @@ import type {
   LeadRecoveryWorkspaceConfig,
 } from "@/lib/mctb/lead-recovery/types";
 import { launchFaqIntentPolicyOverrides } from "@/lib/mctb/lead-recovery/launch-faq-policies";
-import { defaultLaunchEnabledScenarios } from "@/lib/mctb/lead-recovery/scenarios";
+import {
+  defaultLaunchEnabledScenarios,
+  intentsForEnabledScenarios,
+} from "@/lib/mctb/lead-recovery/scenarios";
+import type { LeadRecoveryScenarioKey } from "@/lib/mctb/lead-recovery/types";
 import {
   simplifiedTogglesToCollectCapabilities,
   type AiRecoverySimplifiedField,
@@ -84,6 +88,7 @@ export type NormalizeAiRecoverySaveInput = {
   allowDynamicCustomQuestions?: boolean;
   bookingLinkEnabled: boolean;
   bookingLinkId: string | null;
+  enabledScenarios?: Partial<Record<LeadRecoveryScenarioKey, boolean>>;
   existing: LeadRecoveryWorkspaceConfig;
 };
 
@@ -147,12 +152,20 @@ export function buildAiRecoverySavePatch(
   const fallback = stripPolicyActions(input.existing.fallbackPolicy);
   const fallbackCollect = collectForIntent("GENERAL_INQUIRY", collectCapabilities);
 
+  const enabledScenarios = {
+    ...defaultLaunchEnabledScenarios(),
+    ...input.existing.enabledScenarios,
+    ...(input.enabledScenarios ?? {}),
+  };
+
   return {
     enabled: input.enabled,
-    smsCollectFields: input.smsCollectFields,
-    allowDynamicCustomQuestions: input.allowDynamicCustomQuestions,
+    smsCollectFields: input.smsCollectFields ?? input.existing.smsCollectFields,
+    allowDynamicCustomQuestions:
+      input.allowDynamicCustomQuestions ?? input.existing.allowDynamicCustomQuestions ?? true,
     globalMode: "STANDARD",
-    enabledScenarios: defaultLaunchEnabledScenarios(),
+    enabledScenarios,
+    enabledIntents: intentsForEnabledScenarios(enabledScenarios),
     intentPolicies,
     fallbackPolicy: {
       ...fallback,
