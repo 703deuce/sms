@@ -194,6 +194,9 @@ export function MctbOnboardingRuntime({
       const goalRaw = setupJson?.data?.recoveryGoal ?? setupJson?.recoveryGoal;
       const goalId = parseRecoveryGoalId(goalRaw);
       if (goalId) setRecoveryGoal(goalId);
+    } else if (json.state?.consentMode) {
+      const { normalizeMctbConsentMode } = await import("@/lib/mctb/consent-mode");
+      setConsentMode(normalizeMctbConsentMode(json.state.consentMode));
     } else if (json.capabilities) {
       setExistingConsentEligible(Boolean(json.capabilities.pressOneConsent));
     }
