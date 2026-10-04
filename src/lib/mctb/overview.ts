@@ -29,6 +29,11 @@ import { appProductSourceToPrisma } from "@/lib/mass-texting/product-source";
 import { loadLeadRecoveryConfigPersisted } from "@/lib/mctb/lead-recovery/config";
 import { loadLatestTeamBriefsForMissedCalls } from "@/lib/mctb/handoff/team-activity-brief";
 import { buildMctbOverviewLeadRecoveryCard } from "@/lib/mctb/overview-lead-recovery-card";
+import {
+  buildOverviewMissedCallSubtitle,
+  formatOverviewRelativeTime,
+  overviewMissedCallStatusChip,
+} from "@/lib/mctb/overview-display";
 import { INBOUND_HANDLING_MODE_LABELS } from "@/lib/mctb/inbound-handling/types";
 import type { MctbOverviewPayload, MctbOverviewStatus } from "@/lib/mctb/overview-types";
 
@@ -113,6 +118,7 @@ async function loadMctbOverviewShared(workspaceId: string): Promise<Omit<MctbOve
     overviewKpis,
     recentEvents,
     recentConversations,
+    needsReplyConversations,
   ] = await Promise.all([
     loadMissedCallTextConfig(workspaceId),
     loadMctbOnboardingState(workspaceId),
@@ -136,7 +142,21 @@ async function loadMctbOverviewShared(workspaceId: string): Promise<Omit<MctbOve
       orderBy: { updatedAt: "desc" },
       take: 5,
       include: {
-        contact: { select: { name: true } },
+        contact: { select: { firstName: true, lastName: true } },
+        messages: { orderBy: { createdAt: "desc" }, take: 1 },
+      },
+    }),
+    prisma.conversation.findMany({
+      where: {
+        workspaceId,
+        productSource: appProductSourceToPrisma("mctb"),
+        unread: true,
+        status: "OPEN",
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 5,
+      include: {
+        contact: { select: { firstName: true, lastName: true } },
         messages: { orderBy: { createdAt: "desc" }, take: 1 },
       },
     }),
@@ -227,21 +247,82 @@ async function loadMctbOverviewShared(workspaceId: string): Promise<Omit<MctbOve
       );
       return recentEvents.map((e: (typeof recentEvents)[number]) => {
         const brief = briefs.get(e.id);
+        const recoveryLabel = formatRecoveryStatus(e.status, e.suppressionReason);
+        const replyLabel = formatReplyStatus(e.status);
+        const callerName = brief?.callerName?.trim() || null;
+        const callerLabel = callerName || formatMctbPhoneLabel(e.callerE164);
+        const needsAttention =
+          replyLabel.toLowerCase().includes("need") ||
+          recoveryLabel.toLowerCase().includes("need");
         return {
           id: e.id,
-          callerLabel: formatMctbPhoneLabel(e.callerE164),
+          callerLabel,
+          callerName,
+          callerE164: e.callerE164,
           missedAt: e.detectedAt.toISOString(),
-          recoveryLabel: formatRecoveryStatus(e.status, e.suppressionReason),
-          replyLabel: formatReplyStatus(e.status),
+          missedAtRelative: formatOverviewRelativeTime(e.detectedAt.toISOString()),
+          recoveryLabel,
+          replyLabel,
+          subtitle: buildOverviewMissedCallSubtitle({
+            teamBriefHeadline: brief?.headline ?? null,
+            recoveryLabel,
+            replyLabel,
+          }),
+          statusChip: overviewMissedCallStatusChip({
+            recoveryLabel,
+            replyLabel,
+            needsAttention,
+          }),
           teamBriefHeadline: brief?.headline ?? null,
-          teamBriefSummary: brief?.summary?.slice(0, 200) ?? null,
+          teamBriefSummary: brief?.summary?.slice(0, 120) ?? null,
+        };
+      });
+    })(),
+    needsAttention: await (async () => {
+      const briefIds = needsReplyConversations
+        .map((c) => c.missedCallEventId)
+        .filter((id): id is string => Boolean(id));
+      const briefs = await loadLatestTeamBriefsForMissedCalls(workspaceId, briefIds).catch(
+        () => new Map(),
+      );
+      return needsReplyConversations.map((c) => {
+        const contactName = [
+          c.contact?.firstName,
+          c.contact?.lastName,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
+        const name = contactName || formatMctbPhoneLabel(c.fromE164 || "Unknown");
+        const brief = c.missedCallEventId ? briefs.get(c.missedCallEventId) : null;
+        const preview =
+          brief?.summary?.slice(0, 140) ||
+          c.messages[0]?.body?.slice(0, 140) ||
+          "Waiting on your reply.";
+        const reason =
+          brief?.headline?.includes("callback") || preview.toLowerCase().includes("call")
+            ? "Needs callback"
+            : "Needs reply";
+        return {
+          missedCallId: c.missedCallEventId,
+          conversationId: c.id,
+          name,
+          phone: formatMctbPhoneLabel(c.fromE164 || ""),
+          phoneE164: c.fromE164 || "",
+          reason,
+          preview,
+          updatedAt: c.updatedAt.toISOString(),
         };
       });
     })(),
     recentConversations: recentConversations.map((c: (typeof recentConversations)[number]) => {
       const lastMsg = c.messages[0];
       const preview = lastMsg?.body?.slice(0, 80) || "No messages yet";
-      const name = c.contact?.name || c.fromE164 || "Unknown";
+      const contactName = [c.contact?.firstName, c.contact?.lastName]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+      const name = contactName || c.fromE164 || "Unknown";
       return {
         id: c.id,
         label: name,

@@ -19,12 +19,27 @@ export type MctbOverviewPayload = {
     repliesToday: number;
     needsReplyCount: number;
   };
+  needsAttention: Array<{
+    missedCallId: string | null;
+    conversationId: string;
+    name: string;
+    phone: string;
+    phoneE164: string;
+    reason: string;
+    preview: string;
+    updatedAt: string;
+  }>;
   recentMissedCalls: Array<{
     id: string;
     callerLabel: string;
+    callerName: string | null;
+    callerE164: string;
     missedAt: string;
+    missedAtRelative: string;
     recoveryLabel: string;
     replyLabel: string;
+    subtitle: string;
+    statusChip: string;
     /** LLM team brief headline when a notification snapshot exists */
     teamBriefHeadline?: string | null;
     teamBriefSummary?: string | null;

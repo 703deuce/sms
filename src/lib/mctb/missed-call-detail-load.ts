@@ -34,6 +34,7 @@ async function loadConversationForEvent(
         productSource,
         OR: [
           { missedCallEventId: event.id },
+          { fromE164: event.callerE164 },
           ...(event.contactId ? [{ contactId: event.contactId }] : []),
         ],
       },
@@ -166,19 +167,56 @@ export async function loadMctbMissedCallDetailPayload(workspaceId: string, event
   let teamBrief = await loadLatestTeamBriefForMissedCall(workspaceId, eventId).catch(
     () => null,
   );
+  const briefCtx = await loadTeamBriefContext({
+    workspaceId,
+    missedCallEventId: eventId,
+    conversationId: conversation?.id ?? null,
+    triggerEvent: "caller_replied",
+  }).catch(() => null);
+
   if (
     !teamBrief &&
-    (conversation?.messages?.length || voicemail?.transcriptText || voicemail?.aiSummary)
+    (conversation?.messages?.length ||
+      briefCtx?.smsThread.length ||
+      voicemail?.transcriptText ||
+      voicemail?.aiSummary)
   ) {
-    const ctx = await loadTeamBriefContext({
-      workspaceId,
-      missedCallEventId: eventId,
-      conversationId: conversation?.id ?? null,
-      triggerEvent: "caller_replied",
-    }).catch(() => null);
-    if (ctx) {
-      teamBrief = await generateTeamActivityBrief(ctx).catch(() => null);
+    if (briefCtx) {
+      teamBrief = await generateTeamActivityBrief(briefCtx).catch(() => null);
     }
+  }
+
+  let conversationOut = conversation;
+  if ((!conversationOut?.messages?.length || conversationOut.messages.length === 0) && briefCtx?.smsThread.length) {
+    let linkedId = conversationOut?.id ?? null;
+    if (!linkedId) {
+      const linked = await prisma.conversation.findFirst({
+        where: {
+          workspaceId,
+          missedCallEventId: eventId,
+          productSource: appProductSourceToPrisma("mctb"),
+        },
+        select: { id: true },
+        orderBy: { updatedAt: "desc" },
+      });
+      linkedId = linked?.id ?? null;
+    }
+    conversationOut = {
+      id: linkedId ?? "",
+      unread: conversationOut?.unread ?? false,
+      status: conversationOut?.status ?? "OPEN",
+      updatedAt: conversationOut?.updatedAt ?? new Date().toISOString(),
+      messages: briefCtx.smsThread.map((m) => ({
+        body: m.body,
+        createdAt: m.at ?? new Date().toISOString(),
+        direction:
+          m.direction === "customer"
+            ? "inbound"
+            : m.direction === "business"
+              ? "outbound"
+              : "system",
+      })),
+    };
   }
 
   return {
@@ -201,7 +239,7 @@ export async function loadMctbMissedCallDetailPayload(workspaceId: string, event
       leadCaptureEnabled: config?.leadCaptureEnabled ?? false,
       consent,
       contact,
-      conversation,
+      conversation: conversationOut,
       voicemail: voicemail
         ? {
             id: voicemail.id,
