@@ -123,11 +123,19 @@ export async function saveMctbOnboardingState(
     baseCfg.mctb && typeof baseCfg.mctb === "object"
       ? (baseCfg.mctb as Record<string, unknown>)
       : {};
+  const onboardingRaw = asRecord(baseCfg.mctbOnboarding);
+  const onboardingExplicitConsent =
+    typeof onboardingRaw.consentMode === "string" && onboardingRaw.consentMode.length > 0;
+  const consentStepComplete = next.completedSteps.includes("consent");
+  const shouldMirrorConsentToMctb =
+    Boolean(patch.consentMode) ||
+    consentStepComplete ||
+    onboardingExplicitConsent;
   const customFieldsConfig = jsonSafe({
     ...baseCfg,
     mctbOnboarding: next,
-    ...(patch.consentMode
-      ? { mctb: { ...mctb, consentMode: patch.consentMode } }
+    ...(shouldMirrorConsentToMctb
+      ? { mctb: { ...mctb, consentMode: next.consentMode } }
       : {}),
   });
   await prisma.workspace.update({

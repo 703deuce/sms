@@ -15,4 +15,8 @@ assert.doesNotMatch(
 );
 assert.match(src, /consentMode:\s*canonicalConsent/);
 
+const onboardingState = readFileSync("src/lib/mctb/onboarding/state.ts", "utf8");
+assert.match(onboardingState, /shouldMirrorConsentToMctb/);
+assert.match(onboardingState, /consentStepComplete/);
+
 console.log("test-mctb-seed-workspace-consent: PASS");
