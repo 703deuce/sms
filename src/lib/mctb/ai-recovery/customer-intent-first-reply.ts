@@ -4,6 +4,7 @@ import type { MctbAiBookingInboundResult } from "@/lib/mctb/ai-booking/conversat
 import { getMctbAiBookingSessionStore } from "@/lib/mctb/ai-booking/session-store";
 import {
   faqIntentForKnowledgeReply,
+  leadRecoveryFieldCollectionBlocksKnowledge,
   shouldTryKnowledgeBeforeTransactionalFlow,
 } from "@/lib/mctb/ai-recovery/customer-intent-first-heuristics";
 import { generateApprovedInformationSmsReply } from "@/lib/mctb/lead-recovery/approved-information-reply";
@@ -50,10 +51,7 @@ export async function tryKnowledgeFirstSmsReply(input: {
     session?.stage === "AWAITING_SLOT_SELECTION" ||
     state.phase === "AWAITING_SLOT_SELECTION" ||
     state.activeSpecialist === "SCHEDULING";
-  const collectActive =
-    state.phase === "COLLECT" ||
-    state.missingFields.length > 0 ||
-    state.pendingAction?.action === "COLLECT_FIELD";
+  const collectActive = leadRecoveryFieldCollectionBlocksKnowledge(state);
 
   if (
     !shouldTryKnowledgeBeforeTransactionalFlow({

@@ -36,16 +36,33 @@ export function messageLooksLikeBusinessQuestion(message: string): boolean {
   return patterns.some((p) => p.test(m));
 }
 
+export function leadRecoveryFieldCollectionBlocksKnowledge(input: {
+  phase: string;
+  pendingAction?: { action: string } | null;
+}): boolean {
+  return input.phase === "COLLECT" || input.pendingAction?.action === "COLLECT_FIELD";
+}
+
 export function shouldTryKnowledgeBeforeTransactionalFlow(input: {
   classified: StructuredLeadIntent;
   customerMessage: string;
   collectActive: boolean;
   bookingWorkflowActive: boolean;
 }): boolean {
-  if (input.collectActive || input.bookingWorkflowActive) return false;
+  if (input.bookingWorkflowActive) return false;
 
   const primary = input.classified.primary_intent;
-  if (FAQ_INTENTS.has(primary)) return true;
+  const businessQuestion = messageLooksLikeBusinessQuestion(input.customerMessage);
+  const bookingTurn =
+    input.classified.booking_requested && BOOKING_INTENTS.has(primary);
+  if (businessQuestion && !bookingTurn) {
+    return true;
+  }
+
+  if (input.collectActive) return false;
+
+  const primaryForFlow = primary;
+  if (FAQ_INTENTS.has(primaryForFlow)) return true;
 
   const secondaryFaq = input.classified.secondary_intents.some((i) => FAQ_INTENTS.has(i));
   if (secondaryFaq && messageLooksLikeBusinessQuestion(input.customerMessage)) return true;

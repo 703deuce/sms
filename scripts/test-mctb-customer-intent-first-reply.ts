@@ -63,6 +63,17 @@ assert.equal(
   false,
 );
 
+assert.equal(
+  shouldTryKnowledgeBeforeTransactionalFlow({
+    classified: baseIntent({ primary_intent: "UNKNOWN", confidence: 0.2 }),
+    customerMessage: "What do you guys do",
+    collectActive: true,
+    bookingWorkflowActive: false,
+  }),
+  true,
+  "business questions must not be blocked by stale missingFields on old threads",
+);
+
 const pipeline = readFileSync("src/lib/mctb/ai-booking/sms-conversation-pipeline.ts", "utf8");
 assert.match(pipeline, /tryKnowledgeFirstSmsReply/);
 

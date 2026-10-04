@@ -84,10 +84,10 @@ async function tryLeadRecoveryPolicyRuntime(input: {
     workspaceId: input.pipeline.workspaceId,
     conversationId: input.pipeline.conversationId,
   });
-  const collectActive =
-    state.phase === "COLLECT" ||
-    state.missingFields.length > 0 ||
-    state.pendingAction?.action === "COLLECT_FIELD";
+  const { leadRecoveryFieldCollectionBlocksKnowledge } = await import(
+    "@/lib/mctb/ai-recovery/customer-intent-first-heuristics"
+  );
+  const collectActive = leadRecoveryFieldCollectionBlocksKnowledge(state);
 
   const primary = input.classified.primary_intent;
 
