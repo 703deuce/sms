@@ -124,7 +124,7 @@ export function TransplantMctbAiRecoveryPage({ wired }: { wired?: MctbAiRecovery
           </Panel>
 
           {wired?.scenarios?.length ? (
-            <Panel title="Advanced scenarios" description="Optional — leave defaults on unless you need to limit what AI handles" bodyClassName="p-0">
+            <Panel title="Advanced scenarios" description="Optional — leave defaults on unless you need to limit what AI handles">
               <div className="divide-y">
                 {wired.scenarios.map((s) => (
                   <SettingRow
@@ -142,7 +142,7 @@ export function TransplantMctbAiRecoveryPage({ wired }: { wired?: MctbAiRecovery
                 ))}
               </div>
               {wired.emergenciesScenarioEnabled ? (
-                <div className="border-t p-4">
+                <div className="mt-4 border-t pt-4">
                   <div className="grid gap-1.5">
                     <Label htmlFor="lr-emergency-criteria">What counts as an emergency?</Label>
                     <p className="text-sm text-muted-foreground">
