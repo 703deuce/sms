@@ -70,39 +70,37 @@ function bookingEnabledForPrompt(bookingConfig: Awaited<ReturnType<typeof loadMc
   );
 }
 
-/**
- * Single-prompt MCTB SMS agent — business knowledge + full thread, no policy/intent/RAG pipeline.
- */
-export async function handleMctbSimpleSmsAgentInbound(
-  input: MctbSimpleSmsAgentInput,
-): Promise<MctbAiBookingInboundResult> {
-  if (isCarrierProtocolOptOutMessage(input.body)) {
-    return { handled: false };
+export type MctbSimpleSmsAgentTurnContext = {
+  customerMessage: string;
+  thread: MctbConversationTurn[];
+  businessKnowledgeBlock: string;
+  customerName?: string | null;
+  timezone?: string | null;
+  booking?: { enabled: boolean; url?: string | null };
+};
+
+/** Core agent turn — used in production and dialogue smoke tests (inject thread + knowledge). */
+export async function runMctbSimpleSmsAgentTurn(
+  ctx: MctbSimpleSmsAgentTurnContext,
+): Promise<
+  MctbAiBookingInboundResult & {
+    llmProvider?: string;
+    llmModel?: string;
+    llmInvoked?: boolean;
   }
-
-  const [knowledge, inbox, bookingConfig] = await Promise.all([
-    loadMctbLeadRecoveryKnowledgeBundle(input.workspaceId, {
-      includeCollectPrompts: false,
-    }),
-    loadMctbInboxConversationThread(input.conversationId),
-    loadMctbAiBookingConfig(input.workspaceId),
-  ]);
-
+> {
   const thread = resolveThread({
-    inbox,
-    latestCustomerMessage: input.body,
+    inbox: ctx.thread,
+    latestCustomerMessage: ctx.customerMessage,
   });
 
-  const bookingOn = bookingEnabledForPrompt(bookingConfig);
-  let bookingUrl: string | null = null;
-  if (bookingOn) {
-    bookingUrl = await resolveFallbackBookingUrl(input.workspaceId, bookingConfig);
-  }
+  const bookingOn = ctx.booking?.enabled === true;
+  const bookingUrl = ctx.booking?.url?.trim() || null;
 
   const userPayload: Record<string, unknown> = {
-    customer_name: input.customerName?.trim() || null,
-    timezone: input.timezone || bookingConfig.timezone || null,
-    business_knowledge: knowledge.runtime_prompt_block,
+    customer_name: ctx.customerName?.trim() || null,
+    timezone: ctx.timezone || null,
+    business_knowledge: ctx.businessKnowledgeBlock,
     conversation_thread: formatThreadForPrompt(thread),
   };
 
@@ -143,5 +141,45 @@ export async function handleMctbSimpleSmsAgentInbound(
     handled: true,
     reply,
     action: llm?.data?.include_booking_link ? "simple_sms_booking_link" : "simple_sms_reply",
+    llmProvider: llm?.provider,
+    llmModel: llm?.model,
+    llmInvoked: Boolean(llm?.data?.reply?.trim()),
   };
+}
+
+/**
+ * Single-prompt MCTB SMS agent — business knowledge + full thread, no policy/intent/RAG pipeline.
+ */
+export async function handleMctbSimpleSmsAgentInbound(
+  input: MctbSimpleSmsAgentInput,
+): Promise<MctbAiBookingInboundResult> {
+  if (isCarrierProtocolOptOutMessage(input.body)) {
+    return { handled: false };
+  }
+
+  const [knowledge, inbox, bookingConfig] = await Promise.all([
+    loadMctbLeadRecoveryKnowledgeBundle(input.workspaceId, {
+      includeCollectPrompts: false,
+    }),
+    loadMctbInboxConversationThread(input.conversationId),
+    loadMctbAiBookingConfig(input.workspaceId),
+  ]);
+
+  const bookingOn = bookingEnabledForPrompt(bookingConfig);
+  let bookingUrl: string | null = null;
+  if (bookingOn) {
+    bookingUrl = await resolveFallbackBookingUrl(input.workspaceId, bookingConfig);
+  }
+
+  const result = await runMctbSimpleSmsAgentTurn({
+    customerMessage: input.body,
+    thread: inbox,
+    businessKnowledgeBlock: knowledge.runtime_prompt_block,
+    customerName: input.customerName,
+    timezone: input.timezone || bookingConfig.timezone || null,
+    booking: bookingOn && bookingUrl ? { enabled: true, url: bookingUrl } : { enabled: false },
+  });
+
+  const { llmProvider: _p, llmModel: _m, ...rest } = result;
+  return rest;
 }

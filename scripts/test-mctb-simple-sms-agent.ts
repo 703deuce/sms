@@ -19,4 +19,13 @@ assert.doesNotMatch(agent, /runLeadRecoveryIntentAgent/);
 const bookingConfig = readFileSync("src/lib/mctb/ai-booking/config.ts", "utf8");
 assert.match(bookingConfig, /smsPipelinePrimary: false/);
 
+assert.match(
+  readFileSync("package.json", "utf8"),
+  /test:mctb-simple-sms-dialogue-smoke/,
+);
+assert.match(
+  readFileSync("src/lib/mctb/ai-recovery/simple-sms-agent.ts", "utf8"),
+  /runMctbSimpleSmsAgentTurn/,
+);
+
 console.log("test-mctb-simple-sms-agent: OK");

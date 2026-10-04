@@ -97,6 +97,7 @@
     "test:ai-transcription": "tsx scripts/test-ai-transcription.ts",
     "test:mctb-consent-log": "tsx scripts/test-mctb-consent-log.ts",
     "test:mctb-final-pipeline-contract": "tsx scripts/test-mctb-final-pipeline-contract.ts",
+    "test:mctb-simple-sms-dialogue-smoke": "tsx scripts/mctb-simple-sms-agent-dialogue-smoke.ts",
     "test:mctb-timeout-retry-voice-hardening": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-mctb-timeout-retry-voice-hardening.ts",
     "test:microsoft-reconnect-pointer-migration": "tsx scripts/test-microsoft-reconnect-pointer-migration.ts",
     "test:voice-ai-booking-production-path-cert": "tsx scripts/test-voice-ai-booking-production-path-cert.ts",
