@@ -3,7 +3,11 @@ import "server-only";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { loadConsentForMissedCallEvent } from "@/lib/mctb/consent-log";
 import { countCallerMissedEventsToday } from "@/lib/mctb/repeat-caller";
-import { loadLatestTeamBriefForMissedCall } from "@/lib/mctb/handoff/team-activity-brief";
+import {
+  generateTeamActivityBrief,
+  loadLatestTeamBriefForMissedCall,
+  loadTeamBriefContext,
+} from "@/lib/mctb/handoff/team-activity-brief";
 import { buildMctbEventTimeline } from "@/lib/mctb/timeline";
 import { getPrisma } from "@/lib/db";
 import { appProductSourceToPrisma } from "@/lib/mass-texting/product-source";
@@ -159,9 +163,23 @@ export async function loadMctbMissedCallDetailPayload(workspaceId: string, event
       .catch(() => null),
   ]);
 
-  const teamBrief = await loadLatestTeamBriefForMissedCall(workspaceId, eventId).catch(
+  let teamBrief = await loadLatestTeamBriefForMissedCall(workspaceId, eventId).catch(
     () => null,
   );
+  if (
+    !teamBrief &&
+    (conversation?.messages?.length || voicemail?.transcriptText || voicemail?.aiSummary)
+  ) {
+    const ctx = await loadTeamBriefContext({
+      workspaceId,
+      missedCallEventId: eventId,
+      conversationId: conversation?.id ?? null,
+      triggerEvent: "caller_replied",
+    }).catch(() => null);
+    if (ctx) {
+      teamBrief = await generateTeamActivityBrief(ctx).catch(() => null);
+    }
+  }
 
   return {
     ok: true as const,
