@@ -270,6 +270,34 @@ async function handleMctbLeadRecoveryInboundSmsLocked(input: {
   });
   const intent = clampIntentToEnabledIntents(classified, config);
 
+  if (intent.primary_intent !== "OPT_OUT" && intent.primary_intent !== "WRONG_NUMBER") {
+    const { tryKnowledgeFirstSmsReply } = await import(
+      "@/lib/mctb/ai-recovery/customer-intent-first-reply"
+    );
+    const knowledgeFirst = await tryKnowledgeFirstSmsReply({
+      workspaceId: input.workspaceId,
+      conversationId,
+      customerMessage: input.body,
+      classified: intent,
+      config,
+    });
+    if (knowledgeFirst?.reply?.trim()) {
+      state = appendConversationTurn(state, { role: "business", text: knowledgeFirst.reply });
+      state = {
+        ...state,
+        lastCustomerMessage: input.body,
+        lastBusinessMessage: knowledgeFirst.reply,
+      };
+      await saveLeadRecoveryState(state);
+      return {
+        handled: true,
+        reply: knowledgeFirst.reply,
+        action: knowledgeFirst.action || "approved_info",
+        intent,
+      };
+    }
+  }
+
   if (intent.primary_intent === "OPT_OUT" || intent.primary_intent === "WRONG_NUMBER") {
     state = mergeIntentIntoState(state, intent);
     const policy = evaluateLeadRecoveryPolicy({

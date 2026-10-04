@@ -94,9 +94,6 @@ async function tryLeadRecoveryPolicyRuntime(input: {
   if (!collectActive && PIPELINE_FAQ_FIRST_INTENTS.has(primary)) {
     return null;
   }
-  if (!collectActive && primary === "GENERAL_INQUIRY") {
-    return null;
-  }
   if (!collectActive && !PIPELINE_POLICY_INTENTS.has(primary)) {
     return null;
   }
@@ -253,6 +250,18 @@ export async function handleMctbSmsConversationPipeline(
     lrConfig,
   });
   if (compliance) return compliance;
+
+  const { tryKnowledgeFirstSmsReply } = await import(
+    "@/lib/mctb/ai-recovery/customer-intent-first-reply"
+  );
+  const knowledgeFirst = await tryKnowledgeFirstSmsReply({
+    workspaceId: input.workspaceId,
+    conversationId: input.conversationId,
+    customerMessage: input.body,
+    classified,
+    config: lrConfig,
+  });
+  if (knowledgeFirst) return knowledgeFirst;
 
   const policyRuntime = await tryLeadRecoveryPolicyRuntime({
     pipeline: input,
