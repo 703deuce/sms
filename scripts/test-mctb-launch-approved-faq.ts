@@ -23,6 +23,7 @@ assert.equal(launchScenarios.payments, false);
 
 const faqPolicies = launchFaqIntentPolicyOverrides();
 assert.deepEqual(faqPolicies.BUSINESS_HOURS?.actions, ["ANSWER_APPROVED_INFORMATION"]);
+assert.deepEqual(faqPolicies.GENERAL_INQUIRY?.actions, ["ANSWER_APPROVED_INFORMATION"]);
 
 const policies = {
   ...defaultIntentPolicies("SEND_BOOKING_LINK"),
