@@ -38,8 +38,8 @@ const customerSms = readFileSync(
   "src/lib/agents/missed-call-text-back/customer-sms.ts",
   "utf8",
 );
-assert.ok(customerSms.includes("handleMctbSmsConversationPipeline"));
-assert.ok(customerSms.includes("handleMctbLeadRecoveryInboundSms"));
+assert.ok(customerSms.includes("handleMctbSimpleSmsAgentInbound"));
+assert.ok(!customerSms.includes("handleMctbSmsConversationPipeline"));
 
 const runtime = readFileSync("src/lib/mctb/ai-booking/conversation-runtime.ts", "utf8");
 assert.ok(runtime.includes("calendarFulfillmentEnabled"));

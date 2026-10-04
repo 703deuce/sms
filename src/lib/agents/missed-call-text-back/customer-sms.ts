@@ -1,6 +1,5 @@
 /**
- * MCTB customer SMS replies (Telnyx) — multi-agent SMS pipeline first (router + grounded FAQ),
- * then Lead Recovery policy fallback. Live calendar booking when fulfillmentMode=calendar.
+ * MCTB customer SMS replies (Telnyx) — single prompt-based agent (business knowledge + thread).
  */
 
 import { getPrisma } from "@/lib/db";
@@ -9,7 +8,6 @@ import { recordMctbLeadRecoveryInboundSideEffects } from "@/lib/mctb/handoff/lea
 import { loadMissedCallTextConfig } from "./config";
 import { loadLeadRecoveryConfig } from "@/lib/mctb/lead-recovery/config";
 import type { MissedCallTextConfigRecord } from "./types";
-import { handleMctbLeadRecoveryInboundSms } from "@/lib/mctb/lead-recovery/conversation-runtime";
 import {
   mctbCallerE164Variants,
   normalizeMctbCallerE164,
@@ -232,9 +230,6 @@ export async function handleMctbCustomerSmsReply(input: {
   const leadRecoveryConfig = await loadLeadRecoveryConfig(input.workspaceId);
   const leadRecoveryActive =
     leadRecoveryConfig.enabled && leadRecoveryConfig.policyHealth !== "DISABLED";
-  const { loadMctbAiBookingConfig } = await import("@/lib/mctb/ai-booking/config");
-  const bookingConfig = await loadMctbAiBookingConfig(input.workspaceId);
-
   if (leadRecoveryActive && !config.conversationEnabled) {
     console.warn("[mctb/customer-sms] conversationEnabled=false but Lead Recovery is on — replying anyway");
   }
@@ -298,112 +293,33 @@ export async function handleMctbCustomerSmsReply(input: {
     return { handled: true, action: "mctb_notifications_only" };
   }
 
-  const { handleMctbSmsConversationPipeline } = await import(
-    "@/lib/mctb/ai-booking/sms-conversation-pipeline"
+  const { handleMctbSimpleSmsAgentInbound } = await import(
+    "@/lib/mctb/ai-recovery/simple-sms-agent"
   );
-  const pipeline = await handleMctbSmsConversationPipeline({
+  const simple = await handleMctbSimpleSmsAgentInbound({
     workspaceId: input.workspaceId,
     conversationId,
-    contactId: contact?.id,
     customerPhone: fromE164,
     customerName,
-    customerEmail: contact?.email,
     body: input.body,
     timezone: config.timezone,
-    recoverySmsCallerE164: fromE164,
-    recoverySmsBusinessE164: input.toE164,
   });
 
   const { logMctbSmsRoutingDecision } = await import(
     "@/lib/mctb/messaging/inbound-processing-trace"
   );
 
-  if (!pipeline.handled || !pipeline.reply?.trim()) {
+  if (!simple.handled || !simple.reply?.trim()) {
     await logMctbSmsRoutingDecision({
       workspaceId: input.workspaceId,
       conversationId,
       providerMessageId: input.providerMessageId,
       processingJobId: input.processingJobId,
-      handler: leadRecoveryActive ? "sms_pipeline" : "skipped",
-      branch: !bookingConfig.smsPipelinePrimary
-        ? "pipeline_disabled_smsPipelinePrimary_false"
-        : "pipeline_returned_unhandled",
-      smsPipelinePrimary: bookingConfig.smsPipelinePrimary,
+      handler: "simple_sms_agent",
+      branch: "simple_agent_unhandled",
       leadRecoveryEnabled: leadRecoveryActive,
     });
-  }
-
-  if (pipeline.handled && pipeline.reply?.trim()) {
-    const pipelineAction =
-      "action" in pipeline && typeof pipeline.action === "string" ? pipeline.action : null;
-    await logMctbSmsRoutingDecision({
-      workspaceId: input.workspaceId,
-      conversationId,
-      providerMessageId: input.providerMessageId,
-      processingJobId: input.processingJobId,
-      handler: "sms_pipeline",
-      branch: pipelineAction || "sms_pipeline_reply",
-      action: pipelineAction,
-      smsPipelinePrimary: bookingConfig.smsPipelinePrimary,
-      leadRecoveryEnabled: leadRecoveryActive,
-    });
-    await recordMctbLeadRecoveryInboundSideEffects({
-      workspaceId: input.workspaceId,
-      fromE164,
-      body: input.body,
-      conversationId,
-      missedCallEventId: recentEvent.id,
-      providerMessageId: input.providerMessageId,
-      structuredIntent: null,
-    });
-    const idemKey = `mctb-sms-pipeline:${conversationId}:${input.providerMessageId || input.body.slice(0, 32)}`;
-    const outboundDelivery = input.outboundDelivery ?? "inline";
-    if (outboundDelivery === "durable") {
-      const { enqueueMctbCustomerOutboundSmsJob } = await import(
-        "@/lib/mctb/messaging/enqueue-customer-outbound-sms"
-      );
-      const job = await enqueueMctbCustomerOutboundSmsJob({
-        workspaceId: input.workspaceId,
-        conversationId,
-        toE164: fromE164,
-        body: pipeline.reply,
-        idempotencyKey: idemKey,
-        providerMessageId: input.providerMessageId,
-        processingJobId: input.processingJobId,
-        action: pipeline.action,
-      });
-      return {
-        handled: true,
-        action: pipeline.action || "sms_pipeline",
-        reply: pipeline.reply,
-        outboundJobId: job.id,
-      };
-    }
-    await sendMctbCustomerOutboundSms({
-      workspaceId: input.workspaceId,
-      config,
-      toE164: fromE164,
-      body: pipeline.reply,
-      idempotencyKey: idemKey,
-    });
-    return { handled: true, action: pipeline.action || "sms_pipeline", reply: pipeline.reply };
-  }
-
-  const leadRecovery = await handleMctbLeadRecoveryInboundSms({
-    workspaceId: input.workspaceId,
-    conversationId,
-    contactId: contact?.id,
-    customerPhone: fromE164,
-    customerName,
-    customerEmail: contact?.email,
-    body: input.body,
-    timezone: config.timezone,
-    missedCallEventId: recentEvent.id,
-    providerMessageId: input.providerMessageId,
-  });
-
-  if (!leadRecovery.handled) {
-    return { handled: false, reason: leadRecovery.reason || "lead_recovery_not_handled" };
+    return { handled: false, reason: "simple_sms_agent_no_reply" };
   }
 
   await logMctbSmsRoutingDecision({
@@ -411,11 +327,9 @@ export async function handleMctbCustomerSmsReply(input: {
     conversationId,
     providerMessageId: input.providerMessageId,
     processingJobId: input.processingJobId,
-    handler: "lead_recovery",
-    branch: leadRecovery.action || "lead_recovery_reply",
-    action: leadRecovery.action,
-    primaryIntent: leadRecovery.intent?.primary_intent ?? null,
-    smsPipelinePrimary: bookingConfig.smsPipelinePrimary,
+    handler: "simple_sms_agent",
+    branch: simple.action || "simple_sms_reply",
+    action: simple.action,
     leadRecoveryEnabled: leadRecoveryActive,
   });
 
@@ -426,14 +340,10 @@ export async function handleMctbCustomerSmsReply(input: {
     conversationId,
     missedCallEventId: recentEvent.id,
     providerMessageId: input.providerMessageId,
-    structuredIntent: leadRecovery.intent ?? null,
+    structuredIntent: null,
   });
 
-  if (leadRecovery.action === "duplicate_inbound_ignored" || !leadRecovery.reply?.trim()) {
-    return { handled: true, action: leadRecovery.action, reply: leadRecovery.reply };
-  }
-
-  const idemKey = `mctb-lead-recovery:${conversationId}:${input.providerMessageId || input.body.slice(0, 32)}`;
+  const idemKey = `mctb-simple-sms:${conversationId}:${input.providerMessageId || input.body.slice(0, 32)}`;
   const outboundDelivery = input.outboundDelivery ?? "inline";
 
   if (outboundDelivery === "durable") {
@@ -448,11 +358,11 @@ export async function handleMctbCustomerSmsReply(input: {
         workspaceId: input.workspaceId,
         conversationId,
         toE164: fromE164,
-        body: leadRecovery.reply,
+        body: simple.reply,
         idempotencyKey: idemKey,
         providerMessageId: input.providerMessageId,
         processingJobId: input.processingJobId,
-        action: leadRecovery.action,
+        action: simple.action,
       });
       await logMctbInboundProcessingEvent({
         kind: "OUTBOUND_ENQUEUED",
@@ -464,12 +374,12 @@ export async function handleMctbCustomerSmsReply(input: {
       });
       return {
         handled: true,
-        action: leadRecovery.action,
-        reply: leadRecovery.reply,
+        action: simple.action,
+        reply: simple.reply,
         outboundJobId: job.id,
       };
     } catch (err) {
-      console.error("[mctb/customer-sms] lead recovery outbound enqueue failed", err);
+      console.error("[mctb/customer-sms] simple SMS agent outbound enqueue failed", err);
       return { handled: false, reason: "sms_send_failed" };
     }
   }
@@ -479,11 +389,11 @@ export async function handleMctbCustomerSmsReply(input: {
       workspaceId: input.workspaceId,
       config,
       toE164: fromE164,
-      body: leadRecovery.reply,
+      body: simple.reply,
       idempotencyKey: idemKey,
     });
   } catch (err) {
-    console.error("[mctb/customer-sms] lead recovery SMS send failed", err);
+    console.error("[mctb/customer-sms] simple SMS agent send failed", err);
     return { handled: false, reason: "sms_send_failed" };
   }
 
@@ -491,7 +401,7 @@ export async function handleMctbCustomerSmsReply(input: {
     data: {
       conversationId,
       direction: "outbound",
-      body: leadRecovery.reply,
+      body: simple.reply,
       userName: "AI",
       providerMessageId: null,
     },
@@ -499,8 +409,8 @@ export async function handleMctbCustomerSmsReply(input: {
 
   return {
     handled: true,
-    action: leadRecovery.action,
-    reply: leadRecovery.reply,
+    action: simple.action,
+    reply: simple.reply,
   };
 }
 

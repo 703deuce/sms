@@ -15,6 +15,10 @@ import type {
   StructuredLeadIntent,
 } from "@/lib/mctb/lead-recovery/types";
 import { finalizeMctbOutboundSms } from "@/lib/mctb/sms-channel";
+import {
+  reconcileStaleLeadRecoveryCollectionState,
+} from "@/lib/mctb/ai-recovery/conversational-sms-config";
+import { saveLeadRecoveryState } from "@/lib/mctb/lead-recovery/state-store";
 
 const BOOKING_INTENTS = new Set<LeadRecoveryIntent>([
   "BOOKING_REQUEST",
@@ -42,16 +46,24 @@ export async function tryKnowledgeFirstSmsReply(input: {
   classified: StructuredLeadIntent;
   config: LeadRecoveryWorkspaceConfig;
 }): Promise<MctbAiBookingInboundResult | null> {
-  const state = await loadLeadRecoveryState({
+  let state = await loadLeadRecoveryState({
     workspaceId: input.workspaceId,
     conversationId: input.conversationId,
   });
+  const reconciled = reconcileStaleLeadRecoveryCollectionState(state, input.config);
+  if (reconciled !== state) {
+    state = reconciled;
+    await saveLeadRecoveryState(state).catch(() => undefined);
+  }
   const session = await getMctbAiBookingSessionStore().get(input.conversationId);
   const bookingWorkflowActive =
     session?.stage === "AWAITING_SLOT_SELECTION" ||
     state.phase === "AWAITING_SLOT_SELECTION" ||
     state.activeSpecialist === "SCHEDULING";
-  const collectActive = leadRecoveryFieldCollectionBlocksKnowledge(state);
+  const collectActive = leadRecoveryFieldCollectionBlocksKnowledge(
+    state,
+    input.customerMessage,
+  );
 
   if (
     !shouldTryKnowledgeBeforeTransactionalFlow({

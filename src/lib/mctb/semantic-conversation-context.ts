@@ -136,7 +136,9 @@ function mapDbDirection(direction: string): MctbConversationTurn["role"] {
   return "customer";
 }
 
-async function loadInboxConversationThread(conversationId: string): Promise<MctbConversationTurn[]> {
+export async function loadMctbInboxConversationThread(
+  conversationId: string,
+): Promise<MctbConversationTurn[]> {
   const prisma = getPrisma();
   if (!prisma.conversationMessage?.findMany) return [];
   try {
@@ -197,7 +199,7 @@ export async function buildMctbSemanticConversationContext(input: {
   const [state, session, inbox, approvedRaw] = await Promise.all([
     loadLeadRecoveryState({ workspaceId: input.workspaceId, conversationId: input.conversationId }),
     getMctbAiBookingSessionStore().get(input.conversationId),
-    loadInboxConversationThread(input.conversationId),
+    loadMctbInboxConversationThread(input.conversationId),
     lrConfig.enabled && lrConfig.policyHealth !== "DISABLED"
       ? import("@/lib/mctb/lead-recovery/knowledge-prompt").then((m) =>
           m.loadMctbLeadRecoveryKnowledgeBundle(input.workspaceId),

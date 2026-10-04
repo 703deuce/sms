@@ -4,7 +4,11 @@ import { readFileSync } from "node:fs";
 import {
   messageLooksLikeBusinessQuestion,
   shouldTryKnowledgeBeforeTransactionalFlow,
+  leadRecoveryFieldCollectionBlocksKnowledge,
 } from "../src/lib/mctb/ai-recovery/customer-intent-first-heuristics.ts";
+import { normalizeConversationalAiRecoveryConfig } from "../src/lib/mctb/ai-recovery/conversational-sms-config.ts";
+import { defaultSmsCollectFields } from "../src/lib/mctb/ai-recovery/collect-field-schema.ts";
+import { DEFAULT_LEAD_RECOVERY_FALLBACK } from "../src/lib/mctb/lead-recovery/policy-defaults.ts";
 import type { StructuredLeadIntent } from "../src/lib/mctb/lead-recovery/types.ts";
 
 function baseIntent(overrides: Partial<StructuredLeadIntent>): StructuredLeadIntent {
@@ -76,5 +80,79 @@ assert.equal(
 
 const pipeline = readFileSync("src/lib/mctb/ai-booking/sms-conversation-pipeline.ts", "utf8");
 assert.match(pipeline, /tryKnowledgeFirstSmsReply/);
+
+assert.equal(
+  leadRecoveryFieldCollectionBlocksKnowledge(
+    { phase: "COLLECT", pendingAction: { action: "COLLECT_FIELD" } },
+    "What do you guys do",
+  ),
+  false,
+);
+
+assert.equal(DEFAULT_LEAD_RECOVERY_FALLBACK.collect.length, 0);
+assert.ok(defaultSmsCollectFields().every((f) => !f.enabled));
+
+const normalized = normalizeConversationalAiRecoveryConfig({
+  enabled: true,
+  version: 1,
+  globalMode: "STANDARD",
+  enabledScenarios: {},
+  enabledIntents: ["GENERAL_INQUIRY"],
+  intentPolicies: {
+    GENERAL_INQUIRY: {
+      enabled: true,
+      collect: ["NAME", "REASON"],
+      actions: ["CUSTOMER_MESSAGE"],
+    },
+  },
+  fallbackPolicy: {
+    enabled: true,
+    collect: ["NAME", "REASON"],
+    actions: ["CUSTOMER_MESSAGE"],
+  },
+  globalBehavior: {
+    tone: "professional",
+    maxClarificationAttempts: 1,
+    followUpEnabled: false,
+    followUpDelayMinutes: 60,
+    captureOnly: false,
+  },
+  paymentPolicy: {
+    textToPayEnabled: false,
+    amountAuthority: "known_balance",
+    fixedFeeAmountMinor: null,
+    fixedFeeCurrency: "usd",
+  },
+  serviceAreaPolicy: {
+    source: "workspace",
+    inAreaAction: "continue",
+    outOfAreaAction: "decline",
+    uncertainAction: "clarify_zip",
+  },
+  existingCustomerPolicy: {
+    treatDifferently: true,
+    actions: ["CREATE_CALLBACK_REQUEST"],
+    notifyRecipientId: null,
+  },
+  faqPolicy: { topics: ["FAQ"], fallback: "clarify" },
+  migratedFromAiBooking: false,
+  collectCapabilities: [],
+  answerCapabilities: [],
+  actionCapabilities: ["ANSWER_APPROVED_INFORMATION", "CUSTOMER_MESSAGE"],
+  handoffTriggers: {
+    uncertain: true,
+    complaint: true,
+    sensitive: true,
+    emergency: true,
+    highValue: false,
+  },
+  bookingLinkId: null,
+  policyHealth: "READY",
+  scenarioHealth: {},
+  smsCollectFields: defaultSmsCollectFields(),
+  allowDynamicCustomQuestions: true,
+});
+assert.deepEqual(normalized.intentPolicies.GENERAL_INQUIRY?.collect, []);
+assert.deepEqual(normalized.fallbackPolicy.collect, []);
 
 console.log("test-mctb-customer-intent-first-reply: OK");

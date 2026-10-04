@@ -114,6 +114,14 @@ async function handleMctbLeadRecoveryInboundSmsLocked(input: {
     workspaceId: input.workspaceId,
     conversationId,
   });
+  const { reconcileStaleLeadRecoveryCollectionState } = await import(
+    "@/lib/mctb/ai-recovery/conversational-sms-config"
+  );
+  const reconciledState = reconcileStaleLeadRecoveryCollectionState(state, config);
+  if (reconciledState !== state) {
+    state = reconciledState;
+    await saveLeadRecoveryState(state).catch(() => undefined);
+  }
 
   const inbound = registerInboundProviderMessage(state, input.providerMessageId);
   state = inbound.state;

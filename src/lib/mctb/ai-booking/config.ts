@@ -11,7 +11,7 @@ export type MctbAiBookingWorkspaceConfig = {
   upgradeRequired: boolean;
   /** SMS scheduling fulfillment: live provider book vs booking link only (calendar path preserved for later). */
   fulfillmentMode: MctbAiBookingFulfillmentMode;
-  /** When true, MCTB customer SMS uses the multi-agent pipeline before Lead Recovery policy collect. */
+  /** @deprecated Legacy multi-agent pipeline — MCTB SMS uses simple-sms-agent. Kept for migration reads only. */
   smsPipelinePrimary: boolean;
   provider: MctbAiBookingProviderId;
   providerConnectionId?: string | null;
@@ -29,7 +29,7 @@ const DEFAULT_CONFIG: MctbAiBookingWorkspaceConfig = {
   entitled: false,
   upgradeRequired: true,
   fulfillmentMode: "link_only",
-  smsPipelinePrimary: true,
+  smsPipelinePrimary: false,
   provider: "microsoft",
   serviceName: "Consultation",
   durationMinutes: 30,
@@ -73,7 +73,7 @@ export async function loadMctbAiBookingConfig(
     entitled,
     upgradeRequired: !entitled,
     fulfillmentMode,
-    smsPipelinePrimary: raw.smsPipelinePrimary !== false,
+    smsPipelinePrimary: raw.smsPipelinePrimary === true,
     provider,
     providerConnectionId:
       typeof raw.providerConnectionId === "string" ? raw.providerConnectionId : null,

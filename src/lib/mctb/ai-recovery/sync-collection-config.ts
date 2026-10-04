@@ -70,7 +70,7 @@ function collectForIntent(
     if (set.has("REASON")) fields.push("REASON", "ISSUE_DESCRIPTION");
     if (set.has("URGENCY")) fields.push("URGENCY");
     if (set.has("NAME")) fields.push("NAME");
-    return fields.length ? fields : ["REASON"];
+    return fields;
   }
   if (intent === "EMERGENCY_OR_URGENT") {
     const fields: LeadRecoveryCollectField[] = ["ISSUE_DESCRIPTION"];
@@ -181,7 +181,14 @@ export function buildAiRecoverySavePatch(
     intentPolicies,
     fallbackPolicy: {
       ...fallback,
-      collect: fallbackCollect.length ? fallbackCollect : ["NAME", "REASON"],
+      collect: fallbackCollect,
+      actions: fallbackCollect.length
+        ? fallback.actions
+        : [
+            "ANSWER_APPROVED_INFORMATION",
+            "SEND_EMAIL_SUMMARY",
+            "CUSTOMER_MESSAGE",
+          ],
     },
     collectCapabilities,
     actionCapabilities: LAUNCH_ACTION_CAPABILITIES,

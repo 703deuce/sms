@@ -78,6 +78,7 @@ export function composeLeadRecoveryRuntimePromptBlock(input: {
 
 export async function loadMctbLeadRecoveryKnowledgeBundle(
   workspaceId: string,
+  options?: { includeCollectPrompts?: boolean },
 ): Promise<MctbLeadRecoveryKnowledgeBundle> {
   const [approved, handoff, brainModule, lrConfig] = await Promise.all([
     loadMctbApprovedBusinessInformation(workspaceId),
@@ -100,10 +101,13 @@ export async function loadMctbLeadRecoveryKnowledgeBundle(
     emergencyDetectionEnabled: handoff.emergencyDetectionEnabled,
   });
 
+  const includeCollect = options?.includeCollectPrompts !== false;
   const { enabledSmsCollectPrompts } = await import(
     "@/lib/mctb/ai-recovery/collect-field-schema"
   );
-  const prompts = enabledSmsCollectPrompts(lrConfig.smsCollectFields ?? []);
+  const prompts = includeCollect
+    ? enabledSmsCollectPrompts(lrConfig.smsCollectFields ?? [])
+    : [];
   if (prompts.length) {
     const lines = prompts.map(
       (p) =>

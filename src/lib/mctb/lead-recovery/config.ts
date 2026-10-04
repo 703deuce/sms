@@ -17,6 +17,8 @@ import {
   normalizeSmsCollectFields,
   smsCollectFieldsToCapabilities,
 } from "@/lib/mctb/ai-recovery/collect-field-schema";
+import { normalizeConversationalAiRecoveryConfig } from "@/lib/mctb/ai-recovery/conversational-sms-config";
+import { launchFaqIntentPolicyOverrides } from "@/lib/mctb/lead-recovery/launch-faq-policies";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -84,7 +86,10 @@ export async function loadLeadRecoveryConfigPersisted(
       ? "SEND_BOOKING_LINK"
       : "COLLECT_ONLY";
 
-  const defaultPolicies = defaultIntentPolicies(bookingMode);
+  const defaultPolicies = {
+    ...defaultIntentPolicies(bookingMode),
+    ...launchFaqIntentPolicyOverrides(),
+  };
   const storedPolicies = asRecord(raw.intentPolicies);
   const intentPolicies: Partial<Record<LeadRecoveryIntent, IntentPolicyShape>> = {
     ...defaultPolicies,
@@ -203,9 +208,9 @@ export async function loadLeadRecoveryConfigPersisted(
   const fromSchema = smsCollectFieldsToCapabilities(smsCollectFields);
   const legacyCaps = Array.isArray(raw.collectCapabilities)
     ? (raw.collectCapabilities as LeadRecoveryCollectField[])
-    : ["NAME", "EMAIL", "ADDRESS", "REASON", "SERVICE_CATEGORY", "URGENCY"];
+    : [];
 
-  const baseConfig: LeadRecoveryWorkspaceConfig = {
+  const baseConfig: LeadRecoveryWorkspaceConfig = normalizeConversationalAiRecoveryConfig({
     enabled,
     version: typeof raw.version === "number" ? raw.version : 1,
     globalMode,
@@ -248,7 +253,7 @@ export async function loadLeadRecoveryConfigPersisted(
         : aiBooking.fallbackBookingLinkId,
     policyHealth: "DISABLED",
     scenarioHealth: {},
-  };
+  });
 
   return baseConfig;
 }

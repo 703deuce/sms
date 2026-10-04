@@ -2,9 +2,9 @@ import type { IntentPolicyShape, LeadRecoveryIntent } from "@/lib/mctb/lead-reco
 
 export const DEFAULT_LEAD_RECOVERY_FALLBACK: IntentPolicyShape = {
   enabled: true,
-  collect: ["NAME", "REASON"],
-  actions: ["SEND_EMAIL_SUMMARY", "CUSTOMER_MESSAGE"],
-  customerMessage: "Thanks — someone from our team will follow up shortly.",
+  collect: [],
+  actions: ["ANSWER_APPROVED_INFORMATION", "SEND_EMAIL_SUMMARY", "CUSTOMER_MESSAGE"],
+  customerMessage: "Thanks for reaching out — how can we help?",
 };
 
 export function defaultIntentPolicies(bookingMode: "AI_BOOK" | "SEND_BOOKING_LINK" | "COLLECT_ONLY"): Partial<
@@ -73,8 +73,8 @@ export function defaultIntentPolicies(bookingMode: "AI_BOOK" | "SEND_BOOKING_LIN
     },
     GENERAL_INQUIRY: {
       enabled: true,
-      collect: ["NAME", "REASON"],
-      actions: ["SEND_EMAIL_SUMMARY", "CUSTOMER_MESSAGE"],
+      collect: [],
+      actions: ["ANSWER_APPROVED_INFORMATION", "SEND_EMAIL_SUMMARY", "CUSTOMER_MESSAGE"],
       customerMessage: "Thanks for reaching out — how can we help?",
     },
     SERVICE_REQUEST: {
@@ -84,8 +84,8 @@ export function defaultIntentPolicies(bookingMode: "AI_BOOK" | "SEND_BOOKING_LIN
     },
     UNKNOWN: {
       enabled: true,
-      collect: ["REASON"],
-      actions: ["CUSTOMER_MESSAGE"],
+      collect: [],
+      actions: ["ANSWER_APPROVED_INFORMATION", "CUSTOMER_MESSAGE"],
       customerMessage: "Sure — what were you calling about?",
     },
     EXISTING_CUSTOMER_ISSUE: {

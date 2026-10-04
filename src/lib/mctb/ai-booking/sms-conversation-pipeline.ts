@@ -80,14 +80,23 @@ async function tryLeadRecoveryPolicyRuntime(input: {
   lrConfig: LeadRecoveryWorkspaceConfig;
   classified: StructuredLeadIntent;
 }): Promise<MctbAiBookingInboundResult | null> {
-  const state = await loadLeadRecoveryState({
+  let state = await loadLeadRecoveryState({
     workspaceId: input.pipeline.workspaceId,
     conversationId: input.pipeline.conversationId,
   });
+  const { reconcileStaleLeadRecoveryCollectionState } = await import(
+    "@/lib/mctb/ai-recovery/conversational-sms-config"
+  );
+  const { saveLeadRecoveryState } = await import("@/lib/mctb/lead-recovery/state-store");
+  const reconciled = reconcileStaleLeadRecoveryCollectionState(state, input.lrConfig);
+  if (reconciled !== state) {
+    state = reconciled;
+    await saveLeadRecoveryState(state).catch(() => undefined);
+  }
   const { leadRecoveryFieldCollectionBlocksKnowledge } = await import(
     "@/lib/mctb/ai-recovery/customer-intent-first-heuristics"
   );
-  const collectActive = leadRecoveryFieldCollectionBlocksKnowledge(state);
+  const collectActive = leadRecoveryFieldCollectionBlocksKnowledge(state, input.pipeline.body);
 
   const primary = input.classified.primary_intent;
 

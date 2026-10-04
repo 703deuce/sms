@@ -36,10 +36,16 @@ export function messageLooksLikeBusinessQuestion(message: string): boolean {
   return patterns.some((p) => p.test(m));
 }
 
-export function leadRecoveryFieldCollectionBlocksKnowledge(input: {
-  phase: string;
-  pendingAction?: { action: string } | null;
-}): boolean {
+export function leadRecoveryFieldCollectionBlocksKnowledge(
+  input: {
+    phase: string;
+    pendingAction?: { action: string } | null;
+  },
+  customerMessage?: string,
+): boolean {
+  if (customerMessage && messageLooksLikeBusinessQuestion(customerMessage)) {
+    return false;
+  }
   return input.phase === "COLLECT" || input.pendingAction?.action === "COLLECT_FIELD";
 }
 
