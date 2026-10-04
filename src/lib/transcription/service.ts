@@ -36,6 +36,29 @@ export async function enqueueTranscriptionJob(input: {
   }
 
   const idempotencyKey = `ai-transcription:${input.sourceType}:${input.sourceId}`;
+
+  const prisma = getPrisma();
+  if (input.sourceType === "voicemail_message") {
+    const vm = await prisma.voicemailMessage.findFirst({
+      where: { id: input.sourceId, workspaceId: input.workspaceId },
+      select: { transcriptStatus: true, transcriptText: true },
+    });
+    if (vm?.transcriptStatus === "completed" && vm.transcriptText?.trim()) {
+      return { queued: false, reason: "already_transcribed" };
+    }
+    if (vm?.transcriptStatus === "processing") {
+      const existingJob = await prisma.jobQueue.findUnique({ where: { idempotencyKey } });
+      if (
+        existingJob &&
+        (existingJob.status === "pending" ||
+          existingJob.status === "deferred" ||
+          existingJob.status === "processing")
+      ) {
+        return { queued: false, reason: "already_queued" };
+      }
+    }
+  }
+
   await markTranscriptionPending(input.sourceType, input.sourceId);
 
   await enqueueJob({

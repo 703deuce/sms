@@ -17,6 +17,7 @@ import {
 import { wrapMctbMessageUrlsWithTracking } from "@/lib/mctb/link-tracking";
 import { traceMctbPipeline, traceMctbPipelineSkip } from "@/lib/mctb/pipeline-trace";
 import { mctbCallerE164Variants } from "@/lib/mctb/messaging/caller-e164";
+import { claimMctbRecoverySmsSend } from "./send-claim";
 
 function renderTemplate(template: string, vars: Record<string, string>): string {
   return renderMctbMessageTemplate(template, vars);
@@ -172,6 +173,21 @@ export async function executeMissedCallTextSend(input: {
     return { ok: false, reason: eligibility.reason };
   }
 
+  const sendClaim = await claimMctbRecoverySmsSend({
+    workspaceId: input.workspaceId,
+    missedCallEventId: event.id,
+  });
+  if (!sendClaim.claimed) {
+    traceMctbPipelineSkip("send", "send_claim", sendClaim.reason, input);
+    if (sendClaim.reason === "already_sent") {
+      return { ok: true, skipped: true, reason: "already_sent" };
+    }
+    if (sendClaim.reason === "in_progress") {
+      return { ok: true, skipped: true, reason: "send_in_progress" };
+    }
+    return { ok: false, reason: sendClaim.reason };
+  }
+
   const callerVariants = event.callerE164
     ? mctbCallerE164Variants(event.callerE164)
     : [];
@@ -206,11 +222,6 @@ export async function executeMissedCallTextSend(input: {
       });
 
   let body = tracked.body;
-
-  await prisma.missedCallEvent.update({
-    where: { id: event.id },
-    data: { status: "SENDING" },
-  });
 
   let trialReservation: { reserved: boolean; segments: number } | null = null;
   let recoveryUsageReserved = false;
