@@ -1,6 +1,7 @@
 import { telnyxInferenceChatCompletion, isTelnyxInferenceChatConfigured } from "@/lib/voice/telnyx/inference-chat";
 import { openAiChatCompletion } from "@/lib/ai/openai";
 import { translateText } from "@/lib/ai/translate";
+import { voicemailTranscriptLooksLikeGreetingOnly } from "@/lib/phone/voicemail-transcript-heuristics";
 
 const ENGLISH_LANG_CODES = new Set(["en", "english"]);
 
@@ -53,8 +54,11 @@ export async function translateVoicemailToEnglish(
 export async function summarizeVoicemailTranscript(transcript: string): Promise<string | null> {
   const text = transcript.trim();
   if (!text) return null;
+  if (voicemailTranscriptLooksLikeGreetingOnly(text)) {
+    return "No clear caller message in the recording — the transcript may be only a greeting or carrier prompt.";
+  }
   return chatForVoicemail(
-    "Summarize this voicemail in 1-2 short sentences for a business owner. Focus on who called and what they need. No bullet points.",
+    "Summarize this voicemail in 1-2 short sentences for a business owner. Use only the transcript text. Focus on what the caller wants. If the transcript does not contain a real request from a person, say that no clear caller message was captured. Never ask the reader to provide a message. No bullet points.",
     text,
     120,
   );

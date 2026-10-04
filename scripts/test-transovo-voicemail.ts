@@ -5,6 +5,7 @@
 import assert from "node:assert/strict";
 import { mapVoicemailMessage } from "../src/lib/personal/voicemail-mappers";
 import { translateVoicemailToEnglish } from "../src/lib/phone/voicemail-post-process";
+import { voicemailTranscriptLooksLikeGreetingOnly } from "../src/lib/phone/voicemail-transcript-heuristics";
 
 const mapped = mapVoicemailMessage({
   id: "vm1",
@@ -19,6 +20,15 @@ const mapped = mapVoicemailMessage({
 });
 assert.equal(mapped.transcriptEnglish, "Hello, I need an appointment");
 assert.equal(mapped.summary, "Caller needs an appointment.");
+
+assert.equal(
+  voicemailTranscriptLooksLikeGreetingOnly("This is a message from the MSI 1."),
+  true,
+);
+assert.equal(
+  voicemailTranscriptLooksLikeGreetingOnly("Hi, I need a quote for HVAC repair tomorrow."),
+  false,
+);
 
 (async () => {
   const englishSkip = await translateVoicemailToEnglish("Hello there", "en");
