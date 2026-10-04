@@ -71,6 +71,9 @@ export type ParsedDeliveryStatus = {
   internalStatus: "queued" | "sent" | "delivered" | "failed" | "undelivered" | "expired" | "unknown";
   errorCode?: string | null;
   errorDetail?: string | null;
+  /** Correlates delivery webhooks that arrive before providerId is persisted on the Message row. */
+  toE164?: string | null;
+  fromE164?: string | null;
   raw: unknown;
 };
 

@@ -118,27 +118,8 @@ async function lookupProviderMessageStatus(
   }
 
   if (providerName === "telnyx") {
-    const { getTelnyxApiKey } = await import("@/lib/messaging/telnyx/config");
-    const apiKey = getTelnyxApiKey();
-    if (!apiKey) return null;
-    const res = await fetch(`https://api.telnyx.com/v2/messages/${providerMessageId}`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    });
-    if (!res.ok) return null;
-    const json = (await res.json()) as { data?: Record<string, unknown> };
-    const data = json.data || {};
-    const toArr = Array.isArray(data.to) ? data.to : [];
-    const providerStatus = String(
-      (toArr[0] as { status?: string } | undefined)?.status || data.status || "unknown",
-    );
-    const errors = Array.isArray(data.errors) ? data.errors : [];
-    const status = providerStatus.toLowerCase();
-    return {
-      status: status === "delivery_failed" ? "failed" : status,
-      providerStatus,
-      errorCode: errors[0]?.code != null ? String(errors[0].code) : null,
-      errorDetail: errors[0]?.detail != null ? String(errors[0].detail) : null,
-    };
+    const { lookupTelnyxMessageStatus } = await import("@/lib/messaging/telnyx/lookup-message-status");
+    return lookupTelnyxMessageStatus(providerMessageId);
   }
 
   return null;

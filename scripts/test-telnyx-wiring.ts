@@ -80,6 +80,20 @@ const status = telnyxProvider.parseDeliveryStatus({
 assert.equal(status.providerMessageId, "msg_456");
 assert.equal(status.internalStatus, "delivered");
 
+const webhookDelivered = telnyxProvider.parseDeliveryStatus({
+  data: {
+    event_type: "message.finalized",
+    payload: {
+      id: "msg_webhook_delivered",
+      from: { phone_number: "+18666020680" },
+      to: [{ phone_number: "+17038166017", status: "webhook_delivered" }],
+    },
+  },
+});
+assert.equal(webhookDelivered.internalStatus, "delivered");
+assert.equal(webhookDelivered.toE164, "+17038166017");
+assert.equal(webhookDelivered.fromE164, "+18666020680");
+
 assert.equal(classifyTelnyxMessagingEvent("message.received"), "inbound");
 assert.equal(classifyTelnyxMessagingEvent("message.finalized"), "status");
 assert.equal(classifyTelnyxMessagingEvent("message.sent"), "status");

@@ -43,7 +43,7 @@ function mapDeliveryStatus(status: string): ParsedDeliveryStatus["internalStatus
   const s = status.toLowerCase();
   if (s === "queued" || s === "sending") return "queued";
   if (s === "sent") return "sent";
-  if (s === "delivered") return "delivered";
+  if (s === "delivered" || s === "webhook_delivered") return "delivered";
   if (s === "delivery_failed" || s === "failed") return "failed";
   if (s === "delivery_unconfirmed") return "undelivered";
   if (s.includes("expired")) return "expired";
@@ -498,12 +498,23 @@ export const telnyxProvider: MessagingProvider = {
     const toArr = Array.isArray(payloadObj.to) ? payloadObj.to : [];
     const providerStatus = String(toArr[0]?.status || payloadObj.status || "unknown");
     const errors = Array.isArray(payloadObj.errors) ? payloadObj.errors : [];
+    const providerMessageId = String(
+      payloadObj.id ||
+        payloadObj.message_id ||
+        data.id ||
+        (asRecord(data.record) || {}).id ||
+        "",
+    );
+    const toE164 = extractPhone(toArr[0] ?? payloadObj.to);
+    const fromE164 = extractPhone(payloadObj.from);
     return {
-      providerMessageId: String(payloadObj.id || data.id || ""),
+      providerMessageId,
       providerStatus,
       internalStatus: mapDeliveryStatus(providerStatus),
       errorCode: errors[0]?.code != null ? String(errors[0].code) : null,
       errorDetail: errors[0]?.detail != null ? String(errors[0].detail) : null,
+      toE164: toE164 || null,
+      fromE164: fromE164 || null,
       raw: payload,
     };
   },
