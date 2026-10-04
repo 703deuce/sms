@@ -237,10 +237,10 @@ export async function handleTelnyxMessageStatus(payload: unknown) {
   const result = await applyParsedDeliveryStatus(parsed, "telnyx");
   const status = result.status;
 
-  const { appendMctbDeliveryTraceFromProviderStatus } = await import(
+  const { bridgeMctbRecoveryDeliveryWebhook } = await import(
     "@/lib/mctb/messaging/delivery-trace"
   );
-  await appendMctbDeliveryTraceFromProviderStatus({
+  await bridgeMctbRecoveryDeliveryWebhook({
     providerMessageId: sid,
     status,
     errorDetail: parsed.errorDetail,

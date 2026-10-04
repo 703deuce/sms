@@ -8,8 +8,25 @@ const STATUS_TO_TRACE_KIND: Record<string, string> = {
   delivered: "sms.delivered",
   failed: "sms.send.failed",
   undelivered: "sms.send.failed",
-  sent: "sms.send.accepted",
+  expired: "sms.send.failed",
 };
+
+/** Provider delivery webhooks — call after applyOutboundDeliveryStatus / applyParsedDeliveryStatus. */
+export async function bridgeMctbRecoveryDeliveryWebhook(input: {
+  providerMessageId: string;
+  status: string;
+  errorDetail?: string | null;
+}): Promise<{ matched: boolean; missedCallEventId?: string }> {
+  const status = input.status.toLowerCase();
+  if (!STATUS_TO_TRACE_KIND[status]) {
+    return { matched: false };
+  }
+  return appendMctbDeliveryTraceFromProviderStatus({
+    providerMessageId: input.providerMessageId,
+    status,
+    errorDetail: input.errorDetail,
+  });
+}
 
 /**
  * Bridge Telnyx delivery webhooks into MCTB event traces when the outbound
@@ -38,7 +55,10 @@ export async function appendMctbDeliveryTraceFromProviderStatus(input: {
     return { matched: false };
   }
 
-  const kind = STATUS_TO_TRACE_KIND[input.status] || `sms.status.${input.status}`;
+  const kind = STATUS_TO_TRACE_KIND[input.status];
+  if (!kind) {
+    return { matched: false };
+  }
   await appendMctbTrace({
     workspaceId: event.workspaceId,
     traceId: event.traceId,
