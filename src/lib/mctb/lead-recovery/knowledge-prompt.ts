@@ -79,23 +79,42 @@ export function composeLeadRecoveryRuntimePromptBlock(input: {
 export async function loadMctbLeadRecoveryKnowledgeBundle(
   workspaceId: string,
 ): Promise<MctbLeadRecoveryKnowledgeBundle> {
-  const [approved, handoff, brainModule] = await Promise.all([
+  const [approved, handoff, brainModule, lrConfig] = await Promise.all([
     loadMctbApprovedBusinessInformation(workspaceId),
     loadMctbHandoffConfig(workspaceId),
     import("@/lib/agents/appointment-booking/business-brain").then((m) =>
       m.loadBusinessBrain(workspaceId),
+    ),
+    import("@/lib/mctb/lead-recovery/config").then((m) =>
+      m.loadLeadRecoveryConfigPersisted(workspaceId),
     ),
   ]);
 
   const about_business = trimBlock(brainModule.aboutBusiness, 6_000) || null;
   const emergency_criteria = handoff.emergencyCriteria?.trim() || null;
 
-  const runtime_prompt_block = composeLeadRecoveryRuntimePromptBlock({
+  let runtime_prompt_block = composeLeadRecoveryRuntimePromptBlock({
     approved,
     aboutBusiness: about_business,
     emergencyCriteria: emergency_criteria,
     emergencyDetectionEnabled: handoff.emergencyDetectionEnabled,
   });
+
+  const { enabledSmsCollectPrompts } = await import(
+    "@/lib/mctb/ai-recovery/collect-field-schema"
+  );
+  const prompts = enabledSmsCollectPrompts(lrConfig.smsCollectFields ?? []);
+  if (prompts.length) {
+    const lines = prompts.map(
+      (p) =>
+        `- ${p.label}${p.required ? " (required)" : ""}: ${p.prompt}${p.custom ? " [custom]" : ""}`,
+    );
+    runtime_prompt_block += `\n\nINFORMATION TO COLLECT (when needed — one question at a time, after answering the customer):\n${lines.join("\n")}`;
+    if (lrConfig.allowDynamicCustomQuestions) {
+      runtime_prompt_block +=
+        "\nYou may ask one brief clarifying question not listed above when it clearly helps follow up (e.g. a detail the customer raised). Do not invent required compliance fields.";
+    }
+  }
 
   return {
     about_business,

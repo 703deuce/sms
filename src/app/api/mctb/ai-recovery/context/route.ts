@@ -78,6 +78,8 @@ export async function GET() {
           enabled: config.enabled,
           bookingLinkId: config.bookingLinkId,
           collectCapabilities: config.collectCapabilities,
+          smsCollectFields: config.smsCollectFields,
+          allowDynamicCustomQuestions: config.allowDynamicCustomQuestions,
           enabledScenarios: config.enabledScenarios,
         },
         booking: {

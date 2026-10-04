@@ -13,6 +13,10 @@ import {
 } from "@/lib/mctb/lead-recovery/scenarios";
 import type { LeadRecoveryScenarioKey } from "@/lib/mctb/lead-recovery/types";
 import { computeLeadRecoveryPolicyHealth } from "@/lib/mctb/lead-recovery/policy-health";
+import {
+  normalizeSmsCollectFields,
+  smsCollectFieldsToCapabilities,
+} from "@/lib/mctb/ai-recovery/collect-field-schema";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -195,6 +199,12 @@ export async function loadLeadRecoveryConfigPersisted(
       fq.fallback === "notify" || fq.fallback === "handoff" ? fq.fallback : "clarify",
   };
 
+  const smsCollectFields = normalizeSmsCollectFields(raw.smsCollectFields);
+  const fromSchema = smsCollectFieldsToCapabilities(smsCollectFields);
+  const legacyCaps = Array.isArray(raw.collectCapabilities)
+    ? (raw.collectCapabilities as LeadRecoveryCollectField[])
+    : ["NAME", "EMAIL", "ADDRESS", "REASON", "SERVICE_CATEGORY", "URGENCY"];
+
   const baseConfig: LeadRecoveryWorkspaceConfig = {
     enabled,
     version: typeof raw.version === "number" ? raw.version : 1,
@@ -209,9 +219,9 @@ export async function loadLeadRecoveryConfigPersisted(
     existingCustomerPolicy,
     faqPolicy,
     migratedFromAiBooking: enabledByAiBooking && !hasStored,
-    collectCapabilities: Array.isArray(raw.collectCapabilities)
-      ? (raw.collectCapabilities as LeadRecoveryCollectField[])
-      : ["NAME", "EMAIL", "ADDRESS", "REASON", "SERVICE_CATEGORY", "URGENCY"],
+    smsCollectFields,
+    allowDynamicCustomQuestions: raw.allowDynamicCustomQuestions !== false,
+    collectCapabilities: fromSchema.length ? fromSchema : legacyCaps,
     answerCapabilities: Array.isArray(raw.answerCapabilities)
       ? (raw.answerCapabilities as LeadRecoveryWorkspaceConfig["answerCapabilities"])
       : [],
@@ -278,6 +288,8 @@ export async function saveLeadRecoveryConfig(
     actionCapabilities: LeadRecoveryWorkspaceConfig["actionCapabilities"];
     handoffTriggers: LeadRecoveryWorkspaceConfig["handoffTriggers"];
     bookingLinkId: string | null;
+    smsCollectFields: LeadRecoveryWorkspaceConfig["smsCollectFields"];
+    allowDynamicCustomQuestions: boolean;
     version: number;
   }>,
 ): Promise<LeadRecoveryWorkspaceConfig> {

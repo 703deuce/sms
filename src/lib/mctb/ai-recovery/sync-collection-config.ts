@@ -12,6 +12,8 @@ import {
   simplifiedTogglesToCollectCapabilities,
   type AiRecoverySimplifiedField,
 } from "@/lib/mctb/ai-recovery/simplified-fields";
+import { smsCollectFieldsToCapabilities } from "@/lib/mctb/ai-recovery/collect-field-schema";
+import type { MctbSmsCollectFieldDef as MctbSmsCollectFieldDefType } from "@/lib/mctb/lead-recovery/types";
 
 const LAUNCH_ACTION_CAPABILITIES: LeadRecoveryWorkspaceConfig["actionCapabilities"] = [
   "SEND_BOOKING_LINK",
@@ -78,6 +80,8 @@ function collectForIntent(
 export type NormalizeAiRecoverySaveInput = {
   enabled: boolean;
   fieldToggles: Record<AiRecoverySimplifiedField, boolean>;
+  smsCollectFields?: MctbSmsCollectFieldDefType[];
+  allowDynamicCustomQuestions?: boolean;
   bookingLinkEnabled: boolean;
   bookingLinkId: string | null;
   existing: LeadRecoveryWorkspaceConfig;
@@ -87,7 +91,9 @@ export type NormalizeAiRecoverySaveInput = {
 export function buildAiRecoverySavePatch(
   input: NormalizeAiRecoverySaveInput,
 ): Partial<LeadRecoveryWorkspaceConfig> {
-  const collectCapabilities = simplifiedTogglesToCollectCapabilities(input.fieldToggles);
+  const collectCapabilities = input.smsCollectFields?.length
+    ? smsCollectFieldsToCapabilities(input.smsCollectFields)
+    : simplifiedTogglesToCollectCapabilities(input.fieldToggles);
   const bookingMode = input.bookingLinkEnabled && input.bookingLinkId
     ? "SEND_BOOKING_LINK"
     : "COLLECT_ONLY";
@@ -143,6 +149,8 @@ export function buildAiRecoverySavePatch(
 
   return {
     enabled: input.enabled,
+    smsCollectFields: input.smsCollectFields,
+    allowDynamicCustomQuestions: input.allowDynamicCustomQuestions,
     globalMode: "STANDARD",
     enabledScenarios: defaultLaunchEnabledScenarios(),
     intentPolicies,

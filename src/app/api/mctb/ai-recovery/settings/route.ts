@@ -12,6 +12,7 @@ import {
 import { computeLeadRecoveryPolicyHealth } from "@/lib/mctb/lead-recovery/policy-health";
 import { applyLaunchAiRepliesSetting } from "@/lib/mctb/launch-lead-recovery";
 import { saveMctbHandoffConfig } from "@/lib/mctb/handoff/config";
+import { normalizeSmsCollectFields } from "@/lib/mctb/ai-recovery/collect-field-schema";
 
 function parseFieldToggles(body: Record<string, unknown>): Record<AiRecoverySimplifiedField, boolean> {
   const fields = body.fields;
@@ -65,9 +66,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ data: { config: disabledConfig, health } });
     }
 
+    const smsCollectFields = body.smsCollectFields
+      ? normalizeSmsCollectFields(body.smsCollectFields)
+      : undefined;
+    const allowDynamicCustomQuestions =
+      body.allowDynamicCustomQuestions === undefined
+        ? undefined
+        : body.allowDynamicCustomQuestions !== false;
+
     const patch = buildAiRecoverySavePatch({
       enabled: true,
       fieldToggles,
+      smsCollectFields,
+      allowDynamicCustomQuestions,
       bookingLinkEnabled,
       bookingLinkId: bookingLinkId ?? existing.bookingLinkId,
       existing,

@@ -209,6 +209,17 @@ export type PolicyHealthStatus =
   | "UPGRADE_REQUIRED"
   | "DISABLED";
 
+export type MctbSmsCollectFieldDef = {
+  id: string;
+  label: string;
+  prompt: string;
+  enabled: boolean;
+  required: boolean;
+  sortOrder: number;
+  source: "builtin" | "custom";
+  builtinKey?: LeadRecoveryCollectField;
+};
+
 export type LeadRecoveryWorkspaceConfig = {
   enabled: boolean;
   version: number;
@@ -236,6 +247,10 @@ export type LeadRecoveryWorkspaceConfig = {
     highValue: boolean;
   };
   bookingLinkId?: string | null;
+  /** Ordered SMS collect questions (built-in + custom). */
+  smsCollectFields?: MctbSmsCollectFieldDef[];
+  /** When true, the agent may ask one-off clarifying questions not listed above. */
+  allowDynamicCustomQuestions?: boolean;
   policyHealth: PolicyHealthStatus;
   scenarioHealth: Partial<Record<LeadRecoveryScenarioKey, PolicyHealthStatus>>;
 };

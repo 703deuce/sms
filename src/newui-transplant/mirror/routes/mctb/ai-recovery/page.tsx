@@ -9,8 +9,9 @@ import { Textarea } from '@/newui-transplant/components/ui/textarea'
 import { SaveBar } from '@/newui-transplant/components/app/save-bar'
 import { cn } from '@/lib/utils'
 import { BUSINESS } from '@/newui-transplant/lib/sandbox-data'
-import type { AiRecoverySimplifiedField } from '@/lib/mctb/ai-recovery/simplified-fields'
+import type { MctbSmsCollectFieldDef } from '@/lib/mctb/lead-recovery/types'
 import { formatAiRecoverySenderDescription } from '@/lib/mctb/ai-recovery/sender-copy'
+import { LrCollectFieldsOpus } from '@/newui-transplant/connected/mctb/lr-collect-fields-opus'
 
 export type MctbAiRecoveryWired = {
   enabled?: boolean
@@ -25,14 +26,16 @@ export type MctbAiRecoveryWired = {
   emergencyCriteria?: string
   onEmergencyCriteriaChange?: (value: string) => void
   emergenciesScenarioEnabled?: boolean
-  fields?: Record<AiRecoverySimplifiedField, boolean>
+  smsCollectFields?: MctbSmsCollectFieldDef[]
+  onSmsCollectFieldsChange?: (fields: MctbSmsCollectFieldDef[]) => void
+  allowDynamicCustomQuestions?: boolean
+  onAllowDynamicCustomQuestionsChange?: (value: boolean) => void
   bookingLinkEnabled?: boolean
   bookingLinkUrl?: string
   bookingLinkLabel?: string
   bookingLinkReadOnly?: boolean
   bookingLinkEditHref?: string
   onEnabledChange?: (value: boolean) => void
-  onFieldChange?: (key: AiRecoverySimplifiedField, value: boolean) => void
   onBookingLinkEnabledChange?: (value: boolean) => void
   onBookingLinkUrlChange?: (value: string) => void
   onBookingLinkLabelChange?: (value: string) => void
@@ -46,19 +49,6 @@ export type MctbAiRecoveryWired = {
   onSave?: () => Promise<void>
 }
 
-const COLLECT: Array<{
-  key: AiRecoverySimplifiedField
-  label: string
-  description: string
-  defaultOn: boolean
-}> = [
-  { key: 'NAME', label: 'Name', description: 'Ask for the caller’s name', defaultOn: true },
-  { key: 'REASON', label: 'What they need', description: 'Service or reason for calling', defaultOn: true },
-  { key: 'ADDRESS', label: 'Service location', description: 'Address or neighborhood', defaultOn: true },
-  { key: 'URGENCY', label: 'Urgency', description: 'How soon they need help (not the same as an emergency)', defaultOn: true },
-  { key: 'CALLBACK_TIME', label: 'Best time to call back', description: 'Preferred callback window', defaultOn: false },
-]
-
 export function TransplantMctbAiRecoveryPage({ wired }: { wired?: MctbAiRecoveryWired }) {
   const live = wired !== undefined
   const senderDescription = formatAiRecoverySenderDescription(
@@ -66,7 +56,6 @@ export function TransplantMctbAiRecoveryPage({ wired }: { wired?: MctbAiRecovery
     wired?.senderE164,
   )
   const enabled = wired?.enabled ?? (live ? false : true)
-  const fields = wired?.fields
   const bookingOn = wired?.bookingLinkEnabled ?? (live ? false : true)
   const bookingUrl = wired?.bookingLinkUrl ?? (live ? '' : 'https://book.northsideplumbing.com/service')
   const bookingLabel = wired?.bookingLinkLabel ?? (live ? '' : 'Book a service visit')
@@ -122,23 +111,20 @@ export function TransplantMctbAiRecoveryPage({ wired }: { wired?: MctbAiRecovery
             </div>
           </Panel>
 
-          <Panel title="Information to collect" description="AI asks only for what’s enabled, one question at a time" bodyClassName="p-0">
-            <div className="divide-y">
-              {COLLECT.map((c) => (
-                <SettingRow key={c.label} title={c.label} description={c.description} control={
-                  <Switch
-                    id={c.key === "CALLBACK_TIME" ? "collect-CALLBACK_TIME" : undefined}
-                    checked={fields?.[c.key] ?? c.defaultOn}
-                    onCheckedChange={(v) => wired?.onFieldChange?.(c.key, Boolean(v))}
-                    aria-label={`Collect ${c.label}`}
-                  />
-                } />
-              ))}
-            </div>
+          <Panel
+            title="Information to collect"
+            description="Suggested questions for follow-up — same idea as your receptionist setup. Enable built-ins, add custom questions, and reorder. The agent asks one at a time after answering the customer."
+          >
+            <LrCollectFieldsOpus
+              fields={wired?.smsCollectFields ?? []}
+              onChange={(next) => wired?.onSmsCollectFieldsChange?.(next)}
+              allowDynamic={wired?.allowDynamicCustomQuestions ?? true}
+              onAllowDynamicChange={(v) => wired?.onAllowDynamicCustomQuestionsChange?.(Boolean(v))}
+            />
           </Panel>
 
           {wired?.scenarios?.length ? (
-            <Panel title="Conversation scenarios" description="Which kinds of replies AI Recovery may handle" bodyClassName="p-0">
+            <Panel title="Advanced scenarios" description="Optional — leave defaults on unless you need to limit what AI handles" bodyClassName="p-0">
               <div className="divide-y">
                 {wired.scenarios.map((s) => (
                   <SettingRow
