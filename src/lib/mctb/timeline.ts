@@ -24,6 +24,7 @@ const TRACE_LABELS: Record<string, string> = {
   "mctb.scheduled": "SMS queued",
   "sms.send.started": "SMS send started",
   "sms.send.accepted": "SMS sent",
+  "sms.delivered": "SMS delivered",
   "sms.send.failed": "SMS failed",
   "sms.send.blocked": "SMS blocked",
   "mctb.consent.recorded": "Consent recorded",
@@ -119,11 +120,33 @@ export async function buildMctbEventTimeline(missedCallEventId: string): Promise
     push(trace.kind, label, stepStatusFromEvent(trace.kind, detail), trace.createdAt.toISOString(), detail);
   }
 
-  if (event.smsSentAt) {
-    push("sms_delivered", "SMS delivered", "pending", null, {
-      note: "Delivery status depends on provider webhook",
-      smsMessageId: event.smsMessageId,
+  const deliveredTrace = traces.find((t: MissedCallTextTraceRow) => t.kind === "sms.delivered");
+  let linkedMessage: { deliveredAt: Date | null; status: string } | null = null;
+  if (event.smsMessageId) {
+    linkedMessage = await prisma.message.findUnique({
+      where: { id: event.smsMessageId },
+      select: { deliveredAt: true, status: true },
     });
+  }
+
+  if (event.smsSentAt && !deliveredTrace) {
+    const deliveredAt = linkedMessage?.deliveredAt;
+    if (deliveredAt) {
+      push("sms_delivered", "SMS delivered", "complete", deliveredAt.toISOString(), {
+        smsMessageId: event.smsMessageId,
+        source: "message.deliveredAt",
+      });
+    } else if (linkedMessage?.status === "failed" || linkedMessage?.status === "undelivered") {
+      push("sms_delivered", "SMS delivered", "failed", event.updatedAt.toISOString(), {
+        smsMessageId: event.smsMessageId,
+        messageStatus: linkedMessage.status,
+      });
+    } else {
+      push("sms_delivered", "SMS delivered", "pending", null, {
+        note: "Waiting for carrier delivery confirmation",
+        smsMessageId: event.smsMessageId,
+      });
+    }
   }
 
   if (event.status === "FAILED") {

@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     const status = (params.MessageStatus || params.SmsStatus || "").toLowerCase();
     if (!sid) return NextResponse.json({ ok: true, skipped: true });
 
-    await applyOutboundDeliveryStatus({
+    const result = await applyOutboundDeliveryStatus({
       providerMessageId: sid,
       status,
       providerStatus: params.MessageStatus || params.SmsStatus || null,
@@ -60,6 +60,15 @@ export async function POST(request: Request) {
       errorDetail: params.ErrorMessage || null,
       provider: "twilio",
     });
+
+    const { bridgeMctbRecoveryDeliveryWebhook } = await import(
+      "@/lib/mctb/messaging/delivery-trace"
+    );
+    await bridgeMctbRecoveryDeliveryWebhook({
+      providerMessageId: sid,
+      status: result.status,
+      errorDetail: params.ErrorMessage || null,
+    }).catch(() => undefined);
 
     return NextResponse.json({ ok: true });
   } catch (err) {

@@ -62,8 +62,8 @@ async function markTranscriptionPending(sourceType: TranscriptionSourceType, sou
   const prisma = getPrisma();
   if (sourceType === "voicemail_message") {
     await prisma.voicemailMessage.updateMany({
-      where: { id: sourceId, transcriptStatus: { in: [null, "pending"] } },
-      data: { transcriptStatus: "processing" },
+      where: { id: sourceId, transcriptStatus: { in: [null, "pending", "failed"] } },
+      data: { transcriptStatus: "processing", transcriptionError: null },
     });
   } else {
     await prisma.smartRoutingCallRecording.updateMany({
