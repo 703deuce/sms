@@ -83,6 +83,7 @@ export async function provisionMctbPhoneTexmlIngressMode(input: {
         mctbInbound: {
           ...mctbInbound,
           texmlHandlerMode: handlerMode,
+          consentMode: input.consentMode,
           texmlVoiceUrl: voiceUrl,
           texmlAppId,
           greetingToken: greetingTokenForE164(phone.e164),

@@ -321,10 +321,15 @@ export async function POST(request: Request) {
         peekMctbInboundRoutingProfileByToken(routingTokenParam) ||
         peekMctbInboundRoutingProfileByE164(to);
 
-      const cacheHit = Boolean(profile);
+      let cacheHit = Boolean(profile);
       if (!profile) {
-        profile = buildFailOpenInboundRoutingProfile(to);
-        scheduleInboundWarm(to);
+        const warmed = await warmMctbInboundRoutingProfileForE164(to);
+        if (warmed) {
+          profile = warmed;
+        } else {
+          profile = buildFailOpenInboundRoutingProfile(to);
+          scheduleInboundWarm(to);
+        }
       }
 
       const instant = buildInstantMctbInboundTexml({
