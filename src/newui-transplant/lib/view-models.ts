@@ -37,6 +37,8 @@ export type MissedCall = {
   reply: string | null;
   line: string;
   conversationId?: string;
+  teamBriefHeadline?: string | null;
+  teamBriefSummary?: string | null;
 };
 
 export type Message = {

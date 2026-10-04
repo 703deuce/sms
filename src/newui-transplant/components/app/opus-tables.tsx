@@ -31,7 +31,13 @@ export function MissedCallsCompactTable({ rows }: { rows: MissedCall[] }) {
                   <Initials name={m.caller} className="size-7" />
                   <span className="min-w-0">
                     <span className="block truncate">{m.caller}</span>
-                    <span className="block font-mono text-xs font-normal text-muted-foreground tabular-nums">{m.phone}</span>
+                    {m.teamBriefSummary ? (
+                      <span className="block truncate text-xs font-normal text-muted-foreground">
+                        {m.teamBriefSummary}
+                      </span>
+                    ) : (
+                      <span className="block font-mono text-xs font-normal text-muted-foreground tabular-nums">{m.phone}</span>
+                    )}
                   </span>
                 </Link>
               </td>

@@ -37,6 +37,23 @@ export function TransplantMctbMissedCallDetailView({ wired }: { wired: MctbMisse
         }
       />
 
+      {wired.teamBrief ? (
+        <Panel title="What happened" className="mb-4">
+          <h3 className="text-base font-semibold text-foreground">{wired.teamBrief.headline}</h3>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{wired.teamBrief.summary}</p>
+          {wired.teamBrief.bullets.length > 0 ? (
+            <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-foreground">
+              {wired.teamBrief.bullets.map((b) => (
+                <li key={b}>{b}</li>
+              ))}
+            </ul>
+          ) : null}
+          <p className="mt-4 text-sm font-medium text-foreground">
+            Next step: <span className="font-normal text-muted-foreground">{wired.teamBrief.recommendedNextStep}</span>
+          </p>
+        </Panel>
+      ) : null}
+
       <Panel title="Recovery lifecycle" className="mb-4">
         <ol className="grid gap-4 sm:grid-cols-5">
           {wired.lifecycleSteps.map((s, i) => (

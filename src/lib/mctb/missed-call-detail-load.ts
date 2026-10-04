@@ -3,6 +3,7 @@ import "server-only";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { loadConsentForMissedCallEvent } from "@/lib/mctb/consent-log";
 import { countCallerMissedEventsToday } from "@/lib/mctb/repeat-caller";
+import { loadLatestTeamBriefForMissedCall } from "@/lib/mctb/handoff/team-activity-brief";
 import { buildMctbEventTimeline } from "@/lib/mctb/timeline";
 import { getPrisma } from "@/lib/db";
 import { appProductSourceToPrisma } from "@/lib/mass-texting/product-source";
@@ -158,11 +159,16 @@ export async function loadMctbMissedCallDetailPayload(workspaceId: string, event
       .catch(() => null),
   ]);
 
+  const teamBrief = await loadLatestTeamBriefForMissedCall(workspaceId, eventId).catch(
+    () => null,
+  );
+
   return {
     ok: true as const,
     status: 200,
     body: {
       ok: true,
+      teamBrief,
       event: serializeEvent(event as unknown as Record<string, unknown>),
       timeline,
       repeatCaller,

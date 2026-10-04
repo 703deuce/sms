@@ -25,6 +25,9 @@ export type MctbOverviewPayload = {
     missedAt: string;
     recoveryLabel: string;
     replyLabel: string;
+    /** LLM team brief headline when a notification snapshot exists */
+    teamBriefHeadline?: string | null;
+    teamBriefSummary?: string | null;
   }>;
   recentConversations: Array<{
     id: string;

@@ -29,6 +29,14 @@ export type MctbMissedCallDetailWired = {
   voicemailTranscript?: string | null;
   senderLabel?: string;
   diagnostics: string;
+  teamBrief?: {
+    headline: string;
+    summary: string;
+    bullets: string[];
+    recommendedNextStep: string;
+    hasVoicemail: boolean;
+    hasTextReplies: boolean;
+  } | null;
 };
 
 function toRecoveryStatus(status: string, suppressionReason: string | null): RecoveryStatus {
@@ -212,6 +220,26 @@ export function buildMctbMissedCallDetailWired(
   ];
   if (repeatLabel) callDetailsRows.push({ label: "Repeat caller", value: repeatLabel });
 
+  const teamBriefRaw = json.teamBrief as {
+    headline?: string;
+    summary?: string;
+    bullets?: string[];
+    recommendedNextStep?: string;
+    hasVoicemail?: boolean;
+    hasTextReplies?: boolean;
+  } | null;
+  const teamBrief =
+    teamBriefRaw?.headline && teamBriefRaw?.summary
+      ? {
+          headline: teamBriefRaw.headline,
+          summary: teamBriefRaw.summary,
+          bullets: Array.isArray(teamBriefRaw.bullets) ? teamBriefRaw.bullets : [],
+          recommendedNextStep: teamBriefRaw.recommendedNextStep || "Follow up with the caller.",
+          hasVoicemail: Boolean(teamBriefRaw.hasVoicemail),
+          hasTextReplies: Boolean(teamBriefRaw.hasTextReplies),
+        }
+      : null;
+
   const traceId = timeline?.traceId ? String(timeline.traceId) : "";
   const diagnosticsLines = [
     `event_id: ${event.id}`,
@@ -248,5 +276,6 @@ export function buildMctbMissedCallDetailWired(
     voicemailTranscript: voicemail?.transcriptText ?? null,
     senderLabel: extras?.senderLabel,
     diagnostics: diagnosticsLines.join("\n"),
+    teamBrief,
   };
 }

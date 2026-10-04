@@ -27,6 +27,7 @@ import { loadAdminMctbTestFlags } from "@/lib/mctb/admin-test-workspace";
 import { loadMissedCallTextBack } from "@/lib/solutions/missed-call-text-back/save";
 import { appProductSourceToPrisma } from "@/lib/mass-texting/product-source";
 import { loadLeadRecoveryConfigPersisted } from "@/lib/mctb/lead-recovery/config";
+import { loadLatestTeamBriefsForMissedCalls } from "@/lib/mctb/handoff/team-activity-brief";
 import { buildMctbOverviewLeadRecoveryCard } from "@/lib/mctb/overview-lead-recovery-card";
 import { INBOUND_HANDLING_MODE_LABELS } from "@/lib/mctb/inbound-handling/types";
 import type { MctbOverviewPayload, MctbOverviewStatus } from "@/lib/mctb/overview-types";
@@ -219,13 +220,24 @@ async function loadMctbOverviewShared(workspaceId: string): Promise<Omit<MctbOve
       repliesToday: overviewKpis.customerReplies,
       needsReplyCount: overviewKpis.needsReplyCount,
     },
-    recentMissedCalls: recentEvents.map((e: (typeof recentEvents)[number]) => ({
-      id: e.id,
-      callerLabel: formatMctbPhoneLabel(e.callerE164),
-      missedAt: e.detectedAt.toISOString(),
-      recoveryLabel: formatRecoveryStatus(e.status, e.suppressionReason),
-      replyLabel: formatReplyStatus(e.status),
-    })),
+    recentMissedCalls: await (async () => {
+      const ids = recentEvents.map((e: (typeof recentEvents)[number]) => e.id);
+      const briefs = await loadLatestTeamBriefsForMissedCalls(workspaceId, ids).catch(
+        () => new Map(),
+      );
+      return recentEvents.map((e: (typeof recentEvents)[number]) => {
+        const brief = briefs.get(e.id);
+        return {
+          id: e.id,
+          callerLabel: formatMctbPhoneLabel(e.callerE164),
+          missedAt: e.detectedAt.toISOString(),
+          recoveryLabel: formatRecoveryStatus(e.status, e.suppressionReason),
+          replyLabel: formatReplyStatus(e.status),
+          teamBriefHeadline: brief?.headline ?? null,
+          teamBriefSummary: brief?.summary?.slice(0, 200) ?? null,
+        };
+      });
+    })(),
     recentConversations: recentConversations.map((c: (typeof recentConversations)[number]) => {
       const lastMsg = c.messages[0];
       const preview = lastMsg?.body?.slice(0, 80) || "No messages yet";

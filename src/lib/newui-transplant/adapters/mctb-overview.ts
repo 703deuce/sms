@@ -21,5 +21,7 @@ export function mapMctbOverviewRecentMissedCalls(data: MctbOverviewPayload): Mis
     recovery: toRecovery(row.recoveryLabel),
     reply: row.replyLabel === "—" ? null : row.replyLabel,
     line: data.setupHealth.businessLine ?? "—",
+    teamBriefHeadline: row.teamBriefHeadline ?? null,
+    teamBriefSummary: row.teamBriefSummary ?? null,
   }));
 }

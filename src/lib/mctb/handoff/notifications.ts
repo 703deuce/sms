@@ -6,6 +6,8 @@ import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { loadMctbHandoffConfig, loadMctbNotificationRecipients } from "./config";
 import { recipientAllowsNotificationChannel } from "./recipient-event-routing";
 import { MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY } from "@/lib/mctb/launch-flags";
+import { ensureTeamActivityBriefForHandoff } from "./team-activity-brief";
+import type { MctbTeamActivityBrief } from "./team-activity-brief-types";
 import { renderMctbTeamEmail, renderMctbTeamSms, type NotificationRenderInput } from "./templates";
 import type {
   MctbEventChannelPrefs,
@@ -85,8 +87,24 @@ export async function deliverMctbHandoffNotifications(input: {
       ? recipients.filter((r) => routing.recipientIds!.includes(r.id))
       : recipients;
 
-  const channels = resolveHandoffEventChannels(routing);
+  let channels = resolveHandoffEventChannels(routing);
+  if (MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY) {
+    channels = { email: true, sms: false, in_app: false };
+  }
   const results: Array<{ channel: string; status: string; destination?: string }> = [];
+
+  let teamBrief: MctbTeamActivityBrief | null = null;
+  if (channels.email && input.missedCallEventId) {
+    teamBrief = await ensureTeamActivityBriefForHandoff({
+      workspaceId: input.workspaceId,
+      handoffEventId: input.handoffEventId,
+      missedCallEventId: input.missedCallEventId,
+      conversationId: input.conversationId,
+      eventType: input.eventType,
+      facts: input.facts,
+    }).catch(() => null);
+  }
+  renderInput.teamBrief = teamBrief;
 
   const emailRecipients = targetRecipients.filter(
     (r) =>
@@ -225,6 +243,7 @@ export async function deliverMctbHandoffNotifications(input: {
 
   if (
     channels.sms &&
+    !MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY &&
     !suppressNonUrgentSms &&
     !blockAllNonUrgent &&
     (input.eventType !== "urgent_detected" || urgentBusinessSmsEntitled)

@@ -1,4 +1,5 @@
 import type { MctbLeadSnapshotDerived, MctbLeadSnapshotFacts } from "./types";
+import type { MctbTeamActivityBrief } from "./team-activity-brief-types";
 
 export type NotificationRenderInput = {
   businessName: string;
@@ -6,6 +7,7 @@ export type NotificationRenderInput = {
   urgent?: boolean;
   facts: MctbLeadSnapshotFacts;
   derived?: MctbLeadSnapshotDerived;
+  teamBrief?: MctbTeamActivityBrief | null;
   conversationUrl?: string;
   missedCallUrl?: string;
   callTelUrl?: string;
@@ -70,10 +72,30 @@ export function renderMctbTeamEmail(input: NotificationRenderInput): {
     )
     .join("");
 
-  const excerpt = (input.facts.customerMessages || []).slice(-2).join(" / ");
+  const brief = input.teamBrief;
+  const excerpt = brief
+    ? null
+    : (input.facts.customerMessages || []).slice(-2).join(" / ");
+
+  const briefHtml = brief
+    ? `<div style="margin:16px 0;padding:16px;background:#f9fafb;border-radius:8px;border:1px solid #e5e7eb">
+<h3 style="margin:0 0 8px;font-size:16px">${escapeHtml(brief.headline)}</h3>
+<p style="margin:0 0 12px;line-height:1.5;color:#374151">${escapeHtml(brief.summary)}</p>
+${
+  brief.bullets.length
+    ? `<ul style="margin:0 0 12px;padding-left:20px;color:#374151">${brief.bullets
+        .map((b) => `<li style="margin:4px 0">${escapeHtml(b)}</li>`)
+        .join("")}</ul>`
+    : ""
+}
+<p style="margin:0;font-weight:600;color:#111827">Next step: ${escapeHtml(brief.recommendedNextStep)}</p>
+</div>`
+    : "";
+
   const html = `<div style="font-family:system-ui,sans-serif;max-width:560px">
-<h2 style="margin:0 0 12px">${urgent ? "Urgent missed-call lead" : "New missed-call lead"}</h2>
+<h2 style="margin:0 0 12px">${urgent ? "Urgent missed-call lead" : "Missed call update"}</h2>
 <p style="color:#6b7280;margin:0 0 16px">${escapeHtml(input.businessName)}</p>
+${briefHtml}
 <table>${htmlRows}</table>
 ${excerpt ? `<p style="margin-top:16px"><strong>Customer said:</strong> ${escapeHtml(excerpt)}</p>` : ""}
 ${input.conversationUrl ? `<p style="margin-top:20px"><a href="${input.conversationUrl}">Open conversation</a></p>` : ""}
@@ -82,9 +104,14 @@ ${input.missedCallUrl ? `<p><a href="${input.missedCallUrl}">View missed call</a
 
   const text = [
     subject,
+    brief?.headline,
+    brief?.summary,
+    ...(brief?.bullets?.map((b) => `• ${b}`) ?? []),
+    brief ? `Next step: ${brief.recommendedNextStep}` : "",
     ...factRows.map(([k, v]) => `${k}: ${v}`),
     excerpt ? `Customer said: ${excerpt}` : "",
     input.conversationUrl ? `Conversation: ${input.conversationUrl}` : "",
+    input.missedCallUrl ? `Missed call: ${input.missedCallUrl}` : "",
   ]
     .filter(Boolean)
     .join("\n");
