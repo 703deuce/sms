@@ -115,16 +115,30 @@ export async function runMctbSimpleSmsAgentTurn(
     userPayload.booking = { enabled: false };
   }
 
-  const llm = await mctbSemanticStructuredJson<{ reply: string; include_booking_link?: boolean }>({
+  let llm = await mctbSemanticStructuredJson<{ reply: string; include_booking_link?: boolean }>({
     system: SIMPLE_SMS_SYSTEM,
     user: JSON.stringify(userPayload),
     temperature: 0.2,
     maxTokens: 400,
   });
 
-  let reply =
-    llm?.data?.reply?.trim() ||
-    "Thanks for texting us back — someone from our team will follow up with you shortly.";
+  if (!llm?.data?.reply?.trim()) {
+    llm = await mctbSemanticStructuredJson<{ reply: string; include_booking_link?: boolean }>({
+      system: SIMPLE_SMS_SYSTEM,
+      user: JSON.stringify(userPayload),
+      temperature: 0.2,
+      maxTokens: 400,
+      provider: "openai",
+    });
+  }
+
+  const llmReply = llm?.data?.reply?.trim();
+  if (!llmReply) {
+    console.warn("[mctb/simple-sms-agent] semantic LLM returned no reply");
+    return { handled: false };
+  }
+
+  let reply = llmReply;
 
   if (bookingOn && bookingUrl && llm?.data?.include_booking_link) {
     if (!reply.includes(bookingUrl)) {

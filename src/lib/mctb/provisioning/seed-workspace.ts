@@ -2,6 +2,10 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { ensureBusinessWorkspaceForMctb } from "@/lib/mctb/ensure-business-workspace-for-mctb";
+import {
+  normalizeMctbConsentMode,
+  type MctbConsentMode,
+} from "@/lib/mctb/consent-mode";
 import type { MctbOnboardingState } from "@/lib/mctb/onboarding/types";
 import { parseMctbOnboardingState } from "@/lib/mctb/onboarding/state";
 
@@ -23,23 +27,34 @@ export async function ensureMctbWorkspaceSeeded(workspaceId: string): Promise<vo
       ? (ws.customFieldsConfig as Record<string, unknown>)
       : {};
 
+  const mctbCfg =
+    cfg.mctb && typeof cfg.mctb === "object" ? (cfg.mctb as Record<string, unknown>) : {};
+  const storedMctbConsent: MctbConsentMode | undefined =
+    typeof mctbCfg.consentMode === "string"
+      ? normalizeMctbConsentMode(mctbCfg.consentMode)
+      : undefined;
+
   const existing = parseMctbOnboardingState(cfg);
   const hasOnboarding = Boolean((cfg as Record<string, unknown>).mctbOnboarding);
 
   const onboardingSeed: MctbOnboardingState = hasOnboarding
-    ? existing
+    ? {
+        ...existing,
+        ...(storedMctbConsent ? { consentMode: storedMctbConsent } : {}),
+      }
     : {
         version: 2,
         currentStep: "business",
         completedSteps: [],
         startedAt: new Date().toISOString(),
-        consentMode: "press_1",
+        consentMode: storedMctbConsent ?? "press_1",
         messageTemplate: DEFAULT_MESSAGE,
       };
 
+  const canonicalConsent: MctbConsentMode =
+    storedMctbConsent ?? normalizeMctbConsentMode(onboardingSeed.consentMode);
+
   const plan = String(ws.billingPlan || "").toLowerCase();
-  const mctbCfg =
-    cfg.mctb && typeof cfg.mctb === "object" ? (cfg.mctb as Record<string, unknown>) : {};
   const preservePaidPlan =
     mctbCfg.adminTestAccount === true || mctbCfg.unlimitedMctbTesting === true;
   const billingPatch =
@@ -54,10 +69,10 @@ export async function ensureMctbWorkspaceSeeded(workspaceId: string): Promise<vo
       ...billingPatch,
       customFieldsConfig: {
         ...cfg,
-        mctbOnboarding: onboardingSeed,
+        mctbOnboarding: { ...onboardingSeed, consentMode: canonicalConsent },
         mctb: {
           ...(cfg.mctb && typeof cfg.mctb === "object" ? (cfg.mctb as object) : {}),
-          consentMode: onboardingSeed.consentMode || "press_1",
+          consentMode: canonicalConsent,
         },
       },
     },

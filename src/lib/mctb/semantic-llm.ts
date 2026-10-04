@@ -25,8 +25,9 @@ export function resolveMctbSemanticLlmProvider(): MctbSemanticLlmProvider {
   const forced = process.env.MCTB_SEMANTIC_LLM_PROVIDER?.trim().toLowerCase();
   if (forced === "openai") return "openai";
   if (forced === "deepseek") return "deepseek";
-  if (process.env.DEEPSEEK_API_KEY?.trim()) return "deepseek";
+  // Prefer OpenAI when both are configured — DeepSeek is opt-in (billing/outages).
   if (getOpenAiApiKey()) return "openai";
+  if (process.env.DEEPSEEK_API_KEY?.trim()) return "deepseek";
   if (providers().length > 0) return providers()[0].id;
   return "openai";
 }
@@ -93,10 +94,11 @@ export async function mctbSemanticStructuredJson<T>(input: {
   model?: string;
   temperature?: number;
   maxTokens?: number;
+  provider?: MctbSemanticLlmProvider;
 }): Promise<MctbSemanticStructuredResult<T> | null> {
   const temperature = input.temperature ?? 0.1;
   const maxTokens = input.maxTokens ?? 500;
-  const preferred = resolveMctbSemanticLlmProvider();
+  const preferred = input.provider?.trim() || resolveMctbSemanticLlmProvider();
 
   if (preferred === "deepseek" && process.env.DEEPSEEK_API_KEY?.trim()) {
     try {

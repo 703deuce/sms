@@ -67,7 +67,7 @@ export function MctbSetupConsentView() {
   const [error, setError] = useState<string | null>(null);
   const [phoneNumberId, setPhoneNumberId] = useState<string | null>(null);
   const [phoneNumbers, setPhoneNumbers] = useState<PhoneOption[]>([]);
-  const [draftMode, setDraftMode] = useState<MctbConsentMode>(MCTB_CONSENT_MODE_VERIFIED);
+  const [draftMode, setDraftMode] = useState<MctbConsentMode | null>(null);
   const [baseline, setBaseline] = useState<ConsentSnapshot | null>(null);
   const [savedAttestation, setSavedAttestation] = useState<ConsentAttestationMeta>(null);
   const [messagingReady, setMessagingReady] = useState(false);
@@ -112,7 +112,7 @@ export function MctbSetupConsentView() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to load");
       const data = json.data;
-      const mode = (data.consentMode as MctbConsentMode) || MCTB_CONSENT_MODE_VERIFIED;
+      const mode = (data.consentMode as MctbConsentMode) || MCTB_CONSENT_MODE_EXISTING;
       setPhoneNumberId(data.runtime?.phoneNumberId ?? null);
       setPhoneNumbers(data.phoneNumbers || []);
       setDraftMode(mode);
@@ -206,6 +206,7 @@ export function MctbSetupConsentView() {
   }
 
   async function save() {
+    if (!draftMode) return;
     if (!phoneNumberId) {
       setError("Select an MCTB forwarding number on Phone & Forwarding before saving consent.");
       return;
@@ -290,6 +291,8 @@ export function MctbSetupConsentView() {
     );
   }
 
+  const activeConsentMode = draftMode ?? MCTB_CONSENT_MODE_EXISTING;
+
   return (
     <MctbSetupShell {...shellProps}>
       <div className="mctb-consent-page">
@@ -339,7 +342,7 @@ export function MctbSetupConsentView() {
           </div>
           <div className="mctb-consent-status-strip__cell">
             <span className="mctb-consent-status-strip__label">Method</span>
-            <span className="mctb-consent-status-strip__value">{methodLabel(draftMode)}</span>
+            <span className="mctb-consent-status-strip__value">{methodLabel(activeConsentMode)}</span>
           </div>
           <div className="mctb-consent-status-strip__cell">
             <span className="mctb-consent-status-strip__label">Text-back sender</span>
@@ -347,7 +350,7 @@ export function MctbSetupConsentView() {
           </div>
           <div className="mctb-consent-status-strip__cell">
             <span className="mctb-consent-status-strip__label">Evidence</span>
-            <span className="mctb-consent-status-strip__value">{evidenceLabel(draftMode)}</span>
+            <span className="mctb-consent-status-strip__value">{evidenceLabel(activeConsentMode)}</span>
           </div>
         </div>
 
