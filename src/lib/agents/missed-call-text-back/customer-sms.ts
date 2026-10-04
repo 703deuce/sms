@@ -303,6 +303,8 @@ export async function handleMctbCustomerSmsReply(input: {
     customerPhone: fromE164,
     body: input.body,
     timezone: config.timezone,
+    crmContactFirstName: contact?.firstName ?? null,
+    crmContactLastName: contact?.lastName ?? null,
   });
 
   const { logMctbSmsRoutingDecision } = await import(

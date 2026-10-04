@@ -11,7 +11,10 @@ import {
 } from "@/lib/mctb/conversation-thread";
 import { loadMctbLeadRecoveryKnowledgeBundle } from "@/lib/mctb/lead-recovery/knowledge-prompt";
 import { isCarrierProtocolOptOutMessage } from "@/lib/mctb/lead-recovery/protocol-intent";
-import { finalizeMctbAgentSmsReply } from "@/lib/mctb/sms-channel";
+import {
+  finalizeMctbAgentSmsReply,
+  sanitizeMctbThreadForAgentPrompt,
+} from "@/lib/mctb/sms-channel";
 import { loadMctbInboxConversationThread } from "@/lib/mctb/semantic-conversation-context";
 import { mctbSemanticStructuredJson } from "@/lib/mctb/semantic-llm";
 
@@ -21,6 +24,9 @@ export type MctbSimpleSmsAgentInput = {
   customerPhone: string;
   body: string;
   timezone?: string;
+  /** Sanitization only — strips wrong CRM sign-offs; not passed to the model as identity. */
+  crmContactFirstName?: string | null;
+  crmContactLastName?: string | null;
 };
 
 const SIMPLE_SMS_SYSTEM = `You are the business's helpful SMS assistant continuing a missed-call text conversation.
@@ -36,7 +42,7 @@ Your job:
 4. Do NOT include any URLs or links in your reply (booking links are added by the system only when appropriate).
 5. Do NOT address the customer by name unless they clearly introduced themselves in this thread.
 6. Do NOT add STOP, HELP, opt-out, or compliance footer text (the first business text already included that).
-7. No markdown, no sign-off names, no "Anthony" or other names from metadata.
+7. No markdown and no sign-off names — never end with ", FirstName" or similar.
 
 BOOKING: Only set include_booking_link true when BOOKING is enabled and the customer wants to schedule. Never paste a URL yourself.
 
@@ -76,6 +82,9 @@ export type MctbSimpleSmsAgentTurnContext = {
   businessKnowledgeBlock: string;
   timezone?: string | null;
   booking?: { enabled: boolean; url?: string | null };
+  /** CRM hints for sanitization only — never sent to the LLM as identity. */
+  crmContactFirstName?: string | null;
+  crmContactLastName?: string | null;
 };
 
 /** Core agent turn — used in production and dialogue smoke tests (inject thread + knowledge). */
@@ -92,6 +101,8 @@ export async function runMctbSimpleSmsAgentTurn(
     inbox: ctx.thread,
     latestCustomerMessage: ctx.customerMessage,
   });
+  const crmNames = [ctx.crmContactFirstName, ctx.crmContactLastName];
+  const threadForPrompt = sanitizeMctbThreadForAgentPrompt(thread, crmNames);
 
   const bookingOn = ctx.booking?.enabled === true;
   const bookingUrl = ctx.booking?.url?.trim() || null;
@@ -99,7 +110,7 @@ export async function runMctbSimpleSmsAgentTurn(
   const userPayload: Record<string, unknown> = {
     timezone: ctx.timezone || null,
     business_knowledge: ctx.businessKnowledgeBlock,
-    conversation_thread: formatThreadForPrompt(thread),
+    conversation_thread: formatThreadForPrompt(threadForPrompt),
   };
 
   if (bookingOn && bookingUrl) {
@@ -145,6 +156,8 @@ export async function runMctbSimpleSmsAgentTurn(
 
   reply = finalizeMctbAgentSmsReply(reply, {
     allowedUrl: appendBooking ? bookingUrl : null,
+    thread,
+    crmKnownFirstNames: crmNames,
   });
   if (!reply.trim()) {
     return { handled: false };
@@ -190,6 +203,8 @@ export async function handleMctbSimpleSmsAgentInbound(
     businessKnowledgeBlock: knowledge.runtime_prompt_block,
     timezone: input.timezone || bookingConfig.timezone || null,
     booking: bookingOn && bookingUrl ? { enabled: true, url: bookingUrl } : { enabled: false },
+    crmContactFirstName: input.crmContactFirstName,
+    crmContactLastName: input.crmContactLastName,
   });
 
   const { llmProvider: _p, llmModel: _m, ...rest } = result;

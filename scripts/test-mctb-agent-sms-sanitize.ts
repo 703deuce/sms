@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   finalizeMctbAgentSmsReply,
   stripMctbTrackingUrlsFromSms,
+  stripUnverifiedCallerNameFromAgentReply,
   stripUrlsFromMctbAgentSmsReply,
 } from "../src/lib/mctb/sms-channel";
 
@@ -31,5 +32,16 @@ assert.equal(
   stripMctbTrackingUrlsFromSms("Hi https://transovo.ai/r/abc123 thanks"),
   "Hi thanks",
 );
+
+const thread = [
+  { role: "business", text: "Our team will follow up shortly, Anthony." },
+  { role: "customer", text: "Do I have to go through A2P" },
+] as const;
+const noAnthony = stripUnverifiedCallerNameFromAgentReply(
+  "I don't have those details. Our team will follow up with you shortly, Anthony.",
+  [...thread],
+  ["Anthony"],
+);
+assert.ok(!noAnthony.includes("Anthony"));
 
 console.log("test-mctb-agent-sms-sanitize: OK");
