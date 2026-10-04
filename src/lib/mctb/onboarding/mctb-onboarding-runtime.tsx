@@ -159,7 +159,6 @@ export function MctbOnboardingRuntime({
       if (json.state.businessName) setBusinessName(json.state.businessName);
       if (json.state.websiteUrl) setWebsiteUrl(json.state.websiteUrl);
       if (json.state.messageTemplate) setMessageTemplate(json.state.messageTemplate);
-      if (json.state.consentMode) setConsentMode(json.state.consentMode);
       if (
         (json as { existingConsentAttestationRecorded?: boolean }).existingConsentAttestationRecorded
       ) {
@@ -173,12 +172,20 @@ export function MctbOnboardingRuntime({
     if (setupRes?.ok) {
       const setupJson = (await setupRes.json()) as {
         data?: {
+          consentMode?: MctbConsentMode;
           consentMeta?: { existingConsentEligible?: boolean };
           recoveryGoal?: string;
         };
+        consentMode?: MctbConsentMode;
         consentMeta?: { existingConsentEligible?: boolean };
         recoveryGoal?: string;
       };
+      const { normalizeMctbConsentMode } = await import("@/lib/mctb/consent-mode");
+      const setupConsent =
+        setupJson?.data?.consentMode ?? setupJson?.consentMode ?? json.state?.consentMode;
+      if (setupConsent) {
+        setConsentMode(normalizeMctbConsentMode(setupConsent));
+      }
       const ready = Boolean(
         setupJson?.data?.consentMeta?.existingConsentEligible ??
           setupJson?.consentMeta?.existingConsentEligible,

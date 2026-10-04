@@ -104,7 +104,17 @@ export function NewUiMctbAiRecoveryPage() {
       const scenarios = (data.recovery?.enabledScenarios ?? {}) as Partial<
         Record<LeadRecoveryScenarioKey, boolean>
       >;
-      setEnabledScenarios(scenarios);
+      setEnabledScenarios({
+        take_message: true,
+        emergencies: scenarios.emergencies ?? true,
+        general_faq: scenarios.general_faq ?? true,
+        booking: scenarios.booking ?? false,
+        pricing: scenarios.pricing ?? false,
+        service_area: scenarios.service_area ?? false,
+        payments: scenarios.payments ?? false,
+        existing_customer: scenarios.existing_customer ?? false,
+        ...scenarios,
+      });
       setAboutBusiness(
         typeof data.business?.aboutBusiness === "string" ? data.business.aboutBusiness : "",
       );

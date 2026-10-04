@@ -32,6 +32,8 @@ const PIPELINE_FAQ_FIRST_INTENTS = new Set<LeadRecoveryIntent>([
   "BUSINESS_FAQ",
   "BUSINESS_LOCATION",
   "SERVICE_AREA_CHECK",
+  /** "What do you do?" / company questions — answer from business knowledge before intake. */
+  "GENERAL_INQUIRY",
 ]);
 
 const PIPELINE_POLICY_INTENTS = new Set<LeadRecoveryIntent>([

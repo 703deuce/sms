@@ -25,7 +25,7 @@ const MODES = [
 
 export function ConsentEditor() {
   const { business } = useOpusWorkspaceData()
-  const [mode, setMode] = useState<(typeof MODES)[number]['id']>('press1')
+  const [mode, setMode] = useState<(typeof MODES)[number]['id'] | null>(null)
   const [attested, setAttested] = useState(false)
   const [disclosure, setDisclosure] = useState('')
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(null)
@@ -92,10 +92,14 @@ export function ConsentEditor() {
     return () => window.removeEventListener('mctb-setup-updated', onSetup)
   }, [load])
 
-  const apiMode = MODES.find((m) => m.id === mode)?.api ?? 'press_1'
+  const apiMode = MODES.find((m) => m.id === mode)?.api
 
   const onSave = async () => {
     setSaveError(null)
+    if (!apiMode) {
+      setSaveError('Consent settings are still loading. Wait a moment and try again.')
+      return
+    }
     if (!phoneNumberId) {
       setSaveError('Select an MCTB forwarding number on Phone & Forwarding before saving consent.')
       return
@@ -107,7 +111,7 @@ export function ConsentEditor() {
     try {
       await saveMctbSetup({
         phoneNumberId,
-        consentMode: apiMode,
+        consentMode: apiMode as 'press_1' | 'existing_consent',
         existingConsentAttested: apiMode === 'existing_consent' ? true : undefined,
         activate: false,
       })

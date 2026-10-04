@@ -116,6 +116,12 @@ export function buildAiRecoverySavePatch(
     const intentKey = key as LeadRecoveryIntent;
     if (COLLECT_SYNC_INTENTS.includes(intentKey)) {
       next = { ...next, collect: collectForIntent(intentKey, collectCapabilities) };
+      if (intentKey === "GENERAL_INQUIRY") {
+        next = {
+          ...next,
+          actions: ["ANSWER_APPROVED_INFORMATION", "SEND_EMAIL_SUMMARY", "CUSTOMER_MESSAGE"],
+        };
+      }
     }
     if (BOOKING_INTENTS.includes(intentKey)) {
       const bookingActions =
@@ -152,10 +158,16 @@ export function buildAiRecoverySavePatch(
   const fallback = stripPolicyActions(input.existing.fallbackPolicy);
   const fallbackCollect = collectForIntent("GENERAL_INQUIRY", collectCapabilities);
 
+  const scenarioPatch = input.enabledScenarios ?? {};
   const enabledScenarios = {
     ...defaultLaunchEnabledScenarios(),
     ...input.existing.enabledScenarios,
-    ...(input.enabledScenarios ?? {}),
+    ...scenarioPatch,
+    // Opus AI Recovery expects FAQ answers unless the user explicitly turned the scenario off.
+    general_faq:
+      scenarioPatch.general_faq ??
+      input.existing.enabledScenarios?.general_faq ??
+      true,
   };
 
   return {
