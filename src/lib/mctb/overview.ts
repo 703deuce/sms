@@ -234,7 +234,7 @@ async function loadMctbOverviewShared(workspaceId: string): Promise<Omit<MctbOve
       leadRecoveryAiEnabled,
     ),
     recentConversations: recentConversations.map((c: (typeof recentConversations)[number]) => {
-      const lastMsg = c.messages[0];
+      const lastMsg = c.messages?.[0];
       const preview = lastMsg?.body?.slice(0, 80) || "No messages yet";
       const name = c.contact?.name || c.fromE164 || "Unknown";
       return {

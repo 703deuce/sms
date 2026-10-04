@@ -79,7 +79,7 @@ export async function loadMctbOverviewRecentRecoveryRows(
   >();
   for (const conv of conversations) {
     if (!conv.missedCallEventId) continue;
-    const outboundCount = conv.messages.filter((m) => {
+    const outboundCount = (conv.messages ?? []).filter((m) => {
       const dir = String(m.direction || "").toLowerCase();
       return dir === "outbound" || dir === "out";
     }).length;

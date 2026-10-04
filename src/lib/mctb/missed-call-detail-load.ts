@@ -149,11 +149,11 @@ export async function loadMctbMissedCallDetailPayload(workspaceId: string, event
       event: serializeEvent(event as unknown as Record<string, unknown>),
       timeline,
       repeatCaller,
-      linkClicks: linkClicks.map((c) => ({
+      linkClicks: (linkClicks ?? []).map((c) => ({
         ...c,
         createdAt: c.createdAt.toISOString(),
       })),
-      formSubmissions: formSubmissions.map((s) => ({
+      formSubmissions: (formSubmissions ?? []).map((s) => ({
         ...s,
         submittedAt: s.submittedAt.toISOString(),
       })),

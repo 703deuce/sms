@@ -13,7 +13,8 @@ export async function buildMctbOverviewLeadRecoveryCard(
   workspaceId: string,
   lrConfig: LeadRecoveryWorkspaceConfig,
 ): Promise<MctbOverviewPayload["leadRecovery"]> {
-  const activePolicies = LEAD_RECOVERY_SCENARIO_DEFS.filter((d) => lrConfig.enabledScenarios[d.key]);
+  const scenarios = lrConfig.enabledScenarios ?? {};
+  const activePolicies = LEAD_RECOVERY_SCENARIO_DEFS.filter((d) => scenarios[d.key]);
   const policySummary = activePolicies.map((d) => d.title.split(" ")[0]).slice(0, 4).join(" · ");
 
   if (!lrConfig.enabled) {
