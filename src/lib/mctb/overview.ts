@@ -6,10 +6,7 @@ import { loadMctbOverviewKpis } from "@/lib/mctb/overview-kpis";
 import { MCTB_CONSENT_MODE_LABELS, normalizeMctbConsentMode } from "@/lib/mctb/consent-mode";
 import { loadMctbOnboardingState, isOnboardingComplete } from "@/lib/mctb/onboarding/state";
 import { formatMctbPhoneLabel } from "@/lib/mctb/phone-display";
-import {
-  formatRecoveryStatus,
-  formatReplyStatus,
-} from "@/lib/mctb/recovery-display";
+import { isLeadRecoveryAiRepliesEnabled } from "@/lib/mctb/lead-recovery/config";
 import {
   isMctbOperationalMessagingReady,
   isMctbSetupMessagingReady,
@@ -27,8 +24,8 @@ import { loadAdminMctbTestFlags } from "@/lib/mctb/admin-test-workspace";
 import { loadMissedCallTextBack } from "@/lib/solutions/missed-call-text-back/save";
 import { appProductSourceToPrisma } from "@/lib/mass-texting/product-source";
 import { loadLeadRecoveryConfigPersisted } from "@/lib/mctb/lead-recovery/config";
-import { loadLatestTeamBriefsForMissedCalls } from "@/lib/mctb/handoff/team-activity-brief";
 import { buildMctbOverviewLeadRecoveryCard } from "@/lib/mctb/overview-lead-recovery-card";
+import { loadMctbOverviewRecentRecoveryRows } from "@/lib/mctb/overview-recent-recovery-load";
 import { INBOUND_HANDLING_MODE_LABELS } from "@/lib/mctb/inbound-handling/types";
 import type { MctbOverviewPayload, MctbOverviewStatus } from "@/lib/mctb/overview-types";
 
@@ -113,6 +110,7 @@ async function loadMctbOverviewShared(workspaceId: string): Promise<Omit<MctbOve
     overviewKpis,
     recentEvents,
     recentConversations,
+    leadRecoveryAiEnabled,
   ] = await Promise.all([
     loadMissedCallTextConfig(workspaceId),
     loadMctbOnboardingState(workspaceId),
@@ -126,7 +124,16 @@ async function loadMctbOverviewShared(workspaceId: string): Promise<Omit<MctbOve
     prisma.missedCallEvent.findMany({
       where: { workspaceId },
       orderBy: { detectedAt: "desc" },
-      take: 8,
+      take: 3,
+      select: {
+        id: true,
+        callerE164: true,
+        detectedAt: true,
+        status: true,
+        suppressionReason: true,
+        smsSentAt: true,
+        contactId: true,
+      },
     }),
     prisma.conversation.findMany({
       where: {
@@ -140,6 +147,7 @@ async function loadMctbOverviewShared(workspaceId: string): Promise<Omit<MctbOve
         messages: { orderBy: { createdAt: "desc" }, take: 1 },
       },
     }),
+    isLeadRecoveryAiRepliesEnabled(workspaceId),
   ]);
 
   const requiredActions = deriveRequiredActions(compliance.registration, workspaceNumbers);
@@ -220,24 +228,11 @@ async function loadMctbOverviewShared(workspaceId: string): Promise<Omit<MctbOve
       repliesToday: overviewKpis.customerReplies,
       needsReplyCount: overviewKpis.needsReplyCount,
     },
-    recentMissedCalls: await (async () => {
-      const ids = recentEvents.map((e: (typeof recentEvents)[number]) => e.id);
-      const briefs = await loadLatestTeamBriefsForMissedCalls(workspaceId, ids).catch(
-        () => new Map(),
-      );
-      return recentEvents.map((e: (typeof recentEvents)[number]) => {
-        const brief = briefs.get(e.id);
-        return {
-          id: e.id,
-          callerLabel: formatMctbPhoneLabel(e.callerE164),
-          missedAt: e.detectedAt.toISOString(),
-          recoveryLabel: formatRecoveryStatus(e.status, e.suppressionReason),
-          replyLabel: formatReplyStatus(e.status),
-          teamBriefHeadline: brief?.headline ?? null,
-          teamBriefSummary: brief?.summary?.slice(0, 200) ?? null,
-        };
-      });
-    })(),
+    recentMissedCalls: await loadMctbOverviewRecentRecoveryRows(
+      workspaceId,
+      recentEvents,
+      leadRecoveryAiEnabled,
+    ),
     recentConversations: recentConversations.map((c: (typeof recentConversations)[number]) => {
       const lastMsg = c.messages[0];
       const preview = lastMsg?.body?.slice(0, 80) || "No messages yet";

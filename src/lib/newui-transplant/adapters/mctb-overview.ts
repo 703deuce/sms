@@ -15,13 +15,13 @@ export function mapMctbOverviewRecentMissedCalls(data: MctbOverviewPayload): Mis
   return data.recentMissedCalls.map((row) => ({
     id: row.id,
     caller: row.callerLabel,
-    phone: row.callerLabel,
+    phone: row.callerPhoneLabel,
     missed: row.missedAt,
     trigger: "No answer",
     recovery: toRecovery(row.recoveryLabel),
     reply: row.replyLabel === "—" ? null : row.replyLabel,
     line: data.setupHealth.businessLine ?? "—",
     teamBriefHeadline: row.teamBriefHeadline ?? null,
-    teamBriefSummary: row.teamBriefSummary ?? null,
+    teamBriefSummary: row.teamBriefSummary ?? row.summaryText,
   }));
 }

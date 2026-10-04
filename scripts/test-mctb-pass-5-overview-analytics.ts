@@ -84,10 +84,19 @@ const sampleOverview: MctbOverviewPayload = {
   recentMissedCalls: [
     {
       id: "mc1",
+      callerName: null,
+      callerPhoneE164: "+15551112222",
+      callerPhoneLabel: "(555) 111-2222",
       callerLabel: "(555) 111-2222",
       missedAt: new Date().toISOString(),
       recoveryLabel: "Sent",
       replyLabel: "No reply",
+      summaryText:
+        "Missed call from a new caller. Transovo sent the recovery text, but the caller has not replied yet.",
+      footerChips: ["Text delivered", "No reply yet"],
+      conversationId: null,
+      teamBriefHeadline: null,
+      teamBriefSummary: null,
     },
   ],
   recentConversations: [],

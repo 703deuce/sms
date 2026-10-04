@@ -1,5 +1,22 @@
 /** Client-safe MCTB overview shapes (no server imports). */
 
+export type MctbOverviewRecentRecoveryRow = {
+  id: string;
+  callerName: string | null;
+  callerPhoneE164: string;
+  callerPhoneLabel: string;
+  /** Primary list label — name when known, else formatted phone */
+  callerLabel: string;
+  missedAt: string;
+  recoveryLabel: string;
+  replyLabel: string;
+  summaryText: string;
+  footerChips: string[];
+  conversationId: string | null;
+  teamBriefHeadline: string | null;
+  teamBriefSummary: string | null;
+};
+
 export type MctbOverviewStatus =
   | "setup_incomplete"
   | "paused"
@@ -19,16 +36,7 @@ export type MctbOverviewPayload = {
     repliesToday: number;
     needsReplyCount: number;
   };
-  recentMissedCalls: Array<{
-    id: string;
-    callerLabel: string;
-    missedAt: string;
-    recoveryLabel: string;
-    replyLabel: string;
-    /** LLM team brief headline when a notification snapshot exists */
-    teamBriefHeadline?: string | null;
-    teamBriefSummary?: string | null;
-  }>;
+  recentMissedCalls: MctbOverviewRecentRecoveryRow[];
   recentConversations: Array<{
     id: string;
     label: string;
