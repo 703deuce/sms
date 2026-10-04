@@ -5,6 +5,8 @@ import { resolveCanonicalBookingTimezone } from "@/lib/mctb/ai-booking/booking-t
 import { recordBookingSelectionAudit } from "@/lib/mctb/ai-booking/booking-audit";
 import { resolveOfferedSlotIdFromSpecialist } from "@/lib/mctb/ai-booking/resolve-offered-slot-from-specialist";
 import { loadMctbAiBookingConfig, resolveFallbackBookingUrl } from "@/lib/mctb/ai-booking/config";
+import { calendarFulfillmentEnabled } from "@/lib/mctb/ai-booking/fulfillment-mode";
+import { sendMctbBookingLinkSmsReply } from "@/lib/mctb/ai-booking/booking-link-sms";
 import { orchestrateMctbAiBooking } from "@/lib/mctb/ai-booking/orchestrator";
 import { getMctbAiBookingSessionStore } from "@/lib/mctb/ai-booking/session-store";
 import { recordMctbAiBookingFallbackActivity } from "@/lib/mctb/ai-booking/activity";
@@ -86,11 +88,17 @@ export async function handleMctbAiBookingInboundSms(input: {
   }
 
   if (route.subintent === "ASK_BOOKING_LINK") {
-    const url = await resolveFallbackBookingUrl(input.workspaceId, config);
-    const reply = url
-      ? `You can pick a time here: ${url}`
-      : "Please ask us for our booking link — we’ll send it shortly.";
-    return { handled: true, reply, action: "ai_booking" };
+    return sendMctbBookingLinkSmsReply({
+      workspaceId: input.workspaceId,
+      customerMessage: input.body,
+    });
+  }
+
+  if (!calendarFulfillmentEnabled(config)) {
+    return sendMctbBookingLinkSmsReply({
+      workspaceId: input.workspaceId,
+      customerMessage: input.body,
+    });
   }
 
   const readiness = await evaluateMctbAiBookingReadiness(input.workspaceId);

@@ -296,6 +296,65 @@ export async function handleMctbCustomerSmsReply(input: {
     return { handled: true, action: "mctb_notifications_only" };
   }
 
+  const { handleMctbSmsConversationPipeline } = await import(
+    "@/lib/mctb/ai-booking/sms-conversation-pipeline"
+  );
+  const pipeline = await handleMctbSmsConversationPipeline({
+    workspaceId: input.workspaceId,
+    conversationId,
+    contactId: contact?.id,
+    customerPhone: fromE164,
+    customerName,
+    customerEmail: contact?.email,
+    body: input.body,
+    timezone: config.timezone,
+    recoverySmsCallerE164: fromE164,
+    recoverySmsBusinessE164: input.toE164,
+  });
+
+  if (pipeline.handled && pipeline.reply?.trim()) {
+    await recordMctbLeadRecoveryInboundSideEffects({
+      workspaceId: input.workspaceId,
+      fromE164,
+      body: input.body,
+      conversationId,
+      missedCallEventId: recentEvent.id,
+      providerMessageId: input.providerMessageId,
+      structuredIntent: null,
+    });
+    const idemKey = `mctb-sms-pipeline:${conversationId}:${input.providerMessageId || input.body.slice(0, 32)}`;
+    const outboundDelivery = input.outboundDelivery ?? "inline";
+    if (outboundDelivery === "durable") {
+      const { enqueueMctbCustomerOutboundSmsJob } = await import(
+        "@/lib/mctb/messaging/enqueue-customer-outbound-sms"
+      );
+      const job = await enqueueMctbCustomerOutboundSmsJob({
+        workspaceId: input.workspaceId,
+        conversationId,
+        toE164: fromE164,
+        body: pipeline.reply,
+        idempotencyKey: idemKey,
+        providerMessageId: input.providerMessageId,
+        processingJobId: input.processingJobId,
+        action: pipeline.action,
+      });
+      return {
+        handled: true,
+        action: pipeline.action || "sms_pipeline",
+        reply: pipeline.reply,
+        outboundJobId: job.id,
+      };
+    }
+    await sendMctbCustomerOutboundSms({
+      workspaceId: input.workspaceId,
+      config,
+      toE164: fromE164,
+      body: pipeline.reply,
+      idempotencyKey: idemKey,
+    });
+    return { handled: true, action: pipeline.action || "sms_pipeline", reply: pipeline.reply };
+  }
+
   const leadRecovery = await handleMctbLeadRecoveryInboundSms({
     workspaceId: input.workspaceId,
     conversationId,

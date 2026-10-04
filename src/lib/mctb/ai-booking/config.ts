@@ -3,10 +3,16 @@ import type { MctbAiBookingProviderId } from "@/lib/mctb/ai-booking/types";
 import { getDefaultMctbBookingLink } from "@/lib/mctb/ai-booking/fallback";
 import { hasMctbAiBookingEntitlement } from "@/lib/mctb/ai-booking/entitlement";
 
+export type MctbAiBookingFulfillmentMode = "calendar" | "link_only";
+
 export type MctbAiBookingWorkspaceConfig = {
   enabled: boolean;
   entitled: boolean;
   upgradeRequired: boolean;
+  /** SMS scheduling fulfillment: live provider book vs booking link only (calendar path preserved for later). */
+  fulfillmentMode: MctbAiBookingFulfillmentMode;
+  /** When true, MCTB customer SMS uses the multi-agent pipeline before Lead Recovery policy collect. */
+  smsPipelinePrimary: boolean;
   provider: MctbAiBookingProviderId;
   providerConnectionId?: string | null;
   eventTypeId?: string | null;
@@ -22,6 +28,8 @@ const DEFAULT_CONFIG: MctbAiBookingWorkspaceConfig = {
   enabled: false,
   entitled: false,
   upgradeRequired: true,
+  fulfillmentMode: "link_only",
+  smsPipelinePrimary: true,
   provider: "microsoft",
   serviceName: "Consultation",
   durationMinutes: 30,
@@ -57,11 +65,15 @@ export async function loadMctbAiBookingConfig(
 
   const entitled = await hasMctbAiBookingEntitlement(workspaceId);
   const enabledFlag = raw.enabled === true;
+  const fulfillmentMode: MctbAiBookingFulfillmentMode =
+    raw.fulfillmentMode === "calendar" ? "calendar" : "link_only";
 
   return {
     enabled: enabledFlag && entitled,
     entitled,
     upgradeRequired: !entitled,
+    fulfillmentMode,
+    smsPipelinePrimary: raw.smsPipelinePrimary !== false,
     provider,
     providerConnectionId:
       typeof raw.providerConnectionId === "string" ? raw.providerConnectionId : null,
@@ -92,6 +104,8 @@ export async function saveMctbAiBookingConfig(
   workspaceId: string,
   patch: Partial<{
     enabled: boolean;
+    fulfillmentMode: MctbAiBookingFulfillmentMode;
+    smsPipelinePrimary: boolean;
     provider: MctbAiBookingProviderId;
     providerConnectionId: string | null;
     eventTypeId: string | null;
