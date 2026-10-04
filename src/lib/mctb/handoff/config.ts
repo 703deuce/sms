@@ -2,6 +2,7 @@ import { getPrisma } from "@/lib/db";
 import { defaultHandoffConfig, DEFAULT_LEAD_FIELD_SCHEMA } from "./defaults";
 import type {
   MctbHandoffConfigDto,
+  MctbHandoffEventType,
   MctbLeadFieldConfig,
   MctbNotificationRecipientDto,
   MctbRoutingMatrix,
@@ -21,9 +22,36 @@ function parseFieldSchema(json: unknown): MctbLeadFieldConfig[] {
   return parsed.length ? parsed : DEFAULT_LEAD_FIELD_SCHEMA;
 }
 
+/** Legacy onboarding saved `email`/`sms` on the event row instead of under `channels`. */
+function normalizeRoutingMatrixEntry(raw: unknown): {
+  channels: NonNullable<MctbRoutingMatrix[MctbHandoffEventType]>["channels"];
+  recipientIds: string[];
+} {
+  const fallback = { channels: { in_app: true }, recipientIds: [] as string[] };
+  if (!raw || typeof raw !== "object") return fallback;
+  const row = raw as Record<string, unknown>;
+  const channels = {
+    ...((row.channels as Record<string, boolean>) || {}),
+  };
+  if (typeof row.email === "boolean" && channels.email === undefined) {
+    channels.email = row.email;
+  }
+  if (typeof row.sms === "boolean" && channels.sms === undefined) {
+    channels.sms = row.sms;
+  }
+  const recipientIds = Array.isArray(row.recipientIds)
+    ? row.recipientIds.filter((id): id is string => typeof id === "string")
+    : [];
+  return { channels, recipientIds };
+}
+
 function parseRoutingMatrix(json: unknown): MctbRoutingMatrix {
   if (!json || typeof json !== "object") return defaultHandoffConfig().routingMatrix;
-  return json as MctbRoutingMatrix;
+  const out: MctbRoutingMatrix = {};
+  for (const [eventType, entry] of Object.entries(json)) {
+    out[eventType as keyof MctbRoutingMatrix] = normalizeRoutingMatrixEntry(entry);
+  }
+  return out;
 }
 
 function rowToDto(row: {

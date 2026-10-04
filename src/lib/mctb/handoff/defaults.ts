@@ -3,6 +3,7 @@ import type {
   MctbLeadFieldConfig,
   MctbRoutingMatrix,
 } from "./types";
+import { MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY } from "@/lib/mctb/launch-flags";
 
 export const DEFAULT_LEAD_FIELD_SCHEMA: MctbLeadFieldConfig[] = [
   { id: "caller_name", label: "Caller name", requirement: "optional", sortOrder: 1 },
@@ -17,7 +18,14 @@ export const DEFAULT_LEAD_FIELD_SCHEMA: MctbLeadFieldConfig[] = [
 ];
 
 export const DEFAULT_ROUTING_MATRIX: MctbRoutingMatrix = {
-  caller_replied: { channels: { sms: true, in_app: true }, recipientIds: [] },
+  caller_replied: {
+    channels: {
+      sms: !MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY,
+      in_app: !MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY,
+      email: MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY,
+    },
+    recipientIds: [],
+  },
   lead_captured: { channels: { sms: true, email: true, in_app: true }, recipientIds: [] },
   callback_requested: { channels: { sms: true, email: true, in_app: true }, recipientIds: [] },
   urgent_detected: { channels: { sms: true, email: true, in_app: true }, recipientIds: [] },

@@ -225,7 +225,7 @@ export function OnboardingNotificationsStep({ c, caps, compact }: NotificationsS
   useEffect(() => {
     if (!n.config) return;
     const matrix = n.config.routingMatrix.caller_replied;
-    setCallerReplyEmail(matrix?.email ?? true);
+    setCallerReplyEmail(matrix?.channels?.email ?? true);
   }, [n.config]);
 
   const saveNotifications = useCallback(async () => {
@@ -250,9 +250,14 @@ export function OnboardingNotificationsStep({ c, caps, compact }: NotificationsS
       routingMatrix: {
         ...n.config.routingMatrix,
         caller_replied: {
-          ...(n.config.routingMatrix.caller_replied || {}),
-          email: callerReplyEmail,
-          sms: false,
+          ...(n.config.routingMatrix.caller_replied || { recipientIds: [] }),
+          channels: {
+            ...(n.config.routingMatrix.caller_replied?.channels || {}),
+            email: callerReplyEmail,
+            sms: false,
+            in_app: false,
+          },
+          recipientIds: n.config.routingMatrix.caller_replied?.recipientIds ?? [],
         },
       },
     };
