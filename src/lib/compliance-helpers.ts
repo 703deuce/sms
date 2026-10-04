@@ -4,10 +4,11 @@ import { isPhoneMessagingApproved } from "@/lib/messaging/compliance/messaging-c
 
 export function deriveRequiredActions(
   reg: MessagingRegistration | null | undefined,
-  numbers: PhoneNumber[],
+  numbers: PhoneNumber[] | null | undefined,
 ): string[] {
   const actions: string[] = [];
-  const activeNumbers = numbers.filter((n) => n.status === "Active");
+  const list = numbers ?? [];
+  const activeNumbers = list.filter((n) => n.status === "Active");
   const brandApproved = (reg?.brandStatus || "").toLowerCase() === "approved";
   const campaignApproved = (reg?.campaignStatus || "").toLowerCase() === "approved";
   const registrationReady =

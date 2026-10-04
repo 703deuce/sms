@@ -230,9 +230,15 @@ async function loadMctbOverviewShared(workspaceId: string): Promise<Omit<MctbOve
     },
     recentMissedCalls: await loadMctbOverviewRecentRecoveryRows(
       workspaceId,
-      recentEvents,
+      recentEvents ?? [],
       leadRecoveryAiEnabled,
-    ),
+    ).catch((err) => {
+      console.error("[mctb/overview] recent_recovery_load_failed", {
+        workspaceId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return [] as Awaited<ReturnType<typeof loadMctbOverviewRecentRecoveryRows>>;
+    }),
     recentConversations: recentConversations.map((c: (typeof recentConversations)[number]) => {
       const lastMsg = c.messages?.[0];
       const preview = lastMsg?.body?.slice(0, 80) || "No messages yet";
