@@ -3,10 +3,6 @@ import { classificationToTriggerLabel } from "@/lib/mctb/missed-calls-list-filte
 import { formatConsentModeLabel, formatRecoveryStatus, formatReplyStatus } from "@/lib/mctb/recovery-display";
 import { formatMctbPhoneLabel } from "@/lib/mctb/phone-display";
 import type { RecoveryStatus } from "@/newui-transplant/lib/view-models";
-import {
-  buildCustomerActivitySteps,
-  buildTechnicalDeliverySteps,
-} from "@/lib/newui-transplant/adapters/mctb-missed-call-activity";
 
 export type MctbMissedCallDetailWired = {
   id: string;
@@ -19,20 +15,8 @@ export type MctbMissedCallDetailWired = {
   trigger: string;
   reply: boolean;
   conversationId?: string;
-  messages: Array<{ from: "customer" | "business" | "ai" | "system"; text: string; time: string; label: string }>;
-  activitySteps: Array<{ label: string; at: string; done: boolean }>;
-  technicalSteps: Array<{ label: string; at: string; done: boolean }>;
+  messages: Array<{ from: "customer" | "business"; text: string }>;
   lifecycleSteps: Array<{ label: string; detail: string; done: boolean }>;
-  handoff?: {
-    callerName: string;
-    statusLine: string;
-    phone: string;
-    phoneTel: string;
-    narrative: string;
-    facts: Array<{ label: string; value: string }>;
-    suggestedAction: string;
-    needsAttention?: boolean;
-  } | null;
   textBackRows: Array<{ label: string; value: string }>;
   linkActivity: string;
   requestForm: string;
@@ -99,7 +83,7 @@ export function buildMctbMissedCallDetailWired(
   } | undefined;
   const conversation = json.conversation as {
     id: string;
-    messages?: Array<{ body: string; direction: string; createdAt?: string }>;
+    messages?: Array<{ body: string; direction: string }>;
   } | null;
   const consent = json.consent as {
     consentedAt?: string;
@@ -169,35 +153,10 @@ export function buildMctbMissedCallDetailWired(
     conversation?.messages?.map((m) => {
       const dir = String(m.direction || "").toLowerCase();
       const outbound = dir === "outbound" || dir === "out";
-      const system = dir === "system";
-      const body = String(m.body || "");
-      const looksAi =
-        outbound &&
-        (body.includes("AI Recovery") ||
-          body.length > 280 ||
-          /book an appointment|happy to help/i.test(body));
-      const from = system
-        ? ("system" as const)
-        : outbound
-          ? looksAi
-            ? ("ai" as const)
-            : ("business" as const)
-          : ("customer" as const);
-      const time = m.createdAt
-        ? new Date(m.createdAt).toLocaleTimeString(undefined, {
-            hour: "numeric",
-            minute: "2-digit",
-          })
-        : "";
-      const label =
-        from === "customer"
-          ? caller
-          : from === "ai"
-            ? "AI Recovery"
-            : from === "system"
-              ? "System"
-              : "Transovo";
-      return { from, text: body, time, label };
+      return {
+        from: outbound ? ("business" as const) : ("customer" as const),
+        text: m.body,
+      };
     }) ?? [];
 
   const linkActivity =
@@ -281,23 +240,6 @@ export function buildMctbMissedCallDetailWired(
         }
       : null;
 
-  const recoveryLabel = formatRecoveryStatus(status, suppressionReason);
-  const handoff = teamBrief
-    ? buildHandoffFromBrief({
-        caller,
-        phone,
-        phoneTel: callerE164,
-        recoveryLabel,
-        teamBrief,
-      })
-    : null;
-
-  const activitySteps = buildCustomerActivitySteps(lifecycleSteps, {
-    callerName: name || undefined,
-    reply,
-  });
-  const technicalSteps = buildTechnicalDeliverySteps(lifecycleSteps);
-
   const traceId = timeline?.traceId ? String(timeline.traceId) : "";
   const diagnosticsLines = [
     `event_id: ${event.id}`,
@@ -319,12 +261,9 @@ export function buildMctbMissedCallDetailWired(
     recovery,
     trigger,
     reply,
-    conversationId: conversation?.id || undefined,
+    conversationId: conversation?.id,
     messages,
-    activitySteps,
-    technicalSteps,
     lifecycleSteps,
-    handoff,
     textBackRows,
     linkActivity,
     requestForm,
@@ -338,52 +277,5 @@ export function buildMctbMissedCallDetailWired(
     senderLabel: extras?.senderLabel,
     diagnostics: diagnosticsLines.join("\n"),
     teamBrief,
-  };
-}
-
-function buildHandoffFromBrief(input: {
-  caller: string;
-  phone: string;
-  phoneTel: string;
-  recoveryLabel: string;
-  teamBrief: {
-    headline: string;
-    summary: string;
-    bullets: string[];
-    recommendedNextStep: string;
-  };
-}) {
-  const needsAttention =
-    input.recoveryLabel === "Needs attention" ||
-    input.teamBrief.headline.toLowerCase().includes("callback") ||
-    input.teamBrief.recommendedNextStep.toLowerCase().includes("call");
-
-  let statusLine = input.teamBrief.headline;
-  if (statusLine.length > 80) {
-    statusLine = needsAttention ? "Callback requested · Needs attention" : "Follow-up needed";
-  }
-
-  const facts: Array<{ label: string; value: string }> = [];
-  for (const raw of input.teamBrief.bullets) {
-    const b = raw.trim();
-    if (!b) continue;
-    const colon = b.indexOf(":");
-    if (colon > 0 && colon < 40) {
-      facts.push({ label: b.slice(0, colon).trim(), value: b.slice(colon + 1).trim() });
-    } else {
-      facts.push({ label: "Note", value: b });
-    }
-    if (facts.length >= 6) break;
-  }
-
-  return {
-    callerName: input.caller,
-    statusLine,
-    phone: input.phone,
-    phoneTel: input.phoneTel,
-    narrative: input.teamBrief.summary,
-    facts,
-    suggestedAction: input.teamBrief.recommendedNextStep,
-    needsAttention,
   };
 }

@@ -62,35 +62,9 @@ export async function loadTeamBriefContext(input: {
   const productSource = appProductSourceToPrisma("mctb");
   const smsThread: MctbTeamBriefContext["smsThread"] = [];
 
-  let resolvedConversationId = input.conversationId?.trim() || null;
-  if (!resolvedConversationId && input.missedCallEventId) {
-    const linked = await prisma.conversation.findFirst({
-      where: {
-        workspaceId: input.workspaceId,
-        productSource,
-        missedCallEventId: input.missedCallEventId,
-      },
-      orderBy: { updatedAt: "desc" },
-      select: { id: true },
-    });
-    resolvedConversationId = linked?.id ?? null;
-  }
-  if (!resolvedConversationId && missed?.callerE164) {
-    const byPhone = await prisma.conversation.findFirst({
-      where: {
-        workspaceId: input.workspaceId,
-        productSource,
-        fromE164: missed.callerE164,
-      },
-      orderBy: { updatedAt: "desc" },
-      select: { id: true },
-    });
-    resolvedConversationId = byPhone?.id ?? null;
-  }
-
-  if (resolvedConversationId) {
+  if (input.conversationId) {
     const messages = await prisma.conversationMessage.findMany({
-      where: { conversationId: resolvedConversationId },
+      where: { conversationId: input.conversationId },
       orderBy: { createdAt: "asc" },
       take: 40,
       select: { body: true, direction: true, createdAt: true },

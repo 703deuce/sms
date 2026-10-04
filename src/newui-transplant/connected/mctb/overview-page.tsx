@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
+  AlertTriangle,
   CheckCircle2,
-  ChevronDown,
   MessageSquareReply,
   MessagesSquare,
   PhoneMissed,
@@ -13,14 +13,19 @@ import {
 } from "lucide-react";
 import { ButtonLink } from "@/newui-transplant/components/app/button-link";
 import {
-  KeyValueRow,
+  Callout,
+  FeatureEmphasisStrip,
+  Initials,
   Page,
   PageHeader,
   Panel,
   Pill,
+  KeyValueRow,
   Stat,
   TextLink,
 } from "@/newui-transplant/components/app/kit";
+import { MissedCallsCompactTable } from "@/newui-transplant/components/app/opus-tables";
+import { mapMctbOverviewRecentMissedCalls } from "@/lib/newui-transplant/adapters/mctb-overview";
 import type { MctbOverviewPayload } from "@/lib/mctb/overview-types";
 import type { MctbCapabilities } from "@/lib/mctb/capabilities";
 import { useMctbOverviewEnrichment } from "@/newui-transplant/connected/mctb/overview-enrichment";
@@ -29,9 +34,6 @@ import { fetchMctbSetup } from "@/lib/newui-transplant/api/mctb-setup-client";
 import { openMctbSetupGuide } from "@/newui-transplant/connected/mctb/mctb-setup-guide";
 import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
 import { Button } from "@/newui-transplant/components/ui/button";
-import { MctbOverviewNeedsAttention } from "@/newui-transplant/components/mctb/mctb-overview-needs-attention";
-import { MctbOverviewMissedList } from "@/newui-transplant/components/mctb/mctb-overview-missed-list";
-import { cn } from "@/lib/utils";
 
 export function NewUiMctbOverviewPage({ data }: { data: MctbOverviewPayload }) {
   const { leadRecovery: leadRecoveryRaw } = useMctbOverviewEnrichment(data);
@@ -44,6 +46,7 @@ export function NewUiMctbOverviewPage({ data }: { data: MctbOverviewPayload }) {
     attentionReason: null,
     attentionHref: null,
   };
+  const recentMissed = mapMctbOverviewRecentMissedCalls(data);
   const kpis = data.kpis;
   const [capabilities, setCapabilities] = useState<MctbCapabilities | null>(null);
   const [schedule, setSchedule] = useState<{
@@ -91,14 +94,6 @@ export function NewUiMctbOverviewPage({ data }: { data: MctbOverviewPayload }) {
     return () => window.removeEventListener("mctb-setup-updated", onSetup);
   }, [reloadSetup]);
 
-  const setupHealthy =
-    data.setupComplete &&
-    data.setupHealth.forwardingLabel === "Verified" &&
-    !data.setupHealth.senderLabel.includes("Needs");
-
-  const recoveryUsed = capabilities?.monthlyRecoveriesUsed ?? 0;
-  const recoveryLimit = capabilities?.monthlyRecoveryLimit ?? 0;
-
   return (
     <Page className="pb-24 lg:pb-6">
       <PageHeader
@@ -123,7 +118,21 @@ export function NewUiMctbOverviewPage({ data }: { data: MctbOverviewPayload }) {
         <Stat label="Needs reply" value={String(kpis.needsReplyCount)} hint="Waiting on your team" href="/mctb/conversations?filter=needs_reply" icon={MessagesSquare} />
       </div>
 
-      {schedule?.paused ? (
+      {capabilities && capabilities.monthlyRecoveryLimit > 0 ? (
+        <div className={`mt-4 px-4 py-3 ${OPUS_CARD}`}>
+          <p className="text-sm font-medium">Recovered calls this month</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            <span className="font-mono tabular-nums text-foreground">
+              {capabilities.monthlyRecoveriesUsed} / {capabilities.monthlyRecoveryLimit}
+            </span>
+            {capabilities.monthlyRecoveriesUsed >= capabilities.monthlyRecoveryLimit
+              ? " — limit reached; new recovery texts are suppressed until the next period."
+              : " — qualifying missed calls count toward your plan limit."}
+          </p>
+        </div>
+      ) : null}
+
+      {schedule ? (
         <div className="mt-4">
           <MctbRecoveryPauseOpus
             compact
@@ -136,74 +145,90 @@ export function NewUiMctbOverviewPage({ data }: { data: MctbOverviewPayload }) {
         </div>
       ) : null}
 
-      <MctbOverviewNeedsAttention items={data.needsAttention ?? []} />
-
-      <Panel
-        title="Recent missed calls"
-        action={<TextLink href="/mctb/missed-calls">View all</TextLink>}
-        className="mt-4"
-        bodyClassName="p-0"
-      >
-        <MctbOverviewMissedList rows={data.recentMissedCalls.slice(0, 5)} />
-      </Panel>
-
-      <div className={`mt-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3 ${OPUS_CARD}`}>
-        <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
-          <Sparkles className="size-4 shrink-0 text-primary" aria-hidden="true" />
-          <span className="font-medium">AI Recovery</span>
-          <span className="text-muted-foreground" aria-hidden="true">·</span>
-          <Pill tone={leadRecovery.enabled ? "success" : "neutral"} dot={leadRecovery.enabled} className="h-auto py-0.5">
-            {leadRecovery.enabled ? "On" : "Off"}
-          </Pill>
-          {recoveryLimit > 0 ? (
-            <>
-              <span className="text-muted-foreground" aria-hidden="true">·</span>
-              <span className="font-mono text-xs tabular-nums text-muted-foreground">
-                {recoveryUsed} / {recoveryLimit} recoveries
-              </span>
-            </>
-          ) : null}
-        </div>
-        <TextLink href="/mctb/ai-recovery">Manage</TextLink>
+      <div className="mt-4">
+        <FeatureEmphasisStrip
+          icon={Sparkles}
+          title={leadRecovery.enabled ? "AI Recovery is on" : "AI Recovery is off"}
+          badge={
+            leadRecovery.enabled ? (
+              <Pill tone="success" dot={false} className="h-auto bg-success/20 text-[oklch(0.82_0.12_158)] ring-0">
+                {leadRecovery.statusLabel}
+              </Pill>
+            ) : (
+              <Pill tone="neutral" dot={false} className="ring-0">Off</Pill>
+            )
+          }
+          description={leadRecovery.policySummary}
+          action={<TextLink href="/mctb/ai-recovery">Manage</TextLink>}
+        />
       </div>
 
-      {setupHealthy ? (
-        <details className={cn("mt-4 group", OPUS_CARD)}>
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 text-sm">
-            <span className="flex items-center gap-2">
-              <CheckCircle2 className="size-4 text-success" aria-hidden="true" />
-              <span className="font-medium">Setup complete</span>
-              <span className="text-muted-foreground">
-                Forwarding verified · Sender ready · Recovery active
-              </span>
-            </span>
-            <span className="flex items-center gap-2 text-primary">
-              <Link href="/mctb/setup" className="text-xs font-medium hover:underline">View setup</Link>
-              <ChevronDown className="size-4 text-muted-foreground transition group-open:rotate-180" aria-hidden="true" />
-            </span>
-          </summary>
-          <div className="divide-y border-t px-5">
-            <KeyValueRow label="Business line" value={data.setupHealth.businessLine || "—"} href="/mctb/setup/phone" />
-            <KeyValueRow label="Forwarding" value={data.setupHealth.forwardingLabel} href="/mctb/setup/phone" />
-            <KeyValueRow label="Consent" value={data.setupHealth.consentLabel} href="/mctb/setup/consent" />
-            <KeyValueRow label="Sender" value={data.setupHealth.senderLabel} href="/mctb/setup/phone" />
-            <KeyValueRow label="Recovery" value={data.setupHealth.recoveryLabel} href="/mctb/setup/recovery" />
-          </div>
-        </details>
-      ) : (
-        <Panel className="mt-4" title="Setup health" bodyClassName="divide-y p-0 px-5">
-          <KeyValueRow label="Business line" value={data.setupHealth.businessLine || "—"} href="/mctb/setup/phone" />
-          <KeyValueRow label="Forwarding" value={data.setupHealth.forwardingLabel} href="/mctb/setup/phone" />
-          <KeyValueRow label="Consent" value={data.setupHealth.consentLabel} href="/mctb/setup/consent" />
-          <KeyValueRow label="Sender" value={data.setupHealth.senderLabel} href="/mctb/setup/phone" />
-          <KeyValueRow label="Recovery" value={data.setupHealth.recoveryLabel} href="/mctb/setup/recovery" />
-          {!data.setupComplete ? (
-            <div className="py-4">
-              <ButtonLink href="/mctb/setup">Finish setup</ButtonLink>
-            </div>
-          ) : null}
+      {leadRecovery.status === "needs_attention" && leadRecovery.attentionReason ? (
+        <div className="mt-3">
+          <Callout
+            tone="warning"
+            icon={AlertTriangle}
+            title={leadRecovery.attentionReason}
+            action={
+              leadRecovery.attentionHref ? (
+                <TextLink href={leadRecovery.attentionHref}>Review</TextLink>
+              ) : undefined
+            }
+          />
+        </div>
+      ) : null}
+
+      {data.status === "active" &&
+      data.setupComplete &&
+      leadRecovery.status === "ready" &&
+      leadRecovery.policySummary !== "Loading…" &&
+      data.kpis.needsReplyCount === 0 ? (
+        <div className="mt-4 flex items-center gap-2 rounded-xl border border-success/30 bg-success/5 px-4 py-3 text-sm">
+          <CheckCircle2 className="size-4 text-success" aria-hidden="true" />
+          Nothing needs attention. Forwarding, sender, and consent are healthy.
+        </div>
+      ) : null}
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-5">
+        <Panel
+          title="Recent missed calls"
+          action={<TextLink href="/mctb/missed-calls">View all</TextLink>}
+          className="lg:col-span-3"
+          bodyClassName="p-0"
+        >
+          <MissedCallsCompactTable rows={recentMissed.slice(0, 5)} />
         </Panel>
-      )}
+
+        <Panel
+          title="Recent conversations"
+          action={<TextLink href="/mctb/conversations">Open inbox</TextLink>}
+          className="lg:col-span-2"
+          bodyClassName="p-0"
+        >
+          <ul className="divide-y">
+            {data.recentConversations.slice(0, 5).map((c) => (
+              <li key={c.id}>
+                <Link href={`/mctb/conversations?conversation=${c.id}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/50">
+                  <Initials name={c.label} />
+                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="truncate text-sm font-medium">{c.label}</span>
+                    <span className="truncate text-xs text-muted-foreground">{c.preview}</span>
+                  </div>
+                  {c.needsReply ? <span className="mt-1.5 size-2 shrink-0 rounded-full bg-primary" aria-label="Needs reply" /> : null}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      </div>
+
+      <Panel className="mt-4" title="Setup health" bodyClassName="divide-y p-0 px-5">
+        <KeyValueRow label="Business line" value={data.setupHealth.businessLine || "—"} href="/mctb/setup/phone" />
+        <KeyValueRow label="Forwarding" value={data.setupHealth.forwardingLabel} href="/mctb/setup/phone" />
+        <KeyValueRow label="Consent" value={data.setupHealth.consentLabel} href="/mctb/setup/consent" />
+        <KeyValueRow label="Sender" value={data.setupHealth.senderLabel} href="/mctb/setup/phone" />
+        <KeyValueRow label="Recovery" value={data.setupHealth.recoveryLabel} href="/mctb/setup/recovery" />
+      </Panel>
     </Page>
   );
 }
