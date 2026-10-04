@@ -177,16 +177,35 @@ async function loadKnowledgeBlock(): Promise<string> {
 }
 
 async function main() {
+  const { hydrateProdLlmEnvFromCoolify } = await import("./cloud-agent/hydrate-prod-llm-env");
+  const { providers } = await import("../src/lib/ai/llm-providers");
   const { resolveMctbSemanticLlmProvider } = await import("../src/lib/mctb/semantic-llm");
   const { runMctbSimpleSmsAgentTurn } = await import(
     "../src/lib/mctb/ai-recovery/simple-sms-agent"
   );
   type MctbConversationTurn = import("../src/lib/mctb/conversation-thread").MctbConversationTurn;
 
+  if (!providers().length) {
+    hydrateProdLlmEnvFromCoolify();
+  }
+
+  if (process.env.OPENAI_API_KEY?.trim() && !process.env.OPENAI_MODEL?.trim()) {
+    process.env.OPENAI_MODEL =
+      process.env.MCTB_SMOKE_OPENAI_MODEL?.trim() || "gpt-4o-mini";
+  }
+  if (
+    process.env.OPENAI_API_KEY?.trim() &&
+    process.env.DEEPSEEK_API_KEY?.trim() &&
+    !process.env.MCTB_SEMANTIC_LLM_PROVIDER?.trim()
+  ) {
+    process.env.MCTB_SEMANTIC_LLM_PROVIDER =
+      process.env.MCTB_SMOKE_LLM_PROVIDER?.trim() || "openai";
+  }
+
   const provider = resolveMctbSemanticLlmProvider();
-  if (provider === "deepseek" && !process.env.DEEPSEEK_API_KEY?.trim()) {
+  if (!providers().length) {
     throw new Error(
-      "DEEPSEEK_API_KEY required for dialogue smoke (or set MCTB_SEMANTIC_LLM_PROVIDER=openai)",
+      "No LLM API key in this shell. Set DEEPSEEK_API_KEY or OPENAI_API_KEY, or run from Cloud Agent with Coolify SSH (auto-hydrate from production web).",
     );
   }
 
@@ -225,10 +244,10 @@ async function main() {
 
     if (turnNum === 1 && result.llmInvoked === false) {
       console.error(
-        "\nLLM did not return a reply (missing DEEPSEEK_API_KEY / OPENAI_API_KEY or provider error).",
+        "\nLLM did not return a reply (provider error or empty model output).",
       );
       console.error(
-        "Set DEEPSEEK_API_KEY or OPENAI_API_KEY, then re-run:\n  npx tsx scripts/mctb-simple-sms-agent-dialogue-smoke.ts\n",
+        "Check DEEPSEEK_API_KEY / OPENAI_API_KEY (or hydrate from prod) and re-run:\n  npx tsx scripts/mctb-simple-sms-agent-dialogue-smoke.ts\n",
       );
       process.exit(2);
     }

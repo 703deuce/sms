@@ -2,11 +2,11 @@
  * Canonical structured JSON LLM for MCTB Lead Recovery + AI Booking semantics.
  * Product default: DeepSeek deepseek-chat (no keyword fallbacks).
  */
-import { extractJsonFromLlm } from "@/lib/ai/llm";
-import { openAiChatCompletion, getOpenAiApiKey } from "@/lib/ai/openai";
-import { DEFAULT_OPENAI_MODEL } from "@/lib/ai/llm-providers";
+import { extractJsonFromLlm, llmChatCompletion } from "@/lib/ai/llm";
+import { getOpenAiApiKey } from "@/lib/ai/openai";
+import { providers } from "@/lib/ai/llm-providers";
 
-export type MctbSemanticLlmProvider = "deepseek" | "openai";
+export type MctbSemanticLlmProvider = "deepseek" | "openai" | string;
 
 export function mctbSemanticModelId(): string {
   return (
@@ -26,6 +26,8 @@ export function resolveMctbSemanticLlmProvider(): MctbSemanticLlmProvider {
   if (forced === "openai") return "openai";
   if (forced === "deepseek") return "deepseek";
   if (process.env.DEEPSEEK_API_KEY?.trim()) return "deepseek";
+  if (getOpenAiApiKey()) return "openai";
+  if (providers().length > 0) return providers()[0].id;
   return "openai";
 }
 
@@ -92,11 +94,11 @@ export async function mctbSemanticStructuredJson<T>(input: {
   temperature?: number;
   maxTokens?: number;
 }): Promise<MctbSemanticStructuredResult<T> | null> {
-  const provider = resolveMctbSemanticLlmProvider();
   const temperature = input.temperature ?? 0.1;
   const maxTokens = input.maxTokens ?? 500;
+  const preferred = resolveMctbSemanticLlmProvider();
 
-  if (provider === "deepseek") {
+  if (preferred === "deepseek" && process.env.DEEPSEEK_API_KEY?.trim()) {
     try {
       const model = input.model?.trim() || mctbSemanticModelId();
       const { raw, latencyMs } = await deepSeekChat({
@@ -109,27 +111,24 @@ export async function mctbSemanticStructuredJson<T>(input: {
       const data = extractJsonFromLlm(raw) as T;
       return { data, provider: "deepseek", model, latencyMs, raw };
     } catch {
-      return null;
+      // fall through to shared provider chain
     }
   }
 
-  if (!getOpenAiApiKey()) return null;
-  const model = input.model?.trim() || DEFAULT_OPENAI_MODEL;
   try {
     const started = Date.now();
-    const raw = await openAiChatCompletion(input.system, input.user, {
-      model,
+    const hit = await llmChatCompletion(input.system, input.user, {
       temperature,
       maxTokens,
     });
-    if (!raw) return null;
-    const data = extractJsonFromLlm(raw) as T;
+    if (!hit?.content) return null;
+    const data = extractJsonFromLlm(hit.content) as T;
     return {
       data,
-      provider: "openai",
-      model,
+      provider: hit.provider,
+      model: hit.model,
       latencyMs: Date.now() - started,
-      raw,
+      raw: hit.content,
     };
   } catch {
     return null;
