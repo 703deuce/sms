@@ -2,7 +2,7 @@ import { getPrisma } from "@/lib/db";
 import { sendQuickSms } from "@/lib/sms/send-quick";
 import { evaluateMissedCallTextEligibility } from "./eligibility";
 import { loadMissedCallTextConfig } from "./config";
-import { appendMctbTrace, appendMctbTraceOnce } from "./trace";
+import { appendMctbTraceOnce } from "./trace";
 import { getDemoMessageBody } from "@/lib/mctb/onboarding/demo";
 import {
   reserveTrialSmsSegments,
