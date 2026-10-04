@@ -78,6 +78,20 @@ export async function tryKnowledgeFirstSmsReply(input: {
     config: input.config,
   });
 
+  const { logMctbSmsRoutingDecision } = await import(
+    "@/lib/mctb/messaging/inbound-processing-trace"
+  );
+  await logMctbSmsRoutingDecision({
+    workspaceId: input.workspaceId,
+    conversationId: input.conversationId,
+    handler: "sms_pipeline",
+    branch: "knowledge_first_generate",
+    action: faq.grounded ? "approved_info" : "approved_info_fallback",
+    primaryIntent: input.classified.primary_intent,
+    grounded: faq.grounded,
+    extra: { knowledgeSource: faq.source },
+  }).catch(() => undefined);
+
   let reply = faq.reply.trim();
   if (!reply) return null;
 

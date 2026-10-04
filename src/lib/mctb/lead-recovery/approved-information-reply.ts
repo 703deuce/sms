@@ -145,13 +145,6 @@ export async function generateApprovedInformationSmsReply(input: {
   approved?: MctbApprovedBusinessInformation;
 }): Promise<ApprovedInformationReplyResult> {
   const intent = input.structuredIntent.primary_intent;
-  if (!intentMatchesFaqTopics(intent, input.config)) {
-    return {
-      reply: faqFallbackMessage(input.config),
-      grounded: false,
-      source: "fallback",
-    };
-  }
 
   const approved =
     input.approved ?? (await loadMctbApprovedBusinessInformation(input.workspaceId));
@@ -160,15 +153,25 @@ export async function generateApprovedInformationSmsReply(input: {
     "@/lib/mctb/lead-recovery/knowledge-prompt"
   );
   const knowledgeBundle = await loadMctbLeadRecoveryKnowledgeBundle(input.workspaceId);
-  const runtimeBlock = knowledgeBundle.runtime_prompt_block;
+  const runtimeBlock = knowledgeBundle.runtime_prompt_block.trim();
 
-  if (!runtimeBlock.trim()) {
+  if (!runtimeBlock) {
+    if (!intentMatchesFaqTopics(intent, input.config)) {
+      return {
+        reply: faqFallbackMessage(input.config),
+        grounded: false,
+        source: "fallback",
+      };
+    }
     return {
       reply: faqFallbackMessage(input.config),
       grounded: false,
       source: "fallback",
     };
   }
+
+  // Business knowledge is configured — answer from runtime_prompt_block (about + services,
+  // hours, locations, approved facts). Legacy faqPolicy topic flags are not a second gate.
 
   const deterministic = deterministicApprovedReply({
     customerMessage: input.customerMessage,
