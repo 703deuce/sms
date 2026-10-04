@@ -17,7 +17,15 @@ import {
   type AiRecoverySimplifiedField,
 } from "@/lib/mctb/ai-recovery/simplified-fields";
 import { smsCollectFieldsToCapabilities } from "@/lib/mctb/ai-recovery/collect-field-schema";
-import type { MctbSmsCollectFieldDef as MctbSmsCollectFieldDefType } from "@/lib/mctb/lead-recovery/types";
+import type {
+  MctbAiRecoveryGoalType,
+  MctbSmsCollectFieldDef as MctbSmsCollectFieldDefType,
+} from "@/lib/mctb/lead-recovery/types";
+import {
+  enabledScenariosForRecoveryGoal,
+  inferMctbAiRecoveryGoalType,
+  normalizeCustomRecoveryGoal,
+} from "@/lib/mctb/ai-recovery/recovery-goal";
 
 const LAUNCH_ACTION_CAPABILITIES: LeadRecoveryWorkspaceConfig["actionCapabilities"] = [
   "SEND_BOOKING_LINK",
@@ -89,6 +97,8 @@ export type NormalizeAiRecoverySaveInput = {
   bookingLinkEnabled: boolean;
   bookingLinkId: string | null;
   enabledScenarios?: Partial<Record<LeadRecoveryScenarioKey, boolean>>;
+  recoveryGoalType?: MctbAiRecoveryGoalType;
+  customRecoveryGoal?: string | null;
   existing: LeadRecoveryWorkspaceConfig;
 };
 
@@ -99,9 +109,16 @@ export function buildAiRecoverySavePatch(
   const collectCapabilities = input.smsCollectFields?.length
     ? smsCollectFieldsToCapabilities(input.smsCollectFields)
     : simplifiedTogglesToCollectCapabilities(input.fieldToggles);
-  const bookingMode = input.bookingLinkEnabled && input.bookingLinkId
-    ? "SEND_BOOKING_LINK"
-    : "COLLECT_ONLY";
+  const goalForBooking =
+    input.recoveryGoalType ??
+    input.existing.recoveryGoalType ??
+    (input.bookingLinkEnabled && input.bookingLinkId
+      ? "SCHEDULE"
+      : inferMctbAiRecoveryGoalType(input.existing));
+  const bookingMode =
+    goalForBooking === "SCHEDULE" && input.bookingLinkEnabled && input.bookingLinkId
+      ? "SEND_BOOKING_LINK"
+      : "COLLECT_ONLY";
 
   const basePolicies = {
     ...defaultIntentPolicies(bookingMode),
@@ -158,20 +175,34 @@ export function buildAiRecoverySavePatch(
   const fallback = stripPolicyActions(input.existing.fallbackPolicy);
   const fallbackCollect = collectForIntent("GENERAL_INQUIRY", collectCapabilities);
 
-  const scenarioPatch = input.enabledScenarios ?? {};
-  const enabledScenarios = {
-    ...defaultLaunchEnabledScenarios(),
-    ...input.existing.enabledScenarios,
-    ...scenarioPatch,
-    // Opus AI Recovery expects FAQ answers unless the user explicitly turned the scenario off.
-    general_faq:
-      scenarioPatch.general_faq ??
-      input.existing.enabledScenarios?.general_faq ??
-      true,
-  };
+  const goal =
+    input.recoveryGoalType ??
+    input.existing.recoveryGoalType ??
+    (input.bookingLinkEnabled && input.bookingLinkId
+      ? "SCHEDULE"
+      : inferMctbAiRecoveryGoalType(input.existing));
+  const customRecoveryGoal =
+    input.customRecoveryGoal !== undefined
+      ? normalizeCustomRecoveryGoal(input.customRecoveryGoal)
+      : input.existing.customRecoveryGoal ?? null;
+
+  const enabledScenarios =
+    input.enabledScenarios != null
+      ? {
+          ...defaultLaunchEnabledScenarios(),
+          ...input.existing.enabledScenarios,
+          ...input.enabledScenarios,
+          general_faq:
+            input.enabledScenarios?.general_faq ??
+            input.existing.enabledScenarios?.general_faq ??
+            true,
+        }
+      : enabledScenariosForRecoveryGoal(goal, input.bookingLinkEnabled);
 
   return {
     enabled: input.enabled,
+    recoveryGoalType: goal,
+    customRecoveryGoal,
     smsCollectFields: input.smsCollectFields ?? input.existing.smsCollectFields,
     allowDynamicCustomQuestions:
       input.allowDynamicCustomQuestions ?? input.existing.allowDynamicCustomQuestions ?? true,

@@ -124,5 +124,13 @@ const connectedPage = readFileSync(
   "utf8",
 );
 assert.match(connectedPage, /\/api\/mctb\/ai-recovery\/save/);
+assert.match(connectedPage, /recoveryGoalType/);
+
+const mirrorPage = readFileSync(
+  "src/newui-transplant/mirror/routes/mctb/ai-recovery/page.tsx",
+  "utf8",
+);
+assert.match(mirrorPage, /Recovery goal/);
+assert.doesNotMatch(mirrorPage, /Advanced scenarios/);
 
 console.log("test-mctb-pass-3-ai-recovery: OK");

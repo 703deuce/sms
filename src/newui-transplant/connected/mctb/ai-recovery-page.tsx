@@ -7,25 +7,27 @@ import {
   defaultSmsCollectFields,
   normalizeSmsCollectFields,
 } from "@/lib/mctb/ai-recovery/collect-field-schema";
-import type { LeadRecoveryScenarioKey, MctbSmsCollectFieldDef } from "@/lib/mctb/lead-recovery/types";
-import { LEAD_RECOVERY_SCENARIO_DEFS } from "@/lib/mctb/lead-recovery/scenarios";
-import { MCTB_LAUNCH_HIDE_LR_TEXT_TO_PAY_UI } from "@/lib/mctb/launch-flags";
+import { parseMctbAiRecoveryGoalType } from "@/lib/mctb/ai-recovery/recovery-goal";
+import type { MctbAiRecoveryGoalType, MctbSmsCollectFieldDef } from "@/lib/mctb/lead-recovery/types";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 
 export function NewUiMctbAiRecoveryPage() {
   const [loading, setLoading] = useState(true);
-  const [meta, setMeta] = useState<Pick<
-    MctbAiRecoveryWired,
-    "senderLabel" | "senderE164" | "businessName" | "services" | "serviceArea" | "hours"
-  > | null>(null);
+  const [meta, setMeta] = useState<Pick<MctbAiRecoveryWired, "senderLabel" | "senderE164"> | null>(
+    null,
+  );
   const [enabled, setEnabled] = useState(false);
   const [smsCollectFields, setSmsCollectFields] = useState<MctbSmsCollectFieldDef[]>(
     defaultSmsCollectFields(),
   );
   const [allowDynamicCustomQuestions, setAllowDynamicCustomQuestions] = useState(true);
+  const [recoveryGoalType, setRecoveryGoalType] = useState<MctbAiRecoveryGoalType>("FOLLOW_UP");
+  const [customRecoveryGoal, setCustomRecoveryGoal] = useState("");
   const enabledRef = useRef(enabled);
   const smsFieldsRef = useRef(smsCollectFields);
   const allowDynamicRef = useRef(allowDynamicCustomQuestions);
+  const goalRef = useRef(recoveryGoalType);
+  const customGoalRef = useRef(customRecoveryGoal);
   useEffect(() => {
     enabledRef.current = enabled;
   }, [enabled]);
@@ -35,25 +37,21 @@ export function NewUiMctbAiRecoveryPage() {
   useEffect(() => {
     allowDynamicRef.current = allowDynamicCustomQuestions;
   }, [allowDynamicCustomQuestions]);
+  useEffect(() => {
+    goalRef.current = recoveryGoalType;
+  }, [recoveryGoalType]);
+  useEffect(() => {
+    customGoalRef.current = customRecoveryGoal;
+  }, [customRecoveryGoal]);
   const [bookingLinkEnabled, setBookingLinkEnabled] = useState(false);
   const [bookingLinkId, setBookingLinkId] = useState<string | null>(null);
   const [bookingLinkUrl, setBookingLinkUrl] = useState("");
   const [bookingLinkLabel, setBookingLinkLabel] = useState("");
-  const [enabledScenarios, setEnabledScenarios] = useState<Partial<Record<LeadRecoveryScenarioKey, boolean>>>({});
   const [aboutBusiness, setAboutBusiness] = useState("");
-  const [emergencyCriteria, setEmergencyCriteria] = useState("");
   const aboutRef = useRef(aboutBusiness);
-  const emergencyRef = useRef(emergencyCriteria);
-  const scenariosRef = useRef(enabledScenarios);
   useEffect(() => {
     aboutRef.current = aboutBusiness;
   }, [aboutBusiness]);
-  useEffect(() => {
-    emergencyRef.current = emergencyCriteria;
-  }, [emergencyCriteria]);
-  useEffect(() => {
-    scenariosRef.current = enabledScenarios;
-  }, [enabledScenarios]);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
@@ -80,18 +78,19 @@ export function NewUiMctbAiRecoveryPage() {
       setMeta({
         senderLabel: data.messaging?.senderLabel,
         senderE164: senderE164 || null,
-        businessName: data.business?.name,
-        services: data.business?.services?.join(", "),
-        serviceArea: data.business?.serviceArea,
-        hours: data.business?.hours,
       });
       setEnabled(Boolean(data.recovery?.enabled));
 
-      setSmsCollectFields(
-        normalizeSmsCollectFields(data.recovery?.smsCollectFields),
-      );
-      setAllowDynamicCustomQuestions(
-        data.recovery?.allowDynamicCustomQuestions !== false,
+      setSmsCollectFields(normalizeSmsCollectFields(data.recovery?.smsCollectFields));
+      setAllowDynamicCustomQuestions(data.recovery?.allowDynamicCustomQuestions !== false);
+
+      const goal =
+        parseMctbAiRecoveryGoalType(data.recovery?.recoveryGoalType) ?? "FOLLOW_UP";
+      setRecoveryGoalType(goal);
+      setCustomRecoveryGoal(
+        typeof data.recovery?.customRecoveryGoal === "string"
+          ? data.recovery.customRecoveryGoal
+          : "",
       );
 
       const linkId = (data.recovery?.bookingLinkId as string | null) ?? null;
@@ -101,27 +100,8 @@ export function NewUiMctbAiRecoveryPage() {
       setBookingLinkId(linkId);
       setBookingLinkUrl(selected?.url ?? "");
       setBookingLinkLabel(selected?.label ?? "");
-      const scenarios = (data.recovery?.enabledScenarios ?? {}) as Partial<
-        Record<LeadRecoveryScenarioKey, boolean>
-      >;
-      setEnabledScenarios({
-        take_message: true,
-        emergencies: scenarios.emergencies ?? true,
-        general_faq: scenarios.general_faq ?? true,
-        booking: scenarios.booking ?? false,
-        pricing: scenarios.pricing ?? false,
-        service_area: scenarios.service_area ?? false,
-        payments: scenarios.payments ?? false,
-        existing_customer: scenarios.existing_customer ?? false,
-        ...scenarios,
-      });
       setAboutBusiness(
         typeof data.business?.aboutBusiness === "string" ? data.business.aboutBusiness : "",
-      );
-      setEmergencyCriteria(
-        typeof data.business?.emergencyCriteria === "string"
-          ? data.business.emergencyCriteria
-          : "",
       );
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "Could not load AI Recovery");
@@ -138,8 +118,9 @@ export function NewUiMctbAiRecoveryPage() {
   const onSave = useCallback(async () => {
     const enabledNow = enabledRef.current;
     const resolvedLinkId = bookingLinkId;
-    const scenariosNow = scenariosRef.current;
-    const emergenciesOn = Boolean(scenariosNow.emergencies);
+    const goalNow = goalRef.current;
+    const bookingEnabledForSave =
+      goalNow === "SCHEDULE" && bookingLinkEnabled && Boolean(resolvedLinkId && bookingLinkUrl.trim());
     const res = await fetch("/api/mctb/ai-recovery/save", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -147,12 +128,11 @@ export function NewUiMctbAiRecoveryPage() {
         enabled: enabledNow,
         smsCollectFields: smsFieldsRef.current,
         allowDynamicCustomQuestions: allowDynamicRef.current,
-        enabledScenarios: scenariosNow,
-        bookingLinkEnabled: bookingLinkEnabled && Boolean(resolvedLinkId && bookingLinkUrl.trim()),
-        bookingLinkId: bookingLinkEnabled ? resolvedLinkId : null,
+        recoveryGoalType: goalNow,
+        customRecoveryGoal: customGoalRef.current,
+        bookingLinkEnabled: bookingEnabledForSave,
+        bookingLinkId: bookingEnabledForSave ? resolvedLinkId : null,
         aboutBusiness: aboutRef.current,
-        emergencyCriteria: emergencyRef.current,
-        emergencyDetectionEnabled: emergenciesOn,
       }),
     });
     const json = await res.json().catch(() => ({}));
@@ -162,26 +142,12 @@ export function NewUiMctbAiRecoveryPage() {
     const runtimeArmed = (json as { data?: { runtimeArmed?: boolean } }).data?.runtimeArmed;
     if (enabledNow && runtimeArmed === false) {
       throw new Error(
-        "AI Recovery is on, but business knowledge is empty. Add “About your business” and save again.",
+        "AI Recovery is on, but business knowledge is empty. Add business knowledge and save again.",
       );
     }
 
     await reload();
-  }, [
-    bookingLinkEnabled,
-    bookingLinkId,
-    bookingLinkLabel,
-    bookingLinkUrl,
-    reload,
-  ]);
-
-  const scenarioDefs = useMemo(
-    () =>
-      LEAD_RECOVERY_SCENARIO_DEFS.filter(
-        (d) => !(MCTB_LAUNCH_HIDE_LR_TEXT_TO_PAY_UI && d.key === "payments"),
-      ),
-    [],
-  );
+  }, [bookingLinkEnabled, bookingLinkId, bookingLinkUrl, reload]);
 
   const wired: MctbAiRecoveryWired | undefined = useMemo(() => {
     if (loading && !meta) return undefined;
@@ -192,6 +158,19 @@ export function NewUiMctbAiRecoveryPage() {
       onSmsCollectFieldsChange: setSmsCollectFields,
       allowDynamicCustomQuestions,
       onAllowDynamicCustomQuestionsChange: setAllowDynamicCustomQuestions,
+      recoveryGoalType,
+      onRecoveryGoalTypeChange: (value) => {
+        goalRef.current = value;
+        setRecoveryGoalType(value);
+        if (value === "SCHEDULE" && bookingLinkUrl.trim()) {
+          setBookingLinkEnabled(true);
+        }
+      },
+      customRecoveryGoal,
+      onCustomRecoveryGoalChange: (value) => {
+        customGoalRef.current = value;
+        setCustomRecoveryGoal(value);
+      },
       bookingLinkEnabled,
       bookingLinkUrl,
       bookingLinkLabel,
@@ -199,22 +178,11 @@ export function NewUiMctbAiRecoveryPage() {
       bookingLinkEditHref: `${MCTB_ROUTES.textBack}?section=booking`,
       aboutBusiness,
       onAboutBusinessChange: setAboutBusiness,
-      emergencyCriteria,
-      onEmergencyCriteriaChange: setEmergencyCriteria,
-      emergenciesScenarioEnabled: Boolean(enabledScenarios.emergencies),
       onEnabledChange: (value) => {
         enabledRef.current = value;
         setEnabled(value);
       },
       onBookingLinkEnabledChange: setBookingLinkEnabled,
-      scenarios: scenarioDefs.map((def) => ({
-        key: def.key,
-        title: def.title,
-        description: def.description,
-        enabled: Boolean(enabledScenarios[def.key]),
-        onChange: (value: boolean) =>
-          setEnabledScenarios((prev) => ({ ...prev, [def.key]: value })),
-      })),
       onSave,
     };
   }, [
@@ -223,13 +191,12 @@ export function NewUiMctbAiRecoveryPage() {
     enabled,
     smsCollectFields,
     allowDynamicCustomQuestions,
+    recoveryGoalType,
+    customRecoveryGoal,
     bookingLinkEnabled,
     bookingLinkUrl,
     bookingLinkLabel,
-    enabledScenarios,
     aboutBusiness,
-    emergencyCriteria,
-    scenarioDefs,
     onSave,
   ]);
 
@@ -238,7 +205,11 @@ export function NewUiMctbAiRecoveryPage() {
   }
 
   if (loadError && !wired) {
-    return <p className="p-6 text-sm text-destructive" role="alert">{loadError}</p>;
+    return (
+      <p className="p-6 text-sm text-destructive" role="alert">
+        {loadError}
+      </p>
+    );
   }
 
   return <TransplantMctbAiRecoveryPage wired={wired} />;

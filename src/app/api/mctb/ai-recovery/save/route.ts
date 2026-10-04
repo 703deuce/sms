@@ -5,7 +5,8 @@ import {
   saveAiRecoveryBundle,
 } from "@/lib/mctb/ai-recovery/save-bundle";
 import { normalizeSmsCollectFields } from "@/lib/mctb/ai-recovery/collect-field-schema";
-import type { LeadRecoveryScenarioKey } from "@/lib/mctb/lead-recovery/types";
+import { parseMctbAiRecoveryGoalType } from "@/lib/mctb/ai-recovery/recovery-goal";
+import type { LeadRecoveryScenarioKey, MctbAiRecoveryGoalType } from "@/lib/mctb/lead-recovery/types";
 
 /**
  * Canonical save for /mctb/ai-recovery — one request publishes settings + knowledge + runtime arming.
@@ -43,8 +44,11 @@ export async function POST(request: Request) {
           ? null
           : undefined;
 
-    const scenariosNow = enabledScenarios ?? {};
-    const emergenciesOn = Boolean(scenariosNow.emergencies);
+    const recoveryGoalType = parseMctbAiRecoveryGoalType(body.recoveryGoalType) as
+      | MctbAiRecoveryGoalType
+      | undefined;
+    const customRecoveryGoal =
+      typeof body.customRecoveryGoal === "string" ? body.customRecoveryGoal : undefined;
 
     const result = await saveAiRecoveryBundle({
       workspaceId: auth.workspaceId,
@@ -64,7 +68,8 @@ export async function POST(request: Request) {
         typeof body.aboutBusiness === "string" ? body.aboutBusiness : undefined,
       emergencyCriteria:
         typeof body.emergencyCriteria === "string" ? body.emergencyCriteria : undefined,
-      emergencyDetectionEnabled: emergenciesOn,
+      recoveryGoalType,
+      customRecoveryGoal,
     });
 
     return NextResponse.json({

@@ -1,31 +1,26 @@
 import Link from 'next/link'
 import { Sparkles } from 'lucide-react'
-import { Page, PageHeader, Panel, Rows, SettingRow, TextLink } from '@/newui-transplant/components/app/kit'
-import { ButtonLink } from '@/newui-transplant/components/app/button-link'
+import { Page, PageHeader, Panel, SettingRow, TextLink } from '@/newui-transplant/components/app/kit'
 import { Switch } from '@/newui-transplant/components/ui/switch'
-import { Input } from '@/newui-transplant/components/ui/input'
 import { Label } from '@/newui-transplant/components/ui/label'
 import { Textarea } from '@/newui-transplant/components/ui/textarea'
 import { SaveBar } from '@/newui-transplant/components/app/save-bar'
 import { cn } from '@/lib/utils'
-import { BUSINESS } from '@/newui-transplant/lib/sandbox-data'
-import type { MctbSmsCollectFieldDef } from '@/lib/mctb/lead-recovery/types'
+import type { MctbSmsCollectFieldDef, MctbAiRecoveryGoalType } from '@/lib/mctb/lead-recovery/types'
 import { formatAiRecoverySenderDescription } from '@/lib/mctb/ai-recovery/sender-copy'
 import { LrCollectFieldsOpus } from '@/newui-transplant/connected/mctb/lr-collect-fields-opus'
+import { MctbRecoveryGoalOpus } from '@/newui-transplant/connected/mctb/mctb-recovery-goal-opus'
 
 export type MctbAiRecoveryWired = {
   enabled?: boolean
   senderLabel?: string
   senderE164?: string | null
-  businessName?: string
-  services?: string
-  serviceArea?: string
-  hours?: string
   aboutBusiness?: string
   onAboutBusinessChange?: (value: string) => void
-  emergencyCriteria?: string
-  onEmergencyCriteriaChange?: (value: string) => void
-  emergenciesScenarioEnabled?: boolean
+  recoveryGoalType?: MctbAiRecoveryGoalType
+  onRecoveryGoalTypeChange?: (value: MctbAiRecoveryGoalType) => void
+  customRecoveryGoal?: string
+  onCustomRecoveryGoalChange?: (value: string) => void
   smsCollectFields?: MctbSmsCollectFieldDef[]
   onSmsCollectFieldsChange?: (fields: MctbSmsCollectFieldDef[]) => void
   allowDynamicCustomQuestions?: boolean
@@ -37,34 +32,27 @@ export type MctbAiRecoveryWired = {
   bookingLinkEditHref?: string
   onEnabledChange?: (value: boolean) => void
   onBookingLinkEnabledChange?: (value: boolean) => void
-  onBookingLinkUrlChange?: (value: string) => void
-  onBookingLinkLabelChange?: (value: string) => void
-  scenarios?: Array<{
-    key: string
-    title: string
-    description: string
-    enabled: boolean
-    onChange: (value: boolean) => void
-  }>
   onSave?: () => Promise<void>
 }
 
 export function TransplantMctbAiRecoveryPage({ wired }: { wired?: MctbAiRecoveryWired }) {
   const live = wired !== undefined
   const senderDescription = formatAiRecoverySenderDescription(
-    wired?.senderLabel ?? (live ? null : BUSINESS.sender),
+    wired?.senderLabel ?? (live ? null : 'Your text-back sender'),
     wired?.senderE164,
   )
   const enabled = wired?.enabled ?? (live ? false : true)
-  const bookingOn = wired?.bookingLinkEnabled ?? (live ? false : true)
-  const bookingUrl = wired?.bookingLinkUrl ?? (live ? '' : 'https://book.northsideplumbing.com/service')
-  const bookingLabel = wired?.bookingLinkLabel ?? (live ? '' : 'Book a service visit')
+  const goal = wired?.recoveryGoalType ?? 'FOLLOW_UP'
+  const bookingOn = wired?.bookingLinkEnabled ?? false
+  const bookingUrl = wired?.bookingLinkUrl ?? ''
+  const bookingLabel = wired?.bookingLinkLabel ?? ''
+  const showBooking = goal === 'SCHEDULE'
 
   return (
     <Page>
       <PageHeader
         title="AI Recovery"
-        description="Let AI continue the text conversation after a missed call, collect details, and share your booking link."
+        description="Let AI continue the conversation after a missed call, answer basic questions, collect what your team needs, and work toward your recovery goal."
         actions={<SaveBar onSave={wired?.onSave} />}
       />
       <section className="relative overflow-hidden rounded-xl border bg-sidebar p-6 text-sidebar-foreground">
@@ -77,9 +65,8 @@ export function TransplantMctbAiRecoveryPage({ wired }: { wired?: MctbAiRecovery
             <p className="font-semibold">AI Recovery</p>
             <p className="max-w-xl text-pretty text-sm text-sidebar-foreground/70">{senderDescription}</p>
             <p className="text-sm text-sidebar-foreground/70">
-              Replies stop when a teammate responds in the{' '}
-              <Link href="/mctb/conversations" className="underline underline-offset-4">Inbox</Link> or the customer opts out. Track outcomes on{' '}
-              <Link href="/mctb/missed-calls" className="underline underline-offset-4">Missed Calls</Link>.
+              Your team can take over from{' '}
+              <Link href="/mctb/conversations" className="underline underline-offset-4">Conversations</Link> at any time.
             </p>
           </div>
           <Switch
@@ -91,154 +78,80 @@ export function TransplantMctbAiRecoveryPage({ wired }: { wired?: MctbAiRecovery
         </div>
       </section>
 
-      <div className={cn('mt-4 grid gap-4 lg:grid-cols-3', !enabled && 'pointer-events-none opacity-50')} aria-disabled={!enabled}>
-        <div className="flex flex-col gap-4 lg:col-span-2">
-
-          <Panel
-            title="About your business"
-            description="Tell AI Recovery what it should know so it can answer customers accurately. Include services, service area, hours, pricing guidance, policies, FAQs, or anything customers commonly ask about."
-          >
-            <div className="grid gap-1.5">
-              <Label htmlFor="lr-about-business">Business knowledge</Label>
-              <Textarea
-                id="lr-about-business"
-                rows={8}
-                className="min-h-[10rem] resize-y"
-                placeholder="Example: We provide residential plumbing throughout Fairfax and Prince William counties. We repair leaks, water heaters, toilets, faucets, drains, and sewer lines. Monday–Friday 8 AM–6 PM. After-hours emergency service for active leaks, flooding, sewage backups, and loss of water."
-                value={wired?.aboutBusiness ?? ''}
-                onChange={(e) => wired?.onAboutBusinessChange?.(e.target.value)}
-              />
-            </div>
-          </Panel>
-
-          <Panel
-            title="Information to collect"
-            description="Suggested questions for follow-up — same idea as your receptionist setup. Enable built-ins, add custom questions, and reorder. The agent asks one at a time after answering the customer."
-          >
-            <LrCollectFieldsOpus
-              fields={wired?.smsCollectFields ?? []}
-              onChange={(next) => wired?.onSmsCollectFieldsChange?.(next)}
-              allowDynamic={wired?.allowDynamicCustomQuestions ?? true}
-              onAllowDynamicChange={(v) => wired?.onAllowDynamicCustomQuestionsChange?.(Boolean(v))}
+      <div className={cn('mt-4 flex max-w-3xl flex-col gap-5', !enabled && 'pointer-events-none opacity-50')} aria-disabled={!enabled}>
+        <Panel
+          title="Business knowledge"
+          description="Tell AI about your business so it can answer callers accurately. Include services, service area, hours, pricing guidance, policies, FAQs, or anything customers commonly ask about."
+        >
+          <div className="grid gap-1.5">
+            <Label htmlFor="lr-about-business">Business knowledge</Label>
+            <Textarea
+              id="lr-about-business"
+              rows={8}
+              className="min-h-[10rem] resize-y"
+              placeholder="Example: We provide residential plumbing throughout Fairfax and Prince William counties. We repair leaks, water heaters, toilets, faucets, drains, and sewer lines. Monday–Friday 8 AM–6 PM. We do not quote repair prices by text because pricing depends on seeing the problem."
+              value={wired?.aboutBusiness ?? ''}
+              onChange={(e) => wired?.onAboutBusinessChange?.(e.target.value)}
             />
-          </Panel>
+          </div>
+        </Panel>
 
-          {wired?.scenarios?.length ? (
-            <Panel title="Advanced scenarios" description="Optional — leave defaults on unless you need to limit what AI handles">
-              <div className="divide-y">
-                {wired.scenarios.map((s) => (
+        <Panel
+          title="Recovery goal"
+          description="What should AI try to accomplish when a missed caller replies?"
+        >
+          <MctbRecoveryGoalOpus
+            value={goal}
+            onChange={(v) => wired?.onRecoveryGoalTypeChange?.(v)}
+            customGoal={wired?.customRecoveryGoal ?? ''}
+            onCustomGoalChange={(v) => wired?.onCustomRecoveryGoalChange?.(v)}
+          />
+          {showBooking ? (
+            <div className="mt-4 space-y-3 border-t pt-4 text-sm">
+              <p className="font-medium">Booking link</p>
+              <p className="text-muted-foreground">
+                AI will share this link when the caller is ready to schedule.
+              </p>
+              {wired?.bookingLinkReadOnly ? (
+                <>
                   <SettingRow
-                    key={s.key}
-                    title={s.title}
-                    description={s.description}
+                    title="Share booking link"
+                    description="Uses the booking link configured in Text Back"
                     control={
                       <Switch
-                        checked={s.enabled}
-                        onCheckedChange={(v) => s.onChange(Boolean(v))}
-                        aria-label={`Enable ${s.title}`}
+                        checked={bookingOn}
+                        onCheckedChange={(v) => wired?.onBookingLinkEnabledChange?.(Boolean(v))}
+                        aria-label="Enable booking link for AI Recovery"
+                        disabled={!bookingUrl}
                       />
                     }
                   />
-                ))}
-              </div>
-              {wired.emergenciesScenarioEnabled ? (
-                <div className="mt-4 border-t pt-4">
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="lr-emergency-criteria">What counts as an emergency?</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Describe urgent situations for your business and what AI Recovery should do. Urgency (needs help soon) is not the same as an emergency.
-                    </p>
-                    <Textarea
-                      id="lr-emergency-criteria"
-                      rows={5}
-                      className="min-h-[7rem] resize-y"
-                      placeholder="Example: Treat active flooding, burst pipes, sewage backing into the home, or complete loss of water as urgent. Collect name, address, and callback number. Notify the on-call team. Do not promise an arrival time."
-                      value={wired.emergencyCriteria ?? ''}
-                      onChange={(e) => wired.onEmergencyCriteriaChange?.(e.target.value)}
-                    />
-                  </div>
-                </div>
+                  {bookingUrl ? (
+                    <>
+                      <p className="font-medium">{bookingLabel || 'Book an appointment'}</p>
+                      <p className="font-mono text-xs text-muted-foreground break-all">{bookingUrl}</p>
+                    </>
+                  ) : (
+                    <p className="text-muted-foreground">No booking link configured.</p>
+                  )}
+                  <TextLink href={wired.bookingLinkEditHref || '/mctb/text-back?section=booking'}>
+                    {bookingUrl ? 'Configure in Text Back' : 'Configure booking link'}
+                  </TextLink>
+                </>
               ) : null}
-            </Panel>
+            </div>
           ) : null}
-
-          <Panel title="Booking link">
-            {wired?.bookingLinkReadOnly ? (
-              <div className="space-y-3 text-sm">
-                <SettingRow
-                  title="Share booking link"
-                  description="Uses the booking link configured in Text Back"
-                  control={
-                    <Switch
-                      checked={bookingOn}
-                      onCheckedChange={(v) => wired?.onBookingLinkEnabledChange?.(Boolean(v))}
-                      aria-label="Enable booking link for AI Recovery"
-                      disabled={!bookingUrl}
-                    />
-                  }
-                />
-                {bookingUrl ? (
-                  <>
-                    <p className="font-medium">{bookingLabel || 'Book an appointment'}</p>
-                    <p className="font-mono text-xs text-muted-foreground break-all">{bookingUrl}</p>
-                    <p className="text-muted-foreground">AI can send this link when appropriate.</p>
-                  </>
-                ) : (
-                  <p className="text-muted-foreground">No booking link configured.</p>
-                )}
-                <TextLink href={wired.bookingLinkEditHref || '/mctb/text-back?section=booking'}>
-                  {bookingUrl ? 'Edit in Text Back' : 'Configure in Text Back'}
-                </TextLink>
-              </div>
-            ) : (
-              <>
-                <SettingRow
-                  title="Share booking link"
-                  description="Sent once AI has collected the required details"
-                  control={
-                    <Switch
-                      checked={bookingOn}
-                      onCheckedChange={(v) => wired?.onBookingLinkEnabledChange?.(Boolean(v))}
-                      aria-label="Enable booking link"
-                    />
-                  }
-                />
-                <div className="mt-4 grid gap-4 border-t pt-4 sm:grid-cols-2">
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="bl-url">Link URL</Label>
-                    <Input
-                      id="bl-url"
-                      value={bookingUrl}
-                      onChange={(e) => wired?.onBookingLinkUrlChange?.(e.target.value)}
-                    />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="bl-label">Label</Label>
-                    <Input
-                      id="bl-label"
-                      value={bookingLabel}
-                      onChange={(e) => wired?.onBookingLinkLabelChange?.(e.target.value)}
-                    />
-                  </div>
-                </div>
-              </>
-            )}
-          </Panel>
-        </div>
+        </Panel>
 
         <Panel
-          title="Structured business details"
-          description="From your workspace profile — supplements About your business"
-          action={<ButtonLink href="/settings/business" variant="outline" size="sm">Edit profile</ButtonLink>}
-          className="h-fit"
+          title="Information to collect"
+          description="Choose what AI should try to collect during the conversation. If the caller already provides something naturally, AI won't ask for it again."
         >
-          <Rows
-            items={[
-              { label: 'Name', value: <span className="truncate">{wired?.businessName ?? (wired ? '—' : 'Northside Plumbing')}</span> },
-              { label: 'Services', value: wired?.services ?? (wired ? '—' : 'Plumbing, HVAC') },
-              { label: 'Service area', value: wired?.serviceArea ?? (wired ? '—' : 'Greater Austin') },
-              { label: 'Hours', value: wired?.hours ?? (wired ? '—' : 'Mon–Sat') },
-            ]}
+          <LrCollectFieldsOpus
+            fields={wired?.smsCollectFields ?? []}
+            onChange={(next) => wired?.onSmsCollectFieldsChange?.(next)}
+            allowDynamic={wired?.allowDynamicCustomQuestions ?? true}
+            onAllowDynamicChange={(v) => wired?.onAllowDynamicCustomQuestionsChange?.(Boolean(v))}
           />
         </Panel>
       </div>

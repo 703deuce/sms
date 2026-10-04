@@ -220,10 +220,15 @@ export type MctbSmsCollectFieldDef = {
   builtinKey?: LeadRecoveryCollectField;
 };
 
+export type MctbAiRecoveryGoalType = "FOLLOW_UP" | "SCHEDULE" | "CUSTOM";
+
 export type LeadRecoveryWorkspaceConfig = {
   enabled: boolean;
   version: number;
   globalMode: LeadRecoveryGlobalMode;
+  /** Simplified AI Recovery outcome — drives prompt + legacy scenario mapping. */
+  recoveryGoalType?: MctbAiRecoveryGoalType;
+  customRecoveryGoal?: string | null;
   enabledScenarios: Partial<Record<LeadRecoveryScenarioKey, boolean>>;
   enabledIntents: LeadRecoveryIntent[];
   intentPolicies: Partial<Record<LeadRecoveryIntent, IntentPolicyShape>>;
