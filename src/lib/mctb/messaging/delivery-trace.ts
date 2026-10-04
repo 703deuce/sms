@@ -62,6 +62,15 @@ export async function appendMctbDeliveryTraceFromProviderStatus(input: {
   if (!kind) {
     return { matched: false };
   }
+
+  const existingTrace = await prisma.missedCallTextTrace.findFirst({
+    where: { missedCallEventId: event.id, kind },
+    select: { id: true },
+  });
+  if (existingTrace) {
+    return { matched: true, missedCallEventId: event.id };
+  }
+
   await appendMctbTrace({
     workspaceId: event.workspaceId,
     traceId: event.traceId,

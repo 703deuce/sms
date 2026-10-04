@@ -111,7 +111,10 @@ export async function buildMctbEventTimeline(missedCallEventId: string): Promise
     );
   }
 
+  const seenTraceKinds = new Set<string>();
   for (const trace of traces) {
+    if (seenTraceKinds.has(trace.kind)) continue;
+    seenTraceKinds.add(trace.kind);
     const label = TRACE_LABELS[trace.kind] || trace.kind;
     const detail =
       trace.detail && typeof trace.detail === "object"
