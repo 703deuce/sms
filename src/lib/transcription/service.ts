@@ -3,6 +3,10 @@ import "server-only";
 import { getPrisma } from "@/lib/db";
 import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 import { transcribeAudioUrlWithDeepgram } from "./deepgram-prerecorded";
+import {
+  isTelnyxAudioTranscriptionConfigured,
+  transcribeAudioUrlWithTelnyx,
+} from "./telnyx-audio";
 import { canTranscribeRecording } from "./entitlement";
 import { recordTranscriptionUsage } from "./usage";
 import { resolveVoicemailRecordingFetchUrl } from "@/lib/voice/python-runtime-bridge/mctb-sip-voicemail-service";
@@ -177,9 +181,13 @@ export async function executeTranscriptionJob(input: {
 
   try {
     const fetchUrl = await resolveVoicemailRecordingFetchUrl(input.recordingUrl);
-    const result = await transcribeAudioUrlWithDeepgram(fetchUrl, {
-      diarize: input.diarize,
-    });
+    const useTelnyxForVoicemail =
+      input.sourceType === "voicemail_message" && isTelnyxAudioTranscriptionConfigured();
+    const result = useTelnyxForVoicemail
+      ? await transcribeAudioUrlWithTelnyx(fetchUrl)
+      : await transcribeAudioUrlWithDeepgram(fetchUrl, {
+          diarize: input.diarize,
+        });
     const transcript = result.text?.trim() || null;
     if (!transcript) {
       throw new Error("empty_transcript");
