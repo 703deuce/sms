@@ -41,15 +41,21 @@ function intentMatchesFaqTopics(
   config: LeadRecoveryWorkspaceConfig,
 ): boolean {
   const topics = config.faqPolicy?.topics || [];
-  const map: Partial<Record<LeadRecoveryIntent, string>> = {
+  type FaqTopic = LeadRecoveryWorkspaceConfig["answerCapabilities"][number];
+  const map: Partial<Record<LeadRecoveryIntent, FaqTopic>> = {
     BUSINESS_HOURS: "HOURS",
     BUSINESS_FAQ: "FAQ",
+    GENERAL_INQUIRY: "FAQ",
     SERVICE_AREA_CHECK: "SERVICE_AREA",
     BUSINESS_LOCATION: "LOCATIONS",
+    PRICING_QUESTION: "PRICING",
   };
   const topic = map[intent];
   if (!topic) return false;
-  return topics.includes(topic as (typeof topics)[number]);
+  if (topics.includes(topic)) return true;
+  if (intent === "GENERAL_INQUIRY" && topics.includes("SERVICES")) return true;
+  if (intent === "PRICING_QUESTION" && topics.includes("SERVICES")) return true;
+  return false;
 }
 
 function normalize(text: string): string {
@@ -70,6 +76,21 @@ function deterministicApprovedReply(input: {
   ) {
     return {
       reply: `Our hours: ${input.approved.business_hours}`,
+      grounded: true,
+      source: "deterministic",
+    };
+  }
+
+  if (
+    (input.intent === "GENERAL_INQUIRY" ||
+      input.intent === "BUSINESS_FAQ" ||
+      input.intent === "SERVICE_AREA_CHECK") &&
+    input.approved.services.length &&
+    /\bwhat do you\b|\bwhat (services|do you (do|offer))\b/.test(msg)
+  ) {
+    const list = input.approved.services.slice(0, 4).join(", ");
+    return {
+      reply: `We offer ${list}.`,
       grounded: true,
       source: "deterministic",
     };

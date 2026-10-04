@@ -8,7 +8,42 @@ export type MctbInboundProcessingTraceKind =
   | "OUTBOUND_ENQUEUED"
   | "OUTBOUND_SENT"
   | "LR_FAILED"
-  | "LR_FALLBACK_ENQUEUED";
+  | "LR_FALLBACK_ENQUEUED"
+  | "SMS_ROUTING_DECISION";
+
+/** Structured decision trail for inbound MCTB SMS (console + conversation activity). */
+export async function logMctbSmsRoutingDecision(input: {
+  workspaceId: string;
+  conversationId: string;
+  providerMessageId?: string | null;
+  processingJobId?: string | null;
+  handler: "sms_pipeline" | "lead_recovery" | "skipped";
+  branch: string;
+  action?: string | null;
+  primaryIntent?: string | null;
+  grounded?: boolean | null;
+  smsPipelinePrimary?: boolean | null;
+  leadRecoveryEnabled?: boolean | null;
+  extra?: Record<string, unknown>;
+}) {
+  await logMctbInboundProcessingEvent({
+    kind: "SMS_ROUTING_DECISION",
+    workspaceId: input.workspaceId,
+    conversationId: input.conversationId,
+    providerMessageId: input.providerMessageId,
+    processingJobId: input.processingJobId,
+    meta: {
+      handler: input.handler,
+      branch: input.branch,
+      action: input.action,
+      primaryIntent: input.primaryIntent,
+      grounded: input.grounded,
+      smsPipelinePrimary: input.smsPipelinePrimary,
+      leadRecoveryEnabled: input.leadRecoveryEnabled,
+      ...input.extra,
+    },
+  });
+}
 
 export async function logMctbInboundProcessingEvent(input: {
   kind: MctbInboundProcessingTraceKind;

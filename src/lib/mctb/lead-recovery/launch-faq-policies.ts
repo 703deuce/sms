@@ -27,5 +27,15 @@ export function launchFaqIntentPolicyOverrides(): Partial<
       collect: [],
       actions: [...FAQ_ANSWER_ACTIONS],
     },
+    GENERAL_INQUIRY: {
+      enabled: true,
+      collect: [],
+      actions: [...FAQ_ANSWER_ACTIONS],
+    },
+    PRICING_QUESTION: {
+      enabled: true,
+      collect: [],
+      actions: [...FAQ_ANSWER_ACTIONS],
+    },
   };
 }

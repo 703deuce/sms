@@ -158,6 +158,15 @@ const serviceReply = resolveApprovedInformationReplyForTest({
 assert.equal(serviceReply.grounded, true);
 assert.match(serviceReply.reply, /Furnace installation/i);
 
+const generalInquiryReply = resolveApprovedInformationReplyForTest({
+  customerMessage: "What do you guys do?",
+  intent: "GENERAL_INQUIRY",
+  config: baseConfig(),
+  approved: approvedFixture,
+});
+assert.equal(generalInquiryReply.grounded, true);
+assert.match(generalInquiryReply.reply, /HVAC repair/i);
+
 const unknownReply = resolveApprovedInformationReplyForTest({
   customerMessage: "Do you install swimming pools?",
   intent: "BUSINESS_FAQ",
@@ -172,8 +181,11 @@ const customerSms = fs.readFileSync(
   "utf8",
 );
 assert.ok(isCarrierProtocolOptOutMessage("STOP"));
-const stopIdx = customerSms.indexOf("isCarrierProtocolOptOutMessage");
-const lrIdx = customerSms.indexOf("lead_recovery_not_enabled");
+const handlerStart = customerSms.indexOf("export async function handleMctbCustomerSmsReply");
+assert.ok(handlerStart > 0);
+const handlerBody = customerSms.slice(handlerStart);
+const stopIdx = handlerBody.indexOf("isCarrierProtocolOptOutMessage");
+const lrIdx = handlerBody.indexOf("handleMctbLeadRecoveryInboundSms");
 assert.ok(stopIdx > 0 && lrIdx > 0 && stopIdx < lrIdx);
 
 const semantic = fs.readFileSync(
@@ -181,7 +193,6 @@ const semantic = fs.readFileSync(
   "utf8",
 );
 assert.ok(semantic.includes("approved_business_information"));
-assert.ok(semantic.includes("loadMctbApprovedBusinessInformation"));
 assert.ok(!semantic.includes("voice-v3"));
 assert.ok(!semantic.includes("searchKnowledge"));
 

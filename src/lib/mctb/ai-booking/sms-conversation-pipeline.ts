@@ -197,6 +197,7 @@ async function handleGeneralConversation(input: {
     "BUSINESS_HOURS",
     "BUSINESS_LOCATION",
     "SERVICE_AREA_CHECK",
+    "GENERAL_INQUIRY",
     "PRICING_QUESTION",
   ]);
   let intentForAnswer = input.structuredIntent.primary_intent;
@@ -261,7 +262,21 @@ export async function handleMctbSmsConversationPipeline(
     classified,
     config: lrConfig,
   });
-  if (knowledgeFirst) return knowledgeFirst;
+  if (knowledgeFirst) {
+    const { logMctbSmsRoutingDecision } = await import(
+      "@/lib/mctb/messaging/inbound-processing-trace"
+    );
+    await logMctbSmsRoutingDecision({
+      workspaceId: input.workspaceId,
+      conversationId: input.conversationId,
+      handler: "sms_pipeline",
+      branch: "knowledge_first",
+      action: knowledgeFirst.action,
+      primaryIntent: classified.primary_intent,
+      grounded: knowledgeFirst.action === "approved_info",
+    });
+    return knowledgeFirst;
+  }
 
   const policyRuntime = await tryLeadRecoveryPolicyRuntime({
     pipeline: input,

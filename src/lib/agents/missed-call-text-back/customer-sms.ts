@@ -232,6 +232,8 @@ export async function handleMctbCustomerSmsReply(input: {
   const leadRecoveryConfig = await loadLeadRecoveryConfig(input.workspaceId);
   const leadRecoveryActive =
     leadRecoveryConfig.enabled && leadRecoveryConfig.policyHealth !== "DISABLED";
+  const { loadMctbAiBookingConfig } = await import("@/lib/mctb/ai-booking/config");
+  const bookingConfig = await loadMctbAiBookingConfig(input.workspaceId);
 
   if (leadRecoveryActive && !config.conversationEnabled) {
     console.warn("[mctb/customer-sms] conversationEnabled=false but Lead Recovery is on — replying anyway");
@@ -312,7 +314,39 @@ export async function handleMctbCustomerSmsReply(input: {
     recoverySmsBusinessE164: input.toE164,
   });
 
+  const { logMctbSmsRoutingDecision } = await import(
+    "@/lib/mctb/messaging/inbound-processing-trace"
+  );
+
+  if (!pipeline.handled || !pipeline.reply?.trim()) {
+    await logMctbSmsRoutingDecision({
+      workspaceId: input.workspaceId,
+      conversationId,
+      providerMessageId: input.providerMessageId,
+      processingJobId: input.processingJobId,
+      handler: leadRecoveryActive ? "sms_pipeline" : "skipped",
+      branch: !bookingConfig.smsPipelinePrimary
+        ? "pipeline_disabled_smsPipelinePrimary_false"
+        : "pipeline_returned_unhandled",
+      smsPipelinePrimary: bookingConfig.smsPipelinePrimary,
+      leadRecoveryEnabled: leadRecoveryActive,
+    });
+  }
+
   if (pipeline.handled && pipeline.reply?.trim()) {
+    const pipelineAction =
+      "action" in pipeline && typeof pipeline.action === "string" ? pipeline.action : null;
+    await logMctbSmsRoutingDecision({
+      workspaceId: input.workspaceId,
+      conversationId,
+      providerMessageId: input.providerMessageId,
+      processingJobId: input.processingJobId,
+      handler: "sms_pipeline",
+      branch: pipelineAction || "sms_pipeline_reply",
+      action: pipelineAction,
+      smsPipelinePrimary: bookingConfig.smsPipelinePrimary,
+      leadRecoveryEnabled: leadRecoveryActive,
+    });
     await recordMctbLeadRecoveryInboundSideEffects({
       workspaceId: input.workspaceId,
       fromE164,
@@ -371,6 +405,19 @@ export async function handleMctbCustomerSmsReply(input: {
   if (!leadRecovery.handled) {
     return { handled: false, reason: leadRecovery.reason || "lead_recovery_not_handled" };
   }
+
+  await logMctbSmsRoutingDecision({
+    workspaceId: input.workspaceId,
+    conversationId,
+    providerMessageId: input.providerMessageId,
+    processingJobId: input.processingJobId,
+    handler: "lead_recovery",
+    branch: leadRecovery.action || "lead_recovery_reply",
+    action: leadRecovery.action,
+    primaryIntent: leadRecovery.intent?.primary_intent ?? null,
+    smsPipelinePrimary: bookingConfig.smsPipelinePrimary,
+    leadRecoveryEnabled: leadRecoveryActive,
+  });
 
   await recordMctbLeadRecoveryInboundSideEffects({
     workspaceId: input.workspaceId,
