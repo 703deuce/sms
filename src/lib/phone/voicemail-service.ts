@@ -389,7 +389,8 @@ export async function listVoicemailMessages(workspaceId: string, boxId?: string)
 
 /**
  * Carrier-agnostic voicemail recording attach + optional AI transcription queue.
- * Transcription uses Deepgram Nova-3 when workspace has ai_transcription entitlement.
+ * Voicemail transcription uses Telnyx Inference STT when TELNYX_API_KEY is set;
+ * Smart Routing call recordings still use Deepgram when entitled.
  */
 export async function attachVoicemailRecordingAndTranscribe(input: {
   workspaceId: string;
