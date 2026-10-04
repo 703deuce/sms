@@ -417,6 +417,16 @@ export async function attachVoicemailRecordingAndTranscribe(input: {
       : null;
   if (!msg) return null;
 
+  const sameRecording =
+    Boolean(msg.recordingUrl) && msg.recordingUrl === input.recordingUrl;
+  const transcriptionInFlight =
+    msg.transcriptStatus === "processing" || msg.transcriptStatus === "pending";
+  const transcriptionDone =
+    msg.transcriptStatus === "completed" && Boolean(msg.transcriptText?.trim());
+  if (sameRecording && (transcriptionInFlight || transcriptionDone)) {
+    return msg;
+  }
+
   const box = await prisma.voicemailBox.findFirst({
     where: { id: msg.boxId, workspaceId: input.workspaceId },
   });

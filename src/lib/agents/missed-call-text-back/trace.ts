@@ -29,3 +29,26 @@ export async function appendMctbTrace(input: {
     },
   });
 }
+
+/** Avoid duplicate timeline noise when webhooks or parallel paths retry the same step. */
+export async function appendMctbTraceOnce(input: {
+  workspaceId: string;
+  traceId: string;
+  kind: string;
+  missedCallEventId?: string | null;
+  voiceCallId?: string | null;
+  humanCallId?: string | null;
+  conversationId?: string | null;
+  detail?: Record<string, unknown>;
+}): Promise<{ created: boolean }> {
+  if (input.missedCallEventId) {
+    const prisma = getPrisma();
+    const existing = await prisma.missedCallTextTrace.findFirst({
+      where: { missedCallEventId: input.missedCallEventId, kind: input.kind },
+      select: { id: true },
+    });
+    if (existing) return { created: false };
+  }
+  await appendMctbTrace(input);
+  return { created: true };
+}

@@ -5,7 +5,8 @@ import type { ClassifyInboundCallInput } from "./classify";
 import { classifyInboundCallOutcome } from "./classify";
 import { evaluateMissedCallTextEligibility } from "./eligibility";
 import { scheduleMissedCallText } from "./schedule";
-import { appendMctbTrace, newMctbTraceId } from "./trace";
+import { appendMctbTrace, appendMctbTraceOnce, newMctbTraceId } from "./trace";
+import { Prisma } from "@prisma/client";
 import { traceMctbPipeline, traceMctbPipelineSkip } from "@/lib/mctb/pipeline-trace";
 
 export type ProcessMissedCallInput = {
@@ -118,25 +119,56 @@ export async function processMissedInboundCall(input: ProcessMissedCallInput) {
     ...(input.eventMetadata || {}),
   });
 
-  const event = await prisma.missedCallEvent.create({
-    data: {
-      workspaceId: input.workspaceId,
-      voiceCallId: input.voiceCallId || null,
-      humanCallId: input.humanCallId || null,
-      contactId,
-      callerE164: caller,
-      businessE164,
-      phoneNumberId: input.phoneNumberId || null,
-      reason: classification,
-      disposition: input.call.disposition || null,
-      status: "DETECTED",
-      traceId,
-      idempotencyKey,
-      metadata: usageMetadata,
-    },
-  });
+  let event: { id: string; traceId: string; status: string };
+  try {
+    event = await prisma.missedCallEvent.create({
+      data: {
+        workspaceId: input.workspaceId,
+        voiceCallId: input.voiceCallId || null,
+        humanCallId: input.humanCallId || null,
+        contactId,
+        callerE164: caller,
+        businessE164,
+        phoneNumberId: input.phoneNumberId || null,
+        reason: classification,
+        disposition: input.call.disposition || null,
+        status: "DETECTED",
+        traceId,
+        idempotencyKey,
+        metadata: usageMetadata,
+      },
+    });
+  } catch (err) {
+    if (
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err.code === "P2002"
+    ) {
+      const raced = await prisma.missedCallEvent.findUnique({
+        where: { idempotencyKey },
+      });
+      if (raced) {
+        traceMctbPipeline({
+          layer: "process",
+          step: "deduped",
+          outcome: "deduped",
+          traceId: raced.traceId,
+          missedCallEventId: raced.id,
+          workspaceId: input.workspaceId,
+          race: "create_p2002",
+        });
+        return {
+          ok: true,
+          deduped: true,
+          missedCallEventId: raced.id,
+          traceId: raced.traceId,
+          status: raced.status,
+        };
+      }
+    }
+    throw err;
+  }
 
-  await appendMctbTrace({
+  await appendMctbTraceOnce({
     workspaceId: input.workspaceId,
     traceId,
     missedCallEventId: event.id,
@@ -199,7 +231,7 @@ export async function processMissedInboundCall(input: ProcessMissedCallInput) {
         suppressionReason,
       },
     });
-    await appendMctbTrace({
+    await appendMctbTraceOnce({
       workspaceId: input.workspaceId,
       traceId,
       missedCallEventId: event.id,
@@ -219,7 +251,7 @@ export async function processMissedInboundCall(input: ProcessMissedCallInput) {
     where: { id: event.id },
     data: { eligible: true, status: "ELIGIBILITY_CHECK" },
   });
-  await appendMctbTrace({
+  await appendMctbTraceOnce({
     workspaceId: input.workspaceId,
     traceId,
     missedCallEventId: event.id,

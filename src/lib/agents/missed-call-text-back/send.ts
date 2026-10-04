@@ -2,7 +2,7 @@ import { getPrisma } from "@/lib/db";
 import { sendQuickSms } from "@/lib/sms/send-quick";
 import { evaluateMissedCallTextEligibility } from "./eligibility";
 import { loadMissedCallTextConfig } from "./config";
-import { appendMctbTrace } from "./trace";
+import { appendMctbTraceOnce } from "./trace";
 import { getDemoMessageBody } from "@/lib/mctb/onboarding/demo";
 import {
   reserveTrialSmsSegments,
@@ -163,7 +163,7 @@ export async function executeMissedCallTextSend(input: {
         eligible: false,
       },
     });
-    await appendMctbTrace({
+    await appendMctbTraceOnce({
       workspaceId: input.workspaceId,
       traceId: input.traceId,
       missedCallEventId: event.id,
@@ -288,7 +288,7 @@ export async function executeMissedCallTextSend(input: {
         eligible: false,
       },
     });
-    await appendMctbTrace({
+    await appendMctbTraceOnce({
       workspaceId: input.workspaceId,
       traceId: input.traceId,
       missedCallEventId: event.id,
@@ -333,7 +333,7 @@ export async function executeMissedCallTextSend(input: {
         eligible: false,
       },
     });
-    await appendMctbTrace({
+    await appendMctbTraceOnce({
       workspaceId: input.workspaceId,
       traceId: input.traceId,
       missedCallEventId: event.id,
@@ -356,7 +356,7 @@ export async function executeMissedCallTextSend(input: {
     route,
   });
 
-  await appendMctbTrace({
+  await appendMctbTraceOnce({
     workspaceId: input.workspaceId,
     traceId: input.traceId,
     missedCallEventId: event.id,
@@ -413,7 +413,7 @@ export async function executeMissedCallTextSend(input: {
       },
     });
 
-    await appendMctbTrace({
+    await appendMctbTraceOnce({
       workspaceId: input.workspaceId,
       traceId: input.traceId,
       missedCallEventId: event.id,
@@ -504,7 +504,7 @@ export async function executeMissedCallTextSend(input: {
       where: { id: event.id },
       data: { status: "FAILED", suppressionReason: "PROVIDER_ERROR" },
     });
-    await appendMctbTrace({
+    await appendMctbTraceOnce({
       workspaceId: input.workspaceId,
       traceId: input.traceId,
       missedCallEventId: event.id,

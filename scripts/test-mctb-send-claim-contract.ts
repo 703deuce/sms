@@ -1,10 +1,18 @@
 import assert from "node:assert/strict";
 
-// Contract tests — no DB required.
-const { claimMctbRecoverySmsSend } = await import(
-  "@/lib/agents/missed-call-text-back/send-claim"
-);
+async function main() {
+  const { claimMctbRecoverySmsSend } = await import(
+    "@/lib/agents/missed-call-text-back/send-claim"
+  );
+  const { claimMctbRecoverySchedule } = await import(
+    "@/lib/agents/missed-call-text-back/schedule-claim"
+  );
+  assert.equal(typeof claimMctbRecoverySmsSend, "function");
+  assert.equal(typeof claimMctbRecoverySchedule, "function");
+  console.log("test-mctb-send-claim-contract: PASS");
+}
 
-assert.equal(typeof claimMctbRecoverySmsSend, "function");
-
-console.log("test-mctb-send-claim-contract: PASS (export smoke)");
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
