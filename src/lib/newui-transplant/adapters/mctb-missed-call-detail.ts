@@ -15,7 +15,13 @@ export type MctbMissedCallDetailWired = {
   trigger: string;
   reply: boolean;
   conversationId?: string;
-  messages: Array<{ from: "customer" | "business"; text: string }>;
+  contactEmail?: string | null;
+  headerStatusLine: string;
+  infoRailSections: Array<{ title: string; rows: Array<{ label: string; value: string }> }>;
+  messages: Array<{ from: "customer" | "business" | "ai"; text: string; at: string }>;
+  messageCount: number;
+  aiOutboundCount: number;
+  conversationEmptyHint: string;
   lifecycleSteps: Array<{ label: string; detail: string; done: boolean }>;
   textBackRows: Array<{ label: string; value: string }>;
   linkActivity: string;
@@ -83,7 +89,7 @@ export function buildMctbMissedCallDetailWired(
   } | undefined;
   const conversation = json.conversation as {
     id: string;
-    messages?: Array<{ body: string; direction: string }>;
+    messages?: Array<{ body: string; direction: string; createdAt?: string; userName?: string | null }>;
   } | null;
   const consent = json.consent as {
     consentedAt?: string;
@@ -91,7 +97,11 @@ export function buildMctbMissedCallDetailWired(
     consentMode?: string | null;
     consentScope?: string;
   } | null;
-  const contact = json.contact as { firstName?: string | null; lastName?: string | null } | null;
+  const contact = json.contact as {
+    firstName?: string | null;
+    lastName?: string | null;
+    email?: string | null;
+  } | null;
   const linkClicks = (json.linkClicks as Array<{ destinationUrl: string | null; createdAt?: string }>) ?? [];
   const formSubmissions = (json.formSubmissions as Array<{ submittedAt?: string }>) ?? [];
   const voicemail = json.voicemail as {
@@ -149,15 +159,39 @@ export function buildMctbMissedCallDetailWired(
           { label: "Reply", detail: reply ? "Customer replied" : "No reply yet", done: reply },
         ];
 
+  const teamBriefRaw = json.teamBrief as {
+    headline?: string;
+    summary?: string;
+    bullets?: string[];
+    recommendedNextStep?: string;
+    hasVoicemail?: boolean;
+    hasTextReplies?: boolean;
+  } | null;
+
   const messages =
     conversation?.messages?.map((m) => {
       const dir = String(m.direction || "").toLowerCase();
-      const outbound = dir === "outbound" || dir === "out";
+      const inbound = dir === "inbound" || dir === "in";
+      const userName = String(m.userName || "").toLowerCase();
+      let from: "customer" | "business" | "ai" = "customer";
+      if (!inbound) {
+        from = userName === "ai" ? "ai" : "business";
+      }
       return {
-        from: outbound ? ("business" as const) : ("customer" as const),
+        from,
         text: m.body,
+        at: m.createdAt ?? "",
       };
     }) ?? [];
+
+  const messageCount = messages.length;
+  const aiOutboundCount = messages.filter((m) => m.from === "ai").length;
+
+  const briefHasReplies = Boolean(teamBriefRaw?.hasTextReplies);
+  const conversationEmptyHint =
+    briefHasReplies && !messageCount
+      ? "This call has text replies in the recovery summary, but the SMS thread could not be loaded. Open the inbox or try again in a moment."
+      : "No conversation has started with this caller yet.";
 
   const linkActivity =
     linkClicks.length > 0
@@ -220,14 +254,6 @@ export function buildMctbMissedCallDetailWired(
   ];
   if (repeatLabel) callDetailsRows.push({ label: "Repeat caller", value: repeatLabel });
 
-  const teamBriefRaw = json.teamBrief as {
-    headline?: string;
-    summary?: string;
-    bullets?: string[];
-    recommendedNextStep?: string;
-    hasVoicemail?: boolean;
-    hasTextReplies?: boolean;
-  } | null;
   const teamBrief =
     teamBriefRaw?.headline && teamBriefRaw?.summary
       ? {
@@ -239,6 +265,58 @@ export function buildMctbMissedCallDetailWired(
           hasTextReplies: Boolean(teamBriefRaw.hasTextReplies),
         }
       : null;
+
+  const sentAtLabel = sentAt ? "Sent ✓" : recovery === "Waiting for consent" ? "Waiting" : "Not sent";
+  const replyLabel = reply ? "Received ✓" : "No reply yet";
+  const consentRail =
+    consentModeRaw === "existing_consent"
+      ? "Existing consent"
+      : recovery === "Waiting for consent"
+        ? "Pending"
+        : consent
+          ? "Captured ✓"
+          : "—";
+
+  const headerParts: string[] = [];
+  if (repeatCaller?.missedToday && repeatCaller.missedToday > 1) {
+    headerParts.push(`${repeatCaller.missedToday} missed calls today`);
+  }
+  if (sentAt) headerParts.push("Recovery text sent");
+  if (reply) headerParts.push("Customer replied");
+  const headerStatusLine = headerParts.join(" · ") || formatRecoveryStatus(status, suppressionReason);
+
+  const infoRailSections = [
+    {
+      title: "Caller",
+      rows: [
+        { label: "Name", value: caller },
+        { label: "Phone", value: phone },
+        ...(contact?.email ? [{ label: "Email", value: contact.email }] : []),
+      ],
+    },
+    {
+      title: "Call",
+      rows: [
+        { label: "Missed", value: missed },
+        { label: "Trigger", value: trigger },
+        { label: "Business line", value: formatMctbPhoneLabel(String(event.businessE164 || event.businessLineE164 || "—")) },
+        ...(repeatLabel ? [{ label: "Repeat caller", value: repeatLabel }] : []),
+      ],
+    },
+    {
+      title: "Recovery",
+      rows: [
+        { label: "Recovery text", value: sentAtLabel },
+        { label: "Customer reply", value: replyLabel },
+        { label: "Consent", value: consentRail },
+        ...(aiOutboundCount > 0
+          ? [{ label: "AI Recovery", value: `${messageCount} messages (${aiOutboundCount} AI)` }]
+          : messageCount > 0
+            ? [{ label: "Messages", value: String(messageCount) }]
+            : []),
+      ],
+    },
+  ];
 
   const traceId = timeline?.traceId ? String(timeline.traceId) : "";
   const diagnosticsLines = [
@@ -262,7 +340,13 @@ export function buildMctbMissedCallDetailWired(
     trigger,
     reply,
     conversationId: conversation?.id,
+    contactEmail: contact?.email ?? null,
+    headerStatusLine,
+    infoRailSections,
     messages,
+    messageCount,
+    aiOutboundCount,
+    conversationEmptyHint,
     lifecycleSteps,
     textBackRows,
     linkActivity,

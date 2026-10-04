@@ -3,14 +3,15 @@ import "server-only";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { loadConsentForMissedCallEvent } from "@/lib/mctb/consent-log";
 import { countCallerMissedEventsToday } from "@/lib/mctb/repeat-caller";
+import { resolveMctbConversationForMissedCall } from "@/lib/mctb/conversation-for-missed-call";
 import {
   generateTeamActivityBrief,
   loadLatestTeamBriefForMissedCall,
   loadTeamBriefContext,
 } from "@/lib/mctb/handoff/team-activity-brief";
+import { tightenTeamBriefForDetail } from "@/lib/mctb/team-brief-display";
 import { buildMctbEventTimeline } from "@/lib/mctb/timeline";
 import { getPrisma } from "@/lib/db";
-import { appProductSourceToPrisma } from "@/lib/mass-texting/product-source";
 
 function serializeEvent(event: Record<string, unknown>) {
   const out: Record<string, unknown> = { ...event };
@@ -19,55 +20,6 @@ function serializeEvent(event: Record<string, unknown>) {
     if (v instanceof Date) out[key] = v.toISOString();
   }
   return out;
-}
-
-async function loadConversationForEvent(
-  workspaceId: string,
-  event: { id: string; contactId: string | null; callerE164: string },
-) {
-  const prisma = getPrisma();
-  const productSource = appProductSourceToPrisma("mctb");
-  try {
-    const conversation = await prisma.conversation.findFirst({
-      where: {
-        workspaceId,
-        productSource,
-        OR: [
-          { missedCallEventId: event.id },
-          ...(event.contactId ? [{ contactId: event.contactId }] : []),
-        ],
-      },
-      orderBy: { updatedAt: "desc" },
-      select: {
-        id: true,
-        unread: true,
-        status: true,
-        updatedAt: true,
-        messages: {
-          orderBy: { createdAt: "desc" },
-          take: 20,
-          select: { body: true, createdAt: true, direction: true },
-        },
-      },
-    });
-    if (!conversation) return null;
-    return {
-      id: conversation.id,
-      unread: conversation.unread,
-      status: conversation.status,
-      updatedAt: conversation.updatedAt.toISOString(),
-      messages: conversation.messages
-        .slice()
-        .reverse()
-        .map((m) => ({
-          body: m.body,
-          createdAt: m.createdAt.toISOString(),
-          direction: m.direction,
-        })),
-    };
-  } catch {
-    return null;
-  }
 }
 
 export async function loadMctbMissedCallDetailPayload(workspaceId: string, eventId: string) {
@@ -131,15 +83,20 @@ export async function loadMctbMissedCallDetailPayload(workspaceId: string, event
       ? prisma.contact
           .findFirst({
             where: { id: event.contactId, workspaceId },
-            select: { id: true, firstName: true, lastName: true },
+            select: { id: true, firstName: true, lastName: true, email: true },
           })
           .catch(() => null)
       : Promise.resolve(null),
-    loadConversationForEvent(workspaceId, {
-      id: event.id,
-      contactId: event.contactId,
-      callerE164: event.callerE164,
-    }),
+    resolveMctbConversationForMissedCall(
+      workspaceId,
+      {
+        id: event.id,
+        contactId: event.contactId,
+        callerE164: event.callerE164,
+        detectedAt: event.detectedAt,
+      },
+      { messageTake: 80 },
+    ),
     prisma.voicemailMessage
       .findFirst({
         where: {
@@ -181,12 +138,14 @@ export async function loadMctbMissedCallDetailPayload(workspaceId: string, event
     }
   }
 
+  const displayBrief = teamBrief ? tightenTeamBriefForDetail(teamBrief) : null;
+
   return {
     ok: true as const,
     status: 200,
     body: {
       ok: true,
-      teamBrief,
+      teamBrief: displayBrief,
       event: serializeEvent(event as unknown as Record<string, unknown>),
       timeline,
       repeatCaller,
