@@ -2,7 +2,7 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { readPhoneCapabilities } from "@/lib/numbers/phone-capabilities";
-import { loadMctbConsentMode } from "@/lib/mctb/consent-prompt/service";
+import { readIngressConsentAuthorityForPhone } from "@/lib/mctb/consent-mode-authority";
 import type { MctbConsentMode } from "@/lib/mctb/consent-mode";
 import { resolveMctbAssignedWorkspaceForPhone } from "@/lib/mctb/sip-ingress/resolver";
 import { isMctbTexmlVoiceIngress } from "@/lib/mctb/sip-ingress/sync";
@@ -140,12 +140,17 @@ export async function resolveMctbTexmlIngressConfig(
     })) ?? (texmlIngress || mctbEnabled ? phone.workspaceId : null);
   if (!assignedWorkspaceId) return null;
 
-  let consentMode: MctbConsentMode = "press_1";
-  try {
-    consentMode = await loadMctbConsentMode(assignedWorkspaceId);
-  } catch {
-    // default press_1
-  }
+  const ws = await prisma.workspace.findUnique({
+    where: { id: assignedWorkspaceId },
+    select: { customFieldsConfig: true },
+  });
+  const authority = await readIngressConsentAuthorityForPhone({
+    workspaceId: assignedWorkspaceId,
+    phoneNumberId: phone.id,
+    phoneSettingsJson: phone.settingsJson,
+    workspaceCustomFieldsConfig: ws?.customFieldsConfig,
+  });
+  const consentMode = authority.consentMode;
 
   let automationActive = true;
   if (consentMode !== "existing_consent") {

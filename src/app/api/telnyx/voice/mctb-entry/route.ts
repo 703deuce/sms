@@ -24,12 +24,7 @@ import {
   parseMctbTexmlFields,
   pickMctbTexmlField,
 } from "@/lib/mctb/texml-ingress/parse-texml-fields";
-import {
-  buildFailOpenInboundRoutingProfile,
-  peekMctbInboundRoutingProfileByE164,
-  peekMctbInboundRoutingProfileByToken,
-  warmMctbInboundRoutingProfileForE164,
-} from "@/lib/mctb/texml-ingress/routing-profile";
+import { resolveMctbInboundRoutingProfileForIngressCall } from "@/lib/mctb/texml-ingress/routing-profile";
 import { traceMctbTexml } from "@/lib/mctb/texml-ingress/trace";
 import {
   beginMctbEntryCfnaProbe,
@@ -317,19 +312,22 @@ export async function POST(request: Request) {
         extra: { path: "instant" },
       });
 
-      let profile =
-        peekMctbInboundRoutingProfileByToken(routingTokenParam) ||
-        peekMctbInboundRoutingProfileByE164(to);
+      const resolvedProfile = await resolveMctbInboundRoutingProfileForIngressCall(
+        to,
+        routingTokenParam,
+      );
+      const profile = resolvedProfile.profile;
+      const cacheHit = resolvedProfile.profileSource === "cache";
 
-      let cacheHit = Boolean(profile);
       if (!profile) {
-        const warmed = await warmMctbInboundRoutingProfileForE164(to);
-        if (warmed) {
-          profile = warmed;
-        } else {
-          profile = buildFailOpenInboundRoutingProfile(to);
-          scheduleInboundWarm(to);
-        }
+        traceMctbTexml("MCTB_ROUTING_FAIL", {
+          reason: "ingress_profile_unresolved",
+          to,
+          callSid,
+          profileSource: resolvedProfile.profileSource,
+        });
+        scheduleInboundWarm(to);
+        return respondTexml(CONTROLLED_HANGUP, { branch: "ingress_profile_unresolved" });
       }
 
       const instant = buildInstantMctbInboundTexml({
@@ -357,10 +355,12 @@ export async function POST(request: Request) {
           console.log(
             JSON.stringify({
               source: "mctb-entry",
-              event: "routing_profile_cache_miss_fail_open",
+              event: "routing_profile_cache_miss_authoritative_load",
               to,
               callSid,
               certMode,
+              consentMode: profile.consentMode,
+              workspaceId: profile.workspaceId,
             }),
           );
         }

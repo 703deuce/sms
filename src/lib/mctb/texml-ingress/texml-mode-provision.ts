@@ -75,6 +75,22 @@ export async function provisionMctbPhoneTexmlIngressMode(input: {
       ? (settings.mctbInbound as Record<string, unknown>)
       : {};
 
+  const ws = await prisma.workspace.findUnique({
+    where: { id: input.workspaceId },
+    select: { customFieldsConfig: true },
+  });
+  const mctbCfg =
+    ws?.customFieldsConfig &&
+    typeof ws.customFieldsConfig === "object" &&
+    (ws.customFieldsConfig as Record<string, unknown>).mctb &&
+    typeof (ws.customFieldsConfig as Record<string, unknown>).mctb === "object"
+      ? ((ws.customFieldsConfig as Record<string, unknown>).mctb as Record<string, unknown>)
+      : {};
+  const consentConfigRevision =
+    typeof mctbCfg.consentConfigRevision === "string" && mctbCfg.consentConfigRevision.trim()
+      ? mctbCfg.consentConfigRevision.trim()
+      : `ccfg_${Date.now()}`;
+
   await prisma.phoneNumber.update({
     where: { id: phone.id },
     data: {
@@ -84,6 +100,7 @@ export async function provisionMctbPhoneTexmlIngressMode(input: {
           ...mctbInbound,
           texmlHandlerMode: handlerMode,
           consentMode: input.consentMode,
+          consentConfigRevision,
           texmlVoiceUrl: voiceUrl,
           texmlAppId,
           greetingToken: greetingTokenForE164(phone.e164),

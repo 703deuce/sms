@@ -154,13 +154,25 @@ export async function warmMctbInboundRoutingProfileForE164(
 
   const voicemailPlayUrl = resolveStableVoicemailGreetingPlayUrl(greetingToken);
 
+  const { readIngressConsentAuthorityForPhone } = await import("@/lib/mctb/consent-mode-authority");
+  const ws = await prisma.workspace.findUnique({
+    where: { id: config.workspaceId },
+    select: { customFieldsConfig: true },
+  });
+  const authority = await readIngressConsentAuthorityForPhone({
+    workspaceId: config.workspaceId,
+    phoneNumberId: phone.id,
+    phoneSettingsJson: phone.settingsJson,
+    workspaceCustomFieldsConfig: ws?.customFieldsConfig,
+  });
+
   const profile: MctbInboundRoutingProfile = {
     routingToken,
     greetingToken,
     workspaceId: config.workspaceId,
     phoneNumberId: phone.id,
     e164: phone.e164,
-    consentMode: config.consentMode,
+    consentMode: authority.consentMode,
     automationActive: config.automationActive,
     press1PlayUrl: platformPress1PlayUrl(),
     voicemail: {
@@ -211,16 +223,49 @@ export async function warmMctbInboundRoutingProfileForWorkspace(
   await Promise.all([...e164s].map((e164) => warmMctbInboundRoutingProfileForE164(e164)));
 }
 
-/** Synchronous fail-open profile when cache is cold — platform audio only. */
+/**
+ * Resolve routing shell + authoritative consent for inbound TeXML (cache cannot decide consent).
+ */
+export async function resolveMctbInboundRoutingProfileForIngressCall(
+  e164: string,
+  routingTokenParam?: string | null,
+): Promise<{
+  profile: MctbInboundRoutingProfile | null;
+  profileSource: "cache" | "persisted_load" | "unresolved";
+}> {
+  const cached =
+    peekMctbInboundRoutingProfileByToken(routingTokenParam) ||
+    peekMctbInboundRoutingProfileByE164(e164);
+  const profileSource: "cache" | "persisted_load" | "unresolved" = cached
+    ? "cache"
+    : "persisted_load";
+  const { resolveInboundRoutingProfileWithAuthoritativeConsent } = await import(
+    "@/lib/mctb/consent-mode-authority"
+  );
+  const resolved = await resolveInboundRoutingProfileWithAuthoritativeConsent({
+    e164,
+    routingTokenParam,
+    cachedProfile: cached,
+    profileSource: cached ? "cache" : "persisted_load",
+  });
+  if (!resolved.profile) {
+    return { profile: null, profileSource: "unresolved" };
+  }
+  return { profile: resolved.profile, profileSource };
+}
+
+/**
+ * @deprecated Do not use for provisioned ingress — never substitutes Press 1 for config load failures.
+ */
 export function buildFailOpenInboundRoutingProfile(e164: string): MctbInboundRoutingProfile {
   return {
-    routingToken: "r_failopen",
-    greetingToken: "g_failopen",
+    routingToken: "r_unprovisioned",
+    greetingToken: "g_unprovisioned",
     workspaceId: "",
     phoneNumberId: "",
     e164,
     consentMode: "press_1",
-    automationActive: true,
+    automationActive: false,
     press1PlayUrl: platformPress1PlayUrl(),
     voicemail: {
       kind: "platform_default",

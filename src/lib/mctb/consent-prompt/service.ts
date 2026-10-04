@@ -32,13 +32,26 @@ import { normalizeMctbConsentMode } from "@/lib/mctb/consent-mode";
 export type { MctbConsentMode };
 
 export async function loadMctbConsentMode(workspaceId: string): Promise<MctbConsentMode> {
+  const { getPrisma } = await import("@/lib/db");
   const {
-    resolveMctbConsentModeForWorkspace,
-    persistCanonicalMctbConsentModeIfNeeded,
-  } = await import("@/lib/mctb/consent-mode-resolution");
-  const resolved = await resolveMctbConsentModeForWorkspace(workspaceId);
-  await persistCanonicalMctbConsentModeIfNeeded(workspaceId, resolved);
-  return resolved.mode;
+    backfillIngressConsentAuthorityForWorkspace,
+    readIngressConsentAuthorityForPhone,
+  } = await import("@/lib/mctb/consent-mode-authority");
+  const prisma = getPrisma();
+  const ws = await prisma.workspace.findUnique({
+    where: { id: workspaceId },
+    select: { customFieldsConfig: true },
+  });
+  const authority = await readIngressConsentAuthorityForPhone({
+    workspaceId,
+    phoneNumberId: "",
+    phoneSettingsJson: {},
+    workspaceCustomFieldsConfig: ws?.customFieldsConfig,
+  });
+  if (authority.legacyFallbackUsed) {
+    await backfillIngressConsentAuthorityForWorkspace(workspaceId).catch(() => undefined);
+  }
+  return authority.consentMode;
 }
 
 async function resolveWorkspaceTfnPhoneNumberId(workspaceId: string): Promise<string | null> {

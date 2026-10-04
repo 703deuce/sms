@@ -845,6 +845,24 @@ export async function POST(req: Request) {
         ? { ...onboardingFresh, consentMode: body.consentMode }
         : onboardingFresh;
 
+    if (body.consentMode) {
+      const { persistAuthoritativeConsentMode } = await import("@/lib/mctb/consent-mode-authority");
+      try {
+        await persistAuthoritativeConsentMode({
+          workspaceId,
+          consentMode: body.consentMode,
+        });
+      } catch (err) {
+        return NextResponse.json(
+          {
+            error: "Failed to save consent mode",
+            detail: err instanceof Error ? err.message : String(err),
+          },
+          { status: 500 },
+        );
+      }
+    }
+
     await prisma.workspace.update({
       where: { id: workspaceId },
       data: {
@@ -855,7 +873,6 @@ export async function POST(req: Request) {
             : {}),
           mctb: {
             ...mctbFresh,
-            ...(body.consentMode ? { consentMode: body.consentMode } : {}),
             ...(body.replyNotifications !== undefined
               ? { replyNotifications: body.replyNotifications }
               : {}),
@@ -892,6 +909,13 @@ export async function POST(req: Request) {
             (body.scheduleMode ?? scheduleModePatch) === "business_hours",
         },
       });
+    }
+
+    if (body.consentMode) {
+      const { invalidateMctbTexmlIngressCacheForWorkspace } = await import(
+        "@/lib/mctb/texml-ingress/config-cache"
+      );
+      await invalidateMctbTexmlIngressCacheForWorkspace(workspaceId).catch(() => undefined);
     }
 
     if (body.consentMode || phoneId) {

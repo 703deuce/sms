@@ -462,27 +462,25 @@ export async function POST(req: Request) {
         }
       }
       await saveMissedCallTextBack(auth.workspaceId, { activate: false });
-      const ws = await prisma.workspace.findUnique({
-        where: { id: auth.workspaceId },
-        select: { customFieldsConfig: true },
-      });
-      const cfg =
-        ws?.customFieldsConfig && typeof ws.customFieldsConfig === "object"
-          ? (ws.customFieldsConfig as Record<string, unknown>)
-          : {};
-      const mctb =
-        cfg.mctb && typeof cfg.mctb === "object"
-          ? (cfg.mctb as Record<string, unknown>)
-          : {};
-      await prisma.workspace.update({
-        where: { id: auth.workspaceId },
-        data: {
-          customFieldsConfig: {
-            ...cfg,
-            mctb: { ...mctb, consentMode: body.consentMode },
+      const { persistAuthoritativeConsentMode } = await import("@/lib/mctb/consent-mode-authority");
+      const { invalidateMctbTexmlIngressCacheForWorkspace } = await import(
+        "@/lib/mctb/texml-ingress/config-cache"
+      );
+      try {
+        await persistAuthoritativeConsentMode({
+          workspaceId: auth.workspaceId,
+          consentMode: body.consentMode,
+        });
+        await invalidateMctbTexmlIngressCacheForWorkspace(auth.workspaceId);
+      } catch (err) {
+        return NextResponse.json(
+          {
+            error: "Failed to save consent mode",
+            detail: err instanceof Error ? err.message : String(err),
           },
-        },
-      });
+          { status: 500 },
+        );
+      }
       state = await saveMctbOnboardingState(auth.workspaceId, {
         consentMode: body.consentMode,
       });
