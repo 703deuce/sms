@@ -6,6 +6,7 @@ import { Page, PageHeader, Panel, Pill, Rows } from '@/newui-transplant/componen
 import { OPUS_CARD } from '@/newui-transplant/components/app/opus-surfaces'
 import { ButtonLink } from '@/newui-transplant/components/app/button-link'
 import { RecoveryPill } from '@/newui-transplant/components/app/status'
+import { MctbTeamActivityBriefPanel } from '@/newui-transplant/components/mctb/mctb-team-activity-brief-panel'
 import { cn } from '@/lib/utils'
 import type { MctbMissedCallDetailWired } from '@/lib/newui-transplant/adapters/mctb-missed-call-detail'
 
@@ -38,20 +39,7 @@ export function TransplantMctbMissedCallDetailView({ wired }: { wired: MctbMisse
       />
 
       {wired.teamBrief ? (
-        <Panel title="What happened" className="mb-4">
-          <h3 className="text-base font-semibold text-foreground">{wired.teamBrief.headline}</h3>
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{wired.teamBrief.summary}</p>
-          {wired.teamBrief.bullets.length > 0 ? (
-            <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-foreground">
-              {wired.teamBrief.bullets.map((b) => (
-                <li key={b}>{b}</li>
-              ))}
-            </ul>
-          ) : null}
-          <p className="mt-4 text-sm font-medium text-foreground">
-            Next step: <span className="font-normal text-muted-foreground">{wired.teamBrief.recommendedNextStep}</span>
-          </p>
-        </Panel>
+        <MctbTeamActivityBriefPanel brief={wired.teamBrief} className="mb-4" />
       ) : null}
 
       <Panel title="Recovery lifecycle" className="mb-4">

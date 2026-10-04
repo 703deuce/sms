@@ -2,10 +2,7 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { ensureBusinessWorkspaceForMctb } from "@/lib/mctb/ensure-business-workspace-for-mctb";
-import {
-  normalizeMctbConsentMode,
-  type MctbConsentMode,
-} from "@/lib/mctb/consent-mode";
+import { resolveMctbConsentModeForWorkspace } from "@/lib/mctb/consent-mode-resolution";
 import type { MctbOnboardingState } from "@/lib/mctb/onboarding/types";
 import { parseMctbOnboardingState } from "@/lib/mctb/onboarding/state";
 
@@ -29,30 +26,21 @@ export async function ensureMctbWorkspaceSeeded(workspaceId: string): Promise<vo
 
   const mctbCfg =
     cfg.mctb && typeof cfg.mctb === "object" ? (cfg.mctb as Record<string, unknown>) : {};
-  const storedMctbConsent: MctbConsentMode | undefined =
-    typeof mctbCfg.consentMode === "string"
-      ? normalizeMctbConsentMode(mctbCfg.consentMode)
-      : undefined;
+  const { mode: canonicalConsent } = await resolveMctbConsentModeForWorkspace(workspaceId);
 
   const existing = parseMctbOnboardingState(cfg);
   const hasOnboarding = Boolean((cfg as Record<string, unknown>).mctbOnboarding);
 
   const onboardingSeed: MctbOnboardingState = hasOnboarding
-    ? {
-        ...existing,
-        ...(storedMctbConsent ? { consentMode: storedMctbConsent } : {}),
-      }
+    ? { ...existing, consentMode: canonicalConsent }
     : {
         version: 2,
         currentStep: "business",
         completedSteps: [],
         startedAt: new Date().toISOString(),
-        consentMode: storedMctbConsent ?? "press_1",
+        consentMode: canonicalConsent,
         messageTemplate: DEFAULT_MESSAGE,
       };
-
-  const canonicalConsent: MctbConsentMode =
-    storedMctbConsent ?? normalizeMctbConsentMode(onboardingSeed.consentMode);
 
   const plan = String(ws.billingPlan || "").toLowerCase();
   const preservePaidPlan =

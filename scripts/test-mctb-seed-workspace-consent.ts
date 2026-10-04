@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 
 const src = readFileSync("src/lib/mctb/provisioning/seed-workspace.ts", "utf8");
 
-assert.match(src, /storedMctbConsent/);
+assert.match(src, /resolveMctbConsentModeForWorkspace/);
 assert.match(src, /canonicalConsent/);
 assert.doesNotMatch(
   src,
