@@ -11,7 +11,7 @@ import {
 } from "@/lib/mctb/conversation-thread";
 import { loadMctbLeadRecoveryKnowledgeBundle } from "@/lib/mctb/lead-recovery/knowledge-prompt";
 import { isCarrierProtocolOptOutMessage } from "@/lib/mctb/lead-recovery/protocol-intent";
-import { finalizeMctbOutboundSms } from "@/lib/mctb/sms-channel";
+import { finalizeMctbAgentSmsReply } from "@/lib/mctb/sms-channel";
 import { loadMctbInboxConversationThread } from "@/lib/mctb/semantic-conversation-context";
 import { mctbSemanticStructuredJson } from "@/lib/mctb/semantic-llm";
 
@@ -19,7 +19,6 @@ export type MctbSimpleSmsAgentInput = {
   workspaceId: string;
   conversationId: string;
   customerPhone: string;
-  customerName?: string | null;
   body: string;
   timezone?: string;
 };
@@ -28,17 +27,18 @@ const SIMPLE_SMS_SYSTEM = `You are the business's helpful SMS assistant continui
 
 Use ONLY the BUSINESS KNOWLEDGE block for business-specific facts (hours, services, location, policies). Do not invent information.
 
-Read the full SMS thread, including the first outbound recovery message from the business, so you know what was already said.
+Read the conversation thread so you know what was already said. Do not repeat the opener verbatim.
 
 Your job:
-1. Understand what the customer is asking or needs right now.
-2. Answer their question directly when the knowledge block supports it.
-3. If you cannot answer from the knowledge block, say briefly that the team will follow up with that detail — do not guess.
-4. Converse naturally. Do not run a rigid intake form or ask for name/address unless the customer is clearly trying to schedule service and volunteered details.
-5. When the customer seems done or you have helped them, reassure them the team will get back to them soon.
-6. Plain text only, under 320 characters, no markdown.
+1. Answer the customer's latest question in one or two short sentences.
+2. If knowledge does not cover it, say the team will follow up — do not guess.
+3. Plain text only. Target about 160 characters (one SMS segment). Hard maximum 280 characters.
+4. Do NOT include any URLs or links in your reply (booking links are added by the system only when appropriate).
+5. Do NOT address the customer by name unless they clearly introduced themselves in this thread.
+6. Do NOT add STOP, HELP, opt-out, or compliance footer text (the first business text already included that).
+7. No markdown, no sign-off names, no "Anthony" or other names from metadata.
 
-BOOKING: Only follow booking instructions when a BOOKING section is present in the user payload. Never mention booking links if booking is not enabled.
+BOOKING: Only set include_booking_link true when BOOKING is enabled and the customer wants to schedule. Never paste a URL yourself.
 
 Return JSON: { "reply": string, "include_booking_link": boolean }`;
 
@@ -74,7 +74,6 @@ export type MctbSimpleSmsAgentTurnContext = {
   customerMessage: string;
   thread: MctbConversationTurn[];
   businessKnowledgeBlock: string;
-  customerName?: string | null;
   timezone?: string | null;
   booking?: { enabled: boolean; url?: string | null };
 };
@@ -98,7 +97,6 @@ export async function runMctbSimpleSmsAgentTurn(
   const bookingUrl = ctx.booking?.url?.trim() || null;
 
   const userPayload: Record<string, unknown> = {
-    customer_name: ctx.customerName?.trim() || null,
     timezone: ctx.timezone || null,
     business_knowledge: ctx.businessKnowledgeBlock,
     conversation_thread: formatThreadForPrompt(thread),
@@ -119,7 +117,7 @@ export async function runMctbSimpleSmsAgentTurn(
     system: SIMPLE_SMS_SYSTEM,
     user: JSON.stringify(userPayload),
     temperature: 0.2,
-    maxTokens: 400,
+    maxTokens: 220,
   });
 
   if (!llm?.data?.reply?.trim()) {
@@ -127,7 +125,7 @@ export async function runMctbSimpleSmsAgentTurn(
       system: SIMPLE_SMS_SYSTEM,
       user: JSON.stringify(userPayload),
       temperature: 0.2,
-      maxTokens: 400,
+      maxTokens: 220,
       provider: "openai",
     });
   }
@@ -140,13 +138,14 @@ export async function runMctbSimpleSmsAgentTurn(
 
   let reply = llmReply;
 
-  if (bookingOn && bookingUrl && llm?.data?.include_booking_link) {
-    if (!reply.includes(bookingUrl)) {
-      reply = `${reply} Book here: ${bookingUrl}`;
-    }
+  const appendBooking = bookingOn && bookingUrl && llm?.data?.include_booking_link;
+  if (appendBooking && bookingUrl && !reply.includes(bookingUrl)) {
+    reply = `${reply} Book: ${bookingUrl}`;
   }
 
-  reply = finalizeMctbOutboundSms(reply);
+  reply = finalizeMctbAgentSmsReply(reply, {
+    allowedUrl: appendBooking ? bookingUrl : null,
+  });
   if (!reply.trim()) {
     return { handled: false };
   }
@@ -189,7 +188,6 @@ export async function handleMctbSimpleSmsAgentInbound(
     customerMessage: input.body,
     thread: inbox,
     businessKnowledgeBlock: knowledge.runtime_prompt_block,
-    customerName: input.customerName,
     timezone: input.timezone || bookingConfig.timezone || null,
     booking: bookingOn && bookingUrl ? { enabled: true, url: bookingUrl } : { enabled: false },
   });

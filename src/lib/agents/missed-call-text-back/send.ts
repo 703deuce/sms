@@ -10,13 +10,10 @@ import {
 } from "@/lib/mctb/entitlement";
 
 import { resolveMctbRecoveryOpenerTemplate, renderMctbMessageTemplate } from "@/lib/mctb/message-template";
-import {
-  resolveMctbLinkDestinationUrl,
-  resolveMctbTemplateVars,
-} from "@/lib/mctb/template-vars";
-import { wrapMctbMessageUrlsWithTracking } from "@/lib/mctb/link-tracking";
+import { resolveMctbTemplateVars } from "@/lib/mctb/template-vars";
 import { traceMctbPipeline, traceMctbPipelineSkip } from "@/lib/mctb/pipeline-trace";
 import { mctbCallerE164Variants } from "@/lib/mctb/messaging/caller-e164";
+import { stripMctbTrackingUrlsFromSms } from "@/lib/mctb/sms-channel";
 import { claimMctbRecoverySmsSend } from "./send-claim";
 
 function renderTemplate(template: string, vars: Record<string, string>): string {
@@ -210,18 +207,7 @@ export async function executeMissedCallTextSend(input: {
     ? getDemoMessageBody()
     : renderTemplate(resolveMctbRecoveryOpenerTemplate(config), templateVars);
 
-  const destinationUrl = demoMode
-    ? null
-    : resolveMctbLinkDestinationUrl(config);
-
-  const tracked = demoMode
-    ? { body: rawBody, trackingToken: null as string | null, destinationUrl: null as string | null }
-    : wrapMctbMessageUrlsWithTracking({
-        body: rawBody,
-        destinationUrl,
-      });
-
-  let body = tracked.body;
+  let body = stripMctbTrackingUrlsFromSms(rawBody);
 
   let trialReservation: { reserved: boolean; segments: number } | null = null;
   let recoveryUsageReserved = false;
@@ -354,6 +340,7 @@ export async function executeMissedCallTextSend(input: {
     consumerE164: event.callerE164,
     body,
     route,
+    treatAsFirstMessage: true,
   });
 
   await appendMctbTraceOnce({
@@ -377,9 +364,8 @@ export async function executeMissedCallTextSend(input: {
       to: event.callerE164,
       body,
       from: resolvedSender.e164,
-      customerName: contact?.firstName || undefined,
       idempotencyKey: `mctb-recovery:${event.id}`,
-      destinationUrl: tracked.destinationUrl || undefined,
+      omitConsumerTrackingLink: true,
       demoBypass: demoMode,
       senderRoute: {
         sendWorkspaceId: route.sendWorkspaceId,

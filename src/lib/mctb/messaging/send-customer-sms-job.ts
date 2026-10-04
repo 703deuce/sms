@@ -49,6 +49,7 @@ export async function executeMctbSendCustomerSmsJob(payload: Record<string, unkn
     body,
     route,
     conversationId,
+    treatAsFirstMessage: false,
   });
 
   const existingMessage = await prisma.message.findFirst({
@@ -87,6 +88,7 @@ export async function executeMctbSendCustomerSmsJob(payload: Record<string, unkn
     body: outboundBody,
     from: route.fromE164,
     idempotencyKey,
+    omitConsumerTrackingLink: true,
     senderRoute: {
       sendWorkspaceId: route.sendWorkspaceId,
       fromE164: route.fromE164,

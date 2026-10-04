@@ -36,3 +36,67 @@ export function isOrdinaryMctbReplyTooLong(
   const fail = analysis.segmentCount >= limits.warnSegments;
   return { fail, analysis };
 }
+
+const TRACKING_URL_RE = /https?:\/\/[^\s]*\/r\/[a-zA-Z0-9]+/gi;
+const GENERIC_URL_RE = /https?:\/\/[^\s]+/gi;
+
+/** Strip Transovo /r/ redirect links — never customer-facing. */
+export function stripMctbTrackingUrlsFromSms(body: string): string {
+  return body.replace(TRACKING_URL_RE, "").replace(/\s{2,}/g, " ").trim();
+}
+
+/** Agent follow-ups: no tracking links; only an explicit booking URL may remain. */
+export function stripUrlsFromMctbAgentSmsReply(
+  body: string,
+  allowedUrl?: string | null,
+): string {
+  let text = body.trim();
+  if (!text) return text;
+
+  const allowed = allowedUrl?.trim();
+  text = stripMctbTrackingUrlsFromSms(text);
+
+  if (allowed) {
+    const allowedNorm = allowed.toLowerCase();
+    text = text
+      .replace(GENERIC_URL_RE, (url) => (url.toLowerCase() === allowedNorm ? url : ""))
+      .trim();
+  } else {
+    text = text.replace(GENERIC_URL_RE, "").trim();
+  }
+
+  return text.replace(/\s{2,}/g, " ").replace(/\s+([.!?])/g, "$1").trim();
+}
+
+/** Hard cap for conversational agent SMS (2 GSM segments ≈ 306 chars). */
+export function truncateMctbAgentSmsToSegmentBudget(
+  body: string,
+  limits: MctbSmsSegmentLimits = DEFAULT_MCTB_SMS_LIMITS,
+): string {
+  let text = finalizeMctbOutboundSms(body);
+  const maxSegments = limits.maxSegmentsOrdinary;
+  const analysis = analyzeSmsBody(text);
+  if (analysis.segmentCount <= maxSegments) return text;
+
+  const single = analysis.encoding === "GSM7" ? 160 : 70;
+  const concat = analysis.encoding === "GSM7" ? 153 : 67;
+  const maxChars = maxSegments === 1 ? single : single + (maxSegments - 1) * concat;
+
+  if (text.length <= maxChars) return text;
+
+  const slice = text.slice(0, maxChars);
+  const lastBreak = Math.max(slice.lastIndexOf(". "), slice.lastIndexOf("! "), slice.lastIndexOf("? "));
+  if (lastBreak > maxChars * 0.55) {
+    return slice.slice(0, lastBreak + 1).trim();
+  }
+  const lastSpace = slice.lastIndexOf(" ");
+  return (lastSpace > 40 ? slice.slice(0, lastSpace) : slice).trim() + "...";
+}
+
+export function finalizeMctbAgentSmsReply(
+  body: string,
+  options?: { allowedUrl?: string | null },
+): string {
+  const stripped = stripUrlsFromMctbAgentSmsReply(body, options?.allowedUrl);
+  return truncateMctbAgentSmsToSegmentBudget(stripped);
+}

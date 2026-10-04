@@ -29,6 +29,11 @@ export type QuickSendSmsInput = {
   /** Skip messaging registration + credit gates for platform demo SMS. */
   demoBypass?: boolean;
   /**
+   * MCTB and other customer-care SMS: never append /r/ tracking or auto review links.
+   * Booking / template links must appear only as explicit URLs in the message body.
+   */
+  omitConsumerTrackingLink?: boolean;
+  /**
    * Route outbound through another workspace's provider registration (e.g. platform Telnyx A2P).
    * Message rows still belong to workspaceId. Does not skip credits/trial unless demoBypass.
    */
@@ -192,10 +197,13 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
     throw new Error("Platform demo messaging is not configured.");
   }
 
-  const trackingToken = randomTrackingToken();
-  const trackedUrl = `${getAppBaseUrl()}/r/${trackingToken}`;
+  const omitTracking = input.omitConsumerTrackingLink === true;
+  const trackingToken = omitTracking ? null : randomTrackingToken();
+  const trackedUrl = trackingToken ? `${getAppBaseUrl()}/r/${trackingToken}` : "";
   const { resolveReviewLink } = await import("@/lib/messaging/review-link");
-  const destinationUrl = input.destinationUrl || (await resolveReviewLink(input.workspaceId));
+  const destinationUrl = omitTracking
+    ? input.destinationUrl?.trim() || null
+    : input.destinationUrl || (await resolveReviewLink(input.workspaceId));
 
   let poolFrom: string | undefined;
   if (input.senderPoolId) {
@@ -213,8 +221,9 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
     review_link: trackedUrl,
   });
 
-  const finalBody =
-    body.includes(trackedUrl) || !destinationUrl
+  const finalBody = omitTracking
+    ? body.trim()
+    : body.includes(trackedUrl) || !destinationUrl
       ? body
       : `${body.trim()} ${trackedUrl}`.trim();
 
@@ -243,7 +252,9 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
         from: persistedFrom,
         body: finalBody,
         status: "sending",
-        providerId: input.idempotencyKey ? `idem:${input.idempotencyKey}` : `pending:${trackingToken}`,
+        providerId: input.idempotencyKey
+          ? `idem:${input.idempotencyKey}`
+          : `pending:${trackingToken ?? randomTrackingToken()}`,
         idempotencyKey: input.idempotencyKey || null,
         trackingToken,
         destinationUrl,

@@ -20,6 +20,7 @@ async function sendMctbCustomerOutboundSms(input: {
   toE164: string;
   body: string;
   idempotencyKey: string;
+  conversationId: string;
 }) {
   const { resolveMctbOutboundSmsRoute } = await import("@/lib/mctb/messaging/outbound-sms-route");
   const route = await resolveMctbOutboundSmsRoute({
@@ -48,6 +49,8 @@ async function sendMctbCustomerOutboundSms(input: {
     consumerE164: input.toE164,
     body: input.body,
     route,
+    conversationId: input.conversationId,
+    treatAsFirstMessage: false,
   });
   const result = await sendQuickSms({
     workspaceId: input.workspaceId,
@@ -55,6 +58,7 @@ async function sendMctbCustomerOutboundSms(input: {
     body,
     from: route.fromE164,
     idempotencyKey: input.idempotencyKey,
+    omitConsumerTrackingLink: true,
     senderRoute: {
       sendWorkspaceId: route.sendWorkspaceId,
       fromE164: route.fromE164,
@@ -277,9 +281,6 @@ export async function handleMctbCustomerSmsReply(input: {
     return { handled: true, action: "human_handling" };
   }
 
-  const customerName =
-    [contact?.firstName, contact?.lastName].filter(Boolean).join(" ").trim() || undefined;
-
   if (!leadRecoveryActive) {
     await recordMctbLeadRecoveryInboundSideEffects({
       workspaceId: input.workspaceId,
@@ -300,7 +301,6 @@ export async function handleMctbCustomerSmsReply(input: {
     workspaceId: input.workspaceId,
     conversationId,
     customerPhone: fromE164,
-    customerName,
     body: input.body,
     timezone: config.timezone,
   });
@@ -391,6 +391,7 @@ export async function handleMctbCustomerSmsReply(input: {
       toE164: fromE164,
       body: simple.reply,
       idempotencyKey: idemKey,
+      conversationId,
     });
   } catch (err) {
     console.error("[mctb/customer-sms] simple SMS agent send failed", err);

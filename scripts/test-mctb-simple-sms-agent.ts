@@ -7,12 +7,21 @@ const customerSms = readFileSync(
   "utf8",
 );
 assert.match(customerSms, /handleMctbSimpleSmsAgentInbound/);
+assert.match(customerSms, /omitConsumerTrackingLink: true/);
+assert.doesNotMatch(customerSms, /customerName/);
 assert.doesNotMatch(customerSms, /handleMctbSmsConversationPipeline/);
+
+const recoverySend = readFileSync("src/lib/agents/missed-call-text-back/send.ts", "utf8");
+assert.match(recoverySend, /omitConsumerTrackingLink: true/);
+assert.doesNotMatch(recoverySend, /wrapMctbMessageUrlsWithTracking/);
+assert.match(recoverySend, /treatAsFirstMessage: true/);
 
 const agent = readFileSync("src/lib/mctb/ai-recovery/simple-sms-agent.ts", "utf8");
 assert.match(agent, /business_knowledge/);
 assert.match(agent, /conversation_thread/);
 assert.match(agent, /includeCollectPrompts: false/);
+assert.doesNotMatch(agent, /customer_name/);
+assert.match(agent, /finalizeMctbAgentSmsReply/);
 assert.doesNotMatch(agent, /evaluateLeadRecoveryPolicy/);
 assert.doesNotMatch(agent, /runLeadRecoveryIntentAgent/);
 
