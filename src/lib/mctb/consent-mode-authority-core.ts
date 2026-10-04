@@ -1,3 +1,13 @@
+/**
+ * MCTB consent mode — authoritative persisted sources (runtime):
+ *
+ * 1. Per-DID ingress: phone.settingsJson.mctbInbound.consentMode (+ consentConfigRevision)
+ * 2. Workspace Setup save: customFieldsConfig.mctb.consentMode (+ consentConfigRevision)
+ *
+ * In-memory routing profiles and ingress config cache are accelerators only.
+ * Every inbound call re-applies authority from persisted storage (see consent-mode-authority.ts).
+ * Legacy onboarding/attestation/solution fields are migration-only (legacy_migration).
+ */
 import {
   MCTB_CONSENT_MODE_EXISTING,
   MCTB_CONSENT_MODE_VERIFIED,
