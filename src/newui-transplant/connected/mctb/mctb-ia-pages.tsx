@@ -132,7 +132,7 @@ export function NewUiMctbMissedCallRecoveryPage() {
           <Stat
             label="This month"
             value={`${usageUsed}`}
-            hint={`of ${usageLimit} recoveries`}
+            hint={`of ${usageLimit} missed calls texted`}
             icon={Activity}
           />
         ) : null}

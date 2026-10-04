@@ -468,7 +468,7 @@ export function MctbOnboardingRuntime({
             : "Your missed-call recovery setup is complete."}
         </p>
         <p className="mt-2 text-sm font-medium text-muted-foreground">
-          Free plan · 10 recoveries per month on the Transovo platform sender
+          Free plan · 10 recovery texts per month on the Transovo platform sender
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <Button type="button" onClick={() => router.push(MCTB_ROUTES.home)}>Go to MCTB</Button>

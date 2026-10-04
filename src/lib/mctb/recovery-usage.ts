@@ -7,6 +7,7 @@ import { isOnboardingComplete } from "@/lib/mctb/onboarding/completion";
 import { loadMctbOnboardingState } from "@/lib/mctb/onboarding/state";
 import {
   currentMctbRecoveryPeriodKey,
+  mctbRecoveryPeriodUtcBounds,
   MCTB_FREE_MONTHLY_RECOVERY_LIMIT,
   resolveMctbMonthlyRecoveryLimit,
 } from "@/lib/mctb/recovery-usage-constants";
@@ -93,37 +94,63 @@ export async function buildMissedCallRecoveryUsageMetadata(
   return meta;
 }
 
-async function listRecoveryReservedEvents(
-  workspaceId: string,
-  periodKey: string,
-): Promise<Array<{ metadata: unknown; detectedAt: Date }>> {
-  const prisma = getPrisma();
-  const events = await prisma.missedCallEvent.findMany({
-    where: { workspaceId },
-    select: { metadata: true, detectedAt: true },
-  });
-  return events.filter((event) => {
-    const meta = asRecord(event.metadata);
-    return meta[EVENT_META_RESERVED_PERIOD] === periodKey;
-  });
-}
-
-async function countBillableRecoveryReservations(
+/**
+ * Billable usage = missed calls where a recovery text was sent this period.
+ * Customer replies and “recovered” outcomes do not affect the counter.
+ */
+async function countBillableRecoveryTextsSentInPeriod(
   workspaceId: string,
   periodKey: string,
 ): Promise<number> {
-  const reserved = await listRecoveryReservedEvents(workspaceId, periodKey);
+  const { start, end } = mctbRecoveryPeriodUtcBounds(periodKey);
+  const prisma = getPrisma();
+  const events = await prisma.missedCallEvent.findMany({
+    where: {
+      workspaceId,
+      smsSentAt: { gte: start, lt: end },
+    },
+    select: { metadata: true, detectedAt: true, smsSentAt: true },
+  });
   let count = 0;
-  for (const event of reserved) {
-    const meta = asRecord(event.metadata);
+  for (const event of events) {
+    if (!event.smsSentAt) continue;
     const excluded = await shouldExcludeMissedCallFromRecoveryUsage({
       workspaceId,
-      eventMetadata: meta,
+      eventMetadata: asRecord(event.metadata),
       detectedAt: event.detectedAt,
     });
     if (!excluded) count += 1;
   }
   return count;
+}
+
+async function persistWorkspaceRecoveryUsed(
+  workspaceId: string,
+  periodKey: string,
+  used: number,
+  existingLimits?: Record<string, unknown>,
+): Promise<void> {
+  const prisma = getPrisma();
+  const limits = existingLimits ?? asRecord(
+    (
+      await prisma.workspaceLimits.findUnique({
+        where: { workspaceId },
+        select: { limits: true },
+      })
+    )?.limits,
+  );
+  await prisma.workspaceLimits
+    .upsert({
+      where: { workspaceId },
+      create: {
+        workspaceId,
+        limits: { ...limits, [USAGE_PERIOD_KEY]: periodKey, [USAGE_USED]: used },
+      },
+      update: {
+        limits: { ...limits, [USAGE_PERIOD_KEY]: periodKey, [USAGE_USED]: used },
+      },
+    })
+    .catch(() => undefined);
 }
 
 export async function getMctbRecoveryUsageSnapshot(
@@ -141,37 +168,10 @@ export async function getMctbRecoveryUsageSnapshot(
   let used = Number(limits[USAGE_USED] || 0);
   if (storedPeriod !== periodKey) used = 0;
 
-  const reservedEvents = await listRecoveryReservedEvents(workspaceId, periodKey);
-  if (reservedEvents.length > 0) {
-    let excludedReserved = 0;
-    for (const event of reservedEvents) {
-      const excluded = await shouldExcludeMissedCallFromRecoveryUsage({
-        workspaceId,
-        eventMetadata: asRecord(event.metadata),
-        detectedAt: event.detectedAt,
-      });
-      if (excluded) excludedReserved += 1;
-    }
-    if (excludedReserved > 0) {
-      const adjusted = Math.max(0, used - excludedReserved);
-      if (adjusted !== used) {
-        used = adjusted;
-        if (storedPeriod === periodKey) {
-          await prisma.workspaceLimits
-            .upsert({
-              where: { workspaceId },
-              create: {
-                workspaceId,
-                limits: { ...limits, [USAGE_PERIOD_KEY]: periodKey, [USAGE_USED]: adjusted },
-              },
-              update: {
-                limits: { ...limits, [USAGE_PERIOD_KEY]: periodKey, [USAGE_USED]: adjusted },
-              },
-            })
-            .catch(() => undefined);
-        }
-      }
-    }
+  const textsSentInPeriod = await countBillableRecoveryTextsSentInPeriod(workspaceId, periodKey);
+  if (textsSentInPeriod !== used) {
+    used = textsSentInPeriod;
+    await persistWorkspaceRecoveryUsed(workspaceId, periodKey, used, limits);
   }
 
   const limit = resolveMctbMonthlyRecoveryLimit({
@@ -294,6 +294,14 @@ export async function reserveMctbRecoveryUnit(input: {
     const storedPeriod = String(limits[USAGE_PERIOD_KEY] || "");
     if (storedPeriod !== periodKey) {
       used = 0;
+    }
+
+    const textsSentInPeriod = await countBillableRecoveryTextsSentInPeriod(
+      input.workspaceId,
+      periodKey,
+    );
+    if (textsSentInPeriod > used) {
+      used = textsSentInPeriod;
     }
 
     if (used >= limit) {

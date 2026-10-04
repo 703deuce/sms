@@ -9,6 +9,7 @@ import { resolveMctbMonthlyRecoveryLimit } from "@/lib/mctb/recovery-usage-const
 
 export type MctbCapabilities = {
   monthlyRecoveryLimit: number;
+  /** Missed calls where a recovery SMS was sent this period (not customer replies). */
   monthlyRecoveriesUsed: number;
   pressOneConsent: boolean;
   existingConsentCertification: boolean;

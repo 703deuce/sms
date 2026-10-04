@@ -1,4 +1,4 @@
-/** Free tier: logical missed-call recoveries per monthly period (not SMS segments). */
+/** Free tier: missed calls texted back per calendar month (one unit per call, not per SMS). */
 export const MCTB_FREE_MONTHLY_RECOVERY_LIMIT = 10;
 
 /** Text Back ($9.99/mo) — paid MCTB platform subscription. */
@@ -38,4 +38,18 @@ export function currentMctbRecoveryPeriodKey(now = new Date()): string {
   const y = now.getUTCFullYear();
   const m = String(now.getUTCMonth() + 1).padStart(2, "0");
   return `${y}-${m}`;
+}
+
+/** Half-open UTC interval [start, end) for a `YYYY-MM` recovery usage period. */
+export function mctbRecoveryPeriodUtcBounds(periodKey: string): { start: Date; end: Date } {
+  const match = /^(\d{4})-(\d{2})$/.exec(periodKey.trim());
+  if (!match) {
+    const now = new Date();
+    return mctbRecoveryPeriodUtcBounds(currentMctbRecoveryPeriodKey(now));
+  }
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]) - 1;
+  const start = new Date(Date.UTC(year, monthIndex, 1, 0, 0, 0, 0));
+  const end = new Date(Date.UTC(year, monthIndex + 1, 1, 0, 0, 0, 0));
+  return { start, end };
 }

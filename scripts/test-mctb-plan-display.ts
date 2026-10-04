@@ -27,7 +27,7 @@ const freeUsage = buildMctbPlanUsagePresentation({
   periodKey: "2026-09",
 });
 assert.equal(freeUsage.planLabel, "Free");
-assert.equal(freeUsage.usageShortLabel, "3 / 10 recoveries");
+assert.equal(freeUsage.usageShortLabel, "3 / 10 missed calls texted");
 assert.equal(freeUsage.atLimit, false);
 
 const atLimit = buildMctbPlanUsagePresentation({

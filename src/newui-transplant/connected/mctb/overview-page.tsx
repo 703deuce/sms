@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
   AlertTriangle,
@@ -15,7 +14,6 @@ import { ButtonLink } from "@/newui-transplant/components/app/button-link";
 import {
   Callout,
   FeatureEmphasisStrip,
-  Initials,
   Page,
   PageHeader,
   Panel,
@@ -24,9 +22,8 @@ import {
   Stat,
   TextLink,
 } from "@/newui-transplant/components/app/kit";
-import { MissedCallsCompactTable } from "@/newui-transplant/components/app/opus-tables";
-import { mapMctbOverviewRecentMissedCalls } from "@/lib/newui-transplant/adapters/mctb-overview";
 import type { MctbOverviewPayload } from "@/lib/mctb/overview-types";
+import { MctbOverviewRecoverySummaries } from "@/newui-transplant/components/mctb/mctb-overview-recovery-summaries";
 import type { MctbCapabilities } from "@/lib/mctb/capabilities";
 import { useMctbOverviewEnrichment } from "@/newui-transplant/connected/mctb/overview-enrichment";
 import { MctbRecoveryPauseOpus } from "@/newui-transplant/components/mctb/mctb-recovery-pause-opus";
@@ -46,7 +43,6 @@ export function NewUiMctbOverviewPage({ data }: { data: MctbOverviewPayload }) {
     attentionReason: null,
     attentionHref: null,
   };
-  const recentMissed = mapMctbOverviewRecentMissedCalls(data);
   const kpis = data.kpis;
   const [capabilities, setCapabilities] = useState<MctbCapabilities | null>(null);
   const [schedule, setSchedule] = useState<{
@@ -120,14 +116,14 @@ export function NewUiMctbOverviewPage({ data }: { data: MctbOverviewPayload }) {
 
       {capabilities && capabilities.monthlyRecoveryLimit > 0 ? (
         <div className={`mt-4 px-4 py-3 ${OPUS_CARD}`}>
-          <p className="text-sm font-medium">Recovered calls this month</p>
+          <p className="text-sm font-medium">Recovery texts this month</p>
           <p className="mt-1 text-sm text-muted-foreground">
             <span className="font-mono tabular-nums text-foreground">
               {capabilities.monthlyRecoveriesUsed} / {capabilities.monthlyRecoveryLimit}
             </span>
             {capabilities.monthlyRecoveriesUsed >= capabilities.monthlyRecoveryLimit
               ? " — limit reached; new recovery texts are suppressed until the next period."
-              : " — qualifying missed calls count toward your plan limit."}
+              : " — each missed call we text back counts once. Customer replies are not counted."}
           </p>
         </div>
       ) : null}
@@ -189,37 +185,8 @@ export function NewUiMctbOverviewPage({ data }: { data: MctbOverviewPayload }) {
         </div>
       ) : null}
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-5">
-        <Panel
-          title="Recent missed calls"
-          action={<TextLink href="/mctb/missed-calls">View all</TextLink>}
-          className="lg:col-span-3"
-          bodyClassName="p-0"
-        >
-          <MissedCallsCompactTable rows={recentMissed.slice(0, 5)} />
-        </Panel>
-
-        <Panel
-          title="Recent conversations"
-          action={<TextLink href="/mctb/conversations">Open inbox</TextLink>}
-          className="lg:col-span-2"
-          bodyClassName="p-0"
-        >
-          <ul className="divide-y">
-            {data.recentConversations.slice(0, 5).map((c) => (
-              <li key={c.id}>
-                <Link href={`/mctb/conversations?conversation=${c.id}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/50">
-                  <Initials name={c.label} />
-                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <span className="truncate text-sm font-medium">{c.label}</span>
-                    <span className="truncate text-xs text-muted-foreground">{c.preview}</span>
-                  </div>
-                  {c.needsReply ? <span className="mt-1.5 size-2 shrink-0 rounded-full bg-primary" aria-label="Needs reply" /> : null}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </Panel>
+      <div className="mt-4">
+        <MctbOverviewRecoverySummaries rows={data.recentMissedCalls} />
       </div>
 
       <Panel className="mt-4" title="Setup health" bodyClassName="divide-y p-0 px-5">

@@ -9,7 +9,7 @@ export type MctbPlanUsagePresentation = {
   monthlyRecoveryLimit: number;
   atLimit: boolean;
   periodKey: string;
-  /** Short header copy, e.g. "3 / 10 recoveries" */
+  /** Short header copy, e.g. "3 / 10 missed calls texted" */
   usageShortLabel: string;
   /** Accessible description of plan + usage */
   usageAriaLabel: string;
@@ -53,8 +53,8 @@ export function buildMctbPlanUsagePresentation(input: {
   const used = Math.max(0, input.monthlyRecoveriesUsed);
   const limit = Math.max(0, input.monthlyRecoveryLimit);
   const usageShortLabel =
-    limit > 0 ? `${used} / ${limit} recoveries` : `${used} recoveries`;
-  const usageAriaLabel = `${planLabel} plan. ${used} of ${limit} missed-call recoveries used this month.`;
+    limit > 0 ? `${used} / ${limit} missed calls texted` : `${used} missed calls texted`;
+  const usageAriaLabel = `${planLabel} plan. ${used} of ${limit} missed calls texted back this month. Replies are not counted.`;
 
   return {
     planKey,

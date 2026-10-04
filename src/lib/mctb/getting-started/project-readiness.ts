@@ -331,7 +331,7 @@ export async function projectMctbGettingStarted(workspaceId: string): Promise<Mc
   const operationalReady =
     essentialsComplete === essentialsTotal && !recoveryPaused && forwardingVerified;
 
-  const usageLine = `This month: ${usage.usedInPeriod} of ${usage.limit} recoveries used`;
+  const usageLine = `This month: ${usage.usedInPeriod} of ${usage.limit} recovery texts sent`;
 
   return {
     workspaceName: businessName,
