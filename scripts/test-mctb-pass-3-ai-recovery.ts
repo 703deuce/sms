@@ -111,4 +111,18 @@ assert.match(
 );
 assert.doesNotMatch(contextRoute, /loadRegistration/);
 
+const saveBundle = readFileSync("src/lib/mctb/ai-recovery/save-bundle.ts", "utf8");
+assert.match(saveBundle, /ai_recovery_save_mutated_consent_mode/);
+assert.match(saveBundle, /Does not read or write consent mode/);
+
+const saveRoute = readFileSync("src/app/api/mctb/ai-recovery/save/route.ts", "utf8");
+assert.match(saveRoute, /saveAiRecoveryBundle/);
+assert.match(saveRoute, /runtimeArmed/);
+
+const connectedPage = readFileSync(
+  "src/newui-transplant/connected/mctb/ai-recovery-page.tsx",
+  "utf8",
+);
+assert.match(connectedPage, /\/api\/mctb\/ai-recovery\/save/);
+
 console.log("test-mctb-pass-3-ai-recovery: OK");

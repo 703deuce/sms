@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
-import { saveBusinessBrainPartial, loadBusinessBrain } from "@/lib/agents/appointment-booking/business-brain";
-import { loadMctbHandoffConfig, saveMctbHandoffConfig } from "@/lib/mctb/handoff/config";
+import { loadBusinessBrain } from "@/lib/agents/appointment-booking/business-brain";
+import { loadMctbHandoffConfig } from "@/lib/mctb/handoff/config";
 import { loadMctbLeadRecoveryKnowledgeBundle } from "@/lib/mctb/lead-recovery/knowledge-prompt";
+import { saveAiRecoveryBundle } from "@/lib/mctb/ai-recovery/save-bundle";
+import { loadLeadRecoveryConfig } from "@/lib/mctb/lead-recovery/config";
 
 const MAX_ABOUT = 12_000;
 const MAX_EMERGENCY = 4_000;
@@ -46,33 +48,46 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json()) as Record<string, unknown>;
+    const existing = await loadLeadRecoveryConfig(auth.workspaceId);
 
-    if (body.aboutBusiness !== undefined) {
-      const raw = typeof body.aboutBusiness === "string" ? body.aboutBusiness : "";
-      const aboutBusiness = raw.trim().slice(0, MAX_ABOUT) || null;
-      await saveBusinessBrainPartial(auth.workspaceId, { aboutBusiness });
-    }
+    const aboutBusiness =
+      body.aboutBusiness !== undefined
+        ? typeof body.aboutBusiness === "string"
+          ? body.aboutBusiness.trim().slice(0, MAX_ABOUT)
+          : ""
+        : undefined;
+    const emergencyCriteria =
+      body.emergencyCriteria !== undefined
+        ? typeof body.emergencyCriteria === "string"
+          ? body.emergencyCriteria.trim().slice(0, MAX_EMERGENCY)
+          : ""
+        : undefined;
 
-    const handoffPatch: Parameters<typeof saveMctbHandoffConfig>[1] = {};
-    if (body.emergencyCriteria !== undefined) {
-      const raw =
-        typeof body.emergencyCriteria === "string" ? body.emergencyCriteria : "";
-      handoffPatch.emergencyCriteria = raw.trim().slice(0, MAX_EMERGENCY) || null;
-    }
-    if (body.emergencyDetectionEnabled === true || body.emergencyDetectionEnabled === false) {
-      handoffPatch.emergencyDetectionEnabled = body.emergencyDetectionEnabled;
-    }
-    if (Object.keys(handoffPatch).length) {
-      await saveMctbHandoffConfig(auth.workspaceId, handoffPatch);
-    }
+    const emergenciesOn = body.emergencyDetectionEnabled === true;
+    const result = await saveAiRecoveryBundle({
+      workspaceId: auth.workspaceId,
+      enabled: existing.enabled,
+      aboutBusiness,
+      emergencyCriteria,
+      emergencyDetectionEnabled:
+        body.emergencyDetectionEnabled === true || body.emergencyDetectionEnabled === false
+          ? body.emergencyDetectionEnabled
+          : emergenciesOn,
+    });
 
-    const bundle = await loadMctbLeadRecoveryKnowledgeBundle(auth.workspaceId);
+    const [brain, handoff] = await Promise.all([
+      loadBusinessBrain(auth.workspaceId),
+      loadMctbHandoffConfig(auth.workspaceId),
+    ]);
+
     return NextResponse.json({
       data: {
-        aboutBusiness: bundle.about_business ?? "",
-        emergencyCriteria: bundle.emergency_criteria ?? "",
-        emergencyDetectionEnabled: bundle.emergency_detection_enabled,
-        runtimePromptBlock: bundle.runtime_prompt_block,
+        aboutBusiness: brain.aboutBusiness ?? "",
+        emergencyCriteria: handoff.emergencyCriteria ?? "",
+        emergencyDetectionEnabled: handoff.emergencyDetectionEnabled,
+        runtimePromptBlock: result.runtimePromptBlock,
+        consentMode: result.consentMode,
+        runtimeArmed: result.runtimeArmed,
       },
     });
   } catch (err) {

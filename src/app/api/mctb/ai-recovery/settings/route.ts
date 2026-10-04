@@ -1,34 +1,13 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
-import { buildAiRecoverySavePatch } from "@/lib/mctb/ai-recovery/sync-collection-config";
 import {
-  deriveSimplifiedFieldEnabled,
-  type AiRecoverySimplifiedField,
-} from "@/lib/mctb/ai-recovery/simplified-fields";
-import {
-  loadLeadRecoveryConfig,
-  saveLeadRecoveryConfig,
-} from "@/lib/mctb/lead-recovery/config";
-import { computeLeadRecoveryPolicyHealth } from "@/lib/mctb/lead-recovery/policy-health";
-import { applyLaunchAiRepliesSetting } from "@/lib/mctb/launch-lead-recovery";
-import { saveMctbHandoffConfig } from "@/lib/mctb/handoff/config";
+  fieldTogglesFromBody,
+  saveAiRecoveryBundle,
+} from "@/lib/mctb/ai-recovery/save-bundle";
 import { normalizeSmsCollectFields } from "@/lib/mctb/ai-recovery/collect-field-schema";
 import type { LeadRecoveryScenarioKey } from "@/lib/mctb/lead-recovery/types";
 
-function parseFieldToggles(body: Record<string, unknown>): Record<AiRecoverySimplifiedField, boolean> {
-  const fields = body.fields;
-  const base = deriveSimplifiedFieldEnabled([]);
-  if (!fields || typeof fields !== "object") return base;
-  const f = fields as Record<string, unknown>;
-  return {
-    NAME: f.NAME === true,
-    REASON: f.REASON === true,
-    ADDRESS: f.ADDRESS === true,
-    URGENCY: f.URGENCY === true,
-    CALLBACK_TIME: f.CALLBACK_TIME === true,
-  };
-}
-
+/** @deprecated Prefer POST /api/mctb/ai-recovery/save — kept for legacy callers. */
 export async function POST(request: Request) {
   try {
     const auth = await requireSession();
@@ -44,12 +23,7 @@ export async function POST(request: Request) {
           ? null
           : undefined;
 
-    const existing = await loadLeadRecoveryConfig(auth.workspaceId);
-    const fieldToggles = parseFieldToggles(body);
-    const hasFieldsPayload = body.fields != null && typeof body.fields === "object";
-    const persistFieldsDespiteStaleMasterFlag = !enabled && existing.enabled && hasFieldsPayload;
-
-    if (enabled || persistFieldsDespiteStaleMasterFlag) {
+    if (enabled) {
       const { assertMctbCapability } = await import("@/lib/mctb/capabilities");
       const gate = await assertMctbCapability(auth.workspaceId, "aiRecoveryEntitled");
       if (!gate.ok) {
@@ -60,46 +34,30 @@ export async function POST(request: Request) {
       }
     }
 
-    if (!enabled && !persistFieldsDespiteStaleMasterFlag) {
-      await applyLaunchAiRepliesSetting(auth.workspaceId, false);
-      const disabledConfig = await loadLeadRecoveryConfig(auth.workspaceId);
-      const health = await computeLeadRecoveryPolicyHealth(auth.workspaceId, disabledConfig);
-      return NextResponse.json({ data: { config: disabledConfig, health } });
-    }
-
-    const smsCollectFields = body.smsCollectFields
-      ? normalizeSmsCollectFields(body.smsCollectFields)
-      : undefined;
-    const allowDynamicCustomQuestions =
-      body.allowDynamicCustomQuestions === undefined
-        ? undefined
-        : body.allowDynamicCustomQuestions !== false;
-
     const enabledScenarios =
       body.enabledScenarios && typeof body.enabledScenarios === "object"
         ? (body.enabledScenarios as Partial<Record<LeadRecoveryScenarioKey, boolean>>)
         : undefined;
 
-    const patch = buildAiRecoverySavePatch({
-      enabled: true,
-      fieldToggles,
-      smsCollectFields,
-      allowDynamicCustomQuestions,
+    const result = await saveAiRecoveryBundle({
+      workspaceId: auth.workspaceId,
+      enabled,
+      smsCollectFields: body.smsCollectFields
+        ? normalizeSmsCollectFields(body.smsCollectFields)
+        : undefined,
+      allowDynamicCustomQuestions:
+        body.allowDynamicCustomQuestions === undefined
+          ? undefined
+          : body.allowDynamicCustomQuestions !== false,
       enabledScenarios,
       bookingLinkEnabled,
-      bookingLinkId: bookingLinkId ?? existing.bookingLinkId,
-      existing,
+      bookingLinkId,
+      fieldToggles: fieldTogglesFromBody(body),
     });
 
-    await saveLeadRecoveryConfig(auth.workspaceId, patch);
-    await saveMctbHandoffConfig(auth.workspaceId, {
-      responseMode: "ai_conversation",
-      bookingBehavior: "on_request",
-    }).catch(() => undefined);
-
-    const finalConfig = await loadLeadRecoveryConfig(auth.workspaceId);
-    const health = await computeLeadRecoveryPolicyHealth(auth.workspaceId, finalConfig);
-    return NextResponse.json({ data: { config: finalConfig, health } });
+    return NextResponse.json({
+      data: { config: result.config, health: result.health, consentMode: result.consentMode },
+    });
   } catch (err) {
     return jsonError(err, 500);
   }

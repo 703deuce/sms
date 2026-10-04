@@ -138,39 +138,31 @@ export function NewUiMctbAiRecoveryPage() {
   const onSave = useCallback(async () => {
     const enabledNow = enabledRef.current;
     const resolvedLinkId = bookingLinkId;
-    const settingsRes = await fetch("/api/mctb/ai-recovery/settings", {
+    const scenariosNow = scenariosRef.current;
+    const emergenciesOn = Boolean(scenariosNow.emergencies);
+    const res = await fetch("/api/mctb/ai-recovery/save", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         enabled: enabledNow,
         smsCollectFields: smsFieldsRef.current,
         allowDynamicCustomQuestions: allowDynamicRef.current,
-        enabledScenarios: scenariosRef.current,
+        enabledScenarios: scenariosNow,
         bookingLinkEnabled: bookingLinkEnabled && Boolean(resolvedLinkId && bookingLinkUrl.trim()),
         bookingLinkId: bookingLinkEnabled ? resolvedLinkId : null,
-      }),
-    });
-    const settingsJson = await settingsRes.json().catch(() => ({}));
-    if (!settingsRes.ok) {
-      throw new Error(
-        (settingsJson as { error?: string }).error || "Could not save AI Recovery settings",
-      );
-    }
-    const scenariosNow = scenariosRef.current;
-    const emergenciesOn = Boolean(scenariosNow.emergencies);
-    const knowledgeRes = await fetch("/api/mctb/ai-recovery/knowledge", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
         aboutBusiness: aboutRef.current,
         emergencyCriteria: emergencyRef.current,
         emergencyDetectionEnabled: emergenciesOn,
       }),
     });
-    const knowledgeJson = await knowledgeRes.json().catch(() => ({}));
-    if (!knowledgeRes.ok) {
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error((json as { error?: string }).error || "Could not save AI Recovery");
+    }
+    const runtimeArmed = (json as { data?: { runtimeArmed?: boolean } }).data?.runtimeArmed;
+    if (enabledNow && runtimeArmed === false) {
       throw new Error(
-        (knowledgeJson as { error?: string }).error || "Could not save business knowledge",
+        "AI Recovery is on, but business knowledge is empty. Add “About your business” and save again.",
       );
     }
 
