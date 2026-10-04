@@ -11,10 +11,7 @@ import {
 } from "@/lib/mctb/conversation-thread";
 import { loadMctbLeadRecoveryKnowledgeBundle } from "@/lib/mctb/lead-recovery/knowledge-prompt";
 import { isCarrierProtocolOptOutMessage } from "@/lib/mctb/lead-recovery/protocol-intent";
-import {
-  finalizeMctbAgentSmsReply,
-  sanitizeMctbThreadForAgentPrompt,
-} from "@/lib/mctb/sms-channel";
+import { finalizeMctbAgentSmsReply } from "@/lib/mctb/sms-channel";
 import { loadMctbInboxConversationThread } from "@/lib/mctb/semantic-conversation-context";
 import { mctbSemanticStructuredJson } from "@/lib/mctb/semantic-llm";
 
@@ -24,9 +21,6 @@ export type MctbSimpleSmsAgentInput = {
   customerPhone: string;
   body: string;
   timezone?: string;
-  /** Sanitization only — strips wrong CRM sign-offs; not passed to the model as identity. */
-  crmContactFirstName?: string | null;
-  crmContactLastName?: string | null;
 };
 
 const SIMPLE_SMS_SYSTEM = `You are the business's helpful SMS assistant continuing a missed-call text conversation.
@@ -82,9 +76,6 @@ export type MctbSimpleSmsAgentTurnContext = {
   businessKnowledgeBlock: string;
   timezone?: string | null;
   booking?: { enabled: boolean; url?: string | null };
-  /** CRM hints for sanitization only — never sent to the LLM as identity. */
-  crmContactFirstName?: string | null;
-  crmContactLastName?: string | null;
 };
 
 /** Core agent turn — used in production and dialogue smoke tests (inject thread + knowledge). */
@@ -101,16 +92,15 @@ export async function runMctbSimpleSmsAgentTurn(
     inbox: ctx.thread,
     latestCustomerMessage: ctx.customerMessage,
   });
-  const crmNames = [ctx.crmContactFirstName, ctx.crmContactLastName];
-  const threadForPrompt = sanitizeMctbThreadForAgentPrompt(thread, crmNames);
-
   const bookingOn = ctx.booking?.enabled === true;
   const bookingUrl = ctx.booking?.url?.trim() || null;
 
+  // Identity: never pass CRM contact name / caller profile into the LLM payload.
+  // (Historically `customer_name` from contact.firstName caused wrong sign-offs like ", Anthony".)
   const userPayload: Record<string, unknown> = {
     timezone: ctx.timezone || null,
     business_knowledge: ctx.businessKnowledgeBlock,
-    conversation_thread: formatThreadForPrompt(threadForPrompt),
+    conversation_thread: formatThreadForPrompt(thread),
   };
 
   if (bookingOn && bookingUrl) {
@@ -156,8 +146,6 @@ export async function runMctbSimpleSmsAgentTurn(
 
   reply = finalizeMctbAgentSmsReply(reply, {
     allowedUrl: appendBooking ? bookingUrl : null,
-    thread,
-    crmKnownFirstNames: crmNames,
   });
   if (!reply.trim()) {
     return { handled: false };
@@ -203,8 +191,6 @@ export async function handleMctbSimpleSmsAgentInbound(
     businessKnowledgeBlock: knowledge.runtime_prompt_block,
     timezone: input.timezone || bookingConfig.timezone || null,
     booking: bookingOn && bookingUrl ? { enabled: true, url: bookingUrl } : { enabled: false },
-    crmContactFirstName: input.crmContactFirstName,
-    crmContactLastName: input.crmContactLastName,
   });
 
   const { llmProvider: _p, llmModel: _m, ...rest } = result;

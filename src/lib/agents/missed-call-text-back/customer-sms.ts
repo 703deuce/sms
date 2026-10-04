@@ -254,7 +254,7 @@ export async function handleMctbCustomerSmsReply(input: {
 
   let contact = await prisma.contact.findFirst({
     where: { workspaceId: input.workspaceId, phone: { in: callerVariants } },
-    select: { id: true, firstName: true, lastName: true, email: true },
+    select: { id: true, email: true },
   });
 
   const ensured = await ensureMctbConversationId({
@@ -269,7 +269,7 @@ export async function handleMctbCustomerSmsReply(input: {
   if (!contact && ensured.contactId) {
     contact = await prisma.contact.findFirst({
       where: { id: ensured.contactId },
-      select: { id: true, firstName: true, lastName: true, email: true },
+      select: { id: true, email: true },
     });
   }
 
@@ -303,8 +303,6 @@ export async function handleMctbCustomerSmsReply(input: {
     customerPhone: fromE164,
     body: input.body,
     timezone: config.timezone,
-    crmContactFirstName: contact?.firstName ?? null,
-    crmContactLastName: contact?.lastName ?? null,
   });
 
   const { logMctbSmsRoutingDecision } = await import(

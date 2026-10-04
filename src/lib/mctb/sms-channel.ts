@@ -1,7 +1,6 @@
 /**
  * MCTB SMS channel rules — brevity and segment economics are production requirements.
  */
-import type { MctbConversationTurn } from "@/lib/mctb/conversation-thread";
 import { analyzeSmsBody, normalizeSmsToGsm7Preferred } from "@/lib/sms/segment-encoding";
 
 /** Permanent instruction for any MCTB conversational / phrasing LLM. */
@@ -94,77 +93,10 @@ export function truncateMctbAgentSmsToSegmentBudget(
   return (lastSpace > 40 ? slice.slice(0, lastSpace) : slice).trim() + "...";
 }
 
-function customerMentionedNameInThread(thread: MctbConversationTurn[], name: string): boolean {
-  const n = name.trim().toLowerCase();
-  if (!n) return false;
-  return thread
-    .filter((t) => t.role === "customer")
-    .some((t) => t.text.toLowerCase().includes(n));
-}
-
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-/** Remove CRM / guessed sign-off names the customer did not use in the thread. */
-export function stripUnverifiedCallerNameFromAgentReply(
-  reply: string,
-  thread: MctbConversationTurn[],
-  crmKnownFirstNames?: Array<string | null | undefined>,
-): string {
-  const names = new Set<string>();
-  for (const n of crmKnownFirstNames || []) {
-    if (n?.trim()) names.add(n.trim());
-  }
-  const trailing = reply.trim().match(/,\s+([A-Z][a-zA-Z'-]{1,24})[.!?]?\s*$/);
-  if (trailing?.[1]) names.add(trailing[1]);
-
-  let out = reply.trim();
-  for (const name of names) {
-    if (customerMentionedNameInThread(thread, name)) continue;
-    const esc = escapeRegExp(name);
-    out = out.replace(new RegExp(`,\\s+${esc}(?=[.!?]?\\s*$)`, "i"), "");
-    out = out.replace(new RegExp(`\\s+${esc}(?=[.!?]?\\s*$)`, "i"), "");
-  }
-  return out.replace(/,\s*([.!?])\s*$/, "$1").replace(/\s{2,}/g, " ").trim();
-}
-
-/** Stop the model copying bad sign-offs from earlier outbound messages in the thread. */
-export function sanitizeMctbThreadForAgentPrompt(
-  thread: MctbConversationTurn[],
-  crmKnownFirstNames?: Array<string | null | undefined>,
-): MctbConversationTurn[] {
-  const names = (crmKnownFirstNames || []).map((n) => n?.trim()).filter(Boolean) as string[];
-  if (!names.length) return thread;
-
-  return thread.map((turn) => {
-    if (turn.role !== "business") return turn;
-    let text = turn.text;
-    for (const name of names) {
-      if (customerMentionedNameInThread(thread, name)) continue;
-      const esc = escapeRegExp(name);
-      text = text.replace(new RegExp(`,\\s+${esc}(?=[.!?,\\s]|$)`, "gi"), "");
-    }
-    return { ...turn, text: text.replace(/\s{2,}/g, " ").trim() };
-  });
-}
-
 export function finalizeMctbAgentSmsReply(
   body: string,
-  options?: {
-    allowedUrl?: string | null;
-    thread?: MctbConversationTurn[];
-    crmKnownFirstNames?: Array<string | null | undefined>;
-  },
+  options?: { allowedUrl?: string | null },
 ): string {
-  let text = body;
-  if (options?.thread?.length) {
-    text = stripUnverifiedCallerNameFromAgentReply(
-      text,
-      options.thread,
-      options.crmKnownFirstNames,
-    );
-  }
-  const stripped = stripUrlsFromMctbAgentSmsReply(text, options?.allowedUrl);
+  const stripped = stripUrlsFromMctbAgentSmsReply(body, options?.allowedUrl);
   return truncateMctbAgentSmsToSegmentBudget(stripped);
 }
