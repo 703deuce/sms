@@ -51,6 +51,30 @@ export async function executeMctbSendCustomerSmsJob(payload: Record<string, unkn
     conversationId,
   });
 
+  const existingMessage = await prisma.message.findFirst({
+    where: { workspaceId, idempotencyKey },
+    select: { id: true, providerId: true, status: true },
+  });
+  if (existingMessage?.providerId) {
+    await logMctbInboundProcessingEvent({
+      kind: "OUTBOUND_SENT",
+      workspaceId,
+      conversationId,
+      providerMessageId: inboundProviderMessageId,
+      processingJobId,
+      meta: {
+        idempotencyKey,
+        providerOutboundMessageId: existingMessage.providerId,
+        idempotentReplay: true,
+      },
+    });
+    return {
+      ok: true,
+      providerMessageId: existingMessage.providerId,
+      idempotentReplay: true,
+    };
+  }
+
   const existingOutbound = await prisma.conversationMessage.findFirst({
     where: { conversationId, direction: "outbound", body: outboundBody },
     orderBy: { createdAt: "desc" },

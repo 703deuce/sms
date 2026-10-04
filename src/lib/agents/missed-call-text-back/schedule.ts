@@ -1,8 +1,9 @@
 import { getPrisma } from "@/lib/db";
 import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 import { loadMissedCallTextConfig } from "./config";
-import { appendMctbTrace } from "./trace";
-import { traceMctbPipeline } from "@/lib/mctb/pipeline-trace";
+import { appendMctbTraceOnce } from "./trace";
+import { traceMctbPipeline, traceMctbPipelineSkip } from "@/lib/mctb/pipeline-trace";
+import { claimMctbRecoverySchedule } from "./schedule-claim";
 
 export async function scheduleMissedCallText(input: {
   workspaceId: string;
@@ -11,6 +12,27 @@ export async function scheduleMissedCallText(input: {
   delaySeconds?: number;
   demoMode?: boolean;
 }) {
+  const scheduleClaim = await claimMctbRecoverySchedule({
+    workspaceId: input.workspaceId,
+    missedCallEventId: input.missedCallEventId,
+  });
+  if (!scheduleClaim.claimed) {
+    if (scheduleClaim.alreadyScheduled) {
+      traceMctbPipelineSkip("schedule", "claim", "already_scheduled", {
+        traceId: input.traceId,
+        workspaceId: input.workspaceId,
+        missedCallEventId: input.missedCallEventId,
+      });
+      return { ok: true, skipped: true, reason: "already_scheduled" as const };
+    }
+    traceMctbPipelineSkip("schedule", "claim", scheduleClaim.reason || "not_claimed", {
+      traceId: input.traceId,
+      workspaceId: input.workspaceId,
+      missedCallEventId: input.missedCallEventId,
+    });
+    return { ok: false, skipped: true, reason: scheduleClaim.reason || "not_claimed" };
+  }
+
   const config = await loadMissedCallTextConfig(input.workspaceId);
   const configuredDelay =
     input.demoMode === true ? 0 : (input.delaySeconds ?? config.delaySeconds);
@@ -21,12 +43,11 @@ export async function scheduleMissedCallText(input: {
   await prisma.missedCallEvent.update({
     where: { id: input.missedCallEventId },
     data: {
-      status: "SCHEDULED",
       scheduledSmsAt: runAt,
     },
   });
 
-  await appendMctbTrace({
+  await appendMctbTraceOnce({
     workspaceId: input.workspaceId,
     traceId: input.traceId,
     missedCallEventId: input.missedCallEventId,
@@ -84,4 +105,6 @@ export async function scheduleMissedCallText(input: {
     delayMs,
     demoMode: Boolean(input.demoMode),
   });
+
+  return { ok: true, skipped: false as const };
 }

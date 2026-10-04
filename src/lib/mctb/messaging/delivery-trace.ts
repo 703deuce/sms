@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
-import { appendMctbTrace } from "@/lib/agents/missed-call-text-back/trace";
+import { appendMctbTraceOnce } from "@/lib/agents/missed-call-text-back/trace";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 
 const STATUS_TO_TRACE_KIND: Record<string, string> = {
@@ -63,15 +63,7 @@ export async function appendMctbDeliveryTraceFromProviderStatus(input: {
     return { matched: false };
   }
 
-  const existingTrace = await prisma.missedCallTextTrace.findFirst({
-    where: { missedCallEventId: event.id, kind },
-    select: { id: true },
-  });
-  if (existingTrace) {
-    return { matched: true, missedCallEventId: event.id };
-  }
-
-  await appendMctbTrace({
+  const traceResult = await appendMctbTraceOnce({
     workspaceId: event.workspaceId,
     traceId: event.traceId,
     missedCallEventId: event.id,
@@ -83,6 +75,9 @@ export async function appendMctbDeliveryTraceFromProviderStatus(input: {
       error: input.errorDetail || null,
     },
   });
+  if (!traceResult.created) {
+    return { matched: true, missedCallEventId: event.id };
+  }
 
   if (input.status === "delivered") {
     await prisma.missedCallEvent.updateMany({
