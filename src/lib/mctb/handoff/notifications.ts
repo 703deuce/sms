@@ -7,7 +7,24 @@ import { loadMctbHandoffConfig, loadMctbNotificationRecipients } from "./config"
 import { recipientAllowsNotificationChannel } from "./recipient-event-routing";
 import { MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY } from "@/lib/mctb/launch-flags";
 import { renderMctbTeamEmail, renderMctbTeamSms, type NotificationRenderInput } from "./templates";
-import type { MctbHandoffEventType, MctbLeadSnapshotDerived, MctbLeadSnapshotFacts } from "./types";
+import type {
+  MctbEventChannelPrefs,
+  MctbHandoffEventType,
+  MctbLeadSnapshotDerived,
+  MctbLeadSnapshotFacts,
+} from "./types";
+
+/** Legacy rows store `email`/`sms` on the event object, not under `channels`. */
+function resolveHandoffEventChannels(routing: {
+  channels?: MctbEventChannelPrefs;
+  email?: boolean;
+  sms?: boolean;
+}): MctbEventChannelPrefs {
+  const channels: MctbEventChannelPrefs = { ...(routing.channels || { in_app: true }) };
+  if (routing.email === true && channels.email === undefined) channels.email = true;
+  if (routing.sms === true && channels.sms === undefined) channels.sms = routing.sms;
+  return channels;
+}
 
 function appBaseUrl(): string {
   return process.env.APP_URL?.replace(/\/$/, "") || "";
@@ -68,7 +85,7 @@ export async function deliverMctbHandoffNotifications(input: {
       ? recipients.filter((r) => routing.recipientIds!.includes(r.id))
       : recipients;
 
-  const channels = routing.channels || { in_app: true };
+  const channels = resolveHandoffEventChannels(routing);
   const results: Array<{ channel: string; status: string; destination?: string }> = [];
 
   const emailRecipients = targetRecipients.filter(
