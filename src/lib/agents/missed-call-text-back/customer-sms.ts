@@ -319,6 +319,15 @@ export async function handleMctbCustomerSmsReply(input: {
       branch: "simple_agent_unhandled",
       leadRecoveryEnabled: leadRecoveryActive,
     });
+    await recordMctbLeadRecoveryInboundSideEffects({
+      workspaceId: input.workspaceId,
+      fromE164,
+      body: input.body,
+      conversationId,
+      missedCallEventId: recentEvent.id,
+      providerMessageId: input.providerMessageId,
+      structuredIntent: null,
+    });
     return { handled: false, reason: "simple_sms_agent_no_reply" };
   }
 
