@@ -31,7 +31,7 @@ export function resolveMctbSetupIaRedirect(
     return `${MCTB_ROUTES.missedCallRecovery}?tab=general`;
   }
   if (path === MCTB_ROUTES.setupMissedCallRules) {
-    return `${MCTB_ROUTES.missedCallRecovery}?tab=rules`;
+    return `${MCTB_ROUTES.missedCallRecovery}?tab=general`;
   }
   if (path === MCTB_ROUTES.setupConsent) {
     return `${MCTB_ROUTES.missedCallRecovery}?tab=consent`;

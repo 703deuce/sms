@@ -34,7 +34,6 @@ import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import { ButtonLink } from "@/newui-transplant/components/app/button-link";
 import {
   NewUiMctbSetupRecoveryPage,
-  NewUiMctbSetupMissedCallRulesPage,
   NewUiMctbSetupNotificationsPage,
   NewUiMctbSetupPhonePage,
   NewUiMctbSetupTestPage,
@@ -68,7 +67,7 @@ function useTabParam(name: string, allowed: string[], fallback: string) {
 }
 
 export function NewUiMctbMissedCallRecoveryPage() {
-  const { tab, setTab } = useTabParam("tab", ["general", "rules", "consent", "exclusions"], "general");
+  const { tab, setTab } = useTabParam("tab", ["general", "consent", "exclusions"], "general");
   const recovery = useMctbRecoveryWiring();
   const [usageUsed, setUsageUsed] = useState<number | null>(null);
   const [usageLimit, setUsageLimit] = useState<number | null>(null);
@@ -157,7 +156,7 @@ export function NewUiMctbMissedCallRecoveryPage() {
               ? "Forwarded calls can still reach voicemail. No automated recovery texts until you resume."
               : "Qualifying missed calls receive recovery texts after your delay and consent rules."
           }
-          action={<TextLink href={`${MCTB_ROUTES.missedCallRecovery}?tab=rules`}>Edit rules</TextLink>}
+          action={<TextLink href={`${MCTB_ROUTES.missedCallRecovery}?tab=general`}>Edit recovery</TextLink>}
         />
       </div>
       <OpusLineTabs
@@ -166,7 +165,6 @@ export function NewUiMctbMissedCallRecoveryPage() {
         onChange={setTab}
         tabs={[
           { value: "general", label: "General" },
-          { value: "rules", label: "Rules" },
           { value: "consent", label: "Consent" },
           { value: "exclusions", label: "Exclusions" },
         ]}
@@ -179,11 +177,6 @@ export function NewUiMctbMissedCallRecoveryPage() {
           className="mt-4"
         >
           <NewUiMctbSetupRecoveryPage recovery={recovery} />
-        </div>
-      ) : null}
-      {tab === "rules" ? (
-        <div id="opus-tabpanel-rules" role="tabpanel" aria-labelledby="opus-tab-rules" className="mt-4">
-          <NewUiMctbSetupMissedCallRulesPage embedded recovery={recovery} />
         </div>
       ) : null}
       {tab === "consent" ? (
