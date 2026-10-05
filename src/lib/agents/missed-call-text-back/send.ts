@@ -9,16 +9,13 @@ import {
   releaseTrialSmsSegmentReservation,
 } from "@/lib/mctb/entitlement";
 
-import { resolveMctbRecoveryOpenerTemplate, renderMctbMessageTemplate } from "@/lib/mctb/message-template";
+import { resolveMctbRecoveryOpenerForSend } from "@/lib/mctb/first-text-templates/send-resolve";
+import { resolveMctbFirstTextBusinessName } from "@/lib/mctb/first-text-templates/business-name";
 import { resolveMctbTemplateVars } from "@/lib/mctb/template-vars";
 import { traceMctbPipeline, traceMctbPipelineSkip } from "@/lib/mctb/pipeline-trace";
 import { mctbCallerE164Variants } from "@/lib/mctb/messaging/caller-e164";
 import { stripMctbTrackingUrlsFromSms } from "@/lib/mctb/sms-channel";
 import { claimMctbRecoverySmsSend } from "./send-claim";
-
-function renderTemplate(template: string, vars: Record<string, string>): string {
-  return renderMctbMessageTemplate(template, vars);
-}
 
 /** Worker entry — recheck eligibility before send (owner may have disabled John). */
 export async function executeMissedCallTextSend(input: {
@@ -196,16 +193,23 @@ export async function executeMissedCallTextSend(input: {
         })
       : null;
 
+  const businessName = await resolveMctbFirstTextBusinessName(input.workspaceId);
   const templateVars = resolveMctbTemplateVars({
     config,
     callerE164: event.callerE164,
     contact,
     missedCallEventId: event.id,
+    businessName,
   });
 
-  const rawBody = demoMode
-    ? getDemoMessageBody()
-    : renderTemplate(resolveMctbRecoveryOpenerTemplate(config), templateVars);
+  const openerResolved = demoMode
+    ? { body: getDemoMessageBody(), meta: null }
+    : await resolveMctbRecoveryOpenerForSend({
+        workspaceId: input.workspaceId,
+        config,
+        templateVars,
+      });
+  const rawBody = openerResolved.body;
 
   let body = stripMctbTrackingUrlsFromSms(rawBody);
 
@@ -395,6 +399,13 @@ export async function executeMissedCallTextSend(input: {
           outboundSmsPhoneNumberId: route.phoneNumberId,
           outboundSmsFromE164: route.fromE164,
           outboundSmsSenderMode: route.senderMode,
+          ...(openerResolved.meta
+            ? {
+                firstTextTemplateId: openerResolved.meta.firstTextTemplateId,
+                firstTextTemplateVersion: openerResolved.meta.firstTextTemplateVersion,
+                firstTextSentAt: new Date().toISOString(),
+              }
+            : {}),
         },
       },
     });

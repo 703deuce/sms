@@ -1,52 +1,65 @@
 import { getPrisma } from "@/lib/db";
-import type { MctbPlatformTemplateId } from "@/lib/mctb/platform-message-templates";
+import { migrateLegacyPlatformRecoveryTemplateId } from "@/lib/mctb/first-text-templates/registry";
+import type { MctbFirstTextTemplateId } from "@/lib/mctb/first-text-templates/types";
 import { listMctbPlatformRecoveryOpenerChoices } from "@/lib/mctb/platform-recovery-template-choices";
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
+import {
+  defaultMctbFirstTextTemplateConfig,
+  readMctbFirstTextTemplateConfig,
+  writeMctbFirstTextTemplateConfig,
+} from "@/lib/mctb/first-text-templates/persistence";
 
 export async function readMctbPlatformRecoveryTemplateId(
   workspaceId: string,
-): Promise<MctbPlatformTemplateId> {
-  const prisma = getPrisma();
-  const ws = await prisma.workspace.findUnique({
-    where: { id: workspaceId },
-    select: { customFieldsConfig: true },
-  });
-  const mctb = asRecord(asRecord(ws?.customFieldsConfig).mctb);
-  const raw = String(mctb.platformRecoveryTemplateId || "recovery_opener");
-  const allowed = new Set(listMctbPlatformRecoveryOpenerChoices().map((c) => c.id));
-  if (allowed.has(raw as MctbPlatformTemplateId)) {
-    return raw as MctbPlatformTemplateId;
-  }
-  return "recovery_opener";
+): Promise<MctbFirstTextTemplateId> {
+  const config = await readMctbFirstTextTemplateConfig(workspaceId);
+  return config.templateId;
 }
 
 export async function writeMctbPlatformRecoveryTemplateId(
   workspaceId: string,
-  templateId: MctbPlatformTemplateId,
+  templateId: MctbFirstTextTemplateId,
 ): Promise<void> {
   const allowed = new Set(listMctbPlatformRecoveryOpenerChoices().map((c) => c.id));
-  if (!allowed.has(templateId)) {
+  const normalized = migrateLegacyPlatformRecoveryTemplateId(templateId);
+  if (!allowed.has(normalized)) {
     throw new Error("Template is not an approved platform recovery opener.");
   }
+  const existing = await readMctbFirstTextTemplateConfig(workspaceId);
+  await writeMctbFirstTextTemplateConfig(workspaceId, {
+    ...existing,
+    templateId: normalized,
+  });
+}
+
+/** @deprecated legacy import sites — prefer readMctbFirstTextTemplateConfig */
+export async function readMctbPlatformRecoveryTemplateIdLegacyRaw(
+  workspaceId: string,
+): Promise<string> {
   const prisma = getPrisma();
   const ws = await prisma.workspace.findUnique({
     where: { id: workspaceId },
     select: { customFieldsConfig: true },
   });
-  const cfg = asRecord(ws?.customFieldsConfig);
-  const mctb = asRecord(cfg.mctb);
-  await prisma.workspace.update({
-    where: { id: workspaceId },
-    data: {
-      customFieldsConfig: {
-        ...cfg,
-        mctb: { ...mctb, platformRecoveryTemplateId: templateId },
-      },
-    },
+  const mctb =
+    ws?.customFieldsConfig && typeof ws.customFieldsConfig === "object"
+      ? (ws.customFieldsConfig as Record<string, unknown>).mctb
+      : null;
+  const raw =
+    mctb && typeof mctb === "object"
+      ? String((mctb as Record<string, unknown>).platformRecoveryTemplateId || "")
+      : "";
+  return raw || "simple";
+}
+
+export async function writeMctbPlatformRecoveryTemplateIdOnly(
+  workspaceId: string,
+  templateId: MctbFirstTextTemplateId,
+): Promise<void> {
+  const next = defaultMctbFirstTextTemplateConfig(templateId);
+  const existing = await readMctbFirstTextTemplateConfig(workspaceId);
+  await writeMctbFirstTextTemplateConfig(workspaceId, {
+    ...next,
+    ...existing,
+    templateId,
   });
 }

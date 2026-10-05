@@ -1,33 +1,35 @@
 import {
-  MCTB_PLATFORM_TEMPLATE_REGISTRY,
-  type MctbPlatformTemplateId,
-} from "@/lib/mctb/platform-message-templates";
+  MCTB_FIRST_TEXT_TEMPLATE_ORDER,
+  MCTB_FIRST_TEXT_TEMPLATE_REGISTRY,
+  getMctbFirstTextTemplate,
+} from "@/lib/mctb/first-text-templates/registry";
+import { renderMctbFirstTextPreviewExample } from "@/lib/mctb/first-text-templates/render";
+import type { MctbFirstTextTemplateId } from "@/lib/mctb/first-text-templates/types";
 
-/** Platform-sender recovery openers the customer may pick in onboarding / text-back (authoritative registry). */
-const RECOVERY_OPENER_IDS: MctbPlatformTemplateId[] = [
-  "recovery_opener",
-  "recovery_opener_concise",
-  "recovery_opener_invite",
-];
+/** @deprecated Use MctbFirstTextTemplateId — kept for platform persistence typing. */
+export type MctbPlatformRecoveryOpenerId = MctbFirstTextTemplateId;
 
 export function listMctbPlatformRecoveryOpenerChoices(): Array<{
-  id: MctbPlatformTemplateId;
+  id: MctbFirstTextTemplateId;
   label: string;
   body: string;
+  purpose: string;
 }> {
-  const labels: Record<string, string> = {
-    recovery_opener: "Standard recovery",
-    recovery_opener_concise: "Concise recovery",
-    recovery_opener_invite: "Quick help invite",
-  };
-  return RECOVERY_OPENER_IDS.map((id) => {
-    const row = MCTB_PLATFORM_TEMPLATE_REGISTRY[id];
-    return { id, label: labels[id] || row.purpose, body: row.body };
+  return MCTB_FIRST_TEXT_TEMPLATE_ORDER.map((id) => {
+    const row = MCTB_FIRST_TEXT_TEMPLATE_REGISTRY[id];
+    return {
+      id,
+      label: row.name,
+      purpose: row.purpose,
+      body: renderMctbFirstTextPreviewExample(id),
+    };
   });
 }
 
 export function resolvePlatformRecoveryOpenerBody(templateId?: string | null): string {
-  const choices = listMctbPlatformRecoveryOpenerChoices();
-  const match = choices.find((c) => c.id === templateId);
-  return match?.body ?? choices[0]?.body ?? "";
+  const id = (templateId || "simple") as MctbFirstTextTemplateId;
+  const def = getMctbFirstTextTemplate(
+    id in MCTB_FIRST_TEXT_TEMPLATE_REGISTRY ? id : "simple",
+  );
+  return renderMctbFirstTextPreviewExample(def.id);
 }

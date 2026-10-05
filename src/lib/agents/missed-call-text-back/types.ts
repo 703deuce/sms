@@ -89,6 +89,7 @@ export type MissedCallTextConfigRecord = {
   requestFormFieldsJson?: unknown;
   /** Workspace customFieldsConfig.mctb — not a DB column on missedCallTextConfig */
   platformRecoveryTemplateId?: string | null;
+  firstTextTemplate?: import("@/lib/mctb/first-text-templates/types").MctbFirstTextTemplateConfig | null;
 };
 
 export type MissedCallTextSettingsUpdate = {

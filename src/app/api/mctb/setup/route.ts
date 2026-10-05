@@ -96,6 +96,7 @@ export type MctbSetupPayload = {
   existingConsentAttested?: boolean;
   senderMode?: "PLATFORM" | "WORKSPACE";
   platformRecoveryTemplateId?: string;
+  firstTextTemplate?: import("@/lib/mctb/first-text-templates/types").MctbFirstTextTemplateConfig;
 };
 
 const DEFAULT_CAMPAIGN_DESCRIPTION =
@@ -189,15 +190,30 @@ export async function GET() {
   const { listMctbPlatformRecoveryOpenerChoices } = await import(
     "@/lib/mctb/platform-recovery-template-choices"
   );
-  const platformRecoveryTemplateId = await readMctbPlatformRecoveryTemplateId(workspaceId);
+  const { readMctbFirstTextTemplateConfig } = await import(
+    "@/lib/mctb/first-text-templates/persistence"
+  );
+  const { resolveMctbFirstTextBusinessName } = await import(
+    "@/lib/mctb/first-text-templates/business-name"
+  );
+  const [platformRecoveryTemplateId, firstTextTemplate, firstTextBusinessName] = await Promise.all([
+    readMctbPlatformRecoveryTemplateId(workspaceId),
+    readMctbFirstTextTemplateConfig(workspaceId),
+    resolveMctbFirstTextBusinessName(workspaceId),
+  ]);
   runtimeForClient = {
     ...runtimeForClient,
     platformRecoveryTemplateId,
+    firstTextTemplate,
   };
-  if (runtimeForClient.senderMode === "PLATFORM") {
+  if (runtimeForClient.senderMode === "PLATFORM" || firstTextTemplate) {
     runtimeForClient = {
       ...runtimeForClient,
-      messageTemplate: resolveMctbRecoveryOpenerTemplate(runtimeForClient),
+      messageTemplate: resolveMctbRecoveryOpenerTemplate(
+        runtimeForClient,
+        new Date(),
+        firstTextBusinessName || "Your business",
+      ),
       messageTemplateBusinessHours: null,
       messageTemplateAfterHours: null,
     };
@@ -344,6 +360,8 @@ export async function GET() {
         canEditRecoveryOpener: senderMode !== "PLATFORM",
         platformRecoveryTemplateId,
         platformRecoveryOpenerChoices: listMctbPlatformRecoveryOpenerChoices(),
+        firstTextTemplate,
+        firstTextBusinessName,
       },
     },
   });
@@ -364,6 +382,61 @@ export async function POST(req: Request) {
     delete body.messageTemplateAfterHours;
   }
 
+  if (body.firstTextTemplate !== undefined) {
+    const { writeMctbFirstTextTemplateConfig } = await import(
+      "@/lib/mctb/first-text-templates/persistence"
+    );
+    const { validateMctbFirstTextTemplateConfig, renderMctbFirstTextTemplateBody } = await import(
+      "@/lib/mctb/first-text-templates/render"
+    );
+    const { resolveMctbFirstTextBusinessName } = await import(
+      "@/lib/mctb/first-text-templates/business-name"
+    );
+    const { isMctbFirstTextTemplateEntitled } = await import(
+      "@/lib/mctb/first-text-templates/entitlements"
+    );
+    const { inMctbBusinessWindow } = await import("@/lib/mctb/message-template");
+    const businessName = await resolveMctbFirstTextBusinessName(workspaceId);
+    const { resolveMctbCapabilities: resolveCaps } = await import("@/lib/mctb/capabilities");
+    const caps = await resolveCaps(workspaceId);
+    const config = body.firstTextTemplate;
+    if (
+      !isMctbFirstTextTemplateEntitled(config.templateId, { recoveryPaid: caps.recoveryPaid })
+    ) {
+      return NextResponse.json(
+        { error: "This message strategy requires a Text Back plan upgrade." },
+        { status: 403 },
+      );
+    }
+    const inHours = inMctbBusinessWindow(priorRuntime);
+    const validation = validateMctbFirstTextTemplateConfig(config, businessName, inHours);
+    if (!validation.ok) {
+      return NextResponse.json({ error: validation.message, field: validation.field }, { status: 400 });
+    }
+    const afterHoursValidation = validateMctbFirstTextTemplateConfig(config, businessName, false);
+    if (!afterHoursValidation.ok) {
+      return NextResponse.json(
+        { error: afterHoursValidation.message, field: afterHoursValidation.field },
+        { status: 400 },
+      );
+    }
+    await writeMctbFirstTextTemplateConfig(workspaceId, config);
+    const bhBody = renderMctbFirstTextTemplateBody({
+      config,
+      businessName,
+      inBusinessHours: true,
+    });
+    const ahBody = renderMctbFirstTextTemplateBody({
+      config,
+      businessName,
+      inBusinessHours: false,
+    });
+    body.messageTemplate = bhBody;
+    body.messageTemplateBusinessHours = bhBody;
+    body.messageTemplateAfterHours = ahBody;
+    delete body.firstTextTemplate;
+  }
+
   if (body.platformRecoveryTemplateId !== undefined) {
     if (priorRuntime.senderMode !== "PLATFORM") {
       return NextResponse.json(
@@ -374,11 +447,20 @@ export async function POST(req: Request) {
     const { writeMctbPlatformRecoveryTemplateId } = await import(
       "@/lib/mctb/platform-template-persistence"
     );
-    try {
-      await writeMctbPlatformRecoveryTemplateId(
-        workspaceId,
-        body.platformRecoveryTemplateId as import("@/lib/mctb/platform-message-templates").MctbPlatformTemplateId,
+    const { isMctbFirstTextTemplateEntitled } = await import(
+      "@/lib/mctb/first-text-templates/entitlements"
+    );
+    const { resolveMctbCapabilities: resolveCaps } = await import("@/lib/mctb/capabilities");
+    const caps = await resolveCaps(workspaceId);
+    const templateId = body.platformRecoveryTemplateId as import("@/lib/mctb/first-text-templates/types").MctbFirstTextTemplateId;
+    if (!isMctbFirstTextTemplateEntitled(templateId, { recoveryPaid: caps.recoveryPaid })) {
+      return NextResponse.json(
+        { error: "This message strategy requires a Text Back plan upgrade." },
+        { status: 403 },
       );
+    }
+    try {
+      await writeMctbPlatformRecoveryTemplateId(workspaceId, templateId);
     } catch (err) {
       return NextResponse.json(
         { error: err instanceof Error ? err.message : "Invalid platform template." },

@@ -83,8 +83,14 @@ export async function loadMissedCallTextConfig(
   const { readMctbPlatformRecoveryTemplateId } = await import(
     "@/lib/mctb/platform-template-persistence"
   );
-  const platformRecoveryTemplateId = await readMctbPlatformRecoveryTemplateId(workspaceId);
-  return { ...configToRecord(row), platformRecoveryTemplateId };
+  const { readMctbFirstTextTemplateConfig } = await import(
+    "@/lib/mctb/first-text-templates/persistence"
+  );
+  const [platformRecoveryTemplateId, firstTextTemplate] = await Promise.all([
+    readMctbPlatformRecoveryTemplateId(workspaceId),
+    readMctbFirstTextTemplateConfig(workspaceId),
+  ]);
+  return { ...configToRecord(row), platformRecoveryTemplateId, firstTextTemplate };
 }
 
 export async function updateMissedCallTextConfig(input: {

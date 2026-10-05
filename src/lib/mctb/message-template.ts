@@ -1,12 +1,9 @@
 import type { MissedCallTextConfigRecord } from "@/lib/agents/missed-call-text-back/types";
-import { DEFAULT_ONBOARDING_MESSAGE } from "@/lib/mctb/onboarding/types";
+import { readMctbFirstTextTemplateConfigFromMctbFields } from "@/lib/mctb/first-text-templates/config-defaults";
+import { renderMctbFirstTextTemplateBody } from "@/lib/mctb/first-text-templates/render";
+import { getMctbFirstTextTemplate } from "@/lib/mctb/first-text-templates/registry";
 
-/** Authoritative recovery opener for Transovo platform-sender workspaces (TFV/onboarding default). */
-import { getMctbPlatformTemplate } from "@/lib/mctb/platform-message-templates";
-import { resolvePlatformRecoveryOpenerBody } from "@/lib/mctb/platform-recovery-template-choices";
-
-export const MCTB_PLATFORM_SENDER_RECOVERY_OPENER =
-  getMctbPlatformTemplate("recovery_opener").body;
+export const MCTB_PLATFORM_SENDER_RECOVERY_OPENER = getMctbFirstTextTemplate("simple").body;
 
 function parseHm(hm: string | null | undefined): number | null {
   if (!hm) return null;
@@ -15,7 +12,7 @@ function parseHm(hm: string | null | undefined): number | null {
   return Number(m[1]) * 60 + Number(m[2]);
 }
 
-function inBusinessWindow(config: MissedCallTextConfigRecord, now = new Date()): boolean {
+export function inMctbBusinessWindow(config: MissedCallTextConfigRecord, now = new Date()): boolean {
   if (!config.allowedStartTime || !config.allowedEndTime) return true;
   const start = parseHm(config.allowedStartTime);
   const end = parseHm(config.allowedEndTime);
@@ -40,7 +37,7 @@ export function resolveMctbMessageTemplate(
   },
   now = new Date(),
 ): string {
-  const inHours = inBusinessWindow(config, now);
+  const inHours = inMctbBusinessWindow(config, now);
   if (inHours && config.messageTemplateBusinessHours?.trim()) {
     return config.messageTemplateBusinessHours.trim();
   }
@@ -56,11 +53,23 @@ export function resolveMctbRecoveryOpenerTemplate(
     messageTemplateBusinessHours?: string | null;
     messageTemplateAfterHours?: string | null;
     platformRecoveryTemplateId?: string | null;
+    firstTextTemplate?: import("@/lib/mctb/first-text-templates/types").MctbFirstTextTemplateConfig;
   },
   now = new Date(),
+  previewBusinessName = "Your business",
 ): string {
-  if (config.senderMode === "PLATFORM") {
-    return resolvePlatformRecoveryOpenerBody(config.platformRecoveryTemplateId);
+  if (config.senderMode === "PLATFORM" || config.firstTextTemplate) {
+    const firstText =
+      config.firstTextTemplate ||
+      readMctbFirstTextTemplateConfigFromMctbFields({
+        platformRecoveryTemplateId: config.platformRecoveryTemplateId,
+      });
+    const inHours = inMctbBusinessWindow(config, now);
+    return renderMctbFirstTextTemplateBody({
+      config: firstText,
+      businessName: previewBusinessName,
+      inBusinessHours: inHours,
+    });
   }
   return resolveMctbMessageTemplate(config, now);
 }
@@ -73,6 +82,7 @@ export function renderMctbMessageTemplate(
   for (const [key, val] of Object.entries(vars)) {
     out = out.replace(new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, "gi"), val);
     out = out.replace(new RegExp(`\\{\\{\\s*customer\\.${key}\\s*\\}\\}`, "gi"), val);
+    out = out.replace(new RegExp(`\\{${key}\\}`, "gi"), val);
   }
   return out.trim();
 }
