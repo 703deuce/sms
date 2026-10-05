@@ -1,5 +1,8 @@
+import { normalizeSmsCollectFields } from "@/lib/mctb/ai-recovery/collect-field-schema";
 import { defaultCallbackTimeVariable } from "./callback-time";
+import { defaultFirstTextInformationRequestFields } from "./information-request-phrase";
 import { migrateLegacyPlatformRecoveryTemplateId } from "./registry";
+import type { MctbSmsCollectFieldDef } from "@/lib/mctb/lead-recovery/types";
 import type {
   MctbCallbackTimePreset,
   MctbCallbackTimeVariable,
@@ -33,6 +36,11 @@ function parseVariables(raw: unknown): MctbFirstTextTemplateVariables {
   };
 }
 
+function parseInformationRequestFields(raw: unknown): MctbSmsCollectFieldDef[] | undefined {
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  return normalizeSmsCollectFields(raw);
+}
+
 export function defaultMctbFirstTextTemplateConfig(
   templateId: MctbFirstTextTemplateId = "simple",
 ): MctbFirstTextTemplateConfig {
@@ -45,6 +53,7 @@ export function defaultMctbFirstTextTemplateConfig(
       service1: "",
       service2: "",
     },
+    informationRequestFields: defaultFirstTextInformationRequestFields(),
   };
 }
 
@@ -54,10 +63,12 @@ export function parseMctbFirstTextTemplateConfig(raw: unknown): MctbFirstTextTem
   const templateId = migrateLegacyPlatformRecoveryTemplateId(
     String(row.templateId || row.platformRecoveryTemplateId || ""),
   );
+  const informationRequestFields = parseInformationRequestFields(row.informationRequestFields);
   return {
     templateId,
     version: Number(row.version) || MCTB_FIRST_TEXT_TEMPLATE_VERSION,
     variables: parseVariables(row.variables),
+    ...(informationRequestFields ? { informationRequestFields } : {}),
   };
 }
 
@@ -66,13 +77,16 @@ export function readMctbFirstTextTemplateConfigFromMctbFields(
 ): MctbFirstTextTemplateConfig {
   const fromFirstText = parseMctbFirstTextTemplateConfig(mctb.firstTextTemplate);
   if (fromFirstText) {
+    const defaults = defaultMctbFirstTextTemplateConfig(fromFirstText.templateId);
     return {
-      ...defaultMctbFirstTextTemplateConfig(fromFirstText.templateId),
+      ...defaults,
       ...fromFirstText,
       variables: {
-        ...defaultMctbFirstTextTemplateConfig(fromFirstText.templateId).variables,
+        ...defaults.variables,
         ...fromFirstText.variables,
       },
+      informationRequestFields:
+        fromFirstText.informationRequestFields ?? defaults.informationRequestFields,
     };
   }
   const legacyId = migrateLegacyPlatformRecoveryTemplateId(

@@ -4,7 +4,12 @@
 
 import { getPrisma } from "@/lib/db";
 import { sendQuickSms } from "@/lib/sms/send-quick";
+import { updateAutomationState } from "@/lib/mctb/handoff/automation-state";
 import { recordMctbLeadRecoveryInboundSideEffects } from "@/lib/mctb/handoff/lead-recovery-inbound-side-effects";
+import {
+  buildDeterministicFirstReplyAckBody,
+  deterministicReplyAckAlreadySent,
+} from "@/lib/mctb/first-text-templates/deterministic-inbound-reply";
 import { loadMissedCallTextConfig } from "./config";
 import { loadLeadRecoveryConfig } from "@/lib/mctb/lead-recovery/config";
 import type { MissedCallTextConfigRecord } from "./types";
@@ -275,13 +280,20 @@ export async function handleMctbCustomerSmsReply(input: {
 
   const automation = await prisma.mctbConversationAutomationState.findUnique({
     where: { conversationId },
-    select: { state: true },
+    select: { state: true, capturedFieldsJson: true },
   });
-  if (automation?.state === "human_active" || automation?.state === "resolved") {
+  const capturedFields =
+    automation?.capturedFieldsJson && typeof automation.capturedFieldsJson === "object"
+      ? (automation.capturedFieldsJson as Record<string, unknown>)
+      : {};
+
+  if (automation?.state === "human_active") {
     return { handled: true, action: "human_handling" };
   }
 
-  if (!leadRecoveryActive) {
+  const ackAlreadySent = deterministicReplyAckAlreadySent(capturedFields);
+
+  if (ackAlreadySent) {
     await recordMctbLeadRecoveryInboundSideEffects({
       workspaceId: input.workspaceId,
       fromE164,
@@ -292,6 +304,115 @@ export async function handleMctbCustomerSmsReply(input: {
       structuredIntent: null,
     });
     return { handled: true, action: "mctb_notifications_only" };
+  }
+
+  const legacyAiSms =
+    leadRecoveryActive && process.env.MCTB_LEGACY_AI_SMS_REPLY === "1";
+
+  if (!legacyAiSms) {
+    const ackBody = await buildDeterministicFirstReplyAckBody({
+      workspaceId: input.workspaceId,
+      config,
+      missedCallMetadata: recentEvent.metadata,
+      customerReplyBody: input.body,
+    });
+
+    const { logMctbSmsRoutingDecision } = await import(
+      "@/lib/mctb/messaging/inbound-processing-trace"
+    );
+    await logMctbSmsRoutingDecision({
+      workspaceId: input.workspaceId,
+      conversationId,
+      providerMessageId: input.providerMessageId,
+      processingJobId: input.processingJobId,
+      handler: "deterministic_first_reply",
+      branch: "first_reply_ack",
+      leadRecoveryEnabled: leadRecoveryActive,
+    });
+
+    await recordMctbLeadRecoveryInboundSideEffects({
+      workspaceId: input.workspaceId,
+      fromE164,
+      body: input.body,
+      conversationId,
+      missedCallEventId: recentEvent.id,
+      providerMessageId: input.providerMessageId,
+      structuredIntent: null,
+    });
+
+    const idemKey = `mctb-first-reply-ack:${conversationId}:${recentEvent.id}`;
+    const outboundDelivery = input.outboundDelivery ?? "inline";
+
+    if (outboundDelivery === "durable") {
+      const { enqueueMctbCustomerOutboundSmsJob } = await import(
+        "@/lib/mctb/messaging/enqueue-customer-outbound-sms"
+      );
+      const { logMctbInboundProcessingEvent } = await import(
+        "@/lib/mctb/messaging/inbound-processing-trace"
+      );
+      try {
+        const job = await enqueueMctbCustomerOutboundSmsJob({
+          workspaceId: input.workspaceId,
+          conversationId,
+          toE164: fromE164,
+          body: ackBody,
+          idempotencyKey: idemKey,
+          providerMessageId: input.providerMessageId,
+          processingJobId: input.processingJobId,
+          action: "first_reply_ack",
+        });
+        await logMctbInboundProcessingEvent({
+          kind: "OUTBOUND_ENQUEUED",
+          workspaceId: input.workspaceId,
+          conversationId,
+          providerMessageId: input.providerMessageId,
+          processingJobId: input.processingJobId,
+          outboundJobId: job.id,
+        });
+      } catch (err) {
+        console.error("[mctb/customer-sms] deterministic ack enqueue failed", err);
+        return { handled: false, reason: "sms_send_failed" };
+      }
+    } else {
+      try {
+        await sendMctbCustomerOutboundSms({
+          workspaceId: input.workspaceId,
+          config,
+          toE164: fromE164,
+          body: ackBody,
+          idempotencyKey: idemKey,
+          conversationId,
+        });
+        await prisma.conversationMessage.create({
+          data: {
+            conversationId,
+            direction: "outbound",
+            body: ackBody,
+            userName: "System",
+            providerMessageId: null,
+          },
+        }).catch(() => undefined);
+      } catch (err) {
+        console.error("[mctb/customer-sms] deterministic ack send failed", err);
+        return { handled: false, reason: "sms_send_failed" };
+      }
+    }
+
+    await updateAutomationState(conversationId, {
+      state: "resolved",
+      capturedFieldsJson: {
+        ...capturedFields,
+        _deterministic_reply_ack_sent_at: new Date().toISOString(),
+        _deterministic_reply_ack_body: ackBody,
+      },
+      followUpStatus: "acknowledged",
+    });
+
+    return {
+      handled: true,
+      action: "first_reply_ack",
+      reply: ackBody,
+    };
   }
 
   const { handleMctbSimpleSmsAgentInbound } = await import(

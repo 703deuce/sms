@@ -10,7 +10,6 @@ import {
   Phone,
   PhoneMissed,
   Settings,
-  Sparkles,
   Voicemail,
   MessageCircle,
   Shield,
@@ -77,11 +76,6 @@ export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
       label: "Text Back",
       href: MCTB_ROUTES.textBack,
       icon: MessageCircle,
-    },
-    {
-      label: "AI Recovery",
-      href: MCTB_ROUTES.aiRecovery,
-      icon: Sparkles,
     },
     {
       label: "Notifications",

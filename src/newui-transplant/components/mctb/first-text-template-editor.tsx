@@ -32,7 +32,10 @@ import type {
   MctbFirstTextTemplateConfig,
   MctbFirstTextTemplateId,
 } from '@/lib/mctb/first-text-templates/types'
+import { defaultFirstTextInformationRequestFields } from '@/lib/mctb/first-text-templates/information-request-phrase'
 import { MCTB_FIRST_TEXT_TEMPLATE_VERSION } from '@/lib/mctb/first-text-templates/types'
+import type { MctbSmsCollectFieldDef } from '@/lib/mctb/lead-recovery/types'
+import { InformationRequestFieldsEditor } from '@/newui-transplant/components/mctb/information-request-fields-editor'
 
 function isFreeTemplate(id: MctbFirstTextTemplateId): boolean {
   return (MCTB_FIRST_TEXT_FREE_TEMPLATE_IDS as readonly string[]).includes(id)
@@ -56,10 +59,18 @@ export function FirstTextTemplateEditor({
   wizardMode?: boolean
   onConfigChange?: (config: MctbFirstTextTemplateConfig) => void
 }) {
-  const [config, setConfig] = useState<MctbFirstTextTemplateConfig>(initialConfig)
+  const [config, setConfig] = useState<MctbFirstTextTemplateConfig>(() => ({
+    ...initialConfig,
+    informationRequestFields:
+      initialConfig.informationRequestFields ?? defaultFirstTextInformationRequestFields(),
+  }))
 
   useEffect(() => {
-    setConfig(initialConfig)
+    setConfig({
+      ...initialConfig,
+      informationRequestFields:
+        initialConfig.informationRequestFields ?? defaultFirstTextInformationRequestFields(),
+    })
   }, [initialConfig])
 
   const patchConfig = (updater: (prev: MctbFirstTextTemplateConfig) => MctbFirstTextTemplateConfig) => {
@@ -236,6 +247,17 @@ export function FirstTextTemplateEditor({
             }
           />
         </ConfigSection>
+      ) : null}
+
+      {config.templateId !== 'quick_question' ? (
+        <InformationRequestFieldsEditor
+          fields={
+            config.informationRequestFields ?? defaultFirstTextInformationRequestFields()
+          }
+          onChange={(fields: MctbSmsCollectFieldDef[]) =>
+            patchConfig((prev) => ({ ...prev, informationRequestFields: fields }))
+          }
+        />
       ) : null}
 
       {config.templateId === 'quick_question' ? (

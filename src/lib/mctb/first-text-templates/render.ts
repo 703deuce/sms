@@ -1,5 +1,9 @@
 import { renderMctbMessageTemplate } from "@/lib/mctb/message-template";
 import { resolveCallbackTimePhrase } from "./callback-time";
+import {
+  buildInformationRequestPhrase,
+  normalizeFirstTextInformationRequestFields,
+} from "./information-request-phrase";
 import { getMctbFirstTextTemplate } from "./registry";
 import type {
   MctbFirstTextTemplateConfig,
@@ -20,12 +24,21 @@ export function buildFirstTextSubstitutionMap(input: MctbFirstTextRenderInput): 
   const vars = input.config.variables || {};
   const callbackVar = input.inBusinessHours ? vars.callbackTime : vars.callbackTimeAfterHours ?? vars.callbackTime;
   const callbackPhrase = def.usesCallbackTime ? resolveCallbackTimePhrase(callbackVar) : "";
+  const infoFields = normalizeFirstTextInformationRequestFields(
+    input.config.informationRequestFields,
+  );
+  let informationRequestPhrase = buildInformationRequestPhrase(infoFields);
+  if (!informationRequestPhrase) {
+    informationRequestPhrase = "what you need help with";
+  }
 
   return {
     business_name: input.businessName.trim(),
     businessName: input.businessName.trim(),
     callback_time: callbackPhrase,
     callbackTime: callbackPhrase,
+    information_request_phrase: informationRequestPhrase,
+    informationRequestPhrase: informationRequestPhrase,
     service_1: (vars.service1 || "").trim(),
     service_2: (vars.service2 || "").trim(),
     service1: (vars.service1 || "").trim(),

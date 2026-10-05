@@ -14,6 +14,11 @@ import {
 } from "../src/lib/mctb/first-text-templates/render";
 import { defaultMctbFirstTextTemplateConfig } from "../src/lib/mctb/first-text-templates/config-defaults";
 import { isMctbFirstTextTemplateEntitled } from "../src/lib/mctb/first-text-templates/entitlements";
+import { buildInformationRequestPhrase } from "../src/lib/mctb/first-text-templates/information-request-phrase";
+import {
+  guessCallerFirstNameFromReply,
+  renderMctbDeterministicFirstReplyAck,
+} from "../src/lib/mctb/first-text-templates/deterministic-first-reply-ack";
 
 const business = "Joe's Plumbing";
 
@@ -58,5 +63,22 @@ assert.equal(isMctbFirstTextTemplateEntitled("on_a_job", { recoveryPaid: false }
 assert.equal(isMctbFirstTextTemplateEntitled("on_a_job", { recoveryPaid: true }), true);
 
 assert.equal(getMctbFirstTextTemplate("simple").name, "Simple");
+
+const phrase = buildInformationRequestPhrase(
+  defaultMctbFirstTextTemplateConfig("on_a_job").informationRequestFields!,
+);
+assert.match(phrase, /your name/);
+assert.match(phrase, /service address/);
+
+const ack = renderMctbDeterministicFirstReplyAck({
+  businessName: "Joe's Plumbing",
+  callbackTimePhrase: "within 30 minutes",
+  callerFirstName: guessCallerFirstNameFromReply(
+    "Mike, 123 Main Street. Water heater leaking.",
+  ),
+  inBusinessHours: true,
+});
+assert.match(ack, /Thanks, Mike/);
+assert.match(ack, /within 30 minutes/);
 
 console.log("test-mctb-first-text-templates: PASS");

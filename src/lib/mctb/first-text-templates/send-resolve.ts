@@ -10,6 +10,7 @@ import { resolveMctbFirstTextBusinessName } from "./business-name";
 import { readMctbFirstTextTemplateConfig } from "./persistence";
 import {
   assertMctbFirstTextSafeForSend,
+  buildFirstTextSubstitutionMap,
   renderMctbFirstTextTemplateBody,
   validateMctbFirstTextTemplateConfig,
 } from "./render";
@@ -18,6 +19,9 @@ import { MCTB_FIRST_TEXT_TEMPLATE_VERSION } from "./types";
 export type MctbRecoveryOpenerSendMeta = {
   firstTextTemplateId: string;
   firstTextTemplateVersion: number;
+  recoveryBusinessName: string;
+  recoveryCallbackTimePhrase: string;
+  recoveryInBusinessHours: boolean;
 };
 
 export async function resolveMctbRecoveryOpenerForSend(input: {
@@ -56,11 +60,20 @@ export async function resolveMctbRecoveryOpenerForSend(input: {
   });
   assertMctbFirstTextSafeForSend(body);
 
+  const substitutions = buildFirstTextSubstitutionMap({
+    config: firstText,
+    businessName,
+    inBusinessHours: inHours,
+  });
+
   return {
     body,
     meta: {
       firstTextTemplateId: firstText.templateId,
       firstTextTemplateVersion: firstText.version || MCTB_FIRST_TEXT_TEMPLATE_VERSION,
+      recoveryBusinessName: businessName,
+      recoveryCallbackTimePhrase: substitutions.callback_time || substitutions.callbackTime || "",
+      recoveryInBusinessHours: inHours,
     },
   };
 }

@@ -404,6 +404,9 @@ export async function executeMissedCallTextSend(input: {
                 firstTextTemplateId: openerResolved.meta.firstTextTemplateId,
                 firstTextTemplateVersion: openerResolved.meta.firstTextTemplateVersion,
                 firstTextSentAt: new Date().toISOString(),
+                recoveryBusinessName: openerResolved.meta.recoveryBusinessName,
+                recoveryCallbackTimePhrase: openerResolved.meta.recoveryCallbackTimePhrase,
+                recoveryInBusinessHours: openerResolved.meta.recoveryInBusinessHours,
               }
             : {}),
         },

@@ -1,5 +1,7 @@
+import type { MctbSmsCollectFieldDef } from "@/lib/mctb/lead-recovery/types";
+
 /** Deterministic first recovery SMS templates (platform-controlled copy + variable slots). */
-export const MCTB_FIRST_TEXT_TEMPLATE_VERSION = 1;
+export const MCTB_FIRST_TEXT_TEMPLATE_VERSION = 2;
 
 export type MctbFirstTextTemplateId =
   | "on_a_job"
@@ -33,6 +35,8 @@ export type MctbFirstTextTemplateConfig = {
   templateId: MctbFirstTextTemplateId;
   version: number;
   variables: MctbFirstTextTemplateVariables;
+  /** What callers should include in their SMS reply (drives {{information_request_phrase}}). */
+  informationRequestFields?: MctbSmsCollectFieldDef[];
 };
 
 export type MctbFirstTextTemplateDefinition = {

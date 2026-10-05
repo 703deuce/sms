@@ -46,13 +46,12 @@ const configureLabels = launchNav
 assert.deepEqual(configureLabels, [
   "Missed-Call Recovery",
   "Text Back",
-  "AI Recovery",
   "Notifications",
   "Phone & Forwarding",
 ]);
 
 assert.equal(launchNav.find((i) => i.label === "Overview")?.href, "/mctb");
-assert.equal(launchNav.find((i) => i.label === "AI Recovery")?.href, MCTB_ROUTES.aiRecovery);
+assert.ok(!launchLabels.includes("AI Recovery"), "AI Recovery route preserved but hidden from launch nav");
 assert.ok(!launchHrefs.includes("/voice/numbers"));
 assert.ok(!launchHrefs.includes(MCTB_ROUTES.integrations));
 

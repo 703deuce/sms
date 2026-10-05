@@ -144,18 +144,10 @@ export function NewUiMctbOverviewPage({ data }: { data: MctbOverviewPayload }) {
       <div className="mt-4">
         <FeatureEmphasisStrip
           icon={Sparkles}
-          title={leadRecovery.enabled ? "AI Recovery is on" : "AI Recovery is off"}
-          badge={
-            leadRecovery.enabled ? (
-              <Pill tone="success" dot={false} className="h-auto bg-success/20 text-[oklch(0.82_0.12_158)] ring-0">
-                {leadRecovery.statusLabel}
-              </Pill>
-            ) : (
-              <Pill tone="neutral" dot={false} className="ring-0">Off</Pill>
-            )
-          }
-          description={leadRecovery.policySummary}
-          action={<TextLink href="/mctb/ai-recovery">Manage</TextLink>}
+          title="Text-back replies"
+          badge={<Pill tone="success" dot={false} className="h-auto bg-success/20 text-[oklch(0.82_0.12_158)] ring-0">Included</Pill>}
+          description="Callers get one automatic thank-you after they reply, then your team is notified with their message. No AI chat required."
+          action={<TextLink href="/mctb/setup/text-back">Manage text back</TextLink>}
         />
       </div>
 

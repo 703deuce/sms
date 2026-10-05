@@ -9,7 +9,7 @@ export const MCTB_FIRST_TEXT_TEMPLATE_REGISTRY: Record<
     name: "On a Job",
     purpose: "Believable missed-call reason, callback expectation, invite context while waiting.",
     body:
-      "Hi, this is {{business_name}}. Sorry we missed your call — we're currently on a job. We'll call you back {{callback_time}}. In the meantime, reply here with what you need help with.",
+      "Hi, this is {{business_name}}. Sorry we missed your call — we're on a job right now. We'll call you back {{callback_time}}. Reply with {{information_request_phrase}} so we have everything when we call.",
     requiredVariables: ["business_name", "callbackTime"],
     usesCallbackTime: true,
   },
@@ -27,7 +27,7 @@ export const MCTB_FIRST_TEXT_TEMPLATE_REGISTRY: Record<
     name: "Callback Time",
     purpose: "Clear promise the business will call back soon; urgent callers can add context.",
     body:
-      "Hi, this is {{business_name}}. Sorry we missed your call. We'll call you back {{callback_time}}. If this is urgent, reply here with what's going on.",
+      "Hi, this is {{business_name}}. Sorry we missed your call. We'll call you back {{callback_time}}. Reply with {{information_request_phrase}} so we have everything when we call.",
     requiredVariables: ["business_name", "callbackTime"],
     usesCallbackTime: true,
   },
@@ -36,7 +36,7 @@ export const MCTB_FIRST_TEXT_TEMPLATE_REGISTRY: Record<
     name: "What Do You Need?",
     purpose: "Short opener to capture the reason for the call before callback.",
     body:
-      "Hi, this is {{business_name}}. Sorry we missed you — we're on a job right now. What can we help you with? Reply here and we'll see it before we call you back.",
+      "Hi, this is {{business_name}}. Sorry we missed you. Reply with {{information_request_phrase}} and we'll see it before we call you back.",
     requiredVariables: ["business_name"],
     usesCallbackTime: false,
   },
@@ -45,7 +45,7 @@ export const MCTB_FIRST_TEXT_TEMPLATE_REGISTRY: Record<
     name: "Simple",
     purpose: "Universal fallback without claiming to be on a job or with another customer.",
     body:
-      "Hi, this is {{business_name}}. Sorry we missed your call. What can we help you with? Reply here and we'll get back to you as soon as possible.",
+      "Hi, this is {{business_name}}. Sorry we missed your call. Reply with {{information_request_phrase}} and we'll get back to you as soon as possible.",
     requiredVariables: ["business_name"],
     usesCallbackTime: false,
   },
