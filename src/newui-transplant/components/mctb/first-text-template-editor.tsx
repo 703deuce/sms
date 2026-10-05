@@ -36,6 +36,14 @@ import { defaultFirstTextInformationRequestFields } from '@/lib/mctb/first-text-
 import { MCTB_FIRST_TEXT_TEMPLATE_VERSION } from '@/lib/mctb/first-text-templates/types'
 import type { MctbSmsCollectFieldDef } from '@/lib/mctb/lead-recovery/types'
 import { InformationRequestFieldsEditor } from '@/newui-transplant/components/mctb/information-request-fields-editor'
+import { MctbMessagingHoursPanel } from '@/newui-transplant/components/mctb/mctb-messaging-hours-panel'
+import {
+  buildInformationRequestPreviewSentence,
+  previewReplyConfirmationSms,
+  previewReplyConfirmationSmsAnonymous,
+} from '@/lib/mctb/first-text-templates/preview-copy'
+import type { MctbWeeklySchedule } from '@/lib/mctb/schedule-shared'
+import { Button } from '@/newui-transplant/components/ui/button'
 
 function isFreeTemplate(id: MctbFirstTextTemplateId): boolean {
   return (MCTB_FIRST_TEXT_FREE_TEMPLATE_IDS as readonly string[]).includes(id)
@@ -45,10 +53,13 @@ export function FirstTextTemplateEditor({
   initialConfig,
   businessName,
   recoveryPaid,
-  previewInBusinessHours = true,
+  previewInBusinessHours: previewInBusinessHoursProp = true,
   onSaved,
   wizardMode = false,
   onConfigChange,
+  weeklySchedule = null,
+  timezone = 'America/New_York',
+  onScheduleSaved,
 }: {
   initialConfig: MctbFirstTextTemplateConfig
   businessName: string
@@ -58,7 +69,14 @@ export function FirstTextTemplateEditor({
   /** Onboarding wizard: hide Save bar; parent saves on Continue. */
   wizardMode?: boolean
   onConfigChange?: (config: MctbFirstTextTemplateConfig) => void
+  weeklySchedule?: MctbWeeklySchedule | null
+  timezone?: string
+  onScheduleSaved?: () => void
 }) {
+  const [previewInBusinessHours, setPreviewInBusinessHours] = useState(previewInBusinessHoursProp)
+  useEffect(() => {
+    setPreviewInBusinessHours(previewInBusinessHoursProp)
+  }, [previewInBusinessHoursProp])
   const [config, setConfig] = useState<MctbFirstTextTemplateConfig>(() => ({
     ...initialConfig,
     informationRequestFields:
@@ -99,6 +117,28 @@ export function FirstTextTemplateEditor({
   const segments = Math.max(1, Math.ceil(previewBody.length / 160))
 
   const def = MCTB_FIRST_TEXT_TEMPLATE_REGISTRY[config.templateId]
+  const infoPreviewSentence = useMemo(
+    () => buildInformationRequestPreviewSentence(config),
+    [config],
+  )
+  const replyAckPreview = useMemo(
+    () =>
+      previewReplyConfirmationSms(
+        config,
+        businessName || "Joe's Plumbing",
+        previewInBusinessHours,
+      ),
+    [config, businessName, previewInBusinessHours],
+  )
+  const replyAckNoName = useMemo(
+    () =>
+      previewReplyConfirmationSmsAnonymous(
+        config,
+        businessName || "Joe's Plumbing",
+        previewInBusinessHours,
+      ),
+    [config, businessName, previewInBusinessHours],
+  )
 
   const selectTemplate = (id: MctbFirstTextTemplateId) => {
     if (!entitled(id)) {
@@ -151,15 +191,54 @@ export function FirstTextTemplateEditor({
         </p>
       ) : null}
 
+      {!wizardMode ? (
+        <MctbMessagingHoursPanel
+          initialWeeklySchedule={weeklySchedule}
+          timezone={timezone}
+          onSaved={onScheduleSaved}
+        />
+      ) : null}
+
+      <div
+        className="inline-flex rounded-lg border bg-muted/30 p-0.5"
+        role="tablist"
+        aria-label="Message preview hours"
+      >
+        {(
+          [
+            { id: true, label: 'During business hours' },
+            { id: false, label: 'After hours' },
+          ] as const
+        ).map((tab) => (
+          <Button
+            key={String(tab.id)}
+            type="button"
+            role="tab"
+            aria-selected={previewInBusinessHours === tab.id}
+            variant={previewInBusinessHours === tab.id ? 'secondary' : 'ghost'}
+            size="sm"
+            className="h-8 rounded-md px-3 text-xs"
+            onClick={() => setPreviewInBusinessHours(tab.id)}
+          >
+            {tab.label}
+          </Button>
+        ))}
+      </div>
+
       <ul className="divide-y rounded-xl border bg-card/80" role="radiogroup" aria-label="First message strategy">
         {MCTB_FIRST_TEXT_TEMPLATE_ORDER.map((id) => {
           const row = MCTB_FIRST_TEXT_TEMPLATE_REGISTRY[id]
           const selected = config.templateId === id
           const locked = !entitled(id)
           const example = renderMctbFirstTextTemplateBody({
-            config: { templateId: id, version: 1, variables: config.variables },
+            config: {
+              templateId: id,
+              version: 1,
+              variables: config.variables,
+              informationRequestFields: config.informationRequestFields,
+            },
             businessName: businessName || "Joe's Plumbing",
-            inBusinessHours: true,
+            inBusinessHours: previewInBusinessHours,
           })
           return (
             <li key={id}>
@@ -220,13 +299,13 @@ export function FirstTextTemplateEditor({
 
       {def.usesCallbackTime ? (
         <ConfigSection
-          title="Callback time"
-          description="Choose a time you can consistently meet."
+          title="When should callers expect a callback?"
+          description="Choose a time you can consistently meet. The same expectation is used in the automatic reply confirmation."
           insetClassName="space-y-4"
         >
           <SettingRow
             title="During business hours"
-            description="Shown when the missed call happens in your business-hours window."
+            description="Used when the missed call happens while you are open."
             control={
               <CallbackTimeControl
                 value={config.variables.callbackTime}
@@ -250,14 +329,22 @@ export function FirstTextTemplateEditor({
       ) : null}
 
       {config.templateId !== 'quick_question' ? (
-        <InformationRequestFieldsEditor
-          fields={
-            config.informationRequestFields ?? defaultFirstTextInformationRequestFields()
-          }
-          onChange={(fields: MctbSmsCollectFieldDef[]) =>
-            patchConfig((prev) => ({ ...prev, informationRequestFields: fields }))
-          }
-        />
+        <>
+          <InformationRequestFieldsEditor
+            fields={
+              config.informationRequestFields ?? defaultFirstTextInformationRequestFields()
+            }
+            onChange={(fields: MctbSmsCollectFieldDef[]) =>
+              patchConfig((prev) => ({ ...prev, informationRequestFields: fields }))
+            }
+          />
+          {infoPreviewSentence ? (
+            <p className="rounded-lg bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">Live wording: </span>
+              {infoPreviewSentence}
+            </p>
+          ) : null}
+        </>
       ) : null}
 
       {config.templateId === 'quick_question' ? (
@@ -293,8 +380,21 @@ export function FirstTextTemplateEditor({
         </ConfigSection>
       ) : null}
 
+      <ConfigSection
+        title="Reply confirmation"
+        description="When a caller replies, Transovo automatically confirms their message was received. No additional automated messages are sent."
+        insetClassName="space-y-3"
+      >
+        <p className="text-sm leading-relaxed text-foreground">{replyAckPreview}</p>
+        <p className="text-xs text-muted-foreground">
+          Without a detectable name in their reply: {replyAckNoName}
+        </p>
+      </ConfigSection>
+
       <div className={cn(OPUS_CARD, 'p-4')}>
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Caller will receive</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          First recovery text · {previewInBusinessHours ? 'During hours' : 'After hours'}
+        </p>
         <p className="mt-2 text-sm leading-relaxed text-foreground">{previewBody}</p>
         <p className="mt-2 text-xs tabular-nums text-muted-foreground">
           {previewBody.length} chars · {segments} segment{segments > 1 ? 's' : ''} (est.)

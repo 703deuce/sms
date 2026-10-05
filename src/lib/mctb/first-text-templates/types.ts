@@ -17,6 +17,8 @@ export type MctbCallbackTimePreset =
   | "within_1_hour"
   | "as_soon_as_possible"
   | "when_we_reopen_tomorrow_morning"
+  | "next_business_day_morning"
+  | "when_we_reopen"
   | "custom";
 
 export type MctbCallbackTimeVariable = {
@@ -44,6 +46,8 @@ export type MctbFirstTextTemplateDefinition = {
   name: string;
   purpose: string;
   body: string;
+  /** When set, used instead of `body` when the call is outside business hours. */
+  bodyAfterHours?: string;
   requiredVariables: Array<keyof MctbFirstTextTemplateVariables | "business_name">;
   usesCallbackTime: boolean;
 };

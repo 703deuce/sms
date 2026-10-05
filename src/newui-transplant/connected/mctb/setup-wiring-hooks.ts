@@ -160,6 +160,7 @@ export function useMctbVoicemailWiring(input?: { phoneNumberId?: string | null }
   const [sendAfterVoicemail, setSendAfterVoicemail] = useState(true);
   const [voicemailBoxId, setVoicemailBoxId] = useState<string | null>(null);
   const [transcriptionEnabled, setTranscriptionEnabled] = useState(true);
+  const [mentionSmsInGreeting, setMentionSmsInGreeting] = useState(true);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -169,6 +170,8 @@ export function useMctbVoicemailWiring(input?: { phoneNumberId?: string | null }
       const pid = phoneNumberIdOverride || ((r.phoneNumberId as string) ?? null);
       setPhoneNumberId(pid);
       setSendAfterVoicemail(Boolean(r.sendAfterVoicemail ?? true));
+      const messaging = data.messaging as { voicemailMentionSms?: boolean } | undefined;
+      setMentionSmsInGreeting(messaging?.voicemailMentionSms !== false);
       if (pid) {
         const res = await fetch(`/api/phone/voicemail?phoneNumberId=${encodeURIComponent(pid)}`, {
           cache: "no-store",
@@ -224,7 +227,9 @@ export function useMctbVoicemailWiring(input?: { phoneNumberId?: string | null }
 
   const saveGreeting = useCallback(async (textOverride?: string) => {
     const boxId = await ensureVoicemailBoxId();
-    const text = (textOverride ?? greetingText).trim();
+    const { applyVoicemailSmsReinforcement } = await import("@/lib/mctb/voicemail-sms-reinforcement");
+    const raw = (textOverride ?? greetingText).trim();
+    const text = applyVoicemailSmsReinforcement(raw, mentionSmsInGreeting);
     const res = await fetch("/api/phone/voicemail", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -235,7 +240,14 @@ export function useMctbVoicemailWiring(input?: { phoneNumberId?: string | null }
       throw new Error(j.error || "Save failed");
     }
     await reload();
-  }, [ensureVoicemailBoxId, greetingText, reload]);
+  }, [ensureVoicemailBoxId, greetingText, mentionSmsInGreeting, reload]);
+
+  const saveMentionSmsToggle = useCallback(async () => {
+    await saveMctbSetup({ voicemailMentionSms: mentionSmsInGreeting });
+    if (greetingText.trim()) {
+      await saveGreeting();
+    }
+  }, [mentionSmsInGreeting, greetingText, saveGreeting]);
 
   const saveGreetingUrl = useCallback(
     async (url: string) => {
@@ -317,6 +329,9 @@ export function useMctbVoicemailWiring(input?: { phoneNumberId?: string | null }
     saveRecoveryToggle,
     transcriptionEnabled,
     saveTranscription,
+    mentionSmsInGreeting,
+    setMentionSmsInGreeting,
+    saveMentionSmsToggle,
   };
 }
 

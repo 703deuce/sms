@@ -37,6 +37,8 @@ export type MissedCall = {
   reply: string | null;
   line: string;
   conversationId?: string;
+  /** Missed-call attempts from this caller today (when provided by API). */
+  callsToday?: number;
   teamBriefHeadline?: string | null;
   teamBriefSummary?: string | null;
 };

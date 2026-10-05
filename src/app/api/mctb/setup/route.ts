@@ -36,6 +36,7 @@ import {
   parseMctbOnboardingState,
 } from "@/lib/mctb/onboarding/state";
 import { normalizeMctbConsentMode } from "@/lib/mctb/consent-mode";
+import { readVoicemailSmsReinforcementFromMctb } from "@/lib/mctb/voicemail-sms-reinforcement";
 import {
   defaultWeeklySchedule,
   readMctbScheduleFromCustomFields,
@@ -97,6 +98,7 @@ export type MctbSetupPayload = {
   senderMode?: "PLATFORM" | "WORKSPACE";
   platformRecoveryTemplateId?: string;
   firstTextTemplate?: import("@/lib/mctb/first-text-templates/types").MctbFirstTextTemplateConfig;
+  voicemailMentionSms?: boolean;
 };
 
 const DEFAULT_CAMPAIGN_DESCRIPTION =
@@ -362,6 +364,9 @@ export async function GET() {
         platformRecoveryOpenerChoices: listMctbPlatformRecoveryOpenerChoices(),
         firstTextTemplate,
         firstTextBusinessName,
+        voicemailMentionSms: readVoicemailSmsReinforcementFromMctb(
+          mctbSettings as Record<string, unknown>,
+        ),
       },
     },
   });
@@ -879,6 +884,7 @@ export async function POST(req: Request) {
     body.pauseUntil !== undefined ||
     body.enabled !== undefined ||
     body.triggerRules?.afterHours !== undefined ||
+    body.voicemailMentionSms !== undefined ||
     pauseMutation !== null
   ) {
     const ws = await prisma.workspace.findUnique({
@@ -969,6 +975,9 @@ export async function POST(req: Request) {
               : {}),
             ...(body.weeklySchedule !== undefined
               ? { weeklySchedule: body.weeklySchedule }
+              : {}),
+            ...(body.voicemailMentionSms !== undefined
+              ? { voicemailMentionSms: body.voicemailMentionSms }
               : {}),
             ...(pauseMutation
               ? {

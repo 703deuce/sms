@@ -39,5 +39,6 @@ export function mapMctbMissedCallsListToNewUi(data: MctbMissedCallsListData): Mi
     reply: null,
     line: fmtCallPhone(e.businessE164),
     conversationId: e.conversationId ?? undefined,
+    callsToday: e.callsToday && e.callsToday > 1 ? e.callsToday : undefined,
   }));
 }

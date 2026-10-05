@@ -258,6 +258,12 @@ export function NewUiMctbSetupVoicemailPage() {
         onSaveRecoveryToggle: vm.saveRecoveryToggle,
         transcriptionEnabled: vm.transcriptionEnabled,
         onTranscriptionEnabledChange: (v) => void vm.saveTranscription(v),
+        mentionSmsInGreeting: vm.mentionSmsInGreeting,
+        onMentionSmsInGreetingChange: vm.setMentionSmsInGreeting,
+        onSaveMentionSmsToggle: vm.saveMentionSmsToggle,
+        smsReinforcementPreview: vm.greetingText
+          ? `${vm.greetingText.trim()}…`
+          : "Please leave a message after the tone. We've also sent you a text message…",
       }}
     />
   );

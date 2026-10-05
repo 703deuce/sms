@@ -1,11 +1,8 @@
 import "server-only";
 
 import type { MissedCallTextConfigRecord } from "@/lib/agents/missed-call-text-back/types";
-import {
-  inMctbBusinessWindow,
-  resolveMctbMessageTemplate,
-  renderMctbMessageTemplate,
-} from "@/lib/mctb/message-template";
+import { resolveMctbMessagingInBusinessHours } from "@/lib/mctb/messaging-business-hours-resolve";
+import { resolveMctbMessageTemplate, renderMctbMessageTemplate } from "@/lib/mctb/message-template";
 import { resolveMctbFirstTextBusinessName } from "./business-name";
 import { readMctbFirstTextTemplateConfig } from "./persistence";
 import {
@@ -47,7 +44,7 @@ export async function resolveMctbRecoveryOpenerForSend(input: {
     input.templateVars.businessName?.trim() ||
     (await resolveMctbFirstTextBusinessName(input.workspaceId));
 
-  const inHours = inMctbBusinessWindow(input.config, now);
+  const inHours = await resolveMctbMessagingInBusinessHours(input.workspaceId, input.config, now);
   const validation = validateMctbFirstTextTemplateConfig(firstText, businessName, inHours);
   if (!validation.ok) {
     throw new Error(`mctb_first_text_invalid:${validation.field}`);

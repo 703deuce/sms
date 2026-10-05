@@ -46,10 +46,21 @@ export function buildFirstTextSubstitutionMap(input: MctbFirstTextRenderInput): 
   };
 }
 
+export function resolveFirstTextTemplateBodyString(
+  templateId: import("./types").MctbFirstTextTemplateId,
+  inBusinessHours: boolean,
+): string {
+  const def = getMctbFirstTextTemplate(templateId);
+  if (!inBusinessHours && def.bodyAfterHours?.trim()) {
+    return def.bodyAfterHours;
+  }
+  return def.body;
+}
+
 export function renderMctbFirstTextTemplateBody(input: MctbFirstTextRenderInput): string {
-  const def = getMctbFirstTextTemplate(input.config.templateId);
   const substitutions = buildFirstTextSubstitutionMap(input);
-  return renderMctbMessageTemplate(def.body, substitutions);
+  const body = resolveFirstTextTemplateBodyString(input.config.templateId, input.inBusinessHours);
+  return renderMctbMessageTemplate(body, substitutions);
 }
 
 export function renderMctbFirstTextPreviewExample(

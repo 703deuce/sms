@@ -9,7 +9,9 @@ export const MCTB_FIRST_TEXT_TEMPLATE_REGISTRY: Record<
     name: "On a Job",
     purpose: "Believable missed-call reason, callback expectation, invite context while waiting.",
     body:
-      "Hi, this is {{business_name}}. Sorry we missed your call — we're on a job right now. We'll call you back {{callback_time}}. Reply with {{information_request_phrase}} so we have everything when we call.",
+      "Hi, this is {{business_name}}. Sorry we missed you — we're on a job right now. We'll call you back {{callback_time}}. Reply with {{information_request_phrase}} so we have everything when we call.",
+    bodyAfterHours:
+      "Hi, this is {{business_name}}. Sorry we missed your call. We're closed right now, but we'll call you {{callback_time}}. Reply with {{information_request_phrase}} so we have everything when we call.",
     requiredVariables: ["business_name", "callbackTime"],
     usesCallbackTime: true,
   },
@@ -19,6 +21,8 @@ export const MCTB_FIRST_TEXT_TEMPLATE_REGISTRY: Record<
     purpose: "Human tone with an easy question callers can answer in one reply.",
     body:
       "Hi, this is {{business_name}}. Sorry we missed you — we're helping another customer right now. Were you calling about {{service_1}} or {{service_2}}? You can reply here.",
+    bodyAfterHours:
+      "Hi, this is {{business_name}}. Sorry we missed your call — we're closed right now. Were you calling about {{service_1}} or {{service_2}}? Reply here.",
     requiredVariables: ["business_name", "service1", "service2"],
     usesCallbackTime: false,
   },
@@ -28,6 +32,8 @@ export const MCTB_FIRST_TEXT_TEMPLATE_REGISTRY: Record<
     purpose: "Clear promise the business will call back soon; urgent callers can add context.",
     body:
       "Hi, this is {{business_name}}. Sorry we missed your call. We'll call you back {{callback_time}}. Reply with {{information_request_phrase}} so we have everything when we call.",
+    bodyAfterHours:
+      "Hi, this is {{business_name}}. Sorry we missed your call. We're closed for the evening, but we'll call you {{callback_time}}. Reply with {{information_request_phrase}} so we have everything when we call.",
     requiredVariables: ["business_name", "callbackTime"],
     usesCallbackTime: true,
   },
@@ -37,6 +43,8 @@ export const MCTB_FIRST_TEXT_TEMPLATE_REGISTRY: Record<
     purpose: "Short opener to capture the reason for the call before callback.",
     body:
       "Hi, this is {{business_name}}. Sorry we missed you. Reply with {{information_request_phrase}} and we'll see it before we call you back.",
+    bodyAfterHours:
+      "Hi, this is {{business_name}}. Sorry we missed your call. We're closed right now. Reply with {{information_request_phrase}} and we'll call you when we reopen.",
     requiredVariables: ["business_name"],
     usesCallbackTime: false,
   },
@@ -46,6 +54,8 @@ export const MCTB_FIRST_TEXT_TEMPLATE_REGISTRY: Record<
     purpose: "Universal fallback without claiming to be on a job or with another customer.",
     body:
       "Hi, this is {{business_name}}. Sorry we missed your call. Reply with {{information_request_phrase}} and we'll get back to you as soon as possible.",
+    bodyAfterHours:
+      "Hi, this is {{business_name}}. Sorry we missed your call. We're closed right now. Reply with {{information_request_phrase}} and we'll get back to you when we reopen.",
     requiredVariables: ["business_name"],
     usesCallbackTime: false,
   },

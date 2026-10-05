@@ -18,6 +18,10 @@ export type MctbSetupVoicemailWired = {
   onSaveGreetingUrl?: (url: string) => Promise<void>
   onUsePlatformDefaultGreeting?: () => Promise<void>
   onSaveRecoveryToggle?: () => Promise<void>
+  mentionSmsInGreeting?: boolean
+  onMentionSmsInGreetingChange?: (v: boolean) => void
+  onSaveMentionSmsToggle?: () => Promise<void>
+  smsReinforcementPreview?: string
 }
 
 export function TransplantMctbSetupVoicemailPage({ wired }: { wired?: MctbSetupVoicemailWired }) {
@@ -40,6 +44,29 @@ export function TransplantMctbSetupVoicemailPage({ wired }: { wired?: MctbSetupV
           onUsePlatformDefault={wired.onUsePlatformDefaultGreeting}
         />
       ) : null}
+      <Panel title="Text recovery in voicemail" bodyClassName="p-0">
+        <div className="px-5">
+          <SettingRow
+            title="Tell callers to reply to the text"
+            description="Adds a short line that a text was sent and replying is the fastest way to share details."
+            control={
+              <Switch
+                checked={wired?.mentionSmsInGreeting ?? true}
+                onCheckedChange={(v) => {
+                  wired?.onMentionSmsInGreetingChange?.(Boolean(v))
+                  void wired?.onSaveMentionSmsToggle?.()
+                }}
+                aria-label="Mention SMS in voicemail greeting"
+              />
+            }
+          />
+          {wired?.smsReinforcementPreview ? (
+            <p className="pb-4 text-xs leading-relaxed text-muted-foreground">
+              Preview: {wired.smsReinforcementPreview}
+            </p>
+          ) : null}
+        </div>
+      </Panel>
       <Panel title="After a voicemail" bodyClassName="p-0">
         <div className="px-5">
         <SettingRow

@@ -7,6 +7,8 @@ const PRESET_PHRASES: Record<Exclude<MctbCallbackTimePreset, "custom">, string> 
   within_1_hour: "within 1 hour",
   as_soon_as_possible: "as soon as possible",
   when_we_reopen_tomorrow_morning: "when we reopen tomorrow morning",
+  next_business_day_morning: "the next business day morning",
+  when_we_reopen: "when we reopen",
 };
 
 export const MCTB_CALLBACK_TIME_PRESET_OPTIONS: Array<{
@@ -25,8 +27,9 @@ export const MCTB_CALLBACK_TIME_AFTER_HOURS_PRESET_OPTIONS: Array<{
   value: MctbCallbackTimePreset;
   label: string;
 }> = [
-  { value: "when_we_reopen_tomorrow_morning", label: "When we reopen tomorrow morning" },
-  { value: "within_1_hour", label: "Within 1 hour" },
+  { value: "when_we_reopen_tomorrow_morning", label: "Tomorrow morning when we reopen" },
+  { value: "next_business_day_morning", label: "Next business day morning" },
+  { value: "when_we_reopen", label: "When we reopen" },
   { value: "as_soon_as_possible", label: "As soon as possible" },
   { value: "custom", label: "Custom" },
 ];

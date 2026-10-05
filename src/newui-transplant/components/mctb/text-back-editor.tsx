@@ -12,6 +12,9 @@ import { FirstTextTemplateEditor } from '@/newui-transplant/components/mctb/firs
 import type { MctbFirstTextTemplateConfig } from '@/lib/mctb/first-text-templates/types'
 import { defaultMctbFirstTextTemplateConfig } from '@/lib/mctb/first-text-templates/config-defaults'
 import { renderMctbFirstTextTemplateBody } from '@/lib/mctb/first-text-templates/render'
+import { previewReplyConfirmationSms } from '@/lib/mctb/first-text-templates/preview-copy'
+import type { MctbWeeklySchedule } from '@/lib/mctb/schedule-shared'
+import { Button } from '@/newui-transplant/components/ui/button'
 
 export function TextBackEditor({
   manageSenderHref = MCTB_ROUTES.phone,
@@ -35,6 +38,9 @@ export function TextBackEditor({
   const [firstTextBusinessName, setFirstTextBusinessName] = useState('')
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [weeklySchedule, setWeeklySchedule] = useState<MctbWeeklySchedule | null>(null)
+  const [timezone, setTimezone] = useState('America/New_York')
+  const [previewInBusinessHours, setPreviewInBusinessHours] = useState(true)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -73,6 +79,15 @@ export function TextBackEditor({
       setFirstTextBusinessName(
         messaging?.firstTextBusinessName || business?.name || '',
       )
+      const schedule = data.schedule as {
+        weeklySchedule?: MctbWeeklySchedule | null
+      }
+      if (schedule?.weeklySchedule) {
+        setWeeklySchedule(schedule.weeklySchedule)
+        setTimezone(schedule.weeklySchedule.timezone || 'America/New_York')
+      }
+      const runtime = data.runtime as { timezone?: string }
+      if (runtime?.timezone) setTimezone(runtime.timezone)
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : 'Could not load text-back settings')
     } finally {
@@ -172,7 +187,12 @@ export function TextBackEditor({
               initialConfig={firstTextConfig}
               businessName={previewName}
               recoveryPaid={recoveryPaid}
+              previewInBusinessHours={previewInBusinessHours}
+              weeklySchedule={weeklySchedule}
+              timezone={timezone}
+              onScheduleSaved={load}
               onSaved={load}
+              onConfigChange={setFirstTextConfig}
             />
           ) : (
             <p className="flex gap-2 rounded-lg bg-muted/60 px-3 py-2.5 text-sm text-muted-foreground">
@@ -185,7 +205,28 @@ export function TextBackEditor({
       </div>
 
       <aside aria-label="Message preview" className="rounded-[2rem] border-8 border-foreground/90 bg-card p-4 shadow-lg lg:sticky lg:top-20 lg:h-fit">
-        <p className="mb-4 text-center text-xs text-muted-foreground">{sender}</p>
+        <p className="mb-2 text-center text-xs text-muted-foreground">{sender}</p>
+        <div className="mb-3 flex justify-center gap-1" role="tablist" aria-label="Preview hours">
+          {(
+            [
+              { on: true, label: 'Open' },
+              { on: false, label: 'Closed' },
+            ] as const
+          ).map((t) => (
+            <Button
+              key={String(t.on)}
+              type="button"
+              role="tab"
+              aria-selected={previewInBusinessHours === t.on}
+              variant={previewInBusinessHours === t.on ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-7 rounded-full px-2.5 text-[11px]"
+              onClick={() => setPreviewInBusinessHours(t.on)}
+            >
+              {t.label}
+            </Button>
+          ))}
+        </div>
         <div className="flex flex-col gap-2">
           <p className="max-w-[90%] rounded-2xl rounded-bl-md border bg-card px-3 py-2 text-xs leading-relaxed">
             {compliance}
@@ -194,8 +235,14 @@ export function TextBackEditor({
             {renderMctbFirstTextTemplateBody({
               config: firstTextConfig,
               businessName: previewName,
-              inBusinessHours: true,
+              inBusinessHours: previewInBusinessHours,
             })}
+          </p>
+          <p className="max-w-[90%] self-end rounded-2xl rounded-br-md border bg-muted px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+            Caller reply…
+          </p>
+          <p className="max-w-[90%] rounded-2xl rounded-bl-md bg-primary/90 px-3 py-2 text-xs leading-relaxed text-primary-foreground">
+            {previewReplyConfirmationSms(firstTextConfig, previewName, previewInBusinessHours)}
           </p>
         </div>
       </aside>

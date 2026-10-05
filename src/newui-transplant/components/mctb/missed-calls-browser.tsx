@@ -150,7 +150,14 @@ export function MissedCallsBrowser({
                     <Link href={`/mctb/missed-calls/${m.id}`} className="flex items-center gap-3 after:absolute after:inset-0">
                       <Initials name={m.caller} />
                       <span className="flex min-w-0 flex-col">
-                        <span className="font-medium">{m.caller}</span>
+                        <span className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium">{m.caller}</span>
+                          {m.callsToday && m.callsToday > 1 ? (
+                            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                              Called {m.callsToday}× today
+                            </span>
+                          ) : null}
+                        </span>
                         <span className="font-mono text-xs text-muted-foreground tabular-nums">{m.phone}</span>
                       </span>
                     </Link>
