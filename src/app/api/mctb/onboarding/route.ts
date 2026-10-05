@@ -199,6 +199,8 @@ export async function POST(req: Request) {
       forwardingCarrier?: MctbForwardingCarrier;
       businessNumberE164?: string;
       forwardingRingSeconds?: number;
+      /** IANA US timezone for dates, pause, and schedules (e.g. America/New_York). */
+      timezone?: string;
       /** @deprecated Use start_forwarding_test + Twilio verification */
       forwardingConnected?: boolean;
     };
@@ -291,6 +293,11 @@ export async function POST(req: Request) {
       }
       state = await loadMctbOnboardingState(auth.workspaceId);
       return NextResponse.json({ ok: true, state, trialEndsAt: result.trialEndsAt });
+    }
+
+    if (body.timezone) {
+      const { persistMctbWorkspaceTimezone } = await import("@/lib/mctb/persist-workspace-timezone");
+      await persistMctbWorkspaceTimezone(auth.workspaceId, body.timezone);
     }
 
     if (body.businessName) {

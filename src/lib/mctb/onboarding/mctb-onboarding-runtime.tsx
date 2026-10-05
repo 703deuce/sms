@@ -48,6 +48,11 @@ import {
 import { formatMctbOnboardingUserError } from "@/lib/mctb/onboarding/user-facing-errors";
 import type { MctbCapabilities } from "@/lib/mctb/capabilities";
 import { parseRecoveryGoalId } from "@/lib/mctb/recovery-goals";
+import {
+  guessUsTimezoneForOnboarding,
+  MCTB_US_TIMEZONE_OPTIONS,
+  resolveMctbUsTimezoneChoice,
+} from "@/lib/mctb/us-timezone-options";
 
 type OnboardingPayload = {
   state: MctbOnboardingState;
@@ -128,6 +133,7 @@ export function MctbOnboardingRuntime({
   const [businessName, setBusinessName] = useState(initialBusinessName);
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [businessNumber, setBusinessNumber] = useState("");
+  const [businessTimezone, setBusinessTimezone] = useState(guessUsTimezoneForOnboarding);
   const [carrier, setCarrier] = useState<MctbForwardingCarrier>("verizon");
   const [messageTemplate, setMessageTemplate] = useState(DEFAULT_MESSAGE);
   const [recoveryGoal, setRecoveryGoal] = useState<MctbRecoveryGoalId>("get_reply");
@@ -175,6 +181,7 @@ export function MctbOnboardingRuntime({
           consentMode?: MctbConsentMode;
           consentMeta?: { existingConsentEligible?: boolean };
           recoveryGoal?: string;
+          runtime?: { timezone?: string };
         };
         consentMode?: MctbConsentMode;
         consentMeta?: { existingConsentEligible?: boolean };
@@ -194,6 +201,8 @@ export function MctbOnboardingRuntime({
       const goalRaw = setupJson?.data?.recoveryGoal ?? setupJson?.recoveryGoal;
       const goalId = parseRecoveryGoalId(goalRaw);
       if (goalId) setRecoveryGoal(goalId);
+      const savedTz = setupJson?.data?.runtime?.timezone;
+      if (savedTz) setBusinessTimezone(resolveMctbUsTimezoneChoice(savedTz));
     } else if (json.state?.consentMode) {
       const { normalizeMctbConsentMode } = await import("@/lib/mctb/consent-mode");
       setConsentMode(normalizeMctbConsentMode(json.state.consentMode));
@@ -261,6 +270,9 @@ export function MctbOnboardingRuntime({
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Save failed");
       await load();
+      if (body.timezone && typeof window !== "undefined") {
+        window.dispatchEvent(new Event("mctb-setup-updated"));
+      }
       return json;
     } catch (err) {
       setError(
@@ -423,6 +435,8 @@ export function MctbOnboardingRuntime({
       setWebsiteUrl,
       businessNumber,
       setBusinessNumber,
+      businessTimezone,
+      setBusinessTimezone,
       carrier,
       setCarrier,
       messageTemplate,
@@ -570,6 +584,21 @@ export function MctbOnboardingRuntime({
                   />
                 </div>
                 <div className="mctb-onb-field">
+                  <label htmlFor="mctb-onb-timezone">Your time zone</label>
+                  <select
+                    id="mctb-onb-timezone"
+                    value={businessTimezone}
+                    onChange={(e) => setBusinessTimezone(e.target.value)}
+                  >
+                    {MCTB_US_TIMEZONE_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-[12px] text-[#626872]">
+                    Used for missed-call times, pause schedules, and reports.
+                  </p>
+                </div>
+                <div className="mctb-onb-field">
                   <label htmlFor="mctb-onb-carrier">Carrier / provider</label>
                   <select
                     id="mctb-onb-carrier"
@@ -625,6 +654,7 @@ export function MctbOnboardingRuntime({
                   websiteUrl: websiteUrl.trim(),
                   businessNumberE164: businessNumber.trim(),
                   forwardingCarrier: carrier,
+                  timezone: businessTimezone,
                 }),
             })}
           </div>

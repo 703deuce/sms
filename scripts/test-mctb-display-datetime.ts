@@ -25,4 +25,9 @@ assert.ok(!compact.includes("UTC"));
 const weekday = formatMctbChartWeekdayLabel("2026-08-02", tz);
 assert.equal(weekday, "Sun");
 
+import { resolveMctbUsTimezoneChoice } from "../src/lib/mctb/us-timezone-options";
+
+assert.equal(resolveMctbUsTimezoneChoice("America/Chicago"), "America/Chicago");
+assert.equal(resolveMctbUsTimezoneChoice("Europe/London"), "America/New_York");
+
 console.log("test-mctb-display-datetime: PASS");
