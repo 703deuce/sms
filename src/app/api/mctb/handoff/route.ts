@@ -25,8 +25,12 @@ export async function GET() {
   const { canSendMctbUrgentBusinessTeamSms } = await import(
     "@/lib/mctb/handoff/urgent-business-sms-entitlement",
   );
+  const { canSendMctbBusinessReplyTeamSms } = await import(
+    "@/lib/mctb/handoff/business-reply-sms-entitlement",
+  );
   const aiRepliesEnabled = await isLeadRecoveryAiRepliesEnabled(workspaceId);
   const urgentBusinessSmsEntitled = await canSendMctbUrgentBusinessTeamSms(workspaceId);
+  const businessReplySmsEntitled = await canSendMctbBusinessReplyTeamSms(workspaceId);
   return NextResponse.json({
     data: {
       config,
@@ -34,6 +38,7 @@ export async function GET() {
       launch: {
         aiRepliesEnabled,
         urgentBusinessSmsEntitled,
+        businessReplySmsEntitled,
       },
     },
   });

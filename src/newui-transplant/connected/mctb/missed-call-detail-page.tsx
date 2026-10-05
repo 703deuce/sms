@@ -11,6 +11,7 @@ export function NewUiMctbMissedCallDetailPage({ eventId }: { eventId: string }) 
   const [wired, setWired] = useState<ReturnType<typeof buildMctbMissedCallDetailWired> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [markBusy, setMarkBusy] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -72,5 +73,36 @@ export function NewUiMctbMissedCallDetailPage({ eventId }: { eventId: string }) 
   }
   if (!wired) return <p className="p-6 text-sm text-muted-foreground">Missed call not found.</p>;
 
-  return <TransplantMctbMissedCallDetailView wired={wired} />;
+  const markHandled = async () => {
+    if (!wired?.conversationId) return;
+    setMarkBusy(true);
+    try {
+      const res = await fetch("/api/mctb/handoff/actions", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "follow_up",
+          conversationId: wired.conversationId,
+          followUpStatus: "resolved",
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "Could not update follow-up");
+      const detailRes = await fetch(`/api/mctb/missed-calls/${eventId}`, { cache: "no-store" });
+      const detailJson = await detailRes.json();
+      if (detailRes.ok && detailJson.event) setDetailJson(detailJson);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not mark handled");
+    } finally {
+      setMarkBusy(false);
+    }
+  };
+
+  return (
+    <TransplantMctbMissedCallDetailView
+      wired={wired}
+      onMarkHandled={wired.canMarkHandled ? () => void markHandled() : undefined}
+      markHandledBusy={markBusy}
+    />
+  );
 }

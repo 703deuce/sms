@@ -140,6 +140,20 @@ export async function loadMctbMissedCallDetailPayload(workspaceId: string, event
 
   const displayBrief = teamBrief ? tightenTeamBriefForDetail(teamBrief) : null;
 
+  const followUp =
+    conversation?.id
+      ? await prisma.mctbConversationAutomationState
+          .findUnique({
+            where: { conversationId: conversation.id },
+            select: {
+              followUpStatus: true,
+              followUpAt: true,
+              state: true,
+            },
+          })
+          .catch(() => null)
+      : null;
+
   return {
     ok: true as const,
     status: 200,
@@ -161,6 +175,13 @@ export async function loadMctbMissedCallDetailPayload(workspaceId: string, event
       consent,
       contact,
       conversation,
+      followUp: followUp
+        ? {
+            status: followUp.followUpStatus,
+            at: followUp.followUpAt?.toISOString() ?? null,
+            automationState: followUp.state,
+          }
+        : null,
       voicemail: voicemail
         ? {
             id: voicemail.id,

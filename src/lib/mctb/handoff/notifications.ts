@@ -91,6 +91,14 @@ export async function deliverMctbHandoffNotifications(input: {
   if (MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY) {
     channels = { email: true, sms: false, in_app: false };
   }
+
+  const { canSendMctbBusinessReplyTeamSms } = await import("./business-reply-sms-entitlement");
+  const businessReplySmsEntitled = await canSendMctbBusinessReplyTeamSms(input.workspaceId);
+  const isCallerReplyEvent =
+    input.eventType === "caller_replied" || input.eventType === "callback_requested";
+  if (isCallerReplyEvent && !businessReplySmsEntitled) {
+    channels = { ...channels, sms: false };
+  }
   const results: Array<{ channel: string; status: string; destination?: string }> = [];
 
   let teamBrief: MctbTeamActivityBrief | null = null;
@@ -256,9 +264,12 @@ export async function deliverMctbHandoffNotifications(input: {
       });
       if (prior) continue;
       try {
-        await sendQuickSms({
+        const { sendMctbBusinessHandoffNotificationSms } = await import(
+          "./send-business-notification-sms"
+        );
+        await sendMctbBusinessHandoffNotificationSms({
           workspaceId: input.workspaceId,
-          to: recipient.mobileE164!,
+          toE164: recipient.mobileE164!,
           body: smsBody,
           idempotencyKey,
         });
@@ -301,6 +312,19 @@ export async function deliverMctbHandoffNotifications(input: {
       channel: "sms",
       status: "suppressed",
       destination: "urgent_business_sms_not_entitled",
+    });
+  }
+
+  if (
+    channels.sms &&
+    isCallerReplyEvent &&
+    !businessReplySmsEntitled &&
+    routing.channels?.sms
+  ) {
+    results.push({
+      channel: "sms",
+      status: "suppressed",
+      destination: "business_reply_sms_not_entitled",
     });
   }
 

@@ -32,7 +32,10 @@ export type MctbSetupNotificationsWired = {
     email: boolean
     sms: boolean
     smsDisabled?: boolean
-    smsDisabledReason?: 'launch_email_only' | 'urgent_sms_requires_plan'
+    smsDisabledReason?:
+      | 'launch_email_only'
+      | 'urgent_sms_requires_plan'
+      | 'business_reply_sms_requires_plan'
     onEmailChange?: (v: boolean) => void
     onSmsChange?: (v: boolean) => void
   }>
@@ -207,9 +210,11 @@ export function TransplantMctbSetupNotificationsPage({ wired }: { wired?: MctbSe
                         title={
                           e.smsDisabledReason === 'urgent_sms_requires_plan'
                             ? 'Urgent business SMS requires an AI Recovery plan.'
-                            : e.smsDisabledReason === 'launch_email_only'
-                              ? 'SMS alerts for this event are not available at launch. Email notifications apply.'
-                              : 'SMS not available for this event.'
+                            : e.smsDisabledReason === 'business_reply_sms_requires_plan'
+                              ? 'Missed-call reply SMS alerts require a plan upgrade.'
+                              : e.smsDisabledReason === 'launch_email_only'
+                                ? 'SMS alerts for this event are not available at launch. Email notifications apply.'
+                                : 'SMS not available for this event.'
                         }
                       >
                         —

@@ -48,8 +48,12 @@ assert.ok(
 
 assert.equal(
   MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY,
-  true,
-  "launch default: document expects email-only team notifications flag on",
+  false,
+  "deterministic launch: team SMS/in-app enabled with businessReplySms entitlement",
+);
+assert.ok(
+  notifications.includes("canSendMctbBusinessReplyTeamSms"),
+  "caller_replied SMS must be entitlement-gated",
 );
 assert.ok(
   notifications.includes("MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY"),

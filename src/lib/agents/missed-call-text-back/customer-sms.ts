@@ -405,7 +405,7 @@ export async function handleMctbCustomerSmsReply(input: {
         _deterministic_reply_ack_sent_at: new Date().toISOString(),
         _deterministic_reply_ack_body: ackBody,
       },
-      followUpStatus: "acknowledged",
+      followUpStatus: "needs_follow_up",
     });
 
     return {

@@ -17,6 +17,8 @@ export type MctbCapabilities = {
   urgentClassification: boolean;
   urgentBusinessEmail: boolean;
   urgentBusinessSms: boolean;
+  /** Team SMS when a missed-call customer replies (caller_replied) */
+  businessReplySms: boolean;
   /** Purchased AI Recovery SKU — not the same as Recovery paid */
   aiRecoveryEntitled: boolean;
   /** @deprecated alias — use aiRecoveryEntitled for gates */
@@ -97,6 +99,10 @@ export async function resolveMctbCapabilities(workspaceId: string): Promise<Mctb
   const urgentBusinessEmail = aiRecoveryEntitled;
   const urgentBusinessSms = aiRecoveryEntitled;
 
+  const businessReplySmsOpen =
+    process.env.MCTB_BUSINESS_REPLY_SMS_REQUIRES_PAID !== "1" || recoveryPaid;
+  const businessReplySms = mctbProductActive && businessReplySmsOpen;
+
   const customTemplates = customerOwnedSender;
   const manualTwoWayMessaging = customerOwnedSender;
 
@@ -109,6 +115,7 @@ export async function resolveMctbCapabilities(workspaceId: string): Promise<Mctb
     urgentClassification,
     urgentBusinessEmail,
     urgentBusinessSms,
+    businessReplySms,
     aiRecoveryEntitled,
     aiRecovery: aiRecoveryEntitled,
     ownSenderAddOnEntitled,

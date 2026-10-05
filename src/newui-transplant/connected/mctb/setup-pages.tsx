@@ -314,10 +314,15 @@ export function NewUiMctbSetupNotificationsPage() {
     return OPUS_EVENT_MAP.map((row) => {
       const matrix = row.event ? n.config!.routingMatrix[row.event] : null;
       const isUrgentRow = row.event === "urgent_detected";
+      const isCallerReplyRow =
+        row.event === "caller_replied" || row.event === "callback_requested";
       const smsLaunchDisabled =
         MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY && row.event !== "urgent_detected";
       const smsDisabled =
-        !row.event || smsLaunchDisabled || (isUrgentRow && !n.urgentBusinessSmsEntitled);
+        !row.event ||
+        smsLaunchDisabled ||
+        (isUrgentRow && !n.urgentBusinessSmsEntitled) ||
+        (isCallerReplyRow && !n.businessReplySmsEntitled);
       return {
         label: row.label,
         email: matrix?.channels?.email ?? matrix?.email ?? true,
@@ -327,7 +332,9 @@ export function NewUiMctbSetupNotificationsPage() {
           ? "launch_email_only"
           : isUrgentRow && !n.urgentBusinessSmsEntitled
             ? "urgent_sms_requires_plan"
-            : undefined,
+            : isCallerReplyRow && !n.businessReplySmsEntitled
+              ? "business_reply_sms_requires_plan"
+              : undefined,
         onEmailChange: row.event
           ? (v: boolean) => {
               const base = handoffConfigRef.current ?? n.config;
@@ -373,7 +380,14 @@ export function NewUiMctbSetupNotificationsPage() {
           : undefined,
       };
     });
-  }, [n.config, n.recipients, n.setConfig, n.save, n.urgentBusinessSmsEntitled]);
+  }, [
+    n.config,
+    n.recipients,
+    n.setConfig,
+    n.save,
+    n.urgentBusinessSmsEntitled,
+    n.businessReplySmsEntitled,
+  ]);
 
   if (n.loading) return <p className="p-6 text-sm text-muted-foreground">Loading notifications…</p>;
 

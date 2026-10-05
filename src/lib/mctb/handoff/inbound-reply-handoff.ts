@@ -161,7 +161,7 @@ export async function processMctbInboundReplyHandoff(input: {
   await updateAutomationState(input.conversationId, {
     state: nextState,
     capturedFieldsJson: captured,
-    followUpStatus: null,
+    followUpStatus: "needs_follow_up",
   });
 
   await prisma.missedCallEvent.update({

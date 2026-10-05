@@ -6,8 +6,11 @@
 /** Customer-facing Try It / synthetic demo surfaces (nav, onboarding demo CTAs). */
 export const MCTB_LAUNCH_TRY_IT_ENABLED = false;
 
-/** Team notifications: email only in setup UI and delivery for launch. */
-export const MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY = true;
+/**
+ * Legacy launch gate — when true, suppresses team SMS/in-app routing defaults.
+ * Deterministic launch uses per-event channels + `businessReplySms` entitlement instead.
+ */
+export const MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY = false;
 
 /** Hide conversational AI booking / AI_BOOK controls in normal MCTB setup. */
 export const MCTB_LAUNCH_HIDE_AI_BOOK_UI = true;

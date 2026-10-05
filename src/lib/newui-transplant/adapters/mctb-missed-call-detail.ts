@@ -43,6 +43,9 @@ export type MctbMissedCallDetailWired = {
     hasVoicemail: boolean;
     hasTextReplies: boolean;
   } | null;
+  followUpStatus: string | null;
+  followUpLabel: string | null;
+  canMarkHandled: boolean;
 };
 
 function toRecoveryStatus(status: string, suppressionReason: string | null): RecoveryStatus {
@@ -111,6 +114,11 @@ export function buildMctbMissedCallDetailWired(
     transcriptStatus?: string | null;
   } | null;
   const repeatCaller = json.repeatCaller as { total: number; missedToday: number } | null;
+  const followUp = json.followUp as {
+    status?: string | null;
+    at?: string | null;
+    automationState?: string | null;
+  } | null;
 
   const callerE164 = String(event.callerE164 || "");
   const phone = formatMctbPhoneLabel(callerE164);
@@ -277,12 +285,26 @@ export function buildMctbMissedCallDetailWired(
           ? "Captured ✓"
           : "—";
 
+  const followUpStatus = followUp?.status ?? null;
+  let followUpLabel: string | null = null;
+  if (followUpStatus === "resolved" || followUpStatus === "appointment_booked") {
+    followUpLabel = "Handled";
+  } else if (
+    followUpStatus === "needs_follow_up" ||
+    followUpStatus === "acknowledged" ||
+    followUpStatus === "called_back" ||
+    reply
+  ) {
+    followUpLabel = "Needs follow-up";
+  }
+
   const headerParts: string[] = [];
   if (repeatCaller?.missedToday && repeatCaller.missedToday > 1) {
     headerParts.push(`${repeatCaller.missedToday} missed calls today`);
   }
   if (sentAt) headerParts.push("Recovery text sent");
   if (reply) headerParts.push("Customer replied");
+  if (followUpLabel) headerParts.push(followUpLabel);
   const headerStatusLine = headerParts.join(" · ") || formatRecoveryStatus(status, suppressionReason);
 
   const infoRailSections = [
@@ -308,6 +330,7 @@ export function buildMctbMissedCallDetailWired(
       rows: [
         { label: "Recovery text", value: sentAtLabel },
         { label: "Customer reply", value: replyLabel },
+        ...(followUpLabel ? [{ label: "Follow-up", value: followUpLabel }] : []),
         { label: "Consent", value: consentRail },
         ...(aiOutboundCount > 0
           ? [{ label: "AI Recovery", value: `${messageCount} messages (${aiOutboundCount} AI)` }]
@@ -361,5 +384,8 @@ export function buildMctbMissedCallDetailWired(
     senderLabel: extras?.senderLabel,
     diagnostics: diagnosticsLines.join("\n"),
     teamBrief,
+    followUpStatus,
+    followUpLabel,
+    canMarkHandled: Boolean(conversation?.id && followUpLabel === "Needs follow-up"),
   };
 }

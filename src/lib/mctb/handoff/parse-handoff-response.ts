@@ -3,6 +3,7 @@ import type { MctbHandoffConfigDto, MctbNotificationRecipientDto } from "./types
 export type MctbHandoffLaunchMeta = {
   aiRepliesEnabled?: boolean;
   urgentBusinessSmsEntitled?: boolean;
+  businessReplySmsEntitled?: boolean;
 };
 
 export type MctbHandoffPayload = {

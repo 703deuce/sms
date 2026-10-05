@@ -5,12 +5,21 @@ import { ArrowLeft, ChevronDown, MessageSquare, Phone } from 'lucide-react'
 import { Page, PageHeader, Panel, Rows, TextLink } from '@/newui-transplant/components/app/kit'
 import { OPUS_CARD } from '@/newui-transplant/components/app/opus-surfaces'
 import { ButtonLink } from '@/newui-transplant/components/app/button-link'
+import { Button } from '@/newui-transplant/components/ui/button'
 import { MctbRecoveryBriefPanel, MctbRecoveryBriefPlaceholder } from '@/newui-transplant/components/mctb/mctb-recovery-brief-panel'
 import { MctbMissedCallInfoRail } from '@/newui-transplant/components/mctb/mctb-missed-call-info-rail'
 import { MctbDetailConversationThread } from '@/newui-transplant/components/mctb/mctb-detail-conversation-thread'
 import type { MctbMissedCallDetailWired } from '@/lib/newui-transplant/adapters/mctb-missed-call-detail'
 
-export function TransplantMctbMissedCallDetailView({ wired }: { wired: MctbMissedCallDetailWired }) {
+export function TransplantMctbMissedCallDetailView({
+  wired,
+  onMarkHandled,
+  markHandledBusy,
+}: {
+  wired: MctbMissedCallDetailWired
+  onMarkHandled?: () => void
+  markHandledBusy?: boolean
+}) {
   const convoHref = wired.conversationId
     ? `/mctb/conversations?conversation=${wired.conversationId}`
     : undefined
@@ -37,6 +46,19 @@ export function TransplantMctbMissedCallDetailView({ wired }: { wired: MctbMisse
         }
         actions={
           <>
+            {wired.canMarkHandled && onMarkHandled ? (
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                disabled={markHandledBusy}
+                onClick={onMarkHandled}
+              >
+                {markHandledBusy ? 'Saving…' : 'Mark handled'}
+              </Button>
+            ) : wired.followUpLabel === 'Handled' ? (
+              <span className="text-sm font-medium text-muted-foreground">Handled</span>
+            ) : null}
             <ButtonLink href={`tel:${wired.phoneTel}`} variant="outline">
               <Phone /> Call
             </ButtonLink>

@@ -15,25 +15,44 @@ export type NotificationRenderInput = {
 
 export function renderMctbTeamSms(input: NotificationRenderInput): string {
   const lines: string[] = [];
-  if (input.urgent) {
+  const latestReply =
+    input.facts.customerMessages?.length
+      ? input.facts.customerMessages[input.facts.customerMessages.length - 1]?.trim()
+      : "";
+
+  if (input.eventType === "caller_replied" || input.eventType === "callback_requested") {
+    lines.push(`New missed-call reply — ${input.businessName}`);
+    lines.push("");
+    const phone = input.facts.callerPhone || "";
+    if (phone) lines.push(phone);
+    if (latestReply) {
+      lines.push("");
+      const quoted = latestReply.length > 420 ? `${latestReply.slice(0, 417)}…` : latestReply;
+      lines.push(`"${quoted}"`);
+    }
+  } else if (input.urgent) {
     lines.push("URGENT — callback requested");
     lines.push("");
+    const name = input.facts.callerName || "Caller";
+    const phone = input.facts.callerPhone || "";
+    lines.push(name);
+    if (phone) lines.push(phone);
+    lines.push("");
+    if (latestReply) lines.push(latestReply);
   } else {
     lines.push("New missed-call lead");
     lines.push("");
-  }
-
-  const name = input.facts.callerName || "Caller";
-  const phone = input.facts.callerPhone || "";
-  lines.push(name);
-  if (phone) lines.push(phone);
-  lines.push("");
-
-  if (input.facts.serviceReason) lines.push(input.facts.serviceReason);
-  if (input.facts.locationZip) lines.push(input.facts.locationZip);
-  if (input.facts.callbackTime) lines.push(`Callback: ${input.facts.callbackTime}`);
-  if (input.derived?.urgencyClassification && input.urgent) {
-    lines.push(`Urgency: ${input.derived.urgencyClassification}`);
+    const name = input.facts.callerName || "Caller";
+    const phone = input.facts.callerPhone || "";
+    lines.push(name);
+    if (phone) lines.push(phone);
+    lines.push("");
+    if (input.facts.serviceReason) lines.push(input.facts.serviceReason);
+    if (input.facts.locationZip) lines.push(input.facts.locationZip);
+    if (input.facts.callbackTime) lines.push(`Callback: ${input.facts.callbackTime}`);
+    if (input.derived?.urgencyClassification && input.urgent) {
+      lines.push(`Urgency: ${input.derived.urgencyClassification}`);
+    }
   }
 
   if (input.conversationUrl) {

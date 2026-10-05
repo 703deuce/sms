@@ -28,7 +28,7 @@ assert.equal(MCTB_LAUNCH_TRY_IT_ENABLED, false);
 assert.equal(shouldShowTryItNav("trial"), false);
 assert.equal(shouldShowTryItNav("trial", { isPlatformAdmin: true }), true);
 
-assert.equal(MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY, true);
+assert.equal(MCTB_LAUNCH_EMAIL_NOTIFICATIONS_ONLY, false);
 assert.equal(MCTB_LAUNCH_HIDE_LR_TEXT_TO_PAY_UI, true);
 assert.equal(MCTB_LAUNCH_HIDE_LR_AI_BOOK_UI, true);
 
@@ -117,7 +117,7 @@ assert.equal(
     eventType: "caller_replied",
     channel: "sms",
   }),
-  false,
+  true,
 );
 
 const bookingActions = launchBookingIntentActions();
