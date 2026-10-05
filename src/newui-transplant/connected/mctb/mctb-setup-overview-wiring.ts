@@ -238,8 +238,9 @@ export function useMctbSetupOverviewWiring(senderFallback: string): {
 
     const callFlowRows = rows.filter((r) => r.group === "call-flow").map(mapRow);
     const operationsRows = rows.filter((r) => r.group === "operations").map(mapRow);
+    const displayTz = setup.runtime.timezone || "America/New_York";
     const activity = buildSetupActivityFromFunnel(funnelEvents).map((a) => ({
-      time: formatShortWhenCompact(a.at),
+      time: formatShortWhenCompact(a.at, displayTz),
       text: a.label,
     }));
 
@@ -255,7 +256,7 @@ export function useMctbSetupOverviewWiring(senderFallback: string): {
         !voicemailSummary.includes("Not") && voicemailSummary !== "Configure in Voicemail",
     });
 
-    const lastTestShort = lastTestAt ? formatShortWhenCompact(lastTestAt) : "Never";
+    const lastTestShort = lastTestAt ? formatShortWhenCompact(lastTestAt, displayTz) : "Never";
 
     return {
       businessLine: globalStatus.businessLineLabel ?? "—",

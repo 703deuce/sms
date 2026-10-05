@@ -1,3 +1,4 @@
+import { formatMctbCompactDateTime } from "@/lib/mctb/display-datetime";
 import { MCTB_CONSENT_MODE_LABELS, type MctbConsentMode } from "@/lib/mctb/consent-mode";
 import { describeMctbSenderPresentation } from "@/lib/mctb/sender-presentation";
 import { getCarrierGuide } from "@/lib/mctb/onboarding/carriers";
@@ -485,10 +486,9 @@ export function buildSetupActivityFromFunnel(
     }));
 }
 
-export function formatShortWhenCompact(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+export function formatShortWhenCompact(iso: string, timeZone?: string | null): string {
+  const label = formatMctbCompactDateTime(iso, timeZone);
+  return label === "—" ? iso : label;
 }
 
 function formatShortWhen(iso: string): string {

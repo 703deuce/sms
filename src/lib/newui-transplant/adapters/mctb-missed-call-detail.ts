@@ -1,3 +1,4 @@
+import { formatMctbFriendlyDateTime } from "@/lib/mctb/display-datetime";
 import { formatSuppressionReasonLabel } from "@/lib/mctb/analytics-suppression-labels";
 import { classificationToTriggerLabel } from "@/lib/mctb/missed-calls-list-filters";
 import { formatConsentModeLabel, formatRecoveryStatus, formatReplyStatus } from "@/lib/mctb/recovery-display";
@@ -61,24 +62,15 @@ function toRecoveryStatus(status: string, suppressionReason: string | null): Rec
   return "Sent";
 }
 
-function fmtWhen(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString(undefined, {
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  } catch {
-    return "—";
-  }
+function fmtWhen(iso: string | null | undefined, timeZone?: string | null): string {
+  return formatMctbFriendlyDateTime(iso, timeZone);
 }
 
 export function buildMctbMissedCallDetailWired(
   json: Record<string, unknown>,
-  extras?: { senderLabel?: string },
+  extras?: { senderLabel?: string; timeZone?: string | null },
 ): MctbMissedCallDetailWired | null {
+  const timeZone = extras?.timeZone;
   const event = json.event as Record<string, unknown> | undefined;
   if (!event) return null;
 
@@ -117,7 +109,7 @@ export function buildMctbMissedCallDetailWired(
   const name = [contact?.firstName, contact?.lastName].filter(Boolean).join(" ").trim();
   const caller = name || phone;
   const detectedAt = String(event.detectedAt || "");
-  const missed = fmtWhen(detectedAt);
+  const missed = fmtWhen(detectedAt, timeZone);
 
   const status = String(event.status || "");
   const suppressionReason = (event.suppressionReason as string | null) ?? null;
@@ -132,7 +124,7 @@ export function buildMctbMissedCallDetailWired(
     stepsFromApi.length > 0
       ? stepsFromApi.map((s) => ({
           label: s.label,
-          detail: s.at ? fmtWhen(s.at) : s.status,
+          detail: s.at ? fmtWhen(s.at, timeZone) : s.status,
           done: s.status === "complete",
         }))
       : [
@@ -202,7 +194,7 @@ export function buildMctbMissedCallDetailWired(
 
   const requestForm =
     formSubmissions.length > 0
-      ? `Request form submitted${formSubmissions[0]?.submittedAt ? ` · ${fmtWhen(formSubmissions[0].submittedAt)}` : ""}.`
+      ? `Request form submitted${formSubmissions[0]?.submittedAt ? ` · ${fmtWhen(formSubmissions[0].submittedAt, timeZone)}` : ""}.`
       : "No request form submitted.";
 
   const consentModeRaw = timeline?.consentMode ?? consent?.consentMode ?? "press_1";
@@ -227,8 +219,8 @@ export function buildMctbMissedCallDetailWired(
   }
   const scheduledAt = event.scheduledSmsAt as string | undefined;
   const sentAt = event.smsSentAt as string | undefined;
-  if (scheduledAt) textBackRows.push({ label: "Scheduled", value: fmtWhen(scheduledAt) });
-  if (sentAt) textBackRows.push({ label: "Sent", value: fmtWhen(sentAt) });
+  if (scheduledAt) textBackRows.push({ label: "Scheduled", value: fmtWhen(scheduledAt, timeZone) });
+  if (sentAt) textBackRows.push({ label: "Sent", value: fmtWhen(sentAt, timeZone) });
 
   const consentRows: Array<{ label: string; value: string }> = [
     { label: "Mode", value: consentModeLabel },
@@ -238,7 +230,7 @@ export function buildMctbMissedCallDetailWired(
     },
   ];
   if (consent?.consentedAt) {
-    consentRows.push({ label: "Captured", value: fmtWhen(consent.consentedAt) });
+    consentRows.push({ label: "Captured", value: fmtWhen(consent.consentedAt, timeZone) });
   }
   if (consent?.consentScope) {
     consentRows.push({ label: "Scope", value: consent.consentScope });

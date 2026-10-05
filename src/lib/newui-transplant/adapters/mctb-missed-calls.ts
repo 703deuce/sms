@@ -1,3 +1,4 @@
+import { formatMctbCompactDateTime } from "@/lib/mctb/display-datetime";
 import type { MissedCall, RecoveryStatus } from "@/newui-transplant/lib/view-models";
 import type { MctbMissedCallsListData } from "@/lib/mctb/missed-calls-list-data";
 import { fmtCallPhone } from "@/lib/voice/calls/display";
@@ -22,18 +23,16 @@ function mapTrigger(classification: string | null): MissedCall["trigger"] {
   return "No answer";
 }
 
-export function mapMctbMissedCallsListToNewUi(data: MctbMissedCallsListData): MissedCall[] {
+export function mapMctbMissedCallsListToNewUi(
+  data: MctbMissedCallsListData,
+  timeZone?: string | null,
+): MissedCall[] {
   return data.events.map((e) => ({
     id: e.id,
     caller: e.contactName?.trim() || fmtCallPhone(e.callerE164),
     phone: fmtCallPhone(e.callerE164),
     callerE164: e.callerE164,
-    missed: new Date(e.detectedAt).toLocaleString(undefined, {
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    }),
+    missed: formatMctbCompactDateTime(e.detectedAt, timeZone),
     trigger: mapTrigger(e.classification),
     recovery: mapRecoveryStatus(e.status, e.suppressionReason),
     reply: null,

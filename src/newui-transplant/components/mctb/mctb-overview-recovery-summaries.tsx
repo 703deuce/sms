@@ -5,9 +5,10 @@ import { Phone } from "lucide-react";
 import { Initials, Panel, Pill, TextLink } from "@/newui-transplant/components/app/kit";
 import { buttonVariants } from "@/newui-transplant/components/ui/button";
 import { cn } from "@/lib/utils";
+import { formatMctbCompactDateTime } from "@/lib/mctb/display-datetime";
 import type { MctbOverviewRecentRecoveryRow } from "@/lib/mctb/overview-types";
 
-function formatMissedRelative(iso: string): string {
+function formatMissedRelative(iso: string, timeZone?: string | null): string {
   const then = new Date(iso).getTime();
   const now = Date.now();
   const diffSec = Math.max(0, Math.floor((now - then) / 1000));
@@ -16,8 +17,7 @@ function formatMissedRelative(iso: string): string {
   if (mins < 60) return `${mins} min ago`;
   const hours = Math.floor(mins / 60);
   if (hours < 48) return `${hours} hr ago`;
-  const days = Math.floor(hours / 24);
-  return `${days} day${days === 1 ? "" : "s"} ago`;
+  return formatMctbCompactDateTime(iso, timeZone);
 }
 
 function replyPillTone(replyLabel: string): "success" | "neutral" | "warning" {
@@ -26,7 +26,13 @@ function replyPillTone(replyLabel: string): "success" | "neutral" | "warning" {
   return "warning";
 }
 
-export function MctbOverviewRecoverySummaries({ rows }: { rows: MctbOverviewRecentRecoveryRow[] }) {
+export function MctbOverviewRecoverySummaries({
+  rows,
+  timeZone,
+}: {
+  rows: MctbOverviewRecentRecoveryRow[];
+  timeZone?: string | null;
+}) {
   return (
     <Panel
       title="Recent missed calls"
@@ -63,7 +69,7 @@ export function MctbOverviewRecoverySummaries({ rows }: { rows: MctbOverviewRece
                           <Pill tone={replyPillTone(row.replyLabel)} dot>
                             {row.replyLabel === "—" ? row.recoveryLabel : row.replyLabel}
                           </Pill>
-                          <span className="text-xs text-muted-foreground">{formatMissedRelative(row.missedAt)}</span>
+                          <span className="text-xs text-muted-foreground">{formatMissedRelative(row.missedAt, timeZone)}</span>
                         </div>
                       </div>
                       <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{row.summaryText}</p>

@@ -51,6 +51,7 @@ export function NewUiMctbAnalyticsPage({ initialData, initialRange }: { initialD
     const days = data.trends.missedCalls.map((p) => p.date);
     return mergeDailyTrends({
       days,
+      timeZone: data.timeZone,
       missed: data.trends.missedCalls,
       texts: data.trends.recoveryTexts,
       replies: data.trends.replies,

@@ -186,7 +186,7 @@ export function NewUiMctbOverviewPage({ data }: { data: MctbOverviewPayload }) {
       ) : null}
 
       <div className="mt-4">
-        <MctbOverviewRecoverySummaries rows={data.recentMissedCalls ?? []} />
+        <MctbOverviewRecoverySummaries rows={data.recentMissedCalls ?? []} timeZone={timezone} />
       </div>
 
       <Panel className="mt-4" title="Setup health" bodyClassName="divide-y p-0 px-5">
