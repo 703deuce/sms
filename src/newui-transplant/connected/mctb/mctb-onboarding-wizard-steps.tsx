@@ -1,9 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Copy, Lock } from "lucide-react";
+import { CheckCircle2, Copy, Lock, MessageSquareText, Phone } from "lucide-react";
 import type { MctbCapabilities } from "@/lib/mctb/capabilities";
-import { listMctbPlatformRecoveryOpenerChoices } from "@/lib/mctb/platform-recovery-template-choices";
+import { defaultMctbFirstTextTemplateConfig } from "@/lib/mctb/first-text-templates/config-defaults";
+import type { MctbFirstTextTemplateConfig } from "@/lib/mctb/first-text-templates/types";
+import { fetchMctbSetup } from "@/lib/newui-transplant/api/mctb-setup-client";
+import {
+  FirstTextTemplateEditor,
+  validateFirstTextTemplateForPersist,
+} from "@/newui-transplant/components/mctb/first-text-template-editor";
 import { formatCarrierStep } from "@/lib/mctb/onboarding/carriers";
 import type { MctbForwardingCarrier } from "@/lib/mctb/onboarding/types";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
@@ -14,7 +20,7 @@ import { ensureVoicemailNumberBox } from "@/lib/newui-transplant/mctb-voicemail-
 import { buildOnboardingLiveTestSteps } from "@/lib/mctb/onboarding/live-test-presentation";
 import { MctbConsentPromptPanel } from "@/newui-transplant/components/mctb/mctb-consent-prompt-panel";
 import { MctbVoicemailGreetingStudio } from "@/newui-transplant/components/mctb/mctb-voicemail-greeting-studio";
-import { Pill, Rows } from "@/newui-transplant/components/app/kit";
+import { FeatureEmphasisStrip, Panel, Pill, Rows } from "@/newui-transplant/components/app/kit";
 import { Button } from "@/newui-transplant/components/ui/button";
 import { Checkbox } from "@/newui-transplant/components/ui/checkbox";
 import { Input } from "@/newui-transplant/components/ui/input";
@@ -225,23 +231,67 @@ export function WizardConsentStep({ c }: { c: MctbOnboardingController }) {
   );
 }
 
+type OnboardingSenderChoice = "platform" | "own_number_later";
+
 export function WizardTextBackStep({ c }: { c: MctbOnboardingController }) {
   const recoveryBundle = useOnboardingRecoveryBundle();
-  const platformSender = Boolean(c.capabilities?.platformSenderActive);
-  const platformTemplates = listMctbPlatformRecoveryOpenerChoices();
-  const selectedId =
-    platformTemplates.find((t) => t.body === c.messageTemplate)?.id ?? platformTemplates[0]?.id;
+  const recoveryPaid = Boolean(c.capabilities?.recoveryPaid);
+  const [firstTextConfig, setFirstTextConfig] = useState<MctbFirstTextTemplateConfig>(
+    defaultMctbFirstTextTemplateConfig("simple"),
+  );
+  const [senderChoice, setSenderChoice] = useState<OnboardingSenderChoice>("platform");
+  const [setupReady, setSetupReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchMctbSetup({ force: true })
+      .then((data) => {
+        if (cancelled) return;
+        const messaging = data.messaging as {
+          senderMode?: string;
+          firstTextTemplate?: MctbFirstTextTemplateConfig;
+          firstTextBusinessName?: string;
+        };
+        if (messaging?.firstTextTemplate) {
+          setFirstTextConfig(messaging.firstTextTemplate);
+        }
+        if (messaging?.senderMode === "WORKSPACE") {
+          setSenderChoice("own_number_later");
+        } else {
+          setSenderChoice("platform");
+        }
+        setSetupReady(true);
+      })
+      .catch(() => setSetupReady(true));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const businessName = c.businessName.trim() || "Your business";
+  const validation = validateFirstTextTemplateForPersist(firstTextConfig, businessName);
+  const canContinue = setupReady && validation.ok;
 
   useMctbWizardFooter({
     back: true,
     primary: {
       label: "Continue",
-      disabled: !c.messageTemplate.trim(),
+      disabled: !canContinue,
       onClick: () =>
         void (async () => {
           try {
-            await recoveryBundle.saveAll(c.messageTemplate.trim());
-            await c.post({ messageTemplate: c.messageTemplate.trim() });
+            if (!validation.ok) {
+              c.setError(validation.message);
+              return;
+            }
+            const rendered = validation.message;
+            c.setMessageTemplate(rendered);
+            await recoveryBundle.saveAll({
+              messageTemplate: rendered,
+              firstTextTemplate: firstTextConfig,
+              senderMode: "PLATFORM",
+            });
+            await c.post({ messageTemplate: rendered });
           } catch (e) {
             c.setError(e instanceof Error ? e.message : "Could not save text-back settings");
           }
@@ -253,53 +303,65 @@ export function WizardTextBackStep({ c }: { c: MctbOnboardingController }) {
     <>
       <WizardStepIntro
         eyebrow="Step 3"
-        title="Choose your missed-call text"
-        description="This is the first message callers receive after a qualifying missed call."
+        title="Text back & sender"
+        description="Choose how recovery texts are sent, then pick the first message callers receive after consent."
       />
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-sm">
-        <span className="text-muted-foreground">Sending from</span>
-        <span className="font-medium">{c.senderPresentation?.title ?? "Transovo Platform"}</span>
+
+      <div className="mb-6">
+        <FeatureEmphasisStrip
+          icon={Phone}
+          title="Recovery texts send from"
+          badge={
+            <Pill tone="success" dot={false} className="ring-0">
+              Included to start
+            </Pill>
+          }
+          description="Most businesses start on the Transovo platform number while forwarding is connected. You can register your own A2P sender later — no upgrade required to finish setup."
+        />
       </div>
-      {platformSender ? (
-        <div className="space-y-2">
-          {platformTemplates.map((tpl) => (
-            <label
-              key={tpl.id}
-              className={cn(
-                "flex cursor-pointer gap-3 rounded-lg border px-4 py-3",
-                selectedId === tpl.id ? "border-primary ring-1 ring-primary/25" : "",
-              )}
-            >
-              <input
-                type="radio"
-                name="platform-template"
-                className="mt-1"
-                checked={selectedId === tpl.id}
-                onChange={() => c.setMessageTemplate(tpl.body)}
-              />
-              <span className="min-w-0 flex-1">
-                <span className="text-sm font-medium">{tpl.label}</span>
-                <span className="mt-1 block text-xs text-muted-foreground line-clamp-2">&ldquo;{tpl.body}&rdquo;</span>
-              </span>
-              {selectedId === tpl.id ? (
-                <span className="text-xs font-medium text-muted-foreground">Selected</span>
-              ) : null}
-            </label>
-          ))}
-        </div>
-      ) : (
-        <p className="text-sm text-muted-foreground">Loading sender configuration…</p>
-      )}
-      <div className="mt-6">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Preview</p>
-        <div className="mt-2 max-w-sm rounded-2xl rounded-tl-sm bg-muted px-4 py-3 text-sm">{c.messageTemplate}</div>
-      </div>
-      <div className="mt-8 flex items-start gap-2 border-t pt-6 text-sm text-muted-foreground">
-        <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-        <span>
-          <span className="font-medium text-foreground">Write your own recovery message</span> — available when using an
-          eligible verified business sender. Configure in Setup after onboarding.
-        </span>
+
+      <Panel title="Sending number" description="You can change this after onboarding in Setup → Phone." bodyClassName="space-y-3 p-4">
+        <SelectionRow
+          selected={senderChoice === "platform"}
+          title="Transovo platform number"
+          subtitle="Transovo manages the sending number and carrier compliance. Best way to go live quickly on the free plan."
+          badge="Recommended"
+          onSelect={() => setSenderChoice("platform")}
+        />
+        <SelectionRow
+          selected={senderChoice === "own_number_later"}
+          title="Use my business number later"
+          subtitle="Keep onboarding simple now. After setup, add your own verified messaging number in Settings when you're ready for A2P registration — we won't start that process here."
+          badge="After setup"
+          onSelect={() => setSenderChoice("own_number_later")}
+        >
+          <p className="ml-7 text-xs text-muted-foreground">
+            For this wizard, recovery texts still use the platform sender so you can complete your live test. Switching
+            to your number is optional and happens in Setup when messaging is approved.
+          </p>
+        </SelectionRow>
+      </Panel>
+
+      <div className="mt-8 space-y-4">
+        <FeatureEmphasisStrip
+          icon={MessageSquareText}
+          title="First recovery message"
+          description="Deterministic templates — no AI required. Paid strategies are visible so you know what an upgrade unlocks."
+        />
+        {setupReady ? (
+          <FirstTextTemplateEditor
+            initialConfig={firstTextConfig}
+            onConfigChange={setFirstTextConfig}
+            businessName={businessName}
+            recoveryPaid={recoveryPaid}
+            wizardMode
+          />
+        ) : (
+          <p className="text-sm text-muted-foreground">Loading message templates…</p>
+        )}
+        {!validation.ok && setupReady ? (
+          <p className="mt-3 text-sm text-destructive" role="alert">{validation.message}</p>
+        ) : null}
       </div>
     </>
   );

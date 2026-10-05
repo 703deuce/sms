@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Lock } from 'lucide-react'
 import { ConfigSection, Pill, SettingRow } from '@/newui-transplant/components/app/kit'
@@ -44,14 +44,31 @@ export function FirstTextTemplateEditor({
   recoveryPaid,
   previewInBusinessHours = true,
   onSaved,
+  wizardMode = false,
+  onConfigChange,
 }: {
   initialConfig: MctbFirstTextTemplateConfig
   businessName: string
   recoveryPaid: boolean
   previewInBusinessHours?: boolean
   onSaved?: () => void | Promise<void>
+  /** Onboarding wizard: hide Save bar; parent saves on Continue. */
+  wizardMode?: boolean
+  onConfigChange?: (config: MctbFirstTextTemplateConfig) => void
 }) {
   const [config, setConfig] = useState<MctbFirstTextTemplateConfig>(initialConfig)
+
+  useEffect(() => {
+    setConfig(initialConfig)
+  }, [initialConfig])
+
+  const patchConfig = (updater: (prev: MctbFirstTextTemplateConfig) => MctbFirstTextTemplateConfig) => {
+    setConfig((prev) => {
+      const next = updater(prev)
+      onConfigChange?.(next)
+      return next
+    })
+  }
   const [upgradeHint, setUpgradeHint] = useState<MctbFirstTextTemplateId | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -78,7 +95,7 @@ export function FirstTextTemplateEditor({
       return
     }
     setUpgradeHint(null)
-    setConfig((prev) => ({
+    patchConfig((prev) => ({
       ...prev,
       templateId: id,
       version: MCTB_FIRST_TEXT_TEMPLATE_VERSION,
@@ -89,7 +106,7 @@ export function FirstTextTemplateEditor({
     key: 'callbackTime' | 'callbackTimeAfterHours',
     patch: Partial<MctbCallbackTimeVariable>,
   ) => {
-    setConfig((prev) => ({
+    patchConfig((prev) => ({
       ...prev,
       variables: {
         ...prev.variables,
@@ -116,10 +133,12 @@ export function FirstTextTemplateEditor({
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        Pick a first-message strategy. Transovo sends this after consent — no AI required. Replies notify your team so
-        you can call back.
-      </p>
+      {!wizardMode ? (
+        <p className="text-sm text-muted-foreground">
+          Pick a first-message strategy. Transovo sends this after consent — no AI required. Replies notify your team so
+          you can call back.
+        </p>
+      ) : null}
 
       <ul className="divide-y rounded-xl border bg-card/80" role="radiogroup" aria-label="First message strategy">
         {MCTB_FIRST_TEXT_TEMPLATE_ORDER.map((id) => {
@@ -227,7 +246,7 @@ export function FirstTextTemplateEditor({
               className="mt-1"
               value={config.variables.service1 || ''}
               onChange={(e) =>
-                setConfig((prev) => ({
+                patchConfig((prev) => ({
                   ...prev,
                   variables: { ...prev.variables, service1: e.target.value },
                 }))
@@ -241,7 +260,7 @@ export function FirstTextTemplateEditor({
               className="mt-1"
               value={config.variables.service2 || ''}
               onChange={(e) =>
-                setConfig((prev) => ({
+                patchConfig((prev) => ({
                   ...prev,
                   variables: { ...prev.variables, service2: e.target.value },
                 }))
@@ -264,11 +283,29 @@ export function FirstTextTemplateEditor({
         <p className="text-sm text-destructive" role="alert">{saveError}</p>
       ) : null}
 
-      <div className="flex justify-end">
-        <SaveBar onSave={onSave} />
-      </div>
+      {!wizardMode ? (
+        <div className="flex justify-end">
+          <SaveBar onSave={onSave} />
+        </div>
+      ) : null}
     </div>
   )
+}
+
+export function validateFirstTextTemplateForPersist(
+  config: MctbFirstTextTemplateConfig,
+  businessName: string,
+): { ok: true; message: string } | { ok: false; message: string } {
+  const inHours = validateMctbFirstTextTemplateConfig(config, businessName, true)
+  if (!inHours.ok) return { ok: false, message: inHours.message }
+  const afterHours = validateMctbFirstTextTemplateConfig(config, businessName, false)
+  if (!afterHours.ok) return { ok: false, message: afterHours.message }
+  const message = renderMctbFirstTextTemplateBody({
+    config,
+    businessName,
+    inBusinessHours: true,
+  })
+  return { ok: true, message }
 }
 
 function CallbackTimeControl({

@@ -71,9 +71,13 @@ type RecoveryWiring = ReturnType<typeof useMctbRecoveryWiring>;
 export function useOnboardingRecoveryBundle() {
   const r = useMctbRecoveryWiring();
   const saveAll = useCallback(
-    async (messageTemplate: string) => {
+    async (input: {
+      messageTemplate: string;
+      firstTextTemplate?: import("@/lib/mctb/first-text-templates/types").MctbFirstTextTemplateConfig;
+      senderMode?: "PLATFORM" | "WORKSPACE";
+    }) => {
       await r.save();
-      await persistOnboardingRecoveryAndTemplate(messageTemplate);
+      await persistOnboardingRecoveryAndTemplate(input);
     },
     [r],
   );
@@ -182,26 +186,33 @@ export function OnboardingRecoveryControlsSection({ wiring }: { wiring: Recovery
   );
 }
 
-export async function persistOnboardingRecoveryAndTemplate(messageTemplate: string): Promise<void> {
+export async function persistOnboardingRecoveryAndTemplate(input: {
+  messageTemplate: string;
+  firstTextTemplate?: import("@/lib/mctb/first-text-templates/types").MctbFirstTextTemplateConfig;
+  senderMode?: "PLATFORM" | "WORKSPACE";
+}): Promise<void> {
   const data = await fetchMctbSetup({ force: true });
   const phoneNumberId = (data.runtime as { phoneNumberId?: string })?.phoneNumberId;
-  const senderMode = (data.messaging as { senderMode?: string })?.senderMode;
-  if (senderMode === "PLATFORM") {
-    const { listMctbPlatformRecoveryOpenerChoices } = await import(
-      "@/lib/mctb/platform-recovery-template-choices"
-    );
-    const match =
-      listMctbPlatformRecoveryOpenerChoices().find((c) => c.body === messageTemplate.trim()) ??
-      listMctbPlatformRecoveryOpenerChoices()[0];
-    if (match) {
-      await saveMctbSetup({ platformRecoveryTemplateId: match.id });
-    }
+  const senderMode =
+    input.senderMode ??
+    ((data.messaging as { senderMode?: string })?.senderMode === "WORKSPACE" ? "WORKSPACE" : "PLATFORM");
+
+  if (input.firstTextTemplate) {
+    await saveMctbSetup({
+      senderMode: senderMode === "WORKSPACE" ? "WORKSPACE" : "PLATFORM",
+      firstTextTemplate: input.firstTextTemplate,
+      activate: false,
+    });
     return;
   }
-  if (phoneNumberId && messageTemplate.trim()) {
+
+  if (senderMode === "PLATFORM") {
+    return;
+  }
+  if (phoneNumberId && input.messageTemplate.trim()) {
     await saveMctbSetup({
       phoneNumberId,
-      messageTemplate: messageTemplate.trim(),
+      messageTemplate: input.messageTemplate.trim(),
       activate: false,
     });
   }
