@@ -233,6 +233,25 @@
   text-align: center;
 }
 
+.mctb-number-hub-dual {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  text-align: left;
+}
+
+.mctb-number-role {
+  border: 1px solid var(--lp-border);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  background: var(--lp-bg-alt);
+}
+
+.mctb-number-role.highlight {
+  border-color: rgb(99 102 241 / 0.35);
+  background: var(--lp-blue-soft);
+}
+
 .mctb-source-tags {
   display: flex;
   flex-wrap: wrap;

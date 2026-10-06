@@ -4,17 +4,17 @@ import type { Metadata } from "next";
 export async function generateMetadata(): Promise<Metadata> {
   return {
     title: {
-      absolute: "Missed Call Text Back, Appointments & SMS Inbox | Transovo",
+      absolute: "Missed Call Text Back for Small Business | Transovo",
     },
     description:
-      "Recover missed calls by text on your existing business number — plus appointments, conversations, voicemail, and fax. Press-1 or existing permission. Free plan available.",
+      "Turn missed calls into SMS on your existing business line. Start immediately on the Transovo platform sending number — no A2P wait. Press-1 or existing permission. Free plan.",
     alternates: {
       canonical: "/",
     },
     openGraph: {
-      title: "Transovo — missed calls, booking, and conversations",
+      title: "Missed Call Text Back | Transovo",
       description:
-        "Service business workspace: missed call text back, SMS inbox, appointments, voicemail, and fax. Keep your existing number.",
+        "Recover missed calls by text. Keep your business number, start on the platform sender, go live in minutes.",
       url: "/",
     },
   };
