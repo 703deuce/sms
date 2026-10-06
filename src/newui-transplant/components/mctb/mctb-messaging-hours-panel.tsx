@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { Clock } from 'lucide-react'
 import { ConfigSection, SettingRow } from '@/newui-transplant/components/app/kit'
 import { SaveBar } from '@/newui-transplant/components/app/save-bar'
-import { MctbWeeklyScheduleEditor } from '@/components/mctb/weekly-schedule-editor'
+import { MctbWeeklyScheduleEditor } from '@/newui-transplant/components/mctb/mctb-weekly-schedule-editor'
 import {
   defaultWeeklySchedule,
   type MctbWeeklySchedule,
