@@ -4,14 +4,21 @@ import Link from "next/link";
 import { useState } from "react";
 import {
   ArrowRight,
+  Bell,
+  Calendar,
   ChevronDown,
   Clock,
+  Inbox,
   MessageSquare,
   Phone,
   PhoneMissed,
+  Printer,
   Shield,
   Menu,
+  Users,
+  Voicemail,
   X,
+  CheckCircle2,
 } from "lucide-react";
 import { BRAND_NAME } from "@/lib/brand";
 import "../landing.css";
@@ -22,49 +29,89 @@ import { MctbHeroMockup } from "./mctb-hero-mockup";
 const SIGNUP = mctbSignupNextQuery();
 
 const NAV = [
-  { href: "#features", label: "Features" },
-  { href: "#how-it-works", label: "How It Works" },
+  { href: "#platform", label: "Platform" },
+  { href: "#features", label: "Missed calls" },
+  { href: "#how-it-works", label: "How it works" },
   { href: "#industries", label: "Industries" },
   { href: "#faq", label: "FAQ" },
-  { href: "/contact", label: "Book a Demo" },
+  { href: "/contact", label: "Book a demo" },
+];
+
+const PLATFORM = [
+  {
+    icon: PhoneMissed,
+    title: "Missed call text back",
+    body: "Turn unanswered calls into SMS with Press-1 consent or existing permission — templates, one automatic ack, team alerts, and handled tracking.",
+    href: "#how-it-works",
+  },
+  {
+    icon: Calendar,
+    title: "Appointments & reminders",
+    body: "Online booking, calendar, and SMS reminders so customers can schedule without phone tag.",
+    href: "/appointments",
+  },
+  {
+    icon: Inbox,
+    title: "Conversations",
+    body: "One inbox for recovery texts and customer replies — with missed-call context on every thread.",
+    href: "/login?next=/conversations",
+  },
+  {
+    icon: Users,
+    title: "Contacts",
+    body: "Every caller and texter in one place, ready for follow-up when your team is free.",
+    href: "/login?next=/contacts",
+  },
+  {
+    icon: Voicemail,
+    title: "Visual voicemail",
+    body: "Listen, read transcripts, and follow up from a dedicated voicemail workspace.",
+    href: "/login?next=/mctb/voicemail",
+  },
+  {
+    icon: Printer,
+    title: "Transovo Fax",
+    body: "Send and receive fax in the same workspace — no separate fax machine required.",
+    href: "/fax",
+  },
 ];
 
 const FAQS = [
   {
     q: "Do I have to change my business phone number?",
-    a: "No. Transovo is designed to work with your existing business number using unanswered-call forwarding.",
+    a: "No. Missed call text back works with your existing business number using unanswered-call forwarding.",
   },
   {
     q: "What happens when I answer the call?",
-    a: "Nothing changes. You answer and handle the call normally.",
+    a: "Nothing changes. You answer and handle the call normally — Transovo only steps in when you don't.",
   },
   {
-    q: "What happens when I miss the call?",
-    a: "The unanswered call can be forwarded to Transovo, where the caller is offered the option to continue by text.",
+    q: "How does consent work for texting?",
+    a: "Choose Press-1 (caller hears a disclosure and presses 1 to opt in) or existing permission (you attest you already have permission to text — common for businesses with prior customer relationships). Press-1 sends a compliance confirmation text before your recovery message.",
   },
   {
     q: "Does every missed caller automatically receive a text?",
-    a: "No. The caller must choose to receive the text by pressing 1. If they don't press 1, no SMS is sent.",
+    a: "With Press-1, no — the caller must press 1. With existing permission, recovery texts send per your configuration when a call is missed. Opt-outs and exclusions are always honored.",
   },
   {
-    q: "Can customers reply to the text?",
-    a: "Yes. Once they've opted in, they can continue the conversation by SMS.",
+    q: "Is this an AI chatbot that keeps texting customers?",
+    a: "No. You configure recovery templates and optional one automatic acknowledgment. Your team replies from Conversations — or marks leads handled when you're done.",
   },
   {
-    q: "Can customers opt out?",
-    a: "Yes. Customers can reply STOP to opt out.",
+    q: "Can customers reply and opt out?",
+    a: "Yes. Customers can reply by SMS. They can reply STOP to opt out at any time.",
   },
   {
     q: "Can I use my existing booking link?",
-    a: "Yes. You can send customers your existing booking link through the conversation.",
+    a: "Yes. Send your booking link from Conversations, or use Transovo Appointments for scheduling and reminders.",
   },
   {
     q: "Is there a free plan?",
-    a: "Yes. Transovo offers a free plan so businesses can get started before upgrading.",
+    a: "Yes. Start on the free plan and upgrade when you need more capacity.",
   },
   {
-    q: "What if my business is closed?",
-    a: "Callers can choose text and leave their message so your team can respond when you're back.",
+    q: "What else is included in Transovo?",
+    a: "V1 includes missed call text back, appointments, conversations, contacts, visual voicemail, and fax — one login for daily operations.",
   },
 ];
 
@@ -94,11 +141,10 @@ export function MctbLandingPage() {
               {NAV.map((item) => (
                 <Link key={item.href} href={item.href}>{item.label}</Link>
               ))}
-              <Link href="/appointments">Appointments</Link>
             </nav>
             <div className="lp-nav-actions">
               <Link href="/login?next=/mctb" className="lp-login">Log in</Link>
-              <Link href={SIGNUP} className="lp-btn lp-btn-primary lp-btn-sm">Start Free</Link>
+              <Link href={SIGNUP} className="lp-btn lp-btn-primary lp-btn-sm">Start free</Link>
               <button
                 type="button"
                 className="lp-menu-btn"
@@ -115,38 +161,39 @@ export function MctbLandingPage() {
                 {item.label}
               </Link>
             ))}
-            <Link href="/appointments" onClick={() => setMenuOpen(false)}>Appointments</Link>
             <Link href="/login?next=/mctb" onClick={() => setMenuOpen(false)}>Log in</Link>
-            <Link href={SIGNUP} onClick={() => setMenuOpen(false)}>Start Free</Link>
+            <Link href={SIGNUP} onClick={() => setMenuOpen(false)}>Start free</Link>
           </div>
         </div>
       </header>
 
       <main>
-        <section className="lp-hero" id="top">
+        <section className="lp-hero mctb-hero-opus" id="top">
           <div className="lp-blob lp-blob-1" aria-hidden />
           <div className="lp-blob lp-blob-2" aria-hidden />
           <div className="lp-container">
             <div className="mctb-hero-grid">
               <div>
-                <p className="lp-eyebrow">Missed call text back</p>
-                <h1 className="lp-hero-title">Stop Letting Missed Calls Become Missed Customers.</h1>
+                <p className="lp-eyebrow">Service businesses · One workspace</p>
+                <h1 className="lp-hero-title">
+                  Missed calls, appointments, and conversations — without changing your number.
+                </h1>
                 <p className="lp-hero-copy">
-                  When you can&apos;t answer the phone, Transovo gives callers the option to continue
-                  the conversation by text — automatically.
+                  Transovo helps you recover missed calls by text, book customers online, and keep every
+                  reply in one inbox — with compliance built in, not bolted on.
                 </p>
                 <p className="mctb-highlight" style={{ marginTop: "0.75rem" }}>
-                  No new business number. No changing the number your customers already know.
+                  Keep the business line customers already know. Set up in minutes.
                 </p>
                 <div className="lp-hero-actions" style={{ marginTop: "1.5rem" }}>
                   <Link href={SIGNUP} className="lp-btn lp-btn-primary">
-                    Start Free
+                    Start free
                     <ArrowRight className="h-4 w-4" />
                   </Link>
-                  <Link href="#how-it-works" className="lp-btn lp-btn-secondary">See How It Works</Link>
+                  <Link href="#platform" className="lp-btn lp-btn-secondary">See the platform</Link>
                 </div>
                 <p className="mctb-trust-line">
-                  Free plan available • Keep your existing business number • Set up in minutes
+                  Free plan · Press-1 or existing permission · Voicemail · Fax · Team notifications
                 </p>
               </div>
               <MctbHeroMockup />
@@ -154,69 +201,97 @@ export function MctbLandingPage() {
           </div>
         </section>
 
-        <section className="lp-section lp-section-alt" id="features">
+        <section className="lp-section lp-section-alt" id="platform">
+          <div className="lp-container">
+            <div className="lp-section-center">
+              <p className="lp-eyebrow">What you get</p>
+              <h2>Everything in V1 — built for when the phone rings and you can&apos;t answer.</h2>
+              <p className="lp-lead">
+                Missed call text back is the hero — and it sits alongside the tools you need to book,
+                reply, and follow through.
+              </p>
+            </div>
+            <div className="mctb-platform-grid">
+              {PLATFORM.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <article key={item.title} className="mctb-platform-card">
+                    <div className="mctb-platform-icon" aria-hidden>
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <h3>{item.title}</h3>
+                    <p>{item.body}</p>
+                    <Link href={item.href} className="mctb-platform-link">
+                      Learn more
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        <section className="lp-section" id="features">
           <div className="lp-container">
             <div className="lp-section-center">
               <p className="lp-eyebrow">The cost of a missed call</p>
-              <h2>You Can&apos;t Answer Every Call. But You Don&apos;t Have to Lose the Opportunity.</h2>
+              <h2>You can&apos;t answer every call. You don&apos;t have to lose the lead.</h2>
               <p className="lp-lead">
-                You&apos;re with another customer. You&apos;re on a job. It&apos;s after hours. Your team is
-                busy. Whatever the reason, calls get missed — and callers don&apos;t always leave voicemail.
+                You&apos;re on a job, with another customer, or closed for the day. Callers often won&apos;t
+                leave voicemail — but many will text if you give them a compliant path.
               </p>
             </div>
             <div className="mctb-problem-grid">
               <article className="mctb-problem-card">
                 <PhoneMissed className="h-6 w-6 text-indigo-500" aria-hidden />
-                <h3>They Don&apos;t Leave Voicemails</h3>
-                <p>Many callers would rather send a quick text than leave a message and wait.</p>
+                <h3>Voicemail isn&apos;t enough</h3>
+                <p>Callers expect a fast text-back, not a one-way message into the void.</p>
               </article>
               <article className="mctb-problem-card">
                 <Phone className="h-6 w-6 text-indigo-500" aria-hidden />
-                <h3>They May Call Someone Else</h3>
-                <p>A missed call can turn into a competitor&apos;s next customer.</p>
+                <h3>Speed wins</h3>
+                <p>A missed call can become your competitor&apos;s booked job if you wait until tomorrow.</p>
               </article>
               <article className="mctb-problem-card">
                 <Clock className="h-6 w-6 text-indigo-500" aria-hidden />
-                <h3>Calling Back Takes Time</h3>
-                <p>By the time you&apos;re free, the caller may already have moved on.</p>
+                <h3>Your team stays in control</h3>
+                <p>Automatic recovery and one ack — then humans reply, call back, or mark handled.</p>
               </article>
             </div>
-            <p className="lp-section-center mctb-highlight" style={{ marginTop: "2rem", textAlign: "center" }}>
-              Turn the missed call into a conversation instead.
-            </p>
           </div>
         </section>
 
-        <section className="lp-section" id="how-it-works">
+        <section className="lp-section lp-section-alt" id="how-it-works">
           <div className="lp-container">
             <div className="lp-section-center">
-              <h2>From Missed Call to Text Conversation in Seconds.</h2>
+              <h2>From missed call to follow-up in seconds.</h2>
               <p className="lp-lead">
-                You keep using your existing business phone number. Transovo only steps in when you
-                don&apos;t answer.
+                Forward unanswered calls to Transovo. Choose how you establish permission to text — then
+                use the recovery flow your team actually runs.
               </p>
             </div>
             <div className="mctb-steps-4">
               {[
                 {
                   n: "01",
-                  title: "They Call Your Business",
-                  body: "Customers call the same business number they already use today. No new number to advertise.",
+                  title: "They call your line",
+                  body: "Customers dial the same number on your site, Google, and truck — you answer when you can.",
                 },
                 {
                   n: "02",
-                  title: "You Don't Answer",
-                  body: "Your existing phone service forwards the unanswered call to Transovo.",
+                  title: "No answer → Transovo",
+                  body: "Your carrier forwards the unanswered call. We classify the miss and start recovery eligibility.",
                 },
                 {
                   n: "03",
-                  title: "They Choose Text",
-                  body: "The caller hears a short disclosure and presses 1 if they want to continue by text.",
+                  title: "Permission to text",
+                  body: "Press-1: disclosure + keypress. Existing permission: voicemail + automatic recovery per your attestation.",
                 },
                 {
                   n: "04",
-                  title: "The Conversation Starts",
-                  body: "Transovo sends the first message and the customer can reply.",
+                  title: "Recover & follow up",
+                  body: "Compliance + recovery texts, optional one ack, team notified, conversation in your inbox.",
                 },
               ].map((step) => (
                 <div key={step.n} className="mctb-step-card">
@@ -226,28 +301,27 @@ export function MctbLandingPage() {
                 </div>
               ))}
             </div>
-            <div className="mctb-trust-callout">
-              No Press 1? No Text. — If the caller doesn&apos;t choose to receive a text, Transovo
-              doesn&apos;t send one.
+            <div className="mctb-dual-consent-banner">
+              <div>
+                <strong>Press-1</strong>
+                <p>Caller opts in on the call. Compliance text, then your recovery opener.</p>
+              </div>
+              <div>
+                <strong>Existing permission</strong>
+                <p>You confirm prior consent. Recovery text without Press-1 audio.</p>
+              </div>
             </div>
           </div>
         </section>
 
-        <section className="lp-section lp-section-alt">
+        <section className="lp-section">
           <div className="lp-container mctb-split mctb-split-40-60">
             <div>
               <p className="lp-eyebrow">Keep your number</p>
-              <h2>Keep the Business Number You&apos;ve Already Built.</h2>
+              <h2>The number on your truck stays the number customers call.</h2>
               <p>
-                Your phone number may already be on your website, Google Business Profile, business
-                cards, trucks, signs, ads, directories, and customer contacts.
-              </p>
-              <p className="mctb-highlight" style={{ marginTop: "1rem" }}>
-                With Transovo, you don&apos;t replace it.
-              </p>
-              <p style={{ marginTop: "0.75rem" }}>
-                Customers continue calling your existing number. When you answer, nothing changes.
-                When you don&apos;t, Transovo can take it from there.
+                Transovo is an inbound layer — not a replacement line. Answer normally when you&apos;re
+                available; forward when you&apos;re not.
               </p>
             </div>
             <div className="mctb-number-hub">
@@ -265,57 +339,68 @@ export function MctbLandingPage() {
           </div>
         </section>
 
-        <section className="lp-section">
+        <section className="lp-section lp-section-alt">
           <div className="lp-container mctb-split mctb-split-60-40 reverse">
             <div className="mctb-split-visual">
-              <div className="mctb-phone-mock">
-                <p className="mctb-mock-label">SMS conversation</p>
-                <div className="mctb-bubble system">
-                  You&apos;re subscribed to texts about your inquiry to Lakeside Dental. Reply STOP to
-                  opt out.
+              <div className="mctb-phone-mock mctb-phone-mock-wide">
+                <p className="mctb-mock-label">Deterministic recovery — not endless automation</p>
+                <div className="mctb-bubble business">
+                  <p className="mctb-bubble-kicker">Your recovery template</p>
+                  <p>Sorry we missed you — reply with what you need and we&apos;ll call back shortly.</p>
                 </div>
                 <div className="mctb-bubble customer" style={{ marginTop: "0.5rem" }}>
-                  Hi, I was calling about getting a cleaning this week.
+                  <p>Need a service call Thursday AM.</p>
                 </div>
-                <div className="mctb-bubble system" style={{ marginTop: "0.5rem" }}>
-                  Absolutely. What day works best for you?
+                <div className="mctb-bubble business ack" style={{ marginTop: "0.5rem" }}>
+                  <p className="mctb-bubble-kicker">One automatic reply</p>
+                  <p>Thanks — we got it and will reach out soon.</p>
+                </div>
+                <div className="mctb-hero-outcomes compact">
+                  <span className="mctb-outcome-pill">
+                    <Bell className="h-3.5 w-3.5" aria-hidden />
+                    Team notified
+                  </span>
+                  <span className="mctb-outcome-pill highlight">
+                    <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+                    Needs follow-up
+                  </span>
                 </div>
               </div>
             </div>
             <div>
-              <p className="lp-eyebrow">Customer experience</p>
-              <h2>Simple for You. Even Simpler for Your Customers.</h2>
-              <p>No apps to download and no complicated forms.</p>
-              <ul className="mctb-bullet-list" style={{ marginTop: "1rem" }}>
-                <li>They call.</li>
-                <li>You can&apos;t answer.</li>
-                <li>They choose text.</li>
-                <li>They send you what they need.</li>
-              </ul>
-              <p className="mctb-highlight" style={{ marginTop: "1rem" }}>
-                What started as a missed call is now an active customer conversation.
+              <p className="lp-eyebrow">Your playbook</p>
+              <h2>Templates you control. Handoffs your team owns.</h2>
+              <p>
+                Configure on-a-job, after-hours, and next-step recovery messages. Send one automatic
+                acknowledgment, notify your team, then reply from Conversations — or mark the lead handled
+                when you&apos;re done.
               </p>
+              <ul className="mctb-bullet-list" style={{ marginTop: "1rem" }}>
+                <li>Editable recovery openers (compliance copy stays locked on Press-1)</li>
+                <li>Missed-call list with needs follow-up / handled</li>
+                <li>Analytics that separate suppressed vs failed</li>
+              </ul>
             </div>
           </div>
         </section>
 
-        <section className="lp-section lp-section-alt">
-          <div className="lp-container mctb-split" style={{ gridTemplateColumns: "1fr" }}>
+        <section className="lp-section">
+          <div className="lp-container">
             <div className="mctb-split" style={{ gap: "2rem" }}>
               <div>
-                <p className="lp-eyebrow">Customer choice</p>
-                <h2>Customers Choose Whether They Want to Text.</h2>
+                <p className="lp-eyebrow">Compliance</p>
+                <h2>Consent paths that match how your business actually operates.</h2>
                 <p>
-                  After an unanswered call reaches Transovo, the caller hears the text-message
-                  disclosure and can press 1 to consent. If they don&apos;t press 1, no SMS is sent.
+                  High-trust SMS starts with the right permission model — recorded, auditable, and
+                  aligned with carrier rules.
                 </p>
               </div>
               <div className="mctb-consent-grid">
                 {[
-                  ["Press-1 Opt-In", "The customer actively chooses to receive the text."],
-                  ["Consent Recorded", "The opt-in is recorded and stored."],
-                  ["STOP & HELP Support", "Standard SMS opt-out and help commands."],
-                  ["Clear Identification", "Messages identify Transovo as the messaging platform."],
+                  ["Press-1 on the call", "Caller hears disclosure and presses 1 before any marketing-style recovery."],
+                  ["Existing permission", "For businesses with established customer relationships and documented consent."],
+                  ["STOP & HELP", "Standard opt-out and help handling on every thread."],
+                  ["Consent history", "Evidence available for your team — not buried in a spreadsheet."],
                 ].map(([title, body]) => (
                   <div key={title} className="mctb-problem-card">
                     <Shield className="h-5 w-5 text-indigo-500" aria-hidden />
@@ -328,51 +413,47 @@ export function MctbLandingPage() {
           </div>
         </section>
 
-        <section className="lp-section">
+        <section className="lp-section lp-section-alt">
           <div className="lp-container mctb-after-hours mctb-split mctb-split-60-40">
             <div>
               <p className="lp-eyebrow" style={{ color: "#a5b4fc" }}>After hours</p>
-              <h2>Your Business May Be Closed. Your Next Customer Isn&apos;t.</h2>
+              <h2>Closed doesn&apos;t have to mean gone.</h2>
               <p style={{ color: "#cbd5e1" }}>
-                Calls don&apos;t stop when your office closes. Give after-hours callers another option
-                instead of voicemail-only.
+                After-hours callers still get a professional voicemail — and a recovery text path when
+                your setup allows — so Monday morning starts with context, not guesswork.
               </p>
             </div>
             <div className="mctb-phone-mock">
               <p className="mctb-mock-label">8:37 PM · Closed</p>
-              <div className="mctb-bubble system">
-                Lakeside Dental is closed right now. Leave a message and we&apos;ll respond when we&apos;re
-                back. Reply STOP to opt out.
+              <div className="mctb-bubble business">
+                <p className="mctb-bubble-kicker">After-hours recovery</p>
+                <p>We&apos;re closed — reply with your name and what you need; we&apos;ll respond when we open.</p>
               </div>
-              <div className="mctb-bubble customer" style={{ marginTop: "0.5rem" }}>
-                Hi, I&apos;d like to schedule a cleaning next week.
-              </div>
-              <span className="mctb-chip">Waiting for business reply</span>
+              <span className="mctb-chip">Voicemail + recovery · Team sees it tomorrow</span>
             </div>
           </div>
         </section>
 
-        <section className="lp-section lp-section-alt">
+        <section className="lp-section">
           <div className="lp-container mctb-split mctb-split-40-60">
             <div>
               <p className="lp-eyebrow">One inbox</p>
-              <h2>All Your Missed-Call Conversations in One Place.</h2>
-              <p>See who tried to reach you and continue the conversation without chasing voicemails.</p>
+              <h2>Missed calls, replies, and context — together.</h2>
+              <p>Open the thread, see the missed call, reply by SMS, or jump to voicemail when they left one.</p>
               <ul className="mctb-bullet-list" style={{ marginTop: "1rem" }}>
                 <li>Unified conversations</li>
-                <li>Customer replies</li>
-                <li>Conversation history</li>
-                <li>Missed-call context</li>
+                <li>Missed-call detail timeline</li>
+                <li>Mark handled when the lead is closed</li>
               </ul>
             </div>
             <div className="mctb-inbox-mock" aria-hidden>
               <div className="mctb-inbox-list">
-                <div className="active">Sarah M.<br />Missed call → Text</div>
-                <div>David R.<br />New reply</div>
-                <div>Maria T.<br />Waiting</div>
+                <div className="active">Sarah M.<br /><span className="mctb-inbox-status">Needs follow-up</span></div>
+                <div>David R.<br /><span className="mctb-inbox-status handled">Handled</span></div>
+                <div>Maria T.<br /><span className="mctb-inbox-status">New reply</span></div>
               </div>
               <div className="mctb-inbox-pane">
-                <p><strong>Origin:</strong> Missed call · <strong>Consent:</strong> Recorded</p>
+                <p><strong>Missed call</strong> · Press-1 consent recorded</p>
                 <div className="mctb-bubble customer" style={{ marginTop: "0.5rem" }}>
                   Do you have openings Thursday?
                 </div>
@@ -381,16 +462,16 @@ export function MctbLandingPage() {
           </div>
         </section>
 
-        <section className="lp-section">
+        <section className="lp-section lp-section-alt">
           <div className="lp-container">
             <div className="lp-section-center">
-              <h2>Respond Immediately — Even When You Can&apos;t.</h2>
-              <p className="lp-lead">Useful information as soon as the text conversation begins.</p>
+              <h2>Recovery messages that match the moment.</h2>
+              <p className="lp-lead">Templates for busy, closed, and first-touch — you edit the words; runtime sends the right one.</p>
             </div>
             <div className="mctb-sms-cards">
               {[
-                ["Busy right now", "We're helping another customer. Send us what you need and we'll get back to you shortly."],
-                ["After hours", "We're closed right now. Leave a message and we'll respond when we're back."],
+                ["On a job", "We're with another customer. Reply with what you need — we'll get back to you shortly."],
+                ["After hours", "We're closed. Leave your details and we'll respond when we're back."],
                 ["Next step", "Thanks for reaching out. Tell us how we can help and we'll take it from here."],
               ].map(([title, preview]) => (
                 <article key={title} className="mctb-sms-card">
@@ -403,41 +484,45 @@ export function MctbLandingPage() {
           </div>
         </section>
 
-        <section className="lp-section lp-section-alt">
+        <section className="lp-section">
           <div className="lp-container mctb-split mctb-split-60-40">
-            <div className="mctb-phone-mock">
+            <div className="mctb-phone-mock mctb-phone-mock-wide">
               <div className="mctb-bubble customer">Do you have anything available Thursday?</div>
-              <div className="mctb-bubble system" style={{ marginTop: "0.5rem" }}>
-                We&apos;d be happy to help. You can choose an available time here:
+              <div className="mctb-bubble business" style={{ marginTop: "0.5rem" }}>
+                <p>Happy to help — pick a time that works:</p>
               </div>
-              <div className="lp-btn lp-btn-primary lp-btn-sm" style={{ marginTop: "0.75rem", display: "inline-flex" }}>
-                Choose a time →
-              </div>
+              <Link href="/appointments" className="lp-btn lp-btn-primary lp-btn-sm mctb-mock-cta">
+                Book online →
+              </Link>
             </div>
             <div>
-              <p className="lp-eyebrow">Optional booking</p>
-              <h2>Need to Schedule? Send Them Straight to Booking.</h2>
+              <p className="lp-eyebrow">Appointments</p>
+              <h2>Booking and reminders in the same product.</h2>
               <p>
-                Send your booking link and let the customer choose a time — simple for them, less
-                back-and-forth for your team.
+                Offer your scheduling link in conversation — or run full online booking with SMS reminders
+                so customers show up prepared.
               </p>
+              <Link href="/appointments" className="lp-btn lp-btn-secondary" style={{ marginTop: "1rem", display: "inline-flex" }}>
+                Explore appointments
+                <ArrowRight className="h-4 w-4" />
+              </Link>
             </div>
           </div>
         </section>
 
-        <section className="lp-section" id="industries">
+        <section className="lp-section lp-section-alt" id="industries">
           <div className="lp-container">
             <div className="lp-section-center">
-              <h2>Built for Businesses Where Every Call Matters.</h2>
+              <h2>Built for businesses where every call matters.</h2>
             </div>
             <div className="mctb-industry-grid">
               {[
-                ["Home Services", "Plumbers, HVAC, electricians, roofers, cleaners, landscapers, and contractors."],
-                ["Dental & Healthcare", "Give unanswered callers another way to reach the office."],
-                ["Salons & Personal Care", "Capture inquiries while you're with another client."],
-                ["Automotive", "Keep service inquiries moving when the phone isn't answered."],
-                ["Professional Services", "Turn missed inquiries into conversations to follow up."],
-                ["Local Businesses", "When customers call to buy, book, or ask questions, MCTB helps."],
+                ["Home services", "HVAC, plumbing, electrical, cleaning, landscaping — jobs that start with a ring."],
+                ["Dental & healthcare", "Capture scheduling intent when the front desk is busy."],
+                ["Salons & personal care", "Stay responsive while you're with another client."],
+                ["Automotive", "Service inquiries that can't wait until you find voicemail."],
+                ["Professional services", "Turn inquiries into conversations you can qualify."],
+                ["Local businesses", "When customers call to buy or book, meet them where they are."],
               ].map(([title, body]) => (
                 <article key={title} className="mctb-industry-card">
                   <h3>{title}</h3>
@@ -448,39 +533,39 @@ export function MctbLandingPage() {
           </div>
         </section>
 
-        <section className="lp-section lp-section-alt">
+        <section className="lp-section">
           <div className="lp-container">
             <div className="mctb-free-panel">
-              <p className="lp-eyebrow">Free plan available</p>
-              <h2>Start Turning Missed Calls Into Conversations for Free.</h2>
+              <p className="lp-eyebrow">Free plan</p>
+              <h2>Start with real missed calls — not a demo script.</h2>
               <p className="lp-lead">
-                Set it up, connect your existing business number, and see how it works with real missed
-                calls — then upgrade when you need more capacity.
+                Connect forwarding, choose your consent mode, and see recovery texts hit your inbox. Upgrade
+                when volume grows.
               </p>
               <Link href={SIGNUP} className="lp-btn lp-btn-primary" style={{ marginTop: "1.25rem" }}>
-                Start Free
+                Start free
                 <ArrowRight className="h-4 w-4" />
               </Link>
-              <p className="mctb-trust-line">No need to change your existing business number.</p>
+              <p className="mctb-trust-line">No new business number required.</p>
             </div>
           </div>
         </section>
 
-        <section className="lp-section">
+        <section className="lp-section lp-section-alt">
           <div className="lp-container mctb-split mctb-split-40-60">
             <div>
               <p className="lp-eyebrow">Why Transovo</p>
-              <h2>Missed Call Text Back Without Rebuilding Your Phone System.</h2>
-              <p>Most businesses need a better way to handle the calls they&apos;re already missing.</p>
+              <h2>Operations software — not another phone system science project.</h2>
+              <p>One login for recovery, conversations, booking, voicemail, and fax.</p>
             </div>
             <div className="mctb-benefit-stack">
               {[
-                ["Keep Your Number", "Continue using the number customers already know."],
-                ["Only Steps In When Needed", "Answer normally and nothing changes."],
-                ["Explicit Customer Opt-In", "Texting starts only after the caller chooses it."],
-                ["Fast Follow-Up", "Create a conversation while interest is still fresh."],
-                ["Free Plan Available", "Start before committing to a paid plan."],
-                ["Built for Real Businesses", "Designed for when you're too busy to pick up."],
+                ["Keep your number", "Forward unanswered calls — don't reprint collateral."],
+                ["Two consent modes", "Press-1 and existing permission, both first-class."],
+                ["Team notifications", "Know when a recovery text needs a human."],
+                ["Handled tracking", "Close the loop on leads, not just message counts."],
+                ["Free plan", "Prove value before you scale spend."],
+                ["Built for mobile teams", "On a job, in the chair, or at the front desk."],
               ].map(([title, body]) => (
                 <div key={title} className="mctb-benefit-row">
                   <Phone className="h-5 w-5 text-indigo-500 shrink-0" aria-hidden />
@@ -494,10 +579,10 @@ export function MctbLandingPage() {
           </div>
         </section>
 
-        <section className="lp-section lp-section-alt" id="faq">
+        <section className="lp-section" id="faq">
           <div className="lp-container">
             <div className="lp-section-center">
-              <h2>Frequently Asked Questions</h2>
+              <h2>Frequently asked questions</h2>
             </div>
             <div className="lp-faq-grid">
               {FAQS.map((faq, index) => (
@@ -521,18 +606,17 @@ export function MctbLandingPage() {
 
         <section className="appt-cta-band">
           <div className="lp-container lp-section-center">
-            <h2>The Next Call You Miss Doesn&apos;t Have to Be the Next Customer You Lose.</h2>
+            <h2>The next call you miss doesn&apos;t have to be the next customer you lose.</h2>
             <p className="lp-lead">
-              Keep your existing number. When you can&apos;t answer, give the caller another way to reach you.
+              Start free on Transovo — missed call text back, conversations, and more in one workspace.
             </p>
             <div className="lp-hero-actions" style={{ justifyContent: "center" }}>
               <Link href={SIGNUP} className="lp-btn lp-btn-primary">
-                Start Free
+                Start free
                 <ArrowRight className="h-4 w-4" />
               </Link>
-              <Link href="#how-it-works" className="lp-btn lp-btn-secondary">See How It Works</Link>
+              <Link href="/contact" className="lp-btn lp-btn-secondary">Book a demo</Link>
             </div>
-            <p className="mctb-trust-line">Turn missed calls into conversations with Transovo.</p>
           </div>
         </section>
       </main>
@@ -546,7 +630,8 @@ export function MctbLandingPage() {
                 {BRAND_NAME}
               </Link>
               <p className="lp-footer-tag">
-                Missed call text back — turn unanswered calls into SMS conversations customers choose.
+                Missed call text back, appointments, conversations, voicemail, and fax — for service
+                businesses that live on the phone.
               </p>
               <p className="mctb-footer-disclosure">
                 Transovo provides conversational messaging services for participating businesses. Message
@@ -557,21 +642,22 @@ export function MctbLandingPage() {
             <div className="lp-footer-cols">
               <div>
                 <h4>Product</h4>
-                <Link href="#how-it-works">How it works</Link>
+                <Link href="#platform">Platform</Link>
+                <Link href="#how-it-works">Missed call text back</Link>
                 <Link href="/appointments">Appointments</Link>
-                <Link href={SIGNUP}>Start Free</Link>
-                <Link href="/login?next=/mctb">Login</Link>
+                <Link href={SIGNUP}>Start free</Link>
+                <Link href="/login?next=/mctb">Log in</Link>
               </div>
               <div>
                 <h4>Contact</h4>
                 <Link href="/contact">Contact</Link>
-                <Link href="/contact">Book a Demo</Link>
+                <Link href="/contact">Book a demo</Link>
               </div>
               <div>
                 <h4>Legal</h4>
                 <Link href="/terms">Terms</Link>
                 <Link href="/privacy">Privacy</Link>
-                <Link href="/acceptable-use">Acceptable Use</Link>
+                <Link href="/acceptable-use">Acceptable use</Link>
               </div>
             </div>
           </div>
