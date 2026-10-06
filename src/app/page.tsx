@@ -7,7 +7,7 @@ export async function generateMetadata(): Promise<Metadata> {
       absolute: "Missed Call Text Back for Small Business | Transovo",
     },
     description:
-      "Turn missed calls into SMS on your existing business line. Start immediately on the Transovo platform sending number — no A2P wait. Press-1 or existing permission. Free plan.",
+      "Missed call text back on your business line, recovery texts from Transovo's platform toll-free — start free without your own A2P. Team email and SMS alerts. One simple paid upgrade.",
     alternates: {
       canonical: "/",
     },

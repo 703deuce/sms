@@ -13,7 +13,8 @@ import {
   Rocket,
   Shield,
   Menu,
-  Zap,
+  Mail,
+  DollarSign,
   X,
   CheckCircle2,
 } from "lucide-react";
@@ -29,6 +30,7 @@ const NAV = [
   { href: "#features", label: "Features" },
   { href: "#how-it-works", label: "How it works" },
   { href: "#why-transovo", label: "Why Transovo" },
+  { href: "#pricing", label: "Pricing" },
   { href: "#industries", label: "Industries" },
   { href: "#faq", label: "FAQ" },
   { href: "/contact", label: "Book a demo" },
@@ -37,33 +39,33 @@ const NAV = [
 const DIFFERENTIATORS = [
   {
     icon: Rocket,
-    title: "Go live in minutes",
-    body: "Start on the Transovo platform sending number — we handle carrier compliance so you are not stuck waiting on A2P registration before your first recovery text.",
+    title: "Text back from our 1-800 today",
+    body: "Use the Transovo platform toll-free as your text-back sender — already registered on our side. You do not need your own texting number or your own A2P brand campaign to start sending recovery SMS.",
   },
   {
     icon: Phone,
     title: "Keep the number customers call",
-    body: "Your public business line stays the same. Unanswered calls forward to Transovo; when you pick up, nothing changes.",
+    body: "Forward unanswered calls from your existing business line. When you answer, nothing changes — we only step in on the miss.",
+  },
+  {
+    icon: DollarSign,
+    title: "Free plan — not a bait-and-switch",
+    body: "Most missed-call texting tools start at painful monthly fees. Transovo includes real recoveries on the free plan. When you outgrow it, one straightforward paid plan — not a menu of add-ons.",
   },
   {
     icon: Shield,
     title: "Press-1 or existing permission",
-    body: "Pick the consent path that fits your business — caller opt-in on the call, or recovery when you already have permission to text.",
-  },
-  {
-    icon: MessageSquare,
-    title: "Your words, not a chatbot",
-    body: "Deterministic recovery templates plus one automatic acknowledgment. Your team replies when it is human time — no endless AI thread.",
+    body: "Choose caller Press-1 opt-in or existing permission attestation — both supported from day one on the platform sender.",
   },
   {
     icon: Bell,
-    title: "Team notified instantly",
-    body: "When a caller texts back, your people know. Track needs follow-up vs handled so leads do not slip through.",
+    title: "Email & text alerts to your team",
+    body: "Know when you missed a call worth chasing or when a customer texted back — notifications to the phones and inboxes your team already checks.",
   },
   {
-    icon: Zap,
-    title: "Free plan to prove it",
-    body: "Connect forwarding, run a live test, and see real missed-call recovery before you pay for more volume.",
+    icon: MessageSquare,
+    title: "Your templates, not a runaway bot",
+    body: "Recovery messages you write, plus one automatic acknowledgment. Then your people call back, reply, or mark handled.",
   },
 ];
 
@@ -73,8 +75,12 @@ const FAQS = [
     a: "No. Customers keep calling the number they already know. You set up unanswered-call forwarding to Transovo — you do not replace your line.",
   },
   {
-    q: "Do I need A2P or 10DLC registration before I can start?",
-    a: "Not to get started. Most businesses begin with the Transovo platform sending number so recovery texts can go out while forwarding is connected. You can add your own verified business sender later in setup when you are ready — it is optional, not a gate to finishing onboarding.",
+    q: "Do I need A2P or 10DLC registration?",
+    a: "Only if you want recovery texts to come from your own local or toll-free sending number. On the Transovo platform sender (our pre-verified toll-free), we send on our registration — you can start and stay on that path on the free plan without filing your own A2P campaign. If you later add your own number as the text-back sender, carrier brand registration and approval apply — same as anywhere else.",
+  },
+  {
+    q: "Do I need my own phone number to send texts?",
+    a: "No. Recovery SMS can send from the Transovo platform toll-free while you keep your existing line for incoming calls only. Adding your own texting number is optional when you want texts to show your local caller ID.",
   },
   {
     q: "What happens when I answer the call?",
@@ -97,8 +103,12 @@ const FAQS = [
     a: "Yes. Paste your link in a reply from the missed-call conversation — same as you would from any business texting workflow.",
   },
   {
-    q: "Is there a free plan?",
-    a: "Yes. Start free, connect forwarding, and validate with real missed calls before upgrading.",
+    q: "What does the free plan include?",
+    a: "Monthly missed-call recoveries on the platform sender, Press-1 and existing permission, missed-call history, and business email/SMS notifications — no credit card to start. Upgrade only when you need more recoveries or booking-link features.",
+  },
+  {
+    q: "How much does paid cost?",
+    a: "One main upgrade for automatic text back beyond the free allowance — simple pricing without the enterprise tax many competitors charge. You can keep using the platform sender on paid plans too; own-number texting remains optional with separate carrier registration.",
   },
   {
     q: "What if my business is closed?",
@@ -174,8 +184,8 @@ export function MctbLandingPage() {
                   alerts, and a clear handoff when a human needs to step in.
                 </p>
                 <p className="mctb-highlight" style={{ marginTop: "0.75rem" }}>
-                  Start on our platform sending number today. No A2P paperwork required to go live.
-                  Keep your existing business line for every call.
+                  Send recovery texts from our platform toll-free — no own texting number, no waiting on
+                  your A2P approval to try it. Free plan included. Keep your existing line for calls.
                 </p>
                 <div className="lp-hero-actions" style={{ marginTop: "1.5rem" }}>
                   <Link href={SIGNUP} className="lp-btn lp-btn-primary">
@@ -185,7 +195,7 @@ export function MctbLandingPage() {
                   <Link href="#how-it-works" className="lp-btn lp-btn-secondary">See how it works</Link>
                 </div>
                 <p className="mctb-trust-line">
-                  Free plan · Platform sender included · Press-1 or existing permission · Set up in minutes
+                  $0 to start · Platform 1-800 sender · Team email &amp; SMS alerts · Press-1 or existing permission
                 </p>
               </div>
               <MctbHeroMockup />
@@ -199,8 +209,9 @@ export function MctbLandingPage() {
               <p className="lp-eyebrow">Why businesses switch</p>
               <h2>Missed-call texting that actually ships — not a six-week carrier project.</h2>
               <p className="lp-lead">
-                Other tools make you register messaging, rebuild your number story, or bolt on a bot.
-                Transovo is built around one job: recover the call you already missed.
+                Others charge before you see a single recovery, or make you wait weeks on A2P just to
+                test. Transovo lets you run on our toll-free sender, alert your team, and upgrade once —
+                when volume — not vendor paperwork — says so.
               </p>
             </div>
             <div className="mctb-platform-grid">
@@ -305,15 +316,16 @@ export function MctbLandingPage() {
         <section className="lp-section">
           <div className="lp-container mctb-split mctb-split-40-60">
             <div>
-              <p className="lp-eyebrow">Two numbers, one story</p>
-              <h2>Customers call your line. Recovery texts can start on ours.</h2>
+              <p className="lp-eyebrow">Platform sender vs your own</p>
+              <h2>Call your number. We can text from ours.</h2>
               <p>
-                Your <strong>business line</strong> is what you advertise. The <strong>text-back sender</strong> can
-                be Transovo&apos;s platform number on day one — so you are not waiting on brand registration to help
-                your first missed caller.
+                Your <strong>business line</strong> is still what customers dial — forward when you do not answer.
+                Recovery SMS can come from Transovo&apos;s <strong>platform toll-free</strong> (already on our A2P) so
+                you are not buying a second line or filing brand registration just to send your first text back.
               </p>
               <p style={{ marginTop: "0.75rem" }}>
-                When you are ready, switch to your own verified sender in setup. Forwarding and consent stay the same.
+                Want texts to show your local number instead? Add your own sender later — that path uses standard
+                A2P/10DLC registration and approval timelines. Many businesses stay on the platform sender.
               </p>
             </div>
             <div className="mctb-number-hub mctb-number-hub-dual">
@@ -325,8 +337,8 @@ export function MctbLandingPage() {
               <p className="mctb-flow-arrow">No answer → forward</p>
               <div className="mctb-number-role highlight">
                 <p className="mctb-mock-label">Recovery texts (start here)</p>
-                <p className="mctb-mock-title">Transovo platform sender</p>
-                <p className="mctb-mock-sub">Included · No A2P wait to start</p>
+                <p className="mctb-mock-title">Transovo platform 1-800</p>
+                <p className="mctb-mock-sub">We send · Our A2P · Free plan OK</p>
               </div>
             </div>
           </div>
@@ -426,12 +438,55 @@ export function MctbLandingPage() {
         <section className="lp-section">
           <div className="lp-container mctb-split mctb-split-40-60">
             <div>
+              <p className="lp-eyebrow">Never miss the miss</p>
+              <h2>Your phone was busy — your team still gets the alert.</h2>
+              <p>
+                Route business notifications by email and text when a recovery matters: a fresh missed call,
+                a customer reply, or a thread that still needs follow-up — so the lead is not sitting silent in
+                the inbox until tomorrow.
+              </p>
+              <ul className="mctb-bullet-list" style={{ marginTop: "1rem" }}>
+                <li>Multiple recipients — owner, dispatcher, on-call</li>
+                <li>Email and SMS channels</li>
+                <li>Included on the free plan with platform sender</li>
+              </ul>
+            </div>
+            <div className="mctb-split-visual">
+              <div className="mctb-notify-mock">
+                <div className="mctb-notify-row">
+                  <Mail className="h-5 w-5 text-indigo-500 shrink-0" aria-hidden />
+                  <div>
+                    <p className="mctb-mock-label" style={{ marginBottom: "0.2rem" }}>Email · Owner</p>
+                    <p style={{ margin: 0, fontSize: "0.88rem" }}>
+                      <strong>Missed call — Sarah replied</strong>
+                      <br />
+                      &quot;Do you have openings Thursday?&quot; · Needs follow-up
+                    </p>
+                  </div>
+                </div>
+                <div className="mctb-notify-row" style={{ marginTop: "0.75rem" }}>
+                  <Bell className="h-5 w-5 text-indigo-500 shrink-0" aria-hidden />
+                  <div>
+                    <p className="mctb-mock-label" style={{ marginBottom: "0.2rem" }}>SMS · On-call tech</p>
+                    <p style={{ margin: 0, fontSize: "0.88rem" }}>
+                      Missed call text back: new reply from (571) 555-0198
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="lp-section lp-section-alt">
+          <div className="lp-container mctb-split mctb-split-40-60">
+            <div>
               <p className="lp-eyebrow">Missed-call inbox</p>
               <h2>Every recovery thread tied to the call that started it.</h2>
               <p>See the miss, the consent path, the texts, and the reply — then close the loop.</p>
               <ul className="mctb-bullet-list" style={{ marginTop: "1rem" }}>
                 <li>Conversation linked to missed-call detail</li>
-                <li>Team notifications when someone texts back</li>
+                <li>Needs follow-up vs handled on the list</li>
                 <li>Mark handled when the job is won or lost</li>
               </ul>
             </div>
@@ -496,20 +551,42 @@ export function MctbLandingPage() {
           </div>
         </section>
 
-        <section className="lp-section lp-section-alt">
+        <section className="lp-section lp-section-alt" id="pricing">
           <div className="lp-container">
-            <div className="mctb-free-panel">
-              <p className="lp-eyebrow">Free plan</p>
-              <h2>Start with real missed calls — not a slide deck.</h2>
+            <div className="lp-section-center">
+              <p className="lp-eyebrow">Pricing</p>
+              <h2>Start free. Pay once when you outgrow it.</h2>
               <p className="lp-lead">
-                Sign up, connect forwarding, use the platform sender, and run your live test. Upgrade when
-                volume grows — not before you have proof.
+                No credit card to begin. Platform toll-free texting stays available on every plan — you are not
+                forced onto own-number A2P to get value.
               </p>
-              <Link href={SIGNUP} className="lp-btn lp-btn-primary" style={{ marginTop: "1.25rem" }}>
-                Start free
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-              <p className="mctb-trust-line">Keep your business number · Platform texting included to start</p>
+            </div>
+            <div className="mctb-pricing-grid">
+              <article className="mctb-pricing-card featured">
+                <p className="mctb-pricing-tier">Free</p>
+                <p className="mctb-pricing-amount"><span>$0</span>/mo</p>
+                <ul className="mctb-bullet-list mctb-pricing-list">
+                  <li>Real missed-call recoveries every month</li>
+                  <li>Transovo platform 1-800 sender</li>
+                  <li>Press-1 and existing permission</li>
+                  <li>Business email &amp; SMS notifications</li>
+                  <li>Missed-call history &amp; conversations</li>
+                </ul>
+                <Link href={SIGNUP} className="lp-btn lp-btn-primary" style={{ marginTop: "1.25rem", width: "100%", justifyContent: "center" }}>
+                  Start free
+                </Link>
+              </article>
+              <article className="mctb-pricing-card">
+                <p className="mctb-pricing-tier">Text Back</p>
+                <p className="mctb-pricing-amount"><span>$9.99</span>/mo</p>
+                <p className="mctb-pricing-note">One upgrade when you need more recoveries and booking links.</p>
+                <ul className="mctb-bullet-list mctb-pricing-list">
+                  <li>Higher monthly recovery allowance</li>
+                  <li>Booking link in recovery flows</li>
+                  <li>Still use platform sender — or add own number later</li>
+                </ul>
+                <p className="mctb-pricing-foot">Own local texting number? Optional add-on with standard A2P registration.</p>
+              </article>
             </div>
           </div>
         </section>
@@ -579,6 +656,7 @@ export function MctbLandingPage() {
                 <h4>Product</h4>
                 <Link href="#how-it-works">How it works</Link>
                 <Link href="#why-transovo">Why Transovo</Link>
+                <Link href="#pricing">Pricing</Link>
                 <Link href={SIGNUP}>Start free</Link>
                 <Link href="/login?next=/mctb">Log in</Link>
               </div>
