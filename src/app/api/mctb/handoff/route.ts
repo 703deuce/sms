@@ -31,6 +31,8 @@ export async function GET() {
   const aiRepliesEnabled = await isLeadRecoveryAiRepliesEnabled(workspaceId);
   const urgentBusinessSmsEntitled = await canSendMctbUrgentBusinessTeamSms(workspaceId);
   const businessReplySmsEntitled = await canSendMctbBusinessReplyTeamSms(workspaceId);
+  const { resolveMctbCapabilities } = await import("@/lib/mctb/capabilities");
+  const capabilities = await resolveMctbCapabilities(workspaceId);
   return NextResponse.json({
     data: {
       config,
@@ -39,6 +41,8 @@ export async function GET() {
         aiRepliesEnabled,
         urgentBusinessSmsEntitled,
         businessReplySmsEntitled,
+        aiRecoveryEntitled: capabilities.aiRecoveryEntitled,
+        urgentDetectionAvailable: capabilities.urgentClassification,
       },
     },
   });

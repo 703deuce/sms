@@ -64,7 +64,7 @@ export async function loadMctbAnalytics(workspaceId: string, range: MctbAnalytic
     (e) => e.suppressionReason === "OPTED_OUT" && isSuppressedRow(e),
   ).length;
 
-  const [linkClicks, bookingLinksSent, callbackRequested, aiAssistedConversations, voicemailCount] =
+  const [linkClicks, bookingLinksSent, callbackRequested, aiAssistedConversations, voicemailCount, handledLeads] =
     await Promise.all([
       prisma.linkClickEvent
         .count({
@@ -109,6 +109,15 @@ export async function loadMctbAnalytics(workspaceId: string, range: MctbAnalytic
           where: { workspaceId, createdAt: { gte: since } },
         })
         .catch(() => 0),
+      prisma.mctbConversationAutomationState
+        .count({
+          where: {
+            workspaceId,
+            followUpStatus: "resolved",
+            followUpAt: { gte: since },
+          },
+        })
+        .catch(() => 0),
     ]);
 
   const missedTrendRows = rows.map((e) => ({ at: e.detectedAt }));
@@ -126,6 +135,7 @@ export async function loadMctbAnalytics(workspaceId: string, range: MctbAnalytic
     textsSent: funnel.textsSent,
     suppressed: funnel.suppressed,
     replies: funnel.replies,
+    handledLeads,
     replyRate: funnel.replyRate,
     eligibilityRate: funnel.eligibilityRate,
     sendRate: funnel.sendRate,

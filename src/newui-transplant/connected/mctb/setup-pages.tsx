@@ -311,7 +311,10 @@ export function NewUiMctbSetupNotificationsPage() {
 
   const events = useMemo(() => {
     if (!n.config) return undefined;
-    return OPUS_EVENT_MAP.map((row) => {
+    const rows = n.urgentDetectionAvailable
+      ? OPUS_EVENT_MAP
+      : OPUS_EVENT_MAP.filter((row) => row.event !== "urgent_detected");
+    return rows.map((row) => {
       const matrix = row.event ? n.config!.routingMatrix[row.event] : null;
       const isUrgentRow = row.event === "urgent_detected";
       const isCallerReplyRow =
@@ -387,6 +390,7 @@ export function NewUiMctbSetupNotificationsPage() {
     n.save,
     n.urgentBusinessSmsEntitled,
     n.businessReplySmsEntitled,
+    n.urgentDetectionAvailable,
   ]);
 
   if (n.loading) return <p className="p-6 text-sm text-muted-foreground">Loading notifications…</p>;
@@ -412,11 +416,12 @@ export function NewUiMctbSetupNotificationsPage() {
       ) : null}
     <TransplantMctbSetupNotificationsPage
       wired={{
-        urgent: n.config
+        urgent:
+          n.config && n.urgentDetectionAvailable
           ? {
               enabled: Boolean(n.config.emergencyDetectionEnabled),
               criteriaPreview: n.config.emergencyCriteria || null,
-              criteriaEditHref: "/mctb/ai-recovery",
+              criteriaEditHref: MCTB_ROUTES.aiRecovery,
               urgentBusinessSmsEntitled: n.urgentBusinessSmsEntitled,
               testMessage: urgentTestMessage,
               testBusy: urgentTestBusy,

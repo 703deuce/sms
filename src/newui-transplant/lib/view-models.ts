@@ -41,6 +41,9 @@ export type MissedCall = {
   callsToday?: number;
   teamBriefHeadline?: string | null;
   teamBriefSummary?: string | null;
+  /** Operational follow-up after caller replied (not a second persistence field). */
+  followUpLabel?: "Needs follow-up" | "Handled" | null;
+  followUpStatus?: "needs_follow_up" | "resolved" | null;
 };
 
 export type Message = {

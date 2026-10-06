@@ -165,7 +165,21 @@ export function MissedCallsBrowser({
                   <td className={cn(td, 'text-muted-foreground')}>{m.missed}</td>
                   <td className={td}>{m.trigger}</td>
                   <td className={td}><RecoveryPill status={m.recovery} /></td>
-                  <td className={cn(td, 'max-w-64 truncate text-muted-foreground')}>{m.reply ?? '—'}</td>
+                  <td className={cn(td, 'max-w-64 truncate text-muted-foreground')}>
+                    {m.followUpLabel ? (
+                      <span
+                        className={
+                          m.followUpLabel === 'Handled'
+                            ? 'font-medium text-foreground'
+                            : 'font-medium text-amber-700 dark:text-amber-400'
+                        }
+                      >
+                        {m.followUpLabel}
+                      </span>
+                    ) : (
+                      m.reply ?? '—'
+                    )}
+                  </td>
                   <td className={cn(td, 'text-muted-foreground')}>{m.line}</td>
                   <td className={cn(td, 'w-8 text-right')}>
                     <DropdownMenu>
@@ -180,6 +194,15 @@ export function MissedCallsBrowser({
                         {m.conversationId ? (
                           <DropdownMenuItem render={<Link href={`/mctb/conversations?conversation=${m.conversationId}`} />}>
                             <MessageSquare aria-hidden="true" /> Open conversation
+                          </DropdownMenuItem>
+                        ) : null}
+                        {m.conversationId && m.followUpStatus === 'needs_follow_up' && wiring?.onMarkHandled ? (
+                          <DropdownMenuItem
+                            onClick={() => {
+                              void wiring.onMarkHandled?.(m.conversationId!, m.id)
+                            }}
+                          >
+                            Mark handled
                           </DropdownMenuItem>
                         ) : null}
                         <DropdownMenuSeparator />

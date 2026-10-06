@@ -32,6 +32,8 @@ export type MctbMissedCallsListData = {
     smsSentAt: Date | null;
     classification: string | null;
     callsToday?: number;
+    /** From mctb_conversation_automation_states when caller replied */
+    followUpStatus: string | null;
   }>;
   pagination: {
     page: number;
@@ -88,6 +90,21 @@ export async function loadMctbMissedCallsListData(
     }
   }
 
+  const eventIds = events.map((e: MissedCallEvent) => e.id);
+  const followUpRows =
+    eventIds.length > 0
+      ? await prisma.mctbConversationAutomationState.findMany({
+          where: { workspaceId, missedCallEventId: { in: eventIds } },
+          select: { missedCallEventId: true, followUpStatus: true },
+        })
+      : [];
+  const followUpByEventId = new Map<string, string | null>();
+  for (const row of followUpRows) {
+    if (row.missedCallEventId) {
+      followUpByEventId.set(row.missedCallEventId, row.followUpStatus);
+    }
+  }
+
   const mapped = await Promise.all(
     events.map(async (e: MissedCallEvent) => {
       const repeat = await countCallerMissedEventsToday(workspaceId, e.callerE164);
@@ -114,6 +131,7 @@ export async function loadMctbMissedCallsListData(
         smsSentAt: e.smsSentAt,
         classification: e.disposition,
         callsToday: repeat.missedToday,
+        followUpStatus: followUpByEventId.get(e.id) ?? null,
       };
     }),
   );

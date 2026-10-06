@@ -8,6 +8,7 @@ fi
 export NODE_OPTIONS="${NODE_OPTIONS:-} --import ./scripts/preload-server-only.mjs"
 
 echo "=== MCTB commercial launch guards ==="
+npx tsx scripts/test-mctb-deterministic-first-text-guard.ts
 npx tsx scripts/test-mctb-capabilities-resolver.ts
 npx tsx scripts/test-mctb-recovery-usage-idempotency.ts
 npx tsx scripts/test-mctb-recovery-cooldown-eligibility.ts

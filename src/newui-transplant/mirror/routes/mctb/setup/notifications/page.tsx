@@ -15,7 +15,7 @@ export type MctbSetupNotificationsUrgentWired = {
   enabled: boolean
   /** Read-only preview of criteria stored in AI Recovery / business knowledge */
   criteriaPreview: string | null
-  criteriaEditHref: string
+  criteriaEditHref?: string | null
   urgentBusinessSmsEntitled: boolean
   testMessage: string
   testBusy: boolean
@@ -55,7 +55,7 @@ export function TransplantMctbSetupNotificationsPage({ wired }: { wired?: MctbSe
         <ConfigSection
           icon={Bolt}
           title="Urgent Reply Alerts"
-          description="Notify your team when an inbound reply looks urgent. Criteria live in AI Recovery — turn alerts on or off here."
+          description="Notify your team when an inbound reply looks urgent. Turn alerts on or off here."
         >
           <div className="flex flex-col gap-5">
             <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -75,16 +75,18 @@ export function TransplantMctbSetupNotificationsPage({ wired }: { wired?: MctbSe
             <div className={cn(OPUS_CONFIG_INSET, 'bg-background/60 p-4')}>
               <p className="text-sm font-medium">What counts as urgent</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Defined in AI Recovery (business knowledge). Update it there — not on this page.
+                Criteria are read-only on this page. Contact support to change urgency rules.
               </p>
               {urgent.criteriaPreview?.trim() ? (
                 <p className="mt-2 line-clamp-4 text-sm text-muted-foreground">{urgent.criteriaPreview.trim()}</p>
               ) : (
                 <p className="mt-2 text-sm text-muted-foreground">No urgent criteria saved yet.</p>
               )}
-              <p className="mt-3">
-                <TextLink href={urgent.criteriaEditHref}>Edit urgent criteria in AI Recovery</TextLink>
-              </p>
+              {urgent.criteriaEditHref ? (
+                <p className="mt-3">
+                  <TextLink href={urgent.criteriaEditHref}>Edit urgent criteria</TextLink>
+                </p>
+              ) : null}
             </div>
 
             {!urgent.urgentBusinessSmsEntitled ? (

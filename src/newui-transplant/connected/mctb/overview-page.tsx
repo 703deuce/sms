@@ -29,6 +29,7 @@ import { useMctbOverviewEnrichment } from "@/newui-transplant/connected/mctb/ove
 import { MctbRecoveryPauseOpus } from "@/newui-transplant/components/mctb/mctb-recovery-pause-opus";
 import { fetchMctbSetup } from "@/lib/newui-transplant/api/mctb-setup-client";
 import { openMctbSetupGuide } from "@/newui-transplant/connected/mctb/mctb-setup-guide";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
 import { Button } from "@/newui-transplant/components/ui/button";
 
@@ -147,11 +148,13 @@ export function NewUiMctbOverviewPage({ data }: { data: MctbOverviewPayload }) {
           title="Text-back replies"
           badge={<Pill tone="success" dot={false} className="h-auto bg-success/20 text-[oklch(0.82_0.12_158)] ring-0">Included</Pill>}
           description="Callers get one automatic thank-you after they reply, then your team is notified with their message. No AI chat required."
-          action={<TextLink href="/mctb/setup/text-back">Manage text back</TextLink>}
+          action={<TextLink href={MCTB_ROUTES.textBack}>Manage text back</TextLink>}
         />
       </div>
 
-      {leadRecovery.status === "needs_attention" && leadRecovery.attentionReason ? (
+      {capabilities?.aiRecoveryEntitled &&
+      leadRecovery.status === "needs_attention" &&
+      leadRecovery.attentionReason ? (
         <div className="mt-3">
           <Callout
             tone="warning"
@@ -168,7 +171,7 @@ export function NewUiMctbOverviewPage({ data }: { data: MctbOverviewPayload }) {
 
       {data.status === "active" &&
       data.setupComplete &&
-      leadRecovery.status === "ready" &&
+      (!capabilities?.aiRecoveryEntitled || leadRecovery.status === "ready") &&
       leadRecovery.policySummary !== "Loading…" &&
       data.kpis.needsReplyCount === 0 ? (
         <div className="mt-4 flex items-center gap-2 rounded-xl border border-success/30 bg-success/5 px-4 py-3 text-sm">
@@ -182,11 +185,11 @@ export function NewUiMctbOverviewPage({ data }: { data: MctbOverviewPayload }) {
       </div>
 
       <Panel className="mt-4" title="Setup health" bodyClassName="divide-y p-0 px-5">
-        <KeyValueRow label="Business line" value={data.setupHealth.businessLine || "—"} href="/mctb/setup/phone" />
-        <KeyValueRow label="Forwarding" value={data.setupHealth.forwardingLabel} href="/mctb/setup/phone" />
-        <KeyValueRow label="Consent" value={data.setupHealth.consentLabel} href="/mctb/setup/consent" />
-        <KeyValueRow label="Sender" value={data.setupHealth.senderLabel} href="/mctb/setup/phone" />
-        <KeyValueRow label="Recovery" value={data.setupHealth.recoveryLabel} href="/mctb/setup/recovery" />
+        <KeyValueRow label="Business line" value={data.setupHealth.businessLine || "—"} href={MCTB_ROUTES.phone} />
+        <KeyValueRow label="Forwarding" value={data.setupHealth.forwardingLabel} href={MCTB_ROUTES.phone} />
+        <KeyValueRow label="Consent" value={data.setupHealth.consentLabel} href={`${MCTB_ROUTES.missedCallRecovery}?tab=consent`} />
+        <KeyValueRow label="Sender" value={data.setupHealth.senderLabel} href={MCTB_ROUTES.phone} />
+        <KeyValueRow label="Recovery" value={data.setupHealth.recoveryLabel} href={MCTB_ROUTES.missedCallRecovery} />
       </Panel>
     </Page>
   );

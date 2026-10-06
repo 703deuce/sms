@@ -13,6 +13,16 @@ function mapRecoveryStatus(status: string, suppressionReason: string | null): Re
   return "Sent";
 }
 
+function mapFollowUpLabel(
+  eventStatus: string,
+  followUpStatus: string | null,
+): MissedCall["followUpLabel"] {
+  if (eventStatus.toUpperCase() !== "CUSTOMER_REPLIED") return null;
+  if (followUpStatus === "needs_follow_up") return "Needs follow-up";
+  if (followUpStatus === "resolved") return "Handled";
+  return null;
+}
+
 function mapTrigger(classification: string | null): MissedCall["trigger"] {
   const c = (classification || "").toLowerCase();
   if (c.includes("busy")) return "Busy";
@@ -40,5 +50,10 @@ export function mapMctbMissedCallsListToNewUi(data: MctbMissedCallsListData): Mi
     line: fmtCallPhone(e.businessE164),
     conversationId: e.conversationId ?? undefined,
     callsToday: e.callsToday && e.callsToday > 1 ? e.callsToday : undefined,
+    followUpLabel: mapFollowUpLabel(e.status, e.followUpStatus),
+    followUpStatus:
+      e.followUpStatus === "needs_follow_up" || e.followUpStatus === "resolved"
+        ? e.followUpStatus
+        : null,
   }));
 }

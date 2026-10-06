@@ -4,6 +4,8 @@ export type MctbHandoffLaunchMeta = {
   aiRepliesEnabled?: boolean;
   urgentBusinessSmsEntitled?: boolean;
   businessReplySmsEntitled?: boolean;
+  aiRecoveryEntitled?: boolean;
+  urgentDetectionAvailable?: boolean;
 };
 
 export type MctbHandoffPayload = {

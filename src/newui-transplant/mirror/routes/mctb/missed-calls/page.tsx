@@ -20,6 +20,7 @@ export type MctbMissedCallsListWiring = {
   onSortChange: (v: string) => void
   onPageChange: (page: number) => void
   onAddExclusion?: (phoneE164: string, label?: string) => Promise<void>
+  onMarkHandled?: (conversationId: string, eventId: string) => Promise<void>
 }
 
 export type MctbMissedCallsWired = {

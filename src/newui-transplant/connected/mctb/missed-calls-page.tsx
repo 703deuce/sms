@@ -131,6 +131,20 @@ export function NewUiMctbMissedCallsPage({
               throw err;
             }
           },
+          onMarkHandled: async (conversationId) => {
+            const res = await fetch("/api/mctb/handoff/actions", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                action: "follow_up",
+                conversationId,
+                followUpStatus: "resolved",
+              }),
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(json.error || "Could not mark handled");
+            await load();
+          },
         },
       }}
     />

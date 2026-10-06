@@ -12,7 +12,9 @@ import type { MctbOverviewPayload } from "@/lib/mctb/overview-types";
 export async function buildMctbOverviewLeadRecoveryCard(
   workspaceId: string,
   lrConfig: LeadRecoveryWorkspaceConfig,
+  options?: { surfaceAttentionInOverview?: boolean },
 ): Promise<MctbOverviewPayload["leadRecovery"]> {
+  const surfaceAttention = options?.surfaceAttentionInOverview === true;
   const scenarios = lrConfig.enabledScenarios ?? {};
   const activePolicies = LEAD_RECOVERY_SCENARIO_DEFS.filter((d) => scenarios[d.key]);
   const policySummary = activePolicies.map((d) => d.title.split(" ")[0]).slice(0, 4).join(" · ");
@@ -36,7 +38,7 @@ export async function buildMctbOverviewLeadRecoveryCard(
       : "ready";
   let attentionReason: string | null = null;
   let attentionHref: string | null = null;
-  if (lrStatus === "needs_attention") {
+  if (lrStatus === "needs_attention" && surfaceAttention) {
     if (v1Health.providers.booking === "NEEDS_CONFIGURATION") {
       attentionReason = "Add a booking link for Send Booking Link recovery";
       attentionHref = "/mctb/ai-recovery";

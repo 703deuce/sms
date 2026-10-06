@@ -63,6 +63,11 @@ export function NewUiMctbAnalyticsPage({ initialData, initialRange }: { initialD
       { label: "Eligible", value: data.eligible, note: pct(data.eligible, data.totalMissed) },
       { label: "Recovery texts sent", value: data.textsSent, note: `${pct(data.textsSent, data.eligible)} of eligible` },
       { label: "Customer replies", value: data.replies, note: `${pct(data.replies, data.textsSent)} of sent` },
+      {
+        label: "Handled",
+        value: data.handledLeads ?? 0,
+        note: `${pct(data.handledLeads ?? 0, data.replies)} of replies`,
+      },
     ],
     [data],
   );
@@ -117,7 +122,7 @@ export function NewUiMctbAnalyticsPage({ initialData, initialRange }: { initialD
       </div>
 
       <Panel className="mt-4" title="Recovery funnel">
-        <ol className="grid gap-3 sm:grid-cols-4">
+        <ol className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {funnel.map((f, i) => (
             <li key={f.label} className="flex flex-col gap-2">
               <div className="h-24 overflow-hidden rounded-lg bg-muted">

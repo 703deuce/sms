@@ -63,8 +63,13 @@ export async function loadMctbOverviewCore(workspaceId: string): Promise<MctbOve
 
 /** Tier 2 — AI Recovery card (persisted V1 config; no direct-booking provider readiness). */
 export async function loadMctbOverviewEnrichment(workspaceId: string): Promise<MctbOverviewEnrichment> {
-  const lrConfig = await loadLeadRecoveryConfigPersisted(workspaceId);
-  const leadRecovery = await buildMctbOverviewLeadRecoveryCard(workspaceId, lrConfig);
+  const [lrConfig, capabilities] = await Promise.all([
+    loadLeadRecoveryConfigPersisted(workspaceId),
+    resolveMctbCapabilities(workspaceId),
+  ]);
+  const leadRecovery = await buildMctbOverviewLeadRecoveryCard(workspaceId, lrConfig, {
+    surfaceAttentionInOverview: capabilities.aiRecoveryEntitled,
+  });
   return { leadRecovery };
 }
 

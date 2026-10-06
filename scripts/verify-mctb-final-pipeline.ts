@@ -23,6 +23,8 @@ import {
 } from "../src/lib/mctb/texml-ingress/frozen-pipeline";
 import { MCTB_TEXML_ROUTING_MODE, MCTB_TEXML_ROUTING_OWNER } from "../src/lib/mctb/texml-ingress/constants";
 import { readPhoneCapabilities } from "../src/lib/numbers/phone-capabilities";
+import { isSupabaseConfigured } from "../src/lib/supabase/admin";
+import { runMctbDeterministicFirstTextChecks } from "./lib/mctb-deterministic-first-text-verify";
 
 const WS = process.env.WORKSPACE_ID || MCTB_FINAL_REFERENCE_WORKSPACE_ID;
 
@@ -59,7 +61,22 @@ async function resolveIngressTarget(prisma: ReturnType<typeof getPrisma>) {
 }
 
 async function main() {
-  const checks: Check[] = [];
+  const checks: Check[] = [...runMctbDeterministicFirstTextChecks()];
+
+  if (!isSupabaseConfigured()) {
+    const failed = checks.filter((c) => !c.ok);
+    const report = {
+      pipelineId: MCTB_FINAL_PIPELINE_ID,
+      workspaceId: WS,
+      ok: failed.length === 0,
+      skipped: "live_db_telnyx_checks_require_supabase",
+      checks,
+    };
+    console.log(JSON.stringify(report, null, 2));
+    if (failed.length) process.exit(1);
+    return;
+  }
+
   const prisma = getPrisma();
   const { mctb, phoneId: PHONE_ID, e164: E164, resolveSource } = await resolveIngressTarget(prisma);
 

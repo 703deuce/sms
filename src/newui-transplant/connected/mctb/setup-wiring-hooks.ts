@@ -344,6 +344,7 @@ export function useMctbNotificationsWiring() {
   const configRef = useRef<MctbHandoffConfigDto | null>(null);
   const [urgentBusinessSmsEntitled, setUrgentBusinessSmsEntitled] = useState(true);
   const [businessReplySmsEntitled, setBusinessReplySmsEntitled] = useState(true);
+  const [urgentDetectionAvailable, setUrgentDetectionAvailable] = useState(false);
 
   const setConfigSynced = useCallback((next: MctbHandoffConfigDto | null) => {
     configRef.current = next;
@@ -367,6 +368,7 @@ export function useMctbNotificationsWiring() {
       setRecipientsSynced(payload.recipients);
       setUrgentBusinessSmsEntitled(payload.launch?.urgentBusinessSmsEntitled !== false);
       setBusinessReplySmsEntitled(payload.launch?.businessReplySmsEntitled !== false);
+      setUrgentDetectionAvailable(payload.launch?.urgentDetectionAvailable === true);
     },
     [setConfigSynced, setRecipientsSynced],
   );
@@ -442,6 +444,7 @@ export function useMctbNotificationsWiring() {
     reload,
     urgentBusinessSmsEntitled,
     businessReplySmsEntitled,
+    urgentDetectionAvailable,
   };
 }
 
