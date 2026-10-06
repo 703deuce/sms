@@ -245,24 +245,24 @@ export function MctbGettingStartedPage() {
         <h2 className="text-sm font-semibold">Help &amp; guides</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div>
-            <TextLink href={MCTB_ROUTES.phone}>Forwarding your business phone →</TextLink>
+            <TextLink href="/help/phone-forwarding">Forwarding your business phone →</TextLink>
             <p className="mt-0.5 text-xs text-muted-foreground">Set up conditional/no-answer forwarding.</p>
           </div>
           <div>
-            <TextLink href={`${MCTB_ROUTES.missedCallRecovery}?tab=consent`}>How Press-1 consent works →</TextLink>
+            <TextLink href="/help/consent-compliance">How Press-1 consent works →</TextLink>
             <p className="mt-0.5 text-xs text-muted-foreground">What callers hear and how consent is recorded.</p>
           </div>
           <div>
-            <TextLink href={MCTB_ROUTES.textBack}>Text-back and sender guide →</TextLink>
+            <TextLink href="/help/text-back-messages">Text-back and sender guide →</TextLink>
             <p className="mt-0.5 text-xs text-muted-foreground">Transovo Platform vs your own sender.</p>
           </div>
           <div>
-            <TextLink href={MCTB_ROUTES.setupTest}>Troubleshooting missed-call recovery →</TextLink>
+            <TextLink href="/help/troubleshooting-and-test">Troubleshooting missed-call recovery →</TextLink>
             <p className="mt-0.5 text-xs text-muted-foreground">What to check if a test call does not recover.</p>
           </div>
           <div>
-            <TextLink href="/settings">Contact support →</TextLink>
-            <p className="mt-0.5 text-xs text-muted-foreground">Get help with setup or account questions.</p>
+            <TextLink href="/help/account-and-support">Account &amp; support →</TextLink>
+            <p className="mt-0.5 text-xs text-muted-foreground">Profile, billing, and how to reach support.</p>
           </div>
         </div>
       </section>

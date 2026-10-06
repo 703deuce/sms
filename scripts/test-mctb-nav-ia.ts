@@ -28,7 +28,7 @@ assert.ok(launchLabels.includes("Conversations"));
 assert.ok(launchLabels.includes("Missed-Call Recovery"));
 assert.ok(launchLabels.includes("Text Back"));
 assert.ok(launchLabels.includes("Phone & Forwarding"));
-assert.ok(launchLabels.includes("Help"));
+assert.ok(!launchLabels.includes("Help"), "Help is header-only");
 assert.ok(!launchLabels.includes("Settings"), "Settings live in account menu");
 assert.ok(!launchLabels.includes("Billing"), "Billing lives in account menu");
 
@@ -42,9 +42,7 @@ const activityLabels = launchNav
   .map((i) => i.label);
 assert.deepEqual(activityLabels, ["Missed Calls", "Conversations", "Voicemail", "Analytics"]);
 
-const configureLabels = launchNav
-  .slice(configureIdx, launchNav.findIndex((i) => i.label === "Help"))
-  .map((i) => i.label);
+const configureLabels = launchNav.slice(configureIdx).map((i) => i.label);
 assert.deepEqual(configureLabels, [
   "Missed-Call Recovery",
   "Text Back",

@@ -1,7 +1,6 @@
 import {
   BarChart3,
   Bell,
-  HelpCircle,
   Home,
   LayoutDashboard,
   ListChecks,
@@ -84,11 +83,6 @@ export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
       label: "Phone & Forwarding",
       href: MCTB_ROUTES.phone,
       icon: Phone,
-    },
-    {
-      label: "Help",
-      href: "/help",
-      icon: HelpCircle,
     },
   ];
 }
