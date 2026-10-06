@@ -22,8 +22,13 @@ import { BRAND_NAME } from "@/lib/brand";
 import "../landing.css";
 import "./mctb-landing.css";
 import { mctbSignupNextQuery } from "@/lib/mctb/onboarding/entry-path";
+import {
+  MCTB_FREE_MONTHLY_RECOVERY_LIMIT,
+  MCTB_PRO_MONTHLY_RECOVERY_LIMIT,
+} from "@/lib/mctb/recovery-usage-constants";
 import { MctbHeroMockup } from "./mctb-hero-mockup";
 import { MctbLandingCheckoutButton } from "./mctb-landing-checkout-button";
+import { MctbPlanCompareSection } from "./mctb-plan-compare-section";
 
 const CHECKOUT_PRO = "/mctb/billing/checkout?product=mctb_pro";
 const CHECKOUT_A2P = "/mctb/billing/checkout?product=mctb_own_sender";
@@ -34,6 +39,7 @@ const NAV = [
   { href: "#features", label: "Features" },
   { href: "#how-it-works", label: "How it works" },
   { href: "#why-transovo", label: "Why Transovo" },
+  { href: "#compare", label: "Free vs Pro" },
   { href: "#pricing", label: "Pricing" },
   { href: "#industries", label: "Industries" },
   { href: "#faq", label: "FAQ" },
@@ -196,7 +202,7 @@ export function MctbLandingPage() {
                     Start free
                     <ArrowRight className="h-4 w-4" />
                   </Link>
-                  <Link href="#how-it-works" className="lp-btn lp-btn-secondary">See how it works</Link>
+                  <Link href="#compare" className="lp-btn lp-btn-secondary">Compare Free vs Pro</Link>
                 </div>
                 <p className="mctb-trust-line">
                   $0 to start · Platform 1-800 sender · Team email &amp; SMS alerts · Press-1 or existing permission
@@ -555,15 +561,29 @@ export function MctbLandingPage() {
           </div>
         </section>
 
-        <section className="lp-section lp-section-alt" id="pricing">
+        <section className="lp-section lp-section-alt" id="compare">
+          <div className="lp-container">
+            <div className="lp-section-center">
+              <p className="lp-eyebrow">Plans</p>
+              <h2>Free vs Pro — see exactly what changes when you upgrade.</h2>
+              <p className="lp-lead">
+                Both plans send recovery SMS from our platform toll-free so you can start without your own A2P
+                registration. Pro adds volume, SMS alerts to your team, every recovery strategy, booking links, and
+                deeper analytics — not a different product.
+              </p>
+            </div>
+            <MctbPlanCompareSection />
+          </div>
+        </section>
+
+        <section className="lp-section" id="pricing">
           <div className="lp-container">
             <div className="lp-section-center">
               <p className="lp-eyebrow">Pricing</p>
-              <h2>Free to start. One Pro plan. No surprise bills.</h2>
+              <h2>Choose how you want to start — upgrade anytime.</h2>
               <p className="lp-lead">
-                Recovery texts send from our platform toll-free on every plan — no customer A2P required to begin.
-                Automated text-backs pause at your monthly limit; voicemail, call history, and email alerts keep
-                working.
+                Start free with no card, or go straight to Pro checkout. Optional customer-owned messaging is a
+                separate add-on on either plan.
               </p>
             </div>
             <div className="mctb-pricing-grid mctb-pricing-grid-3">
@@ -571,11 +591,11 @@ export function MctbLandingPage() {
                 <p className="mctb-pricing-tier">Free</p>
                 <p className="mctb-pricing-amount"><span>$0</span>/mo</p>
                 <ul className="mctb-bullet-list mctb-pricing-list">
-                  <li>25 missed-call text-backs / month</li>
+                  <li>{MCTB_FREE_MONTHLY_RECOVERY_LIMIT} missed-call text-backs / month</li>
+                  <li>2 recovery strategies (Simple, What do you need?)</li>
                   <li>Press-1 or existing consent</li>
-                  <li>Essential recovery templates</li>
-                  <li>Email team notifications</li>
-                  <li>Platform 1-800 sender included</li>
+                  <li>Email team alerts — no SMS on Free</li>
+                  <li>Platform toll-free sender — no A2P required</li>
                 </ul>
                 <Link href={SIGNUP} className="lp-btn lp-btn-primary" style={{ marginTop: "1.25rem", width: "100%", justifyContent: "center" }}>
                   Start free
@@ -586,20 +606,23 @@ export function MctbLandingPage() {
                 <p className="mctb-pricing-amount"><span>$19.99</span>/mo</p>
                 <p className="mctb-pricing-note">One paid plan — not a menu of tiers.</p>
                 <ul className="mctb-bullet-list mctb-pricing-list">
-                  <li>300 missed-call text-backs / month</li>
-                  <li>All recovery strategies + business-hours variations</li>
+                  <li>{MCTB_PRO_MONTHLY_RECOVERY_LIMIT} missed-call text-backs / month</li>
+                  <li>All 5 recovery strategies + after-hours message wording</li>
                   <li>Email + SMS team alerts</li>
-                  <li>Booking links &amp; detailed analytics</li>
-                  <li>Platform sender — or add customer-owned A2P below</li>
+                  <li>Booking links &amp; full analytics</li>
+                  <li>Same platform sender — optional own-number add-on below</li>
                 </ul>
                 <MctbLandingCheckoutButton
                   productKey="mctb_pro"
                   loginNextPath={CHECKOUT_PRO}
-                  className="lp-btn lp-btn-secondary"
+                  className="lp-btn lp-btn-primary"
                   style={{ marginTop: "1.25rem", width: "100%", justifyContent: "center" }}
                 >
-                  Upgrade to Pro
+                  Get Pro — $19.99/mo
                 </MctbLandingCheckoutButton>
+                <p className="mctb-pricing-foot" style={{ marginTop: "0.75rem" }}>
+                  <Link href="#compare">See full Free vs Pro comparison</Link>
+                </p>
                 <p className="mctb-pricing-foot">
                   Need more than 300? Pro can enable optional usage-based overages with a monthly spending cap
                   (coming soon).
@@ -708,6 +731,7 @@ export function MctbLandingPage() {
                 <h4>Product</h4>
                 <Link href="#how-it-works">How it works</Link>
                 <Link href="#why-transovo">Why Transovo</Link>
+                <Link href="#compare">Free vs Pro</Link>
                 <Link href="#pricing">Pricing</Link>
                 <Link href={SIGNUP}>Start free</Link>
                 <Link href="/login?next=/mctb">Log in</Link>
