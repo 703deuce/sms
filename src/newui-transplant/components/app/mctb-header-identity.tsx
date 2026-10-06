@@ -103,8 +103,9 @@ export function MctbHeaderIdentity() {
           </>
         ) : null}
         <DropdownMenuSeparator />
-        <DropdownMenuItem render={<Link href="/settings/billing">Billing &amp; plans →</Link>} />
-        <DropdownMenuItem render={<Link href={MCTB_ROUTES.phone}>Phone &amp; Forwarding settings →</Link>} />
+        <DropdownMenuItem render={<Link href="/settings/billing" />}>Billing &amp; plans</DropdownMenuItem>
+        <DropdownMenuItem render={<Link href={MCTB_ROUTES.phone} />}>Phone &amp; Forwarding</DropdownMenuItem>
+        <DropdownMenuItem render={<Link href="/settings/business" />}>Business profile</DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={() => {

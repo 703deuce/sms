@@ -7,14 +7,14 @@ export async function generateMetadata(): Promise<Metadata> {
       absolute: "Missed Call Text Back for Small Business | Transovo",
     },
     description:
-      "When you miss a call, Transovo lets callers press 1 to continue by text on your existing business number. Free plan available. Set up in minutes.",
+      "Missed call text back on your business line, recovery texts from Transovo's platform toll-free — start free without your own A2P. Team email and SMS alerts. One simple paid upgrade.",
     alternates: {
       canonical: "/",
     },
     openGraph: {
       title: "Missed Call Text Back | Transovo",
       description:
-        "Missed call → caller chooses text → conversation continues. Keep your existing business number.",
+        "Recover missed calls by text. Keep your business number, start on the platform sender, go live in minutes.",
       url: "/",
     },
   };

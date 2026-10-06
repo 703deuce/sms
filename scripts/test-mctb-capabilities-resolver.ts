@@ -10,7 +10,7 @@ import {
 import { getMctbPlatformTemplate } from "../src/lib/mctb/platform-message-templates";
 
 assert.match(currentMctbRecoveryPeriodKey(new Date("2026-09-15T12:00:00Z")), /^\d{4}-\d{2}$/);
-assert.equal(MCTB_FREE_MONTHLY_RECOVERY_LIMIT, 10);
+assert.equal(MCTB_FREE_MONTHLY_RECOVERY_LIMIT, 25);
 
 assert.equal(
   resolveMctbMonthlyRecoveryLimit({

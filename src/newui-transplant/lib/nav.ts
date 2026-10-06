@@ -57,8 +57,6 @@ const AI_RECEPTIONIST_SECTION: NavSection = {
   ],
 }
 
-const ACCOUNT_FOOTER_LABELS = new Set(['Settings', 'Billing', 'Help'])
-
 function productNavItemToOpus(item: ProductNavItem): NavItem {
   const opus: NavItem = {
     label: item.label,
@@ -88,9 +86,6 @@ export function mctbLaunchNavSections(inboxBadge = 0): NavSection[] {
     if (item.sectionLabel) {
       flush()
       bucketLabel = item.sectionLabel
-    } else if (ACCOUNT_FOOTER_LABELS.has(item.label) && bucketLabel === 'Configure') {
-      flush()
-      bucketLabel = 'Account'
     }
     bucket.push(productNavItemToOpus(item))
   }

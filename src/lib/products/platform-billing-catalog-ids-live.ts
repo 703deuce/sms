@@ -6,20 +6,20 @@ export const PLATFORM_BILLING_CATALOG_LIVE: PlatformCatalogIds = {
     "stripeProductId": "prod_VMCHPYMStHBStX",
     "tiers": {
       "text_back": {
-        "stripePriceId": "price_1ULTtIKjM2RWgyrvURlhs3yQ",
-        "monthlyPriceCents": 999
+        "stripePriceId": "price_1UNf5IKjM2RWgyrvIy15XrMK",
+        "monthlyPriceCents": 1999
       },
       "starter": {
-        "stripePriceId": "price_1ULTtJKjM2RWgyrvNtS8hjoO",
-        "monthlyPriceCents": 999
+        "stripePriceId": "price_1UNf5IKjM2RWgyrvrBTIAEOv",
+        "monthlyPriceCents": 1999
       },
       "growth": {
-        "stripePriceId": "price_1ULTtJKjM2RWgyrvuJqWJ1hl",
-        "monthlyPriceCents": 999
+        "stripePriceId": "price_1UNf5IKjM2RWgyrvVhlJu1NI",
+        "monthlyPriceCents": 1999
       },
       "pro": {
-        "stripePriceId": "price_1ULTtJKjM2RWgyrvVdhokrqA",
-        "monthlyPriceCents": 999
+        "stripePriceId": "price_1UNf5JKjM2RWgyrvswaNjRZY",
+        "monthlyPriceCents": 1999
       }
     }
   },
@@ -144,7 +144,7 @@ export const PLATFORM_BILLING_CATALOG_LIVE: PlatformCatalogIds = {
       "stripeProductId": "prod_VMCISLE1o5oh0P",
       "stripePriceId": "price_1ULTtQKjM2RWgyrvbHevvJFx",
       "monthlyPriceCents": 1000,
-      "stripeOneTimePriceId": "price_1ULTtQKjM2RWgyrvJFrj0QkM",
+      "stripeOneTimePriceId": "price_1UNf5KKjM2RWgyrvs4dZAnHK",
       "oneTimePriceCents": 1950
     }
   }

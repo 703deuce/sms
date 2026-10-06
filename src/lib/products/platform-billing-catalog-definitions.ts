@@ -13,8 +13,8 @@ export type PlatformProductFamily =
   | "ai_transcription"
   | "fax";
 
-/** Purchasable MCTB subscription tier; legacy Stripe/webhook tiers alias to the same price. */
-export const MCTB_PRIMARY_TIER: MctbTier = "text_back";
+/** Purchasable MCTB subscription tier for new checkouts (`mctb_pro`). */
+export const MCTB_PRIMARY_TIER: MctbTier = "pro";
 
 export const MCTB_TIERS: MctbTier[] = ["text_back", "starter", "growth", "pro"];
 export const SMART_ROUTING_TIERS: SmartRoutingTier[] = ["starter", "business", "pro"];
@@ -24,17 +24,17 @@ export const FAX_TIERS: FaxTier[] = ["starter", "business", "pro"];
 export const VERIFY_CREDIT_PACKS: VerifyCreditPack[] = ["1000", "5000", "10000", "50000"];
 
 export const MCTB_TIER_PRICES_CENTS: Record<MctbTier, number> = {
-  text_back: 999,
-  starter: 999,
-  growth: 999,
-  pro: 999,
+  text_back: 1999,
+  starter: 1999,
+  growth: 1999,
+  pro: 1999,
 };
 
 export const MCTB_TIER_DISPLAY_NAMES: Record<MctbTier, string> = {
-  text_back: "Text Back",
-  starter: "Text Back",
-  growth: "Text Back",
-  pro: "Text Back",
+  text_back: "Pro",
+  starter: "Pro",
+  growth: "Pro",
+  pro: "Pro",
 };
 
 export const SMART_ROUTING_TIER_PRICES_CENTS: Record<SmartRoutingTier, number> = {
@@ -139,9 +139,9 @@ export const ADDON_PRODUCT_DEFS = [
   },
   {
     productKey: "mctb_own_sender",
-    displayName: "Own Local Number",
+    displayName: "Customer-owned A2P messaging",
     description:
-      "$10/month subscription for your local texting number, plus $19.50 one-time A2P registration at checkout. Complete the A2P form in Phone & Forwarding — Transovo submits registration manually.",
+      "Optional add-on on any plan: $19.50 one-time carrier registration (pass-through) plus $10/month standard campaign fee (pass-through). Unlocks customer-branded texting and manual two-way conversations after approval.",
     amountCents: 1000,
     feature: "mctb" as const,
   },

@@ -1,30 +1,29 @@
 /**
- * Customer-facing MCTB monthly totals — base plan + optional Own Local Number add-on.
- * @see docs/MCTB-COMMERCIAL-PACKAGES.md
+ * Customer-facing MCTB monthly totals — base plan + optional customer-owned A2P add-on.
  */
 
-export const MCTB_TEXT_BACK_MONTHLY_CENTS = 999;
-export const MCTB_AI_RECOVERY_MONTHLY_CENTS = 1999;
+export const MCTB_PRO_MONTHLY_CENTS = 1999;
+/** @deprecated Legacy key — same price as Pro */
+export const MCTB_TEXT_BACK_MONTHLY_CENTS = MCTB_PRO_MONTHLY_CENTS;
+export const MCTB_AI_RECOVERY_MONTHLY_CENTS = MCTB_PRO_MONTHLY_CENTS;
 export const MCTB_OWN_SENDER_MONTHLY_CENTS = 1000;
 export const MCTB_OWN_SENDER_A2P_ONE_TIME_CENTS = 1950;
 
-export type MctbBasePlanKey = "free" | "text_back" | "ai_recovery";
+export type MctbBasePlanKey = "free" | "pro" | "text_back" | "ai_recovery";
 
-/** Base plan monthly charge (not including add-ons). AI Recovery is not stacked on Text Back. */
 export function mctbBasePlanMonthlyCents(plan: MctbBasePlanKey): number {
   switch (plan) {
     case "free":
       return 0;
+    case "pro":
     case "text_back":
-      return MCTB_TEXT_BACK_MONTHLY_CENTS;
     case "ai_recovery":
-      return MCTB_AI_RECOVERY_MONTHLY_CENTS;
+      return MCTB_PRO_MONTHLY_CENTS;
     default:
       return 0;
   }
 }
 
-/** Total recurring MCTB bill when Own Local Number add-on is active. */
 export function mctbEstimatedMonthlyTotalCents(input: {
   basePlan: MctbBasePlanKey;
   ownSenderAddOn: boolean;
@@ -33,6 +32,5 @@ export function mctbEstimatedMonthlyTotalCents(input: {
 }
 
 export const MCTB_OWN_NUMBER_STACKING_SUMMARY =
-  "Own Local Number is $10/month on top of your MCTB plan (Free, Text Back $9.99/mo, or AI Recovery $19.99/mo). " +
-  "AI Recovery is the $19.99 plan — not an extra $19.99 on top of Text Back. " +
-  "Checkout also includes a one-time $19.50 A2P registration fee for your own number.";
+  "Customer-owned A2P messaging is $10/month on top of your plan (Free or Pro $19.99/mo), plus a one-time $19.50 " +
+  "carrier registration at checkout (pass-through fees). Pro + add-on = $29.99/mo before tax.";
