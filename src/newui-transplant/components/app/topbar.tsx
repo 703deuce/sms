@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { Bell, HelpCircle, Search } from 'lucide-react'
 import { MctbHeaderIdentity } from '@/newui-transplant/components/app/mctb-header-identity'
+import { MctbHeaderUpgradeButton } from '@/newui-transplant/components/app/mctb-header-upgrade-button'
 import { MctbPlanUsageChip } from '@/newui-transplant/components/app/mctb-plan-usage-chip'
 import { SidebarTrigger } from '@/newui-transplant/components/ui/sidebar'
 import { Separator } from '@/newui-transplant/components/ui/separator'
@@ -60,6 +61,7 @@ export function Topbar({ userName }: { userName?: string }) {
         ) : null}
       </nav>
       <div className="ml-auto flex min-w-0 items-center gap-2">
+        <MctbHeaderUpgradeButton />
         <MctbPlanUsageChip />
         <label className="relative hidden md:block">
           <span className="sr-only">Search</span>
@@ -73,10 +75,22 @@ export function Topbar({ userName }: { userName?: string }) {
             ⌘K
           </kbd>
         </label>
-        <Button variant="ghost" size="icon" aria-label="Help" render={<Link href="/help"><HelpCircle /></Link>} />
-        <Button variant="ghost" size="icon" aria-label="Notifications" className="relative">
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Help"
+          render={<Link href="/help" />}
+        >
+          <HelpCircle />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Notifications"
+          className="relative"
+          render={<Link href="/mctb/notifications" />}
+        >
           <Bell />
-          <span className="absolute right-2 top-2 size-1.5 rounded-full bg-primary" aria-hidden="true" />
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -93,7 +107,11 @@ export function Topbar({ userName }: { userName?: string }) {
               {userName?.trim() || 'Signed in'}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem render={<Link href="/settings">Settings</Link>} />
+            <DropdownMenuItem render={<Link href="/settings/business" />}>Profile</DropdownMenuItem>
+            <DropdownMenuItem render={<Link href="/settings" />}>Settings</DropdownMenuItem>
+            <DropdownMenuItem render={<Link href="/settings/billing" />}>Billing &amp; plans</DropdownMenuItem>
+            <DropdownMenuItem render={<Link href="/help" />}>Help</DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => {
                 void performClientLogout('/login')

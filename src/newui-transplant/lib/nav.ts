@@ -57,7 +57,7 @@ const AI_RECEPTIONIST_SECTION: NavSection = {
   ],
 }
 
-const ACCOUNT_FOOTER_LABELS = new Set(['Settings', 'Billing', 'Help'])
+const ACCOUNT_FOOTER_LABELS = new Set(['Help'])
 
 function productNavItemToOpus(item: ProductNavItem): NavItem {
   const opus: NavItem = {

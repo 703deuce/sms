@@ -1,6 +1,6 @@
 import { BillingSettingsConnected } from "@/features/settings/kimi/billing/billing-connected";
 import { isNewUiStage2Enabled } from "@/lib/newui-transplant/stage2-enabled";
-import { BillingSettingsOpus } from "@/newui-transplant/connected/settings/billing-settings-opus";
+import { MctbBillingSettingsOpus } from "@/newui-transplant/connected/settings/mctb-billing-settings-opus";
 
 export default async function SettingsBillingPage({
   searchParams,
@@ -9,7 +9,7 @@ export default async function SettingsBillingPage({
 }) {
   const { upgrade } = await searchParams;
   if (isNewUiStage2Enabled()) {
-    return <BillingSettingsOpus highlightProduct={upgrade ?? null} />;
+    return <MctbBillingSettingsOpus highlightProduct={upgrade ?? null} />;
   }
 
   const body = <BillingSettingsConnected highlightProduct={upgrade ?? null} hideChrome={false} />;

@@ -29,6 +29,8 @@ assert.ok(launchLabels.includes("Missed-Call Recovery"));
 assert.ok(launchLabels.includes("Text Back"));
 assert.ok(launchLabels.includes("Phone & Forwarding"));
 assert.ok(launchLabels.includes("Help"));
+assert.ok(!launchLabels.includes("Settings"), "Settings live in account menu");
+assert.ok(!launchLabels.includes("Billing"), "Billing lives in account menu");
 
 const activityIdx = launchNav.findIndex((i) => i.sectionLabel === "Activity");
 const configureIdx = launchNav.findIndex((i) => i.sectionLabel === "Configure");
@@ -41,7 +43,7 @@ const activityLabels = launchNav
 assert.deepEqual(activityLabels, ["Missed Calls", "Conversations", "Voicemail", "Analytics"]);
 
 const configureLabels = launchNav
-  .slice(configureIdx, launchNav.findIndex((i) => i.label === "Settings"))
+  .slice(configureIdx, launchNav.findIndex((i) => i.label === "Help"))
   .map((i) => i.label);
 assert.deepEqual(configureLabels, [
   "Missed-Call Recovery",
