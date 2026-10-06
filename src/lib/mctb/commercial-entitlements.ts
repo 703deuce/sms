@@ -25,7 +25,7 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 export type MctbCommercialEntitlements = {
   mctbProductActive: boolean;
-  /** Text Back paid plan ($9.99) — booking links + 50 recoveries/mo */
+  /** Pro paid plan ($19.99) — booking links, SMS team alerts, 300 recoveries/mo */
   recoveryPaid: boolean;
   paidTier: string | null;
   /** Distinct SKU — may enable conversational AI when config is on */
@@ -77,7 +77,7 @@ export async function resolveMctbCommercialEntitlements(
   const recoveryPaid =
     mctbProductActive && (recoveryPaidLegacy || subscriptionActive(MCTB_PLATFORM_PRODUCT_FAMILY, subs));
 
-  const paidTier = mctbSub?.tier ?? (recoveryPaid ? "text_back" : null);
+  const paidTier = mctbSub?.tier ?? (recoveryPaid ? "pro" : null);
 
   const aiRecoveryEntitled =
     adminFull ||

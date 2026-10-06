@@ -99,9 +99,8 @@ export async function resolveMctbCapabilities(workspaceId: string): Promise<Mctb
   const urgentBusinessEmail = aiRecoveryEntitled;
   const urgentBusinessSms = aiRecoveryEntitled;
 
-  const businessReplySmsOpen =
-    process.env.MCTB_BUSINESS_REPLY_SMS_REQUIRES_PAID !== "1" || recoveryPaid;
-  const businessReplySms = mctbProductActive && businessReplySmsOpen;
+  /** Pro plan — team SMS alerts (missed call, reply, voicemail); Free is email-only. */
+  const businessReplySms = mctbProductActive && recoveryPaid;
 
   const customTemplates = customerOwnedSender;
   const manualTwoWayMessaging = customerOwnedSender;

@@ -23,6 +23,10 @@ import "../landing.css";
 import "./mctb-landing.css";
 import { mctbSignupNextQuery } from "@/lib/mctb/onboarding/entry-path";
 import { MctbHeroMockup } from "./mctb-hero-mockup";
+import { MctbLandingCheckoutButton } from "./mctb-landing-checkout-button";
+
+const CHECKOUT_PRO = "/mctb/billing/checkout?product=mctb_pro";
+const CHECKOUT_A2P = "/mctb/billing/checkout?product=mctb_own_sender";
 
 const SIGNUP = mctbSignupNextQuery();
 
@@ -59,8 +63,8 @@ const DIFFERENTIATORS = [
   },
   {
     icon: Bell,
-    title: "Email & text alerts to your team",
-    body: "Know when you missed a call worth chasing or when a customer texted back — notifications to the phones and inboxes your team already checks.",
+    title: "Email alerts on Free · SMS on Pro",
+    body: "Free plan emails your team on missed calls, replies, and voicemail. Pro adds SMS alerts so the right person knows immediately.",
   },
   {
     icon: MessageSquare,
@@ -104,11 +108,11 @@ const FAQS = [
   },
   {
     q: "What does the free plan include?",
-    a: "Monthly missed-call recoveries on the platform sender, Press-1 and existing permission, missed-call history, and business email/SMS notifications — no credit card to start. Upgrade only when you need more recoveries or booking-link features.",
+    a: "25 missed-call text-backs per month on the platform toll-free sender, Press-1 or existing consent, essential recovery workflow, and email notifications to your team — no credit card to start.",
   },
   {
-    q: "How much does paid cost?",
-    a: "One main upgrade for automatic text back beyond the free allowance — simple pricing without the enterprise tax many competitors charge. You can keep using the platform sender on paid plans too; own-number texting remains optional with separate carrier registration.",
+    q: "What does Pro include?",
+    a: "Pro is $19.99/month for 300 text-backs, all recovery strategies, email plus SMS team alerts, booking links, and detailed analytics. You can stay on the platform sender or add customer-owned A2P messaging separately.",
   },
   {
     q: "What if my business is closed?",
@@ -448,7 +452,7 @@ export function MctbLandingPage() {
               <ul className="mctb-bullet-list" style={{ marginTop: "1rem" }}>
                 <li>Multiple recipients — owner, dispatcher, on-call</li>
                 <li>Email and SMS channels</li>
-                <li>Included on the free plan with platform sender</li>
+                <li>Email on Free · email and SMS on Pro</li>
               </ul>
             </div>
             <div className="mctb-split-visual">
@@ -555,39 +559,87 @@ export function MctbLandingPage() {
           <div className="lp-container">
             <div className="lp-section-center">
               <p className="lp-eyebrow">Pricing</p>
-              <h2>Start free. Pay once when you outgrow it.</h2>
+              <h2>Free to start. One Pro plan. No surprise bills.</h2>
               <p className="lp-lead">
-                No credit card to begin. Platform toll-free texting stays available on every plan — you are not
-                forced onto own-number A2P to get value.
+                Recovery texts send from our platform toll-free on every plan — no customer A2P required to begin.
+                Automated text-backs pause at your monthly limit; voicemail, call history, and email alerts keep
+                working.
               </p>
             </div>
-            <div className="mctb-pricing-grid">
+            <div className="mctb-pricing-grid mctb-pricing-grid-3">
               <article className="mctb-pricing-card featured">
                 <p className="mctb-pricing-tier">Free</p>
                 <p className="mctb-pricing-amount"><span>$0</span>/mo</p>
                 <ul className="mctb-bullet-list mctb-pricing-list">
-                  <li>Real missed-call recoveries every month</li>
-                  <li>Transovo platform 1-800 sender</li>
-                  <li>Press-1 and existing permission</li>
-                  <li>Business email &amp; SMS notifications</li>
-                  <li>Missed-call history &amp; conversations</li>
+                  <li>25 missed-call text-backs / month</li>
+                  <li>Press-1 or existing consent</li>
+                  <li>Essential recovery templates</li>
+                  <li>Email team notifications</li>
+                  <li>Platform 1-800 sender included</li>
                 </ul>
                 <Link href={SIGNUP} className="lp-btn lp-btn-primary" style={{ marginTop: "1.25rem", width: "100%", justifyContent: "center" }}>
                   Start free
                 </Link>
               </article>
               <article className="mctb-pricing-card">
-                <p className="mctb-pricing-tier">Text Back</p>
-                <p className="mctb-pricing-amount"><span>$9.99</span>/mo</p>
-                <p className="mctb-pricing-note">One upgrade when you need more recoveries and booking links.</p>
+                <p className="mctb-pricing-tier">Pro</p>
+                <p className="mctb-pricing-amount"><span>$19.99</span>/mo</p>
+                <p className="mctb-pricing-note">One paid plan — not a menu of tiers.</p>
                 <ul className="mctb-bullet-list mctb-pricing-list">
-                  <li>Higher monthly recovery allowance</li>
-                  <li>Booking link in recovery flows</li>
-                  <li>Still use platform sender — or add own number later</li>
+                  <li>300 missed-call text-backs / month</li>
+                  <li>All recovery strategies + business-hours variations</li>
+                  <li>Email + SMS team alerts</li>
+                  <li>Booking links &amp; detailed analytics</li>
+                  <li>Platform sender — or add customer-owned A2P below</li>
                 </ul>
-                <p className="mctb-pricing-foot">Own local texting number? Optional add-on with standard A2P registration.</p>
+                <MctbLandingCheckoutButton
+                  productKey="mctb_pro"
+                  loginNextPath={CHECKOUT_PRO}
+                  className="lp-btn lp-btn-secondary"
+                  style={{ marginTop: "1.25rem", width: "100%", justifyContent: "center" }}
+                >
+                  Upgrade to Pro
+                </MctbLandingCheckoutButton>
+                <p className="mctb-pricing-foot">
+                  Need more than 300? Pro can enable optional usage-based overages with a monthly spending cap
+                  (coming soon).
+                </p>
+              </article>
+              <article className="mctb-pricing-card">
+                <p className="mctb-pricing-tier">A2P add-on</p>
+                <p className="mctb-pricing-amount mctb-pricing-amount-stack">
+                  <span>$19.50</span> once
+                  <br />
+                  <span className="mctb-pricing-plus">+</span>
+                  <span>$10</span>/mo
+                </p>
+                <p className="mctb-pricing-note">
+                  Stacks on Free or Pro. Separate from the $19.99 subscription.
+                </p>
+                <ul className="mctb-bullet-list mctb-pricing-list">
+                  <li>Customer-branded, customizable messaging</li>
+                  <li>Manual two-way SMS after carrier approval</li>
+                  <li>Carrier registration fees (pass-through)</li>
+                  <li>Free + add-on = $10/mo · Pro + add-on = $29.99/mo</li>
+                </ul>
+                <MctbLandingCheckoutButton
+                  productKey="mctb_own_sender"
+                  loginNextPath={CHECKOUT_A2P}
+                  className="lp-btn lp-btn-secondary"
+                  style={{ marginTop: "1.25rem", width: "100%", justifyContent: "center" }}
+                >
+                  Add customer-owned messaging
+                </MctbLandingCheckoutButton>
+                <p className="mctb-pricing-foot">
+                  $19.50 covers standard brand + campaign review fees; $10/mo is the standard campaign
+                  recurring fee (Telnyx pass-through, no Transovo markup).
+                </p>
               </article>
             </div>
+            <p className="mctb-pricing-disclaimer">
+              A recovery counts when the first automated recovery SMS is accepted for sending — not when the call
+              is missed. Voicemail and call records continue after you hit your text-back limit.
+            </p>
           </div>
         </section>
 

@@ -712,6 +712,34 @@
   }
 }
 
+.mctb-pricing-grid-3 {
+  max-width: 72rem;
+}
+
+@media (min-width: 960px) {
+  .mctb-pricing-grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.mctb-pricing-amount-stack {
+  line-height: 1.35;
+}
+
+.mctb-pricing-amount-stack .mctb-pricing-plus {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--lp-muted);
+}
+
+.mctb-pricing-disclaimer {
+  margin: 2rem auto 0;
+  max-width: 42rem;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--lp-muted);
+}
+
 .mctb-pricing-card {
   border: 1px solid var(--lp-border);
   border-radius: 1.25rem;
