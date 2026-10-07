@@ -52,10 +52,26 @@ async function main() {
   });
   const page = await context.newPage();
 
+  const dismissProductSwitcherOnboarding = async () => {
+    await page.evaluate(() => {
+      try {
+        window.localStorage.setItem("transovo.productSwitcherOnboarding.v3", "1");
+      } catch {
+        // ignore
+      }
+    });
+    const gotIt = page.getByRole("button", { name: "Got it" });
+    if (await gotIt.isVisible().catch(() => false)) {
+      await gotIt.click();
+      await page.waitForTimeout(300);
+    }
+  };
+
   for (const route of ROUTES) {
     const url = `${BASE_URL}${route.path}`;
     console.log(`Capturing ${route.slug} → ${url}`);
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 120000 });
+    await dismissProductSwitcherOnboarding();
     await page.waitForTimeout(2500);
     const out = join(OUT_DIR, `${route.slug}.png`);
     await page.screenshot({ path: out, fullPage: true });

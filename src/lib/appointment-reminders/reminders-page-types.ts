@@ -6,7 +6,8 @@ export type ArReminderOperationalStatus =
   | "blocked"
   | "skipped"
   | "past_due"
-  | "not_scheduled";
+  | "not_scheduled"
+  | "logged";
 
 export type ArReminderOperationalRow = {
   id: string;

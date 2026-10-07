@@ -18,7 +18,10 @@ import type {
   ArRemindersPagePayload,
   ArReminderOperationalStatus,
 } from "@/lib/appointment-reminders/reminders-page-types";
-import { isSmsReminderTimelineEvent } from "@/lib/appointment-reminders/sms-reminder-timeline";
+import {
+  isSmsReminderTimelineEvent,
+  mapSmsReminderTimelineOutcome,
+} from "@/lib/appointment-reminders/sms-reminder-timeline";
 
 const SENT_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const FAILED_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
@@ -54,13 +57,6 @@ function blockReason(
   return null;
 }
 
-function mapTimelineStatus(type: string): ArReminderOperationalStatus {
-  if (type.includes("failed")) return "failed";
-  if (type.includes("skipped")) return "skipped";
-  if (type.includes("delivered")) return "delivered";
-  if (type.includes("sent") || type.includes("confirmation")) return "sent";
-  return "sent";
-}
 
 function matchesFilter(row: ArReminderOperationalRow, status: string | undefined): boolean {
   if (!status || status === "all") return true;
@@ -114,21 +110,21 @@ export async function loadAppointmentRemindersOperationalPage(
     for (const ev of timeline) {
       if (!isSmsReminderTimelineEvent(ev.type)) continue;
       const occurredAt = ev.at || null;
-      const st = mapTimelineStatus(ev.type);
+      const outcome = mapSmsReminderTimelineOutcome(ev.type);
       const channel = "SMS";
-        rows.push({
-          id: `${row.id}-past-${ev.type}-${occurredAt || ""}`,
-          appointmentId: row.id,
-          customerLabel,
-          appointmentLabel,
-          reminderLabel: ev.label || ev.type,
-          channel,
+      rows.push({
+        id: `${row.id}-past-${ev.type}-${occurredAt || ""}`,
+        appointmentId: row.id,
+        customerLabel,
+        appointmentLabel,
+        reminderLabel: ev.label || ev.type,
+        channel,
         scheduledFor: null,
         occurredAt,
-        status: st,
-        statusLabel: st === "failed" ? "Failed" : st === "skipped" ? "Skipped" : "Sent",
+        status: outcome.status,
+        statusLabel: outcome.statusLabel,
         detail: ev.detail || null,
-        actionHint: st === "failed" ? "Check sender registration and recipient phone" : null,
+        actionHint: outcome.status === "failed" ? "Check sender registration and recipient phone" : null,
       });
     }
 

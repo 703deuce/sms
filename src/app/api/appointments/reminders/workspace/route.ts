@@ -2,7 +2,10 @@ import { getPrisma } from "@/lib/db";
 import { listAppointmentTypes } from "@/lib/appointments";
 import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
 import { buildDedicatedReminderTimeline } from "@/lib/appointments/reminder-engine";
-import { isSmsReminderTimelineEvent } from "@/lib/appointment-reminders/sms-reminder-timeline";
+import {
+  isSmsReminderTimelineEvent,
+  mapSmsReminderTimelineOutcome,
+} from "@/lib/appointment-reminders/sms-reminder-timeline";
 import { listEnabledReminderSteps } from "@/lib/appointments/reminders/reminders-config";
 import { withAppointmentsAuth } from "@/lib/appointments/service-booking/api-helpers";
 import type { AppointmentMetadata } from "@/lib/appointments/types";
@@ -61,17 +64,25 @@ export async function GET() {
 
       for (const ev of timeline) {
         if (!isSmsReminderTimelineEvent(ev.type)) continue;
-        const status = ev.type.includes("failed")
-          ? "Failed"
-          : ev.type.includes("skipped")
-            ? "Skipped"
-            : ev.type.includes("sent") || ev.type.includes("confirmation")
-              ? "Sent"
-              : "Logged";
+        const outcome = mapSmsReminderTimelineOutcome(ev.type);
+        const status =
+          outcome.status === "failed"
+            ? "Failed"
+            : outcome.status === "skipped"
+              ? "Skipped"
+              : outcome.status === "sent" || outcome.status === "delivered"
+                ? "Sent"
+                : outcome.statusLabel;
         if (status === "Failed" && new Date(ev.at || row.startsAt).getTime() > now - 7 * 86400000) {
           failed7d += 1;
         }
-        if (status === "Sent" && ev.at && new Date(ev.at) >= dayStart) sentToday += 1;
+        if (
+          (outcome.status === "sent" || outcome.status === "delivered") &&
+          ev.at &&
+          new Date(ev.at) >= dayStart
+        ) {
+          sentToday += 1;
+        }
         activity.push({
           id: `${row.id}-${ev.type}-${ev.at || ""}`,
           at: ev.at || row.startsAt.toISOString(),

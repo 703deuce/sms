@@ -21,6 +21,8 @@ const E164_RE = /^\+[1-9]\d{6,14}$/;
 export function isValidReminderPhone(phone: string | null | undefined): boolean {
   if (!phone?.trim()) return false;
   const normalized = phone.trim();
+  if (normalized.startsWith("email:")) return false;
+  if (normalized.includes("@") && !normalized.startsWith("+")) return false;
   if (E164_RE.test(normalized)) return true;
   const digits = normalized.replace(/\D/g, "");
   return digits.length >= 10 && digits.length <= 15;
@@ -31,7 +33,12 @@ export function resolveReminderContactPhone(
   inviteePhone: string | null | undefined,
 ): string | null {
   const override = meta.reminderOverride?.phone;
-  return override || meta.inviteePhone || inviteePhone || null;
+  const raw = override || meta.inviteePhone || inviteePhone || null;
+  if (!raw?.trim()) return null;
+  const v = raw.trim();
+  if (v.startsWith("email:")) return null;
+  if (v.includes("@") && !v.startsWith("+")) return null;
+  return v;
 }
 
 export function matchesReminderStatusFilter(

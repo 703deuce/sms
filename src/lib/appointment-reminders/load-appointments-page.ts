@@ -11,6 +11,7 @@ import {
 } from "@/lib/appointment-reminders/aggregate-reminder-status";
 import { computeAggregateReminderView } from "@/lib/appointment-reminders/aggregate-reminder-status.server";
 import { isCalendarConnectionUsable } from "@/lib/appointment-reminders/calendar-connection";
+import { resolveArAppointmentContactDisplay } from "@/lib/appointment-reminders/contact-display";
 
 export type ArAppointmentsQuery = {
   q?: string;
@@ -67,27 +68,37 @@ function mapRow(
     metadata: meta,
     platform,
   });
-  const phone = resolveReminderContactPhone(meta, row.inviteePhone);
+  const contact = resolveArAppointmentContactDisplay(
+    meta,
+    row.inviteeName,
+    row.inviteePhone,
+    row.serviceName,
+  );
+  const phone = contact.phone;
   const phoneState =
-    !phone?.trim() ? "missing" : reminder.attentionReason === "invalid_phone" ? "invalid" : "ok";
+    contact.phoneState === "email_only"
+      ? "missing"
+      : contact.phoneState === "invalid" || reminder.attentionReason === "invalid_phone"
+        ? "invalid"
+        : contact.phoneState === "ok"
+          ? "ok"
+          : "missing";
 
   const connectionId = (meta.connectionId as string) || null;
   const cal = connectionId ? calendarNames.get(connectionId) : undefined;
   const provider = (meta.provider as string) || cal?.provider || null;
 
-  const customerName = row.inviteeName?.trim() || "";
-  const title = row.serviceName?.trim() || "Appointment";
-
   return {
     id: row.id,
-    customerName: customerName || title,
-    appointmentTitle: customerName ? title : "",
+    customerName: contact.customerName,
+    appointmentTitle: contact.appointmentTitle,
     startsAt: row.startsAt,
     endsAt: row.endsAt,
     timezone: row.timezone,
     isAllDay: Boolean(meta.isAllDay),
     phone,
     phoneState,
+    contactEmail: contact.email,
     reminder,
     sourceProvider: provider,
     sourceCalendarLabel: cal?.name || (meta.calendarId as string) || null,

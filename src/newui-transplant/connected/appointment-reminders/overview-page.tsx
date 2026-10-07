@@ -23,7 +23,15 @@ type WorkspaceStats = {
   failed7d: number
 }
 
-type CalendarRow = { id: string; provider: string; status: string; lastSyncAt?: string | null }
+type CalendarRow = {
+  id: string
+  provider: string
+  status: string
+  lastSyncAt?: string | null
+  label?: string
+  accountEmail?: string | null
+  importCalendarCount?: number
+}
 
 export function AppointmentRemindersOverviewPage() {
   const [counts, setCounts] = useState<OverviewCounts | null>(null)
@@ -148,14 +156,31 @@ export function AppointmentRemindersOverviewPage() {
           ) : (
             <ul className="space-y-2 text-sm">
               {calendars.map((c) => (
-                <li key={c.id} className="rounded-md border bg-muted/30 p-3">
-                  <span className="font-medium capitalize">{c.provider}</span>
-                  <span className="text-muted-foreground"> · {c.status}</span>
-                  {c.lastSyncAt ? (
-                    <span className="block text-xs text-muted-foreground">
-                      Last sync {new Date(c.lastSyncAt).toLocaleString()}
+                <li key={c.id} className="rounded-xl border bg-muted/20 px-4 py-3">
+                  <p className="font-medium">
+                    {c.label || c.provider}
+                    <span className="font-normal text-muted-foreground">
+                      {' '}
+                      · {c.provider === 'microsoft' ? 'Microsoft 365' : 'Google'}
                     </span>
+                  </p>
+                  {c.accountEmail ? (
+                    <p className="text-xs text-muted-foreground">{c.accountEmail}</p>
                   ) : null}
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {(c.importCalendarCount ?? 0) > 0
+                      ? `${c.importCalendarCount} calendar(s) selected for import`
+                      : 'No import calendars selected yet'}
+                    {' · '}
+                    {c.status}
+                  </p>
+                  {c.lastSyncAt ? (
+                    <p className="text-xs text-muted-foreground">
+                      Last sync {new Date(c.lastSyncAt).toLocaleString()}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Not synced yet</p>
+                  )}
                 </li>
               ))}
             </ul>

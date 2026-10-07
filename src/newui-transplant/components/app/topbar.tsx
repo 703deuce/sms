@@ -54,13 +54,15 @@ export function Topbar({ userName }: { userName?: string }) {
       <Separator orientation="vertical" className="h-5" />
       <MctbHeaderIdentity />
       <nav aria-label="Breadcrumb" className="hidden min-w-0 items-center gap-1.5 text-sm lg:flex">
-        <span className="truncate text-muted-foreground">{section}</span>
-        {page ? (
+        {page && page !== section ? (
           <>
+            <span className="truncate text-muted-foreground">{section}</span>
             <span className="text-muted-foreground/50" aria-hidden="true">/</span>
             <span className="truncate font-medium">{page}</span>
           </>
-        ) : null}
+        ) : (
+          <span className="truncate font-medium">{page || section}</span>
+        )}
       </nav>
       <div className="ml-auto flex min-w-0 items-center gap-2">
         <MctbHeaderUpgradeButton />

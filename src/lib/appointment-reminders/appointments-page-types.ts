@@ -10,6 +10,7 @@ export type ArAppointmentRow = {
   isAllDay: boolean;
   phone: string | null;
   phoneState: "ok" | "missing" | "invalid";
+  contactEmail?: string | null;
   reminder: AggregateReminderView;
   sourceProvider: string | null;
   sourceCalendarLabel: string | null;

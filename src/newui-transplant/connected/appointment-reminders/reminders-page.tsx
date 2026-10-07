@@ -44,6 +44,7 @@ function toPillStatus(status: string): AggregateReminderStatus {
   if (status === 'blocked' || status === 'past_due') return 'needs_attention'
   if (status === 'delivered') return 'delivered'
   if (status === 'failed') return 'failed'
+  if (status === 'logged') return 'cancelled'
   if (status === 'skipped') return 'not_scheduled'
   if (status === 'sent') return 'sent'
   return 'scheduled'

@@ -43,7 +43,16 @@ type CalendarConnection = {
   } | null;
 };
 
-export function CalendarIntegrationsOpus({ returnPath }: { returnPath?: string } = {}) {
+export type CalendarIntegrationsVariant = "scheduling" | "appointment_reminders";
+
+export function CalendarIntegrationsOpus({
+  returnPath,
+  variant = "scheduling",
+}: {
+  returnPath?: string;
+  variant?: CalendarIntegrationsVariant;
+} = {}) {
+  const isReminders = variant === "appointment_reminders";
   const RETURN_PATH = returnPath ?? CALENDAR_INTEGRATIONS_PATH;
   const [connections, setConnections] = useState<CalendarConnection[]>([]);
   const [blockingEnabled, setBlockingEnabled] = useState(false);
@@ -64,13 +73,15 @@ export function CalendarIntegrationsOpus({ returnPath }: { returnPath?: string }
         fetch("/api/integrations/calendars").catch(() => null),
         fetch("/api/appointments/integrations/status").catch(() => null),
       ]);
-      const settingsJson = settingsRes.ok ? await settingsRes.json() : { data: {} };
-      const blocking = settingsJson.data?.externalCalendarBlocking;
-      setBlockingEnabled(Boolean(blocking?.enabled));
-      const savedIds = blocking?.connectionIds?.length
-        ? blocking.connectionIds
-        : blocking?.calendarIds || [];
-      setSelectedConnectionIds(savedIds);
+      if (!isReminders) {
+        const settingsJson = settingsRes.ok ? await settingsRes.json() : { data: {} };
+        const blocking = settingsJson.data?.externalCalendarBlocking;
+        setBlockingEnabled(Boolean(blocking?.enabled));
+        const savedIds = blocking?.connectionIds?.length
+          ? blocking.connectionIds
+          : blocking?.calendarIds || [];
+        setSelectedConnectionIds(savedIds);
+      }
 
       if (calendarsRes?.ok) {
         const calJson = await calendarsRes.json();
@@ -89,7 +100,7 @@ export function CalendarIntegrationsOpus({ returnPath }: { returnPath?: string }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isReminders]);
 
   useEffect(() => {
     void load();
@@ -163,15 +174,24 @@ export function CalendarIntegrationsOpus({ returnPath }: { returnPath?: string }
   return (
     <div className="space-y-4">
       <Panel
-        title="Calendar integrations"
-        description="Connect Outlook/Google for availability blocking and optional appointment import. Only calendars you explicitly choose for import can create reminder-eligible appointments — personal events like lunch or focus time are filtered out by default."
+        title={isReminders ? "Connect calendars for reminders" : "Calendar integrations"}
+        description={
+          isReminders
+            ? "Authorize Google Calendar or Microsoft 365, then select which calendars contain customer appointments. Transovo imports those events and sends SMS reminders automatically — this product does not manage your booking availability."
+            : "Connect Outlook/Google for availability blocking and optional appointment import. Only calendars you explicitly choose for import can create reminder-eligible appointments — personal events like lunch or focus time are filtered out by default."
+        }
       >
         {notice ? <p className="mt-2 text-sm text-muted-foreground">{notice}</p> : null}
       </Panel>
 
       <ProviderSection
+        variant={variant}
         title="Google Calendar"
-        description="Two-way sync with Google Calendar for availability, bookings, and reminders."
+        description={
+          isReminders
+            ? "Connect Google, then choose calendars that hold appointments you want to remind by SMS."
+            : "Two-way sync with Google Calendar for availability, bookings, and reminders."
+        }
         configured={googleConfigured}
         envHint="GOOGLE_CALENDAR_CLIENT_ID and GOOGLE_CALENDAR_CLIENT_SECRET"
         rows={connections.filter((c) => c.provider === "google")}
@@ -184,8 +204,13 @@ export function CalendarIntegrationsOpus({ returnPath }: { returnPath?: string }
       />
 
       <ProviderSection
+        variant={variant}
         title="Microsoft Outlook"
-        description="Two-way sync with Outlook / Microsoft 365 for availability, bookings, and reminders."
+        description={
+          isReminders
+            ? "Connect Microsoft 365 or Outlook, then choose calendars that hold appointments you want to remind by SMS."
+            : "Two-way sync with Outlook / Microsoft 365 for availability, bookings, and reminders."
+        }
         configured={microsoftConfigured}
         envHint="MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET"
         rows={connections.filter((c) => c.provider === "microsoft")}
@@ -203,8 +228,8 @@ export function CalendarIntegrationsOpus({ returnPath }: { returnPath?: string }
         </div>
       ) : null}
 
-      {connected.length > 0 ? (
-        <div className="space-y-3 border-t border-[#ecedf2] pt-4">
+      {!isReminders && connected.length > 0 ? (
+        <div className="space-y-3 border-t border-border pt-4">
           <label className="flex items-center gap-2 text-[13px]">
             <input
               type="checkbox"
@@ -216,10 +241,10 @@ export function CalendarIntegrationsOpus({ returnPath }: { returnPath?: string }
 
           {blockingEnabled ? (
             <div className="space-y-1">
-              <p className="text-[12px] font-semibold text-[#6b6f82]">
+              <p className="text-[12px] font-semibold text-muted-foreground">
                 Connections that block availability (workspace default)
               </p>
-              <p className="text-[11px] text-[#8a8fa3]">
+              <p className="text-[11px] text-muted-foreground">
                 Per-connection blocking calendars can be configured in each connection&apos;s settings.
               </p>
               {connected.map((c) => (
@@ -245,7 +270,15 @@ export function CalendarIntegrationsOpus({ returnPath }: { returnPath?: string }
             </Button>
           </div>
         </div>
-      ) : pending.length > 0 ? (
+      ) : null}
+
+      {isReminders && connected.length === 0 && pending.length > 0 ? (
+        <p className="text-[12px] text-amber-700">
+          Finish connecting a calendar above, then select import calendars and run Sync now from Appointments.
+        </p>
+      ) : null}
+
+      {!isReminders && connected.length === 0 && pending.length > 0 ? (
         <p className="text-[12px] text-amber-700">
           Finish connecting a calendar above to enable sync and availability blocking.
         </p>
@@ -255,6 +288,7 @@ export function CalendarIntegrationsOpus({ returnPath }: { returnPath?: string }
 }
 
 function ProviderSection({
+  variant,
   title,
   description,
   configured,
@@ -267,6 +301,7 @@ function ProviderSection({
   onReconnect,
   onRefresh,
 }: {
+  variant: CalendarIntegrationsVariant;
   title: string;
   description: string;
   configured: boolean;
@@ -283,26 +318,28 @@ function ProviderSection({
   const pending = rows.filter((r) => r.status !== "connected" && r.status !== "needs_reauth");
 
   return (
-    <div className="rounded-lg border border-[#ecedf2] p-4 space-y-3">
+    <Panel className="space-y-3 p-4">
       <div className="flex items-start gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#efecfd] text-[#5b45e0]">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
           <Calendar className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-semibold">{title}</p>
-          <p className="text-[12px] text-[#8a8fa3]">{description}</p>
+          <p className="text-[12px] text-muted-foreground">{description}</p>
         </div>
       </div>
 
       {!configured ? (
         <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-[12px] text-amber-800">
-          {title} OAuth is not configured on the server. Set <code className="text-[11px]">{envHint}</code>.
+          {title} sign-in is not available until an administrator configures OAuth on the server (
+          <code className="text-[11px]">{envHint}</code>). Microsoft may still work if those variables are set.
         </div>
       ) : null}
 
       {connected.map((c) => (
         <ConnectionRow
           key={c.id}
+          variant={variant}
           connection={c}
           expanded={expandedId === c.id}
           onToggle={() => onExpand(expandedId === c.id ? null : c.id)}
@@ -314,9 +351,9 @@ function ProviderSection({
       {pending.map((c) => (
         <div
           key={c.id}
-          className="flex items-center justify-between rounded-lg border border-dashed border-[#ecedf2] px-3 py-2 text-[13px]"
+          className="flex items-center justify-between rounded-lg border border-dashed border-border px-3 py-2 text-[13px]"
         >
-          <span className="text-[#6b6f82]">{c.name || title}</span>
+          <span className="text-muted-foreground">{c.name || title}</span>
           <Button size="sm" variant="outline" disabled={!configured || busy} onClick={onConnect}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Finish connect"}
           </Button>
@@ -333,23 +370,26 @@ function ProviderSection({
         )}
         {rows.length ? `Connect another ${title}` : `Connect ${title}`}
       </Button>
-    </div>
+    </Panel>
   );
 }
 
 function ConnectionRow({
+  variant,
   connection,
   expanded,
   onToggle,
   onReconnect,
   onRefresh,
 }: {
+  variant: CalendarIntegrationsVariant;
   connection: CalendarConnection;
   expanded: boolean;
   onToggle: () => void;
   onReconnect: () => void;
   onRefresh: () => void;
 }) {
+  const isReminders = variant === "appointment_reminders";
   const [providerCalendars, setProviderCalendars] = useState<ProviderCalendar[]>([]);
   const [loadingCalendars, setLoadingCalendars] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -513,12 +553,12 @@ function ConnectionRow({
   }
 
   return (
-    <div className="rounded-lg border border-[#ecedf2] text-[13px]">
+    <div className="rounded-lg border border-border text-[13px]">
       <div className="flex items-center justify-between px-3 py-2">
         <div>
           <span className="font-medium">{connection.name}</span>
           {connection.config?.email ? (
-            <span className="ml-2 text-[11px] text-[#8a8fa3]">{connection.config.email}</span>
+            <span className="ml-2 text-[11px] text-muted-foreground">{connection.config.email}</span>
           ) : null}
         </div>
         <div className="flex items-center gap-2">
@@ -539,7 +579,7 @@ function ConnectionRow({
       </div>
 
       {connection.lastSyncAt ? (
-        <p className="px-3 pb-2 text-[11px] text-[#8a8fa3]">
+        <p className="px-3 pb-2 text-[11px] text-muted-foreground">
           Last sync: {new Date(connection.lastSyncAt).toLocaleString()}
         </p>
       ) : null}
@@ -560,45 +600,59 @@ function ConnectionRow({
       ) : null}
 
       {expanded ? (
-        <div className="border-t border-[#ecedf2] px-3 py-3 space-y-3 bg-[#fafbfc]">
+        <div className="border-t border-border px-3 py-3 space-y-3 bg-muted/30">
           <div className="flex items-center justify-between">
-            <p className="text-[12px] font-semibold">Calendar selection</p>
+            <p className="text-[12px] font-semibold">
+              {isReminders ? "Calendars to import for SMS reminders" : "Calendar selection"}
+            </p>
             <Button size="sm" variant="ghost" disabled={loadingCalendars} onClick={() => void loadProviderCalendars()}>
               {loadingCalendars ? <Loader2 className="h-4 w-4 animate-spin" /> : "Refresh list"}
             </Button>
           </div>
 
           {providerCalendars.length === 0 && !loadingCalendars ? (
-            <p className="text-[11px] text-[#8a8fa3]">Load calendars to choose write/block/import targets.</p>
+            <p className="text-[11px] text-muted-foreground">
+              {isReminders
+                ? "Refresh the list, then check the calendars that contain customer appointments."
+                : "Load calendars to choose write/block/import targets."}
+            </p>
           ) : null}
 
           {providerCalendars.length > 0 ? (
             <>
-              <div>
-                <p className="text-[11px] font-medium text-[#6b6f82] mb-1">Receive Transovo bookings</p>
-                <select
-                  className="w-full rounded border border-[#ecedf2] px-2 py-1.5 text-[12px]"
-                  value={writeCalendarId}
-                  onChange={(e) => setWriteCalendarId(e.target.value)}
-                >
-                  <option value="">Default calendar</option>
-                  {providerCalendars.map((cal) => (
-                    <option key={cal.id} value={cal.id}>
-                      {cal.name}{cal.primary ? " (primary)" : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {!isReminders ? (
+                <div>
+                  <p className="text-[11px] font-medium text-muted-foreground mb-1">Receive Transovo bookings</p>
+                  <select
+                    className="w-full rounded border border-border px-2 py-1.5 text-[12px]"
+                    value={writeCalendarId}
+                    onChange={(e) => setWriteCalendarId(e.target.value)}
+                  >
+                    <option value="">Default calendar</option>
+                    {providerCalendars.map((cal) => (
+                      <option key={cal.id} value={cal.id}>
+                        {cal.name}{cal.primary ? " (primary)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
+
+              {!isReminders ? (
+                <CalendarCheckboxGroup
+                  label="Availability only — block busy times"
+                  calendars={providerCalendars}
+                  selected={blockingIds}
+                  onChange={setBlockingIds}
+                />
+              ) : null}
 
               <CalendarCheckboxGroup
-                label="Availability only — block busy times"
-                calendars={providerCalendars}
-                selected={blockingIds}
-                onChange={setBlockingIds}
-              />
-
-              <CalendarCheckboxGroup
-                label="Import for reminders — only selected calendars"
+                label={
+                  isReminders
+                    ? "Import appointments from these calendars"
+                    : "Import for reminders — only selected calendars"
+                }
                 calendars={providerCalendars}
                 selected={importIds}
                 onChange={(ids) => {
@@ -608,8 +662,8 @@ function ConnectionRow({
               />
 
               {importIds.length > 0 ? (
-                <div className="rounded-lg border border-[#ecedf2] bg-white p-3 space-y-2">
-                  <p className="text-[11px] font-semibold text-[#6b6f82]">Import safety rules</p>
+                <div className="rounded-lg border border-border bg-card p-3 space-y-2">
+                  <p className="text-[11px] font-semibold text-muted-foreground">Import safety rules</p>
                   <label className="flex items-center gap-2 text-[12px]">
                     <input
                       type="checkbox"
@@ -632,66 +686,76 @@ function ConnectionRow({
                       checked={requireAttendeeEmail}
                       onChange={(e) => setRequireAttendeeEmail(e.target.checked)}
                     />
-                    Require attendee email (needed for email reminders)
+                    {isReminders
+                      ? "Require attendee email on the event"
+                      : "Require attendee email (needed for email reminders)"}
                   </label>
                   <div>
-                    <p className="text-[11px] font-medium text-[#6b6f82] mb-1">Import only if title contains</p>
+                    <p className="text-[11px] font-medium text-muted-foreground mb-1">Import only if title contains</p>
                     <input
-                      className="w-full rounded border border-[#ecedf2] px-2 py-1.5 text-[12px]"
+                      className="w-full rounded border border-border px-2 py-1.5 text-[12px]"
                       placeholder="consultation, new patient (comma-separated)"
                       value={includeKeywords}
                       onChange={(e) => setIncludeKeywords(e.target.value)}
                     />
                   </div>
                   <div>
-                    <p className="text-[11px] font-medium text-[#6b6f82] mb-1">Skip if title contains</p>
+                    <p className="text-[11px] font-medium text-muted-foreground mb-1">Skip if title contains</p>
                     <input
-                      className="w-full rounded border border-[#ecedf2] px-2 py-1.5 text-[12px]"
+                      className="w-full rounded border border-border px-2 py-1.5 text-[12px]"
                       placeholder="lunch, focus, personal (comma-separated)"
                       value={excludeKeywords}
                       onChange={(e) => setExcludeKeywords(e.target.value)}
                     />
                   </div>
-                  <p className="text-[11px] text-[#8a8fa3]">
-                    Transovo matches attendee email to existing contacts and uses their phone for
-                    SMS when available. Email-only imports can still receive email reminders.
+                  <p className="text-[11px] text-muted-foreground">
+                    {isReminders
+                      ? "Transovo matches attendee email to contacts when possible and reads phone numbers from event fields for SMS. Events without a valid mobile number still appear in Appointments with a clear missing-phone state."
+                      : "Transovo matches attendee email to existing contacts and uses their phone for SMS when available. Email-only imports can still receive email reminders."}
                   </p>
                 </div>
               ) : null}
             </>
           ) : null}
 
-          <div className="rounded-lg border border-[#ecedf2] bg-white p-3 space-y-2">
-            <p className="text-[11px] font-semibold text-[#6b6f82]">Per-calendar reminder defaults</p>
+          {isReminders ? (
             <label className="flex items-center gap-2 text-[12px]">
               <input type="checkbox" checked={smsReminders} onChange={(e) => setSmsReminders(e.target.checked)} />
-              SMS reminders enabled
+              SMS reminders enabled for imported appointments from this connection
             </label>
-            <label className="flex items-center gap-2 text-[12px]">
-              <input type="checkbox" checked={emailReminders} onChange={(e) => setEmailReminders(e.target.checked)} />
-              Email reminders enabled
-            </label>
-            <label className="flex items-center gap-2 text-[12px]">
-              <input type="checkbox" checked={voiceReminders} onChange={(e) => setVoiceReminders(e.target.checked)} />
-              Voice reminders enabled
-            </label>
-            <label className="flex items-center gap-2 text-[12px]">
-              <input type="checkbox" checked={attachIcs} onChange={(e) => setAttachIcs(e.target.checked)} />
-              Attach ICS calendar file to reminder emails
-            </label>
-            <input
-              className="w-full rounded border border-[#ecedf2] px-2 py-1.5 text-[12px]"
-              placeholder="Reply-to phone (optional)"
-              value={replyPhone}
-              onChange={(e) => setReplyPhone(e.target.value)}
-            />
-            <input
-              className="w-full rounded border border-[#ecedf2] px-2 py-1.5 text-[12px]"
-              placeholder="Reply-to email (optional)"
-              value={replyEmail}
-              onChange={(e) => setReplyEmail(e.target.value)}
-            />
-          </div>
+          ) : (
+            <div className="rounded-lg border border-border bg-card p-3 space-y-2">
+              <p className="text-[11px] font-semibold text-muted-foreground">Per-calendar reminder defaults</p>
+              <label className="flex items-center gap-2 text-[12px]">
+                <input type="checkbox" checked={smsReminders} onChange={(e) => setSmsReminders(e.target.checked)} />
+                SMS reminders enabled
+              </label>
+              <label className="flex items-center gap-2 text-[12px]">
+                <input type="checkbox" checked={emailReminders} onChange={(e) => setEmailReminders(e.target.checked)} />
+                Email reminders enabled
+              </label>
+              <label className="flex items-center gap-2 text-[12px]">
+                <input type="checkbox" checked={voiceReminders} onChange={(e) => setVoiceReminders(e.target.checked)} />
+                Voice reminders enabled
+              </label>
+              <label className="flex items-center gap-2 text-[12px]">
+                <input type="checkbox" checked={attachIcs} onChange={(e) => setAttachIcs(e.target.checked)} />
+                Attach ICS calendar file to reminder emails
+              </label>
+              <input
+                className="w-full rounded border border-border px-2 py-1.5 text-[12px]"
+                placeholder="Reply-to phone (optional)"
+                value={replyPhone}
+                onChange={(e) => setReplyPhone(e.target.value)}
+              />
+              <input
+                className="w-full rounded border border-border px-2 py-1.5 text-[12px]"
+                placeholder="Reply-to email (optional)"
+                value={replyEmail}
+                onChange={(e) => setReplyEmail(e.target.value)}
+              />
+            </div>
+          )}
 
           {importIds.length > 0 ? (
             <label className="flex items-center gap-2 text-[12px]">
@@ -700,12 +764,15 @@ function ConnectionRow({
                 checked={syncEnabled}
                 onChange={(e) => setSyncEnabled(e.target.checked)}
               />
-              Enable automatic import + Microsoft push sync for reminder calendars
+              {isReminders
+                ? "Keep this calendar importing automatically (recommended)"
+                : "Enable automatic import + Microsoft push sync for reminder calendars"}
             </label>
           ) : (
-            <p className="text-[11px] text-[#8a8fa3]">
-              Select at least one calendar under &quot;Import for reminders&quot; to sync external
-              appointments. Blocking-only calendars never create reminder appointments.
+            <p className="text-[11px] text-muted-foreground">
+              {isReminders
+                ? "Select at least one calendar above, save, then use Sync now on the Appointments page."
+                : "Select at least one calendar under \"Import for reminders\" to sync external appointments. Blocking-only calendars never create reminder appointments."}
             </p>
           )}
 

@@ -13,7 +13,7 @@ export function AppointmentRemindersSetupConnectPage() {
         title="Connect your calendar"
         description="Step 1 — authorize Google or Microsoft and select calendars to import."
       />
-      <CalendarIntegrationsOpus returnPath={AR_ROUTES.setupConnect} />
+      <CalendarIntegrationsOpus returnPath={AR_ROUTES.setupConnect} variant="appointment_reminders" />
       <div className="mt-6 flex justify-end">
         <Button nativeButton={false} render={<Link href={AR_ROUTES.setupActivate} />}>
           Continue

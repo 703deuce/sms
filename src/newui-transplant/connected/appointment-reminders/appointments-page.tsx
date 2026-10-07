@@ -179,7 +179,11 @@ export function AppointmentRemindersAppointmentsPage() {
 
   const syncLabel = data?.sync.lastSyncAt
     ? `Synced ${formatRelative(data.sync.lastSyncAt)}`
-    : 'Not synced yet'
+    : data?.sync.connected && (data?.total ?? 0) > 0
+      ? 'Calendar connected'
+      : data?.sync.connected
+        ? 'Connected — run Sync now to refresh'
+        : 'Not synced yet'
 
   const emptyKind = !data?.sync.connected
     ? 'no_calendar'
@@ -232,7 +236,15 @@ export function AppointmentRemindersAppointmentsPage() {
         className="mb-5 grid grid-cols-2 gap-4 border-b pb-4 md:grid-cols-4 md:divide-x md:divide-border"
         aria-label="Appointment summary"
       >
-        <Metric label="Upcoming" value={data?.summary.upcoming ?? '—'} />
+        <Metric
+          label="Upcoming"
+          value={data?.summary.upcoming ?? '—'}
+          hint={
+            date === 'all' && (data?.summary.upcoming ?? 0) === 0 && (data?.total ?? 0) > 0
+              ? 'Counts future appointments only; table shows all dates'
+              : undefined
+          }
+        />
         <Metric label="Scheduled" value={data?.summary.scheduled ?? '—'} />
         <Metric label="Sent" value={data?.summary.sent ?? '—'} hint="Last 30 days" />
         <Metric
@@ -495,9 +507,14 @@ function AppointmentTableRow({
       </td>
       <td className={td}>
         {row.phoneState === 'missing' ? (
-          <span className="flex items-center gap-1 text-xs text-amber-700">
-            <AlertTriangle className="size-3.5" aria-hidden="true" />
-            Missing phone
+          <span className="flex flex-col gap-0.5 text-xs text-amber-700">
+            <span className="flex items-center gap-1">
+              <AlertTriangle className="size-3.5" aria-hidden="true" />
+              Missing phone
+            </span>
+            {row.contactEmail ? (
+              <span className="text-muted-foreground">Email on file — add phone for SMS</span>
+            ) : null}
           </span>
         ) : row.phoneState === 'invalid' ? (
           <span className="text-xs text-amber-700">Invalid phone</span>

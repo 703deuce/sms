@@ -11,7 +11,7 @@ export function AppointmentRemindersCalendarsPage() {
         title="Calendars"
         description="Connect Google Calendar or Microsoft 365. Choose which calendars import appointments for reminders."
       />
-      <CalendarIntegrationsOpus returnPath={AR_ROUTES.calendars} />
+      <CalendarIntegrationsOpus returnPath={AR_ROUTES.calendars} variant="appointment_reminders" />
     </Page>
   )
 }
