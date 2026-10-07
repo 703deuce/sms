@@ -16,6 +16,16 @@ import { AR_ROUTES } from "@/lib/appointment-reminders/routes";
 const ACCOUNT_SECTION = "Account";
 
 /** Product-local sidebar for Appointment Reminders. */
+/** Bottom nav (4 slots + More) — creation paths must be one tap away on mobile. */
+export function buildAppointmentRemindersMobileNav(): NavItem[] {
+  return [
+    { label: "Home", href: AR_ROUTES.home, icon: LayoutDashboard, matchExact: true },
+    { label: "Services", href: AR_ROUTES.bookingServices, icon: Briefcase },
+    { label: "Booking", href: AR_ROUTES.booking, icon: Link2 },
+    { label: "Meetings", href: AR_ROUTES.bookingMeetings, icon: Video },
+  ];
+}
+
 export function buildAppointmentRemindersNav(): NavItem[] {
   return [
     {

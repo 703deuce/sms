@@ -1,5 +1,8 @@
 import type { NavItem } from "@/lib/nav";
-import { buildAppointmentRemindersNav } from "@/lib/products/appointment-reminders-nav";
+import {
+  buildAppointmentRemindersMobileNav,
+  buildAppointmentRemindersNav,
+} from "@/lib/products/appointment-reminders-nav";
 import { buildAppointmentsMobileNav, buildAppointmentsV1Nav } from "@/lib/products/appointments-nav";
 import { isMctbBundledAiReceptionistPath } from "@/lib/products/mctb-bundled-receptionist-paths";
 import { isAppointmentRemindersSharedWorkspacePath } from "@/lib/products/appointment-reminders-nav";
@@ -139,7 +142,7 @@ export function resolveProductMobileNav(input: ResolveProductNavInput): NavItem[
     return buildAppointmentsMobileNav();
   }
   if (effectiveShell === "appointment_reminders") {
-    return buildAppointmentRemindersNav();
+    return buildAppointmentRemindersMobileNav();
   }
   if (effectiveShell === "mass_sms") {
     return buildSmsPlatformNav({ conversationsBadge: input.inboxBadge });

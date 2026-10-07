@@ -53,7 +53,7 @@ export function ArBookingLivePreview({
           id: 'placeholder',
           name: 'Consultation',
           duration: '30 min',
-          description: 'Add a meeting or service type to preview your booking page.',
+          description: 'Create a service or meeting (buttons on this page) to see real types here.',
         },
       ]
 

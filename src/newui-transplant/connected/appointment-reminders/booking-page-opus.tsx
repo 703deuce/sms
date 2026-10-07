@@ -4,13 +4,16 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
   AlertTriangle,
+  Briefcase,
   Calendar,
   Copy,
   ExternalLink,
   Globe,
   Layers,
   Loader2,
+  Plus,
   Shield,
+  Video,
 } from 'lucide-react'
 import {
   buildBookingPageModel,
@@ -136,25 +139,55 @@ export function AppointmentRemindersBookingOpus() {
 
   return (
     <div className="space-y-6">
+      <Panel
+        title="Step 1 — Create what customers book"
+        description="This Booking page does not create services or meetings. Use the same editors as full Appointments — they feed your public link."
+      >
+        <p className="text-sm text-muted-foreground">
+          Nothing appears on <code className="text-xs">/book/your-slug</code> until you add at least one enabled
+          service or meeting below. Step 2 on this page is turning the link on and styling it.
+        </p>
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+          <Button type="button" asChild className="justify-center sm:justify-start">
+            <Link href={`${AR_ROUTES.bookingServices}/new`}>
+              <Plus className="mr-2 h-4 w-4" aria-hidden />
+              Create service
+            </Link>
+          </Button>
+          <Button type="button" variant="secondary" asChild className="justify-center sm:justify-start">
+            <Link href={`${AR_ROUTES.bookingMeetings}/new`}>
+              <Plus className="mr-2 h-4 w-4" aria-hidden />
+              Create meeting
+            </Link>
+          </Button>
+          <Button type="button" variant="outline" asChild className="justify-center sm:justify-start">
+            <Link href={AR_ROUTES.bookingServices}>
+              <Briefcase className="mr-2 h-4 w-4" aria-hidden />
+              All services
+            </Link>
+          </Button>
+          <Button type="button" variant="outline" asChild className="justify-center sm:justify-start">
+            <Link href={AR_ROUTES.bookingMeetings}>
+              <Video className="mr-2 h-4 w-4" aria-hidden />
+              All meetings
+            </Link>
+          </Button>
+        </div>
+      </Panel>
+
       <FeatureEmphasisStrip
         icon={Globe}
-        title="Simple online booking"
+        title="Step 2 — Customer booking link"
         badge={<Pill tone="neutral" dot={false}>Meetings & services only</Pill>}
-        description="This screen controls your customer link and branding. Create what customers book under Booking → Services or Meetings in the sidebar."
+        description="Share one URL. Customers only see types you created in Services or Meetings."
       />
 
       {draft.appointmentTypes.length === 0 ? (
-        <Callout tone="info" icon={Calendar} title="Nothing to book yet">
+        <Callout tone="warning" icon={Calendar} title="Your booking link is empty">
           <p className="text-sm text-muted-foreground">
-            The public page lists appointment types you create in{' '}
-            <Link href={AR_ROUTES.bookingServices} className="font-medium text-primary underline-offset-2 hover:underline">
-              Services
-            </Link>{' '}
-            or{' '}
-            <Link href={AR_ROUTES.bookingMeetings} className="font-medium text-primary underline-offset-2 hover:underline">
-              Meetings
-            </Link>
-            . This page only turns the link on and styles it.
+            Use <strong className="font-medium text-foreground">Create service</strong> or{' '}
+            <strong className="font-medium text-foreground">Create meeting</strong> above first — then enable the
+            public page below.
           </p>
         </Callout>
       ) : null}

@@ -110,6 +110,7 @@ export function MobileNav({
     : currentProduct === "numbers"
       ? numbersItems
       : resolvedMobile.map((item, i) => {
+          if (item.icon) return item;
           const icons =
             item.href.startsWith("/mctb")
               ? mobileIconSets.mctb
