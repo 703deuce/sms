@@ -149,6 +149,10 @@ export function AppointmentRemindersAppointmentsPage() {
       const res = await fetch('/api/appointment-reminders/sync', { method: 'POST' })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Sync failed')
+      const skipped = (json.data?.results || []).find(
+        (r: { skippedReason?: string }) => r.skippedReason,
+      )?.skippedReason
+      if (skipped) setSyncError(skipped)
       await load()
     } catch (e) {
       setSyncError(e instanceof Error ? e.message : 'Sync failed')
@@ -314,12 +318,26 @@ export function AppointmentRemindersAppointmentsPage() {
           />
         ) : emptyKind === 'no_rows' ? (
           <EmptyState
-            title="No appointments found"
-            description="No appointments match your current date range or selected calendars."
+            title={date === 'upcoming' ? 'No upcoming appointments' : 'No appointments found'}
+            description={
+              date === 'upcoming' && data?.sync.connected
+                ? 'Your calendar is connected. Try All or Past to see imported events, or run Sync now to refresh from Outlook or Google.'
+                : 'No appointments match your current date range or selected calendars.'
+            }
             action={
-              <Button variant="outline" onClick={() => replaceParams({ date: 'all', page: 1 })}>
-                Change filters
-              </Button>
+              <div className="flex flex-wrap justify-center gap-2">
+                {date === 'upcoming' ? (
+                  <Button onClick={() => replaceParams({ date: 'all', page: 1 })}>
+                    Show all appointments
+                  </Button>
+                ) : null}
+                <Button
+                  variant="outline"
+                  onClick={() => replaceParams({ date: date === 'upcoming' ? 'all' : 'upcoming', page: 1 })}
+                >
+                  {date === 'upcoming' ? 'Change filters' : 'Show upcoming only'}
+                </Button>
+              </div>
             }
           />
         ) : (
