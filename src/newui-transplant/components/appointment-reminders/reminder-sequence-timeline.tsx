@@ -1,8 +1,9 @@
 'use client'
 
-import { MessageSquare, Plus } from 'lucide-react'
+import { CalendarCheck, MessageSquare, Plus } from 'lucide-react'
 import type { ReminderItem } from '@/features/appointments/kimi/reminders/types'
-import { OPUS_CONFIG_INSET } from '@/newui-transplant/components/app/opus-surfaces'
+import { Pill } from '@/newui-transplant/components/app/kit'
+import { OPUS_CARD, OPUS_CONFIG_INSET } from '@/newui-transplant/components/app/opus-surfaces'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Input } from '@/newui-transplant/components/ui/input'
 import { Switch } from '@/newui-transplant/components/ui/switch'
@@ -39,19 +40,29 @@ export function ReminderSequenceTimeline({ steps, onToggle, onEdit, onAdd, onMin
   const activeCount = steps.filter((s) => s.enabled).length
 
   return (
-    <div className={cn(OPUS_CONFIG_INSET, 'p-4 md:p-5')}>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Booking created
-          </p>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            {activeCount} active step{activeCount === 1 ? '' : 's'} · SMS only
-          </p>
+    <div className={cn(OPUS_CONFIG_INSET, 'relative overflow-hidden p-4 md:p-5')}>
+      <div
+        className="pointer-events-none absolute -right-12 -top-16 size-48 rounded-full bg-primary/15 blur-3xl"
+        aria-hidden="true"
+      />
+      <div className="relative mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <MessageSquare className="size-4" aria-hidden="true" />
+          </span>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-semibold tracking-tight">Drip sequence</p>
+              <Pill tone="primary" dot={false}>SMS</Pill>
+            </div>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              Starts when an appointment is imported · {activeCount} active step{activeCount === 1 ? '' : 's'}
+            </p>
+          </div>
         </div>
         <Button type="button" size="sm" variant="outline" className="h-9" onClick={onAdd}>
           <Plus className="mr-1.5 size-3.5" aria-hidden="true" />
-          Add reminder
+          Add step
         </Button>
       </div>
 
@@ -72,13 +83,14 @@ export function ReminderSequenceTimeline({ steps, onToggle, onEdit, onAdd, onMin
                   )}
                 />
                 {index < steps.length - 1 ? (
-                  <span className="mt-1 w-px flex-1 bg-border" />
+                  <span className="mt-1 w-px flex-1 bg-gradient-to-b from-primary/50 to-border" />
                 ) : null}
               </div>
 
               <article
                 className={cn(
-                  'mb-1 flex min-h-[72px] flex-1 flex-col gap-3 rounded-xl border bg-card p-4 shadow-[0_1px_2px_rgba(16,18,40,0.04)] sm:flex-row sm:items-center',
+                  OPUS_CARD,
+                  'mb-1 flex min-h-[72px] flex-1 flex-col gap-3 p-4 sm:flex-row sm:items-center',
                   !step.enabled && 'border-dashed bg-muted/25 opacity-80',
                 )}
               >
@@ -121,12 +133,10 @@ export function ReminderSequenceTimeline({ steps, onToggle, onEdit, onAdd, onMin
                 </div>
 
                 <div className="flex shrink-0 flex-wrap items-center gap-3 sm:flex-col sm:items-end sm:gap-2">
-                  <span
-                    className="inline-flex items-center gap-1.5 rounded-full border bg-muted/50 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
-                  >
-                    <MessageSquare className="size-3.5 text-primary" aria-hidden="true" />
+                  <Pill tone={step.enabled ? 'primary' : 'neutral'} dot={false}>
+                    <MessageSquare className="size-3" aria-hidden="true" />
                     SMS
-                  </span>
+                  </Pill>
                   <div className="flex items-center gap-2">
                     <Switch
                       checked={step.enabled}
@@ -156,9 +166,11 @@ export function ReminderSequenceTimeline({ steps, onToggle, onEdit, onAdd, onMin
         </li>
       </ol>
 
-      <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-        Appointment start
-      </p>
+      <div className="mt-3 flex items-center gap-2 rounded-lg border border-dashed bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
+        <CalendarCheck className="size-4 shrink-0 text-primary" aria-hidden="true" />
+        <span className="font-medium text-foreground">Appointment start</span>
+        <span className="text-xs">— sequence ends here</span>
+      </div>
     </div>
   )
 }
