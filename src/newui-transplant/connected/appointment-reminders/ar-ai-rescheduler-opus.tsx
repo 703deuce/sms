@@ -22,6 +22,11 @@ export function ArAiReschedulerOpusPage() {
   const [config, setConfig] = useState<AiReschedulerConfig | null>(null)
   const [timezone, setTimezone] = useState('America/New_York')
   const [calendar, setCalendar] = useState<{ provider: string; label: string; status: string } | null>(null)
+  const [readiness, setReadiness] = useState<{
+    level: number
+    summary: string
+    writeCalendarOk: boolean
+  } | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(true)
@@ -39,6 +44,7 @@ export function ArAiReschedulerOpusPage() {
         setConfig(json.data)
         setTimezone(json.timezone || 'America/New_York')
         setCalendar(json.calendar)
+        setReadiness(json.readiness ?? null)
         setSaved(true)
       })
       .catch(() => setError('Could not load AI Rescheduler settings.'))
@@ -284,9 +290,21 @@ export function ArAiReschedulerOpusPage() {
       <section className="space-y-2 border-t border-border/60 pt-6">
         <h2 className="text-base font-medium">Connected calendar</h2>
         {calendar ? (
-          <p className="text-sm text-muted-foreground">
-            {calendar.label} ({calendar.provider}) — {calendar.status}
-          </p>
+          <div className="space-y-1 text-sm text-muted-foreground">
+            <p>
+              {calendar.label} ({calendar.provider}) — {calendar.status}
+            </p>
+            {readiness ? (
+              <p>
+                Readiness: level {readiness.level}/3 — {readiness.summary}
+                {aiOn && config.approval === 'automatic' && !readiness.writeCalendarOk ? (
+                  <span className="block text-amber-700 dark:text-amber-400">
+                    Automatic calendar updates need write access and a write calendar selected.
+                  </span>
+                ) : null}
+              </p>
+            ) : null}
+          </div>
         ) : (
           <p className="text-sm text-muted-foreground">No calendar connected. Connect one under Calendars.</p>
         )}

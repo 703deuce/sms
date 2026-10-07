@@ -18,7 +18,7 @@ export type AvailabilityQueryResult = {
   noMatch: boolean;
 };
 
-function timeOfDayRange(
+export function timeOfDayRange(
   timeOfDay: string | undefined,
   preferredStart?: string,
   preferredEnd?: string,
@@ -39,7 +39,7 @@ function timeOfDayRange(
   }
 }
 
-function slotMatchesTimePreference(
+export function slotMatchesTimePreference(
   startsAt: string,
   timezone: string,
   pref: { startMinutes?: number; endMinutes?: number },
@@ -61,7 +61,7 @@ function slotMatchesTimePreference(
   return true;
 }
 
-function slotMatchesDatePreference(
+export function slotMatchesDatePreference(
   startsAt: string,
   timezone: string,
   requestedDate?: string,

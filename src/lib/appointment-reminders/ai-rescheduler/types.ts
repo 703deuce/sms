@@ -67,3 +67,7 @@ export function isAiReschedulerSmsEnabled(config: AiReschedulerConfig): boolean 
 export function isAiAutomaticCalendarMutation(config: AiReschedulerConfig): boolean {
   return config.mode === "ai" && config.approval === "automatic";
 }
+
+export function isAiBusinessApprovalMode(config: AiReschedulerConfig): boolean {
+  return config.mode === "ai" && config.approval === "business";
+}

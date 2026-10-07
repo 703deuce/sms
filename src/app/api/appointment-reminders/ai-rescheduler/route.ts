@@ -8,6 +8,8 @@ import {
 import type { AiReschedulerConfig } from "@/lib/appointment-reminders/ai-rescheduler/types";
 import { resolveAiReschedulerConfig } from "@/lib/appointment-reminders/ai-rescheduler/types";
 import { getPrisma } from "@/lib/db";
+import { evaluateArCalendarReadiness } from "@/lib/appointment-reminders/ai-rescheduler/calendar-readiness";
+import type { CalendarConfig } from "@/lib/voice/calendar/providers";
 
 export async function GET() {
   try {
@@ -24,6 +26,18 @@ export async function GET() {
       orderBy: { createdAt: "asc" },
       select: { id: true, provider: true, status: true, name: true },
     });
+    const fullConn = connection
+      ? await getPrisma().voiceCalendarConnection.findFirst({
+          where: { id: connection.id, workspaceId: auth.workspaceId },
+          select: { config: true },
+        })
+      : null;
+    const readiness = evaluateArCalendarReadiness({
+      provider: connection?.provider,
+      connectionStatus: connection?.status,
+      config: (fullConn?.config || {}) as CalendarConfig,
+    });
+
     return NextResponse.json({
       data: config,
       timezone: platform.timezone,
@@ -35,6 +49,7 @@ export async function GET() {
             label: connection.name || connection.provider,
           }
         : null,
+      readiness,
     });
   } catch (err) {
     return jsonError(err, 500);

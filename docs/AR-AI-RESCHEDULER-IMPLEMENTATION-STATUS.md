@@ -16,13 +16,13 @@
 | Idempotency keys on reschedule ops in appointment metadata | Partial |
 | Automated script `scripts/test-ar-ai-rescheduler.ts` | Done |
 
-## Follow-ups (not complete)
+## Follow-ups (partial / remaining)
 
-- Business approval inbox action + revalidation at approve time
-- Enforce `weeklyHours`, `minimumNoticeMinutes`, `maximumDaysAhead`, `bufferMinutes` in availability resolver
+- Business approval: in-app notification + `POST /api/appointment-reminders/ai-rescheduler/approve` (staff UI affordance on appointments list still minimal)
+- Provider availability for reschedule uses Voice V3 busy + AR weekly hours/rules when AI mode + SMS/conversation
+- Reconciliation metadata `arReconcilePending` on provider-success / local DB failure (no background job yet)
+- Calendar readiness levels 0–3 on settings API + page copy (per-event level 4 at mutation time via existing Microsoft validation)
 - Full Google parity tests + conditional etag updates
-- Durable cross-request reconciliation job after provider-success / DB-failure
-- Four-tier calendar readiness UI on settings page
 - Broader automated test matrix from locked spec §10
 - Live Microsoft/Google certification
 

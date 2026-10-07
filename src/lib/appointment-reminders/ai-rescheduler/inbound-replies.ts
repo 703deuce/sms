@@ -17,6 +17,7 @@ import {
 } from "./types";
 import { cancelProviderEvent } from "./provider-mutations";
 import { cancelPlatformAppointment } from "@/lib/appointments/booking-platform";
+import { notifyBusinessRescheduleInterest } from "./business-approval";
 
 export type ArInboundReplyResult =
   | { handled: true; replyText: string }
@@ -149,6 +150,11 @@ export async function handleArReminderLetterReply(input: {
         } as object,
         status: "reschedule_requested",
       },
+    });
+    await notifyBusinessRescheduleInterest({
+      workspaceId: input.workspaceId,
+      appointmentId,
+      message: `Customer asked to reschedule the appointment on ${whenLabel}.`,
     });
     return {
       handled: true,

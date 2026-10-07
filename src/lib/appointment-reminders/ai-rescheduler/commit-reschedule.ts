@@ -14,10 +14,12 @@ export async function commitArReschedule(input: {
   startsAt: string;
   initiatedBy: "customer" | "staff" | "system";
   operationId: string;
+  /** Staff approval path revalidates at approve time. */
+  skipModeCheck?: boolean;
 }): Promise<{ ok: true } | { ok: false; message: string }> {
   const platform = await loadAppointmentPlatformConfig(input.workspaceId);
   const ar = resolveAiReschedulerConfig(platform);
-  if (!isAiAutomaticCalendarMutation(ar)) {
+  if (!input.skipModeCheck && !isAiAutomaticCalendarMutation(ar)) {
     return { ok: false, message: "Automatic calendar reschedule is not enabled" };
   }
 
@@ -98,6 +100,21 @@ export async function commitArReschedule(input: {
       },
     });
   } catch (err) {
+    await prisma.voiceAppointment.update({
+      where: { id: row.id },
+      data: {
+        metadata: {
+          ...withTimeline,
+          arReconcilePending: {
+            operationId: input.operationId,
+            providerUpdatedAt: new Date().toISOString(),
+            proposedStartsAt: start.toISOString(),
+            proposedEndsAt: end.toISOString(),
+            error: err instanceof Error ? err.message : "local_update_failed",
+          },
+        } as object,
+      },
+    });
     return {
       ok: false,
       message:
