@@ -2,7 +2,7 @@
 
 import { Suspense } from 'react'
 import { Page, PageHeader } from '@/newui-transplant/components/app/kit'
-import { AppointmentRemindersSettingsConnected } from '@/newui-transplant/connected/appointment-reminders/settings-connected'
+import { AppointmentRemindersSettingsOpus } from '@/newui-transplant/connected/appointment-reminders/reminder-settings-opus'
 
 export function AppointmentRemindersSettingsPage() {
   return (
@@ -12,7 +12,7 @@ export function AppointmentRemindersSettingsPage() {
         description="Timing, templates, phone extraction, sending hours, and consent — saved to your workspace reminder engine."
       />
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading settings…</p>}>
-        <AppointmentRemindersSettingsConnected />
+        <AppointmentRemindersSettingsOpus />
       </Suspense>
     </Page>
   )
