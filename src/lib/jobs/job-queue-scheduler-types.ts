@@ -27,6 +27,7 @@ export const PROCESS_DUE_JOBS_SCHEDULER_JOB_TYPES: readonly string[] = [
   "appointments_platform_reminder_scan",
   "voice_v2_callback_sla_overdue_scan",
   "calendar_connections_reconcile",
+  "ar_reschedule_reconcile_scan",
   "calendar_subscription_renew",
   "promote_scheduled_receptionists",
   "crm_task_due_scan",

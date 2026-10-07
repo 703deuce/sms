@@ -37,9 +37,8 @@ function pickBookingPatch(body: Partial<AppointmentPlatformConfig>): Partial<App
   return patch;
 }
 
-function isSimpleBookingType(config?: { bookingTypeKind?: string } | null): boolean {
-  const kind = resolveBookingTypeKind(config ?? undefined);
-  return kind === "MEETING" || kind === "SERVICE";
+function isArBookingMeetingType(config?: { bookingTypeKind?: string } | null): boolean {
+  return resolveBookingTypeKind(config ?? undefined) === "MEETING";
 }
 
 export async function GET() {
@@ -56,7 +55,7 @@ export async function GET() {
       }),
     ]);
 
-    const simpleTypes = types.filter((row) => isSimpleBookingType(row.config));
+    const simpleTypes = types.filter((row) => isArBookingMeetingType(row.config));
 
     const schedulerTheme = (settings as { schedulerTheme?: SchedulerThemeConfig }).schedulerTheme || {};
 

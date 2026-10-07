@@ -13,6 +13,10 @@ import { defaultConfigForSegment, segmentById } from "@/lib/appointments/booking
 import { defaultConfigPatchForKind } from "@/lib/appointments/booking-type-kind";
 import { isMeetingRow } from "@/lib/appointments/meetings/meeting-display";
 import { newLocation, newStaffMember } from "@/features/appointments/kimi/shared/platform-settings-types";
+import {
+  APPOINTMENTS_MEETINGS_ROUTES,
+  type MeetingsWorkspaceRoutes,
+} from "@/lib/appointments/bookable-workspace-routes";
 
 export type MeetingEditorOptions = {
   staffOptions: Array<{ id: string; name: string }>;
@@ -50,7 +54,10 @@ function optionsFromSettings(
   };
 }
 
-export function useMeetingEditor(meetingId: string | null) {
+export function useMeetingEditor(
+  meetingId: string | null,
+  routes: MeetingsWorkspaceRoutes = APPOINTMENTS_MEETINGS_ROUTES,
+) {
   const router = useRouter();
   const isCreating = !meetingId;
 
@@ -191,10 +198,10 @@ export function useMeetingEditor(meetingId: string | null) {
     setSavedSnapshot(JSON.stringify(nextForm));
     setSaveStatus("saved");
     if (isCreating) {
-      router.replace(`/appointments/meetings/${saved.id}`);
+      router.replace(routes.detail(saved.id));
     }
     return saved.id;
-  }, [form, isCreating, meetingId, router]);
+  }, [form, isCreating, meetingId, router, routes]);
 
   const duplicate = useCallback(async () => {
     if (!meetingId) return;
@@ -212,9 +219,9 @@ export function useMeetingEditor(meetingId: string | null) {
     setSaving(false);
     if (res.ok) {
       const json = await res.json();
-      router.push(`/appointments/meetings/${(json.data as ApiAppointmentType).id}`);
+      router.push(routes.detail((json.data as ApiAppointmentType).id));
     }
-  }, [form, meetingId, router]);
+  }, [form, meetingId, router, routes]);
 
   const setEnabled = useCallback(
     async (enabled: boolean) => {

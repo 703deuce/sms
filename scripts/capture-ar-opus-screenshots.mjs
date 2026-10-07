@@ -16,6 +16,7 @@ const routes = [
   { name: "03-reminders-log", path: "/appointment-reminders/reminders" },
   { name: "04-calendars", path: "/appointment-reminders/calendars" },
   { name: "05-settings", path: "/appointment-reminders/settings" },
+  { name: "05b-ai-rescheduler", path: "/appointment-reminders/ai-rescheduler" },
   { name: "06-setup-connect", path: "/appointment-reminders/setup/connect" },
 ];
 

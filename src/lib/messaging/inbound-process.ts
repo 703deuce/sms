@@ -332,6 +332,24 @@ export async function processInboundMessage(input: {
       where: { workspaceId_phone: { workspaceId: input.workspaceId, phone: from } },
     });
     if (apptContact) {
+      const { handleArCancelConfirmation } = await import(
+        "@/lib/appointment-reminders/ai-rescheduler/inbound-replies"
+      );
+      const arCancel = await handleArCancelConfirmation({
+        workspaceId: input.workspaceId,
+        contactId: apptContact.id,
+      });
+      if (arCancel.handled) {
+        await recordInboundReceipt({
+          workspaceId: input.workspaceId,
+          from,
+          to: input.to,
+          body,
+          providerMessageId: input.providerMessageId,
+        });
+        return { kind: "message", replyText: arCancel.replyText };
+      }
+
       const pending = await prisma.voiceAppointment.findFirst({
         where: {
           workspaceId: input.workspaceId,
@@ -364,19 +382,22 @@ export async function processInboundMessage(input: {
     }
   }
 
-  // Single-letter appointment confirm (C) / cancel (X) for contacts with an
-  // upcoming appointment. Falls through to normal handling when none exists.
-  if (upper === "C" || upper === "X") {
+  // Appointment Reminders follow-up conversation (after R) — before product-specific inbox AI.
+  {
     const apptContact = await prisma.contact.findUnique({
       where: { workspaceId_phone: { workspaceId: input.workspaceId, phone: from } },
     });
-    if (apptContact) {
-      const { findUpcomingAppointmentForContact, confirmAppointment } = await import(
-        "@/lib/voice/calendar/booking"
+    if (apptContact && body && !/^(yes|y|c|x|r|stop|help)$/i.test(body.trim())) {
+      const { tryHandleArReminderFollowUp } = await import(
+        "@/lib/appointment-reminders/ai-rescheduler/inbound-follow-up"
       );
-      const { cancelPlatformAppointment } = await import("@/lib/appointments/booking-platform");
-      const appt = await findUpcomingAppointmentForContact(input.workspaceId, apptContact.id);
-      if (appt) {
+      const followUp = await tryHandleArReminderFollowUp({
+        workspaceId: input.workspaceId,
+        contactId: apptContact.id,
+        message: body,
+        providerMessageId: input.providerMessageId,
+      });
+      if (followUp.handled) {
         await recordInboundReceipt({
           workspaceId: input.workspaceId,
           from,
@@ -384,22 +405,37 @@ export async function processInboundMessage(input: {
           body,
           providerMessageId: input.providerMessageId,
         });
-        const whenLabel = appt.startsAt.toLocaleString("en-US", {
-          dateStyle: "medium",
-          timeStyle: "short",
-          timeZone: appt.timezone || undefined,
+        return { kind: "message", replyText: followUp.replyText };
+      }
+    }
+  }
+
+  // Appointment Reminders: C confirm, R reschedule, X cancel (reminder-bound when configured).
+  if (upper === "C" || upper === "X" || upper === "R") {
+    const apptContact = await prisma.contact.findUnique({
+      where: { workspaceId_phone: { workspaceId: input.workspaceId, phone: from } },
+    });
+    if (apptContact) {
+      const { handleArReminderLetterReply } = await import(
+        "@/lib/appointment-reminders/ai-rescheduler/inbound-replies"
+      );
+      const arReply = await handleArReminderLetterReply({
+        workspaceId: input.workspaceId,
+        contactId: apptContact.id,
+        body,
+        letter: upper as "C" | "R" | "X",
+      });
+      if (arReply.handled) {
+        await recordInboundReceipt({
+          workspaceId: input.workspaceId,
+          from,
+          to: input.to,
+          body,
+          providerMessageId: input.providerMessageId,
         });
-        if (upper === "C") {
-          await confirmAppointment(input.workspaceId, appt.id);
-          return {
-            kind: "message",
-            replyText: `Your appointment on ${whenLabel} is confirmed. Reply X to cancel.`,
-          };
-        }
-        await cancelPlatformAppointment(input.workspaceId, appt.id, "customer");
         return {
           kind: "message",
-          replyText: `Your appointment on ${whenLabel} has been cancelled.`,
+          replyText: arReply.replyText,
         };
       }
     }

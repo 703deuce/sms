@@ -13,6 +13,8 @@ import {
 import { computeAggregateReminderView } from "@/lib/appointment-reminders/aggregate-reminder-status.server";
 import { isCalendarConnectionUsable } from "@/lib/appointment-reminders/calendar-connection";
 import { resolveArAppointmentContactDisplay } from "@/lib/appointment-reminders/contact-display";
+import type { ArRescheduleRequestMeta } from "@/lib/appointment-reminders/ai-rescheduler/business-approval";
+import { expireArRescheduleRequestIfNeeded } from "@/lib/appointment-reminders/ai-rescheduler/reschedule-request-lifecycle";
 
 export type ArAppointmentsQuery = {
   q?: string;
@@ -106,6 +108,9 @@ function mapRow(
     connectionId,
     status: row.status,
     sourceEventUrl: (meta.eventUrl as string) || null,
+    arRescheduleRequest: meta.arRescheduleRequest
+      ? expireArRescheduleRequestIfNeeded(meta.arRescheduleRequest as ArRescheduleRequestMeta)
+      : undefined,
   };
 }
 
@@ -273,7 +278,11 @@ export async function loadAppointmentRemindersPage(
       return true;
     }).length,
     needsAttention: upcomingRows.filter(
-      (r) => r.reminder.status === "needs_attention" || r.reminder.status === "failed",
+      (r) =>
+        r.reminder.status === "needs_attention" ||
+        r.reminder.status === "failed" ||
+        r.arRescheduleRequest?.status === "pending_approval" ||
+        r.arRescheduleRequest?.status === "pending_business",
     ).length,
   };
 

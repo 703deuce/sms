@@ -12,6 +12,7 @@ import {
 import { resolveSlotFromConversation } from "./conversation-state";
 import type { AppointmentAiContext } from "./context";
 import { queryAvailabilityForIntent } from "./availability-bridge";
+import { resolveAiReschedulerConfig } from "@/lib/appointment-reminders/ai-rescheduler/types";
 import type { SchedulingIntent } from "./intent-schema";
 import {
   buildIsoFromDateAndTime,
@@ -271,14 +272,25 @@ export async function resolveAppointmentIntent(
     }
     if (!slot || !understanding.explicitMutationRequested) {
       const legacy = understandingToLegacyIntent(understanding);
-      const availability = await queryAvailabilityForIntent(
-        ctx.workspaceId,
-        legacy,
-        targetAppt.serviceName,
-      );
+      const ar = resolveAiReschedulerConfig(ctx.platform);
+      const useProviderSlots =
+        ar.mode === "ai" &&
+        (ctx.channel === "sms" || ctx.channel === "conversation");
+      const availability = useProviderSlots
+        ? await (
+            await import(
+              "@/lib/appointment-reminders/ai-rescheduler/availability-for-reschedule"
+            )
+          ).queryArRescheduleAvailability({
+            workspaceId: ctx.workspaceId,
+            appointmentId: targetAppt.id,
+            intent: legacy,
+            serviceName: targetAppt.serviceName,
+          })
+        : await queryAvailabilityForIntent(ctx.workspaceId, legacy, targetAppt.serviceName);
       return {
         status: "AVAILABLE_OPTIONS",
-        reason: "Here are some alternative times:",
+        reason: availability.message || "Here are some alternative times:",
         slots: availability.slots,
         serviceName: targetAppt.serviceName,
         appointment: targetAppt,

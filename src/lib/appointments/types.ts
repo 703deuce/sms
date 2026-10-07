@@ -310,6 +310,8 @@ export type AppointmentPlatformConfig = {
   };
   /** Automated outbound voice reminder templates and settings */
   voiceReminders?: VoiceRemindersPlatformConfig;
+  /** Appointment Reminders — AI Rescheduler (SMS C/R/X + optional AI calendar mutation). */
+  aiRescheduler?: import("@/lib/appointment-reminders/ai-rescheduler/types").AiReschedulerConfig;
   /** Workspace-wide booking commerce defaults (offering config may override). */
   commerceDefaults?: CommerceDefaults;
 };
@@ -514,6 +516,24 @@ export const DEFAULT_PLATFORM_CONFIG: AppointmentPlatformConfig = {
       label: "2-hour reminder",
       template: DEFAULT_REMINDER_TEMPLATES.reminder2h,
     },
+  },
+  aiRescheduler: {
+    mode: "notify",
+    approval: "automatic",
+    weeklyHours: {
+      monday: { enabled: true, open: "09:00", close: "17:00" },
+      tuesday: { enabled: true, open: "09:00", close: "17:00" },
+      wednesday: { enabled: true, open: "09:00", close: "17:00" },
+      thursday: { enabled: true, open: "09:00", close: "17:00" },
+      friday: { enabled: true, open: "09:00", close: "17:00" },
+      saturday: { enabled: false, open: "09:00", close: "12:00" },
+      sunday: { enabled: false, open: "09:00", close: "12:00" },
+    },
+    durationMode: "original",
+    minimumNoticeMinutes: 120,
+    maximumDaysAhead: 60,
+    bufferMinutes: 0,
+    allowProviderCancel: false,
   },
 };
 

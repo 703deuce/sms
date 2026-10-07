@@ -46,6 +46,8 @@ export function AppointmentDetailDrawer({
   const [phoneEdit, setPhoneEdit] = useState('')
   const [savingPhone, setSavingPhone] = useState(false)
   const [phoneError, setPhoneError] = useState('')
+  const [approvalBusy, setApprovalBusy] = useState<'approve' | 'reject' | null>(null)
+  const [approvalError, setApprovalError] = useState('')
 
   const loadDetail = useCallback(async () => {
     if (!row?.id) return
@@ -115,6 +117,64 @@ export function AppointmentDetailDrawer({
       ? 'Consent required'
       : 'Eligible under workspace reminder policy'
 
+  const rescheduleReq = (row?.arRescheduleRequest ||
+    (meta.arRescheduleRequest as ArAppointmentRow['arRescheduleRequest'])) as
+    | ArAppointmentRow['arRescheduleRequest']
+    | undefined
+  const pendingReschedule =
+    rescheduleReq &&
+    (rescheduleReq.status === 'pending_approval' ||
+      rescheduleReq.status === 'pending_business' ||
+      rescheduleReq.status === 'processing')
+  const rescheduleLocked =
+    rescheduleReq &&
+    (rescheduleReq.status === 'approved' ||
+      rescheduleReq.status === 'rejected' ||
+      rescheduleReq.status === 'expired' ||
+      rescheduleReq.status === 'failed')
+
+  async function approveReschedule() {
+    if (!row) return
+    setApprovalBusy('approve')
+    setApprovalError('')
+    try {
+      const res = await fetch('/api/appointment-reminders/ai-rescheduler/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appointmentId: row.id }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || 'Approval failed')
+      onPhoneSaved()
+      await loadDetail()
+    } catch (e) {
+      setApprovalError(e instanceof Error ? e.message : 'Approval failed')
+    } finally {
+      setApprovalBusy(null)
+    }
+  }
+
+  async function rejectReschedule() {
+    if (!row) return
+    setApprovalBusy('reject')
+    setApprovalError('')
+    try {
+      const res = await fetch('/api/appointment-reminders/ai-rescheduler/reject', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appointmentId: row.id }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || 'Rejection failed')
+      onPhoneSaved()
+      await loadDetail()
+    } catch (e) {
+      setApprovalError(e instanceof Error ? e.message : 'Rejection failed')
+    } finally {
+      setApprovalBusy(null)
+    }
+  }
+
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
       <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md md:max-w-[480px]">
@@ -167,6 +227,78 @@ export function AppointmentDetailDrawer({
                       ) : null}
                     </dl>
                   </section>
+
+                  {rescheduleReq ? (
+                    <section>
+                      <h2 className="mb-3 text-sm font-semibold">Reschedule request</h2>
+                      <dl className="mb-3 space-y-2">
+                        <KeyValueRow label="Status" value={formatRescheduleStatus(rescheduleReq.status)} />
+                        {rescheduleReq.requestedAt ? (
+                          <KeyValueRow
+                            label="Requested"
+                            value={new Date(rescheduleReq.requestedAt).toLocaleString(undefined, {
+                              dateStyle: 'medium',
+                              timeStyle: 'short',
+                              timeZone: tz,
+                            })}
+                          />
+                        ) : null}
+                        {rescheduleReq.proposedStartsAt ? (
+                          <KeyValueRow
+                            label="Requested time"
+                            value={new Date(rescheduleReq.proposedStartsAt).toLocaleString(undefined, {
+                              dateStyle: 'medium',
+                              timeStyle: 'short',
+                              timeZone: tz,
+                            })}
+                          />
+                        ) : null}
+                        {row.sourceCalendarLabel ? (
+                          <KeyValueRow
+                            label="Calendar"
+                            value={`${row.sourceProvider === 'microsoft' ? 'Outlook' : row.sourceProvider === 'google' ? 'Google' : 'Calendar'} · ${row.sourceCalendarLabel}`}
+                          />
+                        ) : null}
+                        {'failureReason' in (rescheduleReq as object) &&
+                        (rescheduleReq as { failureReason?: string }).failureReason ? (
+                          <KeyValueRow
+                            label="Error"
+                            value={(rescheduleReq as { failureReason?: string }).failureReason || ''}
+                          />
+                        ) : null}
+                        <KeyValueRow
+                          label="Original time"
+                          value={formatDateTimeRange(row.startsAt, row.endsAt, tz, row.isAllDay)}
+                        />
+                      </dl>
+                      {approvalError ? (
+                        <p className="mb-2 text-xs text-destructive" role="alert">{approvalError}</p>
+                      ) : null}
+                      {pendingReschedule ? (
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            onClick={approveReschedule}
+                            disabled={approvalBusy !== null || rescheduleReq.status === 'processing'}
+                          >
+                            {approvalBusy === 'approve' || rescheduleReq.status === 'processing'
+                              ? 'Approving…'
+                              : 'Approve reschedule'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={rejectReschedule}
+                            disabled={approvalBusy !== null || rescheduleReq.status === 'processing'}
+                          >
+                            {approvalBusy === 'reject' ? 'Rejecting…' : 'Reject'}
+                          </Button>
+                        </div>
+                      ) : rescheduleLocked ? (
+                        <p className="text-xs text-muted-foreground">This request is closed.</p>
+                      ) : null}
+                    </section>
+                  ) : null}
 
                   <section>
                     <h2 className="mb-3 text-sm font-semibold">Reminder contact</h2>
@@ -272,6 +404,27 @@ function formatTimeRange(
   const a = new Date(start).toLocaleTimeString(undefined, opts)
   const b = end ? new Date(end).toLocaleTimeString(undefined, opts) : ''
   return b ? `${a} – ${b}` : a
+}
+
+function formatRescheduleStatus(status: string) {
+  switch (status) {
+    case 'pending_approval':
+      return 'Pending approval'
+    case 'pending_business':
+      return 'Pending business follow-up'
+    case 'approved':
+      return 'Approved'
+    case 'rejected':
+      return 'Rejected'
+    case 'failed':
+      return 'Failed'
+    case 'processing':
+      return 'Processing'
+    case 'expired':
+      return 'Expired'
+    default:
+      return status
+  }
 }
 
 function formatDateTimeRange(

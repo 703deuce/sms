@@ -1023,6 +1023,33 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
         limit: typeof payload.limit === "number" ? payload.limit : undefined,
       });
     }
+    case "ar_reschedule_reconcile": {
+      const { reconcileArReschedulePending } = await import(
+        "@/lib/appointment-reminders/ai-rescheduler/reconcile-pending"
+      );
+      const result = await reconcileArReschedulePending({
+        workspaceId: String(payload.workspaceId || ""),
+        appointmentId: String(payload.appointmentId || ""),
+      });
+      if (!result.ok) {
+        const { notifyWorkspace } = await import("@/lib/notifications/in-app");
+        const { AR_ROUTES } = await import("@/lib/appointment-reminders/routes");
+        await notifyWorkspace(String(payload.workspaceId || ""), {
+          type: "system",
+          title: "Appointment reconcile needs attention",
+          body: result.message,
+          href: `${AR_ROUTES.appointments}?highlight=${String(payload.appointmentId || "")}`,
+        }).catch(() => undefined);
+        throw new Error(result.message);
+      }
+      return result;
+    }
+    case "ar_reschedule_reconcile_scan": {
+      const { scanArRescheduleReconcilePending } = await import(
+        "@/lib/appointment-reminders/ai-rescheduler/reconcile-pending"
+      );
+      return scanArRescheduleReconcilePending();
+    }
     case "calendar_subscription_renew": {
       const { renewExpiringCalendarSubscriptions } = await import("@/lib/calendar/webhooks");
       return renewExpiringCalendarSubscriptions();
@@ -1338,6 +1365,13 @@ export async function processDueJobs(limit = 25) {
     queueName: "maintenance",
     payload: { minuteKey },
     idempotencyKey: `calendar-reconcile:${minuteKey}`,
+  });
+
+  await enqueueJob({
+    jobType: "ar_reschedule_reconcile_scan",
+    queueName: "maintenance",
+    payload: { minuteKey },
+    idempotencyKey: `ar-reschedule-reconcile-scan:${minuteKey}`,
   });
 
   await enqueueJob({

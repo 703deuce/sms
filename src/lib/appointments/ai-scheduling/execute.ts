@@ -122,10 +122,94 @@ async function runMutationBody(
       };
     }
     case "RESCHEDULE": {
+      const prisma = (await import("@/lib/db")).getPrisma();
+      const row = await prisma.voiceAppointment.findFirst({
+        where: { id: action.appointmentId, workspaceId: ctx.workspaceId },
+      });
+      const { providerRefFromAppointment } = await import(
+        "@/lib/appointment-reminders/ai-rescheduler/provider-mutations"
+      );
+      const { commitArReschedule } = await import(
+        "@/lib/appointment-reminders/ai-rescheduler/commit-reschedule"
+      );
+      const { isAiAutomaticCalendarMutation, resolveAiReschedulerConfig } = await import(
+        "@/lib/appointment-reminders/ai-rescheduler/types"
+      );
+      const { queueArRescheduleBusinessApproval } = await import(
+        "@/lib/appointment-reminders/ai-rescheduler/business-approval"
+      );
+      const { isAiBusinessApprovalMode } = await import(
+        "@/lib/appointment-reminders/ai-rescheduler/types"
+      );
+      const ar = resolveAiReschedulerConfig(ctx.platform);
+      const providerRef = row ? providerRefFromAppointment(row) : null;
+      const durationMs =
+        row?.endsAt && row?.startsAt
+          ? row.endsAt.getTime() - row.startsAt.getTime()
+          : 30 * 60_000;
+      const endsAtIso = new Date(new Date(action.startsAt).getTime() + durationMs).toISOString();
+
+      if (providerRef && isAiBusinessApprovalMode(ar)) {
+        const operationId = `${ctx.requestId}:reschedule:${action.appointmentId}`;
+        await queueArRescheduleBusinessApproval({
+          workspaceId: ctx.workspaceId,
+          appointmentId: action.appointmentId,
+          contactId: ctx.customerId,
+          proposedStartsAt: action.startsAt,
+          proposedEndsAt: endsAtIso,
+          operationId,
+        });
+        return {
+          status: "RESCHEDULED",
+          appointment: {
+            id: action.appointmentId,
+            serviceName: row?.serviceName || "Appointment",
+            startsAt: action.startsAt,
+            status: "reschedule_requested",
+          },
+          requiresVerifier: false,
+          mutationExecuted: true,
+        };
+      }
+
+      if (providerRef && isAiAutomaticCalendarMutation(ar)) {
+        const operationId = `${ctx.requestId}:reschedule:${action.appointmentId}`;
+        const committed = await commitArReschedule({
+          workspaceId: ctx.workspaceId,
+          appointmentId: action.appointmentId,
+          startsAt: action.startsAt,
+          initiatedBy: "customer",
+          operationId,
+        });
+        if (!committed.ok) {
+          return {
+            status: "CLARIFICATION_REQUIRED",
+            reason: committed.message,
+            requiresVerifier: false,
+            mutationExecuted: false,
+          };
+        }
+        const updated = await prisma.voiceAppointment.findFirst({
+          where: { id: action.appointmentId, workspaceId: ctx.workspaceId },
+        });
+        return {
+          status: "RESCHEDULED",
+          appointment: {
+            id: action.appointmentId,
+            serviceName: updated?.serviceName || "Appointment",
+            startsAt: updated?.startsAt.toISOString() || action.startsAt,
+            status: updated?.status || "scheduled",
+          },
+          requiresVerifier: false,
+          mutationExecuted: true,
+        };
+      }
+
       const appt = await reschedulePlatformAppointment(
         ctx.workspaceId,
         action.appointmentId,
         action.startsAt,
+        "customer",
       );
       return {
         status: "RESCHEDULED",

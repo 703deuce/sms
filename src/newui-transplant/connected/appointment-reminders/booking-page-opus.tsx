@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
   AlertTriangle,
-  Briefcase,
   Calendar,
   Copy,
   ExternalLink,
@@ -140,30 +139,18 @@ export function AppointmentRemindersBookingOpus() {
   return (
     <div className="space-y-6">
       <Panel
-        title="Step 1 — Create what customers book"
-        description="This Booking page does not create services or meetings. Use the same editors as full Appointments — they feed your public link."
+        title="Step 1 — Create meetings customers book"
+        description="Add bookable meetings here. They appear on your public link when enabled."
       >
         <p className="text-sm text-muted-foreground">
           Nothing appears on <code className="text-xs">/book/your-slug</code> until you add at least one enabled
-          service or meeting below. Step 2 on this page is turning the link on and styling it.
+          meeting. Step 2 on this page is turning the link on and styling it.
         </p>
         <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           <Button type="button" asChild className="justify-center sm:justify-start">
-            <Link href={`${AR_ROUTES.bookingServices}/new`}>
-              <Plus className="mr-2 h-4 w-4" aria-hidden />
-              Create service
-            </Link>
-          </Button>
-          <Button type="button" variant="secondary" asChild className="justify-center sm:justify-start">
             <Link href={`${AR_ROUTES.bookingMeetings}/new`}>
               <Plus className="mr-2 h-4 w-4" aria-hidden />
               Create meeting
-            </Link>
-          </Button>
-          <Button type="button" variant="outline" asChild className="justify-center sm:justify-start">
-            <Link href={AR_ROUTES.bookingServices}>
-              <Briefcase className="mr-2 h-4 w-4" aria-hidden />
-              All services
             </Link>
           </Button>
           <Button type="button" variant="outline" asChild className="justify-center sm:justify-start">
@@ -178,15 +165,14 @@ export function AppointmentRemindersBookingOpus() {
       <FeatureEmphasisStrip
         icon={Globe}
         title="Step 2 — Customer booking link"
-        badge={<Pill tone="neutral" dot={false}>Meetings & services only</Pill>}
-        description="Share one URL. Customers only see types you created in Services or Meetings."
+        badge={<Pill tone="neutral" dot={false}>Meetings only</Pill>}
+        description="Share one URL. Customers only see meetings you created under Meetings."
       />
 
       {draft.appointmentTypes.length === 0 ? (
         <Callout tone="warning" icon={Calendar} title="Your booking link is empty">
           <p className="text-sm text-muted-foreground">
-            Use <strong className="font-medium text-foreground">Create service</strong> or{' '}
-            <strong className="font-medium text-foreground">Create meeting</strong> above first — then enable the
+            Use <strong className="font-medium text-foreground">Create meeting</strong> above first — then enable the
             public page below.
           </p>
         </Callout>
@@ -198,7 +184,7 @@ export function AppointmentRemindersBookingOpus() {
             title="Public booking page"
             description={
               draft.bookingEnabled
-                ? 'Your booking link is live for enabled meeting and service types.'
+                ? 'Your booking link is live for enabled meetings.'
                 : 'Turn on booking when you are ready to accept appointments online.'
             }
             action={
@@ -275,8 +261,7 @@ export function AppointmentRemindersBookingOpus() {
                     </div>
                   </div>
                   <p className="mt-2 text-xs text-muted-foreground">
-                    Customers use this link to pick a service, choose a time, and complete checkout when payment is
-                    enabled on the appointment type.
+                    Customers use this link to pick a meeting and choose a time.
                   </p>
                 </div>
 
@@ -285,31 +270,24 @@ export function AppointmentRemindersBookingOpus() {
                     <p className="text-sm text-muted-foreground">
                       Create a{' '}
                       <Link
-                        href={AR_ROUTES.bookingServices}
-                        className="font-medium text-primary underline-offset-2 hover:underline"
-                      >
-                        service
-                      </Link>{' '}
-                      or{' '}
-                      <Link
                         href={AR_ROUTES.bookingMeetings}
                         className="font-medium text-primary underline-offset-2 hover:underline"
                       >
                         meeting
                       </Link>{' '}
-                      in the Booking section of the sidebar, then turn this page on.
+                      in the sidebar, then turn this page on.
                     </p>
                   </Callout>
                 ) : (
                   <p className="text-sm text-muted-foreground">
-                    Showing {draft.appointmentTypes.length} enabled meeting/service type
-                    {draft.appointmentTypes.length === 1 ? '' : 's'} in preview. Names, duration, price, and
-                    payment are edited in{' '}
+                    Showing {draft.appointmentTypes.length} enabled meeting
+                    {draft.appointmentTypes.length === 1 ? '' : 's'} in preview. Names, duration, and availability
+                    are edited in{' '}
                     <Link
-                      href={AR_ROUTES.bookingServices}
+                      href={AR_ROUTES.bookingMeetings}
                       className="font-medium text-primary underline-offset-2 hover:underline"
                     >
-                      Services
+                      Meetings
                     </Link>
                     — not on this page.
                   </p>
@@ -320,20 +298,19 @@ export function AppointmentRemindersBookingOpus() {
 
           <Panel
             title="What this page does not change"
-            description="Everything below still uses the same booking engine — nothing is disconnected. Open these when customers see the wrong service, price, or times."
+            description="Everything below still uses the same booking engine — nothing is disconnected. Open these when customers see the wrong meeting or times."
             action={<Layers className="h-4 w-4 text-muted-foreground" aria-hidden />}
           >
             <ul className="space-y-3 text-sm">
               <li className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                 <span className="text-muted-foreground">
-                  <span className="font-medium text-foreground">Services & prices</span> — what appears on the
-                  list, deposits, checkout
+                  <span className="font-medium text-foreground">Meetings</span> — names, duration, hosts, method
                 </span>
                 <Link
-                  href={AR_ROUTES.bookingServices}
+                  href={AR_ROUTES.bookingMeetings}
                   className="inline-flex shrink-0 items-center gap-1 font-medium text-primary underline-offset-2 hover:underline"
                 >
-                  Services (Booking)
+                  Meetings
                   <ExternalLink className="h-3.5 w-3.5" aria-hidden />
                 </Link>
               </li>

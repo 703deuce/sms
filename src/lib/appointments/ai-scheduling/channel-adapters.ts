@@ -3,7 +3,7 @@ import "server-only";
 import { getPrisma } from "@/lib/db";
 import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
 import { handleUnifiedAiBooking } from "@/lib/appointments/ai-booking-orchestrator";
-import { mergeConversationState } from "./conversation-state";
+import { mergeConversationState, parseConversationState } from "./conversation-state";
 import type { AppointmentAiResult } from "./schema";
 
 const APPOINTMENT_SIGNAL =
@@ -24,8 +24,16 @@ export async function tryHandleInboundAppointmentAi(input: {
   providerMessageId?: string;
   conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>;
 }): Promise<{ handled: true; replyText: string; result: AppointmentAiResult } | { handled: false }> {
-  if (!looksAppointmentRelated(input.message)) {
-    const prisma = getPrisma();
+  const prisma = getPrisma();
+  const contactEarly = await prisma.contact.findFirst({
+    where: { id: input.contactId, workspaceId: input.workspaceId },
+    select: { customFields: true },
+  });
+  const activeReschedule = parseConversationState(contactEarly?.customFields);
+  const inArRescheduleThread =
+    activeReschedule?.activeIntent === "RESCHEDULE" && Boolean(activeReschedule.appointmentId);
+
+  if (!inArRescheduleThread && !looksAppointmentRelated(input.message)) {
     const upcoming = await prisma.voiceAppointment.count({
       where: {
         workspaceId: input.workspaceId,
@@ -38,7 +46,12 @@ export async function tryHandleInboundAppointmentAi(input: {
   }
 
   const platform = await loadAppointmentPlatformConfig(input.workspaceId);
-  if (platform.bookingEnabled === false) return { handled: false };
+  const { resolveAiReschedulerConfig } = await import(
+    "@/lib/appointment-reminders/ai-rescheduler/types"
+  );
+  const ar = resolveAiReschedulerConfig(platform);
+  const arSmsActive = ar.mode === "ai" || ar.mode === "notify";
+  if (platform.bookingEnabled === false && !arSmsActive) return { handled: false };
 
   const prisma = getPrisma();
   const contact = await prisma.contact.findFirst({

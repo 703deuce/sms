@@ -439,12 +439,27 @@ async function trySendStep(input: {
   );
 
   try {
-    const smsBody = finalizeReminderSmsBody(body);
-    await sendInternationalAppointmentSms({
+    let smsBody = finalizeReminderSmsBody(body);
+    const platform = await loadAppointmentPlatformConfig(input.workspaceId);
+    const {
+      isAiReschedulerSmsEnabled,
+      AR_REPLY_INSTRUCTIONS_SUFFIX,
+      resolveAiReschedulerConfig,
+    } = await import("@/lib/appointment-reminders/ai-rescheduler/types");
+    if (isAiReschedulerSmsEnabled(resolveAiReschedulerConfig(platform))) {
+      if (!/reply\s+c\s+to\s+confirm/i.test(smsBody)) {
+        smsBody = `${smsBody.trim()}${AR_REPLY_INSTRUCTIONS_SUFFIX}`;
+      }
+    }
+    const sendResult = await sendInternationalAppointmentSms({
       workspaceId: input.workspaceId,
       to: input.phone,
       body: smsBody,
     });
+    const outboundProviderMessageId =
+      sendResult && typeof sendResult === "object" && "messageId" in sendResult
+        ? String((sendResult as { messageId?: string }).messageId || "")
+        : undefined;
     const prisma = getPrisma();
     const nextMeta = markReminderSentInMeta(
       appendTimeline(input.metadata, {
@@ -457,6 +472,24 @@ async function trySendStep(input: {
       where: { id: input.appointmentId },
       data: { metadata: nextMeta as object },
     });
+    const apptRow = await prisma.voiceAppointment.findFirst({
+      where: { id: input.appointmentId },
+      select: { contactId: true, metadata: true },
+    });
+    if (apptRow?.contactId) {
+      const { seedRescheduleConversationOnReminderSend } = await import(
+        "@/lib/appointment-reminders/ai-rescheduler/inbound-replies"
+      );
+      const gen = (apptRow.metadata as AppointmentMetadata)?.reminderGeneration;
+      await seedRescheduleConversationOnReminderSend({
+        workspaceId: input.workspaceId,
+        contactId: apptRow.contactId,
+        appointmentId: input.appointmentId,
+        reminderGeneration: typeof gen === "number" ? gen : undefined,
+        timelineType: input.timelineType,
+        outboundProviderMessageId: outboundProviderMessageId || undefined,
+      });
+    }
     return true;
   } catch (err) {
     await releaseArReminderSmsReservation({
@@ -510,6 +543,10 @@ export async function scanPlatformAppointmentReminders() {
     if (!(await workspaceRemindersOperational(row.workspaceId))) continue;
     const meta = (row.metadata || {}) as AppointmentMetadata;
     if (meta.remindersSuppressed || meta.reminderOverride?.suppressed) continue;
+    const { shouldHoldRemindersForAppointment } = await import(
+      "@/lib/appointment-reminders/ai-rescheduler/ar-reminder-guard"
+    );
+    if (shouldHoldRemindersForAppointment(meta)) continue;
 
     const { shouldSkipPlatformRemindersForAppointment } = await import(
       "@/lib/appointment-workflows/platform-guard"
@@ -629,6 +666,12 @@ export async function maybeSendImmediateConfirmationForAppointment(
   const meta = (row.metadata || {}) as AppointmentMetadata;
   if (meta.remindersSuppressed || meta.reminderOverride?.suppressed) {
     return { sent: false, skipped: "suppressed" };
+  }
+  const { shouldHoldRemindersForAppointment } = await import(
+    "@/lib/appointment-reminders/ai-rescheduler/ar-reminder-guard"
+  );
+  if (shouldHoldRemindersForAppointment(meta)) {
+    return { sent: false, skipped: "ar_reconcile_pending" };
   }
 
   if (!(await workspaceRemindersOperational(workspaceId))) {

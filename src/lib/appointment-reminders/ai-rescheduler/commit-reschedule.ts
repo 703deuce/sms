@@ -1,0 +1,180 @@
+import "server-only";
+
+import { getPrisma } from "@/lib/db";
+import { resetAppointmentReminders } from "@/lib/appointments/reminder-state";
+import { appendTimeline } from "@/lib/appointments/settings";
+import type { AppointmentMetadata } from "@/lib/appointments/types";
+import { patchProviderEventTimes } from "./provider-mutations";
+import { resolveAiReschedulerConfig, isAiAutomaticCalendarMutation } from "./types";
+import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
+
+export async function commitArReschedule(input: {
+  workspaceId: string;
+  appointmentId: string;
+  startsAt: string;
+  initiatedBy: "customer" | "staff" | "system";
+  operationId: string;
+  /** Staff approval path revalidates at approve time. */
+  skipModeCheck?: boolean;
+}): Promise<{ ok: true } | { ok: false; message: string }> {
+  const platform = await loadAppointmentPlatformConfig(input.workspaceId);
+  const ar = resolveAiReschedulerConfig(platform);
+  if (!input.skipModeCheck && !isAiAutomaticCalendarMutation(ar)) {
+    return { ok: false, message: "Automatic calendar reschedule is not enabled" };
+  }
+
+  const prisma = getPrisma();
+  const row = await prisma.voiceAppointment.findFirst({
+    where: { id: input.appointmentId, workspaceId: input.workspaceId },
+  });
+  if (!row) return { ok: false, message: "Appointment not found" };
+
+  const meta = (row.metadata || {}) as AppointmentMetadata & {
+    arRescheduleOps?: Record<string, { status: string; at: string }>;
+  };
+  const ops = meta.arRescheduleOps || {};
+  if (ops[input.operationId]?.status === "completed") {
+    return { ok: true };
+  }
+
+  const start = new Date(input.startsAt);
+  if (Number.isNaN(start.getTime())) return { ok: false, message: "Invalid start time" };
+
+  const { assertSafeSingleOccurrenceMutation } = await import("./recurring-guard");
+  const recurring = await assertSafeSingleOccurrenceMutation({
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+  });
+  if (!recurring.ok) return { ok: false, message: recurring.message };
+
+  const { revalidateArSlotBeforeCommit } = await import("./revalidate-slot");
+  const slotOk = await revalidateArSlotBeforeCommit({
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+    startsAt: input.startsAt,
+  });
+  if (!slotOk.ok) return { ok: false, message: slotOk.message };
+
+  const durationMs =
+    ar.durationMode === "fixed" && ar.fixedDurationMinutes
+      ? ar.fixedDurationMinutes * 60_000
+      : row.endsAt && row.startsAt
+        ? row.endsAt.getTime() - row.startsAt.getTime()
+        : 30 * 60_000;
+  const end = new Date(start.getTime() + durationMs);
+
+  const { beginArDurableReschedule, markArDurableProviderSucceeded, markArDurableCompleted, markArDurableFailed } =
+    await import("./durable-operation");
+  const durableMeta = beginArDurableReschedule({
+    meta,
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+    operationId: input.operationId,
+    row,
+    proposedStartsAt: start.toISOString(),
+    proposedEndsAt: end.toISOString(),
+  });
+  await prisma.voiceAppointment.update({
+    where: { id: row.id },
+    data: { metadata: durableMeta as object },
+  });
+
+  const providerResult = await patchProviderEventTimes({
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+    startsAt: start,
+    endsAt: end,
+    summary: row.serviceName || undefined,
+  });
+  if (!providerResult.ok) {
+    const failedMeta = markArDurableFailed(durableMeta, providerResult.message);
+    await prisma.voiceAppointment.update({
+      where: { id: row.id },
+      data: {
+        metadata: {
+          ...failedMeta,
+          arRescheduleOps: {
+            ...ops,
+            [input.operationId]: {
+              status: "provider_failed",
+              at: new Date().toISOString(),
+              message: providerResult.message,
+            },
+          },
+        } as object,
+      },
+    });
+    const { notifyWorkspace } = await import("@/lib/notifications/in-app");
+    const { AR_ROUTES } = await import("@/lib/appointment-reminders/routes");
+    await notifyWorkspace(input.workspaceId, {
+      type: "system",
+      title: "Reschedule calendar update failed",
+      body: providerResult.message,
+      href: `${AR_ROUTES.appointments}?highlight=${input.appointmentId}`,
+    }).catch(() => undefined);
+    return { ok: false, message: providerResult.message };
+  }
+
+  const afterProvider = markArDurableProviderSucceeded(durableMeta);
+  await prisma.voiceAppointment.update({
+    where: { id: row.id },
+    data: { metadata: afterProvider as object },
+  });
+
+  const nextMeta = resetAppointmentReminders({
+    ...markArDurableCompleted(afterProvider),
+    arRescheduleOps: {
+      ...ops,
+      [input.operationId]: { status: "completed", at: new Date().toISOString() },
+    },
+    lastChangeInitiatedBy: input.initiatedBy,
+  });
+  const withTimeline = appendTimeline(nextMeta, {
+    type: "rescheduled",
+    label: "Rescheduled via Appointment Reminders SMS",
+    detail: start.toISOString(),
+  });
+
+  try {
+    await prisma.voiceAppointment.update({
+      where: { id: row.id },
+      data: {
+        startsAt: start,
+        endsAt: end,
+        status: "scheduled",
+        metadata: withTimeline as object,
+      },
+    });
+  } catch (err) {
+    await prisma.voiceAppointment.update({
+      where: { id: row.id },
+      data: {
+        metadata: {
+          ...withTimeline,
+          arReconcilePending: {
+            operationId: input.operationId,
+            providerUpdatedAt: new Date().toISOString(),
+            proposedStartsAt: start.toISOString(),
+            proposedEndsAt: end.toISOString(),
+            error: err instanceof Error ? err.message : "local_update_failed",
+          },
+        } as object,
+      },
+    });
+    const { enqueueArRescheduleReconcile } = await import("./reconcile-pending");
+    await enqueueArRescheduleReconcile({
+      workspaceId: input.workspaceId,
+      appointmentId: input.appointmentId,
+      operationId: input.operationId,
+    }).catch(() => undefined);
+    return {
+      ok: false,
+      message:
+        err instanceof Error
+          ? `Calendar updated but local record failed: ${err.message}`
+          : "Calendar updated but local record failed",
+    };
+  }
+
+  return { ok: true };
+}
