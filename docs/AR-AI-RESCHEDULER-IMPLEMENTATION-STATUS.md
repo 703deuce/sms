@@ -7,24 +7,29 @@
 | Area | Status |
 |------|--------|
 | `aiRescheduler` platform config + defaults | Done |
-| API `GET/PATCH /api/appointment-reminders/ai-rescheduler` | Done |
+| API `GET/PATCH /api/appointment-reminders/ai-rescheduler` + approve | Done |
 | Opus page `/appointment-reminders/ai-rescheduler` + nav | Done |
-| Reminder SMS suffix C/R/X + context on send | Done |
-| Inbound C / R / X reminder-bound handler | Done |
-| AI SMS path when notify or AI mode (`channel-adapters`) | Done |
-| Provider-first reschedule via Voice V3 `executeMicrosoftUpdateBooking` + Google `updateGoogleEvent` | Done (`commit-reschedule` + `execute.ts`) |
-| Idempotency keys on reschedule ops in appointment metadata | Partial |
-| Automated script `scripts/test-ar-ai-rescheduler.ts` | Done |
+| Reminder SMS suffix C/R/X on `trySendStep` SMS path + per-send context (24h/2h/additional) | Done |
+| Outbound `messageId` + `timelineType` on reminder context | Done |
+| Inbound C / R / X + YES cancel confirm + AR follow-up before inbox/MCTB AI | Done |
+| Eligibility gate (contact + SMS reminder eligibility + non-internal) | Done |
+| C → Transovo confirm + Google extendedProperties annotate (best effort) | Done |
+| X → cancellation policy + YES confirm; provider cancel when enabled | Done |
+| R → notify request or AI thread (`activeIntent` RESCHEDULE) | Done |
+| Provider reschedule preserves title/attendees (time-only PATCH) | Done |
+| Recurring series guard on commit | Done |
+| Provider availability (Voice V3 busy + AR rules) | Done |
+| Business approval queue + approve API | Done |
+| Scripts: `test-ar-ai-rescheduler.ts`, `test-ar-ai-rescheduler-integration.ts` | Done |
+| Addendum doc `AR-AI-RESCHEDULER-REQUIRED-ADDENDUM.md` | Done |
 
 ## Follow-ups (partial / remaining)
 
-- Business approval: in-app notification + `POST /api/appointment-reminders/ai-rescheduler/approve` (staff UI affordance on appointments list still minimal)
-- Provider availability for reschedule uses Voice V3 busy + AR weekly hours/rules when AI mode + SMS/conversation
-- Reconciliation metadata `arReconcilePending` on provider-success / local DB failure (no background job yet)
-- Calendar readiness levels 0–3 on settings API + page copy (per-event level 4 at mutation time via existing Microsoft validation)
-- Full Google parity tests + conditional etag updates
-- Broader automated test matrix from locked spec §10
-- Live Microsoft/Google certification
+- Staff approve affordance in appointments UI (API exists)
+- Background reconciliation job for `arReconcilePending`
+- Full mocked E2E harness (import → reminder → inbound → provider mock) in CI
+- Live Microsoft/Google + Telnyx certification (steps in addendum §H)
+- Microsoft customer-confirmed annotation (Transovo metadata authoritative)
 
 ## Key paths
 

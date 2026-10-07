@@ -5,7 +5,7 @@ import { approveArRescheduleRequest } from "@/lib/appointment-reminders/ai-resch
 
 export async function POST(request: Request) {
   try {
-    const auth = await requireAppointmentRemindersAccess("appointment_reminders.settings");
+    const auth = await requireAppointmentRemindersAccess("appointment_reminders.write");
     if ("error" in auth) return auth.error;
     const body = (await request.json()) as { appointmentId?: string };
     if (!body.appointmentId) {

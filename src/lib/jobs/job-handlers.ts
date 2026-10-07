@@ -1023,6 +1023,19 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
         limit: typeof payload.limit === "number" ? payload.limit : undefined,
       });
     }
+    case "ar_reschedule_reconcile": {
+      const { reconcileArReschedulePending } = await import(
+        "@/lib/appointment-reminders/ai-rescheduler/reconcile-pending"
+      );
+      const result = await reconcileArReschedulePending({
+        workspaceId: String(payload.workspaceId || ""),
+        appointmentId: String(payload.appointmentId || ""),
+      });
+      if (!result.ok) {
+        throw new Error(result.message);
+      }
+      return result;
+    }
     case "calendar_subscription_renew": {
       const { renewExpiringCalendarSubscriptions } = await import("@/lib/calendar/webhooks");
       return renewExpiringCalendarSubscriptions();

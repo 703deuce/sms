@@ -47,6 +47,14 @@ export async function commitArReschedule(input: {
   });
   if (!recurring.ok) return { ok: false, message: recurring.message };
 
+  const { revalidateArSlotBeforeCommit } = await import("./revalidate-slot");
+  const slotOk = await revalidateArSlotBeforeCommit({
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+    startsAt: input.startsAt,
+  });
+  if (!slotOk.ok) return { ok: false, message: slotOk.message };
+
   const durationMs =
     ar.durationMode === "fixed" && ar.fixedDurationMinutes
       ? ar.fixedDurationMinutes * 60_000
@@ -122,6 +130,12 @@ export async function commitArReschedule(input: {
         } as object,
       },
     });
+    const { enqueueArRescheduleReconcile } = await import("./reconcile-pending");
+    await enqueueArRescheduleReconcile({
+      workspaceId: input.workspaceId,
+      appointmentId: input.appointmentId,
+      operationId: input.operationId,
+    }).catch(() => undefined);
     return {
       ok: false,
       message:

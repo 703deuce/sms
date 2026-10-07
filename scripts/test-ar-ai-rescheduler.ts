@@ -53,4 +53,28 @@ assert.equal(
   false,
 );
 
+import { filterBusyForReschedule } from "../src/lib/voice-v3/calendar/slot-generator";
+
+const busy = [
+  { startUtc: "2026-10-12T15:00:00.000Z", endUtc: "2026-10-12T16:00:00.000Z" },
+];
+const existing = { startUtc: "2026-10-12T14:00:00.000Z", endUtc: "2026-10-12T14:30:00.000Z" };
+const filteredBusy = filterBusyForReschedule(busy, existing);
+assert.equal(filteredBusy.length, 1, "unrelated busy interval remains");
+
+const sundayHours = {
+  ...DEFAULT_AI_RESCHEDULER_CONFIG.weeklyHours,
+  sunday: { enabled: true, open: "10:00", close: "14:00" },
+  saturday: { enabled: false, open: "09:00", close: "17:00" },
+};
+assert.ok(
+  slotPassesArWeeklyHours(
+    "2026-10-11T15:00:00.000Z",
+    "2026-10-11T15:30:00.000Z",
+    tz,
+    sundayHours,
+  ),
+  "per-day sunday hours",
+);
+
 console.log("PASS test-ar-ai-rescheduler");

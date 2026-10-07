@@ -106,6 +106,7 @@ function mapRow(
     connectionId,
     status: row.status,
     sourceEventUrl: (meta.eventUrl as string) || null,
+    arRescheduleRequest: meta.arRescheduleRequest as ArAppointmentRow["arRescheduleRequest"],
   };
 }
 
@@ -273,7 +274,11 @@ export async function loadAppointmentRemindersPage(
       return true;
     }).length,
     needsAttention: upcomingRows.filter(
-      (r) => r.reminder.status === "needs_attention" || r.reminder.status === "failed",
+      (r) =>
+        r.reminder.status === "needs_attention" ||
+        r.reminder.status === "failed" ||
+        r.arRescheduleRequest?.status === "pending_approval" ||
+        r.arRescheduleRequest?.status === "pending_business",
     ).length,
   };
 

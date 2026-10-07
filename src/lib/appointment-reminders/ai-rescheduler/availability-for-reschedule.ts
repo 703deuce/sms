@@ -49,7 +49,7 @@ function expandBusyWithBuffer(
   }));
 }
 
-async function fetchBusyForRef(
+export async function fetchBusyForRef(
   ref: ProviderAppointmentRef,
   workspaceId: string,
   rangeStartUtc: string,
@@ -164,9 +164,10 @@ export async function queryArRescheduleAvailability(input: {
       slotStepMinutes: 15,
       businessHours: arWeeklyToBusinessWindow(ar.weeklyHours),
       busyIntervals: busy,
-      maxSlots: 24,
+      maxSlots: 48,
     });
     rawSlots = generated.map((s) => ({ startsAt: s.startUtc, endsAt: s.endUtc }));
+    rawSlots = applyArRescheduleRules(rawSlots, { timezone, ar, now });
   } else {
     const { queryAvailabilityForIntent } = await import(
       "@/lib/appointments/ai-scheduling/availability-bridge"
@@ -200,10 +201,11 @@ export async function queryArRescheduleAvailability(input: {
     return slotMatchesTimePreference(slot.startsAt, timezone, timePref);
   });
 
-  filtered = applyArRescheduleRules(
-    filtered.length ? filtered : rawSlots,
-    { timezone, ar, now },
-  );
+  if (!filtered.length) {
+    filtered = applyArRescheduleRules(rawSlots, { timezone, ar, now });
+  } else {
+    filtered = applyArRescheduleRules(filtered, { timezone, ar, now });
+  }
 
   filtered = filtered.slice(0, 3);
 

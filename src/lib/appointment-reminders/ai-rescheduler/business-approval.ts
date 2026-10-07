@@ -10,12 +10,15 @@ import { resolveAiReschedulerConfig, isAiBusinessApprovalMode } from "./types";
 import { sendInternationalAppointmentSms } from "@/lib/appointments/reminder-engine";
 
 export type ArRescheduleRequestMeta = {
-  status: "pending_business" | "pending_approval" | "approved" | "rejected";
+  status: "pending_business" | "pending_approval" | "approved" | "rejected" | "failed";
   requestedAt: string;
   channel: "sms";
   proposedStartsAt?: string;
   proposedEndsAt?: string;
   operationId?: string;
+  rejectedAt?: string;
+  rejectedBy?: string;
+  rejectionReason?: string;
 };
 
 export async function queueArRescheduleBusinessApproval(input: {
@@ -126,6 +129,65 @@ export async function approveArRescheduleRequest(input: {
       workspaceId: input.workspaceId,
       to: phone,
       body: `You're rescheduled for ${when}. Your appointment has been updated.`,
+    }).catch(() => undefined);
+  }
+
+  return { ok: true };
+}
+
+export async function rejectArRescheduleRequest(input: {
+  workspaceId: string;
+  appointmentId: string;
+  staffUserId?: string;
+  reason?: string;
+}): Promise<{ ok: true } | { ok: false; message: string }> {
+  const prisma = getPrisma();
+  const row = await prisma.voiceAppointment.findFirst({
+    where: { id: input.appointmentId, workspaceId: input.workspaceId },
+    include: { contact: { select: { phone: true } } },
+  });
+  if (!row) return { ok: false, message: "Appointment not found" };
+
+  const meta = (row.metadata || {}) as AppointmentMetadata & {
+    arRescheduleRequest?: ArRescheduleRequestMeta;
+  };
+  const req = meta.arRescheduleRequest;
+  if (
+    !req ||
+    (req.status !== "pending_approval" && req.status !== "pending_business")
+  ) {
+    return { ok: false, message: "No pending reschedule request" };
+  }
+
+  const when = row.startsAt.toLocaleString("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: row.timezone || undefined,
+  });
+
+  await prisma.voiceAppointment.update({
+    where: { id: input.appointmentId },
+    data: {
+      status: row.status === "reschedule_requested" ? "scheduled" : row.status,
+      metadata: {
+        ...meta,
+        arRescheduleRequest: {
+          ...req,
+          status: "rejected",
+          rejectedAt: new Date().toISOString(),
+          rejectedBy: input.staffUserId,
+          rejectionReason: input.reason,
+        },
+      } as object,
+    },
+  });
+
+  const phone = row.contact?.phone;
+  if (phone) {
+    await sendInternationalAppointmentSms({
+      workspaceId: input.workspaceId,
+      to: phone,
+      body: `We couldn't move your appointment. You're still scheduled for ${when}.`,
     }).catch(() => undefined);
   }
 

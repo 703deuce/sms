@@ -5,6 +5,7 @@ import { parseImportedExternalId } from "@/lib/calendar/external-id";
 import type { CalendarConfig } from "@/lib/calendar/providers";
 import {
   getValidAccessToken,
+  getGoogleCalendarEvent,
   resolveWriteCalendarId,
   updateGoogleEvent,
   deleteGoogleEvent,
@@ -125,6 +126,26 @@ export async function patchProviderEventTimes(input: {
     if (!validation.ok) {
       return { ok: false, message: validation.message };
     }
+    const driftStart = new Date(validation.startUtc).getTime();
+    const driftEnd = new Date(validation.endUtc).getTime();
+    const expectedStart = row.startsAt.getTime();
+    const expectedEnd = row.endsAt.getTime();
+    const driftToleranceMs = 90_000;
+    if (
+      Math.abs(driftStart - expectedStart) > driftToleranceMs ||
+      Math.abs(driftEnd - expectedEnd) > driftToleranceMs
+    ) {
+      if (
+        Math.abs(driftStart - input.startsAt.getTime()) <= driftToleranceMs &&
+        Math.abs(driftEnd - input.endsAt.getTime()) <= driftToleranceMs
+      ) {
+        return { ok: true };
+      }
+      return {
+        ok: false,
+        message: "This appointment changed on the calendar. Please refresh and try again.",
+      };
+    }
     const result = await executeMicrosoftUpdateBooking(
       {
         connectionId: ref.connectionId,
@@ -149,8 +170,39 @@ export async function patchProviderEventTimes(input: {
 
   const token = await getValidAccessToken(conn.id, "google", config);
   if (!token) return { ok: false, message: "Google token unavailable" };
+  const calendarId = resolveWriteCalendarId(config);
   try {
-    await updateGoogleEvent(token, resolveWriteCalendarId(config), ref.providerEventId, {
+    const existing = await getGoogleCalendarEvent(token, calendarId, ref.providerEventId);
+    if (!existing) {
+      return { ok: false, message: "Calendar event was deleted or not found" };
+    }
+    if (existing.status === "cancelled") {
+      return { ok: false, message: "Calendar event is already cancelled" };
+    }
+    const toleranceMs = 90_000;
+    const proposedStart = input.startsAt.getTime();
+    const proposedEnd = input.endsAt.getTime();
+    if (
+      existing.start &&
+      Math.abs(existing.start.getTime() - proposedStart) <= toleranceMs &&
+      existing.end &&
+      Math.abs(existing.end.getTime() - proposedEnd) <= toleranceMs
+    ) {
+      return { ok: true };
+    }
+    const expectedStart = row.startsAt.getTime();
+    const expectedEnd = row.endsAt.getTime();
+    if (
+      existing.start &&
+      (Math.abs(existing.start.getTime() - expectedStart) > toleranceMs ||
+        (existing.end && Math.abs(existing.end.getTime() - expectedEnd) > toleranceMs))
+    ) {
+      return {
+        ok: false,
+        message: "This appointment changed on the calendar. Please refresh and try again.",
+      };
+    }
+    await updateGoogleEvent(token, calendarId, ref.providerEventId, {
       start: input.startsAt,
       end: input.endsAt,
       timezone: config.timezone || ref.timezone,

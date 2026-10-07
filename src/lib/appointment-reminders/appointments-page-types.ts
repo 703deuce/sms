@@ -17,6 +17,12 @@ export type ArAppointmentRow = {
   connectionId: string | null;
   status: string;
   sourceEventUrl: string | null;
+  arRescheduleRequest?: {
+    status: string;
+    proposedStartsAt?: string;
+    proposedEndsAt?: string;
+    requestedAt?: string;
+  };
 };
 
 export type ArAppointmentsPagePayload = {
