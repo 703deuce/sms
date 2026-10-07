@@ -373,6 +373,119 @@ Five setting groups (product spec):
 
 ---
 
+## 7. Voice AI agent (Microsoft 365) vs Appointment Reminders SMS
+
+When you reschedule on a **live Microsoft Voice V3** call today, the system does **not** use `src/lib/appointments/ai-scheduling/execute.ts` or `syncExternalCalendarOnReschedule`. It uses the **Voice V3 appointment-management pipeline**, which PATCHes Graph with the **raw `providerEventId`** after slot revalidation.
+
+Appointment Reminders SMS (and the shared `reschedulePlatformAppointment` path) uses **`external-sync.ts`**, which **refuses** to PATCH when `externalId` is `microsoft:…` / `google:…`. That is why voice “works” on Microsoft while reminder SMS reschedule can move only the Transovo row.
+
+### Two voice stacks (do not conflate)
+
+| Path | Entry | Microsoft reschedule commit |
+|------|--------|-----------------------------|
+| **Voice V3 (PSTN Microsoft booking)** | Tools → `dispatchAppointmentManagementIfRequired` | `executeMicrosoftUpdateBooking` → `updateMicrosoftEvent(providerEventId, …)` |
+| **Agent tool gateway** (receptionist / `reschedule_appointment` tool) | `runRescheduleAppointment` | Updates DB; enqueues `voice_appointment_provider_reschedule` → `getSchedulingProvider()` → **`InternalSchedulingProvider.rescheduleAppointment` is a no-op** (unless Calendly is the workspace provider) |
+
+If your production smoke is **Microsoft Graph reschedule on call**, you are almost certainly on **Voice V3**, not the gateway outbox path.
+
+### Voice V3 — book / reschedule / cancel (Microsoft)
+
+**Lookup (reschedule/cancel prerequisite)**
+
+- `findExistingAppointment` merges durable store candidates with **Microsoft calendarView** (`fetchMicrosoftAppointmentDiscoveryCandidates`) when `config.calendar.connectionId` is set.
+- Verified appointment carries `providerEventId`, `providerCalendarId`, `startUtc`, `endUtc` — used for all mutations.
+
+**Reschedule**
+
+1. Goal `RESCHEDULE_APPOINTMENT` → `dispatchFindAvailabilityIfRequired` (FIND) when rules require a new slot.
+2. Caller selects slot → `dispatchRescheduleIfRequired`:
+   - Revalidates busy intervals via Graph (`fetchMicrosoftBusyIntervals`), with **`filterBusyForReschedule`** so the **existing event interval is excluded** from conflict blocking.
+   - `validateMicrosoftAppointmentBeforeMutation` (permissions / event still exists).
+   - **`executeMicrosoftUpdateBooking`** — same underlying `updateMicrosoftEvent` as calendar import sync, but **no `shouldSyncToNativeCalendar` gate**.
+
+**Cancel**
+
+- `dispatchCancellationIfRequired` → `executeMicrosoftCancelBooking` (Graph cancel/delete), with confirmation phase `CANCELLATION_CONFIRMATION_REQUIRED` before commit.
+
+**Book**
+
+- `executeMicrosoftCreateBooking` via `calendar-provider-runtime` (separate certified FIND/BOOK path; not AR reminders scope).
+
+Key files:
+
+- `src/lib/voice-v3/calendar/appointment-management-dispatch.ts`
+- `src/lib/voice-v3/calendar/reschedule-dispatch.ts`
+- `src/lib/voice-v3/calendar/cancel-dispatch.ts`
+- `src/lib/voice-v3/calendar/microsoft/microsoft-update-booking.ts`
+- `src/lib/voice-v3/calendar/microsoft/microsoft-cancel-booking.ts`
+- `src/lib/voice-v3/calendar/microsoft/microsoft-create-booking.ts`
+
+### Agent gateway — what it does on reschedule
+
+```228:256:src/lib/voice/agent-tool-gateway/scheduling-workflows.ts
+  const durationMs =
+    appt.endsAt && appt.startsAt
+      ? appt.endsAt.getTime() - appt.startsAt.getTime()
+      : 30 * 60 * 1000;
+  const updated = await prisma.voiceAppointment.update({ /* startsAt / endsAt */ });
+  if (updated.externalId) {
+    await enqueueVoiceOutbox({
+      jobType: "voice_appointment_provider_reschedule",
+      payload: { externalId: updated.externalId, newStartTime, … },
+    });
+  }
+```
+
+Outbox handler:
+
+```51:59:src/lib/voice/outbox/voice-outbox.ts
+    case "voice_appointment_provider_reschedule": {
+      const provider = await getSchedulingProvider(String(payload.workspaceId));
+      await provider.rescheduleAppointment(
+        String(payload.externalId || ""),
+        String(payload.newStartTime || ""),
+        …
+      );
+```
+
+`InternalSchedulingProvider.rescheduleAppointment()` is intentionally empty — **no Microsoft PATCH** on this path.
+
+### Appointment Reminders / ai-scheduling (SMS)
+
+- Conversation: `handleAppointmentAIRequest` → `applyVerifiedWrite` → **`reschedulePlatformAppointment`**.
+- Provider write: **`syncExternalCalendarOnReschedule`**, gated by **`shouldSyncToNativeCalendar`** (imports skipped).
+
+### What AR should reuse (Microsoft-first recommendation)
+
+Do **not** port the whole Voice V3 runtime (goals, offer sets, live session). **Do** reuse the **same Graph mutation primitives and safety pattern**:
+
+| Voice V3 behavior | AR / ai-scheduling equivalent |
+|-------------------|-------------------------------|
+| `executeMicrosoftUpdateBooking` | Call from reschedule executor after verify, using `metadata.providerEventId` + `metadata.connectionId` (or `parseImportedExternalId(externalId)`) |
+| `validateMicrosoftAppointmentBeforeMutation` | Run before PATCH on SMS reschedule (writable calendar, event exists) |
+| `filterBusyForReschedule` + slot revalidation | Extend `queryAvailabilityForIntent` / reschedule slot path with `excludeAppointmentId` + event duration |
+| Confirmation before commit | Already in `verify-action.ts` + explicit mutation flag; mirror voice “confirmed” semantics for **R** flow |
+| Cancel policy | Mirror `CANCELLATION_CONFIRMATION_REQUIRED` — do not call `syncExternalCalendarOnCancel` unless AR policy allows |
+
+**Shared low-level API:** `@/lib/voice/calendar/providers` → `updateMicrosoftEvent`, `cancelOrDeleteMicrosoftEvent` (also used by `src/lib/calendar/external-sync.ts` for Transovo-booked ids).
+
+### Why `shouldSyncToNativeCalendar` existed
+
+Historical intent: avoid PATCHing **calendar-imported** events when Transovo was only a mirror, and avoid double-writes right after **new** bookings before Graph propagation. For **Appointment Reminders**, the reminded appointment is already authoritative on the provider; the customer expects the **original Microsoft event** to move. Voice V3 already PATCHes by `providerEventId`; AR should align with that, not with the import-skip guard.
+
+### Implementation sketch (single shared module — future)
+
+Extract or call:
+
+- `executeMicrosoftUpdateBooking` / `executeMicrosoftCancelBooking` from a neutral path (e.g. `src/lib/calendar/provider-mutations.ts`) used by:
+  - Voice V3 (already)
+  - `syncExternalCalendarOnReschedule` / cancel for `calendar_import` rows
+  - Optional: gateway outbox when `externalId` is `microsoft:…`
+
+Until then, the smallest fix for SMS is: in `reschedulePlatformAppointment` after verify, if `metadata.source === "calendar_import"` and provider is Microsoft, invoke the same update helper Voice V3 uses, then keep `resetAppointmentReminders`.
+
+---
+
 ## Out of scope for this audit
 
 - MCTB `src/lib/mctb/ai-booking/**` — not on the SMS appointment path above.  
