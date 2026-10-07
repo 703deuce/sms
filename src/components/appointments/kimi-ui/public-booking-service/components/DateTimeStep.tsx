@@ -288,7 +288,7 @@ export function DateTimeStep({
               ).map(([day, daySlots]) => (
                 <div key={day}>
                   <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{day}</p>
-                  <div className="slot-grid">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                     {daySlots.map((slot) => {
                       const active = startsAt === slot.startsAt;
                       return (

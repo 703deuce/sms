@@ -10,6 +10,10 @@ import {
   servicePriceLabel,
   serviceStaffSummary,
 } from "@/lib/appointments/services/service-display";
+import {
+  APPOINTMENTS_SERVICES_ROUTES,
+  type ServicesWorkspaceRoutes,
+} from "@/lib/appointments/bookable-workspace-routes";
 
 type Props = {
   services: ApiTypeRow[];
@@ -23,6 +27,7 @@ type Props = {
   onCategory: (id: string) => void;
   onSelect: (id: string) => void;
   loading?: boolean;
+  routes?: ServicesWorkspaceRoutes;
 };
 
 /** Second line of a row: the facts an operator scans for, not every setting. */
@@ -56,6 +61,7 @@ export function ServicesListPanel({
   onCategory,
   onSelect,
   loading,
+  routes = APPOINTMENTS_SERVICES_ROUTES,
 }: Props) {
   const q = search.trim().toLowerCase();
   const filtered = services.filter((s) => {
@@ -72,7 +78,7 @@ export function ServicesListPanel({
             <h2 className="text-[0.9375rem] font-semibold text-[var(--text-primary)]">Services</h2>
             {!loading ? <span className="ws-list-count">{services.length}</span> : null}
           </div>
-          <Link href="/appointments/services/new" className="ws-list-new-btn">
+          <Link href={routes.new} className="ws-list-new-btn">
             <Plus className="h-3.5 w-3.5" aria-hidden />
             New
           </Link>

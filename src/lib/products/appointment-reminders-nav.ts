@@ -1,5 +1,6 @@
 import {
   Bell,
+  Briefcase,
   Calendar,
   CalendarDays,
   LayoutDashboard,
@@ -7,6 +8,7 @@ import {
   CreditCard,
   Building2,
   Link2,
+  Video,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
 import { AR_ROUTES } from "@/lib/appointment-reminders/routes";
@@ -43,10 +45,22 @@ export function buildAppointmentRemindersNav(): NavItem[] {
       icon: Settings2,
     },
     {
-      label: "Booking",
+      label: "Booking page",
       href: AR_ROUTES.booking,
       icon: Link2,
-      sectionLabel: "More",
+      sectionLabel: "Booking",
+    },
+    {
+      label: "Services",
+      href: AR_ROUTES.bookingServices,
+      icon: Briefcase,
+      sectionLabel: "Booking",
+    },
+    {
+      label: "Meetings",
+      href: AR_ROUTES.bookingMeetings,
+      icon: Video,
+      sectionLabel: "Booking",
     },
     {
       label: "Plan & Billing",
@@ -70,7 +84,9 @@ export function getAppointmentRemindersPageTitle(pathname: string): string {
   if (pathname.startsWith(AR_ROUTES.reminders)) return "Reminders";
   if (pathname.startsWith(AR_ROUTES.calendars)) return "Calendars";
   if (pathname.startsWith(AR_ROUTES.settings)) return "Reminder Settings";
-  if (pathname.startsWith(AR_ROUTES.booking)) return "Booking";
+  if (pathname.startsWith(AR_ROUTES.bookingServices)) return "Services";
+  if (pathname.startsWith(AR_ROUTES.bookingMeetings)) return "Meetings";
+  if (pathname.startsWith(AR_ROUTES.booking)) return "Booking page";
   if (pathname.startsWith(AR_ROUTES.setupConnect)) return "Connect calendar";
   if (pathname.startsWith(AR_ROUTES.setupActivate)) return "Activate reminders";
   return "";

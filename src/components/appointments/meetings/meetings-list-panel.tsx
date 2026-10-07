@@ -8,6 +8,10 @@ import {
   meetingIsActive,
   meetingMethodLabel,
 } from "@/lib/appointments/meetings/meeting-display";
+import {
+  APPOINTMENTS_MEETINGS_ROUTES,
+  type MeetingsWorkspaceRoutes,
+} from "@/lib/appointments/bookable-workspace-routes";
 
 type Props = {
   meetings: ApiTypeRow[];
@@ -16,6 +20,7 @@ type Props = {
   onSearch: (q: string) => void;
   onSelect: (id: string) => void;
   loading?: boolean;
+  routes?: MeetingsWorkspaceRoutes;
 };
 
 export function MeetingsListPanel({
@@ -25,6 +30,7 @@ export function MeetingsListPanel({
   onSearch,
   onSelect,
   loading,
+  routes = APPOINTMENTS_MEETINGS_ROUTES,
 }: Props) {
   const q = search.trim().toLowerCase();
   const filtered = meetings.filter((m) => !q || m.name.toLowerCase().includes(q));
@@ -37,7 +43,7 @@ export function MeetingsListPanel({
             <h2 className="text-[0.9375rem] font-semibold text-[var(--text-primary)]">Meetings</h2>
             {!loading ? <span className="ws-list-count">{meetings.length}</span> : null}
           </div>
-          <Link href="/appointments/meetings/new" className="ws-list-new-btn">
+          <Link href={routes.new} className="ws-list-new-btn">
             <Plus className="h-3.5 w-3.5" aria-hidden />
             New
           </Link>
@@ -74,7 +80,7 @@ export function MeetingsListPanel({
               {q ? `Nothing matches “${search.trim()}”.` : "Create a meeting customers can book online."}
             </p>
             {!q ? (
-              <Link href="/appointments/meetings/new" className="ws-list-new-btn mt-4 inline-flex">
+              <Link href={routes.new} className="ws-list-new-btn mt-4 inline-flex">
                 <Plus className="h-3.5 w-3.5" aria-hidden />
                 Create meeting
               </Link>

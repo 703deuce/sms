@@ -35,10 +35,12 @@ Each bookable offering is an **appointment type** stored as a `voiceService` row
 
 **AR simple profile** only lists **MEETING** and **SERVICE** types that are **enabled**.
 
-Create types:
+Create types (same editors as Appointments, under AR shell):
 
-- **From AR:** Appointment Reminders → Booking → “Create your first bookable service” (calls `POST /api/appointment-reminders/booking/types`), or
-- **Full editor:** `/appointments/types` (or Meetings/Services wizards under Appointments).
+- **Appointment Reminders → Booking → Services** — `/appointment-reminders/booking/services`
+- **Appointment Reminders → Booking → Meetings** — `/appointment-reminders/booking/meetings`
+
+Legacy Appointments URLs (`/appointments/services`, `/appointments/meetings`) still work and edit the same data.
 
 ### 4. Time slots
 

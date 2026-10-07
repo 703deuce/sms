@@ -39,6 +39,10 @@ import {
   meetingMethodLabel,
 } from "@/lib/appointments/meetings/meeting-display";
 import { ChoiceCard, Field, NumberField, SelectInput, TextArea, TextInput } from "@/components/appointments/workspace-ui";
+import {
+  APPOINTMENTS_MEETINGS_ROUTES,
+  type MeetingsWorkspaceRoutes,
+} from "@/lib/appointments/bookable-workspace-routes";
 import "@/components/appointments/kimi-ui/shared/appointments-pilot-tokens.css";
 import "@/components/appointments/kimi-ui/shared/bookable-workspace-pilot.css";
 import "@/components/appointments/kimi-ui/shared/workspace-pilot.css";
@@ -116,7 +120,11 @@ function MeetingSoFar({
   );
 }
 
-export function CreateMeetingWizard() {
+export function CreateMeetingWizard({
+  routes = APPOINTMENTS_MEETINGS_ROUTES,
+}: {
+  routes?: MeetingsWorkspaceRoutes;
+} = {}) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<AppointmentTypeFormState>(EMPTY_APPOINTMENT_TYPE_FORM);
@@ -258,7 +266,7 @@ export function CreateMeetingWizard() {
     }
     const json = await res.json();
     const saved = json.data as ApiAppointmentType;
-    router.replace(`/appointments/meetings/${saved.id}?created=1`);
+    router.replace(`${routes.detail(saved.id)}?created=1`);
   }, [form, router]);
 
   function selectMethod(def: MeetingMethodDef) {
@@ -281,7 +289,7 @@ export function CreateMeetingWizard() {
   return (
     <div className={`${SHELL_CLASS} min-h-full bg-[var(--surface-muted)]`}>
       <div className="ws-wizard-shell">
-        <Link href="/appointments/meetings" className="appt-pilot-back-link">
+        <Link href={routes.list} className="appt-pilot-back-link">
           <ArrowLeft className="h-3.5 w-3.5" aria-hidden /> Meetings
         </Link>
 

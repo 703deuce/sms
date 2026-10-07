@@ -21,6 +21,7 @@ import {
 } from '@/features/appointments/kimi/booking/map-booking'
 import type { BookingPageModel } from '@/features/appointments/kimi/booking/types'
 import type { BookingProtectionMode } from '@/lib/appointments/types'
+import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
 import { ArBookingLivePreview } from '@/newui-transplant/components/appointment-reminders/ar-booking-live-preview'
 import { Callout, FeatureEmphasisStrip, Panel, Pill } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
@@ -56,11 +57,6 @@ export function AppointmentRemindersBookingOpus() {
   const [copied, setCopied] = useState(false)
   const [primaryColor, setPrimaryColor] = useState('#6366f1')
   const [logoUrl, setLogoUrl] = useState('')
-  const [newTypeName, setNewTypeName] = useState('')
-  const [newTypeDuration, setNewTypeDuration] = useState(30)
-  const [newTypeKind, setNewTypeKind] = useState<'MEETING' | 'SERVICE'>('SERVICE')
-  const [creatingType, setCreatingType] = useState(false)
-  const [createTypeError, setCreateTypeError] = useState('')
 
   const load = useCallback(() => {
     setLoading(true)
@@ -120,61 +116,6 @@ export function AppointmentRemindersBookingOpus() {
     }
   }, [])
 
-  const createBookableType = useCallback(async () => {
-    const name = newTypeName.trim()
-    if (!name) {
-      setCreateTypeError('Enter a name for this service or meeting.')
-      return
-    }
-    setCreatingType(true)
-    setCreateTypeError('')
-    try {
-      const res = await fetch('/api/appointment-reminders/booking/types', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          durationMinutes: newTypeDuration,
-          bookingTypeKind: newTypeKind,
-        }),
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        setCreateTypeError(typeof json.error === 'string' ? json.error : 'Could not create bookable type.')
-        return
-      }
-      const apiTypes = (json.data?.types || []) as BookingTypeApiRow[]
-      setTypes(apiTypes)
-      setNewTypeName('')
-      if (settings) {
-        setDraft(
-          buildBookingPageModel({
-            settings,
-            types: apiTypes,
-            workspaceSlug,
-            workspaceName,
-            origin: typeof window !== 'undefined' ? window.location.origin : undefined,
-          }),
-        )
-      }
-      if (!draft?.bookingEnabled && workspaceSlug) {
-        await savePatch({ bookingEnabled: true, publicBookingProfile: 'simple' })
-        setDraft((d) => (d ? { ...d, bookingEnabled: true } : d))
-      }
-    } finally {
-      setCreatingType(false)
-    }
-  }, [
-    newTypeName,
-    newTypeDuration,
-    newTypeKind,
-    settings,
-    workspaceSlug,
-    workspaceName,
-    draft?.bookingEnabled,
-    savePatch,
-  ])
-
   const protectionOptions = useMemo(
     () => draft?.protectionOptions ?? [],
     [draft?.protectionOptions],
@@ -199,111 +140,24 @@ export function AppointmentRemindersBookingOpus() {
         icon={Globe}
         title="Simple online booking"
         badge={<Pill tone="neutral" dot={false}>Meetings & services only</Pill>}
-        description="Share one link so customers book and pay on your public page. The booking page only shows appointment types you create below (or in Appointment types)."
+        description="This screen controls your customer link and branding. Create what customers book under Booking → Services or Meetings in the sidebar."
       />
 
-      <Panel
-        title="How booking gets on your link"
-        description="Customers see nothing until these pieces exist. Branding on this page does not create services."
-      >
-        <ol className="list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
-          <li>
-            <span className="text-foreground">Business URL slug</span> — required for{' '}
-            <code className="text-xs">/book/your-slug</code>{' '}
-            {hasSlug ? (
-              <Pill tone="success" dot={false} className="ml-1 inline-flex">Done</Pill>
-            ) : (
-              <Link href="/settings/business" className="font-medium text-primary underline-offset-2 hover:underline">
-                Set in Business settings
-              </Link>
-            )}
-          </li>
-          <li>
-            <span className="text-foreground">At least one bookable type</span> — a meeting or service (name +
-            duration){' '}
-            {draft.appointmentTypes.length > 0 ? (
-              <Pill tone="success" dot={false} className="ml-1 inline-flex">Done</Pill>
-            ) : (
-              <span className="text-foreground">— use the form below</span>
-            )}
-          </li>
-          <li>
-            <span className="text-foreground">Booking page enabled</span> — toggle in the next panel{' '}
-            {draft.bookingEnabled ? (
-              <Pill tone="success" dot={false} className="ml-1 inline-flex">On</Pill>
-            ) : (
-              <span>— turn on when types exist</span>
-            )}
-          </li>
-          <li>
-            <span className="text-foreground">Open times</span> — default Mon–Fri 9–5 unless you change{' '}
-            <Link
-              href="/appointments/availability"
-              className="font-medium text-primary underline-offset-2 hover:underline"
-            >
-              Availability
-            </Link>
-          </li>
-        </ol>
-      </Panel>
-
-      <Panel
-        title="Create your first bookable service"
-        description="This creates the same appointment type the public page lists (stored as a bookable type in your workspace)."
-      >
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <Label htmlFor="ar-new-type-name">Name</Label>
-            <Input
-              id="ar-new-type-name"
-              className="mt-1.5"
-              placeholder="e.g. Initial consultation"
-              value={newTypeName}
-              onChange={(e) => setNewTypeName(e.target.value)}
-            />
-          </div>
-          <div>
-            <Label htmlFor="ar-new-type-duration">Duration (minutes)</Label>
-            <Input
-              id="ar-new-type-duration"
-              type="number"
-              min={5}
-              max={480}
-              className="mt-1.5"
-              value={newTypeDuration}
-              onChange={(e) => setNewTypeDuration(Number(e.target.value) || 30)}
-            />
-          </div>
-          <div>
-            <SimpleSelect
-              id="ar-new-type-kind"
-              label="Kind"
-              className="mt-1.5"
-              value={newTypeKind}
-              onChange={(v) => setNewTypeKind(v as 'MEETING' | 'SERVICE')}
-              options={[
-                { value: 'SERVICE', label: 'Service' },
-                { value: 'MEETING', label: 'Meeting' },
-              ]}
-            />
-          </div>
-        </div>
-        {createTypeError ? (
-          <p className="mt-3 text-sm text-destructive" role="alert">{createTypeError}</p>
-        ) : null}
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <Button type="button" disabled={creatingType} onClick={() => void createBookableType()}>
-            {creatingType ? 'Creating…' : 'Create bookable type'}
-          </Button>
-          <span className="text-xs text-muted-foreground">
-            Or use the full editor in{' '}
-            <Link href="/appointments/types" className="text-primary underline-offset-2 hover:underline">
-              Appointment types
+      {draft.appointmentTypes.length === 0 ? (
+        <Callout tone="info" icon={Calendar} title="Nothing to book yet">
+          <p className="text-sm text-muted-foreground">
+            The public page lists appointment types you create in{' '}
+            <Link href={AR_ROUTES.bookingServices} className="font-medium text-primary underline-offset-2 hover:underline">
+              Services
             </Link>{' '}
-            for price, staff, and intake.
-          </span>
-        </div>
-      </Panel>
+            or{' '}
+            <Link href={AR_ROUTES.bookingMeetings} className="font-medium text-primary underline-offset-2 hover:underline">
+              Meetings
+            </Link>
+            . This page only turns the link on and styles it.
+          </p>
+        </Callout>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
         <div className="space-y-5">
@@ -396,14 +250,21 @@ export function AppointmentRemindersBookingOpus() {
                 {draft.appointmentTypes.length === 0 ? (
                   <Callout tone="info" icon={Calendar} title="No bookable types yet">
                     <p className="text-sm text-muted-foreground">
-                      Create at least one enabled meeting or service appointment type (see{' '}
+                      Create a{' '}
                       <Link
-                        href="/appointments/types"
+                        href={AR_ROUTES.bookingServices}
                         className="font-medium text-primary underline-offset-2 hover:underline"
                       >
-                        Appointment types
-                      </Link>
-                      ). Class and group types are hidden on this simple booking page.
+                        service
+                      </Link>{' '}
+                      or{' '}
+                      <Link
+                        href={AR_ROUTES.bookingMeetings}
+                        className="font-medium text-primary underline-offset-2 hover:underline"
+                      >
+                        meeting
+                      </Link>{' '}
+                      in the Booking section of the sidebar, then turn this page on.
                     </p>
                   </Callout>
                 ) : (
@@ -412,10 +273,10 @@ export function AppointmentRemindersBookingOpus() {
                     {draft.appointmentTypes.length === 1 ? '' : 's'} in preview. Names, duration, price, and
                     payment are edited in{' '}
                     <Link
-                      href="/appointments/types"
+                      href={AR_ROUTES.bookingServices}
                       className="font-medium text-primary underline-offset-2 hover:underline"
                     >
-                      Appointment types
+                      Services
                     </Link>
                     — not on this page.
                   </p>
@@ -436,10 +297,10 @@ export function AppointmentRemindersBookingOpus() {
                   list, deposits, checkout
                 </span>
                 <Link
-                  href="/appointments/types"
+                  href={AR_ROUTES.bookingServices}
                   className="inline-flex shrink-0 items-center gap-1 font-medium text-primary underline-offset-2 hover:underline"
                 >
-                  Appointment types
+                  Services (Booking)
                   <ExternalLink className="h-3.5 w-3.5" aria-hidden />
                 </Link>
               </li>

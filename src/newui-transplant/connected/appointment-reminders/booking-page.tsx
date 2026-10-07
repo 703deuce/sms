@@ -9,7 +9,7 @@ export function AppointmentRemindersBookingPage() {
     <Page className="mx-auto max-w-[1440px]">
       <PageHeader
         title="Booking"
-        description="Share your customer-facing booking link and control how your public page looks — simple meetings and services with optional payment at checkout."
+        description="Turn on your customer link and control branding. Create bookable offerings under Booking → Services or Meetings in the sidebar."
       />
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading booking…</p>}>
         <AppointmentRemindersBookingOpus />

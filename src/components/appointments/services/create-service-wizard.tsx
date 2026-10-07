@@ -45,6 +45,10 @@ import {
   TextArea,
   TextInput,
 } from "@/components/appointments/workspace-ui";
+import {
+  APPOINTMENTS_SERVICES_ROUTES,
+  type ServicesWorkspaceRoutes,
+} from "@/lib/appointments/bookable-workspace-routes";
 import "@/components/appointments/kimi-ui/shared/appointments-pilot-tokens.css";
 import "@/components/appointments/kimi-ui/shared/bookable-workspace-pilot.css";
 import "@/components/appointments/kimi-ui/shared/workspace-pilot.css";
@@ -161,7 +165,11 @@ function ServiceSoFar({
   );
 }
 
-export function CreateServiceWizard() {
+export function CreateServiceWizard({
+  routes = APPOINTMENTS_SERVICES_ROUTES,
+}: {
+  routes?: ServicesWorkspaceRoutes;
+} = {}) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<AppointmentTypeFormState>(EMPTY_APPOINTMENT_TYPE_FORM);
@@ -383,7 +391,7 @@ export function CreateServiceWizard() {
     }
     const json = await res.json();
     const saved = json.data as ApiAppointmentType;
-    router.replace(`/appointments/services/${saved.id}?created=1`);
+    router.replace(`${routes.detail(saved.id)}?created=1`);
   }, [form, router]);
 
   function setPrice(cents: number, mode: AppointmentTypeFormState["paymentMode"]) {
@@ -413,7 +421,7 @@ export function CreateServiceWizard() {
   return (
     <div className={`${SHELL_CLASS} min-h-full bg-[var(--surface-muted)]`}>
       <div className="ws-wizard-shell">
-        <Link href="/appointments/services" className="appt-pilot-back-link">
+        <Link href={routes.list} className="appt-pilot-back-link">
           <ArrowLeft className="h-3.5 w-3.5" aria-hidden /> Services
         </Link>
 

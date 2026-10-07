@@ -16,6 +16,10 @@ import { MeetingLocalNav } from "./meeting-local-nav";
 import { MeetingSectionWorkspace } from "./meeting-section-workspace";
 import { MeetingsListPanel } from "./meetings-list-panel";
 import { MEETING_SECTIONS, type MeetingSectionId } from "./meeting-section-types";
+import {
+  APPOINTMENTS_MEETINGS_ROUTES,
+  type MeetingsWorkspaceRoutes,
+} from "@/lib/appointments/bookable-workspace-routes";
 import "@/components/appointments/kimi-ui/shared/appointments-pilot-tokens.css";
 import "@/components/appointments/kimi-ui/shared/bookable-workspace-pilot.css";
 import "@/components/appointments/kimi-ui/shared/workspace-pilot.css";
@@ -30,9 +34,13 @@ const VALID_SECTIONS = new Set<string>(MEETING_SECTIONS.map((s) => s.id));
 
 type Props = {
   meetingId: string | null;
+  routes?: MeetingsWorkspaceRoutes;
 };
 
-export function MeetingsWorkspaceConnected({ meetingId }: Props) {
+export function MeetingsWorkspaceConnected({
+  meetingId,
+  routes = APPOINTMENTS_MEETINGS_ROUTES,
+}: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editor = useMeetingEditor(meetingId);
@@ -53,16 +61,9 @@ export function MeetingsWorkspaceConnected({ meetingId }: Props) {
 
   const setSection = useCallback(
     (next: MeetingSectionId) => {
-      const params = new URLSearchParams(searchParams.toString());
-      if (next === "overview") params.delete("section");
-      else params.set("section", next);
-      const query = params.toString();
-      router.replace(
-        `/appointments/meetings/${meetingId}${query ? `?${query}` : ""}`,
-        { scroll: false },
-      );
+      router.replace(routes.detailWithSection(meetingId!, next), { scroll: false });
     },
-    [meetingId, router, searchParams],
+    [meetingId, router, routes],
   );
 
   const loadList = useCallback(async () => {
@@ -102,10 +103,10 @@ export function MeetingsWorkspaceConnected({ meetingId }: Props) {
 
   const selectMeeting = useCallback(
     (id: string) => {
-      router.push(`/appointments/meetings/${id}`);
+      router.push(routes.detail(id));
       setMobileListOpen(false);
     },
-    [router],
+    [router, routes],
   );
 
   if (editor.loading && meetingId) {
@@ -123,7 +124,7 @@ export function MeetingsWorkspaceConnected({ meetingId }: Props) {
         <div className="max-w-md rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-6 py-12 text-center">
           <AlertTriangle className="mx-auto h-5 w-5 text-[var(--brand-accent)]" />
           <p className="mt-3 text-[0.9375rem] font-semibold">Meeting not found</p>
-          <Link href="/appointments/meetings" className="appt-pilot-muted-link mt-4 inline-block">
+          <Link href={routes.list} className="appt-pilot-muted-link mt-4 inline-block">
             Back to Meetings
           </Link>
         </div>
@@ -143,6 +144,7 @@ export function MeetingsWorkspaceConnected({ meetingId }: Props) {
             onSearch={setSearch}
             onSelect={selectMeeting}
             loading={listLoading}
+            routes={routes}
           />
         </div>
         <div className="ws-empty-state flex-1">
@@ -190,7 +192,7 @@ export function MeetingsWorkspaceConnected({ meetingId }: Props) {
                   Share one booking link
                 </span>
               </div>
-              <Link href="/appointments/meetings/new" className="appt-pilot-primary-btn mt-6 inline-flex">
+              <Link href={routes.new} className="appt-pilot-primary-btn mt-6 inline-flex">
                 Create meeting
               </Link>
               {hasMeetings ? (
@@ -202,6 +204,7 @@ export function MeetingsWorkspaceConnected({ meetingId }: Props) {
                     onSearch={setSearch}
                     onSelect={selectMeeting}
                     loading={listLoading}
+                    routes={routes}
                   />
                 </div>
               ) : null}
@@ -221,6 +224,7 @@ export function MeetingsWorkspaceConnected({ meetingId }: Props) {
           search={search}
           onSearch={setSearch}
           onSelect={selectMeeting}
+          routes={routes}
           loading={listLoading}
         />
       </div>

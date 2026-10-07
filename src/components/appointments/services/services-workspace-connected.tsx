@@ -21,6 +21,10 @@ import { ServiceLocalNav } from "./service-local-nav";
 import { ServiceSectionWorkspace } from "./service-section-workspace";
 import { ServicesListPanel } from "./services-list-panel";
 import { SERVICE_SECTIONS, type ServiceSectionId } from "./service-section-types";
+import {
+  APPOINTMENTS_SERVICES_ROUTES,
+  type ServicesWorkspaceRoutes,
+} from "@/lib/appointments/bookable-workspace-routes";
 import "@/components/appointments/kimi-ui/shared/appointments-pilot-tokens.css";
 import "@/components/appointments/kimi-ui/shared/bookable-workspace-pilot.css";
 import "@/components/appointments/kimi-ui/shared/workspace-pilot.css";
@@ -33,9 +37,15 @@ const SHELL_CLASS =
 
 const VALID_SECTIONS = new Set<string>(SERVICE_SECTIONS.map((s) => s.id));
 
-type Props = { serviceId: string | null };
+type Props = {
+  serviceId: string | null;
+  routes?: ServicesWorkspaceRoutes;
+};
 
-export function ServicesWorkspaceConnected({ serviceId }: Props) {
+export function ServicesWorkspaceConnected({
+  serviceId,
+  routes = APPOINTMENTS_SERVICES_ROUTES,
+}: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editor = useServiceEditor(serviceId);
@@ -57,15 +67,10 @@ export function ServicesWorkspaceConnected({ serviceId }: Props) {
 
   const setSection = useCallback(
     (next: ServiceSectionId) => {
-      const params = new URLSearchParams(searchParams.toString());
-      if (next === "overview") params.delete("section");
-      else params.set("section", next);
-      const query = params.toString();
-      router.replace(`/appointments/services/${serviceId}${query ? `?${query}` : ""}`, {
-        scroll: false,
-      });
+      const path = routes.detailWithSection(serviceId!, next);
+      router.replace(path, { scroll: false });
     },
-    [router, searchParams, serviceId],
+    [router, serviceId, routes],
   );
 
   const loadList = useCallback(async () => {
@@ -172,10 +177,10 @@ export function ServicesWorkspaceConnected({ serviceId }: Props) {
 
   const selectService = useCallback(
     (id: string) => {
-      router.push(`/appointments/services/${id}`);
+      router.push(routes.detail(id));
       setMobileListOpen(false);
     },
-    [router],
+    [router, routes],
   );
 
   if (editor.loading && serviceId) {
@@ -193,7 +198,7 @@ export function ServicesWorkspaceConnected({ serviceId }: Props) {
         <div className="max-w-md rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-6 py-12 text-center">
           <AlertTriangle className="mx-auto h-5 w-5 text-[var(--brand-accent)]" />
           <p className="mt-3 text-[0.9375rem] font-semibold">Service not found</p>
-          <Link href="/appointments/services" className="appt-pilot-muted-link mt-4 inline-block">
+          <Link href={routes.list} className="appt-pilot-muted-link mt-4 inline-block">
             Back to Services
           </Link>
         </div>
@@ -218,6 +223,7 @@ export function ServicesWorkspaceConnected({ serviceId }: Props) {
             onCategory={setCategoryFilter}
             onSelect={selectService}
             loading={listLoading}
+            routes={routes}
           />
         </div>
         <div className="ws-empty-state flex-1">
@@ -265,10 +271,7 @@ export function ServicesWorkspaceConnected({ serviceId }: Props) {
                   Price, deposits and packages
                 </span>
               </div>
-              <Link
-                href="/appointments/services/new"
-                className="appt-pilot-primary-btn mt-6 inline-flex"
-              >
+              <Link href={routes.new} className="appt-pilot-primary-btn mt-6 inline-flex">
                 Create service
               </Link>
               {hasServices ? (
@@ -285,6 +288,7 @@ export function ServicesWorkspaceConnected({ serviceId }: Props) {
                     onCategory={setCategoryFilter}
                     onSelect={selectService}
                     loading={listLoading}
+                    routes={routes}
                   />
                 </div>
               ) : null}
@@ -310,6 +314,7 @@ export function ServicesWorkspaceConnected({ serviceId }: Props) {
           onCategory={setCategoryFilter}
           onSelect={selectService}
           loading={listLoading}
+          routes={routes}
         />
       </div>
 
