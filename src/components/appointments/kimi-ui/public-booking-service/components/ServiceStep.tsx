@@ -183,7 +183,11 @@ export function ServiceStep({
                 </div>
               ) : null}
               {!isCollapsed ? (
-                <ul id={`cat-list-${section.id}`} className="space-y-3" role="list">
+                <ul
+                  id={`cat-list-${section.id}`}
+                  className="grid grid-cols-1 gap-3 md:grid-cols-2"
+                  role="list"
+                >
                   {section.types.map((type) => (
                     <ServiceCard key={type.id} type={type} onPick={onPick} />
                   ))}

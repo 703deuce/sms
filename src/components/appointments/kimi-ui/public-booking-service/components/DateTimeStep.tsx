@@ -335,7 +335,7 @@ export function DateTimeStep({
           </div>
         </div>
       ) : (
-      <div className="mt-6 grid gap-5 md:grid-cols-[220px_1fr]">
+      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(240px,280px)_1fr]">
         {/* Date picker column */}
         <div>
           <div className="flex items-center justify-between">
@@ -402,13 +402,16 @@ export function DateTimeStep({
             Available times · {formatFullDate(selectedDay, timezone).split(",")[0]}
           </p>
           {slots === null ? (
-            <div className="slot-grid mt-2" aria-busy="true">
+            <div
+              className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
+              aria-busy="true"
+            >
               {[0, 1, 2, 3, 4, 5].map((i) => (
                 <div key={i} className="skeleton-shimmer h-10 rounded-lg" />
               ))}
             </div>
           ) : slots.length > 0 ? (
-            <div className="slot-grid mt-2">
+            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
               {slots.map((slot) => {
                 const active = startsAt === slot.startsAt;
                 return (

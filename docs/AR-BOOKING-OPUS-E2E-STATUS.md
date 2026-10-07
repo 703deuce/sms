@@ -82,6 +82,15 @@ On **`86ab5151`**, after deploy, the datetime step on **simple** workspaces shou
 
 ---
 
+## Desktop layout (public booking)
+
+The customer page is **responsive**, not phone-only:
+
+- **Desktop:** content uses up to `max-w-7xl` shell with `max-w-5xl` (services) / `max-w-6xl` (date & time) inner width; service cards use a 2-column grid from `md` breakpoint.
+- **Mobile:** stacks to a single column (unchanged).
+
+Prior issue: inner column was capped at `max-w-lg` (~512px), which looked like a phone column on a wide monitor.
+
 ## Optional follow-up
 
 If you want the **inner** slot/details steps rebuilt as pure Opus components (not shared step modules), that’s a larger follow-up on top of this wiring.

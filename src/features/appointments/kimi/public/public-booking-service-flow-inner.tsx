@@ -22,6 +22,12 @@ import { cn } from "@/lib/utils";
 
 type FlowStep = OpusPublicStep;
 
+function contentMaxWidth(step: FlowStep): string {
+  if (step === "datetime") return "max-w-6xl";
+  if (step === "service") return "max-w-5xl";
+  return "max-w-3xl";
+}
+
 function toServiceType(type: PublicBookingType): KimiServiceBookingType {
   return {
     id: type.id,
@@ -46,15 +52,12 @@ export function PublicBookingServiceFlowInner({
   const indicatorStep: FlowStep =
     flow.step === "payment" ? "info" : (flow.step as FlowStep);
 
+  const widthClass = contentMaxWidth(indicatorStep === "payment" ? "info" : indicatorStep);
+
   return (
-    <div
-      className={cn(
-        "min-h-screen bg-muted/30 px-4 py-8 sm:py-12",
-        embed && "min-h-0 bg-transparent py-4",
-      )}
-    >
+    <div className={cn(!embed && "min-h-screen bg-muted/30", embed && "w-full")}>
       <ApplySchedulerTheme theme={flow.schedulerTheme} />
-      <div className={flow.step === "datetime" ? "mx-auto max-w-2xl" : "mx-auto max-w-lg"}>
+      <div className={cn("mx-auto w-full", widthClass, embed ? "py-0" : "px-0 py-2 sm:py-4")}>
         <header className="mb-6 text-center">
           {ws.logoUrl ? (
             <img
@@ -65,6 +68,11 @@ export function PublicBookingServiceFlowInner({
           ) : (
             <div
               className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-lg font-bold text-primary-foreground shadow-sm"
+              style={
+                flow.schedulerTheme?.primaryColor
+                  ? { backgroundColor: flow.schedulerTheme.primaryColor }
+                  : undefined
+              }
               aria-hidden
             >
               {ws.name.charAt(0)}
@@ -95,7 +103,7 @@ export function PublicBookingServiceFlowInner({
           <OpusPublicStepIndicator step={indicatorStep === "payment" ? "info" : indicatorStep} />
         ) : null}
 
-        <div className={cn(OPUS_CARD, "bg-card p-5 sm:p-7")}>
+        <div className={cn(OPUS_CARD, "bg-card p-6 sm:p-8 lg:p-10")}>
           {flow.step === "service" ? (
             <ServiceStep
               types={flow.types.map(toServiceType)}
@@ -290,16 +298,18 @@ export function PublicBookingServiceFlowInner({
           ) : null}
         </div>
 
-        <footer className="mt-6 text-center text-xs text-muted-foreground">
-          Powered by <span className="font-semibold text-foreground">Transovo</span> ·{" "}
-          <a href={ws.termsUrl} className="hover:text-foreground underline-offset-2 hover:underline">
-            Terms
-          </a>{" "}
-          ·{" "}
-          <a href={ws.privacyUrl} className="hover:text-foreground underline-offset-2 hover:underline">
-            Privacy
-          </a>
-        </footer>
+        {embed ? null : (
+          <footer className="mt-6 text-center text-xs text-muted-foreground">
+            Powered by <span className="font-semibold text-foreground">Transovo</span> ·{" "}
+            <a href={ws.termsUrl} className="hover:text-foreground underline-offset-2 hover:underline">
+              Terms
+            </a>{" "}
+            ·{" "}
+            <a href={ws.privacyUrl} className="hover:text-foreground underline-offset-2 hover:underline">
+              Privacy
+            </a>
+          </footer>
+        )}
       </div>
     </div>
   );

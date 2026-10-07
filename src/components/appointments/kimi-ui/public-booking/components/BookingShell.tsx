@@ -25,7 +25,7 @@ export function BookingShell({
         className="sticky top-0 z-10 border-b border-border"
         style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(10px)" }}
       >
-        <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4 sm:px-6">
+        <div className="mx-auto flex h-14 w-full max-w-7xl items-center gap-3 px-4 sm:px-6 lg:px-8">
           <span
             className="flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold text-primary-foreground"
             style={{ background: "var(--primary)" }}
@@ -43,10 +43,12 @@ export function BookingShell({
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 sm:py-10">{children}</main>
+      <main className="mx-auto w-full max-w-7xl flex-1 bg-muted/30 px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+        {children}
+      </main>
 
       <footer className="border-t border-border bg-card">
-        <div className="mx-auto flex max-w-5xl flex-col gap-3 px-4 py-6 text-[12px] text-muted-foreground sm:flex-row sm:items-center sm:px-6">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-4 py-6 text-[12px] text-muted-foreground sm:flex-row sm:items-center sm:px-6 lg:px-8">
           <div className="flex items-center gap-4">
             <span className="inline-flex items-center gap-1.5">
               <Phone className="h-3.5 w-3.5" /> {workspace.phone || mockWorkspace.phone}
