@@ -6,6 +6,7 @@ import {
   Settings2,
   CreditCard,
   Building2,
+  Link2,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
 import { AR_ROUTES } from "@/lib/appointment-reminders/routes";
@@ -42,6 +43,12 @@ export function buildAppointmentRemindersNav(): NavItem[] {
       icon: Settings2,
     },
     {
+      label: "Booking",
+      href: AR_ROUTES.booking,
+      icon: Link2,
+      sectionLabel: "More",
+    },
+    {
       label: "Plan & Billing",
       href: "/settings/billing",
       icon: CreditCard,
@@ -63,6 +70,7 @@ export function getAppointmentRemindersPageTitle(pathname: string): string {
   if (pathname.startsWith(AR_ROUTES.reminders)) return "Reminders";
   if (pathname.startsWith(AR_ROUTES.calendars)) return "Calendars";
   if (pathname.startsWith(AR_ROUTES.settings)) return "Reminder Settings";
+  if (pathname.startsWith(AR_ROUTES.booking)) return "Booking";
   if (pathname.startsWith(AR_ROUTES.setupConnect)) return "Connect calendar";
   if (pathname.startsWith(AR_ROUTES.setupActivate)) return "Activate reminders";
   return "";

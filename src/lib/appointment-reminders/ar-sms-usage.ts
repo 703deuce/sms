@@ -39,9 +39,21 @@ export type ArSmsUsageSnapshot = {
   meteringActive: boolean;
 };
 
+async function workspaceLimitsRecord(workspaceId: string): Promise<Record<string, unknown>> {
+  const prisma = getPrisma();
+  const row = await prisma.workspaceLimits.findUnique({
+    where: { workspaceId },
+    select: { limits: true },
+  });
+  return asRecord(row?.limits);
+}
+
+/** Test workspaces may set `limits.arSmsMeteringEnabled` to exercise billing without platform sender. */
 export async function shouldMeterAppointmentRemindersSms(
   workspaceId: string,
 ): Promise<boolean> {
+  const limits = await workspaceLimitsRecord(workspaceId);
+  if (limits.arSmsMeteringEnabled === true) return true;
   return usesPlatformAppointmentSmsSender(workspaceId);
 }
 
@@ -249,16 +261,17 @@ export async function reserveArReminderSmsUnit(input: {
   const timelineType = input.timelineType?.trim() || "reminder";
 
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.workspaceId}))`;
+
     if (
       appointmentId &&
       timelineType &&
       (await appointmentAlreadyReserved(tx, appointmentId, periodKey, timelineType))
     ) {
-      const limitsRow = await tx.workspaceLimits.findUnique({
-        where: { workspaceId: input.workspaceId },
-        select: { limits: true },
-      });
-      const limits = asRecord(limitsRow?.limits);
+      const locked = await tx.$queryRaw<Array<{ limits: unknown }>>`
+        SELECT limits FROM workspace_limits WHERE workspace_id = ${input.workspaceId} FOR UPDATE
+      `;
+      const limits = asRecord(locked[0]?.limits);
       let used = Number(limits[USAGE_USED] || 0);
       if (String(limits[USAGE_PERIOD_KEY] || "") !== periodKey) used = 0;
       return {
@@ -269,32 +282,31 @@ export async function reserveArReminderSmsUnit(input: {
       };
     }
 
-    const limitsRow = await tx.workspaceLimits.findUnique({
-      where: { workspaceId: input.workspaceId },
-      select: { limits: true },
-    });
-    const limits = asRecord(limitsRow?.limits);
+    const locked = await tx.$queryRaw<Array<{ limits: unknown }>>`
+      SELECT limits FROM workspace_limits WHERE workspace_id = ${input.workspaceId} FOR UPDATE
+    `;
+
+    const limits = asRecord(locked[0]?.limits);
     let used = Number(limits[USAGE_USED] || 0);
     if (String(limits[USAGE_PERIOD_KEY] || "") !== periodKey) used = 0;
-
-    const counted = await countBillableArReminderSmsSentInPeriod(input.workspaceId, periodKey);
-    if (counted > used) used = counted;
 
     if (used >= limit) {
       return { reserved: false, used, limit, reason: "ar_sms_limit_reached" };
     }
 
     const nextUsed = used + 1;
-    await tx.workspaceLimits.upsert({
-      where: { workspaceId: input.workspaceId },
-      create: {
-        workspaceId: input.workspaceId,
-        limits: { ...limits, [USAGE_PERIOD_KEY]: periodKey, [USAGE_USED]: nextUsed },
-      },
-      update: {
-        limits: { ...limits, [USAGE_PERIOD_KEY]: periodKey, [USAGE_USED]: nextUsed },
-      },
-    });
+    const nextLimits = { ...limits, [USAGE_PERIOD_KEY]: periodKey, [USAGE_USED]: nextUsed };
+
+    if (locked.length === 0) {
+      await tx.workspaceLimits.create({
+        data: { workspaceId: input.workspaceId, limits: nextLimits },
+      });
+    } else {
+      await tx.workspaceLimits.update({
+        where: { workspaceId: input.workspaceId },
+        data: { limits: nextLimits },
+      });
+    }
 
     if (appointmentId && timelineType) {
       await markAppointmentArSmsReserved(tx, appointmentId, periodKey, timelineType);
@@ -318,6 +330,11 @@ export async function releaseArReminderSmsReservation(input: {
   const timelineType = input.timelineType?.trim() || "reminder";
 
   await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.workspaceId}))`;
+    await tx.$queryRaw`
+      SELECT limits FROM workspace_limits WHERE workspace_id = ${input.workspaceId} FOR UPDATE
+    `;
+
     if (appointmentId) {
       const row = await tx.voiceAppointment.findUnique({
         where: { id: appointmentId },

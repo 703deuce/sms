@@ -5,6 +5,7 @@ export const AR_ROUTES = {
   reminders: "/appointment-reminders/reminders",
   calendars: "/appointment-reminders/calendars",
   settings: "/appointment-reminders/settings",
+  booking: "/appointment-reminders/booking",
   setupConnect: "/appointment-reminders/setup/connect",
   setupActivate: "/appointment-reminders/setup/activate",
 } as const;

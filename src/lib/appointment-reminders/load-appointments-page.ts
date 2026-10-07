@@ -197,14 +197,57 @@ export async function loadAppointmentRemindersPage(
         contact: a.contact ? { id: a.contact.id } : null,
       }));
   } else {
-    const { rows } = await buildAppointmentsDirectory(workspaceId, {
-      tab: range.tab,
-      from: range.from,
-      to: range.to,
-      q: query.q,
-      take: 5000,
-    });
-    directoryRows = rows;
+    const tabRange =
+      range.tab === "past"
+        ? { to: range.to ?? now }
+        : {
+            from: range.from ?? (range.tab === "upcoming" ? now : undefined),
+            to: range.to,
+          };
+    const BATCH = 250;
+    let skip = 0;
+    const collected: AppointmentDirectoryRow[] = [];
+    for (;;) {
+      const appts = await listAppointments(workspaceId, {
+        ...tabRange,
+        q: query.q,
+        take: BATCH,
+        skip,
+      });
+      if (!appts.length) break;
+      const batchRows: AppointmentDirectoryRow[] = appts
+        .filter((a) => !a.id.startsWith("enroll:"))
+        .map((a) => ({
+          id: a.id,
+          inviteeName: a.inviteeName,
+          inviteePhone: a.inviteePhone,
+          inviteeEmail: a.inviteeEmail,
+          serviceName: a.serviceName,
+          startsAt: a.startsAt,
+          endsAt: a.endsAt,
+          status: a.status,
+          timezone: a.timezone,
+          reminderStatus: a.reminderStatus,
+          contactId: a.contactId,
+          domainType: "service",
+          domainLabel: "Service",
+          staffLabel: "",
+          staffIds: [],
+          locationId: null,
+          locationLabel: null,
+          resourceLabels: [],
+          paymentLabel: null,
+          balanceDueCents: 0,
+          attentionFlags: [],
+          attentionSummary: null,
+          metadata: a.metadata as Record<string, unknown>,
+          contact: a.contact ? { id: a.contact.id } : null,
+        }));
+      collected.push(...batchRows);
+      if (appts.length < BATCH) break;
+      skip += BATCH;
+    }
+    directoryRows = collected;
   }
 
   let mapped = directoryRows
