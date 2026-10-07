@@ -2,12 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Loader2, Plus } from 'lucide-react'
+import { AlertTriangle, Loader2 } from 'lucide-react'
 import {
   addAdditionalReminderStep,
   buildRemindersPageModel,
   patchReminderAdvanced,
-  patchReminderChannel,
   patchReminderEnabled,
   patchReminderMinutesBefore,
   patchReminderTemplate,
@@ -18,9 +17,11 @@ import {
   REMINDER_MERGE_TAGS,
 } from '@/features/appointments/kimi/reminders/map-reminders'
 import { listReminderStepIds, resolveReminderStep } from '@/lib/appointments/reminders/reminders-config'
-import { DEFAULT_PLATFORM_CONFIG, type AppointmentPlatformConfig, type ReminderChannel } from '@/lib/appointments/types'
+import { DEFAULT_PLATFORM_CONFIG, type AppointmentPlatformConfig } from '@/lib/appointments/types'
 import type { ReminderItem, ReminderStepKey } from '@/features/appointments/kimi/reminders/types'
-import { Callout, Panel } from '@/newui-transplant/components/app/kit'
+import { ReminderSequenceTimeline } from '@/newui-transplant/components/appointment-reminders/reminder-sequence-timeline'
+import { Callout, Panel, Stat } from '@/newui-transplant/components/app/kit'
+import { OPUS_META_STRIP } from '@/newui-transplant/components/app/opus-surfaces'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Input } from '@/newui-transplant/components/ui/input'
 import { Textarea } from '@/newui-transplant/components/ui/textarea'
@@ -50,21 +51,18 @@ async function loadPreviews(config: RemindersApiConfig): Promise<ReminderPreview
   return Object.fromEntries(entries) as ReminderPreviewMap
 }
 
-function minutesToParts(minutes: number) {
-  if (minutes >= 1440 && minutes % 1440 === 0) return { value: minutes / 1440, unit: 'days' as const }
-  if (minutes >= 60 && minutes % 60 === 0) return { value: minutes / 60, unit: 'hours' as const }
-  return { value: minutes, unit: 'minutes' as const }
-}
-
-function partsToMinutes(value: number, unit: 'minutes' | 'hours' | 'days') {
-  if (unit === 'days') return value * 1440
-  if (unit === 'hours') return value * 60
-  return value
+type WorkspaceStats = {
+  activeSteps: number
+  scheduledCount: number
+  sentToday: number
+  failed7d: number
+  readiness: { sms: string; email: string }
 }
 
 export function AppointmentRemindersSettingsOpus() {
   const [config, setConfig] = useState<RemindersApiConfig | null>(null)
   const [previews, setPreviews] = useState<ReminderPreviewMap>({})
+  const [workspace, setWorkspace] = useState<WorkspaceStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -74,6 +72,23 @@ export function AppointmentRemindersSettingsOpus() {
   const [testStep, setTestStep] = useState<ReminderStepKey>('confirmation')
   const [testing, setTesting] = useState(false)
   const [testError, setTestError] = useState('')
+
+  const loadWorkspace = useCallback(() => {
+    void fetch('/api/appointments/reminders/workspace')
+      .then((r) => r.json())
+      .then((json) => {
+        const d = json.data
+        if (!d?.stats) return
+        setWorkspace({
+          activeSteps: d.stats.activeSteps,
+          scheduledCount: d.stats.scheduledCount,
+          sentToday: d.stats.sentToday,
+          failed7d: d.stats.failed7d,
+          readiness: d.readiness || { sms: '—', email: '—' },
+        })
+      })
+      .catch(() => setWorkspace(null))
+  }, [])
 
   const load = useCallback(() => {
     setLoading(true)
@@ -96,10 +111,11 @@ export function AppointmentRemindersSettingsOpus() {
         }
         setConfig(nextConfig)
         setPreviews(await loadPreviews(nextConfig))
+        loadWorkspace()
       })
       .catch(() => setFailed(true))
       .finally(() => setLoading(false))
-  }, [])
+  }, [loadWorkspace])
 
   useEffect(() => {
     load()
@@ -123,12 +139,13 @@ export function AppointmentRemindersSettingsOpus() {
       if (!res.ok) throw new Error('save failed')
       setSaved(true)
       setPreviews(await loadPreviews(config))
+      loadWorkspace()
     } catch {
       setSaved(false)
     } finally {
       setSaving(false)
     }
-  }, [config])
+  }, [config, loadWorkspace])
 
   if (loading) {
     return (
@@ -150,89 +167,99 @@ export function AppointmentRemindersSettingsOpus() {
   }
 
   const stepOptions = model.reminders.map((r) => ({ value: r.stepKey, label: r.title }))
+  const smsSteps = model.reminders.filter((r) => r.enabled && r.channel === 'sms')
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-end gap-2">
         {saved && !saving ? (
-          <span className="text-xs text-muted-foreground" role="status">Saved</span>
+          <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400" role="status">
+            Saved
+          </span>
         ) : null}
-        <Button onClick={() => void save()} disabled={saving}>
+        <Button onClick={() => void save()} disabled={saving} className="h-10 px-5">
           {saving ? 'Saving…' : 'Save changes'}
         </Button>
       </div>
 
+      {workspace ? (
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <Stat label="Active steps" value={String(workspace.activeSteps)} />
+          <Stat label="Scheduled" value={String(workspace.scheduledCount)} hint="Upcoming sends" />
+          <Stat label="Sent today" value={String(workspace.sentToday)} />
+          <Stat
+            label="SMS sender"
+            value={workspace.readiness.sms}
+            hint={workspace.failed7d > 0 ? `${workspace.failed7d} failed (7d)` : undefined}
+          />
+        </div>
+      ) : null}
+
       <Tabs defaultValue="sequence">
-        <TabsList>
+        <TabsList className="h-10">
           <TabsTrigger value="sequence">Reminder sequence</TabsTrigger>
+          <TabsTrigger value="preview">Customer preview</TabsTrigger>
           <TabsTrigger value="test">Send test</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="sequence" className="mt-4 space-y-4">
+        <TabsContent value="sequence" className="mt-5 space-y-4">
           <Panel
-            title="Default sequence"
-            description="SMS reminders for imported calendar appointments. Timing applies to future appointments only."
+            title="SMS reminder sequence"
+            description="Like a drip campaign: confirmations and timed texts before each appointment. Changes apply to future appointments only."
             bodyClassName="p-0"
           >
-            <ul className="divide-y">
-              {model.reminders.map((step) => (
-                <li key={step.stepKey} className="flex flex-wrap items-center gap-3 px-5 py-4">
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={step.enabled}
-                      onChange={() => {
-                        const s = resolveReminderStep(asPlatformConfig(config), step.stepKey)
-                        if (!s) return
-                        setConfig(patchReminderEnabled(config, step.stepKey, !step.enabled))
-                        setSaved(false)
-                      }}
-                      aria-label={`Enable ${step.title}`}
-                    />
-                    <span className="font-medium">{step.badge}</span>
-                  </label>
-                  <span className="text-sm text-muted-foreground capitalize">{step.channel}</span>
-                  {step.stepKey !== 'confirmation' && step.minutesBefore != null ? (
-                    <TimingEditor
-                      minutes={step.minutesBefore}
-                      onChange={(m) => {
-                        setConfig(patchReminderMinutesBefore(config, step.stepKey, m))
-                        setSaved(false)
-                      }}
-                    />
-                  ) : (
-                    <span className="text-xs text-muted-foreground">On booking</span>
-                  )}
-                  <Button variant="outline" size="sm" className="ml-auto" onClick={() => setEditStep(step)}>
-                    Edit message
-                  </Button>
-                </li>
-              ))}
-            </ul>
-            <div className="border-t px-5 py-3">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setConfig(addAdditionalReminderStep(config))
-                  setSaved(false)
-                }}
-              >
-                <Plus className="mr-1 size-3.5" aria-hidden="true" />
-                Add reminder step
-              </Button>
-            </div>
+            <ReminderSequenceTimeline
+              steps={model.reminders}
+              onToggle={(stepKey) => {
+                const step = resolveReminderStep(asPlatformConfig(config), stepKey)
+                if (!step) return
+                setConfig(patchReminderEnabled(config, stepKey, !step.enabled))
+                setSaved(false)
+              }}
+              onEdit={setEditStep}
+              onAdd={() => {
+                setConfig(addAdditionalReminderStep(config))
+                setSaved(false)
+              }}
+              onMinutesChange={(stepKey, minutes) => {
+                setConfig(patchReminderMinutesBefore(config, stepKey, minutes))
+                setSaved(false)
+              }}
+            />
           </Panel>
 
           <Callout tone="neutral" icon={AlertTriangle} title="Consent and compliance">
             Recipient consent and SMS sender registration are enforced at send time. Manage compliance in{' '}
             <Link href="/compliance" className="font-medium underline">Compliance</Link>
-            {' '}and phone extraction rules in your calendar field mapping.
+            {' '}and phone extraction in calendar field mapping.
           </Callout>
         </TabsContent>
 
-        <TabsContent value="test" className="mt-4">
-          <Panel title="Send test reminder" description="Sends a single test SMS using your saved templates.">
+        <TabsContent value="preview" className="mt-5">
+          <Panel
+            title="What customers receive"
+            description="Rendered with sample merge data — matches production SMS wording."
+          >
+            <ul className="space-y-4">
+              {smsSteps.length === 0 ? (
+                <li className="text-sm text-muted-foreground">Enable at least one SMS step to preview.</li>
+              ) : (
+                smsSteps.map((r) => (
+                  <li key={r.stepKey} className="rounded-xl border bg-muted/20 p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">{r.badge}</p>
+                    <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{r.preview || r.template}</p>
+                  </li>
+                ))
+              )}
+            </ul>
+          </Panel>
+        </TabsContent>
+
+        <TabsContent value="test" className="mt-5">
+          <Panel title="Send test SMS" description="One live text using your saved templates and workspace sender.">
+            <div className={OPUS_META_STRIP + ' mb-4 text-muted-foreground'}>
+              Tests use the same pipeline as appointment reminders — not a mock composer.
+            </div>
             <div className="grid gap-4 sm:max-w-md">
               <SimpleSelect
                 label="Reminder step"
@@ -241,11 +268,12 @@ export function AppointmentRemindersSettingsOpus() {
                 options={stepOptions}
               />
               <label className="block text-sm">
-                <span className="mb-1 block font-medium">Test phone</span>
-                <Input value={testPhone} onChange={(e) => setTestPhone(e.target.value)} autoComplete="tel" />
+                <span className="mb-1.5 block font-medium">Test phone</span>
+                <Input value={testPhone} onChange={(e) => setTestPhone(e.target.value)} autoComplete="tel" className="h-10" />
               </label>
               {testError ? <p className="text-xs text-destructive" role="alert">{testError}</p> : null}
               <Button
+                className="h-10"
                 disabled={testing || !testPhone.trim()}
                 onClick={async () => {
                   setTesting(true)
@@ -280,11 +308,6 @@ export function AppointmentRemindersSettingsOpus() {
           setConfig(patchReminderTemplate(config, editStep.stepKey, template))
           setSaved(false)
         }}
-        onChannelChange={(channel) => {
-          if (!editStep) return
-          setConfig(patchReminderChannel(config, editStep.stepKey, channel))
-          setSaved(false)
-        }}
         onReset={() => {
           if (!editStep) return
           setConfig(resetReminderTemplate(config, editStep.stepKey))
@@ -310,47 +333,10 @@ export function AppointmentRemindersSettingsOpus() {
   )
 }
 
-function TimingEditor({
-  minutes,
-  onChange,
-}: {
-  minutes: number
-  onChange: (m: number) => void
-}) {
-  const parts = minutesToParts(minutes)
-  return (
-    <div className="flex items-center gap-1 text-sm">
-      <Input
-        type="number"
-        min={1}
-        className="h-8 w-14 text-center"
-        value={parts.value}
-        onChange={(e) =>
-          onChange(partsToMinutes(Number(e.target.value) || 1, parts.unit))
-        }
-        aria-label="Timing amount"
-      />
-      <select
-        className="h-8 rounded-md border bg-background px-2 text-xs"
-        value={parts.unit}
-        onChange={(e) =>
-          onChange(partsToMinutes(parts.value, e.target.value as 'minutes' | 'hours' | 'days'))
-        }
-        aria-label="Timing unit"
-      >
-        <option value="minutes">minutes before</option>
-        <option value="hours">hours before</option>
-        <option value="days">days before</option>
-      </select>
-    </div>
-  )
-}
-
 function StepEditSheet({
   step,
   onClose,
   onTemplateChange,
-  onChannelChange,
   onReset,
   onRemove,
   onAdvancedChange,
@@ -358,7 +344,6 @@ function StepEditSheet({
   step: ReminderItem | null
   onClose: () => void
   onTemplateChange: (t: string) => void
-  onChannelChange: (c: ReminderChannel) => void
   onReset: () => void
   onRemove?: () => void
   onAdvancedChange: (patch: Record<string, unknown>) => void
@@ -371,45 +356,44 @@ function StepEditSheet({
             <SheetHeader>
               <SheetTitle>Edit {step.title}</SheetTitle>
             </SheetHeader>
-            <div className="mt-4 space-y-4">
+            <div className="mt-6 space-y-5">
               <label className="block text-sm">
-                <span className="mb-1 block font-medium">Step name</span>
-                <Input value={step.title} onChange={(e) => onAdvancedChange({ label: e.target.value })} />
+                <span className="mb-1.5 block font-medium">Step name</span>
+                <Input
+                  className="h-10"
+                  value={step.title}
+                  onChange={(e) => onAdvancedChange({ label: e.target.value })}
+                />
               </label>
-              <SimpleSelect
-                label="Channel"
-                value={step.channel}
-                onChange={(v) => onChannelChange(v as ReminderChannel)}
-                options={[
-                  { value: 'sms', label: 'SMS' },
-                  { value: 'email', label: 'Email' },
-                ]}
-              />
+              <p className="text-xs text-muted-foreground rounded-lg border bg-muted/30 px-3 py-2">
+                Channel: <span className="font-medium text-foreground">SMS</span> (Appointment Reminders)
+              </p>
               <div>
-                <div className="mb-1 flex items-center justify-between">
+                <div className="mb-1.5 flex items-center justify-between">
                   <span className="text-sm font-medium">Message</span>
                   <Button type="button" variant="ghost" size="sm" onClick={onReset}>Reset default</Button>
                 </div>
                 <Textarea
-                  className="min-h-[140px] font-mono text-sm"
+                  className="min-h-[160px] font-mono text-sm leading-relaxed"
                   value={step.template}
                   onChange={(e) => onTemplateChange(e.target.value)}
                 />
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {step.template.length} characters
-                  {step.channel === 'sms' ? ` · ${step.segments} segment(s)` : ''}
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  {step.template.length} characters · {step.segments} SMS segment{step.segments === 1 ? '' : 's'}
                 </p>
               </div>
               <div>
-                <p className="mb-1 text-xs font-medium text-muted-foreground">Insert variable</p>
-                <div className="flex flex-wrap gap-1">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Insert variable
+                </p>
+                <div className="flex flex-wrap gap-1.5">
                   {REMINDER_MERGE_TAGS.map((tag) => (
                     <Button
                       key={tag}
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="h-7 text-[10px]"
+                      className="h-8 text-[11px]"
                       onClick={() =>
                         onTemplateChange(`${step.template}${step.template.endsWith(' ') ? '' : ' '}${tag}`)
                       }
@@ -420,7 +404,9 @@ function StepEditSheet({
                 </div>
               </div>
               {step.preview ? (
-                <div className="rounded-md border bg-muted/30 p-3 text-sm whitespace-pre-wrap">{step.preview}</div>
+                <div className="rounded-xl border bg-muted/25 p-4 text-sm whitespace-pre-wrap leading-relaxed">
+                  {step.preview}
+                </div>
               ) : null}
               {onRemove ? (
                 <Button type="button" variant="destructive" size="sm" onClick={onRemove}>

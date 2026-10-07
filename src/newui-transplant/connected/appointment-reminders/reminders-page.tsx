@@ -127,10 +127,15 @@ export function AppointmentRemindersLogPage() {
             Upcoming scheduled reminders, delivery outcomes, failures, and blocked sends — with clear next steps.
           </p>
         </div>
-        <Button variant="outline" size="sm" className="h-[34px]" onClick={load} disabled={loading}>
-          <RefreshCw className={cn('mr-1.5 size-3.5', loading && 'animate-spin')} aria-hidden="true" />
-          Refresh
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="secondary" size="sm" className="h-[34px]" render={<Link href={AR_ROUTES.settings} />}>
+            Edit SMS sequence
+          </Button>
+          <Button variant="outline" size="sm" className="h-[34px]" onClick={load} disabled={loading}>
+            <RefreshCw className={cn('mr-1.5 size-3.5', loading && 'animate-spin')} aria-hidden="true" />
+            Refresh
+          </Button>
+        </div>
       </header>
 
       <div
