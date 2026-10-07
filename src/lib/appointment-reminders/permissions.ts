@@ -6,24 +6,12 @@ import {
   DEFAULT_ROLES,
   listGranularRoles,
   resolveUserRoleId,
-  roleHasPermission,
 } from "@/lib/appointments/org-permissions";
+import type { AppointmentRemindersPermission } from "@/lib/appointment-reminders/permissions-types";
+import { defaultArPermissionsForRole } from "@/lib/appointment-reminders/permissions-roles";
 
-/** Appointment Reminders–scoped permissions (standalone product). */
-export type AppointmentRemindersPermission =
-  | "appointment_reminders.read"
-  | "appointment_reminders.write"
-  | "appointment_reminders.settings"
-  | "appointment_reminders.calendar"
-  | "appointment_reminders.test";
-
-const AR_PERMS: AppointmentRemindersPermission[] = [
-  "appointment_reminders.read",
-  "appointment_reminders.write",
-  "appointment_reminders.settings",
-  "appointment_reminders.calendar",
-  "appointment_reminders.test",
-];
+export type { AppointmentRemindersPermission } from "@/lib/appointment-reminders/permissions-types";
+export { defaultArPermissionsForRole } from "@/lib/appointment-reminders/permissions-roles";
 
 /** Appointments permissions that imply the matching AR permission (shared runtime, no full Appointments UI required). */
 const APPOINTMENTS_IMPLIES: Record<
@@ -36,21 +24,6 @@ const APPOINTMENTS_IMPLIES: Record<
   "appointment_reminders.calendar": "calendar.connect",
   "appointment_reminders.test": "appointments.settings.manage",
 };
-
-export function defaultArPermissionsForRole(roleId: string): AppointmentRemindersPermission[] {
-  if (roleId === "viewer") {
-    return ["appointment_reminders.read"];
-  }
-  if (roleId === "scheduler") {
-    return [
-      "appointment_reminders.read",
-      "appointment_reminders.write",
-      "appointment_reminders.calendar",
-      "appointment_reminders.test",
-    ];
-  }
-  return [...AR_PERMS];
-}
 
 export async function assertAppointmentRemindersPermission(
   workspaceId: string,

@@ -4,6 +4,7 @@ import { getPrisma } from "@/lib/db";
 import { loadAppointmentRemindersPage } from "@/lib/appointment-reminders/load-appointments-page";
 import { loadAppointmentRemindersOperationalPage } from "@/lib/appointment-reminders/load-reminders-operational-page";
 import { isCalendarConnectionUsable } from "@/lib/appointment-reminders/calendar-connection";
+import { loadAppointmentRemindersActivation } from "@/lib/appointment-reminders/activation";
 
 export async function loadAppointmentRemindersOverview(workspaceId: string) {
   const prisma = getPrisma();
@@ -11,6 +12,8 @@ export async function loadAppointmentRemindersOverview(workspaceId: string) {
     where: { workspaceId, provider: { in: ["google", "microsoft"] } },
     select: { id: true, name: true, provider: true, status: true, lastSyncAt: true, config: true },
   });
+
+  const activation = await loadAppointmentRemindersActivation(workspaceId);
 
   const [todayPage, upcomingPage, remindersPage] = await Promise.all([
     loadAppointmentRemindersPage(workspaceId, { date: "today", page: 1, pageSize: 500 }),
@@ -50,7 +53,7 @@ export async function loadAppointmentRemindersOverview(workspaceId: string) {
   }
 
   const operationalStatus =
-    calendarHealthy && hasImportCalendars && syncHealthy && smsSenderReady
+    activation.activatedAt && calendarHealthy && hasImportCalendars && syncHealthy && smsSenderReady
       ? "active"
       : calendarHealthy && hasImportCalendars
         ? "needs_attention"

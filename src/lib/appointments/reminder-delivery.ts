@@ -27,6 +27,8 @@ import type { CoreReminderStepKey } from "@/lib/appointments/reminders/reminders
 import { resolveWeeklyHours } from "@/lib/appointments/availability-engine-policy";
 import { resolveEffectiveReminderPhone } from "@/lib/appointment-reminders/effective-phone";
 import { evaluateSmsReminderEligibility } from "@/lib/appointment-reminders/sms-eligibility";
+import { finalizeReminderSmsBody } from "@/lib/appointment-reminders/message-sanitize";
+import { loadAppointmentRemindersActivation } from "@/lib/appointment-reminders/activation";
 
 async function resolveAppointmentCalendarConnectionId(
   workspaceId: string,
@@ -365,10 +367,11 @@ async function trySendStep(input: {
   );
 
   try {
+    const smsBody = finalizeReminderSmsBody(body);
     await sendInternationalAppointmentSms({
       workspaceId: input.workspaceId,
       to: input.phone,
-      body,
+      body: smsBody,
     });
     const prisma = getPrisma();
     const nextMeta = markReminderSentInMeta(
@@ -395,6 +398,22 @@ async function trySendStep(input: {
 }
 
 /** Scan platform appointments and send configured reminder SMS using workspace settings. */
+async function workspaceRemindersOperational(workspaceId: string): Promise<boolean> {
+  const prisma = getPrisma();
+  const activationRow = await prisma.solutionSetup.findFirst({
+    where: { workspaceId, solutionType: "appointment-reminders-product" },
+    select: { id: true },
+  });
+  const activation = await loadAppointmentRemindersActivation(workspaceId);
+  if (activation.activatedAt) return true;
+  const { evaluateAppointmentRemindersSetupReadiness } = await import(
+    "@/lib/appointment-reminders/activation"
+  );
+  const readiness = await evaluateAppointmentRemindersSetupReadiness(workspaceId);
+  if (!activationRow && readiness.canActivate) return true;
+  return false;
+}
+
 export async function scanPlatformAppointmentReminders() {
   const prisma = getPrisma();
   const now = Date.now();
@@ -411,6 +430,7 @@ export async function scanPlatformAppointmentReminders() {
   });
 
   for (const row of rows) {
+    if (!(await workspaceRemindersOperational(row.workspaceId))) continue;
     const meta = (row.metadata || {}) as AppointmentMetadata;
     if (meta.remindersSuppressed || meta.reminderOverride?.suppressed) continue;
 
@@ -530,6 +550,10 @@ export async function maybeSendImmediateConfirmationForAppointment(
   const meta = (row.metadata || {}) as AppointmentMetadata;
   if (meta.remindersSuppressed || meta.reminderOverride?.suppressed) {
     return { sent: false, skipped: "suppressed" };
+  }
+
+  if (!(await workspaceRemindersOperational(workspaceId))) {
+    return { sent: false, skipped: "not_activated" };
   }
 
   const config = await loadAppointmentPlatformConfig(workspaceId);

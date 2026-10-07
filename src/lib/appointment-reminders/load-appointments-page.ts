@@ -1,6 +1,7 @@
 import "server-only";
 
 import { buildAppointmentsDirectory, type AppointmentDirectoryRow } from "@/lib/appointments/list/appointments-list-workspace";
+import { countAppointments, listAppointments } from "@/lib/appointments/appointments-service";
 import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
 import { getPrisma } from "@/lib/db";
 import type { AppointmentMetadata } from "@/lib/appointments/types";
@@ -153,15 +154,58 @@ export async function loadAppointmentRemindersPage(
 
   const needsInMemoryFilter =
     Boolean(query.reminderStatus && query.reminderStatus !== "all") ||
-    Boolean(query.calendarId && query.calendarId !== "all");
+    Boolean(query.calendarId && query.calendarId !== "all") ||
+    Boolean(query.q?.trim());
 
-  const { rows: directoryRows } = await buildAppointmentsDirectory(workspaceId, {
-    tab: range.tab,
-    from: range.from,
-    to: range.to,
-    q: query.q,
-    take: needsInMemoryFilter ? 5000 : 5000,
-  });
+  let directoryRows: AppointmentDirectoryRow[] = [];
+  let dbPaginatedTotal: number | null = null;
+
+  if (!needsInMemoryFilter) {
+    const tabRange = range.tab === "past" ? { to: range.to ?? now } : { from: range.from ?? (range.tab === "upcoming" ? now : undefined), to: range.to };
+    dbPaginatedTotal = await countAppointments(workspaceId, tabRange);
+    const appts = await listAppointments(workspaceId, {
+      ...tabRange,
+      take: pageSize,
+      skip: (page - 1) * pageSize,
+    });
+    directoryRows = appts
+      .filter((a) => !a.id.startsWith("enroll:"))
+      .map((a) => ({
+        id: a.id,
+        inviteeName: a.inviteeName,
+        inviteePhone: a.inviteePhone,
+        inviteeEmail: a.inviteeEmail,
+        serviceName: a.serviceName,
+        startsAt: a.startsAt,
+        endsAt: a.endsAt,
+        status: a.status,
+        timezone: a.timezone,
+        reminderStatus: a.reminderStatus,
+        contactId: a.contactId,
+        domainType: "service",
+        domainLabel: "Service",
+        staffLabel: "",
+        staffIds: [],
+        locationId: null,
+        locationLabel: null,
+        resourceLabels: [],
+        paymentLabel: null,
+        balanceDueCents: 0,
+        attentionFlags: [],
+        attentionSummary: null,
+        metadata: a.metadata as Record<string, unknown>,
+        contact: a.contact ? { id: a.contact.id } : null,
+      }));
+  } else {
+    const { rows } = await buildAppointmentsDirectory(workspaceId, {
+      tab: range.tab,
+      from: range.from,
+      to: range.to,
+      q: query.q,
+      take: 5000,
+    });
+    directoryRows = rows;
+  }
 
   let mapped = directoryRows
     .filter((r) => !r.id.startsWith("enroll:"))
@@ -203,9 +247,8 @@ export async function loadAppointmentRemindersPage(
     return now.getTime() - lastSent <= SENT_WINDOW_MS;
   }).length;
 
-  const total = mapped.length;
-  const startIdx = (page - 1) * pageSize;
-  const pageRows = mapped.slice(startIdx, startIdx + pageSize);
+  const total = dbPaginatedTotal ?? mapped.length;
+  const pageRows = dbPaginatedTotal != null ? mapped : mapped.slice((page - 1) * pageSize, page * pageSize);
 
   const connected = connections.some((c) => isCalendarConnectionUsable(c.status));
   const lastSyncAt = connections

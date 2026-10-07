@@ -5,10 +5,18 @@ import { isCalendarConnectionUsable } from "@/lib/appointment-reminders/calendar
 import { getPrisma } from "@/lib/db";
 import { syncWorkspaceCalendarConnection } from "@/lib/calendar/import-sync";
 
+const SYNC_COOLDOWN_MS = 30_000;
+const lastManualSync = new Map<string, number>();
+
 export async function POST() {
   try {
     const auth = await requireAppointmentRemindersAccess("appointment_reminders.calendar");
     if ("error" in auth) return auth.error;
+    const last = lastManualSync.get(auth.workspaceId) || 0;
+    if (Date.now() - last < SYNC_COOLDOWN_MS) {
+      return NextResponse.json({ error: "Wait before syncing again." }, { status: 429 });
+    }
+    lastManualSync.set(auth.workspaceId, Date.now());
     const prisma = getPrisma();
     const allConnections = await prisma.voiceCalendarConnection.findMany({
       where: {

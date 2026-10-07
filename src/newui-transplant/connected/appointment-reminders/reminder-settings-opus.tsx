@@ -43,7 +43,7 @@ async function loadPreviews(config: RemindersApiConfig): Promise<ReminderPreview
   const keys = listReminderStepIds(asPlatformConfig(config))
   const entries = await Promise.all(
     keys.map(async (key) => {
-      const res = await fetch(`/api/appointments/reminders/test?step=${encodeURIComponent(key)}`)
+      const res = await fetch(`/api/appointment-reminders/reminders/test?step=${encodeURIComponent(key)}`)
       if (!res.ok) return [key, ''] as const
       const json = await res.json()
       return [key, json.data?.preview || ''] as const
@@ -73,9 +73,10 @@ export function AppointmentRemindersSettingsOpus() {
   const [testStep, setTestStep] = useState<ReminderStepKey>('confirmation')
   const [testing, setTesting] = useState(false)
   const [testError, setTestError] = useState('')
+  const [templateLocked, setTemplateLocked] = useState(false)
 
   const loadWorkspace = useCallback(() => {
-    void fetch('/api/appointments/reminders/workspace')
+    void fetch('/api/appointment-reminders/reminders/workspace')
       .then((r) => r.json())
       .then((json) => {
         const d = json.data
@@ -94,12 +95,13 @@ export function AppointmentRemindersSettingsOpus() {
   const load = useCallback(() => {
     setLoading(true)
     setFailed(false)
-    fetch('/api/appointments/settings')
+    fetch('/api/appointment-reminders/settings')
       .then((r) => {
         if (!r.ok) throw new Error('settings failed')
         return r.json()
       })
       .then(async (json) => {
+        setTemplateLocked(Boolean(json.messaging?.templateEditingLocked))
         const data = json.data
         const nextConfig: RemindersApiConfig = {
           timezone: data.timezone,
@@ -132,7 +134,7 @@ export function AppointmentRemindersSettingsOpus() {
     setSaving(true)
     setSaved(false)
     try {
-      const res = await fetch('/api/appointments/settings', {
+      const res = await fetch('/api/appointment-reminders/settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reminders: config.reminders, timezone: config.timezone }),
@@ -292,7 +294,7 @@ export function AppointmentRemindersSettingsOpus() {
                   setTesting(true)
                   setTestError('')
                   try {
-                    const res = await fetch('/api/appointments/reminders/test', {
+                    const res = await fetch('/api/appointment-reminders/reminders/test', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ stepKey: testStep, phone: testPhone.trim() }),
@@ -341,6 +343,7 @@ export function AppointmentRemindersSettingsOpus() {
           setConfig(patchReminderAdvanced(config, editStep.stepKey, patch))
           setSaved(false)
         }}
+        templateLocked={templateLocked}
       />
     </div>
   )
@@ -353,6 +356,7 @@ function StepEditSheet({
   onReset,
   onRemove,
   onAdvancedChange,
+  templateLocked,
 }: {
   step: ReminderItem | null
   onClose: () => void
@@ -360,6 +364,7 @@ function StepEditSheet({
   onReset: () => void
   onRemove?: () => void
   onAdvancedChange: (patch: Record<string, unknown>) => void
+  templateLocked?: boolean
 }) {
   return (
     <Sheet open={Boolean(step)} onOpenChange={(v) => !v && onClose()}>
@@ -380,15 +385,24 @@ function StepEditSheet({
               </label>
               <p className="text-xs text-muted-foreground rounded-lg border bg-muted/30 px-3 py-2">
                 Channel: <span className="font-medium text-foreground">SMS</span> (Appointment Reminders)
+                {templateLocked ? (
+                  <span className="mt-1 block text-amber-700 dark:text-amber-300">
+                    Platform sender — message text uses approved templates. You can change timing and on/off.
+                  </span>
+                ) : null}
               </p>
               <div>
                 <div className="mb-1.5 flex items-center justify-between">
                   <span className="text-sm font-medium">Message</span>
-                  <Button type="button" variant="ghost" size="sm" onClick={onReset}>Reset default</Button>
+                  {!templateLocked ? (
+                    <Button type="button" variant="ghost" size="sm" onClick={onReset}>Reset default</Button>
+                  ) : null}
                 </div>
                 <Textarea
                   className="min-h-[160px] font-mono text-sm leading-relaxed"
                   value={step.template}
+                  readOnly={templateLocked}
+                  disabled={templateLocked}
                   onChange={(e) => onTemplateChange(e.target.value)}
                 />
                 <p className="mt-1.5 text-xs text-muted-foreground">
@@ -400,14 +414,25 @@ function StepEditSheet({
                   Insert variable
                 </p>
                 <div className="flex flex-wrap gap-1.5">
-                  {REMINDER_MERGE_TAGS.map((tag) => (
+                  {(templateLocked
+                    ? REMINDER_MERGE_TAGS.filter(
+                        (t) =>
+                          !t.includes('manage_link') &&
+                          !t.includes('reschedule_link') &&
+                          !t.includes('cancel_link') &&
+                          !t.includes('confirm_link'),
+                      )
+                    : REMINDER_MERGE_TAGS
+                  ).map((tag) => (
                     <Button
                       key={tag}
                       type="button"
                       variant="outline"
                       size="sm"
                       className="h-8 text-[11px]"
+                      disabled={templateLocked}
                       onClick={() =>
+                        !templateLocked &&
                         onTemplateChange(`${step.template}${step.template.endsWith(' ') ? '' : ' '}${tag}`)
                       }
                     >

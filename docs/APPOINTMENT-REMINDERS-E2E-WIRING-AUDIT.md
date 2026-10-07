@@ -206,3 +206,30 @@ Connect **Microsoft** → select import calendars → sync → see appointments 
 5. Test SMS from Reminder Settings  
 6. Wait for or force a 24h/2h window → verify timeline + Reminders log + real delivery  
 7. Repeat with drawer phone override after fixing delivery to honor `reminderOverride.phone`
+
+---
+
+## Update — 2026-10-07 (branch `cursor/appointment-reminders-e2e-complete-f350`)
+
+**Baseline commit:** `5ce061c0` (premium New UI 2 on master). This pass wires runtime/auth gaps without UI redesign.
+
+| Area | Prior | After this pass | Evidence |
+|------|-------|-----------------|----------|
+| AR API auth | Session only | Entitlement + `appointment_reminders.*` permissions (`api-auth.ts`, all `/api/appointment-reminders/*`) | Code + unit tests pending for 403 matrix |
+| Drawer detail/timeline | `appointments.read` | `GET /api/appointment-reminders/appointments/:id` (+ timeline) | Drawer fetches AR routes |
+| Phone PATCH | `appointments.write` | `appointment_reminders.write` | `reminder-contact/route.ts` |
+| SMS eligibility | UI vs scan mismatch | Shared `evaluateSmsReminderEligibility()` in UI loaders + `scanPlatformAppointmentReminders` | `sms-eligibility.test.ts` |
+| Effective phone at send | Override ignored | `resolveEffectiveReminderPhone()` in delivery scan | `reminder-delivery.ts` |
+| Confirmation on import | Not hooked | `maybeSendImmediateConfirmationForAppointment()` after future imports only | `import-sync.ts` |
+| Overview status pill | OAuth only | `readiness.operationalStatus` (import calendars + sync + SMS sender) | `load-ar-overview.ts`, overview page |
+| `?open=appointmentId` | Not hooked | Appointments page opens drawer via query | `appointments-page.tsx` |
+| Scale | 500 / 200 caps | 5000 appointment directory window; 1500 reminders scan (still in-memory) | **Partial** — not full DB pagination |
+| Setup activate | Static | **Unchanged** | Still needs persisted activation API |
+| Platform template lock | Not hooked | **Unchanged** | API enforcement still required |
+| Billing / usage limits | Not audited | **Unchanged** | Trace `MASS_TEXTING` / AR SKU separately |
+| Google OAuth | Env-dependent | **Unchanged** | Requires `GOOGLE_CALENDAR_CLIENT_ID` / `SECRET` |
+| Launch certified SMS | N/A | **Not claimed** | Needs live scheduler + authorized send |
+
+**Remaining for code-complete:** AR settings/test APIs with AR permissions; platform-sender template enforcement; setup activation persistence; DB-level pagination; billing metering; broader automated test suite; regression on shared Appointments/Voice paths.
+
+**Remaining for launch-certified:** Production job scheduler, real Google/Microsoft sync, approved sender + live SMS evidence, usage limit enforcement.
