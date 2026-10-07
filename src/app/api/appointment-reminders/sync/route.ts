@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
-import { jsonError, requireSession } from "@/lib/api-auth";
+import { jsonError } from "@/lib/api-auth";
+import { requireAppointmentRemindersAccess } from "@/lib/appointment-reminders/api-auth";
 import { isCalendarConnectionUsable } from "@/lib/appointment-reminders/calendar-connection";
 import { getPrisma } from "@/lib/db";
 import { syncWorkspaceCalendarConnection } from "@/lib/calendar/import-sync";
 
 export async function POST() {
   try {
-    const auth = await requireSession();
+    const auth = await requireAppointmentRemindersAccess("appointment_reminders.calendar");
     if ("error" in auth) return auth.error;
     const prisma = getPrisma();
     const allConnections = await prisma.voiceCalendarConnection.findMany({

@@ -25,6 +25,8 @@ import {
 } from "@/lib/appointments/reminder-engine";
 import type { CoreReminderStepKey } from "@/lib/appointments/reminders/reminders-config";
 import { resolveWeeklyHours } from "@/lib/appointments/availability-engine-policy";
+import { resolveEffectiveReminderPhone } from "@/lib/appointment-reminders/effective-phone";
+import { evaluateSmsReminderEligibility } from "@/lib/appointment-reminders/sms-eligibility";
 
 async function resolveAppointmentCalendarConnectionId(
   workspaceId: string,
@@ -116,7 +118,7 @@ function configuredReminderSteps(config: Awaited<ReturnType<typeof loadAppointme
 }
 
 function inviteePhone(meta: AppointmentMetadata, contactPhone?: string | null): string | null {
-  return meta.inviteePhone || contactPhone || null;
+  return resolveEffectiveReminderPhone(meta, meta.inviteePhone, contactPhone);
 }
 
 function inviteeEmail(meta: AppointmentMetadata, contactEmail?: string | null): string | null {
@@ -411,7 +413,6 @@ export async function scanPlatformAppointmentReminders() {
   for (const row of rows) {
     const meta = (row.metadata || {}) as AppointmentMetadata;
     if (meta.remindersSuppressed || meta.reminderOverride?.suppressed) continue;
-    if (meta.smsConsent === false) continue;
 
     const { shouldSkipPlatformRemindersForAppointment } = await import(
       "@/lib/appointment-workflows/platform-guard"
@@ -474,6 +475,13 @@ export async function scanPlatformAppointmentReminders() {
         : null;
       const phone = inviteePhone(meta, contact?.phone);
       const email = inviteeEmail(meta, contact?.email);
+      const smsEligibility = evaluateSmsReminderEligibility({
+        metadata: meta,
+        inviteePhone: meta.inviteePhone,
+        contactPhone: contact?.phone,
+        appointmentStatus: row.status,
+      });
+      if (scheduled.step.channel === "sms" && !smsEligibility.eligible) continue;
       if (!phone && !email) continue;
 
       const ok = await trySendStep({
@@ -497,6 +505,89 @@ export async function scanPlatformAppointmentReminders() {
   }
 
   return { ok: true, sent };
+}
+
+/** Send immediate confirmation once for a newly eligible future appointment (calendar import / webhook). */
+export async function maybeSendImmediateConfirmationForAppointment(
+  workspaceId: string,
+  appointmentId: string,
+  opts?: { minStartsAtMs?: number },
+): Promise<{ sent: boolean; skipped?: string }> {
+  const prisma = getPrisma();
+  const row = await prisma.voiceAppointment.findFirst({
+    where: { id: appointmentId, workspaceId },
+  });
+  if (!row) return { sent: false, skipped: "not_found" };
+
+  const minStart = opts?.minStartsAtMs ?? Date.now();
+  if (row.startsAt.getTime() < minStart) {
+    return { sent: false, skipped: "historical_or_past_start" };
+  }
+  if (row.startsAt.getTime() <= Date.now()) {
+    return { sent: false, skipped: "appointment_already_started" };
+  }
+
+  const meta = (row.metadata || {}) as AppointmentMetadata;
+  if (meta.remindersSuppressed || meta.reminderOverride?.suppressed) {
+    return { sent: false, skipped: "suppressed" };
+  }
+
+  const config = await loadAppointmentPlatformConfig(workspaceId);
+  const confirmation = configuredReminderSteps(config).find((s) => s.immediate);
+  if (!confirmation || !confirmation.step.enabled) {
+    return { sent: false, skipped: "confirmation_disabled" };
+  }
+  if (wasReminderSent(meta, confirmation.timelineType)) {
+    return { sent: false, skipped: "already_sent" };
+  }
+
+  const contact = row.contactId
+    ? await prisma.contact.findFirst({
+        where: { id: row.contactId, workspaceId },
+        select: { phone: true, email: true },
+      })
+    : null;
+
+  const smsEligibility = evaluateSmsReminderEligibility({
+    metadata: meta,
+    inviteePhone: meta.inviteePhone,
+    contactPhone: contact?.phone,
+    appointmentStatus: row.status,
+  });
+  if (confirmation.step.channel === "sms" && !smsEligibility.eligible) {
+    return { sent: false, skipped: smsEligibility.blockReason };
+  }
+
+  const workspace = await prisma.workspace.findUnique({
+    where: { id: workspaceId },
+    select: { displayName: true, name: true },
+  });
+  const phone = inviteePhone(meta, contact?.phone);
+  const email = inviteeEmail(meta, contact?.email);
+  if (confirmation.step.channel === "sms" && !phone) {
+    return { sent: false, skipped: "missing_phone" };
+  }
+  if (confirmation.step.channel === "email" && !email) {
+    return { sent: false, skipped: "missing_email" };
+  }
+
+  const ok = await trySendStep({
+    workspaceId,
+    appointmentId: row.id,
+    startsAt: row.startsAt,
+    serviceName: row.serviceName,
+    timezone: row.timezone || config.timezone,
+    step: confirmation.step,
+    timelineType: confirmation.timelineType,
+    metadata: meta,
+    phone: phone || "",
+    email,
+    businessName: workspace?.displayName || workspace?.name || "our team",
+    confirmToken: meta.confirmToken,
+    cancelToken: meta.cancelToken,
+    rescheduleToken: meta.rescheduleToken,
+  });
+  return { sent: ok };
 }
 
 export function previewReminderMessage(input: {

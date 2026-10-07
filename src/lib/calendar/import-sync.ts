@@ -255,7 +255,7 @@ export async function processCalendarProviderEvent(input: {
   const contact = await resolveContactForImportedEvent(workspaceId, event, config.email);
   const externalId = formatImportedExternalId(provider, connectionId, event.id);
 
-  await upsertWorkspaceAppointmentByExternalId({
+  const saved = await upsertWorkspaceAppointmentByExternalId({
     workspaceId,
     externalId,
     create: {
@@ -279,6 +279,17 @@ export async function processCalendarProviderEvent(input: {
       metadata: buildImportMetadata(event, provider, connectionId, contact, input.calendarId) as Record<string, unknown>,
     },
   });
+
+  if (event.start.getTime() > Date.now()) {
+    try {
+      const { maybeSendImmediateConfirmationForAppointment } = await import(
+        "@/lib/appointments/reminder-delivery"
+      );
+      await maybeSendImmediateConfirmationForAppointment(workspaceId, saved.id);
+    } catch (err) {
+      console.warn("[calendar] immediate confirmation after import failed", saved.id, err);
+    }
+  }
 
   return { result: "imported" };
 }

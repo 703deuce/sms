@@ -52,6 +52,13 @@ type CalendarRow = {
   importCalendarCount?: number
 }
 
+type OverviewReadiness = {
+  hasImportCalendars?: boolean
+  syncHealthy?: boolean
+  smsSenderReady?: boolean
+  operationalStatus?: 'active' | 'needs_attention' | 'setup_incomplete'
+}
+
 function calendarStatusTone(status: string): Tone {
   const s = String(status || '').toLowerCase()
   if (s === 'connected' || s === 'active' || s === 'verified' || s === 'ok') return 'success'
@@ -77,6 +84,7 @@ export function AppointmentRemindersOverviewPage() {
   >([])
   const [error, setError] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [readiness, setReadiness] = useState<OverviewReadiness | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -90,6 +98,7 @@ export function AppointmentRemindersOverviewPage() {
       setStats(data?.stats ?? null)
       setActivity(data?.activity ?? [])
       setCalendars(data?.calendars ?? [])
+      setReadiness(data?.readiness ?? null)
     } catch {
       setError(true)
     } finally {
@@ -108,8 +117,19 @@ export function AppointmentRemindersOverviewPage() {
       return s === 'connected' || s === 'active' || s === 'verified' || s === 'ok'
     })
 
-  const activeLabel = calendarHealthy ? 'Active' : calendars.length ? 'Needs attention' : 'Setup incomplete'
-  const activeTone: Tone = calendarHealthy ? 'success' : calendars.length ? 'warning' : 'neutral'
+  const operational = readiness?.operationalStatus
+  const activeLabel =
+    operational === 'active'
+      ? 'Active'
+      : operational === 'needs_attention'
+        ? 'Needs attention'
+        : calendarHealthy && readiness?.hasImportCalendars
+          ? 'Needs attention'
+          : calendars.length
+            ? 'Needs attention'
+            : 'Setup incomplete'
+  const activeTone: Tone =
+    operational === 'active' ? 'success' : operational === 'setup_incomplete' ? 'neutral' : 'warning'
 
   return (
     <Page className="max-w-[1440px]">

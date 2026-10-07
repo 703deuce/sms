@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-import { jsonError, requireSession } from "@/lib/api-auth";
+import { jsonError } from "@/lib/api-auth";
+import { requireAppointmentRemindersAccess } from "@/lib/appointment-reminders/api-auth";
 import { loadAppointmentRemindersPage } from "@/lib/appointment-reminders/load-appointments-page";
 
 export async function GET(request: Request) {
   try {
-    const auth = await requireSession();
+    const auth = await requireAppointmentRemindersAccess("appointment_reminders.read");
     if ("error" in auth) return auth.error;
     const { searchParams } = new URL(request.url);
     const data = await loadAppointmentRemindersPage(auth.workspaceId, {

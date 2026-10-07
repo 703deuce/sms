@@ -82,6 +82,28 @@ export function mapAppointmentRow(
   };
 }
 
+export async function countAppointments(
+  workspaceId: string,
+  input?: {
+    from?: Date;
+    to?: Date;
+    status?: string;
+  },
+) {
+  const prisma = getPrisma();
+  const where: Record<string, unknown> = { workspaceId };
+  if (input?.from || input?.to) {
+    where.startsAt = {
+      ...(input.from ? { gte: input.from } : {}),
+      ...(input.to ? { lte: input.to } : {}),
+    };
+  }
+  if (input?.status && input.status !== "all") {
+    where.status = input.status === "canceled" ? { in: ["canceled", "cancelled"] } : input.status;
+  }
+  return prisma.voiceAppointment.count({ where });
+}
+
 export async function listAppointments(
   workspaceId: string,
   input?: {
@@ -90,6 +112,7 @@ export async function listAppointments(
     status?: string;
     q?: string;
     take?: number;
+    skip?: number;
   },
 ) {
   const prisma = getPrisma();
@@ -108,6 +131,7 @@ export async function listAppointments(
     where,
     orderBy: { startsAt: input?.from ? "asc" : "desc" },
     take: input?.take || 200,
+    skip: input?.skip || 0,
   });
 
   const contactIds = [...new Set(rows.map((r: DbRow) => r.contactId).filter(Boolean))] as string[];

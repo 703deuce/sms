@@ -149,6 +149,49 @@ export function AppointmentRemindersAppointmentsPage() {
     void load()
   }, [load])
 
+  const openAppointmentId = searchParams.get('open')
+
+  useEffect(() => {
+    if (!openAppointmentId || !data?.rows?.length || loading) return
+    const match = data.rows.find((r) => r.id === openAppointmentId)
+    if (match) {
+      setSelected(match)
+      setDrawerOpen(true)
+      return
+    }
+    void (async () => {
+      try {
+        const res = await fetch(`/api/appointment-reminders/appointments/${openAppointmentId}`)
+        if (!res.ok) return
+        const json = await res.json()
+        const appt = json.data
+        if (!appt?.id) return
+        const stub: ArAppointmentRow = {
+          id: appt.id,
+          customerName: appt.inviteeName || 'Customer',
+          appointmentTitle: appt.serviceName || 'Appointment',
+          startsAt: appt.startsAt,
+          endsAt: appt.endsAt,
+          timezone: appt.timezone,
+          isAllDay: false,
+          phone: null,
+          phoneState: 'missing',
+          contactEmail: appt.inviteeEmail,
+          reminder: { status: 'scheduled', label: 'Scheduled', secondaryLine: '' },
+          sourceProvider: null,
+          sourceCalendarLabel: null,
+          connectionId: null,
+          status: appt.status,
+          sourceEventUrl: null,
+        }
+        setSelected(stub)
+        setDrawerOpen(true)
+      } catch {
+        /* ignore */
+      }
+    })()
+  }, [openAppointmentId, data?.rows, loading])
+
   const syncNow = async () => {
     if (!data?.sync.connected) return
     setSyncing(true)

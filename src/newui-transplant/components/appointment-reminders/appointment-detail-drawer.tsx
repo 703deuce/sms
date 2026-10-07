@@ -52,8 +52,8 @@ export function AppointmentDetailDrawer({
     setLoading(true)
     try {
       const [apptRes, tlRes] = await Promise.all([
-        fetch(`/api/appointments/${row.id}`),
-        fetch(`/api/appointments/${row.id}/reminder-timeline`),
+        fetch(`/api/appointment-reminders/appointments/${row.id}`),
+        fetch(`/api/appointment-reminders/appointments/${row.id}/reminder-timeline`),
       ])
       const apptJson = apptRes.ok ? await apptRes.json() : null
       const tlJson = tlRes.ok ? await tlRes.json() : null

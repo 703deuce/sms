@@ -9,10 +9,11 @@ import {
 import { listEnabledReminderSteps } from "@/lib/appointments/reminders/reminders-config";
 import { resolveWeeklyHours } from "@/lib/appointments/availability-engine-policy";
 import type { AppointmentMetadata } from "@/lib/appointments/types";
+import { resolveReminderContactPhone } from "@/lib/appointment-reminders/aggregate-reminder-status";
 import {
-  isValidReminderPhone,
-  resolveReminderContactPhone,
-} from "@/lib/appointment-reminders/aggregate-reminder-status";
+  eligibilityToBlockDetail,
+  evaluateSmsReminderEligibility,
+} from "@/lib/appointment-reminders/sms-eligibility";
 import type {
   ArReminderOperationalRow,
   ArRemindersPagePayload,
@@ -34,27 +35,17 @@ export type ArRemindersQuery = {
   pageSize?: number;
 };
 
-function consentBlocks(meta: AppointmentMetadata): boolean {
-  return Boolean(meta.emailOnly || meta.smsCapable === false);
-}
-
 function blockReason(
   meta: AppointmentMetadata,
   phone: string | null,
+  appointmentStatus: string,
 ): { blocked: boolean; detail: string; hint: string } | null {
-  if (meta.remindersSuppressed) {
-    return { blocked: true, detail: "Reminders suppressed for this appointment", hint: "Open appointment in Appointments" };
-  }
-  if (!phone?.trim()) {
-    return { blocked: true, detail: "Phone number required", hint: "Add phone on Appointments page" };
-  }
-  if (!isValidReminderPhone(phone)) {
-    return { blocked: true, detail: "Invalid phone number", hint: "Correct phone on Appointments page" };
-  }
-  if (consentBlocks(meta)) {
-    return { blocked: true, detail: "SMS consent required", hint: "Complete consent workflow in Reminder settings" };
-  }
-  return null;
+  const eligibility = evaluateSmsReminderEligibility({
+    metadata: meta,
+    inviteePhone: (meta.inviteePhone as string) || null,
+    appointmentStatus,
+  });
+  return eligibilityToBlockDetail(eligibility);
 }
 
 
@@ -83,7 +74,7 @@ export async function loadAppointmentRemindersOperationalPage(
   const appointments = await prisma.voiceAppointment.findMany({
     where: { workspaceId },
     orderBy: { startsAt: "desc" },
-    take: 200,
+    take: 1500,
     select: {
       id: true,
       serviceName: true,
@@ -101,7 +92,7 @@ export async function loadAppointmentRemindersOperationalPage(
     const customerLabel = (meta.inviteeName as string) || "Customer";
     const appointmentLabel = row.serviceName || "Appointment";
     const phone = resolveReminderContactPhone(meta, (meta.inviteePhone as string) || null);
-    const block = blockReason(meta, phone);
+    const block = blockReason(meta, phone, row.status);
     const inactive = ["canceled", "cancelled", "completed", "no_show"].includes(
       row.status.toLowerCase(),
     );

@@ -49,6 +49,7 @@ export type AppointmentsListFilters = {
   attention?: boolean;
   take?: number;
   skip?: number;
+  skip?: number;
 };
 
 function inferDomain(
@@ -158,6 +159,7 @@ export async function buildAppointmentsDirectory(workspaceId: string, filters: A
       status: filters.status && filters.status !== "all" ? filters.status : undefined,
       q: filters.q,
       take: filters.take ?? 200,
+      skip: filters.skip ?? 0,
     }),
   ]);
 

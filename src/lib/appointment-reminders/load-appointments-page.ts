@@ -151,12 +151,16 @@ export async function loadAppointmentRemindersPage(
     ]),
   );
 
+  const needsInMemoryFilter =
+    Boolean(query.reminderStatus && query.reminderStatus !== "all") ||
+    Boolean(query.calendarId && query.calendarId !== "all");
+
   const { rows: directoryRows } = await buildAppointmentsDirectory(workspaceId, {
     tab: range.tab,
     from: range.from,
     to: range.to,
     q: query.q,
-    take: 500,
+    take: needsInMemoryFilter ? 5000 : 5000,
   });
 
   let mapped = directoryRows

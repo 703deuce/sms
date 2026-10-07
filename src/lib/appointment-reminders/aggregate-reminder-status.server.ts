@@ -11,13 +11,7 @@ import {
   resolveReminderContactPhone,
   type AggregateReminderView,
 } from "@/lib/appointment-reminders/aggregate-reminder-status";
-
-function consentBlocksSms(meta: AppointmentMetadata): boolean {
-  if (meta.remindersSuppressed) return false;
-  if (meta.emailOnly) return true;
-  if (meta.smsCapable === false) return true;
-  return false;
-}
+import { evaluateSmsReminderEligibility } from "@/lib/appointment-reminders/sms-eligibility";
 
 function formatWhen(iso?: string | null): string {
   if (!iso) return "";
@@ -64,29 +58,34 @@ export function computeAggregateReminderView(input: {
   }
 
   const phone = resolveReminderContactPhone(meta, input.inviteePhone);
-  if (!phone?.trim()) {
+  const eligibility = evaluateSmsReminderEligibility({
+    metadata: meta,
+    inviteePhone: input.inviteePhone,
+    appointmentStatus: input.status,
+  });
+  if (!eligibility.eligible) {
+    const reasonMap: Record<string, AggregateReminderView["attentionReason"]> = {
+      missing_phone: "missing_phone",
+      invalid_phone: "invalid_phone",
+      consent_required: "consent",
+      opted_out: "consent",
+      suppressed: undefined,
+      sender_unavailable: "delivery_failed",
+      none: undefined,
+    };
+    return {
+      status: "needs_attention",
+      label: "Needs attention",
+      secondaryLine: eligibility.detail || "Cannot send SMS",
+      attentionReason: reasonMap[eligibility.blockReason],
+    };
+  }
+  if (!phone?.trim() || !isValidReminderPhone(phone)) {
     return {
       status: "needs_attention",
       label: "Needs attention",
       secondaryLine: "Phone number required",
       attentionReason: "missing_phone",
-    };
-  }
-  if (!isValidReminderPhone(phone)) {
-    return {
-      status: "needs_attention",
-      label: "Needs attention",
-      secondaryLine: "Invalid phone",
-      attentionReason: "invalid_phone",
-    };
-  }
-
-  if (consentBlocksSms(meta)) {
-    return {
-      status: "needs_attention",
-      label: "Needs attention",
-      secondaryLine: "Consent required",
-      attentionReason: "consent",
     };
   }
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { jsonError } from "@/lib/api-auth";
-import { requireAppointmentsAccess } from "@/lib/api-appointments-auth";
+import { requireAppointmentRemindersAccess } from "@/lib/appointment-reminders/api-auth";
 import { getAppointment } from "@/lib/appointments";
 import { getPrisma } from "@/lib/db";
 import type { AppointmentMetadata } from "@/lib/appointments/types";
@@ -22,7 +22,7 @@ function normalizeToE164(raw: string): string | null {
 
 export async function PATCH(request: Request, { params }: Params) {
   try {
-    const auth = await requireAppointmentsAccess("appointments.write");
+    const auth = await requireAppointmentRemindersAccess("appointment_reminders.write");
     if ("error" in auth) return auth.error;
     const { id } = await params;
     const body = (await request.json()) as { phone?: string };

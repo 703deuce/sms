@@ -34,6 +34,28 @@ export async function loadAppointmentRemindersOverview(workspaceId: string) {
   const calendarHealthy =
     calendars.length > 0 && calendars.every((c) => isCalendarConnectionUsable(c.status));
 
+  const hasImportCalendars = calendars.some((c) => (c.importCalendarCount ?? 0) > 0);
+  const syncHealthy = Boolean(todayPage.sync.connected) && !todayPage.sync.syncError;
+
+  let smsSenderReady = false;
+  try {
+    const { getMerchantPaymentStatus } = await import("@/lib/merchant-payments/service");
+    const merchantStatus = await getMerchantPaymentStatus(workspaceId);
+    smsSenderReady = Boolean(
+      merchantStatus &&
+        (merchantStatus as { sms?: { ready?: boolean } }).sms?.ready !== false,
+    );
+  } catch {
+    smsSenderReady = false;
+  }
+
+  const operationalStatus =
+    calendarHealthy && hasImportCalendars && syncHealthy && smsSenderReady
+      ? "active"
+      : calendarHealthy && hasImportCalendars
+        ? "needs_attention"
+        : "setup_incomplete";
+
   return {
     counts: {
       todayTotal: todayPage.total,
@@ -46,6 +68,12 @@ export async function loadAppointmentRemindersOverview(workspaceId: string) {
     },
     calendars,
     calendarHealthy,
+    readiness: {
+      hasImportCalendars,
+      syncHealthy,
+      smsSenderReady,
+      operationalStatus,
+    },
     sync: todayPage.sync,
     activity: remindersPage.rows.slice(0, 6).map((r) => ({
       id: r.id,
