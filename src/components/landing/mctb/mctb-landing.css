@@ -296,9 +296,39 @@
   color: #e2e8f0;
 }
 
-.mctb-after-hours h2,
-.mctb-after-hours p {
-  color: inherit;
+/* Beat `.landing .lp-section h2 { color: var(--lp-navy) }` on the dark panel */
+.mctb-landing .lp-section .mctb-after-hours .mctb-after-hours-copy h2 {
+  color: #f8fafc;
+}
+
+.mctb-landing .lp-section .mctb-after-hours .mctb-after-hours-copy .lp-eyebrow {
+  color: #c7d2fe;
+}
+
+.mctb-landing .lp-section .mctb-after-hours .mctb-after-hours-copy > p {
+  color: #e2e8f0;
+}
+
+/* Phone mock sits on white — reset inherited light text from the dark panel */
+.mctb-after-hours .mctb-phone-mock {
+  color: #0f172a;
+}
+
+.mctb-after-hours .mctb-phone-mock .mctb-mock-label {
+  color: #64748b;
+}
+
+.mctb-after-hours .mctb-phone-mock .mctb-bubble.business p {
+  margin: 0;
+  color: #1e293b;
+}
+
+.mctb-after-hours .mctb-phone-mock .mctb-bubble-kicker {
+  color: #475569;
+}
+
+.mctb-after-hours .mctb-phone-mock .mctb-chip {
+  color: #4338ca;
 }
 
 .mctb-inbox-mock {

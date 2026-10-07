@@ -426,10 +426,10 @@ export function MctbLandingPage() {
 
         <section className="lp-section lp-section-alt">
           <div className="lp-container mctb-after-hours mctb-split mctb-split-60-40">
-            <div>
-              <p className="lp-eyebrow" style={{ color: "#a5b4fc" }}>After hours</p>
+            <div className="mctb-after-hours-copy">
+              <p className="lp-eyebrow">After hours</p>
               <h2>Closed for the day. Still capture the intent.</h2>
-              <p style={{ color: "#cbd5e1" }}>
+              <p>
                 Night and weekend callers get your voicemail plus a recovery path when configured — so Monday
                 starts with names and needs, not mystery hang-ups.
               </p>
