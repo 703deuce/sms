@@ -248,16 +248,16 @@ export async function authenticate(baseUrl: string): Promise<{
     process.env.DEV_AUTH_BYPASS?.trim()?.toLowerCase() === "true";
 
   if (useDevBypass) {
-    const email = process.env.DEV_AUTH_BYPASS_EMAIL || BROWSER_CERT_CONFIG.certEmail;
-    const bypass = await api.get(
-      `/api/auth/dev-bypass?next=/appointments/overview&email=${encodeURIComponent(email)}`,
-      { maxRedirects: 0 },
-    );
+    const emailHint = process.env.DEV_AUTH_BYPASS_EMAIL?.trim();
+    const bypassPath = emailHint
+      ? `/api/auth/dev-bypass?next=/appointments/overview&email=${encodeURIComponent(emailHint)}`
+      : "/api/auth/dev-bypass?next=/appointments/overview";
+    const bypass = await api.get(bypassPath, { maxRedirects: 0 });
     const ok = bypass.ok() || [302, 307, 308].includes(bypass.status());
     if (ok) {
       const storageState = await api.storageState();
       await api.dispose();
-      return { ok: true, storageState, email };
+      return { ok: true, storageState, email: emailHint || BROWSER_CERT_CONFIG.certEmail };
     }
   }
 

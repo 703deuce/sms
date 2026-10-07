@@ -21,7 +21,18 @@ const ROUTES = [
 ];
 
 async function main() {
-  if (!process.env.CERT_BROWSER_PASSWORD?.trim() && !process.env.UI_AGENT_SMOKE_PASSWORD?.trim()) {
+  if (process.env.AR_SCREENSHOT_DEV_BYPASS?.trim() === "1") {
+    process.env.DEV_AUTH_BYPASS = "1";
+    delete process.env.DEV_AUTH_BYPASS_EMAIL;
+  }
+  const useBypass =
+    process.env.DEV_AUTH_BYPASS?.trim() === "1" ||
+    process.env.DEV_AUTH_BYPASS?.trim()?.toLowerCase() === "true";
+  if (
+    !useBypass &&
+    !process.env.CERT_BROWSER_PASSWORD?.trim() &&
+    !process.env.UI_AGENT_SMOKE_PASSWORD?.trim()
+  ) {
     process.env.CERT_BROWSER_PASSWORD = "ApptMctbBrowserCert_v1!";
     console.warn("Using default cert browser password — set CERT_BROWSER_PASSWORD for other accounts.");
   }
