@@ -1,6 +1,6 @@
 # Appointment Reminders — what controls the public booking page?
 
-Use this with `docs/AR-BOOKING-OPUS-E2E-STATUS.md`.
+Use this with `docs/AR-BOOKING-OPUS-E2E-STATUS.md` and **`docs/AR-BOOKING-HOW-IT-IS-BUILT.md`** (create types before the public list shows anything).
 
 ---
 
@@ -82,8 +82,8 @@ Use this with `docs/AR-BOOKING-OPUS-E2E-STATUS.md`.
 
 1. **Keep** all existing booking/commerce APIs and type config — do not rip out packages/payments.
 2. **AR Booking** = customer-facing **page** settings + simple profile (what you have).
-3. **Add links** on AR Booking (not new products): “Manage bookable services” → `/appointments/types` (filter meeting/service), optional “Advanced booking” → `/appointments/booking` for power users.
-4. **Optional one AR page later:** “Bookable services” — single table + drawer (name, duration, price, on/off) writing the same APIs — avoids 4–5 pages.
+3. **Links on AR Booking** (implemented): panel “What this page does not change” → Appointment types, Availability, Pricing & payments, Booking pages (advanced).
+4. **Optional one AR page later:** “Bookable services” — single table + drawer (name, duration, price, on/off) writing the same APIs — only if you want types editable without leaving AR.
 
 ---
 

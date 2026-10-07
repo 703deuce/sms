@@ -56,6 +56,11 @@ export function AppointmentRemindersBookingOpus() {
   const [copied, setCopied] = useState(false)
   const [primaryColor, setPrimaryColor] = useState('#6366f1')
   const [logoUrl, setLogoUrl] = useState('')
+  const [newTypeName, setNewTypeName] = useState('')
+  const [newTypeDuration, setNewTypeDuration] = useState(30)
+  const [newTypeKind, setNewTypeKind] = useState<'MEETING' | 'SERVICE'>('SERVICE')
+  const [creatingType, setCreatingType] = useState(false)
+  const [createTypeError, setCreateTypeError] = useState('')
 
   const load = useCallback(() => {
     setLoading(true)
@@ -115,6 +120,61 @@ export function AppointmentRemindersBookingOpus() {
     }
   }, [])
 
+  const createBookableType = useCallback(async () => {
+    const name = newTypeName.trim()
+    if (!name) {
+      setCreateTypeError('Enter a name for this service or meeting.')
+      return
+    }
+    setCreatingType(true)
+    setCreateTypeError('')
+    try {
+      const res = await fetch('/api/appointment-reminders/booking/types', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          durationMinutes: newTypeDuration,
+          bookingTypeKind: newTypeKind,
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setCreateTypeError(typeof json.error === 'string' ? json.error : 'Could not create bookable type.')
+        return
+      }
+      const apiTypes = (json.data?.types || []) as BookingTypeApiRow[]
+      setTypes(apiTypes)
+      setNewTypeName('')
+      if (settings) {
+        setDraft(
+          buildBookingPageModel({
+            settings,
+            types: apiTypes,
+            workspaceSlug,
+            workspaceName,
+            origin: typeof window !== 'undefined' ? window.location.origin : undefined,
+          }),
+        )
+      }
+      if (!draft?.bookingEnabled && workspaceSlug) {
+        await savePatch({ bookingEnabled: true, publicBookingProfile: 'simple' })
+        setDraft((d) => (d ? { ...d, bookingEnabled: true } : d))
+      }
+    } finally {
+      setCreatingType(false)
+    }
+  }, [
+    newTypeName,
+    newTypeDuration,
+    newTypeKind,
+    settings,
+    workspaceSlug,
+    workspaceName,
+    draft?.bookingEnabled,
+    savePatch,
+  ])
+
   const protectionOptions = useMemo(
     () => draft?.protectionOptions ?? [],
     [draft?.protectionOptions],
@@ -139,8 +199,111 @@ export function AppointmentRemindersBookingOpus() {
         icon={Globe}
         title="Simple online booking"
         badge={<Pill tone="neutral" dot={false}>Meetings & services only</Pill>}
-        description="Share one link so customers book and pay on your public page. Class schedules, memberships, and packages stay in the full Appointments product — not here."
+        description="Share one link so customers book and pay on your public page. The booking page only shows appointment types you create below (or in Appointment types)."
       />
+
+      <Panel
+        title="How booking gets on your link"
+        description="Customers see nothing until these pieces exist. Branding on this page does not create services."
+      >
+        <ol className="list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
+          <li>
+            <span className="text-foreground">Business URL slug</span> — required for{' '}
+            <code className="text-xs">/book/your-slug</code>{' '}
+            {hasSlug ? (
+              <Pill tone="success" dot={false} className="ml-1 inline-flex">Done</Pill>
+            ) : (
+              <Link href="/settings/business" className="font-medium text-primary underline-offset-2 hover:underline">
+                Set in Business settings
+              </Link>
+            )}
+          </li>
+          <li>
+            <span className="text-foreground">At least one bookable type</span> — a meeting or service (name +
+            duration){' '}
+            {draft.appointmentTypes.length > 0 ? (
+              <Pill tone="success" dot={false} className="ml-1 inline-flex">Done</Pill>
+            ) : (
+              <span className="text-foreground">— use the form below</span>
+            )}
+          </li>
+          <li>
+            <span className="text-foreground">Booking page enabled</span> — toggle in the next panel{' '}
+            {draft.bookingEnabled ? (
+              <Pill tone="success" dot={false} className="ml-1 inline-flex">On</Pill>
+            ) : (
+              <span>— turn on when types exist</span>
+            )}
+          </li>
+          <li>
+            <span className="text-foreground">Open times</span> — default Mon–Fri 9–5 unless you change{' '}
+            <Link
+              href="/appointments/availability"
+              className="font-medium text-primary underline-offset-2 hover:underline"
+            >
+              Availability
+            </Link>
+          </li>
+        </ol>
+      </Panel>
+
+      <Panel
+        title="Create your first bookable service"
+        description="This creates the same appointment type the public page lists (stored as a bookable type in your workspace)."
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <Label htmlFor="ar-new-type-name">Name</Label>
+            <Input
+              id="ar-new-type-name"
+              className="mt-1.5"
+              placeholder="e.g. Initial consultation"
+              value={newTypeName}
+              onChange={(e) => setNewTypeName(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label htmlFor="ar-new-type-duration">Duration (minutes)</Label>
+            <Input
+              id="ar-new-type-duration"
+              type="number"
+              min={5}
+              max={480}
+              className="mt-1.5"
+              value={newTypeDuration}
+              onChange={(e) => setNewTypeDuration(Number(e.target.value) || 30)}
+            />
+          </div>
+          <div>
+            <SimpleSelect
+              id="ar-new-type-kind"
+              label="Kind"
+              className="mt-1.5"
+              value={newTypeKind}
+              onChange={(v) => setNewTypeKind(v as 'MEETING' | 'SERVICE')}
+              options={[
+                { value: 'SERVICE', label: 'Service' },
+                { value: 'MEETING', label: 'Meeting' },
+              ]}
+            />
+          </div>
+        </div>
+        {createTypeError ? (
+          <p className="mt-3 text-sm text-destructive" role="alert">{createTypeError}</p>
+        ) : null}
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <Button type="button" disabled={creatingType} onClick={() => void createBookableType()}>
+            {creatingType ? 'Creating…' : 'Create bookable type'}
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            Or use the full editor in{' '}
+            <Link href="/appointments/types" className="text-primary underline-offset-2 hover:underline">
+              Appointment types
+            </Link>{' '}
+            for price, staff, and intake.
+          </span>
+        </div>
+      </Panel>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
         <div className="space-y-5">
