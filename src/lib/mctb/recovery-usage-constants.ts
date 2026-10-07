@@ -1,25 +1,27 @@
-/** Free tier: missed calls texted back per calendar month (one unit per call, not per SMS). */
-export const MCTB_FREE_MONTHLY_RECOVERY_LIMIT = 10;
+/** Free tier: missed calls texted back per calendar month (first automated SMS accepted). */
+export const MCTB_FREE_MONTHLY_RECOVERY_LIMIT = 25;
 
-/** Text Back ($9.99/mo) — paid MCTB platform subscription. */
-export const MCTB_TEXT_BACK_MONTHLY_RECOVERY_LIMIT = 50;
+/** Pro ($19.99/mo) — primary paid MCTB subscription. */
+export const MCTB_PRO_MONTHLY_RECOVERY_LIMIT = 300;
 
-/** AI Recovery ($19.99/mo) — includes higher recovery allowance. */
-export const MCTB_AI_RECOVERY_MONTHLY_RECOVERY_LIMIT = 100;
+/** @deprecated Legacy alias — use MCTB_PRO_MONTHLY_RECOVERY_LIMIT */
+export const MCTB_TEXT_BACK_MONTHLY_RECOVERY_LIMIT = MCTB_PRO_MONTHLY_RECOVERY_LIMIT;
+
+/** @deprecated Legacy AI SKU — allowance matches Pro when entitled */
+export const MCTB_AI_RECOVERY_MONTHLY_RECOVERY_LIMIT = MCTB_PRO_MONTHLY_RECOVERY_LIMIT;
 
 /**
- * Legacy Stripe tier keys on `mctb` product family — all map to Text Back allowance at launch.
- * Prefer catalog tier `text_back` for new subscriptions.
+ * Stripe tier keys on `mctb` product family.
+ * New checkouts use `pro`; legacy `text_back` subscribers keep Pro allowance.
  */
 export const MCTB_PAID_RECOVERY_LIMIT_BY_TIER: Record<string, number> = {
-  text_back: MCTB_TEXT_BACK_MONTHLY_RECOVERY_LIMIT,
-  starter: MCTB_TEXT_BACK_MONTHLY_RECOVERY_LIMIT,
-  growth: MCTB_TEXT_BACK_MONTHLY_RECOVERY_LIMIT,
-  pro: MCTB_TEXT_BACK_MONTHLY_RECOVERY_LIMIT,
+  text_back: MCTB_PRO_MONTHLY_RECOVERY_LIMIT,
+  starter: MCTB_PRO_MONTHLY_RECOVERY_LIMIT,
+  growth: MCTB_PRO_MONTHLY_RECOVERY_LIMIT,
+  pro: MCTB_PRO_MONTHLY_RECOVERY_LIMIT,
 };
 
-/** When paid tier is unknown but recovery is entitled, use Text Back allowance. */
-export const MCTB_PAID_RECOVERY_LIMIT_FALLBACK = MCTB_TEXT_BACK_MONTHLY_RECOVERY_LIMIT;
+export const MCTB_PAID_RECOVERY_LIMIT_FALLBACK = MCTB_PRO_MONTHLY_RECOVERY_LIMIT;
 
 export function resolveMctbMonthlyRecoveryLimit(input: {
   mctbProductActive: boolean;
@@ -28,8 +30,14 @@ export function resolveMctbMonthlyRecoveryLimit(input: {
   paidTier: string | null;
 }): number {
   if (!input.mctbProductActive) return 0;
-  if (input.aiRecoveryEntitled) return MCTB_AI_RECOVERY_MONTHLY_RECOVERY_LIMIT;
-  if (input.recoveryPaid) return MCTB_TEXT_BACK_MONTHLY_RECOVERY_LIMIT;
+  if (input.aiRecoveryEntitled) return MCTB_PRO_MONTHLY_RECOVERY_LIMIT;
+  if (input.recoveryPaid) {
+    const tier = input.paidTier?.trim();
+    if (tier && MCTB_PAID_RECOVERY_LIMIT_BY_TIER[tier]) {
+      return MCTB_PAID_RECOVERY_LIMIT_BY_TIER[tier];
+    }
+    return MCTB_PAID_RECOVERY_LIMIT_FALLBACK;
+  }
   return MCTB_FREE_MONTHLY_RECOVERY_LIMIT;
 }
 

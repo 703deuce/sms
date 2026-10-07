@@ -96,7 +96,7 @@ export async function deliverMctbHandoffNotifications(input: {
   const businessReplySmsEntitled = await canSendMctbBusinessReplyTeamSms(input.workspaceId);
   const isCallerReplyEvent =
     input.eventType === "caller_replied" || input.eventType === "callback_requested";
-  if (isCallerReplyEvent && !businessReplySmsEntitled) {
+  if (!businessReplySmsEntitled) {
     channels = { ...channels, sms: false };
   }
   const results: Array<{ channel: string; status: string; destination?: string }> = [];

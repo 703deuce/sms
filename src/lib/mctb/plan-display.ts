@@ -1,6 +1,6 @@
 /** Customer-facing MCTB plan labels — keep in sync with docs/MCTB-COMMERCIAL-PACKAGES.md */
 
-export type MctbCommercialPlanKey = "free" | "text_back" | "ai_recovery";
+export type MctbCommercialPlanKey = "free" | "pro" | "ai_recovery";
 
 export type MctbPlanUsagePresentation = {
   planKey: MctbCommercialPlanKey;
@@ -20,7 +20,7 @@ export function resolveMctbCommercialPlanKey(input: {
   aiRecoveryEntitled: boolean;
 }): MctbCommercialPlanKey {
   if (input.aiRecoveryEntitled) return "ai_recovery";
-  if (input.recoveryPaid) return "text_back";
+  if (input.recoveryPaid) return "pro";
   return "free";
 }
 
@@ -28,10 +28,10 @@ export function mctbCommercialPlanLabel(planKey: MctbCommercialPlanKey): string 
   switch (planKey) {
     case "free":
       return "Free";
-    case "text_back":
-      return "Text Back";
+    case "pro":
+      return "Pro";
     case "ai_recovery":
-      return "AI Recovery";
+      return "Pro";
     default:
       return "Free";
   }

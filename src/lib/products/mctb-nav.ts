@@ -1,15 +1,12 @@
 import {
   BarChart3,
   Bell,
-  CreditCard,
-  HelpCircle,
   Home,
   LayoutDashboard,
   ListChecks,
   MessageSquare,
   Phone,
   PhoneMissed,
-  Settings,
   Voicemail,
   MessageCircle,
   Shield,
@@ -86,21 +83,6 @@ export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
       label: "Phone & Forwarding",
       href: MCTB_ROUTES.phone,
       icon: Phone,
-    },
-    {
-      label: "Settings",
-      href: "/settings",
-      icon: Settings,
-    },
-    {
-      label: "Billing",
-      href: "/settings/billing",
-      icon: CreditCard,
-    },
-    {
-      label: "Help",
-      href: "/help",
-      icon: HelpCircle,
     },
   ];
 }

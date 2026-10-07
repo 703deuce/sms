@@ -396,6 +396,68 @@ async function prismaHasActiveFamily(
   return Boolean(row);
 }
 
+export type PlatformSubscriptionManageAction =
+  | "cancel_at_period_end"
+  | "cancel_now"
+  | "resume";
+
+export async function managePlatformProductSubscription(input: {
+  workspaceId: string;
+  productFamily: PlatformSubscriptionFamily;
+  action: PlatformSubscriptionManageAction;
+}): Promise<{
+  status: string;
+  cancelAtPeriodEnd: boolean;
+  currentPeriodEnd: Date | null;
+}> {
+  const stripe = getStripe();
+  if (!stripe) throw new Error("Stripe is not configured");
+  const prisma = getPrisma();
+  const sub = await prisma.platformProductSubscription.findUnique({
+    where: {
+      workspaceId_productFamily: {
+        workspaceId: input.workspaceId,
+        productFamily: input.productFamily,
+      },
+    },
+  });
+  if (!sub?.stripeSubscriptionId) {
+    throw new Error("No subscription found for this product");
+  }
+  if (!ACTIVE_STATUSES.has(sub.status) && input.action !== "resume") {
+    throw new Error("Subscription is not active");
+  }
+
+  if (input.action === "cancel_now") {
+    const canceled = await stripe.subscriptions.cancel(sub.stripeSubscriptionId);
+    await upsertPlatformProductSubscriptionFromStripe(canceled);
+    return {
+      status: canceled.status,
+      cancelAtPeriodEnd: false,
+      currentPeriodEnd: sub.currentPeriodEnd,
+    };
+  }
+
+  const cancelAtPeriodEnd = input.action === "cancel_at_period_end";
+  const updated = await stripe.subscriptions.update(sub.stripeSubscriptionId, {
+    cancel_at_period_end: cancelAtPeriodEnd,
+  });
+  const { periodEnd } = subscriptionBillingPeriod(updated);
+  await prisma.platformProductSubscription.update({
+    where: { id: sub.id },
+    data: {
+      cancelAtPeriodEnd: updated.cancel_at_period_end,
+      currentPeriodEnd: periodEnd,
+      status: updated.status,
+    },
+  });
+  return {
+    status: updated.status,
+    cancelAtPeriodEnd: updated.cancel_at_period_end,
+    currentPeriodEnd: periodEnd,
+  };
+}
+
 export async function changePlatformSubscriptionTier(input: {
   workspaceId: string;
   productFamily: PlatformProductFamily;
