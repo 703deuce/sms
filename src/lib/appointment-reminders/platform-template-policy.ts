@@ -76,6 +76,14 @@ function enforceStepTemplates(
 /**
  * Platform sender: timing/toggles may change; message bodies are locked to approved templates.
  */
+/** Runtime send path: lock body to approved platform template (timing may still vary). */
+export function resolvePlatformLockedReminderTemplate(
+  stepKey: string,
+  incomingStep: ReminderStepConfig,
+): ReminderStepConfig {
+  return lockStepTemplate(incomingStep, stepKey);
+}
+
 export async function applyAppointmentRemindersPlatformTemplatePolicy(
   workspaceId: string,
   patch: Partial<AppointmentPlatformConfig>,

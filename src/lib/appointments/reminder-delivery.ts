@@ -29,6 +29,14 @@ import { resolveEffectiveReminderPhone } from "@/lib/appointment-reminders/effec
 import { evaluateSmsReminderEligibility } from "@/lib/appointment-reminders/sms-eligibility";
 import { finalizeReminderSmsBody } from "@/lib/appointment-reminders/message-sanitize";
 import { loadAppointmentRemindersActivation } from "@/lib/appointment-reminders/activation";
+import {
+  releaseArReminderSmsReservation,
+  reserveArReminderSmsUnit,
+} from "@/lib/appointment-reminders/ar-sms-usage";
+import {
+  resolvePlatformLockedReminderTemplate,
+  usesPlatformAppointmentSmsSender,
+} from "@/lib/appointment-reminders/platform-template-policy";
 
 async function resolveAppointmentCalendarConnectionId(
   workspaceId: string,
@@ -180,6 +188,29 @@ async function sendReminderSms(input: {
   });
 }
 
+async function markReminderAllowanceBlocked(input: {
+  appointmentId: string;
+  metadata: AppointmentMetadata;
+  timelineType: string;
+  detail: string;
+}) {
+  const prisma = getPrisma();
+  const nextMeta = appendTimeline(input.metadata, {
+    type: `${input.timelineType}_suppressed`,
+    label: "Reminder blocked",
+    detail: input.detail,
+  });
+  await prisma.voiceAppointment.update({
+    where: { id: input.appointmentId },
+    data: {
+      metadata: {
+        ...nextMeta,
+        reminderStatus: "blocked",
+      } as object,
+    },
+  });
+}
+
 async function markReminderFailed(input: {
   appointmentId: string;
   metadata: AppointmentMetadata;
@@ -209,8 +240,10 @@ async function trySendStep(input: {
   startsAt: Date;
   serviceName: string | null;
   timezone: string;
+  stepKey: string;
   step: ReminderStepConfig;
   timelineType: string;
+  appointmentStatus: string;
   metadata: AppointmentMetadata;
   phone: string;
   email?: string | null;
@@ -348,8 +381,47 @@ async function trySendStep(input: {
 
   if (input.step.channel !== "sms") return false;
 
+  const smsEligibility = evaluateSmsReminderEligibility({
+    metadata: input.metadata,
+    inviteePhone: input.metadata.inviteePhone,
+    contactPhone: input.phone,
+    appointmentStatus: input.appointmentStatus,
+  });
+  if (!smsEligibility.eligible) {
+    await markReminderAllowanceBlocked({
+      appointmentId: input.appointmentId,
+      metadata: input.metadata,
+      timelineType: input.timelineType,
+      detail: smsEligibility.detail || "SMS not eligible",
+    });
+    return false;
+  }
+
+  const reservation = await reserveArReminderSmsUnit({
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+    timelineType: input.timelineType,
+  });
+  if (!reservation.reserved) {
+    await markReminderAllowanceBlocked({
+      appointmentId: input.appointmentId,
+      metadata: input.metadata,
+      timelineType: input.timelineType,
+      detail:
+        reservation.reason === "ar_sms_limit_reached"
+          ? "Monthly Appointment Reminders SMS allowance reached"
+          : "Appointment Reminders SMS allowance is not configured",
+    });
+    return false;
+  }
+
+  let effectiveStep = input.step;
+  if (await usesPlatformAppointmentSmsSender(input.workspaceId)) {
+    effectiveStep = resolvePlatformLockedReminderTemplate(input.stepKey, input.step);
+  }
+
   const body = renderAppointmentTemplate(
-    input.step.template,
+    effectiveStep.template,
     appointmentMergeVars({
       firstName: input.metadata.inviteeName?.split(/\s+/)[0],
       businessName: input.businessName,
@@ -377,7 +449,7 @@ async function trySendStep(input: {
     const nextMeta = markReminderSentInMeta(
       appendTimeline(input.metadata, {
         type: input.timelineType,
-        label: input.step.label,
+        label: effectiveStep.label,
       }),
       input.timelineType,
     );
@@ -387,6 +459,11 @@ async function trySendStep(input: {
     });
     return true;
   } catch (err) {
+    await releaseArReminderSmsReservation({
+      workspaceId: input.workspaceId,
+      appointmentId: input.appointmentId,
+      timelineType: input.timelineType,
+    });
     await markReminderFailed({
       appointmentId: input.appointmentId,
       metadata: input.metadata,
@@ -510,8 +587,10 @@ export async function scanPlatformAppointmentReminders() {
         startsAt: row.startsAt,
         serviceName: row.serviceName,
         timezone: row.timezone || config.timezone,
+        stepKey: scheduled.key,
         step: effectiveStep,
         timelineType: scheduled.timelineType,
+        appointmentStatus: row.status,
         metadata: meta,
         phone: phone || "",
         email,
@@ -601,8 +680,10 @@ export async function maybeSendImmediateConfirmationForAppointment(
     startsAt: row.startsAt,
     serviceName: row.serviceName,
     timezone: row.timezone || config.timezone,
+    stepKey: confirmation.key,
     step: confirmation.step,
     timelineType: confirmation.timelineType,
+    appointmentStatus: row.status,
     metadata: meta,
     phone: phone || "",
     email,
@@ -662,8 +743,21 @@ export async function sendTestReminderSms(
     platform,
     workspaceName: workspace?.displayName || workspace?.name || "Business",
   })}`;
+  const reservation = await reserveArReminderSmsUnit({
+    workspaceId,
+    excludeFromUsage: true,
+  });
+  if (!reservation.reserved && reservation.reason === "ar_sms_limit_reached") {
+    throw new Error("Monthly Appointment Reminders SMS allowance reached");
+  }
+
   const { sendAppointmentSms } = await import("@/lib/appointments/sms-sender");
-  await sendAppointmentSms({ workspaceId, to: input.phone, body });
+  try {
+    await sendAppointmentSms({ workspaceId, to: input.phone, body });
+  } catch (err) {
+    await releaseArReminderSmsReservation({ workspaceId });
+    throw err;
+  }
   return { body };
 }
 

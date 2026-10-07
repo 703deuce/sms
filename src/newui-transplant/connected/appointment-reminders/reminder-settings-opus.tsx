@@ -58,6 +58,13 @@ type WorkspaceStats = {
   sentToday: number
   failed7d: number
   readiness: { sms: string; email: string }
+  smsUsage?: {
+    usedInPeriod: number
+    limit: number
+    atLimit: boolean
+    periodKey: string
+    meteringActive: boolean
+  }
 }
 
 export function AppointmentRemindersSettingsOpus() {
@@ -87,6 +94,7 @@ export function AppointmentRemindersSettingsOpus() {
           sentToday: d.stats.sentToday,
           failed7d: d.stats.failed7d,
           readiness: d.readiness || { sms: '—', email: '—' },
+          smsUsage: d.smsUsage,
         })
       })
       .catch(() => setWorkspace(null))
@@ -207,6 +215,13 @@ export function AppointmentRemindersSettingsOpus() {
             value={workspace.readiness.sms}
             hint={workspace.failed7d > 0 ? `${workspace.failed7d} failed (7d)` : undefined}
           />
+          {workspace.smsUsage?.meteringActive ? (
+            <Stat
+              label="SMS this month"
+              value={`${workspace.smsUsage.usedInPeriod} / ${workspace.smsUsage.limit}`}
+              hint={workspace.smsUsage.atLimit ? 'Allowance reached — upgrade or wait for reset' : undefined}
+            />
+          ) : null}
         </ArStatGrid>
       ) : null}
 

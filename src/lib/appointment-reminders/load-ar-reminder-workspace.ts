@@ -10,11 +10,12 @@ import {
 } from "@/lib/appointment-reminders/sms-reminder-timeline";
 import { listEnabledReminderSteps } from "@/lib/appointments/reminders/reminders-config";
 import type { AppointmentMetadata } from "@/lib/appointments/types";
+import { getArSmsUsageSnapshot } from "@/lib/appointment-reminders/ar-sms-usage";
 
 export async function loadArReminderWorkspacePanel(workspaceId: string) {
   const prisma = getPrisma();
   const { getMerchantPaymentStatus } = await import("@/lib/merchant-payments/service");
-  const [platform, types, appointments, merchantStatus] = await Promise.all([
+  const [platform, types, appointments, merchantStatus, smsUsage] = await Promise.all([
     loadAppointmentPlatformConfig(workspaceId),
     listAppointmentTypes(workspaceId, { includeSecret: true, includeUnlisted: true }),
     prisma.voiceAppointment.findMany({
@@ -30,6 +31,7 @@ export async function loadArReminderWorkspacePanel(workspaceId: string) {
       },
     }),
     getMerchantPaymentStatus(workspaceId).catch(() => null),
+    getArSmsUsageSnapshot(workspaceId),
   ]);
 
   const steps = listEnabledReminderSteps(platform);
@@ -88,6 +90,14 @@ export async function loadArReminderWorkspacePanel(workspaceId: string) {
     readiness: {
       sms: smsReady ? "Ready" : "Needs setup",
       email: "Ready",
+    },
+    smsUsage: {
+      usedInPeriod: smsUsage.usedInPeriod,
+      limit: smsUsage.limit,
+      atLimit: smsUsage.atLimit,
+      periodKey: smsUsage.periodKey,
+      meteringActive: smsUsage.meteringActive,
+      limitSource: smsUsage.limitSource,
     },
     timezone: platform.timezone,
   };
