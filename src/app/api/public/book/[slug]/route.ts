@@ -21,6 +21,10 @@ import {
 import { listBookingCategories } from "@/lib/appointments/service-booking/booking-category";
 import { loadSchedulerTheme } from "@/lib/appointments/service-booking/scheduler-theme";
 import { resolveBookingTypeKind } from "@/lib/appointments/booking-type-kind";
+import {
+  filterTypesForPublicBookingProfile,
+  resolvePublicBookingProfile,
+} from "@/lib/appointments/public-booking-profile";
 import { listBookingAddOns, listSchedulingResources, listIntakeForms } from "@/lib/appointments/service-booking";
 import { listCustomerFieldDefinitions } from "@/lib/appointments/service-booking/phase2/custom-fields";
 import { calculateAddOnTotals } from "@/lib/appointments/service-booking/add-ons";
@@ -139,7 +143,8 @@ export async function GET(_request: Request, { params }: Params) {
     if (!config.bookingEnabled) {
       return NextResponse.json({ error: "Booking page disabled" }, { status: 403 });
     }
-    const types = (await listAppointmentTypes(workspace.id))
+    const publicProfile = resolvePublicBookingProfile(config);
+    const typesRaw = (await listAppointmentTypes(workspace.id))
       .filter((t: { active: boolean }) => t.active)
       .map((t: { id: string; name: string; durationMinutes: number; config: AppointmentTypeConfig }) => ({
         id: t.id,
@@ -150,6 +155,7 @@ export async function GET(_request: Request, { params }: Params) {
         confirmationPage: t.config?.confirmationPage,
         config: t.config,
       }));
+    const types = filterTypesForPublicBookingProfile(typesRaw, publicProfile);
     const staff = (config.staff || [])
       .filter((s) => s.active !== false && s.customerSelectable !== false)
       .map((s) => ({
@@ -271,6 +277,7 @@ export async function GET(_request: Request, { params }: Params) {
             }),
           ),
         schedulerTheme,
+        publicBookingProfile: publicProfile,
         staff,
         locations,
       },

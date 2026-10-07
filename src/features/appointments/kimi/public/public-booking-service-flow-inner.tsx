@@ -1,8 +1,6 @@
 "use client";
 
 import { Globe2, Phone } from "lucide-react";
-import { Card } from "@/components/appointments/kimi-ui/public-booking-service/components/ui";
-import { StepIndicator, type Step } from "@/components/appointments/kimi-ui/public-booking-service/components/StepIndicator";
 import { ServiceStep } from "@/components/appointments/kimi-ui/public-booking-service/components/ServiceStep";
 import { DateTimeStep } from "@/components/appointments/kimi-ui/public-booking-service/components/DateTimeStep";
 import { InfoStep } from "@/components/appointments/kimi-ui/public-booking-service/components/InfoStep";
@@ -14,8 +12,15 @@ import { SquarePaymentStep } from "@/components/appointments/square-payment-step
 import type { BookingType as KimiServiceBookingType } from "@/components/appointments/kimi-ui/public-booking-service/mock-data";
 import type { PublicBookingFlow } from "@/features/appointments/kimi/public/use-public-booking-flow";
 import type { PublicBookingType } from "@/features/appointments/kimi/public/types";
+import { ApplySchedulerTheme } from "@/newui-transplant/components/public-booking/apply-scheduler-theme";
+import {
+  OpusPublicStepIndicator,
+  type OpusPublicStep,
+} from "@/newui-transplant/components/public-booking/opus-public-step-indicator";
+import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
+import { cn } from "@/lib/utils";
 
-type FlowStep = Step | "payment";
+type FlowStep = OpusPublicStep;
 
 function toServiceType(type: PublicBookingType): KimiServiceBookingType {
   return {
@@ -37,44 +42,66 @@ export function PublicBookingServiceFlowInner({
   embed?: boolean;
 }) {
   const ws = flow.workspace!;
+  const simple = flow.publicBookingProfile === "simple";
   const indicatorStep: FlowStep =
     flow.step === "payment" ? "info" : (flow.step as FlowStep);
 
   return (
-    <div className={`booking-shell min-h-screen px-4 py-8 sm:py-12 ${embed ? "min-h-0 py-4" : ""}`}>
+    <div
+      className={cn(
+        "min-h-screen bg-muted/30 px-4 py-8 sm:py-12",
+        embed && "min-h-0 bg-transparent py-4",
+      )}
+    >
+      <ApplySchedulerTheme theme={flow.schedulerTheme} />
       <div className={flow.step === "datetime" ? "mx-auto max-w-2xl" : "mx-auto max-w-lg"}>
         <header className="mb-6 text-center">
-          <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-primary font-display text-lg font-bold text-primary-foreground shadow-sm">
-            {ws.name.charAt(0)}
-          </div>
-          <h1 className="font-display text-[17px] font-semibold tracking-tight text-foreground">
-            {ws.name}
-          </h1>
-          <p className="mt-0.5 flex items-center justify-center gap-3 text-[12px] text-muted-foreground">
+          {ws.logoUrl ? (
+            <img
+              src={ws.logoUrl}
+              alt=""
+              className="mx-auto mb-3 h-14 w-14 rounded-xl border bg-card object-cover shadow-sm"
+            />
+          ) : (
+            <div
+              className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-lg font-bold text-primary-foreground shadow-sm"
+              aria-hidden
+            >
+              {ws.name.charAt(0)}
+            </div>
+          )}
+          <h1 className="text-lg font-semibold tracking-tight text-foreground">{ws.name}</h1>
+          {ws.businessAddress ? (
+            <p className="mt-1 text-xs text-muted-foreground">{ws.businessAddress}</p>
+          ) : null}
+          <p className="mt-2 flex flex-wrap items-center justify-center gap-3 text-xs text-muted-foreground">
             {ws.timezone ? (
               <span className="inline-flex items-center gap-1">
-                <Globe2 className="h-3 w-3" /> {ws.timezone.replace(/_/g, " ")}
+                <Globe2 className="h-3 w-3" aria-hidden /> {ws.timezone.replace(/_/g, " ")}
               </span>
             ) : null}
             {ws.businessPhone ? (
-              <a href={`tel:${ws.businessPhone}`} className="inline-flex items-center gap-1 hover:text-foreground">
-                <Phone className="h-3 w-3" /> {ws.businessPhone}
+              <a
+                href={`tel:${ws.businessPhone}`}
+                className="inline-flex items-center gap-1 hover:text-foreground"
+              >
+                <Phone className="h-3 w-3" aria-hidden /> {ws.businessPhone}
               </a>
             ) : null}
           </p>
         </header>
 
         {flow.step !== "done" && flow.step !== "waitlist" && flow.step !== "ai" ? (
-          <StepIndicator step={indicatorStep === "payment" ? "info" : indicatorStep} />
+          <OpusPublicStepIndicator step={indicatorStep === "payment" ? "info" : indicatorStep} />
         ) : null}
 
-        <Card className="p-5 sm:p-7">
+        <div className={cn(OPUS_CARD, "bg-card p-5 sm:p-7")}>
           {flow.step === "service" ? (
             <ServiceStep
               types={flow.types.map(toServiceType)}
-              categories={flow.categories}
+              categories={simple ? [] : flow.categories}
               activeCategorySlug={flow.initialCategorySlug}
-              addingAdditional={flow.addingAdditionalService}
+              addingAdditional={simple ? false : flow.addingAdditionalService}
               onPick={(type) => void flow.pickType(flow.types.find((t) => t.id === type.id)!)}
             />
           ) : null}
@@ -85,8 +112,8 @@ export function PublicBookingServiceFlowInner({
               timezone={ws.timezone}
               staffOptions={flow.eligibleStaff}
               locationOptions={flow.eligibleLocations}
-              waitlistEnabled={ws.waitlistEnabled !== false}
-              aiEnabled={ws.aiBookingEnabled !== false}
+              waitlistEnabled={!simple && ws.waitlistEnabled !== false}
+              aiEnabled={!simple && ws.aiBookingEnabled !== false}
               startsAt={flow.startsAt}
               selectedStaffId={flow.selectedStaffId}
               selectedLocationId={flow.selectedLocationId}
@@ -99,18 +126,22 @@ export function PublicBookingServiceFlowInner({
               onAi={() => flow.setStep("ai")}
               externalSlots={flow.slots}
               externalLoadingSlots={flow.loadingSlots}
-              onAddAnotherService={flow.addAdditionalService}
-              additionalServiceNames={flow.additionalServices.map((s) => s.name)}
-              additionalServices={flow.additionalServices.map((s) => ({
-                id: s.id,
-                name: s.name,
-                staffAssignment: s.config?.staffAssignment,
-                staffIds: s.config?.staffIds,
-              }))}
+              onAddAnotherService={simple ? undefined : flow.addAdditionalService}
+              additionalServiceNames={simple ? [] : flow.additionalServices.map((s) => s.name)}
+              additionalServices={
+                simple
+                  ? []
+                  : flow.additionalServices.map((s) => ({
+                      id: s.id,
+                      name: s.name,
+                      staffAssignment: s.config?.staffAssignment,
+                      staffIds: s.config?.staffIds,
+                    }))
+              }
               lineStaffIds={flow.lineStaffIds}
               onLineStaffChange={flow.setLineStaffId}
-              onAddToSessionCart={flow.addToSessionCart}
-              sessionLineCount={flow.sessionLines.length}
+              onAddToSessionCart={simple ? undefined : flow.addToSessionCart}
+              sessionLineCount={simple ? 0 : flow.sessionLines.length}
             />
           ) : null}
 
@@ -139,27 +170,29 @@ export function PublicBookingServiceFlowInner({
               timezone={ws.timezone}
               submitting={flow.submitting || flow.paymentPending}
               error={flow.error}
-              entitlements={flow.entitlements}
-              entitlementsLoading={flow.entitlementsLoading}
-              entitlementMethod={flow.entitlementMethod}
-              packageBalanceId={flow.packageBalanceId}
-              giftCertificateCode={flow.giftCertificateCode}
-              useSavedCard={flow.useSavedCard}
+              entitlements={simple ? null : flow.entitlements}
+              entitlementsLoading={simple ? false : flow.entitlementsLoading}
+              entitlementMethod={simple ? "none" : flow.entitlementMethod}
+              packageBalanceId={simple ? "" : flow.packageBalanceId}
+              giftCertificateCode={simple ? "" : flow.giftCertificateCode}
+              useSavedCard={simple ? false : flow.useSavedCard}
               onEntitlementMethodChange={flow.setEntitlementMethod}
               onPackageBalanceIdChange={flow.setPackageBalanceId}
               onGiftCertificateCodeChange={flow.setGiftCertificateCode}
               onUseSavedCardChange={flow.setUseSavedCard}
-              walletApplyCents={flow.walletApplyCents}
+              walletApplyCents={simple ? 0 : flow.walletApplyCents}
               onWalletApplyCentsChange={flow.setWalletApplyCents}
-              loyaltyProgramId={flow.loyaltyProgramId}
-              loyaltyRedeemPoints={flow.loyaltyRedeemPoints}
+              loyaltyProgramId={simple ? "" : flow.loyaltyProgramId}
+              loyaltyRedeemPoints={simple ? 0 : flow.loyaltyRedeemPoints}
               onLoyaltyProgramIdChange={flow.setLoyaltyProgramId}
               onLoyaltyRedeemPointsChange={flow.setLoyaltyRedeemPoints}
-              couponCode={flow.couponCode}
+              couponCode={simple ? "" : flow.couponCode}
               onCouponCodeChange={flow.setCouponCode}
-              onLookupEntitlements={(phone, email) => void flow.lookupEntitlements(phone, email)}
-              eligibleAddOns={flow.eligibleAddOns}
-              selectedAddOns={flow.selectedAddOns}
+              onLookupEntitlements={
+                simple ? () => undefined : (phone, email) => void flow.lookupEntitlements(phone, email)
+              }
+              eligibleAddOns={simple ? [] : flow.eligibleAddOns}
+              selectedAddOns={simple ? [] : flow.selectedAddOns}
               onSelectedAddOnsChange={flow.setSelectedAddOns}
               customFieldDefinitions={flow.customFieldDefinitions}
               customFieldValues={flow.customFieldValues}
@@ -189,10 +222,10 @@ export function PublicBookingServiceFlowInner({
                 flow.setRecurringOccurrences(payload.recurringOccurrences);
                 void flow.book(payload);
               }}
-              recurringPreview={flow.recurringPreview}
-              recurringPreviewLoading={flow.recurringPreviewLoading}
-              sessionLineCount={flow.sessionLines.length}
-              additionalServiceNames={flow.additionalServices.map((s) => s.name)}
+              recurringPreview={simple ? null : flow.recurringPreview}
+              recurringPreviewLoading={simple ? false : flow.recurringPreviewLoading}
+              sessionLineCount={simple ? 0 : flow.sessionLines.length}
+              additionalServiceNames={simple ? [] : flow.additionalServices.map((s) => s.name)}
               dynamicPriceCents={flow.dynamicPriceCents}
               onCheckoutSession={() => void flow.checkoutSession()}
               termsRequired={Boolean(ws.termsVersion)}
@@ -222,7 +255,7 @@ export function PublicBookingServiceFlowInner({
             />
           ) : null}
 
-          {flow.step === "waitlist" ? (
+          {!simple && flow.step === "waitlist" ? (
             <WaitlistStep
               type={flow.selectedType ? toServiceType(flow.selectedType) : null}
               onBack={() => flow.setStep(flow.selectedType ? "datetime" : "service")}
@@ -240,7 +273,7 @@ export function PublicBookingServiceFlowInner({
             />
           ) : null}
 
-          {flow.step === "ai" ? (
+          {!simple && flow.step === "ai" ? (
             <AiBookingStep
               timezone={ws.timezone}
               workspaceName={ws.name}
@@ -255,12 +288,17 @@ export function PublicBookingServiceFlowInner({
               onBack={() => flow.setStep("datetime")}
             />
           ) : null}
-        </Card>
+        </div>
 
-        <footer className="mt-6 text-center text-[11px] text-muted-foreground">
+        <footer className="mt-6 text-center text-xs text-muted-foreground">
           Powered by <span className="font-semibold text-foreground">Transovo</span> ·{" "}
-          <a href={ws.termsUrl} className="hover:text-foreground">Terms</a> ·{" "}
-          <a href={ws.privacyUrl} className="hover:text-foreground">Privacy</a>
+          <a href={ws.termsUrl} className="hover:text-foreground underline-offset-2 hover:underline">
+            Terms
+          </a>{" "}
+          ·{" "}
+          <a href={ws.privacyUrl} className="hover:text-foreground underline-offset-2 hover:underline">
+            Privacy
+          </a>
         </footer>
       </div>
     </div>

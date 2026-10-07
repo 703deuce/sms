@@ -234,8 +234,12 @@ export type RecurringConfig = {
   maxOccurrences?: number;
 };
 
+/** `simple` = meetings/services only on public booking (Appointment Reminders default). */
+export type PublicBookingProfile = "simple" | "full";
+
 export type AppointmentPlatformConfig = {
   bookingEnabled: boolean;
+  publicBookingProfile?: PublicBookingProfile;
   timezone: string;
   businessPhone?: string;
   businessAddress?: string;
@@ -480,6 +484,7 @@ export const DEFAULT_REMINDER_TEMPLATES = {
 
 export const DEFAULT_PLATFORM_CONFIG: AppointmentPlatformConfig = {
   bookingEnabled: false,
+  publicBookingProfile: "simple",
   timezone: "America/New_York",
   consentText: DEFAULT_SMS_CONSENT_TEXT,
   consentVersion: "v1",

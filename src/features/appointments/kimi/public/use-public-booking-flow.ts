@@ -9,10 +9,12 @@ import type {
   PublicBookingType,
   PublicBookingWorkspace,
   PublicLocationOption,
+  PublicSchedulerTheme,
   PublicSlot,
   PublicStaffOption,
   SquarePaymentConfig,
 } from "./types";
+import type { PublicBookingProfile } from "@/lib/appointments/types";
 
 export type BookingEntitlements = {
   packages: Array<{ id: string; productName: string; creditsRemaining: number }>;
@@ -58,6 +60,8 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
 
   const [step, setStep] = useState<PublicBookingStep>("service");
   const [workspace, setWorkspace] = useState<PublicBookingWorkspace | null>(null);
+  const [schedulerTheme, setSchedulerTheme] = useState<PublicSchedulerTheme>({});
+  const [publicBookingProfile, setPublicBookingProfile] = useState<PublicBookingProfile>("simple");
   const [types, setTypes] = useState<PublicBookingType[]>([]);
   const [categories, setCategories] = useState<PublicBookingCategory[]>([]);
   const [staffOptions, setStaffOptions] = useState<PublicStaffOption[]>([]);
@@ -544,8 +548,14 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
         return r.json();
       })
       .then((json) => {
+        const profile: PublicBookingProfile =
+          json.data.publicBookingProfile === "full" ? "full" : "simple";
+        const simpleProfile = profile === "simple";
+        const theme = (json.data.schedulerTheme || {}) as PublicSchedulerTheme;
+        setSchedulerTheme(theme);
+        setPublicBookingProfile(profile);
         const ws: PublicBookingWorkspace = {
-          name: json.data.workspace.name,
+          name: json.data.businessDisplayName || json.data.workspace.name,
           slug: json.data.workspace.slug || slug,
           timezone: json.data.timezone || "",
           businessPhone: json.data.businessPhone || "",
@@ -554,8 +564,9 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
           termsUrl: json.data.termsUrl || "/terms",
           termsVersion: json.data.termsVersion,
           privacyUrl: json.data.privacyUrl || "/privacy",
-          aiBookingEnabled: json.data.aiBookingEnabled !== false,
-          waitlistEnabled: json.data.waitlistEnabled !== false,
+          logoUrl: theme.logoUrl || json.data.workspace.logoUrl,
+          aiBookingEnabled: simpleProfile ? false : json.data.aiBookingEnabled !== false,
+          waitlistEnabled: simpleProfile ? false : json.data.waitlistEnabled !== false,
         };
         setWorkspace(ws);
         const list = (json.data.types || []) as PublicBookingType[];
@@ -1017,6 +1028,8 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
     step,
     setStep,
     workspace,
+    schedulerTheme,
+    publicBookingProfile,
     types,
     categories,
     initialCategorySlug,

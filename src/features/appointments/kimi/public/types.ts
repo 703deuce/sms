@@ -45,6 +45,13 @@ export type PublicStaffOption = { id: string; name: string };
 export type PublicLocationOption = { id: string; name: string; kind?: string; address?: string };
 export type PublicSlot = { startsAt: string; endsAt: string; remaining?: number; capacity?: number };
 
+export type PublicSchedulerTheme = {
+  primaryColor?: string;
+  backgroundColor?: string;
+  logoUrl?: string;
+  confirmationMessage?: string;
+};
+
 export type PublicBookingWorkspace = {
   name: string;
   slug: string;
@@ -57,6 +64,7 @@ export type PublicBookingWorkspace = {
   privacyUrl: string;
   aiBookingEnabled?: boolean;
   waitlistEnabled?: boolean;
+  logoUrl?: string;
 };
 
 export type PublicBookingAddOn = {

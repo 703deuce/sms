@@ -9,10 +9,12 @@ import {
   saveAppointmentPlatformConfig,
 } from "@/lib/appointments";
 import type { AppointmentPlatformConfig } from "@/lib/appointments/types";
+import type { SchedulerThemeConfig } from "@/lib/appointments/service-booking/types";
 import { getPrisma } from "@/lib/db";
 
 const BOOKING_PATCH_KEYS: (keyof AppointmentPlatformConfig)[] = [
   "bookingEnabled",
+  "publicBookingProfile",
   "businessDisplayName",
   "timezone",
   "businessPhone",
@@ -56,9 +58,12 @@ export async function GET() {
 
     const simpleTypes = types.filter((row) => isSimpleBookingType(row.config));
 
+    const schedulerTheme = (settings as { schedulerTheme?: SchedulerThemeConfig }).schedulerTheme || {};
+
     return NextResponse.json({
       data: {
         settings,
+        schedulerTheme,
         types: simpleTypes,
         workspace: workspace
           ? {
@@ -78,8 +83,21 @@ export async function PATCH(request: Request) {
   try {
     const auth = await requireAppointmentRemindersAccess("appointment_reminders.settings");
     if ("error" in auth) return auth.error;
-    const body = (await request.json()) as Partial<AppointmentPlatformConfig>;
+    const body = (await request.json()) as Partial<AppointmentPlatformConfig> & {
+      schedulerTheme?: SchedulerThemeConfig;
+    };
     const patch = pickBookingPatch(body);
+    if (body.schedulerTheme && typeof body.schedulerTheme === "object") {
+      const current = await loadAppointmentPlatformConfig(auth.workspaceId);
+      const prev = (current as { schedulerTheme?: SchedulerThemeConfig }).schedulerTheme || {};
+      (patch as { schedulerTheme?: SchedulerThemeConfig }).schedulerTheme = {
+        ...prev,
+        ...body.schedulerTheme,
+      };
+    }
+    if (patch.bookingEnabled === true && patch.publicBookingProfile === undefined) {
+      patch.publicBookingProfile = "simple";
+    }
     if (Object.keys(patch).length === 0) {
       return NextResponse.json({ error: "No supported booking fields in request" }, { status: 400 });
     }

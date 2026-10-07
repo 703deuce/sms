@@ -53,6 +53,8 @@ export function AppointmentRemindersBookingOpus() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [primaryColor, setPrimaryColor] = useState('#6366f1')
+  const [logoUrl, setLogoUrl] = useState('')
 
   const load = useCallback(() => {
     setLoading(true)
@@ -67,6 +69,9 @@ export function AppointmentRemindersBookingOpus() {
         const apiTypes = (json.data.types || []) as BookingTypeApiRow[]
         const ws = json.data.workspace as { slug: string; name: string } | null
         setSettings(apiSettings)
+        const theme = (json.data.schedulerTheme || {}) as { primaryColor?: string; logoUrl?: string }
+        setPrimaryColor(theme.primaryColor || '#6366f1')
+        setLogoUrl(theme.logoUrl || '')
         setTypes(apiTypes)
         const slug = ws?.slug || ''
         const name = ws?.name || 'Your business'
@@ -155,7 +160,10 @@ export function AppointmentRemindersBookingOpus() {
                   disabled={saving || !hasSlug}
                   onCheckedChange={(enabled) => {
                     setDraft((d) => (d ? { ...d, bookingEnabled: enabled } : d))
-                    void savePatch({ bookingEnabled: enabled })
+                    void savePatch({
+                      bookingEnabled: enabled,
+                      publicBookingProfile: 'simple',
+                    })
                   }}
                   aria-label="Enable public booking page"
                 />
@@ -400,6 +408,55 @@ export function AppointmentRemindersBookingOpus() {
                 }}
               >
                 {saving ? 'Saving…' : 'Save consent & legal'}
+              </Button>
+            </div>
+          </Panel>
+
+          <Panel
+            title="Page appearance"
+            description="Brand color and logo on your customer-facing booking page (New UI)."
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label htmlFor="ar-booking-primary">Accent color</Label>
+                <div className="mt-1.5 flex items-center gap-2">
+                  <Input
+                    id="ar-booking-primary"
+                    type="color"
+                    className="h-10 w-14 cursor-pointer p-1"
+                    value={primaryColor}
+                    onChange={(e) => setPrimaryColor(e.target.value)}
+                  />
+                  <Input
+                    value={primaryColor}
+                    onChange={(e) => setPrimaryColor(e.target.value)}
+                    className="font-mono text-sm"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="ar-booking-logo">Logo URL</Label>
+                <Input
+                  id="ar-booking-logo"
+                  className="mt-1.5"
+                  placeholder="https://…"
+                  value={logoUrl}
+                  onChange={(e) => setLogoUrl(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <Button
+                type="button"
+                disabled={saving}
+                onClick={() => {
+                  void savePatch({
+                    publicBookingProfile: 'simple',
+                    schedulerTheme: { primaryColor, logoUrl: logoUrl.trim() || undefined },
+                  })
+                }}
+              >
+                {saving ? 'Saving…' : 'Save appearance'}
               </Button>
             </div>
           </Panel>
