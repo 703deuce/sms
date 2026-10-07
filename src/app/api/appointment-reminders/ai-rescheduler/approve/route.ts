@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     const result = await approveArRescheduleRequest({
       workspaceId: auth.workspaceId,
       appointmentId: body.appointmentId,
-      staffUserId: auth.userId,
+      staffUserId: auth.session.userId,
     });
     if (!result.ok) {
       return NextResponse.json({ error: result.message }, { status: 400 });
