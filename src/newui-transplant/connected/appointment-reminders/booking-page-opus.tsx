@@ -8,6 +8,7 @@ import {
   Copy,
   ExternalLink,
   Globe,
+  Layers,
   Loader2,
   Shield,
 } from 'lucide-react'
@@ -232,13 +233,97 @@ export function AppointmentRemindersBookingOpus() {
                 {draft.appointmentTypes.length === 0 ? (
                   <Callout tone="info" icon={Calendar} title="No bookable types yet">
                     <p className="text-sm text-muted-foreground">
-                      Create at least one enabled meeting or service appointment type in your workspace calendar
-                      setup. Class and group types are hidden on this simple booking page.
+                      Create at least one enabled meeting or service appointment type (see{' '}
+                      <Link
+                        href="/appointments/types"
+                        className="font-medium text-primary underline-offset-2 hover:underline"
+                      >
+                        Appointment types
+                      </Link>
+                      ). Class and group types are hidden on this simple booking page.
                     </p>
                   </Callout>
-                ) : null}
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Showing {draft.appointmentTypes.length} enabled meeting/service type
+                    {draft.appointmentTypes.length === 1 ? '' : 's'} in preview. Names, duration, price, and
+                    payment are edited in{' '}
+                    <Link
+                      href="/appointments/types"
+                      className="font-medium text-primary underline-offset-2 hover:underline"
+                    >
+                      Appointment types
+                    </Link>
+                    — not on this page.
+                  </p>
+                )}
               </div>
             )}
+          </Panel>
+
+          <Panel
+            title="What this page does not change"
+            description="Everything below still uses the same booking engine — nothing is disconnected. Open these when customers see the wrong service, price, or times."
+            action={<Layers className="h-4 w-4 text-muted-foreground" aria-hidden />}
+          >
+            <ul className="space-y-3 text-sm">
+              <li className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <span className="text-muted-foreground">
+                  <span className="font-medium text-foreground">Services & prices</span> — what appears on the
+                  list, deposits, checkout
+                </span>
+                <Link
+                  href="/appointments/types"
+                  className="inline-flex shrink-0 items-center gap-1 font-medium text-primary underline-offset-2 hover:underline"
+                >
+                  Appointment types
+                  <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                </Link>
+              </li>
+              <li className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <span className="text-muted-foreground">
+                  <span className="font-medium text-foreground">Open hours & slots</span> — when times are offered
+                </span>
+                <Link
+                  href="/appointments/availability"
+                  className="inline-flex shrink-0 items-center gap-1 font-medium text-primary underline-offset-2 hover:underline"
+                >
+                  Availability
+                  <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                </Link>
+              </li>
+              <li className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <span className="text-muted-foreground">
+                  <span className="font-medium text-foreground">Stripe / merchant</span> — whether card payment
+                  succeeds
+                </span>
+                <Link
+                  href="/appointments/pricing-payments"
+                  className="inline-flex shrink-0 items-center gap-1 font-medium text-primary underline-offset-2 hover:underline"
+                >
+                  Pricing & payments
+                  <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                </Link>
+              </li>
+              <li className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <span className="text-muted-foreground">
+                  <span className="font-medium text-foreground">Intake forms, add-ons, classes, store</span> —
+                  full Appointments booking hub
+                </span>
+                <Link
+                  href="/appointments/booking"
+                  className="inline-flex shrink-0 items-center gap-1 font-medium text-primary underline-offset-2 hover:underline"
+                >
+                  Booking pages (advanced)
+                  <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                </Link>
+              </li>
+            </ul>
+            <p className="mt-4 text-xs text-muted-foreground">
+              AR simple booking hides packages, wallet, AI assistant, and multi-service cart on the public page.
+              Paid booking still works when payment is set on the type. Subscriptions and store URLs may still exist
+              for workspaces that use the full profile or deep links.
+            </p>
           </Panel>
 
           <Panel
