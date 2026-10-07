@@ -1,5 +1,4 @@
-import { MeetingsWorkspaceConnected } from '@/components/appointments/meetings/meetings-workspace-connected'
-import { AR_BOOKING_MEETINGS_ROUTES } from '@/lib/appointments/bookable-workspace-routes'
+import { ArMeetingsWorkspaceOpus } from '@/newui-transplant/connected/appointment-reminders/ar-meetings-workspace-opus'
 
 export default async function AppointmentRemindersMeetingEditorRoute({
   params,
@@ -7,5 +6,5 @@ export default async function AppointmentRemindersMeetingEditorRoute({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  return <MeetingsWorkspaceConnected meetingId={id} routes={AR_BOOKING_MEETINGS_ROUTES} />
+  return <ArMeetingsWorkspaceOpus meetingId={id} />
 }

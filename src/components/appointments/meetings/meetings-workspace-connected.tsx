@@ -43,7 +43,7 @@ export function MeetingsWorkspaceConnected({
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const editor = useMeetingEditor(meetingId);
+  const editor = useMeetingEditor(meetingId, routes);
   const [listRows, setListRows] = useState<ApiTypeRow[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [listFailed, setListFailed] = useState(false);

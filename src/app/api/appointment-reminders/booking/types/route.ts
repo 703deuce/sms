@@ -10,9 +10,8 @@ import {
 import { listAppointmentTypes, upsertAppointmentType } from "@/lib/appointments";
 import type { AppointmentTypeConfig } from "@/lib/appointments/types";
 
-function isSimpleBookingType(config?: AppointmentTypeConfig | null): boolean {
-  const kind = resolveBookingTypeKind(config ?? undefined);
-  return kind === "MEETING" || kind === "SERVICE";
+function isArBookingMeetingType(config?: AppointmentTypeConfig | null): boolean {
+  return resolveBookingTypeKind(config ?? undefined) === "MEETING";
 }
 
 export async function POST(request: Request) {
@@ -34,7 +33,7 @@ export async function POST(request: Request) {
     const kind =
       body.bookingTypeKind && BOOKING_TYPE_KINDS.includes(body.bookingTypeKind)
         ? body.bookingTypeKind
-        : "SERVICE";
+        : "MEETING";
 
     const durationMinutes =
       typeof body.durationMinutes === "number" && body.durationMinutes > 0
@@ -57,7 +56,7 @@ export async function POST(request: Request) {
     });
 
     const types = (await listAppointmentTypes(auth.workspaceId, { includeSecret: true, includeUnlisted: true }))
-      .filter((t) => isSimpleBookingType(t.config))
+      .filter((t) => isArBookingMeetingType(t.config))
       .map((t) => ({
         id: t.id,
         name: t.name,

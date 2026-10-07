@@ -1,0 +1,162 @@
+/* Opus skin for shared meeting section forms (workspace-ui) inside AR booking. */
+.ar-meeting-opus {
+  --ar-meeting-border: hsl(var(--border));
+  --ar-meeting-muted: hsl(var(--muted));
+  --ar-meeting-fg: hsl(var(--foreground));
+  --ar-meeting-muted-fg: hsl(var(--muted-foreground));
+  --ar-meeting-primary: hsl(var(--primary));
+}
+
+.ar-meeting-opus .ws-flat-section {
+  padding-bottom: 1.5rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--ar-meeting-border);
+}
+
+.ar-meeting-opus .ws-flat-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.ar-meeting-opus .ws-flat-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--ar-meeting-fg);
+}
+
+.ar-meeting-opus .ws-flat-desc,
+.ar-meeting-opus .ws-field-hint,
+.ar-meeting-opus .ws-card-desc {
+  margin-top: 0.25rem;
+  font-size: 0.8125rem;
+  color: var(--ar-meeting-muted-fg);
+}
+
+.ar-meeting-opus .ws-flat-body {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.ar-meeting-opus label {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ar-meeting-fg);
+}
+
+.ar-meeting-opus .input,
+.ar-meeting-opus input[type="text"],
+.ar-meeting-opus input[type="search"],
+.ar-meeting-opus input[type="number"],
+.ar-meeting-opus input[type="url"],
+.ar-meeting-opus textarea,
+.ar-meeting-opus select {
+  width: 100%;
+  border-radius: calc(var(--radius) - 2px);
+  border: 1px solid var(--ar-meeting-border);
+  background: hsl(var(--background));
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--ar-meeting-fg);
+}
+
+.ar-meeting-opus .input.has-leading-icon {
+  padding-left: 2.25rem;
+}
+
+.ar-meeting-opus .ws-inline-error {
+  font-size: 0.8125rem;
+  color: hsl(var(--destructive));
+}
+
+.ar-meeting-opus .ws-choice-card {
+  display: flex;
+  gap: 0.75rem;
+  width: 100%;
+  text-align: left;
+  border-radius: calc(var(--radius) - 2px);
+  border: 1px solid var(--ar-meeting-border);
+  background: hsl(var(--card));
+  padding: 0.875rem 1rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.ar-meeting-opus .ws-choice-card:hover {
+  border-color: hsl(var(--ring) / 0.4);
+}
+
+.ar-meeting-opus .ws-choice-card[aria-pressed="true"],
+.ar-meeting-opus .ws-choice-card.is-selected {
+  border-color: var(--ar-meeting-primary);
+  box-shadow: 0 0 0 1px var(--ar-meeting-primary);
+}
+
+.ar-meeting-opus .ws-choice-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ar-meeting-fg);
+}
+
+.ar-meeting-opus .ws-choice-help {
+  font-size: 0.8125rem;
+  color: var(--ar-meeting-muted-fg);
+}
+
+.ar-meeting-opus .ws-switch-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.ar-meeting-opus .ws-switch {
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 1.375rem;
+  border-radius: 9999px;
+  background: var(--ar-meeting-muted);
+  position: relative;
+  border: none;
+  cursor: pointer;
+}
+
+.ar-meeting-opus .ws-switch[aria-checked="true"] {
+  background: var(--ar-meeting-primary);
+}
+
+.ar-meeting-opus .ws-module-trigger {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: calc(var(--radius) - 2px);
+  border: 1px solid var(--ar-meeting-border);
+  background: hsl(var(--card));
+  padding: 0.75rem 1rem;
+  text-align: left;
+}
+
+.ar-meeting-opus .ws-module-title {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ar-meeting-muted-fg);
+}
+
+.ar-meeting-opus .ws-module-value {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ar-meeting-fg);
+}
+
+.ar-meeting-opus .ws-module-body {
+  margin-top: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: calc(var(--radius) - 2px);
+  border: 1px solid var(--ar-meeting-border);
+  background: hsl(var(--muted) / 0.35);
+}

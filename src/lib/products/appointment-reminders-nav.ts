@@ -1,6 +1,5 @@
 import {
   Bell,
-  Briefcase,
   Calendar,
   CalendarDays,
   LayoutDashboard,
@@ -20,9 +19,9 @@ const ACCOUNT_SECTION = "Account";
 export function buildAppointmentRemindersMobileNav(): NavItem[] {
   return [
     { label: "Home", href: AR_ROUTES.home, icon: LayoutDashboard, matchExact: true },
-    { label: "Services", href: AR_ROUTES.bookingServices, icon: Briefcase },
-    { label: "Booking", href: AR_ROUTES.booking, icon: Link2 },
     { label: "Meetings", href: AR_ROUTES.bookingMeetings, icon: Video },
+    { label: "Booking", href: AR_ROUTES.booking, icon: Link2 },
+    { label: "Reminders", href: AR_ROUTES.reminders, icon: Bell },
   ];
 }
 
@@ -61,12 +60,6 @@ export function buildAppointmentRemindersNav(): NavItem[] {
       sectionLabel: "Booking",
     },
     {
-      label: "Services",
-      href: AR_ROUTES.bookingServices,
-      icon: Briefcase,
-      sectionLabel: "Booking",
-    },
-    {
       label: "Meetings",
       href: AR_ROUTES.bookingMeetings,
       icon: Video,
@@ -94,7 +87,7 @@ export function getAppointmentRemindersPageTitle(pathname: string): string {
   if (pathname.startsWith(AR_ROUTES.reminders)) return "Reminders";
   if (pathname.startsWith(AR_ROUTES.calendars)) return "Calendars";
   if (pathname.startsWith(AR_ROUTES.settings)) return "Reminder Settings";
-  if (pathname.startsWith(AR_ROUTES.bookingServices)) return "Services";
+  if (pathname.startsWith(AR_ROUTES.bookingServices)) return "Meetings";
   if (pathname.startsWith(AR_ROUTES.bookingMeetings)) return "Meetings";
   if (pathname.startsWith(AR_ROUTES.booking)) return "Booking page";
   if (pathname.startsWith(AR_ROUTES.setupConnect)) return "Connect calendar";
