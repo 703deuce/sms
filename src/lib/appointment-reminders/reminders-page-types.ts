@@ -30,6 +30,7 @@ export type ArRemindersPagePayload = {
   pageSize: number;
   summary: {
     scheduled: number;
+    sentToday: number;
     sent30d: number;
     failed7d: number;
     blocked: number;

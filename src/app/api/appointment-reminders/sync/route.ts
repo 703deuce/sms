@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { jsonError, requireSession } from "@/lib/api-auth";
+import { isCalendarConnectionUsable } from "@/lib/appointment-reminders/calendar-connection";
 import { getPrisma } from "@/lib/db";
 import { syncWorkspaceCalendarConnection } from "@/lib/calendar/import-sync";
 
@@ -8,14 +9,14 @@ export async function POST() {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
     const prisma = getPrisma();
-    const connections = await prisma.voiceCalendarConnection.findMany({
+    const allConnections = await prisma.voiceCalendarConnection.findMany({
       where: {
         workspaceId: auth.workspaceId,
         provider: { in: ["google", "microsoft"] },
-        status: "connected",
       },
-      select: { id: true },
+      select: { id: true, status: true },
     });
+    const connections = allConnections.filter((c) => isCalendarConnectionUsable(c.status));
     if (!connections.length) {
       return NextResponse.json({ error: "No calendar connected" }, { status: 400 });
     }

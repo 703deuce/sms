@@ -263,12 +263,13 @@ export async function buildAppointmentsDirectory(workspaceId: string, filters: A
       const series = en.occurrence.series;
       const kind = resolveClassSeriesOfferingKind(series.metadata);
       const domainType = kind === "workshop" ? "workshop" : "class";
-      const name = `${en.contact.firstName || ""} ${en.contact.lastName || ""}`.trim() || "Client";
+      const name =
+        `${en.contact?.firstName || ""} ${en.contact?.lastName || ""}`.trim() || "Client";
       rows.push({
         id: `enroll:${en.id}`,
         inviteeName: name,
-        inviteePhone: en.contact.phone,
-        inviteeEmail: en.contact.email,
+        inviteePhone: en.contact?.phone ?? null,
+        inviteeEmail: en.contact?.email ?? null,
         serviceName: series.name,
         startsAt: en.occurrence.startsAt.toISOString(),
         endsAt: en.occurrence.endsAt.toISOString(),

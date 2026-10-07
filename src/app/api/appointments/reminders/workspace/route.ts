@@ -2,6 +2,7 @@ import { getPrisma } from "@/lib/db";
 import { listAppointmentTypes } from "@/lib/appointments";
 import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
 import { buildDedicatedReminderTimeline } from "@/lib/appointments/reminder-engine";
+import { isSmsReminderTimelineEvent } from "@/lib/appointment-reminders/sms-reminder-timeline";
 import { listEnabledReminderSteps } from "@/lib/appointments/reminders/reminders-config";
 import { withAppointmentsAuth } from "@/lib/appointments/service-booking/api-helpers";
 import type { AppointmentMetadata } from "@/lib/appointments/types";
@@ -21,8 +22,6 @@ export async function GET() {
           id: true,
           serviceName: true,
           startsAt: true,
-          firstName: true,
-          lastName: true,
           status: true,
           metadata: true,
           contactId: true,
@@ -57,11 +56,11 @@ export async function GET() {
     for (const row of appointments) {
       const meta = (row.metadata || {}) as AppointmentMetadata;
       const timeline = buildDedicatedReminderTimeline(meta);
-      const customerLabel =
-        [row.firstName, row.lastName].filter(Boolean).join(" ") || "Customer";
+      const customerLabel = (meta.inviteeName as string) || "Customer";
       const bookingLabel = `${row.serviceName || "Appointment"} · ${row.startsAt.toISOString().slice(0, 10)}`;
 
       for (const ev of timeline) {
+        if (!isSmsReminderTimelineEvent(ev.type)) continue;
         const status = ev.type.includes("failed")
           ? "Failed"
           : ev.type.includes("skipped")

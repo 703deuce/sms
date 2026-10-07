@@ -10,6 +10,7 @@ import {
   type AggregateReminderView,
 } from "@/lib/appointment-reminders/aggregate-reminder-status";
 import { computeAggregateReminderView } from "@/lib/appointment-reminders/aggregate-reminder-status.server";
+import { isCalendarConnectionUsable } from "@/lib/appointment-reminders/calendar-connection";
 
 export type ArAppointmentsQuery = {
   q?: string;
@@ -191,7 +192,7 @@ export async function loadAppointmentRemindersPage(
   const startIdx = (page - 1) * pageSize;
   const pageRows = mapped.slice(startIdx, startIdx + pageSize);
 
-  const connected = connections.some((c) => c.status === "connected");
+  const connected = connections.some((c) => isCalendarConnectionUsable(c.status));
   const lastSyncAt = connections
     .map((c) => c.lastSyncAt)
     .filter(Boolean)

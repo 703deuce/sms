@@ -18,6 +18,7 @@ import type {
   ArRemindersPagePayload,
   ArReminderOperationalStatus,
 } from "@/lib/appointment-reminders/reminders-page-types";
+import { isSmsReminderTimelineEvent } from "@/lib/appointment-reminders/sms-reminder-timeline";
 
 const SENT_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const FAILED_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
@@ -111,15 +112,17 @@ export async function loadAppointmentRemindersOperationalPage(
 
     const timeline = buildDedicatedReminderTimeline(meta);
     for (const ev of timeline) {
+      if (!isSmsReminderTimelineEvent(ev.type)) continue;
       const occurredAt = ev.at || null;
       const st = mapTimelineStatus(ev.type);
-      rows.push({
-        id: `${row.id}-past-${ev.type}-${occurredAt || ""}`,
-        appointmentId: row.id,
-        customerLabel,
-        appointmentLabel,
-        reminderLabel: ev.label || ev.type,
-        channel: ev.type.includes("email") ? "Email" : "SMS",
+      const channel = "SMS";
+        rows.push({
+          id: `${row.id}-past-${ev.type}-${occurredAt || ""}`,
+          appointmentId: row.id,
+          customerLabel,
+          appointmentLabel,
+          reminderLabel: ev.label || ev.type,
+          channel,
         scheduledFor: null,
         occurredAt,
         status: st,
@@ -131,15 +134,17 @@ export async function loadAppointmentRemindersOperationalPage(
 
     if (inactive || row.startsAt.getTime() < now - 86400000) continue;
 
+    const smsSteps = steps.filter((s) => s.step.channel === "sms");
     const future = buildFutureReminderSchedule({
       startsAt: row.startsAt.toISOString(),
       timezone: row.timezone || platform.timezone,
-      steps: steps.map((s) => ({ key: s.id, step: { ...s.step, minutesBefore: s.minutesBefore } })),
+      steps: smsSteps.map((s) => ({ key: s.id, step: { ...s.step, minutesBefore: s.minutesBefore } })),
       metadata: meta,
       weeklyHours,
     });
 
     for (const step of future) {
+      if (step.channel !== "sms") continue;
       if (step.status === "skipped" && !step.scheduledFor) continue;
       let status: ArReminderOperationalStatus = step.status as ArReminderOperationalStatus;
       let detail: string | null = null;
@@ -201,8 +206,16 @@ export async function loadAppointmentRemindersOperationalPage(
     return tb - ta;
   });
 
+  const dayStart = new Date();
+  dayStart.setHours(0, 0, 0, 0);
+
   const summary = {
     scheduled: filtered.filter((r) => r.status === "scheduled").length,
+    sentToday: filtered.filter((r) => {
+      if (r.status !== "sent" && r.status !== "delivered") return false;
+      if (!r.occurredAt) return false;
+      return new Date(r.occurredAt) >= dayStart;
+    }).length,
     sent30d: filtered.filter((r) => {
       if (r.status !== "sent" && r.status !== "delivered") return false;
       const t = r.occurredAt ? new Date(r.occurredAt).getTime() : 0;

@@ -383,7 +383,6 @@ function StepEditSheet({
                 options={[
                   { value: 'sms', label: 'SMS' },
                   { value: 'email', label: 'Email' },
-                  { value: 'voice', label: 'Voice' },
                 ]}
               />
               <div>

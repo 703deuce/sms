@@ -39,23 +39,14 @@ export function AppointmentRemindersOverviewPage() {
     setLoading(true)
     setError(false)
     try {
-      const [overviewRes, workspaceRes, calRes] = await Promise.all([
-        fetch('/api/appointments/overview'),
-        fetch('/api/appointments/reminders/workspace'),
-        fetch('/api/integrations/calendars'),
-      ])
-      if (!overviewRes.ok || !workspaceRes.ok) throw new Error('load failed')
-      const overviewJson = await overviewRes.json()
-      const workspaceJson = await workspaceRes.json()
-      const calJson = calRes.ok ? await calRes.json() : { data: [] }
-      setCounts(overviewJson.data?.counts ?? null)
-      setStats(workspaceJson.stats ?? null)
-      setActivity((workspaceJson.activity ?? []).slice(0, 6))
-      setCalendars(
-        (calJson.data ?? []).filter((c: { provider?: string }) =>
-          ['google', 'microsoft'].includes(String(c.provider || '')),
-        ),
-      )
+      const res = await fetch('/api/appointment-reminders/overview', { cache: 'no-store' })
+      if (!res.ok) throw new Error('load failed')
+      const json = await res.json()
+      const data = json.data
+      setCounts(data?.counts ?? null)
+      setStats(data?.stats ?? null)
+      setActivity(data?.activity ?? [])
+      setCalendars(data?.calendars ?? [])
     } catch {
       setError(true)
     } finally {
@@ -68,7 +59,11 @@ export function AppointmentRemindersOverviewPage() {
   }, [load])
 
   const calendarHealthy =
-    calendars.length > 0 && calendars.every((c) => c.status === 'active' || c.status === 'connected')
+    calendars.length > 0 &&
+    calendars.every((c) => {
+      const s = String(c.status || '').toLowerCase()
+      return s === 'connected' || s === 'active' || s === 'verified' || s === 'ok'
+    })
 
   return (
     <div className="mx-auto w-full max-w-[1440px] px-4 py-6 md:px-6">
