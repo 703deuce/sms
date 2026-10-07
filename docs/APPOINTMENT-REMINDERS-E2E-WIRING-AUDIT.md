@@ -232,4 +232,18 @@ Connect **Microsoft** → select import calendars → sync → see appointments 
 
 **Remaining for code-complete:** AR settings/test APIs with AR permissions; platform-sender template enforcement; setup activation persistence; DB-level pagination; billing metering; broader automated test suite; regression on shared Appointments/Voice paths.
 
-**Remaining for launch-certified:** Production job scheduler, real Google/Microsoft sync, approved sender + live SMS evidence, usage limit enforcement.
+**Remaining for launch-certified:** Production job scheduler, real Google/Microsoft sync, approved sender + live SMS evidence.
+
+---
+
+## Update — 2026-10-07 pass 3 (billing, reminders log, tests)
+
+| Area | Status | Notes |
+|------|--------|--------|
+| **M — SMS metering** | **Full** (code) | `ar-sms-usage.ts` reserve/release at send; limits from platform trial/plan/override; UI stat on Reminder Settings |
+| **K — Reminders log scale** | **Full** (code) | `reminders-log-query.ts` — JSONB timeline pagination; no 1500 appointment cap |
+| **G — Runtime templates** | **Full** | Platform sender locks body at send via `resolvePlatformLockedReminderTemplate` |
+| **D — Consent at send** | **Full** | `trySendStep` re-runs `evaluateSmsReminderEligibility` immediately before SMS |
+| **O — Tests** | **Partial** | `npm run test:appointment-reminders` (7 suites); see `docs/APPOINTMENT-REMINDERS-E2E-A-Q-CERTIFICATION.md` |
+
+**Authoritative A–Q matrix:** `docs/APPOINTMENT-REMINDERS-E2E-A-Q-CERTIFICATION.md`
