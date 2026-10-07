@@ -2,16 +2,14 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Calendar, Send } from 'lucide-react'
+import { AlertTriangle, Calendar } from 'lucide-react'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
 import {
   Callout,
-  Page,
-  PageHeader,
   Panel,
-  Stat,
   TextLink,
 } from '@/newui-transplant/components/app/kit'
+import { cn } from '@/lib/utils'
 import { Button } from '@/newui-transplant/components/ui/button'
 
 type OverviewCounts = {
@@ -73,16 +71,18 @@ export function AppointmentRemindersOverviewPage() {
     calendars.length > 0 && calendars.every((c) => c.status === 'active' || c.status === 'connected')
 
   return (
-    <Page>
-      <PageHeader
-        title="Overview"
-        description="Reminders scheduled today, delivery health, and calendar connection status."
-        actions={
-          <Button variant="outline" size="sm" onClick={() => load()} disabled={loading}>
-            Refresh
-          </Button>
-        }
-      />
+    <div className="mx-auto w-full max-w-[1440px] px-4 py-6 md:px-6">
+      <header className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div className="min-w-0 flex-[1_1_70%]">
+          <h1 className="text-[22px] font-semibold leading-7 tracking-tight">Overview</h1>
+          <p className="mt-1 text-[13px] text-muted-foreground">
+            Reminders scheduled today, delivery health, and calendar connection status.
+          </p>
+        </div>
+        <Button variant="outline" size="sm" className="h-[34px]" onClick={() => load()} disabled={loading}>
+          Refresh
+        </Button>
+      </header>
 
       {error ? (
         <Callout tone="danger" icon={AlertTriangle} title="Could not load overview">
@@ -92,23 +92,21 @@ export function AppointmentRemindersOverviewPage() {
         </Callout>
       ) : null}
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Appointments today" value={loading ? '—' : String(counts?.todayTotal ?? 0)} icon={Calendar} />
-        <Stat
-          label="Reminders sent today"
-          value={loading ? '—' : String(stats?.sentToday ?? 0)}
-          icon={Send}
-        />
-        <Stat
+      <div
+        className="mb-6 grid grid-cols-2 gap-4 border-b pb-4 md:grid-cols-4 md:divide-x md:divide-border"
+        aria-label="Overview summary"
+      >
+        <OverviewMetric label="Appointments today" value={loading ? '—' : String(counts?.todayTotal ?? 0)} />
+        <OverviewMetric label="Reminders sent today" value={loading ? '—' : String(stats?.sentToday ?? 0)} />
+        <OverviewMetric
           label="Scheduled reminders"
           value={loading ? '—' : String(stats?.scheduledCount ?? 0)}
           hint="Upcoming automated texts"
         />
-        <Stat
+        <OverviewMetric
           label="Failed (7 days)"
           value={loading ? '—' : String(stats?.failed7d ?? 0)}
-          icon={AlertTriangle}
-          href={stats?.failed7d ? AR_ROUTES.reminders : undefined}
+          warn={(stats?.failed7d ?? 0) > 0}
         />
       </div>
 
@@ -174,6 +172,33 @@ export function AppointmentRemindersOverviewPage() {
           </div>
         </Panel>
       </div>
-    </Page>
+    </div>
+  )
+}
+
+function OverviewMetric({
+  label,
+  value,
+  hint,
+  warn,
+}: {
+  label: string
+  value: string
+  hint?: string
+  warn?: boolean
+}) {
+  return (
+    <div className="px-2 md:px-4">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p
+        className={cn(
+          'text-xl font-semibold tabular-nums',
+          warn && 'text-amber-700 dark:text-amber-500',
+        )}
+      >
+        {value}
+      </p>
+      {hint ? <p className="text-[11px] text-muted-foreground">{hint}</p> : null}
+    </div>
   )
 }

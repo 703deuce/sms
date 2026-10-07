@@ -244,6 +244,8 @@ export type PerCalendarReminderDefaults = {
 
 export type AppointmentReminderOverride = {
   suppressed?: boolean;
+  /** Transovo reminder contact override — does not modify provider calendar events. */
+  phone?: string;
   customSteps?: ReminderStepExtended[];
   extraRecipients?: Array<{ email?: string; phone?: string; name?: string }>;
 };

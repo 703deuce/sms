@@ -1,0 +1,37 @@
+/* Appointment Reminders product — align legacy reminder settings pilot UI with Opus shell */
+.ar-opus-shell {
+  --surface: hsl(var(--card));
+  --surface-muted: hsl(var(--muted) / 0.35);
+  --border: hsl(var(--border));
+  --text: hsl(var(--foreground));
+  --text-muted: hsl(var(--muted-foreground));
+  --accent: hsl(var(--primary));
+}
+
+.ar-opus-shell .appt-overview-pilot,
+.ar-opus-shell .ws-pilot,
+.ar-opus-shell .ref-root {
+  background: transparent !important;
+  min-height: 0 !important;
+}
+
+.ar-opus-shell .ws-pilot {
+  padding: 0 !important;
+}
+
+.ar-opus-shell .appt-pilot-primary-btn,
+.ar-opus-shell button[type="button"].appt-pilot-primary-btn {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-radius: calc(var(--radius) - 2px);
+  font-size: 13px;
+  font-weight: 600;
+  height: 36px;
+  padding: 0 14px;
+}
+
+.ar-opus-shell .appt-pilot-secondary-btn {
+  border-radius: calc(var(--radius) - 2px);
+  font-size: 13px;
+  height: 36px;
+}
