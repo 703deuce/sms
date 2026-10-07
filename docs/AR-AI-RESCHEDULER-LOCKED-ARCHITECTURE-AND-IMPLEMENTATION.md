@@ -9,6 +9,22 @@
 
 **Governing insight:** Transovo already has a **working Microsoft 365 rescheduling implementation in Voice V3** that updates the actual calendar event. Reuse that proven path for Appointment Reminders rather than build another Microsoft rescheduling implementation.
 
+This specification brings product requirements, existing architecture, and engineering safeguards together **without** turning Appointment Reminders into another scheduling platform.
+
+### Three locked product decisions
+
+1. **Reuse Voice V3’s proven Microsoft calendar operations** while keeping the existing **Appointments AI** conversation pipeline for SMS.
+2. **Notify-only is the default**; automatic AI rescheduling is enabled **explicitly** by the business.
+3. **Never require a booking page or meeting type.** The original Google or Microsoft event supplies appointment identity and duration.
+
+### Simple business journey (target)
+
+Connect Google or Microsoft → turn on reminders → optionally enable **AI Rescheduler** → choose available days and hours.
+
+**Product distinction:** Other reminder systems may tell you an appointment needs changing. Transovo AI can handle the conversation and change the **original calendar appointment** for you.
+
+**Scope guard:** Do not add more pages, appointment types, calendar setup wizards, or additional AI agents beyond what is specified here.
+
 ---
 
 ## What the two audits establish
@@ -101,14 +117,25 @@ Reuse existing validation, Graph busy checks, exclusion of the original event, a
 
 **Do not** route imported Microsoft appointments through the internal scheduling provider’s no-op reschedule operation (`InternalSchedulingProvider.rescheduleAppointment`).
 
-### 3. Fix calendar-write consistency
+### 3. Fix calendar-write consistency (provider-first + recovery)
 
 Current AR reschedule flow updates the Transovo appointment and **skips PATCH** for imported events (`shouldSyncToNativeCalendar`).
 
-For eligible imported events, replace with **safe provider-first update** and **durable reconciliation**.
+For eligible imported events, replace with **provider-first update** and **durable reconciliation**.
 
-- Do **not** claim a successful reschedule unless the original Microsoft event and Transovo appointment agree.
-- Handle provider failures, retry ambiguity, concurrent changes, and local persistence failures explicitly.
+- Do **not** claim a successful reschedule unless the original provider event and Transovo appointment agree.
+- **Order:** Mutate provider when policy allows, then persist local state and reset reminders—or enter reconciliation if local write fails after provider success.
+
+**Recovery protection (required):**
+
+| Failure | Requirement |
+|---------|-------------|
+| Provider succeeds, DB update fails | Durable operation record (idempotency key per attempt); reconciliation job or manual-safe retry that **does not** double-PATCH or send duplicate customer confirmations |
+| Retry after ambiguous outcome | Treat `BOOKING_OUTCOME_UNKNOWN`-class results like Voice V3; reconcile by reading provider event state before re-attempting |
+| Concurrent booking / race | Free/busy revalidation alone is **not** sufficient. Before mutation, check original event for changes (etag / `changeKey` / `updated` where provider supports **conditional updates**); fail or hand off if event changed since offer |
+| Customer-facing success | Only after provider + local reconciliation both succeed (or explicit notify-only handoff with no calendar claim) |
+
+Reuse patterns from Voice V3 authoritative operations (`runAuthoritativeOperation`, operation receipts) where applicable; extend for SMS/idempotency keys distinct from `callId`.
 
 ### 4. Complete reminder-bound SMS handling
 
@@ -122,7 +149,7 @@ Rules:
 
 - Do not select an appointment solely because it is the contact’s next upcoming appointment.
 - Do not let a reply to an old reminder modify an unrelated appointment.
-- Keep STOP/HELP and existing SMS compliance rules intact.
+- Keep STOP/HELP and existing SMS compliance rules intact (see **SMS sender & consent** below).
 
 ### 5. Use original appointment details
 
@@ -149,14 +176,75 @@ Add automated tests for:
 - Microsoft imported-event rescheduling
 - Google equivalent behavior (once verified)
 - Multiple appointments per contact
-- Provider failures
-- Concurrent slot selection
-- Calendar write permissions
+- Provider failures and **provider-success / DB-failure** reconciliation
+- Concurrent slot selection and **conditional update** / event-changed-since-offer paths
+- Calendar write readiness tiers (see below)
+- Per-appointment editability failures
 - Reminder recalculation
+- SMS consent / STOP / HELP on conversational reschedule threads
 
 Report completed code changes separately from live-provider certification.
 
 **Do not merge or deploy without approval.**
+
+### 9. Engineering safeguards (tightened before implementation)
+
+#### A. Calendar readiness ≠ write access
+
+A healthy OAuth connection does **not** prove Transovo can edit every imported event.
+
+The AI Rescheduler readiness indicator must distinguish:
+
+| Level | Meaning | Gates |
+|-------|---------|--------|
+| 1 | Calendar connected and **readable** | Baseline import/reminders |
+| 2 | Required **write permissions** granted (OAuth scopes) | Enabling AI reschedule features |
+| 3 | Selected **write calendar** supports updates (not read-only calendar id) | Enabling **automatic** calendar mutation |
+| 4 | **Individual appointment editable** at request time | Each customer reschedule attempt |
+
+Levels **1–3** determine whether AI rescheduling can be **enabled** in settings. Level **4** is checked **per appointment** when the customer requests a change (permissions, recurring series, organizer locks, etc.).
+
+Do not use `verifyWorkspaceCalendarConnection` token health alone as “ready to auto-reschedule.”
+
+#### B. Provider-first updates + reconciliation
+
+See **§3** above. Implementation must be explicit in code review—not implied by happy-path tests.
+
+#### C. Rescheduling modes and approval (one UI, clear behavior)
+
+Do **not** add a separate third “rescheduling mode” in the nav. Use:
+
+- **Mode:** Notify me (default) **or** AI reschedules (opt-in).
+- **When AI is on:** sub-choice **automatic approval** vs **business approval**.
+
+| Configuration | Behavior |
+|---------------|----------|
+| **Notify me** | Collect the request; business handles rescheduling manually. No automatic provider mutation. |
+| **AI + automatic approval** | AI offers provider-verified slots; customer confirms selection; calendar updates after revalidation. |
+| **AI + business approval** | AI offers slots; customer selects preferred time; **business approves** before calendar updates. |
+
+For **business approval**, the chosen time must be **revalidated at approval time** (live availability + event still editable). Do not assume the slot remains available between customer selection and staff approval.
+
+#### D. SMS sender and consent
+
+Automatic conversational rescheduling must operate within the **approved messaging use case** for Appointment Reminders:
+
+- Existing SMS sender registration and workspace compliance rules apply.
+- STOP / HELP / opt-out handling unchanged.
+- Conversational AI replies are not authorized solely because calendar OAuth succeeded.
+- No additional marketing or unrelated SMS flows via the reschedule thread.
+
+---
+
+## Post-implementation review (what matters)
+
+When Cursor returns changes, review in this order—not whether the page merely renders:
+
+1. **Actual Microsoft / Google event-write paths** (imported ids, conditional updates, failure modes).
+2. **Reminder-to-appointment binding** (C / R / X and multi-appointment contacts).
+3. **Recovery behavior** (provider succeeded, local failed; retries; no duplicate confirmations).
+
+UI completeness is secondary to the above.
 
 ---
 
@@ -207,24 +295,33 @@ Let customers request appointment changes by replying to their reminder texts. U
 1. **Notify me (default)**  
    Collect the customer’s request so I can reschedule manually.
 
-2. **AI reschedules automatically**  
-   Offer available times, confirm the selection, and update my connected calendar.
+2. **AI reschedules** (explicit opt-in)  
+   Offer available times and confirm with the customer. When enabled, choose:
+   - **Automatic approval** — after customer confirms a slot, update the connected calendar (subject to revalidation).
+   - **Business approval required** — customer selects a time; staff approves before any calendar update (slot re-checked at approval).
 
-Automatic AI rescheduling is an **explicit opt-in** upgrade, not the default.
+There is **one** rescheduling mode control (notify vs AI), not a third top-level mode.
 
 ### Settings exposed on the page
 
 | Setting | Notes |
 |---------|--------|
-| Rescheduling mode | Notify business (default) vs AI automatically reschedules |
+| Rescheduling mode | Notify me (default) vs AI reschedules |
+| Approval (when AI on) | Automatic after customer confirmation vs business approval required |
 | Allowed days and hours | Working window for offered slots; live calendar conflicts |
 | Duration | Original event duration (default); optional fixed override if product allows |
 | Rules | Minimum notice, booking horizon (max days ahead), buffer between appointments |
-| Approval | Automatic after customer confirmation vs business approval required |
 
-### Connected calendar readiness
+### Connected calendar readiness (four levels)
 
-Show whether the connected calendar **supports event updates** (write calendar, token health, permissions). Read-only or import-only connections must **not** be presented as ready for automatic rescheduling.
+Surface status clearly on the page (not a single green “connected”):
+
+1. Connected and readable  
+2. Write permissions granted  
+3. Write calendar supports updates  
+4. (Runtime) Per-appointment editable — explained in help copy; failures surface as handoff to business
+
+Read-only connections must **not** allow enabling automatic calendar mutation.
 
 ### What the system handles automatically (not on the page)
 
@@ -246,15 +343,16 @@ Business should not configure every technical detail. Transovo derives from orig
 
 Business only chooses **policy** and **availability rules**.
 
-### How the two modes behave
+### How modes behave
 
-| Customer action | Notify me (default) | AI reschedules |
-|-----------------|---------------------|----------------|
-| “I need to change my appointment” | Business receives request | AI asks for preferred time |
-| “Friday afternoon” | Business sees request | AI checks available slots |
-| Chooses 3 PM | Business handles manually | AI confirms selection |
-| Calendar event changes | Only when business changes it | Automatically after successful update |
-| Reminders update | Following calendar sync | Immediately after successful reschedule |
+| Customer action | Notify me (default) | AI + automatic approval | AI + business approval |
+|-----------------|---------------------|-------------------------|-------------------------|
+| “I need to change my appointment” | Business receives request | AI asks for preferred time | AI asks for preferred time |
+| “Friday afternoon” | Business sees request | AI checks provider slots | AI checks provider slots |
+| Chooses 3 PM | Business handles manually | AI confirms; calendar updates after revalidation | Customer selection queued for staff |
+| Staff / business step | — | — | Staff approves; **slot revalidated** then calendar updates |
+| Calendar event changes | Only when business changes it | After successful provider + local reconcile | After approval + successful provider + local reconcile |
+| Reminders update | Following calendar sync | After successful reschedule | After approved reschedule completes |
 
 ### Appointment identity (critical)
 
@@ -287,6 +385,16 @@ Optional Booking Page and Meetings remain **separate and unchanged**.
 | Inbound C/X/R (to extend) | `src/lib/messaging/inbound-process.ts` |
 | Reminder reset | `src/lib/appointments/reminder-state.ts` |
 | AR nav (when adding page) | `src/lib/products/appointment-reminders-nav.ts` |
+
+---
+
+## Recommendation (proceed)
+
+Proceed with this specification, including safeguards **§9 A–D** explicitly in implementation and tests.
+
+Do not expand scope into booking platforms, meeting types, or extra agents.
+
+Remaining risk is **implementation quality**, not product scope.
 
 ---
 
