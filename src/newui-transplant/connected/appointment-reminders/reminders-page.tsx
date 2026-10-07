@@ -3,19 +3,25 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { AlertTriangle, RefreshCw, Search } from 'lucide-react'
+import { AlertTriangle, Bell, RefreshCw, Send, ShieldAlert } from 'lucide-react'
 import type {
   ArReminderOperationalRow,
   ArRemindersPagePayload,
 } from '@/lib/appointment-reminders/reminders-page-types'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
+import {
+  ArStatGrid,
+  OpusDataSurface,
+  OpusSearchField,
+  OpusTableSkeleton,
+} from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
 import { ReminderStatusPill } from '@/newui-transplant/components/appointment-reminders/reminder-status-pill'
 import type { AggregateReminderStatus } from '@/lib/appointment-reminders/aggregate-reminder-status'
+import { EmptyState, Initials, Page, PageHeader, Stat } from '@/newui-transplant/components/app/kit'
 import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
 import { OPUS_TABLE_HEAD } from '@/newui-transplant/components/app/opus-surfaces'
 import { th, td } from '@/newui-transplant/components/app/opus-tables'
 import { Button } from '@/newui-transplant/components/ui/button'
-import { Input } from '@/newui-transplant/components/ui/input'
 import {
   Sheet,
   SheetContent,
@@ -120,81 +126,104 @@ export function AppointmentRemindersLogPage() {
   const pageCount = Math.max(1, Math.ceil(total / pageSize))
 
   return (
-    <div className="mx-auto w-full max-w-[1440px] px-4 py-6 md:px-6">
-      <header className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div className="min-w-0 flex-[1_1_70%]">
-          <h1 className="text-[22px] font-semibold leading-7 tracking-tight">Reminders</h1>
-          <p className="mt-1 text-[13px] text-muted-foreground">
-            Upcoming scheduled reminders, delivery outcomes, failures, and blocked sends — with clear next steps.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="secondary" size="sm" className="h-[34px]" render={<Link href={AR_ROUTES.settings} />}>
-            Edit SMS sequence
-          </Button>
-          <Button variant="outline" size="sm" className="h-[34px]" onClick={load} disabled={loading}>
-            <RefreshCw className={cn('mr-1.5 size-3.5', loading && 'animate-spin')} aria-hidden="true" />
-            Refresh
-          </Button>
-        </div>
-      </header>
-
-      <div
-        className="mb-5 grid grid-cols-2 gap-4 border-b pb-4 md:grid-cols-4 md:divide-x md:divide-border"
-        aria-label="Reminder summary"
-      >
-        <Metric label="Scheduled" value={data?.summary.scheduled ?? '—'} />
-        <Metric label="Sent" value={data?.summary.sent30d ?? '—'} hint="Last 30 days" />
-        <Metric label="Failed" value={data?.summary.failed7d ?? '—'} hint="Last 7 days" warn={(data?.summary.failed7d ?? 0) > 0} />
-        <Metric label="Blocked" value={data?.summary.blocked ?? '—'} warn={(data?.summary.blocked ?? 0) > 0} />
-      </div>
-
-      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-1 flex-wrap items-center gap-2">
-          <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
-            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-            <Input
-              value={qInput}
-              onChange={(e) => setQInput(e.target.value)}
-              placeholder="Search reminders"
-              className="h-9 pl-9"
-              aria-label="Search reminders"
-            />
+    <Page className="max-w-[1440px]">
+      <PageHeader
+        title="Reminders"
+        description="Scheduled SMS, confirmed sends, recorded internal events, failures, and blocked delivery — one operational log."
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" className="h-9" render={<Link href={AR_ROUTES.settings} />}>
+              Edit SMS sequence
+            </Button>
+            <Button variant="outline" className="h-9" onClick={load} disabled={loading}>
+              <RefreshCw className={cn('mr-1.5 size-3.5', loading && 'animate-spin')} aria-hidden="true" />
+              Refresh
+            </Button>
           </div>
-          <SimpleSelect
-            label="Status"
-            value={status}
-            onChange={(v) => replaceParams({ status: v, page: 1 })}
-            options={STATUS_OPTIONS}
-            className="w-[160px]"
-          />
-          <SimpleSelect
-            label="Horizon"
-            value={horizon}
-            onChange={(v) => replaceParams({ horizon: v, page: 1 })}
-            options={HORIZON_OPTIONS}
-            className="w-[150px]"
-          />
-        </div>
-        <p className="text-xs text-muted-foreground whitespace-nowrap">
-          {total > 0 ? `Showing ${start}–${end} of ${total} reminders` : 'No reminders'}
-        </p>
-      </div>
+        }
+      />
 
-      <div className="overflow-hidden rounded-lg border bg-card">
-        {loading ? (
-          <TableSkeleton />
-        ) : total === 0 ? (
-          <div className="px-6 py-16 text-center">
-            <h2 className="text-sm font-semibold">No reminders in this view</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Connect a calendar and configure your reminder sequence in settings.
-            </p>
-            <div className="mt-4 flex justify-center gap-2">
-              <Button variant="outline" render={<Link href={AR_ROUTES.calendars} />}>Calendars</Button>
-              <Button variant="outline" render={<Link href={AR_ROUTES.settings} />}>Reminder settings</Button>
+      <ArStatGrid className="mb-6">
+        <Stat label="Scheduled" value={String(data?.summary.scheduled ?? '—')} icon={Bell} />
+        <Stat label="Sent" value={String(data?.summary.sent30d ?? '—')} hint="Last 30 days" icon={Send} />
+        <Stat label="Failed" value={String(data?.summary.failed7d ?? '—')} hint="Last 7 days" icon={AlertTriangle} />
+        <Stat label="Blocked" value={String(data?.summary.blocked ?? '—')} icon={ShieldAlert} />
+      </ArStatGrid>
+
+      <OpusDataSurface
+        toolbar={
+          <>
+            <div className="flex flex-1 flex-wrap items-center gap-2">
+              <OpusSearchField
+                id="ar-reminders-search"
+                label="Search reminders"
+                value={qInput}
+                onChange={setQInput}
+                placeholder="Search customer or reminder"
+                className="sm:max-w-xs"
+              />
+              <SimpleSelect
+                label="Status"
+                value={status}
+                onChange={(v) => replaceParams({ status: v, page: 1 })}
+                options={STATUS_OPTIONS}
+                className="w-[160px]"
+              />
+              <SimpleSelect
+                label="Horizon"
+                value={horizon}
+                onChange={(v) => replaceParams({ horizon: v, page: 1 })}
+                options={HORIZON_OPTIONS}
+                className="w-[150px]"
+              />
             </div>
-          </div>
+            <p className="text-xs text-muted-foreground whitespace-nowrap">
+              {total > 0 ? `${start}–${end} of ${total}` : 'No reminders'}
+            </p>
+          </>
+        }
+        footer={
+          total > 0 ? (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-muted-foreground">Showing {start}–{end} of {total} reminders</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <SimpleSelect
+                  label="Rows per page"
+                  value={String(pageSize)}
+                  onChange={(v) => replaceParams({ pageSize: Number(v), page: 1 })}
+                  options={[
+                    { value: '25', label: '25' },
+                    { value: '50', label: '50' },
+                    { value: '100', label: '100' },
+                  ]}
+                  className="w-[88px]"
+                />
+                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => replaceParams({ page: page - 1 })}>
+                  Previous
+                </Button>
+                <span className="text-xs text-muted-foreground">Page {page} of {pageCount}</span>
+                <Button variant="outline" size="sm" disabled={page >= pageCount} onClick={() => replaceParams({ page: page + 1 })}>
+                  Next
+                </Button>
+              </div>
+            </div>
+          ) : undefined
+        }
+      >
+        {loading ? (
+          <OpusTableSkeleton label="Loading reminders" />
+        ) : total === 0 ? (
+          <EmptyState
+            icon={Bell}
+            title="No reminders in this view"
+            description="Connect a calendar, select import calendars, and configure your SMS sequence."
+            action={
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button variant="outline" render={<Link href={AR_ROUTES.calendars} />}>Calendars</Button>
+                <Button render={<Link href={AR_ROUTES.settings} />}>Reminder settings</Button>
+              </div>
+            }
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -218,8 +247,13 @@ export function AppointmentRemindersLogPage() {
                     }}
                   >
                     <td className={td}>
-                      <span className="block text-[13px] font-medium">{row.customerLabel}</span>
-                      <span className="block text-xs text-muted-foreground">{row.appointmentLabel}</span>
+                      <span className="flex items-center gap-3">
+                        <Initials name={row.customerLabel} className="size-8" />
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-medium">{row.customerLabel}</span>
+                          <span className="block truncate text-xs text-muted-foreground">{row.appointmentLabel}</span>
+                        </span>
+                      </span>
                     </td>
                     <td className={td}>
                       <span className="text-[13px]">{row.reminderLabel}</span>
@@ -246,33 +280,7 @@ export function AppointmentRemindersLogPage() {
             </table>
           </div>
         )}
-      </div>
-
-      {total > 0 ? (
-        <footer className="flex flex-col gap-3 border-t px-2 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs text-muted-foreground">Showing {start}–{end} of {total} reminders</p>
-          <div className="flex flex-wrap items-center gap-2">
-            <SimpleSelect
-              label="Rows per page"
-              value={String(pageSize)}
-              onChange={(v) => replaceParams({ pageSize: Number(v), page: 1 })}
-              options={[
-                { value: '25', label: '25' },
-                { value: '50', label: '50' },
-                { value: '100', label: '100' },
-              ]}
-              className="w-[88px]"
-            />
-            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => replaceParams({ page: page - 1 })}>
-              Previous
-            </Button>
-            <span className="text-xs text-muted-foreground">Page {page} of {pageCount}</span>
-            <Button variant="outline" size="sm" disabled={page >= pageCount} onClick={() => replaceParams({ page: page + 1 })}>
-              Next
-            </Button>
-          </div>
-        </footer>
-      ) : null}
+      </OpusDataSurface>
 
       <Sheet open={drawerOpen} onOpenChange={(v) => !v && setDrawerOpen(false)}>
         <SheetContent side="right" className="w-full sm:max-w-md">
@@ -319,38 +327,6 @@ export function AppointmentRemindersLogPage() {
           ) : null}
         </SheetContent>
       </Sheet>
-    </div>
-  )
-}
-
-function Metric({
-  label,
-  value,
-  hint,
-  warn,
-}: {
-  label: string
-  value: string | number
-  hint?: string
-  warn?: boolean
-}) {
-  return (
-    <div className="px-2 md:px-4">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className={cn('text-xl font-semibold tabular-nums', warn && 'text-amber-700 dark:text-amber-500')}>
-        {value}
-      </p>
-      {hint ? <p className="text-[11px] text-muted-foreground">{hint}</p> : null}
-    </div>
-  )
-}
-
-function TableSkeleton() {
-  return (
-    <div className="space-y-0 divide-y p-2" aria-busy="true">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="h-[60px] animate-pulse bg-muted/30" />
-      ))}
-    </div>
+    </Page>
   )
 }

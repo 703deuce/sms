@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Loader2 } from 'lucide-react'
+import { AlertTriangle, Loader2, MessageSquare } from 'lucide-react'
 import {
   addAdditionalReminderStep,
   buildRemindersPageModel,
@@ -19,8 +19,9 @@ import {
 import { listReminderStepIds, resolveReminderStep } from '@/lib/appointments/reminders/reminders-config'
 import { DEFAULT_PLATFORM_CONFIG, type AppointmentPlatformConfig } from '@/lib/appointments/types'
 import type { ReminderItem, ReminderStepKey } from '@/features/appointments/kimi/reminders/types'
+import { ArStatGrid } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
 import { ReminderSequenceTimeline } from '@/newui-transplant/components/appointment-reminders/reminder-sequence-timeline'
-import { Callout, Panel, Stat } from '@/newui-transplant/components/app/kit'
+import { Callout, FeatureEmphasisStrip, Panel, Pill, Stat } from '@/newui-transplant/components/app/kit'
 import { OPUS_META_STRIP } from '@/newui-transplant/components/app/opus-surfaces'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Input } from '@/newui-transplant/components/ui/input'
@@ -171,6 +172,18 @@ export function AppointmentRemindersSettingsOpus() {
 
   return (
     <div className="space-y-6">
+      <FeatureEmphasisStrip
+        icon={MessageSquare}
+        title="SMS reminder sequence"
+        badge={<Pill tone="success" dot={false}>Workspace engine</Pill>}
+        description="Drip-style timing and templates — like campaigns, but tied to imported appointments. Changes apply to future sends only."
+        action={
+          saved && !saving ? (
+            <span className="text-xs font-medium text-[oklch(0.82_0.12_158)]" role="status">Saved</span>
+          ) : null
+        }
+      />
+
       <div className="flex flex-wrap items-center justify-end gap-2">
         {saved && !saving ? (
           <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400" role="status">
@@ -183,7 +196,7 @@ export function AppointmentRemindersSettingsOpus() {
       </div>
 
       {workspace ? (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <ArStatGrid>
           <Stat label="Active steps" value={String(workspace.activeSteps)} />
           <Stat label="Scheduled" value={String(workspace.scheduledCount)} hint="Upcoming sends" />
           <Stat label="Sent today" value={String(workspace.sentToday)} />
@@ -192,7 +205,7 @@ export function AppointmentRemindersSettingsOpus() {
             value={workspace.readiness.sms}
             hint={workspace.failed7d > 0 ? `${workspace.failed7d} failed (7d)` : undefined}
           />
-        </div>
+        </ArStatGrid>
       ) : null}
 
       <Tabs defaultValue="sequence">

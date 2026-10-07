@@ -2,13 +2,32 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Calendar } from 'lucide-react'
+import {
+  AlertTriangle,
+  Bell,
+  Calendar,
+  CalendarClock,
+  MessagesSquare,
+  Send,
+  Sparkles,
+} from 'lucide-react'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
+import { ArStatGrid } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
 import {
   Callout,
+  EmptyState,
+  FeatureEmphasisStrip,
+  Initials,
+  KeyValueRow,
+  Page,
+  PageHeader,
   Panel,
+  Pill,
+  Stat,
   TextLink,
+  type Tone,
 } from '@/newui-transplant/components/app/kit'
+import { buttonVariants } from '@/newui-transplant/components/ui/button'
 import { cn } from '@/lib/utils'
 import { Button } from '@/newui-transplant/components/ui/button'
 
@@ -31,6 +50,22 @@ type CalendarRow = {
   label?: string
   accountEmail?: string | null
   importCalendarCount?: number
+}
+
+function calendarStatusTone(status: string): Tone {
+  const s = String(status || '').toLowerCase()
+  if (s === 'connected' || s === 'active' || s === 'verified' || s === 'ok') return 'success'
+  if (s === 'needs_reauth') return 'warning'
+  return 'neutral'
+}
+
+function activityStatusTone(label: string): Tone {
+  const t = label.toLowerCase()
+  if (t.includes('fail')) return 'danger'
+  if (t.includes('sent') || t.includes('deliver')) return 'success'
+  if (t.includes('sched')) return 'primary'
+  if (t.includes('record')) return 'neutral'
+  return 'info'
 }
 
 export function AppointmentRemindersOverviewPage() {
@@ -73,19 +108,26 @@ export function AppointmentRemindersOverviewPage() {
       return s === 'connected' || s === 'active' || s === 'verified' || s === 'ok'
     })
 
+  const activeLabel = calendarHealthy ? 'Active' : calendars.length ? 'Needs attention' : 'Setup incomplete'
+  const activeTone: Tone = calendarHealthy ? 'success' : calendars.length ? 'warning' : 'neutral'
+
   return (
-    <div className="mx-auto w-full max-w-[1440px] px-4 py-6 md:px-6">
-      <header className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div className="min-w-0 flex-[1_1_70%]">
-          <h1 className="text-[22px] font-semibold leading-7 tracking-tight">Overview</h1>
-          <p className="mt-1 text-[13px] text-muted-foreground">
-            Reminders scheduled today, delivery health, and calendar connection status.
-          </p>
-        </div>
-        <Button variant="outline" size="sm" className="h-[34px]" onClick={() => load()} disabled={loading}>
-          Refresh
-        </Button>
-      </header>
+    <Page className="max-w-[1440px]">
+      <PageHeader
+        title="Overview"
+        meta={<Pill tone={activeTone}>{activeLabel}</Pill>}
+        description="Calendar-synced SMS reminders for upcoming appointments — delivery health and connection status at a glance."
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Link href={AR_ROUTES.settings} className={cn(buttonVariants({ variant: 'outline' }), 'h-9')}>
+              Reminder settings
+            </Link>
+            <Button variant="outline" className="h-9" onClick={() => load()} disabled={loading}>
+              Refresh
+            </Button>
+          </div>
+        }
+      />
 
       {error ? (
         <Callout tone="danger" icon={AlertTriangle} title="Could not load overview">
@@ -95,130 +137,164 @@ export function AppointmentRemindersOverviewPage() {
         </Callout>
       ) : null}
 
-      <div
-        className="mb-6 grid grid-cols-2 gap-4 border-b pb-4 md:grid-cols-4 md:divide-x md:divide-border"
-        aria-label="Overview summary"
-      >
-        <OverviewMetric label="Appointments today" value={loading ? '—' : String(counts?.todayTotal ?? 0)} />
-        <OverviewMetric label="Reminders sent today" value={loading ? '—' : String(stats?.sentToday ?? 0)} />
-        <OverviewMetric
+      <ArStatGrid className="mb-6">
+        <Stat
+          label="Appointments today"
+          value={loading ? '—' : String(counts?.todayTotal ?? 0)}
+          icon={CalendarClock}
+          href={AR_ROUTES.appointments}
+        />
+        <Stat
+          label="Reminders sent today"
+          value={loading ? '—' : String(stats?.sentToday ?? 0)}
+          icon={Send}
+          href={AR_ROUTES.reminders}
+        />
+        <Stat
           label="Scheduled reminders"
           value={loading ? '—' : String(stats?.scheduledCount ?? 0)}
           hint="Upcoming automated texts"
+          icon={Bell}
+          href={`${AR_ROUTES.reminders}?status=scheduled`}
         />
-        <OverviewMetric
+        <Stat
           label="Failed (7 days)"
           value={loading ? '—' : String(stats?.failed7d ?? 0)}
-          warn={(stats?.failed7d ?? 0) > 0}
+          icon={MessagesSquare}
+          href={`${AR_ROUTES.reminders}?status=failed`}
         />
-      </div>
+      </ArStatGrid>
 
       {!calendarHealthy && !loading ? (
         <div className="mb-6">
           <Callout tone="warning" icon={Calendar} title="Calendar connection needs attention">
-            Connect Google Calendar or Microsoft 365 so appointments can sync.{' '}
+            Connect Google Calendar or Microsoft 365 and select import calendars.{' '}
             <TextLink href={AR_ROUTES.calendars}>Open calendars</TextLink>
           </Callout>
         </div>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Panel title="Recent reminder activity" description="Latest sends, skips, and failures.">
-          {loading ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
-          ) : activity.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No reminder activity yet.</p>
-          ) : (
-            <ul className="divide-y text-sm">
-              {activity.map((row) => (
-                <li key={row.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
-                  <div className="min-w-0">
-                    <p className="font-medium">{row.customerLabel}</p>
-                    <p className="text-muted-foreground">{row.reminderLabel}</p>
-                  </div>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {new Date(row.at).toLocaleString()} · {row.status}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="mt-4">
-            <TextLink href={AR_ROUTES.reminders}>View all reminders</TextLink>
-          </div>
-        </Panel>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="flex flex-col gap-6 lg:col-span-2">
+          <FeatureEmphasisStrip
+            icon={Sparkles}
+            title="Automatic SMS from your calendar"
+            badge={
+              <Pill tone="primary" dot={false}>
+                Import only
+              </Pill>
+            }
+            description="Transovo reads appointments from calendars you choose and sends timed SMS reminders. This is not a booking or availability product — connect, import, and remind."
+            action={
+              <Link
+                href={AR_ROUTES.calendars}
+                className="inline-flex h-9 items-center rounded-md bg-sidebar-foreground px-3.5 text-xs font-semibold text-sidebar transition-opacity hover:opacity-90"
+              >
+                Manage calendars
+              </Link>
+            }
+          />
 
-        <Panel title="Calendars" description="Import source for read-only appointments.">
-          {loading ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
-          ) : calendars.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No calendar connected.</p>
-          ) : (
-            <ul className="space-y-2 text-sm">
-              {calendars.map((c) => (
-                <li key={c.id} className="rounded-xl border bg-muted/20 px-4 py-3">
-                  <p className="font-medium">
-                    {c.label || c.provider}
-                    <span className="font-normal text-muted-foreground">
-                      {' '}
-                      · {c.provider === 'microsoft' ? 'Microsoft 365' : 'Google'}
-                    </span>
-                  </p>
-                  {c.accountEmail ? (
-                    <p className="text-xs text-muted-foreground">{c.accountEmail}</p>
-                  ) : null}
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {(c.importCalendarCount ?? 0) > 0
-                      ? `${c.importCalendarCount} calendar(s) selected for import`
-                      : 'No import calendars selected yet'}
-                    {' · '}
-                    {c.status}
-                  </p>
-                  {c.lastSyncAt ? (
-                    <p className="text-xs text-muted-foreground">
-                      Last sync {new Date(c.lastSyncAt).toLocaleString()}
+          <Panel
+            title="Recent reminder activity"
+            description="Latest sends, recorded events, skips, and failures."
+            action={<TextLink href={AR_ROUTES.reminders}>View all</TextLink>}
+            bodyClassName="p-0"
+          >
+            {loading ? (
+              <p className="p-5 text-sm text-muted-foreground">Loading…</p>
+            ) : activity.length === 0 ? (
+              <EmptyState
+                icon={Bell}
+                title="No reminder activity yet"
+                description="After calendars import appointments and reminders send, activity appears here."
+                action={
+                  <Button variant="outline" nativeButton={false} render={<Link href={AR_ROUTES.calendars} />}>
+                    Connect calendar
+                  </Button>
+                }
+              />
+            ) : (
+              <ul className="divide-y">
+                {activity.map((row) => (
+                  <li key={row.id}>
+                    <Link
+                      href={AR_ROUTES.reminders}
+                      className="flex items-start gap-3 px-5 py-3.5 transition-colors hover:bg-muted/40"
+                    >
+                      <Initials name={row.customerLabel} className="size-8" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="truncate text-sm font-medium">{row.customerLabel}</span>
+                          <Pill tone={activityStatusTone(row.status)}>{row.status}</Pill>
+                        </div>
+                        <p className="truncate text-xs text-muted-foreground">{row.reminderLabel}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
+                          {new Date(row.at).toLocaleString()}
+                        </p>
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+        </div>
+
+        <div className="flex flex-col gap-6">
+          <Panel
+            title="Connected calendars"
+            description="Accounts and import selection for appointment sync."
+            action={<TextLink href={AR_ROUTES.calendars}>Manage</TextLink>}
+            bodyClassName="divide-y py-0"
+          >
+            {loading ? (
+              <p className="py-4 text-sm text-muted-foreground">Loading…</p>
+            ) : calendars.length === 0 ? (
+              <EmptyState
+                icon={Calendar}
+                title="No calendar connected"
+                description="Authorize Google or Microsoft and pick calendars that hold customer appointments."
+                action={
+                  <Button nativeButton={false} render={<Link href={AR_ROUTES.calendars} />}>
+                    Connect calendar
+                  </Button>
+                }
+              />
+            ) : (
+              calendars.map((c) => (
+                <div key={c.id} className="px-1">
+                  <KeyValueRow
+                    label={c.provider === 'microsoft' ? 'Microsoft 365' : 'Google Calendar'}
+                    value={c.label || c.provider}
+                    tone={calendarStatusTone(c.status)}
+                    href={AR_ROUTES.calendars}
+                  />
+                  <div className="border-b border-dashed px-5 pb-3 text-xs text-muted-foreground last:border-0">
+                    {c.accountEmail ? <p>{c.accountEmail}</p> : null}
+                    <p>
+                      {(c.importCalendarCount ?? 0) > 0
+                        ? `${c.importCalendarCount} calendar(s) selected for import`
+                        : 'No import calendars selected yet'}
                     </p>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">Not synced yet</p>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="mt-4">
-            <Link href={AR_ROUTES.calendars} className="text-sm font-medium text-primary hover:underline">
-              Manage calendars
-            </Link>
-          </div>
-        </Panel>
-      </div>
-    </div>
-  )
-}
+                    <p>
+                      {c.lastSyncAt
+                        ? `Last sync ${new Date(c.lastSyncAt).toLocaleString()}`
+                        : 'Not synced yet — run Sync on Appointments after selecting import calendars'}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
+          </Panel>
 
-function OverviewMetric({
-  label,
-  value,
-  hint,
-  warn,
-}: {
-  label: string
-  value: string
-  hint?: string
-  warn?: boolean
-}) {
-  return (
-    <div className="px-2 md:px-4">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p
-        className={cn(
-          'text-xl font-semibold tabular-nums',
-          warn && 'text-amber-700 dark:text-amber-500',
-        )}
-      >
-        {value}
-      </p>
-      {hint ? <p className="text-[11px] text-muted-foreground">{hint}</p> : null}
-    </div>
+          <Panel title="Quick links" bodyClassName="divide-y py-0">
+            <KeyValueRow label="Appointments" value="View imported events" href={AR_ROUTES.appointments} />
+            <KeyValueRow label="Reminder log" value="Delivery outcomes" href={AR_ROUTES.reminders} />
+            <KeyValueRow label="SMS sequence" value="Timing and templates" href={AR_ROUTES.settings} />
+          </Panel>
+        </div>
+      </div>
+    </Page>
   )
 }

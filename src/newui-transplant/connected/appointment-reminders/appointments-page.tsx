@@ -6,20 +6,28 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertTriangle,
   Calendar,
+  CalendarClock,
+  ChevronRight,
   MoreHorizontal,
   RefreshCw,
-  Search,
+  Send,
 } from 'lucide-react'
 import type { ArAppointmentRow, ArAppointmentsPagePayload } from '@/lib/appointment-reminders/appointments-page-types'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
 import { formatPhone } from '@/lib/utils'
 import { AppointmentDetailDrawer } from '@/newui-transplant/components/appointment-reminders/appointment-detail-drawer'
 import { ReminderStatusPill } from '@/newui-transplant/components/appointment-reminders/reminder-status-pill'
+import {
+  ArStatGrid,
+  OpusDataSurface,
+  OpusSearchField,
+  OpusTableSkeleton,
+} from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
+import { EmptyState, Initials, Page, PageHeader, Stat } from '@/newui-transplant/components/app/kit'
 import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
-import { OPUS_TABLE_HEAD } from '@/newui-transplant/components/app/opus-surfaces'
+import { OPUS_META_STRIP, OPUS_TABLE_HEAD } from '@/newui-transplant/components/app/opus-surfaces'
 import { th, td } from '@/newui-transplant/components/app/opus-tables'
 import { Button } from '@/newui-transplant/components/ui/button'
-import { Input } from '@/newui-transplant/components/ui/input'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -198,109 +206,126 @@ export function AppointmentRemindersAppointmentsPage() {
             : null
 
   return (
-    <div className="mx-auto w-full max-w-[1440px] px-4 py-6 md:px-6">
-      {/* Section 1 — Header */}
-      <header className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div className="min-w-0 flex-[1_1_70%]">
-          <h1 className="text-[22px] font-semibold leading-7 tracking-tight">Appointments</h1>
-          <p className="mt-1 text-[13px] text-muted-foreground">
-            View appointments from your connected calendars and track reminder readiness.
-          </p>
-        </div>
-        <div className="flex flex-col items-start gap-2 md:items-end">
-          <p className="text-xs text-muted-foreground">{syncLabel}</p>
-          {data?.sync.connected ? (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-[34px]"
-              disabled={syncing}
-              onClick={syncNow}
-            >
-              <RefreshCw className={cn('mr-1.5 size-3.5', syncing && 'animate-spin')} aria-hidden="true" />
-              Sync now
-            </Button>
-          ) : (
-            <Button variant="outline" size="sm" className="h-[34px]" render={<Link href={AR_ROUTES.calendars} />}>
-              Connect calendar
-            </Button>
-          )}
-          {syncError ? (
-            <p className="text-xs text-destructive" role="alert">{syncError}</p>
-          ) : null}
-        </div>
-      </header>
+    <Page className="max-w-[1440px]">
+      <PageHeader
+        title="Appointments"
+        description="Imported calendar events with reminder readiness, phone quality, and sync status."
+        actions={
+          <div className="flex flex-col items-end gap-2">
+            <span className={cn(OPUS_META_STRIP, 'text-xs text-muted-foreground')}>{syncLabel}</span>
+            {data?.sync.connected ? (
+              <Button variant="outline" className="h-9" disabled={syncing} onClick={syncNow}>
+                <RefreshCw className={cn('mr-1.5 size-3.5', syncing && 'animate-spin')} aria-hidden="true" />
+                Sync now
+              </Button>
+            ) : (
+              <Button variant="outline" className="h-9" render={<Link href={AR_ROUTES.calendars} />}>
+                Connect calendar
+              </Button>
+            )}
+            {syncError ? (
+              <p className="text-xs text-destructive" role="alert">{syncError}</p>
+            ) : null}
+          </div>
+        }
+      />
 
-      {/* Section 2 — Summary strip */}
-      <div
-        className="mb-5 grid grid-cols-2 gap-4 border-b pb-4 md:grid-cols-4 md:divide-x md:divide-border"
-        aria-label="Appointment summary"
-      >
-        <Metric
+      <ArStatGrid className="mb-6">
+        <Stat
           label="Upcoming"
-          value={data?.summary.upcoming ?? '—'}
+          value={String(data?.summary.upcoming ?? '—')}
           hint={
             date === 'all' && (data?.summary.upcoming ?? 0) === 0 && (data?.total ?? 0) > 0
-              ? 'Counts future appointments only; table shows all dates'
+              ? 'Future only; table shows all dates'
               : undefined
           }
+          icon={CalendarClock}
         />
-        <Metric label="Scheduled" value={data?.summary.scheduled ?? '—'} />
-        <Metric label="Sent" value={data?.summary.sent ?? '—'} hint="Last 30 days" />
-        <Metric
+        <Stat label="Scheduled reminders" value={String(data?.summary.scheduled ?? '—')} icon={Calendar} />
+        <Stat label="Sent" value={String(data?.summary.sent ?? '—')} hint="Last 30 days" icon={Send} />
+        <Stat
           label="Needs attention"
-          value={data?.summary.needsAttention ?? '—'}
-          warn={(data?.summary.needsAttention ?? 0) > 0}
+          value={String(data?.summary.needsAttention ?? '—')}
+          icon={AlertTriangle}
         />
-      </div>
+      </ArStatGrid>
 
-      {/* Section 3 — Toolbar */}
-      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-1 flex-wrap items-center gap-2">
-          <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
-            <Search
-              className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <Input
-              value={qInput}
-              onChange={(e) => setQInput(e.target.value)}
-              placeholder="Search appointments"
-              className="h-9 pl-9"
-              aria-label="Search appointments"
-            />
-          </div>
-          <SimpleSelect
-            label="Date range"
-            value={date}
-            onChange={(v) => replaceParams({ date: v, page: 1 })}
-            options={DATE_OPTIONS}
-            className="w-[140px]"
-          />
-          <SimpleSelect
-            label="Reminder status"
-            value={reminderStatus}
-            onChange={(v) => replaceParams({ reminderStatus: v, page: 1 })}
-            options={STATUS_OPTIONS}
-            className="w-[160px]"
-          />
-          <SimpleSelect
-            label="Calendar"
-            value={calendarId}
-            onChange={(v) => replaceParams({ calendarId: v, page: 1 })}
-            options={calendarOptions}
-            className="w-[180px]"
-          />
-        </div>
-        <p className="text-xs text-muted-foreground whitespace-nowrap">
-          {total > 0 ? `Showing ${start}–${end} of ${total} appointments` : 'No appointments'}
-        </p>
-      </div>
-
-      {/* Section 4 — Table */}
-      <div className="overflow-hidden rounded-lg border bg-card">
+      <OpusDataSurface
+        toolbar={
+          <>
+            <div className="flex flex-1 flex-wrap items-center gap-2">
+              <OpusSearchField
+                id="ar-appointments-search"
+                label="Search appointments"
+                value={qInput}
+                onChange={setQInput}
+                placeholder="Search customer, title, or phone"
+                className="sm:max-w-xs"
+              />
+              <SimpleSelect
+                label="Date range"
+                value={date}
+                onChange={(v) => replaceParams({ date: v, page: 1 })}
+                options={DATE_OPTIONS}
+                className="w-[140px]"
+              />
+              <SimpleSelect
+                label="Reminder status"
+                value={reminderStatus}
+                onChange={(v) => replaceParams({ reminderStatus: v, page: 1 })}
+                options={STATUS_OPTIONS}
+                className="w-[160px]"
+              />
+              <SimpleSelect
+                label="Calendar"
+                value={calendarId}
+                onChange={(v) => replaceParams({ calendarId: v, page: 1 })}
+                options={calendarOptions}
+                className="w-[180px]"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground whitespace-nowrap">
+              {total > 0 ? `${start}–${end} of ${total}` : 'No appointments'}
+            </p>
+          </>
+        }
+        footer={
+          total > 0 ? (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-muted-foreground">
+                Showing {start}–{end} of {total} appointments
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <SimpleSelect
+                  label="Rows per page"
+                  value={String(pageSize)}
+                  onChange={(v) => replaceParams({ pageSize: Number(v), page: 1 })}
+                  options={[
+                    { value: '25', label: '25' },
+                    { value: '50', label: '50' },
+                    { value: '100', label: '100' },
+                  ]}
+                  className="w-[88px]"
+                />
+                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => replaceParams({ page: page - 1 })}>
+                  Previous
+                </Button>
+                <span className="text-xs text-muted-foreground">Page {page} of {pageCount}</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= pageCount}
+                  onClick={() => replaceParams({ page: page + 1 })}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          ) : undefined
+        }
+      >
         {emptyKind === 'loading' ? (
-          <TableSkeleton />
+          <OpusTableSkeleton label="Loading appointments" />
         ) : emptyKind === 'no_calendar' ? (
           <EmptyState
             icon={Calendar}
@@ -322,6 +347,7 @@ export function AppointmentRemindersAppointmentsPage() {
           />
         ) : emptyKind === 'no_search' ? (
           <EmptyState
+            icon={Calendar}
             title="No matching appointments"
             description="Try another name, appointment title, or phone number."
             action={
@@ -330,6 +356,7 @@ export function AppointmentRemindersAppointmentsPage() {
           />
         ) : emptyKind === 'no_rows' ? (
           <EmptyState
+            icon={CalendarClock}
             title={date === 'upcoming' ? 'No upcoming appointments' : 'No appointments found'}
             description={
               date === 'upcoming' && data?.sync.connected
@@ -363,6 +390,9 @@ export function AppointmentRemindersAppointmentsPage() {
                     <th scope="col" className={th}>Phone</th>
                     <th scope="col" className={th}>Reminder</th>
                     <th scope="col" className={cn(th, 'hidden lg:table-cell')}>Source</th>
+                    <th scope="col" className={cn(th, 'w-8')}>
+                      <span className="sr-only">Open</span>
+                    </th>
                     <th scope="col" className={cn(th, 'text-right')}>Actions</th>
                   </tr>
                 </thead>
@@ -396,48 +426,7 @@ export function AppointmentRemindersAppointmentsPage() {
             </div>
           </>
         )}
-      </div>
-
-      {/* Section 5 — Pagination */}
-      {total > 0 ? (
-        <footer className="mt-0 flex flex-col gap-3 border-t px-2 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs text-muted-foreground">
-            Showing {start}–{end} of {total} appointments
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <SimpleSelect
-              label="Rows per page"
-              value={String(pageSize)}
-              onChange={(v) => replaceParams({ pageSize: Number(v), page: 1 })}
-              options={[
-                { value: '25', label: '25' },
-                { value: '50', label: '50' },
-                { value: '100', label: '100' },
-              ]}
-              className="w-[88px]"
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() => replaceParams({ page: page - 1 })}
-            >
-              Previous
-            </Button>
-            <span className="text-xs text-muted-foreground">
-              Page {page} of {pageCount}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= pageCount}
-              onClick={() => replaceParams({ page: page + 1 })}
-            >
-              Next
-            </Button>
-          </div>
-        </footer>
-      ) : null}
+      </OpusDataSurface>
 
       <AppointmentDetailDrawer
         row={selected}
@@ -446,34 +435,7 @@ export function AppointmentRemindersAppointmentsPage() {
         timezone={data?.timezone || 'America/New_York'}
         onPhoneSaved={load}
       />
-    </div>
-  )
-}
-
-function Metric({
-  label,
-  value,
-  hint,
-  warn,
-}: {
-  label: string
-  value: string | number
-  hint?: string
-  warn?: boolean
-}) {
-  return (
-    <div className="px-2 md:px-4">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p
-        className={cn(
-          'text-xl font-semibold tabular-nums',
-          warn && 'text-amber-700 dark:text-amber-500',
-        )}
-      >
-        {value}
-      </p>
-      {hint ? <p className="text-[11px] text-muted-foreground">{hint}</p> : null}
-    </div>
+    </Page>
   )
 }
 
@@ -494,10 +456,15 @@ function AppointmentTableRow({
       onKeyDown={(e) => e.key === 'Enter' && onOpen()}
     >
       <td className={td}>
-        <span className="block text-[13px] font-medium">{row.customerName}</span>
-        {row.appointmentTitle ? (
-          <span className="block text-xs text-muted-foreground">{row.appointmentTitle}</span>
-        ) : null}
+        <span className="flex items-center gap-3">
+          <Initials name={row.customerName} className="size-8" />
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-medium">{row.customerName}</span>
+            {row.appointmentTitle ? (
+              <span className="block truncate text-xs text-muted-foreground">{row.appointmentTitle}</span>
+            ) : null}
+          </span>
+        </span>
       </td>
       <td className={td}>
         <span className="block text-[13px]">{formatDay(row.startsAt, timezone)}</span>
@@ -530,6 +497,9 @@ function AppointmentTableRow({
       </td>
       <td className={cn(td, 'hidden text-xs text-muted-foreground lg:table-cell')}>
         {sourceLabel(row)}
+      </td>
+      <td className={cn(td, 'w-8')}>
+        <ChevronRight className="ml-auto size-4 text-muted-foreground group-hover:text-foreground" aria-hidden="true" />
       </td>
       <td className={cn(td, 'text-right')} onClick={(e) => e.stopPropagation()}>
         <RowMenu row={row} onOpen={onOpen} />
@@ -589,37 +559,6 @@ function RowMenu({ row, onOpen }: { row: ArAppointmentRow; onOpen: () => void })
         ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
-  )
-}
-
-function EmptyState({
-  icon: Icon,
-  title,
-  description,
-  action,
-}: {
-  icon?: typeof Calendar
-  title: string
-  description: string
-  action?: React.ReactNode
-}) {
-  return (
-    <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-      {Icon ? <Icon className="mb-3 size-8 text-muted-foreground" aria-hidden="true" /> : null}
-      <h2 className="text-sm font-semibold">{title}</h2>
-      <p className="mt-1 max-w-md text-sm text-muted-foreground">{description}</p>
-      {action ? <div className="mt-4">{action}</div> : null}
-    </div>
-  )
-}
-
-function TableSkeleton() {
-  return (
-    <div className="space-y-0 divide-y p-2" aria-busy="true" aria-label="Loading appointments">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="h-[60px] animate-pulse bg-muted/30" />
-      ))}
-    </div>
   )
 }
 
