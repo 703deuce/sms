@@ -37,6 +37,7 @@ export type NewUiTransplantShellLayoutProps = {
   hasSms?: boolean;
   hasNumbers?: boolean;
   hasMctb?: boolean;
+  hasAppointmentReminders?: boolean;
   hasAiAfterHours?: boolean;
   workspaces?: unknown[];
 };
@@ -46,6 +47,9 @@ export function NewUiTransplantShellLayout({
   mainClassName,
   workspaceName,
   userName,
+  hasMctb = true,
+  hasAppointmentReminders = true,
+  hasAiAfterHours = false,
 }: NewUiTransplantShellLayoutProps) {
   const wsName = workspaceName?.trim() || "Workspace";
   return (
@@ -53,7 +57,12 @@ export function NewUiTransplantShellLayout({
       <OpusWorkspaceDataProvider workspaceName={wsName}>
         <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
         <SidebarProvider className="flex h-full min-h-0 w-full flex-1 overflow-hidden">
-          <AppSidebar userName={userName} />
+          <AppSidebar
+            userName={userName}
+            hasMctb={hasMctb}
+            hasAppointmentReminders={hasAppointmentReminders}
+            hasAiAfterHours={hasAiAfterHours}
+          />
           <SidebarInset className="min-h-0 min-w-0 flex-1 bg-background">
             <div className="shrink-0">
               <Topbar userName={userName} />

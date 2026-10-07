@@ -43,9 +43,8 @@ type CalendarConnection = {
   } | null;
 };
 
-const RETURN_PATH = CALENDAR_INTEGRATIONS_PATH;
-
-export function CalendarIntegrationsOpus() {
+export function CalendarIntegrationsOpus({ returnPath }: { returnPath?: string } = {}) {
+  const RETURN_PATH = returnPath ?? CALENDAR_INTEGRATIONS_PATH;
   const [connections, setConnections] = useState<CalendarConnection[]>([]);
   const [blockingEnabled, setBlockingEnabled] = useState(false);
   const [selectedConnectionIds, setSelectedConnectionIds] = useState<string[]>([]);

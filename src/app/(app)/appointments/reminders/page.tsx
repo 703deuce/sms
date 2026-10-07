@@ -1,10 +1,6 @@
-import { Suspense } from "react";
-import { AppointmentRemindersClient } from "@/components/appointments/reminders-client";
+import { redirect } from "next/navigation";
+import { AR_ROUTES } from "@/lib/appointment-reminders/routes";
 
-export default function AppointmentRemindersPage() {
-  return (
-    <Suspense fallback={<div className="p-8 text-sm text-muted-foreground">Loading reminders…</div>}>
-      <AppointmentRemindersClient />
-    </Suspense>
-  );
+export default function LegacyAppointmentRemindersRedirect() {
+  redirect(AR_ROUTES.settings);
 }

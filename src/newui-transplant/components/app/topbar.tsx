@@ -19,10 +19,12 @@ import {
   DropdownMenuTrigger,
 } from '@/newui-transplant/components/ui/dropdown-menu'
 import { performClientLogout } from '@/lib/auth/logout-client'
+import { resolveProductShellFromPath } from '@/lib/products/product-shell'
 import { resolveCustomerNavSections } from '@/newui-transplant/lib/nav'
 
 function sectionFor(pathname: string) {
-  for (const section of resolveCustomerNavSections()) {
+  const shell = resolveProductShellFromPath(pathname) ?? 'mctb'
+  for (const section of resolveCustomerNavSections(shell)) {
     for (const item of section.items) {
       if (pathname === item.href || (item.matchPrefix && pathname.startsWith(item.matchPrefix))) {
         return { section: section.label, page: item.label }

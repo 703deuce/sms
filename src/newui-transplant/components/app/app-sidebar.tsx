@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { PhoneCall } from 'lucide-react'
 import {
@@ -25,7 +26,14 @@ import {
   isVoiceProductCustomerVisible,
   mctbLaunchCustomerHome,
 } from '@/lib/products/launch-product-availability'
+import {
+  resolveProductShellFromPath,
+  readStoredProductShell,
+  type ProductShell,
+} from '@/lib/products/product-shell'
+import { OpusProductSwitcher } from '@/newui-transplant/components/app/opus-product-switcher'
 import { resolveCustomerNavSections, type NavItem, type NavSubItem } from '@/newui-transplant/lib/nav'
+import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
 import {
   isReceptionistWizardAreaPath,
   isReceptionistWizardEditPath,
@@ -64,15 +72,38 @@ function receptionistAreaExpanded(pathname: string) {
   return isReceptionistWizardAreaPath(pathname)
 }
 
-export function AppSidebar({ userName }: { userName?: string }) {
+export type AppSidebarProps = {
+  userName?: string
+  hasMctb?: boolean
+  hasAppointmentReminders?: boolean
+  hasAiAfterHours?: boolean
+}
+
+export function AppSidebar({
+  userName,
+  hasMctb = true,
+  hasAppointmentReminders = true,
+  hasAiAfterHours = false,
+}: AppSidebarProps) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const pathShell = resolveProductShellFromPath(pathname)
+  const [storedShell, setStoredShell] = useState<ProductShell | null>(null)
+  useEffect(() => {
+    setStoredShell(readStoredProductShell())
+  }, [pathname])
+  const productShell: ProductShell =
+    pathShell ?? storedShell ?? (hasMctb ? 'mctb' : 'appointment_reminders')
+  const navSections = resolveCustomerNavSections(productShell)
+  const brandHref =
+    productShell === 'appointment_reminders' ? AR_ROUTES.home : mctbLaunchCustomerHome()
+
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="gap-1 px-2 pb-1 pt-2.5">
         <div className="flex items-center gap-1 group-data-[collapsible=icon]:justify-center">
           <Link
-            href={mctbLaunchCustomerHome()}
+            href={brandHref}
             className="flex min-w-0 flex-1 items-center gap-2 px-0.5 group-data-[collapsible=icon]:flex-none"
           >
             <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
@@ -87,10 +118,15 @@ export function AppSidebar({ userName }: { userName?: string }) {
         <div className="hidden justify-center px-1 pt-1 group-data-[collapsible=icon]:flex">
           <SidebarCollapseButton />
         </div>
+        <OpusProductSwitcher
+          hasMctb={hasMctb}
+          hasAppointmentReminders={hasAppointmentReminders}
+          hasAiAfterHours={hasAiAfterHours}
+        />
       </SidebarHeader>
 
       <SidebarContent className="pb-2 pt-0">
-        {resolveCustomerNavSections().map((section) => (
+        {navSections.map((section) => (
           <SidebarGroup key={section.label} className="px-1.5 py-0.5">
             <SidebarGroupLabel className="px-1.5 pb-0.5 pt-1 text-[10px] font-medium uppercase tracking-wider text-sidebar-foreground/50">
               {section.label}

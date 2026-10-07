@@ -13,7 +13,9 @@ import { getNumbersPageTitle } from "@/lib/products/numbers-nav";
 import { getAiAfterHoursPageTitle } from "@/lib/products/ai-after-hours-nav";
 import { getVoicePageTitle } from "@/lib/products/voice-nav";
 import { getSmsPlatformPageTitle } from "@/lib/products/sms-platform-nav";
+import { getAppointmentRemindersPageTitle } from "@/lib/products/appointment-reminders-nav";
 import { getMctbPageTitle } from "@/lib/products/mctb-nav";
+import { isAppointmentRemindersProductPath } from "@/lib/appointment-reminders/routes";
 import { getAppointmentsPageTitle } from "@/lib/products/appointments-nav";
 import { isAppointmentsProductPath } from "@/lib/products/appointments-routes";
 import { isAppointmentsV1Primary } from "@/lib/workspace/platform-launch";
@@ -127,6 +129,7 @@ export function AppShell({
   hasSms = false,
   hasNumbers = false,
   hasMctb = false,
+  hasAppointmentReminders = false,
   hasAiAfterHours = false,
   showTryIt = false,
   productFeatures = null,
@@ -152,6 +155,7 @@ export function AppShell({
   hasSms?: boolean;
   hasNumbers?: boolean;
   hasMctb?: boolean;
+  hasAppointmentReminders?: boolean;
   hasAiAfterHours?: boolean;
   showTryIt?: boolean;
   productFeatures?: WorkspaceFeatureSnapshot | null;
@@ -211,8 +215,14 @@ export function AppShell({
     hasMctb,
     hasMassSms: hasSms,
     hasAiAfterHours,
+    hasAppointmentReminders,
   });
-  const { shell: productShell } = useProductShell(hasMctb, hasSms, hasAiAfterHours);
+  const { shell: productShell } = useProductShell(
+    hasMctb,
+    hasSms,
+    hasAiAfterHours,
+    hasAppointmentReminders,
+  );
   const newUiShell = shouldUseNewUiShell(pathname, {
     realtorMode,
     isLauncher,
@@ -233,14 +243,19 @@ export function AppShell({
       ? getAppointmentsPageTitle(pathname)
       : "";
   const mctbTitle = mctbContextActive ? getMctbPageTitle(pathname) || getVoicePageTitle(pathname) : "";
+  const arTitle = isAppointmentRemindersProductPath(pathname)
+    ? getAppointmentRemindersPageTitle(pathname)
+    : "";
   const hideAppointmentsHeaderTitle = pathname.startsWith("/appointments/calendar");
   const title = hideChromeTitle || hideAppointmentsHeaderTitle
     ? ""
     : isLauncher
       ? "Your Transovo Products"
-      : mctbTitle
-        ? mctbTitle
-        : appointmentsTitle
+      : arTitle
+        ? arTitle
+        : mctbTitle
+          ? mctbTitle
+          : appointmentsTitle
           ? appointmentsTitle
         : smsPlatformTitle
           ? smsPlatformTitle
@@ -332,6 +347,7 @@ export function AppShell({
             hasSms={hasSms}
             hasNumbers={hasNumbers}
             hasMctb={hasMctb}
+            hasAppointmentReminders={hasAppointmentReminders}
             hasAiAfterHours={hasAiAfterHours}
             mainClassName={mainClassName}
           >

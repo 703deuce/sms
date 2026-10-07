@@ -7,9 +7,11 @@ import {
 } from 'lucide-react'
 import { isVoiceProductCustomerVisible } from '@/lib/products/launch-product-availability'
 import { RECEPTIONIST_WIZARD_NAV_ITEMS } from '@/lib/voice/receptionist/wizard-step-url'
+import { buildAppointmentRemindersNav } from '@/lib/products/appointment-reminders-nav'
 import { buildMctbV1Nav } from '@/lib/products/mctb-nav'
 import type { NavItem as ProductNavItem } from '@/lib/nav'
 import { MCTB_ROUTES } from '@/lib/mctb/routes'
+import type { ProductShell } from '@/lib/products/product-shell'
 
 export type NavSubItem = {
   label: string
@@ -70,6 +72,28 @@ function productNavItemToOpus(item: ProductNavItem): NavItem {
   return opus
 }
 
+export function appointmentRemindersNavSections(): NavSection[] {
+  const flat = buildAppointmentRemindersNav()
+  const sections: NavSection[] = []
+  let bucket: NavItem[] = []
+  let bucketLabel = 'Overview'
+
+  const flush = () => {
+    if (bucket.length > 0) sections.push({ label: bucketLabel, items: bucket })
+    bucket = []
+  }
+
+  for (const item of flat) {
+    if (item.sectionLabel) {
+      flush()
+      bucketLabel = item.sectionLabel
+    }
+    bucket.push(productNavItemToOpus(item))
+  }
+  flush()
+  return sections
+}
+
 /** Launch MCTB IA — single source with `buildMctbV1Nav` (desktop legacy + Opus mobile drawer). */
 export function mctbLaunchNavSections(inboxBadge = 0): NavSection[] {
   const flat = buildMctbV1Nav({ inboxBadge })
@@ -113,10 +137,19 @@ export const INTEGRATION_TABS = [
   { label: 'Developer logs', href: '/integrations/logs' },
 ]
 
-/** Customer-facing sidebar sections (respects launch product visibility). */
-export function resolveCustomerNavSections(): NavSection[] {
-  const mctb = mctbLaunchNavSections()
-  if (isVoiceProductCustomerVisible()) {
+/** Customer-facing sidebar sections for the active product shell. */
+export function resolveCustomerNavSections(
+  productShell: ProductShell = 'mctb',
+  inboxBadge = 0,
+): NavSection[] {
+  if (productShell === 'appointment_reminders') {
+    return appointmentRemindersNavSections()
+  }
+  const mctb = mctbLaunchNavSections(inboxBadge)
+  if (productShell === 'ai_after_hours' && isVoiceProductCustomerVisible()) {
+    return [AI_RECEPTIONIST_SECTION, ...mctb]
+  }
+  if (isVoiceProductCustomerVisible() && productShell === 'mctb') {
     return [AI_RECEPTIONIST_SECTION, ...mctb]
   }
   return mctb

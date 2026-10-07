@@ -1,6 +1,8 @@
 import type { NavItem } from "@/lib/nav";
+import { buildAppointmentRemindersNav } from "@/lib/products/appointment-reminders-nav";
 import { buildAppointmentsMobileNav, buildAppointmentsV1Nav } from "@/lib/products/appointments-nav";
 import { isMctbBundledAiReceptionistPath } from "@/lib/products/mctb-bundled-receptionist-paths";
+import { isAppointmentRemindersSharedWorkspacePath } from "@/lib/products/appointment-reminders-nav";
 import { buildMctbV1Nav, buildMctbV1MobileNav, isMctbSharedWorkspacePath } from "@/lib/products/mctb-nav";
 import { buildAiAfterHoursNav } from "@/lib/products/ai-after-hours-nav";
 import { buildSmsPlatformNav } from "@/lib/products/sms-platform-nav";
@@ -40,6 +42,9 @@ function resolveEffectiveProductShell(
   const pathShell = resolveProductShellFromPath(pathname);
   if (pathShell) return pathShell;
   if (isMctbSharedWorkspacePath(pathname) && productShell === "mctb") return "mctb";
+  if (isAppointmentRemindersSharedWorkspacePath(pathname) && productShell === "appointment_reminders") {
+    return "appointment_reminders";
+  }
   if (multiProduct) return productShell;
   if (isMctbV1Primary() && hasMctb) return "mctb";
   return null;
@@ -63,6 +68,9 @@ export function resolveProductSidebarNav(input: ResolveProductNavInput): NavItem
   }
   if (effectiveShell === "appointments") {
     return buildAppointmentsV1Nav({ conversationsBadge: input.inboxBadge });
+  }
+  if (effectiveShell === "appointment_reminders") {
+    return buildAppointmentRemindersNav();
   }
   if (effectiveShell === "mass_sms") {
     return buildSmsPlatformNav({ conversationsBadge: input.inboxBadge });
@@ -130,6 +138,9 @@ export function resolveProductMobileNav(input: ResolveProductNavInput): NavItem[
   if (effectiveShell === "appointments") {
     return buildAppointmentsMobileNav();
   }
+  if (effectiveShell === "appointment_reminders") {
+    return buildAppointmentRemindersNav();
+  }
   if (effectiveShell === "mass_sms") {
     return buildSmsPlatformNav({ conversationsBadge: input.inboxBadge });
   }
@@ -164,7 +175,12 @@ export function isMctbShellActive(
   }
   const pathShell = resolveProductShellFromPath(pathname);
   if (pathShell === "mctb") return true;
-  if (pathShell === "appointments" || pathShell === "mass_sms" || pathShell === "ai_after_hours") {
+  if (
+    pathShell === "appointments" ||
+    pathShell === "appointment_reminders" ||
+    pathShell === "mass_sms" ||
+    pathShell === "ai_after_hours"
+  ) {
     return false;
   }
   if (isMctbSharedWorkspacePath(pathname) && productShell === "mctb") return true;

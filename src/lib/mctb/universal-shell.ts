@@ -1,3 +1,5 @@
+import { isAppointmentRemindersSharedWorkspacePath } from "@/lib/products/appointment-reminders-nav";
+import { isAppointmentRemindersProductPath } from "@/lib/appointment-reminders/routes";
 import { isMctbSharedWorkspacePath } from "@/lib/products/mctb-nav";
 import { isMctbBundledAiReceptionistPath } from "@/lib/products/mctb-bundled-receptionist-paths";
 import { isMctbNeutralShellPath } from "@/lib/products/mctb-shell";
@@ -30,13 +32,24 @@ export function isMctbUniversalChromeActive(
 ): boolean {
   if (isMctbChromeExcludedPath(pathname)) return false;
   if (isMctbNeutralShellPath(pathname)) return true;
+  if (isAppointmentRemindersProductPath(pathname)) return true;
   if (productShell === "mctb" && isMctbSharedWorkspacePath(pathname)) return true;
+  if (
+    productShell === "appointment_reminders" &&
+    isAppointmentRemindersSharedWorkspacePath(pathname)
+  ) {
+    return true;
+  }
   if (isMctbV1Primary() && options?.hasMctb !== false) {
     if (isMctbBundledAiReceptionistPath(pathname)) return true;
     const pathShell = resolveProductShellFromPath(pathname);
     if (pathShell === "mass_sms" || pathShell === "ai_after_hours") return false;
     if (pathShell === "appointments") return false;
-    return true;
+    if (pathShell === "appointment_reminders") return false;
+    if (productShell === "appointment_reminders") {
+      return isAppointmentRemindersSharedWorkspacePath(pathname);
+    }
+    return productShell === "mctb";
   }
   return false;
 }

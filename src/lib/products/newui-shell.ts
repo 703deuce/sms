@@ -38,6 +38,7 @@ export function shouldUseNewUiShell(
 
   if (pathname.startsWith("/voice/")) return true;
   if (pathname.startsWith("/mctb/") || pathname === "/mctb") return true;
+  if (pathname.startsWith("/appointment-reminders")) return true;
   if (pathname === "/integrations" || pathname.startsWith("/integrations/")) return true;
   if (pathname === "/settings" || pathname.startsWith("/settings/")) return true;
 

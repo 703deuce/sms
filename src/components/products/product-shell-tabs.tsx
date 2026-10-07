@@ -33,6 +33,7 @@ type Props = {
   hasMctb: boolean;
   hasMassSms: boolean;
   hasAiAfterHours: boolean;
+  hasAppointmentReminders?: boolean;
   collapsed?: boolean;
   onNavigate?: () => void;
   className?: string;
@@ -42,11 +43,12 @@ export function useProductShell(
   hasMctb: boolean,
   hasMassSms: boolean,
   hasAiAfterHours: boolean,
+  hasAppointmentReminders = false,
 ) {
   const pathname = usePathname();
   const fromPath = useMemo(() => resolveProductShellFromPath(pathname), [pathname]);
   const [shell, setShellState] = useState<ProductShell>(() =>
-    defaultProductShell({ hasMctb, hasMassSms, hasAiAfterHours }),
+    defaultProductShell({ hasMctb, hasMassSms, hasAiAfterHours, hasAppointmentReminders }),
   );
 
   useEffect(() => {
@@ -60,8 +62,10 @@ export function useProductShell(
       setShellState(stored);
       return;
     }
-    setShellState(defaultProductShell({ hasMctb, hasMassSms, hasAiAfterHours }));
-  }, [fromPath, hasMctb, hasMassSms, hasAiAfterHours]);
+    setShellState(
+      defaultProductShell({ hasMctb, hasMassSms, hasAiAfterHours, hasAppointmentReminders }),
+    );
+  }, [fromPath, hasMctb, hasMassSms, hasAiAfterHours, hasAppointmentReminders]);
 
   const setShell = (next: ProductShell) => {
     writeStoredProductShell(next);
@@ -82,6 +86,10 @@ const SHELL_META: Record<
     icon: Calendar,
     description: "Calendar, booking, reminders, and customer scheduling",
   },
+  appointment_reminders: {
+    icon: Calendar,
+    description: "Calendar-synced SMS reminders for upcoming appointments",
+  },
   mass_sms: {
     icon: Megaphone,
     description: "Campaigns, conversations, contacts, and playbooks",
@@ -100,13 +108,24 @@ export function ProductShellSwitcher({
   hasMctb,
   hasMassSms,
   hasAiAfterHours,
+  hasAppointmentReminders = false,
   collapsed = false,
   onNavigate,
   className,
 }: Props) {
   const router = useRouter();
-  const entitlement = { hasMctb, hasMassSms, hasAiAfterHours };
-  const { shell, setShell } = useProductShell(hasMctb, hasMassSms, hasAiAfterHours);
+  const entitlement = {
+    hasMctb,
+    hasMassSms,
+    hasAiAfterHours,
+    hasAppointmentReminders,
+  };
+  const { shell, setShell } = useProductShell(
+    hasMctb,
+    hasMassSms,
+    hasAiAfterHours,
+    hasAppointmentReminders,
+  );
   const pathname = usePathname();
   const visibleShells = visibleProductShells(entitlement);
   const hideForMctbVoiceAgent =

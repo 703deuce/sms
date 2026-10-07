@@ -68,6 +68,7 @@ export default async function AppLayout({
       ? (customCfg.mctb as Record<string, unknown>)
       : {};
   const hasMctb = isActiveEntitlement(productFeatures.mctb);
+  const hasAppointmentReminders = productAccess.hasVoice;
   const hasAiAfterHours = isAiAfterHoursEntitled(productAccess.hasVoice);
   const showTryIt =
     hasMctb &&
@@ -113,6 +114,7 @@ export default async function AppLayout({
         }
         hasNumbers={productAccess.hasNumbers}
         hasMctb={hasMctb}
+        hasAppointmentReminders={hasAppointmentReminders}
         hasAiAfterHours={hasAiAfterHours}
         showTryIt={showTryIt}
         productFeatures={productFeatures}
