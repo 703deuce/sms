@@ -122,10 +122,59 @@ async function runMutationBody(
       };
     }
     case "RESCHEDULE": {
+      const prisma = (await import("@/lib/db")).getPrisma();
+      const row = await prisma.voiceAppointment.findFirst({
+        where: { id: action.appointmentId, workspaceId: ctx.workspaceId },
+      });
+      const { providerRefFromAppointment } = await import(
+        "@/lib/appointment-reminders/ai-rescheduler/provider-mutations"
+      );
+      const { commitArReschedule } = await import(
+        "@/lib/appointment-reminders/ai-rescheduler/commit-reschedule"
+      );
+      const { isAiAutomaticCalendarMutation, resolveAiReschedulerConfig } = await import(
+        "@/lib/appointment-reminders/ai-rescheduler/types"
+      );
+      const ar = resolveAiReschedulerConfig(ctx.platform);
+      const providerRef = row ? providerRefFromAppointment(row) : null;
+      if (providerRef && isAiAutomaticCalendarMutation(ar)) {
+        const operationId = `${ctx.requestId}:reschedule:${action.appointmentId}`;
+        const committed = await commitArReschedule({
+          workspaceId: ctx.workspaceId,
+          appointmentId: action.appointmentId,
+          startsAt: action.startsAt,
+          initiatedBy: "customer",
+          operationId,
+        });
+        if (!committed.ok) {
+          return {
+            status: "CLARIFICATION_REQUIRED",
+            reason: committed.message,
+            requiresVerifier: false,
+            mutationExecuted: false,
+          };
+        }
+        const updated = await prisma.voiceAppointment.findFirst({
+          where: { id: action.appointmentId, workspaceId: ctx.workspaceId },
+        });
+        return {
+          status: "RESCHEDULED",
+          appointment: {
+            id: action.appointmentId,
+            serviceName: updated?.serviceName || "Appointment",
+            startsAt: updated?.startsAt.toISOString() || action.startsAt,
+            status: updated?.status || "scheduled",
+          },
+          requiresVerifier: false,
+          mutationExecuted: true,
+        };
+      }
+
       const appt = await reschedulePlatformAppointment(
         ctx.workspaceId,
         action.appointmentId,
         action.startsAt,
+        "customer",
       );
       return {
         status: "RESCHEDULED",

@@ -38,7 +38,12 @@ export async function tryHandleInboundAppointmentAi(input: {
   }
 
   const platform = await loadAppointmentPlatformConfig(input.workspaceId);
-  if (platform.bookingEnabled === false) return { handled: false };
+  const { resolveAiReschedulerConfig } = await import(
+    "@/lib/appointment-reminders/ai-rescheduler/types"
+  );
+  const ar = resolveAiReschedulerConfig(platform);
+  const arSmsActive = ar.mode === "ai" || ar.mode === "notify";
+  if (platform.bookingEnabled === false && !arSmsActive) return { handled: false };
 
   const prisma = getPrisma();
   const contact = await prisma.contact.findFirst({

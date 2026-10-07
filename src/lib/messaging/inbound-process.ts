@@ -364,19 +364,22 @@ export async function processInboundMessage(input: {
     }
   }
 
-  // Single-letter appointment confirm (C) / cancel (X) for contacts with an
-  // upcoming appointment. Falls through to normal handling when none exists.
-  if (upper === "C" || upper === "X") {
+  // Appointment Reminders: C confirm, R reschedule, X cancel (reminder-bound when configured).
+  if (upper === "C" || upper === "X" || upper === "R") {
     const apptContact = await prisma.contact.findUnique({
       where: { workspaceId_phone: { workspaceId: input.workspaceId, phone: from } },
     });
     if (apptContact) {
-      const { findUpcomingAppointmentForContact, confirmAppointment } = await import(
-        "@/lib/voice/calendar/booking"
+      const { handleArReminderLetterReply } = await import(
+        "@/lib/appointment-reminders/ai-rescheduler/inbound-replies"
       );
-      const { cancelPlatformAppointment } = await import("@/lib/appointments/booking-platform");
-      const appt = await findUpcomingAppointmentForContact(input.workspaceId, apptContact.id);
-      if (appt) {
+      const arReply = await handleArReminderLetterReply({
+        workspaceId: input.workspaceId,
+        contactId: apptContact.id,
+        body,
+        letter: upper as "C" | "R" | "X",
+      });
+      if (arReply.handled) {
         await recordInboundReceipt({
           workspaceId: input.workspaceId,
           from,
@@ -384,22 +387,9 @@ export async function processInboundMessage(input: {
           body,
           providerMessageId: input.providerMessageId,
         });
-        const whenLabel = appt.startsAt.toLocaleString("en-US", {
-          dateStyle: "medium",
-          timeStyle: "short",
-          timeZone: appt.timezone || undefined,
-        });
-        if (upper === "C") {
-          await confirmAppointment(input.workspaceId, appt.id);
-          return {
-            kind: "message",
-            replyText: `Your appointment on ${whenLabel} is confirmed. Reply X to cancel.`,
-          };
-        }
-        await cancelPlatformAppointment(input.workspaceId, appt.id, "customer");
         return {
           kind: "message",
-          replyText: `Your appointment on ${whenLabel} has been cancelled.`,
+          replyText: arReply.replyText,
         };
       }
     }

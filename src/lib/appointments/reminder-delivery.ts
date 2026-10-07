@@ -439,7 +439,18 @@ async function trySendStep(input: {
   );
 
   try {
-    const smsBody = finalizeReminderSmsBody(body);
+    let smsBody = finalizeReminderSmsBody(body);
+    const platform = await loadAppointmentPlatformConfig(input.workspaceId);
+    const {
+      isAiReschedulerSmsEnabled,
+      AR_REPLY_INSTRUCTIONS_SUFFIX,
+      resolveAiReschedulerConfig,
+    } = await import("@/lib/appointment-reminders/ai-rescheduler/types");
+    if (isAiReschedulerSmsEnabled(resolveAiReschedulerConfig(platform))) {
+      if (!/reply\s+c\s+to\s+confirm/i.test(smsBody)) {
+        smsBody = `${smsBody.trim()}${AR_REPLY_INSTRUCTIONS_SUFFIX}`;
+      }
+    }
     await sendInternationalAppointmentSms({
       workspaceId: input.workspaceId,
       to: input.phone,
@@ -457,6 +468,23 @@ async function trySendStep(input: {
       where: { id: input.appointmentId },
       data: { metadata: nextMeta as object },
     });
+    const apptRow = await prisma.voiceAppointment.findFirst({
+      where: { id: input.appointmentId },
+      select: { contactId: true, metadata: true },
+    });
+    if (apptRow?.contactId) {
+      const { seedRescheduleConversationOnReminderSend } = await import(
+        "@/lib/appointment-reminders/ai-rescheduler/inbound-replies"
+      );
+      const gen = (apptRow.metadata as AppointmentMetadata)?.reminderGeneration;
+      await seedRescheduleConversationOnReminderSend({
+        workspaceId: input.workspaceId,
+        contactId: apptRow.contactId,
+        appointmentId: input.appointmentId,
+        reminderGeneration: typeof gen === "number" ? gen : undefined,
+        timelineType: input.timelineType,
+      });
+    }
     return true;
   } catch (err) {
     await releaseArReminderSmsReservation({

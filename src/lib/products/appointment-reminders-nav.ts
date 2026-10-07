@@ -4,6 +4,7 @@ import {
   CalendarDays,
   LayoutDashboard,
   Settings2,
+  Sparkles,
   CreditCard,
   Building2,
   Link2,
@@ -54,6 +55,11 @@ export function buildAppointmentRemindersNav(): NavItem[] {
       icon: Settings2,
     },
     {
+      label: "AI Rescheduler",
+      href: AR_ROUTES.aiRescheduler,
+      icon: Sparkles,
+    },
+    {
       label: "Booking page",
       href: AR_ROUTES.booking,
       icon: Link2,
@@ -87,6 +93,7 @@ export function getAppointmentRemindersPageTitle(pathname: string): string {
   if (pathname.startsWith(AR_ROUTES.reminders)) return "Reminders";
   if (pathname.startsWith(AR_ROUTES.calendars)) return "Calendars";
   if (pathname.startsWith(AR_ROUTES.settings)) return "Reminder Settings";
+  if (pathname.startsWith(AR_ROUTES.aiRescheduler)) return "AI Rescheduler";
   if (pathname.startsWith(AR_ROUTES.bookingServices)) return "Meetings";
   if (pathname.startsWith(AR_ROUTES.bookingMeetings)) return "Meetings";
   if (pathname.startsWith(AR_ROUTES.booking)) return "Booking page";
