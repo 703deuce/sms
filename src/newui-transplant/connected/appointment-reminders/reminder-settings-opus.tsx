@@ -11,7 +11,7 @@ import {
   patchReminderMinutesBefore,
   patchReminderTemplate,
   removeReminderStep,
-  resetReminderTemplate,
+  resetAppointmentRemindersTemplate,
   type RemindersApiConfig,
   type ReminderPreviewMap,
   REMINDER_MERGE_TAGS,
@@ -19,9 +19,9 @@ import {
 import { listReminderStepIds, resolveReminderStep } from '@/lib/appointments/reminders/reminders-config'
 import { DEFAULT_PLATFORM_CONFIG, type AppointmentPlatformConfig } from '@/lib/appointments/types'
 import type { ReminderItem, ReminderStepKey } from '@/features/appointments/kimi/reminders/types'
-import { ArStatGrid } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
+import { CompactMetric, CompactMetricStrip } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
 import { ReminderSequenceTimeline } from '@/newui-transplant/components/appointment-reminders/reminder-sequence-timeline'
-import { Callout, FeatureEmphasisStrip, Panel, Pill, Stat } from '@/newui-transplant/components/app/kit'
+import { Callout, Panel } from '@/newui-transplant/components/app/kit'
 import { OPUS_META_STRIP } from '@/newui-transplant/components/app/opus-surfaces'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Input } from '@/newui-transplant/components/ui/input'
@@ -172,18 +172,6 @@ export function AppointmentRemindersSettingsOpus() {
 
   return (
     <div className="space-y-6">
-      <FeatureEmphasisStrip
-        icon={MessageSquare}
-        title="SMS reminder sequence"
-        badge={<Pill tone="success" dot={false}>Workspace engine</Pill>}
-        description="Drip-style timing and templates — like campaigns, but tied to imported appointments. Changes apply to future sends only."
-        action={
-          saved && !saving ? (
-            <span className="text-xs font-medium text-[oklch(0.82_0.12_158)]" role="status">Saved</span>
-          ) : null
-        }
-      />
-
       <div className="flex flex-wrap items-center justify-end gap-2">
         {saved && !saving ? (
           <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400" role="status">
@@ -196,16 +184,16 @@ export function AppointmentRemindersSettingsOpus() {
       </div>
 
       {workspace ? (
-        <ArStatGrid>
-          <Stat label="Active steps" value={String(workspace.activeSteps)} />
-          <Stat label="Scheduled" value={String(workspace.scheduledCount)} hint="Upcoming sends" />
-          <Stat label="Sent today" value={String(workspace.sentToday)} />
-          <Stat
+        <CompactMetricStrip>
+          <CompactMetric label="Active steps" value={String(workspace.activeSteps)} />
+          <CompactMetric label="Scheduled" value={String(workspace.scheduledCount)} hint="Upcoming sends" />
+          <CompactMetric label="Sent today" value={String(workspace.sentToday)} />
+          <CompactMetric
             label="SMS sender"
             value={workspace.readiness.sms}
             hint={workspace.failed7d > 0 ? `${workspace.failed7d} failed (7d)` : undefined}
           />
-        </ArStatGrid>
+        </CompactMetricStrip>
       ) : null}
 
       <Tabs defaultValue="sequence">
@@ -217,8 +205,8 @@ export function AppointmentRemindersSettingsOpus() {
 
         <TabsContent value="sequence" className="mt-5 space-y-4">
           <Panel
-            title="SMS reminder sequence"
-            description="Like a drip campaign: confirmations and timed texts before each appointment. Changes apply to future appointments only."
+            title="Reminder sequence"
+            description="Confirmations and timed SMS before each imported appointment. Changes apply to future sends only."
             bodyClassName="p-0"
           >
             <ReminderSequenceTimeline
@@ -323,7 +311,7 @@ export function AppointmentRemindersSettingsOpus() {
         }}
         onReset={() => {
           if (!editStep) return
-          setConfig(resetReminderTemplate(config, editStep.stepKey))
+          setConfig(resetAppointmentRemindersTemplate(config, editStep.stepKey))
           setSaved(false)
         }}
         onRemove={

@@ -173,16 +173,14 @@ export function CalendarIntegrationsOpus({
 
   return (
     <div className="space-y-4">
-      <Panel
-        title={isReminders ? "Connect calendars for reminders" : "Calendar integrations"}
-        description={
-          isReminders
-            ? "Authorize Google Calendar or Microsoft 365, then select which calendars contain customer appointments. Transovo imports those events and sends SMS reminders automatically — this product does not manage your booking availability."
-            : "Connect Outlook/Google for availability blocking and optional appointment import. Only calendars you explicitly choose for import can create reminder-eligible appointments — personal events like lunch or focus time are filtered out by default."
-        }
-      >
-        {notice ? <p className="mt-2 text-sm text-muted-foreground">{notice}</p> : null}
-      </Panel>
+      {notice ? <p className="text-sm text-muted-foreground">{notice}</p> : null}
+
+      {!isReminders ? (
+        <Panel
+          title="Calendar integrations"
+          description="Connect Outlook/Google for availability blocking and optional appointment import. Only calendars you explicitly choose for import can create reminder-eligible appointments — personal events like lunch or focus time are filtered out by default."
+        />
+      ) : null}
 
       <ProviderSection
         variant={variant}
@@ -274,7 +272,7 @@ export function CalendarIntegrationsOpus({
 
       {isReminders && connected.length === 0 && pending.length > 0 ? (
         <p className="text-[12px] text-amber-700">
-          Finish connecting a calendar above, then select import calendars and run Sync now from Appointments.
+          Finish OAuth above, then expand the connection to select import calendars and save.
         </p>
       ) : null}
 
@@ -314,19 +312,31 @@ function ProviderSection({
   onReconnect: (id: string) => void;
   onRefresh: () => void;
 }) {
+  const isReminders = variant === "appointment_reminders";
   const connected = rows.filter((r) => r.status === "connected" || r.status === "needs_reauth");
   const pending = rows.filter((r) => r.status !== "connected" && r.status !== "needs_reauth");
+  const statusLabel = connected.length
+    ? "Connected"
+    : pending.length
+      ? "Setup in progress"
+      : "Not connected";
 
   return (
     <Panel className="space-y-3 p-4">
-      <div className="flex items-start gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <Calendar className="h-4 w-4" />
-        </div>
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-semibold">{title}</p>
-          <p className="text-[12px] text-muted-foreground">{description}</p>
+          {isReminders ? (
+            <p className="text-[12px] text-muted-foreground">{statusLabel}</p>
+          ) : (
+            <p className="text-[12px] text-muted-foreground">{description}</p>
+          )}
         </div>
+        {!isReminders ? (
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <Calendar className="h-4 w-4" />
+          </div>
+        ) : null}
       </div>
 
       {!configured ? (
@@ -405,7 +415,11 @@ function ConnectionRow({
     connection.config?.blockingCalendarIds || [],
   );
   const [importIds, setImportIds] = useState<string[]>(connection.config?.importCalendarIds || []);
-  const [syncEnabled, setSyncEnabled] = useState(connection.config?.syncEnabled === true);
+  const [syncEnabled, setSyncEnabled] = useState(
+    isReminders
+      ? connection.config?.syncEnabled !== false
+      : connection.config?.syncEnabled === true,
+  );
   const [requireExternalAttendees, setRequireExternalAttendees] = useState(
     connection.config?.importRules?.requireExternalAttendees !== false,
   );
@@ -470,14 +484,17 @@ function ConnectionRow({
 
   async function saveConnectionSettings() {
     setSaving(true);
-    await fetch(`/api/integrations/calendars/${connection.id}`, {
+    const effectiveSyncEnabled = isReminders
+      ? importIds.length > 0
+      : importIds.length > 0 && syncEnabled;
+    const res = await fetch(`/api/integrations/calendars/${connection.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         writeCalendarId: writeCalendarId || undefined,
         blockingCalendarIds: blockingIds,
         importCalendarIds: importIds,
-        syncEnabled: importIds.length > 0 && syncEnabled,
+        syncEnabled: effectiveSyncEnabled,
         importRules: {
           requireExternalAttendees,
           requireAttendeeEmail,
@@ -503,6 +520,9 @@ function ConnectionRow({
     });
     setSaving(false);
     onRefresh();
+    if (isReminders && importIds.length > 0 && res.ok) {
+      await syncNow();
+    }
   }
 
   async function syncNow() {
@@ -658,6 +678,7 @@ function ConnectionRow({
                 onChange={(ids) => {
                   setImportIds(ids);
                   if (!ids.length) setSyncEnabled(false);
+                  else if (isReminders) setSyncEnabled(true);
                 }}
               />
 
@@ -771,7 +792,7 @@ function ConnectionRow({
           ) : (
             <p className="text-[11px] text-muted-foreground">
               {isReminders
-                ? "Select at least one calendar above, save, then use Sync now on the Appointments page."
+                ? "Select at least one calendar above, then save to start importing appointments."
                 : "Select at least one calendar under \"Import for reminders\" to sync external appointments. Blocking-only calendars never create reminder appointments."}
             </p>
           )}

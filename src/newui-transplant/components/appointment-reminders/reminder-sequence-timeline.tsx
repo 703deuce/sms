@@ -1,9 +1,8 @@
 'use client'
 
-import { CalendarCheck, MessageSquare, Plus } from 'lucide-react'
+import { CalendarCheck, Plus } from 'lucide-react'
 import type { ReminderItem } from '@/features/appointments/kimi/reminders/types'
-import { Pill } from '@/newui-transplant/components/app/kit'
-import { OPUS_CARD, OPUS_CONFIG_INSET } from '@/newui-transplant/components/app/opus-surfaces'
+import { OPUS_CARD } from '@/newui-transplant/components/app/opus-surfaces'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Input } from '@/newui-transplant/components/ui/input'
 import { Switch } from '@/newui-transplant/components/ui/switch'
@@ -40,25 +39,13 @@ export function ReminderSequenceTimeline({ steps, onToggle, onEdit, onAdd, onMin
   const activeCount = steps.filter((s) => s.enabled).length
 
   return (
-    <div className={cn(OPUS_CONFIG_INSET, 'relative overflow-hidden p-4 md:p-5')}>
-      <div
-        className="pointer-events-none absolute -right-12 -top-16 size-48 rounded-full bg-primary/15 blur-3xl"
-        aria-hidden="true"
-      />
-      <div className="relative mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <MessageSquare className="size-4" aria-hidden="true" />
-          </span>
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-semibold tracking-tight">Drip sequence</p>
-              <Pill tone="primary" dot={false}>SMS</Pill>
-            </div>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              Starts when an appointment is imported · {activeCount} active step{activeCount === 1 ? '' : 's'}
-            </p>
-          </div>
+    <div className="p-4 md:p-5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold tracking-tight">Reminder sequence</p>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            When an appointment is imported · {activeCount} active step{activeCount === 1 ? '' : 's'}
+          </p>
         </div>
         <Button type="button" size="sm" variant="outline" className="h-9" onClick={onAdd}>
           <Plus className="mr-1.5 size-3.5" aria-hidden="true" />
@@ -83,7 +70,7 @@ export function ReminderSequenceTimeline({ steps, onToggle, onEdit, onAdd, onMin
                   )}
                 />
                 {index < steps.length - 1 ? (
-                  <span className="mt-1 w-px flex-1 bg-gradient-to-b from-primary/50 to-border" />
+                  <span className="mt-1 w-px flex-1 bg-border" />
                 ) : null}
               </div>
 
@@ -133,10 +120,6 @@ export function ReminderSequenceTimeline({ steps, onToggle, onEdit, onAdd, onMin
                 </div>
 
                 <div className="flex shrink-0 flex-wrap items-center gap-3 sm:flex-col sm:items-end sm:gap-2">
-                  <Pill tone={step.enabled ? 'primary' : 'neutral'} dot={false}>
-                    <MessageSquare className="size-3" aria-hidden="true" />
-                    SMS
-                  </Pill>
                   <div className="flex items-center gap-2">
                     <Switch
                       checked={step.enabled}
@@ -166,10 +149,9 @@ export function ReminderSequenceTimeline({ steps, onToggle, onEdit, onAdd, onMin
         </li>
       </ol>
 
-      <div className="mt-3 flex items-center gap-2 rounded-lg border border-dashed bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
-        <CalendarCheck className="size-4 shrink-0 text-primary" aria-hidden="true" />
+      <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+        <CalendarCheck className="size-4 shrink-0" aria-hidden="true" />
         <span className="font-medium text-foreground">Appointment start</span>
-        <span className="text-xs">— sequence ends here</span>
       </div>
     </div>
   )

@@ -18,12 +18,13 @@ import { formatPhone } from '@/lib/utils'
 import { AppointmentDetailDrawer } from '@/newui-transplant/components/appointment-reminders/appointment-detail-drawer'
 import { ReminderStatusPill } from '@/newui-transplant/components/appointment-reminders/reminder-status-pill'
 import {
-  ArStatGrid,
+  CompactMetric,
+  CompactMetricStrip,
   OpusDataSurface,
   OpusSearchField,
   OpusTableSkeleton,
 } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
-import { EmptyState, Initials, Page, PageHeader, Stat } from '@/newui-transplant/components/app/kit'
+import { EmptyState, Initials, Page, PageHeader } from '@/newui-transplant/components/app/kit'
 import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
 import { OPUS_META_STRIP, OPUS_TABLE_HEAD } from '@/newui-transplant/components/app/opus-surfaces'
 import { th, td } from '@/newui-transplant/components/app/opus-tables'
@@ -230,8 +231,8 @@ export function AppointmentRemindersAppointmentsPage() {
         }
       />
 
-      <ArStatGrid className="mb-6">
-        <Stat
+      <CompactMetricStrip>
+        <CompactMetric
           label="Upcoming"
           value={String(data?.summary.upcoming ?? '—')}
           hint={
@@ -239,16 +240,11 @@ export function AppointmentRemindersAppointmentsPage() {
               ? 'Future only; table shows all dates'
               : undefined
           }
-          icon={CalendarClock}
         />
-        <Stat label="Scheduled reminders" value={String(data?.summary.scheduled ?? '—')} icon={Calendar} />
-        <Stat label="Sent" value={String(data?.summary.sent ?? '—')} hint="Last 30 days" icon={Send} />
-        <Stat
-          label="Needs attention"
-          value={String(data?.summary.needsAttention ?? '—')}
-          icon={AlertTriangle}
-        />
-      </ArStatGrid>
+        <CompactMetric label="Scheduled reminders" value={String(data?.summary.scheduled ?? '—')} />
+        <CompactMetric label="Sent" value={String(data?.summary.sent ?? '—')} hint="Last 30 days" />
+        <CompactMetric label="Needs attention" value={String(data?.summary.needsAttention ?? '—')} />
+      </CompactMetricStrip>
 
       <OpusDataSurface
         toolbar={

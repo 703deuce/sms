@@ -3,21 +3,22 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { AlertTriangle, Bell, RefreshCw, Send, ShieldAlert } from 'lucide-react'
+import { Bell, RefreshCw } from 'lucide-react'
 import type {
   ArReminderOperationalRow,
   ArRemindersPagePayload,
 } from '@/lib/appointment-reminders/reminders-page-types'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
 import {
-  ArStatGrid,
+  CompactMetric,
+  CompactMetricStrip,
   OpusDataSurface,
   OpusSearchField,
   OpusTableSkeleton,
 } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
 import { ReminderStatusPill } from '@/newui-transplant/components/appointment-reminders/reminder-status-pill'
 import type { AggregateReminderStatus } from '@/lib/appointment-reminders/aggregate-reminder-status'
-import { EmptyState, Initials, Page, PageHeader, Stat } from '@/newui-transplant/components/app/kit'
+import { EmptyState, Initials, Page, PageHeader } from '@/newui-transplant/components/app/kit'
 import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
 import { OPUS_TABLE_HEAD } from '@/newui-transplant/components/app/opus-surfaces'
 import { th, td } from '@/newui-transplant/components/app/opus-tables'
@@ -143,12 +144,12 @@ export function AppointmentRemindersLogPage() {
         }
       />
 
-      <ArStatGrid className="mb-6">
-        <Stat label="Scheduled" value={String(data?.summary.scheduled ?? '—')} icon={Bell} />
-        <Stat label="Sent" value={String(data?.summary.sent30d ?? '—')} hint="Last 30 days" icon={Send} />
-        <Stat label="Failed" value={String(data?.summary.failed7d ?? '—')} hint="Last 7 days" icon={AlertTriangle} />
-        <Stat label="Blocked" value={String(data?.summary.blocked ?? '—')} icon={ShieldAlert} />
-      </ArStatGrid>
+      <CompactMetricStrip>
+        <CompactMetric label="Scheduled" value={String(data?.summary.scheduled ?? '—')} />
+        <CompactMetric label="Sent" value={String(data?.summary.sent30d ?? '—')} hint="Last 30 days" />
+        <CompactMetric label="Failed" value={String(data?.summary.failed7d ?? '—')} hint="Last 7 days" />
+        <CompactMetric label="Blocked" value={String(data?.summary.blocked ?? '—')} />
+      </CompactMetricStrip>
 
       <OpusDataSurface
         toolbar={

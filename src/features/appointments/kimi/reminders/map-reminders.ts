@@ -1,4 +1,5 @@
 import { createId } from "@/lib/supabase/id";
+import { defaultAppointmentRemindersTemplateForStep } from "@/lib/appointment-reminders/default-reminder-templates";
 import { DEFAULT_REMINDER_TEMPLATES } from "@/lib/appointments/types";
 import type { ReminderChannel, ReminderStepConfig } from "@/lib/appointments/types";
 import { estimateSmsSegments } from "@/lib/utils";
@@ -217,6 +218,14 @@ export function resetReminderTemplate(
   stepKey: ReminderStepId,
 ): RemindersApiConfig {
   return patchReminderTemplate(config, stepKey, defaultTemplateForStep(stepKey));
+}
+
+/** Reset to Appointment Reminders (calendar-import) defaults — no booking self-service links. */
+export function resetAppointmentRemindersTemplate(
+  config: RemindersApiConfig,
+  stepKey: ReminderStepId,
+): RemindersApiConfig {
+  return patchReminderTemplate(config, stepKey, defaultAppointmentRemindersTemplateForStep(stepKey));
 }
 
 export function addAdditionalReminderStep(config: RemindersApiConfig): RemindersApiConfig {

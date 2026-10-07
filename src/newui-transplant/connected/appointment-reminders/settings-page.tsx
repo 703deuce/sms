@@ -9,7 +9,7 @@ export function AppointmentRemindersSettingsPage() {
     <Page className="mx-auto max-w-[1440px]">
       <PageHeader
         title="Reminder settings"
-        description="Build your SMS drip sequence — timing, message templates, and tests — saved to your workspace reminder engine."
+        description="Configure your reminder sequence — timing, SMS templates, preview, and test sends."
       />
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading settings…</p>}>
         <AppointmentRemindersSettingsOpus />

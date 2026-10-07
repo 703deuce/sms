@@ -1,11 +1,10 @@
 'use client'
 
 import Link from 'next/link'
-import { Bell, Sparkles } from 'lucide-react'
+import { Bell } from 'lucide-react'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
 import {
   ConfigSection,
-  FeatureEmphasisStrip,
   Page,
   PageHeader,
   Panel,
@@ -21,12 +20,7 @@ export function AppointmentRemindersSetupConnectPage() {
       <PageHeader
         title="Connect your calendar"
         meta={<Pill tone="primary">Step 1</Pill>}
-        description="Authorize Google or Microsoft and select calendars that contain appointments you want to remind."
-      />
-      <FeatureEmphasisStrip
-        icon={Sparkles}
-        title="Import appointments, send SMS reminders"
-        description="Finish OAuth, pick import calendars, save, then sync from the Appointments page."
+        description="Authorize Google or Microsoft, select import calendars, and save — the first appointment import runs automatically."
       />
       <div className="mt-6">
         <CalendarIntegrationsOpus returnPath={AR_ROUTES.setupConnect} variant="appointment_reminders" />

@@ -2,28 +2,18 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import {
-  AlertTriangle,
-  Bell,
-  Calendar,
-  CalendarClock,
-  MessagesSquare,
-  Send,
-  Sparkles,
-} from 'lucide-react'
+import { AlertTriangle, Bell, Calendar } from 'lucide-react'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
-import { ArStatGrid } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
+import { CompactMetric, CompactMetricStrip } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
 import {
   Callout,
   EmptyState,
-  FeatureEmphasisStrip,
   Initials,
   KeyValueRow,
   Page,
   PageHeader,
   Panel,
   Pill,
-  Stat,
   TextLink,
   type Tone,
 } from '@/newui-transplant/components/app/kit'
@@ -137,33 +127,29 @@ export function AppointmentRemindersOverviewPage() {
         </Callout>
       ) : null}
 
-      <ArStatGrid className="mb-6">
-        <Stat
+      <CompactMetricStrip>
+        <CompactMetric
           label="Appointments today"
           value={loading ? '—' : String(counts?.todayTotal ?? 0)}
-          icon={CalendarClock}
           href={AR_ROUTES.appointments}
         />
-        <Stat
+        <CompactMetric
           label="Reminders sent today"
           value={loading ? '—' : String(stats?.sentToday ?? 0)}
-          icon={Send}
           href={AR_ROUTES.reminders}
         />
-        <Stat
+        <CompactMetric
           label="Scheduled reminders"
           value={loading ? '—' : String(stats?.scheduledCount ?? 0)}
           hint="Upcoming automated texts"
-          icon={Bell}
           href={`${AR_ROUTES.reminders}?status=scheduled`}
         />
-        <Stat
+        <CompactMetric
           label="Failed (7 days)"
           value={loading ? '—' : String(stats?.failed7d ?? 0)}
-          icon={MessagesSquare}
           href={`${AR_ROUTES.reminders}?status=failed`}
         />
-      </ArStatGrid>
+      </CompactMetricStrip>
 
       {!calendarHealthy && !loading ? (
         <div className="mb-6">
@@ -176,25 +162,6 @@ export function AppointmentRemindersOverviewPage() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="flex flex-col gap-6 lg:col-span-2">
-          <FeatureEmphasisStrip
-            icon={Sparkles}
-            title="Automatic SMS from your calendar"
-            badge={
-              <Pill tone="primary" dot={false}>
-                Import only
-              </Pill>
-            }
-            description="Transovo reads appointments from calendars you choose and sends timed SMS reminders. This is not a booking or availability product — connect, import, and remind."
-            action={
-              <Link
-                href={AR_ROUTES.calendars}
-                className="inline-flex h-9 items-center rounded-md bg-sidebar-foreground px-3.5 text-xs font-semibold text-sidebar transition-opacity hover:opacity-90"
-              >
-                Manage calendars
-              </Link>
-            }
-          />
-
           <Panel
             title="Recent reminder activity"
             description="Latest sends, recorded events, skips, and failures."
@@ -280,7 +247,7 @@ export function AppointmentRemindersOverviewPage() {
                     <p>
                       {c.lastSyncAt
                         ? `Last sync ${new Date(c.lastSyncAt).toLocaleString()}`
-                        : 'Not synced yet — run Sync on Appointments after selecting import calendars'}
+                        : 'Not synced yet — save import calendars to start the first import'}
                     </p>
                   </div>
                 </div>

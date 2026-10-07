@@ -1,7 +1,8 @@
 'use client'
 
+import Link from 'next/link'
 import { Search } from 'lucide-react'
-import { OPUS_CARD, OPUS_SEARCH_INPUT } from '@/newui-transplant/components/app/opus-surfaces'
+import { OPUS_CARD, OPUS_META_STRIP, OPUS_SEARCH_INPUT } from '@/newui-transplant/components/app/opus-surfaces'
 import { cn } from '@/lib/utils'
 
 /** New UI 2 data table shell — toolbar + table + optional footer in one card. */
@@ -29,8 +30,60 @@ export function OpusDataSurface({
   )
 }
 
+/** @deprecated Use CompactMetricStrip for Appointment Reminders operational pages. */
 export function ArStatGrid({ children, className }: { children: React.ReactNode; className?: string }) {
   return <div className={cn('grid grid-cols-2 gap-3 lg:grid-cols-4', className)}>{children}</div>
+}
+
+/** Thin horizontal KPI row — no per-metric cards or icons. */
+export function CompactMetricStrip({
+  className,
+  children,
+}: {
+  className?: string
+  children: React.ReactNode
+}) {
+  return (
+    <div
+      className={cn(
+        OPUS_META_STRIP,
+        'mb-6 grid grid-cols-2 gap-y-3 lg:grid-cols-4 lg:gap-y-0 lg:divide-x lg:divide-border',
+        className,
+      )}
+    >
+      {children}
+    </div>
+  )
+}
+
+export function CompactMetric({
+  label,
+  value,
+  hint,
+  href,
+  className,
+}: {
+  label: string
+  value: string
+  hint?: string
+  href?: string
+  className?: string
+}) {
+  const inner = (
+    <div className={cn('min-w-0 px-0 lg:px-4 lg:first:pl-0', className)}>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-lg font-semibold tabular-nums tracking-tight">{value}</p>
+      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+    </div>
+  )
+  if (href) {
+    return (
+      <Link href={href} className="rounded-md transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        {inner}
+      </Link>
+    )
+  }
+  return inner
 }
 
 export function OpusSearchField({
