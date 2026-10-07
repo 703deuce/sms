@@ -63,6 +63,22 @@ export async function commitArReschedule(input: {
         : 30 * 60_000;
   const end = new Date(start.getTime() + durationMs);
 
+  const { beginArDurableReschedule, markArDurableProviderSucceeded, markArDurableCompleted, markArDurableFailed } =
+    await import("./durable-operation");
+  const durableMeta = beginArDurableReschedule({
+    meta,
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+    operationId: input.operationId,
+    row,
+    proposedStartsAt: start.toISOString(),
+    proposedEndsAt: end.toISOString(),
+  });
+  await prisma.voiceAppointment.update({
+    where: { id: row.id },
+    data: { metadata: durableMeta as object },
+  });
+
   const providerResult = await patchProviderEventTimes({
     workspaceId: input.workspaceId,
     appointmentId: input.appointmentId,
@@ -71,11 +87,12 @@ export async function commitArReschedule(input: {
     summary: row.serviceName || undefined,
   });
   if (!providerResult.ok) {
+    const failedMeta = markArDurableFailed(durableMeta, providerResult.message);
     await prisma.voiceAppointment.update({
       where: { id: row.id },
       data: {
         metadata: {
-          ...meta,
+          ...failedMeta,
           arRescheduleOps: {
             ...ops,
             [input.operationId]: {
@@ -87,11 +104,25 @@ export async function commitArReschedule(input: {
         } as object,
       },
     });
+    const { notifyWorkspace } = await import("@/lib/notifications/in-app");
+    const { AR_ROUTES } = await import("@/lib/appointment-reminders/routes");
+    await notifyWorkspace(input.workspaceId, {
+      type: "system",
+      title: "Reschedule calendar update failed",
+      body: providerResult.message,
+      href: `${AR_ROUTES.appointments}?highlight=${input.appointmentId}`,
+    }).catch(() => undefined);
     return { ok: false, message: providerResult.message };
   }
 
+  const afterProvider = markArDurableProviderSucceeded(durableMeta);
+  await prisma.voiceAppointment.update({
+    where: { id: row.id },
+    data: { metadata: afterProvider as object },
+  });
+
   const nextMeta = resetAppointmentReminders({
-    ...meta,
+    ...markArDurableCompleted(afterProvider),
     arRescheduleOps: {
       ...ops,
       [input.operationId]: { status: "completed", at: new Date().toISOString() },

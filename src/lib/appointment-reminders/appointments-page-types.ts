@@ -22,6 +22,7 @@ export type ArAppointmentRow = {
     proposedStartsAt?: string;
     proposedEndsAt?: string;
     requestedAt?: string;
+    failureReason?: string;
   };
 };
 

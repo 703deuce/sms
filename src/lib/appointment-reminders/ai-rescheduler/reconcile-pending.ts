@@ -116,9 +116,11 @@ export async function reconcileArReschedulePending(input: {
     return { ok: true, message: "Already reconciled" };
   }
 
+  const { markArDurableCompleted } = await import("./durable-operation");
   const nextMeta = resetAppointmentReminders({
-    ...meta,
+    ...markArDurableCompleted(meta),
     arReconcilePending: undefined,
+    arRemindersHeld: false,
     arRescheduleOps: {
       ...ops,
       [pending.operationId]: { status: "completed", at: new Date().toISOString() },
@@ -142,6 +144,29 @@ export async function reconcileArReschedulePending(input: {
   });
 
   return { ok: true, message: "Reconciled local appointment with provider" };
+}
+
+export async function scanArRescheduleReconcilePending(): Promise<{ scanned: number; enqueued: number }> {
+  const prisma = getPrisma();
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const rows = await prisma.voiceAppointment.findMany({
+    where: { updatedAt: { gte: since } },
+    select: { id: true, workspaceId: true, metadata: true },
+    take: 300,
+    orderBy: { updatedAt: "desc" },
+  });
+  let enqueued = 0;
+  for (const row of rows) {
+    const meta = (row.metadata || {}) as { arReconcilePending?: { operationId?: string } };
+    if (!meta.arReconcilePending?.operationId) continue;
+    await enqueueArRescheduleReconcile({
+      workspaceId: row.workspaceId,
+      appointmentId: row.id,
+      operationId: meta.arReconcilePending.operationId,
+    });
+    enqueued++;
+  }
+  return { scanned: rows.length, enqueued };
 }
 
 export async function enqueueArRescheduleReconcile(input: {

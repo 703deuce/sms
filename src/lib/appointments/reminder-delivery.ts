@@ -543,6 +543,10 @@ export async function scanPlatformAppointmentReminders() {
     if (!(await workspaceRemindersOperational(row.workspaceId))) continue;
     const meta = (row.metadata || {}) as AppointmentMetadata;
     if (meta.remindersSuppressed || meta.reminderOverride?.suppressed) continue;
+    const { shouldHoldRemindersForAppointment } = await import(
+      "@/lib/appointment-reminders/ai-rescheduler/ar-reminder-guard"
+    );
+    if (shouldHoldRemindersForAppointment(meta)) continue;
 
     const { shouldSkipPlatformRemindersForAppointment } = await import(
       "@/lib/appointment-workflows/platform-guard"
@@ -662,6 +666,12 @@ export async function maybeSendImmediateConfirmationForAppointment(
   const meta = (row.metadata || {}) as AppointmentMetadata;
   if (meta.remindersSuppressed || meta.reminderOverride?.suppressed) {
     return { sent: false, skipped: "suppressed" };
+  }
+  const { shouldHoldRemindersForAppointment } = await import(
+    "@/lib/appointment-reminders/ai-rescheduler/ar-reminder-guard"
+  );
+  if (shouldHoldRemindersForAppointment(meta)) {
+    return { sent: false, skipped: "ar_reconcile_pending" };
   }
 
   if (!(await workspaceRemindersOperational(workspaceId))) {

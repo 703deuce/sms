@@ -123,7 +123,15 @@ export function AppointmentDetailDrawer({
     | undefined
   const pendingReschedule =
     rescheduleReq &&
-    (rescheduleReq.status === 'pending_approval' || rescheduleReq.status === 'pending_business')
+    (rescheduleReq.status === 'pending_approval' ||
+      rescheduleReq.status === 'pending_business' ||
+      rescheduleReq.status === 'processing')
+  const rescheduleLocked =
+    rescheduleReq &&
+    (rescheduleReq.status === 'approved' ||
+      rescheduleReq.status === 'rejected' ||
+      rescheduleReq.status === 'expired' ||
+      rescheduleReq.status === 'failed')
 
   async function approveReschedule() {
     if (!row) return
@@ -225,6 +233,16 @@ export function AppointmentDetailDrawer({
                       <h2 className="mb-3 text-sm font-semibold">Reschedule request</h2>
                       <dl className="mb-3 space-y-2">
                         <KeyValueRow label="Status" value={formatRescheduleStatus(rescheduleReq.status)} />
+                        {rescheduleReq.requestedAt ? (
+                          <KeyValueRow
+                            label="Requested"
+                            value={new Date(rescheduleReq.requestedAt).toLocaleString(undefined, {
+                              dateStyle: 'medium',
+                              timeStyle: 'short',
+                              timeZone: tz,
+                            })}
+                          />
+                        ) : null}
                         {rescheduleReq.proposedStartsAt ? (
                           <KeyValueRow
                             label="Requested time"
@@ -233,6 +251,19 @@ export function AppointmentDetailDrawer({
                               timeStyle: 'short',
                               timeZone: tz,
                             })}
+                          />
+                        ) : null}
+                        {row.sourceCalendarLabel ? (
+                          <KeyValueRow
+                            label="Calendar"
+                            value={`${row.sourceProvider === 'microsoft' ? 'Outlook' : row.sourceProvider === 'google' ? 'Google' : 'Calendar'} · ${row.sourceCalendarLabel}`}
+                          />
+                        ) : null}
+                        {'failureReason' in (rescheduleReq as object) &&
+                        (rescheduleReq as { failureReason?: string }).failureReason ? (
+                          <KeyValueRow
+                            label="Error"
+                            value={(rescheduleReq as { failureReason?: string }).failureReason || ''}
                           />
                         ) : null}
                         <KeyValueRow
@@ -248,19 +279,23 @@ export function AppointmentDetailDrawer({
                           <Button
                             size="sm"
                             onClick={approveReschedule}
-                            disabled={approvalBusy !== null}
+                            disabled={approvalBusy !== null || rescheduleReq.status === 'processing'}
                           >
-                            {approvalBusy === 'approve' ? 'Approving…' : 'Approve reschedule'}
+                            {approvalBusy === 'approve' || rescheduleReq.status === 'processing'
+                              ? 'Approving…'
+                              : 'Approve reschedule'}
                           </Button>
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={rejectReschedule}
-                            disabled={approvalBusy !== null}
+                            disabled={approvalBusy !== null || rescheduleReq.status === 'processing'}
                           >
                             {approvalBusy === 'reject' ? 'Rejecting…' : 'Reject'}
                           </Button>
                         </div>
+                      ) : rescheduleLocked ? (
+                        <p className="text-xs text-muted-foreground">This request is closed.</p>
                       ) : null}
                     </section>
                   ) : null}
@@ -383,6 +418,10 @@ function formatRescheduleStatus(status: string) {
       return 'Rejected'
     case 'failed':
       return 'Failed'
+    case 'processing':
+      return 'Processing'
+    case 'expired':
+      return 'Expired'
     default:
       return status
   }

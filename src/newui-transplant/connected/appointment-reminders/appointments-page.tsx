@@ -84,6 +84,7 @@ export function AppointmentRemindersAppointmentsPage() {
   const [syncError, setSyncError] = useState<string | null>(null)
   const [selected, setSelected] = useState<ArAppointmentRow | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const highlightId = searchParams.get('highlight')
 
   const date = searchParams.get('date') || 'upcoming'
   const reminderStatus = searchParams.get('reminderStatus') || 'all'
@@ -109,6 +110,15 @@ export function AppointmentRemindersAppointmentsPage() {
     },
     [calendarId, date, page, pageSize, pathname, qInput, reminderStatus, router],
   )
+
+  useEffect(() => {
+    if (!highlightId || !data?.rows?.length) return
+    const row = data.rows.find((r) => r.id === highlightId)
+    if (row) {
+      setSelected(row)
+      setDrawerOpen(true)
+    }
+  }, [highlightId, data?.rows])
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -537,6 +547,14 @@ function AppointmentTableRow({
       <td className={td}>
         <ReminderStatusPill label={row.reminder.label} status={row.reminder.status} />
         <span className="mt-0.5 block text-xs text-muted-foreground">{row.reminder.secondaryLine}</span>
+        {row.arRescheduleRequest &&
+        (row.arRescheduleRequest.status === 'pending_approval' ||
+          row.arRescheduleRequest.status === 'pending_business' ||
+          row.arRescheduleRequest.status === 'processing') ? (
+          <span className="mt-1 inline-flex rounded-md bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+            Reschedule pending
+          </span>
+        ) : null}
       </td>
       <td className={cn(td, 'hidden text-xs text-muted-foreground lg:table-cell')}>
         {sourceLabel(row)}
