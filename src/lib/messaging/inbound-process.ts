@@ -332,6 +332,24 @@ export async function processInboundMessage(input: {
       where: { workspaceId_phone: { workspaceId: input.workspaceId, phone: from } },
     });
     if (apptContact) {
+      const { handleArCancelConfirmation } = await import(
+        "@/lib/appointment-reminders/ai-rescheduler/inbound-replies"
+      );
+      const arCancel = await handleArCancelConfirmation({
+        workspaceId: input.workspaceId,
+        contactId: apptContact.id,
+      });
+      if (arCancel.handled) {
+        await recordInboundReceipt({
+          workspaceId: input.workspaceId,
+          from,
+          to: input.to,
+          body,
+          providerMessageId: input.providerMessageId,
+        });
+        return { kind: "message", replyText: arCancel.replyText };
+      }
+
       const pending = await prisma.voiceAppointment.findFirst({
         where: {
           workspaceId: input.workspaceId,
@@ -360,6 +378,34 @@ export async function processInboundMessage(input: {
           kind: "message",
           replyText: "Thanks — your appointment is confirmed.",
         };
+      }
+    }
+  }
+
+  // Appointment Reminders follow-up conversation (after R) — before product-specific inbox AI.
+  {
+    const apptContact = await prisma.contact.findUnique({
+      where: { workspaceId_phone: { workspaceId: input.workspaceId, phone: from } },
+    });
+    if (apptContact && body && !/^(yes|y|c|x|r|stop|help)$/i.test(body.trim())) {
+      const { tryHandleArReminderFollowUp } = await import(
+        "@/lib/appointment-reminders/ai-rescheduler/inbound-follow-up"
+      );
+      const followUp = await tryHandleArReminderFollowUp({
+        workspaceId: input.workspaceId,
+        contactId: apptContact.id,
+        message: body,
+        providerMessageId: input.providerMessageId,
+      });
+      if (followUp.handled) {
+        await recordInboundReceipt({
+          workspaceId: input.workspaceId,
+          from,
+          to: input.to,
+          body,
+          providerMessageId: input.providerMessageId,
+        });
+        return { kind: "message", replyText: followUp.replyText };
       }
     }
   }

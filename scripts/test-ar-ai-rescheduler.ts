@@ -10,6 +10,7 @@ import {
   slotPassesArWeeklyHours,
 } from "../src/lib/appointment-reminders/ai-rescheduler/availability-rules";
 import { evaluateArCalendarReadiness } from "../src/lib/appointment-reminders/ai-rescheduler/calendar-readiness";
+import { evaluateArCustomerActionEligibility } from "../src/lib/appointment-reminders/ai-rescheduler/appointment-eligibility";
 
 assert.equal(DEFAULT_AI_RESCHEDULER_CONFIG.mode, "notify");
 assert.equal(isAiAutomaticCalendarMutation({ ...DEFAULT_AI_RESCHEDULER_CONFIG, mode: "ai" }), true);
@@ -41,5 +42,15 @@ assert.equal(filtered.length, 0, "minimum notice should filter near-term slot");
 
 const ready = evaluateArCalendarReadiness({ provider: null, connectionStatus: null });
 assert.equal(ready.level, 0);
+
+assert.equal(
+  evaluateArCustomerActionEligibility({
+    appointmentId: "x",
+    contactId: "c",
+    status: "scheduled",
+    metadata: { internalBlock: true },
+  }).eligible,
+  false,
+);
 
 console.log("PASS test-ar-ai-rescheduler");

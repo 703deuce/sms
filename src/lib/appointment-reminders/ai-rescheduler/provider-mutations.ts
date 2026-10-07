@@ -133,7 +133,7 @@ export async function patchProviderEventTimes(input: {
         startUtc: input.startsAt.toISOString(),
         endUtc: input.endsAt.toISOString(),
         timezone: ref.timezone,
-        summary: input.summary || row.serviceName || "Appointment",
+        summary: row.serviceName || "Appointment",
       },
       config,
     );
@@ -151,7 +151,6 @@ export async function patchProviderEventTimes(input: {
   if (!token) return { ok: false, message: "Google token unavailable" };
   try {
     await updateGoogleEvent(token, resolveWriteCalendarId(config), ref.providerEventId, {
-      summary: input.summary || row.serviceName || undefined,
       start: input.startsAt,
       end: input.endsAt,
       timezone: config.timezone || ref.timezone,

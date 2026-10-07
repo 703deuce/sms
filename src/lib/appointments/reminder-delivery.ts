@@ -451,11 +451,15 @@ async function trySendStep(input: {
         smsBody = `${smsBody.trim()}${AR_REPLY_INSTRUCTIONS_SUFFIX}`;
       }
     }
-    await sendInternationalAppointmentSms({
+    const sendResult = await sendInternationalAppointmentSms({
       workspaceId: input.workspaceId,
       to: input.phone,
       body: smsBody,
     });
+    const outboundProviderMessageId =
+      sendResult && typeof sendResult === "object" && "messageId" in sendResult
+        ? String((sendResult as { messageId?: string }).messageId || "")
+        : undefined;
     const prisma = getPrisma();
     const nextMeta = markReminderSentInMeta(
       appendTimeline(input.metadata, {
@@ -483,6 +487,7 @@ async function trySendStep(input: {
         appointmentId: input.appointmentId,
         reminderGeneration: typeof gen === "number" ? gen : undefined,
         timelineType: input.timelineType,
+        outboundProviderMessageId: outboundProviderMessageId || undefined,
       });
     }
     return true;

@@ -40,6 +40,13 @@ export async function commitArReschedule(input: {
   const start = new Date(input.startsAt);
   if (Number.isNaN(start.getTime())) return { ok: false, message: "Invalid start time" };
 
+  const { assertSafeSingleOccurrenceMutation } = await import("./recurring-guard");
+  const recurring = await assertSafeSingleOccurrenceMutation({
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+  });
+  if (!recurring.ok) return { ok: false, message: recurring.message };
+
   const durationMs =
     ar.durationMode === "fixed" && ar.fixedDurationMinutes
       ? ar.fixedDurationMinutes * 60_000
