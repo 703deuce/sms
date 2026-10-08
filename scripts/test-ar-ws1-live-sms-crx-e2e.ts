@@ -257,14 +257,42 @@ async function expireStaleArSessionsForLiveCert(prisma: ReturnType<typeof getPri
 }
 
 async function ensureCertCustomerMessagingUnblocked(prisma: ReturnType<typeof getPrisma>) {
-  const { mctbCallerE164Variants } = await import("@/lib/mctb/messaging/caller-e164");
+  const { mctbCallerE164Variants, normalizeMctbCallerE164 } = await import(
+    "@/lib/mctb/messaging/caller-e164"
+  );
   const phoneVariants = mctbCallerE164Variants(CUSTOMER_E164);
-  const removed = await prisma.suppression.deleteMany({
-    where: { phone: { in: phoneVariants } },
+  const normalized = normalizeMctbCallerE164(CUSTOMER_E164);
+
+  const before = await prisma.suppression.findMany({
+    where: {
+      OR: [
+        { phone: { in: phoneVariants } },
+        { suppressionKey: { contains: normalized } },
+        ...phoneVariants.map((p) => ({ suppressionKey: { contains: p } })),
+      ],
+    },
+    select: { id: true, workspaceId: true, reason: true, source: true, suppressionKey: true },
+    take: 20,
   });
-  if (removed.count > 0) {
-    console.log(`  [setup] cleared ${removed.count} STOP/suppression row(s) for cert customer`);
+  if (before.length) {
+    console.log(
+      `  [setup] removing ${before.length} suppression row(s) for cert customer (STOP/opt-out):`,
+      before.map((r) => ({ reason: r.reason, source: r.source, ws: r.workspaceId })),
+    );
   }
+
+  const removed = await prisma.suppression.deleteMany({
+    where: {
+      OR: [
+        { phone: { in: phoneVariants } },
+        { suppressionKey: { contains: normalized } },
+        ...phoneVariants.map((p) => ({ suppressionKey: { contains: p } })),
+      ],
+    },
+  });
+  console.log(
+    `  [setup] cert customer messaging unblocked (deleted ${removed.count} suppression row(s))`,
+  );
 }
 
 async function ensureCustomerContact(prisma: ReturnType<typeof getPrisma>) {
