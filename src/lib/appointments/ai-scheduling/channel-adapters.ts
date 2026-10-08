@@ -53,11 +53,7 @@ export async function tryHandleInboundAppointmentAi(input: {
   const arSmsActive = ar.mode === "ai" || ar.mode === "notify";
   if (platform.bookingEnabled === false && !arSmsActive) return { handled: false };
 
-  const prisma = getPrisma();
-  const contact = await prisma.contact.findFirst({
-    where: { id: input.contactId, workspaceId: input.workspaceId },
-    select: { customFields: true },
-  });
+  const contact = contactEarly;
 
   const result = await handleUnifiedAiBooking({
     workspaceId: input.workspaceId,
