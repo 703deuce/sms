@@ -19,6 +19,9 @@ export const SMS_DISPATCH_BULLMQ_QUEUES = [
 /** Interactive MCTB + missed-call opener jobs (same `npm run worker:sms` process). */
 export const MCTB_DISPATCH_BULLMQ_QUEUES = ["mctb", "automations"] as const;
 
+/** Appointment Reminders platform SMS (C/R/X + Luna reschedule replies). */
+export const AR_DISPATCH_BULLMQ_QUEUES = ["appointment_reminders"] as const;
+
 /** Voice durable operations + Telnyx async jobs (same dispatch worker as MCTB in production). */
 export const VOICE_DISPATCH_BULLMQ_QUEUES = ["voice-calls"] as const;
 
@@ -26,11 +29,13 @@ export const VOICE_DISPATCH_BULLMQ_QUEUES = ["voice-calls"] as const;
 export const PRODUCTION_DISPATCH_WORKER_BULLMQ_QUEUES = [
   ...SMS_DISPATCH_BULLMQ_QUEUES,
   ...MCTB_DISPATCH_BULLMQ_QUEUES,
+  ...AR_DISPATCH_BULLMQ_QUEUES,
   ...VOICE_DISPATCH_BULLMQ_QUEUES,
 ] as const;
 
 export type SmsDispatchBullmqQueue = (typeof SMS_DISPATCH_BULLMQ_QUEUES)[number];
 export type MctbDispatchBullmqQueue = (typeof MCTB_DISPATCH_BULLMQ_QUEUES)[number];
+export type ArDispatchBullmqQueue = (typeof AR_DISPATCH_BULLMQ_QUEUES)[number];
 
 /** Stored on job data so DB outbox can be completed after sanitize. */
 const IDEMPOTENCY_FIELD = "__idempotencyKey";
@@ -56,6 +61,16 @@ const smsDispatchMetrics: BullmqJobMetrics = {
 };
 
 const mctbDispatchMetrics: BullmqJobMetrics = {
+  received: 0,
+  completed: 0,
+  failed: 0,
+  lastReceivedAt: null,
+  lastCompletedAt: null,
+  lastFailedAt: null,
+  lastError: null,
+};
+
+const arDispatchMetrics: BullmqJobMetrics = {
   received: 0,
   completed: 0,
   failed: 0,
@@ -206,6 +221,10 @@ function createWorkerProcessor(queueName: string) {
       mctbDispatchMetrics.received += 1;
       mctbDispatchMetrics.lastReceivedAt = new Date().toISOString();
     }
+    if (AR_DISPATCH_BULLMQ_QUEUES.includes(queueName as ArDispatchBullmqQueue)) {
+      arDispatchMetrics.received += 1;
+      arDispatchMetrics.lastReceivedAt = new Date().toISOString();
+    }
     if (VOICE_DISPATCH_BULLMQ_QUEUES.includes(queueName as (typeof VOICE_DISPATCH_BULLMQ_QUEUES)[number])) {
       voiceDispatchMetrics.received += 1;
       voiceDispatchMetrics.lastReceivedAt = new Date().toISOString();
@@ -240,6 +259,10 @@ function createWorkerProcessor(queueName: string) {
       if (MCTB_DISPATCH_BULLMQ_QUEUES.includes(queueName as MctbDispatchBullmqQueue)) {
         mctbDispatchMetrics.completed += 1;
         mctbDispatchMetrics.lastCompletedAt = new Date().toISOString();
+      }
+      if (AR_DISPATCH_BULLMQ_QUEUES.includes(queueName as ArDispatchBullmqQueue)) {
+        arDispatchMetrics.completed += 1;
+        arDispatchMetrics.lastCompletedAt = new Date().toISOString();
       }
       if (VOICE_DISPATCH_BULLMQ_QUEUES.includes(queueName as (typeof VOICE_DISPATCH_BULLMQ_QUEUES)[number])) {
         voiceDispatchMetrics.completed += 1;
@@ -291,6 +314,11 @@ function createWorkerProcessor(queueName: string) {
         mctbDispatchMetrics.failed += 1;
         mctbDispatchMetrics.lastFailedAt = new Date().toISOString();
         mctbDispatchMetrics.lastError = message;
+      }
+      if (AR_DISPATCH_BULLMQ_QUEUES.includes(queueName as ArDispatchBullmqQueue)) {
+        arDispatchMetrics.failed += 1;
+        arDispatchMetrics.lastFailedAt = new Date().toISOString();
+        arDispatchMetrics.lastError = message;
       }
       if (VOICE_DISPATCH_BULLMQ_QUEUES.includes(queueName as (typeof VOICE_DISPATCH_BULLMQ_QUEUES)[number])) {
         voiceDispatchMetrics.failed += 1;
@@ -465,6 +493,13 @@ export function resetSmsDispatchBullmqMetricsForTests() {
   mctbDispatchMetrics.lastCompletedAt = null;
   mctbDispatchMetrics.lastFailedAt = null;
   mctbDispatchMetrics.lastError = null;
+  arDispatchMetrics.received = 0;
+  arDispatchMetrics.completed = 0;
+  arDispatchMetrics.failed = 0;
+  arDispatchMetrics.lastReceivedAt = null;
+  arDispatchMetrics.lastCompletedAt = null;
+  arDispatchMetrics.lastFailedAt = null;
+  arDispatchMetrics.lastError = null;
   voiceDispatchMetrics.received = 0;
   voiceDispatchMetrics.completed = 0;
   voiceDispatchMetrics.failed = 0;

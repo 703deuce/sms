@@ -75,7 +75,7 @@ docker exec <web-container> node -e "
   const IORedis = require('ioredis');
   const c = new IORedis(process.env.REDIS_URL, { maxRetriesPerRequest: null });
   (async () => {
-    for (const q of ['mctb','automations','sms-send','review-campaign','voice-calls','email-send']) {
+    for (const q of ['mctb','appointment_reminders','automations','sms-send','review-campaign','voice-calls','email-send']) {
       const queue = new Queue(q, { connection: c });
       const counts = await queue.getJobCounts('waiting','active','delayed','failed','completed');
       console.log(q, counts);
