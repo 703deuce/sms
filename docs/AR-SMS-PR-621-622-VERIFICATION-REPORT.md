@@ -1,7 +1,30 @@
 # AR SMS PR #621 + #622 — verification report
 
 **Status:** Pre-merge integration review (not a live PSTN certification).  
+**Last verified (automated):** 2026-10-08 — Cloud Agent on `cursor/ar-reminder-customer-outcome-ui-f350` @ `87969b7f8`.  
 **Branches:** `cursor/ar-post-complete-ack-cutoff-f350` (#621), `cursor/ar-reminder-customer-outcome-ui-f350` (#622, includes #621 two-agent commits).
+
+## Executive summary
+
+| Area | Code | Automated tests | Live Microsoft + SMS |
+|------|------|-----------------|----------------------|
+| Two-agent SMS (#621) | Implemented | 30 vitest tests PASS (see below) | **Not run** in this session |
+| Customer outcomes UI (#622) | Implemented | Included in same suite + backfill tests | **Not run** (UI not browser-tested here) |
+| Cancel/reschedule policies | Implemented | `ar-sms-action-policy` + `reschedule-sms-cutoff` PASS | Policy copy only until live late-cutoff scenario |
+| Request vs completed outcomes | Tightened backfill + live hooks | PASS | N/A |
+
+**Merge / deploy:** Still blocked until someone with a Microsoft-linked test appointment runs the in-process or live SMS scripts below and completes the manual multi-day thread checklist.
+
+## User checklist (six boundaries)
+
+| # | Requirement | Verdict | Evidence |
+|---|-------------|---------|----------|
+| 1 | Both agents share the same conversation snapshot (history, completed ops, pending offers) | **PASS (code + unit)** | `buildArSmsSharedTurnSnapshot` → `runArSmsContextAgent` → `runArRescheduleLunaTurn` with `snapshot.conversationHistory`; `ar-sms-shared-snapshot.test.ts` |
+| 2 | Natural language from first SMS and after a completed operation | **PASS (code + prompt); live not run** | No post-complete canned ack bypass; appointment-agent COMPLETED guidance; `AR_INBOUND_ROUTABLE_LIFECYCLE_STATES` includes `COMPLETED` |
+| 3 | Reschedule → thanks → next day → reschedule again without replaying first op | **PARTIAL** | `resetReschedulePhaseForNewRequest` + session re-open on COMPLETED; two `rescheduled` outcome events in tests; live multi-day steps in §4 |
+| 4 | PR #622 attributes second op to correct appointment; list shows latest time | **PASS (unit)** | `ar-sms-integration-boundaries.test.ts` (latest Oct 19 over Oct 12); `startsAt` authoritative on list |
+| 5 | Independent cancel cutoff, late policies, penalties, acknowledgments | **IMPLEMENTED (gap on ack flag)** | `ar-sms-action-policy.ts`, UI fields, `inbound-replies.ts` / `luna-turn.ts`; tests PASS; no persisted penalty-acknowledgment flag |
+| 6 | Microsoft calendar path (not mocks only) | **NOT RUN** | Bootstrap E2E without `externalId` stops at calendar verify; use §7 with real `AR_SMS_E2E_*` or `test-ar-ws1-live-sms-crx-e2e.ts` |
 
 ## 1. Two-agent architecture (#621)
 
@@ -81,3 +104,62 @@ Implemented in `ar-sms-action-policy.ts` + UI `SmsActionPolicyFields`:
 - [ ] Optional: extend `test-ar-sms-luna-conversation-e2e.ts` with post-complete “Thanks” + second reschedule lines
 
 **Do not merge/deploy until live path is run by someone with DB + Telnyx + Microsoft test appointment.**
+
+## 7. Automated run log (2026-10-08)
+
+```bash
+npx vitest run \
+  src/lib/appointment-reminders/ar-sms-outcome-backfill.test.ts \
+  src/lib/appointment-reminders/ar-sms-integration-boundaries.test.ts \
+  src/lib/appointment-reminders/ar-sms-outcome-detail.test.ts \
+  src/lib/appointment-reminders/ar-sms-customer-outcome.test.ts \
+  src/lib/appointment-reminders/ai-rescheduler/ar-sms-shared-snapshot.test.ts \
+  src/lib/appointment-reminders/ai-rescheduler/context-agent/ar-sms-context-schema.test.ts \
+  src/lib/appointment-reminders/ai-rescheduler/ar-sms-action-policy.test.ts \
+  src/lib/appointment-reminders/ai-rescheduler/reschedule-sms-cutoff.test.ts
+# → 7 files, 30 tests, all PASS
+
+AR_SMS_E2E_BOOTSTRAP=1 AR_SMS_E2E_DRY_RUN=1 \
+  NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' \
+  npx tsx scripts/test-ar-sms-luna-conversation-e2e.ts
+# → PASS dry run; R opens flow; natural follow-up requires provider ref (no externalId on bootstrap row)
+```
+
+### Microsoft + full conversation (owner / staging)
+
+**In-process (no phone)** — point at a workspace appointment that already has a Microsoft `externalId` and matching reply-session calendar fields:
+
+```bash
+AR_SMS_E2E_WORKSPACE_ID=... AR_SMS_E2E_APPOINTMENT_ID=... \
+AR_SMS_E2E_LINES='Friday afternoon\nthe second one\nYes\nThanks\nCan we move to Tuesday afternoon?' \
+  NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' \
+  npx tsx scripts/test-ar-sms-luna-conversation-e2e.ts
+```
+
+Or bootstrap with an existing Graph event:
+
+```bash
+AR_SMS_E2E_BOOTSTRAP=1 \
+AR_SMS_E2E_MICROSOFT_CONNECTION_ID=... AR_SMS_E2E_PROVIDER_EVENT_ID=... \
+  NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' \
+  npx tsx scripts/test-ar-sms-luna-conversation-e2e.ts
+```
+
+**Live Telnyx + Microsoft fixture** (creates Graph event, sends real SMS):
+
+```bash
+NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' \
+  npx tsx scripts/test-ar-ws1-live-sms-crx-e2e.ts
+```
+
+After any successful reschedule, confirm appointment detail shows latest `customerResponse` / action history and that `npm run backfill:ar-sms-customer-outcomes -- --dry-run` does not propose downgrades for that row.
+
+## 8. PR #622 backfill safety (user review)
+
+| Rule | Status |
+|------|--------|
+| Do not mark Cancelled/Rescheduled from `COMPLETED` session alone | Enforced in `ar-sms-outcome-backfill.ts`; test `does not infer outcome from COMPLETED session alone` |
+| Prefer `arRescheduleOps.completed` or legacy `rescheduled` timeline | Enforced |
+| `cancel_pending` ≠ `cancelled` in UI summary | `ar-sms-integration-boundaries.test.ts` |
+| No invented cancellation reasons | Notes use customer snippet or neutral copy only |
+| Idempotent backfill; dry-run first | `scripts/backfill-ar-sms-customer-outcomes.ts` supports `--dry-run`; does not overwrite newer verified types when timeline already has outcome events |
