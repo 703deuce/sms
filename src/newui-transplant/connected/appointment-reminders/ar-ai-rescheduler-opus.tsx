@@ -402,6 +402,22 @@ export function ArAiReschedulerOpusPage() {
                   onChange={(e) => patch({ bufferMinutes: Number(e.target.value) })}
                 />
               </label>
+              <label className="text-sm sm:col-span-3">
+                SMS reschedule cutoff (minutes before appointment)
+                <Input
+                  type="number"
+                  min={0}
+                  className="mt-1 max-w-xs"
+                  value={config.rescheduleSmsCutoffMinutes ?? 0}
+                  onChange={(e) =>
+                    patch({ rescheduleSmsCutoffMinutes: Math.max(0, Number(e.target.value)) })
+                  }
+                />
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  Example: 1440 = customers cannot reply R on reminders sent within 24 hours of the
+                  appointment (2-hour reminders show confirm/cancel only).
+                </span>
+              </label>
             </div>
             <label className="flex items-center gap-2 text-sm">
               <input

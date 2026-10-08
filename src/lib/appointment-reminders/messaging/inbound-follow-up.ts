@@ -5,6 +5,7 @@ import { isAiReschedulerSmsEnabled, resolveAiReschedulerConfig } from "../ai-res
 import { runArV3RescheduleSmsTurn } from "../ai-rescheduler/v3-workflow/run-turn";
 import { verifyArReplySessionForInboundTurn } from "./verify-reply-session";
 import { markArReplySessionLifecycle } from "./reply-session";
+import { buildArPostCompleteInboundAck } from "./post-complete-ack";
 
 /**
  * Platform AR SMS follow-up — every turn bound to ArSmsReplySession (no contact heuristics).
@@ -17,7 +18,10 @@ export async function tryHandleArReminderFollowUp(input: {
   conversationId?: string;
   message: string;
   providerMessageId?: string;
-}): Promise<{ handled: true; replyText: string } | { handled: false }> {
+}): Promise<
+  | { handled: true; replyText: string; handler?: "post_complete_ack" | "luna_follow_up" }
+  | { handled: false }
+> {
   const platform = await loadAppointmentPlatformConfig(input.workspaceId);
   const ar = resolveAiReschedulerConfig(platform);
   if (!isAiReschedulerSmsEnabled(ar) || ar.mode !== "ai") {
@@ -32,10 +36,15 @@ export async function tryHandleArReminderFollowUp(input: {
   });
   if (!verified.ok) return { handled: false };
 
-  if (
-    verified.session.lifecycleState === "AWAITING_REPLY" ||
-    verified.session.lifecycleState === "COMPLETED"
-  ) {
+  if (verified.session.lifecycleState === "COMPLETED") {
+    return {
+      handled: true,
+      replyText: buildArPostCompleteInboundAck(input.message),
+      handler: "post_complete_ack",
+    };
+  }
+
+  if (verified.session.lifecycleState === "AWAITING_REPLY") {
     await markArReplySessionLifecycle({
       sessionId: input.replySessionId,
       workspaceId: input.workspaceId,
@@ -53,5 +62,5 @@ export async function tryHandleArReminderFollowUp(input: {
     providerMessageId: input.providerMessageId,
   });
   if (!v3.handled) return { handled: false };
-  return { handled: true, replyText: v3.replyText };
+  return { handled: true, replyText: v3.replyText, handler: "luna_follow_up" };
 }

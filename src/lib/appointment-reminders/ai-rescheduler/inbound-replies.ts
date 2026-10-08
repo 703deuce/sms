@@ -20,6 +20,10 @@ import { cancelPlatformAppointment } from "@/lib/appointments/booking-platform";
 import { notifyBusinessRescheduleInterest } from "./business-approval";
 import { evaluateArCustomerActionEligibility } from "./appointment-eligibility";
 import { reflectCustomerConfirmationOnProvider } from "./confirm-calendar";
+import {
+  evaluateArRescheduleSmsCutoff,
+  resolveArRescheduleSmsCutoffMinutes,
+} from "./reschedule-sms-cutoff";
 
 export type ArInboundReplyResult =
   | { handled: true; replyText: string }
@@ -228,6 +232,23 @@ export async function handleArReminderLetterReply(input: {
   }
 
   // R — reschedule (notify-only still collects request; AI mode opens conversation)
+  const cutoffMinutes = resolveArRescheduleSmsCutoffMinutes(ar);
+  const cutoff = evaluateArRescheduleSmsCutoff({
+    startsAt: row.startsAt,
+    cutoffMinutes,
+  });
+  if (!cutoff.allowed) {
+    const hours = Math.round(cutoff.cutoffMinutes / 60);
+    const windowLabel =
+      hours >= 24 && hours % 24 === 0
+        ? `${hours / 24} hour${hours / 24 === 1 ? "" : "s"}`
+        : `${cutoff.cutoffMinutes} minutes`;
+    return {
+      handled: true,
+      replyText: `Rescheduling by text isn't available within ${windowLabel} of your appointment. Please contact the business directly if you need help.`,
+    };
+  }
+
   if (input.replySessionId) {
     const { markArReplySessionLifecycle } = await import(
       "@/lib/appointment-reminders/messaging/reply-session"

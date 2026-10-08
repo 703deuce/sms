@@ -92,6 +92,7 @@ export async function handleAppointmentRemindersInboundBody(input: {
     providerMessageId: input.providerMessageId,
   });
   if (followUp.handled) {
+    const handler = followUp.handler ?? "luna_follow_up";
     logArSmsPipeline({
       step: "inbound_handler_branch",
       workspaceId: input.workspaceId,
@@ -99,8 +100,8 @@ export async function handleAppointmentRemindersInboundBody(input: {
       appointmentId: input.appointmentId,
       conversationId: input.conversationId,
       providerMessageId: input.providerMessageId,
-      handler: "luna_follow_up",
-      branch: "v3_reschedule",
+      handler,
+      branch: handler === "post_complete_ack" ? "completed_thread" : "v3_reschedule",
       inboundKind,
       bodyLength,
     });

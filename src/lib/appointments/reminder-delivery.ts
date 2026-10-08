@@ -283,12 +283,17 @@ async function buildReminderSmsBodyForOutbound(input: {
   const platform = await loadAppointmentPlatformConfig(input.workspaceId);
   const {
     isAiReschedulerSmsEnabled,
-    AR_REPLY_INSTRUCTIONS_SUFFIX,
+    arReplyInstructionsSuffixForAppointment,
     resolveAiReschedulerConfig,
   } = await import("@/lib/appointment-reminders/ai-rescheduler/types");
-  if (isAiReschedulerSmsEnabled(resolveAiReschedulerConfig(platform))) {
+  const arConfig = resolveAiReschedulerConfig(platform);
+  if (isAiReschedulerSmsEnabled(arConfig)) {
     if (!/reply\s+c\s+to\s+confirm/i.test(smsBody)) {
-      smsBody = `${smsBody.trim()}${AR_REPLY_INSTRUCTIONS_SUFFIX}`;
+      const suffix = arReplyInstructionsSuffixForAppointment({
+        config: arConfig,
+        startsAt: input.startsAt,
+      });
+      smsBody = `${smsBody.trim()}${suffix}`;
     }
   }
   return smsBody;

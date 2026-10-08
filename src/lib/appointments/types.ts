@@ -533,6 +533,7 @@ export const DEFAULT_PLATFORM_CONFIG: AppointmentPlatformConfig = {
     minimumNoticeMinutes: 120,
     maximumDaysAhead: 60,
     bufferMinutes: 0,
+    rescheduleSmsCutoffMinutes: 0,
     allowProviderCancel: false,
   },
 };
