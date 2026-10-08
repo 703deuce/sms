@@ -43,6 +43,11 @@ export async function openAiChatWithTools(input: {
   if (!apiKey) return null;
 
   const model = input.model?.trim() || getOpenAiModel();
+  const toolExtras: Record<string, string> = {};
+  // gpt-6-luna rejects tool calls unless reasoning_effort is explicitly none on chat/completions.
+  if (/gpt-6/i.test(model)) {
+    toolExtras.reasoning_effort = "none";
+  }
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -51,6 +56,7 @@ export async function openAiChatWithTools(input: {
     },
     body: JSON.stringify({
       model,
+      ...toolExtras,
       ...chatCompletionBodyExtras("openai", model, {
         temperature: input.temperature ?? 0.2,
         maxTokens: input.maxTokens ?? 900,
