@@ -195,6 +195,29 @@ async function appointmentAlreadyReserved(
   return reserved[key] === true || meta[EVENT_META_AR_SMS_RESERVED] === key;
 }
 
+function txSupportsAdvisoryLock(tx: Prisma.TransactionClient): boolean {
+  return typeof (tx as { $executeRaw?: unknown }).$executeRaw === "function";
+}
+
+async function readWorkspaceLimitsInTx(
+  tx: Prisma.TransactionClient,
+  workspaceId: string,
+): Promise<{ exists: boolean; limits: Record<string, unknown> }> {
+  if (txSupportsAdvisoryLock(tx)) {
+    const locked = await tx.$queryRaw<Array<{ limits: unknown }>>`
+      SELECT limits FROM workspace_limits WHERE workspace_id = ${workspaceId} FOR UPDATE
+    `;
+    if (locked.length === 0) return { exists: false, limits: {} };
+    return { exists: true, limits: asRecord(locked[0]?.limits) };
+  }
+  const row = await tx.workspaceLimits.findUnique({
+    where: { workspaceId },
+    select: { limits: true },
+  });
+  if (!row) return { exists: false, limits: {} };
+  return { exists: true, limits: asRecord(row.limits) };
+}
+
 async function markAppointmentArSmsReserved(
   tx: Prisma.TransactionClient,
   appointmentId: string,
@@ -261,17 +284,16 @@ export async function reserveArReminderSmsUnit(input: {
   const timelineType = input.timelineType?.trim() || "reminder";
 
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.workspaceId}))`;
+    if (txSupportsAdvisoryLock(tx)) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.workspaceId}))`;
+    }
 
     if (
       appointmentId &&
       timelineType &&
       (await appointmentAlreadyReserved(tx, appointmentId, periodKey, timelineType))
     ) {
-      const locked = await tx.$queryRaw<Array<{ limits: unknown }>>`
-        SELECT limits FROM workspace_limits WHERE workspace_id = ${input.workspaceId} FOR UPDATE
-      `;
-      const limits = asRecord(locked[0]?.limits);
+      const { limits } = await readWorkspaceLimitsInTx(tx, input.workspaceId);
       let used = Number(limits[USAGE_USED] || 0);
       if (String(limits[USAGE_PERIOD_KEY] || "") !== periodKey) used = 0;
       return {
@@ -282,11 +304,7 @@ export async function reserveArReminderSmsUnit(input: {
       };
     }
 
-    const locked = await tx.$queryRaw<Array<{ limits: unknown }>>`
-      SELECT limits FROM workspace_limits WHERE workspace_id = ${input.workspaceId} FOR UPDATE
-    `;
-
-    const limits = asRecord(locked[0]?.limits);
+    const { exists, limits } = await readWorkspaceLimitsInTx(tx, input.workspaceId);
     let used = Number(limits[USAGE_USED] || 0);
     if (String(limits[USAGE_PERIOD_KEY] || "") !== periodKey) used = 0;
 
@@ -297,7 +315,7 @@ export async function reserveArReminderSmsUnit(input: {
     const nextUsed = used + 1;
     const nextLimits = { ...limits, [USAGE_PERIOD_KEY]: periodKey, [USAGE_USED]: nextUsed };
 
-    if (locked.length === 0) {
+    if (!exists) {
       await tx.workspaceLimits.create({
         data: { workspaceId: input.workspaceId, limits: nextLimits },
       });
@@ -330,10 +348,10 @@ export async function releaseArReminderSmsReservation(input: {
   const timelineType = input.timelineType?.trim() || "reminder";
 
   await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.workspaceId}))`;
-    await tx.$queryRaw`
-      SELECT limits FROM workspace_limits WHERE workspace_id = ${input.workspaceId} FOR UPDATE
-    `;
+    if (txSupportsAdvisoryLock(tx)) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.workspaceId}))`;
+    }
+    await readWorkspaceLimitsInTx(tx, input.workspaceId);
 
     if (appointmentId) {
       const row = await tx.voiceAppointment.findUnique({
