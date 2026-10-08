@@ -5,7 +5,7 @@ import {
   findPersistentArConversationId,
   groupArSessionsByWorkspace,
   listArInboundRoutableSessions,
-  pickPrimaryArReplySessionForInbound,
+  resolveArInboundPrimarySession,
   syncArReplySessionsToConversation,
 } from "./persistent-conversation";
 import { logArSmsPipeline } from "./pipeline-log";
@@ -13,6 +13,7 @@ import { logArSmsPipeline } from "./pipeline-log";
 export type ResolveInitiatedArInboundResult =
   | { status: "matched"; session: ArSmsReplySession; conversationId: string | null }
   | { status: "ambiguous_workspace"; workspaceIds: string[]; sessions: ArSmsReplySession[] }
+  | { status: "ambiguous_appointment"; appointmentIds: string[]; sessions: ArSmsReplySession[] }
   | { status: "none" };
 
 /**
@@ -54,10 +55,25 @@ export async function resolveArInboundFromOutboundInitiatedConversation(input: {
 
   const workspaceSessions = sessions;
   const workspaceId = workspaceSessions[0]!.workspaceId;
-  const primary = pickPrimaryArReplySessionForInbound(workspaceSessions);
-  if (!primary) {
+  const primaryRes = resolveArInboundPrimarySession(workspaceSessions);
+  if (primaryRes.status === "none") {
     return { status: "none" };
   }
+  if (primaryRes.status === "ambiguous_appointment") {
+    logArSmsPipeline({
+      step: "route_ambiguous_appointment",
+      workspaceId,
+      platformPhoneNumberId: input.platformPhoneNumberId,
+      sessionCount: workspaceSessions.length,
+      meta: { appointmentIds: primaryRes.appointmentIds },
+    });
+    return {
+      status: "ambiguous_appointment",
+      appointmentIds: primaryRes.appointmentIds,
+      sessions: workspaceSessions,
+    };
+  }
+  const primary = primaryRes.session;
 
   let conversationId = primary.conversationId;
   if (!conversationId) {

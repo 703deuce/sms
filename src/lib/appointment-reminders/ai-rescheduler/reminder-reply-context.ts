@@ -93,8 +93,6 @@ export async function resolveReminderBoundAppointment(input: {
   const fromContext = contextIds.filter((id) => upcoming.some((a) => a.id === id));
   if (fromContext.length === 1) return { appointmentId: fromContext[0]! };
   if (fromContext.length > 1) {
-    const latestId = sortedContexts.find((c) => fromContext.includes(c.appointmentId))?.appointmentId;
-    if (latestId) return { appointmentId: latestId };
     return { ambiguous: true, candidates: fromContext };
   }
 

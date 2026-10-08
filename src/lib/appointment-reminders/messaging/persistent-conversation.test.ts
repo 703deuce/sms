@@ -3,7 +3,7 @@ import type { ArSmsReplySession } from "@/lib/domain";
 import {
   groupArSessionsByWorkspace,
   pickPrimaryArReplySessionForInbound,
-} from "./persistent-conversation";
+} from "./ar-inbound-session-routing";
 
 function session(partial: Partial<ArSmsReplySession> & { id: string }): ArSmsReplySession {
   return {

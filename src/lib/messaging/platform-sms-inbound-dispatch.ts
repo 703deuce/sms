@@ -110,6 +110,47 @@ export async function dispatchSharedPlatformSmsInbound(input: {
     platformPhoneNumberId: input.destination.phoneNumberId,
   });
 
+  if (arMatch.status === "ambiguous_appointment") {
+    logArSmsPipeline({
+      step: "route_ambiguous_appointment",
+      providerMessageId,
+      platformPhoneNumberId: input.destination.phoneNumberId,
+      channel: input.channel,
+      sessionCount: arMatch.sessions.length,
+      workspaceId: arMatch.sessions[0]?.workspaceId,
+      holdReason: "ambiguous_ar_appointment_on_platform_sender",
+      routingResolution: "ambiguous_cross_product_reply",
+      meta: { appointmentIds: arMatch.appointmentIds },
+    });
+    logPlatformInboundResolution({
+      event: "ambiguous_appointment_ar_reply",
+      channel: input.channel,
+      fromE164: input.fromE164,
+      toPhoneNumberId: input.destination.phoneNumberId,
+      workspaceId: arMatch.sessions[0]?.workspaceId,
+    });
+    await recordHeldPlatformInbound({
+      channel: input.channel,
+      destination: input.destination,
+      providerMessageId,
+      fromE164: input.fromE164,
+      body: input.body,
+      reason: "ambiguous_ar_appointment_on_platform_sender",
+      arSessions: arMatch.sessions.map((s) => ({
+        id: s.id,
+        workspaceId: s.workspaceId,
+        appointmentId: s.appointmentId,
+        conversationId: s.conversationId,
+      })),
+    });
+    await patchArPlatformSmsInboundReceipt(providerMessageId, {
+      state: "HELD",
+      routingResolution: "ambiguous_cross_product_reply",
+      holdReason: "ambiguous_ar_appointment_on_platform_sender",
+    });
+    return { resolution: "ambiguous_cross_product_reply" };
+  }
+
   if (arMatch.status === "ambiguous_workspace") {
     logArSmsPipeline({
       step: "route_ambiguous_workspace",

@@ -10,6 +10,7 @@ export type ArSmsPipelineStep =
   | "route_sessions_listed"
   | "route_matched"
   | "route_ambiguous_workspace"
+  | "route_ambiguous_appointment"
   | "route_unmatched"
   | "ingress_accept_start"
   | "ingress_duplicate"

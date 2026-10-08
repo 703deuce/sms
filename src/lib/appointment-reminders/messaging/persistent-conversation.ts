@@ -31,43 +31,12 @@ const OUTBOUND_PROOF_FILTER = {
   ],
 } as const;
 
-const PRIMARY_SESSION_PRIORITY: Record<string, number> = {
-  RESCHEDULING: 0,
-  AWAITING_CANCEL_CONFIRM: 1,
-  AWAITING_STAFF_APPROVAL: 2,
-  AWAITING_REPLY: 3,
-  NEEDS_CLARIFICATION: 4,
-  COMPLETED: 5,
-};
-
-/**
- * Pick the session that should own this inbound turn (not "win" other appointments).
- * Prefer an in-flight reschedule; never auto-expire sibling sessions.
- */
-export function pickPrimaryArReplySessionForInbound(sessions: ArSmsReplySession[]): ArSmsReplySession | null {
-  if (!sessions.length) return null;
-  const sorted = [...sessions].sort((a, b) => {
-    const pa = PRIMARY_SESSION_PRIORITY[a.lifecycleState] ?? 50;
-    const pb = PRIMARY_SESSION_PRIORITY[b.lifecycleState] ?? 50;
-    if (pa !== pb) return pa - pb;
-    const ta = a.lastUsedAt?.getTime() ?? 0;
-    const tb = b.lastUsedAt?.getTime() ?? 0;
-    return tb - ta;
-  });
-  return sorted[0] ?? null;
-}
-
-export function groupArSessionsByWorkspace(
-  sessions: ArSmsReplySession[],
-): Map<string, ArSmsReplySession[]> {
-  const map = new Map<string, ArSmsReplySession[]>();
-  for (const s of sessions) {
-    const list = map.get(s.workspaceId) ?? [];
-    list.push(s);
-    map.set(s.workspaceId, list);
-  }
-  return map;
-}
+export {
+  groupArSessionsByWorkspace,
+  pickPrimaryArReplySessionForInbound,
+  resolveArInboundPrimarySession,
+  type ArInboundPrimarySessionResolution,
+} from "./ar-inbound-session-routing";
 
 export async function listArInboundRoutableSessions(input: {
   consumerE164: string;
