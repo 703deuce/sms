@@ -93,6 +93,48 @@ export async function processMctbInboundSmsJob(payload: Record<string, unknown>)
   });
 
   try {
+    const { tryHandleAppointmentRemindersPlatformInbound } = await import(
+      "@/lib/appointment-reminders/ai-rescheduler/platform-sender-inbound"
+    );
+    const arInbound = await tryHandleAppointmentRemindersPlatformInbound({
+      workspaceId,
+      fromE164,
+      body,
+      providerMessageId,
+      conversationId,
+    });
+    if (arInbound.handled) {
+      const idempotencyKey = `ar-platform-reply:${conversationId}:${providerMessageId}`;
+      const job = await enqueueMctbCustomerOutboundSmsJob({
+        workspaceId,
+        conversationId,
+        toE164: fromE164,
+        body: arInbound.replyText,
+        idempotencyKey,
+        providerMessageId,
+        processingJobId: queueJob.id,
+        action: "appointment_reminders_platform_reply",
+      });
+      await logMctbInboundProcessingEvent({
+        kind: "LR_COMPLETED",
+        workspaceId,
+        conversationId,
+        providerMessageId,
+        processingJobId: queueJob.id,
+        meta: {
+          action: "appointment_reminders_platform_reply",
+          outboundQueued: true,
+          outboundJobId: job.id,
+        },
+      });
+      return {
+        ok: true,
+        handled: true,
+        action: "appointment_reminders_platform_reply",
+        outboundJobId: job.id,
+      };
+    }
+
     const result = await handleMctbCustomerSmsReply({
       workspaceId,
       fromE164,
