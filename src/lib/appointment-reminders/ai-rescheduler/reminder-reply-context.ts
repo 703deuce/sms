@@ -106,5 +106,19 @@ export async function resolveReminderBoundAppointment(input: {
   });
   if (metaMatch.length === 1) return { appointmentId: metaMatch[0]!.id };
 
+  const withRecentReminder = upcoming
+    .map((a) => {
+      const meta = (a.metadata || {}) as AppointmentMetadata;
+      const at = meta.lastReminderSmsAt ? new Date(meta.lastReminderSmsAt).getTime() : 0;
+      return { id: a.id, at };
+    })
+    .filter((row) => row.at > 0)
+    .sort((a, b) => b.at - a.at);
+  if (withRecentReminder.length >= 1) {
+    const latest = withRecentReminder[0]!;
+    const tied = withRecentReminder.filter((r) => r.at === latest.at);
+    if (tied.length === 1) return { appointmentId: latest.id };
+  }
+
   return { ambiguous: true, candidates: upcoming.map((a) => a.id) };
 }
