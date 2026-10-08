@@ -13,6 +13,7 @@ import { loadArSmsConversationForLuna } from "./luna-conversation-context";
 import { loadArCustomerAppointmentsSummaryForLuna } from "@/lib/appointment-reminders/messaging/persistent-conversation";
 import { classifyArInboundBody, logArSmsPipeline } from "@/lib/appointment-reminders/messaging/pipeline-log";
 import { resolveArAppointmentDisplayTimezone } from "../display-time";
+import { buildArLunaVerifiedContextBlock } from "../ar-sms-luna-context";
 
 /**
  * Voice V3-equivalent reschedule turn for AR SMS (post-R follow-ups).
@@ -51,10 +52,7 @@ export async function runArV3RescheduleSmsTurn(input: {
     return { handled: false };
   }
 
-  if (
-    verified.session.lifecycleState === "AWAITING_REPLY" ||
-    verified.session.lifecycleState === "COMPLETED"
-  ) {
+  if (verified.session.lifecycleState === "AWAITING_REPLY") {
     await markArReplySessionLifecycle({
       sessionId: input.replySessionId,
       workspaceId: input.workspaceId,
@@ -167,16 +165,25 @@ export async function runArV3RescheduleSmsTurn(input: {
     meta: { historyTurns: conversationHistory.length },
   });
 
+  const verifiedContextBlock = await buildArLunaVerifiedContextBlock({
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+    sessionLifecycleState: verified.session.lifecycleState,
+  });
+
   const turn = await runArRescheduleLunaTurn({
     workspaceId: input.workspaceId,
     appointmentId: input.appointmentId,
     sessionId: input.replySessionId,
+    replySessionId: input.replySessionId,
     config,
     runtime,
     message: input.message,
     conversationHistory,
     displayTimezone,
     relatedAppointmentsSummary,
+    verifiedContextBlock,
+    sessionLifecycleState: verified.session.lifecycleState,
   });
 
   if (turn.confirmed) {

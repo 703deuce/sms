@@ -18,29 +18,36 @@ import { persistArRescheduleRuntime } from "./session-runtime";
 import { createId } from "@/lib/supabase/id";
 import { openAiChatWithTools, type ChatMessage } from "./openai-tools";
 import { buildArRescheduleConfirmedSms } from "../display-time";
+import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
+import { resolveAiReschedulerConfig } from "../types";
+import {
+  evaluateArSmsActionPolicy,
+  resolveArRescheduleSmsPolicy,
+} from "../ar-sms-action-policy";
+import { getPrisma } from "@/lib/db";
+import { markArReplySessionLifecycle } from "@/lib/appointment-reminders/messaging/reply-session";
 
-const SYSTEM = `You are Luna, the Appointment Reminders SMS scheduling assistant.
+const SYSTEM = `You are Luna, the Appointment Reminders SMS assistant for this business.
 
-The customer already chose RESCHEDULE (reply R). activeGoal is RESCHEDULE_APPOINTMENT.
-The existing appointment is verified — never call find_appointment.
+You manage the SMS conversation. The reminder already bound this thread to one appointment (see verified context). Do not ask which appointment unless the customer clearly refers to a different one and you cannot resolve it safely.
 
-Authoritative scheduling timezone: use the display_timezone in context for interpreting dates and clock times.
-Never treat a UTC ISO timestamp's hour as the customer's local hour.
+Authoritative scheduling timezone: use display_timezone in context. Never treat a UTC ISO hour as the customer's local hour.
 
-Use tools in this order when appropriate:
-1. set_scheduling_preference — structured new date/time semantics for when they want to move.
-2. find_availability — after scheduling preference is set and valid.
-3. reschedule_appointment — when the customer clearly accepts a slot from the latest offer set (use offer_set_id and slot_id from tool results only).
+Conversation vs operations:
+- reply_session_lifecycle=COMPLETED means the last calendar operation (e.g. reschedule) already succeeded. Continue the conversation naturally. Do NOT call reschedule_appointment again unless the customer is clearly requesting a NEW change to the appointment time.
+- Thanks, acknowledgments, and small talk: reply briefly and warmly. No tools.
+- Questions about appointment time, location, or business details: answer using verified context only. Do not invent facts.
+- If sms_reschedule_automated_allowed=false, explain the customer must contact the business to reschedule (use business_phone when present). Do not call scheduling tools.
+- If a late penalty applies (sms_reschedule_late_penalty / sms_cancel_late_penalty), explain it clearly and obtain explicit confirmation before any calendar-changing tool.
 
-Never invent offer_set_id, slot_id, or calendar times.
-If the customer changes the day or time request, call set_scheduling_preference again before find_availability.
-For ordinal picks ("the second one"), map to the slot_id from the listed options in the last find_availability result.
+Reschedule tools (only when the customer wants a new time):
+1. set_scheduling_preference — capture structured new date/time intent.
+2. find_availability — after preference is set.
+3. reschedule_appointment — only when the customer clearly accepts a specific offered slot (offer_set_id and slot_id from tool results only).
 
-Read the full SMS conversation above — short replies like "Yes" refer to your prior assistant messages.
-Do not re-ask for information the customer already provided in this thread.
-If the customer has multiple upcoming appointments, use the appointment list in context and the thread to decide which appointment they mean; ask a brief clarification only when still ambiguous.
-
-After a successful reschedule, a deterministic backend message will confirm the time — do not claim success unless reschedule_appointment returned rescheduled.`;
+Never invent slots, times, offer_set_id, or slot_id.
+Read the full SMS thread — "Yes" refers to your prior message.
+After reschedule_appointment succeeds, the backend sends the confirmation SMS — do not repeat the same confirmation wording in your reply unless adding brief new information.`;
 
 function formatOfferSummary(runtime: VoiceV3CallRuntime): string {
   const snap = runtime.getSnapshot();
@@ -116,12 +123,47 @@ async function arExecuteFindAvailability(
   });
 }
 
+function resetReschedulePhaseForNewRequest(runtime: VoiceV3CallRuntime): void {
+  const snap = runtime.getSnapshot();
+  if (snap.appointmentManagement.reschedule.phase !== "RESCHEDULE_CONFIRMED") return;
+  runtime.replaceContext({
+    ...snap,
+    appointmentManagement: {
+      ...snap.appointmentManagement,
+      reschedule: { phase: "NONE", attemptId: null },
+    },
+  });
+}
+
 async function arExecuteReschedule(
   toolCtx: VoiceToolExecutionContext,
   argsJson: string,
   workspaceId: string,
   appointmentId: string,
 ): Promise<string> {
+  const prisma = getPrisma();
+  const appt = await prisma.voiceAppointment.findFirst({
+    where: { id: appointmentId, workspaceId },
+    select: { startsAt: true },
+  });
+  if (!appt) {
+    return JSON.stringify({ ok: false, error: "appointment_not_found" });
+  }
+  const platform = await loadAppointmentPlatformConfig(workspaceId);
+  const ar = resolveAiReschedulerConfig(platform);
+  const policyEval = evaluateArSmsActionPolicy({
+    action: "reschedule",
+    startsAt: appt.startsAt,
+    policy: resolveArRescheduleSmsPolicy(ar),
+  });
+  if (!policyEval.allowsAutomatedAction) {
+    return JSON.stringify({
+      ok: false,
+      status: "RESCHEDULE_BLOCKED_BY_POLICY",
+      message: "Rescheduling by SMS is not available this close to the appointment. Contact the business.",
+    });
+  }
+
   const args = JSON.parse(argsJson) as unknown;
   const validated = rescheduleAppointmentTool.validate(args);
   const bindResult = await rescheduleAppointmentTool.execute(toolCtx, validated);
@@ -202,12 +244,15 @@ export async function runArRescheduleLunaTurn(input: {
   workspaceId: string;
   appointmentId: string;
   sessionId: string;
+  replySessionId: string;
   config: VoiceV3AgentConfig;
   runtime: VoiceV3CallRuntime;
   message: string;
   conversationHistory: Array<{ role: "user" | "assistant"; content: string }>;
   displayTimezone: string;
   relatedAppointmentsSummary?: string;
+  verifiedContextBlock?: string;
+  sessionLifecycleState?: string;
 }): Promise<{ replyText: string; confirmed: boolean }> {
   const openAiTools = [
     buildSetSchedulingPreferenceOpenAiTool(input.config),
@@ -231,11 +276,14 @@ export async function runArRescheduleLunaTurn(input: {
   const relatedBlock = input.relatedAppointmentsSummary?.trim()
     ? `\n\n--- Related appointments ---\n${input.relatedAppointmentsSummary.trim()}`
     : "";
+  const verifiedBlock = input.verifiedContextBlock?.trim()
+    ? `\n\n--- Verified appointment & policy context ---\n${input.verifiedContextBlock.trim()}`
+    : "";
 
   const messages: ChatMessage[] = [
     {
       role: "system",
-      content: `${SYSTEM}\n\n--- Authoritative scheduling state ---\n${schedulingContext}${relatedBlock}`,
+      content: `${SYSTEM}\n\n--- Authoritative scheduling state ---\n${schedulingContext}${verifiedBlock}${relatedBlock}`,
     },
   ];
 
@@ -281,6 +329,12 @@ export async function runArRescheduleLunaTurn(input: {
         let result: string;
         try {
           if (call.function.name === "set_scheduling_preference") {
+            resetReschedulePhaseForNewRequest(toolCtx.runtime);
+            await markArReplySessionLifecycle({
+              sessionId: input.replySessionId,
+              workspaceId: input.workspaceId,
+              lifecycleState: "RESCHEDULING",
+            });
             const validated = setSchedulingPreferenceTool.validate(JSON.parse(call.function.arguments));
             const r = await setSchedulingPreferenceTool.execute(toolCtx, validated);
             result = JSON.stringify(r);
@@ -324,12 +378,11 @@ export async function runArRescheduleLunaTurn(input: {
     }
 
     await persistArRescheduleRuntime(input.sessionId, input.runtime);
-    const phase = input.runtime.getSnapshot().appointmentManagement.reschedule.phase;
     return {
       replyText:
         content?.trim() ||
         "What day or time would work better for your appointment?",
-      confirmed: phase === "RESCHEDULE_CONFIRMED",
+      confirmed: false,
     };
   }
 

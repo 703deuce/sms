@@ -43,7 +43,8 @@ describe("arReplyInstructionsSuffixForAppointment", () => {
       startsAt,
       now: new Date("2026-10-20T10:00:00.000Z"),
     });
-    expect(suffix).toBe(AR_REPLY_INSTRUCTIONS_CONFIRM_CANCEL);
+    expect(suffix).toContain("Contact the business to reschedule");
+    expect(suffix).not.toMatch(/\bR to reschedule\b/);
   });
 
   it("includes R outside cutoff", () => {

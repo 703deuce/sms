@@ -1,8 +1,6 @@
 import type { AppointmentPlatformConfig } from "@/lib/appointments/types";
-import {
-  evaluateArRescheduleSmsCutoff,
-  resolveArRescheduleSmsCutoffMinutes,
-} from "./reschedule-sms-cutoff";
+import type { ArSmsActionPolicyConfig } from "./ar-sms-action-policy";
+import { buildArReplyInstructionsSuffix } from "./ar-sms-action-policy";
 
 export type AiReschedulerMode = "notify" | "ai";
 
@@ -25,10 +23,12 @@ export type AiReschedulerConfig = {
   maximumDaysAhead: number;
   bufferMinutes: number;
   /**
-   * Customer cannot reply R (and reminders omit R) when the appointment starts sooner than this many minutes.
-   * 0 = no cutoff (always offer reschedule when AR SMS is enabled).
+   * Legacy reschedule cutoff (minutes before start). Prefer `rescheduleSmsPolicy.cutoffMinutes`.
    */
   rescheduleSmsCutoffMinutes?: number;
+  rescheduleSmsPolicy?: ArSmsActionPolicyConfig;
+  cancelSmsCutoffMinutes?: number;
+  cancelSmsPolicy?: ArSmsActionPolicyConfig;
   /** When true, X may cancel/delete provider event per policy; otherwise Transovo-only + notify business. */
   allowProviderCancel: boolean;
 };
@@ -44,13 +44,7 @@ export function arReplyInstructionsSuffixForAppointment(input: {
   startsAt: Date;
   now?: Date;
 }): string {
-  const cutoffMinutes = resolveArRescheduleSmsCutoffMinutes(input.config);
-  const { allowed } = evaluateArRescheduleSmsCutoff({
-    startsAt: input.startsAt,
-    cutoffMinutes,
-    now: input.now,
-  });
-  return allowed ? AR_REPLY_INSTRUCTIONS_SUFFIX : AR_REPLY_INSTRUCTIONS_CONFIRM_CANCEL;
+  return buildArReplyInstructionsSuffix(input);
 }
 
 export const DEFAULT_AI_RESCHEDULER_WEEKLY_HOURS: Record<string, AiReschedulerDayConfig> = {

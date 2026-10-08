@@ -21,9 +21,10 @@ import { notifyBusinessRescheduleInterest } from "./business-approval";
 import { evaluateArCustomerActionEligibility } from "./appointment-eligibility";
 import { reflectCustomerConfirmationOnProvider } from "./confirm-calendar";
 import {
-  evaluateArRescheduleSmsCutoff,
-  resolveArRescheduleSmsCutoffMinutes,
-} from "./reschedule-sms-cutoff";
+  evaluateArSmsActionPolicy,
+  resolveArCancelSmsPolicy,
+  resolveArRescheduleSmsPolicy,
+} from "./ar-sms-action-policy";
 
 export type ArInboundReplyResult =
   | { handled: true; replyText: string }
@@ -189,6 +190,19 @@ export async function handleArReminderLetterReply(input: {
   }
 
   if (input.letter === "X") {
+    const cancelSms = evaluateArSmsActionPolicy({
+      action: "cancel",
+      startsAt: row.startsAt,
+      policy: resolveArCancelSmsPolicy(ar),
+    });
+    if (!cancelSms.allowsAutomatedAction) {
+      return {
+        handled: true,
+        replyText:
+          "Cancellation by text isn't available this close to your appointment. Please contact the business directly.",
+      };
+    }
+
     const policy = evaluateCancellationPolicy(platform.cancellationPolicy, row.startsAt);
     if (!policy.allowed) {
       return {
@@ -198,6 +212,7 @@ export async function handleArReminderLetterReply(input: {
     }
 
     const pending = (meta as { arCancelPending?: { requestedAt: string } }).arCancelPending;
+    const latePenalty = cancelSms.requiresPolicyWarning ? cancelSms.penaltySummary : null;
     if (!pending) {
       const prisma = getPrisma();
       await prisma.voiceAppointment.update({
@@ -219,33 +234,41 @@ export async function handleArReminderLetterReply(input: {
           lifecycleState: "AWAITING_CANCEL_CONFIRM",
         });
       }
+      const penaltyLine = latePenalty
+        ? ` Because it's within the cancellation window, ${latePenalty}.`
+        : "";
       return {
         handled: true,
-        replyText: `Reply YES to confirm you want to cancel your appointment on ${whenLabel}.`,
+        replyText: `Reply YES to confirm you want to cancel your appointment on ${whenLabel}.${penaltyLine}`,
       };
     }
 
+    const penaltyLine = latePenalty
+      ? ` Because it's within the cancellation window, ${latePenalty}.`
+      : "";
     return {
       handled: true,
-      replyText: `Reply YES to confirm cancellation of your appointment on ${whenLabel}.`,
+      replyText: `Reply YES to confirm cancellation of your appointment on ${whenLabel}.${penaltyLine}`,
     };
   }
 
   // R — reschedule (notify-only still collects request; AI mode opens conversation)
-  const cutoffMinutes = resolveArRescheduleSmsCutoffMinutes(ar);
-  const cutoff = evaluateArRescheduleSmsCutoff({
+  const rescheduleSms = evaluateArSmsActionPolicy({
+    action: "reschedule",
     startsAt: row.startsAt,
-    cutoffMinutes,
+    policy: resolveArRescheduleSmsPolicy(ar),
   });
-  if (!cutoff.allowed) {
-    const hours = Math.round(cutoff.cutoffMinutes / 60);
-    const windowLabel =
-      hours >= 24 && hours % 24 === 0
-        ? `${hours / 24} hour${hours / 24 === 1 ? "" : "s"}`
-        : `${cutoff.cutoffMinutes} minutes`;
+  if (!rescheduleSms.allowsAutomatedAction) {
     return {
       handled: true,
-      replyText: `Rescheduling by text isn't available within ${windowLabel} of your appointment. Please contact the business directly if you need help.`,
+      replyText:
+        "Rescheduling by text isn't available this close to your appointment. Please contact the business directly if you need help.",
+    };
+  }
+  if (rescheduleSms.requiresPolicyWarning && rescheduleSms.penaltySummary) {
+    return {
+      handled: true,
+      replyText: `You can reschedule, but ${rescheduleSms.penaltySummary}. What day or time works better for your appointment on ${whenLabel}?`,
     };
   }
 

@@ -1,4 +1,8 @@
 import type { AiReschedulerConfig } from "./types";
+import {
+  evaluateArSmsActionPolicy,
+  resolveArRescheduleSmsPolicy,
+} from "./ar-sms-action-policy";
 
 export type ArRescheduleSmsCutoffResult = {
   allowed: boolean;
@@ -6,31 +10,28 @@ export type ArRescheduleSmsCutoffResult = {
   cutoffMinutes: number;
 };
 
-/**
- * Whether the customer may start or be offered SMS reschedule (R) for this appointment.
- * When cutoffMinutes is 0, reschedule is always allowed (legacy / unset).
- */
+/** @deprecated Use evaluateArSmsActionPolicy — kept for existing imports. */
 export function evaluateArRescheduleSmsCutoff(input: {
   startsAt: Date;
   cutoffMinutes: number;
   now?: Date;
 }): ArRescheduleSmsCutoffResult {
-  const now = input.now ?? new Date();
-  const cutoffMinutes = Math.max(0, Math.floor(input.cutoffMinutes || 0));
-  const minutesUntilStart = (input.startsAt.getTime() - now.getTime()) / 60_000;
-  if (cutoffMinutes <= 0) {
-    return { allowed: true, minutesUntilStart, cutoffMinutes };
-  }
+  const evalResult = evaluateArSmsActionPolicy({
+    action: "reschedule",
+    startsAt: input.startsAt,
+    now: input.now,
+    policy: {
+      cutoffMinutes: input.cutoffMinutes,
+      afterCutoff: "contact_business",
+    },
+  });
   return {
-    allowed: minutesUntilStart > cutoffMinutes,
-    minutesUntilStart,
-    cutoffMinutes,
+    allowed: evalResult.allowsAutomatedAction && !evalResult.insideCutoff,
+    minutesUntilStart: evalResult.minutesUntilStart,
+    cutoffMinutes: evalResult.cutoffMinutes,
   };
 }
 
 export function resolveArRescheduleSmsCutoffMinutes(config: AiReschedulerConfig): number {
-  const raw = config.rescheduleSmsCutoffMinutes;
-  if (raw === undefined || raw === null) return 0;
-  const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  return resolveArRescheduleSmsPolicy(config).cutoffMinutes ?? 0;
 }

@@ -2,11 +2,131 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
-import type { AiReschedulerConfig, AiReschedulerMode } from '@/lib/appointment-reminders/ai-rescheduler/types'
+import type {
+  AiReschedulerConfig,
+  AiReschedulerMode,
+} from '@/lib/appointment-reminders/ai-rescheduler/types'
+import type {
+  ArSmsLateActionMode,
+  ArSmsPenaltyType,
+} from '@/lib/appointment-reminders/ai-rescheduler/ar-sms-action-policy'
 import { Panel, Pill } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Input } from '@/newui-transplant/components/ui/input'
 import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
+import type { ArSmsActionPolicyConfig } from '@/lib/appointment-reminders/ai-rescheduler/ar-sms-action-policy'
+
+const LATE_MODE_OPTIONS: { value: ArSmsLateActionMode; label: string }[] = [
+  { value: 'allow', label: 'Allow (no extra warning)' },
+  { value: 'allow_with_warning', label: 'Allow with policy warning' },
+  { value: 'contact_business', label: 'Contact business (no auto action)' },
+]
+
+const PENALTY_OPTIONS: { value: ArSmsPenaltyType; label: string }[] = [
+  { value: 'none', label: 'No penalty text' },
+  { value: 'lost_session', label: 'Lost prepaid session' },
+  { value: 'percent_of_price', label: 'Percentage of price' },
+  { value: 'fixed_fee', label: 'Fixed fee' },
+  { value: 'nonrefundable_deposit', label: 'Nonrefundable deposit' },
+  { value: 'custom_text', label: 'Custom policy text' },
+]
+
+function SmsActionPolicyFields(input: {
+  title: string
+  policy?: ArSmsActionPolicyConfig
+  legacyCutoffMinutes?: number
+  defaultAfterCutoff: ArSmsLateActionMode
+  onChange: (policy: ArSmsActionPolicyConfig, legacyCutoff: number) => void
+}) {
+  const cutoff =
+    input.policy?.cutoffMinutes ?? input.legacyCutoffMinutes ?? 0
+  const afterCutoff = input.policy?.afterCutoff ?? input.defaultAfterCutoff
+  const penaltyType = input.policy?.penaltyType ?? 'none'
+
+  function merge(patch: Partial<ArSmsActionPolicyConfig>, legacy?: number) {
+    const next: ArSmsActionPolicyConfig = {
+      cutoffMinutes: legacy ?? cutoff,
+      afterCutoff,
+      penaltyType,
+      penaltyPercent: input.policy?.penaltyPercent,
+      penaltyFixedAmountCents: input.policy?.penaltyFixedAmountCents,
+      penaltyCustomText: input.policy?.penaltyCustomText,
+      ...patch,
+    }
+    input.onChange(next, next.cutoffMinutes ?? 0)
+  }
+
+  return (
+    <div className="space-y-2 rounded-lg border border-border/60 p-3">
+      <h3 className="text-sm font-medium">{input.title}</h3>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="text-sm">
+          Cutoff (minutes before appointment)
+          <Input
+            type="number"
+            min={0}
+            className="mt-1"
+            value={cutoff}
+            onChange={(e) => merge({ cutoffMinutes: Math.max(0, Number(e.target.value)) })}
+          />
+        </label>
+        <SimpleSelect
+          label="After cutoff"
+          value={afterCutoff}
+          onChange={(v) => merge({ afterCutoff: v as ArSmsLateActionMode })}
+          options={LATE_MODE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+        />
+        {afterCutoff === 'allow_with_warning' ? (
+          <>
+            <SimpleSelect
+              label="Late-action consequence"
+              value={penaltyType}
+              onChange={(v) => merge({ penaltyType: v as ArSmsPenaltyType })}
+              options={PENALTY_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+            />
+            {penaltyType === 'percent_of_price' ? (
+              <label className="text-sm">
+                Percent
+                <Input
+                  type="number"
+                  min={1}
+                  max={100}
+                  className="mt-1"
+                  value={input.policy?.penaltyPercent ?? 50}
+                  onChange={(e) => merge({ penaltyPercent: Number(e.target.value) })}
+                />
+              </label>
+            ) : null}
+            {penaltyType === 'fixed_fee' ? (
+              <label className="text-sm">
+                Fee (cents)
+                <Input
+                  type="number"
+                  min={0}
+                  className="mt-1"
+                  value={input.policy?.penaltyFixedAmountCents ?? 2500}
+                  onChange={(e) =>
+                    merge({ penaltyFixedAmountCents: Number(e.target.value) })
+                  }
+                />
+              </label>
+            ) : null}
+            {penaltyType === 'custom_text' ? (
+              <label className="text-sm sm:col-span-2">
+                Custom policy text
+                <Input
+                  className="mt-1"
+                  value={input.policy?.penaltyCustomText ?? ''}
+                  onChange={(e) => merge({ penaltyCustomText: e.target.value })}
+                />
+              </label>
+            ) : null}
+          </>
+        ) : null}
+      </div>
+    </div>
+  )
+}
 
 function ArReschedulerOperationsPanel() {
   const [ops, setOps] = useState<{
@@ -402,23 +522,31 @@ export function ArAiReschedulerOpusPage() {
                   onChange={(e) => patch({ bufferMinutes: Number(e.target.value) })}
                 />
               </label>
-              <label className="text-sm sm:col-span-3">
-                SMS reschedule cutoff (minutes before appointment)
-                <Input
-                  type="number"
-                  min={0}
-                  className="mt-1 max-w-xs"
-                  value={config.rescheduleSmsCutoffMinutes ?? 0}
-                  onChange={(e) =>
-                    patch({ rescheduleSmsCutoffMinutes: Math.max(0, Number(e.target.value)) })
-                  }
-                />
-                <span className="mt-1 block text-xs text-muted-foreground">
-                  Example: 1440 = customers cannot reply R on reminders sent within 24 hours of the
-                  appointment (2-hour reminders show confirm/cancel only).
-                </span>
-              </label>
             </div>
+            <SmsActionPolicyFields
+              title="SMS rescheduling (reply R)"
+              defaultAfterCutoff="contact_business"
+              policy={config.rescheduleSmsPolicy}
+              legacyCutoffMinutes={config.rescheduleSmsCutoffMinutes}
+              onChange={(policy, legacyCutoff) =>
+                patch({
+                  rescheduleSmsPolicy: policy,
+                  rescheduleSmsCutoffMinutes: legacyCutoff,
+                })
+              }
+            />
+            <SmsActionPolicyFields
+              title="SMS cancellation (reply X)"
+              defaultAfterCutoff="allow"
+              policy={config.cancelSmsPolicy}
+              legacyCutoffMinutes={config.cancelSmsCutoffMinutes}
+              onChange={(policy, legacyCutoff) =>
+                patch({
+                  cancelSmsPolicy: policy,
+                  cancelSmsCutoffMinutes: legacyCutoff,
+                })
+              }
+            />
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
