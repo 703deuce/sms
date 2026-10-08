@@ -6,6 +6,8 @@ import type { VoiceV3CallContext } from "@/lib/voice-v3/state/call-context";
 export type ArRescheduleWorkflowPersisted = {
   version: 1;
   v3Context: VoiceV3CallContext;
+  /** IANA timezone for customer-facing scheduling copy on this session */
+  displayTimezone?: string;
 };
 
 export function parsePersistedWorkflowState(raw: unknown): ArRescheduleWorkflowPersisted | null {
@@ -26,9 +28,22 @@ export async function loadWorkflowContext(sessionId: string): Promise<VoiceV3Cal
   return parsed?.v3Context ?? null;
 }
 
-export async function saveWorkflowContext(sessionId: string, ctx: VoiceV3CallContext): Promise<void> {
+export async function saveWorkflowContext(
+  sessionId: string,
+  ctx: VoiceV3CallContext,
+  opts?: { displayTimezone?: string },
+): Promise<void> {
   const prisma = getPrisma();
-  const payload: ArRescheduleWorkflowPersisted = { version: 1, v3Context: ctx };
+  const existing = await prisma.arSmsReplySession.findFirst({
+    where: { id: sessionId },
+    select: { rescheduleWorkflowState: true },
+  });
+  const prior = parsePersistedWorkflowState(existing?.rescheduleWorkflowState);
+  const payload: ArRescheduleWorkflowPersisted = {
+    version: 1,
+    v3Context: ctx,
+    displayTimezone: opts?.displayTimezone ?? prior?.displayTimezone,
+  };
   await prisma.arSmsReplySession.update({
     where: { id: sessionId },
     data: { rescheduleWorkflowState: payload as object },

@@ -40,7 +40,9 @@ export async function ensureArRescheduleRuntime(input: {
         reschedule: { phase: "NONE", attemptId: null },
       },
     };
-    await saveWorkflowContext(input.sessionId, context);
+    await saveWorkflowContext(input.sessionId, context, {
+      displayTimezone: input.config.timezone,
+    });
   }
 
   const runtime = new VoiceV3CallRuntime({ config: input.config, context });
