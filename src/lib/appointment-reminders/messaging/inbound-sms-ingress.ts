@@ -8,6 +8,7 @@ import {
 } from "@/lib/mctb/messaging/caller-e164";
 import { JOB_PRIORITY_TRANSACTIONAL } from "@/lib/jobs/job-priority";
 import { AR_JOB_PROCESS_INBOUND_SMS, AR_QUEUE_NAME } from "./constants";
+import { classifyArInboundBody, logArSmsPipeline } from "./pipeline-log";
 
 export type AcceptArInboundSmsIngressInput = {
   workspaceId: string;
@@ -57,6 +58,19 @@ export async function acceptArInboundSmsIngress(
   const body = (input.body || "").trim();
   const webhookAckAt = new Date().toISOString();
   const idempotencyKey = inboundJobIdempotencyKey(input.workspaceId, providerMessageId);
+  const { inboundKind, bodyLength } = classifyArInboundBody(body);
+
+  logArSmsPipeline({
+    step: "ingress_accept_start",
+    workspaceId: input.workspaceId,
+    contactId: input.contactId,
+    appointmentId: input.appointmentId,
+    replySessionId: input.replySessionId,
+    providerMessageId,
+    channel: input.provider,
+    inboundKind,
+    bodyLength,
+  });
 
   const result = await prisma.$transaction(async (tx) => {
     const existingJob = await tx.jobQueue.findUnique({
@@ -147,6 +161,13 @@ export async function acceptArInboundSmsIngress(
           tags: ["appointment_reminders"],
         },
       });
+      logArSmsPipeline({
+        step: "ingress_conversation_bound",
+        workspaceId: input.workspaceId,
+        replySessionId: input.replySessionId,
+        conversationId,
+        platformPhoneNumberId: arSession?.platformPhoneNumberId ?? undefined,
+      });
 
       const displayBody = formatInboundMessageBody(body, input.mediaUrls);
       const inboundMedia = input.mediaUrls?.filter(Boolean) ?? [];
@@ -162,6 +183,13 @@ export async function acceptArInboundSmsIngress(
           select: { id: true },
         });
         conversationMessageId = created.id;
+        logArSmsPipeline({
+          step: "ingress_message_persisted",
+          workspaceId: input.workspaceId,
+          conversationId,
+          providerMessageId,
+          meta: { conversationMessageId: created.id },
+        });
       } catch (err) {
         if (!(err && typeof err === "object" && "code" in err && (err as { code: string }).code === "P2002")) {
           throw err;
@@ -246,6 +274,42 @@ export async function acceptArInboundSmsIngress(
       });
     } catch {
       // receipt row is best-effort until migration applied
+    }
+  }
+
+  if (result.duplicate) {
+    logArSmsPipeline({
+      step: "ingress_duplicate",
+      workspaceId: input.workspaceId,
+      appointmentId: input.appointmentId,
+      replySessionId: input.replySessionId,
+      providerMessageId,
+      conversationId: result.conversationId,
+      processingJobId: result.processingJobId,
+      duplicate: true,
+    });
+  } else {
+    logArSmsPipeline({
+      step: "ingress_accepted",
+      workspaceId: input.workspaceId,
+      contactId: input.contactId,
+      appointmentId: input.appointmentId,
+      replySessionId: input.replySessionId,
+      providerMessageId,
+      conversationId: result.conversationId,
+      processingJobId: result.processingJobId,
+      inboundKind,
+      bodyLength,
+      meta: { conversationMessageId: result.conversationMessageId },
+    });
+    if (result.processingJobId) {
+      logArSmsPipeline({
+        step: "ingress_job_enqueued",
+        workspaceId: input.workspaceId,
+        providerMessageId,
+        processingJobId: result.processingJobId,
+        conversationId: result.conversationId,
+      });
     }
   }
 

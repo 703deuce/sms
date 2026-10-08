@@ -5,6 +5,10 @@ import { resolveArInboundFromOutboundInitiatedConversation } from "@/lib/appoint
 import { handlePlatformSenderComplianceInbound } from "@/lib/mctb/messaging/platform-inbound-boundary";
 import { logPlatformInboundResolution } from "@/lib/mctb/messaging/platform-inbound-tenant-resolution";
 import { acceptArInboundSmsIngress } from "@/lib/appointment-reminders/messaging/inbound-sms-ingress";
+import {
+  classifyArInboundBody,
+  logArSmsPipeline,
+} from "@/lib/appointment-reminders/messaging/pipeline-log";
 import { getPrisma } from "@/lib/db";
 import { isPlatformSharedSmsMctbInboundEnabled } from "@/lib/workspace/platform-launch";
 
@@ -68,18 +72,37 @@ export async function dispatchSharedPlatformSmsInbound(input: {
   }
 
   const providerMessageId = input.providerMessageId.trim();
+  const { inboundKind, bodyLength } = classifyArInboundBody(input.body);
+
+  logArSmsPipeline({
+    step: "webhook_dispatch_start",
+    providerMessageId,
+    platformPhoneNumberId: input.destination.phoneNumberId,
+    channel: input.channel,
+    inboundKind,
+    bodyLength,
+    meta: { toE164: input.destination.e164 },
+  });
 
   const {
     recordArPlatformSmsInboundReceipt,
     patchArPlatformSmsInboundReceipt,
   } = await import("@/lib/appointment-reminders/messaging/platform-inbound-receipt");
-  await recordArPlatformSmsInboundReceipt({
+  const receipt = await recordArPlatformSmsInboundReceipt({
     providerMessageId,
     channel: input.channel,
     fromE164: input.fromE164,
     toE164: input.destination.e164,
     platformPhoneNumberId: input.destination.phoneNumberId,
     body: input.body,
+  });
+  logArSmsPipeline({
+    step: "inbound_receipt_recorded",
+    providerMessageId,
+    platformPhoneNumberId: input.destination.phoneNumberId,
+    channel: input.channel,
+    duplicate: !receipt.created,
+    meta: { receiptId: receipt.id },
   });
 
   const arMatch = await resolveArInboundFromOutboundInitiatedConversation({
@@ -88,6 +111,16 @@ export async function dispatchSharedPlatformSmsInbound(input: {
   });
 
   if (arMatch.status === "ambiguous_workspace") {
+    logArSmsPipeline({
+      step: "route_ambiguous_workspace",
+      providerMessageId,
+      platformPhoneNumberId: input.destination.phoneNumberId,
+      channel: input.channel,
+      sessionCount: arMatch.sessions.length,
+      workspaceIds: arMatch.workspaceIds,
+      holdReason: "ambiguous_ar_workspace_on_platform_sender",
+      routingResolution: "ambiguous_cross_product_reply",
+    });
     logPlatformInboundResolution({
       event: "ambiguous_cross_workspace_ar_reply",
       channel: input.channel,
@@ -120,6 +153,21 @@ export async function dispatchSharedPlatformSmsInbound(input: {
   if (arMatch.status === "matched") {
     const session = arMatch.session;
     const conversationId = arMatch.conversationId ?? session.conversationId;
+    logArSmsPipeline({
+      step: "route_matched",
+      providerMessageId,
+      platformPhoneNumberId: input.destination.phoneNumberId,
+      channel: input.channel,
+      workspaceId: session.workspaceId,
+      contactId: session.contactId,
+      appointmentId: session.appointmentId,
+      replySessionId: session.id,
+      conversationId,
+      lifecycleState: session.lifecycleState,
+      routingResolution: "ar_platform_reply_resolved",
+      inboundKind,
+      bodyLength,
+    });
     await acceptArInboundSmsIngress({
       workspaceId: session.workspaceId,
       contactId: session.contactId,
@@ -154,6 +202,14 @@ export async function dispatchSharedPlatformSmsInbound(input: {
   }
 
   if (!isPlatformSharedSmsMctbInboundEnabled()) {
+    logArSmsPipeline({
+      step: "route_unmatched",
+      providerMessageId,
+      platformPhoneNumberId: input.destination.phoneNumberId,
+      channel: input.channel,
+      holdReason: "no_matching_ar_reply_session",
+      routingResolution: "unmatched_platform_reply",
+    });
     logPlatformInboundResolution({
       event: "platform_reply_unmatched_appointment_reminders_only",
       channel: input.channel,

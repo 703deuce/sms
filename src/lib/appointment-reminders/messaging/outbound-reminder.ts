@@ -9,6 +9,7 @@ import {
 } from "./reply-session";
 import { appendArConversationOutboundMessage } from "./persistent-conversation";
 import { sendAppointmentSmsViaPlatformSender } from "./send-via-assigned-sender";
+import { logArSmsPipeline } from "./pipeline-log";
 
 export async function sendArReminderSmsWithSession(input: {
   workspaceId: string;
@@ -21,12 +22,27 @@ export async function sendArReminderSmsWithSession(input: {
   | { sent: true; sessionId: string; providerMessageId?: string; messageId?: string }
   | { sent: false; reason: string; pendingSendReason?: string }
 > {
+  logArSmsPipeline({
+    step: "reminder_send_start",
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+    contactId: input.contactId,
+    meta: { timelineType: input.timelineType, bodyLength: input.body.length },
+  });
+
   const selection = await selectArOutboundPlatformSender({
     workspaceId: input.workspaceId,
     appointmentId: input.appointmentId,
     consumerE164: input.phone,
   });
   if (!selection.ok) {
+    logArSmsPipeline({
+      step: "reminder_send_failed",
+      workspaceId: input.workspaceId,
+      appointmentId: input.appointmentId,
+      error: selection.reason,
+      meta: { pendingSendReason: selection.pendingSendReason },
+    });
     return {
       sent: false,
       reason: selection.reason,
@@ -43,6 +59,15 @@ export async function sendArReminderSmsWithSession(input: {
     appointmentId: input.appointmentId,
   });
 
+  logArSmsPipeline({
+    step: "reminder_conversation_ready",
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+    conversationId,
+    platformPhoneNumberId: selection.phoneNumberId,
+    meta: { senderE164: selection.e164 },
+  });
+
   const claim = await claimArReplySessionForOutbound({
     workspaceId: input.workspaceId,
     contactId: input.contactId,
@@ -53,6 +78,16 @@ export async function sendArReminderSmsWithSession(input: {
     timelineType: input.timelineType,
     conversationId,
   });
+
+  logArSmsPipeline({
+    step: "reminder_session_claimed",
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+    replySessionId: claim.sessionId,
+    conversationId,
+    platformPhoneNumberId: selection.phoneNumberId,
+  });
+
   const idempotencyKey = arReminderOutboundIdempotencyKey({
     workspaceId: input.workspaceId,
     appointmentId: input.appointmentId,
@@ -81,6 +116,22 @@ export async function sendArReminderSmsWithSession(input: {
     conversationId,
     body: input.body,
     providerMessageId: sendResult.providerMessageId,
+  });
+
+  logArSmsPipeline({
+    step: "reminder_provider_sent",
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+    replySessionId: claim.sessionId,
+    conversationId,
+    providerMessageId: sendResult.providerMessageId,
+    meta: { messageId: sendResult.messageId },
+  });
+  logArSmsPipeline({
+    step: "reminder_thread_appended",
+    workspaceId: input.workspaceId,
+    conversationId,
+    appointmentId: input.appointmentId,
   });
 
   return {

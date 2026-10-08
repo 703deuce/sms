@@ -8,6 +8,7 @@ import {
   pickPrimaryArReplySessionForInbound,
   syncArReplySessionsToConversation,
 } from "./persistent-conversation";
+import { logArSmsPipeline } from "./pipeline-log";
 
 export type ResolveInitiatedArInboundResult =
   | { status: "matched"; session: ArSmsReplySession; conversationId: string | null }
@@ -23,12 +24,27 @@ export async function resolveArInboundFromOutboundInitiatedConversation(input: {
   platformPhoneNumberId: string;
 }): Promise<ResolveInitiatedArInboundResult> {
   const sessions = await listArInboundRoutableSessions(input);
+  logArSmsPipeline({
+    step: "route_sessions_listed",
+    platformPhoneNumberId: input.platformPhoneNumberId,
+    sessionCount: sessions.length,
+    meta: {
+      appointmentIds: sessions.map((s) => s.appointmentId),
+      lifecycleStates: sessions.map((s) => s.lifecycleState),
+    },
+  });
   if (!sessions.length) {
     return { status: "none" };
   }
 
   const byWorkspace = groupArSessionsByWorkspace(sessions);
   if (byWorkspace.size > 1) {
+    logArSmsPipeline({
+      step: "route_ambiguous_workspace",
+      platformPhoneNumberId: input.platformPhoneNumberId,
+      sessionCount: sessions.length,
+      workspaceIds: [...byWorkspace.keys()],
+    });
     return {
       status: "ambiguous_workspace",
       workspaceIds: [...byWorkspace.keys()],
@@ -64,6 +80,19 @@ export async function resolveArInboundFromOutboundInitiatedConversation(input: {
   const session: ArSmsReplySession = conversationId && !primary.conversationId
     ? { ...primary, conversationId }
     : primary;
+
+  logArSmsPipeline({
+    step: "route_matched",
+    workspaceId,
+    platformPhoneNumberId: input.platformPhoneNumberId,
+    primarySessionId: primary.id,
+    replySessionId: session.id,
+    appointmentId: session.appointmentId,
+    conversationId,
+    sessionCount: workspaceSessions.length,
+    lifecycleState: session.lifecycleState,
+    meta: { syncedConversation: Boolean(conversationId) },
+  });
 
   return { status: "matched", session, conversationId };
 }

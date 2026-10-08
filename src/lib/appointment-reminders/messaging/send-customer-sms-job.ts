@@ -4,6 +4,7 @@ import { getPrisma } from "@/lib/db";
 import { AR_SMS_IDEMPOTENCY_PREFIX } from "./constants";
 import { loadArReplySessionForWorkspace } from "./reply-session";
 import { sendAppointmentSmsViaPlatformSender } from "./send-via-assigned-sender";
+import { logArSmsPipeline } from "./pipeline-log";
 
 export async function executeArSendCustomerSmsJob(payload: Record<string, unknown>) {
   const workspaceId = String(payload.workspaceId || "");
@@ -16,6 +17,16 @@ export async function executeArSendCustomerSmsJob(payload: Record<string, unknow
     throw new Error("ar_send_customer_sms_payload_incomplete");
   }
 
+  const inboundProviderMessageId = String(payload.providerMessageId || "").trim();
+  logArSmsPipeline({
+    step: "outbound_reply_job_start",
+    workspaceId,
+    replySessionId,
+    conversationId: String(payload.conversationId || ""),
+    providerMessageId: inboundProviderMessageId || undefined,
+    meta: { replyLength: body.length },
+  });
+
   const outboundKey = idempotencyKey.startsWith(AR_SMS_IDEMPOTENCY_PREFIX)
     ? idempotencyKey
     : `${AR_SMS_IDEMPOTENCY_PREFIX}reply:${idempotencyKey}`;
@@ -26,6 +37,13 @@ export async function executeArSendCustomerSmsJob(payload: Record<string, unknow
     select: { id: true, providerId: true, status: true },
   });
   if (existingMessage?.providerId) {
+    logArSmsPipeline({
+      step: "outbound_reply_idempotent",
+      workspaceId,
+      replySessionId,
+      duplicate: true,
+      meta: { providerMessageId: existingMessage.providerId },
+    });
     return {
       ok: true,
       providerMessageId: existingMessage.providerId,
@@ -35,6 +53,12 @@ export async function executeArSendCustomerSmsJob(payload: Record<string, unknow
 
   const session = await loadArReplySessionForWorkspace({ sessionId: replySessionId, workspaceId });
   if (!session) {
+    logArSmsPipeline({
+      step: "outbound_reply_failed",
+      workspaceId,
+      replySessionId,
+      error: "ar_reply_session_missing_for_outbound",
+    });
     throw new Error("ar_reply_session_missing_for_outbound");
   }
 
@@ -80,7 +104,15 @@ export async function executeArSendCustomerSmsJob(payload: Record<string, unknow
     }
   }
 
-  const inboundProviderMessageId = String(payload.providerMessageId || "").trim();
+  logArSmsPipeline({
+    step: "outbound_reply_sent",
+    workspaceId,
+    replySessionId,
+    conversationId,
+    providerMessageId: providerMessageId ?? undefined,
+    meta: { messageId: result?.messageId },
+  });
+
   if (inboundProviderMessageId) {
     try {
       const { patchArPlatformSmsInboundReceipt } = await import("./platform-inbound-receipt");
