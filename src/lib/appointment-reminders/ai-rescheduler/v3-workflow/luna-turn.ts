@@ -17,11 +17,15 @@ import { buildArFindBusyFetcher } from "./fetch-busy";
 import { persistArRescheduleRuntime } from "./session-runtime";
 import { createId } from "@/lib/supabase/id";
 import { openAiChatWithTools, type ChatMessage } from "./openai-tools";
+import { buildArRescheduleConfirmedSms } from "../display-time";
 
 const SYSTEM = `You are Luna, the Appointment Reminders SMS scheduling assistant.
 
 The customer already chose RESCHEDULE (reply R). activeGoal is RESCHEDULE_APPOINTMENT.
 The existing appointment is verified — never call find_appointment.
+
+Authoritative scheduling timezone: use the display_timezone in context for interpreting dates and clock times.
+Never treat a UTC ISO timestamp's hour as the customer's local hour.
 
 Use tools in this order when appropriate:
 1. set_scheduling_preference — structured new date/time semantics for when they want to move.
@@ -32,7 +36,10 @@ Never invent offer_set_id, slot_id, or calendar times.
 If the customer changes the day or time request, call set_scheduling_preference again before find_availability.
 For ordinal picks ("the second one"), map to the slot_id from the listed options in the last find_availability result.
 
-After a successful reschedule, confirm the new time briefly. Do not claim success unless reschedule_appointment returned rescheduled.`;
+Read the full SMS conversation above — short replies like "Yes" refer to your prior assistant messages.
+Do not re-ask for information the customer already provided in this thread.
+
+After a successful reschedule, a deterministic backend message will confirm the time — do not claim success unless reschedule_appointment returned rescheduled.`;
 
 function formatOfferSummary(runtime: VoiceV3CallRuntime): string {
   const snap = runtime.getSnapshot();
@@ -176,6 +183,20 @@ async function arExecuteReschedule(
   return JSON.stringify({ ...bindResult, reschedule_phase: phase });
 }
 
+function buildSchedulingContextBlock(input: {
+  runtime: VoiceV3CallRuntime;
+  displayTimezone: string;
+  appointmentId: string;
+}): string {
+  const snap = input.runtime.getSnapshot();
+  return [
+    `appointment_id=${input.appointmentId}`,
+    `display_timezone=${input.displayTimezone}`,
+    `Reschedule phase: ${snap.appointmentManagement.reschedule.phase}`,
+    formatOfferSummary(input.runtime),
+  ].join("\n");
+}
+
 export async function runArRescheduleLunaTurn(input: {
   workspaceId: string;
   appointmentId: string;
@@ -183,7 +204,8 @@ export async function runArRescheduleLunaTurn(input: {
   config: VoiceV3AgentConfig;
   runtime: VoiceV3CallRuntime;
   message: string;
-  conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>;
+  conversationHistory: Array<{ role: "user" | "assistant"; content: string }>;
+  displayTimezone: string;
 }): Promise<{ replyText: string; confirmed: boolean }> {
   const openAiTools = [
     buildSetSchedulingPreferenceOpenAiTool(input.config),
@@ -198,25 +220,29 @@ export async function runArRescheduleLunaTurn(input: {
     },
   }));
 
-  const history = (input.conversationHistory || [])
-    .slice(-10)
-    .map((m) => `${m.role}: ${m.content}`)
-    .join("\n");
-
-  const snap = input.runtime.getSnapshot();
-  const contextBlock = [
-    `Reschedule phase: ${snap.appointmentManagement.reschedule.phase}`,
-    formatOfferSummary(input.runtime),
-    history ? `Conversation:\n${history}` : "",
-    `Customer: ${input.message}`,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+  const schedulingContext = buildSchedulingContextBlock({
+    runtime: input.runtime,
+    displayTimezone: input.displayTimezone,
+    appointmentId: input.appointmentId,
+  });
 
   const messages: ChatMessage[] = [
-    { role: "system", content: SYSTEM },
-    { role: "user", content: contextBlock },
+    {
+      role: "system",
+      content: `${SYSTEM}\n\n--- Authoritative scheduling state ---\n${schedulingContext}`,
+    },
   ];
+
+  for (const turn of input.conversationHistory) {
+    if (!turn.content.trim()) continue;
+    messages.push({ role: turn.role, content: turn.content });
+  }
+
+  const last = messages[messages.length - 1];
+  const current = (input.message || "").trim();
+  if (current && !(last?.role === "user" && last.content === current)) {
+    messages.push({ role: "user", content: current });
+  }
 
   const toolCtx = buildToolCtx(input.runtime, input.workspaceId);
   const modelOpts = arAiReschedulerModelOptions();
@@ -276,18 +302,15 @@ export async function runArRescheduleLunaTurn(input: {
       if (
         input.runtime.getSnapshot().appointmentManagement.reschedule.phase === "RESCHEDULE_CONFIRMED"
       ) {
-        const final = await openAiChatWithTools({
-          messages,
-          tools: openAiTools,
-          model: modelOpts.model,
-          temperature: 0.2,
-          maxTokens: 400,
-        });
         await persistArRescheduleRuntime(input.sessionId, input.runtime);
+        const sel = input.runtime.getSnapshot().selection.selected;
+        const startUtc = sel?.startUtc;
+        const replyText =
+          startUtc
+            ? buildArRescheduleConfirmedSms(startUtc, input.displayTimezone)
+            : "Your appointment has been rescheduled.";
         return {
-          replyText:
-            final?.message.content?.trim() ||
-            "Your appointment has been rescheduled. Reply C anytime to confirm the new time.",
+          replyText,
           confirmed: true,
         };
       }

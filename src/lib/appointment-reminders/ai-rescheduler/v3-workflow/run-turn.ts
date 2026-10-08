@@ -9,6 +9,8 @@ import { buildArVoiceV3AgentConfig } from "./agent-config";
 import { loadVerifiedExistingForArSession } from "./verified-existing";
 import { ensureArRescheduleRuntime } from "./session-runtime";
 import { runArRescheduleLunaTurn } from "./luna-turn";
+import { loadArSmsConversationForLuna } from "./luna-conversation-context";
+import { resolveArAppointmentDisplayTimezone } from "../display-time";
 
 /**
  * Voice V3-equivalent reschedule turn for AR SMS (post-R follow-ups).
@@ -76,24 +78,41 @@ export async function runArV3RescheduleSmsTurn(input: {
     lookupCompleted: true,
   });
 
-  let conversationHistory: Array<{ role: "user" | "assistant"; content: string }> | undefined;
-  if (input.conversationId) {
-    const messages = await getPrisma().conversationMessage.findMany({
-      where: { conversationId: input.conversationId },
-      orderBy: { createdAt: "asc" },
-      take: 12,
-      select: { direction: true, body: true },
+  const apptRow = await getPrisma().voiceAppointment.findFirst({
+    where: { id: input.appointmentId, workspaceId: input.workspaceId },
+    select: { timezone: true, metadata: true },
+  });
+  const metaTz = (apptRow?.metadata as { timezone?: string } | null)?.timezone;
+  const displayTimezone =
+    resolveArAppointmentDisplayTimezone({
+      appointmentTimezone: apptRow?.timezone,
+      metadataTimezone: metaTz,
+      platformTimezone: platform.timezone,
+      agentConfigTimezone: config.timezone,
     });
-    conversationHistory = messages
-      .map((m) => {
-        const text = (m.body || "").trim();
-        if (!text) return null;
-        return {
-          role: m.direction === "inbound" ? "user" : "assistant",
-          content: text,
-        };
-      })
-      .filter((m): m is { role: "user" | "assistant"; content: string } => Boolean(m));
+
+  let conversationHistory: Array<{ role: "user" | "assistant"; content: string }> = [];
+  if (input.conversationId) {
+    const loaded = await loadArSmsConversationForLuna({
+      workspaceId: input.workspaceId,
+      replySessionId: input.replySessionId,
+      appointmentId: input.appointmentId,
+      contactId: input.contactId,
+      conversationId: input.conversationId,
+      currentMessage: input.message,
+      currentProviderMessageId: input.providerMessageId,
+    });
+    if (!loaded.sessionOk) {
+      return {
+        handled: true,
+        replyText:
+          "We couldn't load this conversation safely. Please text R again from your latest reminder.",
+      };
+    }
+    conversationHistory = loaded.messages;
+  } else {
+    const trimmed = (input.message || "").trim();
+    if (trimmed) conversationHistory = [{ role: "user", content: trimmed }];
   }
 
   const turn = await runArRescheduleLunaTurn({
@@ -104,6 +123,7 @@ export async function runArV3RescheduleSmsTurn(input: {
     runtime,
     message: input.message,
     conversationHistory,
+    displayTimezone,
   });
 
   if (turn.confirmed) {
