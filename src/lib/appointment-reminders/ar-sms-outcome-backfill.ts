@@ -188,11 +188,33 @@ export function inferArSmsOutcomesForBackfill(input: {
     });
   }
 
+  const ops = (meta as { arRescheduleOps?: Record<string, { status: string; at: string }> })
+    .arRescheduleOps;
+  const completedOp = ops
+    ? Object.values(ops)
+        .filter((o) => o.status === "completed")
+        .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())[0]
+    : undefined;
+  if (
+    completedOp &&
+    !hasArSmsOutcomeInTimeline(timeline, "rescheduled") &&
+    !inferred.some((i) => i.outcome === "rescheduled")
+  ) {
+    const at = new Date(completedOp.at);
+    push({
+      outcome: "rescheduled",
+      at: completedOp.at,
+      reminderTimelineType: pickReminderTypeForTime(meta, input.sessions, at),
+      newStartsAtIso: input.startsAt.toISOString(),
+      note: "Rescheduled (backfilled from verified reschedule operation)",
+    });
+  }
+
   const reschedulingSession = input.sessions.find((s) => s.lifecycleState === "RESCHEDULING");
   if (
     reschedulingSession &&
     !hasArSmsOutcomeInTimeline(timeline, "rescheduled") &&
-    !inferred.some((i) => i.outcome === "rescheduled")
+    !inferred.some((i) => i.outcome === "rescheduled" || i.outcome === "reschedule_started")
   ) {
     const at = sessionAt(reschedulingSession);
     push({
@@ -201,22 +223,9 @@ export function inferArSmsOutcomesForBackfill(input: {
       reminderTimelineType:
         reschedulingSession.timelineType ||
         pickReminderTypeForTime(meta, input.sessions, at),
-      note: snippetForSession(reschedulingSession.id) || "Customer started rescheduling by SMS",
-    });
-  }
-
-  for (const session of input.sessions) {
-    if (session.lifecycleState !== "COMPLETED" || !session.completedAt) continue;
-    const hasTerminal = timeline.some(
-      (e) => isArSmsOutcomeTimelineEvent(e.type) && e.detail?.startsWith(session.timelineType || ""),
-    );
-    if (hasTerminal || !session.timelineType) continue;
-    if (inferred.length > 0) continue;
-    push({
-      outcome: "reschedule_started",
-      at: session.completedAt.toISOString(),
-      reminderTimelineType: session.timelineType,
-      note: snippetForSession(session.id) || "SMS conversation completed (backfilled)",
+      note:
+        snippetForSession(reschedulingSession.id) ||
+        "Customer started rescheduling by SMS (in progress — not yet verified on calendar)",
     });
   }
 

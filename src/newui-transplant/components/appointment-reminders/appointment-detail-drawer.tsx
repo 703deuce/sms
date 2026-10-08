@@ -52,6 +52,16 @@ export function AppointmentDetailDrawer({
   const [approvalError, setApprovalError] = useState('')
   const [customerResponse, setCustomerResponse] = useState<ArCustomerResponseSummary | null>(null)
   const [reminderEngagement, setReminderEngagement] = useState<ArReminderEngagementStep[]>([])
+  const [actionHistory, setActionHistory] = useState<
+    Array<{
+      at: string
+      label: string
+      kind: string
+      reasonLine?: string
+      detailLine?: string
+      reminderTimelineType?: string
+    }>
+  >([])
 
   const loadDetail = useCallback(async () => {
     if (!row?.id) return
@@ -84,6 +94,7 @@ export function AppointmentDetailDrawer({
       setTimeline(merged.length ? merged : apptJson?.data?.reminderSchedule || [])
       setCustomerResponse((tlJson?.data?.customerResponse as ArCustomerResponseSummary) ?? row.customerResponse)
       setReminderEngagement((tlJson?.data?.reminderEngagement as ArReminderEngagementStep[]) || [])
+      setActionHistory((tlJson?.data?.customerActionHistory as typeof actionHistory) || [])
       setPhoneEdit(row.phone || '')
     } finally {
       setLoading(false)
@@ -352,6 +363,29 @@ export function AppointmentDetailDrawer({
                       </Button>
                     </div>
                   </section>
+
+                  {actionHistory.length > 1 ? (
+                    <section>
+                      <h2 className="mb-3 text-sm font-semibold">Customer action history</h2>
+                      <ol className="space-y-3 border-l border-border pl-4">
+                        {actionHistory.map((item, i) => (
+                          <li key={`${item.at}-${i}`} className="relative text-sm">
+                            <span className="absolute -left-[21px] top-1.5 size-2 rounded-full bg-border" />
+                            <p className="font-medium">{item.label}</p>
+                            {item.detailLine ? (
+                              <p className="text-xs text-muted-foreground">{item.detailLine}</p>
+                            ) : null}
+                            {item.reasonLine ? (
+                              <p className="text-xs text-muted-foreground">{item.reasonLine}</p>
+                            ) : null}
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(item.at).toLocaleString(undefined, { timeZone: tz })}
+                            </p>
+                          </li>
+                        ))}
+                      </ol>
+                    </section>
+                  ) : null}
 
                   <section>
                     <h2 className="mb-3 text-sm font-semibold">Reminders &amp; customer actions</h2>

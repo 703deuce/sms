@@ -51,6 +51,26 @@ describe("inferArSmsOutcomesForBackfill", () => {
     expect(inferred).toHaveLength(0);
   });
 
+  it("does not infer outcome from COMPLETED session alone", () => {
+    const inferred = inferArSmsOutcomesForBackfill({
+      metadata: { timeline: [] },
+      status: "scheduled",
+      startsAt: new Date(),
+      sessions: [
+        {
+          id: "sess1",
+          timelineType: "confirmation_sent",
+          lifecycleState: "COMPLETED",
+          conversationId: null,
+          createdAt: new Date("2026-09-30T10:00:00.000Z"),
+          completedAt: new Date("2026-10-01T15:00:00.000Z"),
+          lastUsedAt: new Date("2026-10-01T15:00:00.000Z"),
+        },
+      ],
+    });
+    expect(inferred).toHaveLength(0);
+  });
+
   it("infers rescheduled from legacy rescheduled timeline event", () => {
     const meta: AppointmentMetadata = {
       timeline: [

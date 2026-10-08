@@ -5,6 +5,7 @@ import type { AppointmentMetadata } from "@/lib/appointments/types";
 import { buildDedicatedReminderTimeline } from "@/lib/appointments/reminder-engine";
 import {
   isArSmsOutcomeTimelineEvent,
+  listArSmsOutcomeEvents,
   resolveArCustomerResponseSummary,
   type ArReminderEngagementStep,
   type ArCustomerResponseSummary,
@@ -118,17 +119,30 @@ export async function loadArReminderEngagementPayload(input: {
         label: "Awaiting cancel confirmation",
         at: session.lastUsedAt.toISOString(),
       };
-    } else if (session.lifecycleState === "COMPLETED" && session.completedAt) {
-      step.customerResponse = {
-        kind: "replied",
-        label: "Conversation completed",
-        at: session.completedAt.toISOString(),
-      };
     }
   }
 
+  const customerActionHistory = listArSmsOutcomeEvents(input.metadata).map((ev) => {
+    const parsed = parseArSmsOutcomeDetail(ev.detail);
+    const row = resolveArCustomerResponseSummary({
+      status: input.status,
+      startsAt: input.startsAt,
+      timezone: input.timezone,
+      metadata: { timeline: [ev] },
+    });
+    return {
+      at: ev.at,
+      label: ev.label || row.label,
+      kind: row.kind,
+      reasonLine: parsed.note,
+      detailLine: row.detailLine,
+      reminderTimelineType: parsed.reminderTimelineType,
+    };
+  });
+
   return {
     customerResponse,
+    customerActionHistory,
     reminderEngagement,
     sessions: sessions.map((s) => ({
       id: s.id,

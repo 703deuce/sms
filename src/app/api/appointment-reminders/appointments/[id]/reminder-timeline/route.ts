@@ -51,6 +51,7 @@ export async function GET(_request: Request, { params }: Params) {
         timeline,
         suppressed: Boolean(meta.remindersSuppressed),
         customerResponse: engagement.customerResponse,
+        customerActionHistory: engagement.customerActionHistory,
         reminderEngagement: engagement.reminderEngagement,
       },
     });

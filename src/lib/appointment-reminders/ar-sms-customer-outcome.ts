@@ -52,9 +52,19 @@ function formatAppointmentWhen(iso: string, timezone?: string | null): string {
 }
 
 function latestOutcomeEvent(timeline: AppointmentTimelineEvent[]): AppointmentTimelineEvent | null {
-  const outcomes = timeline.filter((e) => isArSmsOutcomeTimelineEvent(e.type));
+  const outcomes = timeline
+    .filter((e) => isArSmsOutcomeTimelineEvent(e.type))
+    .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
   if (!outcomes.length) return null;
   return outcomes[outcomes.length - 1]!;
+}
+
+export function listArSmsOutcomeEvents(
+  metadata: AppointmentMetadata,
+): AppointmentTimelineEvent[] {
+  return (metadata.timeline || [])
+    .filter((e) => isArSmsOutcomeTimelineEvent(e.type))
+    .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
 }
 
 function summaryFromOutcomeEvent(
