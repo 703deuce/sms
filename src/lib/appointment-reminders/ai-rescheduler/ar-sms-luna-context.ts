@@ -8,6 +8,7 @@ import {
   resolveArCancelSmsPolicy,
   resolveArRescheduleSmsPolicy,
 } from "./ar-sms-action-policy";
+import { getArSmsPolicyAck } from "./ar-sms-policy-ack";
 import { resolveArAppointmentDisplayTimezone } from "./display-time";
 
 export async function buildArLunaVerifiedContextBlock(input: {
@@ -67,6 +68,8 @@ export async function buildArLunaVerifiedContextBlock(input: {
     policy: resolveArCancelSmsPolicy(ar),
   });
 
+  const policyAck = getArSmsPolicyAck(row.metadata as import("@/lib/appointments/types").AppointmentMetadata);
+
   const lines = [
     `business_name=${workspace?.displayName || workspace?.name || "Business"}`,
     `appointment_id=${input.appointmentId}`,
@@ -85,6 +88,9 @@ export async function buildArLunaVerifiedContextBlock(input: {
     `sms_cancel_policy_inside_cutoff=${cancelPolicy.insideCutoff}`,
     `sms_cancel_automated_allowed=${cancelPolicy.allowsAutomatedAction}`,
     cancelPolicy.penaltySummary ? `sms_cancel_late_penalty=${cancelPolicy.penaltySummary}` : null,
+    policyAck
+      ? `sms_policy_ack_action=${policyAck.action};phase=${policyAck.phase};operation_id=${policyAck.operationId}`
+      : null,
   ].filter(Boolean);
 
   return lines.join("\n");

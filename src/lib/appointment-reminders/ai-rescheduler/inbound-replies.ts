@@ -25,10 +25,17 @@ import {
   resolveArCancelSmsPolicy,
   resolveArRescheduleSmsPolicy,
 } from "./ar-sms-action-policy";
+import {
+  consumePolicyAck,
+  gateArSmsCalendarWriteByPolicy,
+  getArSmsPolicyAck,
+  mergePolicyAckIntoMetadata,
+} from "./ar-sms-policy-ack";
+import { ensureArSmsPolicyWarningDelivered } from "./ar-sms-policy-ack-inbound";
 import { recordArSmsCustomerOutcome } from "../record-ar-sms-outcome";
 
 export type ArInboundReplyResult =
-  | { handled: true; replyText: string }
+  | { handled: true; replyText: string; openedRescheduleFlow?: boolean }
   | { handled: false };
 
 async function loadAppointmentForActions(
@@ -84,6 +91,16 @@ export async function handleArCancelConfirmation(input: {
   const platform = await loadAppointmentPlatformConfig(input.workspaceId);
   const ar = resolveAiReschedulerConfig(platform);
   const whenLabel = await formatWhen(input.workspaceId, row.id);
+  const cancelPolicy = resolveArCancelSmsPolicy(ar);
+  const policyGate = gateArSmsCalendarWriteByPolicy({
+    meta,
+    action: "cancel",
+    startsAt: row.startsAt,
+    policy: cancelPolicy,
+  });
+  if (!policyGate.allowed) {
+    return { handled: true, replyText: policyGate.customerMessage };
+  }
 
   if (ar.allowProviderCancel && ar.mode === "ai") {
     const provider = await cancelProviderEvent({
@@ -107,8 +124,13 @@ export async function handleArCancelConfirmation(input: {
   });
   const fresh = await prisma.voiceAppointment.findFirst({ where: { id: row.id } });
   if (fresh) {
+    let ackMeta = (fresh.metadata || {}) as AppointmentMetadata;
+    const ack = getArSmsPolicyAck(ackMeta);
+    if (ack && policyGate.ack) {
+      ackMeta = mergePolicyAckIntoMetadata(ackMeta, consumePolicyAck(ack, "cancel"));
+    }
     const nextMeta = suppressAppointmentReminders({
-      ...(fresh.metadata as AppointmentMetadata),
+      ...ackMeta,
       arCancelPending: undefined,
     });
     await prisma.voiceAppointment.update({
@@ -119,6 +141,127 @@ export async function handleArCancelConfirmation(input: {
   return {
     handled: true,
     replyText: `Your appointment on ${whenLabel} has been cancelled.`,
+  };
+}
+
+export async function beginArCancelPendingAfterPolicyAck(input: {
+  workspaceId: string;
+  contactId: string;
+  appointmentId: string;
+  replySessionId?: string;
+  whenLabel: string;
+  meta: AppointmentMetadata;
+}): Promise<string> {
+  const prisma = getPrisma();
+  await prisma.voiceAppointment.update({
+    where: { id: input.appointmentId },
+    data: {
+      metadata: {
+        ...input.meta,
+        arCancelPending: { requestedAt: new Date().toISOString() },
+      } as object,
+    },
+  });
+  if (input.replySessionId) {
+    const { markArReplySessionLifecycle } = await import(
+      "@/lib/appointment-reminders/messaging/reply-session"
+    );
+    await markArReplySessionLifecycle({
+      sessionId: input.replySessionId,
+      workspaceId: input.workspaceId,
+      lifecycleState: "AWAITING_CANCEL_CONFIRM",
+    });
+  }
+  await recordArSmsCustomerOutcome({
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+    replySessionId: input.replySessionId,
+    outcome: "cancel_pending",
+  });
+  return `Reply YES to confirm you want to cancel your appointment on ${input.whenLabel}.`;
+}
+
+export async function continueArRescheduleAfterPolicyAcceptance(input: {
+  workspaceId: string;
+  contactId: string;
+  appointmentId: string;
+  replySessionId?: string;
+  whenLabel: string;
+  meta: AppointmentMetadata;
+  ar: ReturnType<typeof resolveAiReschedulerConfig>;
+}): Promise<ArInboundReplyResult> {
+  if (input.replySessionId) {
+    const { markArReplySessionLifecycle } = await import(
+      "@/lib/appointment-reminders/messaging/reply-session"
+    );
+    await markArReplySessionLifecycle({
+      sessionId: input.replySessionId,
+      workspaceId: input.workspaceId,
+      lifecycleState: "RESCHEDULING",
+    });
+  }
+
+  const prisma = getPrisma();
+  await prisma.contact.update({
+    where: { id: input.contactId },
+    data: {
+      customFields: mergeConversationState(
+        (
+          await prisma.contact.findFirst({
+            where: { id: input.contactId },
+            select: { customFields: true },
+          })
+        )?.customFields,
+        {
+          appointmentId: input.appointmentId,
+          activeIntent: "RESCHEDULE",
+        },
+      ) as object,
+    },
+  });
+
+  if (input.ar.mode === "notify") {
+    await prisma.voiceAppointment.update({
+      where: { id: input.appointmentId },
+      data: {
+        metadata: {
+          ...input.meta,
+          arRescheduleRequest: {
+            status: "pending_business",
+            requestedAt: new Date().toISOString(),
+            channel: "sms",
+          },
+        } as object,
+        status: "reschedule_requested",
+      },
+    });
+    await notifyBusinessRescheduleInterest({
+      workspaceId: input.workspaceId,
+      appointmentId: input.appointmentId,
+      message: `Customer asked to reschedule the appointment on ${input.whenLabel}.`,
+    });
+    await recordArSmsCustomerOutcome({
+      workspaceId: input.workspaceId,
+      appointmentId: input.appointmentId,
+      replySessionId: input.replySessionId,
+      outcome: "reschedule_requested",
+    });
+    return {
+      handled: true,
+      replyText: `Thanks — we received your request to reschedule your appointment on ${input.whenLabel}. The business will follow up shortly.`,
+    };
+  }
+
+  await recordArSmsCustomerOutcome({
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+    replySessionId: input.replySessionId,
+    outcome: "reschedule_started",
+  });
+  return {
+    handled: true,
+    openedRescheduleFlow: true,
+    replyText: `Sure — what day or time works better for your appointment on ${input.whenLabel}?`,
   };
 }
 
@@ -224,49 +367,36 @@ export async function handleArReminderLetterReply(input: {
     }
 
     const pending = (meta as { arCancelPending?: { requestedAt: string } }).arCancelPending;
-    const latePenalty = cancelSms.requiresPolicyWarning ? cancelSms.penaltySummary : null;
-    if (!pending) {
-      const prisma = getPrisma();
-      await prisma.voiceAppointment.update({
-        where: { id: appointmentId },
-        data: {
-          metadata: {
-            ...meta,
-            arCancelPending: { requestedAt: new Date().toISOString() },
-          } as object,
-        },
-      });
-      if (input.replySessionId) {
-        const { markArReplySessionLifecycle } = await import(
-          "@/lib/appointment-reminders/messaging/reply-session"
-        );
-        await markArReplySessionLifecycle({
-          sessionId: input.replySessionId,
-          workspaceId: input.workspaceId,
-          lifecycleState: "AWAITING_CANCEL_CONFIRM",
-        });
-      }
-      await recordArSmsCustomerOutcome({
-        workspaceId: input.workspaceId,
-        appointmentId,
-        replySessionId: input.replySessionId,
-        outcome: "cancel_pending",
-      });
-      const penaltyLine = latePenalty
-        ? ` Because it's within the cancellation window, ${latePenalty}.`
-        : "";
-      return {
-        handled: true,
-        replyText: `Reply YES to confirm you want to cancel your appointment on ${whenLabel}.${penaltyLine}`,
-      };
+    const policyWarning = await ensureArSmsPolicyWarningDelivered({
+      workspaceId: input.workspaceId,
+      contactId: input.contactId,
+      appointmentId,
+      replySessionId: input.replySessionId,
+      conversationId: input.conversationId,
+      action: "cancel",
+      ar,
+      whenLabel,
+      startsAt: row.startsAt,
+    });
+    if (policyWarning.required && !policyWarning.alreadyAccepted) {
+      return { handled: true, replyText: policyWarning.replyText };
     }
 
-    const penaltyLine = latePenalty
-      ? ` Because it's within the cancellation window, ${latePenalty}.`
-      : "";
+    if (!pending) {
+      const confirmLine = await beginArCancelPendingAfterPolicyAck({
+        workspaceId: input.workspaceId,
+        contactId: input.contactId,
+        appointmentId,
+        replySessionId: input.replySessionId,
+        whenLabel,
+        meta,
+      });
+      return { handled: true, replyText: confirmLine };
+    }
+
     return {
       handled: true,
-      replyText: `Reply YES to confirm cancellation of your appointment on ${whenLabel}.${penaltyLine}`,
+      replyText: `Reply YES to confirm cancellation of your appointment on ${whenLabel}.`,
     };
   }
 
@@ -283,85 +413,30 @@ export async function handleArReminderLetterReply(input: {
         "Rescheduling by text isn't available this close to your appointment. Please contact the business directly if you need help.",
     };
   }
-  if (rescheduleSms.requiresPolicyWarning && rescheduleSms.penaltySummary) {
-    return {
-      handled: true,
-      replyText: `You can reschedule, but ${rescheduleSms.penaltySummary}. What day or time works better for your appointment on ${whenLabel}?`,
-    };
-  }
-
-  if (input.replySessionId) {
-    const { markArReplySessionLifecycle } = await import(
-      "@/lib/appointment-reminders/messaging/reply-session"
-    );
-    await markArReplySessionLifecycle({
-      sessionId: input.replySessionId,
-      workspaceId: input.workspaceId,
-      lifecycleState: "RESCHEDULING",
-    });
-  }
-
-  const prisma = getPrisma();
-  await prisma.contact.update({
-    where: { id: input.contactId },
-    data: {
-      customFields: mergeConversationState(
-        (
-          await prisma.contact.findFirst({
-            where: { id: input.contactId },
-            select: { customFields: true },
-          })
-        )?.customFields,
-        {
-          appointmentId,
-          activeIntent: "RESCHEDULE",
-        },
-      ) as object,
-    },
-  });
-
-  if (ar.mode === "notify") {
-    await prisma.voiceAppointment.update({
-      where: { id: appointmentId },
-      data: {
-        metadata: {
-          ...meta,
-          arRescheduleRequest: {
-            status: "pending_business",
-            requestedAt: new Date().toISOString(),
-            channel: "sms",
-          },
-        } as object,
-        status: "reschedule_requested",
-      },
-    });
-    await notifyBusinessRescheduleInterest({
-      workspaceId: input.workspaceId,
-      appointmentId,
-      message: `Customer asked to reschedule the appointment on ${whenLabel}.`,
-    });
-    await recordArSmsCustomerOutcome({
-      workspaceId: input.workspaceId,
-      appointmentId,
-      replySessionId: input.replySessionId,
-      outcome: "reschedule_requested",
-    });
-    return {
-      handled: true,
-      replyText: `Thanks — we received your request to reschedule your appointment on ${whenLabel}. The business will follow up shortly.`,
-    };
-  }
-
-  await recordArSmsCustomerOutcome({
+  const reschedulePolicyWarning = await ensureArSmsPolicyWarningDelivered({
     workspaceId: input.workspaceId,
+    contactId: input.contactId,
     appointmentId,
     replySessionId: input.replySessionId,
-    outcome: "reschedule_started",
+    conversationId: input.conversationId,
+    action: "reschedule",
+    ar,
+    whenLabel,
+    startsAt: row.startsAt,
   });
-  return {
-    handled: true,
-    replyText: `Sure — what day or time works better for your appointment on ${whenLabel}?`,
-  };
+  if (reschedulePolicyWarning.required && !reschedulePolicyWarning.alreadyAccepted) {
+    return { handled: true, replyText: reschedulePolicyWarning.replyText };
+  }
+
+  return continueArRescheduleAfterPolicyAcceptance({
+    workspaceId: input.workspaceId,
+    contactId: input.contactId,
+    appointmentId,
+    replySessionId: input.replySessionId,
+    whenLabel,
+    meta,
+    ar,
+  });
 }
 
 export async function seedRescheduleConversationOnReminderSend(input: {

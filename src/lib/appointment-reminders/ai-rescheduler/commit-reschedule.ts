@@ -8,6 +8,13 @@ import type { AppointmentMetadata } from "@/lib/appointments/types";
 import { patchProviderEventTimes } from "./provider-mutations";
 import { resolveAiReschedulerConfig, isAiAutomaticCalendarMutation } from "./types";
 import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
+import { resolveArRescheduleSmsPolicy } from "./ar-sms-action-policy";
+import {
+  consumePolicyAck,
+  gateArSmsCalendarWriteByPolicy,
+  getArSmsPolicyAck,
+  mergePolicyAckIntoMetadata,
+} from "./ar-sms-policy-ack";
 
 export async function commitArReschedule(input: {
   workspaceId: string;
@@ -40,6 +47,20 @@ export async function commitArReschedule(input: {
 
   const start = new Date(input.startsAt);
   if (Number.isNaN(start.getTime())) return { ok: false, message: "Invalid start time" };
+
+  let policyGateAck = null as ReturnType<typeof getArSmsPolicyAck>;
+  if (input.initiatedBy === "customer") {
+    const policyGate = gateArSmsCalendarWriteByPolicy({
+      meta,
+      action: "reschedule",
+      startsAt: row.startsAt,
+      policy: resolveArRescheduleSmsPolicy(ar),
+    });
+    if (!policyGate.allowed) {
+      return { ok: false, message: policyGate.customerMessage };
+    }
+    policyGateAck = policyGate.ack;
+  }
 
   const { assertSafeSingleOccurrenceMutation } = await import("./recurring-guard");
   const recurring = await assertSafeSingleOccurrenceMutation({
@@ -136,6 +157,12 @@ export async function commitArReschedule(input: {
     detail: start.toISOString(),
   });
 
+  let finalMeta = withTimeline as AppointmentMetadata;
+  if (policyGateAck) {
+    const ack = getArSmsPolicyAck(finalMeta) ?? policyGateAck;
+    finalMeta = mergePolicyAckIntoMetadata(finalMeta, consumePolicyAck(ack, "reschedule"));
+  }
+
   try {
     await prisma.voiceAppointment.update({
       where: { id: row.id },
@@ -143,7 +170,7 @@ export async function commitArReschedule(input: {
         startsAt: start,
         endsAt: end,
         status: "scheduled",
-        metadata: withTimeline as object,
+        metadata: finalMeta as object,
       },
     });
   } catch (err) {

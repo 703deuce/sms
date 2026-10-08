@@ -20,10 +20,13 @@ import { openAiChatWithTools, type ChatMessage } from "./openai-tools";
 import { buildArRescheduleConfirmedSms } from "../display-time";
 import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
 import { resolveAiReschedulerConfig } from "../types";
+import { resolveArRescheduleSmsPolicy } from "../ar-sms-action-policy";
 import {
-  evaluateArSmsActionPolicy,
-  resolveArRescheduleSmsPolicy,
-} from "../ar-sms-action-policy";
+  consumePolicyAck,
+  gateArSmsCalendarWriteByPolicy,
+  getArSmsPolicyAck,
+  mergePolicyAckIntoMetadata,
+} from "../ar-sms-policy-ack";
 import { getPrisma } from "@/lib/db";
 import { markArReplySessionLifecycle } from "@/lib/appointment-reminders/messaging/reply-session";
 import { AR_SMS_APPOINTMENT_AGENT_SYSTEM_PROMPT } from "../context-agent/ar-sms-appointment-agent-prompt";
@@ -155,23 +158,25 @@ async function arExecuteReschedule(
   const prisma = getPrisma();
   const appt = await prisma.voiceAppointment.findFirst({
     where: { id: appointmentId, workspaceId },
-    select: { startsAt: true },
+    select: { startsAt: true, metadata: true },
   });
   if (!appt) {
     return JSON.stringify({ ok: false, error: "appointment_not_found" });
   }
   const platform = await loadAppointmentPlatformConfig(workspaceId);
   const ar = resolveAiReschedulerConfig(platform);
-  const policyEval = evaluateArSmsActionPolicy({
+  const reschedulePolicy = resolveArRescheduleSmsPolicy(ar);
+  const policyGate = gateArSmsCalendarWriteByPolicy({
+    meta: (appt.metadata || {}) as import("@/lib/appointments/types").AppointmentMetadata,
     action: "reschedule",
     startsAt: appt.startsAt,
-    policy: resolveArRescheduleSmsPolicy(ar),
+    policy: reschedulePolicy,
   });
-  if (!policyEval.allowsAutomatedAction) {
+  if (!policyGate.allowed) {
     return JSON.stringify({
       ok: false,
-      status: "RESCHEDULE_BLOCKED_BY_POLICY",
-      message: "Rescheduling by SMS is not available this close to the appointment. Contact the business.",
+      status: policyGate.code,
+      message: policyGate.customerMessage,
     });
   }
 
@@ -230,6 +235,26 @@ async function arExecuteReschedule(
         operationId: opId,
         initiatedBy: "customer",
       });
+      if (policyGate.ack) {
+        const fresh = await prisma.voiceAppointment.findFirst({
+          where: { id: appointmentId, workspaceId },
+          select: { metadata: true },
+        });
+        const ack = getArSmsPolicyAck(
+          (fresh?.metadata || {}) as import("@/lib/appointments/types").AppointmentMetadata,
+        );
+        if (ack) {
+          await prisma.voiceAppointment.update({
+            where: { id: appointmentId },
+            data: {
+              metadata: mergePolicyAckIntoMetadata(
+                (fresh?.metadata || {}) as import("@/lib/appointments/types").AppointmentMetadata,
+                consumePolicyAck(ack, "reschedule"),
+              ) as object,
+            },
+          });
+        }
+      }
     }
   }
 
@@ -386,7 +411,7 @@ export async function runArRescheduleLunaTurn(input: {
               body: input.message,
               letter: "R",
             });
-            if (r.handled) {
+            if (r.handled && r.openedRescheduleFlow) {
               await markArReplySessionLifecycle({
                 sessionId: input.replySessionId,
                 workspaceId: input.workspaceId,

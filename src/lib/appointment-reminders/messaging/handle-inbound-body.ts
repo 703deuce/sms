@@ -1,9 +1,20 @@
 import "server-only";
 
 import {
+  beginArCancelPendingAfterPolicyAck,
+  continueArRescheduleAfterPolicyAcceptance,
   handleArCancelConfirmation,
   handleArReminderLetterReply,
 } from "@/lib/appointment-reminders/ai-rescheduler/inbound-replies";
+import { tryHandleArSmsPolicyAckForAppointment } from "@/lib/appointment-reminders/ai-rescheduler/ar-sms-policy-ack-inbound";
+import { getArSmsPolicyAck, awaitingPolicyAcceptance } from "@/lib/appointment-reminders/ai-rescheduler/ar-sms-policy-ack";
+import {
+  isAiReschedulerSmsEnabled,
+  resolveAiReschedulerConfig,
+} from "@/lib/appointment-reminders/ai-rescheduler/types";
+import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
+import { getPrisma } from "@/lib/db";
+import type { AppointmentMetadata } from "@/lib/appointments/types";
 import { tryHandleArReminderFollowUp } from "@/lib/appointment-reminders/messaging/inbound-follow-up";
 import { classifyArInboundBody, logArSmsPipeline } from "./pipeline-log";
 
@@ -20,6 +31,73 @@ export async function handleAppointmentRemindersInboundBody(input: {
   const body = (input.body || "").trim();
   const { inboundKind, bodyLength } = classifyArInboundBody(body);
   if (!body) return { handled: false };
+
+  const platform = await loadAppointmentPlatformConfig(input.workspaceId);
+  const ar = resolveAiReschedulerConfig(platform);
+  if (isAiReschedulerSmsEnabled(ar)) {
+    const apptRow = await getPrisma().voiceAppointment.findFirst({
+      where: { id: input.appointmentId, workspaceId: input.workspaceId },
+      select: { metadata: true, startsAt: true, timezone: true },
+    });
+    const meta = (apptRow?.metadata || {}) as AppointmentMetadata;
+    if (awaitingPolicyAcceptance(meta)) {
+      const whenLabel = apptRow?.startsAt
+        ? apptRow.startsAt.toLocaleString("en-US", {
+            dateStyle: "medium",
+            timeStyle: "short",
+            timeZone: apptRow.timezone || undefined,
+          })
+        : "your appointment";
+      const ack = getArSmsPolicyAck(meta);
+      const policyTurn = await tryHandleArSmsPolicyAckForAppointment({
+        workspaceId: input.workspaceId,
+        contactId: input.contactId,
+        appointmentId: input.appointmentId,
+        replySessionId: input.replySessionId,
+        conversationId: input.conversationId,
+        body,
+        providerMessageId: input.providerMessageId,
+        whenLabel,
+        ar,
+        onCancelAccepted: async () =>
+          beginArCancelPendingAfterPolicyAck({
+            workspaceId: input.workspaceId,
+            contactId: input.contactId,
+            appointmentId: input.appointmentId,
+            replySessionId: input.replySessionId,
+            whenLabel,
+            meta,
+          }),
+        onRescheduleAccepted: async () => {
+          const r = await continueArRescheduleAfterPolicyAcceptance({
+            workspaceId: input.workspaceId,
+            contactId: input.contactId,
+            appointmentId: input.appointmentId,
+            replySessionId: input.replySessionId,
+            whenLabel,
+            meta,
+            ar,
+          });
+          return r.replyText;
+        },
+      });
+      if (policyTurn.handled) {
+        logArSmsPipeline({
+          step: "inbound_handler_branch",
+          workspaceId: input.workspaceId,
+          replySessionId: input.replySessionId,
+          appointmentId: input.appointmentId,
+          conversationId: input.conversationId,
+          providerMessageId: input.providerMessageId,
+          handler: "policy_ack",
+          branch: ack?.action ?? "unknown",
+          inboundKind,
+          bodyLength,
+        });
+        return { handled: true, replyText: policyTurn.replyText };
+      }
+    }
+  }
 
   if (/^(yes|y)$/i.test(body)) {
     const arCancel = await handleArCancelConfirmation({

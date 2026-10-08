@@ -23,7 +23,7 @@
 | 2 | Natural language from first SMS and after a completed operation | **PASS (code + prompt); live not run** | No post-complete canned ack bypass; appointment-agent COMPLETED guidance; `AR_INBOUND_ROUTABLE_LIFECYCLE_STATES` includes `COMPLETED` |
 | 3 | Reschedule → thanks → next day → reschedule again without replaying first op | **PARTIAL** | `resetReschedulePhaseForNewRequest` + session re-open on COMPLETED; two `rescheduled` outcome events in tests; live multi-day steps in §4 |
 | 4 | PR #622 attributes second op to correct appointment; list shows latest time | **PASS (unit)** | `ar-sms-integration-boundaries.test.ts` (latest Oct 19 over Oct 12); `startsAt` authoritative on list |
-| 5 | Independent cancel cutoff, late policies, penalties, acknowledgments | **IMPLEMENTED (gap on ack flag)** | `ar-sms-action-policy.ts`, UI fields, `inbound-replies.ts` / `luna-turn.ts`; tests PASS; no persisted penalty-acknowledgment flag |
+| 5 | Independent cancel cutoff, late policies, penalties, acknowledgments | **IMPLEMENTED** | `ar-sms-action-policy.ts` + persisted `arSmsPolicyAck` (`ar-sms-policy-ack.ts`); enforced at cancel/reschedule write boundaries; `ar-sms-policy-ack.test.ts` |
 | 6 | Microsoft calendar path (not mocks only) | **NOT RUN** | Bootstrap E2E without `externalId` stops at calendar verify; use §7 with real `AR_SMS_E2E_*` or `test-ar-ws1-live-sms-crx-e2e.ts` |
 
 ## 1. Two-agent architecture (#621)
@@ -77,7 +77,7 @@ Implemented in `ar-sms-action-policy.ts` + UI `SmsActionPolicyFields`:
 - Enforcement: `inbound-replies.ts` (C/R/X), `luna-turn.ts` (`arExecuteReschedule`), reminder suffix `buildArReplyInstructionsSuffix`
 - Tests: `ar-sms-action-policy.test.ts`, `reschedule-sms-cutoff.test.ts`
 
-**Gap / clarify:** “Explicit acknowledgment” for late reschedule is communicated in SMS copy (penalty warning before flow continues). There is no separate persisted “customer acknowledged penalty” flag beyond proceeding in conversation.
+**Late-action policy acceptance (2026-10-08):** `arSmsPolicyAck` on appointment metadata tracks `warning_delivered` → `accepted` / `declined`, policy fingerprint, message + timestamp, and `consumedAt` after a successful calendar write. C/R/X and natural-language paths share `ensureArSmsPolicyWarningDelivered` + `gateArSmsCalendarWriteByPolicy`. Scheduling questions do not imply acceptance.
 
 ## 4. Multi-day / second reschedule on same thread
 
