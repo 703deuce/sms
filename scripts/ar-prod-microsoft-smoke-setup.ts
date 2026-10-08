@@ -113,19 +113,19 @@ async function main() {
   });
   if (!user) throw new Error(`User not found: ${EMAIL}`);
 
-  const member = await prisma.membership.findFirst({
+  const memberOnTarget = await prisma.membership.findFirst({
     where: { userId: user.id, workspaceId: WORKSPACE_ID },
     select: { workspaceId: true },
   });
-  if (!member) {
+  if (!memberOnTarget) {
     const any = await prisma.membership.findFirst({
       where: { userId: user.id },
       select: { workspaceId: true },
     });
     if (!any) throw new Error("No workspace membership");
-    console.warn("Using workspace", any.workspaceId, "instead of", WORKSPACE_ID);
+    console.warn("User is not on", WORKSPACE_ID, "— using", any.workspaceId);
   }
-  const workspaceId = member?.workspaceId || WORKSPACE_ID;
+  const workspaceId = WORKSPACE_ID;
 
   const msConn = await prisma.voiceCalendarConnection.findFirst({
     where: {
@@ -297,12 +297,36 @@ async function main() {
     phone,
   });
 
+  const { mctbCallerE164Variants, normalizeMctbCallerE164 } = await import(
+    "../src/lib/mctb/messaging/caller-e164"
+  );
+  const { AR_REPLY_ELIGIBLE_STATES } = await import(
+    "../src/lib/appointment-reminders/messaging/ar-platform-sender-pool"
+  );
+  const consumerVariants = mctbCallerE164Variants(normalizeMctbCallerE164(phone));
+  const expired = await prisma.arSmsReplySession.updateMany({
+    where: {
+      workspaceId,
+      consumerE164: { in: consumerVariants },
+      lifecycleState: { in: [...AR_REPLY_ELIGIBLE_STATES] },
+    },
+    data: {
+      lifecycleState: "EXPIRED",
+      completedAt: new Date(),
+      lastUsedAt: new Date(),
+    },
+  });
+  if (expired.count > 0) {
+    console.log("expired_prior_ar_reply_sessions", expired.count);
+  }
+
   const sendResult = await maybeSendImmediateConfirmationForAppointment(workspaceId, row.id);
   console.log("immediate_confirmation", sendResult);
 
   if (!sendResult.sent) {
     console.error(
-      "Did not send production confirmation reminder. Fix skip reason above (activation, SMS consent, confirmation step, allowance, etc.).",
+      "Did not send production confirmation reminder.",
+      sendResult.skipped ? `(skipped: ${sendResult.skipped})` : "(trySendStep returned false — check appointment metadata timeline)",
     );
     console.error(
       "Graph event was created — cancel manually in Outlook if you re-run after fixing SMS.",
