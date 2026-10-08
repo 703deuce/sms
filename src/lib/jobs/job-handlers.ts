@@ -195,7 +195,25 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       return executeArSendCustomerSmsJob(payload);
     }
     case "ar_inbound_held": {
-      return { ok: true, held: true, reason: String(payload.reason || "held") };
+      const heldMessageId = String(payload.heldMessageId || "");
+      if (!heldMessageId) {
+        return { ok: false, reason: "held_message_id_missing" };
+      }
+      const { getPrisma } = await import("@/lib/db");
+      const row = await getPrisma().arSmsInboundHeldMessage.findUnique({
+        where: { id: heldMessageId },
+        select: { id: true, state: true, holdReason: true },
+      });
+      if (!row) {
+        return { ok: false, reason: "held_message_not_found" };
+      }
+      return {
+        ok: true,
+        held: true,
+        heldMessageId: row.id,
+        state: row.state,
+        reason: row.holdReason,
+      };
     }
     case "voice_mctb_booking_create": {
       const { executeVoiceMctbBookingCreateJob } = await import(

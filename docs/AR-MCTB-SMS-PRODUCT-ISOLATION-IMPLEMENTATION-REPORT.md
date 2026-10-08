@@ -1,7 +1,7 @@
 # AR / MCTB SMS product isolation — implementation report
 
 **Branch:** `cursor/ar-ai-rescheduler-implement-f350`  
-**Commits:** `1d87255a`, `0997ad78` (use **`0997ad78`** as latest)  
+**Commits:** `1d87255a`, `0997ad78`, final corrections on same branch (see git log)  
 **PR:** [#616](https://github.com/703deuce/sms/pull/616)  
 **Status:** Do not merge or deploy without explicit approval.
 
@@ -36,15 +36,15 @@ Entry: `resolvePlatformInboundDestination()` → `dispatchSharedPlatformSmsInbou
 |-----------|----------|
 | Exactly **one** active, reply-eligible **`ArSmsReplySession`** for `(consumer, destination sender)` | → `ar_process_inbound_sms` (never MCTB) |
 | Exactly **one** active **`MctbPlatformSenderAssignment`** for same pair | → existing MCTB ingress/job |
-| **Both** active | → **hold** (`ar_inbound_held` job); **no** handler, **no** MCTB fallback |
-| Multiple AR or multiple MCTB active | → **ambiguous** (no guess) |
+| **Both** active | → **hold** (`ArSmsInboundHeldMessage` + `ar_inbound_held` audit job); **no** auto-route |
+| Multiple AR or multiple MCTB active | → **ambiguous** (durable hold; no guess) |
 | Neither active | → **MCTB-only** legacy resolution (unchanged MCTB behavior; AR does not run) |
 
 C/R/X and follow-up on the AR path use **`explicitAppointmentId` + `replySessionId`** from the session (not “next upcoming appointment” on platform inbound).
 
 ### Two-sender AR strategy
 
-`ar-platform-sender-pool.ts`: eligible platform senders (authorized for outbound), Telnyx preferred, preserved Twilio secondary; skip senders already tied to **other** active AR sessions for that consumer; reuse sender for the **same** appointment; collision → `HELD_PENDING_SEND` / blocked send with reason on the reminder path.
+`ar-platform-sender-pool.ts`: eligible platform senders (authorized for outbound), Telnyx preferred, preserved Twilio secondary; skip senders occupied by **active AR sessions or active MCTB platform assignments** for that consumer (`findOccupiedPlatformSenderIdsForConsumer` uses the same MCTB assignment semantics as inbound dispatch); reuse sender for the **same** appointment; collision at claim time if MCTB assignment races AR send → blocked/pending; inbound hold remains backstop when MCTB legacy path cannot share an atomic reservation.
 
 ### Where “booking through text” lives (unchanged product boundary)
 
@@ -53,7 +53,7 @@ C/R/X and follow-up on the AR path use **`explicitAppointmentId` + `replySession
 - `src/lib/appointments/ai-scheduling/`
 - `src/lib/appointment-reminders/ai-rescheduler/` (provider mutations, Microsoft/Google paths, durable ops)
 
-It is **not** MCTB lead recovery. Platform inbound now reaches it only via **`ar_process_inbound_sms`** → `handle-inbound-body` → existing `inbound-replies` / `inbound-follow-up` → `tryHandleInboundAppointmentAi`.
+It is **not** MCTB lead recovery. Platform inbound now reaches it only via **`ar_process_inbound_sms`** → `handle-inbound-body` → `inbound-replies` / **`messaging/inbound-follow-up`** (session-bound, `lockedAppointmentId` on `handleAppointmentAIRequest`).
 
 MCTB AI booking/lead recovery stays under **`src/lib/agents/missed-call-text-back/`** and MCTB jobs only.
 
@@ -129,7 +129,8 @@ At **inbound** (`processArInboundSmsJob`):
 
 - **Outbound:** `outbound-reminder.ts`, `reply-session.ts`, `send-via-assigned-sender.ts`
 - **Inbound:** `inbound-sms-ingress.ts`, `process-inbound-sms-job.ts`, `send-customer-sms-job.ts`
-- **Jobs:** `ar_process_inbound_sms`, `ar_send_customer_sms`, `ar_inbound_held` (noop complete)
+- **Jobs:** `ar_process_inbound_sms`, `ar_send_customer_sms`, `ar_inbound_held` (links to durable `ArSmsInboundHeldMessage`)
+- **Held ops UI:** `/appointment-reminders/held-inbound` + APIs under `/api/appointment-reminders/held-inbound`
 
 ### 3. Product isolation (same workspace, both products)
 
@@ -151,8 +152,9 @@ Both products may share numbers; routing uses **active session/assignment**, not
 
 ### 7. Database
 
-- Migration **`20261008130000_ar_sms_reply_session`**
-- Enum: `ConversationProductSource.APPOINTMENT_REMINDERS`, `ArSmsReplySessionState`
+- Migrations **`20261008130000_ar_sms_reply_session`**, **`20261008140000_ar_sms_inbound_held`**
+- Enums: `ConversationProductSource.APPOINTMENT_REMINDERS`, `ArSmsReplySessionState`, `ArSmsInboundHeldState`
+- Model: `ArSmsInboundHeldMessage`
 - **Deploy prerequisite:** `prisma migrate deploy` before traffic
 
 ### 8. Changed files (concise)
@@ -179,11 +181,12 @@ Both products may share numbers; routing uses **active session/assignment**, not
 | MCTB + AR same customer, same sender, both active | **PASS** | Cross-product hold |
 | AR reply R | **PASS** | Session-bound `appointmentId` |
 | MCTB customer replies | **PASS** | MCTB assignment/legacy only |
-| Late AR reply vs newer appointment | **PARTIAL** | Session binding on C/R/X; follow-up still uses contact `customFields` heuristics |
+| Late AR reply vs newer appointment | **PASS** (platform path) | `verifyArReplySessionForInboundTurn` + `lockedAppointmentId` on every AI turn |
 | Duplicate webhook | **PASS** | Idempotency keys per product ingress |
 | AR disabled / MCTB disabled | **CONFIG** | Entitlements not changed in this PR |
-| Clarification SMS on ambiguous | **GAP** | Hold recorded; no approved clarification template send yet |
-| Staff approve/reject UI + full rescheduler UI | **GAP** | Backend paths exist; UI/reconciliation not finished this pass |
+| Clarification SMS on ambiguous | **GAP** | Durable hold + staff dismiss/route AR; no auto clarification SMS |
+| Staff approve/reject + reconciliation UI | **PASS** (baseline) | Appointments drawer + AI Rescheduler pending ops panel + reconcile API |
+| AR outbound avoids MCTB sender collision | **PASS** | `findOccupiedPlatformSenderIdsForConsumer` before send |
 | Non-platform AR (workspace line) | **GAP** | Session model on **platform** reminder path in `reminder-delivery` only |
 
 ### 10. Remaining manual testing (owner)
@@ -196,13 +199,13 @@ Both products may share numbers; routing uses **active session/assignment**, not
 
 ---
 
-## Remaining implementation blockers / follow-ups
+## Remaining gaps (post-correction)
 
-1. Tighten AR follow-up (`inbound-follow-up`) to require `replySessionId` / session appointment (not only `customFields`).
-2. Approved clarification SMS for held cross-product inbound.
-3. Staff Approve/Reject UI and durable reconciliation surfacing in AR operational UI.
-4. Optional: extend `ArSmsReplySession` to non-platform AR sends if workspace-owned numbers are used for reminders.
-5. Configure `AR_PLATFORM_SENDER_PHONE_NUMBER_IDS` when more than auto-discovered platform rows exist.
+1. Approved clarification SMS for held cross-product inbound (intentionally deferred).
+2. Non-platform AR (workspace-owned reminder numbers) still outside `ArSmsReplySession` outbound path.
+3. Concurrent MCTB assignment + AR send on same sender may still race; inbound hold + send-time MCTB check reduce but do not eliminate legacy MCTB non-transactional claim paths.
+4. Configure `AR_PLATFORM_SENDER_PHONE_NUMBER_IDS` when more than auto-discovered platform rows exist.
+5. **Runtime verification not performed** in this pass (per instruction).
 
 ---
 
@@ -212,6 +215,8 @@ Both products may share numbers; routing uses **active session/assignment**, not
 |----------|---------|
 | `AR_PLATFORM_SENDER_PHONE_NUMBER_IDS` | Comma-separated `PhoneNumber.id` values eligible for AR (optional; defaults to discovered platform senders) |
 | `AR_SMS_REPLY_ELIGIBLE_DAYS` | Reply window for session eligibility (default `21`) |
+
+**Telnyx + Twilio for AR:** Both must be present as **Active** platform sender `PhoneNumber` rows (Telnyx primary, preserved Twilio secondary per `ar-platform-sender-pool.ts`), each **authorized for outbound SMS** (`isPhoneAuthorizedForOutboundSms`). Restrict with `AR_PLATFORM_SENDER_PHONE_NUMBER_IDS` when multiple platform numbers exist. MCTB uses the same physical numbers; AR allocation skips senders with active MCTB assignments for that consumer.
 
 ---
 

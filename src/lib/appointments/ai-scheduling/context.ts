@@ -54,6 +54,7 @@ export async function assembleAppointmentAiContext(input: {
   customerTimezone?: string;
   conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>;
   contactCustomFields?: unknown;
+  lockedAppointmentId?: string;
   now?: Date;
 }): Promise<AppointmentAiContext> {
   const now = input.now || new Date();
@@ -71,23 +72,44 @@ export async function assembleAppointmentAiContext(input: {
 
   if (input.customerId) {
     const prisma = getPrisma();
-    const rows = await prisma.voiceAppointment.findMany({
-      where: {
-        workspaceId: input.workspaceId,
-        contactId: input.customerId,
-        startsAt: { gte: now },
-        status: { notIn: ["canceled", "cancelled", "completed", "no_show"] },
-      },
-      orderBy: { startsAt: "asc" },
-      take: 5,
-      select: { id: true, serviceName: true, startsAt: true, status: true },
-    });
-    customerAppointments = rows.map((r: DbRow) => ({
-      id: r.id,
-      serviceName: r.serviceName || "Appointment",
-      startsAt: r.startsAt.toISOString(),
-      status: r.status,
-    }));
+    if (input.lockedAppointmentId) {
+      const row = await prisma.voiceAppointment.findFirst({
+        where: {
+          id: input.lockedAppointmentId,
+          workspaceId: input.workspaceId,
+          contactId: input.customerId,
+        },
+        select: { id: true, serviceName: true, startsAt: true, status: true },
+      });
+      if (row) {
+        customerAppointments = [
+          {
+            id: row.id,
+            serviceName: row.serviceName || "Appointment",
+            startsAt: row.startsAt.toISOString(),
+            status: row.status,
+          },
+        ];
+      }
+    } else {
+      const rows = await prisma.voiceAppointment.findMany({
+        where: {
+          workspaceId: input.workspaceId,
+          contactId: input.customerId,
+          startsAt: { gte: now },
+          status: { notIn: ["canceled", "cancelled", "completed", "no_show"] },
+        },
+        orderBy: { startsAt: "asc" },
+        take: 5,
+        select: { id: true, serviceName: true, startsAt: true, status: true },
+      });
+      customerAppointments = rows.map((r: DbRow) => ({
+        id: r.id,
+        serviceName: r.serviceName || "Appointment",
+        startsAt: r.startsAt.toISOString(),
+        status: r.status,
+      }));
+    }
   }
 
   if (input.conversationId && !conversationState) {
@@ -106,7 +128,18 @@ export async function assembleAppointmentAiContext(input: {
   const appointmentTypeIds = new Set<string>(types.map((t: DbRow) => String(t.id)));
   const staffIds = new Set<string>(staff.map((s: DbRow) => String(s.id)));
   const locationIds = new Set<string>(locations.map((l: DbRow) => String(l.id)));
-  const appointmentIds = new Set<string>(customerAppointments.map((a: DbRow) => String(a.id)));
+  const appointmentIds = new Set<string>(customerAppointments.map((a) => String(a.id)));
+
+  if (input.lockedAppointmentId && customerAppointments.some((a) => a.id === input.lockedAppointmentId)) {
+    conversationState = {
+      ...(conversationState || { updatedAt: new Date().toISOString() }),
+      activeIntent: "RESCHEDULE",
+      appointmentId: input.lockedAppointmentId,
+      updatedAt: new Date().toISOString(),
+    };
+    appointmentIds.clear();
+    appointmentIds.add(input.lockedAppointmentId);
+  }
 
   return {
     requestId: input.requestId,

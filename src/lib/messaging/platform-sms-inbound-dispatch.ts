@@ -91,6 +91,16 @@ export async function dispatchSharedPlatformSmsInbound(input: {
       arWorkspaceIds,
       mctbWorkspaceIds,
     });
+    await recordHeldPlatformInbound({
+      channel: input.channel,
+      destination: input.destination,
+      providerMessageId: input.providerMessageId,
+      fromE164: input.fromE164,
+      body: input.body,
+      reason: arAmbiguous ? "ambiguous_ar_sessions" : "ambiguous_mctb_assignments",
+      arSessions,
+      mctbAssignments,
+    });
     return { resolution: "ambiguous_platform_reply" };
   }
 
@@ -103,11 +113,14 @@ export async function dispatchSharedPlatformSmsInbound(input: {
       mctbWorkspaceId: mctbEligible.workspaceId,
     });
     await recordHeldPlatformInbound({
+      channel: input.channel,
+      destination: input.destination,
       providerMessageId: input.providerMessageId,
       fromE164: input.fromE164,
-      toE164: input.destination.e164,
       body: input.body,
       reason: "cross_product_active_context",
+      arSessions: [arEligible],
+      mctbAssignments: [mctbEligible],
     });
     return { resolution: "ambiguous_cross_product_reply" };
   }
@@ -203,12 +216,57 @@ export async function dispatchSharedPlatformSmsInbound(input: {
 }
 
 async function recordHeldPlatformInbound(input: {
+  channel: "twilio" | "telnyx";
+  destination: PlatformInboundDestination;
   providerMessageId: string;
   fromE164: string;
-  toE164: string;
   body: string;
   reason: string;
+  arSessions: Array<{
+    id: string;
+    workspaceId: string;
+    appointmentId: string;
+    conversationId: string | null;
+  }>;
+  mctbAssignments: Array<{
+    id: string;
+    workspaceId: string;
+    conversationId: string | null;
+  }>;
 }) {
+  const { persistArInboundHeldMessage } = await import(
+    "@/lib/appointment-reminders/messaging/platform-inbound-held"
+  );
+  const candidateContexts = [
+    ...input.arSessions.map((s) => ({
+      product: "appointment_reminders" as const,
+      workspaceId: s.workspaceId,
+      replySessionId: s.id,
+      appointmentId: s.appointmentId,
+      conversationId: s.conversationId ?? undefined,
+    })),
+    ...input.mctbAssignments.map((a) => ({
+      product: "mctb" as const,
+      workspaceId: a.workspaceId,
+      assignmentId: a.id,
+      conversationId: a.conversationId ?? undefined,
+    })),
+  ];
+  const workspaceId =
+    candidateContexts.length === 1 ? candidateContexts[0]!.workspaceId : null;
+
+  const held = await persistArInboundHeldMessage({
+    providerMessageId: input.providerMessageId,
+    channel: input.channel,
+    fromE164: input.fromE164,
+    toE164: input.destination.e164,
+    platformPhoneNumberId: input.destination.phoneNumberId,
+    body: input.body,
+    holdReason: input.reason,
+    candidateContexts,
+    workspaceId,
+  });
+
   const prisma = getPrisma();
   const idempotencyKey = `platform-inbound-held:${input.providerMessageId}`;
   await prisma.jobQueue
@@ -218,18 +276,23 @@ async function recordHeldPlatformInbound(input: {
         jobType: "ar_inbound_held",
         queueName: "appointment_reminders",
         priority: 60,
-        maxAttempts: 1,
+        maxAttempts: 3,
         idempotencyKey,
         payload: {
+          heldMessageId: held.id,
           providerMessageId: input.providerMessageId,
-          fromE164: input.fromE164,
-          toE164: input.toE164,
-          body: input.body.slice(0, 500),
           reason: input.reason,
           heldAt: new Date().toISOString(),
         },
       },
-      update: {},
+      update: {
+        payload: {
+          heldMessageId: held.id,
+          providerMessageId: input.providerMessageId,
+          reason: input.reason,
+          heldAt: new Date().toISOString(),
+        },
+      },
     })
     .catch(() => undefined);
 }

@@ -5,7 +5,9 @@ import {
   isPlatformMctbSenderPhoneRecord,
   isPreservedTwilioPlatformMctbSenderRecord,
 } from "@/lib/messaging/compliance/phone-number-class";
+import { normalizeMctbCallerE164 } from "@/lib/mctb/messaging/caller-e164";
 import { resolveCanonicalMctbPlatformSender } from "@/lib/mctb/messaging/platform-sender-config";
+import { findActivePlatformSenderIdsForConsumer } from "@/lib/mctb/messaging/platform-sender-assignment";
 import { isPhoneAuthorizedForOutboundSms } from "@/lib/mctb/messaging/outbound-sms-route";
 
 export type ArPlatformSenderCandidate = {
@@ -96,6 +98,18 @@ export async function findOccupiedArSenderIdsForConsumer(consumerE164: string): 
     select: { platformPhoneNumberId: true, appointmentId: true },
   });
   return new Set(rows.map((r) => r.platformPhoneNumberId));
+}
+
+/** Senders occupied by active AR sessions or active MCTB platform assignments for this consumer. */
+export async function findOccupiedPlatformSenderIdsForConsumer(
+  consumerE164: string,
+): Promise<Set<string>> {
+  const consumer = normalizeMctbCallerE164(consumerE164);
+  const [arOccupied, mctbOccupied] = await Promise.all([
+    findOccupiedArSenderIdsForConsumer(consumer),
+    findActivePlatformSenderIdsForConsumer(consumer),
+  ]);
+  return new Set([...arOccupied, ...mctbOccupied]);
 }
 
 export { AR_REPLY_ELIGIBLE_STATES };

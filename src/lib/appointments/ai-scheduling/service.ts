@@ -95,6 +95,8 @@ export type HandleAppointmentAIRequestInput = {
   contactCustomFields?: unknown;
   requestId?: string;
   useResponseComposerLlm?: boolean;
+  /** Platform AR SMS: bind all turns to one appointment (no contact heuristics). */
+  lockedAppointmentId?: string;
 };
 
 /**
@@ -129,6 +131,7 @@ export async function handleAppointmentAIRequest(
     customerTimezone: input.customerTimezone,
     conversationHistory: input.conversationHistory,
     contactCustomFields: input.contactCustomFields,
+    lockedAppointmentId: input.lockedAppointmentId,
   });
 
   const hinted = applyStateHintsToUnderstanding(emptyUnderstanding(input.message), ctx.conversationState);

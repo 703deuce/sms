@@ -96,6 +96,38 @@ async function releaseExpiredActiveAssignments(input: {
   }
 }
 
+/** Active MCTB platform sender rows for a consumer (all senders). Matches inbound dispatch semantics. */
+export async function findActivePlatformSenderIdsForConsumer(
+  consumerE164: string,
+): Promise<Set<string>> {
+  const consumer = normalizeMctbCallerE164(consumerE164);
+  const prisma = getPrisma();
+  const now = new Date();
+  const distinctSenders = await prisma.mctbPlatformSenderAssignment.findMany({
+    where: { consumerE164: consumer, state: "ACTIVE" },
+    select: { platformPhoneNumberId: true },
+    distinct: ["platformPhoneNumberId"],
+  });
+  const occupied = new Set<string>();
+  for (const row of distinctSenders) {
+    await releaseExpiredActiveAssignments({
+      consumerE164: consumer,
+      platformPhoneNumberId: row.platformPhoneNumberId,
+      now,
+    });
+    const active = await prisma.mctbPlatformSenderAssignment.findFirst({
+      where: {
+        consumerE164: consumer,
+        platformPhoneNumberId: row.platformPhoneNumberId,
+        state: "ACTIVE",
+      },
+      select: { id: true },
+    });
+    if (active) occupied.add(row.platformPhoneNumberId);
+  }
+  return occupied;
+}
+
 export async function findActivePlatformSenderAssignments(input: {
   consumerE164: string;
   platformPhoneNumberId: string;

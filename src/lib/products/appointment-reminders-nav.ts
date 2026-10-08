@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   Settings2,
   Sparkles,
+  MessageSquareWarning,
   CreditCard,
   Building2,
   Link2,
@@ -43,6 +44,11 @@ export function buildAppointmentRemindersNav(): NavItem[] {
       label: "Reminders",
       href: AR_ROUTES.reminders,
       icon: Bell,
+    },
+    {
+      label: "Held SMS replies",
+      href: AR_ROUTES.heldInbound,
+      icon: MessageSquareWarning,
     },
     {
       label: "Calendars",
@@ -90,6 +96,7 @@ export function getAppointmentRemindersPageTitle(pathname: string): string {
   if (pathname.startsWith("/settings/business")) return "Business Settings";
   if (pathname === AR_ROUTES.home) return "Overview";
   if (pathname.startsWith(AR_ROUTES.appointments)) return "Appointments";
+  if (pathname.startsWith(AR_ROUTES.heldInbound)) return "Held SMS replies";
   if (pathname.startsWith(AR_ROUTES.reminders)) return "Reminders";
   if (pathname.startsWith(AR_ROUTES.calendars)) return "Calendars";
   if (pathname.startsWith(AR_ROUTES.settings)) return "Reminder Settings";

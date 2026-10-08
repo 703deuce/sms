@@ -1,7 +1,7 @@
 import "server-only";
 
 import { handleArReminderLetterReply } from "@/lib/appointment-reminders/ai-rescheduler/inbound-replies";
-import { tryHandleArReminderFollowUp } from "@/lib/appointment-reminders/ai-rescheduler/inbound-follow-up";
+import { tryHandleArReminderFollowUp } from "@/lib/appointment-reminders/messaging/inbound-follow-up";
 
 export async function handleAppointmentRemindersInboundBody(input: {
   workspaceId: string;
@@ -36,6 +36,9 @@ export async function handleAppointmentRemindersInboundBody(input: {
   const followUp = await tryHandleArReminderFollowUp({
     workspaceId: input.workspaceId,
     contactId: input.contactId,
+    appointmentId: input.appointmentId,
+    replySessionId: input.replySessionId,
+    conversationId: input.conversationId,
     message: body,
     providerMessageId: input.providerMessageId,
   });

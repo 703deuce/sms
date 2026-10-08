@@ -187,6 +187,12 @@ enum ArSmsReplySessionState {
   HELD_PENDING_SEND
 }
 
+enum ArSmsInboundHeldState {
+  HELD
+  RESOLVED
+  DISMISSED
+}
+
 /// Separate A2P/messaging registration profiles per product use case.
 enum MessagingProductUseCase {
   MCTB_CUSTOMER_CARE
@@ -515,6 +521,7 @@ model Workspace {
   mctbHandoffEvents                 MctbHandoffEvent[]
   mctbPlatformSenderAssignments     MctbPlatformSenderAssignment[]
   arSmsReplySessions                ArSmsReplySession[]
+  arSmsInboundHeldMessages          ArSmsInboundHeldMessage[]
   mctbNotificationDeliveries        MctbNotificationDelivery[]
   faxAccount                        FaxAccount?
   owner                             User?                              @relation("WorkspaceOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
@@ -4840,6 +4847,35 @@ model ArSmsReplySession {
   @@index([consumerE164, platformPhoneNumberId, lifecycleState])
   @@index([workspaceId, contactId, lifecycleState])
   @@map("ar_sms_reply_sessions")
+}
+
+/// Durable record when platform inbound SMS cannot be routed safely (AR/MCTB ambiguity).
+model ArSmsInboundHeldMessage {
+  id                    String                  @id @default(cuid())
+  workspaceId           String?
+  providerMessageId     String                  @unique
+  channel               String
+  fromE164              String
+  toE164                String
+  platformPhoneNumberId String?
+  bodyPreview           String
+  holdReason            String
+  state                 ArSmsInboundHeldState   @default(HELD)
+  candidateContexts     Json                    @default("[]")
+  resolvedWorkspaceId   String?
+  resolvedProduct       String?
+  resolvedReplySessionId String?
+  resolvedConversationId String?
+  resolvedByUserId      String?
+  resolvedAt            DateTime?
+  resolutionNote        String?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  workspace             Workspace?              @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, state, createdAt])
+  @@index([fromE164, createdAt])
+  @@map("ar_sms_inbound_held_messages")
 }
 
 model MctbRequestFormSubmission {

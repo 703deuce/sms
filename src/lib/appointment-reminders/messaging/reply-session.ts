@@ -9,7 +9,7 @@ import { providerRefFromAppointment } from "@/lib/appointment-reminders/ai-resch
 import {
   AR_REPLY_ELIGIBLE_STATES,
   listArEligiblePlatformSenders,
-  findOccupiedArSenderIdsForConsumer,
+  findOccupiedPlatformSenderIdsForConsumer,
 } from "./ar-platform-sender-pool";
 
 const DEFAULT_REPLY_ELIGIBLE_MS = 21 * 24 * 60 * 60 * 1000;
@@ -66,7 +66,7 @@ export async function selectArOutboundPlatformSender(input: {
     };
   }
 
-  const occupied = await findOccupiedArSenderIdsForConsumer(consumer);
+  const occupied = await findOccupiedPlatformSenderIdsForConsumer(consumer);
 
   for (const sender of senders) {
     if (!occupied.has(sender.phoneNumberId)) {
@@ -84,7 +84,7 @@ export async function selectArOutboundPlatformSender(input: {
     ok: false,
     reason: "ar_sender_pool_exhausted",
     pendingSendReason:
-      "Customer already has active Appointment Reminders conversations on all eligible platform senders",
+      "Customer already has active Appointment Reminders or Missed Call Text Back conversations on all eligible platform senders",
   };
 }
 
@@ -158,6 +158,17 @@ export async function claimArReplySessionForOutbound(input: {
     });
     if (foreignOnSender) {
       return { collision: true as const, ownerAppointmentId: foreignOnSender.appointmentId };
+    }
+
+    const { findActivePlatformSenderAssignments } = await import(
+      "@/lib/mctb/messaging/platform-sender-assignment"
+    );
+    const mctbOnSender = await findActivePlatformSenderAssignments({
+      consumerE164: consumer,
+      platformPhoneNumberId: input.platformPhoneNumberId,
+    });
+    if (mctbOnSender.length > 0) {
+      return { collision: true as const, ownerAppointmentId: input.appointmentId };
     }
 
     const created = await tx.arSmsReplySession.create({

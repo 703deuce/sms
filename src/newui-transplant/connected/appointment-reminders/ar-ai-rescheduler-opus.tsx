@@ -8,6 +8,134 @@ import { Button } from '@/newui-transplant/components/ui/button'
 import { Input } from '@/newui-transplant/components/ui/input'
 import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
 
+function ArReschedulerOperationsPanel() {
+  const [ops, setOps] = useState<{
+    pendingApproval: Array<{ appointmentId: string; serviceName: string | null; startsAt: string; requestStatus: string; contactName?: string }>
+    reconcilePending: Array<{ appointmentId: string; serviceName: string | null; proposedStartsAt?: string }>
+  } | null>(null)
+  const [opsError, setOpsError] = useState('')
+  const [busy, setBusy] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch('/api/appointment-reminders/ai-rescheduler/operations')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('ops'))))
+      .then((json) => setOps(json.data))
+      .catch(() => setOpsError('Could not load pending reschedule operations.'))
+  }, [])
+
+  async function approve(appointmentId: string) {
+    setBusy(appointmentId)
+    try {
+      const res = await fetch('/api/appointment-reminders/ai-rescheduler/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appointmentId }),
+      })
+      if (!res.ok) throw new Error('approve_failed')
+      const refresh = await fetch('/api/appointment-reminders/ai-rescheduler/operations')
+      if (refresh.ok) {
+        const json = await refresh.json()
+        setOps(json.data)
+      }
+    } catch {
+      setOpsError('Approve failed. Check calendar availability and try again from Appointments.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function reject(appointmentId: string) {
+    setBusy(appointmentId)
+    try {
+      const res = await fetch('/api/appointment-reminders/ai-rescheduler/reject', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appointmentId }),
+      })
+      if (!res.ok) throw new Error('reject_failed')
+      const refresh = await fetch('/api/appointment-reminders/ai-rescheduler/operations')
+      if (refresh.ok) {
+        const json = await refresh.json()
+        setOps(json.data)
+      }
+    } catch {
+      setOpsError('Reject failed.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function reconcile(appointmentId: string) {
+    setBusy(`reconcile:${appointmentId}`)
+    try {
+      const res = await fetch('/api/appointment-reminders/ai-rescheduler/reconcile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appointmentId }),
+      })
+      if (!res.ok) throw new Error('reconcile_failed')
+      const refresh = await fetch('/api/appointment-reminders/ai-rescheduler/operations')
+      if (refresh.ok) {
+        const json = await refresh.json()
+        setOps(json.data)
+      }
+    } catch {
+      setOpsError('Reconcile failed — calendar may not match the proposed time yet.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  if (!ops && !opsError) return null
+  const pending = ops?.pendingApproval || []
+  const reconcile = ops?.reconcilePending || []
+  if (!opsError && !pending.length && !reconcile.length) return null
+
+  return (
+    <section className="space-y-4 border-t border-border/60 pt-6">
+      <h2 className="text-base font-medium">Pending operations</h2>
+      {opsError ? <p className="text-sm text-destructive">{opsError}</p> : null}
+      {pending.length ? (
+        <div className="space-y-2">
+          <h3 className="text-sm font-medium text-muted-foreground">Staff approval</h3>
+          <ul className="space-y-2 text-sm">
+            {pending.map((p) => (
+              <li key={p.appointmentId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2">
+                <span>
+                  {p.serviceName || 'Appointment'} — {p.contactName || 'Customer'} ({p.requestStatus})
+                </span>
+                <span className="flex gap-2">
+                  <Button type="button" size="sm" variant="outline" disabled={busy === p.appointmentId} onClick={() => void reject(p.appointmentId)}>
+                    Reject
+                  </Button>
+                  <Button type="button" size="sm" disabled={busy === p.appointmentId} onClick={() => void approve(p.appointmentId)}>
+                    Approve
+                  </Button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {reconcile.length ? (
+        <div className="space-y-2">
+          <h3 className="text-sm font-medium text-muted-foreground">Calendar reconciliation</h3>
+          <ul className="space-y-2 text-sm">
+            {reconcile.map((p) => (
+              <li key={p.appointmentId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2">
+                <span>{p.serviceName || 'Appointment'} — provider sync pending</span>
+                <Button type="button" size="sm" variant="outline" disabled={busy === `reconcile:${p.appointmentId}`} onClick={() => void reconcile(p.appointmentId)}>
+                  Reconcile
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
 const DAYS = [
   ['monday', 'Monday'],
   ['tuesday', 'Tuesday'],
@@ -286,6 +414,8 @@ export function ArAiReschedulerOpusPage() {
           </section>
         </>
       ) : null}
+
+      <ArReschedulerOperationsPanel />
 
       <section className="space-y-2 border-t border-border/60 pt-6">
         <h2 className="text-base font-medium">Connected calendar</h2>

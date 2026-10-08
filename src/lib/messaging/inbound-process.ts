@@ -382,33 +382,7 @@ export async function processInboundMessage(input: {
     }
   }
 
-  // Appointment Reminders follow-up conversation (after R) — before product-specific inbox AI.
-  {
-    const apptContact = await prisma.contact.findUnique({
-      where: { workspaceId_phone: { workspaceId: input.workspaceId, phone: from } },
-    });
-    if (apptContact && body && !/^(yes|y|c|x|r|stop|help)$/i.test(body.trim())) {
-      const { tryHandleArReminderFollowUp } = await import(
-        "@/lib/appointment-reminders/ai-rescheduler/inbound-follow-up"
-      );
-      const followUp = await tryHandleArReminderFollowUp({
-        workspaceId: input.workspaceId,
-        contactId: apptContact.id,
-        message: body,
-        providerMessageId: input.providerMessageId,
-      });
-      if (followUp.handled) {
-        await recordInboundReceipt({
-          workspaceId: input.workspaceId,
-          from,
-          to: input.to,
-          body,
-          providerMessageId: input.providerMessageId,
-        });
-        return { kind: "message", replyText: followUp.replyText };
-      }
-    }
-  }
+  // Platform AR SMS follow-up is handled only via ar_process_inbound_sms + ArSmsReplySession (no contact heuristics here).
 
   // Appointment Reminders: C confirm, R reschedule, X cancel (reminder-bound when configured).
   if (upper === "C" || upper === "X" || upper === "R") {
