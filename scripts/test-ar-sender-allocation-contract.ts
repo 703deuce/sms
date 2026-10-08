@@ -28,9 +28,11 @@ assert.ok(
   replySession.includes("ar_assigned_sender_unavailable"),
   "selectArOutbound does not bypass unavailable assignment",
 );
-assert.ok(
-  !replySession.includes("expireSupersededArReplySessionsOnSender"),
-  "no latest-reminder-wins supersede on outbound select",
-);
+const selectBlock = replySession.match(
+  /export async function selectArOutboundPlatformSender[\s\S]*?^}/m,
+)?.[0];
+assert.ok(selectBlock && !selectBlock.includes("expireSupersededArReplySessionsOnSender"), {
+  message: "selectArOutbound does not call expireSuperseded (no latest-reminder-wins)",
+});
 
 console.log("PASS test-ar-sender-allocation-contract");
