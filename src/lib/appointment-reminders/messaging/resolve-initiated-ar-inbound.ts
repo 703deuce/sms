@@ -1,69 +1,69 @@
 import "server-only";
 
 import type { ArSmsReplySession } from "@/lib/domain";
-import { getPrisma } from "@/lib/db";
-import { normalizeMctbCallerE164 } from "@/lib/mctb/messaging/caller-e164";
-import { AR_REPLY_ELIGIBLE_STATES } from "./ar-platform-sender-pool";
+import {
+  findPersistentArConversationId,
+  groupArSessionsByWorkspace,
+  listArInboundRoutableSessions,
+  pickPrimaryArReplySessionForInbound,
+  syncArReplySessionsToConversation,
+} from "./persistent-conversation";
 
 export type ResolveInitiatedArInboundResult =
-  | { status: "matched"; session: ArSmsReplySession }
+  | { status: "matched"; session: ArSmsReplySession; conversationId: string | null }
+  | { status: "ambiguous_workspace"; workspaceIds: string[]; sessions: ArSmsReplySession[] }
   | { status: "none" };
 
 /**
- * Match inbound SMS to Appointment Reminders conversations Transovo already started.
- * Key: customer E.164 + platform sender number (indexed on ar_sms_reply_sessions).
- * Only sessions with persisted outbound proof qualify — never body scans or MCTB context.
+ * Match inbound SMS to Appointment Reminders threads Transovo already started.
+ * Key: customer E.164 + platform sender + workspace (multiple appointments share one conversation).
  */
 export async function resolveArInboundFromOutboundInitiatedConversation(input: {
   consumerE164: string;
   platformPhoneNumberId: string;
 }): Promise<ResolveInitiatedArInboundResult> {
-  const prisma = getPrisma();
-  const consumer = normalizeMctbCallerE164(input.consumerE164);
-  const now = new Date();
-
-  const sessions = await prisma.arSmsReplySession.findMany({
-    where: {
-      consumerE164: consumer,
-      platformPhoneNumberId: input.platformPhoneNumberId,
-      lifecycleState: { in: [...AR_REPLY_ELIGIBLE_STATES] },
-      OR: [{ replyEligibleUntil: null }, { replyEligibleUntil: { gt: now } }],
-      AND: {
-        OR: [
-          { lastOutboundProviderMessageId: { not: null } },
-          { lastOutboundMessageId: { not: null } },
-        ],
-      },
-    },
-    orderBy: { lastUsedAt: "desc" },
-  });
-
+  const sessions = await listArInboundRoutableSessions(input);
   if (!sessions.length) {
     return { status: "none" };
   }
-  if (sessions.length === 1) {
-    return { status: "matched", session: sessions[0]! };
+
+  const byWorkspace = groupArSessionsByWorkspace(sessions);
+  if (byWorkspace.size > 1) {
+    return {
+      status: "ambiguous_workspace",
+      workspaceIds: [...byWorkspace.keys()],
+      sessions,
+    };
   }
 
-  // Multiple eligible sessions on one sender+consumer is invalid operations state.
-  // Authoritative winner: most recently used session (same ordering as outbound-initiated proof).
-  const winner = sessions[0]!;
-  const { expireStaleArReplySessionsExcept } = await import("./expire-stale-ar-sessions");
-  const expired = await expireStaleArReplySessionsExcept({
-    keepSessionId: winner.id,
-    consumerE164: consumer,
-    platformPhoneNumberId: input.platformPhoneNumberId,
-    reason: "superseded_ambiguous_inbound_resolution",
-  });
-  if (expired > 0) {
-    console.info(
-      JSON.stringify({
-        event: "ar_inbound_session_deduped",
-        keepSessionId: winner.id,
-        expiredCount: expired,
-        appointmentId: winner.appointmentId,
-      }),
-    );
+  const workspaceSessions = sessions;
+  const workspaceId = workspaceSessions[0]!.workspaceId;
+  const primary = pickPrimaryArReplySessionForInbound(workspaceSessions);
+  if (!primary) {
+    return { status: "none" };
   }
-  return { status: "matched", session: winner };
+
+  let conversationId = primary.conversationId;
+  if (!conversationId) {
+    conversationId = await findPersistentArConversationId({
+      workspaceId,
+      consumerE164: input.consumerE164,
+      platformPhoneNumberId: input.platformPhoneNumberId,
+    });
+  }
+
+  if (conversationId) {
+    await syncArReplySessionsToConversation({
+      workspaceId,
+      consumerE164: input.consumerE164,
+      platformPhoneNumberId: input.platformPhoneNumberId,
+      conversationId,
+    });
+  }
+
+  const session: ArSmsReplySession = conversationId && !primary.conversationId
+    ? { ...primary, conversationId }
+    : primary;
+
+  return { status: "matched", session, conversationId };
 }

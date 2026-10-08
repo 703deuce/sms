@@ -106,40 +106,54 @@ export async function acceptArInboundSmsIngress(
 
       const arSession = await tx.arSmsReplySession.findFirst({
         where: { id: input.replySessionId, workspaceId: input.workspaceId },
-        select: { conversationId: true },
+        select: { conversationId: true, platformPhoneNumberId: true, consumerE164: true },
       });
+
+      const { ensureArConversation } = await import("./reply-session");
+      const { syncArReplySessionsToConversation } = await import("./persistent-conversation");
 
       if (arSession?.conversationId) {
         conversationId = arSession.conversationId;
-        await tx.conversation.update({
-          where: { id: conversationId },
-          data: {
-            unread: true,
-            updatedAt: new Date(),
-            productSource: "APPOINTMENT_REMINDERS",
-            tags: ["appointment_reminders"],
-          },
-        });
       } else {
-        const { ensureArConversation } = await import("./reply-session");
         conversationId = await ensureArConversation({
           workspaceId: input.workspaceId,
           contactId: contact.id,
           toE164: input.to,
           fromE164: from,
+          platformPhoneNumberId: arSession?.platformPhoneNumberId,
         });
+      }
+
+      if (arSession?.platformPhoneNumberId) {
+        await syncArReplySessionsToConversation({
+          workspaceId: input.workspaceId,
+          consumerE164: arSession.consumerE164 || from,
+          platformPhoneNumberId: arSession.platformPhoneNumberId,
+          conversationId,
+        });
+      } else {
         await tx.arSmsReplySession.update({
           where: { id: input.replySessionId },
           data: { conversationId },
         });
       }
 
+      await tx.conversation.update({
+        where: { id: conversationId },
+        data: {
+          unread: true,
+          updatedAt: new Date(),
+          productSource: "APPOINTMENT_REMINDERS",
+          tags: ["appointment_reminders"],
+        },
+      });
+
       const displayBody = formatInboundMessageBody(body, input.mediaUrls);
       const inboundMedia = input.mediaUrls?.filter(Boolean) ?? [];
       try {
         const created = await tx.conversationMessage.create({
           data: {
-            conversationId: conversation.id,
+            conversationId,
             direction: "inbound",
             body: displayBody,
             mediaUrls: inboundMedia,

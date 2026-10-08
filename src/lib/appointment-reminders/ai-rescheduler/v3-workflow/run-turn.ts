@@ -10,6 +10,7 @@ import { loadVerifiedExistingForArSession } from "./verified-existing";
 import { ensureArRescheduleRuntime } from "./session-runtime";
 import { runArRescheduleLunaTurn } from "./luna-turn";
 import { loadArSmsConversationForLuna } from "./luna-conversation-context";
+import { loadArCustomerAppointmentsSummaryForLuna } from "@/lib/appointment-reminders/messaging/persistent-conversation";
 import { resolveArAppointmentDisplayTimezone } from "../display-time";
 
 /**
@@ -38,7 +39,10 @@ export async function runArV3RescheduleSmsTurn(input: {
   });
   if (!verified.ok) return { handled: false };
 
-  if (verified.session.lifecycleState === "AWAITING_REPLY") {
+  if (
+    verified.session.lifecycleState === "AWAITING_REPLY" ||
+    verified.session.lifecycleState === "COMPLETED"
+  ) {
     await markArReplySessionLifecycle({
       sessionId: input.replySessionId,
       workspaceId: input.workspaceId,
@@ -96,7 +100,6 @@ export async function runArV3RescheduleSmsTurn(input: {
     const loaded = await loadArSmsConversationForLuna({
       workspaceId: input.workspaceId,
       replySessionId: input.replySessionId,
-      appointmentId: input.appointmentId,
       contactId: input.contactId,
       conversationId: input.conversationId,
       currentMessage: input.message,
@@ -115,6 +118,11 @@ export async function runArV3RescheduleSmsTurn(input: {
     if (trimmed) conversationHistory = [{ role: "user", content: trimmed }];
   }
 
+  const relatedAppointmentsSummary = await loadArCustomerAppointmentsSummaryForLuna({
+    workspaceId: input.workspaceId,
+    contactId: input.contactId,
+  });
+
   const turn = await runArRescheduleLunaTurn({
     workspaceId: input.workspaceId,
     appointmentId: input.appointmentId,
@@ -124,6 +132,7 @@ export async function runArV3RescheduleSmsTurn(input: {
     message: input.message,
     conversationHistory,
     displayTimezone,
+    relatedAppointmentsSummary,
   });
 
   if (turn.confirmed) {

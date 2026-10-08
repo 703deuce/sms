@@ -39,6 +39,31 @@ export async function selectArOutboundPlatformSender(input: {
   const prisma = getPrisma();
   const consumer = normalizeMctbCallerE164(input.consumerE164);
 
+  const persistentSender = await prisma.arSmsReplySession.findFirst({
+    where: {
+      workspaceId: input.workspaceId,
+      consumerE164: consumer,
+      lifecycleState: { not: "EXPIRED" },
+      OR: [
+        { lastOutboundProviderMessageId: { not: null } },
+        { lastOutboundMessageId: { not: null } },
+      ],
+    },
+    orderBy: { lastUsedAt: "desc" },
+    include: { platformPhoneNumber: { select: { id: true, e164: true, provider: true } } },
+  });
+  if (persistentSender?.platformPhoneNumber?.e164) {
+    return {
+      ok: true,
+      phoneNumberId: persistentSender.platformPhoneNumberId,
+      e164: persistentSender.platformPhoneNumber.e164,
+      provider: String(
+        persistentSender.provider || persistentSender.platformPhoneNumber.provider || "telnyx",
+      ),
+      reusedExistingAppointmentSender: true,
+    };
+  }
+
   const existingForAppointment = await prisma.arSmsReplySession.findFirst({
     where: {
       workspaceId: input.workspaceId,
@@ -140,22 +165,16 @@ export async function claimArReplySessionForOutbound(input: {
           lastUsedAt: new Date(),
           replyEligibleUntil,
           timelineType: input.timelineType,
+          lifecycleState:
+            existingApptSession.lifecycleState === "COMPLETED"
+              ? "AWAITING_REPLY"
+              : existingApptSession.lifecycleState,
+          completedAt:
+            existingApptSession.lifecycleState === "COMPLETED" ? null : existingApptSession.completedAt,
           ...(input.conversationId ? { conversationId: input.conversationId } : {}),
         },
       });
       return { sessionId: updated.id };
-    }
-
-    const foreignOnSender = await tx.arSmsReplySession.findFirst({
-      where: {
-        consumerE164: consumer,
-        platformPhoneNumberId: input.platformPhoneNumberId,
-        lifecycleState: { in: [...AR_REPLY_ELIGIBLE_STATES] },
-        NOT: { appointmentId: input.appointmentId },
-      },
-    });
-    if (foreignOnSender) {
-      return { collision: true as const, ownerAppointmentId: foreignOnSender.appointmentId };
     }
 
     const created = await tx.arSmsReplySession.create({
@@ -286,10 +305,13 @@ export async function ensureArConversation(input: {
   contactId: string;
   toE164: string;
   fromE164: string;
+  platformPhoneNumberId?: string;
   appointmentId?: string;
   existingConversationId?: string | null;
 }): Promise<string> {
   const prisma = getPrisma();
+  const consumer = normalizeMctbCallerE164(input.fromE164);
+
   if (input.existingConversationId) {
     await prisma.conversation.updateMany({
       where: { id: input.existingConversationId, workspaceId: input.workspaceId },
@@ -298,27 +320,33 @@ export async function ensureArConversation(input: {
     return input.existingConversationId;
   }
 
-  if (input.appointmentId) {
-    const bound = await prisma.arSmsReplySession.findFirst({
-      where: {
-        workspaceId: input.workspaceId,
-        appointmentId: input.appointmentId,
-        conversationId: { not: null },
-      },
-      orderBy: { lastUsedAt: "desc" },
-      select: { conversationId: true },
+  const { findPersistentArConversationId, syncArReplySessionsToConversation } = await import(
+    "./persistent-conversation"
+  );
+
+  if (input.platformPhoneNumberId) {
+    const persistent = await findPersistentArConversationId({
+      workspaceId: input.workspaceId,
+      consumerE164: consumer,
+      platformPhoneNumberId: input.platformPhoneNumberId,
     });
-    if (bound?.conversationId) {
+    if (persistent) {
       await prisma.conversation.updateMany({
-        where: { id: bound.conversationId, workspaceId: input.workspaceId },
+        where: { id: persistent, workspaceId: input.workspaceId },
         data: { productSource: "APPOINTMENT_REMINDERS", updatedAt: new Date() },
       });
-      return bound.conversationId;
+      await syncArReplySessionsToConversation({
+        workspaceId: input.workspaceId,
+        consumerE164: consumer,
+        platformPhoneNumberId: input.platformPhoneNumberId,
+        conversationId: persistent,
+      });
+      return persistent;
     }
   }
 
   const phone = await prisma.phoneNumber.findFirst({
-    where: { workspaceId: input.workspaceId, e164: input.toE164, status: "Active" },
+    where: { id: input.platformPhoneNumberId ?? undefined, status: "Active" },
     select: { id: true },
   });
 
@@ -334,5 +362,15 @@ export async function ensureArConversation(input: {
     },
     select: { id: true },
   });
+
+  if (input.platformPhoneNumberId) {
+    await syncArReplySessionsToConversation({
+      workspaceId: input.workspaceId,
+      consumerE164: consumer,
+      platformPhoneNumberId: input.platformPhoneNumberId,
+      conversationId: created.id,
+    });
+  }
+
   return created.id;
 }

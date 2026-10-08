@@ -2,7 +2,7 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { providerRefFromAppointment } from "@/lib/appointment-reminders/ai-rescheduler/provider-mutations";
-import { AR_REPLY_ELIGIBLE_STATES } from "./ar-platform-sender-pool";
+import { AR_INBOUND_ROUTABLE_LIFECYCLE_STATES } from "./persistent-conversation";
 import type { ArSmsReplySession } from "@/lib/domain";
 
 export async function verifyArReplySessionForInboundTurn(input: {
@@ -22,12 +22,11 @@ export async function verifyArReplySessionForInboundTurn(input: {
   if (session.contactId !== input.contactId || session.appointmentId !== input.appointmentId) {
     return { ok: false, reason: "session_identity_mismatch" };
   }
-  if (!AR_REPLY_ELIGIBLE_STATES.includes(session.lifecycleState as (typeof AR_REPLY_ELIGIBLE_STATES)[number])) {
+  const routable = AR_INBOUND_ROUTABLE_LIFECYCLE_STATES.includes(
+    session.lifecycleState as (typeof AR_INBOUND_ROUTABLE_LIFECYCLE_STATES)[number],
+  );
+  if (!routable) {
     return { ok: false, reason: "session_not_reply_eligible" };
-  }
-  const now = new Date();
-  if (session.replyEligibleUntil && session.replyEligibleUntil <= now) {
-    return { ok: false, reason: "session_expired" };
   }
 
   const appt = await prisma.voiceAppointment.findFirst({

@@ -87,8 +87,39 @@ export async function dispatchSharedPlatformSmsInbound(input: {
     platformPhoneNumberId: input.destination.phoneNumberId,
   });
 
+  if (arMatch.status === "ambiguous_workspace") {
+    logPlatformInboundResolution({
+      event: "ambiguous_cross_workspace_ar_reply",
+      channel: input.channel,
+      fromE164: input.fromE164,
+      toPhoneNumberId: input.destination.phoneNumberId,
+      workspaceIds: arMatch.workspaceIds,
+    });
+    await recordHeldPlatformInbound({
+      channel: input.channel,
+      destination: input.destination,
+      providerMessageId,
+      fromE164: input.fromE164,
+      body: input.body,
+      reason: "ambiguous_ar_workspace_on_platform_sender",
+      arSessions: arMatch.sessions.map((s) => ({
+        id: s.id,
+        workspaceId: s.workspaceId,
+        appointmentId: s.appointmentId,
+        conversationId: s.conversationId,
+      })),
+    });
+    await patchArPlatformSmsInboundReceipt(providerMessageId, {
+      state: "HELD",
+      routingResolution: "ambiguous_cross_product_reply",
+      holdReason: "ambiguous_ar_workspace_on_platform_sender",
+    });
+    return { resolution: "ambiguous_cross_product_reply" };
+  }
+
   if (arMatch.status === "matched") {
     const session = arMatch.session;
+    const conversationId = arMatch.conversationId ?? session.conversationId;
     await acceptArInboundSmsIngress({
       workspaceId: session.workspaceId,
       contactId: session.contactId,
@@ -113,7 +144,7 @@ export async function dispatchSharedPlatformSmsInbound(input: {
       state: "ROUTED",
       routingResolution: "ar_platform_reply_resolved",
       replySessionId: session.id,
-      conversationId: session.conversationId,
+      conversationId,
     });
     return {
       product: "appointment_reminders",

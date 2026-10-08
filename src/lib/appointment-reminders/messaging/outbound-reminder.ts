@@ -5,9 +5,9 @@ import {
   attachOutboundProofToArReplySession,
   claimArReplySessionForOutbound,
   ensureArConversation,
-  expireSupersededArReplySessionsOnSender,
   selectArOutboundPlatformSender,
 } from "./reply-session";
+import { appendArConversationOutboundMessage } from "./persistent-conversation";
 import { sendAppointmentSmsViaPlatformSender } from "./send-via-assigned-sender";
 
 export async function sendArReminderSmsWithSession(input: {
@@ -34,17 +34,12 @@ export async function sendArReminderSmsWithSession(input: {
     };
   }
 
-  await expireSupersededArReplySessionsOnSender({
-    consumerE164: input.phone,
-    platformPhoneNumberId: selection.phoneNumberId,
-    keepAppointmentId: input.appointmentId,
-  });
-
   const conversationId = await ensureArConversation({
     workspaceId: input.workspaceId,
     contactId: input.contactId,
     toE164: selection.e164,
     fromE164: input.phone,
+    platformPhoneNumberId: selection.phoneNumberId,
     appointmentId: input.appointmentId,
   });
 
@@ -58,15 +53,6 @@ export async function sendArReminderSmsWithSession(input: {
     timelineType: input.timelineType,
     conversationId,
   });
-  if ("collision" in claim) {
-    return {
-      sent: false,
-      reason: "ar_sender_slot_collision",
-      pendingSendReason:
-        "Another active appointment reminder already uses this platform sender for this customer. Retry or wait for the reply window to expire.",
-    };
-  }
-
   const idempotencyKey = arReminderOutboundIdempotencyKey({
     workspaceId: input.workspaceId,
     appointmentId: input.appointmentId,
@@ -89,6 +75,12 @@ export async function sendArReminderSmsWithSession(input: {
     workspaceId: input.workspaceId,
     outboundMessageId: sendResult.messageId,
     outboundProviderMessageId: sendResult.providerMessageId,
+  });
+
+  await appendArConversationOutboundMessage({
+    conversationId,
+    body: input.body,
+    providerMessageId: sendResult.providerMessageId,
   });
 
   return {

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
+import { arPersistentConversationHistorySince } from "@/lib/appointment-reminders/messaging/persistent-conversation";
 import {
   appendCurrentInboundIfNeeded,
   type ArLunaConversationMessage,
@@ -9,13 +10,11 @@ import {
 export type { ArLunaConversationMessage };
 
 /**
- * Full chronological SMS thread for one AR reply session (inbound + outbound).
- * Scoped by session + conversation + appointment — never phone-only.
+ * Chronological SMS thread for Luna on the persistent customer conversation (inbound + outbound).
  */
 export async function loadArSmsConversationForLuna(input: {
   workspaceId: string;
   replySessionId: string;
-  appointmentId: string;
   contactId: string;
   conversationId: string;
   currentMessage: string;
@@ -26,23 +25,34 @@ export async function loadArSmsConversationForLuna(input: {
     where: { id: input.replySessionId, workspaceId: input.workspaceId },
     select: {
       id: true,
-      appointmentId: true,
       contactId: true,
       conversationId: true,
     },
   });
   if (!session) return { sessionOk: false, reason: "session_not_found" };
-  if (session.appointmentId !== input.appointmentId || session.contactId !== input.contactId) {
+  if (session.contactId !== input.contactId) {
     return { sessionOk: false, reason: "session_identity_mismatch" };
   }
-  // Reply session owns the canonical conversation thread (not generic inbound routing).
+
   const conversationId = session.conversationId || input.conversationId;
   if (!conversationId) {
     return { sessionOk: false, reason: "conversation_scope_missing" };
   }
 
+  const conv = await prisma.conversation.findFirst({
+    where: { id: conversationId, workspaceId: input.workspaceId },
+    select: { id: true },
+  });
+  if (!conv) {
+    return { sessionOk: false, reason: "conversation_scope_mismatch" };
+  }
+
+  const since = arPersistentConversationHistorySince();
   const rows = await prisma.conversationMessage.findMany({
-    where: { conversationId },
+    where: {
+      conversationId,
+      createdAt: { gte: since },
+    },
     orderBy: { createdAt: "asc" },
     select: {
       direction: true,
