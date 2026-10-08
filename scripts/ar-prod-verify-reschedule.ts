@@ -41,13 +41,13 @@ async function main() {
 
   const session = await prisma.arSmsReplySession.findFirst({
     where: { appointmentId: row.id },
-    orderBy: { updatedAt: "desc" },
+    orderBy: { lastUsedAt: "desc" },
   });
   if (session) {
     console.log("ar_reply_session", {
       id: session.id,
       lifecycleState: session.lifecycleState,
-      updatedAt: session.updatedAt.toISOString(),
+      lastUsedAt: session.lastUsedAt?.toISOString(),
       hasWorkflowState: Boolean(session.rescheduleWorkflowState),
     });
   }
