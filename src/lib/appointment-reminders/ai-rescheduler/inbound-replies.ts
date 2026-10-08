@@ -113,6 +113,8 @@ export async function handleArReminderLetterReply(input: {
   workspaceId: string;
   contactId: string;
   conversationId?: string;
+  explicitAppointmentId?: string;
+  replySessionId?: string;
   body: string;
   letter: "C" | "R" | "X";
 }): Promise<ArInboundReplyResult> {
@@ -120,20 +122,23 @@ export async function handleArReminderLetterReply(input: {
   const ar = resolveAiReschedulerConfig(platform);
   if (!isAiReschedulerSmsEnabled(ar)) return { handled: false };
 
-  const bound = await resolveReminderBoundAppointment({
-    workspaceId: input.workspaceId,
-    contactId: input.contactId,
-  });
-  if (!bound) return { handled: false };
-  if ("ambiguous" in bound) {
-    return {
-      handled: true,
-      replyText:
-        "I see more than one upcoming appointment. Please reply with the date of the appointment you mean.",
-    };
+  let appointmentId: string | null = input.explicitAppointmentId?.trim() || null;
+  if (!appointmentId) {
+    const bound = await resolveReminderBoundAppointment({
+      workspaceId: input.workspaceId,
+      contactId: input.contactId,
+      explicitAppointmentId: input.explicitAppointmentId,
+    });
+    if (!bound) return { handled: false };
+    if ("ambiguous" in bound) {
+      return {
+        handled: true,
+        replyText:
+          "I see more than one upcoming appointment. Please reply with the date of the appointment you mean.",
+      };
+    }
+    appointmentId = bound.appointmentId;
   }
-
-  const appointmentId = bound.appointmentId;
   const row = await loadAppointmentForActions(input.workspaceId, appointmentId, input.contactId);
   if (!row) return { handled: false };
 
