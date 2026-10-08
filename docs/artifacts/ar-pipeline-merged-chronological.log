@@ -1,0 +1,231 @@
+# 2026-10-08T19:56:43.879Z | ar-pipeline-web.log:1 | webhook_dispatch_start
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:56:43.879Z","step":"webhook_dispatch_start","providerMessageId":"59c0d003-2c1f-45cb-8ede-93c1e87ac410","platformPhoneNumberId":"cmtoszkn26t6z485u3d2w3c51","channel":"telnyx","inboundKind":"R","bodyLength":1,"meta":{"toE164":"+18666020680"}}
+
+# 2026-10-08T19:56:44.304Z | ar-pipeline-web.log:2 | inbound_receipt_recorded
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:56:44.304Z","step":"inbound_receipt_recorded","providerMessageId":"59c0d003-2c1f-45cb-8ede-93c1e87ac410","platformPhoneNumberId":"cmtoszkn26t6z485u3d2w3c51","channel":"telnyx","duplicate":false,"meta":{"receiptId":"cmuzyjazp715f2n0h3a5g2y3k"}}
+
+# 2026-10-08T19:56:44.430Z | ar-pipeline-web.log:3 | route_sessions_listed
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:56:44.430Z","step":"route_sessions_listed","platformPhoneNumberId":"cmtoszkn26t6z485u3d2w3c51","sessionCount":2,"meta":{"appointmentIds":["cmuzyipnf5y3k115c7060464k","cmuzrs78n3h5h5s2o5s1j5b60"],"lifecycleStates":["AWAITING_REPLY","COMPLETED"]}}
+
+# 2026-10-08T19:56:44.674Z | ar-pipeline-web.log:4 | route_matched
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:56:44.674Z","step":"route_matched","workspaceId":"ws_1","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","platformPhoneNumberId":"cmtoszkn26t6z485u3d2w3c51","lifecycleState":"AWAITING_REPLY","sessionCount":2,"primarySessionId":"cmuzyixh54t1i303r3f4g254z","meta":{"syncedConversation":true}}
+
+# 2026-10-08T19:56:44.674Z | ar-pipeline-web.log:5 | route_matched
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:56:44.674Z","step":"route_matched","workspaceId":"ws_1","contactId":"cmsdkphjd6t12365p2g301r5o","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"59c0d003-2c1f-45cb-8ede-93c1e87ac410","platformPhoneNumberId":"cmtoszkn26t6z485u3d2w3c51","channel":"telnyx","inboundKind":"R","bodyLength":1,"lifecycleState":"AWAITING_REPLY","routingResolution":"ar_platform_reply_resolved"}
+
+# 2026-10-08T19:56:44.675Z | ar-pipeline-web.log:6 | ingress_accept_start
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:56:44.675Z","step":"ingress_accept_start","workspaceId":"ws_1","contactId":"cmsdkphjd6t12365p2g301r5o","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","providerMessageId":"59c0d003-2c1f-45cb-8ede-93c1e87ac410","channel":"telnyx","inboundKind":"R","bodyLength":1}
+
+# 2026-10-08T19:56:45.922Z | ar-pipeline-web.log:7 | ingress_conversation_bound
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:56:45.922Z","step":"ingress_conversation_bound","workspaceId":"ws_1","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","platformPhoneNumberId":"cmtoszkn26t6z485u3d2w3c51"}
+
+# 2026-10-08T19:56:46.164Z | ar-pipeline-web.log:8 | ingress_message_persisted
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:56:46.164Z","step":"ingress_message_persisted","workspaceId":"ws_1","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"59c0d003-2c1f-45cb-8ede-93c1e87ac410","meta":{"conversationMessageId":"cmuzyjcgy3i6g683c1g670y1g"}}
+
+# 2026-10-08T19:56:46.413Z | ar-pipeline-web.log:9 | ingress_accepted
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:56:46.413Z","step":"ingress_accepted","workspaceId":"ws_1","contactId":"cmsdkphjd6t12365p2g301r5o","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"59c0d003-2c1f-45cb-8ede-93c1e87ac410","processingJobId":"cmuzyjcno6u5i2w6n6h3m0916","inboundKind":"R","bodyLength":1,"meta":{"conversationMessageId":"cmuzyjcgy3i6g683c1g670y1g"}}
+
+# 2026-10-08T19:56:46.413Z | ar-pipeline-web.log:10 | ingress_job_enqueued
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:56:46.413Z","step":"ingress_job_enqueued","workspaceId":"ws_1","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"59c0d003-2c1f-45cb-8ede-93c1e87ac410","processingJobId":"cmuzyjcno6u5i2w6n6h3m0916"}
+
+# 2026-10-08T19:56:47.726Z | ar-pipeline-web.log:11 | inbound_job_process_start
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:56:47.726Z","step":"inbound_job_process_start","workspaceId":"ws_1","contactId":"cmsdkphjd6t12365p2g301r5o","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"59c0d003-2c1f-45cb-8ede-93c1e87ac410","inboundKind":"R","bodyLength":1}
+
+# 2026-10-08T19:56:47.873Z | ar-pipeline-web.log:12 | inbound_job_session_verified
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:56:47.873Z","step":"inbound_job_session_verified","workspaceId":"ws_1","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"59c0d003-2c1f-45cb-8ede-93c1e87ac410","lifecycleState":"AWAITING_REPLY"}
+
+# 2026-10-08T19:56:48.995Z | ar-pipeline-web.log:13 | inbound_handler_branch
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:56:48.995Z","step":"inbound_handler_branch","workspaceId":"ws_1","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"59c0d003-2c1f-45cb-8ede-93c1e87ac410","inboundKind":"R","bodyLength":1,"handler":"reminder_letter","branch":"R"}
+
+# 2026-10-08T19:56:49.248Z | ar-pipeline-web.log:14 | inbound_job_completed
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:56:49.248Z","step":"inbound_job_completed","workspaceId":"ws_1","providerMessageId":"59c0d003-2c1f-45cb-8ede-93c1e87ac410","processingJobId":"cmuzyjcno6u5i2w6n6h3m0916","ok":true}
+
+# 2026-10-08T19:56:49.248Z | ar-pipeline-web.log:15 | inbound_outbound_enqueued
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:56:49.248Z","step":"inbound_outbound_enqueued","workspaceId":"ws_1","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"59c0d003-2c1f-45cb-8ede-93c1e87ac410","processingJobId":"cmuzyjcno6u5i2w6n6h3m0916","outboundJobId":"cmuzyjexs6x4q3t4j5q6l0u38","meta":{"replyLength":84}}
+
+# 2026-10-08T19:56:49.396Z | ar-pipeline-worker.log:1 | outbound_reply_job_start
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:56:49.396Z","step":"outbound_reply_job_start","workspaceId":"ws_1","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"59c0d003-2c1f-45cb-8ede-93c1e87ac410","meta":{"replyLength":84}}
+
+# 2026-10-08T19:56:56.371Z | ar-pipeline-worker.log:2 | outbound_reply_sent
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:56:56.371Z","step":"outbound_reply_sent","workspaceId":"ws_1","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","meta":{"messageId":"cmuzyjhac0l1h20652a4z5l6i"}}
+
+# 2026-10-08T19:57:13.757Z | ar-pipeline-web.log:16 | webhook_dispatch_start
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:13.757Z","step":"webhook_dispatch_start","providerMessageId":"411291fa-0a0d-4d32-a1c9-f1b9c014f8d1","platformPhoneNumberId":"cmtoszkn26t6z485u3d2w3c51","channel":"telnyx","inboundKind":"natural","bodyLength":18,"meta":{"toE164":"+18666020680"}}
+
+# 2026-10-08T19:57:14.159Z | ar-pipeline-web.log:17 | inbound_receipt_recorded
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:14.159Z","step":"inbound_receipt_recorded","providerMessageId":"411291fa-0a0d-4d32-a1c9-f1b9c014f8d1","platformPhoneNumberId":"cmtoszkn26t6z485u3d2w3c51","channel":"telnyx","duplicate":false,"meta":{"receiptId":"cmuzyjy1k5q0a4i4p1u0z0w3t"}}
+
+# 2026-10-08T19:57:14.290Z | ar-pipeline-web.log:18 | route_sessions_listed
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:14.290Z","step":"route_sessions_listed","platformPhoneNumberId":"cmtoszkn26t6z485u3d2w3c51","sessionCount":2,"meta":{"appointmentIds":["cmuzyipnf5y3k115c7060464k","cmuzrs78n3h5h5s2o5s1j5b60"],"lifecycleStates":["RESCHEDULING","COMPLETED"]}}
+
+# 2026-10-08T19:57:14.553Z | ar-pipeline-web.log:19 | route_matched
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:14.553Z","step":"route_matched","workspaceId":"ws_1","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","platformPhoneNumberId":"cmtoszkn26t6z485u3d2w3c51","lifecycleState":"RESCHEDULING","sessionCount":2,"primarySessionId":"cmuzyixh54t1i303r3f4g254z","meta":{"syncedConversation":true}}
+
+# 2026-10-08T19:57:14.553Z | ar-pipeline-web.log:20 | route_matched
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:14.553Z","step":"route_matched","workspaceId":"ws_1","contactId":"cmsdkphjd6t12365p2g301r5o","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"411291fa-0a0d-4d32-a1c9-f1b9c014f8d1","platformPhoneNumberId":"cmtoszkn26t6z485u3d2w3c51","channel":"telnyx","inboundKind":"natural","bodyLength":18,"lifecycleState":"RESCHEDULING","routingResolution":"ar_platform_reply_resolved"}
+
+# 2026-10-08T19:57:14.554Z | ar-pipeline-web.log:21 | ingress_accept_start
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:14.554Z","step":"ingress_accept_start","workspaceId":"ws_1","contactId":"cmsdkphjd6t12365p2g301r5o","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","providerMessageId":"411291fa-0a0d-4d32-a1c9-f1b9c014f8d1","channel":"telnyx","inboundKind":"natural","bodyLength":18}
+
+# 2026-10-08T19:57:15.680Z | ar-pipeline-web.log:22 | ingress_conversation_bound
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:15.680Z","step":"ingress_conversation_bound","workspaceId":"ws_1","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","platformPhoneNumberId":"cmtoszkn26t6z485u3d2w3c51"}
+
+# 2026-10-08T19:57:15.958Z | ar-pipeline-web.log:23 | ingress_message_persisted
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:15.958Z","step":"ingress_message_persisted","workspaceId":"ws_1","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"411291fa-0a0d-4d32-a1c9-f1b9c014f8d1","meta":{"conversationMessageId":"cmuzyjzfl0z4q5n574e2l3a5x"}}
+
+# 2026-10-08T19:57:16.206Z | ar-pipeline-web.log:24 | ingress_accepted
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:16.206Z","step":"ingress_accepted","workspaceId":"ws_1","contactId":"cmsdkphjd6t12365p2g301r5o","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"411291fa-0a0d-4d32-a1c9-f1b9c014f8d1","processingJobId":"cmuzyjznb5a564c444t2a0t2m","inboundKind":"natural","bodyLength":18,"meta":{"conversationMessageId":"cmuzyjzfl0z4q5n574e2l3a5x"}}
+
+# 2026-10-08T19:57:16.206Z | ar-pipeline-web.log:25 | ingress_job_enqueued
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:16.206Z","step":"ingress_job_enqueued","workspaceId":"ws_1","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"411291fa-0a0d-4d32-a1c9-f1b9c014f8d1","processingJobId":"cmuzyjznb5a564c444t2a0t2m"}
+
+# 2026-10-08T19:57:16.211Z | ar-pipeline-web.log:26 | inbound_job_process_start
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:16.211Z","step":"inbound_job_process_start","workspaceId":"ws_1","contactId":"cmsdkphjd6t12365p2g301r5o","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"411291fa-0a0d-4d32-a1c9-f1b9c014f8d1","inboundKind":"natural","bodyLength":18}
+
+# 2026-10-08T19:57:16.336Z | ar-pipeline-web.log:27 | inbound_job_session_verified
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:16.336Z","step":"inbound_job_session_verified","workspaceId":"ws_1","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"411291fa-0a0d-4d32-a1c9-f1b9c014f8d1","lifecycleState":"RESCHEDULING"}
+
+# 2026-10-08T19:57:18.752Z | ar-pipeline-web.log:28 | luna_context_loaded
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:18.752Z","step":"luna_context_loaded","workspaceId":"ws_1","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"411291fa-0a0d-4d32-a1c9-f1b9c014f8d1","inboundKind":"natural","bodyLength":18,"meta":{"historyTurns":5}}
+
+# 2026-10-08T19:57:18.871Z | ar-pipeline-web.log:29 | luna_turn_start
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:18.871Z","step":"luna_turn_start","workspaceId":"ws_1","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"411291fa-0a0d-4d32-a1c9-f1b9c014f8d1","meta":{"historyTurns":5}}
+
+# 2026-10-08T19:57:27.569Z | ar-pipeline-web.log:30 | inbound_handler_branch
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:27.569Z","step":"inbound_handler_branch","workspaceId":"ws_1","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"411291fa-0a0d-4d32-a1c9-f1b9c014f8d1","inboundKind":"natural","bodyLength":18,"handler":"luna_follow_up","branch":"v3_reschedule"}
+
+# 2026-10-08T19:57:27.569Z | ar-pipeline-web.log:31 | luna_turn_completed
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:27.569Z","step":"luna_turn_completed","workspaceId":"ws_1","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","providerMessageId":"411291fa-0a0d-4d32-a1c9-f1b9c014f8d1","ok":true,"meta":{"confirmed":false,"replyLength":111}}
+
+# 2026-10-08T19:57:27.823Z | ar-pipeline-web.log:32 | inbound_job_completed
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:27.823Z","step":"inbound_job_completed","workspaceId":"ws_1","providerMessageId":"411291fa-0a0d-4d32-a1c9-f1b9c014f8d1","processingJobId":"cmuzyjznb5a564c444t2a0t2m","ok":true}
+
+# 2026-10-08T19:57:27.823Z | ar-pipeline-web.log:33 | inbound_outbound_enqueued
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:27.823Z","step":"inbound_outbound_enqueued","workspaceId":"ws_1","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"411291fa-0a0d-4d32-a1c9-f1b9c014f8d1","processingJobId":"cmuzyjznb5a564c444t2a0t2m","outboundJobId":"cmuzyk8p80f1i021e37160v13","meta":{"replyLength":111}}
+
+# 2026-10-08T19:57:27.846Z | ar-pipeline-web.log:34 | outbound_reply_job_start
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:27.846Z","step":"outbound_reply_job_start","workspaceId":"ws_1","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"411291fa-0a0d-4d32-a1c9-f1b9c014f8d1","meta":{"replyLength":111}}
+
+# 2026-10-08T19:57:34.655Z | ar-pipeline-web.log:35 | outbound_reply_sent
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:34.655Z","step":"outbound_reply_sent","workspaceId":"ws_1","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","meta":{"messageId":"cmuzykb0n550t1y400r2z0a3v"}}
+
+# 2026-10-08T19:57:43.710Z | ar-pipeline-web.log:36 | webhook_dispatch_start
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:43.710Z","step":"webhook_dispatch_start","providerMessageId":"f1f6f484-568f-45f4-8554-c7e68440cb98","platformPhoneNumberId":"cmtoszkn26t6z485u3d2w3c51","channel":"telnyx","inboundKind":"yes","bodyLength":3,"meta":{"toE164":"+18666020680"}}
+
+# 2026-10-08T19:57:44.133Z | ar-pipeline-web.log:37 | inbound_receipt_recorded
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:44.133Z","step":"inbound_receipt_recorded","providerMessageId":"f1f6f484-568f-45f4-8554-c7e68440cb98","platformPhoneNumberId":"cmtoszkn26t6z485u3d2w3c51","channel":"telnyx","duplicate":false,"meta":{"receiptId":"cmuzykl5o2v5r4x6q3r6b2s6h"}}
+
+# 2026-10-08T19:57:44.259Z | ar-pipeline-web.log:38 | route_sessions_listed
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:44.259Z","step":"route_sessions_listed","platformPhoneNumberId":"cmtoszkn26t6z485u3d2w3c51","sessionCount":2,"meta":{"appointmentIds":["cmuzyipnf5y3k115c7060464k","cmuzrs78n3h5h5s2o5s1j5b60"],"lifecycleStates":["RESCHEDULING","COMPLETED"]}}
+
+# 2026-10-08T19:57:44.509Z | ar-pipeline-web.log:39 | ingress_accept_start
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:44.509Z","step":"ingress_accept_start","workspaceId":"ws_1","contactId":"cmsdkphjd6t12365p2g301r5o","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","providerMessageId":"f1f6f484-568f-45f4-8554-c7e68440cb98","channel":"telnyx","inboundKind":"yes","bodyLength":3}
+
+# 2026-10-08T19:57:44.509Z | ar-pipeline-web.log:40 | route_matched
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:44.509Z","step":"route_matched","workspaceId":"ws_1","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","platformPhoneNumberId":"cmtoszkn26t6z485u3d2w3c51","lifecycleState":"RESCHEDULING","sessionCount":2,"primarySessionId":"cmuzyixh54t1i303r3f4g254z","meta":{"syncedConversation":true}}
+
+# 2026-10-08T19:57:44.509Z | ar-pipeline-web.log:41 | route_matched
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:44.509Z","step":"route_matched","workspaceId":"ws_1","contactId":"cmsdkphjd6t12365p2g301r5o","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"f1f6f484-568f-45f4-8554-c7e68440cb98","platformPhoneNumberId":"cmtoszkn26t6z485u3d2w3c51","channel":"telnyx","inboundKind":"yes","bodyLength":3,"lifecycleState":"RESCHEDULING","routingResolution":"ar_platform_reply_resolved"}
+
+# 2026-10-08T19:57:45.618Z | ar-pipeline-web.log:42 | ingress_conversation_bound
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:45.618Z","step":"ingress_conversation_bound","workspaceId":"ws_1","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","platformPhoneNumberId":"cmtoszkn26t6z485u3d2w3c51"}
+
+# 2026-10-08T19:57:45.866Z | ar-pipeline-web.log:43 | ingress_message_persisted
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:45.866Z","step":"ingress_message_persisted","workspaceId":"ws_1","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"f1f6f484-568f-45f4-8554-c7e68440cb98","meta":{"conversationMessageId":"cmuzykmj61u1r6j5e2z4h6104"}}
+
+# 2026-10-08T19:57:46.131Z | ar-pipeline-web.log:44 | ingress_accepted
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:46.131Z","step":"ingress_accepted","workspaceId":"ws_1","contactId":"cmsdkphjd6t12365p2g301r5o","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"f1f6f484-568f-45f4-8554-c7e68440cb98","processingJobId":"cmuzykmq31c6w4l640j693g30","inboundKind":"yes","bodyLength":3,"meta":{"conversationMessageId":"cmuzykmj61u1r6j5e2z4h6104"}}
+
+# 2026-10-08T19:57:46.131Z | ar-pipeline-web.log:45 | ingress_job_enqueued
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:46.131Z","step":"ingress_job_enqueued","workspaceId":"ws_1","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"f1f6f484-568f-45f4-8554-c7e68440cb98","processingJobId":"cmuzykmq31c6w4l640j693g30"}
+
+# 2026-10-08T19:57:46.906Z | ar-pipeline-worker.log:3 | inbound_job_process_start
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:46.906Z","step":"inbound_job_process_start","workspaceId":"ws_1","contactId":"cmsdkphjd6t12365p2g301r5o","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"f1f6f484-568f-45f4-8554-c7e68440cb98","inboundKind":"yes","bodyLength":3}
+
+# 2026-10-08T19:57:47.035Z | ar-pipeline-worker.log:4 | inbound_job_session_verified
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:47.035Z","step":"inbound_job_session_verified","workspaceId":"ws_1","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"f1f6f484-568f-45f4-8554-c7e68440cb98","lifecycleState":"RESCHEDULING"}
+
+# 2026-10-08T19:57:49.121Z | ar-pipeline-worker.log:5 | luna_context_loaded
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:49.121Z","step":"luna_context_loaded","workspaceId":"ws_1","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"f1f6f484-568f-45f4-8554-c7e68440cb98","inboundKind":"yes","bodyLength":3,"meta":{"historyTurns":7}}
+
+# 2026-10-08T19:57:49.241Z | ar-pipeline-worker.log:6 | luna_turn_start
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:49.241Z","step":"luna_turn_start","workspaceId":"ws_1","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"f1f6f484-568f-45f4-8554-c7e68440cb98","meta":{"historyTurns":7}}
+
+# 2026-10-08T19:57:54.038Z | ar-pipeline-worker.log:7 | luna_turn_completed
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:54.038Z","step":"luna_turn_completed","workspaceId":"ws_1","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","providerMessageId":"f1f6f484-568f-45f4-8554-c7e68440cb98","ok":true,"meta":{"confirmed":true,"replyLength":71}}
+
+# 2026-10-08T19:57:54.039Z | ar-pipeline-worker.log:8 | inbound_handler_branch
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:54.039Z","step":"inbound_handler_branch","workspaceId":"ws_1","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"f1f6f484-568f-45f4-8554-c7e68440cb98","inboundKind":"yes","bodyLength":3,"handler":"luna_follow_up","branch":"v3_reschedule"}
+
+# 2026-10-08T19:57:54.289Z | ar-pipeline-worker.log:9 | inbound_job_completed
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:54.289Z","step":"inbound_job_completed","workspaceId":"ws_1","providerMessageId":"f1f6f484-568f-45f4-8554-c7e68440cb98","processingJobId":"cmuzykmq31c6w4l640j693g30","ok":true}
+
+# 2026-10-08T19:57:54.289Z | ar-pipeline-worker.log:10 | inbound_outbound_enqueued
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:54.289Z","step":"inbound_outbound_enqueued","workspaceId":"ws_1","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"f1f6f484-568f-45f4-8554-c7e68440cb98","processingJobId":"cmuzykmq31c6w4l640j693g30","outboundJobId":"cmuzykt4l5x723t5c290l5414","meta":{"replyLength":71}}
+
+# 2026-10-08T19:57:54.291Z | ar-pipeline-web.log:46 | outbound_reply_job_start
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:57:54.291Z","step":"outbound_reply_job_start","workspaceId":"ws_1","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"f1f6f484-568f-45f4-8554-c7e68440cb98","meta":{"replyLength":71}}
+
+# 2026-10-08T19:58:01.328Z | ar-pipeline-web.log:47 | outbound_reply_sent
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:58:01.328Z","step":"outbound_reply_sent","workspaceId":"ws_1","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","meta":{"messageId":"cmuzykvad655v116j551x6i3a"}}
+
+# 2026-10-08T19:58:09.491Z | ar-pipeline-web.log:48 | webhook_dispatch_start
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:58:09.491Z","step":"webhook_dispatch_start","providerMessageId":"8ae1b42a-11b7-4d6c-b10e-2db8d5a1027d","platformPhoneNumberId":"cmtoszkn26t6z485u3d2w3c51","channel":"telnyx","inboundKind":"natural","bodyLength":6,"meta":{"toE164":"+18666020680"}}
+
+# 2026-10-08T19:58:09.896Z | ar-pipeline-web.log:49 | inbound_receipt_recorded
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:58:09.896Z","step":"inbound_receipt_recorded","providerMessageId":"8ae1b42a-11b7-4d6c-b10e-2db8d5a1027d","platformPhoneNumberId":"cmtoszkn26t6z485u3d2w3c51","channel":"telnyx","duplicate":false,"meta":{"receiptId":"cmuzyl51r3a4o4f460s1m006m"}}
+
+# 2026-10-08T19:58:10.020Z | ar-pipeline-web.log:50 | route_sessions_listed
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:58:10.020Z","step":"route_sessions_listed","platformPhoneNumberId":"cmtoszkn26t6z485u3d2w3c51","sessionCount":2,"meta":{"appointmentIds":["cmuzyipnf5y3k115c7060464k","cmuzrs78n3h5h5s2o5s1j5b60"],"lifecycleStates":["COMPLETED","COMPLETED"]}}
+
+# 2026-10-08T19:58:10.265Z | ar-pipeline-web.log:51 | ingress_accept_start
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:58:10.265Z","step":"ingress_accept_start","workspaceId":"ws_1","contactId":"cmsdkphjd6t12365p2g301r5o","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","providerMessageId":"8ae1b42a-11b7-4d6c-b10e-2db8d5a1027d","channel":"telnyx","inboundKind":"natural","bodyLength":6}
+
+# 2026-10-08T19:58:10.265Z | ar-pipeline-web.log:52 | route_matched
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:58:10.265Z","step":"route_matched","workspaceId":"ws_1","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","platformPhoneNumberId":"cmtoszkn26t6z485u3d2w3c51","lifecycleState":"COMPLETED","sessionCount":2,"primarySessionId":"cmuzyixh54t1i303r3f4g254z","meta":{"syncedConversation":true}}
+
+# 2026-10-08T19:58:10.265Z | ar-pipeline-web.log:53 | route_matched
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:58:10.265Z","step":"route_matched","workspaceId":"ws_1","contactId":"cmsdkphjd6t12365p2g301r5o","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"8ae1b42a-11b7-4d6c-b10e-2db8d5a1027d","platformPhoneNumberId":"cmtoszkn26t6z485u3d2w3c51","channel":"telnyx","inboundKind":"natural","bodyLength":6,"lifecycleState":"COMPLETED","routingResolution":"ar_platform_reply_resolved"}
+
+# 2026-10-08T19:58:11.347Z | ar-pipeline-web.log:54 | ingress_conversation_bound
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:58:11.347Z","step":"ingress_conversation_bound","workspaceId":"ws_1","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","platformPhoneNumberId":"cmtoszkn26t6z485u3d2w3c51"}
+
+# 2026-10-08T19:58:11.599Z | ar-pipeline-web.log:55 | ingress_message_persisted
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:58:11.599Z","step":"ingress_message_persisted","workspaceId":"ws_1","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"8ae1b42a-11b7-4d6c-b10e-2db8d5a1027d","meta":{"conversationMessageId":"cmuzyl6dv26583e4u314a501g"}}
+
+# 2026-10-08T19:58:11.836Z | ar-pipeline-web.log:56 | ingress_accepted
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:58:11.836Z","step":"ingress_accepted","workspaceId":"ws_1","contactId":"cmsdkphjd6t12365p2g301r5o","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"8ae1b42a-11b7-4d6c-b10e-2db8d5a1027d","processingJobId":"cmuzyl6kw3v3q535v4k1m3e0n","inboundKind":"natural","bodyLength":6,"meta":{"conversationMessageId":"cmuzyl6dv26583e4u314a501g"}}
+
+# 2026-10-08T19:58:11.836Z | ar-pipeline-web.log:57 | ingress_job_enqueued
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:58:11.836Z","step":"ingress_job_enqueued","workspaceId":"ws_1","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"8ae1b42a-11b7-4d6c-b10e-2db8d5a1027d","processingJobId":"cmuzyl6kw3v3q535v4k1m3e0n"}
+
+# 2026-10-08T19:58:11.841Z | ar-pipeline-web.log:58 | inbound_job_process_start
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:58:11.841Z","step":"inbound_job_process_start","workspaceId":"ws_1","contactId":"cmsdkphjd6t12365p2g301r5o","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"8ae1b42a-11b7-4d6c-b10e-2db8d5a1027d","inboundKind":"natural","bodyLength":6}
+
+# 2026-10-08T19:58:11.992Z | ar-pipeline-web.log:59 | inbound_job_session_verified
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:58:11.992Z","step":"inbound_job_session_verified","workspaceId":"ws_1","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"8ae1b42a-11b7-4d6c-b10e-2db8d5a1027d","lifecycleState":"COMPLETED"}
+
+# 2026-10-08T19:58:14.238Z | ar-pipeline-web.log:60 | luna_context_loaded
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:58:14.238Z","step":"luna_context_loaded","workspaceId":"ws_1","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"8ae1b42a-11b7-4d6c-b10e-2db8d5a1027d","inboundKind":"natural","bodyLength":6,"meta":{"historyTurns":9}}
+
+# 2026-10-08T19:58:14.360Z | ar-pipeline-web.log:61 | luna_turn_start
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:58:14.360Z","step":"luna_turn_start","workspaceId":"ws_1","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"8ae1b42a-11b7-4d6c-b10e-2db8d5a1027d","meta":{"historyTurns":9}}
+
+# 2026-10-08T19:58:18.056Z | ar-pipeline-web.log:62 | inbound_handler_branch
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:58:18.056Z","step":"inbound_handler_branch","workspaceId":"ws_1","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"8ae1b42a-11b7-4d6c-b10e-2db8d5a1027d","inboundKind":"natural","bodyLength":6,"handler":"luna_follow_up","branch":"v3_reschedule"}
+
+# 2026-10-08T19:58:18.056Z | ar-pipeline-web.log:63 | luna_turn_completed
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:58:18.056Z","step":"luna_turn_completed","workspaceId":"ws_1","appointmentId":"cmuzyipnf5y3k115c7060464k","replySessionId":"cmuzyixh54t1i303r3f4g254z","providerMessageId":"8ae1b42a-11b7-4d6c-b10e-2db8d5a1027d","ok":true,"meta":{"confirmed":true,"replyLength":71}}
+
+# 2026-10-08T19:58:18.346Z | ar-pipeline-web.log:64 | inbound_job_completed
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:58:18.346Z","step":"inbound_job_completed","workspaceId":"ws_1","providerMessageId":"8ae1b42a-11b7-4d6c-b10e-2db8d5a1027d","processingJobId":"cmuzyl6kw3v3q535v4k1m3e0n","ok":true}
+
+# 2026-10-08T19:58:18.346Z | ar-pipeline-web.log:65 | inbound_outbound_enqueued
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:58:18.346Z","step":"inbound_outbound_enqueued","workspaceId":"ws_1","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"8ae1b42a-11b7-4d6c-b10e-2db8d5a1027d","processingJobId":"cmuzyl6kw3v3q535v4k1m3e0n","outboundJobId":"cmuzylbov5a613p38232f705b","meta":{"replyLength":71}}
+
+# 2026-10-08T19:58:18.348Z | ar-pipeline-worker.log:11 | outbound_reply_job_start
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:58:18.348Z","step":"outbound_reply_job_start","workspaceId":"ws_1","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","providerMessageId":"8ae1b42a-11b7-4d6c-b10e-2db8d5a1027d","meta":{"replyLength":71}}
+
+# 2026-10-08T19:58:24.988Z | ar-pipeline-worker.log:12 | outbound_reply_sent
+{"event":"ar_sms_pipeline","at":"2026-10-08T19:58:24.988Z","step":"outbound_reply_sent","workspaceId":"ws_1","replySessionId":"cmuzyixh54t1i303r3f4g254z","conversationId":"cmuzu7o2s3h1r355c3k53124b","meta":{"messageId":"cmuzylduw2a6p6p144t716b10"}}
+
