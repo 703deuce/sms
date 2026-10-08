@@ -24,6 +24,15 @@ npm run db:deploy
 npx prisma migrate deploy
 ```
 
+## Production apply log (2026-10-08)
+
+| Migration | Result |
+|-----------|--------|
+| `20261008130000_ar_sms_reply_session` | Applied successfully |
+| `20261008140000_ar_sms_inbound_held` | First attempt failed: FK referenced `"workspaces"` (table is `"Workspace"`). Migration marked rolled back; SQL fixed; re-applied successfully. |
+
+Verified tables present: `ar_sms_reply_sessions`, `ar_sms_inbound_held_messages`.
+
 ## Rollback / recovery
 
 Postgres DDL rollback is not automatic. Recovery procedure:

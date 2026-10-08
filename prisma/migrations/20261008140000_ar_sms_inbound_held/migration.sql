@@ -37,4 +37,4 @@ CREATE INDEX "ar_sms_inbound_held_messages_workspaceId_state_createdAt_idx" ON "
 CREATE INDEX "ar_sms_inbound_held_messages_fromE164_createdAt_idx" ON "ar_sms_inbound_held_messages"("fromE164", "createdAt");
 
 -- AddForeignKey
-ALTER TABLE "ar_sms_inbound_held_messages" ADD CONSTRAINT "ar_sms_inbound_held_messages_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "workspaces"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "ar_sms_inbound_held_messages" ADD CONSTRAINT "ar_sms_inbound_held_messages_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE SET NULL ON UPDATE CASCADE;
