@@ -4,16 +4,13 @@
  * Does not print secret values.
  */
 import { execFileSync } from "node:child_process";
-import { isSupabaseConfigured } from "../../src/lib/supabase/admin";
 import { providers } from "../../src/lib/ai/llm-providers";
 
 const PROD_WEB_CONTAINER_FILTER =
   process.env.MCTB_PROD_WEB_CONTAINER_FILTER?.trim() || "ds8s3hjin60qs6g7s0iqkixs";
 
+/** Supabase credentials intentionally omitted — use AR_TEST_SUPABASE_* for destructive DB tests. */
 const VARS = [
-  "NEXT_PUBLIC_SUPABASE_URL",
-  "SUPABASE_SERVICE_ROLE_KEY",
-  "SUPABASE_ANON_KEY",
   "DEEPSEEK_API_KEY",
   "OPENAI_API_KEY",
   "OPENAI_BASE_URL",
@@ -26,15 +23,14 @@ const VARS = [
   "DEEPSEEK_MODEL",
 ];
 
-export function hydrateProdTestEnvFromCoolify(): { supabase: boolean; llm: boolean } {
-  const needSupabase = !isSupabaseConfigured();
+export function hydrateProdTestEnvFromCoolify(): { llm: boolean } {
   const needLlm = providers().length === 0;
-  if (!needSupabase && !needLlm) {
-    return { supabase: true, llm: true };
+  if (!needLlm) {
+    return { llm: true };
   }
 
   if (process.env.MCTB_HYDRATE_LLM_FROM_PROD === "0") {
-    return { supabase: isSupabaseConfigured(), llm: providers().length > 0 };
+    return { llm: providers().length > 0 };
   }
 
   const remote = [
@@ -86,8 +82,5 @@ export function hydrateProdTestEnvFromCoolify(): { supabase: boolean; llm: boole
     );
   }
 
-  return {
-    supabase: isSupabaseConfigured(),
-    llm: providers().length > 0,
-  };
+  return { llm: providers().length > 0 };
 }

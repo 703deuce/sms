@@ -42,12 +42,18 @@ assert.ok(defaultArPermissionsForRole("admin").includes("appointment_reminders.s
 assert.equal(mapSmsReminderTimelineOutcome("reminder_1440m_sent").status, "sent");
 
 async function dbSection() {
-  const { hydrateProdTestEnvFromCoolify } = await import("./cloud-agent/hydrate-prod-test-env");
-  hydrateProdTestEnvFromCoolify();
-  const { isSupabaseConfigured } = await import("@/lib/supabase/admin");
-  if (!process.env.DATABASE_URL && !isSupabaseConfigured()) {
-    console.log("SKIP DB section — DATABASE_URL / Supabase not configured");
-    return;
+  const {
+    requireIsolatedArTestDatabase,
+    ArTestDatabaseSkip,
+  } = await import("./cloud-agent/ar-test-database-guard");
+  try {
+    requireIsolatedArTestDatabase();
+  } catch (err) {
+    if (err instanceof ArTestDatabaseSkip) {
+      console.log(`SKIP DB section — ${err.message}`);
+      return;
+    }
+    throw err;
   }
 
   const { getPrisma } = await import("@/lib/db");

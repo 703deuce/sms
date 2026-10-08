@@ -398,13 +398,23 @@ async function main() {
   console.log("=== AR PR #616 backend verification ===\n");
   console.log(`Configured AR model: ${getArAiReschedulerModelId()}\n`);
 
-  const hydrated = hydrateProdTestEnvFromCoolify();
-  if (!hydrated.supabase) {
-    record("database_backed_tests", "CONFIG", "CONFIGURATION REQUIRED — Supabase env not available");
-    sectionProviderRefIsolation();
-    sectionMctbHiddenIntact();
-    printSummary();
-    process.exit(2);
+  hydrateProdTestEnvFromCoolify();
+
+  const {
+    requireIsolatedArTestDatabase,
+    ArTestDatabaseSkip,
+  } = await import("./cloud-agent/ar-test-database-guard");
+  try {
+    requireIsolatedArTestDatabase();
+  } catch (err) {
+    if (err instanceof ArTestDatabaseSkip) {
+      record("database_backed_tests", "CONFIG", err.message);
+      sectionProviderRefIsolation();
+      sectionMctbHiddenIntact();
+      printSummary();
+      process.exit(0);
+    }
+    throw err;
   }
 
   try {

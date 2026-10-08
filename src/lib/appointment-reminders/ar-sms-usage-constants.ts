@@ -12,6 +12,8 @@ export const AR_PLATFORM_PRODUCT_FAMILY = "appointment_reminders";
 
 export const USAGE_PERIOD_KEY = "arReminderSmsPeriodKey";
 export const USAGE_USED = "arReminderSmsUsed";
+/** Optimistic concurrency token inside workspace_limits.limits JSON (Supabase-safe). */
+export const USAGE_REVISION_KEY = "arReminderSmsUsageRevision";
 export const LIMITS_OVERRIDE_KEY = "arAppointmentRemindersMonthlySmsLimit";
 
 /** Metadata on appointment: `${periodKey}:${timelineType}` */

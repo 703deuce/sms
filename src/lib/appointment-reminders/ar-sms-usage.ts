@@ -11,6 +11,11 @@ import {
   USAGE_PERIOD_KEY,
   USAGE_USED,
 } from "@/lib/appointment-reminders/ar-sms-usage-constants";
+import {
+  casDecrementArSmsUsage,
+  casIncrementArSmsUsageIfBelowLimit,
+  readArSmsUsedFromLimits,
+} from "@/lib/appointment-reminders/ar-sms-usage-reserve";
 import { isSmsReminderTimelineEvent } from "@/lib/appointment-reminders/sms-reminder-timeline";
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -109,28 +114,26 @@ async function countBillableArReminderSmsSentInPeriod(
 ): Promise<number> {
   const { start, end } = arSmsUsagePeriodUtcBounds(periodKey);
   const prisma = getPrisma();
-  const rows = await prisma.$queryRaw<
-    Array<{ event_type: string; event_at: string | null; metadata: unknown }>
-  >`
-    SELECT
-      ev.elem->>'type' AS event_type,
-      ev.elem->>'at' AS event_at,
-      va.metadata AS metadata
-    FROM voice_appointments va
-    CROSS JOIN LATERAL jsonb_array_elements(COALESCE(va.metadata->'timeline', '[]'::jsonb)) AS ev(elem)
-    WHERE va.workspace_id = ${workspaceId}
-  `;
+  const appointments = await prisma.voiceAppointment.findMany({
+    where: { workspaceId },
+    select: { metadata: true },
+  });
 
   let count = 0;
-  for (const row of rows) {
-    if (!isBillableSentTimelineType(row.event_type)) continue;
+  for (const row of appointments) {
     const meta = asRecord(row.metadata);
     if (meta.testSms === true || meta.excludeFromArSmsUsage === true) continue;
-    const atRaw = row.event_at;
-    if (!atRaw) continue;
-    const at = new Date(atRaw);
-    if (Number.isNaN(at.getTime()) || at < start || at >= end) continue;
-    count += 1;
+    const timeline = Array.isArray(meta.timeline) ? meta.timeline : [];
+    for (const ev of timeline) {
+      const item = asRecord(ev);
+      const eventType = String(item.type || "");
+      if (!isBillableSentTimelineType(eventType)) continue;
+      const atRaw = item.at;
+      if (!atRaw) continue;
+      const at = new Date(String(atRaw));
+      if (Number.isNaN(at.getTime()) || at < start || at >= end) continue;
+      count += 1;
+    }
   }
   return count;
 }
@@ -179,7 +182,7 @@ export type ArSmsReservationResult = {
 };
 
 async function appointmentAlreadyReserved(
-  tx: Prisma.TransactionClient,
+  tx: Pick<Prisma.TransactionClient, "voiceAppointment">,
   appointmentId: string,
   periodKey: string,
   timelineType: string,
@@ -196,7 +199,7 @@ async function appointmentAlreadyReserved(
 }
 
 async function markAppointmentArSmsReserved(
-  tx: Prisma.TransactionClient,
+  tx: Pick<Prisma.TransactionClient, "voiceAppointment">,
   appointmentId: string,
   periodKey: string,
   timelineType: string,
@@ -260,60 +263,42 @@ export async function reserveArReminderSmsUnit(input: {
   const appointmentId = input.appointmentId?.trim() || null;
   const timelineType = input.timelineType?.trim() || "reminder";
 
-  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.workspaceId}))`;
+  if (
+    appointmentId &&
+    timelineType &&
+    (await appointmentAlreadyReserved(prisma, appointmentId, periodKey, timelineType))
+  ) {
+    const limitsRow = await prisma.workspaceLimits.findUnique({
+      where: { workspaceId: input.workspaceId },
+      select: { limits: true },
+    });
+    const used = readArSmsUsedFromLimits(asRecord(limitsRow?.limits), periodKey);
+    return {
+      reserved: true,
+      used,
+      limit,
+      reason: "idempotent_replay",
+    };
+  }
 
-    if (
-      appointmentId &&
-      timelineType &&
-      (await appointmentAlreadyReserved(tx, appointmentId, periodKey, timelineType))
-    ) {
-      const locked = await tx.$queryRaw<Array<{ limits: unknown }>>`
-        SELECT limits FROM workspace_limits WHERE workspace_id = ${input.workspaceId} FOR UPDATE
-      `;
-      const limits = asRecord(locked[0]?.limits);
-      let used = Number(limits[USAGE_USED] || 0);
-      if (String(limits[USAGE_PERIOD_KEY] || "") !== periodKey) used = 0;
-      return {
-        reserved: true,
-        used,
-        limit,
-        reason: "idempotent_replay",
-      };
-    }
-
-    const locked = await tx.$queryRaw<Array<{ limits: unknown }>>`
-      SELECT limits FROM workspace_limits WHERE workspace_id = ${input.workspaceId} FOR UPDATE
-    `;
-
-    const limits = asRecord(locked[0]?.limits);
-    let used = Number(limits[USAGE_USED] || 0);
-    if (String(limits[USAGE_PERIOD_KEY] || "") !== periodKey) used = 0;
-
-    if (used >= limit) {
-      return { reserved: false, used, limit, reason: "ar_sms_limit_reached" };
-    }
-
-    const nextUsed = used + 1;
-    const nextLimits = { ...limits, [USAGE_PERIOD_KEY]: periodKey, [USAGE_USED]: nextUsed };
-
-    if (locked.length === 0) {
-      await tx.workspaceLimits.create({
-        data: { workspaceId: input.workspaceId, limits: nextLimits },
-      });
-    } else {
-      await tx.workspaceLimits.update({
-        where: { workspaceId: input.workspaceId },
-        data: { limits: nextLimits },
-      });
-    }
-
-    if (appointmentId && timelineType) {
-      await markAppointmentArSmsReserved(tx, appointmentId, periodKey, timelineType);
-    }
-
-    return { reserved: true, used: nextUsed, limit };
+  const incremented = await casIncrementArSmsUsageIfBelowLimit({
+    workspaceId: input.workspaceId,
+    periodKey,
+    limit,
   });
+
+  if (!incremented.ok) {
+    if (incremented.reason === "at_limit") {
+      return { reserved: false, used: incremented.used, limit, reason: "ar_sms_limit_reached" };
+    }
+    return { reserved: false, used: incremented.used, limit, reason: "ar_sms_limit_reached" };
+  }
+
+  if (appointmentId && timelineType) {
+    await markAppointmentArSmsReserved(prisma, appointmentId, periodKey, timelineType);
+  }
+
+  return { reserved: true, used: incremented.used, limit };
 }
 
 export async function releaseArReminderSmsReservation(input: {
@@ -329,40 +314,22 @@ export async function releaseArReminderSmsReservation(input: {
   const appointmentId = input.appointmentId?.trim() || null;
   const timelineType = input.timelineType?.trim() || "reminder";
 
-  await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.workspaceId}))`;
-    await tx.$queryRaw`
-      SELECT limits FROM workspace_limits WHERE workspace_id = ${input.workspaceId} FOR UPDATE
-    `;
-
-    if (appointmentId) {
-      const row = await tx.voiceAppointment.findUnique({
-        where: { id: appointmentId },
-        select: { metadata: true },
-      });
-      const meta = asRecord(row?.metadata);
-      const key = reservationMetaKey(periodKey, timelineType);
-      const reserved = asRecord(meta.arSmsReservations);
-      if (!reserved[key]) return;
-      const restReserved = { ...reserved };
-      delete restReserved[key];
-      await tx.voiceAppointment.update({
-        where: { id: appointmentId },
-        data: { metadata: { ...meta, arSmsReservations: restReserved } },
-      });
-    }
-
-    const limitsRow = await tx.workspaceLimits.findUnique({
-      where: { workspaceId: input.workspaceId },
-      select: { limits: true },
+  if (appointmentId) {
+    const row = await prisma.voiceAppointment.findUnique({
+      where: { id: appointmentId },
+      select: { metadata: true },
     });
-    if (!limitsRow) return;
-    const limits = asRecord(limitsRow.limits);
-    if (String(limits[USAGE_PERIOD_KEY] || "") !== periodKey) return;
-    const used = Math.max(0, Number(limits[USAGE_USED] || 0) - 1);
-    await tx.workspaceLimits.update({
-      where: { workspaceId: input.workspaceId },
-      data: { limits: { ...limits, [USAGE_USED]: used } },
+    const meta = asRecord(row?.metadata);
+    const key = reservationMetaKey(periodKey, timelineType);
+    const reserved = asRecord(meta.arSmsReservations);
+    if (!reserved[key]) return;
+    const restReserved = { ...reserved };
+    delete restReserved[key];
+    await prisma.voiceAppointment.update({
+      where: { id: appointmentId },
+      data: { metadata: { ...meta, arSmsReservations: restReserved } },
     });
-  });
+  }
+
+  await casDecrementArSmsUsage({ workspaceId: input.workspaceId, periodKey });
 }
