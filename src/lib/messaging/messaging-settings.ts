@@ -47,7 +47,34 @@ export type MessagingRuntimeSettings = {
   inboxPermissionsJson: InboxPermissionsJson | null;
 };
 
-export const DEFAULT_OPT_OUT_KEYWORDS = "STOP,STOPALL,UNSUBSCRIBE,CANCEL,END,QUIT";
+/** Carrier-style opt-out: exact keyword only (full message, case-insensitive). Not CANCEL / UNSUBSCRIBE. */
+export const DEFAULT_OPT_OUT_KEYWORDS = "STOP";
+
+/** Plain-language opt-out when the customer clearly asks to be removed (full message match). */
+const EXPLICIT_OPT_OUT_PHRASES = [
+  "take me off the list",
+  "take me off your list",
+  "remove me from your list",
+  "please take me off the list",
+  "please take me off your list",
+] as const;
+
+/**
+ * True when the inbound SMS is an opt-out: configured keyword (default STOP only) or an explicit removal phrase.
+ * Matching is on the whole trimmed message — never substring / guess from words like "cancel" inside a sentence.
+ */
+export function isSmsOptOutMessage(
+  body: string,
+  stopKeywords: string[] = parseKeywordList(null, DEFAULT_OPT_OUT_KEYWORDS),
+): boolean {
+  const trimmed = (body || "").trim();
+  if (!trimmed) return false;
+  const upper = trimmed.toUpperCase();
+  if (stopKeywords.includes(upper)) return true;
+  const lower = trimmed.toLowerCase().replace(/\s+/g, " ");
+  const normalized = lower.endsWith(".") ? lower.slice(0, -1).trim() : lower;
+  return EXPLICIT_OPT_OUT_PHRASES.some((phrase) => normalized === phrase);
+}
 export const DEFAULT_OPT_IN_KEYWORDS = "START,YES,UNSTOP";
 export const DEFAULT_HELP_KEYWORDS = "HELP,INFO";
 

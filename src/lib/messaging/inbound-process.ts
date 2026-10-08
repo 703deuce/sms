@@ -12,6 +12,7 @@ import {
   DEFAULT_OPT_IN_KEYWORDS,
   DEFAULT_OPT_OUT_KEYWORDS,
   getMessagingRuntimeSettings,
+  isSmsOptOutMessage,
   parseKeywordList,
   shouldSendAwayReply,
 } from "@/lib/messaging/messaging-settings";
@@ -182,7 +183,7 @@ export async function processInboundMessage(input: {
       where: { providerMessageId: input.providerMessageId },
     });
     if (existingMsg) {
-      if (stopKeywords.includes(upper)) {
+      if (isSmsOptOutMessage(body, stopKeywords)) {
         return { kind: "stop" };
       }
       if (startKeywords.includes(upper)) return { kind: "start" };
@@ -212,7 +213,7 @@ export async function processInboundMessage(input: {
     return { kind: "message", replyText: employeeCmd.replyText };
   }
 
-  if (stopKeywords.includes(upper)) {
+  if (isSmsOptOutMessage(body, stopKeywords)) {
     const suppressionKey = `${input.workspaceId}:p:${from}`;
     try {
       await prisma.suppression.create({

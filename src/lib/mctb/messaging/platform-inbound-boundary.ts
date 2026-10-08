@@ -3,8 +3,7 @@ import "server-only";
 import { getPrisma } from "@/lib/db";
 import {
   DEFAULT_HELP_KEYWORDS,
-  DEFAULT_OPT_OUT_KEYWORDS,
-  parseKeywordList,
+  isSmsOptOutMessage,
 } from "@/lib/messaging/messaging-settings";
 import { mctbCallerE164Variants, normalizeMctbCallerE164 } from "@/lib/mctb/messaging/caller-e164";
 import type { CanonicalMctbPlatformSender } from "@/lib/mctb/messaging/platform-sender-config";
@@ -19,9 +18,7 @@ const PLATFORM_HELP_MESSAGE =
   "Transovo: Reply STOP to opt out. Msg&data rates may apply. For help email support@transovo.com.";
 
 function isStopKeyword(body: string): boolean {
-  const upper = (body || "").trim().toUpperCase();
-  const keywords = parseKeywordList(null, DEFAULT_OPT_OUT_KEYWORDS);
-  return keywords.includes(upper);
+  return isSmsOptOutMessage(body);
 }
 
 function isHelpKeyword(body: string): boolean {

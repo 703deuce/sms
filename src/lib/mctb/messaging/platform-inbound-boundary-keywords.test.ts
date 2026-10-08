@@ -29,4 +29,18 @@ const realStop = await handlePlatformSenderComplianceInbound({
 });
 assert.equal(realStop.kind, "stop", "STOP still opts out when MCTB compliance runs");
 
+const cancelWord = await handlePlatformSenderComplianceInbound({
+  platformSender,
+  fromE164: "+15714073615",
+  body: "CANCEL",
+});
+assert.equal(cancelWord.kind, "none", "CANCEL alone is not an opt-out keyword");
+
+const takeOff = await handlePlatformSenderComplianceInbound({
+  platformSender,
+  fromE164: "+15714073615",
+  body: "take me off the list",
+});
+assert.equal(takeOff.kind, "stop", "explicit removal phrase opts out");
+
 console.log("platform-inbound-boundary-keywords.test.ts: ok");
