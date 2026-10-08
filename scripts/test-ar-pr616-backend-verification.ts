@@ -249,7 +249,7 @@ async function sectionReschedulePipelineDb() {
       record("reschedule_pipeline_session", "CONFIG", picked.reason || "no platform sender");
       return;
     }
-    let claimed: { sessionId: string } | { collision: true; ownerAppointmentId: string };
+    let claimed: { sessionId: string };
     try {
       claimed = await claimArReplySessionForOutbound({
         workspaceId: ws.id,
@@ -271,11 +271,6 @@ async function sectionReschedulePipelineDb() {
       }
       throw err;
     }
-    if ("collision" in claimed) {
-      record("reschedule_pipeline_session", "FAIL", "unexpected sender collision");
-      return;
-    }
-
     const sessionRow = await prisma.arSmsReplySession.findFirst({
       where: { id: claimed.sessionId },
     });

@@ -50,13 +50,6 @@ export async function sendArReminderSmsWithSession(input: {
     timelineType: input.timelineType,
     conversationId,
   });
-  if ("collision" in claim) {
-    return {
-      sent: false,
-      reason: "ar_sender_collision",
-      pendingSendReason: "Sender already reserved for another active appointment conversation",
-    };
-  }
 
   const idempotencyKey = arReminderOutboundIdempotencyKey({
     workspaceId: input.workspaceId,

@@ -6,12 +6,7 @@ import {
   normalizeMctbCallerE164,
 } from "@/lib/mctb/messaging/caller-e164";
 import { providerRefFromAppointment } from "@/lib/appointment-reminders/ai-rescheduler/provider-mutations";
-import {
-  AR_REPLY_ELIGIBLE_STATES,
-  listArEligiblePlatformSenders,
-  findOccupiedPlatformSenderIdsForConsumer,
-  pickFirstUnoccupiedPlatformSender,
-} from "./ar-platform-sender-pool";
+import { AR_REPLY_ELIGIBLE_STATES, listArEligiblePlatformSenders } from "./ar-platform-sender-pool";
 
 const DEFAULT_REPLY_ELIGIBLE_MS = 21 * 24 * 60 * 60 * 1000;
 
@@ -37,7 +32,6 @@ export async function selectArOutboundPlatformSender(input: {
   consumerE164: string;
 }): Promise<ArSenderSelectionResult> {
   const prisma = getPrisma();
-  const consumer = normalizeMctbCallerE164(input.consumerE164);
 
   const existingForAppointment = await prisma.arSmsReplySession.findFirst({
     where: {
@@ -63,27 +57,19 @@ export async function selectArOutboundPlatformSender(input: {
     return {
       ok: false,
       reason: "ar_no_eligible_platform_sender",
-      pendingSendReason: "No Telnyx/Twilio platform sender is configured and authorized for Appointment Reminders",
+      pendingSendReason:
+        "Canonical Telnyx platform sender (866) is not configured or authorized for Appointment Reminders",
     };
   }
 
-  const occupied = await findOccupiedPlatformSenderIdsForConsumer(consumer);
-  const picked = pickFirstUnoccupiedPlatformSender(senders, occupied);
-  if (picked) {
-    return {
-      ok: true,
-      phoneNumberId: picked.phoneNumberId,
-      e164: picked.e164,
-      provider: picked.provider,
-      reusedExistingAppointmentSender: false,
-    };
-  }
-
+  // Shared Telnyx 866 platform sender — same outbound identity as MCTB; never “occupied” for another product.
+  const sender = senders[0]!;
   return {
-    ok: false,
-    reason: "ar_sender_pool_exhausted",
-    pendingSendReason:
-      "Customer already has active Appointment Reminders or Missed Call Text Back conversations on all eligible platform senders",
+    ok: true,
+    phoneNumberId: sender.phoneNumberId,
+    e164: sender.e164,
+    provider: sender.provider,
+    reusedExistingAppointmentSender: false,
   };
 }
 
@@ -96,7 +82,7 @@ export async function claimArReplySessionForOutbound(input: {
   provider: string;
   timelineType: string;
   conversationId?: string | null;
-}): Promise<{ sessionId: string } | { collision: true; ownerAppointmentId: string }> {
+}): Promise<{ sessionId: string }> {
   const prisma = getPrisma();
   const consumer = normalizeMctbCallerE164(input.consumerE164);
   const replyEligibleUntil = arReplyEligibleUntilFromNow();
@@ -122,11 +108,7 @@ export async function claimArReplySessionForOutbound(input: {
   const providerCalendarId = providerRef?.providerCalendarId ?? null;
   const calendarProvider = providerRef?.provider ?? null;
 
-  type ClaimTxResult =
-    | { sessionId: string }
-    | { collision: true; ownerAppointmentId: string };
-
-  const result: ClaimTxResult = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const existingApptSession = await tx.arSmsReplySession.findFirst({
       where: {
         workspaceId: input.workspaceId,
@@ -147,28 +129,16 @@ export async function claimArReplySessionForOutbound(input: {
       return { sessionId: updated.id };
     }
 
-    const foreignOnSender = await tx.arSmsReplySession.findFirst({
+    // Prior reminder sessions for this customer on the shared platform sender are superseded by the latest send.
+    await tx.arSmsReplySession.updateMany({
       where: {
         consumerE164: consumer,
         platformPhoneNumberId: input.platformPhoneNumberId,
         lifecycleState: { in: [...AR_REPLY_ELIGIBLE_STATES] },
         NOT: { appointmentId: input.appointmentId },
       },
+      data: { lifecycleState: "EXPIRED", completedAt: new Date() },
     });
-    if (foreignOnSender) {
-      return { collision: true as const, ownerAppointmentId: foreignOnSender.appointmentId };
-    }
-
-    const { findActivePlatformSenderAssignments } = await import(
-      "@/lib/mctb/messaging/platform-sender-assignment"
-    );
-    const mctbOnSender = await findActivePlatformSenderAssignments({
-      consumerE164: consumer,
-      platformPhoneNumberId: input.platformPhoneNumberId,
-    });
-    if (mctbOnSender.length > 0) {
-      return { collision: true as const, ownerAppointmentId: input.appointmentId };
-    }
 
     const created = await tx.arSmsReplySession.create({
       data: {
@@ -191,9 +161,6 @@ export async function claimArReplySessionForOutbound(input: {
     return { sessionId: created.id };
   });
 
-  if ("collision" in result && result.collision) {
-    return { collision: true, ownerAppointmentId: result.ownerAppointmentId };
-  }
   return { sessionId: result.sessionId };
 }
 

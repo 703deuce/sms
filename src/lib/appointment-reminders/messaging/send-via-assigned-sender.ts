@@ -1,11 +1,11 @@
 import "server-only";
 
+import { resolveCanonicalMctbPlatformSender } from "@/lib/mctb/messaging/platform-sender-config";
+import { isPhoneAuthorizedForOutboundSms } from "@/lib/mctb/messaging/outbound-sms-route";
 import { sendQuickSms } from "@/lib/sms/send-quick";
-import { resolveAppointmentOutboundSmsRoute } from "@/lib/appointments/sms-sender";
 
 /**
- * AR outbound on an explicitly selected platform sender (Telnyx primary or Twilio secondary).
- * Does not use MCTB assignment gates or MCTB outbound jobs.
+ * AR outbound on the canonical Telnyx 866 platform sender (same as MCTB platform SMS).
  */
 export async function sendAppointmentSmsViaPlatformSender(input: {
   workspaceId: string;
@@ -17,26 +17,36 @@ export async function sendAppointmentSmsViaPlatformSender(input: {
   provider: string;
   idempotencyKey?: string;
 }) {
-  const route = await resolveAppointmentOutboundSmsRoute(input.customerWorkspaceId, input.to);
-  if (!route) {
-    throw new Error("ar_platform_sender_route_unavailable");
+  const platform = await resolveCanonicalMctbPlatformSender();
+  if (!platform?.e164) {
+    throw new Error("ar_canonical_platform_sender_not_configured");
+  }
+  if (platform.phoneNumberId !== input.platformPhoneNumberId) {
+    throw new Error("ar_platform_sender_must_be_canonical_telnyx_866");
+  }
+  if (platform.e164 !== input.fromE164) {
+    throw new Error("ar_platform_sender_e164_mismatch");
+  }
+  if (String(platform.provider || "").toLowerCase() !== "telnyx") {
+    throw new Error("ar_platform_sender_must_be_telnyx");
   }
 
-  if (route.phoneNumberId !== input.platformPhoneNumberId) {
-    throw new Error("ar_selected_sender_does_not_match_platform_route");
+  const auth = await isPhoneAuthorizedForOutboundSms(platform.phoneNumberId);
+  if (!auth.allowed) {
+    throw new Error("ar_platform_sender_not_authorized_for_outbound");
   }
 
   return sendQuickSms({
     workspaceId: input.workspaceId,
     to: input.to,
     body: input.body,
-    from: input.fromE164,
+    from: platform.e164,
     idempotencyKey: input.idempotencyKey,
     omitConsumerTrackingLink: true,
     senderRoute: {
-      sendWorkspaceId: route.sendWorkspaceId,
-      fromE164: input.fromE164,
-      phoneNumberId: input.platformPhoneNumberId,
+      sendWorkspaceId: platform.workspaceId,
+      fromE164: platform.e164,
+      phoneNumberId: platform.phoneNumberId,
     },
   });
 }
