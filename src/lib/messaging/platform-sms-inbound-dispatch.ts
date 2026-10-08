@@ -69,6 +69,19 @@ export async function dispatchSharedPlatformSmsInbound(input: {
 
   const providerMessageId = input.providerMessageId.trim();
 
+  const {
+    recordArPlatformSmsInboundReceipt,
+    patchArPlatformSmsInboundReceipt,
+  } = await import("@/lib/appointment-reminders/messaging/platform-inbound-receipt");
+  await recordArPlatformSmsInboundReceipt({
+    providerMessageId,
+    channel: input.channel,
+    fromE164: input.fromE164,
+    toE164: input.destination.e164,
+    platformPhoneNumberId: input.destination.phoneNumberId,
+    body: input.body,
+  });
+
   const arMatch = await resolveArInboundFromOutboundInitiatedConversation({
     consumerE164: input.fromE164,
     platformPhoneNumberId: input.destination.phoneNumberId,
@@ -96,36 +109,17 @@ export async function dispatchSharedPlatformSmsInbound(input: {
       appointmentId: session.appointmentId,
       replySessionId: session.id,
     });
+    await patchArPlatformSmsInboundReceipt(providerMessageId, {
+      state: "ROUTED",
+      routingResolution: "ar_platform_reply_resolved",
+      replySessionId: session.id,
+      conversationId: session.conversationId,
+    });
     return {
       product: "appointment_reminders",
       resolution: "ar_platform_reply_resolved",
       workspaceId: session.workspaceId,
     };
-  }
-
-  if (arMatch.status === "ambiguous") {
-    logPlatformInboundResolution({
-      event: "ambiguous_ar_initiated_conversations",
-      channel: input.channel,
-      fromE164: input.fromE164,
-      sessionCount: arMatch.sessions.length,
-      workspaceIds: [...new Set(arMatch.sessions.map((s) => s.workspaceId))],
-    });
-    await recordHeldPlatformInbound({
-      channel: input.channel,
-      destination: input.destination,
-      providerMessageId,
-      fromE164: input.fromE164,
-      body: input.body,
-      reason: "ambiguous_ar_initiated_conversations",
-      arSessions: arMatch.sessions.map((s) => ({
-        id: s.id,
-        workspaceId: s.workspaceId,
-        appointmentId: s.appointmentId,
-        conversationId: s.conversationId,
-      })),
-    });
-    return { resolution: "ambiguous_platform_reply" };
   }
 
   if (!isPlatformSharedSmsMctbInboundEnabled()) {
@@ -135,7 +129,21 @@ export async function dispatchSharedPlatformSmsInbound(input: {
       fromE164: input.fromE164,
       toPhoneNumberId: input.destination.phoneNumberId,
     });
-    return { resolution: "unmatched_platform_reply" };
+    await recordHeldPlatformInbound({
+      channel: input.channel,
+      destination: input.destination,
+      providerMessageId,
+      fromE164: input.fromE164,
+      body: input.body,
+      reason: "no_matching_ar_reply_session",
+      arSessions: [],
+    });
+    await patchArPlatformSmsInboundReceipt(providerMessageId, {
+      state: "HELD",
+      routingResolution: "unmatched_platform_reply",
+      holdReason: "no_matching_ar_reply_session",
+    });
+    return { resolution: "held_unrouted" };
   }
 
   const { dispatchPlatformSmsInboundToMctb } = await import(
@@ -203,6 +211,15 @@ async function recordHeldPlatformInbound(input: {
   ];
   const workspaceId =
     candidateContexts.length === 1 ? candidateContexts[0]!.workspaceId : null;
+
+  const { patchArPlatformSmsInboundReceipt } = await import(
+    "@/lib/appointment-reminders/messaging/platform-inbound-receipt"
+  );
+  await patchArPlatformSmsInboundReceipt(input.providerMessageId, {
+    state: "HELD",
+    routingResolution: "held_platform_inbound",
+    holdReason: input.reason,
+  });
 
   const held = await persistArInboundHeldMessage({
     providerMessageId: input.providerMessageId,

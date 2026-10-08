@@ -80,6 +80,20 @@ export async function executeArSendCustomerSmsJob(payload: Record<string, unknow
     }
   }
 
+  const inboundProviderMessageId = String(payload.providerMessageId || "").trim();
+  if (inboundProviderMessageId) {
+    try {
+      const { patchArPlatformSmsInboundReceipt } = await import("./platform-inbound-receipt");
+      await patchArPlatformSmsInboundReceipt(inboundProviderMessageId, {
+        state: "COMPLETED",
+        outboundMessageId: result?.messageId ?? null,
+        conversationId: conversationId || null,
+      });
+    } catch {
+      // optional until migration applied
+    }
+  }
+
   return {
     ok: true,
     providerMessageId: result?.providerId ?? result?.messageId ?? null,

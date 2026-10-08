@@ -193,6 +193,16 @@ enum ArSmsInboundHeldState {
   DISMISSED
 }
 
+enum ArPlatformSmsInboundReceiptState {
+  RECEIVED
+  ROUTED
+  PROCESSING
+  COMPLETED
+  RETRY_PENDING
+  HELD
+  FAILED
+}
+
 /// Separate A2P/messaging registration profiles per product use case.
 enum MessagingProductUseCase {
   MCTB_CUSTOMER_CARE
@@ -4877,6 +4887,31 @@ model ArSmsInboundHeldMessage {
   @@index([workspaceId, state, createdAt])
   @@index([fromE164, createdAt])
   @@map("ar_sms_inbound_held_messages")
+}
+
+/// Durable receipt for every platform SMS inbound webhook (before routing).
+model ArPlatformSmsInboundReceipt {
+  id                    String                            @id @default(cuid())
+  providerMessageId     String                            @unique
+  channel               String
+  fromE164              String
+  toE164                String
+  platformPhoneNumberId String?
+  bodyPreview           String
+  state                 ArPlatformSmsInboundReceiptState @default(RECEIVED)
+  routingResolution     String?
+  replySessionId        String?
+  conversationId        String?
+  processInboundJobId   String?
+  outboundMessageId     String?
+  holdReason            String?
+  lastError             String?
+  receivedAt            DateTime                          @default(now())
+  updatedAt             DateTime                          @updatedAt
+
+  @@index([fromE164, receivedAt])
+  @@index([state, receivedAt])
+  @@map("ar_platform_sms_inbound_receipts")
 }
 
 model MctbRequestFormSubmission {

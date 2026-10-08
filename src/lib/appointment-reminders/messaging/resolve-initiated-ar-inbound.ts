@@ -7,8 +7,7 @@ import { AR_REPLY_ELIGIBLE_STATES } from "./ar-platform-sender-pool";
 
 export type ResolveInitiatedArInboundResult =
   | { status: "matched"; session: ArSmsReplySession }
-  | { status: "none" }
-  | { status: "ambiguous"; sessions: ArSmsReplySession[] };
+  | { status: "none" };
 
 /**
  * Match inbound SMS to Appointment Reminders conversations Transovo already started.
@@ -45,5 +44,26 @@ export async function resolveArInboundFromOutboundInitiatedConversation(input: {
   if (sessions.length === 1) {
     return { status: "matched", session: sessions[0]! };
   }
-  return { status: "ambiguous", sessions };
+
+  // Multiple eligible sessions on one sender+consumer is invalid operations state.
+  // Authoritative winner: most recently used session (same ordering as outbound-initiated proof).
+  const winner = sessions[0]!;
+  const { expireStaleArReplySessionsExcept } = await import("./expire-stale-ar-sessions");
+  const expired = await expireStaleArReplySessionsExcept({
+    keepSessionId: winner.id,
+    consumerE164: consumer,
+    platformPhoneNumberId: input.platformPhoneNumberId,
+    reason: "superseded_ambiguous_inbound_resolution",
+  });
+  if (expired > 0) {
+    console.info(
+      JSON.stringify({
+        event: "ar_inbound_session_deduped",
+        keepSessionId: winner.id,
+        expiredCount: expired,
+        appointmentId: winner.appointmentId,
+      }),
+    );
+  }
+  return { status: "matched", session: winner };
 }

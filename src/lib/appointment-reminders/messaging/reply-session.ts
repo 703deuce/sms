@@ -286,6 +286,7 @@ export async function ensureArConversation(input: {
   contactId: string;
   toE164: string;
   fromE164: string;
+  appointmentId?: string;
   existingConversationId?: string | null;
 }): Promise<string> {
   const prisma = getPrisma();
@@ -297,34 +298,41 @@ export async function ensureArConversation(input: {
     return input.existingConversationId;
   }
 
-  const { resolveInboundConversation } = await import("@/lib/mass-texting/conversation-context");
-  const inboundCtx = await resolveInboundConversation({
-    workspaceId: input.workspaceId,
-    contactId: input.contactId,
-    toE164: input.toE164,
-    fromE164: input.fromE164,
+  if (input.appointmentId) {
+    const bound = await prisma.arSmsReplySession.findFirst({
+      where: {
+        workspaceId: input.workspaceId,
+        appointmentId: input.appointmentId,
+        conversationId: { not: null },
+      },
+      orderBy: { lastUsedAt: "desc" },
+      select: { conversationId: true },
+    });
+    if (bound?.conversationId) {
+      await prisma.conversation.updateMany({
+        where: { id: bound.conversationId, workspaceId: input.workspaceId },
+        data: { productSource: "APPOINTMENT_REMINDERS", updatedAt: new Date() },
+      });
+      return bound.conversationId;
+    }
+  }
+
+  const phone = await prisma.phoneNumber.findFirst({
+    where: { workspaceId: input.workspaceId, e164: input.toE164, status: "Active" },
+    select: { id: true },
   });
 
-  const variants = mctbCallerE164Variants(input.fromE164);
-  const arTagged = await prisma.conversation.findFirst({
-    where: {
+  const created = await prisma.conversation.create({
+    data: {
       workspaceId: input.workspaceId,
       contactId: input.contactId,
       productSource: "APPOINTMENT_REMINDERS",
-      contact: { phone: { in: variants } },
+      tags: ["appointment_reminders"],
+      phoneNumberId: phone?.id ?? null,
+      fromE164: input.toE164,
+      unread: false,
     },
-    orderBy: { updatedAt: "desc" },
     select: { id: true },
   });
-  if (arTagged) return arTagged.id;
-
-  await prisma.conversation.update({
-    where: { id: inboundCtx.conversationId },
-    data: {
-      productSource: "APPOINTMENT_REMINDERS",
-      tags: ["appointment_reminders"],
-      updatedAt: new Date(),
-    },
-  });
-  return inboundCtx.conversationId;
+  return created.id;
 }

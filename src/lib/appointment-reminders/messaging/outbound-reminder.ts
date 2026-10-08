@@ -45,6 +45,7 @@ export async function sendArReminderSmsWithSession(input: {
     contactId: input.contactId,
     toE164: selection.e164,
     fromE164: input.phone,
+    appointmentId: input.appointmentId,
   });
 
   const claim = await claimArReplySessionForOutbound({

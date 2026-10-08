@@ -221,6 +221,20 @@ export async function acceptArInboundSmsIngress(
     };
   });
 
+  if (result.processingJobId && providerMessageId) {
+    try {
+      const { patchArPlatformSmsInboundReceipt } = await import("./platform-inbound-receipt");
+      await patchArPlatformSmsInboundReceipt(providerMessageId, {
+        state: result.duplicate ? "ROUTED" : "PROCESSING",
+        processInboundJobId: result.processingJobId,
+        conversationId: result.conversationId || null,
+        replySessionId: input.replySessionId,
+      });
+    } catch {
+      // receipt row is best-effort until migration applied
+    }
+  }
+
   if (!result.duplicate && result.processingJobId && providerMessageId) {
     const { wakeDurableJobQueueRowToBullmq } = await import("@/lib/jobs/bullmq");
     await wakeDurableJobQueueRowToBullmq({
