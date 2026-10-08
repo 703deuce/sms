@@ -121,6 +121,11 @@ export async function handleArCancelConfirmation(input: {
     workspaceId: input.workspaceId,
     appointmentId: row.id,
     outcome: "cancelled",
+    evidence: {
+      calendarResult: "verified",
+      action: "cancel",
+      operationId: policyGate.ack?.operationId,
+    },
   });
   const fresh = await prisma.voiceAppointment.findFirst({ where: { id: row.id } });
   if (fresh) {
@@ -151,6 +156,8 @@ export async function beginArCancelPendingAfterPolicyAck(input: {
   replySessionId?: string;
   whenLabel: string;
   meta: AppointmentMetadata;
+  customerMessage?: string;
+  providerMessageId?: string;
 }): Promise<string> {
   const prisma = getPrisma();
   await prisma.voiceAppointment.update({
@@ -172,11 +179,22 @@ export async function beginArCancelPendingAfterPolicyAck(input: {
       lifecycleState: "AWAITING_CANCEL_CONFIRM",
     });
   }
+  const msg = input.customerMessage?.trim();
   await recordArSmsCustomerOutcome({
     workspaceId: input.workspaceId,
     appointmentId: input.appointmentId,
     replySessionId: input.replySessionId,
     outcome: "cancel_pending",
+    note: msg ? `Customer texted: "${msg.slice(0, 240)}"` : undefined,
+    evidence: msg
+      ? {
+          channel: "sms",
+          direction: "inbound",
+          messageText: msg,
+          providerMessageId: input.providerMessageId,
+          action: "cancel",
+        }
+      : undefined,
   });
   return `Reply YES to confirm you want to cancel your appointment on ${input.whenLabel}.`;
 }
@@ -273,6 +291,7 @@ export async function handleArReminderLetterReply(input: {
   replySessionId?: string;
   body: string;
   letter: "C" | "R" | "X";
+  providerMessageId?: string;
 }): Promise<ArInboundReplyResult> {
   const platform = await loadAppointmentPlatformConfig(input.workspaceId);
   const ar = resolveAiReschedulerConfig(platform);
@@ -390,6 +409,8 @@ export async function handleArReminderLetterReply(input: {
         replySessionId: input.replySessionId,
         whenLabel,
         meta,
+        customerMessage: input.body,
+        providerMessageId: input.providerMessageId,
       });
       return { handled: true, replyText: confirmLine };
     }

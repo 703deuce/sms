@@ -264,6 +264,11 @@ export async function syncLocalAppointmentAfterProviderReschedule(input: {
     appointmentId: input.appointmentId,
     outcome: "rescheduled",
     newStartsAtIso: start.toISOString(),
+    evidence: {
+      calendarResult: "verified",
+      action: "reschedule",
+      operationId: input.operationId,
+    },
   });
   return { ok: true };
 }

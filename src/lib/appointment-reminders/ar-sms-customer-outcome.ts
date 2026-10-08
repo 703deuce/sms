@@ -19,19 +19,42 @@ export type ArCustomerResponseSummary = {
   /** Customer message snippet or contextual note when known */
   reasonLine?: string;
   at?: string;
+  /** Compact list/table line, e.g. "Cancelled — policy accepted" */
+  listDisplayLine?: string;
+};
+
+export type ArCustomerActionHistoryItem = {
+  at: string;
+  kind: string;
+  label: string;
+  detailLine?: string;
+  actor?: "customer" | "transovo" | "system";
+  direction?: "inbound" | "outbound";
+  messageText?: string;
+  providerMessageId?: string;
+  consequenceLabel?: string;
+  policyWindowLabel?: string;
+  calendarResult?: string;
+  operationId?: string;
+  reminderTimelineType?: string;
 };
 
 const AR_SMS_OUTCOME_PREFIX = "ar_sms_outcome_";
 
-export function arSmsOutcomeTimelineType(
-  outcome:
-    | "confirmed"
-    | "cancel_pending"
-    | "cancelled"
-    | "reschedule_started"
-    | "reschedule_requested"
-    | "rescheduled",
-): string {
+export type ArSmsOutcomeSuffix =
+  | "confirmed"
+  | "cancel_pending"
+  | "cancelled"
+  | "reschedule_started"
+  | "reschedule_requested"
+  | "rescheduled"
+  | "policy_disclosed"
+  | "policy_accepted"
+  | "policy_declined"
+  | "reminder_sent"
+  | "calendar_verified";
+
+export function arSmsOutcomeTimelineType(outcome: ArSmsOutcomeSuffix): string {
   return `${AR_SMS_OUTCOME_PREFIX}${outcome}`;
 }
 
@@ -125,9 +148,202 @@ function kindFromOutcomeType(type: string): ArCustomerResponseKind | null {
       return "reschedule_requested";
     case "rescheduled":
       return "rescheduled";
+    case "policy_disclosed":
+    case "policy_accepted":
+    case "policy_declined":
+    case "reminder_sent":
+    case "calendar_verified":
+      return null;
     default:
       return null;
   }
+}
+
+function formatPolicyWindowLabel(cutoffMinutes?: number): string | undefined {
+  if (!cutoffMinutes || cutoffMinutes <= 0) return undefined;
+  if (cutoffMinutes % 1440 === 0) {
+    const days = cutoffMinutes / 1440;
+    return days === 1 ? "24-hour cancellation" : `${days}-day cancellation`;
+  }
+  if (cutoffMinutes % 60 === 0) {
+    return `${cutoffMinutes / 60}-hour cancellation`;
+  }
+  return `${cutoffMinutes}-minute cancellation`;
+}
+
+function hadPolicyAcceptanceBefore(
+  timeline: AppointmentTimelineEvent[],
+  terminalAt: string,
+  action?: "cancel" | "reschedule",
+): boolean {
+  const terminalMs = new Date(terminalAt).getTime();
+  return timeline.some((e) => {
+    if (!e.type.endsWith("policy_accepted")) return false;
+    if (new Date(e.at).getTime() > terminalMs) return false;
+    const parsed = parseArSmsOutcomeDetail(e.detail);
+    if (action && parsed.evidence?.action && parsed.evidence.action !== action) return false;
+    return true;
+  });
+}
+
+function enrichListDisplay(
+  summary: ArCustomerResponseSummary,
+  input: {
+    timeline: AppointmentTimelineEvent[];
+    timezone?: string | null;
+    startsAt: string;
+  },
+): ArCustomerResponseSummary {
+  const latest = latestOutcomeEvent(input.timeline);
+  if (summary.kind === "cancelled") {
+    const policyAccepted =
+      latest && hadPolicyAcceptanceBefore(input.timeline, latest.at, "cancel");
+    return {
+      ...summary,
+      listDisplayLine: policyAccepted ? "Cancelled — policy accepted" : "Cancelled",
+    };
+  }
+  if (summary.kind === "rescheduled" && summary.detailLine) {
+    const short = summary.detailLine.replace(/^Now /, "");
+    return { ...summary, listDisplayLine: `Rescheduled — ${short}` };
+  }
+  if (summary.kind === "confirmed") {
+    return { ...summary, listDisplayLine: "Confirmed" };
+  }
+  if (summary.kind === "cancel_pending") {
+    return { ...summary, listDisplayLine: "Awaiting cancel confirmation" };
+  }
+  if (summary.kind === "reschedule_pending" || summary.kind === "reschedule_requested") {
+    return { ...summary, listDisplayLine: "Reschedule in progress" };
+  }
+  if (summary.kind === "awaiting_reply" || summary.kind === "replied") {
+    return { ...summary, listDisplayLine: "Awaiting response" };
+  }
+  if (summary.kind === "none") {
+    return { ...summary, listDisplayLine: "Awaiting response" };
+  }
+  return summary;
+}
+
+export function mapOutcomeEventToHistoryItem(
+  ev: AppointmentTimelineEvent,
+  timezone?: string | null,
+): ArCustomerActionHistoryItem {
+  const parsed = parseArSmsOutcomeDetail(ev.detail);
+  const evd = parsed.evidence;
+  const suffix = ev.type.slice(AR_SMS_OUTCOME_PREFIX.length);
+  const policyWindowLabel =
+    evd?.policyCutoffMinutes != null
+      ? formatPolicyWindowLabel(evd.policyCutoffMinutes)
+      : undefined;
+
+  let actor: ArCustomerActionHistoryItem["actor"] = "system";
+  let direction = evd?.direction;
+  if (direction === "inbound") actor = "customer";
+  if (direction === "outbound") actor = "transovo";
+  if (suffix === "cancelled" || suffix === "rescheduled" || suffix === "calendar_verified") {
+    actor = "system";
+  }
+
+  const messageText =
+    evd?.messageText?.trim() ||
+    (parsed.note?.startsWith("Customer texted:")
+      ? parsed.note.replace(/^Customer texted:\s*/i, "").replace(/^"|"$/g, "")
+      : undefined);
+
+  return {
+    at: ev.at,
+    kind: suffix,
+    label: ev.label || suffix,
+    detailLine: parsed.newStartsAtIso
+      ? formatAppointmentWhen(parsed.newStartsAtIso, timezone)
+      : undefined,
+    actor,
+    direction,
+    messageText,
+    providerMessageId: evd?.providerMessageId,
+    consequenceLabel: evd?.consequenceLabel,
+    policyWindowLabel,
+    calendarResult: evd?.calendarResult,
+    operationId: evd?.operationId,
+    reminderTimelineType: parsed.reminderTimelineType,
+  };
+}
+
+export function buildCustomerActionHistory(input: {
+  metadata: AppointmentMetadata;
+  timezone?: string | null;
+  status: string;
+  startsAt: string;
+  reminderSentEvents?: Array<{ at: string; label: string; timelineType: string }>;
+}): ArCustomerActionHistoryItem[] {
+  const outcomeItems = listArSmsOutcomeEvents(input.metadata).map((ev) =>
+    mapOutcomeEventToHistoryItem(ev, input.timezone),
+  );
+  const reminderItems: ArCustomerActionHistoryItem[] = (input.reminderSentEvents || [])
+    .filter((r) => !outcomeItems.some((o) => o.kind === "reminder_sent" && o.at === r.at))
+    .map((r) => ({
+      at: r.at,
+      kind: "reminder_sent",
+      label: r.label || "Reminder sent",
+      actor: "transovo",
+      direction: "outbound",
+      reminderTimelineType: r.timelineType,
+    }));
+
+  return [...reminderItems, ...outcomeItems].sort(
+    (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime(),
+  );
+}
+
+export type ArSmsEvidenceSummary = {
+  customerAction?: string;
+  policyWindowLabel?: string;
+  acceptanceStatus?: "recorded" | "declined" | "not_required" | "pending";
+  consequenceLabel?: string;
+};
+
+export function resolveArSmsEvidenceSummary(metadata: AppointmentMetadata): ArSmsEvidenceSummary {
+  const timeline = metadata.timeline || [];
+  const outcomes = listArSmsOutcomeEvents(metadata);
+  const latestPolicyDisclosed = [...outcomes]
+    .reverse()
+    .find((e) => e.type.endsWith("policy_disclosed"));
+  const latestPolicyAccepted = [...outcomes]
+    .reverse()
+    .find((e) => e.type.endsWith("policy_accepted"));
+  const latestPolicyDeclined = [...outcomes]
+    .reverse()
+    .find((e) => e.type.endsWith("policy_declined"));
+
+  const disclosed = latestPolicyDisclosed
+    ? parseArSmsOutcomeDetail(latestPolicyDisclosed.detail)
+    : null;
+  const consequenceLabel = disclosed?.evidence?.consequenceLabel;
+
+  let acceptanceStatus: ArSmsEvidenceSummary["acceptanceStatus"] = "not_required";
+  if (latestPolicyDeclined) acceptanceStatus = "declined";
+  else if (latestPolicyAccepted) acceptanceStatus = "recorded";
+  else if (latestPolicyDisclosed) acceptanceStatus = "pending";
+
+  const latestTerminal = [...outcomes]
+    .reverse()
+    .find((e) =>
+      ["cancelled", "rescheduled", "confirmed"].some((s) => e.type.endsWith(s)),
+    );
+  let customerAction: string | undefined;
+  if (latestTerminal?.type.endsWith("cancelled")) customerAction = "Cancelled by SMS";
+  else if (latestTerminal?.type.endsWith("rescheduled")) customerAction = "Rescheduled by SMS";
+  else if (latestTerminal?.type.endsWith("confirmed")) customerAction = "Confirmed by SMS";
+
+  return {
+    customerAction,
+    policyWindowLabel: disclosed?.evidence?.policyCutoffMinutes
+      ? formatPolicyWindowLabel(disclosed.evidence.policyCutoffMinutes)
+      : undefined,
+    acceptanceStatus,
+    consequenceLabel,
+  };
 }
 
 /**
@@ -147,18 +363,27 @@ export function resolveArCustomerResponseSummary(input: {
   const latest = latestOutcomeEvent(timeline);
   if (latest) {
     const fromEvent = summaryFromOutcomeEvent(latest, whenLabel, input.timezone);
-    if (fromEvent) return fromEvent;
+    if (fromEvent) {
+      return enrichListDisplay(fromEvent, {
+        timeline,
+        timezone: input.timezone,
+        startsAt: input.startsAt,
+      });
+    }
   }
 
   if (statusLower === "canceled" || statusLower === "cancelled") {
     const ev = timeline.find((e) => e.type === arSmsOutcomeTimelineType("cancelled"));
-    return {
-      kind: "cancelled",
-      label: "Cancelled by customer",
-      detailLine: `Was scheduled for ${whenLabel}`,
-      at: ev?.at,
-      reasonLine: ev ? parseArSmsOutcomeDetail(ev.detail).note : undefined,
-    };
+    return enrichListDisplay(
+      {
+        kind: "cancelled",
+        label: "Cancelled by customer",
+        detailLine: `Was scheduled for ${whenLabel}`,
+        at: ev?.at,
+        reasonLine: ev ? parseArSmsOutcomeDetail(ev.detail).note : undefined,
+      },
+      { timeline, timezone: input.timezone, startsAt: input.startsAt },
+    );
   }
 
   const cancelPending = (meta as { arCancelPending?: { requestedAt?: string } }).arCancelPending;
@@ -227,11 +452,14 @@ export function resolveArCustomerResponseSummary(input: {
     };
   }
 
-  return {
-    kind: "none",
-    label: "No response yet",
-    detailLine: undefined,
-  };
+  return enrichListDisplay(
+    {
+      kind: "none",
+      label: "No response yet",
+      detailLine: undefined,
+    },
+    { timeline, timezone: input.timezone, startsAt: input.startsAt },
+  );
 }
 
 export type ArReminderEngagementStep = {

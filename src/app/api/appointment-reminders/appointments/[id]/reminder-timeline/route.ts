@@ -52,6 +52,7 @@ export async function GET(_request: Request, { params }: Params) {
         suppressed: Boolean(meta.remindersSuppressed),
         customerResponse: engagement.customerResponse,
         customerActionHistory: engagement.customerActionHistory,
+        evidenceSummary: engagement.evidenceSummary,
         reminderEngagement: engagement.reminderEngagement,
       },
     });

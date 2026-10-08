@@ -4,7 +4,7 @@ import { getPrisma } from "@/lib/db";
 import { appendTimeline } from "@/lib/appointments/settings";
 import type { AppointmentMetadata } from "@/lib/appointments/types";
 import { arSmsOutcomeTimelineType } from "./ar-sms-customer-outcome";
-import { buildArSmsOutcomeDetail } from "./ar-sms-outcome-detail";
+import { buildArSmsOutcomeDetail, type ArSmsOutcomeEvidence } from "./ar-sms-outcome-detail";
 
 export type ArSmsRecordableOutcome =
   | "confirmed"
@@ -12,15 +12,25 @@ export type ArSmsRecordableOutcome =
   | "cancelled"
   | "reschedule_started"
   | "reschedule_requested"
-  | "rescheduled";
+  | "rescheduled"
+  | "policy_disclosed"
+  | "policy_accepted"
+  | "policy_declined"
+  | "reminder_sent"
+  | "calendar_verified";
 
 const OUTCOME_LABELS: Record<ArSmsRecordableOutcome, string> = {
   confirmed: "Customer confirmed attendance",
-  cancel_pending: "Customer requested cancellation",
-  cancelled: "Customer cancelled appointment",
+  cancel_pending: "Cancellation requested",
+  cancelled: "Appointment cancelled",
   reschedule_started: "Customer started rescheduling",
   reschedule_requested: "Customer requested reschedule",
-  rescheduled: "Customer rescheduled appointment",
+  rescheduled: "Appointment rescheduled",
+  policy_disclosed: "Cancellation policy disclosed",
+  policy_accepted: "Customer accepted policy",
+  policy_declined: "Customer declined policy",
+  reminder_sent: "Reminder sent",
+  calendar_verified: "Calendar update verified",
 };
 
 async function resolveReminderTimelineType(
@@ -50,6 +60,8 @@ export async function recordArSmsCustomerOutcome(input: {
   extraDetail?: string;
   at?: string;
   reminderTimelineType?: string;
+  label?: string;
+  evidence?: Omit<ArSmsOutcomeEvidence, "v" | "reminderTimelineType" | "note" | "newStartsAtIso">;
 }): Promise<void> {
   const prisma = getPrisma();
   const row = await prisma.voiceAppointment.findFirst({
@@ -68,11 +80,12 @@ export async function recordArSmsCustomerOutcome(input: {
     reminderTimelineType: reminderType,
     note,
     newStartsAtIso: input.newStartsAtIso,
+    evidence: input.evidence,
   });
 
   const nextMeta = appendTimeline(meta, {
     type: arSmsOutcomeTimelineType(input.outcome),
-    label: OUTCOME_LABELS[input.outcome],
+    label: input.label?.trim() || OUTCOME_LABELS[input.outcome],
     detail,
     at: input.at || new Date().toISOString(),
   });

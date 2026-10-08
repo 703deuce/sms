@@ -7,7 +7,12 @@ import type { ArAppointmentRow } from '@/lib/appointment-reminders/appointments-
 import { KeyValueRow } from '@/newui-transplant/components/app/kit'
 import { ReminderStatusPill } from '@/newui-transplant/components/appointment-reminders/reminder-status-pill'
 import { CustomerResponsePill } from '@/newui-transplant/components/appointment-reminders/customer-response-pill'
-import type { ArCustomerResponseSummary, ArReminderEngagementStep } from '@/lib/appointment-reminders/ar-sms-customer-outcome'
+import type {
+  ArCustomerActionHistoryItem,
+  ArCustomerResponseSummary,
+  ArReminderEngagementStep,
+  ArSmsEvidenceSummary,
+} from '@/lib/appointment-reminders/ar-sms-customer-outcome'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Input } from '@/newui-transplant/components/ui/input'
 import {
@@ -52,16 +57,8 @@ export function AppointmentDetailDrawer({
   const [approvalError, setApprovalError] = useState('')
   const [customerResponse, setCustomerResponse] = useState<ArCustomerResponseSummary | null>(null)
   const [reminderEngagement, setReminderEngagement] = useState<ArReminderEngagementStep[]>([])
-  const [actionHistory, setActionHistory] = useState<
-    Array<{
-      at: string
-      label: string
-      kind: string
-      reasonLine?: string
-      detailLine?: string
-      reminderTimelineType?: string
-    }>
-  >([])
+  const [actionHistory, setActionHistory] = useState<ArCustomerActionHistoryItem[]>([])
+  const [evidenceSummary, setEvidenceSummary] = useState<ArSmsEvidenceSummary | null>(null)
 
   const loadDetail = useCallback(async () => {
     if (!row?.id) return
@@ -94,7 +91,8 @@ export function AppointmentDetailDrawer({
       setTimeline(merged.length ? merged : apptJson?.data?.reminderSchedule || [])
       setCustomerResponse((tlJson?.data?.customerResponse as ArCustomerResponseSummary) ?? row.customerResponse)
       setReminderEngagement((tlJson?.data?.reminderEngagement as ArReminderEngagementStep[]) || [])
-      setActionHistory((tlJson?.data?.customerActionHistory as typeof actionHistory) || [])
+      setActionHistory((tlJson?.data?.customerActionHistory as ArCustomerActionHistoryItem[]) || [])
+      setEvidenceSummary((tlJson?.data?.evidenceSummary as ArSmsEvidenceSummary) || null)
       setPhoneEdit(row.phone || '')
     } finally {
       setLoading(false)
@@ -230,6 +228,40 @@ export function AppointmentDetailDrawer({
                 </p>
               ) : (
                 <div className="space-y-6">
+                  {customerResponse && customerResponse.kind !== 'none' ? (
+                    <section className="rounded-lg border bg-muted/20 px-4 py-3">
+                      <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Customer action
+                      </h2>
+                      <dl className="space-y-2 text-sm">
+                        {evidenceSummary?.customerAction ? (
+                          <KeyValueRow label="Channel" value={evidenceSummary.customerAction} />
+                        ) : (
+                          <KeyValueRow label="Outcome" value={customerResponse.label} />
+                        )}
+                        {evidenceSummary?.policyWindowLabel ? (
+                          <KeyValueRow label="Policy" value={evidenceSummary.policyWindowLabel} />
+                        ) : null}
+                        {evidenceSummary?.acceptanceStatus &&
+                        evidenceSummary.acceptanceStatus !== 'not_required' ? (
+                          <KeyValueRow
+                            label="Customer acceptance"
+                            value={
+                              evidenceSummary.acceptanceStatus === 'recorded'
+                                ? 'Recorded'
+                                : evidenceSummary.acceptanceStatus === 'pending'
+                                  ? 'Pending'
+                                  : 'Declined'
+                            }
+                          />
+                        ) : null}
+                        {evidenceSummary?.consequenceLabel ? (
+                          <KeyValueRow label="Consequence" value={evidenceSummary.consequenceLabel} />
+                        ) : null}
+                      </dl>
+                    </section>
+                  ) : null}
+
                   <section>
                     <h2 className="mb-3 text-sm font-semibold">Appointment details</h2>
                     <dl className="space-y-2">
@@ -364,22 +396,32 @@ export function AppointmentDetailDrawer({
                     </div>
                   </section>
 
-                  {actionHistory.length > 1 ? (
+                  {actionHistory.length > 0 ? (
                     <section>
                       <h2 className="mb-3 text-sm font-semibold">Customer action history</h2>
-                      <ol className="space-y-3 border-l border-border pl-4">
+                      <ol className="space-y-4 border-l border-border pl-4">
                         {actionHistory.map((item, i) => (
-                          <li key={`${item.at}-${i}`} className="relative text-sm">
+                          <li key={`${item.at}-${item.kind}-${i}`} className="relative text-sm">
                             <span className="absolute -left-[21px] top-1.5 size-2 rounded-full bg-border" />
                             <p className="font-medium">{item.label}</p>
+                            {item.messageText ? (
+                              <p className="mt-1 text-xs text-foreground">
+                                {item.actor === 'customer' ? 'Customer: ' : item.actor === 'transovo' ? 'Transovo: ' : ''}
+                                &ldquo;{item.messageText}&rdquo;
+                              </p>
+                            ) : null}
                             {item.detailLine ? (
                               <p className="text-xs text-muted-foreground">{item.detailLine}</p>
                             ) : null}
-                            {item.reasonLine ? (
-                              <p className="text-xs text-muted-foreground">{item.reasonLine}</p>
+                            {item.calendarResult === 'verified' ? (
+                              <p className="text-xs text-muted-foreground">Calendar update verified</p>
                             ) : null}
                             <p className="text-xs text-muted-foreground">
-                              {new Date(item.at).toLocaleString(undefined, { timeZone: tz })}
+                              {new Date(item.at).toLocaleString(undefined, {
+                                dateStyle: 'medium',
+                                timeStyle: 'short',
+                                timeZone: tz,
+                              })}
                             </p>
                           </li>
                         ))}

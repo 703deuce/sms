@@ -132,6 +132,7 @@ export async function handleAppointmentRemindersInboundBody(input: {
       replySessionId: input.replySessionId,
       body,
       letter: upper as "C" | "R" | "X",
+      providerMessageId: input.providerMessageId,
     });
     if (arReply.handled && arReply.replyText) {
       logArSmsPipeline({

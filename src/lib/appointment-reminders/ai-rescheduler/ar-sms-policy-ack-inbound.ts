@@ -23,6 +23,7 @@ import {
   markPolicyAckDeclined,
   mergePolicyAckIntoMetadata,
 } from "./ar-sms-policy-ack";
+import { recordArSmsCustomerOutcome } from "../record-ar-sms-outcome";
 
 export type ArPolicyAckInboundResult =
   | { handled: true; replyText: string }
@@ -134,6 +135,30 @@ export async function ensureArSmsPolicyWarningDelivered(input: {
     whenLabel: input.whenLabel,
     cutoffMinutes: evaluation.cutoffMinutes,
   });
+
+  await recordArSmsCustomerOutcome({
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+    replySessionId: input.replySessionId,
+    outcome: "policy_disclosed",
+    label:
+      input.action === "cancel"
+        ? "Cancellation policy disclosed"
+        : "Reschedule policy disclosed",
+    evidence: {
+      channel: "sms",
+      direction: "outbound",
+      messageText: replyText,
+      operationId: record.operationId,
+      policyFingerprint: record.policyFingerprint,
+      policyCutoffMinutes: evaluation.cutoffMinutes,
+      policyAfterCutoff: policy.afterCutoff,
+      penaltyType: policy.penaltyType,
+      consequenceLabel: evaluation.penaltySummary,
+      action: input.action,
+    },
+  });
+
   return { required: true, alreadyAccepted: false, replyText, delivered: true };
 }
 
@@ -193,6 +218,21 @@ export async function tryHandleArSmsPolicyAckInbound(input: {
       input.appointmentId,
       mergePolicyAckIntoMetadata(loaded.meta, declined),
     );
+    await recordArSmsCustomerOutcome({
+      workspaceId: input.workspaceId,
+      appointmentId: input.appointmentId,
+      replySessionId: input.replySessionId,
+      outcome: "policy_declined",
+      evidence: {
+        channel: "sms",
+        direction: "inbound",
+        messageText: input.body.trim(),
+        providerMessageId: input.providerMessageId,
+        operationId: ack.operationId,
+        policyFingerprint: ack.policyFingerprint,
+        action: ack.action,
+      },
+    });
     return {
       handled: true,
       replyText: "No problem — we'll keep your appointment as scheduled. Reply anytime if you need help.",
@@ -208,6 +248,25 @@ export async function tryHandleArSmsPolicyAckInbound(input: {
     input.appointmentId,
     mergePolicyAckIntoMetadata(loaded.meta, accepted),
   );
+  await recordArSmsCustomerOutcome({
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+    replySessionId: input.replySessionId,
+    outcome: "policy_accepted",
+    label: "Customer accepted policy",
+    evidence: {
+      channel: "sms",
+      direction: "inbound",
+      messageText: input.body.trim(),
+      providerMessageId: input.providerMessageId,
+      operationId: ack.operationId,
+      policyFingerprint: ack.policyFingerprint,
+      policyCutoffMinutes: ack.policySnapshot.cutoffMinutes,
+      penaltyType: ack.policySnapshot.penaltyType,
+      consequenceLabel: ack.policySnapshot.penaltySummary,
+      action: ack.action,
+    },
+  });
 
   if (ack.action === "cancel" && input.onCancelAccepted) {
     return { handled: true, replyText: await input.onCancelAccepted() };

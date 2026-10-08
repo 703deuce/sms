@@ -551,8 +551,11 @@ function AppointmentTableRow({
         <span className="mt-0.5 block text-xs text-muted-foreground">{row.reminder.secondaryLine}</span>
       </td>
       <td className={td}>
-        <CustomerResponsePill label={row.customerResponse.label} kind={row.customerResponse.kind} />
-        {row.customerResponse.detailLine ? (
+        <CustomerResponsePill
+          label={row.customerResponse.listDisplayLine || row.customerResponse.label}
+          kind={row.customerResponse.kind}
+        />
+        {row.customerResponse.listDisplayLine ? null : row.customerResponse.detailLine ? (
           <span className="mt-0.5 block text-xs text-muted-foreground">{row.customerResponse.detailLine}</span>
         ) : null}
         {row.customerResponse.reasonLine ? (

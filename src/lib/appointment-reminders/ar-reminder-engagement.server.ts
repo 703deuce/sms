@@ -4,9 +4,11 @@ import { getPrisma } from "@/lib/db";
 import type { AppointmentMetadata } from "@/lib/appointments/types";
 import { buildDedicatedReminderTimeline } from "@/lib/appointments/reminder-engine";
 import {
+  buildCustomerActionHistory,
   isArSmsOutcomeTimelineEvent,
   listArSmsOutcomeEvents,
   resolveArCustomerResponseSummary,
+  resolveArSmsEvidenceSummary,
   type ArReminderEngagementStep,
   type ArCustomerResponseSummary,
 } from "./ar-sms-customer-outcome";
@@ -122,27 +124,28 @@ export async function loadArReminderEngagementPayload(input: {
     }
   }
 
-  const customerActionHistory = listArSmsOutcomeEvents(input.metadata).map((ev) => {
-    const parsed = parseArSmsOutcomeDetail(ev.detail);
-    const row = resolveArCustomerResponseSummary({
-      status: input.status,
-      startsAt: input.startsAt,
-      timezone: input.timezone,
-      metadata: { timeline: [ev] },
-    });
-    return {
-      at: ev.at,
-      label: ev.label || row.label,
-      kind: row.kind,
-      reasonLine: parsed.note,
-      detailLine: row.detailLine,
-      reminderTimelineType: parsed.reminderTimelineType,
-    };
+  const reminderSentEvents = buildDedicatedReminderTimeline(input.metadata)
+    .filter((e) => e.type.includes("_sent") || e.type === "confirmation_sent")
+    .map((e) => ({
+      at: e.at,
+      label: e.label,
+      timelineType: e.type,
+    }));
+
+  const customerActionHistory = buildCustomerActionHistory({
+    metadata: input.metadata,
+    timezone: input.timezone,
+    status: input.status,
+    startsAt: input.startsAt,
+    reminderSentEvents,
   });
+
+  const evidenceSummary = resolveArSmsEvidenceSummary(input.metadata);
 
   return {
     customerResponse,
     customerActionHistory,
+    evidenceSummary,
     reminderEngagement,
     sessions: sessions.map((s) => ({
       id: s.id,
