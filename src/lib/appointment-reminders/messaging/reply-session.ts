@@ -6,7 +6,12 @@ import {
   normalizeMctbCallerE164,
 } from "@/lib/mctb/messaging/caller-e164";
 import { providerRefFromAppointment } from "@/lib/appointment-reminders/ai-rescheduler/provider-mutations";
-import { AR_REPLY_ELIGIBLE_STATES, listArEligiblePlatformSenders } from "./ar-platform-sender-pool";
+import {
+  AR_REPLY_ELIGIBLE_STATES,
+  findOccupiedArSenderIdsForConsumer,
+  listArEligiblePlatformSenders,
+  pickFirstUnoccupiedPlatformSender,
+} from "./ar-platform-sender-pool";
 
 const DEFAULT_REPLY_ELIGIBLE_MS = 21 * 24 * 60 * 60 * 1000;
 
@@ -32,6 +37,7 @@ export async function selectArOutboundPlatformSender(input: {
   consumerE164: string;
 }): Promise<ArSenderSelectionResult> {
   const prisma = getPrisma();
+  const consumer = normalizeMctbCallerE164(input.consumerE164);
 
   const existingForAppointment = await prisma.arSmsReplySession.findFirst({
     where: {
@@ -62,14 +68,23 @@ export async function selectArOutboundPlatformSender(input: {
     };
   }
 
-  // Shared Telnyx 866 platform sender — same outbound identity as MCTB; never “occupied” for another product.
-  const sender = senders[0]!;
+  const occupied = await findOccupiedArSenderIdsForConsumer(consumer);
+  const picked = pickFirstUnoccupiedPlatformSender(senders, occupied);
+  if (picked) {
+    return {
+      ok: true,
+      phoneNumberId: picked.phoneNumberId,
+      e164: picked.e164,
+      provider: picked.provider,
+      reusedExistingAppointmentSender: false,
+    };
+  }
+
   return {
-    ok: true,
-    phoneNumberId: sender.phoneNumberId,
-    e164: sender.e164,
-    provider: sender.provider,
-    reusedExistingAppointmentSender: false,
+    ok: false,
+    reason: "ar_sender_pool_exhausted",
+    pendingSendReason:
+      "This customer already has active appointment reminder conversations on all platform senders. Delay the reminder or wait for a reply window to expire.",
   };
 }
 
@@ -82,7 +97,7 @@ export async function claimArReplySessionForOutbound(input: {
   provider: string;
   timelineType: string;
   conversationId?: string | null;
-}): Promise<{ sessionId: string }> {
+}): Promise<{ sessionId: string } | { collision: true; ownerAppointmentId: string }> {
   const prisma = getPrisma();
   const consumer = normalizeMctbCallerE164(input.consumerE164);
   const replyEligibleUntil = arReplyEligibleUntilFromNow();
@@ -108,7 +123,9 @@ export async function claimArReplySessionForOutbound(input: {
   const providerCalendarId = providerRef?.providerCalendarId ?? null;
   const calendarProvider = providerRef?.provider ?? null;
 
-  const result = await prisma.$transaction(async (tx) => {
+  type ClaimTxResult = { sessionId: string } | { collision: true; ownerAppointmentId: string };
+
+  const result: ClaimTxResult = await prisma.$transaction(async (tx) => {
     const existingApptSession = await tx.arSmsReplySession.findFirst({
       where: {
         workspaceId: input.workspaceId,
@@ -129,16 +146,17 @@ export async function claimArReplySessionForOutbound(input: {
       return { sessionId: updated.id };
     }
 
-    // Prior reminder sessions for this customer on the shared platform sender are superseded by the latest send.
-    await tx.arSmsReplySession.updateMany({
+    const foreignOnSender = await tx.arSmsReplySession.findFirst({
       where: {
         consumerE164: consumer,
         platformPhoneNumberId: input.platformPhoneNumberId,
         lifecycleState: { in: [...AR_REPLY_ELIGIBLE_STATES] },
         NOT: { appointmentId: input.appointmentId },
       },
-      data: { lifecycleState: "EXPIRED", completedAt: new Date() },
     });
+    if (foreignOnSender) {
+      return { collision: true as const, ownerAppointmentId: foreignOnSender.appointmentId };
+    }
 
     const created = await tx.arSmsReplySession.create({
       data: {
@@ -161,6 +179,9 @@ export async function claimArReplySessionForOutbound(input: {
     return { sessionId: created.id };
   });
 
+  if ("collision" in result && result.collision) {
+    return { collision: true, ownerAppointmentId: result.ownerAppointmentId };
+  }
   return { sessionId: result.sessionId };
 }
 

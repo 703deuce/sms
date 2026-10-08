@@ -1,10 +1,12 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
-import { isPlatformMctbSenderPhoneRecord } from "@/lib/messaging/compliance/phone-number-class";
+import {
+  isPlatformMctbSenderPhoneRecord,
+  isPreservedTwilioPlatformMctbSenderRecord,
+} from "@/lib/messaging/compliance/phone-number-class";
 import { normalizeMctbCallerE164 } from "@/lib/mctb/messaging/caller-e164";
 import { resolveCanonicalMctbPlatformSender } from "@/lib/mctb/messaging/platform-sender-config";
-import { findActivePlatformSenderIdsForConsumer } from "@/lib/mctb/messaging/platform-sender-assignment";
 import { isPhoneAuthorizedForOutboundSms } from "@/lib/mctb/messaging/outbound-sms-route";
 
 import {
@@ -22,8 +24,8 @@ const AR_REPLY_ELIGIBLE_STATES = [
 ] as const;
 
 /**
- * Appointment Reminders always use the same canonical Telnyx platform toll-free (866)
- * as Missed Call Text Back — never Twilio or a secondary sender pool.
+ * Telnyx 866 (canonical platform sender) first; preserved Twilio platform sender as overflow
+ * when the same customer already has a reply-eligible AR conversation on Telnyx.
  */
 export async function listArEligiblePlatformSenders(): Promise<ArPlatformSenderCandidate[]> {
   const configuredIds = (process.env.AR_PLATFORM_SENDER_PHONE_NUMBER_IDS || "")
@@ -31,59 +33,78 @@ export async function listArEligiblePlatformSenders(): Promise<ArPlatformSenderC
     .map((s) => s.trim())
     .filter(Boolean);
 
+  const candidates: ArPlatformSenderCandidate[] = [];
+
   const canonical = await resolveCanonicalMctbPlatformSender();
-  if (!canonical?.e164) {
-    return [];
+  if (canonical?.e164 && String(canonical.provider || "").toLowerCase() === "telnyx") {
+    if (!configuredIds.length || configuredIds.includes(canonical.phoneNumberId)) {
+      const auth = await isPhoneAuthorizedForOutboundSms(canonical.phoneNumberId);
+      if (auth.allowed) {
+        candidates.push({
+          phoneNumberId: canonical.phoneNumberId,
+          e164: canonical.e164,
+          workspaceId: canonical.workspaceId,
+          provider: "telnyx",
+          priority: 1,
+        });
+      }
+    }
   }
 
-  const provider = String(canonical.provider || "").toLowerCase();
-  if (provider !== "telnyx") {
-    return [];
+  const prisma = getPrisma();
+  const rows = await prisma.phoneNumber.findMany({
+    where: { status: "Active" },
+    select: { id: true, e164: true, workspaceId: true, provider: true, settingsJson: true },
+    take: 80,
+  });
+
+  for (const row of rows) {
+    if (!row.e164) continue;
+    if (!isPreservedTwilioPlatformMctbSenderRecord({ settingsJson: row.settingsJson })) {
+      continue;
+    }
+    if (configuredIds.length && !configuredIds.includes(row.id)) continue;
+    const auth = await isPhoneAuthorizedForOutboundSms(row.id);
+    if (!auth.allowed) continue;
+    candidates.push({
+      phoneNumberId: row.id,
+      e164: row.e164,
+      workspaceId: row.workspaceId,
+      provider: "twilio",
+      priority: 2,
+    });
   }
 
-  if (configuredIds.length && !configuredIds.includes(canonical.phoneNumberId)) {
-    return [];
-  }
-
-  const auth = await isPhoneAuthorizedForOutboundSms(canonical.phoneNumberId);
-  if (!auth.allowed) {
-    return [];
-  }
-
-  return [
-    {
-      phoneNumberId: canonical.phoneNumberId,
-      e164: canonical.e164,
-      workspaceId: canonical.workspaceId,
-      provider: "telnyx",
-      priority: 1,
-    },
-  ];
+  const seen = new Set<string>();
+  return candidates
+    .filter((c) => {
+      if (seen.has(c.phoneNumberId)) return false;
+      seen.add(c.phoneNumberId);
+      return true;
+    })
+    .sort((a, b) => a.priority - b.priority);
 }
 
+/** Platform senders with an active, outbound-initiated AR reply session for this customer. */
 export async function findOccupiedArSenderIdsForConsumer(consumerE164: string): Promise<Set<string>> {
   const prisma = getPrisma();
   const consumer = normalizeMctbCallerE164(consumerE164);
+  const now = new Date();
   const rows = await prisma.arSmsReplySession.findMany({
     where: {
       consumerE164: consumer,
       lifecycleState: { in: [...AR_REPLY_ELIGIBLE_STATES] },
+      OR: [{ replyEligibleUntil: null }, { replyEligibleUntil: { gt: now } }],
+      AND: {
+        OR: [
+          { lastOutboundProviderMessageId: { not: null } },
+          { lastOutboundMessageId: { not: null } },
+        ],
+      },
     },
-    select: { platformPhoneNumberId: true, appointmentId: true },
+    select: { platformPhoneNumberId: true },
   });
   return new Set(rows.map((r) => r.platformPhoneNumberId));
-}
-
-/** Senders occupied by active AR sessions or active MCTB platform assignments for this consumer. */
-export async function findOccupiedPlatformSenderIdsForConsumer(
-  consumerE164: string,
-): Promise<Set<string>> {
-  const consumer = normalizeMctbCallerE164(consumerE164);
-  const [arOccupied, mctbOccupied] = await Promise.all([
-    findOccupiedArSenderIdsForConsumer(consumer),
-    findActivePlatformSenderIdsForConsumer(consumer),
-  ]);
-  return new Set([...arOccupied, ...mctbOccupied]);
 }
 
 export { pickFirstUnoccupiedPlatformSender } from "./ar-platform-sender-selection";

@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { PlatformInboundDestination } from "@/lib/messaging/platform-inbound-destination";
+import { resolveArInboundFromOutboundInitiatedConversation } from "@/lib/appointment-reminders/messaging/resolve-initiated-ar-inbound";
 import { handlePlatformSenderComplianceInbound } from "@/lib/mctb/messaging/platform-inbound-boundary";
 import { logPlatformInboundResolution } from "@/lib/mctb/messaging/platform-inbound-tenant-resolution";
 import { acceptMctbInboundSmsIngress } from "@/lib/mctb/messaging/inbound-sms-ingress";
@@ -10,7 +11,6 @@ import {
   touchPlatformSenderAssignment,
 } from "@/lib/mctb/messaging/platform-sender-assignment";
 import { acceptArInboundSmsIngress } from "@/lib/appointment-reminders/messaging/inbound-sms-ingress";
-import { findReplyEligibleArSessionsForInbound } from "@/lib/appointment-reminders/messaging/reply-session";
 import { getPrisma } from "@/lib/db";
 
 export type PlatformSmsInboundDispatchResolution =
@@ -25,8 +25,9 @@ export type PlatformSmsInboundDispatchResolution =
   | "held_unrouted";
 
 /**
- * Deterministic shared-platform SMS ingress.
- * Routes only on persisted product-scoped assignments/sessions — never on message body or recency heuristics.
+ * Shared platform SMS ingress.
+ * Appointment Reminders: match only outbound-initiated AR conversations (customer + platform sender).
+ * MCTB: independent call-forwarding/consent workflow when no AR match.
  */
 export async function dispatchSharedPlatformSmsInbound(input: {
   channel: "twilio" | "telnyx";
@@ -65,72 +66,18 @@ export async function dispatchSharedPlatformSmsInbound(input: {
     throw new Error("platform_inbound_missing_provider_message_id");
   }
 
-  const arSessions = await findReplyEligibleArSessionsForInbound({
+  const arMatch = await resolveArInboundFromOutboundInitiatedConversation({
     consumerE164: input.fromE164,
     platformPhoneNumberId: input.destination.phoneNumberId,
   });
 
-  const mctbAssignments = await findActivePlatformSenderAssignments({
-    consumerE164: input.fromE164,
-    platformPhoneNumberId: input.destination.phoneNumberId,
-  });
-
-  const arWorkspaceIds = [...new Set(arSessions.map((s) => s.workspaceId))];
-  const mctbWorkspaceIds = [...new Set(mctbAssignments.map((a) => a.workspaceId))];
-
-  const arEligible = arSessions.length === 1 ? arSessions[0]! : null;
-  const arAmbiguous = arSessions.length > 1;
-  const mctbEligible = mctbAssignments.length === 1 ? mctbAssignments[0]! : null;
-  const mctbAmbiguous = mctbAssignments.length > 1;
-
-  if (arAmbiguous || mctbAmbiguous) {
-    logPlatformInboundResolution({
-      event: "ambiguous_platform_reply",
-      channel: input.channel,
-      fromE164: input.fromE164,
-      arWorkspaceIds,
-      mctbWorkspaceIds,
-    });
-    await recordHeldPlatformInbound({
-      channel: input.channel,
-      destination: input.destination,
-      providerMessageId: input.providerMessageId,
-      fromE164: input.fromE164,
-      body: input.body,
-      reason: arAmbiguous ? "ambiguous_ar_sessions" : "ambiguous_mctb_assignments",
-      arSessions,
-      mctbAssignments,
-    });
-    return { resolution: "ambiguous_platform_reply" };
-  }
-
-  if (arEligible && mctbEligible) {
-    logPlatformInboundResolution({
-      event: "ambiguous_cross_product_reply",
-      channel: input.channel,
-      fromE164: input.fromE164,
-      arWorkspaceId: arEligible.workspaceId,
-      mctbWorkspaceId: mctbEligible.workspaceId,
-    });
-    await recordHeldPlatformInbound({
-      channel: input.channel,
-      destination: input.destination,
-      providerMessageId: input.providerMessageId,
-      fromE164: input.fromE164,
-      body: input.body,
-      reason: "cross_product_active_context",
-      arSessions: [arEligible],
-      mctbAssignments: [mctbEligible],
-    });
-    return { resolution: "ambiguous_cross_product_reply" };
-  }
-
-  if (arEligible) {
+  if (arMatch.status === "matched") {
+    const session = arMatch.session;
     await acceptArInboundSmsIngress({
-      workspaceId: arEligible.workspaceId,
-      contactId: arEligible.contactId,
-      replySessionId: arEligible.id,
-      appointmentId: arEligible.appointmentId,
+      workspaceId: session.workspaceId,
+      contactId: session.contactId,
+      replySessionId: session.id,
+      appointmentId: session.appointmentId,
       from: input.fromE164,
       to: input.destination.e164,
       body: input.body,
@@ -138,11 +85,73 @@ export async function dispatchSharedPlatformSmsInbound(input: {
       providerMessageId: input.providerMessageId,
       mediaUrls: input.mediaUrls ?? null,
     });
+    logPlatformInboundResolution({
+      event: "ar_platform_reply_resolved",
+      channel: input.channel,
+      fromE164: input.fromE164,
+      workspaceId: session.workspaceId,
+      appointmentId: session.appointmentId,
+      replySessionId: session.id,
+    });
     return {
       product: "appointment_reminders",
       resolution: "ar_platform_reply_resolved",
-      workspaceId: arEligible.workspaceId,
+      workspaceId: session.workspaceId,
     };
+  }
+
+  if (arMatch.status === "ambiguous") {
+    logPlatformInboundResolution({
+      event: "ambiguous_ar_initiated_conversations",
+      channel: input.channel,
+      fromE164: input.fromE164,
+      sessionCount: arMatch.sessions.length,
+      workspaceIds: [...new Set(arMatch.sessions.map((s) => s.workspaceId))],
+    });
+    await recordHeldPlatformInbound({
+      channel: input.channel,
+      destination: input.destination,
+      providerMessageId: input.providerMessageId,
+      fromE164: input.fromE164,
+      body: input.body,
+      reason: "ambiguous_ar_initiated_conversations",
+      arSessions: arMatch.sessions.map((s) => ({
+        id: s.id,
+        workspaceId: s.workspaceId,
+        appointmentId: s.appointmentId,
+        conversationId: s.conversationId,
+      })),
+      mctbAssignments: [],
+    });
+    return { resolution: "ambiguous_platform_reply" };
+  }
+
+  const mctbAssignments = await findActivePlatformSenderAssignments({
+    consumerE164: input.fromE164,
+    platformPhoneNumberId: input.destination.phoneNumberId,
+  });
+
+  const mctbEligible = mctbAssignments.length === 1 ? mctbAssignments[0]! : null;
+  const mctbAmbiguous = mctbAssignments.length > 1;
+
+  if (mctbAmbiguous) {
+    logPlatformInboundResolution({
+      event: "ambiguous_platform_reply",
+      channel: input.channel,
+      fromE164: input.fromE164,
+      mctbWorkspaceIds: [...new Set(mctbAssignments.map((a) => a.workspaceId))],
+    });
+    await recordHeldPlatformInbound({
+      channel: input.channel,
+      destination: input.destination,
+      providerMessageId: input.providerMessageId,
+      fromE164: input.fromE164,
+      body: input.body,
+      reason: "ambiguous_mctb_assignments",
+      arSessions: [],
+      mctbAssignments,
+    });
+    return { resolution: "ambiguous_platform_reply" };
   }
 
   if (mctbEligible) {
