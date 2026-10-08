@@ -18,10 +18,12 @@ Assignments are **durable** — not released when an appointment cancels (late �
 ## Outbound reminder flow
 
 1. `selectArOutboundPlatformSender` → `allocateArPlatformSenderForReminder`
-2. Reuse row for `(workspaceId, consumer)` if present and sender still authorized.
-3. Else pick lowest-priority eligible Telnyx/Twilio platform sender **not** assigned to another workspace for this customer.
-4. Create assignment in a **transaction**; unique constraints resolve concurrent first-send races.
-5. If no sender available → **do not send** (`ar_sender_pool_exhausted`); provision more numbers or retry later.
+2. **Materialize legacy reply-session pairs** for this customer into the assignment table (migration safety).
+3. Reuse row for `(workspaceId, consumer)` if present and sender still authorized.
+4. Else pick lowest-priority eligible Telnyx/Twilio platform sender **not** assigned to another workspace for this customer (assignments **and** legacy sessions).
+5. Create assignment in a **transaction**; on conflict, **retry next sender** (do not report pool exhausted while candidates remain).
+6. If assigned sender becomes unauthorized → **do not rotate** (`ar_assigned_sender_unavailable`); inbound still uses assignment/legacy owner.
+7. If no conflict-free sender → **do not send** (`ar_sender_pool_exhausted`).
 
 Legacy reply sessions without assignment rows are backfilled via `ensureArConsumerPlatformSenderAssignment` on reuse.
 

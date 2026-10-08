@@ -45,6 +45,9 @@ export async function selectArOutboundPlatformSender(input: {
   if (allocated.ok) {
     return allocated;
   }
+  if (allocated.reason === "ar_assigned_sender_unavailable") {
+    return allocated;
+  }
 
   const persistentSender = await prisma.arSmsReplySession.findFirst({
     where: {
