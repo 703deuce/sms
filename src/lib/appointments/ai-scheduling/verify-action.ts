@@ -1,6 +1,7 @@
 import "server-only";
 
 import { openAiChatCompletion } from "@/lib/ai/openai";
+import { arAiReschedulerModelOptions } from "@/lib/appointment-reminders/ai-rescheduler/model";
 import { WRITE_VERIFIER_SYSTEM_PROMPT } from "./prompts";
 import {
   validateWriteActionVerdict,
@@ -43,6 +44,7 @@ export async function verifyWriteAction(input: {
     const raw = await openAiChatCompletion(WRITE_VERIFIER_SYSTEM_PROMPT, user, {
       temperature: 0,
       maxTokens: 80,
+      ...arAiReschedulerModelOptions(),
     });
     if (!raw) {
       return conservativeVerdict(input);

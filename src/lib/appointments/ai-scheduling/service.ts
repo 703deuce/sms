@@ -136,7 +136,31 @@ export async function handleAppointmentAIRequest(
 
   const hinted = applyStateHintsToUnderstanding(emptyUnderstanding(input.message), ctx.conversationState);
 
-  const { understanding, fallbackUsed, modelFailure } = await runUnderstandingAgent(ctx, hinted);
+  let understanding: UnderstandingResult;
+  let fallbackUsed: boolean;
+  let modelFailure: boolean;
+  try {
+    const understood = await runUnderstandingAgent(ctx, hinted);
+    understanding = understood.understanding;
+    fallbackUsed = understood.fallbackUsed;
+    modelFailure = understood.modelFailure;
+  } catch (err) {
+    if (ctx.strictSessionBinding) {
+      const msg =
+        err instanceof Error && err.message.startsWith("ar_ai_rescheduler")
+          ? "Our scheduling assistant is temporarily unavailable. Please try again in a few minutes or call the business."
+          : "Something went wrong while processing your message. Please try again.";
+      return {
+        type: "MESSAGE",
+        message: msg,
+        requiresFollowUp: true,
+        requiresConfirmation: false,
+        requiresBookingDetails: false,
+        presentationPhases,
+      };
+    }
+    throw err;
+  }
   presentationPhases.push("checking_availability");
 
   let outcome = await resolveAppointmentIntent(ctx, understanding);

@@ -5,7 +5,11 @@ import {
 } from "@/lib/products/access-cookie";
 import { productAccessDeniedRedirect } from "@/lib/products/access-guards";
 import { isMctbAppPath, isVoiceProductPath } from "@/lib/products/voice-routes";
-import { isMctbV1Primary } from "@/lib/workspace/platform-launch";
+import {
+  appointmentRemindersCustomerLandingPath,
+  isMctbCustomerUiPathIncludingLegacyVoice,
+} from "@/lib/products/mctb-launch-gate";
+import { isAppointmentRemindersV1Primary, isMctbV1Primary } from "@/lib/workspace/platform-launch";
 import { publicRedirectUrl } from "@/lib/integrations/framework/app-url";
 import {
   isBusinessOnlyPath,
@@ -251,6 +255,9 @@ export async function middleware(request: NextRequest) {
       return siteRedirect(request, `/api/products/open?product=${product}`);
     }
     if (product === "mctb") {
+      if (isAppointmentRemindersV1Primary()) {
+        return siteRedirect(request, appointmentRemindersCustomerLandingPath());
+      }
       const stage2 =
         process.env.NEXT_PUBLIC_NEWUI_SHELL !== "0" &&
         process.env.NEXT_PUBLIC_NEWUI_STAGE2 !== "0";
@@ -265,14 +272,29 @@ export async function middleware(request: NextRequest) {
     if (launchCount === 1) {
       return siteRedirect(request, hasVoice ? "/dashboard" : "/personal");
     }
+    if (isAppointmentRemindersV1Primary()) {
+      return siteRedirect(request, appointmentRemindersCustomerLandingPath());
+    }
     return siteRedirect(request, "/app");
   }
 
   if (session && !isPublic) {
     if (
+      isAppointmentRemindersV1Primary() &&
+      !pathname.startsWith("/admin") &&
+      !pathname.startsWith("/api/") &&
+      isMctbCustomerUiPathIncludingLegacyVoice(pathname)
+    ) {
+      return siteRedirect(request, appointmentRemindersCustomerLandingPath());
+    }
+
+    if (
       pathname === "/onboarding/mctb" ||
       pathname.startsWith("/onboarding/mctb/")
     ) {
+      if (isAppointmentRemindersV1Primary()) {
+        return siteRedirect(request, appointmentRemindersCustomerLandingPath());
+      }
       const stage2 =
         process.env.NEXT_PUBLIC_NEWUI_SHELL !== "0" &&
         process.env.NEXT_PUBLIC_NEWUI_STAGE2 !== "0";

@@ -10,13 +10,12 @@ import { resolveCanonicalMctbPlatformSender } from "@/lib/mctb/messaging/platfor
 import { findActivePlatformSenderIdsForConsumer } from "@/lib/mctb/messaging/platform-sender-assignment";
 import { isPhoneAuthorizedForOutboundSms } from "@/lib/mctb/messaging/outbound-sms-route";
 
-export type ArPlatformSenderCandidate = {
-  phoneNumberId: string;
-  e164: string;
-  workspaceId: string;
-  provider: "telnyx" | "twilio";
-  priority: number;
-};
+import {
+  pickFirstUnoccupiedPlatformSender,
+  type ArPlatformSenderCandidate,
+} from "./ar-platform-sender-selection";
+
+export type { ArPlatformSenderCandidate };
 
 const AR_REPLY_ELIGIBLE_STATES = [
   "AWAITING_REPLY",
@@ -111,5 +110,7 @@ export async function findOccupiedPlatformSenderIdsForConsumer(
   ]);
   return new Set([...arOccupied, ...mctbOccupied]);
 }
+
+export { pickFirstUnoccupiedPlatformSender } from "./ar-platform-sender-selection";
 
 export { AR_REPLY_ELIGIBLE_STATES };

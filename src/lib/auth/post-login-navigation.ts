@@ -1,7 +1,13 @@
 import { normalizeMctbOnboardingPostLoginPath } from "@/lib/mctb/onboarding/entry-path";
 import { normalizeAppointmentsPostLoginPath } from "@/lib/products/appointments-home-redirect";
-import { mctbShellHome } from "@/lib/products/product-shell";
-import { isMctbV1Primary } from "@/lib/workspace/platform-launch";
+import {
+  appointmentRemindersProductShellHome,
+  mctbShellHome,
+} from "@/lib/products/product-shell";
+import {
+  isAppointmentRemindersV1Primary,
+  isMctbV1Primary,
+} from "@/lib/workspace/platform-launch";
 
 /** Client-side navigation after login/signup — API routes need full page loads. */
 export function navigateAfterAuth(
@@ -19,7 +25,9 @@ export function navigateAfterAuth(
 
 /** Paths safe for client router.push (not API routes or auth pages). */
 export function defaultAuthLandingPath(): string {
-  return isMctbV1Primary() ? mctbShellHome() : "/dashboard";
+  if (isAppointmentRemindersV1Primary()) return appointmentRemindersProductShellHome();
+  if (isMctbV1Primary()) return mctbShellHome();
+  return "/dashboard";
 }
 
 export function clientSafeNextPath(path: string | null | undefined, fallback?: string): string {

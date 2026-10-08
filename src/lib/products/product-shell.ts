@@ -8,6 +8,7 @@ import { isAppointmentsMessagesPath } from "@/lib/products/appointments-messages
 import {
   isSmsOnlyAppNav,
   isAppointmentsV1Primary,
+  isAppointmentRemindersV1Primary,
   isMctbV1Primary,
   isSmsStandaloneHidden,
 } from "@/lib/workspace/platform-launch";
@@ -203,12 +204,13 @@ export function defaultProductShell(input: {
   hasAiAfterHours?: boolean;
   hasAppointmentReminders?: boolean;
 }): ProductShell {
+  if (isAppointmentRemindersV1Primary()) return "appointment_reminders";
   if (isMctbV1Primary() && input.hasMctb) return "mctb";
   if (isAppointmentsV1Primary()) return "appointments";
   if (input.hasMassSms) return "mass_sms";
   if (input.hasAiAfterHours && isVoiceProductCustomerVisible()) return "ai_after_hours";
   if (input.hasMctb) return "mctb";
-  return "appointments";
+  return "appointment_reminders";
 }
 
 export function shellHomePath(shell: ProductShell): string {
@@ -241,6 +243,10 @@ export type ProductShellEntitlementInput = {
 
 /** Product shells shown in the switcher for the current launch configuration. */
 export function visibleProductShells(input: ProductShellEntitlementInput): ProductShell[] {
+  if (isAppointmentRemindersV1Primary()) {
+    return ["appointment_reminders"];
+  }
+
   if (isAppointmentsV1Primary()) {
     const shells: ProductShell[] = ["appointments"];
     if (input.hasMctb) shells.push("mctb");
@@ -265,6 +271,7 @@ export function visibleProductShells(input: ProductShellEntitlementInput): Produ
 
 export function shouldShowProductSwitcher(input: ProductShellEntitlementInput): boolean {
   if (isSmsOnlyAppNav()) return false;
+  if (isAppointmentRemindersV1Primary()) return false;
   if (isAppointmentsV1Primary()) return false;
   return visibleProductShells(input).length >= 2;
 }

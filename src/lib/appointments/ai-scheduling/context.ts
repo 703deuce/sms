@@ -42,6 +42,8 @@ export type AppointmentAiContext = {
     locationIds: Set<string>;
     appointmentIds: Set<string>;
   };
+  /** Platform AR SMS: do not fall back to heuristic understanding when the model fails. */
+  strictSessionBinding?: boolean;
 };
 
 export async function assembleAppointmentAiContext(input: {
@@ -130,6 +132,7 @@ export async function assembleAppointmentAiContext(input: {
   const locationIds = new Set<string>(locations.map((l: DbRow) => String(l.id)));
   const appointmentIds = new Set<string>(customerAppointments.map((a) => String(a.id)));
 
+  let strictSessionBinding = false;
   if (input.lockedAppointmentId && customerAppointments.some((a) => a.id === input.lockedAppointmentId)) {
     conversationState = {
       ...(conversationState || { updatedAt: new Date().toISOString() }),
@@ -139,6 +142,7 @@ export async function assembleAppointmentAiContext(input: {
     };
     appointmentIds.clear();
     appointmentIds.add(input.lockedAppointmentId);
+    strictSessionBinding = true;
   }
 
   return {
@@ -166,6 +170,7 @@ export async function assembleAppointmentAiContext(input: {
       locationIds,
       appointmentIds,
     },
+    strictSessionBinding,
   };
 }
 

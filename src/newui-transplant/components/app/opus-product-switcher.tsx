@@ -52,7 +52,7 @@ function useOpusProductShell(hasMctb: boolean, hasAppointmentReminders: boolean,
   const fromPath = useMemo(() => resolveProductShellFromPath(pathname), [pathname])
   const entitlement = { hasMctb, hasMassSms: false, hasAiAfterHours, hasAppointmentReminders }
   const [shell, setShellState] = useState<ProductShell>(() =>
-    fromPath ?? readStoredProductShell() ?? (hasMctb ? 'mctb' : 'appointment_reminders'),
+    fromPath ?? readStoredProductShell() ?? 'appointment_reminders',
   )
 
   useEffect(() => {

@@ -10,6 +10,7 @@ import {
   AR_REPLY_ELIGIBLE_STATES,
   listArEligiblePlatformSenders,
   findOccupiedPlatformSenderIdsForConsumer,
+  pickFirstUnoccupiedPlatformSender,
 } from "./ar-platform-sender-pool";
 
 const DEFAULT_REPLY_ELIGIBLE_MS = 21 * 24 * 60 * 60 * 1000;
@@ -67,17 +68,15 @@ export async function selectArOutboundPlatformSender(input: {
   }
 
   const occupied = await findOccupiedPlatformSenderIdsForConsumer(consumer);
-
-  for (const sender of senders) {
-    if (!occupied.has(sender.phoneNumberId)) {
-      return {
-        ok: true,
-        phoneNumberId: sender.phoneNumberId,
-        e164: sender.e164,
-        provider: sender.provider,
-        reusedExistingAppointmentSender: false,
-      };
-    }
+  const picked = pickFirstUnoccupiedPlatformSender(senders, occupied);
+  if (picked) {
+    return {
+      ok: true,
+      phoneNumberId: picked.phoneNumberId,
+      e164: picked.e164,
+      provider: picked.provider,
+      reusedExistingAppointmentSender: false,
+    };
   }
 
   return {

@@ -11,6 +11,7 @@ import {
   type UnderstandingResult,
 } from "./schema";
 import { parseUnderstandingFallback } from "./understand-fallback";
+import { arAiReschedulerModelOptions } from "@/lib/appointment-reminders/ai-rescheduler/model";
 
 export async function runUnderstandingAgent(
   ctx: AppointmentAiContext,
@@ -35,14 +36,22 @@ ${UNDERSTANDING_JSON_SCHEMA}`;
     .join("\n");
 
   try {
-    const raw = await openAiChatCompletion(system, user, { temperature: 0.1, maxTokens: 700 });
+    const raw = await openAiChatCompletion(system, user, {
+      temperature: 0.1,
+      maxTokens: 700,
+      ...arAiReschedulerModelOptions(),
+    });
     if (!raw) {
+      if (ctx.strictSessionBinding) {
+        throw new Error("ar_ai_rescheduler_model_unavailable");
+      }
       const fallback = parseUnderstandingFallback(ctx.message, ctx);
       return { understanding: fallback, fallbackUsed: true, modelFailure: true };
     }
 
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
+      if (ctx.strictSessionBinding) throw new Error("ar_ai_rescheduler_model_invalid_response");
       const fallback = parseUnderstandingFallback(ctx.message, ctx);
       return { understanding: fallback, fallbackUsed: true, modelFailure: true };
     }
@@ -51,11 +60,13 @@ ${UNDERSTANDING_JSON_SCHEMA}`;
     parsed.originalText = ctx.message;
     const validated = validateUnderstandingResult(parsed, ctx.scopedIds);
     if (!validated) {
+      if (ctx.strictSessionBinding) throw new Error("ar_ai_rescheduler_model_validation_failed");
       const fallback = parseUnderstandingFallback(ctx.message, ctx);
       return { understanding: fallback, fallbackUsed: true, modelFailure: true };
     }
     return { understanding: validated, fallbackUsed: false, modelFailure: false };
-  } catch {
+  } catch (err) {
+    if (ctx.strictSessionBinding) throw err;
     const fallback = parseUnderstandingFallback(ctx.message, ctx);
     return { understanding: fallback, fallbackUsed: true, modelFailure: true };
   }

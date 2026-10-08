@@ -10,11 +10,17 @@ export const VOICE_PRIMARY_LAUNCH = false;
 /** Standalone SMS platform hidden from primary nav/launcher — infrastructure preserved. */
 export const SMS_STANDALONE_HIDDEN = true;
 
-/** Legacy appointments-first chrome (superseded when MCTB V1 primary is on). */
-export const APPOINTMENTS_V1_PRIMARY = true;
+/** Legacy full Appointments scheduling chrome (not AR-only launch). */
+export const APPOINTMENTS_V1_PRIMARY = false;
 
-/** Current launch: Missed Call Text Back is the primary product experience. */
-export const MCTB_V1_PRIMARY = true;
+/**
+ * Current launch: Appointment Reminders is the only visible customer product.
+ * MCTB remains in the codebase and backend but is hidden from nav/onboarding.
+ */
+export const APPOINTMENT_REMINDERS_V1_PRIMARY = true;
+
+/** MCTB was primary during earlier launch passes — frozen while AR is visible-only. */
+export const MCTB_V1_PRIMARY = false;
 
 /** Sidebar/mobile show SMS mass marketing only — MCTB & AI After Hours hidden from chrome (routes preserved). */
 export const SMS_ONLY_APP_NAV = false;
@@ -56,12 +62,21 @@ export function isSmsOnlyAppNav(): boolean {
   return SMS_ONLY_APP_NAV;
 }
 
+export function isAppointmentRemindersV1Primary(): boolean {
+  return APPOINTMENT_REMINDERS_V1_PRIMARY;
+}
+
 export function isAppointmentsV1Primary(): boolean {
-  return APPOINTMENTS_V1_PRIMARY && !MCTB_V1_PRIMARY;
+  return APPOINTMENTS_V1_PRIMARY && !MCTB_V1_PRIMARY && !APPOINTMENT_REMINDERS_V1_PRIMARY;
 }
 
 export function isMctbV1Primary(): boolean {
-  return MCTB_V1_PRIMARY;
+  return MCTB_V1_PRIMARY && !APPOINTMENT_REMINDERS_V1_PRIMARY;
+}
+
+/** New customer MCTB onboarding is disabled during AR-only launch. */
+export function isMctbCustomerOnboardingOffered(): boolean {
+  return isMctbV1Primary();
 }
 
 /**
