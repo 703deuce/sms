@@ -42,8 +42,11 @@ assert.ok(defaultArPermissionsForRole("admin").includes("appointment_reminders.s
 assert.equal(mapSmsReminderTimelineOutcome("reminder_1440m_sent").status, "sent");
 
 async function dbSection() {
-  if (!process.env.DATABASE_URL) {
-    console.log("SKIP DB section — DATABASE_URL not set");
+  const { hydrateProdTestEnvFromCoolify } = await import("./cloud-agent/hydrate-prod-test-env");
+  hydrateProdTestEnvFromCoolify();
+  const { isSupabaseConfigured } = await import("@/lib/supabase/admin");
+  if (!process.env.DATABASE_URL && !isSupabaseConfigured()) {
+    console.log("SKIP DB section — DATABASE_URL / Supabase not configured");
     return;
   }
 

@@ -22,8 +22,13 @@ import {
 const LIMIT = 10;
 
 async function main() {
-  if (!process.env.DATABASE_URL) {
-    console.log("SKIP test-appointment-reminders-ar-billing-concurrency — DATABASE_URL not set");
+  const { isSupabaseConfigured } = await import("@/lib/supabase/admin");
+  const { hydrateProdTestEnvFromCoolify } = await import("./cloud-agent/hydrate-prod-test-env");
+  hydrateProdTestEnvFromCoolify();
+  if (!process.env.DATABASE_URL && !isSupabaseConfigured()) {
+    console.log(
+      "SKIP test-appointment-reminders-ar-billing-concurrency — DATABASE_URL / Supabase not configured",
+    );
     return;
   }
 

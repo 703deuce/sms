@@ -59,14 +59,14 @@ export function chatCompletionTokenFields(
   model: string,
   maxTokens: number,
 ): Record<string, number> {
-  if (providerId === "openai" && /^gpt-5|^o[134]/.test(model)) {
+  if (providerId === "openai" && /^gpt-[56]|^o[134]/.test(model)) {
     return { max_completion_tokens: maxTokens };
   }
   return { max_tokens: maxTokens };
 }
 
 function isOpenAiReasoningStyleModel(providerId: string, model: string): boolean {
-  return providerId === "openai" && /^gpt-5|^o[134]/.test(model);
+  return providerId === "openai" && /^gpt-[56]|^o[134]/.test(model);
 }
 
 /** Merge temperature + token limits; gpt-5/o-series only support default temperature. */
