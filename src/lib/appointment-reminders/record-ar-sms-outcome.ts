@@ -4,6 +4,7 @@ import { getPrisma } from "@/lib/db";
 import { appendTimeline } from "@/lib/appointments/settings";
 import type { AppointmentMetadata } from "@/lib/appointments/types";
 import { arSmsOutcomeTimelineType } from "./ar-sms-customer-outcome";
+import { buildArSmsOutcomeDetail } from "./ar-sms-outcome-detail";
 
 export type ArSmsRecordableOutcome =
   | "confirmed"
@@ -44,7 +45,11 @@ export async function recordArSmsCustomerOutcome(input: {
   outcome: ArSmsRecordableOutcome;
   /** ISO start time after reschedule, when applicable */
   newStartsAtIso?: string;
+  /** Human context (e.g. customer message snippet or policy note) */
+  note?: string;
   extraDetail?: string;
+  at?: string;
+  reminderTimelineType?: string;
 }): Promise<void> {
   const prisma = getPrisma();
   const row = await prisma.voiceAppointment.findFirst({
@@ -54,21 +59,22 @@ export async function recordArSmsCustomerOutcome(input: {
   if (!row) return;
 
   const meta = (row.metadata || {}) as AppointmentMetadata;
-  const reminderType = await resolveReminderTimelineType(input.workspaceId, input.replySessionId);
-  const detailParts = [
-    reminderType || "unknown_reminder",
-    input.extraDetail?.trim(),
-  ].filter(Boolean);
-  const detail =
-    input.outcome === "rescheduled" && input.newStartsAtIso
-      ? `${detailParts.join(" | ")} | ${input.newStartsAtIso}`
-      : detailParts.join(" | ");
+  const reminderType =
+    input.reminderTimelineType?.trim() ||
+    (await resolveReminderTimelineType(input.workspaceId, input.replySessionId)) ||
+    "unknown_reminder";
+  const note = input.note?.trim() || input.extraDetail?.trim();
+  const detail = buildArSmsOutcomeDetail({
+    reminderTimelineType: reminderType,
+    note,
+    newStartsAtIso: input.newStartsAtIso,
+  });
 
   const nextMeta = appendTimeline(meta, {
     type: arSmsOutcomeTimelineType(input.outcome),
     label: OUTCOME_LABELS[input.outcome],
     detail,
-    at: new Date().toISOString(),
+    at: input.at || new Date().toISOString(),
   });
 
   await prisma.voiceAppointment.update({

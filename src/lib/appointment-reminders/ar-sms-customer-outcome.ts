@@ -1,4 +1,5 @@
 import type { AppointmentMetadata, AppointmentTimelineEvent } from "@/lib/appointments/types";
+import { parseArSmsOutcomeDetail } from "./ar-sms-outcome-detail";
 
 export type ArCustomerResponseKind =
   | "none"
@@ -15,6 +16,8 @@ export type ArCustomerResponseSummary = {
   kind: ArCustomerResponseKind;
   label: string;
   detailLine?: string;
+  /** Customer message snippet or contextual note when known */
+  reasonLine?: string;
   at?: string;
 };
 
@@ -54,6 +57,49 @@ function latestOutcomeEvent(timeline: AppointmentTimelineEvent[]): AppointmentTi
   return outcomes[outcomes.length - 1]!;
 }
 
+function summaryFromOutcomeEvent(
+  ev: AppointmentTimelineEvent,
+  whenLabel: string,
+  timezone?: string | null,
+): ArCustomerResponseSummary | null {
+  const kind = kindFromOutcomeType(ev.type);
+  if (!kind) return null;
+  const parsed = parseArSmsOutcomeDetail(ev.detail);
+  const newWhen = parsed.newStartsAtIso
+    ? formatAppointmentWhen(parsed.newStartsAtIso, timezone)
+    : whenLabel;
+  const base: ArCustomerResponseSummary = {
+    kind,
+    label: ev.label || kind,
+    at: ev.at,
+    reasonLine: parsed.note,
+  };
+  switch (kind) {
+    case "confirmed":
+      return { ...base, label: "Confirmed", detailLine: `Appointment on ${whenLabel}` };
+    case "cancelled":
+      return {
+        ...base,
+        label: "Cancelled by customer",
+        detailLine: `Was scheduled for ${whenLabel}`,
+      };
+    case "cancel_pending":
+      return {
+        ...base,
+        label: "Awaiting cancel confirmation",
+        detailLine: `Appointment on ${whenLabel}`,
+      };
+    case "rescheduled":
+      return { ...base, label: "Rescheduled", detailLine: `Now ${newWhen}` };
+    case "reschedule_requested":
+      return { ...base, label: "Reschedule requested", detailLine: parsed.note || whenLabel };
+    case "reschedule_pending":
+      return { ...base, label: "Rescheduling in progress", detailLine: whenLabel };
+    default:
+      return base;
+  }
+}
+
 function kindFromOutcomeType(type: string): ArCustomerResponseKind | null {
   const suffix = type.slice(AR_SMS_OUTCOME_PREFIX.length);
   switch (suffix) {
@@ -88,62 +134,21 @@ export function resolveArCustomerResponseSummary(input: {
   const statusLower = input.status.toLowerCase();
   const whenLabel = formatAppointmentWhen(input.startsAt, input.timezone);
 
+  const latest = latestOutcomeEvent(timeline);
+  if (latest) {
+    const fromEvent = summaryFromOutcomeEvent(latest, whenLabel, input.timezone);
+    if (fromEvent) return fromEvent;
+  }
+
   if (statusLower === "canceled" || statusLower === "cancelled") {
     const ev = timeline.find((e) => e.type === arSmsOutcomeTimelineType("cancelled"));
     return {
       kind: "cancelled",
       label: "Cancelled by customer",
       detailLine: `Was scheduled for ${whenLabel}`,
-      at: ev?.at || meta.arCustomerConfirmedAt,
+      at: ev?.at,
+      reasonLine: ev ? parseArSmsOutcomeDetail(ev.detail).note : undefined,
     };
-  }
-
-  const latest = latestOutcomeEvent(timeline);
-  if (latest) {
-    const kind = kindFromOutcomeType(latest.type);
-    if (kind === "confirmed") {
-      return {
-        kind: "confirmed",
-        label: "Confirmed",
-        detailLine: `Appointment on ${whenLabel}`,
-        at: latest.at,
-      };
-    }
-    if (kind === "cancel_pending") {
-      return {
-        kind: "cancel_pending",
-        label: "Awaiting cancel confirmation",
-        detailLine: latest.detail || `Reply YES to cancel · ${whenLabel}`,
-        at: latest.at,
-      };
-    }
-    if (kind === "reschedule_pending") {
-      return {
-        kind: "reschedule_pending",
-        label: "Rescheduling in progress",
-        detailLine: latest.detail || whenLabel,
-        at: latest.at,
-      };
-    }
-    if (kind === "reschedule_requested") {
-      return {
-        kind: "reschedule_requested",
-        label: "Reschedule requested",
-        detailLine: latest.detail || whenLabel,
-        at: latest.at,
-      };
-    }
-    if (kind === "rescheduled") {
-      const newWhen = latest.detail
-        ? formatAppointmentWhen(latest.detail, input.timezone)
-        : whenLabel;
-      return {
-        kind: "rescheduled",
-        label: "Rescheduled",
-        detailLine: `Now ${newWhen}`,
-        at: latest.at,
-      };
-    }
   }
 
   const cancelPending = (meta as { arCancelPending?: { requestedAt?: string } }).arCancelPending;

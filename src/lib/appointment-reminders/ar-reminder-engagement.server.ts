@@ -7,7 +7,9 @@ import {
   isArSmsOutcomeTimelineEvent,
   resolveArCustomerResponseSummary,
   type ArReminderEngagementStep,
+  type ArCustomerResponseSummary,
 } from "./ar-sms-customer-outcome";
+import { parseArSmsOutcomeDetail } from "./ar-sms-outcome-detail";
 
 function outcomeLabelForType(type: string): string {
   if (type.endsWith("confirmed")) return "Confirmed attendance";
@@ -41,14 +43,18 @@ export function buildArReminderEngagementFromMetadata(input: {
       sendStatus: step.type.includes("failed") ? "failed" : "sent",
     };
     if (latest) {
+      const parsed = parseArSmsOutcomeDetail(latest.detail);
+      const summary = resolveArCustomerResponseSummary({
+        status: input.status,
+        startsAt: input.startsAt,
+        timezone: input.timezone,
+        metadata: { timeline: [latest] },
+      });
       engagement.customerResponse = {
-        kind: "replied",
+        ...summary,
         label: latest.label || outcomeLabelForType(latest.type),
-        detailLine: latest.detail?.includes("|")
-          ? latest.detail.split("|").slice(1).join("|").trim()
-          : undefined,
-        at: latest.at,
-      };
+        reasonLine: parsed.note || summary.reasonLine,
+      } satisfies ArCustomerResponseSummary;
     }
     return engagement;
   });

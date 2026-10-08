@@ -206,6 +206,9 @@ export function AppointmentDetailDrawer({
               {customerResponse?.detailLine ? (
                 <p className="text-xs text-muted-foreground">{customerResponse.detailLine}</p>
               ) : null}
+              {customerResponse?.reasonLine ? (
+                <p className="text-xs text-muted-foreground">{customerResponse.reasonLine}</p>
+              ) : null}
             </SheetHeader>
 
             <div className="flex-1 overflow-y-auto px-5 py-5">
@@ -371,6 +374,11 @@ export function AppointmentDetailDrawer({
                                 {step.customerResponse.detailLine ? (
                                   <p className="text-xs text-muted-foreground">
                                     {step.customerResponse.detailLine}
+                                  </p>
+                                ) : null}
+                                {step.customerResponse.reasonLine ? (
+                                  <p className="text-xs text-muted-foreground">
+                                    {step.customerResponse.reasonLine}
                                   </p>
                                 ) : null}
                                 {step.customerResponse.at ? (

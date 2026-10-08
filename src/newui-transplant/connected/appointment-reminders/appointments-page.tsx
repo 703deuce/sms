@@ -555,6 +555,11 @@ function AppointmentTableRow({
         {row.customerResponse.detailLine ? (
           <span className="mt-0.5 block text-xs text-muted-foreground">{row.customerResponse.detailLine}</span>
         ) : null}
+        {row.customerResponse.reasonLine ? (
+          <span className="mt-0.5 block text-xs text-muted-foreground line-clamp-2">
+            {row.customerResponse.reasonLine}
+          </span>
+        ) : null}
       </td>
       <td className={cn(td, 'hidden text-xs text-muted-foreground lg:table-cell')}>
         {sourceLabel(row)}
