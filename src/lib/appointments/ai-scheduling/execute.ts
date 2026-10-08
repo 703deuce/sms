@@ -172,7 +172,7 @@ async function runMutationBody(
         };
       }
 
-      if (isAiAutomaticCalendarMutation(ar)) {
+      if (providerRef && isAiAutomaticCalendarMutation(ar)) {
         const operationId = `${ctx.requestId}:reschedule:${action.appointmentId}`;
         const committed = await commitArReschedule({
           workspaceId: ctx.workspaceId,

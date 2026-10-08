@@ -177,7 +177,8 @@ export async function resolvePlatformTelnyxSmsRoute(input: {
   };
 }
 
-async function resolvePlatformMctbSenderRoute(
+/** Transovo toll-free platform sender — same identity as MCTB senderMode=PLATFORM. */
+export async function resolvePlatformMctbSenderRoute(
   customerWorkspaceId: string,
   consumerE164ForOptOutCheck?: string,
 ): Promise<MctbOutboundSmsRoute | null> {

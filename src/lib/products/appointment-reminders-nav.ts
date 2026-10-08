@@ -5,7 +5,10 @@ import {
   LayoutDashboard,
   Settings2,
   Sparkles,
+<<<<<<< HEAD
   MessageSquareWarning,
+=======
+>>>>>>> origin/master
   CreditCard,
   Building2,
   Link2,
