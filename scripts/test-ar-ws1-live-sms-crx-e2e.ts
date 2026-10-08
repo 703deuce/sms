@@ -430,11 +430,43 @@ async function sendReminderAndSession(input: {
   return { sessionId: sent.sessionId!, platformE164: picked.e164 };
 }
 
+async function routeCustomerReplyThroughPlatformDispatch(
+  platformE164: string,
+  text: string,
+  providerMessageId: string,
+) {
+  const { resolvePlatformInboundDestination } = await import(
+    "@/lib/messaging/platform-inbound-destination"
+  );
+  const { dispatchSharedPlatformSmsInbound } = await import(
+    "@/lib/messaging/platform-sms-inbound-dispatch"
+  );
+  const destination = await resolvePlatformInboundDestination(platformE164);
+  assert.ok(destination, `platform inbound destination for ${platformE164}`);
+  const routed = await dispatchSharedPlatformSmsInbound({
+    channel: "telnyx",
+    destination,
+    fromE164: CUSTOMER_E164,
+    body: text,
+    providerMessageId,
+  });
+  console.log(
+    `  [inbound] dispatch resolution=${routed.resolution} product=${routed.product ?? "—"}`,
+  );
+  assert.equal(
+    routed.resolution,
+    "ar_platform_reply_resolved",
+    `customer reply must route to Appointment Reminders, not MCTB (${routed.resolution})`,
+  );
+  assert.equal(routed.product, "appointment_reminders");
+}
+
 async function customerReply(platformE164: string, text: string) {
   const since = new Date().toISOString();
   const providerMessageId = await telnyxSend(CUSTOMER_E164, platformE164, text);
   console.log(`  [sms] customer → platform: "${text}" (id ${providerMessageId.slice(0, 12)}…)`);
-  await sleep(8000);
+  await routeCustomerReplyThroughPlatformDispatch(platformE164, text, providerMessageId);
+  await sleep(2000);
   await drainArJobs();
   await sleep(5000);
   await drainArJobs();

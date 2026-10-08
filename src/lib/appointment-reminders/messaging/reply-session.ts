@@ -185,6 +185,32 @@ export async function claimArReplySessionForOutbound(input: {
   return { sessionId: result.sessionId };
 }
 
+/**
+ * Same platform sender + customer may only have one reply-eligible appointment at a time.
+ * New reminder send supersedes older AR sessions on that sender (latest C/R/X wins).
+ */
+export async function expireSupersededArReplySessionsOnSender(input: {
+  consumerE164: string;
+  platformPhoneNumberId: string;
+  keepAppointmentId: string;
+}) {
+  const prisma = getPrisma();
+  const consumer = normalizeMctbCallerE164(input.consumerE164);
+  await prisma.arSmsReplySession.updateMany({
+    where: {
+      consumerE164: consumer,
+      platformPhoneNumberId: input.platformPhoneNumberId,
+      appointmentId: { not: input.keepAppointmentId },
+      lifecycleState: { in: [...AR_REPLY_ELIGIBLE_STATES] },
+    },
+    data: {
+      lifecycleState: "EXPIRED",
+      completedAt: new Date(),
+      lastUsedAt: new Date(),
+    },
+  });
+}
+
 export async function attachOutboundProofToArReplySession(input: {
   sessionId: string;
   workspaceId: string;

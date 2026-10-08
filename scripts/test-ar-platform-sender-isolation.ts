@@ -19,6 +19,7 @@ import { AR_ROUTES } from "../src/lib/appointment-reminders/routes";
 import {
   isAppointmentRemindersV1Primary,
   isMctbV1Primary,
+  isPlatformSharedSmsMctbInboundEnabled,
 } from "../src/lib/workspace/platform-launch";
 
 const telnyx: ArPlatformSenderCandidate = {
@@ -56,6 +57,11 @@ assert.equal(
 
 assert.ok(isAppointmentRemindersV1Primary(), "AR is V1 primary");
 assert.ok(!isMctbV1Primary(), "MCTB is not V1 primary during AR launch");
+assert.equal(
+  isPlatformSharedSmsMctbInboundEnabled(),
+  false,
+  "shared platform SMS must not route to MCTB during AR-only launch",
+);
 
 const ent = { hasMctb: true, hasMassSms: false, hasAiAfterHours: false, hasAppointmentReminders: true };
 assert.deepEqual(visibleProductShells(ent), ["appointment_reminders"]);

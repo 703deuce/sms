@@ -80,6 +80,15 @@ export function isMctbCustomerOnboardingOffered(): boolean {
 }
 
 /**
+ * Shared platform toll-free SMS may route to MCTB inbound (assignments, lead recovery).
+ * Disabled while Appointment Reminders is the only launched product — platform replies are AR-only.
+ */
+export function isPlatformSharedSmsMctbInboundEnabled(): boolean {
+  if (APPOINTMENT_REMINDERS_V1_PRIMARY) return false;
+  return MCTB_V1_PRIMARY;
+}
+
+/**
  * Personal workspace type is not offered on the current MCTB-first launch.
  * New signups and MCTB onboarding always use BUSINESS tenants.
  */

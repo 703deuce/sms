@@ -5,6 +5,7 @@ import {
   attachOutboundProofToArReplySession,
   claimArReplySessionForOutbound,
   ensureArConversation,
+  expireSupersededArReplySessionsOnSender,
   selectArOutboundPlatformSender,
 } from "./reply-session";
 import { sendAppointmentSmsViaPlatformSender } from "./send-via-assigned-sender";
@@ -32,6 +33,12 @@ export async function sendArReminderSmsWithSession(input: {
       pendingSendReason: selection.pendingSendReason,
     };
   }
+
+  await expireSupersededArReplySessionsOnSender({
+    consumerE164: input.phone,
+    platformPhoneNumberId: selection.phoneNumberId,
+    keepAppointmentId: input.appointmentId,
+  });
 
   const conversationId = await ensureArConversation({
     workspaceId: input.workspaceId,

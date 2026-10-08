@@ -129,18 +129,24 @@ export async function handleTelnyxInbound(payload: unknown) {
           where: { workspaceId: targetWorkspaceId },
         });
 
+  const { isPlatformSharedSmsMctbInboundEnabled } = await import(
+    "@/lib/workspace/platform-launch"
+  );
   const { shouldSkipInboxAwayAutoReply } = await import("@/lib/mctb/messaging/skip-inbox-away");
   const { isMctbCustomerReplyThread } = await import(
     "@/lib/agents/missed-call-text-back/customer-sms"
   );
-  const inMctbReplyThread = await isMctbCustomerReplyThread(targetWorkspaceId, parsed.from);
+  const inMctbReplyThread = isPlatformSharedSmsMctbInboundEnabled()
+    ? await isMctbCustomerReplyThread(targetWorkspaceId, parsed.from)
+    : false;
   const mctbInboundContext =
-    inMctbReplyThread ||
-    (await shouldSkipInboxAwayAutoReply({
-      workspaceId: targetWorkspaceId,
-      fromE164: parsed.from,
-      toE164: parsed.to,
-    }));
+    isPlatformSharedSmsMctbInboundEnabled() &&
+    (inMctbReplyThread ||
+      (await shouldSkipInboxAwayAutoReply({
+        workspaceId: targetWorkspaceId,
+        fromE164: parsed.from,
+        toE164: parsed.to,
+      })));
 
   const result = mctbInboundContext
     ? await (async () => {

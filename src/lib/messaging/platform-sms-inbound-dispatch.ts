@@ -4,14 +4,9 @@ import type { PlatformInboundDestination } from "@/lib/messaging/platform-inboun
 import { resolveArInboundFromOutboundInitiatedConversation } from "@/lib/appointment-reminders/messaging/resolve-initiated-ar-inbound";
 import { handlePlatformSenderComplianceInbound } from "@/lib/mctb/messaging/platform-inbound-boundary";
 import { logPlatformInboundResolution } from "@/lib/mctb/messaging/platform-inbound-tenant-resolution";
-import { acceptMctbInboundSmsIngress } from "@/lib/mctb/messaging/inbound-sms-ingress";
-import {
-  findActivePlatformSenderAssignments,
-  resolvePlatformMctbInboundReplyWithAssignment,
-  touchPlatformSenderAssignment,
-} from "@/lib/mctb/messaging/platform-sender-assignment";
 import { acceptArInboundSmsIngress } from "@/lib/appointment-reminders/messaging/inbound-sms-ingress";
 import { getPrisma } from "@/lib/db";
+import { isPlatformSharedSmsMctbInboundEnabled } from "@/lib/workspace/platform-launch";
 
 export type PlatformSmsInboundDispatchResolution =
   | "platform_reply_resolved"
@@ -25,9 +20,12 @@ export type PlatformSmsInboundDispatchResolution =
   | "held_unrouted";
 
 /**
- * Shared platform SMS ingress.
- * Appointment Reminders: match only outbound-initiated AR conversations (customer + platform sender).
- * MCTB: independent call-forwarding/consent workflow when no AR match.
+ * Shared platform SMS ingress (866 Telnyx, Twilio overflow, etc.).
+ *
+ * **Launch (AR-only):** Appointment Reminders only — match outbound-initiated AR sessions,
+ * hold ambiguous AR, otherwise unmatched. No MCTB routing on platform senders.
+ *
+ * MCTB on platform numbers is re-enabled only when `isPlatformSharedSmsMctbInboundEnabled()`.
  */
 export async function dispatchSharedPlatformSmsInbound(input: {
   channel: "twilio" | "telnyx";
@@ -66,6 +64,8 @@ export async function dispatchSharedPlatformSmsInbound(input: {
     throw new Error("platform_inbound_missing_provider_message_id");
   }
 
+  const providerMessageId = input.providerMessageId.trim();
+
   const arMatch = await resolveArInboundFromOutboundInitiatedConversation({
     consumerE164: input.fromE164,
     platformPhoneNumberId: input.destination.phoneNumberId,
@@ -82,7 +82,7 @@ export async function dispatchSharedPlatformSmsInbound(input: {
       to: input.destination.e164,
       body: input.body,
       provider: input.channel,
-      providerMessageId: input.providerMessageId,
+      providerMessageId,
       mediaUrls: input.mediaUrls ?? null,
     });
     logPlatformInboundResolution({
@@ -111,7 +111,7 @@ export async function dispatchSharedPlatformSmsInbound(input: {
     await recordHeldPlatformInbound({
       channel: input.channel,
       destination: input.destination,
-      providerMessageId: input.providerMessageId,
+      providerMessageId,
       fromE164: input.fromE164,
       body: input.body,
       reason: "ambiguous_ar_initiated_conversations",
@@ -121,107 +121,43 @@ export async function dispatchSharedPlatformSmsInbound(input: {
         appointmentId: s.appointmentId,
         conversationId: s.conversationId,
       })),
-      mctbAssignments: [],
     });
     return { resolution: "ambiguous_platform_reply" };
   }
 
-  const mctbAssignments = await findActivePlatformSenderAssignments({
-    consumerE164: input.fromE164,
-    platformPhoneNumberId: input.destination.phoneNumberId,
-  });
-
-  const mctbEligible = mctbAssignments.length === 1 ? mctbAssignments[0]! : null;
-  const mctbAmbiguous = mctbAssignments.length > 1;
-
-  if (mctbAmbiguous) {
+  if (!isPlatformSharedSmsMctbInboundEnabled()) {
     logPlatformInboundResolution({
-      event: "ambiguous_platform_reply",
+      event: "platform_reply_unmatched_appointment_reminders_only",
       channel: input.channel,
       fromE164: input.fromE164,
-      mctbWorkspaceIds: [...new Set(mctbAssignments.map((a) => a.workspaceId))],
+      toPhoneNumberId: input.destination.phoneNumberId,
     });
-    await recordHeldPlatformInbound({
-      channel: input.channel,
-      destination: input.destination,
-      providerMessageId: input.providerMessageId,
-      fromE164: input.fromE164,
-      body: input.body,
-      reason: "ambiguous_mctb_assignments",
-      arSessions: [],
-      mctbAssignments,
-    });
-    return { resolution: "ambiguous_platform_reply" };
+    return { resolution: "unmatched_platform_reply" };
   }
 
-  if (mctbEligible) {
-    await acceptMctbInboundSmsIngress({
-      workspaceId: mctbEligible.workspaceId,
-      from: input.fromE164,
-      to: input.destination.e164,
-      body: input.body,
-      provider: input.channel,
-      providerMessageId: input.providerMessageId,
-      mediaUrls: input.mediaUrls ?? null,
-    });
-    await touchPlatformSenderAssignment({
-      workspaceId: mctbEligible.workspaceId,
-      consumerE164: input.fromE164,
-      platformPhoneNumberId: input.destination.phoneNumberId,
-      conversationId: mctbEligible.conversationId,
-    }).catch(() => undefined);
-    return {
-      product: "mctb",
-      resolution: "platform_reply_resolved",
-      workspaceId: mctbEligible.workspaceId,
-    };
-  }
-
-  const legacy = await resolvePlatformMctbInboundReplyWithAssignment({
-    platformSender,
-    consumerE164: input.fromE164,
-  });
-
-  logPlatformInboundResolution({
-    event: legacy.status === "RESOLVED" ? "platform_reply_resolved" : legacy.reason,
+  const { dispatchPlatformSmsInboundToMctb } = await import(
+    "./platform-sms-inbound-dispatch-mctb"
+  );
+  return dispatchPlatformSmsInboundToMctb({
     channel: input.channel,
-    status: legacy.status,
+    destination: input.destination,
     fromE164: input.fromE164,
-    toE164: platformSender.e164,
-    resolutionSource: legacy.resolutionSource,
-    ...(legacy.status === "RESOLVED"
-      ? { workspaceId: legacy.workspaceId }
-      : legacy.status === "AMBIGUOUS"
-        ? { workspaceIds: legacy.workspaceIds }
-        : {}),
-  });
-
-  if (legacy.status !== "RESOLVED") {
-    return { resolution: legacy.reason };
-  }
-
-  await acceptMctbInboundSmsIngress({
-    workspaceId: legacy.workspaceId,
-    from: input.fromE164,
-    to: platformSender.e164,
     body: input.body,
-    provider: input.channel,
-    providerMessageId: input.providerMessageId,
+    providerMessageId,
     mediaUrls: input.mediaUrls ?? null,
+    recordHeld: async (hold) => {
+      await recordHeldPlatformInbound({
+        channel: input.channel,
+        destination: input.destination,
+        providerMessageId,
+        fromE164: input.fromE164,
+        body: input.body,
+        reason: hold.reason,
+        arSessions: [],
+        mctbAssignments: hold.mctbAssignments,
+      });
+    },
   });
-
-  await touchPlatformSenderAssignment({
-    workspaceId: legacy.workspaceId,
-    consumerE164: input.fromE164,
-    platformPhoneNumberId: platformSender.phoneNumberId,
-    conversationId: legacy.conversationId,
-  }).catch(() => undefined);
-
-  return {
-    product: "mctb",
-    resolution: "platform_reply_resolved",
-    workspaceId: legacy.workspaceId,
-  };
 }
 
 async function recordHeldPlatformInbound(input: {
@@ -237,7 +173,7 @@ async function recordHeldPlatformInbound(input: {
     appointmentId: string;
     conversationId: string | null;
   }>;
-  mctbAssignments: Array<{
+  mctbAssignments?: Array<{
     id: string;
     workspaceId: string;
     conversationId: string | null;
@@ -246,6 +182,7 @@ async function recordHeldPlatformInbound(input: {
   const { persistArInboundHeldMessage } = await import(
     "@/lib/appointment-reminders/messaging/platform-inbound-held"
   );
+  const mctbAssignments = input.mctbAssignments ?? [];
   const candidateContexts = [
     ...input.arSessions.map((s) => ({
       product: "appointment_reminders" as const,
@@ -254,7 +191,7 @@ async function recordHeldPlatformInbound(input: {
       appointmentId: s.appointmentId,
       conversationId: s.conversationId ?? undefined,
     })),
-    ...input.mctbAssignments.map((a) => ({
+    ...mctbAssignments.map((a) => ({
       product: "mctb" as const,
       workspaceId: a.workspaceId,
       assignmentId: a.id,
