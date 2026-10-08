@@ -1,3 +1,6 @@
+/** Avoid in-process `processDueJobs` competing with targeted AR drain (CRM backlog). */
+process.env.DISABLE_INPROCESS_WORKER = process.env.DISABLE_INPROCESS_WORKER ?? "1";
+
 /**
  * Live two-way SMS cert on ws_1:
  * - Platform sender → customer +15714073615 (571-407-3615) appointment reminder
@@ -587,43 +590,54 @@ async function routeCustomerReplyThroughPlatformDispatch(
   assert.equal(routed.product, "appointment_reminders");
 }
 
-async function waitForArJobDrain(maxMs = 120_000) {
+async function waitForArJobDrain(maxMs = 25_000) {
   const deadline = Date.now() + maxMs;
   let total = 0;
+  let idleStreak = 0;
   while (Date.now() < deadline) {
     const n = await drainArJobs(20);
     total += n;
-    if (n === 0) await sleep(2500);
-    else await sleep(800);
+    if (n === 0) {
+      idleStreak += 1;
+      if (idleStreak >= 5) break;
+      await sleep(400);
+    } else {
+      idleStreak = 0;
+      await sleep(300);
+    }
   }
   return total;
 }
 
 /** Claim AR jobs immediately after local dispatch (race production worker for branch code). */
-async function burstDrainArJobs(maxMs = 90_000): Promise<number> {
+async function burstDrainArJobs(maxMs = 30_000): Promise<number> {
   const deadline = Date.now() + maxMs;
   let total = 0;
+  let idleStreak = 0;
   while (Date.now() < deadline) {
     const n = await drainArJobs(30);
     total += n;
-    if (n > 0) {
-      await sleep(400);
-      continue;
+    if (n === 0) {
+      idleStreak += 1;
+      if (idleStreak >= 5) break;
+      await sleep(350);
+    } else {
+      idleStreak = 0;
+      await sleep(300);
     }
-    await sleep(350);
   }
   return total;
 }
 
 async function customerReply(platformE164: string, text: string) {
-  const since = new Date(Date.now() - 5000).toISOString();
+  const since = new Date(Date.now() - 120_000).toISOString();
   const providerMessageId = await telnyxSend(CUSTOMER_E164, platformE164, text);
   console.log(`  [sms] customer → platform: "${text}" (id ${providerMessageId.slice(0, 12)}…)`);
   await routeCustomerReplyThroughPlatformDispatch(platformE164, text, providerMessageId);
-  const burst = await burstDrainArJobs(90_000);
-  const drained = burst + (burst < 1 ? await waitForArJobDrain(60_000) : 0);
+  const burst = await burstDrainArJobs(30_000);
+  const drained = burst + (burst < 1 ? await waitForArJobDrain(25_000) : 0);
   console.log(`  [jobs] drained ${drained} AR job(s)`);
-  let reply = await waitForInboundSmsToCustomer(CUSTOMER_E164, since, 45_000);
+  let reply = await waitForInboundSmsToCustomer(CUSTOMER_E164, since, 30_000);
   if (!reply) {
     reply = await latestOutboundSmsBodyForCertCustomer(since);
     if (reply) console.log("  [sms] using latest AR outbound conversation message (Telnyx poll empty)");
@@ -747,10 +761,11 @@ async function runRescheduleScenario(contactId: string, daysAhead: number) {
     `R should open reschedule (got lifecycle=${sessionAfterR?.lifecycleState ?? "none"}, sms=${Boolean(reply)})`,
   );
   const rescheduleFollowUps = [
+    "I need to reschedule",
     "Friday afternoon",
-    "How about 3pm?",
-    "Yes that works",
+    "the second one",
     "Yes please book it",
+    "Yes",
     "Confirm",
   ];
   let followIdx = 0;
