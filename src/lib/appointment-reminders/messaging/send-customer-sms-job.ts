@@ -57,6 +57,29 @@ export async function executeArSendCustomerSmsJob(payload: Record<string, unknow
     idempotencyKey: outboundKey,
   });
 
+  const conversationId = String(payload.conversationId || session.conversationId || "").trim();
+  const providerMessageId = result?.providerId?.trim() || null;
+  if (conversationId && body.trim()) {
+    try {
+      await prisma.conversationMessage.create({
+        data: {
+          conversationId,
+          direction: "outbound",
+          body: body.trim(),
+          providerMessageId,
+        },
+      });
+      await prisma.conversation.update({
+        where: { id: conversationId },
+        data: { updatedAt: new Date() },
+      });
+    } catch (err) {
+      if (!(err && typeof err === "object" && "code" in err && (err as { code: string }).code === "P2002")) {
+        throw err;
+      }
+    }
+  }
+
   return {
     ok: true,
     providerMessageId: result?.providerId ?? result?.messageId ?? null,

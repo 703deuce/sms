@@ -35,12 +35,14 @@ export async function loadArSmsConversationForLuna(input: {
   if (session.appointmentId !== input.appointmentId || session.contactId !== input.contactId) {
     return { sessionOk: false, reason: "session_identity_mismatch" };
   }
-  if (!session.conversationId || session.conversationId !== input.conversationId) {
-    return { sessionOk: false, reason: "conversation_scope_mismatch" };
+  // Reply session owns the canonical conversation thread (not generic inbound routing).
+  const conversationId = session.conversationId || input.conversationId;
+  if (!conversationId) {
+    return { sessionOk: false, reason: "conversation_scope_missing" };
   }
 
   const rows = await prisma.conversationMessage.findMany({
-    where: { conversationId: input.conversationId },
+    where: { conversationId },
     orderBy: { createdAt: "asc" },
     select: {
       direction: true,

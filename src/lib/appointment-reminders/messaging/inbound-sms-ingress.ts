@@ -104,24 +104,35 @@ export async function acceptArInboundSmsIngress(
         });
       }
 
-      const { resolveInboundConversation } = await import("@/lib/mass-texting/conversation-context");
-      const inboundCtx = await resolveInboundConversation({
-        workspaceId: input.workspaceId,
-        contactId: contact.id,
-        toE164: input.to,
-        fromE164: from,
+      const arSession = await tx.arSmsReplySession.findFirst({
+        where: { id: input.replySessionId, workspaceId: input.workspaceId },
+        select: { conversationId: true },
       });
 
-      const conversation = await tx.conversation.update({
-        where: { id: inboundCtx.conversationId },
-        data: {
-          unread: true,
-          updatedAt: new Date(),
-          productSource: "APPOINTMENT_REMINDERS",
-          tags: ["appointment_reminders"],
-        },
-      });
-      conversationId = conversation.id;
+      if (arSession?.conversationId) {
+        conversationId = arSession.conversationId;
+        await tx.conversation.update({
+          where: { id: conversationId },
+          data: {
+            unread: true,
+            updatedAt: new Date(),
+            productSource: "APPOINTMENT_REMINDERS",
+            tags: ["appointment_reminders"],
+          },
+        });
+      } else {
+        const { ensureArConversation } = await import("./reply-session");
+        conversationId = await ensureArConversation({
+          workspaceId: input.workspaceId,
+          contactId: contact.id,
+          toE164: input.to,
+          fromE164: from,
+        });
+        await tx.arSmsReplySession.update({
+          where: { id: input.replySessionId },
+          data: { conversationId },
+        });
+      }
 
       const displayBody = formatInboundMessageBody(body, input.mediaUrls);
       const inboundMedia = input.mediaUrls?.filter(Boolean) ?? [];
