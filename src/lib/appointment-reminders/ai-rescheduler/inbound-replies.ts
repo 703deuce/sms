@@ -25,6 +25,7 @@ import {
   resolveArCancelSmsPolicy,
   resolveArRescheduleSmsPolicy,
 } from "./ar-sms-action-policy";
+import { recordArSmsCustomerOutcome } from "../record-ar-sms-outcome";
 
 export type ArInboundReplyResult =
   | { handled: true; replyText: string }
@@ -99,6 +100,11 @@ export async function handleArCancelConfirmation(input: {
     }
   }
   await cancelPlatformAppointment(input.workspaceId, row.id, "customer");
+  await recordArSmsCustomerOutcome({
+    workspaceId: input.workspaceId,
+    appointmentId: row.id,
+    outcome: "cancelled",
+  });
   const fresh = await prisma.voiceAppointment.findFirst({ where: { id: row.id } });
   if (fresh) {
     const nextMeta = suppressAppointmentReminders({
@@ -183,6 +189,12 @@ export async function handleArReminderLetterReply(input: {
       workspaceId: input.workspaceId,
       appointmentId,
     });
+    await recordArSmsCustomerOutcome({
+      workspaceId: input.workspaceId,
+      appointmentId,
+      replySessionId: input.replySessionId,
+      outcome: "confirmed",
+    });
     return {
       handled: true,
       replyText: `Your appointment on ${whenLabel} is confirmed.`,
@@ -234,6 +246,12 @@ export async function handleArReminderLetterReply(input: {
           lifecycleState: "AWAITING_CANCEL_CONFIRM",
         });
       }
+      await recordArSmsCustomerOutcome({
+        workspaceId: input.workspaceId,
+        appointmentId,
+        replySessionId: input.replySessionId,
+        outcome: "cancel_pending",
+      });
       const penaltyLine = latePenalty
         ? ` Because it's within the cancellation window, ${latePenalty}.`
         : "";
@@ -322,12 +340,24 @@ export async function handleArReminderLetterReply(input: {
       appointmentId,
       message: `Customer asked to reschedule the appointment on ${whenLabel}.`,
     });
+    await recordArSmsCustomerOutcome({
+      workspaceId: input.workspaceId,
+      appointmentId,
+      replySessionId: input.replySessionId,
+      outcome: "reschedule_requested",
+    });
     return {
       handled: true,
       replyText: `Thanks — we received your request to reschedule your appointment on ${whenLabel}. The business will follow up shortly.`,
     };
   }
 
+  await recordArSmsCustomerOutcome({
+    workspaceId: input.workspaceId,
+    appointmentId,
+    replySessionId: input.replySessionId,
+    outcome: "reschedule_started",
+  });
   return {
     handled: true,
     replyText: `Sure — what day or time works better for your appointment on ${whenLabel}?`,

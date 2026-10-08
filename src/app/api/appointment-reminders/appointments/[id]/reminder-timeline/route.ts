@@ -8,6 +8,7 @@ import {
 import { getAppointment, loadAppointmentPlatformConfig } from "@/lib/appointments";
 import { resolveWeeklyHours } from "@/lib/appointments/availability-engine-policy";
 import type { AppointmentMetadata } from "@/lib/appointments/types";
+import { loadArReminderEngagementPayload } from "@/lib/appointment-reminders/ar-reminder-engagement.server";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -34,12 +35,23 @@ export async function GET(_request: Request, { params }: Params) {
       weeklyHours,
     });
     const timeline = buildDedicatedReminderTimeline(meta);
+    const engagement = await loadArReminderEngagementPayload({
+      workspaceId: auth.workspaceId,
+      appointmentId: id,
+      metadata: meta,
+      startsAt: appt.startsAt,
+      endsAt: appt.endsAt,
+      timezone: appt.timezone,
+      status: appt.status,
+    });
 
     return NextResponse.json({
       data: {
         future,
         timeline,
         suppressed: Boolean(meta.remindersSuppressed),
+        customerResponse: engagement.customerResponse,
+        reminderEngagement: engagement.reminderEngagement,
       },
     });
   } catch (err) {

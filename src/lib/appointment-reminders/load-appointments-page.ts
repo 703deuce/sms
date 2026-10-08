@@ -15,6 +15,7 @@ import { isCalendarConnectionUsable } from "@/lib/appointment-reminders/calendar
 import { resolveArAppointmentContactDisplay } from "@/lib/appointment-reminders/contact-display";
 import type { ArRescheduleRequestMeta } from "@/lib/appointment-reminders/ai-rescheduler/business-approval";
 import { expireArRescheduleRequestIfNeeded } from "@/lib/appointment-reminders/ai-rescheduler/reschedule-request-lifecycle";
+import { resolveArCustomerResponseSummary } from "@/lib/appointment-reminders/ar-sms-customer-outcome";
 
 export type ArAppointmentsQuery = {
   q?: string;
@@ -103,6 +104,12 @@ function mapRow(
     phoneState,
     contactEmail: contact.email,
     reminder,
+    customerResponse: resolveArCustomerResponseSummary({
+      status: row.status,
+      startsAt: row.startsAt,
+      timezone: row.timezone,
+      metadata: meta,
+    }),
     sourceProvider: provider,
     sourceCalendarLabel: cal?.name || (meta.calendarId as string) || null,
     connectionId,

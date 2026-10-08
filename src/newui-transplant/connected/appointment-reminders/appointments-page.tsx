@@ -17,6 +17,7 @@ import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
 import { formatPhone } from '@/lib/utils'
 import { AppointmentDetailDrawer } from '@/newui-transplant/components/appointment-reminders/appointment-detail-drawer'
 import { ReminderStatusPill } from '@/newui-transplant/components/appointment-reminders/reminder-status-pill'
+import { CustomerResponsePill } from '@/newui-transplant/components/appointment-reminders/customer-response-pill'
 import {
   ArStatGrid,
   OpusDataSurface,
@@ -442,6 +443,7 @@ export function AppointmentRemindersAppointmentsPage() {
                     <th scope="col" className={th}>Date &amp; time</th>
                     <th scope="col" className={th}>Phone</th>
                     <th scope="col" className={th}>Reminder</th>
+                    <th scope="col" className={th}>Customer response</th>
                     <th scope="col" className={cn(th, 'hidden lg:table-cell')}>Source</th>
                     <th scope="col" className={cn(th, 'w-8')}>
                       <span className="sr-only">Open</span>
@@ -547,13 +549,11 @@ function AppointmentTableRow({
       <td className={td}>
         <ReminderStatusPill label={row.reminder.label} status={row.reminder.status} />
         <span className="mt-0.5 block text-xs text-muted-foreground">{row.reminder.secondaryLine}</span>
-        {row.arRescheduleRequest &&
-        (row.arRescheduleRequest.status === 'pending_approval' ||
-          row.arRescheduleRequest.status === 'pending_business' ||
-          row.arRescheduleRequest.status === 'processing') ? (
-          <span className="mt-1 inline-flex rounded-md bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-800">
-            Reschedule pending
-          </span>
+      </td>
+      <td className={td}>
+        <CustomerResponsePill label={row.customerResponse.label} kind={row.customerResponse.kind} />
+        {row.customerResponse.detailLine ? (
+          <span className="mt-0.5 block text-xs text-muted-foreground">{row.customerResponse.detailLine}</span>
         ) : null}
       </td>
       <td className={cn(td, 'hidden text-xs text-muted-foreground lg:table-cell')}>
@@ -591,9 +591,9 @@ function MobileRow({
       <span className="text-xs text-muted-foreground">
         {formatDay(row.startsAt, timezone)} · {formatTimeSpan(row.startsAt, row.endsAt, timezone, row.isAllDay)}
       </span>
-      {row.phoneState !== 'ok' ? (
-        <span className="text-xs text-amber-700">{row.reminder.secondaryLine}</span>
-      ) : null}
+      <span className="text-xs text-muted-foreground">
+        {row.customerResponse.kind !== 'none' ? row.customerResponse.label : row.reminder.secondaryLine}
+      </span>
     </button>
   )
 }

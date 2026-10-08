@@ -6,6 +6,8 @@ import { formatPhone } from '@/lib/utils'
 import type { ArAppointmentRow } from '@/lib/appointment-reminders/appointments-page-types'
 import { KeyValueRow } from '@/newui-transplant/components/app/kit'
 import { ReminderStatusPill } from '@/newui-transplant/components/appointment-reminders/reminder-status-pill'
+import { CustomerResponsePill } from '@/newui-transplant/components/appointment-reminders/customer-response-pill'
+import type { ArCustomerResponseSummary, ArReminderEngagementStep } from '@/lib/appointment-reminders/ar-sms-customer-outcome'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Input } from '@/newui-transplant/components/ui/input'
 import {
@@ -48,6 +50,8 @@ export function AppointmentDetailDrawer({
   const [phoneError, setPhoneError] = useState('')
   const [approvalBusy, setApprovalBusy] = useState<'approve' | 'reject' | null>(null)
   const [approvalError, setApprovalError] = useState('')
+  const [customerResponse, setCustomerResponse] = useState<ArCustomerResponseSummary | null>(null)
+  const [reminderEngagement, setReminderEngagement] = useState<ArReminderEngagementStep[]>([])
 
   const loadDetail = useCallback(async () => {
     if (!row?.id) return
@@ -78,6 +82,8 @@ export function AppointmentDetailDrawer({
         ...past,
       ]
       setTimeline(merged.length ? merged : apptJson?.data?.reminderSchedule || [])
+      setCustomerResponse((tlJson?.data?.customerResponse as ArCustomerResponseSummary) ?? row.customerResponse)
+      setReminderEngagement((tlJson?.data?.reminderEngagement as ArReminderEngagementStep[]) || [])
       setPhoneEdit(row.phone || '')
     } finally {
       setLoading(false)
@@ -188,9 +194,18 @@ export function AppointmentDetailDrawer({
               <p className="text-sm text-muted-foreground">
                 {formatDateTimeRange(row.startsAt, row.endsAt, tz, row.isAllDay)}
               </p>
-              <div className="pt-2">
+              <div className="flex flex-wrap items-center gap-2 pt-2">
                 <ReminderStatusPill label={row.reminder.label} status={row.reminder.status} />
+                {customerResponse ? (
+                  <CustomerResponsePill
+                    label={customerResponse.label}
+                    kind={customerResponse.kind}
+                  />
+                ) : null}
               </div>
+              {customerResponse?.detailLine ? (
+                <p className="text-xs text-muted-foreground">{customerResponse.detailLine}</p>
+              ) : null}
             </SheetHeader>
 
             <div className="flex-1 overflow-y-auto px-5 py-5">
@@ -336,9 +351,44 @@ export function AppointmentDetailDrawer({
                   </section>
 
                   <section>
-                    <h2 className="mb-3 text-sm font-semibold">Reminder timeline</h2>
-                    {timeline.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No reminders configured yet.</p>
+                    <h2 className="mb-3 text-sm font-semibold">Reminders &amp; customer actions</h2>
+                    {reminderEngagement.length > 0 ? (
+                      <ol className="space-y-4 border-l border-border pl-4">
+                        {reminderEngagement.map((step) => (
+                          <li key={step.timelineType} className="relative text-sm">
+                            <span className="absolute -left-[21px] top-1.5 size-2 rounded-full bg-primary/60" />
+                            <p className="font-medium">{step.reminderLabel}</p>
+                            {step.sentAt ? (
+                              <p className="text-xs text-muted-foreground">
+                                Sent {new Date(step.sentAt).toLocaleString(undefined, { timeZone: tz })}
+                              </p>
+                            ) : null}
+                            {step.customerResponse ? (
+                              <div className="mt-2 rounded-md border bg-muted/30 px-3 py-2">
+                                <p className="text-xs font-medium text-foreground">
+                                  {step.customerResponse.label}
+                                </p>
+                                {step.customerResponse.detailLine ? (
+                                  <p className="text-xs text-muted-foreground">
+                                    {step.customerResponse.detailLine}
+                                  </p>
+                                ) : null}
+                                {step.customerResponse.at ? (
+                                  <p className="text-xs text-muted-foreground">
+                                    {new Date(step.customerResponse.at).toLocaleString(undefined, {
+                                      timeZone: tz,
+                                    })}
+                                  </p>
+                                ) : null}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-muted-foreground">No customer response yet</p>
+                            )}
+                          </li>
+                        ))}
+                      </ol>
+                    ) : timeline.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No reminders sent yet.</p>
                     ) : (
                       <ol className="space-y-3 border-l border-border pl-4">
                         {timeline.map((step, i) => (

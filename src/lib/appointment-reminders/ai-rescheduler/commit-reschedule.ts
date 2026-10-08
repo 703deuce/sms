@@ -3,6 +3,7 @@ import "server-only";
 import { getPrisma } from "@/lib/db";
 import { resetAppointmentReminders } from "@/lib/appointments/reminder-state";
 import { appendTimeline } from "@/lib/appointments/settings";
+import { recordArSmsCustomerOutcome } from "../record-ar-sms-outcome";
 import type { AppointmentMetadata } from "@/lib/appointments/types";
 import { patchProviderEventTimes } from "./provider-mutations";
 import { resolveAiReschedulerConfig, isAiAutomaticCalendarMutation } from "./types";
@@ -230,6 +231,12 @@ export async function syncLocalAppointmentAfterProviderReschedule(input: {
       status: "scheduled",
       metadata: withTimeline as object,
     },
+  });
+  await recordArSmsCustomerOutcome({
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+    outcome: "rescheduled",
+    newStartsAtIso: start.toISOString(),
   });
   return { ok: true };
 }

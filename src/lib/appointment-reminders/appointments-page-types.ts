@@ -1,4 +1,5 @@
 import type { AggregateReminderView } from "@/lib/appointment-reminders/aggregate-reminder-status";
+import type { ArCustomerResponseSummary } from "@/lib/appointment-reminders/ar-sms-customer-outcome";
 
 export type ArAppointmentRow = {
   id: string;
@@ -12,6 +13,7 @@ export type ArAppointmentRow = {
   phoneState: "ok" | "missing" | "invalid";
   contactEmail?: string | null;
   reminder: AggregateReminderView;
+  customerResponse: ArCustomerResponseSummary;
   sourceProvider: string | null;
   sourceCalendarLabel: string | null;
   connectionId: string | null;

@@ -277,6 +277,7 @@ export function buildDedicatedReminderTimeline(metadata: AppointmentMetadata) {
       e.type.includes("reminder") ||
       e.type.includes("confirmation") ||
       e.type.includes("workflow_") ||
-      e.type.includes("voice_reminder"),
+      e.type.includes("voice_reminder") ||
+      e.type.startsWith("ar_sms_outcome_"),
   );
 }
