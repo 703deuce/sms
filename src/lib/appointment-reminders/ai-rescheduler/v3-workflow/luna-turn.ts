@@ -38,6 +38,7 @@ For ordinal picks ("the second one"), map to the slot_id from the listed options
 
 Read the full SMS conversation above — short replies like "Yes" refer to your prior assistant messages.
 Do not re-ask for information the customer already provided in this thread.
+If the customer has multiple upcoming appointments, use the appointment list in context and the thread to decide which appointment they mean; ask a brief clarification only when still ambiguous.
 
 After a successful reschedule, a deterministic backend message will confirm the time — do not claim success unless reschedule_appointment returned rescheduled.`;
 
@@ -206,6 +207,7 @@ export async function runArRescheduleLunaTurn(input: {
   message: string;
   conversationHistory: Array<{ role: "user" | "assistant"; content: string }>;
   displayTimezone: string;
+  relatedAppointmentsSummary?: string;
 }): Promise<{ replyText: string; confirmed: boolean }> {
   const openAiTools = [
     buildSetSchedulingPreferenceOpenAiTool(input.config),
@@ -226,10 +228,14 @@ export async function runArRescheduleLunaTurn(input: {
     appointmentId: input.appointmentId,
   });
 
+  const relatedBlock = input.relatedAppointmentsSummary?.trim()
+    ? `\n\n--- Related appointments ---\n${input.relatedAppointmentsSummary.trim()}`
+    : "";
+
   const messages: ChatMessage[] = [
     {
       role: "system",
-      content: `${SYSTEM}\n\n--- Authoritative scheduling state ---\n${schedulingContext}`,
+      content: `${SYSTEM}\n\n--- Authoritative scheduling state ---\n${schedulingContext}${relatedBlock}`,
     },
   ];
 

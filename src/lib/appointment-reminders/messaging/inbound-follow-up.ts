@@ -32,7 +32,10 @@ export async function tryHandleArReminderFollowUp(input: {
   });
   if (!verified.ok) return { handled: false };
 
-  if (verified.session.lifecycleState === "AWAITING_REPLY") {
+  if (
+    verified.session.lifecycleState === "AWAITING_REPLY" ||
+    verified.session.lifecycleState === "COMPLETED"
+  ) {
     await markArReplySessionLifecycle({
       sessionId: input.replySessionId,
       workspaceId: input.workspaceId,

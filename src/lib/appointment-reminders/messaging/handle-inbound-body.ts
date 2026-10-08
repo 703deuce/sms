@@ -5,6 +5,7 @@ import {
   handleArReminderLetterReply,
 } from "@/lib/appointment-reminders/ai-rescheduler/inbound-replies";
 import { tryHandleArReminderFollowUp } from "@/lib/appointment-reminders/messaging/inbound-follow-up";
+import { classifyArInboundBody, logArSmsPipeline } from "./pipeline-log";
 
 export async function handleAppointmentRemindersInboundBody(input: {
   workspaceId: string;
@@ -17,6 +18,7 @@ export async function handleAppointmentRemindersInboundBody(input: {
   conversationId?: string;
 }): Promise<{ handled: true; replyText: string } | { handled: false }> {
   const body = (input.body || "").trim();
+  const { inboundKind, bodyLength } = classifyArInboundBody(body);
   if (!body) return { handled: false };
 
   if (/^(yes|y)$/i.test(body)) {
@@ -26,6 +28,18 @@ export async function handleAppointmentRemindersInboundBody(input: {
       appointmentId: input.appointmentId,
     });
     if (arCancel.handled && arCancel.replyText) {
+      logArSmsPipeline({
+        step: "inbound_handler_branch",
+        workspaceId: input.workspaceId,
+        replySessionId: input.replySessionId,
+        appointmentId: input.appointmentId,
+        conversationId: input.conversationId,
+        providerMessageId: input.providerMessageId,
+        handler: "cancel_confirmation",
+        branch: "yes",
+        inboundKind,
+        bodyLength,
+      });
       return { handled: true, replyText: arCancel.replyText };
     }
   }
@@ -42,8 +56,29 @@ export async function handleAppointmentRemindersInboundBody(input: {
       letter: upper as "C" | "R" | "X",
     });
     if (arReply.handled && arReply.replyText) {
+      logArSmsPipeline({
+        step: "inbound_handler_branch",
+        workspaceId: input.workspaceId,
+        replySessionId: input.replySessionId,
+        appointmentId: input.appointmentId,
+        conversationId: input.conversationId,
+        providerMessageId: input.providerMessageId,
+        handler: "reminder_letter",
+        branch: upper,
+        inboundKind,
+        bodyLength,
+      });
       return { handled: true, replyText: arReply.replyText };
     }
+    logArSmsPipeline({
+      step: "inbound_handler_unhandled",
+      workspaceId: input.workspaceId,
+      replySessionId: input.replySessionId,
+      providerMessageId: input.providerMessageId,
+      handler: "reminder_letter",
+      branch: `${upper}_not_handled`,
+      inboundKind,
+    });
     return { handled: false };
   }
 
@@ -57,8 +92,29 @@ export async function handleAppointmentRemindersInboundBody(input: {
     providerMessageId: input.providerMessageId,
   });
   if (followUp.handled) {
+    logArSmsPipeline({
+      step: "inbound_handler_branch",
+      workspaceId: input.workspaceId,
+      replySessionId: input.replySessionId,
+      appointmentId: input.appointmentId,
+      conversationId: input.conversationId,
+      providerMessageId: input.providerMessageId,
+      handler: "luna_follow_up",
+      branch: "v3_reschedule",
+      inboundKind,
+      bodyLength,
+    });
     return { handled: true, replyText: followUp.replyText };
   }
 
+  logArSmsPipeline({
+    step: "inbound_handler_unhandled",
+    workspaceId: input.workspaceId,
+    replySessionId: input.replySessionId,
+    providerMessageId: input.providerMessageId,
+    handler: "none",
+    inboundKind,
+    bodyLength,
+  });
   return { handled: false };
 }

@@ -312,6 +312,7 @@ const MODEL_TO_TABLE: Record<string, string> = {
   mctbPlatformSenderAssignment: "mctb_platform_sender_assignments",
   arSmsReplySession: "ar_sms_reply_sessions",
   arSmsInboundHeldMessage: "ar_sms_inbound_held_messages",
+  arPlatformSmsInboundReceipt: "ar_platform_sms_inbound_receipts",
   cfnaIngressProbe: "cfna_ingress_probes",
   agentConfigurationChange: "agent_configuration_changes",
   smartRoutingFlow: "smart_routing_flows",

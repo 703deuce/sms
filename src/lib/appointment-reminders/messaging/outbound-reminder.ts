@@ -5,10 +5,11 @@ import {
   attachOutboundProofToArReplySession,
   claimArReplySessionForOutbound,
   ensureArConversation,
-  expireSupersededArReplySessionsOnSender,
   selectArOutboundPlatformSender,
 } from "./reply-session";
+import { appendArConversationOutboundMessage } from "./persistent-conversation";
 import { sendAppointmentSmsViaPlatformSender } from "./send-via-assigned-sender";
+import { logArSmsPipeline } from "./pipeline-log";
 
 export async function sendArReminderSmsWithSession(input: {
   workspaceId: string;
@@ -21,12 +22,27 @@ export async function sendArReminderSmsWithSession(input: {
   | { sent: true; sessionId: string; providerMessageId?: string; messageId?: string }
   | { sent: false; reason: string; pendingSendReason?: string }
 > {
+  logArSmsPipeline({
+    step: "reminder_send_start",
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+    contactId: input.contactId,
+    meta: { timelineType: input.timelineType, bodyLength: input.body.length },
+  });
+
   const selection = await selectArOutboundPlatformSender({
     workspaceId: input.workspaceId,
     appointmentId: input.appointmentId,
     consumerE164: input.phone,
   });
   if (!selection.ok) {
+    logArSmsPipeline({
+      step: "reminder_send_failed",
+      workspaceId: input.workspaceId,
+      appointmentId: input.appointmentId,
+      error: selection.reason,
+      meta: { pendingSendReason: selection.pendingSendReason },
+    });
     return {
       sent: false,
       reason: selection.reason,
@@ -34,17 +50,22 @@ export async function sendArReminderSmsWithSession(input: {
     };
   }
 
-  await expireSupersededArReplySessionsOnSender({
-    consumerE164: input.phone,
-    platformPhoneNumberId: selection.phoneNumberId,
-    keepAppointmentId: input.appointmentId,
-  });
-
   const conversationId = await ensureArConversation({
     workspaceId: input.workspaceId,
     contactId: input.contactId,
     toE164: selection.e164,
     fromE164: input.phone,
+    platformPhoneNumberId: selection.phoneNumberId,
+    appointmentId: input.appointmentId,
+  });
+
+  logArSmsPipeline({
+    step: "reminder_conversation_ready",
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+    conversationId,
+    platformPhoneNumberId: selection.phoneNumberId,
+    meta: { senderE164: selection.e164 },
   });
 
   const claim = await claimArReplySessionForOutbound({
@@ -57,14 +78,15 @@ export async function sendArReminderSmsWithSession(input: {
     timelineType: input.timelineType,
     conversationId,
   });
-  if ("collision" in claim) {
-    return {
-      sent: false,
-      reason: "ar_sender_slot_collision",
-      pendingSendReason:
-        "Another active appointment reminder already uses this platform sender for this customer. Retry or wait for the reply window to expire.",
-    };
-  }
+
+  logArSmsPipeline({
+    step: "reminder_session_claimed",
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+    replySessionId: claim.sessionId,
+    conversationId,
+    platformPhoneNumberId: selection.phoneNumberId,
+  });
 
   const idempotencyKey = arReminderOutboundIdempotencyKey({
     workspaceId: input.workspaceId,
@@ -88,6 +110,28 @@ export async function sendArReminderSmsWithSession(input: {
     workspaceId: input.workspaceId,
     outboundMessageId: sendResult.messageId,
     outboundProviderMessageId: sendResult.providerMessageId,
+  });
+
+  await appendArConversationOutboundMessage({
+    conversationId,
+    body: input.body,
+    providerMessageId: sendResult.providerMessageId,
+  });
+
+  logArSmsPipeline({
+    step: "reminder_provider_sent",
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+    replySessionId: claim.sessionId,
+    conversationId,
+    providerMessageId: sendResult.providerMessageId,
+    meta: { messageId: sendResult.messageId },
+  });
+  logArSmsPipeline({
+    step: "reminder_thread_appended",
+    workspaceId: input.workspaceId,
+    conversationId,
+    appointmentId: input.appointmentId,
   });
 
   return {

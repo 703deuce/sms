@@ -10,6 +10,8 @@ import { loadVerifiedExistingForArSession } from "./verified-existing";
 import { ensureArRescheduleRuntime } from "./session-runtime";
 import { runArRescheduleLunaTurn } from "./luna-turn";
 import { loadArSmsConversationForLuna } from "./luna-conversation-context";
+import { loadArCustomerAppointmentsSummaryForLuna } from "@/lib/appointment-reminders/messaging/persistent-conversation";
+import { classifyArInboundBody, logArSmsPipeline } from "@/lib/appointment-reminders/messaging/pipeline-log";
 import { resolveArAppointmentDisplayTimezone } from "../display-time";
 
 /**
@@ -36,9 +38,23 @@ export async function runArV3RescheduleSmsTurn(input: {
     contactId: input.contactId,
     appointmentId: input.appointmentId,
   });
-  if (!verified.ok) return { handled: false };
+  if (!verified.ok) {
+    logArSmsPipeline({
+      step: "luna_context_failed",
+      workspaceId: input.workspaceId,
+      replySessionId: input.replySessionId,
+      appointmentId: input.appointmentId,
+      providerMessageId: input.providerMessageId,
+      error: verified.reason,
+      handler: "session_verify",
+    });
+    return { handled: false };
+  }
 
-  if (verified.session.lifecycleState === "AWAITING_REPLY") {
+  if (
+    verified.session.lifecycleState === "AWAITING_REPLY" ||
+    verified.session.lifecycleState === "COMPLETED"
+  ) {
     await markArReplySessionLifecycle({
       sessionId: input.replySessionId,
       workspaceId: input.workspaceId,
@@ -96,13 +112,22 @@ export async function runArV3RescheduleSmsTurn(input: {
     const loaded = await loadArSmsConversationForLuna({
       workspaceId: input.workspaceId,
       replySessionId: input.replySessionId,
-      appointmentId: input.appointmentId,
       contactId: input.contactId,
       conversationId: input.conversationId,
       currentMessage: input.message,
       currentProviderMessageId: input.providerMessageId,
     });
     if (!loaded.sessionOk) {
+      logArSmsPipeline({
+        step: "luna_context_failed",
+        workspaceId: input.workspaceId,
+        replySessionId: input.replySessionId,
+        appointmentId: input.appointmentId,
+        conversationId: input.conversationId,
+        providerMessageId: input.providerMessageId,
+        error: loaded.reason,
+        handler: "conversation_load",
+      });
       return {
         handled: true,
         replyText:
@@ -110,10 +135,37 @@ export async function runArV3RescheduleSmsTurn(input: {
       };
     }
     conversationHistory = loaded.messages;
+    const { inboundKind, bodyLength } = classifyArInboundBody(input.message);
+    logArSmsPipeline({
+      step: "luna_context_loaded",
+      workspaceId: input.workspaceId,
+      replySessionId: input.replySessionId,
+      appointmentId: input.appointmentId,
+      conversationId: input.conversationId,
+      providerMessageId: input.providerMessageId,
+      inboundKind,
+      bodyLength,
+      meta: { historyTurns: conversationHistory.length },
+    });
   } else {
     const trimmed = (input.message || "").trim();
     if (trimmed) conversationHistory = [{ role: "user", content: trimmed }];
   }
+
+  const relatedAppointmentsSummary = await loadArCustomerAppointmentsSummaryForLuna({
+    workspaceId: input.workspaceId,
+    contactId: input.contactId,
+  });
+
+  logArSmsPipeline({
+    step: "luna_turn_start",
+    workspaceId: input.workspaceId,
+    replySessionId: input.replySessionId,
+    appointmentId: input.appointmentId,
+    conversationId: input.conversationId,
+    providerMessageId: input.providerMessageId,
+    meta: { historyTurns: conversationHistory.length },
+  });
 
   const turn = await runArRescheduleLunaTurn({
     workspaceId: input.workspaceId,
@@ -124,6 +176,7 @@ export async function runArV3RescheduleSmsTurn(input: {
     message: input.message,
     conversationHistory,
     displayTimezone,
+    relatedAppointmentsSummary,
   });
 
   if (turn.confirmed) {
@@ -133,6 +186,16 @@ export async function runArV3RescheduleSmsTurn(input: {
       lifecycleState: "COMPLETED",
     });
   }
+
+  logArSmsPipeline({
+    step: "luna_turn_completed",
+    workspaceId: input.workspaceId,
+    replySessionId: input.replySessionId,
+    appointmentId: input.appointmentId,
+    providerMessageId: input.providerMessageId,
+    ok: true,
+    meta: { confirmed: turn.confirmed, replyLength: turn.replyText.length },
+  });
 
   return { handled: true, replyText: turn.replyText };
 }

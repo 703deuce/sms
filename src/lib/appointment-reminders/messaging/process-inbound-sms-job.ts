@@ -5,6 +5,7 @@ import { JobDeferredError } from "@/lib/messaging/types";
 import { AR_JOB_PROCESS_INBOUND_SMS } from "./constants";
 import { handleAppointmentRemindersInboundBody } from "./handle-inbound-body";
 import { enqueueArCustomerOutboundSmsJob } from "./enqueue-customer-outbound-sms";
+import { classifyArInboundBody, logArSmsPipeline } from "./pipeline-log";
 
 const RETRYABLE_REASONS = new Set(["sms_send_failed"]);
 
@@ -21,6 +22,19 @@ export async function processArInboundSmsJob(payload: Record<string, unknown>) {
   const fromE164 = String(payload.fromE164 || "");
   const body = String(payload.body || "");
   const providerMessageId = String(payload.providerMessageId || "");
+  const { inboundKind, bodyLength } = classifyArInboundBody(body);
+
+  logArSmsPipeline({
+    step: "inbound_job_process_start",
+    workspaceId,
+    contactId,
+    appointmentId,
+    replySessionId,
+    conversationId,
+    providerMessageId,
+    inboundKind,
+    bodyLength,
+  });
 
   if (
     !workspaceId ||
@@ -31,6 +45,12 @@ export async function processArInboundSmsJob(payload: Record<string, unknown>) {
     !fromE164 ||
     !providerMessageId
   ) {
+    logArSmsPipeline({
+      step: "inbound_job_failed",
+      workspaceId: workspaceId || undefined,
+      providerMessageId: providerMessageId || undefined,
+      error: "ar_process_inbound_sms_payload_incomplete",
+    });
     throw new Error("ar_process_inbound_sms_payload_incomplete");
   }
 
@@ -40,8 +60,26 @@ export async function processArInboundSmsJob(payload: Record<string, unknown>) {
     workspaceId,
   });
   if (!session || session.appointmentId !== appointmentId || session.contactId !== contactId) {
+    logArSmsPipeline({
+      step: "inbound_job_failed",
+      workspaceId,
+      replySessionId,
+      appointmentId,
+      providerMessageId,
+      error: "ar_inbound_session_identity_mismatch",
+    });
     throw new Error("ar_inbound_session_identity_mismatch");
   }
+
+  logArSmsPipeline({
+    step: "inbound_job_session_verified",
+    workspaceId,
+    replySessionId,
+    appointmentId,
+    conversationId,
+    providerMessageId,
+    lifecycleState: session.lifecycleState,
+  });
 
   const prisma = getPrisma();
   const idempotencyKey = inboundJobIdempotencyKey(workspaceId, providerMessageId);
@@ -50,6 +88,13 @@ export async function processArInboundSmsJob(payload: Record<string, unknown>) {
     select: { id: true, attempts: true, maxAttempts: true, jobType: true },
   });
   if (!queueJob || queueJob.jobType !== AR_JOB_PROCESS_INBOUND_SMS) {
+    logArSmsPipeline({
+      step: "inbound_job_failed",
+      workspaceId,
+      providerMessageId,
+      processingJobId: queueJob?.id,
+      error: "ar_inbound_job_row_missing",
+    });
     throw new Error("ar_inbound_job_row_missing");
   }
 
@@ -65,6 +110,15 @@ export async function processArInboundSmsJob(payload: Record<string, unknown>) {
   });
 
   if (!handled.handled) {
+    logArSmsPipeline({
+      step: "inbound_handler_unhandled",
+      workspaceId,
+      replySessionId,
+      appointmentId,
+      conversationId,
+      providerMessageId,
+      inboundKind,
+    });
     return { ok: true, handled: false, reason: "not_appointment_reminders_reply" };
   }
 
@@ -81,6 +135,25 @@ export async function processArInboundSmsJob(payload: Record<string, unknown>) {
       processingJobId: queueJob.id,
     });
 
+    logArSmsPipeline({
+      step: "inbound_outbound_enqueued",
+      workspaceId,
+      replySessionId,
+      conversationId,
+      providerMessageId,
+      processingJobId: queueJob.id,
+      outboundJobId: job.id,
+      meta: { replyLength: handled.replyText.length },
+    });
+
+    logArSmsPipeline({
+      step: "inbound_job_completed",
+      workspaceId,
+      providerMessageId,
+      processingJobId: queueJob.id,
+      ok: true,
+    });
+
     return {
       ok: true,
       handled: true,
@@ -88,6 +161,13 @@ export async function processArInboundSmsJob(payload: Record<string, unknown>) {
     };
   } catch (err) {
     const reason = err instanceof Error ? err.message : "sms_send_failed";
+    logArSmsPipeline({
+      step: "inbound_job_failed",
+      workspaceId,
+      providerMessageId,
+      processingJobId: queueJob.id,
+      error: reason,
+    });
     if (RETRYABLE_REASONS.has(reason) || reason.includes("send")) {
       throw new JobDeferredError(reason, 30_000);
     }
