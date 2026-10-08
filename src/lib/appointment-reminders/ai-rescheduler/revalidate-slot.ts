@@ -1,7 +1,9 @@
 import "server-only";
 
-import { filterBusyForReschedule } from "@/lib/voice-v3/calendar/slot-generator";
-import type { CalendarBusyInterval } from "@/lib/voice-v3/calendar/types";
+import {
+  filterBusyForReschedule,
+  type CalendarBusyInterval,
+} from "@/lib/calendar/ar-microsoft-primitives";
 import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
 import { getPrisma } from "@/lib/db";
 import { providerRefFromAppointment } from "./provider-mutations";

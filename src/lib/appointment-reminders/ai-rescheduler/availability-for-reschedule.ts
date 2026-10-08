@@ -9,8 +9,12 @@ import {
   timeOfDayRange,
 } from "@/lib/appointments/ai-scheduling/availability-bridge";
 import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
-import { filterBusyForReschedule, generateAvailabilitySlots } from "@/lib/voice-v3/calendar/slot-generator";
-import type { BusinessHoursWindow, CalendarBusyInterval } from "@/lib/voice-v3/calendar/types";
+import {
+  filterBusyForReschedule,
+  generateAvailabilitySlots,
+  type BusinessHoursWindow,
+  type CalendarBusyInterval,
+} from "@/lib/calendar/ar-microsoft-primitives";
 import type { CalendarConfig } from "@/lib/voice/calendar/providers";
 import { resolveWriteCalendarId } from "@/lib/voice/calendar/providers";
 import {
@@ -90,9 +94,7 @@ export async function fetchBusyForRef(
     return result.ok ? result.busy : null;
   }
 
-  const { fetchMicrosoftBusyIntervals } = await import(
-    "@/lib/voice-v3/calendar/microsoft/microsoft-find-availability"
-  );
+  const { fetchMicrosoftBusyIntervals } = await import("@/lib/calendar/ar-microsoft-primitives");
   const result = await fetchMicrosoftBusyIntervals({
     request,
     connectionId: ref.connectionId,

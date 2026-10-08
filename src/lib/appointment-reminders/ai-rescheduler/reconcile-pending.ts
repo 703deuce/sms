@@ -7,7 +7,7 @@ import type { AppointmentMetadata } from "@/lib/appointments/types";
 import { providerRefFromAppointment } from "./provider-mutations";
 import { getGoogleCalendarEvent, getValidAccessToken, resolveWriteCalendarId } from "@/lib/calendar/providers";
 import type { CalendarConfig } from "@/lib/calendar/providers";
-import { fetchMicrosoftEventById } from "@/lib/voice-v3/calendar/microsoft/microsoft-get-event";
+import { fetchMicrosoftEventById } from "@/lib/calendar/ar-microsoft-primitives";
 
 type ReconcileMeta = {
   operationId: string;

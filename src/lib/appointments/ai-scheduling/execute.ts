@@ -172,7 +172,7 @@ async function runMutationBody(
         };
       }
 
-      if (providerRef && isAiAutomaticCalendarMutation(ar)) {
+      if (isAiAutomaticCalendarMutation(ar)) {
         const operationId = `${ctx.requestId}:reschedule:${action.appointmentId}`;
         const committed = await commitArReschedule({
           workspaceId: ctx.workspaceId,
@@ -224,7 +224,29 @@ async function runMutationBody(
       };
     }
     case "CANCEL": {
-      await cancelPlatformAppointment(ctx.workspaceId, action.appointmentId);
+      const { resolveAiReschedulerConfig } = await import(
+        "@/lib/appointment-reminders/ai-rescheduler/types"
+      );
+      const { cancelProviderEvent } = await import(
+        "@/lib/appointment-reminders/ai-rescheduler/provider-mutations"
+      );
+      const ar = resolveAiReschedulerConfig(ctx.platform);
+      if (ar.mode === "ai" && ar.allowProviderCancel) {
+        const provider = await cancelProviderEvent({
+          workspaceId: ctx.workspaceId,
+          appointmentId: action.appointmentId,
+          reason: "Customer confirmed cancellation via SMS AI",
+        });
+        if (!provider.ok) {
+          return {
+            status: "CLARIFICATION_REQUIRED",
+            reason: provider.message,
+            requiresVerifier: false,
+            mutationExecuted: false,
+          };
+        }
+      }
+      await cancelPlatformAppointment(ctx.workspaceId, action.appointmentId, "customer");
       return {
         status: "CANCELED",
         appointment: {

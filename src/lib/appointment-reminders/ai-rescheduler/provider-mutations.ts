@@ -10,10 +10,12 @@ import {
   updateGoogleEvent,
   deleteGoogleEvent,
 } from "@/lib/calendar/providers";
-import { executeMicrosoftUpdateBooking } from "@/lib/voice-v3/calendar/microsoft/microsoft-update-booking";
-import { validateMicrosoftAppointmentBeforeMutation } from "@/lib/voice-v3/calendar/microsoft/validate-microsoft-appointment";
-import type { ExistingAppointment } from "@/lib/voice-v3/calendar/appointment-management-types";
-import { executeMicrosoftCancelBooking } from "@/lib/voice-v3/calendar/microsoft/microsoft-cancel-booking";
+import {
+  executeMicrosoftCancelBooking,
+  executeMicrosoftUpdateBooking,
+  validateMicrosoftAppointmentBeforeMutation,
+  type ExistingAppointment,
+} from "@/lib/calendar/ar-microsoft-primitives";
 
 export type ProviderAppointmentRef = {
   provider: "google" | "microsoft";
