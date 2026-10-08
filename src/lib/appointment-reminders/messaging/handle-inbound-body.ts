@@ -1,6 +1,9 @@
 import "server-only";
 
-import { handleArReminderLetterReply } from "@/lib/appointment-reminders/ai-rescheduler/inbound-replies";
+import {
+  handleArCancelConfirmation,
+  handleArReminderLetterReply,
+} from "@/lib/appointment-reminders/ai-rescheduler/inbound-replies";
 import { tryHandleArReminderFollowUp } from "@/lib/appointment-reminders/messaging/inbound-follow-up";
 
 export async function handleAppointmentRemindersInboundBody(input: {
@@ -15,6 +18,17 @@ export async function handleAppointmentRemindersInboundBody(input: {
 }): Promise<{ handled: true; replyText: string } | { handled: false }> {
   const body = (input.body || "").trim();
   if (!body) return { handled: false };
+
+  if (/^(yes|y)$/i.test(body)) {
+    const arCancel = await handleArCancelConfirmation({
+      workspaceId: input.workspaceId,
+      contactId: input.contactId,
+      appointmentId: input.appointmentId,
+    });
+    if (arCancel.handled && arCancel.replyText) {
+      return { handled: true, replyText: arCancel.replyText };
+    }
+  }
 
   const upper = body.toUpperCase();
   if (upper === "C" || upper === "R" || upper === "X") {

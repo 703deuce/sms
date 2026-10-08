@@ -1,7 +1,11 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
-import { DEFAULT_HELP_KEYWORDS, DEFAULT_OPT_OUT_KEYWORDS } from "@/lib/messaging/messaging-settings";
+import {
+  DEFAULT_HELP_KEYWORDS,
+  DEFAULT_OPT_OUT_KEYWORDS,
+  parseKeywordList,
+} from "@/lib/messaging/messaging-settings";
 import { mctbCallerE164Variants, normalizeMctbCallerE164 } from "@/lib/mctb/messaging/caller-e164";
 import type { CanonicalMctbPlatformSender } from "@/lib/mctb/messaging/platform-sender-config";
 import {
@@ -16,12 +20,14 @@ const PLATFORM_HELP_MESSAGE =
 
 function isStopKeyword(body: string): boolean {
   const upper = (body || "").trim().toUpperCase();
-  return DEFAULT_OPT_OUT_KEYWORDS.includes(upper);
+  const keywords = parseKeywordList(null, DEFAULT_OPT_OUT_KEYWORDS);
+  return keywords.includes(upper);
 }
 
 function isHelpKeyword(body: string): boolean {
   const upper = (body || "").trim().toUpperCase();
-  return DEFAULT_HELP_KEYWORDS.includes(upper);
+  const keywords = parseKeywordList(null, DEFAULT_HELP_KEYWORDS);
+  return keywords.includes(upper);
 }
 
 async function applyWorkspaceOptOut(workspaceId: string, phone: string) {

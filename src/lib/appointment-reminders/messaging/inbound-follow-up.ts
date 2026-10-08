@@ -54,6 +54,24 @@ export async function tryHandleArReminderFollowUp(input: {
     activeIntent: "RESCHEDULE",
   });
 
+  let conversationHistory: Array<{ role: "user" | "assistant"; content: string }> | undefined;
+  if (input.conversationId) {
+    const messages = await prisma.conversationMessage.findMany({
+      where: { conversationId: input.conversationId },
+      orderBy: { createdAt: "asc" },
+      take: 12,
+      select: { direction: true, body: true },
+    });
+    conversationHistory = messages
+      .map((m) => {
+        const text = (m.body || "").trim();
+        if (!text) return null;
+        const role = m.direction === "inbound" ? "user" : "assistant";
+        return { role, content: text };
+      })
+      .filter((m): m is { role: "user" | "assistant"; content: string } => Boolean(m));
+  }
+
   const result = await handleAppointmentAIRequest({
     workspaceId: input.workspaceId,
     channel: "conversation",
@@ -62,6 +80,7 @@ export async function tryHandleArReminderFollowUp(input: {
     conversationId: input.conversationId,
     requestId: input.providerMessageId,
     contactCustomFields,
+    conversationHistory,
     lockedAppointmentId: input.appointmentId,
   });
 

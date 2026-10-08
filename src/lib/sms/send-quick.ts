@@ -34,6 +34,12 @@ export type QuickSendSmsInput = {
    */
   omitConsumerTrackingLink?: boolean;
   /**
+   * Appointment Reminders (and similar transactional appointment SMS): do not apply
+   * marketing/MCTB suppression store or contact UNSUBSCRIBED from STOP — eligibility
+   * is enforced on the appointment/consent path instead.
+   */
+  skipRecipientSuppressionGate?: boolean;
+  /**
    * Route outbound through another workspace's provider registration (e.g. platform Telnyx A2P).
    * Message rows still belong to workspaceId. Does not skip credits/trial unless demoBypass.
    */
@@ -122,17 +128,22 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
     }
   }
 
-  const suppressed = await prisma.suppression.findFirst({
-    where: { workspaceId: input.workspaceId, phone: to },
-  });
-  if (suppressed) {
-    throw new Error("Recipient is suppressed (STOP / do-not-contact)");
+  if (!input.skipRecipientSuppressionGate) {
+    const suppressed = await prisma.suppression.findFirst({
+      where: { workspaceId: input.workspaceId, phone: to },
+    });
+    if (suppressed) {
+      throw new Error("Recipient is suppressed (STOP / do-not-contact)");
+    }
   }
 
   const contact = await prisma.contact.findUnique({
     where: { workspaceId_phone: { workspaceId: input.workspaceId, phone: to } },
   });
-  if (contact && (contact.status === "UNSUBSCRIBED" || contact.status === "BLOCKED")) {
+  if (contact?.status === "BLOCKED") {
+    throw new Error(`Recipient contact status is ${contact.status}`);
+  }
+  if (!input.skipRecipientSuppressionGate && contact?.status === "UNSUBSCRIBED") {
     throw new Error(`Recipient contact status is ${contact.status}`);
   }
 

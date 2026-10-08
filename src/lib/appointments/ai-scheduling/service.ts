@@ -166,10 +166,16 @@ export async function handleAppointmentAIRequest(
   let outcome = await resolveAppointmentIntent(ctx, understanding);
   let verifierVerdict: "MATCH" | "NEEDS_CLARIFICATION" | "MISMATCH" | undefined;
 
+  const arBoundRescheduleCommit =
+    ctx.strictSessionBinding &&
+    outcome.proposedWrite?.kind === "RESCHEDULE" &&
+    understanding.explicitMutationRequested;
+
   if (
     outcome.proposedWrite &&
     outcome.requiresVerifier &&
-    writeActionRequiresVerifier(outcome.proposedWrite)
+    writeActionRequiresVerifier(outcome.proposedWrite) &&
+    !arBoundRescheduleCommit
   ) {
     presentationPhases.push("verifying");
     const verification = await verifyWriteAction({
@@ -204,7 +210,10 @@ export async function handleAppointmentAIRequest(
         mutationExecuted: false,
       };
     }
-  } else if (outcome.proposedWrite?.kind === "CONFIRM") {
+  } else if (
+    outcome.proposedWrite &&
+    (outcome.proposedWrite.kind === "CONFIRM" || arBoundRescheduleCommit)
+  ) {
     outcome = await applyVerifiedWrite(ctx, outcome, requestId);
   }
 

@@ -47,11 +47,14 @@ export async function dispatchSharedPlatformSmsInbound(input: {
     provider: input.destination.provider,
   };
 
-  const compliance = await handlePlatformSenderComplianceInbound({
-    platformSender,
-    fromE164: input.fromE164,
-    body: input.body,
-  });
+  const compliance =
+    isPlatformSharedSmsMctbInboundEnabled()
+      ? await handlePlatformSenderComplianceInbound({
+          platformSender,
+          fromE164: input.fromE164,
+          body: input.body,
+        })
+      : { handled: true as const, kind: "none" as const };
 
   if (compliance.kind === "help") {
     return { resolution: "platform_help", replyText: compliance.replyText };

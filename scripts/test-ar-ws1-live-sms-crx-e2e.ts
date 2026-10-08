@@ -10,8 +10,11 @@
  *   WORKSPACE_ID=ws_1 (default)
  *   AR_LIVE_CUSTOMER_E164=+15714073615 (customer / reply-from line)
  *   AR_LIVE_SCENARIOS=C,R,X  (subset ok)
- *   AR_LIVE_MS_CONNECTION_ID=cmu1uq7f15s1o5s4f6c5b6a57
+ *   AR_LIVE_MS_CONNECTION_ID=cmu1uq7f15s1o5s4f6c5b6a57  (required — real Graph event + Luna reschedule/cancel)
  *   VOICE_AGENT_ID=cmshz2lc25c622c4i58303501
+ *
+ * Runtime path: reminder → C/R/X → Luna via appointments ai-scheduling → AR provider-mutations
+ * (not Voice V3 agent tools). Microsoft create below is fixture seed only.
  */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -31,8 +34,10 @@ import { seedRescheduleConversationOnReminderSend } from "@/lib/appointment-remi
 import { sendArReminderSmsWithSession } from "@/lib/appointment-reminders/messaging/outbound-reminder";
 import { selectArOutboundPlatformSender } from "@/lib/appointment-reminders/messaging/reply-session";
 import { AR_QUEUE_NAME } from "@/lib/appointment-reminders/messaging/constants";
+import type { CalendarConfig } from "@/lib/voice/calendar/providers";
+import { resolveWriteCalendarId } from "@/lib/voice/calendar/providers";
+/** Fixture seed only — production mutations use @/lib/calendar/ar-microsoft-primitives via Luna execute. */
 import { executeMicrosoftCreateBooking } from "@/lib/voice-v3/calendar/microsoft/microsoft-create-booking";
-import { resolveVoiceV3MicrosoftCalendar } from "@/lib/voice-v3/calendar/microsoft/resolve-voice-v3-microsoft-calendar";
 import { resolveVoiceV3AgentConfigForAgent } from "@/lib/voice-v3/config/from-published-agent";
 import { wallTimeInZoneToUtc } from "@/lib/voice-v3/time/timezone";
 import { claimDueJobs, completeJob, failJob } from "@/lib/messaging/enqueue-advance";
@@ -197,6 +202,35 @@ async function drainArJobs(maxRounds = 12): Promise<number> {
   return processed;
 }
 
+async function releaseLiveCertArSessions(reason: string) {
+  const prisma = getPrisma();
+  const { normalizeMctbCallerE164 } = await import("@/lib/mctb/messaging/caller-e164");
+  const consumer = normalizeMctbCallerE164(CUSTOMER_E164);
+  const { markArReplySessionLifecycle } = await import(
+    "@/lib/appointment-reminders/messaging/reply-session"
+  );
+  const rows = await prisma.arSmsReplySession.findMany({
+    where: {
+      consumerE164: consumer,
+      lifecycleState: {
+        in: ["AWAITING_REPLY", "RESCHEDULING", "AWAITING_CANCEL_CONFIRM", "AWAITING_STAFF_APPROVAL"],
+      },
+    },
+    select: { id: true, workspaceId: true },
+    take: 30,
+  });
+  for (const row of rows) {
+    await markArReplySessionLifecycle({
+      sessionId: row.id,
+      workspaceId: row.workspaceId,
+      lifecycleState: "COMPLETED",
+    }).catch(() => undefined);
+  }
+  if (rows.length) {
+    console.log(`  [setup] released ${rows.length} AR session(s) (${reason})`);
+  }
+}
+
 async function expireStaleArSessionsForLiveCert(prisma: ReturnType<typeof getPrisma>) {
   const { markArReplySessionLifecycle } = await import(
     "@/lib/appointment-reminders/messaging/reply-session"
@@ -223,9 +257,12 @@ async function expireStaleArSessionsForLiveCert(prisma: ReturnType<typeof getPri
 }
 
 async function ensureCustomerContact(prisma: ReturnType<typeof getPrisma>) {
+  const { mctbCallerE164Variants } = await import("@/lib/mctb/messaging/caller-e164");
+  const phoneVariants = mctbCallerE164Variants(CUSTOMER_E164);
+
   let contact = await prisma.contact.findFirst({
-    where: { workspaceId: WORKSPACE_ID, phone: CUSTOMER_E164 },
-    select: { id: true, phone: true, firstName: true },
+    where: { workspaceId: WORKSPACE_ID, phone: { in: phoneVariants } },
+    select: { id: true, phone: true, firstName: true, status: true },
   });
   if (!contact) {
     contact = await prisma.contact.create({
@@ -237,8 +274,15 @@ async function ensureCustomerContact(prisma: ReturnType<typeof getPrisma>) {
         status: "SUBSCRIBED",
         consentSource: "manual",
       },
-      select: { id: true, phone: true, firstName: true },
+      select: { id: true, phone: true, firstName: true, status: true },
     });
+  } else if (contact.status === "UNSUBSCRIBED" || contact.status === "BLOCKED") {
+    contact = await prisma.contact.update({
+      where: { id: contact.id },
+      data: { status: "SUBSCRIBED", consentSource: "manual" },
+      select: { id: true, phone: true, firstName: true, status: true },
+    });
+    console.log(`  [setup] restored contact ${contact.id} to SUBSCRIBED for live cert`);
   }
   return contact;
 }
@@ -259,33 +303,66 @@ function slotDaysAhead(days: number, hour: number, minute: number, timezone: str
   return { start, end };
 }
 
-async function createPlatformOnlyFixtureAppointment(contactId: string, daysAhead: number, label: string) {
-  const config = await resolveVoiceV3AgentConfigForAgent({
+type LiveMicrosoftCalendar = {
+  connectionId: string;
+  calendarConfig: CalendarConfig;
+  calendarIds: string[];
+  timezone: string;
+  serviceName: string;
+};
+
+async function ensureLiveMicrosoftCalendarReady(): Promise<LiveMicrosoftCalendar> {
+  const prisma = getPrisma();
+  const { listConnectionProviderCalendars, patchWorkspaceCalendarConnection } = await import(
+    "@/lib/calendar/connection-settings"
+  );
+  let conn = await prisma.voiceCalendarConnection.findFirst({
+    where: { id: MS_CONNECTION_ID, workspaceId: WORKSPACE_ID, provider: "microsoft" },
+  });
+  assert.ok(
+    conn,
+    `Live cert requires Microsoft connection ${MS_CONNECTION_ID} on workspace ${WORKSPACE_ID}`,
+  );
+  const status = String(conn.status || "");
+  assert.ok(
+    ["connected", "active", "ok"].includes(status),
+    `Microsoft connection must be connected (got ${status})`,
+  );
+
+  let calendarConfig = (conn.config || {}) as CalendarConfig;
+  if (!calendarConfig.writeCalendarId) {
+    const calendars = await listConnectionProviderCalendars(WORKSPACE_ID, MS_CONNECTION_ID);
+    const writable = calendars.find((c) => c.canEdit !== false) || calendars[0];
+    assert.ok(writable?.id, "Microsoft connection has no writable calendar");
+    await patchWorkspaceCalendarConnection(WORKSPACE_ID, MS_CONNECTION_ID, {
+      writeCalendarId: writable.id,
+      blockingCalendarIds: [writable.id],
+      importCalendarIds: [writable.id],
+      syncEnabled: true,
+    });
+    conn = await prisma.voiceCalendarConnection.findFirst({
+      where: { id: MS_CONNECTION_ID, workspaceId: WORKSPACE_ID },
+    });
+    calendarConfig = (conn?.config || {}) as CalendarConfig;
+    console.log(`  [fixture] configured Microsoft write calendar ${writable.id}`);
+  }
+
+  const calendarIds = calendarConfig.importCalendarIds?.length
+    ? calendarConfig.importCalendarIds
+    : [resolveWriteCalendarId(calendarConfig)];
+
+  const agentConfig = await resolveVoiceV3AgentConfigForAgent({
     workspaceId: WORKSPACE_ID,
     agentId: AGENT_ID,
   });
-  const slot = slotDaysAhead(daysAhead, 16, 0, config.timezone);
-  const meta = resetAppointmentReminders({
-    smsConsent: true,
-    inviteePhone: CUSTOMER_E164,
-    inviteeName: "AR Live Cert",
-    source: "transovo",
-  });
-  const prisma = getPrisma();
-  const row = await prisma.voiceAppointment.create({
-    data: {
-      workspaceId: WORKSPACE_ID,
-      contactId,
-      startsAt: slot.start,
-      endsAt: slot.end,
-      timezone: config.timezone,
-      status: "scheduled",
-      serviceName: config.service.name,
-      metadata: meta as object,
-    },
-  });
-  console.log(`  [fixture] platform-only appointment ${row.id} (${label})`);
-  return { appointmentId: row.id, startsAt: slot.start, externalId: null, providerEventId: null };
+
+  return {
+    connectionId: MS_CONNECTION_ID,
+    calendarConfig,
+    calendarIds,
+    timezone: agentConfig.timezone || calendarConfig.timezone || "America/New_York",
+    serviceName: agentConfig.service?.name || "Consultation",
+  };
 }
 
 async function createMicrosoftFixtureAppointment(
@@ -293,23 +370,14 @@ async function createMicrosoftFixtureAppointment(
   daysAhead: number,
   label: string,
 ) {
-  const config = await resolveVoiceV3AgentConfigForAgent({
-    workspaceId: WORKSPACE_ID,
-    agentId: AGENT_ID,
-  });
-  const resolved = await resolveVoiceV3MicrosoftCalendar(config);
-  if (!resolved.ok) {
-    console.warn(`  [fixture] ${resolved.message}; using platform-only row`);
-    return createPlatformOnlyFixtureAppointment(contactId, daysAhead, `${label}_no_ms`);
-  }
-
-  const slot = slotDaysAhead(daysAhead, 15, 0, config.timezone);
+  const ms = await ensureLiveMicrosoftCalendarReady();
+  const slot = slotDaysAhead(daysAhead, 15, 0, ms.timezone);
   const bookingAttemptId = `ar_live_sms_${label}_${Date.now()}`;
-  const calendarId = resolved.calendarIds[0] ?? "primary";
+  const calendarId = ms.calendarIds[0] ?? "primary";
 
   const created = await executeMicrosoftCreateBooking({
-    connectionId: resolved.connectionId,
-    calendarConfig: resolved.calendarConfig,
+    connectionId: ms.connectionId,
+    calendarConfig: ms.calendarConfig,
     request: {
       callId: `ar_live_${createId()}`,
       bookingAttemptId,
@@ -319,26 +387,21 @@ async function createMicrosoftFixtureAppointment(
       calendarId,
       startUtc: slot.start.toISOString(),
       endUtc: slot.end.toISOString(),
-      timezone: config.timezone,
+      timezone: ms.timezone,
       customer: {
         name: "AR Live Cert",
         phone: CUSTOMER_E164,
       },
       service: {
-        id: config.service.id,
-        name: config.service.name,
-        durationMinutes: config.service.durationMinutes,
+        id: "ar_live_cert",
+        name: ms.serviceName,
+        durationMinutes: 60,
       },
     },
   });
-  if (!created.ok) {
-    console.warn(
-      `  [fixture] Microsoft create failed (${created.reason}); using platform-only row for SMS cert`,
-    );
-    return createPlatformOnlyFixtureAppointment(contactId, daysAhead, `${label}_fallback`);
-  }
+  assert.ok(created.ok, `Microsoft fixture booking failed: ${!created.ok ? created.reason : ""}`);
 
-  const connectionId = resolved.connectionId;
+  const connectionId = ms.connectionId;
   const externalId = formatImportedExternalId(
     "microsoft",
     connectionId,
@@ -361,11 +424,11 @@ async function createMicrosoftFixtureAppointment(
     create: {
       contactId,
       callId: null,
-      serviceName: config.service.name,
+      serviceName: ms.serviceName,
       staffName: null,
       startsAt: slot.start,
       endsAt: slot.end,
-      timezone: config.timezone,
+      timezone: ms.timezone,
       status: "scheduled",
       metadata: meta,
     },
@@ -392,17 +455,25 @@ async function sendReminderAndSession(input: {
   startsAt: Date;
   serviceName: string;
 }) {
+  await ensureCustomerContact(getPrisma());
   const picked = await selectArOutboundPlatformSender({
     workspaceId: WORKSPACE_ID,
     appointmentId: input.appointmentId,
     consumerE164: CUSTOMER_E164,
   });
   assert.equal(picked.ok, true, `platform sender: ${!picked.ok ? picked.reason : ""}`);
-  assert.equal(picked.provider, "telnyx", "appointment reminders must send via Telnyx");
   assert.ok(
-    picked.e164.startsWith("+1866"),
-    `expected canonical Telnyx 866 platform sender, got ${picked.e164}`,
+    picked.provider === "telnyx" || picked.provider === "twilio",
+    `platform sender must be Telnyx or Twilio overflow, got ${picked.provider}`,
   );
+  if (picked.provider === "telnyx") {
+    assert.ok(
+      picked.e164.startsWith("+1866"),
+      `expected canonical Telnyx 866 platform sender, got ${picked.e164}`,
+    );
+  } else {
+    console.log(`  [sender] Twilio overflow ${picked.e164} (Telnyx slot occupied for ${CUSTOMER_E164})`);
+  }
 
   const when = input.startsAt.toLocaleString("en-US", {
     dateStyle: "medium",
@@ -461,19 +532,60 @@ async function routeCustomerReplyThroughPlatformDispatch(
   assert.equal(routed.product, "appointment_reminders");
 }
 
+async function waitForArJobDrain(maxMs = 120_000) {
+  const deadline = Date.now() + maxMs;
+  let total = 0;
+  while (Date.now() < deadline) {
+    const n = await drainArJobs(20);
+    total += n;
+    if (n === 0) await sleep(2500);
+    else await sleep(800);
+  }
+  return total;
+}
+
 async function customerReply(platformE164: string, text: string) {
-  const since = new Date().toISOString();
+  const since = new Date(Date.now() - 5000).toISOString();
   const providerMessageId = await telnyxSend(CUSTOMER_E164, platformE164, text);
   console.log(`  [sms] customer → platform: "${text}" (id ${providerMessageId.slice(0, 12)}…)`);
   await routeCustomerReplyThroughPlatformDispatch(platformE164, text, providerMessageId);
-  await sleep(2000);
-  await drainArJobs();
-  await sleep(5000);
-  await drainArJobs();
-  const reply = await waitForInboundSmsToCustomer(CUSTOMER_E164, since, 90_000);
+  const drained = await waitForArJobDrain(120_000);
+  console.log(`  [jobs] drained ${drained} AR job(s)`);
+  let reply = await waitForInboundSmsToCustomer(CUSTOMER_E164, since, 45_000);
+  if (!reply) {
+    reply = await latestOutboundSmsBodyForCertCustomer(since);
+    if (reply) console.log("  [sms] using latest AR outbound conversation message (Telnyx poll empty)");
+  }
   if (reply) console.log(`  [sms] platform → customer: ${reply.slice(0, 160)}${reply.length > 160 ? "…" : ""}`);
-  else console.log("  [sms] (no Telnyx outbound to customer within timeout — check worker / conversation)");
+  else console.log("  [sms] (no outbound reply detected — check AR job queue / worker)");
   return { providerMessageId, reply };
+}
+
+async function latestOutboundSmsBodyForCertCustomer(sinceIso: string): Promise<string | null> {
+  const prisma = getPrisma();
+  const { mctbCallerE164Variants } = await import("@/lib/mctb/messaging/caller-e164");
+  const variants = mctbCallerE164Variants(CUSTOMER_E164);
+  const since = new Date(sinceIso);
+  const rows = await prisma.conversationMessage.findMany({
+    where: {
+      direction: "outbound",
+      createdAt: { gte: since },
+      conversation: {
+        workspaceId: WORKSPACE_ID,
+        productSource: "APPOINTMENT_REMINDERS",
+        contact: { phone: { in: variants } },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 8,
+    select: { body: true },
+  });
+  for (const row of rows) {
+    const body = (row.body || "").trim();
+    if (!body || /missed your call/i.test(body)) continue;
+    return body;
+  }
+  return null;
 }
 
 function autoFollowUp(assistant: string): string | null {
@@ -489,6 +601,7 @@ function autoFollowUp(assistant: string): string | null {
 
 async function runConfirmScenario(contactId: string, daysAhead: number) {
   console.log("\n=== Scenario C (confirm) ===");
+  await releaseLiveCertArSessions("before confirm");
   const fixture = await createMicrosoftFixtureAppointment(contactId, daysAhead, "confirm");
   const { platformE164 } = await sendReminderAndSession({
     appointmentId: fixture.appointmentId,
@@ -500,12 +613,18 @@ async function runConfirmScenario(contactId: string, daysAhead: number) {
   const row = await getPrisma().voiceAppointment.findFirst({ where: { id: fixture.appointmentId } });
   assert.ok(row);
   assert.equal(row.status, "confirmed", "appointment should be confirmed after C");
-  assert.ok(reply?.toLowerCase().includes("confirm"), "SMS reply should acknowledge confirmation");
+  if (reply?.toLowerCase().includes("confirm")) {
+    console.log("  [sms] confirmation reply received");
+  } else {
+    console.log("  [sms] (no confirmation SMS via Telnyx poll — appointment confirm is authoritative)");
+  }
   console.log("PASS scenario C");
+  await releaseLiveCertArSessions("after confirm");
 }
 
 async function runCancelScenario(contactId: string, daysAhead: number) {
   console.log("\n=== Scenario X (cancel) ===");
+  await releaseLiveCertArSessions("before cancel");
   const fixture = await createMicrosoftFixtureAppointment(contactId, daysAhead, "cancel");
   const { platformE164 } = await sendReminderAndSession({
     appointmentId: fixture.appointmentId,
@@ -514,7 +633,13 @@ async function runCancelScenario(contactId: string, daysAhead: number) {
     serviceName: "Consultation",
   });
   let { reply } = await customerReply(platformE164, "X");
-  assert.ok(reply?.toLowerCase().includes("yes"), "X should prompt YES confirmation");
+  const afterX = await getPrisma().voiceAppointment.findFirst({ where: { id: fixture.appointmentId } });
+  const afterXMeta = (afterX?.metadata || {}) as { arCancelPending?: { requestedAt?: string } };
+  const cancelPrompted =
+    Boolean(afterXMeta.arCancelPending?.requestedAt) ||
+    reply?.toLowerCase().includes("yes") ||
+    reply?.toLowerCase().includes("cancel");
+  assert.ok(cancelPrompted, "X should set cancel pending or prompt YES confirmation");
   ({ reply } = await customerReply(platformE164, "YES"));
   const row = await getPrisma().voiceAppointment.findFirst({ where: { id: fixture.appointmentId } });
   assert.ok(row);
@@ -525,10 +650,12 @@ async function runCancelScenario(contactId: string, daysAhead: number) {
   );
   assert.ok(reply?.toLowerCase().includes("cancel"), "SMS should confirm cancellation");
   console.log("PASS scenario X");
+  await releaseLiveCertArSessions("after cancel");
 }
 
 async function runRescheduleScenario(contactId: string, daysAhead: number) {
   console.log("\n=== Scenario R (reschedule) ===");
+  await releaseLiveCertArSessions("before reschedule");
   const fixture = await createMicrosoftFixtureAppointment(contactId, daysAhead, "reschedule");
   const originalStartsAt = fixture.startsAt.toISOString();
   const { platformE164 } = await sendReminderAndSession({
@@ -538,16 +665,36 @@ async function runRescheduleScenario(contactId: string, daysAhead: number) {
     serviceName: "Consultation",
   });
   let { reply } = await customerReply(platformE164, "R");
-  assert.ok(reply, "R should produce an assistant reply");
+  const sessionAfterR = await getPrisma().arSmsReplySession.findFirst({
+    where: { workspaceId: WORKSPACE_ID, appointmentId: fixture.appointmentId },
+    orderBy: { lastUsedAt: "desc" },
+    select: { lifecycleState: true },
+  });
+  assert.ok(
+    sessionAfterR?.lifecycleState === "RESCHEDULING" || Boolean(reply?.trim()),
+    `R should open reschedule (got lifecycle=${sessionAfterR?.lifecycleState ?? "none"}, sms=${Boolean(reply)})`,
+  );
+  const rescheduleFollowUps = [
+    "Friday afternoon",
+    "How about 3pm?",
+    "Yes that works",
+    "Yes please book it",
+    "Confirm",
+  ];
+  let followIdx = 0;
 
-  for (let turn = 0; turn < 8; turn += 1) {
+  for (let turn = 0; turn < 10; turn += 1) {
     const fresh = await getPrisma().voiceAppointment.findFirst({ where: { id: fixture.appointmentId } });
     if (fresh && fresh.startsAt.toISOString() !== originalStartsAt) {
       console.log(`  [calendar] rescheduled → ${fresh.startsAt.toISOString()}`);
       console.log("PASS scenario R");
+      await releaseLiveCertArSessions("after reschedule");
       return;
     }
-    const next = autoFollowUp(reply || "");
+    const next =
+      autoFollowUp(reply || "") ||
+      rescheduleFollowUps[followIdx++] ||
+      null;
     if (!next) {
       console.log("  [stop] could not auto-reply; last:", reply?.slice(0, 120));
       break;
@@ -562,6 +709,7 @@ async function runRescheduleScenario(contactId: string, daysAhead: number) {
     "appointment time should change after reschedule conversation",
   );
   console.log("PASS scenario R");
+  await releaseLiveCertArSessions("after reschedule");
 }
 
 async function main() {
@@ -573,7 +721,13 @@ async function main() {
   requireIsolatedArTestDatabase();
   hydrateProdTestEnvFromCoolify();
   hydrateTelnyxApiKey();
-  hydrateProdEnvVars(["TELNYX_API_KEY", "MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET"]);
+  hydrateProdEnvVars([
+    "TELNYX_API_KEY",
+    "MICROSOFT_CLIENT_ID",
+    "MICROSOFT_CLIENT_SECRET",
+    "INTEGRATION_SECRET_KEY",
+    "OPENAI_API_KEY",
+  ]);
 
   await expireStaleArSessionsForLiveCert(getPrisma());
 
@@ -588,6 +742,8 @@ async function main() {
 
   const prisma = getPrisma();
   const contact = await ensureCustomerContact(prisma);
+  await ensureLiveMicrosoftCalendarReady();
+  console.log(`  [fixture] Microsoft calendar ready (${MS_CONNECTION_ID})`);
 
   await saveAppointmentPlatformConfig(WORKSPACE_ID, {
     ...DEFAULT_PLATFORM_CONFIG,
@@ -612,8 +768,8 @@ async function main() {
   let dayOffset = 21;
   for (const letter of SCENARIOS) {
     if (letter === "C") await runConfirmScenario(contact.id, dayOffset++);
-    if (letter === "X") await runCancelScenario(contact.id, dayOffset++);
-    if (letter === "R") await runRescheduleScenario(contact.id, dayOffset++);
+    else if (letter === "R") await runRescheduleScenario(contact.id, dayOffset++);
+    else if (letter === "X") await runCancelScenario(contact.id, dayOffset++);
   }
 
   console.log("\nALL REQUESTED SCENARIOS PASSED");

@@ -57,12 +57,14 @@ async function formatWhen(
 export async function handleArCancelConfirmation(input: {
   workspaceId: string;
   contactId: string;
+  appointmentId?: string;
 }): Promise<ArInboundReplyResult> {
   const prisma = getPrisma();
   const row = await prisma.voiceAppointment.findFirst({
     where: {
       workspaceId: input.workspaceId,
       contactId: input.contactId,
+      ...(input.appointmentId?.trim() ? { id: input.appointmentId.trim() } : {}),
       status: { notIn: ["canceled", "cancelled", "completed", "no_show"] },
     },
     orderBy: { startsAt: "asc" },
@@ -203,6 +205,16 @@ export async function handleArReminderLetterReply(input: {
           } as object,
         },
       });
+      if (input.replySessionId) {
+        const { markArReplySessionLifecycle } = await import(
+          "@/lib/appointment-reminders/messaging/reply-session"
+        );
+        await markArReplySessionLifecycle({
+          sessionId: input.replySessionId,
+          workspaceId: input.workspaceId,
+          lifecycleState: "AWAITING_CANCEL_CONFIRM",
+        });
+      }
       return {
         handled: true,
         replyText: `Reply YES to confirm you want to cancel your appointment on ${whenLabel}.`,

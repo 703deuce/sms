@@ -138,7 +138,32 @@ export function resolveSlotFromConversation(
   state: AppointmentConversationState | null,
 ): { startsAt: string; endsAt: string } | null {
   if (!state?.lastOfferedSlots?.length) return null;
-  const lower = text.toLowerCase();
+  const lower = text.toLowerCase().trim();
+  const slots = state.lastOfferedSlots;
+
+  const ordinalMatch =
+    lower.match(/\b(first|1st|one)\b/) ||
+    lower.match(/\b(second|2nd|two)\b/) ||
+    lower.match(/\b(third|3rd|three)\b/) ||
+    lower.match(/\boption\s*([123])\b/) ||
+    lower.match(/^([123])$/);
+  if (ordinalMatch) {
+    const token = (ordinalMatch[1] || ordinalMatch[0] || "").toLowerCase();
+    const index =
+      token === "first" || token === "1st" || token === "one" || token === "1"
+        ? 0
+        : token === "second" || token === "2nd" || token === "two" || token === "2"
+          ? 1
+          : token === "third" || token === "3rd" || token === "three" || token === "3"
+            ? 2
+            : -1;
+    if (index >= 0 && index < slots.length) return slots[index];
+  }
+
+  if (/^(yes|y|ok|okay|sure|sounds good|that works|confirm)$/i.test(lower) && slots.length === 1) {
+    return slots[0];
+  }
+
   const timeMatch = lower.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
   if (!timeMatch) return null;
 

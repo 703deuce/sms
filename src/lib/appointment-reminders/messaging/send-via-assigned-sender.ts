@@ -47,6 +47,7 @@ export async function sendAppointmentSmsViaPlatformSender(input: {
     from: sender.e164,
     idempotencyKey: input.idempotencyKey,
     omitConsumerTrackingLink: true,
+    skipRecipientSuppressionGate: true,
     senderRoute: {
       sendWorkspaceId: phone.workspaceId,
       fromE164: sender.e164,
