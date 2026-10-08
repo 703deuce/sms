@@ -13,8 +13,8 @@
  *   AR_LIVE_MS_CONNECTION_ID=cmu1uq7f15s1o5s4f6c5b6a57  (required — real Graph event + Luna reschedule/cancel)
  *   VOICE_AGENT_ID=cmshz2lc25c622c4i58303501
  *
- * Runtime path: reminder → C/R/X → Luna via appointments ai-scheduling → AR provider-mutations
- * (not Voice V3 agent tools). Microsoft create below is fixture seed only.
+ * Runtime path: reminder → C/R/X letters → follow-ups via AR V3 workflow (Luna tools +
+ * Voice V3 dispatch) → patchProviderEventTimes. Microsoft create below is fixture seed only.
  */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -256,9 +256,21 @@ async function expireStaleArSessionsForLiveCert(prisma: ReturnType<typeof getPri
   }
 }
 
+async function ensureCertCustomerMessagingUnblocked(prisma: ReturnType<typeof getPrisma>) {
+  const { mctbCallerE164Variants } = await import("@/lib/mctb/messaging/caller-e164");
+  const phoneVariants = mctbCallerE164Variants(CUSTOMER_E164);
+  const removed = await prisma.suppression.deleteMany({
+    where: { phone: { in: phoneVariants } },
+  });
+  if (removed.count > 0) {
+    console.log(`  [setup] cleared ${removed.count} STOP/suppression row(s) for cert customer`);
+  }
+}
+
 async function ensureCustomerContact(prisma: ReturnType<typeof getPrisma>) {
   const { mctbCallerE164Variants } = await import("@/lib/mctb/messaging/caller-e164");
   const phoneVariants = mctbCallerE164Variants(CUSTOMER_E164);
+  await ensureCertCustomerMessagingUnblocked(prisma);
 
   let contact = await prisma.contact.findFirst({
     where: { workspaceId: WORKSPACE_ID, phone: { in: phoneVariants } },
@@ -312,10 +324,12 @@ type LiveMicrosoftCalendar = {
 };
 
 async function ensureLiveMicrosoftCalendarReady(): Promise<LiveMicrosoftCalendar> {
+  hydrateProdEnvVars(["MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET"]);
   const prisma = getPrisma();
   const { listConnectionProviderCalendars, patchWorkspaceCalendarConnection } = await import(
     "@/lib/calendar/connection-settings"
   );
+  const { getValidAccessToken } = await import("@/lib/calendar/providers");
   let conn = await prisma.voiceCalendarConnection.findFirst({
     where: { id: MS_CONNECTION_ID, workspaceId: WORKSPACE_ID, provider: "microsoft" },
   });
@@ -324,12 +338,25 @@ async function ensureLiveMicrosoftCalendarReady(): Promise<LiveMicrosoftCalendar
     `Live cert requires Microsoft connection ${MS_CONNECTION_ID} on workspace ${WORKSPACE_ID}`,
   );
   const status = String(conn.status || "");
-  assert.ok(
-    ["connected", "active", "ok"].includes(status),
-    `Microsoft connection must be connected (got ${status})`,
-  );
 
   let calendarConfig = (conn.config || {}) as CalendarConfig;
+  const graphToken = await getValidAccessToken(MS_CONNECTION_ID, "microsoft", calendarConfig, {
+    forceRefresh: status === "needs_reauth",
+    mutationSource: "production_web",
+  });
+  assert.ok(
+    graphToken,
+    `Microsoft Graph token required for live reschedule/cancel (connection status=${status}; hydrate MICROSOFT_CLIENT_ID/SECRET from production)`,
+  );
+  if (status === "needs_reauth") {
+    conn = await prisma.voiceCalendarConnection.findFirst({
+      where: { id: MS_CONNECTION_ID, workspaceId: WORKSPACE_ID },
+    });
+    calendarConfig = (conn?.config || calendarConfig) as CalendarConfig;
+    if (conn && String(conn.status) === "connected") {
+      console.log("  [fixture] Microsoft token refresh restored connection");
+    }
+  }
   if (!calendarConfig.writeCalendarId) {
     const calendars = await listConnectionProviderCalendars(WORKSPACE_ID, MS_CONNECTION_ID);
     const writable = calendars.find((c) => c.canEdit !== false) || calendars[0];
@@ -544,12 +571,29 @@ async function waitForArJobDrain(maxMs = 120_000) {
   return total;
 }
 
+/** Claim AR jobs immediately after local dispatch (race production worker for branch code). */
+async function burstDrainArJobs(maxMs = 90_000): Promise<number> {
+  const deadline = Date.now() + maxMs;
+  let total = 0;
+  while (Date.now() < deadline) {
+    const n = await drainArJobs(30);
+    total += n;
+    if (n > 0) {
+      await sleep(400);
+      continue;
+    }
+    await sleep(350);
+  }
+  return total;
+}
+
 async function customerReply(platformE164: string, text: string) {
   const since = new Date(Date.now() - 5000).toISOString();
   const providerMessageId = await telnyxSend(CUSTOMER_E164, platformE164, text);
   console.log(`  [sms] customer → platform: "${text}" (id ${providerMessageId.slice(0, 12)}…)`);
   await routeCustomerReplyThroughPlatformDispatch(platformE164, text, providerMessageId);
-  const drained = await waitForArJobDrain(120_000);
+  const burst = await burstDrainArJobs(90_000);
+  const drained = burst + (burst < 1 ? await waitForArJobDrain(60_000) : 0);
   console.log(`  [jobs] drained ${drained} AR job(s)`);
   let reply = await waitForInboundSmsToCustomer(CUSTOMER_E164, since, 45_000);
   if (!reply) {
