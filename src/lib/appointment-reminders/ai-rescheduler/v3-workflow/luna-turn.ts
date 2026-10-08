@@ -26,28 +26,39 @@ import {
 } from "../ar-sms-action-policy";
 import { getPrisma } from "@/lib/db";
 import { markArReplySessionLifecycle } from "@/lib/appointment-reminders/messaging/reply-session";
+import { AR_SMS_APPOINTMENT_AGENT_SYSTEM_PROMPT } from "../context-agent/ar-sms-appointment-agent-prompt";
+import type { ArSmsContextInterpretation } from "../context-agent/ar-sms-context-schema";
+import { handleArReminderLetterReply } from "../inbound-replies";
 
-const SYSTEM = `You are Luna, the Appointment Reminders SMS assistant for this business.
-
-You manage the SMS conversation. The reminder already bound this thread to one appointment (see verified context). Do not ask which appointment unless the customer clearly refers to a different one and you cannot resolve it safely.
-
-Authoritative scheduling timezone: use display_timezone in context. Never treat a UTC ISO hour as the customer's local hour.
-
-Conversation vs operations:
-- reply_session_lifecycle=COMPLETED means the last calendar operation (e.g. reschedule) already succeeded. Continue the conversation naturally. Do NOT call reschedule_appointment again unless the customer is clearly requesting a NEW change to the appointment time.
-- Thanks, acknowledgments, and small talk: reply briefly and warmly. No tools.
-- Questions about appointment time, location, or business details: answer using verified context only. Do not invent facts.
-- If sms_reschedule_automated_allowed=false, explain the customer must contact the business to reschedule (use business_phone when present). Do not call scheduling tools.
-- If a late penalty applies (sms_reschedule_late_penalty / sms_cancel_late_penalty), explain it clearly and obtain explicit confirmation before any calendar-changing tool.
-
-Reschedule tools (only when the customer wants a new time):
-1. set_scheduling_preference — capture structured new date/time intent.
-2. find_availability — after preference is set.
-3. reschedule_appointment — only when the customer clearly accepts a specific offered slot (offer_set_id and slot_id from tool results only).
-
-Never invent slots, times, offer_set_id, or slot_id.
-Read the full SMS thread — "Yes" refers to your prior message.
-After reschedule_appointment succeeds, the backend sends the confirmation SMS — do not repeat the same confirmation wording in your reply unless adding brief new information.`;
+const AR_LETTER_TOOLS = [
+  {
+    type: "function" as const,
+    function: {
+      name: "confirm_appointment_attendance",
+      description:
+        "Customer confirms they will attend. Backend enforces policy. Use when they mean confirm/C.",
+      parameters: { type: "object", additionalProperties: false, properties: {} },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "request_appointment_cancellation",
+      description:
+        "Customer wants to cancel. Starts SMS cancellation flow with policy checks. Use when they mean cancel/X or cannot attend and want to cancel.",
+      parameters: { type: "object", additionalProperties: false, properties: {} },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "begin_reschedule_request",
+      description:
+        "Customer wants to change appointment time. Opens reschedule when policy allows. Use when they mean reschedule/R or want a new time.",
+      parameters: { type: "object", additionalProperties: false, properties: {} },
+    },
+  },
+];
 
 function formatOfferSummary(runtime: VoiceV3CallRuntime): string {
   const snap = runtime.getSnapshot();
@@ -242,9 +253,11 @@ function buildSchedulingContextBlock(input: {
 
 export async function runArRescheduleLunaTurn(input: {
   workspaceId: string;
+  contactId: string;
   appointmentId: string;
   sessionId: string;
   replySessionId: string;
+  conversationId?: string;
   config: VoiceV3AgentConfig;
   runtime: VoiceV3CallRuntime;
   message: string;
@@ -253,8 +266,10 @@ export async function runArRescheduleLunaTurn(input: {
   relatedAppointmentsSummary?: string;
   verifiedContextBlock?: string;
   sessionLifecycleState?: string;
+  contextInterpretation?: ArSmsContextInterpretation;
 }): Promise<{ replyText: string; confirmed: boolean }> {
   const openAiTools = [
+    ...AR_LETTER_TOOLS,
     buildSetSchedulingPreferenceOpenAiTool(input.config),
     buildFindAvailabilityOpenAiTool(input.config),
     buildRescheduleAppointmentOpenAiTool(input.config),
@@ -279,11 +294,14 @@ export async function runArRescheduleLunaTurn(input: {
   const verifiedBlock = input.verifiedContextBlock?.trim()
     ? `\n\n--- Verified appointment & policy context ---\n${input.verifiedContextBlock.trim()}`
     : "";
+  const interpretationBlock = input.contextInterpretation
+    ? `\n\n--- Context Agent interpretation (advisory only; verify against conversation) ---\n${JSON.stringify(input.contextInterpretation)}`
+    : "";
 
   const messages: ChatMessage[] = [
     {
       role: "system",
-      content: `${SYSTEM}\n\n--- Authoritative scheduling state ---\n${schedulingContext}${verifiedBlock}${relatedBlock}`,
+      content: `${AR_SMS_APPOINTMENT_AGENT_SYSTEM_PROMPT}\n\n--- Authoritative scheduling state ---\n${schedulingContext}${verifiedBlock}${interpretationBlock}${relatedBlock}`,
     },
   ];
 
@@ -328,7 +346,59 @@ export async function runArRescheduleLunaTurn(input: {
       for (const call of tool_calls) {
         let result: string;
         try {
-          if (call.function.name === "set_scheduling_preference") {
+          if (call.function.name === "confirm_appointment_attendance") {
+            const r = await handleArReminderLetterReply({
+              workspaceId: input.workspaceId,
+              contactId: input.contactId,
+              conversationId: input.conversationId,
+              explicitAppointmentId: input.appointmentId,
+              replySessionId: input.replySessionId,
+              body: input.message,
+              letter: "C",
+            });
+            result = JSON.stringify({
+              ok: r.handled,
+              action: "confirm",
+              backend_message: r.handled ? r.replyText : null,
+            });
+          } else if (call.function.name === "request_appointment_cancellation") {
+            const r = await handleArReminderLetterReply({
+              workspaceId: input.workspaceId,
+              contactId: input.contactId,
+              conversationId: input.conversationId,
+              explicitAppointmentId: input.appointmentId,
+              replySessionId: input.replySessionId,
+              body: input.message,
+              letter: "X",
+            });
+            result = JSON.stringify({
+              ok: r.handled,
+              action: "cancel",
+              backend_message: r.handled ? r.replyText : null,
+            });
+          } else if (call.function.name === "begin_reschedule_request") {
+            const r = await handleArReminderLetterReply({
+              workspaceId: input.workspaceId,
+              contactId: input.contactId,
+              conversationId: input.conversationId,
+              explicitAppointmentId: input.appointmentId,
+              replySessionId: input.replySessionId,
+              body: input.message,
+              letter: "R",
+            });
+            if (r.handled) {
+              await markArReplySessionLifecycle({
+                sessionId: input.replySessionId,
+                workspaceId: input.workspaceId,
+                lifecycleState: "RESCHEDULING",
+              });
+            }
+            result = JSON.stringify({
+              ok: r.handled,
+              action: "reschedule",
+              backend_message: r.handled ? r.replyText : null,
+            });
+          } else if (call.function.name === "set_scheduling_preference") {
             resetReschedulePhaseForNewRequest(toolCtx.runtime);
             await markArReplySessionLifecycle({
               sessionId: input.replySessionId,

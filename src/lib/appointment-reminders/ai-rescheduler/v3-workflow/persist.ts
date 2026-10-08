@@ -2,12 +2,16 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import type { VoiceV3CallContext } from "@/lib/voice-v3/state/call-context";
+import type { ArSmsContextInterpretation } from "../context-agent/ar-sms-context-schema";
 
 export type ArRescheduleWorkflowPersisted = {
   version: 1;
   v3Context: VoiceV3CallContext;
   /** IANA timezone for customer-facing scheduling copy on this session */
   displayTimezone?: string;
+  lastContextInterpretation?: ArSmsContextInterpretation;
+  lastContextProviderMessageId?: string;
+  lastContextInterpretedAt?: string;
 };
 
 export function parsePersistedWorkflowState(raw: unknown): ArRescheduleWorkflowPersisted | null {
@@ -43,9 +47,38 @@ export async function saveWorkflowContext(
     version: 1,
     v3Context: ctx,
     displayTimezone: opts?.displayTimezone ?? prior?.displayTimezone,
+    lastContextInterpretation: prior?.lastContextInterpretation,
+    lastContextProviderMessageId: prior?.lastContextProviderMessageId,
+    lastContextInterpretedAt: prior?.lastContextInterpretedAt,
   };
   await prisma.arSmsReplySession.update({
     where: { id: sessionId },
+    data: { rescheduleWorkflowState: payload as object },
+  });
+}
+
+export async function saveArSmsContextInterpretation(input: {
+  sessionId: string;
+  providerMessageId?: string;
+  interpretation: ArSmsContextInterpretation;
+}): Promise<void> {
+  const prisma = getPrisma();
+  const existing = await prisma.arSmsReplySession.findFirst({
+    where: { id: input.sessionId },
+    select: { rescheduleWorkflowState: true },
+  });
+  const prior = parsePersistedWorkflowState(existing?.rescheduleWorkflowState);
+  if (!prior?.v3Context) {
+    return;
+  }
+  const payload: ArRescheduleWorkflowPersisted = {
+    ...prior,
+    lastContextInterpretation: input.interpretation,
+    lastContextProviderMessageId: input.providerMessageId,
+    lastContextInterpretedAt: new Date().toISOString(),
+  };
+  await prisma.arSmsReplySession.update({
+    where: { id: input.sessionId },
     data: { rescheduleWorkflowState: payload as object },
   });
 }

@@ -26,6 +26,8 @@ export type ArSmsPipelineStep =
   | "inbound_job_failed"
   | "luna_context_loaded"
   | "luna_context_failed"
+  | "context_agent_start"
+  | "context_agent_completed"
   | "luna_turn_start"
   | "luna_turn_completed"
   | "reminder_send_start"

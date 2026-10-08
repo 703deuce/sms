@@ -9,11 +9,11 @@ import { buildArVoiceV3AgentConfig } from "./agent-config";
 import { loadVerifiedExistingForArSession } from "./verified-existing";
 import { ensureArRescheduleRuntime } from "./session-runtime";
 import { runArRescheduleLunaTurn } from "./luna-turn";
-import { loadArSmsConversationForLuna } from "./luna-conversation-context";
-import { loadArCustomerAppointmentsSummaryForLuna } from "@/lib/appointment-reminders/messaging/persistent-conversation";
 import { classifyArInboundBody, logArSmsPipeline } from "@/lib/appointment-reminders/messaging/pipeline-log";
 import { resolveArAppointmentDisplayTimezone } from "../display-time";
-import { buildArLunaVerifiedContextBlock } from "../ar-sms-luna-context";
+import { buildArSmsSharedTurnSnapshot } from "../ar-sms-shared-snapshot";
+import { runArSmsContextAgent } from "../context-agent/run-ar-sms-context-agent";
+import { saveArSmsContextInterpretation } from "./persist";
 
 /**
  * Voice V3-equivalent reschedule turn for AR SMS (post-R follow-ups).
@@ -50,14 +50,6 @@ export async function runArV3RescheduleSmsTurn(input: {
       handler: "session_verify",
     });
     return { handled: false };
-  }
-
-  if (verified.session.lifecycleState === "AWAITING_REPLY") {
-    await markArReplySessionLifecycle({
-      sessionId: input.replySessionId,
-      workspaceId: input.workspaceId,
-      lifecycleState: "RESCHEDULING",
-    });
   }
 
   const existing = await loadVerifiedExistingForArSession({
@@ -105,54 +97,52 @@ export async function runArV3RescheduleSmsTurn(input: {
       agentConfigTimezone: config.timezone,
     });
 
-  let conversationHistory: Array<{ role: "user" | "assistant"; content: string }> = [];
-  if (input.conversationId) {
-    const loaded = await loadArSmsConversationForLuna({
-      workspaceId: input.workspaceId,
-      replySessionId: input.replySessionId,
-      contactId: input.contactId,
-      conversationId: input.conversationId,
-      currentMessage: input.message,
-      currentProviderMessageId: input.providerMessageId,
-    });
-    if (!loaded.sessionOk) {
-      logArSmsPipeline({
-        step: "luna_context_failed",
-        workspaceId: input.workspaceId,
-        replySessionId: input.replySessionId,
-        appointmentId: input.appointmentId,
-        conversationId: input.conversationId,
-        providerMessageId: input.providerMessageId,
-        error: loaded.reason,
-        handler: "conversation_load",
-      });
-      return {
-        handled: true,
-        replyText:
-          "We couldn't load this conversation safely. Please text R again from your latest reminder.",
-      };
-    }
-    conversationHistory = loaded.messages;
-    const { inboundKind, bodyLength } = classifyArInboundBody(input.message);
+  const snapshotResult = await buildArSmsSharedTurnSnapshot({
+    workspaceId: input.workspaceId,
+    contactId: input.contactId,
+    appointmentId: input.appointmentId,
+    replySessionId: input.replySessionId,
+    conversationId: input.conversationId,
+    message: input.message,
+    providerMessageId: input.providerMessageId,
+    sessionLifecycleState: verified.session.lifecycleState,
+  });
+  if (!snapshotResult.ok) {
     logArSmsPipeline({
-      step: "luna_context_loaded",
+      step: "luna_context_failed",
       workspaceId: input.workspaceId,
       replySessionId: input.replySessionId,
       appointmentId: input.appointmentId,
       conversationId: input.conversationId,
       providerMessageId: input.providerMessageId,
-      inboundKind,
-      bodyLength,
-      meta: { historyTurns: conversationHistory.length },
+      error: snapshotResult.reason,
+      handler: "conversation_load",
     });
-  } else {
-    const trimmed = (input.message || "").trim();
-    if (trimmed) conversationHistory = [{ role: "user", content: trimmed }];
+    return {
+      handled: true,
+      replyText:
+        "We couldn't load this conversation safely. Please text R again from your latest reminder.",
+    };
   }
-
-  const relatedAppointmentsSummary = await loadArCustomerAppointmentsSummaryForLuna({
+  const { snapshot } = snapshotResult;
+  const { inboundKind, bodyLength } = classifyArInboundBody(input.message);
+  logArSmsPipeline({
+    step: "luna_context_loaded",
     workspaceId: input.workspaceId,
-    contactId: input.contactId,
+    replySessionId: input.replySessionId,
+    appointmentId: input.appointmentId,
+    conversationId: input.conversationId,
+    providerMessageId: input.providerMessageId,
+    inboundKind,
+    bodyLength,
+    meta: { historyTurns: snapshot.conversationHistory.length },
+  });
+
+  const contextInterpretation = await runArSmsContextAgent({ snapshot });
+  await saveArSmsContextInterpretation({
+    sessionId: input.replySessionId,
+    providerMessageId: input.providerMessageId,
+    interpretation: contextInterpretation,
   });
 
   logArSmsPipeline({
@@ -162,28 +152,28 @@ export async function runArV3RescheduleSmsTurn(input: {
     appointmentId: input.appointmentId,
     conversationId: input.conversationId,
     providerMessageId: input.providerMessageId,
-    meta: { historyTurns: conversationHistory.length },
-  });
-
-  const verifiedContextBlock = await buildArLunaVerifiedContextBlock({
-    workspaceId: input.workspaceId,
-    appointmentId: input.appointmentId,
-    sessionLifecycleState: verified.session.lifecycleState,
+    meta: {
+      historyTurns: snapshot.conversationHistory.length,
+      contextIntent: contextInterpretation.intent,
+    },
   });
 
   const turn = await runArRescheduleLunaTurn({
     workspaceId: input.workspaceId,
+    contactId: input.contactId,
     appointmentId: input.appointmentId,
     sessionId: input.replySessionId,
     replySessionId: input.replySessionId,
+    conversationId: input.conversationId,
     config,
     runtime,
     message: input.message,
-    conversationHistory,
+    conversationHistory: snapshot.conversationHistory,
     displayTimezone,
-    relatedAppointmentsSummary,
-    verifiedContextBlock,
-    sessionLifecycleState: verified.session.lifecycleState,
+    relatedAppointmentsSummary: snapshot.relatedAppointmentsSummary,
+    verifiedContextBlock: snapshot.verifiedContextBlock,
+    sessionLifecycleState: snapshot.sessionLifecycleState,
+    contextInterpretation,
   });
 
   if (turn.confirmed) {
