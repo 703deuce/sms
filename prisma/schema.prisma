@@ -172,6 +172,19 @@ enum ConversationProductSource {
   MASS_TEXT
   MANUAL
   AUTOMATION
+  APPOINTMENT_REMINDERS
+}
+
+enum ArSmsReplySessionState {
+  AWAITING_REPLY
+  RESCHEDULING
+  AWAITING_CANCEL_CONFIRM
+  AWAITING_STAFF_APPROVAL
+  COMPLETED
+  EXPIRED
+  SENDER_REUSE_BLOCKED
+  NEEDS_CLARIFICATION
+  HELD_PENDING_SEND
 }
 
 /// Separate A2P/messaging registration profiles per product use case.
@@ -501,6 +514,7 @@ model Workspace {
   mctbUrgencyAssessments            MctbUrgencyAssessment[]
   mctbHandoffEvents                 MctbHandoffEvent[]
   mctbPlatformSenderAssignments     MctbPlatformSenderAssignment[]
+  arSmsReplySessions                ArSmsReplySession[]
   mctbNotificationDeliveries        MctbNotificationDelivery[]
   faxAccount                        FaxAccount?
   owner                             User?                              @relation("WorkspaceOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
@@ -717,6 +731,7 @@ model PhoneNumber {
   triggerDeployments         TriggerDeployment[]
   numberServiceSubscriptions NumberServiceSubscription[]
   mctbPlatformSenderAssignments MctbPlatformSenderAssignment[]
+  arSmsReplySessions            ArSmsReplySession[]
 
   @@unique([workspaceId, e164])
   @@index([twilioSid])
@@ -1712,6 +1727,7 @@ model Conversation {
   assignee          User?                      @relation("Assignee", fields: [assigneeId], references: [id])
   messages          ConversationMessage[]
   platformSenderAssignments MctbPlatformSenderAssignment[]
+  arSmsReplySessions        ArSmsReplySession[]
 
   @@index([workspaceId, productSource, updatedAt])
   @@index([workspaceId, phoneNumberId, updatedAt])
@@ -4790,6 +4806,40 @@ model MctbPlatformSenderAssignment {
   @@index([workspaceId, consumerE164])
   @@index([platformPhoneNumberId, consumerE164, state])
   @@map("mctb_platform_sender_assignments")
+}
+
+/// Appointment Reminders: outbound-initiated SMS reply context (product-scoped; not MCTB).
+model ArSmsReplySession {
+  id                            String                  @id @default(cuid())
+  workspaceId                   String
+  contactId                     String
+  appointmentId                 String
+  conversationId                String?
+  platformPhoneNumberId         String
+  provider                      String
+  consumerE164                  String
+  lifecycleState                ArSmsReplySessionState  @default(AWAITING_REPLY)
+  timelineType                  String?
+  calendarConnectionId          String?
+  providerCalendarId            String?
+  providerEventId               String?
+  calendarProvider              String?
+  lastOutboundMessageId         String?
+  lastOutboundProviderMessageId String?
+  replyEligibleUntil            DateTime?
+  pendingSendReason             String?
+  createdAt                     DateTime                @default(now())
+  lastUsedAt                    DateTime                @default(now())
+  completedAt                   DateTime?
+  releasedAt                    DateTime?
+  workspace                     Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  platformPhoneNumber           PhoneNumber             @relation(fields: [platformPhoneNumberId], references: [id], onDelete: Restrict)
+  conversation                  Conversation?           @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, appointmentId])
+  @@index([consumerE164, platformPhoneNumberId, lifecycleState])
+  @@index([workspaceId, contactId, lifecycleState])
+  @@map("ar_sms_reply_sessions")
 }
 
 model MctbRequestFormSubmission {

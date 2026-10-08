@@ -42,12 +42,13 @@ export function prismaProductSourceToApp(
   if (v === "mass_text") return "mass_text";
   if (v === "manual") return "manual";
   if (v === "automation") return "automation";
+  if (v === "appointment_reminders") return "manual";
   return null;
 }
 
 export function appProductSourceToPrisma(
   value: MassTextConversationProductSource,
-): "MCTB" | "MASS_TEXT" | "MANUAL" | "AUTOMATION" {
+): "MCTB" | "MASS_TEXT" | "MANUAL" | "AUTOMATION" | "APPOINTMENT_REMINDERS" {
   switch (value) {
     case "mctb":
       return "MCTB";

@@ -27,7 +27,10 @@ import type { CoreReminderStepKey } from "@/lib/appointments/reminders/reminders
 import { resolveWeeklyHours } from "@/lib/appointments/availability-engine-policy";
 import { resolveEffectiveReminderPhone } from "@/lib/appointment-reminders/effective-phone";
 import { evaluateSmsReminderEligibility } from "@/lib/appointment-reminders/sms-eligibility";
-import { finalizeReminderSmsBody } from "@/lib/appointment-reminders/message-sanitize";
+import {
+  finalizeReminderSmsBody,
+  stripHttpUrlsFromSmsBody,
+} from "@/lib/appointment-reminders/message-sanitize";
 import { loadAppointmentRemindersActivation } from "@/lib/appointment-reminders/activation";
 import {
   releaseArReminderSmsReservation,
@@ -234,6 +237,63 @@ async function markReminderFailed(input: {
   });
 }
 
+async function buildReminderSmsBodyForOutbound(input: {
+  workspaceId: string;
+  stepKey: string;
+  step: ReminderStepConfig;
+  firstName?: string;
+  businessName: string;
+  service: string | null;
+  startsAt: Date;
+  timezone: string;
+  confirmToken?: string;
+  cancelToken?: string;
+  rescheduleToken?: string;
+  metadata: AppointmentMetadata;
+}): Promise<string> {
+  let effectiveStep = input.step;
+  const platformSender = await usesPlatformAppointmentSmsSender(input.workspaceId);
+  if (platformSender) {
+    effectiveStep = resolvePlatformLockedReminderTemplate(input.stepKey, input.step);
+  }
+
+  const body = renderAppointmentTemplate(
+    effectiveStep.template,
+    appointmentMergeVars({
+      firstName: input.firstName,
+      businessName: input.businessName,
+      service: input.service,
+      startsAt: input.startsAt,
+      timezone: input.timezone,
+      confirmLink: input.confirmToken ? publicActionUrl("confirm", input.confirmToken) : "",
+      cancelLink: input.cancelToken ? publicActionUrl("cancel", input.cancelToken) : "",
+      rescheduleLink: input.rescheduleToken
+        ? publicActionUrl("reschedule", input.rescheduleToken)
+        : "",
+      manageLink: resolveManageLinkFromMetadata(input.metadata, input.rescheduleToken),
+      meetingLink: input.metadata.meetingUrl || input.metadata.joinUrl || "",
+    }),
+  );
+
+  let smsBody = finalizeReminderSmsBody(body);
+  if (platformSender) {
+    smsBody = stripHttpUrlsFromSmsBody(smsBody);
+  }
+
+  const platform = await loadAppointmentPlatformConfig(input.workspaceId);
+  const {
+    isAiReschedulerSmsEnabled,
+    AR_REPLY_INSTRUCTIONS_SUFFIX,
+    resolveAiReschedulerConfig,
+  } = await import("@/lib/appointment-reminders/ai-rescheduler/types");
+  if (isAiReschedulerSmsEnabled(resolveAiReschedulerConfig(platform))) {
+    if (!/reply\s+c\s+to\s+confirm/i.test(smsBody)) {
+      smsBody = `${smsBody.trim()}${AR_REPLY_INSTRUCTIONS_SUFFIX}`;
+    }
+  }
+  return smsBody;
+}
+
 async function trySendStep(input: {
   workspaceId: string;
   appointmentId: string;
@@ -420,46 +480,66 @@ async function trySendStep(input: {
     effectiveStep = resolvePlatformLockedReminderTemplate(input.stepKey, input.step);
   }
 
-  const body = renderAppointmentTemplate(
-    effectiveStep.template,
-    appointmentMergeVars({
+  try {
+    const smsBody = await buildReminderSmsBodyForOutbound({
+      workspaceId: input.workspaceId,
+      stepKey: input.stepKey,
+      step: input.step,
       firstName: input.metadata.inviteeName?.split(/\s+/)[0],
       businessName: input.businessName,
       service: input.serviceName,
       startsAt: input.startsAt,
       timezone: input.timezone,
-      confirmLink: input.confirmToken ? publicActionUrl("confirm", input.confirmToken) : "",
-      cancelLink: input.cancelToken ? publicActionUrl("cancel", input.cancelToken) : "",
-      rescheduleLink: input.rescheduleToken
-        ? publicActionUrl("reschedule", input.rescheduleToken)
-        : "",
-      manageLink: resolveManageLinkFromMetadata(input.metadata, input.rescheduleToken),
-      meetingLink: input.metadata.meetingUrl || input.metadata.joinUrl || "",
-    }),
-  );
-
-  try {
-    let smsBody = finalizeReminderSmsBody(body);
-    const platform = await loadAppointmentPlatformConfig(input.workspaceId);
-    const {
-      isAiReschedulerSmsEnabled,
-      AR_REPLY_INSTRUCTIONS_SUFFIX,
-      resolveAiReschedulerConfig,
-    } = await import("@/lib/appointment-reminders/ai-rescheduler/types");
-    if (isAiReschedulerSmsEnabled(resolveAiReschedulerConfig(platform))) {
-      if (!/reply\s+c\s+to\s+confirm/i.test(smsBody)) {
-        smsBody = `${smsBody.trim()}${AR_REPLY_INSTRUCTIONS_SUFFIX}`;
-      }
-    }
-    const sendResult = await sendInternationalAppointmentSms({
-      workspaceId: input.workspaceId,
-      to: input.phone,
-      body: smsBody,
+      confirmToken: input.confirmToken,
+      cancelToken: input.cancelToken,
+      rescheduleToken: input.rescheduleToken,
+      metadata: input.metadata,
     });
-    const outboundProviderMessageId =
-      sendResult && typeof sendResult === "object" && "messageId" in sendResult
-        ? String((sendResult as { messageId?: string }).messageId || "")
-        : undefined;
+    const apptRowForContact = await getPrisma().voiceAppointment.findFirst({
+      where: { id: input.appointmentId, workspaceId: input.workspaceId },
+      select: { contactId: true },
+    });
+    const usePlatformSession =
+      (await usesPlatformAppointmentSmsSender(input.workspaceId)) && apptRowForContact?.contactId;
+    let outboundProviderMessageId: string | undefined;
+    if (usePlatformSession) {
+      const { sendArReminderSmsWithSession } = await import(
+        "@/lib/appointment-reminders/messaging/outbound-reminder"
+      );
+      const platformSend = await sendArReminderSmsWithSession({
+        workspaceId: input.workspaceId,
+        appointmentId: input.appointmentId,
+        contactId: apptRowForContact.contactId!,
+        phone: input.phone,
+        body: smsBody,
+        timelineType: input.timelineType,
+      });
+      if (!platformSend.sent) {
+        await markReminderAllowanceBlocked({
+          appointmentId: input.appointmentId,
+          metadata: input.metadata,
+          timelineType: input.timelineType,
+          detail: platformSend.pendingSendReason || platformSend.reason,
+        });
+        await releaseArReminderSmsReservation({
+          workspaceId: input.workspaceId,
+          appointmentId: input.appointmentId,
+          timelineType: input.timelineType,
+        });
+        return false;
+      }
+      outboundProviderMessageId = platformSend.providerMessageId;
+    } else {
+      const sendResult = await sendInternationalAppointmentSms({
+        workspaceId: input.workspaceId,
+        to: input.phone,
+        body: smsBody,
+      });
+      outboundProviderMessageId =
+        sendResult && typeof sendResult === "object" && "messageId" in sendResult
+          ? String((sendResult as { messageId?: string }).messageId || "")
+          : undefined;
+    }
     const prisma = getPrisma();
     const nextMeta = markReminderSentInMeta(
       appendTimeline(input.metadata, {
@@ -781,11 +861,36 @@ export async function sendTestReminderSms(
   const step = resolveReminderStep(platform, input.stepKey);
   if (!step) throw new Error("Reminder step not found");
   if (!step.enabled) throw new Error("This reminder step is disabled");
-  const body = `[TEST] ${previewReminderMessage({
+  if (step.channel !== "sms") {
+    throw new Error("This reminder step is not configured for SMS");
+  }
+
+  const { resolveAppointmentOutboundSmsRoute } = await import("@/lib/appointments/sms-sender");
+  const route = await resolveAppointmentOutboundSmsRoute(workspaceId);
+  if (!route) {
+    throw new Error(
+      "Platform appointment SMS sender is not configured. Reminders must send from the Transovo platform number (same as Missed Call Text Back), not your business line.",
+    );
+  }
+
+  const startsAt = new Date(Date.now() + 86400000);
+  const previewMeta: AppointmentMetadata = {
+    inviteeName: "Alex",
+    source: "test",
+  };
+  const smsCore = await buildReminderSmsBodyForOutbound({
+    workspaceId,
+    stepKey: input.stepKey,
     step,
-    platform,
-    workspaceName: workspace?.displayName || workspace?.name || "Business",
-  })}`;
+    firstName: "Alex",
+    businessName: workspace?.displayName || workspace?.name || "Business",
+    service: "Consultation",
+    startsAt,
+    timezone: platform.timezone,
+    metadata: previewMeta,
+  });
+  const body = `[TEST] ${smsCore}`;
+
   const reservation = await reserveArReminderSmsUnit({
     workspaceId,
     excludeFromUsage: true,
@@ -794,14 +899,13 @@ export async function sendTestReminderSms(
     throw new Error("Monthly Appointment Reminders SMS allowance reached");
   }
 
-  const { sendAppointmentSms } = await import("@/lib/appointments/sms-sender");
   try {
-    await sendAppointmentSms({ workspaceId, to: input.phone, body });
+    await sendInternationalAppointmentSms({ workspaceId, to: input.phone, body });
   } catch (err) {
     await releaseArReminderSmsReservation({ workspaceId });
     throw err;
   }
-  return { body };
+  return { body, fromE164: route.fromE164 };
 }
 
 export function buildReminderSchedule(input: {

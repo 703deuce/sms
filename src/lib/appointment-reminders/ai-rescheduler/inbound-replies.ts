@@ -211,6 +211,17 @@ export async function handleArReminderLetterReply(input: {
   }
 
   // R — reschedule (notify-only still collects request; AI mode opens conversation)
+  if (input.replySessionId) {
+    const { markArReplySessionLifecycle } = await import(
+      "@/lib/appointment-reminders/messaging/reply-session"
+    );
+    await markArReplySessionLifecycle({
+      sessionId: input.replySessionId,
+      workspaceId: input.workspaceId,
+      lifecycleState: "RESCHEDULING",
+    });
+  }
+
   const prisma = getPrisma();
   await prisma.contact.update({
     where: { id: input.contactId },

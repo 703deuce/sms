@@ -121,6 +121,7 @@ export async function loadPlatformMctbReplyContexts(input: {
       from: { in: [platformFrom, platformFromNorm] },
       createdAt: { gte: since },
       status: { notIn: ["failed", "canceled", "cancelled"] },
+      NOT: { idempotencyKey: { startsWith: "ar:" } },
     },
     orderBy: { createdAt: "desc" },
     select: { workspaceId: true, createdAt: true },

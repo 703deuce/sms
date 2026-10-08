@@ -233,10 +233,17 @@ export async function sendInternationalAppointmentSms(input: {
   workspaceId: string;
   to: string;
   body: string;
+  idempotencyKey?: string;
 }) {
   const { sendAppointmentSms } = await import("@/lib/appointments/sms-sender");
   const e164 = normalizePhoneE164(input.to);
-  return sendAppointmentSms({ workspaceId: input.workspaceId, to: e164, body: input.body });
+  return sendAppointmentSms({
+    workspaceId: input.workspaceId,
+    to: e164,
+    body: input.body,
+    idempotencyKey: input.idempotencyKey,
+    omitConsumerTrackingLink: true,
+  });
 }
 
 export async function stopRemindersAfterCustomerReply(

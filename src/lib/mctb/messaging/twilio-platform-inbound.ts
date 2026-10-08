@@ -1,7 +1,7 @@
 import "server-only";
 
-import { handleMctbPlatformSenderInboundCore } from "@/lib/mctb/messaging/platform-sender-inbound-core";
-import { isActiveMctbPlatformSenderE164 } from "@/lib/mctb/messaging/platform-sender-config";
+import { resolvePlatformInboundDestination } from "@/lib/messaging/platform-inbound-destination";
+import { dispatchSharedPlatformSmsInbound } from "@/lib/messaging/platform-sms-inbound-dispatch";
 
 export type TwilioPlatformInboundResult =
   | { handled: false }
@@ -22,15 +22,15 @@ export async function tryHandleTwilioMctbPlatformSenderInbound(input: {
   providerMessageId?: string;
   mediaUrls?: string[];
 }): Promise<TwilioPlatformInboundResult> {
-  const isPlatform = await isActiveMctbPlatformSenderE164(input.toRaw);
-  if (!isPlatform) {
+  const destination = await resolvePlatformInboundDestination(input.toRaw);
+  if (!destination) {
     return { handled: false };
   }
 
   try {
-    const core = await handleMctbPlatformSenderInboundCore({
+    const core = await dispatchSharedPlatformSmsInbound({
       channel: "twilio",
-      toRaw: input.toRaw,
+      destination,
       fromE164: input.fromE164,
       body: input.body,
       providerMessageId: input.providerMessageId,

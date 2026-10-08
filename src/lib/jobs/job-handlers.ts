@@ -182,6 +182,21 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       );
       return processMctbInboundSmsJob(payload);
     }
+    case "ar_process_inbound_sms": {
+      const { processArInboundSmsJob } = await import(
+        "@/lib/appointment-reminders/messaging/process-inbound-sms-job"
+      );
+      return processArInboundSmsJob(payload);
+    }
+    case "ar_send_customer_sms": {
+      const { executeArSendCustomerSmsJob } = await import(
+        "@/lib/appointment-reminders/messaging/send-customer-sms-job"
+      );
+      return executeArSendCustomerSmsJob(payload);
+    }
+    case "ar_inbound_held": {
+      return { ok: true, held: true, reason: String(payload.reason || "held") };
+    }
     case "voice_mctb_booking_create": {
       const { executeVoiceMctbBookingCreateJob } = await import(
         "@/lib/voice/ai-booking/durable-booking-job"
