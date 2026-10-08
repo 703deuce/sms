@@ -7,11 +7,10 @@ import {
 } from "@/lib/mctb/messaging/caller-e164";
 import { providerRefFromAppointment } from "@/lib/appointment-reminders/ai-rescheduler/provider-mutations";
 import {
-  AR_REPLY_ELIGIBLE_STATES,
-  findOccupiedArSenderIdsForConsumer,
-  listArEligiblePlatformSenders,
-  pickFirstUnoccupiedPlatformSender,
-} from "./ar-platform-sender-pool";
+  allocateArPlatformSenderForReminder,
+  ensureArConsumerPlatformSenderAssignment,
+} from "./ar-consumer-platform-sender-assignment";
+import { AR_REPLY_ELIGIBLE_STATES } from "./ar-platform-sender-pool";
 
 const DEFAULT_REPLY_ELIGIBLE_MS = 21 * 24 * 60 * 60 * 1000;
 
@@ -39,6 +38,14 @@ export async function selectArOutboundPlatformSender(input: {
   const prisma = getPrisma();
   const consumer = normalizeMctbCallerE164(input.consumerE164);
 
+  const allocated = await allocateArPlatformSenderForReminder({
+    workspaceId: input.workspaceId,
+    consumerE164: consumer,
+  });
+  if (allocated.ok) {
+    return allocated;
+  }
+
   const persistentSender = await prisma.arSmsReplySession.findFirst({
     where: {
       workspaceId: input.workspaceId,
@@ -53,64 +60,25 @@ export async function selectArOutboundPlatformSender(input: {
     include: { platformPhoneNumber: { select: { id: true, e164: true, provider: true } } },
   });
   if (persistentSender?.platformPhoneNumber?.e164) {
+    const provider = String(
+      persistentSender.provider || persistentSender.platformPhoneNumber.provider || "telnyx",
+    );
+    await ensureArConsumerPlatformSenderAssignment({
+      workspaceId: input.workspaceId,
+      consumerE164: consumer,
+      platformPhoneNumberId: persistentSender.platformPhoneNumberId,
+      provider,
+    });
     return {
       ok: true,
       phoneNumberId: persistentSender.platformPhoneNumberId,
       e164: persistentSender.platformPhoneNumber.e164,
-      provider: String(
-        persistentSender.provider || persistentSender.platformPhoneNumber.provider || "telnyx",
-      ),
+      provider,
       reusedExistingAppointmentSender: true,
     };
   }
 
-  const existingForAppointment = await prisma.arSmsReplySession.findFirst({
-    where: {
-      workspaceId: input.workspaceId,
-      appointmentId: input.appointmentId,
-      lifecycleState: { in: [...AR_REPLY_ELIGIBLE_STATES] },
-    },
-    orderBy: { lastUsedAt: "desc" },
-    include: { platformPhoneNumber: { select: { id: true, e164: true, provider: true } } },
-  });
-  if (existingForAppointment?.platformPhoneNumber?.e164) {
-    return {
-      ok: true,
-      phoneNumberId: existingForAppointment.platformPhoneNumberId,
-      e164: existingForAppointment.platformPhoneNumber.e164,
-      provider: String(existingForAppointment.provider || existingForAppointment.platformPhoneNumber.provider || "telnyx"),
-      reusedExistingAppointmentSender: true,
-    };
-  }
-
-  const senders = await listArEligiblePlatformSenders();
-  if (!senders.length) {
-    return {
-      ok: false,
-      reason: "ar_no_eligible_platform_sender",
-      pendingSendReason:
-        "Canonical Telnyx platform sender (866) is not configured or authorized for Appointment Reminders",
-    };
-  }
-
-  const occupied = await findOccupiedArSenderIdsForConsumer(consumer);
-  const picked = pickFirstUnoccupiedPlatformSender(senders, occupied);
-  if (picked) {
-    return {
-      ok: true,
-      phoneNumberId: picked.phoneNumberId,
-      e164: picked.e164,
-      provider: picked.provider,
-      reusedExistingAppointmentSender: false,
-    };
-  }
-
-  return {
-    ok: false,
-    reason: "ar_sender_pool_exhausted",
-    pendingSendReason:
-      "This customer already has active appointment reminder conversations on all platform senders. Delay the reminder or wait for a reply window to expire.",
-  };
+  return allocated;
 }
 
 export async function claimArReplySessionForOutbound(input: {

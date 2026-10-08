@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { ArSmsReplySession } from "@/lib/domain";
+import { resolveArWorkspaceIdFromConsumerPlatformSender } from "./ar-consumer-platform-sender-assignment";
 import {
   findPersistentArConversationId,
   groupArSessionsByWorkspace,
@@ -24,7 +25,21 @@ export async function resolveArInboundFromOutboundInitiatedConversation(input: {
   consumerE164: string;
   platformPhoneNumberId: string;
 }): Promise<ResolveInitiatedArInboundResult> {
-  const sessions = await listArInboundRoutableSessions(input);
+  let sessions = await listArInboundRoutableSessions(input);
+  const assignmentWorkspaceId = await resolveArWorkspaceIdFromConsumerPlatformSender({
+    consumerE164: input.consumerE164,
+    platformPhoneNumberId: input.platformPhoneNumberId,
+  });
+  if (assignmentWorkspaceId) {
+    sessions = sessions.filter((s) => s.workspaceId === assignmentWorkspaceId);
+    logArSmsPipeline({
+      step: "route_assignment_workspace",
+      workspaceId: assignmentWorkspaceId,
+      platformPhoneNumberId: input.platformPhoneNumberId,
+      sessionCount: sessions.length,
+    });
+  }
+
   logArSmsPipeline({
     step: "route_sessions_listed",
     platformPhoneNumberId: input.platformPhoneNumberId,
@@ -32,6 +47,7 @@ export async function resolveArInboundFromOutboundInitiatedConversation(input: {
     meta: {
       appointmentIds: sessions.map((s) => s.appointmentId),
       lifecycleStates: sessions.map((s) => s.lifecycleState),
+      assignmentWorkspaceId,
     },
   });
   if (!sessions.length) {

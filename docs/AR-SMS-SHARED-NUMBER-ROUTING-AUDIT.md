@@ -153,6 +153,10 @@ platform-sms-inbound-dispatch.ts
 
 ---
 
+## Durable sender assignment (2026-10-08)
+
+Cross-workspace routing now prefers **`ar_sms_consumer_platform_sender_assignments`**: `(customer, platform sender) → workspace` before session listing. See `docs/AR-SMS-DYNAMIC-SENDER-ASSIGNMENT.md`.
+
 ## Recommended before freemium scale
 
 1. Staging collision drill: two workspaces, one platform sender, one customer phone — confirm held inbox UI (`held-inbound` API).

@@ -531,6 +531,7 @@ model Workspace {
   mctbHandoffEvents                 MctbHandoffEvent[]
   mctbPlatformSenderAssignments     MctbPlatformSenderAssignment[]
   arSmsReplySessions                ArSmsReplySession[]
+  arSmsConsumerPlatformSenderAssignments ArSmsConsumerPlatformSenderAssignment[]
   arSmsInboundHeldMessages          ArSmsInboundHeldMessage[]
   mctbNotificationDeliveries        MctbNotificationDelivery[]
   faxAccount                        FaxAccount?
@@ -749,6 +750,7 @@ model PhoneNumber {
   numberServiceSubscriptions NumberServiceSubscription[]
   mctbPlatformSenderAssignments MctbPlatformSenderAssignment[]
   arSmsReplySessions            ArSmsReplySession[]
+  arSmsConsumerPlatformSenderAssignments ArSmsConsumerPlatformSenderAssignment[]
 
   @@unique([workspaceId, e164])
   @@index([twilioSid])
@@ -4823,6 +4825,25 @@ model MctbPlatformSenderAssignment {
   @@index([workspaceId, consumerE164])
   @@index([platformPhoneNumberId, consumerE164, state])
   @@map("mctb_platform_sender_assignments")
+}
+
+/// Appointment Reminders: durable (customer, platform sender) → workspace for shared-number routing.
+/// Invariant: one workspace per (consumerE164, platformPhoneNumberId); one sender per (consumerE164, workspaceId).
+model ArSmsConsumerPlatformSenderAssignment {
+  id                    String      @id @default(cuid())
+  consumerE164          String
+  workspaceId           String
+  platformPhoneNumberId String
+  provider              String
+  createdAt             DateTime    @default(now())
+  lastUsedAt            DateTime    @default(now())
+  workspace             Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  platformPhoneNumber   PhoneNumber @relation(fields: [platformPhoneNumberId], references: [id], onDelete: Restrict)
+
+  @@unique([consumerE164, platformPhoneNumberId])
+  @@unique([consumerE164, workspaceId])
+  @@index([workspaceId, consumerE164])
+  @@map("ar_sms_consumer_platform_sender_assignments")
 }
 
 /// Appointment Reminders: outbound-initiated SMS reply context (product-scoped; not MCTB).

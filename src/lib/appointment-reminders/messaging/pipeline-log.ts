@@ -8,6 +8,7 @@ export type ArSmsPipelineStep =
   | "webhook_dispatch_start"
   | "inbound_receipt_recorded"
   | "route_sessions_listed"
+  | "route_assignment_workspace"
   | "route_matched"
   | "route_ambiguous_workspace"
   | "route_ambiguous_appointment"

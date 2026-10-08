@@ -85,23 +85,15 @@ export async function listArEligiblePlatformSenders(): Promise<ArPlatformSenderC
     .sort((a, b) => a.priority - b.priority);
 }
 
-/** Platform senders with an active, outbound-initiated AR reply session for this customer. */
+/**
+ * Platform senders already assigned to this customer (durable AR assignments).
+ * @deprecated Prefer findArPlatformSendersOccupiedByOtherWorkspaces for allocation.
+ */
 export async function findOccupiedArSenderIdsForConsumer(consumerE164: string): Promise<Set<string>> {
   const prisma = getPrisma();
   const consumer = normalizeMctbCallerE164(consumerE164);
-  const now = new Date();
-  const rows = await prisma.arSmsReplySession.findMany({
-    where: {
-      consumerE164: consumer,
-      lifecycleState: { in: [...AR_REPLY_ELIGIBLE_STATES] },
-      OR: [{ replyEligibleUntil: null }, { replyEligibleUntil: { gt: now } }],
-      AND: {
-        OR: [
-          { lastOutboundProviderMessageId: { not: null } },
-          { lastOutboundMessageId: { not: null } },
-        ],
-      },
-    },
+  const rows = await prisma.arSmsConsumerPlatformSenderAssignment.findMany({
+    where: { consumerE164: consumer },
     select: { platformPhoneNumberId: true },
   });
   return new Set(rows.map((r) => r.platformPhoneNumberId));
