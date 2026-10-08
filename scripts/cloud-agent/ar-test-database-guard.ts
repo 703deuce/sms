@@ -1,46 +1,32 @@
 /**
- * Guards AR integration tests from mutating production Supabase.
+ * Ensures AR DB integration tests can reach Supabase.
  *
- * Set isolated staging credentials:
- *   AR_TEST_SUPABASE_URL
- *   AR_TEST_SUPABASE_SERVICE_ROLE_KEY
- * (and optionally AR_TEST_NEXT_PUBLIC_SUPABASE_URL for anon)
+ * Default (Cloud Agent): hydrates NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
+ * from the production web container via Coolify SSH — no extra Cloud Agent secrets.
  *
- * Production Coolify hydrate must NOT be used for destructive DB tests.
+ * Optional override: AR_TEST_SUPABASE_URL + AR_TEST_SUPABASE_SERVICE_ROLE_KEY.
  */
 import { isSupabaseConfigured } from "@/lib/supabase/admin";
+import {
+  applyArTestSupabaseEnvOverrides,
+  hydrateProdSupabaseFromCoolify,
+} from "./hydrate-prod-test-env";
 
 export class ArTestDatabaseSkip extends Error {
   readonly code = "AR_TEST_DATABASE_SKIP";
 }
 
-export function applyArTestSupabaseEnv(): boolean {
-  const url =
-    process.env.AR_TEST_SUPABASE_URL?.trim() ||
-    process.env.AR_TEST_NEXT_PUBLIC_SUPABASE_URL?.trim();
-  const key = process.env.AR_TEST_SUPABASE_SERVICE_ROLE_KEY?.trim();
-  if (!url || !key) return false;
-  process.env.NEXT_PUBLIC_SUPABASE_URL = url;
-  process.env.SUPABASE_SERVICE_ROLE_KEY = key;
-  return true;
-}
-
-/** Call at start of destructive AR DB integration scripts. */
+/** Call at start of AR DB integration scripts. */
 export function requireIsolatedArTestDatabase(): void {
-  if (process.env.AR_ALLOW_PROD_SUPABASE_TESTS === "1") {
+  applyArTestSupabaseEnvOverrides();
+  if (!isSupabaseConfigured()) {
+    hydrateProdSupabaseFromCoolify();
+  }
+  if (!isSupabaseConfigured()) {
     throw new ArTestDatabaseSkip(
-      "AR_ALLOW_PROD_SUPABASE_TESTS=1 is disabled for Cloud Agent runs — use AR_TEST_SUPABASE_* staging project.",
+      "Supabase not configured — need coolify-server SSH or NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY in env.",
     );
   }
-  if (applyArTestSupabaseEnv()) {
-    if (!isSupabaseConfigured()) {
-      throw new ArTestDatabaseSkip("AR_TEST_SUPABASE_* set but Supabase client still not configured.");
-    }
-    return;
-  }
-  throw new ArTestDatabaseSkip(
-    "CONFIGURATION REQUIRED — set AR_TEST_SUPABASE_URL and AR_TEST_SUPABASE_SERVICE_ROLE_KEY (isolated staging). Destructive tests do not run against production.",
-  );
 }
 
 export function isArTestDatabaseAvailable(): boolean {

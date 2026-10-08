@@ -11,11 +11,9 @@ import {
   USAGE_PERIOD_KEY,
   USAGE_USED,
 } from "@/lib/appointment-reminders/ar-sms-usage-constants";
-import {
-  casDecrementArSmsUsage,
-  casIncrementArSmsUsageIfBelowLimit,
-  readArSmsUsedFromLimits,
-} from "@/lib/appointment-reminders/ar-sms-usage-reserve";
+import { readArSmsUsedFromLimits } from "@/lib/appointment-reminders/ar-sms-usage-limit-math";
+import { withArSmsMeteringLock } from "@/lib/appointment-reminders/ar-sms-usage-metering-lock";
+import { USAGE_REVISION_KEY } from "@/lib/appointment-reminders/ar-sms-usage-constants";
 import { isSmsReminderTimelineEvent } from "@/lib/appointment-reminders/sms-reminder-timeline";
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -93,7 +91,7 @@ export async function getArSmsUsageSnapshot(workspaceId: string): Promise<ArSmsU
   if (storedPeriod !== periodKey) used = 0;
 
   const counted = await countBillableArReminderSmsSentInPeriod(workspaceId, periodKey);
-  if (counted !== used) {
+  if (counted > used) {
     used = counted;
     await persistWorkspaceArSmsUsed(workspaceId, periodKey, used, limits);
   }
@@ -259,46 +257,65 @@ export async function reserveArReminderSmsUnit(input: {
   }
 
   const periodKey = currentArSmsUsagePeriodKey();
-  const prisma = getPrisma();
   const appointmentId = input.appointmentId?.trim() || null;
   const timelineType = input.timelineType?.trim() || "reminder";
 
-  if (
-    appointmentId &&
-    timelineType &&
-    (await appointmentAlreadyReserved(prisma, appointmentId, periodKey, timelineType))
-  ) {
+  return withArSmsMeteringLock(input.workspaceId, async () => {
+    const prisma = getPrisma();
+
+    if (
+      appointmentId &&
+      timelineType &&
+      (await appointmentAlreadyReserved(prisma, appointmentId, periodKey, timelineType))
+    ) {
+      const limitsRow = await prisma.workspaceLimits.findUnique({
+        where: { workspaceId: input.workspaceId },
+        select: { limits: true },
+      });
+      const used = readArSmsUsedFromLimits(limitsRow?.limits, periodKey);
+      return {
+        reserved: true,
+        used,
+        limit,
+        reason: "idempotent_replay",
+      };
+    }
+
     const limitsRow = await prisma.workspaceLimits.findUnique({
       where: { workspaceId: input.workspaceId },
       select: { limits: true },
     });
-    const used = readArSmsUsedFromLimits(asRecord(limitsRow?.limits), periodKey);
-    return {
-      reserved: true,
-      used,
-      limit,
-      reason: "idempotent_replay",
-    };
-  }
+    const limits = asRecord(limitsRow?.limits);
+    let used = readArSmsUsedFromLimits(limits, periodKey);
 
-  const incremented = await casIncrementArSmsUsageIfBelowLimit({
-    workspaceId: input.workspaceId,
-    periodKey,
-    limit,
-  });
+    const counted = await countBillableArReminderSmsSentInPeriod(input.workspaceId, periodKey);
+    if (counted > used) used = counted;
 
-  if (!incremented.ok) {
-    if (incremented.reason === "at_limit") {
-      return { reserved: false, used: incremented.used, limit, reason: "ar_sms_limit_reached" };
+    if (used >= limit) {
+      return { reserved: false, used, limit, reason: "ar_sms_limit_reached" };
     }
-    return { reserved: false, used: incremented.used, limit, reason: "ar_sms_limit_reached" };
-  }
 
-  if (appointmentId && timelineType) {
-    await markAppointmentArSmsReserved(prisma, appointmentId, periodKey, timelineType);
-  }
+    const nextUsed = used + 1;
+    const revision = Number(limits[USAGE_REVISION_KEY] || 0);
+    const nextLimits = {
+      ...limits,
+      [USAGE_PERIOD_KEY]: periodKey,
+      [USAGE_USED]: nextUsed,
+      [USAGE_REVISION_KEY]: revision + 1,
+    };
 
-  return { reserved: true, used: incremented.used, limit };
+    await prisma.workspaceLimits.upsert({
+      where: { workspaceId: input.workspaceId },
+      create: { workspaceId: input.workspaceId, limits: nextLimits },
+      update: { limits: nextLimits },
+    });
+
+    if (appointmentId && timelineType) {
+      await markAppointmentArSmsReserved(prisma, appointmentId, periodKey, timelineType);
+    }
+
+    return { reserved: true, used: nextUsed, limit };
+  });
 }
 
 export async function releaseArReminderSmsReservation(input: {
@@ -310,26 +327,47 @@ export async function releaseArReminderSmsReservation(input: {
   if (!metering) return;
 
   const periodKey = currentArSmsUsagePeriodKey();
-  const prisma = getPrisma();
   const appointmentId = input.appointmentId?.trim() || null;
   const timelineType = input.timelineType?.trim() || "reminder";
 
-  if (appointmentId) {
-    const row = await prisma.voiceAppointment.findUnique({
-      where: { id: appointmentId },
-      select: { metadata: true },
-    });
-    const meta = asRecord(row?.metadata);
-    const key = reservationMetaKey(periodKey, timelineType);
-    const reserved = asRecord(meta.arSmsReservations);
-    if (!reserved[key]) return;
-    const restReserved = { ...reserved };
-    delete restReserved[key];
-    await prisma.voiceAppointment.update({
-      where: { id: appointmentId },
-      data: { metadata: { ...meta, arSmsReservations: restReserved } },
-    });
-  }
+  await withArSmsMeteringLock(input.workspaceId, async () => {
+    const prisma = getPrisma();
 
-  await casDecrementArSmsUsage({ workspaceId: input.workspaceId, periodKey });
+    if (appointmentId) {
+      const row = await prisma.voiceAppointment.findUnique({
+        where: { id: appointmentId },
+        select: { metadata: true },
+      });
+      const meta = asRecord(row?.metadata);
+      const key = reservationMetaKey(periodKey, timelineType);
+      const reserved = asRecord(meta.arSmsReservations);
+      if (!reserved[key]) return;
+      const restReserved = { ...reserved };
+      delete restReserved[key];
+      await prisma.voiceAppointment.update({
+        where: { id: appointmentId },
+        data: { metadata: { ...meta, arSmsReservations: restReserved } },
+      });
+    }
+
+    const limitsRow = await prisma.workspaceLimits.findUnique({
+      where: { workspaceId: input.workspaceId },
+      select: { limits: true },
+    });
+    if (!limitsRow) return;
+    const limits = asRecord(limitsRow.limits);
+    if (String(limits[USAGE_PERIOD_KEY] || "") !== periodKey) return;
+    const revision = Number(limits[USAGE_REVISION_KEY] || 0);
+    const used = Math.max(0, Number(limits[USAGE_USED] || 0) - 1);
+    await prisma.workspaceLimits.update({
+      where: { workspaceId: input.workspaceId },
+      data: {
+        limits: {
+          ...limits,
+          [USAGE_USED]: used,
+          [USAGE_REVISION_KEY]: revision + 1,
+        },
+      },
+    });
+  });
 }
