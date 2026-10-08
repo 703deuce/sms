@@ -5,7 +5,19 @@ export function finalizeReminderSmsBody(body: string): string {
     .replace(/\s*Manage:\s*$/gim, "")
     .replace(/\s*Manage appointment:\s*$/gim, "")
     .replace(/\s*Reschedule:\s*$/gim, "")
+    .replace(/\s*Manage:\s*/gi, " ")
+    .replace(/\s*Manage appointment:\s*/gi, " ")
+    .replace(/\s*Reschedule:\s*/gi, " ")
     .replace(/\s{2,}/g, " ")
     .trim();
   return out;
+}
+
+/** Platform AR uses reply letters (C/R/X), not customer login URLs. */
+export function stripHttpUrlsFromSmsBody(body: string): string {
+  return body
+    .replace(/https?:\/\/[^\s]+/gi, "")
+    .replace(/\s+Reply\s+YES\s+to\s+confirm\.?/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
