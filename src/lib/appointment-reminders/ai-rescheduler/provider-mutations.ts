@@ -57,7 +57,7 @@ export function providerRefFromAppointment(row: {
   return null;
 }
 
-function toExistingMicrosoftAppointment(
+export function toExistingMicrosoftAppointment(
   row: { id: string; startsAt: Date; endsAt: Date },
   ref: ProviderAppointmentRef,
 ): ExistingAppointment {

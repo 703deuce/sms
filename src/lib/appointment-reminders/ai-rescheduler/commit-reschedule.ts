@@ -178,3 +178,58 @@ export async function commitArReschedule(input: {
 
   return { ok: true };
 }
+
+/** Local DB + reminders after provider event already verified at new times (V3 commit path). */
+export async function syncLocalAppointmentAfterProviderReschedule(input: {
+  workspaceId: string;
+  appointmentId: string;
+  startsAt: string;
+  endsAt: string;
+  operationId: string;
+  initiatedBy: "customer" | "staff" | "system";
+}): Promise<{ ok: true } | { ok: false; message: string }> {
+  const prisma = getPrisma();
+  const row = await prisma.voiceAppointment.findFirst({
+    where: { id: input.appointmentId, workspaceId: input.workspaceId },
+  });
+  if (!row) return { ok: false, message: "Appointment not found" };
+
+  const start = new Date(input.startsAt);
+  const end = new Date(input.endsAt);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return { ok: false, message: "Invalid times" };
+  }
+
+  const meta = (row.metadata || {}) as AppointmentMetadata & {
+    arRescheduleOps?: Record<string, { status: string; at: string }>;
+  };
+  const ops = meta.arRescheduleOps || {};
+  if (ops[input.operationId]?.status === "completed") {
+    return { ok: true };
+  }
+
+  const nextMeta = resetAppointmentReminders({
+    ...meta,
+    arRescheduleOps: {
+      ...ops,
+      [input.operationId]: { status: "completed", at: new Date().toISOString() },
+    },
+    lastChangeInitiatedBy: input.initiatedBy,
+  });
+  const withTimeline = appendTimeline(nextMeta, {
+    type: "rescheduled",
+    label: "Rescheduled via Appointment Reminders SMS",
+    detail: start.toISOString(),
+  });
+
+  await prisma.voiceAppointment.update({
+    where: { id: row.id },
+    data: {
+      startsAt: start,
+      endsAt: end,
+      status: "scheduled",
+      metadata: withTimeline as object,
+    },
+  });
+  return { ok: true };
+}

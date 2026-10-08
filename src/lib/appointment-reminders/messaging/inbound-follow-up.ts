@@ -1,10 +1,8 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/db";
 import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
-import { mergeConversationState } from "@/lib/appointments/ai-scheduling/conversation-state";
-import { handleAppointmentAIRequest } from "@/lib/appointments/ai-scheduling/service";
 import { isAiReschedulerSmsEnabled, resolveAiReschedulerConfig } from "../ai-rescheduler/types";
+import { runArV3RescheduleSmsTurn } from "../ai-rescheduler/v3-workflow/run-turn";
 import { verifyArReplySessionForInboundTurn } from "./verify-reply-session";
 import { markArReplySessionLifecycle } from "./reply-session";
 
@@ -42,69 +40,15 @@ export async function tryHandleArReminderFollowUp(input: {
     });
   }
 
-  const prisma = getPrisma();
-  const contact = await prisma.contact.findFirst({
-    where: { id: input.contactId, workspaceId: input.workspaceId },
-    select: { customFields: true },
-  });
-  if (!contact) return { handled: false };
-
-  const contactCustomFields = mergeConversationState(contact.customFields, {
+  const v3 = await runArV3RescheduleSmsTurn({
+    workspaceId: input.workspaceId,
+    contactId: input.contactId,
     appointmentId: input.appointmentId,
-    activeIntent: "RESCHEDULE",
-  });
-
-  let conversationHistory: Array<{ role: "user" | "assistant"; content: string }> | undefined;
-  if (input.conversationId) {
-    const messages = await prisma.conversationMessage.findMany({
-      where: { conversationId: input.conversationId },
-      orderBy: { createdAt: "asc" },
-      take: 12,
-      select: { direction: true, body: true },
-    });
-    conversationHistory = messages
-      .map((m) => {
-        const text = (m.body || "").trim();
-        if (!text) return null;
-        const role = m.direction === "inbound" ? "user" : "assistant";
-        return { role, content: text };
-      })
-      .filter((m): m is { role: "user" | "assistant"; content: string } => Boolean(m));
-  }
-
-  const result = await handleAppointmentAIRequest({
-    workspaceId: input.workspaceId,
-    channel: "conversation",
-    message: input.message,
-    customerId: input.contactId,
+    replySessionId: input.replySessionId,
     conversationId: input.conversationId,
-    requestId: input.providerMessageId,
-    contactCustomFields,
-    conversationHistory,
-    lockedAppointmentId: input.appointmentId,
+    message: input.message,
+    providerMessageId: input.providerMessageId,
   });
-
-  const statePatch = result.data?.conversationState;
-  if (statePatch) {
-    await prisma.contact.update({
-      where: { id: input.contactId },
-      data: {
-        customFields: mergeConversationState(contactCustomFields, statePatch) as object,
-      },
-    });
-  }
-
-  if (result.type === "OUT_OF_SCOPE") {
-    return { handled: false };
-  }
-
-  await markArReplySessionLifecycle({
-    sessionId: input.replySessionId,
-    workspaceId: input.workspaceId,
-    lifecycleState: verified.session.lifecycleState === "AWAITING_STAFF_APPROVAL"
-      ? "AWAITING_STAFF_APPROVAL"
-      : "RESCHEDULING",
-  });
-
-  return { handled: true, replyText: result.message };
+  if (!v3.handled) return { handled: false };
+  return { handled: true, replyText: v3.replyText };
 }
