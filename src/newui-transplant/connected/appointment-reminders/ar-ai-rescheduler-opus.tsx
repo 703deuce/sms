@@ -88,8 +88,8 @@ function ArReschedulerOperationsPanel() {
 
   if (!ops && !opsError) return null
   const pending = ops?.pendingApproval || []
-  const reconcile = ops?.reconcilePending || []
-  if (!opsError && !pending.length && !reconcile.length) return null
+  const reconcilePending = ops?.reconcilePending || []
+  if (!opsError && !pending.length && !reconcilePending.length) return null
 
   return (
     <section className="space-y-4 border-t border-border/60 pt-6">
@@ -117,11 +117,11 @@ function ArReschedulerOperationsPanel() {
           </ul>
         </div>
       ) : null}
-      {reconcile.length ? (
+      {reconcilePending.length ? (
         <div className="space-y-2">
           <h3 className="text-sm font-medium text-muted-foreground">Calendar reconciliation</h3>
           <ul className="space-y-2 text-sm">
-            {reconcile.map((p) => (
+            {reconcilePending.map((p) => (
               <li key={p.appointmentId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2">
                 <span>{p.serviceName || 'Appointment'} — provider sync pending</span>
                 <Button type="button" size="sm" variant="outline" disabled={busy === `reconcile:${p.appointmentId}`} onClick={() => void reconcile(p.appointmentId)}>
