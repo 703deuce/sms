@@ -28,6 +28,11 @@
 | Test2 time change missed | Bulk sync did not reflect latest Graph event at 13:48 UTC | **Root cause partly unresolved** |
 | Subscription renewal | Maintenance exists in code | **Production execution not verified** (jobs stuck pending) |
 | Periodic reconciliation | Maintenance exists in code | **Production execution not verified** (jobs stuck pending) |
+| **Scheduler tick (Oct 9)** | `worker-all` BullMQ path only enqueued `campaign_send_batch` | **Fixed on master merge** — full `processDueJobs` + `drainCalendarMaintenanceFromDb` |
+
+### Scheduler root cause (production `90b938c1`, fixed in merged release)
+
+With `DISABLE_INPROCESS_WORKER=1` and `QUEUE_DRIVER=bullmq`, embedded `scripts/worker-all.ts` called only `campaign_send_batch` + `syncDbOutboxToBullmq` — **not** `processDueJobs()`. That explains Oct 9 **campaign** minute rows without **`calendar-reconcile:*`** rows. Merged code restores full minute scheduler + Postgres calendar maintenance drain.
 
 ---
 
@@ -147,22 +152,23 @@ Implications:
 
 ---
 
-## Fix branch changes (for reference)
-
-Branch: `cursor/ar-microsoft-calendar-sync-fix-f350`  
-Commit: `52b313a86`
+## Merged release changes (master)
 
 1. `mergeCalendarConnectionConfig` — deep-merge `microsoftDeltaLinks` (and preserve subscription/watch metadata when omitted from patch).
 2. Final `syncWorkspaceCalendarConnection` write merges with **fresh** DB config.
 3. Delta bootstrap/incremental without `@odata.deltaLink` → error → existing discovery fallback in `import-sync.ts`.
 4. `enqueueCalendarConnectionSync` — chaser job (+5s) when primary minute-bucket job is already `processing`.
+5. `resolveMicrosoftCalendarViewSyncWindow` — stable UTC day bounds; reuse stored window until advance threshold.
+6. `worker-all` BullMQ tick — `processDueJobs(40)` + `drainCalendarMaintenanceFromDb(8)`; calendar maintenance skips BullMQ enqueue.
 
 **Constraints preserved:** webhook → queue → worker architecture; no Event Hubs; no broad reminder blocking on stale sync.
 
-Local test:
+Local tests:
 
 ```bash
 npx tsx scripts/test-calendar-config-merge.ts
+npx tsx scripts/test-microsoft-delta-sync-window.ts
+npx tsx scripts/test-calendar-maintenance-db-drain.ts
 ```
 
 ---

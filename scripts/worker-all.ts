@@ -30,7 +30,7 @@ async function main() {
   console.log(`[worker] starting (QUEUE_DRIVER=${process.env.QUEUE_DRIVER || "db"})`);
 
   if (useBullmq) {
-    const { startBullmqWorkers, syncDbOutboxToBullmq } = await import("../src/lib/jobs/bullmq");
+    const { startBullmqWorkers } = await import("../src/lib/jobs/bullmq");
     await startBullmqWorkers();
     console.log("[worker] BullMQ-only mode (DB poll disabled to prevent double-send)");
 
@@ -53,26 +53,31 @@ async function main() {
     setInterval(async () => {
       if (shuttingDown) return;
       try {
-        const { enqueueJob } = await import("../src/lib/messaging/enqueue-advance");
-        const minuteKey = new Date().toISOString().slice(0, 16);
-        await enqueueJob({
-          jobType: "campaign_send_batch",
-          queueName: "review-campaign",
-          payload: { minuteKey },
-          idempotencyKey: `campaign-send-batch:${minuteKey}`,
-        });
+        const result = await processDueJobs(40);
+        if (result.outbox && typeof result.outbox === "object" && "synced" in result.outbox) {
+          const outbox = result.outbox as { synced?: number; examined?: number };
+          if ((outbox.synced ?? 0) > 0) {
+            console.log(
+              `[worker] syncDbOutboxToBullmq synced=${outbox.synced} examined=${outbox.examined}`,
+            );
+          }
+        }
       } catch (err) {
-        console.error("[worker] bullmq minute enqueue failed", err);
+        console.error("[worker] processDueJobs (bullmq tick) failed", err);
       }
       try {
-        const outbox = await syncDbOutboxToBullmq(50);
-        if (outbox.synced > 0) {
+        const { drainCalendarMaintenanceFromDb } = await import(
+          "../src/lib/jobs/calendar-maintenance-db-drain"
+        );
+        const drained = await drainCalendarMaintenanceFromDb(8);
+        if (drained.claimed > 0) {
           console.log(
-            `[worker] syncDbOutboxToBullmq synced=${outbox.synced} examined=${outbox.examined}`,
+            `[worker] calendar maintenance db-drain claimed=${drained.claimed}`,
+            drained.results.map((r) => `${r.jobType}:${r.ok ? "ok" : r.error}`).join(", "),
           );
         }
       } catch (err) {
-        console.error("[worker] syncDbOutboxToBullmq failed", err);
+        console.error("[worker] calendar maintenance db-drain failed", err);
       }
     }, INTERVAL_MS);
     return;

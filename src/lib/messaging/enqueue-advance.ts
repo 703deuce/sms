@@ -111,7 +111,10 @@ export async function enqueueJob(input: EnqueueJobInput) {
     });
   }
 
-  if (process.env.QUEUE_DRIVER === "bullmq" && process.env.REDIS_URL) {
+  const { isCalendarMaintenanceDbJob } = await import("@/lib/jobs/calendar-maintenance-db-job-types");
+  const calendarMaintenanceDbOnly = isCalendarMaintenanceDbJob(input.jobType);
+
+  if (process.env.QUEUE_DRIVER === "bullmq" && process.env.REDIS_URL && !calendarMaintenanceDbOnly) {
     try {
       const { enqueueBullmq } = await import("@/lib/jobs/bullmq");
       const delay = Math.max(0, runAfter.getTime() - Date.now());
@@ -139,6 +142,8 @@ export async function enqueueJob(input: EnqueueJobInput) {
         // poller/cron may still catch up
       }
     }
+  } else if (calendarMaintenanceDbOnly) {
+    // Embedded worker drains calendar maintenance from Postgres (see worker-all / inprocess-worker).
   } else {
     // Web-container drain: kick soon so CRM/sync/push don't wait on the poll interval.
     try {

@@ -1398,6 +1398,7 @@ export async function processDueJobs(limit = 25) {
     queueName: "maintenance",
     payload: { minuteKey },
     idempotencyKey: `calendar-reconcile:${minuteKey}`,
+    priority: 15,
   });
 
   await enqueueJob({
@@ -1412,6 +1413,7 @@ export async function processDueJobs(limit = 25) {
     queueName: "maintenance",
     payload: { hourKey: minuteKey.slice(0, 13) },
     idempotencyKey: `calendar-sub-renew:${minuteKey.slice(0, 13)}`,
+    priority: 15,
   });
 
   // Scheduled receptionist activation (wizard activationMode=schedule).
