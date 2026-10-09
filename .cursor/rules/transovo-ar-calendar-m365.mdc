@@ -1,0 +1,44 @@
+---
+description: AR Calendar — Microsoft 365 read-only UI, native Outlook actions, existing Graph sync
+globs:
+  - src/app/**/appointment-reminders/calendar/**
+  - src/newui-transplant/**/appointment-reminders/ar-calendar*
+  - src/lib/appointment-reminders/calendar/**
+  - src/lib/calendar/microsoft-outlook-deeplinks.ts
+  - src/app/api/appointment-reminders/calendar/**
+alwaysApply: false
+---
+
+# AR Calendar — Microsoft 365 authoritative source
+
+**Full doc:** `docs/AR-CALENDAR-MICROSOFT-365-NATIVE-ACTIONS.md`
+
+## Product
+
+- Transovo Calendar is **read-only** — no create, edit, delete, or drag-and-drop in Transovo.
+- **Create / update** — customer uses Outlook on the web (or Google when connected).
+- **SMS reschedule** — existing Appointment Reminders Graph workflow (do not replace).
+
+## Native Microsoft 365 actions (Calendar header)
+
+| Button | Behavior |
+|--------|----------|
+| Add appointment | `https://outlook.office.com/calendar/deeplink/compose` (new tab) |
+| Open Outlook | `https://outlook.office.com/calendar/` |
+| Add calendar | Outlook calendar UI — `manageCalendarsUrl` from native-actions API |
+
+Deep links are convenience URLs, not a stable Graph contract. API: `GET /api/appointment-reminders/calendar/native-actions`.
+
+## Automatic sync (reuse — do not duplicate)
+
+- Graph change notifications (`created`, `updated`, `deleted`) — `src/lib/calendar/webhooks.ts`
+- Webhook ingress — `/api/integrations/calendars/webhooks/microsoft`
+- Delta / missed notifications — `microsoft-delta-sync.ts`, `import-sync.ts`
+- AR stale backstop — `maybe-sync-stale-calendars.ts`
+- UI: refetch on window focus + **Sync now**; background sync runs without the page open
+
+Subscriptions target the connected user’s mailbox events — not every shared calendar without extra permissions. New Outlook calendars must be **selected** under Calendar connections.
+
+## Before changing scopes or subscription shape
+
+Audit OAuth scopes, connected calendar IDs, reminder job suppression, and existing SMS reschedule Graph code.

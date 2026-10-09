@@ -3,56 +3,54 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { AlertTriangle, Calendar, RefreshCw } from 'lucide-react'
-import CalendarView from '@/components/appointments/kimi-ui/calendar/page'
-import CalendarHeader from '@/components/appointments/kimi-ui/calendar/components/CalendarHeader'
-import '@/components/appointments/kimi-ui/calendar/reference.css'
-import '@/newui-transplant/connected/appointment-reminders/appointment-reminders-opus.css'
-import {
-  addDays,
-  buildCalendarPageModel,
-  dateKey,
-  getCalendarRange,
-  startOfWeek,
-  type CalendarApiAppointment,
-} from '@/features/appointments/kimi/calendar/map-calendar'
-import type { CalendarPageActions, CalendarViewMode } from '@/features/appointments/kimi/calendar/types'
-import { AgendaListView } from '@/components/appointments/calendar/agenda-list-view'
+import { AlertTriangle, Calendar, ExternalLink, Info, Plus, RefreshCw } from 'lucide-react'
+import type { CalendarApiAppointment } from '@/features/appointments/kimi/calendar/map-calendar'
+import type { CalendarViewMode } from '@/features/appointments/kimi/calendar/types'
 import {
   buildCalendarSearchParams,
   calendarUrlEquals,
   parseCalendarCursorFromSearch,
-  parseCalendarView,
 } from '@/features/appointments/kimi/calendar/calendar-url-state'
-import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
+import { parseArCalendarView } from '@/lib/appointment-reminders/calendar/ar-calendar-url-state'
+import {
+  addDays,
+  dateKey,
+  getArCalendarRange,
+  startOfWeek,
+} from '@/lib/appointment-reminders/calendar/ar-calendar-layout'
 import {
   isArCalendarViewerReadyFromIntegrationRows,
   isArCalendarViewerReadyFromOverview,
 } from '@/lib/appointment-reminders/calendar/ar-calendar-viewer-ready'
 import { ArCalendarEventSheet } from '@/newui-transplant/components/appointment-reminders/ar-calendar-event-sheet'
-import { EmptyState, Page, PageHeader, Pill } from '@/newui-transplant/components/app/kit'
+import { ArCalendarOpusView } from '@/newui-transplant/components/appointment-reminders/ar-calendar-opus-view'
+import { OpusDataSurface } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
+import { Callout, EmptyState, Page, PageHeader, Pill } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
+import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
 
 function CalendarLoadingShell() {
   return (
-    <div className="ar-cal-surface cal-page animate-pulse min-h-[480px] rounded-lg border border-border/60 bg-card/30 p-3">
-      <div className="mb-3 h-10 rounded bg-muted/40" />
-      <div className="h-[420px] rounded bg-muted/30" />
-    </div>
+    <OpusDataSurface className="min-h-[480px]">
+      <div className="animate-pulse p-6">
+        <div className="mb-4 h-10 max-w-md rounded-lg bg-muted/40" />
+        <div className="h-[420px] rounded-xl bg-muted/30" />
+      </div>
+    </OpusDataSurface>
   )
 }
 
 export function AppointmentRemindersCalendarPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const initialView = parseCalendarView(searchParams.get('view'))
+  const initialView = parseArCalendarView(searchParams.get('view'))
   const [cursor, setCursor] = useState(() =>
     parseCalendarCursorFromSearch(new URLSearchParams(searchParams.toString()), initialView),
   )
   const [view, setView] = useState<CalendarViewMode>(initialView)
   const [selectedDayKey, setSelectedDayKey] = useState(() => {
     const d = parseCalendarCursorFromSearch(new URLSearchParams(searchParams.toString()), initialView)
-    return dateKey(initialView === 'week' ? d : d)
+    return dateKey(d)
   })
   const [events, setEvents] = useState<CalendarApiAppointment[]>([])
   const [timezone, setTimezone] = useState('America/New_York')
@@ -63,15 +61,14 @@ export function AppointmentRemindersCalendarPage() {
   const [syncing, setSyncing] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [nativeActions, setNativeActions] = useState<{
+    primaryProvider: 'microsoft' | 'google' | null
+    microsoft: { composeUrl: string; calendarUrl: string; manageCalendarsUrl: string } | null
+    google: { calendarUrl: string; createEventUrl: string } | null
+    syncNote: string
+  } | null>(null)
 
-  const range = useMemo(() => getCalendarRange(cursor, view), [view, cursor])
-
-  const agendaRangeLabel = useMemo(() => {
-    const { from, to } = getCalendarRange(cursor, 'agenda')
-    const a = from.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-    const b = to.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-    return `${a} – ${b}`
-  }, [cursor])
+  const range = useMemo(() => getArCalendarRange(cursor, view), [view, cursor])
 
   const syncUrl = useCallback(
     (nextView: CalendarViewMode, nextCursor: Date, nextDayKey: string) => {
@@ -116,21 +113,6 @@ export function AppointmentRemindersCalendarPage() {
     }
   }, [])
 
-  useEffect(() => {
-    const refresh = () => {
-      void loadOverview()
-    }
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') refresh()
-    }
-    window.addEventListener('focus', refresh)
-    document.addEventListener('visibilitychange', onVisible)
-    return () => {
-      window.removeEventListener('focus', refresh)
-      document.removeEventListener('visibilitychange', onVisible)
-    }
-  }, [loadOverview])
-
   const loadEvents = useCallback(
     async (opts?: { refresh?: boolean }) => {
       setLoading(true)
@@ -158,8 +140,36 @@ export function AppointmentRemindersCalendarPage() {
   )
 
   useEffect(() => {
+    const refresh = () => {
+      void loadOverview()
+      void loadEvents({ refresh: true })
+    }
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refresh()
+    }
+    window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.removeEventListener('focus', refresh)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [loadOverview, loadEvents])
+
+  const loadNativeActions = useCallback(async () => {
+    try {
+      const res = await fetch('/api/appointment-reminders/calendar/native-actions')
+      if (!res.ok) return
+      const json = await res.json()
+      setNativeActions(json.data ?? null)
+    } catch {
+      setNativeActions(null)
+    }
+  }, [])
+
+  useEffect(() => {
     loadOverview()
-  }, [loadOverview])
+    loadNativeActions()
+  }, [loadOverview, loadNativeActions])
 
   useEffect(() => {
     loadEvents()
@@ -169,75 +179,40 @@ export function AppointmentRemindersCalendarPage() {
     syncUrl(view, cursor, selectedDayKey)
   }, [view, cursor, selectedDayKey, syncUrl])
 
-  const miniCalendarMonth = useMemo(
-    () => new Date(cursor.getFullYear(), cursor.getMonth(), 1),
-    [cursor],
-  )
-
-  const model = useMemo(
-    () =>
-      buildCalendarPageModel({
-        view,
-        cursor,
-        selectedDayKey,
-        appointments: events,
-        miniCalendarMonth,
-      }),
-    [view, cursor, selectedDayKey, events, miniCalendarMonth],
-  )
-
-  const noop = useCallback(() => {}, [])
-
   const openAppointment = useCallback((id: string) => {
     setSelectedId(id)
     setSheetOpen(true)
   }, [])
 
-  const actions: CalendarPageActions = useMemo(
-    () => ({
-      onToday: () => {
-        const t = new Date()
-        setCursor(view === 'week' ? startOfWeek(t) : t)
-        setSelectedDayKey(dateKey(t))
-      },
-      onPrev: () => {
-        const d = new Date(cursor)
-        if (view === 'month') d.setMonth(d.getMonth() - 1)
-        else if (view === 'agenda') d.setDate(d.getDate() - 14)
-        else d.setDate(d.getDate() - (view === 'week' ? 7 : 1))
-        setCursor(view === 'week' ? startOfWeek(d) : d)
-      },
-      onNext: () => {
-        const d = new Date(cursor)
-        if (view === 'month') d.setMonth(d.getMonth() + 1)
-        else if (view === 'agenda') d.setDate(d.getDate() + 14)
-        else d.setDate(d.getDate() + (view === 'week' ? 7 : 1))
-        setCursor(view === 'week' ? startOfWeek(d) : d)
-      },
-      onViewChange: (v) => {
-        setView(v)
-        if (v === 'week') setCursor(startOfWeek(cursor))
-        else if (v === 'agenda') setCursor(new Date(selectedDayKey))
-      },
-      onNewAppointment: noop,
-      onBlockTime: noop,
-      onOpenAppointment: openAppointment,
-      onSelectDay: (dk) => {
-        setSelectedDayKey(dk)
-        if (view === 'month') {
-          setView('day')
-          setCursor(new Date(`${dk}T12:00:00`))
-        }
-      },
-      onMiniCalendarPrev: () => setCursor(addDays(cursor, -7)),
-      onMiniCalendarNext: () => setCursor(addDays(cursor, 7)),
-      onViewFullDay: () => setView('day'),
-      onShowCalendarSettings: () => router.push(AR_ROUTES.calendars),
-      onRetry: () => loadEvents({ refresh: true }),
-      timeZone: timezone,
-      sideCollapsed: true,
-    }),
-    [cursor, view, timezone, noop, router, loadEvents, openAppointment, selectedDayKey],
+  const onToday = useCallback(() => {
+    const t = new Date()
+    setCursor(view === 'week' ? startOfWeek(t) : t)
+    setSelectedDayKey(dateKey(t))
+  }, [view])
+
+  const onPrev = useCallback(() => {
+    const d = new Date(cursor)
+    if (view === 'month') d.setMonth(d.getMonth() - 1)
+    else if (view === 'agenda') d.setDate(d.getDate() - 14)
+    else d.setDate(d.getDate() - (view === 'week' ? 7 : 1))
+    setCursor(view === 'week' ? startOfWeek(d) : d)
+  }, [cursor, view])
+
+  const onNext = useCallback(() => {
+    const d = new Date(cursor)
+    if (view === 'month') d.setMonth(d.getMonth() + 1)
+    else if (view === 'agenda') d.setDate(d.getDate() + 14)
+    else d.setDate(d.getDate() + (view === 'week' ? 7 : 1))
+    setCursor(view === 'week' ? startOfWeek(d) : d)
+  }, [cursor, view])
+
+  const onViewChange = useCallback(
+    (v: CalendarViewMode) => {
+      setView(v)
+      if (v === 'week') setCursor(startOfWeek(cursor))
+      else if (v === 'agenda') setCursor(new Date(selectedDayKey))
+    },
+    [cursor, selectedDayKey],
   )
 
   const handleRefresh = async () => {
@@ -255,9 +230,89 @@ export function AppointmentRemindersCalendarPage() {
       <PageHeader
         title="Calendar"
         meta={<Pill tone="neutral">Read-only</Pill>}
-        description="Appointments from your connected Microsoft 365 or Google calendar. Edit events in Outlook or Google; Transovo syncs changes for reminders and SMS rescheduling."
+        description="Read-only in Transovo. Create and edit appointments in Microsoft 365 or Google Calendar; changes sync back for reminders and SMS rescheduling."
         actions={
           <div className="flex flex-wrap gap-2">
+            {nativeActions?.microsoft ? (
+              <>
+                <Button
+                  size="sm"
+                  nativeButton={false}
+                  render={
+                    <a
+                      href={nativeActions.microsoft.composeUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    />
+                  }
+                >
+                  <Plus className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                  Add appointment
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  nativeButton={false}
+                  render={
+                    <a
+                      href={nativeActions.microsoft.calendarUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    />
+                  }
+                >
+                  <ExternalLink className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                  Open Outlook
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  nativeButton={false}
+                  render={
+                    <a
+                      href={nativeActions.microsoft.manageCalendarsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    />
+                  }
+                >
+                  <Calendar className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                  Add calendar
+                </Button>
+              </>
+            ) : nativeActions?.google ? (
+              <>
+                <Button
+                  size="sm"
+                  nativeButton={false}
+                  render={
+                    <a
+                      href={nativeActions.google.createEventUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    />
+                  }
+                >
+                  <Plus className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                  Add appointment
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  nativeButton={false}
+                  render={
+                    <a
+                      href={nativeActions.google.calendarUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    />
+                  }
+                >
+                  <ExternalLink className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                  Open Google Calendar
+                </Button>
+              </>
+            ) : null}
             <Button variant="outline" size="sm" nativeButton={false} render={<Link href={AR_ROUTES.calendars} />}>
               <Calendar className="mr-1.5 h-3.5 w-3.5" aria-hidden />
               Calendar connections
@@ -269,6 +324,26 @@ export function AppointmentRemindersCalendarPage() {
           </div>
         }
       />
+
+      {connected && nativeActions?.microsoft ? (
+        <div className="mb-4">
+        <Callout tone="info" icon={Info} title="Microsoft 365 calendars">
+          {nativeActions.syncNote}{' '}
+          <Link href={AR_ROUTES.calendars} className="font-medium underline underline-offset-2">
+            Choose calendars to sync
+          </Link>
+          {' · '}
+          <a
+            href={nativeActions.microsoft.manageCalendarsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium underline underline-offset-2"
+          >
+            Manage calendars in Outlook
+          </a>
+        </Callout>
+        </div>
+      ) : null}
 
       {!overviewReady ? (
         <CalendarLoadingShell />
@@ -284,38 +359,25 @@ export function AppointmentRemindersCalendarPage() {
           }
         />
       ) : error ? (
-        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-6 py-12 text-center">
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-12 text-center">
           <AlertTriangle className="h-8 w-8 text-amber-600" aria-hidden />
           <p className="text-sm">{error}</p>
           <Button size="sm" onClick={() => loadEvents({ refresh: true })}>Try again</Button>
         </div>
       ) : loading && !events.length ? (
         <CalendarLoadingShell />
-      ) : view === 'agenda' ? (
-        <div className="ar-cal-surface cal-page cal-page-agenda rounded-lg border border-border/60 bg-card/20 p-1 md:p-2">
-          <CalendarHeader
-            rangeLabel={agendaRangeLabel}
-            view={view}
-            onToday={actions.onToday}
-            onPrev={actions.onPrev}
-            onNext={actions.onNext}
-            onViewChange={actions.onViewChange}
-            onNewAppointment={noop}
-            onBlockTime={noop}
-            hideTitleBlock
-          />
-          <AgendaListView rows={events} onSelect={openAppointment} />
-        </div>
       ) : (
-        <div className="ar-cal-surface cal-page rounded-lg border border-border/60 bg-card/20 p-1 md:p-2">
-          <CalendarView
-            model={model}
-            actions={actions}
-            headerView={view}
-            hideStatCards
-            sideCollapsed
-          />
-        </div>
+        <ArCalendarOpusView
+          view={view}
+          cursor={cursor}
+          events={events}
+          timeZone={timezone}
+          onViewChange={onViewChange}
+          onPrev={onPrev}
+          onNext={onNext}
+          onToday={onToday}
+          onSelectEvent={openAppointment}
+        />
       )}
 
       <ArCalendarEventSheet
