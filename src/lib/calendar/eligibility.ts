@@ -64,6 +64,19 @@ export function externalAttendees(
   });
 }
 
+/**
+ * Calendar page mirror — import/display all provider events in the sync window.
+ * SMS reminder rules are evaluated separately via isEventEligibleForReminderImport.
+ */
+export function isEventEligibleForCalendarMirror(
+  event: ProviderCalendarEvent,
+): { eligible: boolean; reason?: string } {
+  if (event.transovoOriginated) {
+    return { eligible: false, reason: "transovo_originated" };
+  }
+  return { eligible: true };
+}
+
 export function isEventEligibleForReminderImport(
   event: ProviderCalendarEvent,
   rules: CalendarImportRules,

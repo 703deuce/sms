@@ -6,6 +6,15 @@
 - **Create / edit** — customer uses Outlook on the web (or Google Calendar when connected).
 - **SMS reschedule** — existing Appointment Reminders Graph workflow (unchanged).
 
+## Calendar mirror vs SMS reminders (separate)
+
+| Concern | Behavior |
+|---------|----------|
+| **Calendar page** | Mirror **all** events from selected import calendars in the sync window (personal, no guests, all-day, busy/free). |
+| **SMS reminders** | `isEventEligibleForReminderImport` — external attendee, title rules, etc. Stored as `reminderSmsEligible` on imported rows; scanner skips when false. |
+
+Do not use reminder eligibility to hide events on the Calendar page.
+
 ## Native Outlook buttons (Calendar page)
 
 | Action | URL |

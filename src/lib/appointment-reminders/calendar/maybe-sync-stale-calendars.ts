@@ -2,6 +2,8 @@ import "server-only";
 
 import { isCalendarConnectionUsable } from "@/lib/appointment-reminders/calendar-connection";
 import { syncWorkspaceCalendarConnection } from "@/lib/calendar/import-sync";
+import { ensureMicrosoftCalendarSubscription } from "@/lib/calendar/webhooks";
+import type { CalendarConfig } from "@/lib/calendar/providers";
 import { getPrisma } from "@/lib/db";
 
 const STALE_MS = 15 * 60 * 1000;
@@ -17,7 +19,7 @@ export async function maybeSyncStaleAppointmentRemindersCalendars(workspaceId: s
       workspaceId,
       provider: { in: ["google", "microsoft"] },
     },
-    select: { id: true, status: true, lastSyncAt: true, config: true },
+    select: { id: true, provider: true, status: true, lastSyncAt: true, config: true },
   });
   type ConnRow = (typeof connections)[number];
   const usable = connections.filter((c: ConnRow) => isCalendarConnectionUsable(c.status));
@@ -34,6 +36,10 @@ export async function maybeSyncStaleAppointmentRemindersCalendars(workspaceId: s
       continue;
     }
     try {
+      const fullConfig = (conn.config || {}) as CalendarConfig;
+      if (conn.provider === "microsoft" && fullConfig.syncEnabled && !fullConfig.microsoftSubscription?.id) {
+        await ensureMicrosoftCalendarSubscription(workspaceId, conn.id).catch(() => undefined);
+      }
       const stats = await syncWorkspaceCalendarConnection(workspaceId, conn.id, {
         incremental: true,
         manual: false,

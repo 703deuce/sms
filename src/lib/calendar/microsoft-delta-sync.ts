@@ -9,11 +9,7 @@ import {
   type CalendarConfig,
   type ProviderCalendarEvent,
 } from "@/lib/calendar/providers";
-import {
-  GRAPH_PREFER_OUTLOOK_UTC,
-  isMicrosoftBusyShowAs,
-  microsoftCalendarViewDeltaUrl,
-} from "@/lib/microsoft/graph-helpers";
+import { GRAPH_PREFER_OUTLOOK_UTC, microsoftCalendarViewDeltaUrl } from "@/lib/microsoft/graph-helpers";
 
 type MicrosoftDeltaGraphEvent = {
   id: string;
@@ -70,7 +66,6 @@ function normalizeDeltaEvents(items: MicrosoftDeltaGraphEvent[]): {
       });
       continue;
     }
-    if (!isMicrosoftBusyShowAs(item.showAs) && !item.isCancelled) continue;
     events.push(mapMicrosoftGraphEvent(item));
   }
 
@@ -137,10 +132,6 @@ export async function syncMicrosoftCalendarDelta(input: {
   const url = new URL(microsoftCalendarViewDeltaUrl(calendarId));
   url.searchParams.set("startDateTime", timeMin.toISOString());
   url.searchParams.set("endDateTime", timeMax.toISOString());
-  url.searchParams.set(
-    "$select",
-    "id,subject,bodyPreview,start,end,isCancelled,showAs,attendees,organizer,lastModifiedDateTime,isAllDay,seriesMasterId,type,recurrence,originalStart,transactionId",
-  );
   url.searchParams.set("$top", "250");
 
   const res = await callMicrosoftGraph(token, url.toString(), {

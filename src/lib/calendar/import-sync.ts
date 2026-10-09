@@ -3,6 +3,7 @@ import "server-only";
 import { resolveContactForImportedEvent } from "@/lib/calendar/attendee-contact";
 import { updateWorkspaceCalendarConnection } from "@/lib/calendar/connections";
 import {
+  isEventEligibleForCalendarMirror,
   isEventEligibleForReminderImport,
   mergeImportRules,
   shouldImportFromConnection,
@@ -18,7 +19,7 @@ import {
   getMicrosoftCalendarEvent,
   getValidAccessToken,
   listGoogleCalendarEvents,
-  listMicrosoftCalendarEvents,
+  listMicrosoftCalendarEventsForAppointmentDiscovery,
   resolveImportCalendarIds,
   type CalendarConfig,
   type ProviderCalendarEvent,
@@ -185,7 +186,8 @@ export async function processCalendarProviderEvent(input: {
     ? { ...event, transovoOriginated: true }
     : event;
 
-  const eligibility = isEventEligibleForReminderImport(eventForProcessing, rules, config.email);
+  const mirrorEligibility = isEventEligibleForCalendarMirror(eventForProcessing);
+  const reminderEligibility = isEventEligibleForReminderImport(eventForProcessing, rules, config.email);
 
   if (existing) {
     if (isTransovoOwnedProviderEvent(existing, event.id)) {
@@ -199,13 +201,21 @@ export async function processCalendarProviderEvent(input: {
       return { result: "skipped", reason: "other_connection" };
     }
 
-    if (!eligibility.eligible && event.status !== "cancelled") {
-      return { result: "skipped", reason: eligibility.reason };
+    if (!mirrorEligibility.eligible && event.status !== "cancelled") {
+      return { result: "skipped", reason: mirrorEligibility.reason };
     }
 
     const contact = await resolveContactForImportedEvent(workspaceId, event, config.email);
     const externalId = formatImportedExternalId(provider, connectionId, event.id);
     const status = event.status === "cancelled" ? "canceled" : "confirmed";
+    const metadata = buildImportMetadata(
+      event,
+      provider,
+      connectionId,
+      contact,
+      input.calendarId,
+      reminderEligibility,
+    ) as Record<string, unknown>;
 
     await upsertWorkspaceAppointmentByExternalId({
       workspaceId,
@@ -219,7 +229,7 @@ export async function processCalendarProviderEvent(input: {
         endsAt: event.end,
         timezone: event.timezone || null,
         status,
-        metadata: buildImportMetadata(event, provider, connectionId, contact, input.calendarId) as Record<string, unknown>,
+        metadata,
       },
       update: {
         contactId: contact.contactId,
@@ -228,7 +238,7 @@ export async function processCalendarProviderEvent(input: {
         endsAt: event.end,
         timezone: event.timezone || null,
         status,
-        metadata: buildImportMetadata(event, provider, connectionId, contact, input.calendarId) as Record<string, unknown>,
+        metadata,
       },
     });
 
@@ -236,6 +246,7 @@ export async function processCalendarProviderEvent(input: {
       startsAt: event.start,
       endsAt: event.end,
     });
+    await applyImportedReminderEligibility(existing.id, reminderEligibility, existing.metadata);
 
     return { result: event.status === "cancelled" ? "canceled" : "updated" };
   }
@@ -244,16 +255,20 @@ export async function processCalendarProviderEvent(input: {
     return { result: "skipped", reason: "cancelled_unknown" };
   }
 
-  if (transovoOwned || eventForProcessing.transovoOriginated) {
-    return { result: "skipped", reason: "transovo_originated" };
-  }
-
-  if (!eligibility.eligible) {
-    return { result: "skipped", reason: eligibility.reason };
+  if (!mirrorEligibility.eligible) {
+    return { result: "skipped", reason: mirrorEligibility.reason };
   }
 
   const contact = await resolveContactForImportedEvent(workspaceId, event, config.email);
   const externalId = formatImportedExternalId(provider, connectionId, event.id);
+  const metadata = buildImportMetadata(
+    event,
+    provider,
+    connectionId,
+    contact,
+    input.calendarId,
+    reminderEligibility,
+  ) as Record<string, unknown>;
 
   const saved = await upsertWorkspaceAppointmentByExternalId({
     workspaceId,
@@ -267,7 +282,7 @@ export async function processCalendarProviderEvent(input: {
       endsAt: event.end,
       timezone: event.timezone || null,
       status: "confirmed",
-      metadata: buildImportMetadata(event, provider, connectionId, contact, input.calendarId) as Record<string, unknown>,
+      metadata,
     },
     update: {
       contactId: contact.contactId,
@@ -276,11 +291,13 @@ export async function processCalendarProviderEvent(input: {
       endsAt: event.end,
       timezone: event.timezone || null,
       status: "confirmed",
-      metadata: buildImportMetadata(event, provider, connectionId, contact, input.calendarId) as Record<string, unknown>,
+      metadata,
     },
   });
 
-  if (event.start.getTime() > Date.now()) {
+  await applyImportedReminderEligibility(saved.id, reminderEligibility, null);
+
+  if (reminderEligibility.eligible && event.start.getTime() > Date.now()) {
     try {
       const { maybeSendImmediateConfirmationForAppointment } = await import(
         "@/lib/appointments/reminder-delivery"
@@ -337,15 +354,75 @@ async function applyImportedAppointmentLifecycle(
   }
 }
 
+async function applyImportedReminderEligibility(
+  appointmentId: string,
+  reminderEligibility: { eligible: boolean; reason?: string },
+  previousMetadata: unknown,
+) {
+  const prisma = getPrisma();
+  const row = await prisma.voiceAppointment.findFirst({ where: { id: appointmentId } });
+  if (!row) return;
+
+  const prev = (previousMetadata || row.metadata || {}) as Record<string, unknown>;
+  const wasEligible = prev.reminderSmsEligible === true;
+  const base = { ...(row.metadata || {}) as Record<string, unknown> };
+
+  if (!reminderEligibility.eligible) {
+    const { suppressAppointmentReminders } = await import("@/lib/appointments/reminder-state");
+    await prisma.voiceAppointment.update({
+      where: { id: appointmentId },
+      data: {
+        metadata: suppressAppointmentReminders({
+          ...base,
+          reminderSmsEligible: false,
+          reminderSmsIneligibleReason: reminderEligibility.reason,
+        }) as object,
+      },
+    });
+    return;
+  }
+
+  if (!wasEligible && reminderEligibility.eligible) {
+    const { resetAppointmentReminders } = await import("@/lib/appointments/reminder-state");
+    await prisma.voiceAppointment.update({
+      where: { id: appointmentId },
+      data: {
+        metadata: resetAppointmentReminders({
+          ...base,
+          reminderSmsEligible: true,
+          reminderSmsIneligibleReason: undefined,
+        }) as object,
+      },
+    });
+    return;
+  }
+
+  await prisma.voiceAppointment.update({
+    where: { id: appointmentId },
+    data: {
+      metadata: {
+        ...base,
+        reminderSmsEligible: true,
+        reminderSmsIneligibleReason: undefined,
+      } as object,
+    },
+  });
+}
+
 function buildImportMetadata(
   event: ProviderCalendarEvent,
   provider: string,
   connectionId: string,
   contact: Awaited<ReturnType<typeof resolveContactForImportedEvent>>,
   calendarId?: string,
+  reminderEligibility?: { eligible: boolean; reason?: string },
 ) {
   return {
     source: "calendar_import",
+    reminderSmsEligible: reminderEligibility?.eligible ?? false,
+    reminderSmsIneligibleReason: reminderEligibility?.eligible
+      ? undefined
+      : reminderEligibility?.reason,
     provider,
     connectionId,
     calendarId,
@@ -436,10 +513,16 @@ export async function syncWorkspaceCalendarConnection(
           removedEventIds = delta.removedEventIds;
         } catch (deltaErr) {
           console.warn("[calendar] microsoft delta sync failed, falling back to calendarView", connectionId, deltaErr);
-          events = await listMicrosoftCalendarEvents(token, timeMin, timeMax, calendarId, {
-            connectionId: conn.id,
-            config,
-          });
+          events = await listMicrosoftCalendarEventsForAppointmentDiscovery(
+            token,
+            timeMin,
+            timeMax,
+            calendarId,
+            {
+              connectionId: conn.id,
+              config,
+            },
+          );
         }
       }
     } catch (err) {

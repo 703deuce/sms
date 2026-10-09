@@ -18,6 +18,8 @@ alwaysApply: false
 - Transovo Calendar is **read-only** — no create, edit, delete, or drag-and-drop in Transovo.
 - **Create / update** — customer uses Outlook on the web (or Google when connected).
 - **SMS reschedule** — existing Appointment Reminders Graph workflow (do not replace).
+- **Calendar mirror** — import/display **all** events from selected calendars (`isEventEligibleForCalendarMirror`).
+- **SMS reminders** — `isEventEligibleForReminderImport` + `reminderSmsEligible` metadata only; never hide mirror events for reminder rules.
 
 ## Native Microsoft 365 actions (Calendar header)
 

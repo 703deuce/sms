@@ -1065,7 +1065,10 @@ export function mapMicrosoftGraphEvent(item: {
   organizer?: { emailAddress?: { address?: string } };
   "@removed"?: { reason?: string };
 }): ProviderCalendarEvent {
-  const transovoOriginated = Boolean(item.transactionId);
+  const transovoOriginated = Boolean(
+    (item as { extendedProperties?: { private?: { transovoAppointmentId?: string } } }).extendedProperties
+      ?.private?.transovoAppointmentId,
+  );
   return {
     id: item.id,
     summary: item.subject || "Calendar event",
