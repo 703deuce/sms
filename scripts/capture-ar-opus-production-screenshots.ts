@@ -14,6 +14,7 @@ const OUT_DIR = process.env.AR_SCREENSHOT_DIR || "/opt/cursor/artifacts/ar-opus-
 const ROUTES = [
   { slug: "01-overview", path: "/appointment-reminders" },
   { slug: "02-appointments", path: "/appointment-reminders/appointments" },
+  { slug: "02b-calendar", path: "/appointment-reminders/calendar" },
   { slug: "03-reminders", path: "/appointment-reminders/reminders" },
   { slug: "04-calendars", path: "/appointment-reminders/calendars" },
   { slug: "05-settings", path: "/appointment-reminders/settings" },
