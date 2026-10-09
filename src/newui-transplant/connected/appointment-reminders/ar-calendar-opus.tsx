@@ -22,8 +22,10 @@ import {
   buildCalendarSearchParams,
   calendarUrlEquals,
   parseCalendarCursorFromSearch,
-  parseCalendarView,
 } from '@/features/appointments/kimi/calendar/calendar-url-state'
+import { parseArCalendarView } from '@/lib/appointment-reminders/calendar/ar-calendar-url-state'
+import { OpusDataSurface } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
+import { OPUS_META_STRIP } from '@/newui-transplant/components/app/opus-surfaces'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
 import {
   isArCalendarViewerReadyFromIntegrationRows,
@@ -35,17 +37,19 @@ import { Button } from '@/newui-transplant/components/ui/button'
 
 function CalendarLoadingShell() {
   return (
-    <div className="ar-cal-surface cal-page animate-pulse min-h-[480px] rounded-lg border border-border/60 bg-card/30 p-3">
-      <div className="mb-3 h-10 rounded bg-muted/40" />
-      <div className="h-[420px] rounded bg-muted/30" />
-    </div>
+    <OpusDataSurface className="ar-cal-surface opus-cal-shell min-h-[480px]">
+      <div className="animate-pulse p-5">
+        <div className="mb-4 h-10 rounded-lg bg-muted/40" />
+        <div className="h-[420px] rounded-xl bg-muted/30" />
+      </div>
+    </OpusDataSurface>
   )
 }
 
 export function AppointmentRemindersCalendarPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const initialView = parseCalendarView(searchParams.get('view'))
+  const initialView = parseArCalendarView(searchParams.get('view'))
   const [cursor, setCursor] = useState(() =>
     parseCalendarCursorFromSearch(new URLSearchParams(searchParams.toString()), initialView),
   )
@@ -291,31 +295,42 @@ export function AppointmentRemindersCalendarPage() {
         </div>
       ) : loading && !events.length ? (
         <CalendarLoadingShell />
-      ) : view === 'agenda' ? (
-        <div className="ar-cal-surface cal-page cal-page-agenda rounded-lg border border-border/60 bg-card/20 p-1 md:p-2">
-          <CalendarHeader
-            rangeLabel={agendaRangeLabel}
-            view={view}
-            onToday={actions.onToday}
-            onPrev={actions.onPrev}
-            onNext={actions.onNext}
-            onViewChange={actions.onViewChange}
-            onNewAppointment={noop}
-            onBlockTime={noop}
-            hideTitleBlock
-          />
-          <AgendaListView rows={events} onSelect={openAppointment} />
-        </div>
       ) : (
-        <div className="ar-cal-surface cal-page rounded-lg border border-border/60 bg-card/20 p-1 md:p-2">
-          <CalendarView
-            model={model}
-            actions={actions}
-            headerView={view}
-            hideStatCards
-            sideCollapsed
-          />
-        </div>
+        <OpusDataSurface className="ar-cal-surface opus-cal-shell">
+          {connected && !error ? (
+            <div className={OPUS_META_STRIP + ' mx-4 mt-4 border-dashed'}>
+              <span className="text-muted-foreground">
+                Synced appointments from your connected calendar. Tap an event for reminder and SMS status.
+              </span>
+            </div>
+          ) : null}
+          {view === 'agenda' ? (
+            <div className="cal-page cal-page-agenda">
+              <CalendarHeader
+                rangeLabel={agendaRangeLabel}
+                view={view}
+                onToday={actions.onToday}
+                onPrev={actions.onPrev}
+                onNext={actions.onNext}
+                onViewChange={actions.onViewChange}
+                onNewAppointment={noop}
+                onBlockTime={noop}
+                hideTitleBlock
+              />
+              <AgendaListView rows={events} onSelect={openAppointment} />
+            </div>
+          ) : (
+            <div className="cal-page">
+              <CalendarView
+                model={model}
+                actions={actions}
+                headerView={view}
+                hideStatCards
+                sideCollapsed
+              />
+            </div>
+          )}
+        </OpusDataSurface>
       )}
 
       <ArCalendarEventSheet

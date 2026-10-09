@@ -51,7 +51,7 @@ async function main() {
     }
   });
 
-  const calendarUrl = `${BASE_URL}/appointment-reminders/calendar?view=week`;
+  const calendarUrl = `${BASE_URL}/appointment-reminders/calendar?view=month`;
   console.log(`Opening ${calendarUrl}`);
   await page.goto(calendarUrl, { waitUntil: "networkidle", timeout: 120000 });
 
@@ -73,17 +73,17 @@ async function main() {
     process.exit(2);
   }
 
-  const gridShot = join(OUT_DIR, "ar-calendar-production-desktop-grid.png");
+  const gridShot = join(OUT_DIR, "ar-calendar-production-desktop-month.png");
   await page.screenshot({ path: gridShot, fullPage: true });
   console.log(`Saved ${gridShot}`);
 
-  const weekEvent = page.locator(".week-event").first();
-  if (!(await weekEvent.isVisible().catch(() => false))) {
-    await page.getByRole("button", { name: "Month" }).click().catch(() => {});
+  const monthBtn = page.getByRole("button", { name: "Month" });
+  if (await monthBtn.isVisible().catch(() => false)) {
+    await monthBtn.click().catch(() => {});
     await page.waitForTimeout(800);
   }
 
-  const target = page.locator(".week-event, .month-event").first();
+  const target = page.locator(".month-event, .week-event").first();
   await target.waitFor({ state: "visible", timeout: 30000 });
   await target.click();
 
