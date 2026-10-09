@@ -25,6 +25,7 @@ import {
   type ProviderCalendarEvent,
 } from "@/lib/calendar/providers";
 import { syncMicrosoftCalendarDelta } from "@/lib/calendar/microsoft-delta-sync";
+import { ensureMicrosoftCalendarSubscription } from "@/lib/calendar/webhooks";
 import {
   findWorkspaceAppointmentByExternalId,
   upsertWorkspaceAppointmentByExternalId,
@@ -477,6 +478,12 @@ export async function syncWorkspaceCalendarConnection(
   }
 
   const provider = conn.provider as "google" | "microsoft";
+  if (provider === "microsoft" && shouldImportFromConnection(config)) {
+    await ensureMicrosoftCalendarSubscription(workspaceId, connectionId).catch((err) => {
+      console.warn("[calendar] ensure microsoft subscription before sync failed", connectionId, err);
+    });
+  }
+
   const token = await getValidAccessToken(conn.id, provider, config);
   if (!token) {
     await updateWorkspaceCalendarConnection(workspaceId, connectionId, {

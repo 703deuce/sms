@@ -3,6 +3,7 @@ import { jsonError } from "@/lib/api-auth";
 import { requireAppointmentRemindersAccess } from "@/lib/appointment-reminders/api-auth";
 import { listAppointmentRemindersCalendarEvents } from "@/lib/appointment-reminders/calendar/list-calendar-events";
 import { maybeSyncStaleAppointmentRemindersCalendars } from "@/lib/appointment-reminders/calendar/maybe-sync-stale-calendars";
+import { ensureMicrosoftCalendarSubscriptionsForWorkspace } from "@/lib/calendar/ensure-microsoft-subscriptions";
 
 export async function GET(request: Request) {
   try {
@@ -20,6 +21,8 @@ export async function GET(request: Request) {
     if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
       return NextResponse.json({ error: "Invalid from or to" }, { status: 400 });
     }
+
+    void ensureMicrosoftCalendarSubscriptionsForWorkspace(auth.workspaceId).catch(() => undefined);
 
     const refresh = searchParams.get("refresh") === "1";
     let syncMeta: { ran: boolean } | undefined;
