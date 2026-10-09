@@ -10,7 +10,10 @@ import {
   MessagesSquare,
   Send,
   Sparkles,
+  UserCheck,
 } from 'lucide-react'
+import type { ArCustomerResponseSummary } from '@/lib/appointment-reminders/ar-sms-customer-outcome'
+import { CustomerResponsePill } from '@/newui-transplant/components/appointment-reminders/customer-response-pill'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
 import { ArStatGrid } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
 import {
@@ -82,6 +85,16 @@ export function AppointmentRemindersOverviewPage() {
   const [activity, setActivity] = useState<
     Array<{ id: string; at: string; customerLabel: string; reminderLabel: string; status: string }>
   >([])
+  const [customerResponses, setCustomerResponses] = useState<
+    Array<{
+      appointmentId: string
+      customerName: string
+      appointmentTitle: string
+      startsAt: string
+      responseAt: string
+      customerResponse: ArCustomerResponseSummary
+    }>
+  >([])
   const [error, setError] = useState(false)
   const [loading, setLoading] = useState(true)
   const [readiness, setReadiness] = useState<OverviewReadiness | null>(null)
@@ -97,6 +110,7 @@ export function AppointmentRemindersOverviewPage() {
       setCounts(data?.counts ?? null)
       setStats(data?.stats ?? null)
       setActivity(data?.activity ?? [])
+      setCustomerResponses(data?.customerResponses ?? [])
       setCalendars(data?.calendars ?? [])
       setReadiness(data?.readiness ?? null)
     } catch {
@@ -214,6 +228,57 @@ export function AppointmentRemindersOverviewPage() {
               </Link>
             }
           />
+
+          <Panel
+            title="Recent customer responses"
+            description="Confirmations, cancellations, and reschedules after reminder SMS."
+            action={<TextLink href={AR_ROUTES.appointments}>All appointments</TextLink>}
+            bodyClassName="p-0"
+          >
+            {loading ? (
+              <p className="p-5 text-sm text-muted-foreground">Loading…</p>
+            ) : customerResponses.length === 0 ? (
+              <EmptyState
+                icon={UserCheck}
+                title="No customer responses yet"
+                description="When someone replies to a reminder — confirms, cancels, or reschedules — it appears here."
+                action={
+                  <Button variant="outline" nativeButton={false} render={<Link href={AR_ROUTES.appointments} />}>
+                    View appointments
+                  </Button>
+                }
+              />
+            ) : (
+              <ul className="divide-y">
+                {customerResponses.map((row) => (
+                  <li key={row.appointmentId}>
+                    <Link
+                      href={`${AR_ROUTES.appointments}?highlight=${encodeURIComponent(row.appointmentId)}`}
+                      className="flex items-start gap-3 px-5 py-3.5 transition-colors hover:bg-muted/40"
+                    >
+                      <Initials name={row.customerName} className="size-8" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="truncate text-sm font-medium">{row.customerName}</span>
+                          <CustomerResponsePill
+                            label={row.customerResponse.listDisplayLine || row.customerResponse.label}
+                            kind={row.customerResponse.kind}
+                          />
+                        </div>
+                        <p className="truncate text-xs text-muted-foreground">{row.appointmentTitle}</p>
+                        {row.customerResponse.detailLine ? (
+                          <p className="mt-0.5 text-xs text-foreground/90">{row.customerResponse.detailLine}</p>
+                        ) : null}
+                        <p className="mt-1 text-xs text-muted-foreground tabular-nums">
+                          Response {new Date(row.responseAt).toLocaleString()}
+                        </p>
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
 
           <Panel
             title="Recent reminder activity"

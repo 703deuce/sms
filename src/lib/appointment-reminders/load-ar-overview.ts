@@ -8,6 +8,7 @@ import {
   isCalendarConnectionUsable,
 } from "@/lib/appointment-reminders/calendar-connection";
 import { loadAppointmentRemindersActivation } from "@/lib/appointment-reminders/activation";
+import { loadRecentArCustomerResponses } from "@/lib/appointment-reminders/load-recent-customer-responses";
 import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
 
 export async function loadAppointmentRemindersOverview(workspaceId: string) {
@@ -20,10 +21,11 @@ export async function loadAppointmentRemindersOverview(workspaceId: string) {
   const activation = await loadAppointmentRemindersActivation(workspaceId);
   const platform = await loadAppointmentPlatformConfig(workspaceId);
 
-  const [todayPage, upcomingPage, remindersPage] = await Promise.all([
+  const [todayPage, upcomingPage, remindersPage, customerResponses] = await Promise.all([
     loadAppointmentRemindersPage(workspaceId, { date: "today", page: 1, pageSize: 500 }),
     loadAppointmentRemindersPage(workspaceId, { date: "upcoming", page: 1, pageSize: 1 }),
     loadAppointmentRemindersOperationalPage(workspaceId, { page: 1, pageSize: 8 }),
+    loadRecentArCustomerResponses(workspaceId, 5),
   ]);
 
   const calendars = connections.map((c) => {
@@ -94,6 +96,15 @@ export async function loadAppointmentRemindersOverview(workspaceId: string) {
       customerLabel: r.customerLabel,
       reminderLabel: r.reminderLabel,
       status: r.statusLabel,
+    })),
+    customerResponses: customerResponses.map((r) => ({
+      appointmentId: r.appointmentId,
+      customerName: r.customerName,
+      appointmentTitle: r.appointmentTitle,
+      startsAt: r.startsAt,
+      timezone: r.timezone,
+      responseAt: r.responseAt,
+      customerResponse: r.customerResponse,
     })),
   };
 }
