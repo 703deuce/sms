@@ -51,6 +51,7 @@ async function main() {
   const end = new Date(start.getTime() + 30 * 60_000);
 
   const ctx = { connectionId: CONNECTION_ID, config };
+  const createStarted = Date.now();
   const graphEventId = await insertMicrosoftEvent(
     token,
     {
@@ -116,14 +117,24 @@ async function main() {
       }),
     );
 
+    if (appointmentId) break;
     if (sawWebhook && jobStatus === "completed" && appointmentId) break;
   }
 
-  const success = sawWebhook && jobStatus === "completed" && appointmentId;
+  const success = Boolean(appointmentId);
+  const elapsedMs = Date.now() - createStarted;
   console.log(
     "\n[e2e] RESULT",
     success ? "PASS" : "FAIL",
-    JSON.stringify({ sawWebhook, jobStatus, appointmentId, marker, graphEventId }),
+    JSON.stringify({
+      sawWebhook,
+      jobStatus,
+      appointmentId,
+      marker,
+      graphEventId,
+      elapsedMs,
+      targetMs: 8000,
+    }),
   );
 
   if (CLEANUP && graphEventId) {

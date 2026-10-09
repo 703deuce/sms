@@ -3,7 +3,7 @@ import "server-only";
 import { createHmac, randomBytes } from "crypto";
 import { updateWorkspaceCalendarConnection } from "@/lib/calendar/connections";
 import { shouldImportFromConnection } from "@/lib/calendar/eligibility";
-import { enqueueCalendarConnectionSync } from "@/lib/calendar/import-sync";
+import { enqueueCalendarConnectionSync, syncCalendarProviderEventById } from "@/lib/calendar/import-sync";
 import {
   getValidAccessToken,
   microsoftGraphFetch,
@@ -17,6 +17,9 @@ import {
   outlookEventSubscriptionExpiration,
 } from "@/lib/microsoft/graph-helpers";
 import { getPrisma } from "@/lib/db";
+
+/** Webhook-triggered calendar sync should jump ahead of bulk/default backlog. */
+const WEBHOOK_CALENDAR_SYNC_PRIORITY = 15;
 
 function appUrl() {
   return (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
@@ -241,7 +244,30 @@ export async function handleMicrosoftCalendarWebhook(notifications: Array<{
       continue;
     }
 
-    await enqueueCalendarConnectionSync(parsed.workspaceId, parsed.connectionId, true);
+    if (providerEventId) {
+      const calendarIds = resolveImportCalendarIds(config);
+      try {
+        await syncCalendarProviderEventById({
+          workspaceId: parsed.workspaceId,
+          connectionId: parsed.connectionId,
+          provider: "microsoft",
+          eventId: providerEventId,
+          calendarId: calendarIds[0],
+        });
+      } catch (err) {
+        console.warn(
+          "[calendar] microsoft webhook targeted sync failed",
+          parsed.connectionId,
+          providerEventId,
+          err,
+        );
+      }
+    }
+
+    await enqueueCalendarConnectionSync(parsed.workspaceId, parsed.connectionId, true, {
+      priority: WEBHOOK_CALENDAR_SYNC_PRIORITY,
+      wake: true,
+    });
   }
 }
 
@@ -289,12 +315,18 @@ export async function handleMicrosoftCalendarLifecycleWebhook(notifications: Arr
         config: { ...config, microsoftSubscription: undefined },
       });
       await ensureMicrosoftCalendarSubscription(parsed.workspaceId, parsed.connectionId);
-      await enqueueCalendarConnectionSync(parsed.workspaceId, parsed.connectionId, true);
+      await enqueueCalendarConnectionSync(parsed.workspaceId, parsed.connectionId, true, {
+        priority: WEBHOOK_CALENDAR_SYNC_PRIORITY,
+        wake: true,
+      });
       continue;
     }
 
     if (lifecycle === "missed") {
-      await enqueueCalendarConnectionSync(parsed.workspaceId, parsed.connectionId, true);
+      await enqueueCalendarConnectionSync(parsed.workspaceId, parsed.connectionId, true, {
+        priority: WEBHOOK_CALENDAR_SYNC_PRIORITY,
+        wake: true,
+      });
     }
   }
 }
@@ -343,7 +375,10 @@ export async function handleGoogleCalendarWebhook(input: {
     return;
   }
 
-  await enqueueCalendarConnectionSync(parsed.workspaceId, parsed.connectionId, true);
+  await enqueueCalendarConnectionSync(parsed.workspaceId, parsed.connectionId, true, {
+    priority: WEBHOOK_CALENDAR_SYNC_PRIORITY,
+    wake: true,
+  });
 }
 
 async function recordWebhookOnce(

@@ -29,6 +29,9 @@ import { Callout, EmptyState, Page, PageHeader, Pill } from '@/newui-transplant/
 import { Button } from '@/newui-transplant/components/ui/button'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
 
+/** Poll while the calendar tab is open so Outlook/Google webhook imports appear without Sync now. */
+const CALENDAR_AUTO_REFRESH_MS = 20_000
+
 function CalendarLoadingShell() {
   return (
     <OpusDataSurface className="min-h-[480px]">
@@ -114,9 +117,11 @@ export function AppointmentRemindersCalendarPage() {
   }, [])
 
   const loadEvents = useCallback(
-    async (opts?: { refresh?: boolean }) => {
-      setLoading(true)
-      setError(null)
+    async (opts?: { refresh?: boolean; silent?: boolean }) => {
+      if (!opts?.silent) {
+        setLoading(true)
+        setError(null)
+      }
       try {
         const qs = new URLSearchParams({
           from: range.from.toISOString(),
@@ -131,13 +136,25 @@ export function AppointmentRemindersCalendarPage() {
         const json = await res.json()
         setEvents(json.data || [])
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load calendar')
+        if (!opts?.silent) {
+          setError(e instanceof Error ? e.message : 'Failed to load calendar')
+        }
       } finally {
-        setLoading(false)
+        if (!opts?.silent) setLoading(false)
       }
     },
     [range.from, range.to],
   )
+
+  useEffect(() => {
+    if (!connected || !overviewReady) return
+    const tick = () => {
+      if (document.visibilityState !== 'visible') return
+      void loadEvents({ silent: true })
+    }
+    const intervalId = window.setInterval(tick, CALENDAR_AUTO_REFRESH_MS)
+    return () => window.clearInterval(intervalId)
+  }, [connected, overviewReady, loadEvents])
 
   useEffect(() => {
     const refresh = () => {

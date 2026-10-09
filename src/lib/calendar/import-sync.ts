@@ -640,10 +640,17 @@ export async function syncCalendarProviderEventById(input: {
   });
 }
 
+export type EnqueueCalendarConnectionSyncOptions = {
+  /** Lower runs sooner on the default queue (webhook-driven sync uses ~15). */
+  priority?: number;
+  wake?: boolean;
+};
+
 export async function enqueueCalendarConnectionSync(
   workspaceId: string,
   connectionId: string,
   incremental = false,
+  options?: EnqueueCalendarConnectionSyncOptions,
 ) {
   const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
   return enqueueJob({
@@ -651,5 +658,7 @@ export async function enqueueCalendarConnectionSync(
     workspaceId,
     payload: { workspaceId, connectionId, incremental },
     idempotencyKey: `calendar-sync-${connectionId}-${incremental ? "inc" : "full"}-${Math.floor(Date.now() / 60_000)}`,
+    priority: options?.priority,
+    wake: options?.wake,
   });
 }
