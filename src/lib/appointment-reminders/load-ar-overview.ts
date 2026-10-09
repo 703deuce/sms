@@ -40,6 +40,7 @@ export async function loadAppointmentRemindersOverview(workspaceId: string) {
     calendars.length > 0 && calendars.every((c) => isCalendarConnectionUsable(c.status));
 
   const hasImportCalendars = calendars.some((c) => (c.importCalendarCount ?? 0) > 0);
+  const hasUsableConnection = connections.some((c) => isCalendarConnectionUsable(c.status));
   const syncHealthy = Boolean(todayPage.sync.connected) && !todayPage.sync.syncError;
 
   let smsSenderReady = false;
@@ -64,8 +65,7 @@ export async function loadAppointmentRemindersOverview(workspaceId: string) {
   return {
     timezone: platform.timezone,
     setup: {
-      calendarConnected:
-        activation.calendarConnected && hasImportCalendars,
+      calendarConnected: hasUsableConnection && hasImportCalendars,
     },
     counts: {
       todayTotal: todayPage.total,

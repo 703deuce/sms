@@ -25,6 +25,7 @@ import {
   parseCalendarView,
 } from '@/features/appointments/kimi/calendar/calendar-url-state'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
+import { isArCalendarViewerReadyFromOverview } from '@/lib/appointment-reminders/calendar/ar-calendar-viewer-ready'
 import { ArCalendarEventSheet } from '@/newui-transplant/components/appointment-reminders/ar-calendar-event-sheet'
 import { EmptyState, Page, PageHeader, Pill } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
@@ -54,7 +55,8 @@ export function AppointmentRemindersCalendarPage() {
   const [timezone, setTimezone] = useState('America/New_York')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [connected, setConnected] = useState<boolean | null>(null)
+  const [overviewReady, setOverviewReady] = useState(false)
+  const [connected, setConnected] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -86,17 +88,16 @@ export function AppointmentRemindersCalendarPage() {
   )
 
   const loadOverview = useCallback(async () => {
-    const res = await fetch('/api/appointment-reminders/overview')
-    if (!res.ok) return
-    const json = await res.json()
-    const data = json.data
-    setConnected(
-      Boolean(
-        data?.setup?.calendarConnected ??
-          (data?.readiness?.hasImportCalendars && data?.calendarHealthy),
-      ),
-    )
-    if (data?.timezone) setTimezone(data.timezone)
+    try {
+      const res = await fetch('/api/appointment-reminders/overview')
+      if (!res.ok) return
+      const json = await res.json()
+      const data = json.data
+      setConnected(isArCalendarViewerReadyFromOverview(data))
+      if (data?.timezone) setTimezone(data.timezone)
+    } finally {
+      setOverviewReady(true)
+    }
   }, [])
 
   const loadEvents = useCallback(
@@ -238,7 +239,9 @@ export function AppointmentRemindersCalendarPage() {
         }
       />
 
-      {connected === false ? (
+      {!overviewReady ? (
+        <CalendarLoadingShell />
+      ) : !connected && events.length === 0 ? (
         <EmptyState
           icon={Calendar}
           title="Connect a calendar"
