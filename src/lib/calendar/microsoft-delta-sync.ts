@@ -9,7 +9,11 @@ import {
   type CalendarConfig,
   type ProviderCalendarEvent,
 } from "@/lib/calendar/providers";
-import { GRAPH_PREFER_OUTLOOK_UTC, microsoftCalendarViewDeltaUrl } from "@/lib/microsoft/graph-helpers";
+import {
+  GRAPH_PREFER_OUTLOOK_UTC,
+  microsoftCalendarViewDeltaUrl,
+  parseMicrosoftGraphError,
+} from "@/lib/microsoft/graph-helpers";
 
 type MicrosoftDeltaGraphEvent = {
   id: string;
@@ -101,8 +105,9 @@ export async function syncMicrosoftCalendarDelta(input: {
   let deltaLink: string | undefined;
 
   if (canUseDelta && stored?.deltaLink) {
+    const deltaPrefer = `${GRAPH_PREFER_OUTLOOK_UTC},odata.maxpagesize=250`;
     const res = await callMicrosoftGraph(token, stored.deltaLink, {
-      headers: { Prefer: GRAPH_PREFER_OUTLOOK_UTC },
+      headers: { Prefer: deltaPrefer },
     }, ctx);
 
     if (res.status === 410 || res.status === 404) {
@@ -138,12 +143,20 @@ export async function syncMicrosoftCalendarDelta(input: {
   const url = new URL(microsoftCalendarViewDeltaUrl(calendarId));
   url.searchParams.set("startDateTime", timeMin.toISOString());
   url.searchParams.set("endDateTime", timeMax.toISOString());
-  url.searchParams.set("$top", "250");
+  // Graph rejects $top on calendarView/delta (ErrorInvalidUrlQuery). Page size via Prefer header.
+  const deltaPrefer = `${GRAPH_PREFER_OUTLOOK_UTC},odata.maxpagesize=250`;
 
   const res = await callMicrosoftGraph(token, url.toString(), {
-    headers: { Prefer: GRAPH_PREFER_OUTLOOK_UTC },
+    headers: { Prefer: deltaPrefer },
   }, ctx);
-  if (!res.ok) throw new Error(`Microsoft delta bootstrap ${res.status}`);
+  if (!res.ok) {
+    const graphErr = await parseMicrosoftGraphError(res);
+    console.error(
+      "[calendar] microsoft delta bootstrap failed",
+      JSON.stringify({ connectionId, calendarId, ...graphErr }),
+    );
+    throw new Error(`Microsoft delta bootstrap ${res.status}`);
+  }
 
   const { items, deltaLink: nextDeltaLink } = await collectMicrosoftGraphCollection<MicrosoftDeltaGraphEvent>(
     res,

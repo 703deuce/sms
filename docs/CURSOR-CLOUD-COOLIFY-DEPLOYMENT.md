@@ -190,7 +190,7 @@ Both should return `200`. If yes, **re-queue one deploy** with the **full 40-cha
 COMMIT=$(git rev-parse HEAD) bash scripts/coolify-queue-web-deploy.sh --wait
 ```
 
-Avoid stacking multiple deploys for the same push (webhook + manual queue) while disk is tight — wait for `finished` or `failed` before queuing again.
+**One push → one deploy.** `master` push already queues the web app via Coolify webhook. **Do not** run `coolify-queue-web-deploy.sh` after a normal `git push` unless webhook deploy failed or you are redeploying without a new commit. Stacking webhook + manual queue (or multiple manual queues) runs parallel `--no-cache` builds and can take hours on a 8GB host. Wait for `finished` or `failed` before any new queue.
 
 **2026-10-03:** Deployments `3317`–`3320` failed on zen timeout; `3321` succeeded after re-queue (~12 min build). Production `commitSha` matched `adb5b3db…`.
 
