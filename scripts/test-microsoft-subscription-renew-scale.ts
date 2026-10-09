@@ -4,13 +4,13 @@
  */
 import assert from "node:assert/strict";
 import { getPrisma } from "../src/lib/db";
+import { getOrCreateArScaleTestWorkspace } from "./lib/ar-scale-test-workspace";
 
 const count = Number(process.argv.find((a) => a.startsWith("--connections="))?.split("=")[1] || 200);
 
 async function main() {
   const prisma = getPrisma();
-  const ws = await prisma.workspace.findFirst({ select: { id: true } });
-  assert.ok(ws, "workspace required");
+  const ws = { id: await getOrCreateArScaleTestWorkspace() };
 
   const ids: string[] = [];
   const now = Date.now();

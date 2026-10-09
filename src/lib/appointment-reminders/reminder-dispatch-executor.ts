@@ -79,6 +79,24 @@ export async function executeArReminderDispatchJob(payload: { dispatchId?: strin
     data: { status: "submitting", submittingAt: new Date() },
   });
 
+  if (
+    process.env.AR_REMINDER_DISPATCH_TEST_MOCK === "1" &&
+    process.env.AR_REMINDER_DISPATCH_TEST_WORKSPACE &&
+    dispatch.workspaceId === process.env.AR_REMINDER_DISPATCH_TEST_WORKSPACE
+  ) {
+    const mockId = `mock-telnyx-${dispatchId}`;
+    await prisma.arReminderDispatch.update({
+      where: { id: dispatchId },
+      data: {
+        status: "accepted",
+        providerMessageId: mockId,
+        telnyxMessageId: mockId,
+        lastError: null,
+      },
+    });
+    return { ok: true, sent: true, mock: true };
+  }
+
   try {
     const result = await trySendStepForDispatch({
       dispatchId,

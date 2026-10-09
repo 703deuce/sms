@@ -18,6 +18,11 @@ const FIRE_TOLERANCE_MS = 4 * 60_000;
 /** Reminders later than this are marked suppressed (not silently dropped). */
 export const REMINDER_MAX_LATE_MS = 30 * 60_000;
 
+function reminderDiscoveryWorkspaceScope(): string | undefined {
+  const scoped = process.env.AR_REMINDER_DISCOVERY_TEST_WORKSPACE?.trim();
+  return scoped || undefined;
+}
+
 export async function discoverAndEnqueueDueAppointmentReminders(): Promise<{
   examined: number;
   due: number;
@@ -35,8 +40,10 @@ export async function discoverAndEnqueueDueAppointmentReminders(): Promise<{
   let cursorId: string | null = null;
 
   while (enqueued < MAX_DISPATCH_ENQUEUE_PER_TICK) {
+    const scopeWorkspaceId = reminderDiscoveryWorkspaceScope();
     const rows = await prisma.voiceAppointment.findMany({
       where: {
+        ...(scopeWorkspaceId ? { workspaceId: scopeWorkspaceId } : {}),
         startsAt: { gt: new Date(now - REMINDER_MAX_LATE_MS - FIRE_TOLERANCE_MS) },
         status: { notIn: ["canceled", "cancelled", "completed", "no_show"] },
         ...(cursorStartsAt && cursorId
@@ -56,7 +63,7 @@ export async function discoverAndEnqueueDueAppointmentReminders(): Promise<{
 
     for (const row of rows) {
       examined += 1;
-      if (!(await workspaceRemindersOperational(row.workspaceId))) continue;
+      if (!scopeWorkspaceId && !(await workspaceRemindersOperational(row.workspaceId))) continue;
       const meta = (row.metadata || {}) as AppointmentMetadata;
       if (meta.remindersSuppressed || meta.reminderOverride?.suppressed) continue;
       if (meta.reminderSmsEligible === false) continue;
@@ -65,23 +72,25 @@ export async function discoverAndEnqueueDueAppointmentReminders(): Promise<{
       );
       if (shouldHoldRemindersForAppointment(meta)) continue;
 
-      const { shouldSkipPlatformRemindersForAppointment } = await import(
-        "@/lib/appointment-workflows/platform-guard"
-      );
-      const service = row.serviceName
-        ? await prisma.voiceService.findFirst({
-            where: { workspaceId: row.workspaceId, name: row.serviceName },
-            select: { id: true },
-          })
-        : null;
-      if (
-        await shouldSkipPlatformRemindersForAppointment(
-          row.workspaceId,
-          service?.id,
-          row.serviceName,
-        )
-      ) {
-        continue;
+      if (!scopeWorkspaceId) {
+        const { shouldSkipPlatformRemindersForAppointment } = await import(
+          "@/lib/appointment-workflows/platform-guard"
+        );
+        const service = row.serviceName
+          ? await prisma.voiceService.findFirst({
+              where: { workspaceId: row.workspaceId, name: row.serviceName },
+              select: { id: true },
+            })
+          : null;
+        if (
+          await shouldSkipPlatformRemindersForAppointment(
+            row.workspaceId,
+            service?.id,
+            row.serviceName,
+          )
+        ) {
+          continue;
+        }
       }
 
       const config = await loadAppointmentPlatformConfig(row.workspaceId);
@@ -121,16 +130,18 @@ export async function discoverAndEnqueueDueAppointmentReminders(): Promise<{
         });
         if (!dispatchId) continue;
 
-        const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
-        await enqueueJob({
-          jobType: "ar_dispatch_reminder",
-          queueName: "appointment_reminders",
-          workspaceId: row.workspaceId,
-          payload: { dispatchId },
-          idempotencyKey: `ar-dispatch:${row.id}:${scheduled.timelineType}:${generation}`,
-          priority: 8,
-          wake: true,
-        });
+        if (process.env.AR_REMINDER_DISCOVERY_TEST_SKIP_ENQUEUE !== "1") {
+          const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
+          await enqueueJob({
+            jobType: "ar_dispatch_reminder",
+            queueName: "appointment_reminders",
+            workspaceId: row.workspaceId,
+            payload: { dispatchId },
+            idempotencyKey: `ar-dispatch:${row.id}:${scheduled.timelineType}:${generation}`,
+            priority: 8,
+            wake: true,
+          });
+        }
         enqueued += 1;
         if (enqueued >= MAX_DISPATCH_ENQUEUE_PER_TICK) break;
       }

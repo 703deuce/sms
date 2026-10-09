@@ -158,6 +158,15 @@ export async function applyOutboundDeliveryStatus(
 
   const campaignMsg = await prisma.campaignMessage.findFirst({ where: { providerId: sid } });
   if (!campaignMsg) {
+    const { reconcileArReminderDispatchFromTelnyxDelivery } = await import(
+      "@/lib/appointment-reminders/ar-dispatch-telnyx-reconcile"
+    );
+    await reconcileArReminderDispatchFromTelnyxDelivery({
+      providerMessageId: sid,
+      internalStatus: status,
+      errorDetail: input.errorDetail,
+    }).catch(() => undefined);
+
     return {
       ok: true,
       status,
@@ -224,6 +233,15 @@ export async function applyOutboundDeliveryStatus(
       }
     });
   }
+
+  const { reconcileArReminderDispatchFromTelnyxDelivery } = await import(
+    "@/lib/appointment-reminders/ar-dispatch-telnyx-reconcile"
+  );
+  await reconcileArReminderDispatchFromTelnyxDelivery({
+    providerMessageId: sid,
+    internalStatus: status,
+    errorDetail: input.errorDetail,
+  }).catch(() => undefined);
 
   return {
     ok: true,

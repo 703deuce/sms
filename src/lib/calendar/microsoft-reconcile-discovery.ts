@@ -101,7 +101,7 @@ export async function discoverAndEnqueueMicrosoftCalendarSyncs(input?: {
     if (batch.length < take) break;
   }
 
-  if (claimedIds.length) {
+  if (claimedIds.length && !input?.dryRun) {
     await markMicrosoftSyncEnqueueLease(claimedIds);
   }
 

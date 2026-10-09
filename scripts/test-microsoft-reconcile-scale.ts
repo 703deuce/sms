@@ -4,13 +4,13 @@
  */
 import assert from "node:assert/strict";
 import { getPrisma } from "../src/lib/db";
+import { getOrCreateArScaleTestWorkspace } from "./lib/ar-scale-test-workspace";
 
 const count = Number(process.argv.find((a) => a.startsWith("--connections="))?.split("=")[1] || 100);
 
 async function main() {
   const prisma = getPrisma();
-  const ws = await prisma.workspace.findFirst({ select: { id: true } });
-  assert.ok(ws, "workspace required");
+  const ws = { id: await getOrCreateArScaleTestWorkspace() };
 
   const ids: string[] = [];
   const now = Date.now();
@@ -40,7 +40,11 @@ async function main() {
   let totalEnqueued = 0;
   let ticks = 0;
   while (ticks < 50 && totalEnqueued < count) {
-    const result = await discoverAndEnqueueMicrosoftCalendarSyncs({ budget: 500, dryRun: true });
+    const result = await discoverAndEnqueueMicrosoftCalendarSyncs({
+      budget: 500,
+      dryRun: true,
+      workspaceId: ws.id,
+    });
     totalEnqueued += result.enqueued;
     ticks += 1;
     if (result.enqueued === 0) break;

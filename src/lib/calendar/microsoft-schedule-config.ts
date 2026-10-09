@@ -1,6 +1,10 @@
 import "server-only";
 
 /** Target backstop interval for Microsoft calendar reconciliation (minutes). */
+/**
+ * Global reconcile is enqueued once per minute (`calendar-reconcile:${minuteKey}`).
+ * Run a single maintenance worker fleet; overlapping schedulers rely on per-connection enqueue leases.
+ */
 export function microsoftCalendarReconcileIntervalMinutes(): number {
   const raw = process.env.MICROSOFT_CALENDAR_RECONCILE_MINUTES?.trim();
   const parsed = raw ? Number(raw) : 5;
