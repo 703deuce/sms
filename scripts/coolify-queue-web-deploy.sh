@@ -36,7 +36,7 @@ fi
 for ((i = 1; i <= 40; i++)); do
   ROW="$(ssh coolify-server "docker exec coolify-db psql -U coolify -d coolify -t -A -F'|' -c \"
     SELECT id, status FROM application_deployment_queues
-    WHERE application_id = 1 AND commit = '${COMMIT}'
+    WHERE application_id::text = '1' AND commit = '${COMMIT}'
     ORDER BY id DESC LIMIT 1;
   \"")"
   DEPLOY_ID="${ROW%%|*}"
