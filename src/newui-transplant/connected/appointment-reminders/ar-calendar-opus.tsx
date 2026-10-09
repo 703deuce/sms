@@ -25,7 +25,10 @@ import {
   parseCalendarView,
 } from '@/features/appointments/kimi/calendar/calendar-url-state'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
-import { isArCalendarViewerReadyFromOverview } from '@/lib/appointment-reminders/calendar/ar-calendar-viewer-ready'
+import {
+  isArCalendarViewerReadyFromIntegrationRows,
+  isArCalendarViewerReadyFromOverview,
+} from '@/lib/appointment-reminders/calendar/ar-calendar-viewer-ready'
 import { ArCalendarEventSheet } from '@/newui-transplant/components/appointment-reminders/ar-calendar-event-sheet'
 import { EmptyState, Page, PageHeader, Pill } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
@@ -89,16 +92,44 @@ export function AppointmentRemindersCalendarPage() {
 
   const loadOverview = useCallback(async () => {
     try {
-      const res = await fetch('/api/appointment-reminders/overview')
-      if (!res.ok) return
-      const json = await res.json()
-      const data = json.data
-      setConnected(isArCalendarViewerReadyFromOverview(data))
-      if (data?.timezone) setTimezone(data.timezone)
+      const [overviewRes, integrationsRes] = await Promise.all([
+        fetch('/api/appointment-reminders/overview'),
+        fetch('/api/integrations/calendars'),
+      ])
+
+      let linked = false
+      if (integrationsRes.ok) {
+        const calJson = await integrationsRes.json()
+        linked = isArCalendarViewerReadyFromIntegrationRows(calJson.data)
+      }
+
+      if (overviewRes.ok) {
+        const json = await overviewRes.json()
+        const data = json.data
+        if (!linked) linked = isArCalendarViewerReadyFromOverview(data)
+        if (data?.timezone) setTimezone(data.timezone)
+      }
+
+      setConnected(linked)
     } finally {
       setOverviewReady(true)
     }
   }, [])
+
+  useEffect(() => {
+    const refresh = () => {
+      void loadOverview()
+    }
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refresh()
+    }
+    window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.removeEventListener('focus', refresh)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [loadOverview])
 
   const loadEvents = useCallback(
     async (opts?: { refresh?: boolean }) => {
@@ -241,14 +272,14 @@ export function AppointmentRemindersCalendarPage() {
 
       {!overviewReady ? (
         <CalendarLoadingShell />
-      ) : !connected && events.length === 0 ? (
+      ) : !connected ? (
         <EmptyState
           icon={Calendar}
           title="Connect a calendar"
-          description="Authorize Microsoft 365 or Google and choose which calendars to import for SMS reminders."
+          description="Authorize Microsoft 365 or Google on Calendar connections, then return here to view imported appointments."
           action={
             <Button nativeButton={false} size="sm" render={<Link href={AR_ROUTES.calendars} />}>
-              Connect calendar
+              Open calendar connections
             </Button>
           }
         />

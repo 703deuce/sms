@@ -1,28 +1,35 @@
-import { isCalendarConnectionUsable } from "../calendar-connection";
+import { isCalendarConnectionLinked } from "../calendar-connection";
 
 export type ArOverviewCalendarRow = {
   status: string;
   importCalendarCount?: number | null;
 };
 
-/** True when the AR Calendar viewer should show the grid (≥1 usable connection with import calendars). */
+export type ArIntegrationCalendarRow = {
+  provider?: string;
+  status?: string;
+};
+
+/** True when Calendar integrations would show a connected Microsoft/Google row. */
+export function isArCalendarViewerReadyFromIntegrationRows(
+  rows: ArIntegrationCalendarRow[] | null | undefined,
+): boolean {
+  if (!rows?.length) return false;
+  return rows
+    .filter((c) => ["google", "microsoft"].includes(String(c.provider || "")))
+    .some((c) => isCalendarConnectionLinked(c.status));
+}
+
+/** True when the AR Calendar viewer should show the grid (not the connect empty state). */
 export function isArCalendarViewerReadyFromOverview(
   data: {
     setup?: { calendarConnected?: boolean };
     calendars?: ArOverviewCalendarRow[];
-    readiness?: { hasImportCalendars?: boolean };
   } | null
   | undefined,
 ): boolean {
   if (!data) return false;
   const calendars = data.calendars ?? [];
-  const hasImportingConnection = calendars.some(
-    (c) => isCalendarConnectionUsable(c.status) && (c.importCalendarCount ?? 0) > 0,
-  );
-  if (hasImportingConnection) return true;
-  if (data.setup?.calendarConnected === true) return true;
-  return Boolean(
-    data.readiness?.hasImportCalendars &&
-      calendars.some((c) => isCalendarConnectionUsable(c.status)),
-  );
+  if (calendars.some((c) => isCalendarConnectionLinked(c.status))) return true;
+  return Boolean(data.setup?.calendarConnected);
 }

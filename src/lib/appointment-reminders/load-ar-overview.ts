@@ -3,7 +3,10 @@ import "server-only";
 import { getPrisma } from "@/lib/db";
 import { loadAppointmentRemindersPage } from "@/lib/appointment-reminders/load-appointments-page";
 import { loadAppointmentRemindersOperationalPage } from "@/lib/appointment-reminders/load-reminders-operational-page";
-import { isCalendarConnectionUsable } from "@/lib/appointment-reminders/calendar-connection";
+import {
+  isCalendarConnectionLinked,
+  isCalendarConnectionUsable,
+} from "@/lib/appointment-reminders/calendar-connection";
 import { loadAppointmentRemindersActivation } from "@/lib/appointment-reminders/activation";
 import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
 
@@ -40,7 +43,7 @@ export async function loadAppointmentRemindersOverview(workspaceId: string) {
     calendars.length > 0 && calendars.every((c) => isCalendarConnectionUsable(c.status));
 
   const hasImportCalendars = calendars.some((c) => (c.importCalendarCount ?? 0) > 0);
-  const hasUsableConnection = connections.some((c) => isCalendarConnectionUsable(c.status));
+  const hasUsableConnection = connections.some((c) => isCalendarConnectionLinked(c.status));
   const syncHealthy = Boolean(todayPage.sync.connected) && !todayPage.sync.syncError;
 
   let smsSenderReady = false;
