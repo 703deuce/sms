@@ -194,6 +194,25 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       );
       return executeArSendCustomerSmsJob(payload);
     }
+    case "ar_dispatch_reminder": {
+      const { executeArReminderDispatchJob } = await import(
+        "@/lib/appointment-reminders/reminder-dispatch-executor"
+      );
+      return executeArReminderDispatchJob(payload as { dispatchId?: string });
+    }
+    case "microsoft_calendar_webhook_process": {
+      const { processMicrosoftCalendarWebhookJob } = await import(
+        "@/lib/calendar/microsoft-webhook-process"
+      );
+      return processMicrosoftCalendarWebhookJob(
+        payload as {
+          workspaceId: string;
+          connectionId: string;
+          providerEventId?: string | null;
+          changeType?: string | null;
+        },
+      );
+    }
     case "ar_inbound_held": {
       const heldMessageId = String(payload.heldMessageId || "");
       if (!heldMessageId) {

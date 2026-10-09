@@ -3,7 +3,7 @@ import "server-only";
 import { createHmac, randomBytes } from "crypto";
 import { updateWorkspaceCalendarConnection } from "@/lib/calendar/connections";
 import { shouldImportFromConnection } from "@/lib/calendar/eligibility";
-import { enqueueCalendarConnectionSync, syncCalendarProviderEventById } from "@/lib/calendar/import-sync";
+import { enqueueCalendarConnectionSync } from "@/lib/calendar/import-sync";
 import {
   getValidAccessToken,
   microsoftGraphFetch,
@@ -210,6 +210,10 @@ export async function registerCalendarPushNotifications(workspaceId: string, con
 
   if (conn.provider === "microsoft") {
     await ensureMicrosoftCalendarSubscription(workspaceId, connectionId);
+    const { ensureMicrosoftConnectionScheduleInitialized } = await import(
+      "@/lib/calendar/microsoft-connection-schedule"
+    );
+    await ensureMicrosoftConnectionScheduleInitialized(connectionId);
   } else if (conn.provider === "google") {
     for (const calId of config.importCalendarIds || []) {
       await ensureGoogleCalendarWatch(workspaceId, connectionId, calId);
@@ -244,27 +248,18 @@ export async function handleMicrosoftCalendarWebhook(notifications: Array<{
       continue;
     }
 
-    if (providerEventId) {
-      const calendarIds = resolveImportCalendarIds(config);
-      try {
-        await syncCalendarProviderEventById({
-          workspaceId: parsed.workspaceId,
-          connectionId: parsed.connectionId,
-          provider: "microsoft",
-          eventId: providerEventId,
-          calendarId: calendarIds[0],
-        });
-      } catch (err) {
-        console.warn(
-          "[calendar] microsoft webhook targeted sync failed",
-          parsed.connectionId,
-          providerEventId,
-          err,
-        );
-      }
-    }
-
-    await enqueueCalendarConnectionSync(parsed.workspaceId, parsed.connectionId, true, {
+    const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
+    await enqueueJob({
+      jobType: "microsoft_calendar_webhook_process",
+      queueName: "default",
+      workspaceId: parsed.workspaceId,
+      payload: {
+        workspaceId: parsed.workspaceId,
+        connectionId: parsed.connectionId,
+        providerEventId,
+        changeType: note.changeType || null,
+      },
+      idempotencyKey: `ms-wh-process:${idempotencyKey}`,
       priority: WEBHOOK_CALENDAR_SYNC_PRIORITY,
       wake: true,
     });
@@ -409,26 +404,28 @@ async function recordWebhookOnce(
 }
 
 export async function renewExpiringCalendarSubscriptions() {
+  const { renewDueMicrosoftCalendarSubscriptions } = await import(
+    "@/lib/calendar/microsoft-subscription-renewal-scheduler"
+  );
+  const microsoft = await renewDueMicrosoftCalendarSubscriptions();
+
   const prisma = getPrisma();
   const connections = await prisma.voiceCalendarConnection.findMany({
-    where: { provider: { in: ["google", "microsoft"] }, status: "connected" },
+    where: { provider: "google", status: "connected" },
     take: 200,
   });
 
+  let googleRenewed = 0;
   for (const conn of connections) {
     const config = (conn.config || {}) as CalendarConfig;
     if (!shouldImportFromConnection(config)) continue;
     try {
-      if (conn.provider === "microsoft") {
-        const exp = config.microsoftSubscription?.expiresAt;
-        if (!exp || new Date(exp).getTime() < Date.now() + 6 * 3600_000) {
-          await ensureMicrosoftCalendarSubscription(conn.workspaceId, conn.id);
-        }
-      } else if (conn.provider === "google") {
+      if (conn.provider === "google") {
         for (const calId of resolveImportCalendarIds(config)) {
           const channel = (config.googleWatchChannels || []).find((c) => c.calendarId === calId);
           if (!channel?.expiresAt || new Date(channel.expiresAt).getTime() < Date.now() + 6 * 3600_000) {
             await ensureGoogleCalendarWatch(conn.workspaceId, conn.id, calId);
+            googleRenewed += 1;
           }
         }
       }
@@ -436,4 +433,6 @@ export async function renewExpiringCalendarSubscriptions() {
       console.warn("[calendar] subscription renew failed", conn.id, err);
     }
   }
+
+  return { microsoft, googleRenewed };
 }

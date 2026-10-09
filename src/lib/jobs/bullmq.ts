@@ -387,9 +387,20 @@ function startWorkersForQueues(queues: readonly string[]) {
   for (const name of queues) {
     if (workerCache.has(name)) continue;
     void getQueue(name);
+    const maintenanceConcurrency = Number(process.env.BULLMQ_MAINTENANCE_CONCURRENCY || 3);
+    const defaultConcurrency = Number(process.env.BULLMQ_DEFAULT_CONCURRENCY || 4);
+    const arConcurrency = Number(process.env.BULLMQ_AR_REMINDER_CONCURRENCY || 6);
+    const concurrency =
+      name === "appointment_reminders"
+        ? arConcurrency
+        : name === "maintenance"
+          ? maintenanceConcurrency
+          : name.endsWith("send")
+            ? 5
+            : defaultConcurrency;
     const worker = new Worker(name, createWorkerProcessor(name), {
       connection: conn,
-      concurrency: name.endsWith("send") ? 5 : 2,
+      concurrency: Number.isFinite(concurrency) && concurrency > 0 ? concurrency : 2,
     });
     attachWorkerLifecycleLogs(worker, name);
     workerCache.set(name, worker);

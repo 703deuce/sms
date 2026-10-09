@@ -12,7 +12,11 @@ export const JOB_PRIORITY_BULK_BACKFILL = 70;
 /** Jobs at or below this priority are drained before bulk/integration backfill. */
 export const JOB_PRIORITY_INTERACTIVE_MAX = 20;
 
-export const AR_JOB_TYPES = new Set(["ar_process_inbound_sms", "ar_send_customer_sms"]);
+export const AR_JOB_TYPES = new Set([
+  "ar_process_inbound_sms",
+  "ar_send_customer_sms",
+  "ar_dispatch_reminder",
+]);
 
 export const MCTB_JOB_TYPES = new Set([
   "mctb_process_inbound_sms",

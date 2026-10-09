@@ -28,7 +28,14 @@ import {
   type CalendarConfig,
   type ProviderCalendarEvent,
 } from "@/lib/calendar/providers";
-import { syncMicrosoftCalendarDelta } from "@/lib/calendar/microsoft-delta-sync";
+import {
+  commitMicrosoftDeltaCheckpoint,
+  syncMicrosoftCalendarDelta,
+} from "@/lib/calendar/microsoft-delta-sync";
+import {
+  markMicrosoftSyncFailure,
+  markMicrosoftSyncSuccess,
+} from "@/lib/calendar/microsoft-connection-schedule";
 import {
   resolveMicrosoftCalendarViewSyncWindow,
   shouldAdvanceMicrosoftDeltaWindow,
@@ -516,10 +523,13 @@ export async function syncWorkspaceCalendarConnection(
   }
 
   const calendarIds = resolveImportCalendarIds(config);
+  let microsoftConnectionHealthy = provider === "microsoft";
 
   for (const calendarId of calendarIds) {
     let events: ProviderCalendarEvent[] = [];
     let removedEventIds: string[] = [];
+    let pendingDeltaLink: string | undefined;
+    let calendarHadPersistError = false;
     const { timeMin, timeMax } =
       provider === "microsoft"
         ? resolveMicrosoftSyncWindowForCalendar(config, calendarId, Boolean(options?.incremental))
@@ -542,6 +552,7 @@ export async function syncWorkspaceCalendarConnection(
           });
           events = delta.events;
           removedEventIds = delta.removedEventIds;
+          pendingDeltaLink = delta.deltaLink;
         } catch (deltaErr) {
           console.warn("[calendar] microsoft delta sync failed, falling back to calendarView", connectionId, deltaErr);
           events = await listMicrosoftCalendarEventsForAppointmentDiscovery(
@@ -559,6 +570,16 @@ export async function syncWorkspaceCalendarConnection(
     } catch (err) {
       console.warn("[calendar] event import failed", connectionId, calendarId, err);
       stats.errors += 1;
+      if (provider === "microsoft") {
+        microsoftConnectionHealthy = false;
+        const syncState = { ...(config.microsoftCalendarSyncState || {}) };
+        syncState[calendarId] = {
+          lastErrorAt: new Date().toISOString(),
+          lastError: err instanceof Error ? err.message : String(err),
+          consecutiveFailures: (syncState[calendarId]?.consecutiveFailures || 0) + 1,
+        };
+        config.microsoftCalendarSyncState = syncState;
+      }
       continue;
     }
 
@@ -600,6 +621,43 @@ export async function syncWorkspaceCalendarConnection(
       } catch (err) {
         console.warn("[calendar] event upsert failed", connectionId, event.id, err);
         stats.errors += 1;
+        calendarHadPersistError = true;
+      }
+    }
+
+    if (provider === "microsoft") {
+      if (calendarHadPersistError) {
+        microsoftConnectionHealthy = false;
+        const syncState = { ...(config.microsoftCalendarSyncState || {}) };
+        syncState[calendarId] = {
+          lastErrorAt: new Date().toISOString(),
+          lastError: "event_persist_failed",
+          consecutiveFailures: (syncState[calendarId]?.consecutiveFailures || 0) + 1,
+        };
+        config.microsoftCalendarSyncState = syncState;
+      } else if (pendingDeltaLink) {
+        await commitMicrosoftDeltaCheckpoint(
+          workspaceId,
+          connectionId,
+          config,
+          calendarId,
+          timeMin,
+          timeMax,
+          pendingDeltaLink,
+        );
+        const syncState = { ...(config.microsoftCalendarSyncState || {}) };
+        syncState[calendarId] = {
+          lastSuccessAt: new Date().toISOString(),
+          consecutiveFailures: 0,
+        };
+        config.microsoftCalendarSyncState = syncState;
+      } else {
+        const syncState = { ...(config.microsoftCalendarSyncState || {}) };
+        syncState[calendarId] = {
+          lastSuccessAt: new Date().toISOString(),
+          consecutiveFailures: 0,
+        };
+        config.microsoftCalendarSyncState = syncState;
       }
     }
   }
@@ -607,14 +665,33 @@ export async function syncWorkspaceCalendarConnection(
   const freshConn = await getWorkspaceCalendarConnection(workspaceId, connectionId);
   const persistedConfig = mergeCalendarConnectionConfig(
     (freshConn?.config || {}) as Record<string, unknown>,
-    { ...config, lastSyncError: null },
+    {
+      ...config,
+      lastSyncError: microsoftConnectionHealthy ? null : config.lastSyncError,
+    },
   );
 
-  await updateWorkspaceCalendarConnection(workspaceId, connectionId, {
-    lastSyncAt: new Date(),
-    status: "connected",
-    config: persistedConfig,
-  });
+  if (provider === "microsoft") {
+    if (microsoftConnectionHealthy && stats.errors === 0) {
+      await updateWorkspaceCalendarConnection(workspaceId, connectionId, {
+        status: "connected",
+        config: persistedConfig,
+      });
+      await markMicrosoftSyncSuccess(connectionId);
+    } else {
+      await updateWorkspaceCalendarConnection(workspaceId, connectionId, {
+        config: persistedConfig,
+        lastSyncError: "partial_or_failed_microsoft_sync",
+      });
+      await markMicrosoftSyncFailure(connectionId);
+    }
+  } else {
+    await updateWorkspaceCalendarConnection(workspaceId, connectionId, {
+      lastSyncAt: stats.errors === 0 ? new Date() : conn.lastSyncAt,
+      status: stats.errors === 0 ? "connected" : conn.status,
+      config: persistedConfig,
+    });
+  }
 
   return stats;
 }

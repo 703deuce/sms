@@ -62,6 +62,7 @@ export function CalendarIntegrationsOpus({
   const [busyProvider, setBusyProvider] = useState<string | null>(null);
   const [googleConfigured, setGoogleConfigured] = useState(false);
   const [microsoftConfigured, setMicrosoftConfigured] = useState(false);
+  const [arGoogleAllowed, setArGoogleAllowed] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -95,6 +96,9 @@ export function CalendarIntegrationsOpus({
       if (statusRes?.ok) {
         const statusJson = await statusRes.json();
         setGoogleConfigured(Boolean(statusJson.data?.googleCalendarConfigured));
+        if (isReminders && statusJson.data?.appointmentRemindersGoogleCalendarAllowed === false) {
+          setArGoogleAllowed(false);
+        }
         setMicrosoftConfigured(Boolean(statusJson.data?.microsoftCalendarConfigured));
       }
     } finally {
@@ -147,6 +151,7 @@ export function CalendarIntegrationsOpus({
           body: JSON.stringify({
             name: existingCount ? `${label} ${existingCount + 1}` : label,
             provider,
+            config: isReminders ? { productContext: "appointment_reminders" } : undefined,
           }),
         });
         const json = await res.json();
@@ -184,24 +189,44 @@ export function CalendarIntegrationsOpus({
         {notice ? <p className="mt-2 text-sm text-muted-foreground">{notice}</p> : null}
       </Panel>
 
-      <ProviderSection
-        variant={variant}
-        title="Google Calendar"
-        description={
-          isReminders
-            ? "Connect Google, then choose calendars that hold appointments you want to remind by SMS."
-            : "Two-way sync with Google Calendar for availability, bookings, and reminders."
-        }
-        configured={googleConfigured}
-        envHint="GOOGLE_CALENDAR_CLIENT_ID and GOOGLE_CALENDAR_CLIENT_SECRET"
-        rows={connections.filter((c) => c.provider === "google")}
-        busy={busyProvider === "google"}
-        onConnect={() => void startConnect("google")}
-        expandedId={expandedId}
-        onExpand={setExpandedId}
-        onReconnect={(id) => void startConnect("google", id)}
-        onRefresh={load}
-      />
+      {isReminders && !arGoogleAllowed ? (
+        connections.some((c) => c.provider === "google") ? (
+          <ProviderSection
+            variant={variant}
+            title="Google Calendar"
+            description="Existing Google connections remain available. New Google connections for Appointment Reminders are disabled during Microsoft 365 launch."
+            configured={googleConfigured}
+            envHint="GOOGLE_CALENDAR_CLIENT_ID and GOOGLE_CALENDAR_CLIENT_SECRET"
+            rows={connections.filter((c) => c.provider === "google")}
+            busy={busyProvider === "google"}
+            onConnect={undefined}
+            connectDisabled
+            expandedId={expandedId}
+            onExpand={setExpandedId}
+            onReconnect={(id) => void startConnect("google", id)}
+            onRefresh={load}
+          />
+        ) : null
+      ) : (
+        <ProviderSection
+          variant={variant}
+          title="Google Calendar"
+          description={
+            isReminders
+              ? "Connect Google, then choose calendars that hold appointments you want to remind by SMS."
+              : "Two-way sync with Google Calendar for availability, bookings, and reminders."
+          }
+          configured={googleConfigured}
+          envHint="GOOGLE_CALENDAR_CLIENT_ID and GOOGLE_CALENDAR_CLIENT_SECRET"
+          rows={connections.filter((c) => c.provider === "google")}
+          busy={busyProvider === "google"}
+          onConnect={() => void startConnect("google")}
+          expandedId={expandedId}
+          onExpand={setExpandedId}
+          onReconnect={(id) => void startConnect("google", id)}
+          onRefresh={load}
+        />
+      )}
 
       <ProviderSection
         variant={variant}
@@ -296,6 +321,7 @@ function ProviderSection({
   rows,
   busy,
   onConnect,
+  connectDisabled,
   expandedId,
   onExpand,
   onReconnect,
@@ -308,12 +334,14 @@ function ProviderSection({
   envHint: string;
   rows: CalendarConnection[];
   busy: boolean;
-  onConnect: () => void;
+  onConnect?: () => void;
+  connectDisabled?: boolean;
   expandedId: string | null;
   onExpand: (id: string | null) => void;
   onReconnect: (id: string) => void;
   onRefresh: () => void;
 }) {
+  const connectBlocked = connectDisabled || !onConnect;
   const connected = rows.filter((r) => r.status === "connected" || r.status === "needs_reauth");
   const pending = rows.filter((r) => r.status !== "connected" && r.status !== "needs_reauth");
 
@@ -354,13 +382,23 @@ function ProviderSection({
           className="flex items-center justify-between rounded-lg border border-dashed border-border px-3 py-2 text-[13px]"
         >
           <span className="text-muted-foreground">{c.name || title}</span>
-          <Button size="sm" variant="outline" disabled={!configured || busy} onClick={onConnect}>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!configured || busy || connectBlocked}
+            onClick={onConnect}
+          >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Finish connect"}
           </Button>
         </div>
       ))}
 
-      <Button variant="outline" size="sm" disabled={!configured || busy} onClick={onConnect}>
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={!configured || busy || connectBlocked}
+        onClick={onConnect}
+      >
         {busy ? (
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
         ) : rows.length ? (

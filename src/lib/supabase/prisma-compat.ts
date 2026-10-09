@@ -118,6 +118,7 @@ const MODEL_TO_TABLE: Record<string, string> = {
   voiceTool: "voice_tools",
   voiceAgentTool: "voice_agent_tools",
   voiceCalendarConnection: "voice_calendar_connections",
+  arReminderDispatch: "ar_reminder_dispatches",
   voiceService: "voice_services",
   voiceStaffMember: "voice_staff_members",
   voiceRoutingRule: "voice_routing_rules",

@@ -13,6 +13,7 @@ import {
 } from "@/lib/appointments/settings";
 import type { AppointmentMetadata, ReminderStepConfig } from "@/lib/appointments/types";
 import {
+  currentReminderGeneration,
   markReminderSentInMeta,
   reminderTimelineType,
   wasReminderSent,
@@ -58,7 +59,7 @@ async function resolveAppointmentCalendarConnectionId(
   return undefined;
 }
 
-function resolveStepFireTime(
+export function resolveStepFireTime(
   step: ReminderStepConfig,
   startsAt: Date,
 ): Date {
@@ -73,7 +74,7 @@ function resolveStepFireTime(
   return new Date(startsAt.getTime() - mins * 60_000);
 }
 
-function shouldSkipStepNow(step: ReminderStepConfig, fireAt: Date, weeklyHours: Record<string, Array<{ open: string; close: string }>>, timezone: string): boolean {
+export function shouldSkipStepNow(step: ReminderStepConfig, fireAt: Date, weeklyHours: Record<string, Array<{ open: string; close: string }>>, timezone: string): boolean {
   if (step.skipWeekends || step.skipClosedDays) {
     const dow = fireAt.getDay();
     if (dow === 0 || dow === 6) return true;
@@ -85,7 +86,7 @@ function shouldSkipStepNow(step: ReminderStepConfig, fireAt: Date, weeklyHours: 
   return false;
 }
 
-function configuredReminderSteps(config: Awaited<ReturnType<typeof loadAppointmentPlatformConfig>>) {
+export function configuredReminderSteps(config: Awaited<ReturnType<typeof loadAppointmentPlatformConfig>>) {
   const steps: Array<{
     key: string;
     timelineType: string;
@@ -546,6 +547,19 @@ async function trySendStep(input: {
           : undefined;
     }
     const prisma = getPrisma();
+    if (outboundProviderMessageId) {
+      await prisma.arReminderDispatch.updateMany({
+        where: {
+          appointmentId: input.appointmentId,
+          timelineType: input.timelineType,
+          reminderGeneration: currentReminderGeneration(input.metadata),
+        },
+        data: {
+          telnyxMessageId: outboundProviderMessageId,
+          providerMessageId: outboundProviderMessageId,
+        },
+      });
+    }
     const nextMeta = markReminderSentInMeta(
       appendTimeline(input.metadata, {
         type: input.timelineType,
@@ -593,7 +607,7 @@ async function trySendStep(input: {
 }
 
 /** Scan platform appointments and send configured reminder SMS using workspace settings. */
-async function workspaceRemindersOperational(workspaceId: string): Promise<boolean> {
+export async function workspaceRemindersOperational(workspaceId: string): Promise<boolean> {
   const prisma = getPrisma();
   const activationRow = await prisma.solutionSetup.findFirst({
     where: { workspaceId, solutionType: "appointment-reminders-product" },
@@ -610,123 +624,11 @@ async function workspaceRemindersOperational(workspaceId: string): Promise<boole
 }
 
 export async function scanPlatformAppointmentReminders() {
-  const prisma = getPrisma();
-  const now = Date.now();
-  let sent = 0;
-  const windowMs = 4 * 60_000;
-
-  const rows = await prisma.voiceAppointment.findMany({
-    where: {
-      startsAt: { gt: new Date(now - windowMs) },
-      status: { notIn: ["canceled", "cancelled", "completed", "no_show"] },
-    },
-    take: 500,
-    orderBy: { startsAt: "asc" },
-  });
-
-  for (const row of rows) {
-    if (!(await workspaceRemindersOperational(row.workspaceId))) continue;
-    const meta = (row.metadata || {}) as AppointmentMetadata;
-    if (meta.remindersSuppressed || meta.reminderOverride?.suppressed) continue;
-    if (meta.reminderSmsEligible === false) continue;
-    const { shouldHoldRemindersForAppointment } = await import(
-      "@/lib/appointment-reminders/ai-rescheduler/ar-reminder-guard"
-    );
-    if (shouldHoldRemindersForAppointment(meta)) continue;
-
-    const { shouldSkipPlatformRemindersForAppointment } = await import(
-      "@/lib/appointment-workflows/platform-guard"
-    );
-    const service = row.serviceName
-      ? await prisma.voiceService.findFirst({
-          where: { workspaceId: row.workspaceId, name: row.serviceName },
-          select: { id: true },
-        })
-      : null;
-    if (
-      await shouldSkipPlatformRemindersForAppointment(
-        row.workspaceId,
-        service?.id,
-        row.serviceName,
-      )
-    ) {
-      continue;
-    }
-
-    const config = await loadAppointmentPlatformConfig(row.workspaceId);
-    const steps = configuredReminderSteps(config).filter((s) => !s.immediate);
-    const weeklyHours = resolveWeeklyHours(config);
-
-    for (const scheduled of steps) {
-      if (wasReminderSent(meta, scheduled.timelineType)) continue;
-
-      const fireAt = resolveStepFireTime(scheduled.step, row.startsAt);
-      const fireMs = fireAt.getTime();
-
-      if (fireMs < now - windowMs) {
-        if (!wasReminderSent(meta, scheduled.timelineType)) {
-          await markPastDueSkipped({
-            appointmentId: row.id,
-            metadata: meta,
-            timelineType: scheduled.timelineType,
-          });
-        }
-        continue;
-      }
-      if (now < fireMs - windowMs || now > fireMs + windowMs) continue;
-      if (shouldSkipStepNow(scheduled.step, fireAt, weeklyHours, row.timezone || config.timezone)) {
-        continue;
-      }
-
-      const connectionId = await resolveAppointmentCalendarConnectionId(row.workspaceId, meta);
-      const calendarDefaults = await resolvePerCalendarReminderDefaults(row.workspaceId, connectionId);
-      const effectiveStep = applyCalendarReminderDefaults(scheduled.step, calendarDefaults);
-      if (!effectiveStep.enabled) continue;
-
-      const workspace = await prisma.workspace.findUnique({
-        where: { id: row.workspaceId },
-        select: { displayName: true, name: true },
-      });
-      const contact = row.contactId
-        ? await prisma.contact.findFirst({
-            where: { id: row.contactId, workspaceId: row.workspaceId },
-            select: { phone: true, email: true },
-          })
-        : null;
-      const phone = inviteePhone(meta, contact?.phone);
-      const email = inviteeEmail(meta, contact?.email);
-      const smsEligibility = evaluateSmsReminderEligibility({
-        metadata: meta,
-        inviteePhone: meta.inviteePhone,
-        contactPhone: contact?.phone,
-        appointmentStatus: row.status,
-      });
-      if (scheduled.step.channel === "sms" && !smsEligibility.eligible) continue;
-      if (!phone && !email) continue;
-
-      const ok = await trySendStep({
-        workspaceId: row.workspaceId,
-        appointmentId: row.id,
-        startsAt: row.startsAt,
-        serviceName: row.serviceName,
-        timezone: row.timezone || config.timezone,
-        stepKey: scheduled.key,
-        step: effectiveStep,
-        timelineType: scheduled.timelineType,
-        appointmentStatus: row.status,
-        metadata: meta,
-        phone: phone || "",
-        email,
-        businessName: workspace?.displayName || workspace?.name || "our team",
-        confirmToken: meta.confirmToken,
-        cancelToken: meta.cancelToken,
-        rescheduleToken: meta.rescheduleToken,
-      });
-      if (ok) sent += 1;
-    }
-  }
-
-  return { ok: true, sent };
+  const { discoverAndEnqueueDueAppointmentReminders } = await import(
+    "@/lib/appointment-reminders/reminder-discovery"
+  );
+  const discovery = await discoverAndEnqueueDueAppointmentReminders();
+  return { ok: true, sent: discovery.enqueued, discovery };
 }
 
 /** Send immediate confirmation once for a newly eligible future appointment (calendar import / webhook). */
@@ -949,6 +851,93 @@ export function buildReminderSchedule(input: {
     scheduledFor: p.scheduledFor || undefined,
     channel: p.channel,
   }));
+}
+
+export async function trySendStepForDispatch(input: {
+  dispatchId: string;
+  workspaceId: string;
+  appointmentId: string;
+  timelineType: string;
+  stepKey: string;
+}): Promise<
+  | { outcome: "sent"; providerMessageId?: string; telnyxMessageId?: string }
+  | { outcome: "blocked"; detail: string }
+  | { outcome: "unknown"; detail: string }
+> {
+  const prisma = getPrisma();
+  const row = await prisma.voiceAppointment.findFirst({
+    where: { id: input.appointmentId, workspaceId: input.workspaceId },
+  });
+  if (!row) return { outcome: "blocked", detail: "appointment_not_found" };
+
+  const meta = (row.metadata || {}) as AppointmentMetadata;
+  const { shouldHoldRemindersForAppointment } = await import(
+    "@/lib/appointment-reminders/ai-rescheduler/ar-reminder-guard"
+  );
+  if (shouldHoldRemindersForAppointment(meta)) {
+    return { outcome: "blocked", detail: "ar_reconcile_pending" };
+  }
+
+  const config = await loadAppointmentPlatformConfig(input.workspaceId);
+  const steps = configuredReminderSteps(config);
+  const scheduled = steps.find((s) => s.timelineType === input.timelineType);
+  if (!scheduled) return { outcome: "blocked", detail: "step_not_configured" };
+
+  const connectionId = await resolveAppointmentCalendarConnectionId(input.workspaceId, meta);
+  const calendarDefaults = await resolvePerCalendarReminderDefaults(input.workspaceId, connectionId);
+  const effectiveStep = applyCalendarReminderDefaults(scheduled.step, calendarDefaults);
+  if (!effectiveStep.enabled) return { outcome: "blocked", detail: "step_disabled" };
+
+  const workspace = await prisma.workspace.findUnique({
+    where: { id: input.workspaceId },
+    select: { displayName: true, name: true },
+  });
+  const contact = row.contactId
+    ? await prisma.contact.findFirst({
+        where: { id: row.contactId, workspaceId: input.workspaceId },
+        select: { phone: true, email: true },
+      })
+    : null;
+  const phone = inviteePhone(meta, contact?.phone);
+  const email = inviteeEmail(meta, contact?.email);
+  if (!phone && !email) return { outcome: "blocked", detail: "no_recipient" };
+
+  try {
+    const ok = await trySendStep({
+      workspaceId: input.workspaceId,
+      appointmentId: input.appointmentId,
+      startsAt: row.startsAt,
+      serviceName: row.serviceName,
+      timezone: row.timezone || config.timezone,
+      stepKey: input.stepKey,
+      step: effectiveStep,
+      timelineType: input.timelineType,
+      appointmentStatus: row.status,
+      metadata: meta,
+      phone: phone || "",
+      email,
+      businessName: workspace?.displayName || workspace?.name || "our team",
+      confirmToken: meta.confirmToken,
+      cancelToken: meta.cancelToken,
+      rescheduleToken: meta.rescheduleToken,
+    });
+    if (!ok) return { outcome: "blocked", detail: "send_returned_false" };
+    const dispatch = await prisma.arReminderDispatch.findUnique({
+      where: { id: input.dispatchId },
+      select: { telnyxMessageId: true, providerMessageId: true },
+    });
+    return {
+      outcome: "sent",
+      providerMessageId: dispatch?.providerMessageId,
+      telnyxMessageId: dispatch?.telnyxMessageId,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (/timeout|ETIMEDOUT|ECONNRESET|abort/i.test(message)) {
+      return { outcome: "unknown", detail: message };
+    }
+    return { outcome: "blocked", detail: message };
+  }
 }
 
 function applyCalendarReminderDefaults(

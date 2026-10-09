@@ -2675,22 +2675,53 @@ model VoiceAgentTool {
 }
 
 model VoiceCalendarConnection {
-  id             String             @id @default(cuid())
-  workspaceId    String
-  name           String
-  provider       String
-  status         String             @default("connected")
-  config         Json?
-  credentialsRef String?
-  lastSyncAt     DateTime?
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
-  workspace      Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  services       VoiceService[]
-  staff          VoiceStaffMember[]
+  id                    String             @id @default(cuid())
+  workspaceId           String
+  name                  String
+  provider              String
+  status                String             @default("connected")
+  config                Json?
+  credentialsRef        String?
+  lastSyncAt            DateTime?
+  nextSyncDueAt         DateTime?
+  syncBackoffUntil      DateTime?
+  subscriptionRenewDueAt DateTime?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  workspace             Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  services              VoiceService[]
+  staff                 VoiceStaffMember[]
 
   @@index([workspaceId])
+  @@index([provider, status, nextSyncDueAt])
+  @@index([provider, status, subscriptionRenewDueAt])
   @@map("voice_calendar_connections")
+}
+
+/// Durable outbound Appointment Reminder SMS dispatch (idempotent per generation + step).
+model ArReminderDispatch {
+  id                 String    @id @default(cuid())
+  workspaceId        String
+  appointmentId      String
+  timelineType       String
+  reminderGeneration Int
+  intendedFireAt     DateTime
+  status             String    @default("pending")
+  claimedAt          DateTime?
+  claimExpiresAt     DateTime?
+  submittingAt       DateTime?
+  providerMessageId  String?
+  telnyxMessageId    String?
+  lastError          String?
+  unknownSince       DateTime?
+  metadata           Json?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@unique([appointmentId, timelineType, reminderGeneration])
+  @@index([status, intendedFireAt])
+  @@index([workspaceId, status, updatedAt])
+  @@map("ar_reminder_dispatches")
 }
 
 model VoiceService {
