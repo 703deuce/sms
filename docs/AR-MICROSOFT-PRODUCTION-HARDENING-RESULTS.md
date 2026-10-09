@@ -144,7 +144,7 @@ Subscription renewal scheduler (import-disabled connections, no Graph): 200 conn
 
 | Item | Status |
 |------|--------|
-| Commit SHA | _(filled at push)_ |
+| Commit SHA | `f5a400178` (branch tip; includes `0daf26986` migration) |
 | Migration | Additive `20261009120000_ar_microsoft_production_hardening` — safe `migrate deploy` on Coolify |
 | Coolify build | Pending agent push + monitor |
 | Production verify | Pending — M365 test connection smoke per Part 9 §E2E |
