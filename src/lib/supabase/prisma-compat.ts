@@ -311,6 +311,7 @@ const MODEL_TO_TABLE: Record<string, string> = {
   mctbNotificationDelivery: "mctb_notification_deliveries",
   mctbPlatformSenderAssignment: "mctb_platform_sender_assignments",
   arSmsReplySession: "ar_sms_reply_sessions",
+  arSmsConsumerPlatformSenderAssignment: "ar_sms_consumer_platform_sender_assignments",
   arSmsInboundHeldMessage: "ar_sms_inbound_held_messages",
   arPlatformSmsInboundReceipt: "ar_platform_sms_inbound_receipts",
   cfnaIngressProbe: "cfna_ingress_probes",

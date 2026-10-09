@@ -42,8 +42,17 @@ async function main() {
         provider: row.provider || "telnyx",
       });
       ok += 1;
-    } catch {
+    } catch (err) {
       skipped += 1;
+      if (skipped <= 5) {
+        console.warn(
+          "skip",
+          row.workspaceId,
+          row.consumerE164,
+          row.platformPhoneNumberId,
+          err instanceof Error ? err.message : String(err),
+        );
+      }
     }
   }
   console.log(`Backfill complete: ${ok} upserted, ${skipped} skipped (conflict)`);
