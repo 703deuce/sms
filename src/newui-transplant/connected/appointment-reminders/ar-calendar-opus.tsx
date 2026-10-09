@@ -25,7 +25,6 @@ import {
 } from '@/features/appointments/kimi/calendar/calendar-url-state'
 import { parseArCalendarView } from '@/lib/appointment-reminders/calendar/ar-calendar-url-state'
 import { OpusDataSurface } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
-import { OPUS_META_STRIP } from '@/newui-transplant/components/app/opus-surfaces'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
 import {
   isArCalendarViewerReadyFromIntegrationRows,
@@ -297,13 +296,6 @@ export function AppointmentRemindersCalendarPage() {
         <CalendarLoadingShell />
       ) : (
         <OpusDataSurface className="ar-cal-surface opus-cal-shell">
-          {connected && !error ? (
-            <div className={OPUS_META_STRIP + ' mx-4 mt-4 border-dashed'}>
-              <span className="text-muted-foreground">
-                Synced appointments from your connected calendar. Tap an event for reminder and SMS status.
-              </span>
-            </div>
-          ) : null}
           {view === 'agenda' ? (
             <div className="cal-page cal-page-agenda">
               <CalendarHeader
