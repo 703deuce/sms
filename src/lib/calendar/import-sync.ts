@@ -25,6 +25,10 @@ import {
   type ProviderCalendarEvent,
 } from "@/lib/calendar/providers";
 import { syncMicrosoftCalendarDelta } from "@/lib/calendar/microsoft-delta-sync";
+import {
+  resolveMicrosoftCalendarViewSyncWindow,
+  shouldAdvanceMicrosoftDeltaWindow,
+} from "@/lib/calendar/microsoft-sync-window";
 import { ensureMicrosoftCalendarSubscription } from "@/lib/calendar/webhooks";
 import {
   findWorkspaceAppointmentByExternalId,
@@ -55,6 +59,21 @@ function defaultSyncWindow(config: CalendarConfig, incremental: boolean, lastSyn
   const timeMax = new Date(now);
   timeMax.setDate(timeMax.getDate() + lookaheadDays);
   return { timeMin, timeMax };
+}
+
+function resolveMicrosoftSyncWindowForCalendar(
+  config: CalendarConfig,
+  calendarId: string,
+  incremental: boolean,
+): { timeMin: Date; timeMax: Date } {
+  const stored = config.microsoftDeltaLinks?.[calendarId];
+  if (incremental && stored?.windowStart && stored?.windowEnd && !shouldAdvanceMicrosoftDeltaWindow(stored.windowEnd)) {
+    return {
+      timeMin: new Date(stored.windowStart),
+      timeMax: new Date(stored.windowEnd),
+    };
+  }
+  return resolveMicrosoftCalendarViewSyncWindow(config);
 }
 
 async function findExistingAppointment(
@@ -492,21 +511,22 @@ export async function syncWorkspaceCalendarConnection(
     throw new Error("Calendar access token unavailable — reconnect required");
   }
 
-  const { timeMin, timeMax } = defaultSyncWindow(
-    config,
-    Boolean(options?.incremental),
-    conn.lastSyncAt,
-  );
   const calendarIds = resolveImportCalendarIds(config);
 
   for (const calendarId of calendarIds) {
     let events: ProviderCalendarEvent[] = [];
     let removedEventIds: string[] = [];
+    const { timeMin, timeMax } =
+      provider === "microsoft"
+        ? resolveMicrosoftSyncWindowForCalendar(config, calendarId, Boolean(options?.incremental))
+        : defaultSyncWindow(config, Boolean(options?.incremental), conn.lastSyncAt);
     try {
       if (provider === "google") {
         events = await listGoogleCalendarEvents(token, calendarId, timeMin, timeMax);
       } else {
         try {
+          const stored = config.microsoftDeltaLinks?.[calendarId];
+          const forceWindowAdvance = shouldAdvanceMicrosoftDeltaWindow(stored?.windowEnd);
           const delta = await syncMicrosoftCalendarDelta({
             workspaceId,
             connectionId,
@@ -514,7 +534,7 @@ export async function syncWorkspaceCalendarConnection(
             config,
             timeMin,
             timeMax,
-            forceFull: !options?.incremental,
+            forceFull: !options?.incremental || forceWindowAdvance,
           });
           events = delta.events;
           removedEventIds = delta.removedEventIds;

@@ -18,7 +18,55 @@
 | **Maintenance backlog** | `calendar_connections_reconcile` / `calendar_subscription_renew` **pending = 0** (after emergency DB drain ~15:30 UTC) |
 | **`calendar_connection_sync` pending** | **3** (stuck/pending rows still present) |
 
-Delta persistence and config-merge hardening from #625 are **not** live. Maintenance Postgres drain from #626 is **not** live (production `inprocess-worker` only runs `processDueJobs` on the 5s interval—no `drainCalendarMaintenanceFromDb`).
+Delta persistence and config-merge hardening from #625 are **not** live. Maintenance Postgres drain from #626 is **not** live.
+
+---
+
+## Priority 1 — scheduler root cause (confirmed in code, production `90b938c1`)
+
+**Symptom:** On 2026-10-09, `campaign-send-batch:2026-10-09*` rows exist (~1/minute) but **`calendar-reconcile:2026-10-09*` = 0** (and other `processDueJobs` minute ticks missing). Oct 8 reconcile rows only **completed** during the emergency DB drain (~15:30 UTC)—not proof of ongoing scheduling.
+
+**Root cause:** With `QUEUE_DRIVER=bullmq`, embedded `scripts/worker-all.ts` on **`90b938c1` does not call `processDueJobs()`**. It only:
+
+1. Enqueues `campaign_send_batch` for the current minute, and  
+2. Runs `syncDbOutboxToBullmq(50)`.
+
+Web has `DISABLE_INPROCESS_WORKER=1`, so the Next.js process does **not** run the full minute scheduler either. **`/api/jobs/process`** would enqueue all ticks, but there is no evidence those rows exist for Oct 9 unless cron calls it every minute.
+
+**Fix (already on `cursor/ar-maintenance-queue-drain-f350`, commit `b73b19a7c`):** BullMQ `worker-all` interval calls **`processDueJobs(40)`** (full scheduler + outbox sync) and **`drainCalendarMaintenanceFromDb(8)`** for calendar maintenance jobs.
+
+**Deploy verification (required after #626):**
+
+- Within 2 minutes of deploy, DB must show new rows e.g. `calendar-reconcile:2026-10-09T16:xx` and `calendar-sub-renew:2026-10-09T16` completing (not only cleared backlog).
+- Maintenance worker must process `calendar_connections_reconcile` → `reconcileWorkspaceCalendarConnections` → enqueue `calendar_connection_sync` when `lastSyncAt` > 15 min stale.
+
+**Do not** shorten backstop to 5 minutes until this passes with dashboard closed.
+
+---
+
+## Priority 2 — delta window (moving range vs stable checkpoint)
+
+**Issue:** `defaultSyncWindow()` for incremental sync sets `timeMax` from **`now`**, so `endDateTime` changes every sync. Microsoft `calendarView/delta` tokens are scoped to the original range; `syncWindowMatches()` then fails → **bootstrap every run** → poor efficiency and empty/missing `microsoftDeltaLinks` in prod.
+
+**Fix (on maintenance branch + should ship with #625):**
+
+- `resolveMicrosoftCalendarViewSyncWindow()` — UTC **calendar-day** `timeMin` / `timeMax` (stable within a UTC day).
+- Reuse **stored** `windowStart` / `windowEnd` from `microsoftDeltaLinks` on incremental sync when still valid.
+- `shouldAdvanceMicrosoftDeltaWindow()` — deliberate re-bootstrap when within **21 days** of stored `windowEnd`.
+
+Test: `npx tsx scripts/test-microsoft-delta-sync-window.ts`
+
+---
+
+## Trigger responsibilities (target, keep separate)
+
+| Trigger | Expected behavior |
+|---------|-------------------|
+| Microsoft webhook | Immediate sync (`syncCalendarProviderEventById` when id present + `calendar_connection_sync`) |
+| No webhook | Scheduled `calendar_connections_reconcile` → stale connection sync (delta backstop) |
+| Lifecycle `missed` / `subscriptionRemoved` | Recovery sync (+ re-subscribe where applicable) — **implemented** in `webhooks.ts` |
+| Subscription near expiry | `calendar_subscription_renew` — **must run via scheduler** (blocked until Priority 1 fix deployed) |
+| Reminder about to send | **Postpone** Graph pre-send until webhook+delta+backstop latency is measured |
 
 ---
 
