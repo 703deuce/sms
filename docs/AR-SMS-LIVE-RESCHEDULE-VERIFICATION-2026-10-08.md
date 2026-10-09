@@ -699,3 +699,39 @@ PHONE=+15714776175 WORKSPACE_ID=ws_1 \
 ```
 
 **Production health at time of test:** `GET https://transovo.ai/api/health` → `commitSha` `886cb13e92b3fcdc6edbc7c0148de8598ef4b7a5`
+
+---
+
+## 11. Plain-language Context Agent (advisory notes) — 2026-10-09
+
+**Code:** `430d3a46df63236a27b532ccb4444f9be79bb0ae` (`refactor(ar): Context Agent outputs plain advisory notes` + ops inject script).
+
+**Deploy parity:** Web and SMS worker both on `430d3a46d` (`GET /api/health`, worker `:8082/health`).
+
+**Session under test:** `cmv07ink76f5z5x221p6e6539` · appointment `cmv07ieef4s526f1w1g2v170b` · conversation `cmuzu7o2s3h1r355c3k53124b`.
+
+| Boundary | Result | Evidence |
+|----------|--------|----------|
+| Ingress → BullMQ `ar_process_inbound_sms` | PASS | `ingress_job_enqueued` / `processingJobId` `cmv08xsfx4p0n173o403m2d2l` |
+| Context Agent (plain text, no JSON schema) | PASS | `context_agent_completed` `ok:true` `notesLength:417` (and 325 / 295 on follow-up turns) |
+| Appointment Agent (Luna + tools) | PASS | `luna_turn_completed` `ok:true`; no OpenAI `response_format` / Zod parse failures |
+| Outbound SMS | PASS | `outbound_reply_sent` for each turn |
+| Calendar mutation on “Thanks” while `RESCHEDULING` | PASS (no write) | `startsAt` unchanged `2026-10-21T18:00:00.000Z` before/after `Thanks` inject |
+| Full reschedule confirm (`confirmed:true`) in this thread | **Not re-certified** | `Yes` and `Next Monday at 1pm` left `confirmed:false`; session stayed `RESCHEDULING` — needs customer-aligned slot confirmation on phone or explicit offer text in inject |
+
+**Inject (worker container):**
+
+```bash
+REPLY_SESSION_ID=cmv07ink76f5z5x221p6e6539 BODY="Next Monday at 1pm" \
+  NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' \
+  npx tsx scripts/ar-prod-inject-inbound-sms.ts
+```
+
+**Sample worker log lines:**
+
+```
+context_agent_completed … "meta":{"notesLength":417}
+luna_turn_completed … "meta":{"confirmed":false,"replyLength":107}
+inbound_job_completed … "ok":true
+outbound_reply_sent …
+```
