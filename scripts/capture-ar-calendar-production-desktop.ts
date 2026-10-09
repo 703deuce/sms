@@ -83,7 +83,7 @@ async function main() {
     await page.waitForTimeout(800);
   }
 
-  const target = page.locator(".month-event, .week-event").first();
+  const target = page.locator("button").filter({ hasText: /Service Visit|AR Live|AM|PM/ }).first();
   await target.waitFor({ state: "visible", timeout: 30000 });
   await target.click();
 

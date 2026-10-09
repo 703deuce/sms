@@ -5,9 +5,9 @@ import { CalendarClock, ExternalLink, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { formatPhone } from '@/lib/utils'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
-import { KeyValueRow, OpusIconBadge, Pill } from '@/newui-transplant/components/app/kit'
 import { CustomerResponsePill } from '@/newui-transplant/components/appointment-reminders/customer-response-pill'
 import type { ArCustomerResponseSummary } from '@/lib/appointment-reminders/ar-sms-customer-outcome'
+import { OpusIconBadge, Pill } from '@/newui-transplant/components/app/kit'
 import { OPUS_CONFIG_INSET, OPUS_SYSTEM_LOCK_SURFACE } from '@/newui-transplant/components/app/opus-surfaces'
 import { Button } from '@/newui-transplant/components/ui/button'
 import {
@@ -30,6 +30,15 @@ type DetailPayload = {
   sourceEventUrl?: string | null
   customerResponse?: ArCustomerResponseSummary
   reminderSchedule?: Array<{ label: string; status: string }>
+}
+
+function OpusDetailField({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="min-w-0 max-w-full">
+      <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</dt>
+      <dd className="mt-1 break-words text-sm font-medium leading-snug text-foreground">{value}</dd>
+    </div>
+  )
 }
 
 function formatDate(iso: string, tz: string) {
@@ -128,24 +137,27 @@ export function ArCalendarEventSheet({
       (detail?.metadata?.connectionId ? 'Connected calendar' : null),
   )
 
+  const whenLine =
+    detail?.startsAt
+      ? `${formatDate(detail.startsAt, tz)} · ${formatTimeRange(detail.startsAt, detail.endsAt, tz)}`
+      : null
+
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
       <SheetContent
         side="right"
-        className="flex w-full flex-col gap-0 p-0 sm:max-w-md md:max-w-[480px]"
+        className="flex w-full max-w-full flex-col gap-0 p-0 sm:max-w-md md:max-w-[28rem]"
       >
-        <SheetHeader className="border-b bg-gradient-to-b from-card to-muted/20 px-5 py-4 pr-12 text-left">
-          <div className="flex items-start gap-3">
-            <OpusIconBadge icon={CalendarClock} className="mt-0.5" />
+        <SheetHeader className="border-b bg-gradient-to-b from-card to-muted/20 px-6 py-5 pr-14 text-left">
+          <div className="flex min-w-0 items-start gap-3">
+            <OpusIconBadge icon={CalendarClock} className="mt-0.5 shrink-0" />
             <div className="min-w-0 flex-1">
-              <SheetTitle className="text-base font-semibold leading-snug">{title}</SheetTitle>
-              {subtitle ? <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p> : null}
-              {detail?.startsAt ? (
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {formatDate(detail.startsAt, tz)} · {formatTimeRange(detail.startsAt, detail.endsAt, tz)}
-                </p>
+              <SheetTitle className="text-base font-semibold leading-snug break-words">{title}</SheetTitle>
+              {subtitle ? <p className="mt-1 text-sm text-muted-foreground break-words">{subtitle}</p> : null}
+              {whenLine ? (
+                <p className="mt-2 text-sm font-medium leading-snug text-foreground break-words">{whenLine}</p>
               ) : null}
-              <div className="mt-2 flex flex-wrap items-center gap-2">
+              <div className="mt-3 flex flex-wrap gap-2">
                 <Pill tone="neutral">Read-only</Pill>
                 {detail?.customerResponse ? (
                   <CustomerResponsePill
@@ -158,50 +170,55 @@ export function ArCalendarEventSheet({
           </div>
         </SheetHeader>
 
-        <div className="flex-1 overflow-y-auto px-5 py-5">
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 py-5">
           {loading ? (
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+              <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden="true" />
               Loading details…
             </p>
           ) : detail ? (
             <div className="space-y-6">
-              <div className={cn(OPUS_SYSTEM_LOCK_SURFACE, 'text-xs text-muted-foreground')}>
-                Changes are made in Outlook or Google Calendar. Transovo syncs updates for reminders and SMS
+              <div className={cn(OPUS_SYSTEM_LOCK_SURFACE, 'text-xs leading-relaxed text-muted-foreground')}>
+                Edit this appointment in Outlook or Google Calendar. Transovo syncs changes for reminders and SMS
                 rescheduling.
               </div>
 
-              <section>
-                <h2 className="mb-3 text-sm font-semibold">Appointment details</h2>
-                <div className={cn(OPUS_CONFIG_INSET, 'px-4 py-1')}>
-                  {detail.inviteeName ? <KeyValueRow label="Customer" value={detail.inviteeName} /> : null}
+              <section aria-labelledby="ar-cal-detail-heading">
+                <h2 id="ar-cal-detail-heading" className="mb-3 text-sm font-semibold">
+                  Details
+                </h2>
+                <dl className={cn(OPUS_CONFIG_INSET, 'grid gap-4 p-4 sm:p-5')}>
+                  {detail.inviteeName ? (
+                    <OpusDetailField label="Customer" value={detail.inviteeName} />
+                  ) : null}
                   {detail.metadata?.inviteePhone ? (
-                    <KeyValueRow
+                    <OpusDetailField
                       label="Phone"
                       value={formatPhone(String(detail.metadata.inviteePhone))}
                     />
                   ) : null}
-                  {location ? <KeyValueRow label="Location" value={location} /> : null}
-                  {provider ? <KeyValueRow label="Calendar" value={provider} /> : null}
-                  {detail.status ? (
-                    <KeyValueRow label="Status" value={detail.status} tone="neutral" />
-                  ) : null}
-                </div>
+                  {location ? <OpusDetailField label="Location" value={location} /> : null}
+                  {provider ? <OpusDetailField label="Calendar" value={provider} /> : null}
+                  {detail.status ? <OpusDetailField label="Status" value={detail.status} /> : null}
+                </dl>
               </section>
 
               {detail.reminderSchedule?.length ? (
-                <section>
-                  <h2 className="mb-3 text-sm font-semibold">Reminders</h2>
-                  <div className={cn(OPUS_CONFIG_INSET, 'px-4 py-3 text-sm')}>
-                    <ul className="space-y-2">
-                      {detail.reminderSchedule.map((r) => (
-                        <li key={r.label} className="flex items-center justify-between gap-3">
-                          <span className="text-muted-foreground">{r.label}</span>
-                          <span className="font-medium capitalize">{r.status}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                <section aria-labelledby="ar-cal-reminders-heading">
+                  <h2 id="ar-cal-reminders-heading" className="mb-3 text-sm font-semibold">
+                    Reminders
+                  </h2>
+                  <ul className={cn(OPUS_CONFIG_INSET, 'divide-y')}>
+                    {detail.reminderSchedule.map((r) => (
+                      <li
+                        key={r.label}
+                        className="flex flex-col gap-0.5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+                      >
+                        <span className="min-w-0 break-words text-sm text-muted-foreground">{r.label}</span>
+                        <span className="shrink-0 text-sm font-medium capitalize">{r.status}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </section>
               ) : null}
             </div>
@@ -210,8 +227,8 @@ export function ArCalendarEventSheet({
           )}
         </div>
 
-        <SheetFooter className="border-t bg-muted/15 px-5 py-4">
-          <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap">
+        <SheetFooter className="border-t bg-muted/15 px-6 py-4">
+          <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap">
             {detail?.sourceEventUrl ? (
               <Button
                 variant="outline"
