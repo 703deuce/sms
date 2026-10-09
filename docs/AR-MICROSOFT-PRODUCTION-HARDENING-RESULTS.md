@@ -142,9 +142,9 @@ npx tsx scripts/test-microsoft-delta-multipage-contract.ts
 | Step | Status |
 |------|--------|
 | Commits pushed to `cursor/ar-microsoft-production-hardening-f350` | See git log on branch |
-| PR #628 merge to `master` | **Pending / run after review** |
-| Coolify build green | **Pending** post-merge |
-| Migration on production | **Pending** (`20261009120000_ar_microsoft_production_hardening`) |
+| PR #628 merge to `master` | **MERGED** (`dd84e6e6`, 2026-10-09T21:15:20Z) |
+| Coolify build green | **VERIFIED** — production `GET /api/health` returned `commitSha` `dd84e6e6c0df321fa91833de36498199851c73bb` (~11 min after merge) |
+| Migration on production | **Assumed applied** via `scripts/deploy-db-migrations.sh` on deploy (verify in Coolify logs if needed) |
 | M365 E2E (create/modify/delete + webhook-disabled backstop) | **Manual** — requires test tenant |
 | One live SMS reminder | **Manual** — requires authorized phone |
 
