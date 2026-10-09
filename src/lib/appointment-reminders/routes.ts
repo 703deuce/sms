@@ -2,7 +2,10 @@
 export const AR_ROUTES = {
   home: "/appointment-reminders",
   appointments: "/appointment-reminders/appointments",
+  /** Read-only grid synced from connected provider calendars */
+  calendar: "/appointment-reminders/calendar",
   reminders: "/appointment-reminders/reminders",
+  /** OAuth, import selection, and sync settings */
   calendars: "/appointment-reminders/calendars",
   settings: "/appointment-reminders/settings",
   aiRescheduler: "/appointment-reminders/ai-rescheduler",

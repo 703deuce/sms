@@ -5,6 +5,7 @@ import { loadAppointmentRemindersPage } from "@/lib/appointment-reminders/load-a
 import { loadAppointmentRemindersOperationalPage } from "@/lib/appointment-reminders/load-reminders-operational-page";
 import { isCalendarConnectionUsable } from "@/lib/appointment-reminders/calendar-connection";
 import { loadAppointmentRemindersActivation } from "@/lib/appointment-reminders/activation";
+import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
 
 export async function loadAppointmentRemindersOverview(workspaceId: string) {
   const prisma = getPrisma();
@@ -14,6 +15,7 @@ export async function loadAppointmentRemindersOverview(workspaceId: string) {
   });
 
   const activation = await loadAppointmentRemindersActivation(workspaceId);
+  const platform = await loadAppointmentPlatformConfig(workspaceId);
 
   const [todayPage, upcomingPage, remindersPage] = await Promise.all([
     loadAppointmentRemindersPage(workspaceId, { date: "today", page: 1, pageSize: 500 }),
@@ -60,6 +62,11 @@ export async function loadAppointmentRemindersOverview(workspaceId: string) {
         : "setup_incomplete";
 
   return {
+    timezone: platform.timezone,
+    setup: {
+      calendarConnected:
+        activation.calendarConnected && hasImportCalendars,
+    },
     counts: {
       todayTotal: todayPage.total,
       reminderFailed: remindersPage.summary.failed7d,

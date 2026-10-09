@@ -35,3 +35,16 @@
   font-size: 13px;
   height: 36px;
 }
+
+/* Appointment Reminders read-only calendar — hide scheduling-product chrome */
+.ar-cal-surface .cal-subtitle--standalone {
+  display: none;
+}
+
+.ar-cal-surface .cal-side {
+  display: none;
+}
+
+.ar-cal-surface .cal-main {
+  grid-template-columns: 1fr !important;
+}
