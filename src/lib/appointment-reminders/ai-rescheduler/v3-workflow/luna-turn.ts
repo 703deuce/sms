@@ -33,6 +33,43 @@ import { AR_SMS_APPOINTMENT_AGENT_SYSTEM_PROMPT } from "../context-agent/ar-sms-
 import type { ArSmsContextInterpretation } from "../context-agent/ar-sms-context-schema";
 import { handleArReminderLetterReply } from "../inbound-replies";
 
+type OpenAiChatToolDef =
+  | {
+      type: "function";
+      function: {
+        name: string;
+        description?: string | null;
+        parameters?: Record<string, unknown>;
+      };
+    }
+  | {
+      type: "function";
+      name: string;
+      description?: string | null;
+      parameters?: Record<string, unknown>;
+    };
+
+function toOpenAiChatCompletionTool(t: OpenAiChatToolDef) {
+  if ("function" in t && t.function?.name) {
+    return {
+      type: "function" as const,
+      function: {
+        name: t.function.name,
+        description: t.function.description ?? null,
+        parameters: (t.function.parameters ?? {}) as Record<string, unknown>,
+      },
+    };
+  }
+  return {
+    type: "function" as const,
+    function: {
+      name: t.name,
+      description: t.description ?? null,
+      parameters: (t.parameters ?? {}) as Record<string, unknown>,
+    },
+  };
+}
+
 const AR_LETTER_TOOLS = [
   {
     type: "function" as const,
@@ -298,14 +335,7 @@ export async function runArRescheduleLunaTurn(input: {
     buildSetSchedulingPreferenceOpenAiTool(input.config),
     buildFindAvailabilityOpenAiTool(input.config),
     buildRescheduleAppointmentOpenAiTool(input.config),
-  ].map((t) => ({
-    type: "function" as const,
-    function: {
-      name: t.name!,
-      description: t.description,
-      parameters: (t.parameters || {}) as Record<string, unknown>,
-    },
-  }));
+  ].map(toOpenAiChatCompletionTool);
 
   const schedulingContext = buildSchedulingContextBlock({
     runtime: input.runtime,

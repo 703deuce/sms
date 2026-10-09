@@ -88,12 +88,18 @@ export const arSmsContextInterpretationJsonSchema = {
     conversation_relationship: { type: "string", enum: [...AR_SMS_CONVERSATION_RELATIONSHIPS] },
     appointment_reference: { type: "string", enum: [...AR_SMS_APPOINTMENT_REFERENCE] },
     requested_change: {
-      type: ["object", "null"],
-      additionalProperties: false,
-      properties: {
-        date_expression: { type: ["string", "null"] },
-        time_expression: { type: ["string", "null"] },
-      },
+      anyOf: [
+        {
+          type: "object",
+          additionalProperties: false,
+          required: ["date_expression", "time_expression"],
+          properties: {
+            date_expression: { type: ["string", "null"] },
+            time_expression: { type: ["string", "null"] },
+          },
+        },
+        { type: "null" },
+      ],
     },
     pending_offer_response: { type: "string", enum: [...AR_SMS_PENDING_OFFER_RESPONSE] },
     customer_authorization: { type: "string", enum: [...AR_SMS_AUTHORIZATION_STATES] },
