@@ -1,4 +1,4 @@
-import { isCalendarConnectionUsable } from "@/lib/appointment-reminders/calendar-connection";
+import { isCalendarConnectionUsable } from "../calendar-connection";
 
 export type ArOverviewCalendarRow = {
   status: string;
