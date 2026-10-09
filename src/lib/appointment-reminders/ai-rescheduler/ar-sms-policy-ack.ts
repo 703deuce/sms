@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 import type { AppointmentMetadata } from "@/lib/appointments/types";
-import type { ArSmsContextInterpretation } from "./context-agent/ar-sms-context-schema";
 import {
   type ArSmsActionEvaluation,
   type ArSmsActionKind,
@@ -130,35 +129,12 @@ export function messageLooksLikeSchedulingWithoutPolicyAccept(body: string): boo
   return false;
 }
 
-export function interpretPolicyAckResponse(input: {
-  body: string;
-  contextInterpretation?: ArSmsContextInterpretation | null;
-}): "accept" | "decline" | "other" {
+export function interpretPolicyAckResponse(input: { body: string }): "accept" | "decline" | "other" {
   const literal = classifyPolicyAckUtterance(input.body);
   if (literal === "accept" || literal === "decline") return literal;
-
-  const interp = input.contextInterpretation;
-  if (!interp) return "other";
-
-  if (interp.customer_authorization === "rejection_of_pending_action") {
-    return "decline";
-  }
-
   if (messageLooksLikeSchedulingWithoutPolicyAccept(input.body)) {
     return "other";
   }
-
-  if (
-    interp.customer_authorization === "confirmation_of_pending_action" &&
-    interp.pending_offer_response !== "rejection"
-  ) {
-    if (interp.intent === "availability_question") return "other";
-    if (interp.intent === "reschedule_request" && messageLooksLikeSchedulingWithoutPolicyAccept(input.body)) {
-      return "other";
-    }
-    return "accept";
-  }
-
   return "other";
 }
 

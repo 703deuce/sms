@@ -1,21 +1,20 @@
 import "server-only";
 
 import { getArAiReschedulerModelId } from "../model";
-import { openAiChatJsonResponse, type ChatMessage } from "../v3-workflow/openai-tools";
+import { openAiChatTextResponse, type ChatMessage } from "../v3-workflow/openai-tools";
 import type { ArSmsSharedTurnSnapshot } from "../ar-sms-shared-snapshot";
 import { formatSnapshotForContextAgentUserMessage } from "../ar-sms-shared-snapshot";
 import { AR_SMS_CONTEXT_AGENT_SYSTEM_PROMPT } from "./ar-sms-context-agent-prompt";
 import {
-  arSmsContextInterpretationJsonSchema,
-  fallbackArSmsContextInterpretation,
-  parseArSmsContextInterpretation,
-  type ArSmsContextInterpretation,
-} from "./ar-sms-context-schema";
+  fallbackArSmsContextNotes,
+  normalizeArSmsContextNotes,
+  type ArSmsContextNotes,
+} from "./ar-sms-context-notes";
 import { logArSmsPipeline } from "@/lib/appointment-reminders/messaging/pipeline-log";
 
 export async function runArSmsContextAgent(input: {
   snapshot: ArSmsSharedTurnSnapshot;
-}): Promise<ArSmsContextInterpretation> {
+}): Promise<ArSmsContextNotes> {
   logArSmsPipeline({
     step: "context_agent_start",
     workspaceId: input.snapshot.workspaceId,
@@ -35,15 +34,14 @@ export async function runArSmsContextAgent(input: {
   ];
 
   try {
-    const raw = await openAiChatJsonResponse({
+    const raw = await openAiChatTextResponse({
       messages,
       model: getArAiReschedulerModelId(),
       reasoningEffort: "medium",
-      jsonSchema: arSmsContextInterpretationJsonSchema as Record<string, unknown>,
-      schemaName: "ar_sms_context_interpretation",
+      temperature: 0.2,
+      maxTokens: 900,
     });
-    const parsed = parseArSmsContextInterpretation(raw);
-    const interpretation = parsed ?? fallbackArSmsContextInterpretation("invalid_context_agent_json");
+    const notes = raw ? normalizeArSmsContextNotes(raw) : fallbackArSmsContextNotes("empty_model_response");
 
     logArSmsPipeline({
       step: "context_agent_completed",
@@ -51,17 +49,13 @@ export async function runArSmsContextAgent(input: {
       replySessionId: input.snapshot.replySessionId,
       appointmentId: input.snapshot.appointmentId,
       providerMessageId: input.snapshot.providerMessageId,
-      ok: Boolean(parsed),
-      meta: {
-        intent: interpretation.intent,
-        intent_confidence: interpretation.intent_confidence,
-        needs_clarification: interpretation.needs_clarification,
-      },
+      ok: Boolean(raw?.trim()),
+      meta: { notesLength: notes.length },
     });
 
-    return interpretation;
+    return notes;
   } catch (err) {
-    const interpretation = fallbackArSmsContextInterpretation(
+    const notes = fallbackArSmsContextNotes(
       err instanceof Error ? err.message : "context_agent_failed",
     );
     logArSmsPipeline({
@@ -71,8 +65,9 @@ export async function runArSmsContextAgent(input: {
       appointmentId: input.snapshot.appointmentId,
       providerMessageId: input.snapshot.providerMessageId,
       ok: false,
-      error: interpretation.clarification_topic ?? "context_agent_failed",
+      error: err instanceof Error ? err.message : "context_agent_failed",
+      meta: { notesLength: notes.length },
     });
-    return interpretation;
+    return notes;
   }
 }

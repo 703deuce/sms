@@ -2,14 +2,16 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import type { VoiceV3CallContext } from "@/lib/voice-v3/state/call-context";
-import type { ArSmsContextInterpretation } from "../context-agent/ar-sms-context-schema";
+import type { ArSmsContextNotes } from "../context-agent/ar-sms-context-notes";
 
 export type ArRescheduleWorkflowPersisted = {
   version: 1;
   v3Context: VoiceV3CallContext;
   /** IANA timezone for customer-facing scheduling copy on this session */
   displayTimezone?: string;
-  lastContextInterpretation?: ArSmsContextInterpretation;
+  lastContextNotes?: ArSmsContextNotes;
+  /** @deprecated legacy structured interpretation — read-only for old sessions */
+  lastContextInterpretation?: unknown;
   lastContextProviderMessageId?: string;
   lastContextInterpretedAt?: string;
 };
@@ -19,7 +21,17 @@ export function parsePersistedWorkflowState(raw: unknown): ArRescheduleWorkflowP
   const o = raw as Record<string, unknown>;
   if (o.version !== 1) return null;
   if (!o.v3Context || typeof o.v3Context !== "object") return null;
-  return { version: 1, v3Context: o.v3Context as VoiceV3CallContext };
+  return {
+    version: 1,
+    v3Context: o.v3Context as VoiceV3CallContext,
+    displayTimezone: typeof o.displayTimezone === "string" ? o.displayTimezone : undefined,
+    lastContextNotes: typeof o.lastContextNotes === "string" ? o.lastContextNotes : undefined,
+    lastContextInterpretation: o.lastContextInterpretation,
+    lastContextProviderMessageId:
+      typeof o.lastContextProviderMessageId === "string" ? o.lastContextProviderMessageId : undefined,
+    lastContextInterpretedAt:
+      typeof o.lastContextInterpretedAt === "string" ? o.lastContextInterpretedAt : undefined,
+  };
 }
 
 export async function loadWorkflowContext(sessionId: string): Promise<VoiceV3CallContext | null> {
@@ -47,6 +59,7 @@ export async function saveWorkflowContext(
     version: 1,
     v3Context: ctx,
     displayTimezone: opts?.displayTimezone ?? prior?.displayTimezone,
+    lastContextNotes: prior?.lastContextNotes,
     lastContextInterpretation: prior?.lastContextInterpretation,
     lastContextProviderMessageId: prior?.lastContextProviderMessageId,
     lastContextInterpretedAt: prior?.lastContextInterpretedAt,
@@ -57,10 +70,10 @@ export async function saveWorkflowContext(
   });
 }
 
-export async function saveArSmsContextInterpretation(input: {
+export async function saveArSmsContextNotes(input: {
   sessionId: string;
   providerMessageId?: string;
-  interpretation: ArSmsContextInterpretation;
+  notes: ArSmsContextNotes;
 }): Promise<void> {
   const prisma = getPrisma();
   const existing = await prisma.arSmsReplySession.findFirst({
@@ -73,7 +86,7 @@ export async function saveArSmsContextInterpretation(input: {
   }
   const payload: ArRescheduleWorkflowPersisted = {
     ...prior,
-    lastContextInterpretation: input.interpretation,
+    lastContextNotes: input.notes,
     lastContextProviderMessageId: input.providerMessageId,
     lastContextInterpretedAt: new Date().toISOString(),
   };

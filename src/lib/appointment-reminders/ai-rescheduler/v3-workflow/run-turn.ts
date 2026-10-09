@@ -13,7 +13,7 @@ import { classifyArInboundBody, logArSmsPipeline } from "@/lib/appointment-remin
 import { resolveArAppointmentDisplayTimezone } from "../display-time";
 import { buildArSmsSharedTurnSnapshot } from "../ar-sms-shared-snapshot";
 import { runArSmsContextAgent } from "../context-agent/run-ar-sms-context-agent";
-import { saveArSmsContextInterpretation } from "./persist";
+import { saveArSmsContextNotes } from "./persist";
 
 /**
  * Voice V3-equivalent reschedule turn for AR SMS (post-R follow-ups).
@@ -138,11 +138,11 @@ export async function runArV3RescheduleSmsTurn(input: {
     meta: { historyTurns: snapshot.conversationHistory.length },
   });
 
-  const contextInterpretation = await runArSmsContextAgent({ snapshot });
-  await saveArSmsContextInterpretation({
+  const contextNotes = await runArSmsContextAgent({ snapshot });
+  await saveArSmsContextNotes({
     sessionId: input.replySessionId,
     providerMessageId: input.providerMessageId,
-    interpretation: contextInterpretation,
+    notes: contextNotes,
   });
 
   logArSmsPipeline({
@@ -154,7 +154,7 @@ export async function runArV3RescheduleSmsTurn(input: {
     providerMessageId: input.providerMessageId,
     meta: {
       historyTurns: snapshot.conversationHistory.length,
-      contextIntent: contextInterpretation.intent,
+      contextNotesLength: contextNotes.length,
     },
   });
 
@@ -173,7 +173,7 @@ export async function runArV3RescheduleSmsTurn(input: {
     relatedAppointmentsSummary: snapshot.relatedAppointmentsSummary,
     verifiedContextBlock: snapshot.verifiedContextBlock,
     sessionLifecycleState: snapshot.sessionLifecycleState,
-    contextInterpretation,
+    contextNotes,
   });
 
   if (turn.confirmed) {

@@ -3,7 +3,6 @@ import "server-only";
 import { getPrisma } from "@/lib/db";
 import { createId } from "@/lib/supabase/id";
 import type { AppointmentMetadata } from "@/lib/appointments/types";
-import type { ArSmsContextInterpretation } from "./context-agent/ar-sms-context-schema";
 import {
   type ArSmsActionKind,
   evaluateArSmsActionPolicy,
@@ -170,7 +169,6 @@ export async function tryHandleArSmsPolicyAckInbound(input: {
   conversationId?: string;
   body: string;
   providerMessageId?: string;
-  contextInterpretation?: ArSmsContextInterpretation | null;
   whenLabel: string;
   ar: AiReschedulerConfig;
   onCancelAccepted?: () => Promise<string>;
@@ -184,10 +182,7 @@ export async function tryHandleArSmsPolicyAckInbound(input: {
     return { handled: false };
   }
 
-  const decision = interpretPolicyAckResponse({
-    body: input.body,
-    contextInterpretation: input.contextInterpretation,
-  });
+  const decision = interpretPolicyAckResponse({ body: input.body });
 
   if (decision === "other") {
     const policy =
@@ -299,7 +294,6 @@ export async function tryHandleArSmsPolicyAckForAppointment(input: {
   conversationId?: string;
   body: string;
   providerMessageId?: string;
-  contextInterpretation?: ArSmsContextInterpretation | null;
   whenLabel: string;
   ar: AiReschedulerConfig;
   onCancelAccepted: () => Promise<string>;
@@ -313,7 +307,6 @@ export async function tryHandleArSmsPolicyAckForAppointment(input: {
     conversationId: input.conversationId,
     body: input.body,
     providerMessageId: input.providerMessageId,
-    contextInterpretation: input.contextInterpretation,
     whenLabel: input.whenLabel,
     ar: input.ar,
     onCancelAccepted: input.onCancelAccepted,

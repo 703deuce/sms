@@ -91,7 +91,53 @@ export async function openAiChatWithTools(input: {
   };
 }
 
-/** Structured JSON response (Context Agent — no tools). */
+/** Plain-text completion (Context Agent advisory notes — no tools, no JSON schema). */
+export async function openAiChatTextResponse(input: {
+  messages: ChatMessage[];
+  model?: string;
+  reasoningEffort?: "none" | "low" | "medium" | "high";
+  temperature?: number;
+  maxTokens?: number;
+}): Promise<string | null> {
+  const apiKey = getOpenAiApiKey();
+  if (!apiKey) return null;
+
+  const model = input.model?.trim() || getOpenAiModel();
+  const toolExtras: Record<string, string> = {};
+  if (/gpt-6/i.test(model)) {
+    toolExtras.reasoning_effort = input.reasoningEffort ?? "medium";
+  }
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      ...toolExtras,
+      ...chatCompletionBodyExtras("openai", model, {
+        temperature: input.temperature ?? 0.2,
+        maxTokens: input.maxTokens ?? 900,
+      }),
+      messages: input.messages,
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`OpenAI API ${res.status}: ${errText.slice(0, 200)}`);
+  }
+
+  const json = (await res.json()) as {
+    choices?: Array<{ message?: { content?: string | null } }>;
+  };
+  const content = json.choices?.[0]?.message?.content;
+  return typeof content === "string" && content.trim() ? content : null;
+}
+
+/** Structured JSON response (legacy — prefer openAiChatTextResponse for Context Agent). */
 export async function openAiChatJsonResponse(input: {
   messages: ChatMessage[];
   model?: string;

@@ -75,16 +75,6 @@ describe("ar-sms-policy-ack", () => {
     expect(messageLooksLikeSchedulingWithoutPolicyAccept("Can we do Friday afternoon?")).toBe(true);
     const decision = interpretPolicyAckResponse({
       body: "Can we do Friday afternoon?",
-      contextInterpretation: {
-        intent: "availability_question",
-        intent_confidence: "high",
-        conversation_relationship: "new_request",
-        appointment_reference: "current_reminder",
-        pending_offer_response: "none",
-        customer_authorization: "request_only",
-        needs_clarification: false,
-        relevant_context: "asking times",
-      },
     });
     expect(decision).toBe("other");
   });
