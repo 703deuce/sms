@@ -4,6 +4,7 @@ import {
   createWorkspaceCalendarConnection,
   listWorkspaceCalendarConnections,
 } from "@/lib/calendar/connections";
+import { isCalendarProviderAllowedForAppointmentReminders } from "@/lib/appointment-reminders/calendar-provider-policy";
 
 export async function GET() {
   try {
@@ -25,6 +26,20 @@ export async function POST(request: Request) {
       provider?: string;
       config?: Record<string, unknown>;
     };
+    const provider = body.provider || "internal";
+    const productContext = body.config?.productContext;
+    if (
+      productContext === "appointment_reminders" &&
+      !isCalendarProviderAllowedForAppointmentReminders(provider)
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Google Calendar is not available for new Appointment Reminders connections during Microsoft 365 launch. Connect Microsoft Outlook instead.",
+        },
+        { status: 403 },
+      );
+    }
     const row = await createWorkspaceCalendarConnection(auth.workspaceId, body);
     return NextResponse.json({ data: row }, { status: 201 });
   } catch (err) {

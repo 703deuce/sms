@@ -82,6 +82,16 @@ export type CalendarConfig = {
       updatedAt: string;
     }
   >;
+  /** Per-import-calendar sync health (Microsoft). */
+  microsoftCalendarSyncState?: Record<
+    string,
+    {
+      lastSuccessAt?: string;
+      lastErrorAt?: string;
+      lastError?: string;
+      consecutiveFailures?: number;
+    }
+  >;
   /** Sanitized last Graph error for support diagnostics. */
   lastGraphError?: MicrosoftGraphError | null;
   lastVerifiedAt?: string;
@@ -376,6 +386,21 @@ export async function microsoftGraphFetch(
   input: string | URL,
   init?: RequestInit,
 ): Promise<Response> {
+  const { withMicrosoftMailboxGraphLimit, sleepForGraphRetryAfter } = await import(
+    "@/lib/microsoft/graph-mailbox-concurrency"
+  );
+  return withMicrosoftMailboxGraphLimit(connectionId, () =>
+    microsoftGraphFetchInner(connectionId, config, input, init, sleepForGraphRetryAfter),
+  );
+}
+
+async function microsoftGraphFetchInner(
+  connectionId: string,
+  config: CalendarConfig,
+  input: string | URL,
+  init?: RequestInit,
+  sleepForGraphRetryAfter?: (res: Response) => Promise<void>,
+): Promise<Response> {
   const tokenStarted = Date.now();
   let token = await getValidAccessToken(connectionId, "microsoft", config);
   const tokenValidationMs = Date.now() - tokenStarted;
@@ -403,6 +428,18 @@ export async function microsoftGraphFetch(
 
   const graphStarted = Date.now();
   let res = await withAuth(token);
+  for (let throttleAttempt = 0; throttleAttempt < 4; throttleAttempt += 1) {
+    if (
+      sleepForGraphRetryAfter &&
+      (res.status === 429 || res.status >= 500) &&
+      throttleAttempt < 3
+    ) {
+      await sleepForGraphRetryAfter(res);
+      res = await withAuth(token);
+      continue;
+    }
+    break;
+  }
   const firstGraphMs = Date.now() - graphStarted;
   try {
     const { recordVoiceGraphRequest, getActiveVoiceOrchestratorTiming } = await import(

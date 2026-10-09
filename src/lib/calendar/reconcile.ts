@@ -2,6 +2,7 @@ import "server-only";
 
 import { shouldImportFromConnection } from "@/lib/calendar/eligibility";
 import { enqueueCalendarConnectionSync } from "@/lib/calendar/import-sync";
+import { discoverAndEnqueueMicrosoftCalendarSyncs } from "@/lib/calendar/microsoft-reconcile-discovery";
 import type { CalendarConfig } from "@/lib/calendar/providers";
 import { getPrisma } from "@/lib/db";
 
@@ -10,18 +11,24 @@ export async function reconcileWorkspaceCalendarConnections(input?: {
   workspaceId?: string;
   limit?: number;
 }) {
+  const microsoft = await discoverAndEnqueueMicrosoftCalendarSyncs({
+    workspaceId: input?.workspaceId,
+    budget: input?.limit,
+  });
+
   const prisma = getPrisma();
+  const googleLimit = input?.limit ?? 100;
   const connections = await prisma.voiceCalendarConnection.findMany({
     where: {
-      provider: { in: ["google", "microsoft"] },
+      provider: "google",
       status: { in: ["connected", "needs_reauth"] },
       ...(input?.workspaceId ? { workspaceId: input.workspaceId } : {}),
     },
     orderBy: { lastSyncAt: "asc" },
-    take: input?.limit ?? 100,
+    take: googleLimit,
   });
 
-  let queued = 0;
+  let googleQueued = 0;
   for (const conn of connections) {
     const config = (conn.config || {}) as CalendarConfig;
     if (!shouldImportFromConnection(config)) continue;
@@ -33,8 +40,13 @@ export async function reconcileWorkspaceCalendarConnections(input?: {
     if (!stale) continue;
 
     await enqueueCalendarConnectionSync(conn.workspaceId, conn.id, true);
-    queued += 1;
+    googleQueued += 1;
   }
 
-  return { scanned: connections.length, queued };
+  return {
+    scanned: microsoft.dueDiscovered + connections.length,
+    queued: microsoft.enqueued + googleQueued,
+    microsoft,
+    googleQueued,
+  };
 }

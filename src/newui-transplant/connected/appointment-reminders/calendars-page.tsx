@@ -11,7 +11,7 @@ export function AppointmentRemindersCalendarsPage() {
       <PageHeader
         title="Calendars"
         meta={<Pill tone="info">Import for SMS</Pill>}
-        description="Authorize Google Calendar or Microsoft 365, choose which calendars hold customer appointments, and enable automatic import for reminders."
+        description="Connect Microsoft 365 or Outlook, choose which calendars hold customer appointments, and enable automatic import for SMS reminders."
       />
 
       <div className="mb-6">

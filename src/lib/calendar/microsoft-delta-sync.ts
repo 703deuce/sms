@@ -122,9 +122,7 @@ export async function syncMicrosoftCalendarDelta(input: {
       );
       deltaLink = nextDeltaLink;
       const normalized = normalizeDeltaEvents(items);
-      if (nextDeltaLink) {
-        await persistDeltaLink(workspaceId, connectionId, config, calendarId, timeMin, timeMax, nextDeltaLink);
-      } else {
+      if (!nextDeltaLink) {
         console.error(
           "[calendar] microsoft delta incremental finished without @odata.deltaLink",
           JSON.stringify({ connectionId, calendarId }),
@@ -166,9 +164,7 @@ export async function syncMicrosoftCalendarDelta(input: {
   deltaLink = nextDeltaLink;
   const normalized = normalizeDeltaEvents(items);
 
-  if (nextDeltaLink) {
-    await persistDeltaLink(workspaceId, connectionId, config, calendarId, timeMin, timeMax, nextDeltaLink);
-  } else if (usedFullSync) {
+  if (!nextDeltaLink && usedFullSync) {
     console.error(
       "[calendar] microsoft delta bootstrap finished without @odata.deltaLink",
       JSON.stringify({
@@ -190,7 +186,8 @@ export async function syncMicrosoftCalendarDelta(input: {
   };
 }
 
-async function persistDeltaLink(
+/** Persist delta checkpoint after appointment rows are durably updated. */
+export async function commitMicrosoftDeltaCheckpoint(
   workspaceId: string,
   connectionId: string,
   config: CalendarConfig,

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 
 import { getMicrosoftClientId, getMicrosoftClientSecret } from "@/lib/microsoft/oauth-config";
+import { isCalendarProviderAllowedForAppointmentReminders } from "@/lib/appointment-reminders/calendar-provider-policy";
 
 export async function GET() {
   try {
@@ -30,6 +31,10 @@ export async function GET() {
         brevoConfigured,
         stripeConfigured: Boolean(process.env.STRIPE_SECRET_KEY?.trim()),
         squareConfigured,
+        appointmentRemindersGoogleCalendarAllowed:
+          isCalendarProviderAllowedForAppointmentReminders("google"),
+        appointmentRemindersMicrosoftCalendarAllowed:
+          isCalendarProviderAllowedForAppointmentReminders("microsoft"),
       },
     });
   } catch (err) {
