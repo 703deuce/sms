@@ -75,6 +75,26 @@ describe("shared platform sender — inbound session routing", () => {
     }
   });
 
+  it("uses most recent COMPLETED session when several completed appointments share the sender", () => {
+    const older = session({
+      id: "s_old",
+      appointmentId: "appt_old",
+      lifecycleState: "COMPLETED",
+      lastUsedAt: new Date("2026-10-01T12:00:00Z"),
+    });
+    const newer = session({
+      id: "s_new",
+      appointmentId: "appt_new",
+      lifecycleState: "COMPLETED",
+      lastUsedAt: new Date("2026-10-09T01:13:43Z"),
+    });
+    const resolved = resolveArInboundPrimarySession([older, newer]);
+    expect(resolved.status).toBe("ok");
+    if (resolved.status === "ok") {
+      expect(resolved.session.id).toBe("s_new");
+    }
+  });
+
   it("groups sessions by workspace for cross-tenant collision detection", () => {
     const byWs = groupArSessionsByWorkspace([
       session({ id: "a", workspaceId: "ws_a" }),

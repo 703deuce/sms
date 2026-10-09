@@ -60,6 +60,15 @@ export function resolveArInboundPrimarySession(
   const tied = sessions.filter((s) => (PRIMARY_SESSION_PRIORITY[s.lifecycleState] ?? 50) === priority);
   const appointmentIds = [...new Set(tied.map((s) => s.appointmentId))];
   if (appointmentIds.length > 1) {
+    // Multiple appointments at the same active priority (e.g. two AWAITING_REPLY) — fail closed.
+    // Post-complete chatter (thanks, follow-up questions): all tied sessions are terminal — use the
+    // most recently used session (primary) so Context + Appointment agents can respond naturally.
+    const allTerminalAtThisPriority = tied.every(
+      (s) => s.lifecycleState === "COMPLETED" || s.lifecycleState === "EXPIRED",
+    );
+    if (allTerminalAtThisPriority && priority >= PRIMARY_SESSION_PRIORITY.COMPLETED) {
+      return { status: "ok", session: primary };
+    }
     return { status: "ambiguous_appointment", appointmentIds, tiedSessions: tied };
   }
   return { status: "ok", session: primary };
