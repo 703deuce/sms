@@ -80,6 +80,16 @@ export async function startInProcessWorker() {
     // Still enqueue minute/hour batch markers via processDueJobs (claim skipped in bullmq mode).
     setInterval(() => {
       void tick();
+      void (async () => {
+        try {
+          const { drainCalendarMaintenanceFromDb } = await import(
+            "@/lib/jobs/calendar-maintenance-db-drain"
+          );
+          await drainCalendarMaintenanceFromDb(5);
+        } catch (err) {
+          console.error("[web-worker] calendar maintenance db-drain failed", err);
+        }
+      })();
     }, INTERVAL_MS);
     return;
   }
