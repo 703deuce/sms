@@ -119,6 +119,12 @@ export async function syncMicrosoftCalendarDelta(input: {
       const normalized = normalizeDeltaEvents(items);
       if (nextDeltaLink) {
         await persistDeltaLink(workspaceId, connectionId, config, calendarId, timeMin, timeMax, nextDeltaLink);
+      } else {
+        console.error(
+          "[calendar] microsoft delta incremental finished without @odata.deltaLink",
+          JSON.stringify({ connectionId, calendarId }),
+        );
+        throw new Error("Microsoft delta incremental incomplete: missing @odata.deltaLink");
       }
       return {
         events: normalized.events,
@@ -149,6 +155,18 @@ export async function syncMicrosoftCalendarDelta(input: {
 
   if (nextDeltaLink) {
     await persistDeltaLink(workspaceId, connectionId, config, calendarId, timeMin, timeMax, nextDeltaLink);
+  } else if (usedFullSync) {
+    console.error(
+      "[calendar] microsoft delta bootstrap finished without @odata.deltaLink",
+      JSON.stringify({
+        connectionId,
+        calendarId,
+        windowStart: timeMin.toISOString(),
+        windowEnd: timeMax.toISOString(),
+        itemCount: normalized.events.length,
+      }),
+    );
+    throw new Error("Microsoft delta bootstrap incomplete: missing @odata.deltaLink");
   }
 
   return {

@@ -1,7 +1,11 @@
 import "server-only";
 
 import { resolveContactForImportedEvent } from "@/lib/calendar/attendee-contact";
-import { updateWorkspaceCalendarConnection } from "@/lib/calendar/connections";
+import { mergeCalendarConnectionConfig } from "@/lib/calendar/connection-config-merge";
+import {
+  getWorkspaceCalendarConnection,
+  updateWorkspaceCalendarConnection,
+} from "@/lib/calendar/connections";
 import {
   isEventEligibleForCalendarMirror,
   isEventEligibleForReminderImport,
@@ -580,10 +584,16 @@ export async function syncWorkspaceCalendarConnection(
     }
   }
 
+  const freshConn = await getWorkspaceCalendarConnection(workspaceId, connectionId);
+  const persistedConfig = mergeCalendarConnectionConfig(
+    (freshConn?.config || {}) as Record<string, unknown>,
+    { ...config, lastSyncError: null },
+  );
+
   await updateWorkspaceCalendarConnection(workspaceId, connectionId, {
     lastSyncAt: new Date(),
     status: "connected",
-    config: { ...config, lastSyncError: null },
+    config: persistedConfig,
   });
 
   return stats;
@@ -653,12 +663,38 @@ export async function enqueueCalendarConnectionSync(
   options?: EnqueueCalendarConnectionSyncOptions,
 ) {
   const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
-  return enqueueJob({
+  const minuteBucket = Math.floor(Date.now() / 60_000);
+  const idempotencyKey = `calendar-sync-${connectionId}-${incremental ? "inc" : "full"}-${minuteBucket}`;
+
+  const prisma = getPrisma();
+  const existing = await prisma.jobQueue.findUnique({ where: { idempotencyKey } });
+  const syncAlreadyRunning = existing?.status === "processing";
+
+  const job = await enqueueJob({
     jobType: "calendar_connection_sync",
     workspaceId,
     payload: { workspaceId, connectionId, incremental },
-    idempotencyKey: `calendar-sync-${connectionId}-${incremental ? "inc" : "full"}-${Math.floor(Date.now() / 60_000)}`,
+    idempotencyKey,
     priority: options?.priority,
     wake: options?.wake,
   });
+
+  // Webhook coalescing uses the same minute bucket; if a sync is in-flight, queue one follow-up.
+  if (syncAlreadyRunning) {
+    const chaserKey = `${idempotencyKey}:chaser`;
+    const chaserExists = await prisma.jobQueue.findUnique({ where: { idempotencyKey: chaserKey } });
+    if (!chaserExists || chaserExists.status === "completed" || chaserExists.status === "failed") {
+      await enqueueJob({
+        jobType: "calendar_connection_sync",
+        workspaceId,
+        payload: { workspaceId, connectionId, incremental },
+        idempotencyKey: chaserKey,
+        runAfter: new Date(Date.now() + 5_000),
+        priority: options?.priority ?? 15,
+        wake: true,
+      });
+    }
+  }
+
+  return job;
 }

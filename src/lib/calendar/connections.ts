@@ -1,5 +1,6 @@
 import "server-only";
 
+import { mergeCalendarConnectionConfig } from "@/lib/calendar/connection-config-merge";
 import { getPrisma } from "@/lib/db";
 
 export type WorkspaceCalendarProvider = "google" | "microsoft" | "internal" | "calendly";
@@ -76,12 +77,20 @@ export async function updateWorkspaceCalendarConnection(
   const existing = await getWorkspaceCalendarConnection(workspaceId, connectionId);
   if (!existing) return null;
 
+  const config =
+    data.config !== undefined
+      ? mergeCalendarConnectionConfig(
+          (existing.config || {}) as Record<string, unknown>,
+          data.config,
+        )
+      : undefined;
+
   return getPrisma().voiceCalendarConnection.update({
     where: { id: connectionId },
     data: {
       ...(data.name !== undefined ? { name: data.name } : {}),
       ...(data.status !== undefined ? { status: data.status } : {}),
-      ...(data.config !== undefined ? { config: data.config } : {}),
+      ...(config !== undefined ? { config } : {}),
       ...(data.lastSyncAt !== undefined ? { lastSyncAt: data.lastSyncAt } : {}),
     },
   });

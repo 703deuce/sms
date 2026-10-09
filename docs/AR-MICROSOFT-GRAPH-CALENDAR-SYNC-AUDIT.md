@@ -237,3 +237,43 @@ Existing **webhook + BullMQ `default` queue + embedded/maintenance workers** can
 ## Governing sentence
 
 **Webhooks are the fast path and are working for create/title updates on the audited account. Reliability at scale depends on delta tokens and scheduled reconciliation being proven in production — today delta is not persisted on the primary Microsoft connection, which explains missed reschedules when Microsoft does not push an `updated` notification.**
+
+---
+
+## Post-audit root cause (2026-10-09) — Test2 @ 13:48 UTC vs 13:51 UTC
+
+### What production proved
+
+| Time (UTC) | Action | Test2 `startsAt` | Notes |
+|------------|--------|------------------|-------|
+| 13:02 | Create + title via webhooks | Oct 16 | Targeted + queued sync path worked |
+| 13:48 | Inline stale sync (`maybeSyncStaleAppointmentRemindersCalendars` / 15 min rule) | **Still Oct 16** | Connection `lastSyncAt` advanced; appointment `lastExternalSyncAt` ~13:48:48 |
+| 13:51 | `syncCalendarProviderEventById` (single `/me/events/{id}`) | **Oct 19** | Matches Graph |
+
+No `updated` webhook arrived for the reschedule — recovery had to come from bulk sync or reconciliation, not the webhook fast path.
+
+### Most likely explanation (code + evidence)
+
+1. **`microsoftDeltaLinks` never stuck in production** — `persistDeltaLink` wrote tokens during sync, but `syncWorkspaceCalendarConnection` finished with a **full config replace** from a snapshot taken at sync start (`config: { ...config, lastSyncError: null }`). Concurrent or overlapping syncs (inline stale sync + webhook job + UI poll) could **overwrite** the row and drop `microsoftDeltaLinks`. That matches empty delta state despite incremental jobs running.
+
+2. **13:48 bulk path did not apply the reschedule** — Either the `calendarView/delta` page set in that pass still reflected the pre-move instance, or the event was not in the delta/bootstrap page set returned for the sync window. Empty delta forces repeated bootstraps; without a persisted `@odata.deltaLink`, incremental semantics are weaker and reconciliation depends on full window enumeration being correct every time.
+
+3. **13:51 targeted sync succeeded** because `/me/events/{id}` returns the **authoritative** event document (Oct 19), independent of delta pagination/window quirks.
+
+4. **Same-minute job coalescing** is a separate, smaller risk (create + title at 13:02). It does **not** explain the reschedule gap (no webhook). Coalescing **during an in-flight** `calendar_connection_sync` can still drop a follow-up enqueue when a second notification arrives while `status === processing`.
+
+### Fixes shipped on branch `cursor/ar-microsoft-calendar-sync-fix-f350`
+
+| Priority | Change |
+|----------|--------|
+| P1 / P2 | `mergeCalendarConnectionConfig` on every connection config write; final sync merges with **fresh** DB config so delta links survive |
+| P2 | Treat bootstrap/incremental delta rounds **without** `@odata.deltaLink` as failure → fallback discovery list (do not silently “succeed”) |
+| P3 | When enqueue hits a **processing** sync in the same minute bucket, schedule one **chaser** job (+5s) |
+
+**Not done (per product guidance):** broad reminder blocking on stale `lastSyncAt`; Event Hubs; architecture redesign.
+
+### Verification after deploy
+
+1. Run incremental sync twice on `cmu1uq7f15s1o5s4f6c5b6a57` — confirm `config.microsoftDeltaLinks[calendarId].deltaLink` is non-empty after the second run.
+2. Reschedule an Outlook event **without** webhook (or with webhook suppressed) — within 15 min reconcile or stale backstop should correct mirror; targeted webhook path should still use `/me/events/{id}` when `resourceData.id` is present.
+3. Rapid create → edit with sync in-flight — chaser job should run; DB should match final Graph state.
