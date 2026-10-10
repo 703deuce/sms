@@ -386,11 +386,16 @@ export function resolveArCustomerResponseSummary(input: {
     );
   }
 
-  const cancelPending = (meta as { arCancelPending?: { requestedAt?: string } }).arCancelPending;
+  const cancelPending = (meta as {
+    arCancelPending?: { requestedAt?: string; channel?: "sms" | "email" };
+  }).arCancelPending;
   if (cancelPending) {
     return {
       kind: "cancel_pending",
-      label: "Awaiting cancel confirmation",
+      label:
+        cancelPending.channel === "email"
+          ? "Cancellation requested"
+          : "Awaiting cancel confirmation",
       detailLine: `Appointment on ${whenLabel}`,
       at: cancelPending.requestedAt,
     };

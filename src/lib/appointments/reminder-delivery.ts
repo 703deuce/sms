@@ -401,6 +401,13 @@ async function trySendStep(input: {
     const email = emailCheck.email?.trim();
     if (!email) return false;
 
+    const {
+      resolveAiReschedulerConfig,
+      isArRemindersOnlyMode,
+    } = await import("@/lib/appointment-reminders/ai-rescheduler/types");
+    const arForEmail = resolveAiReschedulerConfig(platform);
+    const includeEmailActions = !isArRemindersOnlyMode(arForEmail);
+
     const mergeVars = reminderAppointmentMergeVars({
       platform,
       metadata: input.metadata,
@@ -433,13 +440,15 @@ async function trySendStep(input: {
         branding: platform.reminderEmailBranding,
         preparationInstructions: platform.reminderPreferences?.preparationInstructions,
         cancellationPolicyText: platform.reminderPreferences?.cancellationPolicyText,
-        actionLinks: {
-          confirm: input.confirmToken ? publicActionUrl("confirm", input.confirmToken) : undefined,
-          cancel: input.cancelToken ? publicActionUrl("cancel", input.cancelToken) : undefined,
-          reschedule: input.rescheduleToken
-            ? publicActionUrl("reschedule", input.rescheduleToken)
-            : undefined,
-        },
+        actionLinks: includeEmailActions
+          ? {
+              confirm: input.confirmToken ? publicActionUrl("confirm", input.confirmToken) : undefined,
+              cancel: input.cancelToken ? publicActionUrl("cancel", input.cancelToken) : undefined,
+              reschedule: input.rescheduleToken
+                ? publicActionUrl("reschedule", input.rescheduleToken)
+                : undefined,
+            }
+          : {},
         startsAt: input.startsAt,
         endsAt,
         timezone: input.timezone,

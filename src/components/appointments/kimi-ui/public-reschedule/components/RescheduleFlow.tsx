@@ -58,6 +58,9 @@ export function RescheduleFlow({ token, live = false }: { token?: string; live?:
   const [flow, setFlow] = useState<FlowState>("picking");
   const [submitError, setSubmitError] = useState("");
   const [failOnce, setFailOnce] = useState(false);
+  const [requestOnly, setRequestOnly] = useState(false);
+  const [requestNote, setRequestNote] = useState("");
+  const [requestPreferred, setRequestPreferred] = useState("");
 
   useEffect(() => {
     if (live && token) {
@@ -72,6 +75,7 @@ export function RescheduleFlow({ token, live = false }: { token?: string; live?:
         })
         .then((json) => {
           setAppt(json.data);
+          setRequestOnly(Boolean(json.data.requestOnly));
           setSlots(json.data.slots || []);
           setLoadState("ready");
         })
@@ -94,14 +98,21 @@ export function RescheduleFlow({ token, live = false }: { token?: string; live?:
   }, [live, token]);
 
   async function submit() {
-    if (!selectedSlot) return;
+    if (!requestOnly && !selectedSlot) return;
     setActing(true);
     setSubmitError("");
     if (live && token) {
       const res = await fetch(`/api/public/appointments/reschedule/${encodeURIComponent(token)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ startsAt: selectedSlot }),
+        body: JSON.stringify(
+          requestOnly
+            ? {
+                note: requestNote.trim() || undefined,
+                preferredStartsAt: requestPreferred.trim() || undefined,
+              }
+            : { startsAt: selectedSlot },
+        ),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -257,10 +268,12 @@ export function RescheduleFlow({ token, live = false }: { token?: string; live?:
               </span>
             </div>
             <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700, letterSpacing: "-0.01em" }}>
-              You're rescheduled
+              {requestOnly ? "Reschedule request sent" : "You're rescheduled"}
             </h1>
             <p style={{ margin: "10px 0 0", fontSize: 13.5, lineHeight: 1.55, color: "var(--text-secondary)" }}>
-              Your appointment has been moved. Check your texts for updated details.
+              {requestOnly
+                ? "We've notified the business. Your original appointment stays as scheduled until they confirm a new time."
+                : "Your appointment has been moved. Check your texts for updated details."}
             </p>
 
             <div style={{ marginTop: 20 }}>{summaryRow}</div>
@@ -338,38 +351,79 @@ export function RescheduleFlow({ token, live = false }: { token?: string; live?:
         ) : (
           <Card style={{ padding: 28 }}>
             <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700, letterSpacing: "-0.01em" }}>
-              Reschedule your appointment
+              {requestOnly ? "Request a new time" : "Reschedule your appointment"}
             </h1>
             <p style={{ margin: "6px 0 0", fontSize: 13, color: "var(--text-muted)" }}>
-              Choose a new time that works for you. Your reminders will update automatically.
+              {requestOnly
+                ? "Confirm your request below. The business will follow up — your current appointment is unchanged until then."
+                : "Choose a new time that works for you. Your reminders will update automatically."}
             </p>
 
             <div style={{ marginTop: 18 }}>{summaryRow}</div>
 
-            {/* New time selection */}
-            <div style={{ marginTop: 22 }}>
-              <p
-                id="pick-time-label"
-                style={{
-                  margin: "0 0 10px",
-                  fontSize: 12,
-                  fontWeight: 700,
-                  letterSpacing: "0.04em",
-                  textTransform: "uppercase",
-                  color: "var(--text-muted)",
-                }}
-              >
-                Pick a new time
-              </p>
-              <SlotPicker
-                slots={slots}
-                timezone={appt.timezone}
-                selected={selectedSlot}
-                onSelect={setSelectedSlot}
-              />
-            </div>
+            {requestOnly ? (
+              <div style={{ marginTop: 22, display: "flex", flexDirection: "column", gap: 14 }}>
+                <label style={{ display: "block", fontSize: 13 }}>
+                  <span style={{ fontWeight: 600 }}>Preferred date or time (optional)</span>
+                  <input
+                    type="text"
+                    value={requestPreferred}
+                    onChange={(e) => setRequestPreferred(e.target.value)}
+                    placeholder="e.g. Next Tuesday afternoon"
+                    style={{
+                      marginTop: 6,
+                      width: "100%",
+                      padding: "10px 12px",
+                      borderRadius: 8,
+                      border: "1px solid var(--border)",
+                      fontSize: 14,
+                    }}
+                  />
+                </label>
+                <label style={{ display: "block", fontSize: 13 }}>
+                  <span style={{ fontWeight: 600 }}>Note for the business (optional)</span>
+                  <textarea
+                    value={requestNote}
+                    onChange={(e) => setRequestNote(e.target.value)}
+                    rows={3}
+                    placeholder="Anything we should pass along?"
+                    style={{
+                      marginTop: 6,
+                      width: "100%",
+                      padding: "10px 12px",
+                      borderRadius: 8,
+                      border: "1px solid var(--border)",
+                      fontSize: 14,
+                      resize: "vertical",
+                    }}
+                  />
+                </label>
+              </div>
+            ) : (
+              <div style={{ marginTop: 22 }}>
+                <p
+                  id="pick-time-label"
+                  style={{
+                    margin: "0 0 10px",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    letterSpacing: "0.04em",
+                    textTransform: "uppercase",
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  Pick a new time
+                </p>
+                <SlotPicker
+                  slots={slots}
+                  timezone={appt.timezone}
+                  selected={selectedSlot}
+                  onSelect={setSelectedSlot}
+                />
+              </div>
+            )}
 
-            {selectedSlot ? (
+            {!requestOnly && selectedSlot ? (
               <p
                 role="status"
                 style={{
@@ -405,15 +459,19 @@ export function RescheduleFlow({ token, live = false }: { token?: string; live?:
               <Button
                 size="lg"
                 fullWidth
-                disabled={!selectedSlot || acting || slots.length === 0}
+                disabled={
+                  requestOnly ? acting : !selectedSlot || acting || slots.length === 0
+                }
                 onClick={submit}
                 aria-busy={acting}
               >
                 {acting ? (
                   <>
                     <Spinner size={15} />
-                    Confirming…
+                    {requestOnly ? "Sending…" : "Confirming…"}
                   </>
+                ) : requestOnly ? (
+                  "Send reschedule request"
                 ) : (
                   "Confirm new time"
                 )}

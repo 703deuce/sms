@@ -122,6 +122,8 @@ export function PublicCancelClient({ token, live = false }: { token?: string; li
   const [kept, setKept] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [error, setError] = useState("");
+  const [requestRecorded, setRequestRecorded] = useState(false);
+  const [requestOnly, setRequestOnly] = useState(false);
 
   // Load appointment preview
   useEffect(() => {
@@ -145,8 +147,9 @@ export function PublicCancelClient({ token, live = false }: { token?: string; li
         return r.json();
       })
       .then((json) => {
-        const preview = json.data as AppointmentPreview;
+        const preview = json.data as AppointmentPreview & { requestOnly?: boolean };
         setAppt(preview);
+        setRequestOnly(Boolean(preview.requestOnly));
         const status = preview.status?.toLowerCase() || "";
         if (status === "canceled" || status === "cancelled") {
           setState("already");
@@ -169,7 +172,11 @@ export function PublicCancelClient({ token, live = false }: { token?: string; li
         .then(async (r) => {
           const json = await r.json().catch(() => ({}));
           if (!r.ok) throw new Error(json.error || "Something went wrong");
-          setAppt((prev) => (prev ? { ...prev, status: "canceled" } : prev));
+          if (json.data?.requestRecorded) {
+            setRequestRecorded(true);
+          } else {
+            setAppt((prev) => (prev ? { ...prev, status: "canceled" } : prev));
+          }
           setConfirming(false);
           setState("success");
         })
@@ -375,15 +382,18 @@ export function PublicCancelClient({ token, live = false }: { token?: string; li
               <Check className="h-7 w-7" />
             </div>
             <h1 className="font-display text-xl font-semibold tracking-tight text-foreground">
-              Your appointment has been canceled
+              {requestRecorded
+                ? "Cancellation request sent"
+                : "Your appointment has been canceled"}
             </h1>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              We&rsquo;ve let {displayBusinessName} know. Any scheduled
-              reminders for this appointment have been stopped.
+              {requestRecorded
+                ? `We've notified ${displayBusinessName}. Your appointment stays on the calendar until they confirm the cancellation.`
+                : `We\u2019ve let ${displayBusinessName} know. Any scheduled reminders for this appointment have been stopped.`}
             </p>
 
             <div className="mt-6">
-              <AppointmentSummary appt={appt} icon="x" />
+              <AppointmentSummary appt={appt} icon={requestRecorded ? "check" : "x"} />
             </div>
 
             <div className="mt-6">
@@ -399,13 +409,12 @@ export function PublicCancelClient({ token, live = false }: { token?: string; li
         {state === "normal" && appt ? (
           <Card className="fade-up w-full max-w-md p-6 sm:p-8">
             <h1 className="font-display text-lg font-semibold tracking-tight text-foreground">
-              Cancel your appointment
+              {requestOnly ? "Request cancellation" : "Cancel your appointment"}
             </h1>
             <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
-              {appt.customerFirstName
-                ? `Hi ${appt.customerFirstName}, review`
-                : "Review"}{" "}
-              the details below before canceling. This can&rsquo;t be undone.
+              {requestOnly
+                ? `${appt.customerFirstName ? `Hi ${appt.customerFirstName}, ` : ""}We'll notify the business. Your appointment stays scheduled until they confirm the cancellation.`
+                : `${appt.customerFirstName ? `Hi ${appt.customerFirstName}, review` : "Review"} the details below before canceling. This can\u2019t be undone.`}
             </p>
 
             {kept ? (

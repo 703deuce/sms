@@ -4,9 +4,12 @@ import {
   buildPublicAppointmentCustomerPreview,
   findAppointmentByPublicToken,
   getAvailability,
-  loadAppointmentPlatformConfig,
   reschedulePlatformAppointment,
 } from "@/lib/appointments";
+import {
+  publicEmailActionsUseStaffRequestWorkflow,
+  requestRescheduleViaPublicEmail,
+} from "@/lib/appointment-reminders/public-customer-actions";
 
 type Params = { params: Promise<{ token: string }> };
 
@@ -17,7 +20,17 @@ export async function GET(_request: Request, { params }: Params) {
     if (!row || (row.metadata as { rescheduleToken?: string })?.rescheduleToken !== token) {
       return NextResponse.json({ error: "Invalid token" }, { status: 404 });
     }
-    const config = await loadAppointmentPlatformConfig(row.workspaceId);
+    const requestOnly = await publicEmailActionsUseStaffRequestWorkflow(row.workspaceId);
+    if (requestOnly) {
+      return NextResponse.json({
+        data: {
+          ...buildPublicAppointmentCustomerPreview(row),
+          endsAt: row.endsAt,
+          slots: [],
+          requestOnly: true,
+        },
+      });
+    }
     const availability = await getAvailability(row.workspaceId, {
       serviceName: row.serviceName || undefined,
       daysAhead: 14,
@@ -31,6 +44,7 @@ export async function GET(_request: Request, { params }: Params) {
         ...buildPublicAppointmentCustomerPreview(row),
         endsAt: row.endsAt,
         slots,
+        requestOnly: false,
       },
     });
   } catch (err) {
@@ -45,7 +59,34 @@ export async function POST(request: Request, { params }: Params) {
     if (!row || (row.metadata as { rescheduleToken?: string })?.rescheduleToken !== token) {
       return NextResponse.json({ error: "Invalid token" }, { status: 404 });
     }
-    const body = (await request.json()) as { startsAt?: string };
+    const body = (await request.json()) as {
+      startsAt?: string;
+      preferredStartsAt?: string;
+      note?: string;
+    };
+    const requestOnly = await publicEmailActionsUseStaffRequestWorkflow(row.workspaceId);
+    if (requestOnly) {
+      const result = await requestRescheduleViaPublicEmail({
+        workspaceId: row.workspaceId,
+        appointmentId: row.id,
+        note: body.note,
+        preferredStartsAt: body.preferredStartsAt || body.startsAt,
+      });
+      if (!result.ok) {
+        return NextResponse.json({ error: result.message }, { status: 400 });
+      }
+      const fresh = await findAppointmentByPublicToken(token);
+      if (!fresh) {
+        return NextResponse.json({ error: "Invalid token" }, { status: 404 });
+      }
+      return NextResponse.json({
+        data: {
+          ...buildPublicAppointmentCustomerPreview(fresh),
+          requestRecorded: true,
+          status: result.status,
+        },
+      });
+    }
     if (!body.startsAt) {
       return NextResponse.json({ error: "startsAt is required" }, { status: 400 });
     }

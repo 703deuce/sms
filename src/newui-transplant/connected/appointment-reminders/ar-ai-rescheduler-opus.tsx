@@ -462,6 +462,38 @@ export function ArAiReschedulerOpusPage() {
         </div>
       </OpusDataSurface>
 
+      <Panel
+        title="SMS vs email at launch"
+        description="Email always uses staff-notified requests — even when SMS is on AI handles changes."
+      >
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[520px] text-left text-sm">
+            <thead>
+              <tr className="border-b text-muted-foreground">
+                <th scope="col" className="py-2 pr-4 font-medium">Channel</th>
+                <th scope="col" className="py-2 pr-4 font-medium">Reminders only</th>
+                <th scope="col" className="py-2 pr-4 font-medium">Notify staff</th>
+                <th scope="col" className="py-2 font-medium">AI handles changes</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              <tr>
+                <td className="py-2.5 pr-4 font-medium">SMS</td>
+                <td className="py-2.5 pr-4 text-muted-foreground">Reminder text only</td>
+                <td className="py-2.5 pr-4 text-muted-foreground">C / R / X → notify team</td>
+                <td className="py-2.5 text-muted-foreground">AI conversation + calendar updates</td>
+              </tr>
+              <tr>
+                <td className="py-2.5 pr-4 font-medium">Email</td>
+                <td className="py-2.5 pr-4 text-muted-foreground">No action buttons</td>
+                <td className="py-2.5 pr-4 text-muted-foreground">Confirm + request reschedule/cancel → notify team</td>
+                <td className="py-2.5 text-muted-foreground">Same as notify — requests only (no auto email agent)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+
       {aiOn ? (
         <>
           <section className="space-y-3 border-t border-border/60 pt-6">

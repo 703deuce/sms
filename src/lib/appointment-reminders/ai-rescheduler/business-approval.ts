@@ -20,8 +20,9 @@ export type ArRescheduleRequestMeta = {
     | "expired";
   failureReason?: string;
   requestedAt: string;
-  channel: "sms";
+  channel: "sms" | "email";
   proposedStartsAt?: string;
+  customerNote?: string;
   proposedEndsAt?: string;
   operationId?: string;
   rejectedAt?: string;
