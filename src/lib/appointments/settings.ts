@@ -84,6 +84,18 @@ export async function saveAppointmentPlatformConfig(
       : current.bookingLimits,
     dateOverrides: patch.dateOverrides ?? current.dateOverrides,
     locations: patch.locations ?? current.locations,
+    reminderPreferences: patch.reminderPreferences
+      ? { ...(current.reminderPreferences || {}), ...patch.reminderPreferences }
+      : current.reminderPreferences,
+    reminderEmailBranding: patch.reminderEmailBranding
+      ? { ...(current.reminderEmailBranding || {}), ...patch.reminderEmailBranding }
+      : current.reminderEmailBranding,
+    reminderQuietHours: patch.reminderQuietHours
+      ? { ...(current.reminderQuietHours || {}), ...patch.reminderQuietHours }
+      : current.reminderQuietHours,
+    aiRescheduler: patch.aiRescheduler
+      ? { ...(current.aiRescheduler || {}), ...patch.aiRescheduler }
+      : current.aiRescheduler,
   };
 
   const existing = await prisma.solutionSetup.findFirst({

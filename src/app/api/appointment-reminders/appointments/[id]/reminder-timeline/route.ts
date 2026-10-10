@@ -35,6 +35,8 @@ export async function GET(_request: Request, { params }: Params) {
       steps: enabledSteps,
       metadata: meta,
       weeklyHours,
+      dateOverrides: config.dateOverrides,
+      reminderQuietHours: config.reminderQuietHours,
     });
     const dispatches = await loadArDispatchHistoryForAppointment(auth.workspaceId, id);
     const timeline = buildDedicatedReminderTimeline(meta);

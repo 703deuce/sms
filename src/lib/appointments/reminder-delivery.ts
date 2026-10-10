@@ -75,17 +75,7 @@ export function resolveStepFireTime(
   return new Date(startsAt.getTime() - mins * 60_000);
 }
 
-export function shouldSkipStepNow(step: ReminderStepConfig, fireAt: Date, weeklyHours: Record<string, Array<{ open: string; close: string }>>, timezone: string): boolean {
-  if (step.skipWeekends || step.skipClosedDays) {
-    const dow = fireAt.getDay();
-    if (dow === 0 || dow === 6) return true;
-  }
-  if (step.skipOffHours) {
-    const hour = fireAt.getHours();
-    if (hour < 8 || hour > 20) return true;
-  }
-  return false;
-}
+export { shouldSkipStepNow } from "@/lib/appointment-reminders/reminder-send-time-policy";
 
 export function configuredReminderSteps(config: Awaited<ReturnType<typeof loadAppointmentPlatformConfig>>) {
   const steps: Array<{

@@ -43,6 +43,11 @@ export type RemindersApiConfig = {
   };
   reminderEmailBranding?: ReminderEmailBranding;
   reminderPreferences?: ReminderPreferences;
+  reminderQuietHours?: {
+    enabled?: boolean;
+    start?: string;
+    end?: string;
+  };
 };
 
 export type ReminderPreviewMap = Partial<Record<string, string>>;

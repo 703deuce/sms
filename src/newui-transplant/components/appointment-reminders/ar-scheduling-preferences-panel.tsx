@@ -27,6 +27,72 @@ export function ArSchedulingPreferencesPanel({ config, platformTemplateLocked, o
 
   return (
     <div className="space-y-4">
+      <Panel
+        title="Reminder quiet hours"
+        description="When a step uses “Skip outside business hours,” sends only fall inside this window (workspace timezone)."
+      >
+        <label className="mb-3 flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={config.reminderQuietHours?.enabled === true}
+            onChange={(e) =>
+              onChange({
+                ...config,
+                reminderQuietHours: {
+                  ...config.reminderQuietHours,
+                  enabled: e.target.checked,
+                  start: config.reminderQuietHours?.start || '09:00',
+                  end: config.reminderQuietHours?.end || '17:00',
+                },
+              })
+            }
+          />
+          Enforce quiet hours for steps with “Skip outside business hours”
+        </label>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block text-sm">
+            <span className="mb-1.5 block font-medium">Earliest send (local)</span>
+            <Input
+              type="time"
+              className="h-10"
+              value={config.reminderQuietHours?.start || '09:00'}
+              disabled={config.reminderQuietHours?.enabled !== true}
+              onChange={(e) =>
+                onChange({
+                  ...config,
+                  reminderQuietHours: {
+                    ...config.reminderQuietHours,
+                    enabled: config.reminderQuietHours?.enabled ?? true,
+                    start: e.target.value,
+                    end: config.reminderQuietHours?.end || '17:00',
+                  },
+                })
+              }
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1.5 block font-medium">Latest send (local)</span>
+            <Input
+              type="time"
+              className="h-10"
+              value={config.reminderQuietHours?.end || '17:00'}
+              disabled={config.reminderQuietHours?.enabled !== true}
+              onChange={(e) =>
+                onChange({
+                  ...config,
+                  reminderQuietHours: {
+                    ...config.reminderQuietHours,
+                    enabled: config.reminderQuietHours?.enabled ?? true,
+                    start: config.reminderQuietHours?.start || '09:00',
+                    end: e.target.value,
+                  },
+                })
+              }
+            />
+          </label>
+        </div>
+      </Panel>
+
       <Panel title="Scheduling rules" description="Lead time and send-time behavior honored by discovery and dispatch.">
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block text-sm">

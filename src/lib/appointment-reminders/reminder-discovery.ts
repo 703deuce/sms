@@ -150,7 +150,14 @@ export async function discoverAndEnqueueDueAppointmentReminders(): Promise<{
         const bypassQuietHours = process.env.AR_REMINDER_DISCOVERY_BYPASS_QUIET_HOURS === "1";
         if (
           !bypassQuietHours &&
-          shouldSkipStepNow(scheduled.step, fireAt, weeklyHours, row.timezone || config.timezone)
+          shouldSkipStepNow(
+            scheduled.step,
+            fireAt,
+            weeklyHours,
+            row.timezone || config.timezone || "America/New_York",
+            config.reminderQuietHours,
+            config.dateOverrides,
+          )
         ) {
           continue;
         }

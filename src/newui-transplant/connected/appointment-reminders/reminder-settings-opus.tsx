@@ -221,6 +221,7 @@ export function AppointmentRemindersSettingsOpus({ activeTab = 'sequence' }: { a
           },
           reminderEmailBranding: data.reminderEmailBranding,
           reminderPreferences: data.reminderPreferences,
+          reminderQuietHours: data.reminderQuietHours,
         }
         setBusinessProfile({
           businessDisplayName: data.businessDisplayName || json.workspace?.name || '',
@@ -284,6 +285,7 @@ export function AppointmentRemindersSettingsOpus({ activeTab = 'sequence' }: { a
             ...config.reminderPreferences,
             preparationInstructions: businessProfile.preparationInstructions,
           },
+          reminderQuietHours: config.reminderQuietHours,
         }),
       })
       if (!res.ok) throw new Error('save failed')

@@ -18,6 +18,8 @@ import {
   wasReminderSent,
 } from "@/lib/appointments/reminder-state";
 import { buildIcsAttachment } from "@/lib/appointments/ics-builder";
+import { shouldSkipReminderSendNow } from "@/lib/appointment-reminders/reminder-send-time-policy";
+import type { AppointmentPlatformConfig } from "@/lib/appointments/types";
 
 export type ScheduledReminderPreview = {
   stepKey: string;
@@ -26,17 +28,6 @@ export type ScheduledReminderPreview = {
   scheduledFor: string;
   status: "scheduled" | "sent" | "skipped" | "failed" | "past_due";
 };
-
-function isOffHours(date: Date, timezone: string, weeklyHours: Record<string, Array<{ open: string; close: string }>>) {
-  const { dayKeyInTimezone } = require("@/lib/appointments/availability-engine-policy") as {
-    dayKeyInTimezone: (iso: string, tz: string) => string;
-  };
-  const day = dayKeyInTimezone(date.toISOString(), timezone);
-  const windows = weeklyHours[day] || [];
-  if (!windows.length) return true;
-  const hour = date.getUTCHours();
-  return hour < 8 || hour > 20;
-}
 
 function resolveStepFireTime(
   step: ReminderStepExtended,
@@ -60,6 +51,8 @@ export function buildFutureReminderSchedule(input: {
   steps: Array<{ key: string; step: ReminderStepExtended }>;
   metadata: AppointmentMetadata;
   weeklyHours?: Record<string, Array<{ open: string; close: string }>>;
+  dateOverrides?: AppointmentPlatformConfig["dateOverrides"];
+  reminderQuietHours?: AppointmentPlatformConfig["reminderQuietHours"];
 }): ScheduledReminderPreview[] {
   const startsAt = new Date(input.startsAt);
   const now = Date.now();
@@ -88,14 +81,23 @@ export function buildFutureReminderSchedule(input: {
         status: "past_due",
       };
     }
-    if (step.skipWeekends) {
-      const dow = fireAt.getDay();
-      if (dow === 0 || dow === 6) {
-        return { stepKey: key, label: step.label, channel: step.channel, scheduledFor: fireAt.toISOString(), status: "skipped" };
-      }
-    }
-    if (step.skipOffHours && isOffHours(fireAt, input.timezone, weekly)) {
-      return { stepKey: key, label: step.label, channel: step.channel, scheduledFor: fireAt.toISOString(), status: "skipped" };
+    if (
+      shouldSkipReminderSendNow({
+        step,
+        fireAt,
+        weeklyHours: weekly,
+        timezone: input.timezone,
+        dateOverrides: input.dateOverrides,
+        reminderQuietHours: input.reminderQuietHours,
+      })
+    ) {
+      return {
+        stepKey: key,
+        label: step.label,
+        channel: step.channel,
+        scheduledFor: fireAt.toISOString(),
+        status: "skipped",
+      };
     }
     return {
       stepKey: key,
