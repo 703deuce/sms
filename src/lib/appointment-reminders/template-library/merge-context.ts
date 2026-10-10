@@ -1,6 +1,6 @@
 import type { AppointmentMetadata, AppointmentPlatformConfig } from "@/lib/appointments/types";
-import { appointmentMergeVars, resolveManageLinkFromMetadata } from "@/lib/appointments/appointments-service";
-import { publicActionUrl } from "@/lib/appointments/settings";
+import { appointmentMergeVars } from "@/lib/appointments/appointments-service";
+import { publicActionUrl, resolveManageLinkFromMetadata } from "@/lib/appointments/settings";
 
 export function reminderAppointmentMergeVars(input: {
   platform: AppointmentPlatformConfig;
