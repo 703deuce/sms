@@ -4858,8 +4858,8 @@ model MctbPlatformSenderAssignment {
   @@map("mctb_platform_sender_assignments")
 }
 
-/// Appointment Reminders: durable (customer, platform sender) → workspace for shared-number routing.
-/// Invariant: one workspace per (consumerE164, platformPhoneNumberId); one sender per (consumerE164, workspaceId).
+/// Appointment Reminders: per-workspace preference for which platform sender was used with a customer.
+/// The canonical Telnyx platform number is shared — not exclusive to one workspace.
 model ArSmsConsumerPlatformSenderAssignment {
   id                    String      @id @default(cuid())
   consumerE164          String
@@ -4871,8 +4871,8 @@ model ArSmsConsumerPlatformSenderAssignment {
   workspace             Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   platformPhoneNumber   PhoneNumber @relation(fields: [platformPhoneNumberId], references: [id], onDelete: Restrict)
 
-  @@unique([consumerE164, platformPhoneNumberId])
   @@unique([consumerE164, workspaceId])
+  @@index([consumerE164, platformPhoneNumberId])
   @@index([workspaceId, consumerE164])
   @@map("ar_sms_consumer_platform_sender_assignments")
 }

@@ -85,9 +85,50 @@ export async function listArEligiblePlatformSenders(): Promise<ArPlatformSenderC
     .sort((a, b) => a.priority - b.priority);
 }
 
+export type CanonicalArOutboundPlatformSenderResult =
+  | {
+      ok: true;
+      phoneNumberId: string;
+      e164: string;
+      provider: string;
+    }
+  | { ok: false; reason: string; pendingSendReason: string };
+
 /**
- * Platform senders already assigned to this customer (durable AR assignments).
- * @deprecated Prefer findArPlatformSendersOccupiedByOtherWorkspaces for allocation.
+ * Canonical Telnyx platform sender for AR outbound — shared by every workspace.
+ * Twilio overflow is not used unless explicitly configured via AR_PLATFORM_SENDER_PHONE_NUMBER_IDS.
+ */
+export async function resolveCanonicalArOutboundPlatformSender(): Promise<CanonicalArOutboundPlatformSenderResult> {
+  const senders = await listArEligiblePlatformSenders();
+  const primary =
+    senders.find((s) => s.provider === "telnyx" && s.priority === 1) ?? senders[0];
+  if (!primary) {
+    return {
+      ok: false,
+      reason: "ar_no_eligible_platform_sender",
+      pendingSendReason:
+        "Canonical Telnyx platform sender is not configured or authorized for Appointment Reminders",
+    };
+  }
+  const auth = await isPhoneAuthorizedForOutboundSms(primary.phoneNumberId);
+  if (!auth.allowed) {
+    return {
+      ok: false,
+      reason: "ar_platform_sender_not_authorized",
+      pendingSendReason:
+        "Canonical Telnyx platform sender is not authorized for outbound SMS right now",
+    };
+  }
+  return {
+    ok: true,
+    phoneNumberId: primary.phoneNumberId,
+    e164: primary.e164,
+    provider: primary.provider,
+  };
+}
+
+/**
+ * @deprecated Do not use for outbound selection — platform sender is not per-consumer occupied.
  */
 export async function findOccupiedArSenderIdsForConsumer(consumerE164: string): Promise<Set<string>> {
   const prisma = getPrisma();

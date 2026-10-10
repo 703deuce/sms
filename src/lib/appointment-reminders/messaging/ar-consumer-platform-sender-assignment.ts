@@ -2,12 +2,11 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { normalizeMctbCallerE164 } from "@/lib/mctb/messaging/caller-e164";
-import { isPhoneAuthorizedForOutboundSms } from "@/lib/mctb/messaging/outbound-sms-route";
 import {
   listArEligiblePlatformSenders,
+  resolveCanonicalArOutboundPlatformSender,
   type ArPlatformSenderCandidate,
 } from "./ar-platform-sender-pool";
-import { occupiedPlatformSendersForWorkspace } from "./ar-consumer-sender-allocation-policy";
 
 const OUTBOUND_PROOF_OR = [
   { lastOutboundProviderMessageId: { not: null } },
@@ -33,8 +32,7 @@ async function listLegacyConsumerSenderPairs(consumerE164: string) {
 }
 
 /**
- * Materialize historical reply-session (customer, sender) → workspace before new allocations.
- * Prevents a new workspace from claiming a sender another business already used with this customer.
+ * Materialize historical reply-session (customer, sender) → workspace for inbound hints.
  */
 export async function materializeLegacyArSenderAssignmentsForConsumer(
   consumerE164: string,
@@ -59,60 +57,18 @@ export async function materializeLegacyArSenderAssignmentsForConsumer(
   return { materialized, conflicts };
 }
 
-async function collectConsumerSenderPairs(consumerE164: string): Promise<
-  Array<{ platformPhoneNumberId: string; workspaceId: string }>
-> {
-  const prisma = getPrisma();
-  const consumer = normalizeMctbCallerE164(consumerE164);
-  const fromAssignments = await prisma.arSmsConsumerPlatformSenderAssignment.findMany({
-    where: { consumerE164: consumer },
-    select: { platformPhoneNumberId: true, workspaceId: true },
-  });
-  const fromLegacy = await listLegacyConsumerSenderPairs(consumer);
-  const map = new Map<string, string>();
-  for (const row of fromLegacy) {
-    const key = `${row.platformPhoneNumberId}`;
-    if (!map.has(key)) map.set(key, row.workspaceId);
-  }
-  for (const row of fromAssignments) {
-    map.set(row.platformPhoneNumberId, row.workspaceId);
-  }
-  return [...map.entries()].map(([platformPhoneNumberId, workspaceId]) => ({
-    platformPhoneNumberId,
-    workspaceId,
-  }));
-}
-
-export async function findArPlatformSendersOccupiedByOtherWorkspaces(
-  consumerE164: string,
-  workspaceId: string,
-): Promise<Set<string>> {
-  const pairs = await collectConsumerSenderPairs(consumerE164);
-  return occupiedPlatformSendersForWorkspace({ requestingWorkspaceId: workspaceId, pairs });
-}
-export type ArPlatformSenderAllocateResult =
-  | {
-      ok: true;
-      phoneNumberId: string;
-      e164: string;
-      provider: string;
-      reusedExistingAppointmentSender: boolean;
-    }
-  | { ok: false; reason: string; pendingSendReason: string };
-
 export async function resolveArWorkspaceIdFromConsumerPlatformSender(input: {
   consumerE164: string;
   platformPhoneNumberId: string;
 }): Promise<string | null> {
   const prisma = getPrisma();
   const consumer = normalizeMctbCallerE164(input.consumerE164);
-  const row = await prisma.arSmsConsumerPlatformSenderAssignment.findUnique({
+  const row = await prisma.arSmsConsumerPlatformSenderAssignment.findFirst({
     where: {
-      consumerE164_platformPhoneNumberId: {
-        consumerE164: consumer,
-        platformPhoneNumberId: input.platformPhoneNumberId,
-      },
+      consumerE164: consumer,
+      platformPhoneNumberId: input.platformPhoneNumberId,
     },
+    orderBy: { lastUsedAt: "desc" },
     select: { workspaceId: true },
   });
   if (row?.workspaceId) return row.workspaceId;
@@ -141,7 +97,7 @@ export async function touchArConsumerPlatformSenderAssignment(input: {
   });
 }
 
-/** Persist durable assignment when reusing a sender discovered from legacy reply sessions. */
+/** Per-workspace record of which platform sender was used with this customer (not a global lock). */
 export async function ensureArConsumerPlatformSenderAssignment(input: {
   workspaceId: string;
   consumerE164: string;
@@ -151,35 +107,22 @@ export async function ensureArConsumerPlatformSenderAssignment(input: {
   const prisma = getPrisma();
   const consumer = normalizeMctbCallerE164(input.consumerE164);
   const provider = input.provider.trim() || "telnyx";
-  try {
-    await prisma.arSmsConsumerPlatformSenderAssignment.upsert({
-      where: {
-        consumerE164_workspaceId: { consumerE164: consumer, workspaceId: input.workspaceId },
-      },
-      create: {
-        consumerE164: consumer,
-        workspaceId: input.workspaceId,
-        platformPhoneNumberId: input.platformPhoneNumberId,
-        provider,
-      },
-      update: { lastUsedAt: new Date() },
-    });
-  } catch (err) {
-    if (!(err && typeof err === "object" && "code" in err && (err as { code: string }).code === "P2002")) {
-      throw err;
-    }
-    const existingPair = await prisma.arSmsConsumerPlatformSenderAssignment.findUnique({
-      where: {
-        consumerE164_platformPhoneNumberId: {
-          consumerE164: consumer,
-          platformPhoneNumberId: input.platformPhoneNumberId,
-        },
-      },
-    });
-    if (existingPair?.workspaceId !== input.workspaceId) {
-      throw new Error("ar_consumer_platform_sender_pair_owned_by_other_workspace");
-    }
-  }
+  await prisma.arSmsConsumerPlatformSenderAssignment.upsert({
+    where: {
+      consumerE164_workspaceId: { consumerE164: consumer, workspaceId: input.workspaceId },
+    },
+    create: {
+      consumerE164: consumer,
+      workspaceId: input.workspaceId,
+      platformPhoneNumberId: input.platformPhoneNumberId,
+      provider,
+    },
+    update: {
+      platformPhoneNumberId: input.platformPhoneNumberId,
+      provider,
+      lastUsedAt: new Date(),
+    },
+  });
 }
 
 async function senderSelectionFromAssignment(
@@ -190,6 +133,7 @@ async function senderSelectionFromAssignment(
   if (!candidate) {
     return null;
   }
+  const { isPhoneAuthorizedForOutboundSms } = await import("@/lib/mctb/messaging/outbound-sms-route");
   const auth = await isPhoneAuthorizedForOutboundSms(candidate.phoneNumberId);
   if (!auth.allowed) {
     return null;
@@ -203,34 +147,43 @@ async function senderSelectionFromAssignment(
   };
 }
 
+export type ArPlatformSenderAllocateResult =
+  | {
+      ok: true;
+      phoneNumberId: string;
+      e164: string;
+      provider: string;
+      reusedExistingAppointmentSender: boolean;
+    }
+  | { ok: false; reason: string; pendingSendReason: string };
+
 /**
- * Allocate or reuse platform sender for (workspace, customer) before first outbound reminder.
- * DB unique constraints enforce (customer, sender) → one workspace under concurrency.
+ * Resolve outbound platform sender for appointment reminders.
+ * Canonical Telnyx is always used when authorized — never withheld because another workspace
+ * already texted this customer from the same platform number.
  */
 export async function allocateArPlatformSenderForReminder(input: {
   workspaceId: string;
   consumerE164: string;
 }): Promise<ArPlatformSenderAllocateResult> {
   const consumer = normalizeMctbCallerE164(input.consumerE164);
-  await materializeLegacyArSenderAssignmentsForConsumer(consumer);
-
-  const senders = await listArEligiblePlatformSenders();
-  if (!senders.length) {
-    return {
-      ok: false,
-      reason: "ar_no_eligible_platform_sender",
-      pendingSendReason:
-        "Canonical Telnyx platform sender (866) is not configured or authorized for Appointment Reminders",
-    };
+  const canonical = await resolveCanonicalArOutboundPlatformSender();
+  if (!canonical.ok) {
+    return canonical;
   }
 
+  const senders = await listArEligiblePlatformSenders();
   const prisma = getPrisma();
   const existingForWorkspace = await prisma.arSmsConsumerPlatformSenderAssignment.findUnique({
     where: {
       consumerE164_workspaceId: { consumerE164: consumer, workspaceId: input.workspaceId },
     },
   });
-  if (existingForWorkspace) {
+
+  if (
+    existingForWorkspace &&
+    existingForWorkspace.platformPhoneNumberId === canonical.phoneNumberId
+  ) {
     const fromAssignment = await senderSelectionFromAssignment(existingForWorkspace, senders);
     if (fromAssignment) {
       await touchArConsumerPlatformSenderAssignment({
@@ -239,88 +192,28 @@ export async function allocateArPlatformSenderForReminder(input: {
       });
       return fromAssignment;
     }
-    return {
-      ok: false,
-      reason: "ar_assigned_sender_unavailable",
-      pendingSendReason:
-        "This customer's reminder sender is not available for outbound messaging right now. Inbound replies to the existing number are still recognized; contact support to restore or transition the sender.",
-    };
   }
 
-  const occupiedByOthers = await findArPlatformSendersOccupiedByOtherWorkspaces(
-    consumer,
-    input.workspaceId,
-  );
-
-  for (let candidateIndex = 0; candidateIndex < senders.length; candidateIndex += 1) {
-    const candidate = senders[candidateIndex]!;
-    if (occupiedByOthers.has(candidate.phoneNumberId)) continue;
-    const auth = await isPhoneAuthorizedForOutboundSms(candidate.phoneNumberId);
-    if (!auth.allowed) continue;
-
-    try {
-      const created = await prisma.$transaction(async (tx) => {
-        const pairOwner = await tx.arSmsConsumerPlatformSenderAssignment.findUnique({
-          where: {
-            consumerE164_platformPhoneNumberId: {
-              consumerE164: consumer,
-              platformPhoneNumberId: candidate.phoneNumberId,
-            },
-          },
-        });
-        if (pairOwner && pairOwner.workspaceId !== input.workspaceId) {
-          return null;
-        }
-
-        const wsOwner = await tx.arSmsConsumerPlatformSenderAssignment.findUnique({
-          where: {
-            consumerE164_workspaceId: { consumerE164: consumer, workspaceId: input.workspaceId },
-          },
-        });
-        if (wsOwner) {
-          if (wsOwner.platformPhoneNumberId !== candidate.phoneNumberId) {
-            return null;
-          }
-          return wsOwner;
-        }
-
-        return tx.arSmsConsumerPlatformSenderAssignment.create({
-          data: {
-            consumerE164: consumer,
-            workspaceId: input.workspaceId,
-            platformPhoneNumberId: candidate.phoneNumberId,
-            provider: candidate.provider,
-          },
-        });
-      });
-
-      if (!created) {
-        occupiedByOthers.add(candidate.phoneNumberId);
-        continue;
-      }
-
-      return {
-        ok: true,
-        phoneNumberId: candidate.phoneNumberId,
-        e164: candidate.e164,
-        provider: candidate.provider,
-        reusedExistingAppointmentSender: Boolean(existingForWorkspace),
-      };
-    } catch (err) {
-      const code =
-        err && typeof err === "object" && "code" in err ? String((err as { code: string }).code) : undefined;
-      if (code === "P2002") {
-        occupiedByOthers.add(candidate.phoneNumberId);
-        continue;
-      }
-      throw err;
-    }
-  }
+  await ensureArConsumerPlatformSenderAssignment({
+    workspaceId: input.workspaceId,
+    consumerE164: consumer,
+    platformPhoneNumberId: canonical.phoneNumberId,
+    provider: canonical.provider,
+  });
 
   return {
-    ok: false,
-    reason: "ar_sender_pool_exhausted",
-    pendingSendReason:
-      "This customer already has appointment reminder assignments on all platform senders for other businesses. Add another platform sender or retry later.",
+    ok: true,
+    phoneNumberId: canonical.phoneNumberId,
+    e164: canonical.e164,
+    provider: canonical.provider,
+    reusedExistingAppointmentSender: Boolean(existingForWorkspace),
   };
+}
+
+/** @deprecated Use occupiedPlatformSendersForWorkspace only in tests; outbound no longer blocks on other workspaces. */
+export async function findArPlatformSendersOccupiedByOtherWorkspaces(
+  _consumerE164: string,
+  _workspaceId: string,
+): Promise<Set<string>> {
+  return new Set();
 }

@@ -112,6 +112,38 @@ async function main() {
   );
 
   const failed = dispatches.find((d) => d.status === "failed");
+  if (process.env.TRACE_PLATFORM_SEND === "1" && scheduled && phone && row.contactId) {
+    const { previewReminderMessage } = await import("@/lib/appointments/reminder-delivery");
+    const { sendArReminderSmsWithSession } = await import(
+      "@/lib/appointment-reminders/messaging/outbound-reminder"
+    );
+    const ws = await prisma.workspace.findUnique({
+      where: { id: WORKSPACE_ID },
+      select: { displayName: true, name: true },
+    });
+    const body = previewReminderMessage({
+      step: scheduled.step,
+      platform,
+      workspaceName: ws?.displayName || ws?.name || "Business",
+      serviceName: row.serviceName,
+      startsAt: row.startsAt,
+      tokens: {
+        confirm: meta.confirmToken,
+        cancel: meta.cancelToken,
+        reschedule: meta.rescheduleToken,
+      },
+    });
+    const platformSend = await sendArReminderSmsWithSession({
+      workspaceId: WORKSPACE_ID,
+      appointmentId: APPT_ID,
+      contactId: row.contactId,
+      phone,
+      body,
+      timelineType: timeline,
+    });
+    console.log(JSON.stringify({ tracePlatformSend: platformSend, bodyPreview: body.slice(0, 200) }, null, 2));
+  }
+
   if (process.env.DIRECT_SEND === "1" && scheduled && phone && row.contactId) {
     const { executeArReminderDispatchJob } = await import(
       "@/lib/appointment-reminders/reminder-dispatch-executor"

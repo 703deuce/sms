@@ -6,8 +6,11 @@ import {
   normalizeMctbCallerE164,
 } from "@/lib/mctb/messaging/caller-e164";
 import { providerRefFromAppointment } from "@/lib/appointment-reminders/ai-rescheduler/provider-mutations";
-import { AR_REPLY_ELIGIBLE_STATES } from "./ar-platform-sender-pool";
-import { allocateArPlatformSenderForReminder } from "./ar-consumer-platform-sender-assignment";
+import {
+  AR_REPLY_ELIGIBLE_STATES,
+  resolveCanonicalArOutboundPlatformSender,
+} from "./ar-platform-sender-pool";
+import { ensureArConsumerPlatformSenderAssignment } from "./ar-consumer-platform-sender-assignment";
 
 const DEFAULT_REPLY_ELIGIBLE_MS = 21 * 24 * 60 * 60 * 1000;
 
@@ -79,19 +82,24 @@ export async function selectArOutboundPlatformSender(input: {
     };
   }
 
-  const allocated = await allocateArPlatformSenderForReminder({
+  const canonical = await resolveCanonicalArOutboundPlatformSender();
+  if (!canonical.ok) {
+    return canonical;
+  }
+
+  await ensureArConsumerPlatformSenderAssignment({
     workspaceId: input.workspaceId,
     consumerE164: consumer,
-  });
-  if (!allocated.ok) {
-    return allocated;
-  }
+    platformPhoneNumberId: canonical.phoneNumberId,
+    provider: canonical.provider,
+  }).catch(() => undefined);
+
   return {
     ok: true,
-    phoneNumberId: allocated.phoneNumberId,
-    e164: allocated.e164,
-    provider: allocated.provider,
-    reusedExistingAppointmentSender: allocated.reusedExistingAppointmentSender,
+    phoneNumberId: canonical.phoneNumberId,
+    e164: canonical.e164,
+    provider: canonical.provider,
+    reusedExistingAppointmentSender: false,
   };
 }
 
