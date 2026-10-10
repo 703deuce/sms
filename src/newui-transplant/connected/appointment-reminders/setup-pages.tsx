@@ -22,11 +22,16 @@ type SetupReadiness = {
   calendarConnected: boolean
   hasImportCalendars: boolean
   smsSenderReady?: boolean
+  smsSenderDetail?: string
+  smsCommercialAllowanceConfigured?: boolean
+  smsCommercialAllowanceDetail?: string
   emailSenderReady?: boolean
   emailRemindersEnabled?: boolean
+  smsRemindersEnabled?: boolean
   emailSenderDetail?: string
   canActivate: boolean
   blockers: string[]
+  warnings?: string[]
   activated: boolean
   activatedAt: string | null
 }
@@ -190,8 +195,15 @@ export function AppointmentRemindersSetupActivatePage() {
                   {readiness?.hasImportCalendars ? '✓' : '○'} Import calendars selected
                 </li>
                 <li>
-                  {readiness?.smsSenderReady ? '✓' : '○'} SMS reminders ready
+                  {!readiness?.smsRemindersEnabled
+                    ? '— SMS reminders not enabled in your sequence'
+                    : readiness?.smsSenderReady
+                      ? '✓ SMS sender ready (platform toll-free)'
+                      : '○ SMS sender not ready'}
                 </li>
+                {readiness?.smsRemindersEnabled && readiness?.smsSenderDetail ? (
+                  <li className="text-muted-foreground">{readiness.smsSenderDetail}</li>
+                ) : null}
                 <li>
                   {!readiness?.emailRemindersEnabled
                     ? '— Email reminders not enabled in your sequence'
@@ -224,6 +236,15 @@ export function AppointmentRemindersSetupActivatePage() {
                   <ul className="mt-2 list-disc pl-4">
                     {readiness.blockers.map((b) => (
                       <li key={b}>{b}</li>
+                    ))}
+                  </ul>
+                </Callout>
+              ) : null}
+              {readiness?.warnings?.length ? (
+                <Callout tone="warning" icon={AlertTriangle} title="Before you go live">
+                  <ul className="mt-2 list-disc pl-4">
+                    {readiness.warnings.map((w) => (
+                      <li key={w}>{w}</li>
                     ))}
                   </ul>
                 </Callout>

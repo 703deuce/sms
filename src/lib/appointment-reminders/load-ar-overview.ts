@@ -135,7 +135,9 @@ export async function loadAppointmentRemindersOverview(workspaceId: string) {
         id: "sms",
         label: "SMS readiness",
         status: smsSenderReady ? "ready" : "needs_setup",
-        detail: smsSenderReady ? "Sender ready" : "Complete SMS sender setup",
+        detail: smsSenderReady
+          ? setupReadiness.smsSenderDetail || "Sender ready"
+          : setupReadiness.smsSenderDetail || "Platform SMS sender not ready",
         href: `${AR_ROUTES.settings}?tab=notifications`,
       },
       {

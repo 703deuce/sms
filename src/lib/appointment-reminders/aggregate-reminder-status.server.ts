@@ -12,6 +12,8 @@ import {
   type AggregateReminderView,
 } from "@/lib/appointment-reminders/aggregate-reminder-status";
 import { evaluateSmsReminderEligibility } from "@/lib/appointment-reminders/sms-eligibility";
+import type { PlatformReminderWorkflowConflict } from "@/lib/appointment-reminders/platform-reminder-workflow";
+import { evaluateEmailReminderEligibility } from "@/lib/appointment-reminders/email-reminder-eligibility";
 
 function formatWhen(iso?: string | null): string {
   if (!iso) return "";
@@ -33,13 +35,24 @@ export function computeAggregateReminderView(input: {
   endsAt: string | null;
   timezone: string | null;
   inviteePhone: string | null;
+  inviteeEmail?: string | null;
   metadata: AppointmentMetadata;
   platform: AppointmentPlatformConfig;
+  workflowConflict?: PlatformReminderWorkflowConflict | null;
 }): AggregateReminderView {
   const meta = input.metadata;
   const inactive = ["canceled", "cancelled", "completed", "no_show"].includes(
     input.status.toLowerCase(),
   );
+
+  if (input.workflowConflict?.blocked) {
+    return {
+      status: "not_scheduled",
+      label: "Workflow active",
+      secondaryLine: input.workflowConflict.detail || "Another automation sends reminders for this appointment type.",
+      attentionReason: "workflow_conflict",
+    };
+  }
 
   if (inactive) {
     return {
@@ -58,6 +71,30 @@ export function computeAggregateReminderView(input: {
   }
 
   const phone = resolveReminderContactPhone(meta, input.inviteePhone);
+  const emailEligibility = evaluateEmailReminderEligibility({
+    metadata: meta,
+    inviteeEmail: input.inviteeEmail ?? (meta.inviteeEmail as string) ?? null,
+    appointmentStatus: input.status,
+  });
+  const needsEmail =
+    (input.platform.reminders.confirmation.enabled &&
+      input.platform.reminders.confirmation.channel === "email") ||
+    (input.platform.reminders.reminder24h.enabled &&
+      input.platform.reminders.reminder24h.channel === "email") ||
+    (input.platform.reminders.reminder2h.enabled &&
+      input.platform.reminders.reminder2h.channel === "email") ||
+    (input.platform.reminders.additionalSteps || []).some(
+      (s) => s.enabled && s.channel === "email",
+    );
+  if (needsEmail && !emailEligibility.eligible && emailEligibility.blockReason === "missing_email") {
+    return {
+      status: "needs_attention",
+      label: "Needs attention",
+      secondaryLine: emailEligibility.detail || "Email address required",
+      attentionReason: "missing_email",
+    };
+  }
+
   const eligibility = evaluateSmsReminderEligibility({
     metadata: meta,
     inviteePhone: input.inviteePhone,

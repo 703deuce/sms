@@ -8,6 +8,10 @@ import { resolveWeeklyHours } from "@/lib/appointments/availability-engine-polic
 import type { AppointmentMetadata } from "@/lib/appointments/types";
 import { resolveReminderContactPhone } from "@/lib/appointment-reminders/aggregate-reminder-status";
 import {
+  describePlatformReminderWorkflowConflictFromContext,
+  loadPlatformReminderWorkflowContext,
+} from "@/lib/appointment-reminders/platform-reminder-workflow";
+import {
   eligibilityToBlockDetail,
   evaluateSmsReminderEligibility,
 } from "@/lib/appointment-reminders/sms-eligibility";
@@ -201,6 +205,13 @@ async function fetchFutureScheduledRows(
     },
   });
 
+  const workflowCtx = await loadPlatformReminderWorkflowContext(workspaceId);
+  const serviceRows = await prisma.voiceService.findMany({
+    where: { workspaceId },
+    select: { id: true, name: true },
+  });
+  const serviceNameToId = new Map(serviceRows.map((s) => [s.name, s.id]));
+
   const rows: ArReminderOperationalRow[] = [];
   for (const row of appointments) {
     const meta = (row.metadata || {}) as AppointmentMetadata;
@@ -211,7 +222,20 @@ async function fetchFutureScheduledRows(
     }
     const appointmentLabel = row.serviceName || "Appointment";
     const phone = resolveReminderContactPhone(meta, (meta.inviteePhone as string) || null);
-    const block = blockReason(meta, phone, row.status);
+    const serviceId = row.serviceName ? serviceNameToId.get(row.serviceName) : null;
+    const workflowConflict = describePlatformReminderWorkflowConflictFromContext(
+      workflowCtx,
+      serviceId,
+      row.serviceName,
+    );
+    let block = blockReason(meta, phone, row.status);
+    if (workflowConflict.blocked) {
+      block = {
+        blocked: true,
+        detail: workflowConflict.detail || "Another automation sends reminders for this appointment.",
+        hint: "Open Automations or adjust appointment type scope",
+      };
+    }
 
     const future = buildFutureReminderSchedule({
       startsAt: row.startsAt.toISOString(),

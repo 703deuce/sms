@@ -32,6 +32,7 @@ export function resolveTransactionalEmailSenderConfig(): TransactionalEmailSende
     process.env.BREVO_FROM_EMAIL?.trim() ||
     process.env.TRANSOVO_TRANSACTIONAL_FROM_EMAIL?.trim() ||
     process.env.BREVO_SENDER_EMAIL?.trim() ||
+    process.env.APPOINTMENTS_FROM_EMAIL?.trim() ||
     null;
   const defaultFromName = process.env.REVIEW_REQUEST_FROM_NAME?.trim() || "Transovo";
   return {

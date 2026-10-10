@@ -443,7 +443,10 @@ function ConnectionRow({
     connection.config?.blockingCalendarIds || [],
   );
   const [importIds, setImportIds] = useState<string[]>(connection.config?.importCalendarIds || []);
-  const [syncEnabled, setSyncEnabled] = useState(connection.config?.syncEnabled === true);
+  const [syncEnabled, setSyncEnabled] = useState(
+    isReminders ? connection.config?.syncEnabled !== false : connection.config?.syncEnabled === true,
+  );
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
   const [requireExternalAttendees, setRequireExternalAttendees] = useState(
     connection.config?.importRules?.requireExternalAttendees !== false,
   );
@@ -508,6 +511,9 @@ function ConnectionRow({
 
   async function saveConnectionSettings() {
     setSaving(true);
+    setSyncNotice(null);
+    const enableSync = isReminders ? importIds.length > 0 : importIds.length > 0 && syncEnabled;
+    const hadImportBefore = (connection.config?.importCalendarIds?.length ?? 0) > 0;
     await fetch(`/api/integrations/calendars/${connection.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -515,7 +521,7 @@ function ConnectionRow({
         writeCalendarId: writeCalendarId || undefined,
         blockingCalendarIds: blockingIds,
         importCalendarIds: importIds,
-        syncEnabled: importIds.length > 0 && syncEnabled,
+        syncEnabled: enableSync,
         importRules: {
           requireExternalAttendees,
           requireAttendeeEmail,
@@ -540,6 +546,13 @@ function ConnectionRow({
       }),
     });
     setSaving(false);
+    if (isReminders && importIds.length > 0 && (!hadImportBefore || importIds.length)) {
+      setSyncNotice(
+        connection.lastSyncAt
+          ? "Settings saved. Syncing calendar updates in the background."
+          : "Settings saved. Starting initial calendar import — appointments will appear shortly.",
+      );
+    }
     onRefresh();
   }
 
@@ -809,10 +822,16 @@ function ConnectionRow({
           ) : (
             <p className="text-[11px] text-muted-foreground">
               {isReminders
-                ? "Select at least one calendar above, save, then use Sync now on the Appointments page."
+                ? "Select at least one calendar above and save — Transovo starts the first import automatically."
                 : "Select at least one calendar under \"Import for reminders\" to sync external appointments. Blocking-only calendars never create reminder appointments."}
             </p>
           )}
+
+          {syncNotice ? (
+            <p className="text-[11px] text-emerald-800 dark:text-emerald-300" role="status">
+              {syncNotice}
+            </p>
+          ) : null}
 
           {verification ? (
             <div

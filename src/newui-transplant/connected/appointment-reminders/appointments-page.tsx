@@ -658,6 +658,10 @@ function AppointmentTableRow({
             </span>
             {row.contactEmail ? (
               <span className="text-muted-foreground">Email on file — add phone for SMS</span>
+            ) : row.reminder.attentionReason === 'missing_email' ? (
+              <span className="text-muted-foreground">Add email for email reminders</span>
+            ) : !row.contactEmail ? (
+              <span className="text-muted-foreground">Open appointment to add contact info</span>
             ) : null}
           </span>
         ) : row.phoneState === 'invalid' ? (

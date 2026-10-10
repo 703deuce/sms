@@ -14,6 +14,9 @@ export type ArNeedsAttentionRow = {
 };
 
 function issueForRow(row: ArAppointmentRow): string | null {
+  if (row.reminder.attentionReason === "workflow_conflict") {
+    return row.reminder.secondaryLine || "Automation workflow handles reminders";
+  }
   if (row.phoneState === "missing") return "Missing phone number";
   if (row.phoneState === "invalid") return "Invalid phone number";
   if (!row.contactEmail && row.phoneState !== "ok") return "Missing email and phone";

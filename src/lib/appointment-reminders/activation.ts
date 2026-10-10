@@ -62,16 +62,38 @@ export type AppointmentRemindersSetupReadiness = {
   lastSyncAt: string | null;
   syncError: string | null;
   smsSenderReady: boolean;
+  smsSenderDetail?: string;
+  /** Platform sender metering: allowance configured (not a setup blocker — commercial pass sets plans). */
+  smsCommercialAllowanceConfigured: boolean;
+  smsCommercialAllowanceDetail?: string;
   emailSenderReady: boolean;
   emailSenderDetail?: string;
   /** At least one enabled reminder step uses the email channel. */
   emailRemindersEnabled: boolean;
+  /** At least one enabled reminder step uses the SMS channel. */
+  smsRemindersEnabled: boolean;
   remindersConfigured: boolean;
   activated: boolean;
   activatedAt: string | null;
   canActivate: boolean;
   blockers: string[];
+  warnings: string[];
 };
+
+function stepUsesSms(
+  step: { enabled: boolean; channel?: string },
+): boolean {
+  return step.enabled && (step.channel || "sms") === "sms";
+}
+
+function platformSmsStepsEnabled(platform: Awaited<ReturnType<typeof loadAppointmentPlatformConfig>>): boolean {
+  return (
+    stepUsesSms(platform.reminders.confirmation) ||
+    stepUsesSms(platform.reminders.reminder24h) ||
+    stepUsesSms(platform.reminders.reminder2h) ||
+    (platform.reminders.additionalSteps || []).some((s) => stepUsesSms(s))
+  );
+}
 
 export async function evaluateAppointmentRemindersSetupReadiness(
   workspaceId: string,
@@ -99,17 +121,11 @@ export async function evaluateAppointmentRemindersSetupReadiness(
     .map((c) => (c.config as { lastSyncError?: string })?.lastSyncError)
     .find(Boolean);
 
-  let smsSenderReady = false;
-  try {
-    const { getMerchantPaymentStatus } = await import("@/lib/merchant-payments/service");
-    const merchantStatus = await getMerchantPaymentStatus(workspaceId);
-    smsSenderReady = Boolean(
-      merchantStatus &&
-        (merchantStatus as { sms?: { ready?: boolean } }).sms?.ready !== false,
-    );
-  } catch {
-    smsSenderReady = false;
-  }
+  const { evaluateArSmsOutboundReadiness } = await import(
+    "@/lib/appointment-reminders/ar-sms-readiness"
+  );
+  const smsReadiness = await evaluateArSmsOutboundReadiness(workspaceId);
+  const smsSenderReady = smsReadiness.senderReady;
 
   const { evaluateArEmailSenderReadiness } = await import(
     "@/lib/appointment-reminders/ar-email-readiness"
@@ -123,12 +139,20 @@ export async function evaluateAppointmentRemindersSetupReadiness(
     platform.reminders.reminder2h.enabled ||
     (platform.reminders.additionalSteps || []).some((s) => s.enabled);
 
+  const anySmsStep = platformSmsStepsEnabled(platform);
+  const warnings: string[] = [];
+  if (anySmsStep && smsSenderReady && !smsReadiness.commercialAllowanceConfigured) {
+    warnings.push(smsReadiness.commercialAllowanceDetail);
+  }
+
   const blockers: string[] = [];
   if (!calendarConnected) blockers.push("Connect Google Calendar or Microsoft 365");
   if (!hasImportCalendars) blockers.push("Select at least one calendar to import");
   if (!lastSyncAt) blockers.push("Run an initial calendar sync");
   if (syncError) blockers.push("Resolve calendar sync errors");
-  if (!smsSenderReady) blockers.push("SMS sender is not ready");
+  if (anySmsStep && !smsSenderReady) {
+    blockers.push(smsReadiness.senderDetail || "Transovo platform SMS sender is not ready");
+  }
   const anyEmailStep =
     platform.reminders.confirmation.channel === "email" ||
     platform.reminders.reminder24h.channel === "email" ||
@@ -150,13 +174,18 @@ export async function evaluateAppointmentRemindersSetupReadiness(
     lastSyncAt: lastSyncAt?.toISOString() ?? null,
     syncError: syncError ?? null,
     smsSenderReady,
+    smsSenderDetail: smsReadiness.senderDetail,
+    smsCommercialAllowanceConfigured: smsReadiness.commercialAllowanceConfigured,
+    smsCommercialAllowanceDetail: smsReadiness.commercialAllowanceDetail,
     emailSenderReady,
     emailSenderDetail: emailReadiness.detail,
     emailRemindersEnabled: anyEmailStep,
+    smsRemindersEnabled: anySmsStep,
     remindersConfigured: stepsEnabled,
     activated: Boolean(activation.activatedAt),
     activatedAt: activation.activatedAt ?? null,
     canActivate,
     blockers,
+    warnings,
   };
 }

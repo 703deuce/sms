@@ -19,7 +19,10 @@ export function mapSmsReminderTimelineOutcome(type: string): {
   if (t.includes("failed")) return { status: "failed", statusLabel: "Failed" };
   if (t.includes("skipped")) return { status: "skipped", statusLabel: "Skipped" };
   if (t.includes("delivered")) return { status: "delivered", statusLabel: "Delivered" };
-  if (t.includes("suppressed") || t.includes("stopped") || t.includes("cleared")) {
+  if (t.includes("suppressed")) {
+    return { status: "skipped", statusLabel: "Suppressed" };
+  }
+  if (t.includes("stopped") || t.includes("cleared")) {
     return { status: "logged", statusLabel: "Recorded" };
   }
   if (t.endsWith("_sent") || t === "confirmation_sent") {

@@ -26,10 +26,11 @@ export async function evaluateArEmailSenderReadiness(workspaceId: string): Promi
           "Transovo email delivery is not active on this environment yet. SMS reminders can still work; contact support if you need email reminders.",
       };
     }
+    const fromHint = cfg.fromEmail ? ` (${cfg.fromEmail})` : "";
     return {
       ready: false,
       detail:
-        "Transovo’s verified sender address is not configured yet. You do not need your own Brevo account — contact support to enable email reminders.",
+        `Transovo’s verified sender address is not configured yet${fromHint}. You do not need your own Brevo account — set REVIEW_REQUEST_FROM_EMAIL or BREVO_FROM_EMAIL on the server, or contact support to enable email reminders.`,
     };
   }
 

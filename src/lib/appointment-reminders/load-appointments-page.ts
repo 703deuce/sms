@@ -11,6 +11,10 @@ import {
   type AggregateReminderView,
 } from "@/lib/appointment-reminders/aggregate-reminder-status";
 import { computeAggregateReminderView } from "@/lib/appointment-reminders/aggregate-reminder-status.server";
+import {
+  describePlatformReminderWorkflowConflictFromContext,
+  loadPlatformReminderWorkflowContext,
+} from "@/lib/appointment-reminders/platform-reminder-workflow";
 import { isCalendarConnectionUsable } from "@/lib/appointment-reminders/calendar-connection";
 import { resolveArAppointmentContactDisplay } from "@/lib/appointment-reminders/contact-display";
 import type { ArRescheduleRequestMeta } from "@/lib/appointment-reminders/ai-rescheduler/business-approval";
@@ -89,6 +93,10 @@ function mapRow(
   row: AppointmentDirectoryRow,
   platform: Awaited<ReturnType<typeof loadAppointmentPlatformConfig>>,
   calendarNames: Map<string, { name: string; provider: string }>,
+  opts?: {
+    serviceId?: string | null;
+    workflowConflict?: ReturnType<typeof describePlatformReminderWorkflowConflictFromContext>;
+  },
 ): ArAppointmentRow {
   const meta = row.metadata as AppointmentMetadata;
   const reminder = computeAggregateReminderView({
@@ -97,8 +105,10 @@ function mapRow(
     endsAt: row.endsAt,
     timezone: row.timezone,
     inviteePhone: row.inviteePhone,
+    inviteeEmail: row.inviteeEmail,
     metadata: meta,
     platform,
+    workflowConflict: opts?.workflowConflict,
   });
   const contact = resolveArAppointmentContactDisplay(
     meta,
@@ -177,13 +187,20 @@ export async function loadAppointmentRemindersPage(
     config: unknown;
   };
 
-  const [platform, connections] = await Promise.all([
+  const [platform, connections, workflowCtx, voiceServices] = await Promise.all([
     loadAppointmentPlatformConfig(workspaceId),
     prisma.voiceCalendarConnection.findMany({
       where: { workspaceId, provider: { in: ["google", "microsoft"] } },
       select: { id: true, name: true, provider: true, status: true, lastSyncAt: true, config: true },
     }) as Promise<CalendarConnectionRow[]>,
+    loadPlatformReminderWorkflowContext(workspaceId),
+    prisma.voiceService.findMany({
+      where: { workspaceId },
+      select: { id: true, name: true },
+    }),
   ]);
+
+  const serviceNameToId = new Map(voiceServices.map((s) => [s.name, s.id]));
 
   const calendarNames = new Map<string, { name: string; provider: string }>(
     connections.map((c: CalendarConnectionRow) => [
@@ -293,7 +310,15 @@ export async function loadAppointmentRemindersPage(
 
   let mapped = directoryRows
     .filter((r) => !r.id.startsWith("enroll:"))
-    .map((r) => mapRow(r, platform, calendarNames));
+    .map((r) => {
+      const serviceId = r.serviceName ? serviceNameToId.get(r.serviceName) : null;
+      const workflowConflict = describePlatformReminderWorkflowConflictFromContext(
+        workflowCtx,
+        serviceId,
+        r.serviceName,
+      );
+      return mapRow(r, platform, calendarNames, { serviceId, workflowConflict });
+    });
 
   if (query.calendarId && query.calendarId !== "all") {
     mapped = mapped.filter((r) => r.connectionId === query.calendarId);
