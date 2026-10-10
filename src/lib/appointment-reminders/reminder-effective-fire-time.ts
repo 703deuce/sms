@@ -17,6 +17,9 @@ function resolveStepFireTime(step: ReminderStepConfig, startsAt: Date): Date {
 /** Max calendar lookback when shifting a deferred send earlier than the nominal offset. */
 export const REMINDER_DEFER_MAX_LOOKBACK_MS = 14 * 24 * 60 * 60 * 1000;
 
+/** Avoid stacking a timed reminder immediately on top of booking confirmation SMS. */
+export const REMINDER_MIN_GAP_AFTER_CONFIRMATION_MS = 30 * 60_000;
+
 const SEARCH_STEP_MS = 5 * 60_000;
 
 export type ReminderSendTimeContext = {
@@ -98,6 +101,8 @@ export function resolveEffectiveReminderFireTime(input: {
   timezone: string;
   dateOverrides?: DateOverride[];
   reminderQuietHours?: AppointmentPlatformConfig["reminderQuietHours"];
+  /** When true, do not schedule closer than REMINDER_MIN_GAP_AFTER_CONFIRMATION_MS after booking. */
+  confirmationStepEnabled?: boolean;
 }): EffectiveReminderFireTime | UnresolvedReminderFireTime {
   const nominalFireAt = resolveStepFireTime(input.step, input.startsAt);
   const ctx: ReminderSendTimeContext = {
@@ -126,9 +131,13 @@ export function resolveEffectiveReminderFireTime(input: {
     };
   }
 
+  const bookingFloor = input.confirmationStepEnabled
+    ? input.createdAt.getTime() + REMINDER_MIN_GAP_AFTER_CONFIRMATION_MS
+    : input.createdAt.getTime();
+
   const lowerBound = new Date(
     Math.max(
-      input.createdAt.getTime(),
+      bookingFloor,
       nominalFireAt.getTime() - REMINDER_DEFER_MAX_LOOKBACK_MS,
       input.startsAt.getTime() - REMINDER_DEFER_MAX_LOOKBACK_MS,
     ),
@@ -159,4 +168,19 @@ export function resolveEffectiveReminderFireTime(input: {
   }
 
   return { nominalFireAt, reason: "no_allowed_window" };
+}
+
+/** Clamp an already-resolved effective time so it respects the post-confirmation gap. */
+export function clampEffectiveFireAfterConfirmationGap(input: {
+  effectiveFireAt: Date;
+  createdAt: Date;
+  startsAt: Date;
+  confirmationStepEnabled?: boolean;
+  ctx: ReminderSendTimeContext;
+}): Date {
+  if (!input.confirmationStepEnabled) return input.effectiveFireAt;
+  const floor = input.createdAt.getTime() + REMINDER_MIN_GAP_AFTER_CONFIRMATION_MS;
+  if (input.effectiveFireAt.getTime() >= floor) return input.effectiveFireAt;
+  const bumped = earliestAllowedAfter(new Date(floor), input.startsAt, input.ctx);
+  return bumped || input.effectiveFireAt;
 }

@@ -25,7 +25,6 @@ type SetupReadiness = {
   emailSenderReady?: boolean
   emailRemindersEnabled?: boolean
   emailSenderDetail?: string
-  emailSenderDetail?: string
   canActivate: boolean
   blockers: string[]
   activated: boolean

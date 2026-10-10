@@ -346,7 +346,7 @@ export function AppointmentRemindersSettingsOpus({ activeTab = 'sequence' }: { a
         </Button>
       </div>
 
-      {workspace ? (
+      {workspace && (activeTab === 'sequence' || activeTab === 'scheduling') ? (
         <ArStatGrid>
           <Stat label="Active steps" value={String(workspace.activeSteps)} />
           <Stat label="Scheduled" value={String(workspace.scheduledCount)} hint="Upcoming sends" />

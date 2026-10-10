@@ -36,7 +36,7 @@ type ResponseRow = {
 const TABS: Array<{ view: FeedView; label: string }> = [
   { view: 'needs_attention', label: 'Needs attention' },
   { view: 'all', label: 'All responses' },
-  { view: 'held', label: 'Held messages' },
+  { view: 'held', label: 'Held' },
 ]
 
 function pillKind(kind: ResponseRow['responseKind']): ArCustomerResponseKind {

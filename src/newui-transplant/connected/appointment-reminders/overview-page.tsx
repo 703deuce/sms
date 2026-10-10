@@ -16,8 +16,8 @@ import type {
   ArCustomerResponseKind,
   ArCustomerResponseSummary,
 } from '@/lib/appointment-reminders/ar-sms-customer-outcome'
-import { CustomerResponsePill } from '@/newui-transplant/components/appointment-reminders/customer-response-pill'
 import { AR_ROUTES, AR_SETTINGS_INTEGRATIONS } from '@/lib/appointment-reminders/routes'
+import { ArUpcomingAppointmentsPanel } from '@/newui-transplant/components/appointment-reminders/ar-upcoming-appointments-panel'
 import { ArStatGrid } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
 import {
   Callout,
@@ -219,6 +219,19 @@ export function AppointmentRemindersOverviewPage() {
         </Callout>
       ) : null}
 
+      <ArUpcomingAppointmentsPanel
+        className="mb-6"
+        loading={loading}
+        rows={upcomingAppointments.map((row) => ({
+          ...row,
+          needsAttention:
+            row.responseKind === 'cancel_pending' ||
+            row.responseKind === 'reschedule_pending' ||
+            row.responseKind === 'reschedule_requested' ||
+            row.responseKind === 'awaiting_reply',
+        }))}
+      />
+
       <ArStatGrid className="mb-6">
         <Stat
           label="Upcoming appointments"
@@ -265,60 +278,6 @@ export function AppointmentRemindersOverviewPage() {
           ))}
         </div>
       ) : null}
-
-      <Panel
-        title="Upcoming appointments"
-        description="Next scheduled visits with customer response status."
-        action={<TextLink href={AR_ROUTES.appointments}>View all</TextLink>}
-        bodyClassName="p-0"
-        className="mb-6"
-      >
-        {loading ? (
-          <p className="p-5 text-sm text-muted-foreground">Loading…</p>
-        ) : upcomingAppointments.length === 0 ? (
-          <EmptyState icon={CalendarClock} title="No upcoming appointments" description="Connect a calendar or add appointments manually." />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-sm">
-              <thead className={OPUS_TABLE_HEAD}>
-                <tr>
-                  <th scope="col" className={th}>Customer</th>
-                  <th scope="col" className={th}>Appointment</th>
-                  <th scope="col" className={th}>Response</th>
-                  <th scope="col" className={th}><span className="sr-only">Action</span></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {upcomingAppointments.map((row) => (
-                  <tr key={row.appointmentId} className="hover:bg-muted/30">
-                    <td className={`${td} font-medium`}>{row.customerName}</td>
-                    <td className={td}>
-                      <span className="block truncate">{row.appointmentTitle}</span>
-                      <span className="text-xs text-muted-foreground tabular-nums">
-                        {new Date(row.startsAt).toLocaleString()}
-                      </span>
-                    </td>
-                    <td className={td}>
-                      <CustomerResponsePill
-                        label={row.responseStatus}
-                        kind={(row.responseKind || 'awaiting_reply') as ArCustomerResponseKind}
-                      />
-                    </td>
-                    <td className={td}>
-                      <Link
-                        href={`${AR_ROUTES.appointments}?highlight=${encodeURIComponent(row.appointmentId)}`}
-                        className="text-xs font-medium text-primary hover:underline"
-                      >
-                        Open
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Panel>
 
       <Panel
         title="Needs attention"

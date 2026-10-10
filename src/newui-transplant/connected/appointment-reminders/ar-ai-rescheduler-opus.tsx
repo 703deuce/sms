@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Loader2 } from 'lucide-react'
+import { Bell, Check, Loader2, Sparkles, UserRoundCog } from 'lucide-react'
 import { arSettingsTab } from '@/lib/appointment-reminders/routes'
 import type {
   AiReschedulerConfig,
@@ -12,7 +12,10 @@ import type {
   ArSmsLateActionMode,
   ArSmsPenaltyType,
 } from '@/lib/appointment-reminders/ai-rescheduler/ar-sms-action-policy'
+import { OpusDataSurface } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
 import { Panel, Pill } from '@/newui-transplant/components/app/kit'
+import { OPUS_CARD } from '@/newui-transplant/components/app/opus-surfaces'
+import { cn } from '@/lib/utils'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Input } from '@/newui-transplant/components/ui/input'
 import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
@@ -347,6 +350,38 @@ export function ArAiReschedulerOpusPage() {
 
   const aiOn = config.mode === 'ai'
 
+  const handlingLevels = [
+    {
+      id: 'reminders_only' as const,
+      title: 'Reminders only',
+      desc:
+        'Outbound reminders only — use templates without C / R / X instructions and manage response behavior in Notifications settings.',
+      icon: Bell,
+      selected: false,
+      selectable: false,
+    },
+    {
+      id: 'notify' as const,
+      title: 'Notify staff',
+      desc:
+        'Capture cancellation and reschedule requests, notify your team, and let staff update the calendar.',
+      icon: UserRoundCog,
+      selected: config.mode === 'notify',
+      selectable: true,
+      onSelect: () => patch({ mode: 'notify' }),
+    },
+    {
+      id: 'ai' as const,
+      title: 'AI handles supported changes',
+      desc:
+        'AI offers times from your connected calendar and updates appointments per your approval rules below.',
+      icon: Sparkles,
+      selected: config.mode === 'ai',
+      selectable: true,
+      onSelect: () => patch({ mode: 'ai' }),
+    },
+  ] as const
+
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 pb-16">
       <header className="space-y-2 border-b border-border/60 pb-6">
@@ -363,51 +398,86 @@ export function ArAiReschedulerOpusPage() {
 
       {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
 
-      <section className="space-y-4">
-        <h2 className="text-base font-medium">How should Transovo handle appointment changes?</h2>
-        <div className="grid gap-3">
-          <div className="rounded-lg border border-border px-4 py-3">
-            <div className="font-medium">Reminders only</div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Send scheduled SMS and email reminders without capturing reschedule or cancellation requests in
-              Transovo. Use templates without confirm / reschedule / cancel reply instructions, or turn off
-              customer response actions in{' '}
-              <Link href={arSettingsTab('notifications')} className="font-medium text-primary underline underline-offset-2">
-                Settings → Notifications &amp; responses
-              </Link>
-              .
+      <OpusDataSurface
+        className="bg-gradient-to-br from-card via-card to-primary/[0.04]"
+        toolbar={
+          <div>
+            <h2 className="text-base font-semibold tracking-tight">Handling level</h2>
+            <p className="mt-1 text-sm text-muted-foreground max-w-2xl">
+              Choose what happens when customers reply to reminders or use email action links. This uses your
+              existing AI Rescheduler configuration — no separate mode system.
             </p>
           </div>
-          {(
-            [
-              {
-                mode: 'notify' as AiReschedulerMode,
-                title: 'Notify me',
-                desc: 'Capture cancellation and reschedule requests, notify your business, and let staff update the calendar.',
-              },
-              {
-                mode: 'ai' as AiReschedulerMode,
-                title: 'AI handles changes',
-                desc: 'AI offers times from your connected calendar and updates the appointment per your approval rules below.',
-              },
-            ] as const
-          ).map((opt) => (
-            <button
-              key={opt.mode}
-              type="button"
-              onClick={() => patch({ mode: opt.mode })}
-              className={`rounded-lg border px-4 py-3 text-left transition-colors ${
-                config.mode === opt.mode
-                  ? 'border-primary bg-primary/5'
-                  : 'border-border hover:bg-muted/40'
-              }`}
-            >
-              <div className="font-medium">{opt.title}</div>
-              <div className="mt-1 text-sm text-muted-foreground">{opt.desc}</div>
-            </button>
-          ))}
+        }
+      >
+        <div className="grid gap-3 p-4 sm:grid-cols-1 lg:grid-cols-3">
+          {handlingLevels.map((level) => {
+            const Icon = level.icon
+            const cardClass = cn(
+              OPUS_CARD,
+              'relative flex h-full flex-col gap-3 p-4 text-left transition-all',
+              level.selected
+                ? 'border-primary/60 bg-primary/[0.06] ring-2 ring-primary/25 shadow-sm'
+                : level.selectable
+                  ? 'hover:border-primary/30 hover:bg-muted/30'
+                  : 'border-dashed opacity-95',
+            )
+            const inner = (
+              <>
+                {level.selected ? (
+                  <span
+                    className="absolute right-3 top-3 flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground"
+                    aria-hidden="true"
+                  >
+                    <Check className="size-3.5" />
+                  </span>
+                ) : null}
+                <span
+                  className={cn(
+                    'flex size-10 items-center justify-center rounded-xl',
+                    level.selected ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground',
+                  )}
+                  aria-hidden="true"
+                >
+                  <Icon className="size-5" />
+                </span>
+                <div>
+                  <div className="font-semibold">{level.title}</div>
+                  <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+                    {level.id === 'reminders_only' ? (
+                      <>
+                        Send scheduled SMS and email without routing change requests through Transovo. Use
+                        templates without C / R / X, or adjust behavior in{' '}
+                        <Link
+                          href={arSettingsTab('notifications')}
+                          className="font-medium text-primary underline underline-offset-2"
+                        >
+                          Settings → Notifications &amp; responses
+                        </Link>
+                        .
+                      </>
+                    ) : (
+                      level.desc
+                    )}
+                  </p>
+                </div>
+              </>
+            )
+            if (!level.selectable) {
+              return (
+                <div key={level.id} className={cardClass}>
+                  {inner}
+                </div>
+              )
+            }
+            return (
+              <button key={level.id} type="button" onClick={level.onSelect} className={cardClass}>
+                {inner}
+              </button>
+            )
+          })}
         </div>
-      </section>
+      </OpusDataSurface>
 
       {aiOn ? (
         <>

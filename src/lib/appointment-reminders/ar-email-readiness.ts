@@ -1,33 +1,40 @@
 import "server-only";
 
+import { getPrisma } from "@/lib/db";
 import { resolveTransactionalEmailSenderConfig } from "@/lib/email/brevo";
 
 /**
  * Appointment Reminders email readiness — must match `sendTransactionalEmail` / Brevo config.
+ * Uses the shared Transovo Brevo integration (not per-workspace Brevo accounts).
  */
-export async function evaluateArEmailSenderReadiness(
-  _workspaceId: string,
-): Promise<{
+export async function evaluateArEmailSenderReadiness(workspaceId: string): Promise<{
   ready: boolean;
   detail: string;
 }> {
   const cfg = resolveTransactionalEmailSenderConfig();
-  if (!cfg.apiKeyConfigured) {
+  const workspace = await getPrisma().workspace.findUnique({
+    where: { id: workspaceId },
+    select: { displayName: true, name: true },
+  });
+  const businessName = workspace?.displayName || workspace?.name || "Your business";
+
+  if (!cfg.productionReady) {
+    if (!cfg.apiKeyConfigured) {
+      return {
+        ready: false,
+        detail:
+          "Transovo email delivery is not active on this environment yet. SMS reminders can still work; contact support if you need email reminders.",
+      };
+    }
     return {
       ready: false,
       detail:
-        "Email sending is not configured on this environment. Contact support if you need email reminders.",
+        "Transovo’s verified sender address is not configured yet. You do not need your own Brevo account — contact support to enable email reminders.",
     };
   }
-  if (!cfg.fromEmail) {
-    return {
-      ready: false,
-      detail:
-        "Transactional sender address is not configured. Contact support — you do not need your own Brevo account.",
-    };
-  }
+
   return {
     ready: true,
-    detail: "Platform email sending is configured",
+    detail: `Email reminders send from Transovo’s verified address as “${businessName}”.`,
   };
 }

@@ -5,7 +5,10 @@ import {
   configuredReminderSteps,
   workspaceRemindersOperational,
 } from "@/lib/appointments/reminder-delivery";
-import { resolveEffectiveReminderFireTime } from "@/lib/appointment-reminders/reminder-effective-fire-time";
+import {
+  clampEffectiveFireAfterConfirmationGap,
+  resolveEffectiveReminderFireTime,
+} from "@/lib/appointment-reminders/reminder-effective-fire-time";
 import { currentReminderGeneration, wasReminderSent } from "@/lib/appointments/reminder-state";
 import type { AppointmentMetadata } from "@/lib/appointments/types";
 import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
@@ -137,6 +140,7 @@ export async function discoverAndEnqueueDueAppointmentReminders(): Promise<{
           timezone: tz,
           dateOverrides: config.dateOverrides,
           reminderQuietHours: config.reminderQuietHours,
+          confirmationStepEnabled: config.reminders.confirmation.enabled,
         });
 
         if ("reason" in resolved) {
@@ -150,7 +154,20 @@ export async function discoverAndEnqueueDueAppointmentReminders(): Promise<{
           continue;
         }
 
-        const fireAt = resolved.effectiveFireAt;
+        const sendCtx = {
+          step: scheduled.step,
+          weeklyHours,
+          timezone: tz,
+          dateOverrides: config.dateOverrides,
+          reminderQuietHours: config.reminderQuietHours,
+        };
+        const fireAt = clampEffectiveFireAfterConfirmationGap({
+          effectiveFireAt: resolved.effectiveFireAt,
+          createdAt: row.createdAt,
+          startsAt: row.startsAt,
+          confirmationStepEnabled: config.reminders.confirmation.enabled,
+          ctx: sendCtx,
+        });
         const fireMs = fireAt.getTime();
 
         if (appointmentWithinMinimumLeadTime(row.startsAt, config, now)) {

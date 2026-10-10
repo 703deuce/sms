@@ -135,7 +135,10 @@ export async function evaluateAppointmentRemindersSetupReadiness(
     platform.reminders.reminder2h.channel === "email" ||
     (platform.reminders.additionalSteps || []).some((s) => s.enabled && s.channel === "email");
   if (anyEmailStep && !emailSenderReady) {
-    blockers.push("Email sender is not configured for reminder emails");
+    blockers.push(
+      emailReadiness.detail ||
+        "Email reminders are enabled in your sequence but Transovo email delivery is not ready yet",
+    );
   }
   if (!stepsEnabled) blockers.push("Enable at least one reminder step");
 

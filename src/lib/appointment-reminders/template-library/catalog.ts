@@ -96,9 +96,25 @@ export function listLibraryTemplateSummaries(filters?: {
     }
     return true;
   });
+  const normalizeBodyKey = (body: string) => body.replace(/\s+/g, " ").trim().toLowerCase();
+  const deduped: TemplateLibraryEntry[] = [];
+  const byBodyKey = new Map<string, TemplateLibraryEntry>();
+  for (const t of filtered) {
+    const key = `${t.channel}:${t.messageType}:${normalizeBodyKey(t.body)}`;
+    const prev = byBodyKey.get(key);
+    if (!prev) {
+      byBodyKey.set(key, t);
+      continue;
+    }
+    if (isRecommendedLibraryTemplate(t) && !isRecommendedLibraryTemplate(prev)) {
+      byBodyKey.set(key, t);
+    }
+  }
+  deduped.push(...byBodyKey.values());
+
   const offset = Math.max(0, filters?.offset ?? 0);
   const limit = Math.min(200, Math.max(1, filters?.limit ?? 50));
-  const rows = filtered.slice(offset, offset + limit).map((t) => ({
+  const rows = deduped.slice(offset, offset + limit).map((t) => ({
     id: t.id,
     industry: t.industry,
     messageType: t.messageType,
@@ -106,7 +122,7 @@ export function listLibraryTemplateSummaries(filters?: {
     label: t.label,
     preview: t.body.replace(/\s+/g, " ").trim().slice(0, 140),
   }));
-  return { rows, total: filtered.length };
+  return { rows, total: deduped.length };
 }
 
 function patchStepFromLibrary(

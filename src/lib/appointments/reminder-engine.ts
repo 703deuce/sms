@@ -56,6 +56,7 @@ export function buildFutureReminderSchedule(input: {
   weeklyHours?: Record<string, Array<{ open: string; close: string }>>;
   dateOverrides?: AppointmentPlatformConfig["dateOverrides"];
   reminderQuietHours?: AppointmentPlatformConfig["reminderQuietHours"];
+  confirmationStepEnabled?: boolean;
 }): ScheduledReminderPreview[] {
   const startsAt = new Date(input.startsAt);
   const createdAt = input.createdAt ? new Date(input.createdAt) : startsAt;
@@ -74,6 +75,7 @@ export function buildFutureReminderSchedule(input: {
       timezone: input.timezone,
       dateOverrides: input.dateOverrides,
       reminderQuietHours: input.reminderQuietHours,
+      confirmationStepEnabled: input.confirmationStepEnabled,
     });
     if ("reason" in resolved) {
       return {
