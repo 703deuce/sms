@@ -6,12 +6,8 @@ import {
   normalizeMctbCallerE164,
 } from "@/lib/mctb/messaging/caller-e164";
 import { providerRefFromAppointment } from "@/lib/appointment-reminders/ai-rescheduler/provider-mutations";
-import {
-  AR_REPLY_ELIGIBLE_STATES,
-  findOccupiedArSenderIdsForConsumer,
-  listArEligiblePlatformSenders,
-  pickFirstUnoccupiedPlatformSender,
-} from "./ar-platform-sender-pool";
+import { AR_REPLY_ELIGIBLE_STATES } from "./ar-platform-sender-pool";
+import { allocateArPlatformSenderForReminder } from "./ar-consumer-platform-sender-assignment";
 
 const DEFAULT_REPLY_ELIGIBLE_MS = 21 * 24 * 60 * 60 * 1000;
 
@@ -83,33 +79,19 @@ export async function selectArOutboundPlatformSender(input: {
     };
   }
 
-  const senders = await listArEligiblePlatformSenders();
-  if (!senders.length) {
-    return {
-      ok: false,
-      reason: "ar_no_eligible_platform_sender",
-      pendingSendReason:
-        "Canonical Telnyx platform sender (866) is not configured or authorized for Appointment Reminders",
-    };
+  const allocated = await allocateArPlatformSenderForReminder({
+    workspaceId: input.workspaceId,
+    consumerE164: consumer,
+  });
+  if (!allocated.ok) {
+    return allocated;
   }
-
-  const occupied = await findOccupiedArSenderIdsForConsumer(consumer);
-  const picked = pickFirstUnoccupiedPlatformSender(senders, occupied);
-  if (picked) {
-    return {
-      ok: true,
-      phoneNumberId: picked.phoneNumberId,
-      e164: picked.e164,
-      provider: picked.provider,
-      reusedExistingAppointmentSender: false,
-    };
-  }
-
   return {
-    ok: false,
-    reason: "ar_sender_pool_exhausted",
-    pendingSendReason:
-      "This customer already has active appointment reminder conversations on all platform senders. Delay the reminder or wait for a reply window to expire.",
+    ok: true,
+    phoneNumberId: allocated.phoneNumberId,
+    e164: allocated.e164,
+    provider: allocated.provider,
+    reusedExistingAppointmentSender: allocated.reusedExistingAppointmentSender,
   };
 }
 

@@ -79,6 +79,22 @@ export async function sendArReminderSmsWithSession(input: {
     conversationId,
   });
 
+  if ("collision" in claim && claim.collision) {
+    logArSmsPipeline({
+      step: "reminder_send_failed",
+      workspaceId: input.workspaceId,
+      appointmentId: input.appointmentId,
+      error: "ar_reply_session_collision",
+      meta: { ownerAppointmentId: claim.ownerAppointmentId },
+    });
+    return {
+      sent: false,
+      reason: "ar_reply_session_collision",
+      pendingSendReason:
+        "Another appointment already owns the reply session on this platform sender for this customer.",
+    };
+  }
+
   logArSmsPipeline({
     step: "reminder_session_claimed",
     workspaceId: input.workspaceId,

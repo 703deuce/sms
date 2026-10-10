@@ -139,7 +139,8 @@ async function main() {
   process.env.AR_REMINDER_DISCOVERY_TEST_WORKSPACE = WORKSPACE_ID;
   process.env.AR_REMINDER_DISCOVERY_BYPASS_QUIET_HOURS =
     process.env.AR_REMINDER_DISCOVERY_BYPASS_QUIET_HOURS || "1";
-  delete process.env.AR_REMINDER_DISCOVERY_TEST_SKIP_ENQUEUE;
+  // Run dispatch in-process so worker race does not claim the row first.
+  process.env.AR_REMINDER_DISCOVERY_TEST_SKIP_ENQUEUE = "1";
   delete process.env.AR_REMINDER_DISPATCH_TEST_MOCK;
 
   let discovery = { examined: 0, due: 0, enqueued: 0, suppressedLate: 0 };
