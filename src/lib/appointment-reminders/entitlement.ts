@@ -4,7 +4,7 @@ import { resolveArWorkspaceCommercial } from "@/lib/appointment-reminders/commer
 
 /**
  * Workspace may use Appointment Reminders when it has an explicit commercial entitlement
- * (free activation, paid Stripe subscription, or legacy bundle when TRANSOVO_AR_LEGACY_OPEN_ACCESS=1).
+ * (free activation, paid Stripe subscription, or explicit TRANSOVO_AR_LEGACY_WORKSPACE_IDS grandfather).
  */
 export async function workspaceHasAppointmentReminders(
   workspaceId: string,

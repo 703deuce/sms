@@ -594,6 +594,7 @@ async function trySendStep(input: {
           workspaceId: input.workspaceId,
           appointmentId: input.appointmentId,
           timelineType: input.timelineType,
+          segments: segmentCount,
         });
         return false;
       }
@@ -658,6 +659,7 @@ async function trySendStep(input: {
       workspaceId: input.workspaceId,
       appointmentId: input.appointmentId,
       timelineType: input.timelineType,
+      segments: segmentCount,
     });
     await markReminderFailed({
       appointmentId: input.appointmentId,

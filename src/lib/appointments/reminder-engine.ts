@@ -205,14 +205,23 @@ export async function sendReminderEmailWithTracking(input: {
       ]
     : undefined;
 
-  const result = await sendTransactionalEmail({
-    to: input.to,
-    subject: input.subject,
-    htmlContent: html.replace(/\{\{confirm_link\}\}/g, clickBase + encodeURIComponent(input.body)),
-    textContent: input.body,
-    senderName: input.businessName,
-    ...(attachments ? { attachments } : {}),
-  });
+  let result: Awaited<ReturnType<typeof sendTransactionalEmail>>;
+  try {
+    result = await sendTransactionalEmail({
+      to: input.to,
+      subject: input.subject,
+      htmlContent: html.replace(/\{\{confirm_link\}\}/g, clickBase + encodeURIComponent(input.body)),
+      textContent: input.body,
+      senderName: input.businessName,
+      ...(attachments ? { attachments } : {}),
+    });
+  } catch (emailErr) {
+    await releaseArReminderEmailReservation({
+      workspaceId: input.workspaceId,
+      idempotencyKey: emailIdempotency,
+    });
+    throw emailErr;
+  }
 
   if (result.status === "failed") {
     await releaseArReminderEmailReservation({

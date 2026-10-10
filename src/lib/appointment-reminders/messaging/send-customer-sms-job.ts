@@ -89,16 +89,27 @@ export async function executeArSendCustomerSmsJob(payload: Record<string, unknow
     );
   }
 
-  const result = await sendAppointmentSmsViaPlatformSender({
-    workspaceId,
-    customerWorkspaceId: workspaceId,
-    to: toE164,
-    body,
-    platformPhoneNumberId: session.platformPhoneNumberId,
-    fromE164: phone.e164,
-    provider: String(session.provider || phone.provider || "telnyx"),
-    idempotencyKey: outboundKey,
-  });
+  let result: Awaited<ReturnType<typeof sendAppointmentSmsViaPlatformSender>>;
+  try {
+    result = await sendAppointmentSmsViaPlatformSender({
+      workspaceId,
+      customerWorkspaceId: workspaceId,
+      to: toE164,
+      body,
+      platformPhoneNumberId: session.platformPhoneNumberId,
+      fromE164: phone.e164,
+      provider: String(session.provider || phone.provider || "telnyx"),
+      idempotencyKey: outboundKey,
+    });
+  } catch (sendErr) {
+    await releaseArReminderSmsReservation({
+      workspaceId,
+      appointmentId: session.appointmentId,
+      timelineType: `ai_reply:${replySessionId}`,
+      segments,
+    });
+    throw sendErr;
+  }
 
   const conversationId = String(payload.conversationId || session.conversationId || "").trim();
   const providerMessageId = result?.providerId?.trim() || null;

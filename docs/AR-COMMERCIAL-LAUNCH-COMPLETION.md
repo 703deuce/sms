@@ -24,7 +24,7 @@ Test-mode IDs: run `npx tsx scripts/sync-ar-stripe-catalog.ts --write-ids` with 
 | Area | Location |
 |------|----------|
 | Plan catalog | `src/lib/appointment-reminders/commercial/ar-plan-catalog.ts` |
-| Entitlement resolution | `src/lib/appointment-reminders/commercial/ar-workspace-plan.ts` (`resolveArWorkspaceCommercial`, `assignArFreePlan`, legacy `TRANSOVO_AR_LEGACY_OPEN_ACCESS=1`) |
+| Entitlement resolution | `src/lib/appointment-reminders/commercial/ar-workspace-plan.ts` (`resolveArWorkspaceCommercial`, `assignArFreePlan`; optional `TRANSOVO_AR_LEGACY_WORKSPACE_IDS` allowlist only) |
 | Stripe checkout / portal / upgrade | `src/lib/appointment-reminders/commercial/stripe-checkout.ts` |
 | SMS metering | `src/lib/appointment-reminders/ar-sms-usage.ts` (segment reservations) |
 | Email metering | `src/lib/appointment-reminders/commercial/ar-email-usage.ts` |
@@ -41,7 +41,7 @@ Test-mode IDs: run `npx tsx scripts/sync-ar-stripe-catalog.ts --write-ids` with 
 - **Upgrade:** `POST /api/appointment-reminders/billing/change-plan` (Stripe subscription update with proration, or checkout if no sub)
 - **Cancel:** `POST /api/appointment-reminders/billing/manage` `cancel_at_period_end`; paid access through period end; deletion → `assignArFreePlan`
 - **Portal:** `POST /api/appointment-reminders/billing/portal`
-- **Legacy customers:** `TRANSOVO_AR_LEGACY_OPEN_ACCESS=1` maps bundled MCTB/Voice/Business workspaces to Business allowances without auto-billing
+- **Grandfather (optional):** comma-separated `TRANSOVO_AR_LEGACY_WORKSPACE_IDS` grants Business allowances without Stripe — no MCTB/BUSINESS-type heuristics
 
 ## Feature gates (backend)
 
@@ -63,10 +63,13 @@ Test-mode IDs: run `npx tsx scripts/sync-ar-stripe-catalog.ts --write-ids` with 
 ## Deployment
 
 - Additive code only; no new Prisma migrations required for core metering (uses `workspace_limits.limits` JSON + `platform_product_subscriptions`)
-- Configure Stripe catalog IDs on deploy host before enabling paid checkout in production
+- Live price IDs are committed in `ar-stripe-catalog-ids-live.ts` (synced 2026-10-10)
+- Verify after deploy: `npx tsx scripts/verify-ar-stripe-catalog.ts` (add `--live-stripe` on host with `STRIPE_SECRET_KEY` to confirm Stripe API)
 
-## Remaining blockers
+## Production verification checklist
 
-1. Run `sync-ar-stripe-catalog.ts --write-ids` in test and live with authorized Stripe keys
-2. Confirm Stripe webhook endpoint includes platform subscription events (existing Transovo webhook)
-3. End-to-end paid checkout smoke on staging after price IDs are real
+1. `GET /api/health` → `commitSha` includes commercial launch commits
+2. `npx tsx scripts/verify-ar-stripe-catalog.ts --live-stripe` in web container (no duplicate Stripe products)
+3. Free: `/api/appointment-reminders/product-open?plan=free` (authenticated) → `assignArFreePlan` + onboarding redirect
+4. Paid checkout: uses committed live `price_*` IDs; webhook `platformProductFamily=appointment_reminders` updates `platform_product_subscriptions` only
+5. Manual: one real Stripe test payment to confirm provisioning (agent cannot complete card checkout)

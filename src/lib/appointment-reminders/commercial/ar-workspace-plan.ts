@@ -13,9 +13,6 @@ import {
   type ArWorkspaceCommercialSnapshot,
 } from "@/lib/appointment-reminders/commercial/ar-usage-period";
 import { AR_PLATFORM_PRODUCT_FAMILY } from "@/lib/appointment-reminders/ar-sms-usage-constants";
-import { isActiveEntitlement } from "@/lib/products/types";
-import { getWorkspaceProductFeatures } from "@/lib/products/feature-entitlements";
-
 const LIMITS_PLAN_KEY = "arCommercialPlanKey";
 const LIMITS_FREE_STARTED = "arFreeEntitlementStartedAt";
 
@@ -27,8 +24,19 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
-function legacyOpenAccessEnabled(): boolean {
-  return process.env.TRANSOVO_AR_LEGACY_OPEN_ACCESS === "1";
+/** Explicit workspace IDs only — no BUSINESS/MCTB heuristics (launch has no grandfather cohort by default). */
+function arLegacyGrandfatherWorkspaceIds(): Set<string> {
+  const raw = process.env.TRANSOVO_AR_LEGACY_WORKSPACE_IDS || "";
+  return new Set(
+    raw
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean),
+  );
+}
+
+function hasExplicitLegacyGrandfatherAccess(workspaceId: string): boolean {
+  return arLegacyGrandfatherWorkspaceIds().has(workspaceId);
 }
 
 async function workspaceLimitsRecord(workspaceId: string): Promise<Record<string, unknown>> {
@@ -37,29 +45,6 @@ async function workspaceLimitsRecord(workspaceId: string): Promise<Record<string
     select: { limits: true },
   });
   return asRecord(row?.limits);
-}
-
-async function hasLegacyBundleAccess(workspaceId: string): Promise<boolean> {
-  if (!legacyOpenAccessEnabled()) return false;
-  const [features, entitlements, workspace] = await Promise.all([
-    getWorkspaceProductFeatures(workspaceId, { isPlatformAdmin: false }),
-    getPrisma().productEntitlement.findMany({
-      where: { workspaceId },
-      select: { productKey: true, status: true },
-    }),
-    getPrisma().workspace.findUnique({
-      where: { id: workspaceId },
-      select: { type: true, billingPlan: true },
-    }),
-  ]);
-  if (isActiveEntitlement(features.mctb)) return true;
-  for (const key of ["voice", "sms"]) {
-    const row = entitlements.find((e) => String(e.productKey).toLowerCase() === key);
-    if (row && isActiveEntitlement(row.status as "active" | "inactive" | "trial")) return true;
-  }
-  if (workspace?.type === "BUSINESS" || !workspace?.type) return true;
-  const plan = String(workspace?.billingPlan || "").toLowerCase();
-  return plan.includes("appointment") || plan.includes("reminder") || plan.includes("voice");
 }
 
 /**
@@ -111,7 +96,7 @@ export async function resolveArWorkspaceCommercial(
     };
   }
 
-  if (await hasLegacyBundleAccess(workspaceId)) {
+  if (hasExplicitLegacyGrandfatherAccess(workspaceId)) {
     return {
       planKey: "business",
       hasProductAccess: true,
