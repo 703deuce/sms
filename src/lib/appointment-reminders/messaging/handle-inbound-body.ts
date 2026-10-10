@@ -8,11 +8,7 @@ import {
 } from "@/lib/appointment-reminders/ai-rescheduler/inbound-replies";
 import { tryHandleArSmsPolicyAckForAppointment } from "@/lib/appointment-reminders/ai-rescheduler/ar-sms-policy-ack-inbound";
 import { getArSmsPolicyAck, awaitingPolicyAcceptance } from "@/lib/appointment-reminders/ai-rescheduler/ar-sms-policy-ack";
-import {
-  isAiReschedulerSmsEnabled,
-  resolveAiReschedulerConfig,
-} from "@/lib/appointment-reminders/ai-rescheduler/types";
-import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
+import { isAiReschedulerSmsEnabled } from "@/lib/appointment-reminders/ai-rescheduler/types";
 import { getPrisma } from "@/lib/db";
 import type { AppointmentMetadata } from "@/lib/appointments/types";
 import { tryHandleArReminderFollowUp } from "@/lib/appointment-reminders/messaging/inbound-follow-up";
