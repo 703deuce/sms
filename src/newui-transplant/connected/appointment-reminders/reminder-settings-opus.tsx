@@ -102,6 +102,36 @@ const SETTINGS_TABS = [
 
 export type ArSettingsTab = (typeof SETTINGS_TABS)[number]
 
+const SETTINGS_TAB_STRIP: Record<
+  ArSettingsTab,
+  { title: string; description: string }
+> = {
+  sequence: {
+    title: 'Reminder sequence',
+    description: 'SMS and email steps with shared timing rules. Changes apply to future sends only.',
+  },
+  templates: {
+    title: 'Templates',
+    description: 'Browse approved reminder wording by industry and channel. Platform SMS templates are selection-only.',
+  },
+  scheduling: {
+    title: 'Scheduling & rules',
+    description: 'Timing, business hours, and delivery preferences for reminder sends.',
+  },
+  business: {
+    title: 'Business profile',
+    description: 'Name, location, and reminder identity shown to customers — not your full account settings.',
+  },
+  notifications: {
+    title: 'Notifications & responses',
+    description: 'How customers confirm, cancel, or reschedule from reminders.',
+  },
+  integrations: {
+    title: 'Integrations',
+    description: 'Connect Microsoft 365 or Google calendars and manage import selection.',
+  },
+}
+
 export function AppointmentRemindersSettingsOpus({ activeTab = 'sequence' }: { activeTab?: ArSettingsTab }) {
   const [config, setConfig] = useState<RemindersApiConfig | null>(null)
   const [previews, setPreviews] = useState<ReminderPreviewMap>({})
@@ -293,9 +323,9 @@ export function AppointmentRemindersSettingsOpus({ activeTab = 'sequence' }: { a
     <div className="space-y-6">
       <FeatureEmphasisStrip
         icon={MessageSquare}
-        title="Reminder sequence"
+        title={SETTINGS_TAB_STRIP[activeTab].title}
         badge={<Pill tone="success" dot={false}>Workspace engine</Pill>}
-        description="SMS and email steps with shared timing rules. Changes apply to future sends only."
+        description={SETTINGS_TAB_STRIP[activeTab].description}
         action={
           saved && !saving ? (
             <span className="text-xs font-medium text-[oklch(0.82_0.12_158)]" role="status">Saved</span>

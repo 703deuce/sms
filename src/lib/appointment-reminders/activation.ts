@@ -64,6 +64,8 @@ export type AppointmentRemindersSetupReadiness = {
   smsSenderReady: boolean;
   emailSenderReady: boolean;
   emailSenderDetail?: string;
+  /** At least one enabled reminder step uses the email channel. */
+  emailRemindersEnabled: boolean;
   remindersConfigured: boolean;
   activated: boolean;
   activatedAt: string | null;
@@ -147,6 +149,7 @@ export async function evaluateAppointmentRemindersSetupReadiness(
     smsSenderReady,
     emailSenderReady,
     emailSenderDetail: emailReadiness.detail,
+    emailRemindersEnabled: anyEmailStep,
     remindersConfigured: stepsEnabled,
     activated: Boolean(activation.activatedAt),
     activatedAt: activation.activatedAt ?? null,

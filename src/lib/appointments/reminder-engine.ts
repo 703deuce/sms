@@ -179,8 +179,9 @@ export async function sendReminderEmailWithTracking(input: {
     subject: input.subject,
     htmlContent: html.replace(/\{\{confirm_link\}\}/g, clickBase + encodeURIComponent(input.body)),
     textContent: input.body,
+    senderName: input.businessName,
     ...(attachments ? { attachments } : {}),
-  } as Parameters<typeof sendTransactionalEmail>[0]);
+  });
 
   const prisma = getPrisma();
   const row = await prisma.voiceAppointment.findFirst({

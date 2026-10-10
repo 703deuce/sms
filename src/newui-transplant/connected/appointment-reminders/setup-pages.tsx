@@ -23,6 +23,8 @@ type SetupReadiness = {
   hasImportCalendars: boolean
   smsSenderReady?: boolean
   emailSenderReady?: boolean
+  emailRemindersEnabled?: boolean
+  emailSenderDetail?: string
   emailSenderDetail?: string
   canActivate: boolean
   blockers: string[]
@@ -189,20 +191,35 @@ export function AppointmentRemindersSetupActivatePage() {
                   {readiness?.hasImportCalendars ? '✓' : '○'} Import calendars selected
                 </li>
                 <li>
-                  {readiness?.smsSenderReady ? '✓' : '○'} SMS sender ready
+                  {readiness?.smsSenderReady ? '✓' : '○'} SMS reminders ready
                 </li>
                 <li>
-                  {readiness?.emailSenderReady ? '✓' : '○'} Email sender ready
-                  {readiness?.emailSenderDetail ? ` — ${readiness.emailSenderDetail}` : ''}
+                  {!readiness?.emailRemindersEnabled
+                    ? '— Email reminders not enabled in your sequence'
+                    : readiness?.emailSenderReady
+                      ? '✓ Email reminders ready'
+                      : '○ Email reminders not ready'}
                 </li>
+                {readiness?.emailRemindersEnabled && !readiness?.emailSenderReady && readiness?.emailSenderDetail ? (
+                  <li className="text-muted-foreground">{readiness.emailSenderDetail}</li>
+                ) : null}
                 <li>
                   <TextLink href={AR_ROUTES.settings}>Reminder settings</TextLink> configured
                 </li>
               </ul>
               {readiness?.activated ? (
-                <Callout tone="success" icon={CheckCircle2} title="Appointment Reminders is active">
-                  Activated {readiness.activatedAt ? new Date(readiness.activatedAt).toLocaleString() : ''}.
-                </Callout>
+                <>
+                  <Callout tone="success" icon={CheckCircle2} title="Appointment Reminders is active">
+                    Activated {readiness.activatedAt ? new Date(readiness.activatedAt).toLocaleString() : ''}.
+                    {readiness.smsSenderReady ? ' SMS reminders can send.' : ''}
+                  </Callout>
+                  {readiness.emailRemindersEnabled && !readiness.emailSenderReady ? (
+                    <Callout tone="warning" icon={AlertTriangle} title="Email reminders are not operational">
+                      Your reminder sequence includes email steps, but platform email sending is not ready.
+                      SMS reminders may still send. {readiness.emailSenderDetail || 'Contact support to enable email.'}
+                    </Callout>
+                  ) : null}
+                </>
               ) : readiness?.blockers?.length ? (
                 <Callout tone="warning" icon={AlertTriangle} title="Complete setup">
                   <ul className="mt-2 list-disc pl-4">

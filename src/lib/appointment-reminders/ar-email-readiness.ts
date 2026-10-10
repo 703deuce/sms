@@ -1,24 +1,33 @@
 import "server-only";
 
+import { resolveTransactionalEmailSenderConfig } from "@/lib/email/brevo";
+
 /**
- * Best-effort AR email readiness — uses existing Brevo/transactional configuration.
+ * Appointment Reminders email readiness — must match `sendTransactionalEmail` / Brevo config.
  */
-export async function evaluateArEmailSenderReadiness(workspaceId: string): Promise<{
+export async function evaluateArEmailSenderReadiness(
+  _workspaceId: string,
+): Promise<{
   ready: boolean;
   detail: string;
 }> {
-  const apiKey = process.env.BREVO_API_KEY?.trim() || process.env.SENDINBLUE_API_KEY?.trim();
-  if (!apiKey) {
-    return { ready: false, detail: "Transactional email API key is not configured on the server" };
-  }
-  const fromEmail =
-    process.env.BREVO_SENDER_EMAIL?.trim() ||
-    process.env.TRANSOVO_TRANSACTIONAL_FROM_EMAIL?.trim();
-  if (!fromEmail) {
+  const cfg = resolveTransactionalEmailSenderConfig();
+  if (!cfg.apiKeyConfigured) {
     return {
       ready: false,
-      detail: "Transactional sender email is not configured (BREVO_SENDER_EMAIL)",
+      detail:
+        "Email sending is not configured on this environment. Contact support if you need email reminders.",
     };
   }
-  return { ready: true, detail: `Sender ${fromEmail}` };
+  if (!cfg.fromEmail) {
+    return {
+      ready: false,
+      detail:
+        "Transactional sender address is not configured. Contact support — you do not need your own Brevo account.",
+    };
+  }
+  return {
+    ready: true,
+    detail: "Platform email sending is configured",
+  };
 }

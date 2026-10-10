@@ -131,7 +131,11 @@ export function AppointmentRemindersAnalyticsPage() {
         <Stat label="Failed / unknown" value={String(data.reminders.failed)} />
         <Stat label="Suppressed" value={String(data.reminders.suppressed)} />
         <Stat label="Confirmations" value={String(data.appointments.confirmationResponses)} />
-        <Stat label="Needs attention" value={String(data.appointments.needsAttention)} />
+        <Stat
+          label="Needs attention"
+          value={String(data.appointments.needsAttention)}
+          hint="Appointments in this date range with reminder delivery blocked or suppressed — not the same as reminder send count above"
+        />
       </ArStatGrid>
 
       <div className="grid gap-4 lg:grid-cols-2">

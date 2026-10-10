@@ -10,8 +10,37 @@ export type SendEmailInput = {
   text?: string;
   replyTo?: string;
   workspaceId?: string;
+  /** Overrides REVIEW_REQUEST_FROM_NAME for this message (e.g. workspace business name). */
+  senderName?: string;
   attachments?: Array<{ name: string; content: string }>;
 };
+
+export type TransactionalEmailSenderConfig = {
+  apiKeyConfigured: boolean;
+  fromEmail: string | null;
+  defaultFromName: string;
+  /** Brevo can send when API key and verified from address are set. */
+  productionReady: boolean;
+};
+
+/** Shared sender resolution for Brevo — same vars as `sendTransactionalEmail`. */
+export function resolveTransactionalEmailSenderConfig(): TransactionalEmailSenderConfig {
+  const apiKey =
+    process.env.BREVO_API_KEY?.trim() || process.env.SENDINBLUE_API_KEY?.trim();
+  const fromEmail =
+    process.env.REVIEW_REQUEST_FROM_EMAIL?.trim() ||
+    process.env.BREVO_FROM_EMAIL?.trim() ||
+    process.env.TRANSOVO_TRANSACTIONAL_FROM_EMAIL?.trim() ||
+    process.env.BREVO_SENDER_EMAIL?.trim() ||
+    null;
+  const defaultFromName = process.env.REVIEW_REQUEST_FROM_NAME?.trim() || "Transovo";
+  return {
+    apiKeyConfigured: Boolean(apiKey),
+    fromEmail,
+    defaultFromName,
+    productionReady: Boolean(apiKey && fromEmail),
+  };
+}
 
 export type SendEmailResult = {
   id: string;
@@ -33,9 +62,10 @@ export async function sendTransactionalEmail(input: SendEmailInput): Promise<Sen
   if (process.env.MCTB_HANDOFF_EMAIL_TEST_CAPTURE === "1") {
     handoffTestEmailCapture.push(input.to);
   }
-  const apiKey = process.env.BREVO_API_KEY?.trim();
-  const fromEmail = process.env.REVIEW_REQUEST_FROM_EMAIL?.trim() || process.env.BREVO_FROM_EMAIL?.trim();
-  const fromName = process.env.REVIEW_REQUEST_FROM_NAME?.trim() || "Transovo";
+  const { fromEmail, defaultFromName } = resolveTransactionalEmailSenderConfig();
+  const apiKey =
+    process.env.BREVO_API_KEY?.trim() || process.env.SENDINBLUE_API_KEY?.trim();
+  const fromName = input.senderName?.trim() || defaultFromName;
 
   if (!apiKey) {
     return {
@@ -50,7 +80,7 @@ export async function sendTransactionalEmail(input: SendEmailInput): Promise<Sen
       id: `email_fail_${Date.now()}`,
       provider: "brevo",
       status: "failed",
-      error: "BREVO_FROM_EMAIL or REVIEW_REQUEST_FROM_EMAIL required when BREVO_API_KEY is set",
+      error: "Transactional sender email is not configured",
     };
   }
 
