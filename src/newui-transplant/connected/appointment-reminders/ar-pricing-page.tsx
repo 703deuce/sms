@@ -2,11 +2,14 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import {
   AR_PLAN_CATALOG,
   type ArPlanKey,
 } from '@/lib/appointment-reminders/commercial/ar-plan-catalog'
+import {
+  appointmentRemindersProductOpenPath,
+  appointmentRemindersSignupPath,
+} from '@/lib/appointment-reminders/commercial/product-open'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
 import { Page, PageHeader, Panel } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
@@ -15,7 +18,6 @@ import { formatCurrency } from '@/lib/utils'
 const ORDER: ArPlanKey[] = ['free', 'starter', 'growth', 'business']
 
 export function AppointmentRemindersPricingPage() {
-  const router = useRouter()
   const [busy, setBusy] = useState<ArPlanKey | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -23,28 +25,10 @@ export function AppointmentRemindersPricingPage() {
     setBusy(plan)
     setError(null)
     try {
-      if (plan === 'free') {
-        const res = await fetch('/api/appointment-reminders/billing/free', { method: 'POST' })
-        const json = await res.json()
-        if (!res.ok) throw new Error(json.error || 'Could not activate Free plan')
-        router.push(json.data?.nextPath || AR_ROUTES.setupConnect)
-        return
-      }
-      const res = await fetch('/api/appointment-reminders/billing/checkout', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ plan }),
+      window.location.href = appointmentRemindersProductOpenPath({
+        plan,
+        next: AR_ROUTES.setupConnect,
       })
-      const json = await res.json()
-      if (json.data?.url) {
-        window.location.href = json.data.url
-        return
-      }
-      if (res.status === 401) {
-        router.push(`/signup?product=appointment_reminders&plan=${plan}&next=${encodeURIComponent(AR_ROUTES.pricing)}`)
-        return
-      }
-      throw new Error(json.error || 'Checkout failed')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong')
     } finally {

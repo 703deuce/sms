@@ -8,6 +8,7 @@ import {
   notifyBusinessRescheduleInterest,
   type ArRescheduleRequestMeta,
 } from "@/lib/appointment-reminders/ai-rescheduler/business-approval";
+import { resolveArPlanCapabilities } from "@/lib/appointment-reminders/commercial/ar-plan-capabilities";
 import {
   isArRemindersOnlyMode,
   resolveAiReschedulerConfig,
@@ -27,6 +28,8 @@ export type ArCancelPendingMeta = {
 export async function publicEmailActionsUseStaffRequestWorkflow(
   workspaceId: string,
 ): Promise<boolean> {
+  const caps = await resolveArPlanCapabilities(workspaceId);
+  if (!caps.staffNotifiedRescheduleCancel) return false;
   const platform = await loadAppointmentPlatformConfig(workspaceId);
   const ar = resolveAiReschedulerConfig(platform);
   return !isArRemindersOnlyMode(ar);

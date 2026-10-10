@@ -4,7 +4,11 @@ import type Stripe from "stripe";
 import { getStripe } from "@/lib/stripe/client";
 import { getOrCreateStripeCustomer } from "@/lib/settings/billing";
 import { getAppBaseUrl } from "@/lib/messaging/telnyx/config";
-import type { ArPlanKey } from "@/lib/appointment-reminders/commercial/ar-plan-catalog";
+import {
+  arPlanDefinition,
+  type ArPlanKey,
+  isArPlanKey,
+} from "@/lib/appointment-reminders/commercial/ar-plan-catalog";
 import {
   arCheckoutMetadata,
   resolveArStripePriceId,
@@ -64,7 +68,7 @@ export async function createAppointmentRemindersCheckoutSession(input: {
 export async function changeAppointmentRemindersSubscriptionPlan(input: {
   workspaceId: string;
   plan: ArPlanKey;
-}): Promise<void> {
+}): Promise<{ immediate: boolean; scheduledDowngrade?: boolean }> {
   if (input.plan === "free") {
     throw new Error("Use subscription management to cancel; Free is applied after the paid period ends.");
   }
@@ -78,22 +82,77 @@ export async function changeAppointmentRemindersSubscriptionPlan(input: {
         productFamily: AR_PLATFORM_PRODUCT_FAMILY,
       },
     },
+    select: {
+      id: true,
+      tier: true,
+      status: true,
+      stripeSubscriptionId: true,
+      metadataJson: true,
+    },
   });
   if (!sub?.stripeSubscriptionId || !ACTIVE.has(sub.status)) {
     throw new Error("No active Appointment Reminders subscription to change");
   }
 
+  const currentTier = isArPlanKey(sub.tier) ? sub.tier : input.plan;
+  const currentCents = arPlanDefinition(currentTier).monthlyPriceCents;
+  const targetCents = arPlanDefinition(input.plan).monthlyPriceCents;
   const priceId = resolveArStripePriceId(input.plan);
   const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId);
   const itemId = stripeSub.items.data[0]?.id;
-  if (!itemId) throw new Error("Subscription has no billable items");
+  const currentPriceId = stripeSub.items.data[0]?.price?.id;
+  if (!itemId || !currentPriceId) throw new Error("Subscription has no billable items");
 
   const metadata = arCheckoutMetadata({ workspaceId: input.workspaceId, plan: input.plan });
+
+  if (targetCents < currentCents) {
+    const periodEnd = stripeSub.items.data[0]?.current_period_end;
+    if (!periodEnd) throw new Error("Could not read subscription period end for scheduled downgrade");
+    const schedule = await stripe.subscriptionSchedules.create({
+      from_subscription: sub.stripeSubscriptionId,
+    });
+    await stripe.subscriptionSchedules.update(schedule.id, {
+      end_behavior: "release",
+      phases: [
+        {
+          items: [{ price: currentPriceId, quantity: 1 }],
+          start_date: schedule.phases[0]?.start_date ?? stripeSub.items.data[0]?.current_period_start,
+          end_date: periodEnd,
+        },
+        {
+          items: [{ price: priceId, quantity: 1 }],
+          start_date: periodEnd,
+        },
+      ],
+      metadata: {
+        workspaceId: input.workspaceId,
+        platformProductFamily: AR_PLATFORM_PRODUCT_FAMILY,
+        scheduledArPlanKey: input.plan,
+      },
+    });
+    const priorMeta =
+      sub.metadataJson && typeof sub.metadataJson === "object" && !Array.isArray(sub.metadataJson)
+        ? (sub.metadataJson as Record<string, unknown>)
+        : {};
+    await getPrisma().platformProductSubscription.update({
+      where: { id: sub.id },
+      data: {
+        metadataJson: {
+          ...priorMeta,
+          scheduledArDowngradePlan: input.plan,
+          scheduledArDowngradeAt: new Date(periodEnd * 1000).toISOString(),
+        },
+      },
+    });
+    return { immediate: false, scheduledDowngrade: true };
+  }
+
   await stripe.subscriptions.update(sub.stripeSubscriptionId, {
     items: [{ id: itemId, price: priceId }],
     proration_behavior: "create_prorations",
     metadata: { ...((stripeSub.metadata || {}) as Record<string, string>), ...metadata },
   });
+  return { immediate: true };
 }
 
 export async function createAppointmentRemindersBillingPortalSession(

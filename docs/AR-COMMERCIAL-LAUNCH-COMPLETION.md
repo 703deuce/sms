@@ -9,13 +9,15 @@
 | Environment | Determined by `STRIPE_SECRET_KEY` prefix (`sk_test_` vs live) — `stripeBillingMode()` |
 | Webhooks | Reuses `src/lib/payments/stripe-platform-webhook.ts` + `upsertPlatformProductSubscriptionFromStripe` for `appointment_reminders` family |
 
-**Cloud agent note:** `STRIPE_SECRET_KEY` was not present in the build VM during this pass. Run on a host with credentials:
+**Live catalog (synced 2026-10-10):**
 
-```bash
-npx tsx scripts/sync-ar-stripe-catalog.ts --write-ids
-```
+| Plan | Product ID | Monthly price ID |
+|------|------------|------------------|
+| Starter | `prod_VPyNCYYsfFUdxI` | `price_1UP8QhKjM2RWgyrvrm1dl9SP` |
+| Growth | `prod_VPyNNh2lJfsSr5` | `price_1UP8QiKjM2RWgyrv9t3acn3k` |
+| Business | `prod_VPyNajS5pPWNu3` | `price_1UP8QiKjM2RWgyrvJnD8q7XX` |
 
-Do not commit or paste secret keys. Placeholder IDs remain until sync succeeds.
+Test-mode IDs: run `npx tsx scripts/sync-ar-stripe-catalog.ts --write-ids` with `sk_test_` on a dev host (production container only has live key).
 
 ## Backend
 

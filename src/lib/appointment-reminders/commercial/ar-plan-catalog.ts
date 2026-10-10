@@ -17,7 +17,6 @@ export type ArPlanDefinition = {
   importedCalendarsMax: number;
   reminderStepsMax: number;
   customReminderTiming: "basic" | "full";
-  editableEmailTemplates: boolean;
   smsConfirmationsAndResponses: boolean;
   staffNotifiedRescheduleCancel: boolean;
   aiReschedulerModes: ArAiReschedulerModeAllowed[];
@@ -35,7 +34,6 @@ export const AR_PLAN_CATALOG: Record<ArPlanKey, ArPlanDefinition> = {
     importedCalendarsMax: 1,
     reminderStepsMax: 1,
     customReminderTiming: "basic",
-    editableEmailTemplates: false,
     smsConfirmationsAndResponses: false,
     staffNotifiedRescheduleCancel: false,
     aiReschedulerModes: ["reminders_only"],
@@ -51,7 +49,6 @@ export const AR_PLAN_CATALOG: Record<ArPlanKey, ArPlanDefinition> = {
     importedCalendarsMax: 1,
     reminderStepsMax: 3,
     customReminderTiming: "full",
-    editableEmailTemplates: true,
     smsConfirmationsAndResponses: true,
     staffNotifiedRescheduleCancel: true,
     aiReschedulerModes: ["reminders_only", "notify"],
@@ -67,7 +64,6 @@ export const AR_PLAN_CATALOG: Record<ArPlanKey, ArPlanDefinition> = {
     importedCalendarsMax: 3,
     reminderStepsMax: 3,
     customReminderTiming: "full",
-    editableEmailTemplates: true,
     smsConfirmationsAndResponses: true,
     staffNotifiedRescheduleCancel: true,
     aiReschedulerModes: ["reminders_only", "notify", "ai"],
@@ -83,7 +79,6 @@ export const AR_PLAN_CATALOG: Record<ArPlanKey, ArPlanDefinition> = {
     importedCalendarsMax: 10,
     reminderStepsMax: 3,
     customReminderTiming: "full",
-    editableEmailTemplates: true,
     smsConfirmationsAndResponses: true,
     staffNotifiedRescheduleCancel: true,
     aiReschedulerModes: ["reminders_only", "notify", "ai"],

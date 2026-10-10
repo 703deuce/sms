@@ -94,17 +94,6 @@ export async function assertImportCalendarCountAllowed(
   }
 }
 
-export async function assertEditableEmailTemplatesAllowed(workspaceId: string): Promise<void> {
-  const commercial = await resolveArWorkspaceCommercial(workspaceId);
-  const plan = arPlanLimitsForWorkspace(commercial);
-  if (!plan.editableEmailTemplates) {
-    throw new ArFeatureGateError(
-      "ar_plan_email_templates",
-      "Editable email templates require Starter or higher.",
-    );
-  }
-}
-
 export async function assertStaffNotifiedFlowsAllowed(workspaceId: string): Promise<void> {
   const commercial = await resolveArWorkspaceCommercial(workspaceId);
   const plan = arPlanLimitsForWorkspace(commercial);

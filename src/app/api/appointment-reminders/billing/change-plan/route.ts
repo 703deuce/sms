@@ -31,11 +31,11 @@ export async function POST(request: Request) {
     });
 
     if (sub && ACTIVE.has(sub.status)) {
-      await changeAppointmentRemindersSubscriptionPlan({
+      const result = await changeAppointmentRemindersSubscriptionPlan({
         workspaceId: auth.workspaceId,
         plan: plan as ArPlanKey,
       });
-      return NextResponse.json({ data: { upgraded: true, plan } });
+      return NextResponse.json({ data: { plan, ...result } });
     }
 
     const session = await createAppointmentRemindersCheckoutSession({

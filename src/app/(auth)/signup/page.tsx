@@ -35,11 +35,17 @@ function reservationFromNext(nextPath: string | null): string | undefined {
   }
 }
 
-function voiceProductNext(product: string | null): string | null {
+function voiceProductNext(product: string | null, plan: string | null): string | null {
   if (product === "voice" || product === "mctb") return voiceProductOpenPath();
   if (product === "numbers") return "/personal";
   if (product === "mass_texting" || product === "sms") {
     return "/api/products/open?product=mass_texting";
+  }
+  if (product === "appointment_reminders" || product === "appointment-reminders") {
+    const params = new URLSearchParams();
+    params.set("plan", plan === "starter" || plan === "growth" || plan === "business" ? plan : "free");
+    params.set("next", "/appointment-reminders/setup/connect");
+    return `/api/appointment-reminders/product-open?${params.toString()}`;
   }
   return null;
 }
@@ -55,8 +61,11 @@ function SignupForm() {
   const router = useRouter();
   const params = useSearchParams();
   const productParam = params.get("product");
+  const planParam = params.get("plan");
   const isMassTextSignup = productParam === "mass_texting" || productParam === "sms";
-  const productNext = voiceProductNext(productParam);
+  const isArSignup =
+    productParam === "appointment_reminders" || productParam === "appointment-reminders";
+  const productNext = voiceProductNext(productParam, planParam);
   const defaultNext = numbersPlatformOnly ? "/personal" : mctbOnboardingEntryPath();
   const resolvedNext = params.get("next") || productNext || defaultNext;
   const displayNext = clientSafeNextPath(resolvedNext, defaultNext);
@@ -112,7 +121,9 @@ function SignupForm() {
             ? "Sign in to finish checkout for your reserved number."
             : isMassTextSignup
               ? "Start your Mass Texting trial. No Missed Call Text Back setup required."
-            : numbersPlatformOnly
+            : isArSignup
+              ? "Set up Appointment Reminders — calendar sync and automated SMS and email reminders."
+              : numbersPlatformOnly
               ? "Buy numbers, forward calls, route with Smart Routing, and manage voicemail."
               : mctbPrimary
                 ? "Set up Missed Call Text Back for your business line."

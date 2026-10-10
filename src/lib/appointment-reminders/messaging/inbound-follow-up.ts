@@ -1,7 +1,7 @@
 import "server-only";
 
-import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
-import { isAiReschedulerSmsEnabled, resolveAiReschedulerConfig } from "../ai-rescheduler/types";
+import { isAiReschedulerSmsEnabled } from "../ai-rescheduler/types";
+import { resolveArAiReschedulerConfigForWorkspace } from "@/lib/appointment-reminders/commercial/ar-ai-rescheduler-plan";
 import { runArV3RescheduleSmsTurn } from "../ai-rescheduler/v3-workflow/run-turn";
 import { verifyArReplySessionForInboundTurn } from "./verify-reply-session";
 import { markArReplySessionLifecycle } from "./reply-session";
@@ -18,8 +18,7 @@ export async function tryHandleArReminderFollowUp(input: {
   message: string;
   providerMessageId?: string;
 }): Promise<{ handled: true; replyText: string } | { handled: false }> {
-  const platform = await loadAppointmentPlatformConfig(input.workspaceId);
-  const ar = resolveAiReschedulerConfig(platform);
+  const ar = await resolveArAiReschedulerConfigForWorkspace(input.workspaceId);
   if (!isAiReschedulerSmsEnabled(ar) || ar.mode !== "ai") {
     return { handled: false };
   }

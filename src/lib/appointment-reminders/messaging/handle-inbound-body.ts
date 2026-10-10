@@ -32,8 +32,10 @@ export async function handleAppointmentRemindersInboundBody(input: {
   const { inboundKind, bodyLength } = classifyArInboundBody(body);
   if (!body) return { handled: false };
 
-  const platform = await loadAppointmentPlatformConfig(input.workspaceId);
-  const ar = resolveAiReschedulerConfig(platform);
+  const { resolveArAiReschedulerConfigForWorkspace } = await import(
+    "@/lib/appointment-reminders/commercial/ar-ai-rescheduler-plan"
+  );
+  const ar = await resolveArAiReschedulerConfigForWorkspace(input.workspaceId);
   if (isAiReschedulerSmsEnabled(ar)) {
     const apptRow = await getPrisma().voiceAppointment.findFirst({
       where: { id: input.appointmentId, workspaceId: input.workspaceId },

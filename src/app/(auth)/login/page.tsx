@@ -26,12 +26,18 @@ function reservationFromNext(nextPath: string | null): string | undefined {
   }
 }
 
-function voiceProductNext(product: string | null): string | null {
+function voiceProductNext(product: string | null, plan: string | null): string | null {
   if (product === "numbers") return "/personal";
   if (product === "mctb") return mctbOnboardingEntryPath();
   if (product === "voice") return isMctbV1Primary() ? mctbShellHome() : "/dashboard";
   if (product === "mass_texting" || product === "sms") {
     return "/api/products/open?product=mass_texting";
+  }
+  if (product === "appointment_reminders" || product === "appointment-reminders") {
+    const params = new URLSearchParams();
+    params.set("plan", plan === "starter" || plan === "growth" || plan === "business" ? plan : "free");
+    params.set("next", "/appointment-reminders/setup/connect");
+    return `/api/appointment-reminders/product-open?${params.toString()}`;
   }
   return null;
 }
@@ -40,7 +46,7 @@ function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
   const defaultNext = defaultAuthLandingPath();
-  const productNext = voiceProductNext(params.get("product"));
+  const productNext = voiceProductNext(params.get("product"), params.get("plan"));
   const nextPath = params.get("next") || productNext || defaultNext;
   const reservationId = useMemo(() => reservationFromNext(params.get("next")), [params]);
   const oauthError = params.get("error");
