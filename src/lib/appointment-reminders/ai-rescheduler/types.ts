@@ -2,7 +2,8 @@ import type { AppointmentPlatformConfig } from "@/lib/appointments/types";
 import type { ArSmsActionPolicyConfig } from "./ar-sms-action-policy";
 import { buildArReplyInstructionsSuffix } from "./ar-sms-action-policy";
 
-export type AiReschedulerMode = "notify" | "ai";
+/** How outbound reminders and customer change requests are handled. */
+export type AiReschedulerMode = "reminders_only" | "notify" | "ai";
 
 export type AiReschedulerApproval = "automatic" | "business";
 
@@ -13,7 +14,11 @@ export type AiReschedulerDayConfig = {
 };
 
 export type AiReschedulerConfig = {
-  /** When false, only passive reminder copy may apply; default behavior is notify-only semantics. */
+  /**
+   * `reminders_only` — send template SMS/email only (no C/R/X suffix or inbound change handling).
+   * `notify` — include reply actions; staff notified on cancel/reschedule requests.
+   * `ai` — AI offers times and applies calendar changes per approval rules.
+   */
   mode: AiReschedulerMode;
   approval: AiReschedulerApproval;
   weeklyHours: Record<string, AiReschedulerDayConfig>;
@@ -44,6 +49,7 @@ export function arReplyInstructionsSuffixForAppointment(input: {
   startsAt: Date;
   now?: Date;
 }): string {
+  if (input.config.mode === "reminders_only") return "";
   return buildArReplyInstructionsSuffix(input);
 }
 
@@ -68,6 +74,11 @@ export const DEFAULT_AI_RESCHEDULER_CONFIG: AiReschedulerConfig = {
   allowProviderCancel: false,
 };
 
+function normalizeAiReschedulerMode(mode: unknown): AiReschedulerMode {
+  if (mode === "reminders_only" || mode === "notify" || mode === "ai") return mode;
+  return DEFAULT_AI_RESCHEDULER_CONFIG.mode;
+}
+
 export function resolveAiReschedulerConfig(
   platform: AppointmentPlatformConfig,
 ): AiReschedulerConfig {
@@ -76,12 +87,18 @@ export function resolveAiReschedulerConfig(
   return {
     ...DEFAULT_AI_RESCHEDULER_CONFIG,
     ...raw,
+    mode: normalizeAiReschedulerMode(raw.mode),
     weeklyHours: { ...DEFAULT_AI_RESCHEDULER_WEEKLY_HOURS, ...(raw.weeklyHours || {}) },
   };
 }
 
+/** Customer SMS reply handling (C/R/X suffix + inbound pipeline). False for reminders-only. */
 export function isAiReschedulerSmsEnabled(config: AiReschedulerConfig): boolean {
   return config.mode === "ai" || config.mode === "notify";
+}
+
+export function isArRemindersOnlyMode(config: AiReschedulerConfig): boolean {
+  return config.mode === "reminders_only";
 }
 
 export function isAiAutomaticCalendarMutation(config: AiReschedulerConfig): boolean {

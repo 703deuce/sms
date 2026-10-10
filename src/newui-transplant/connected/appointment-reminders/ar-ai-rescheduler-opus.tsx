@@ -349,45 +349,48 @@ export function ArAiReschedulerOpusPage() {
   }
 
   const aiOn = config.mode === 'ai'
+  const modePill =
+    config.mode === 'ai'
+      ? { tone: 'success' as const, label: 'AI handles changes' }
+      : config.mode === 'notify'
+        ? { tone: 'primary' as const, label: 'Notify staff' }
+        : { tone: 'neutral' as const, label: 'Reminders only' }
 
-  const handlingLevels = [
+  const handlingLevels: Array<{
+    mode: AiReschedulerMode
+    title: string
+    desc: string
+    icon: typeof Bell
+  }> = [
     {
-      id: 'reminders_only' as const,
+      mode: 'reminders_only',
       title: 'Reminders only',
       desc:
-        'Outbound reminders only — use templates without C / R / X instructions and manage response behavior in Notifications settings.',
+        'Send the reminder text only — no “reply C to confirm” or cancel/reschedule instructions appended. Customers get your template as written.',
       icon: Bell,
-      selected: false,
-      selectable: false,
     },
     {
-      id: 'notify' as const,
+      mode: 'notify',
       title: 'Notify staff',
       desc:
-        'Capture cancellation and reschedule requests, notify your team, and let staff update the calendar.',
+        'Include confirm / cancel / reschedule replies on SMS. When customers request a change, your team gets notified to handle the calendar.',
       icon: UserRoundCog,
-      selected: config.mode === 'notify',
-      selectable: true,
-      onSelect: () => patch({ mode: 'notify' }),
     },
     {
-      id: 'ai' as const,
+      mode: 'ai',
       title: 'AI handles supported changes',
       desc:
-        'AI offers times from your connected calendar and updates appointments per your approval rules below.',
+        'Same reply options as notify mode, but AI offers times from your calendar and updates the appointment per your approval rules below.',
       icon: Sparkles,
-      selected: config.mode === 'ai',
-      selectable: true,
-      onSelect: () => patch({ mode: 'ai' }),
     },
-  ] as const
+  ]
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 pb-16">
       <header className="space-y-2 border-b border-border/60 pb-6">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-semibold tracking-tight">AI Rescheduler</h1>
-          <Pill tone={aiOn ? 'success' : 'neutral'}>{aiOn ? 'AI enabled' : 'Notify only'}</Pill>
+          <Pill tone={modePill.tone}>{modePill.label}</Pill>
         </div>
         <p className="text-sm text-muted-foreground max-w-2xl">
           Choose how Transovo handles appointment changes when customers reply to reminders or use email action
@@ -413,18 +416,17 @@ export function ArAiReschedulerOpusPage() {
         <div className="grid gap-3 p-4 sm:grid-cols-1 lg:grid-cols-3">
           {handlingLevels.map((level) => {
             const Icon = level.icon
+            const selected = config.mode === level.mode
             const cardClass = cn(
               OPUS_CARD,
               'relative flex h-full flex-col gap-3 p-4 text-left transition-all',
-              level.selected
+              selected
                 ? 'border-primary/60 bg-primary/[0.06] ring-2 ring-primary/25 shadow-sm'
-                : level.selectable
-                  ? 'hover:border-primary/30 hover:bg-muted/30'
-                  : 'border-dashed opacity-95',
+                : 'hover:border-primary/30 hover:bg-muted/30',
             )
             const inner = (
               <>
-                {level.selected ? (
+                {selected ? (
                   <span
                     className="absolute right-3 top-3 flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground"
                     aria-hidden="true"
@@ -435,7 +437,7 @@ export function ArAiReschedulerOpusPage() {
                 <span
                   className={cn(
                     'flex size-10 items-center justify-center rounded-xl',
-                    level.selected ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground',
+                    selected ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground',
                   )}
                   aria-hidden="true"
                 >
@@ -443,35 +445,18 @@ export function ArAiReschedulerOpusPage() {
                 </span>
                 <div>
                   <div className="font-semibold">{level.title}</div>
-                  <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                    {level.id === 'reminders_only' ? (
-                      <>
-                        Send scheduled SMS and email without routing change requests through Transovo. Use
-                        templates without C / R / X, or adjust behavior in{' '}
-                        <Link
-                          href={arSettingsTab('notifications')}
-                          className="font-medium text-primary underline underline-offset-2"
-                        >
-                          Settings → Notifications &amp; responses
-                        </Link>
-                        .
-                      </>
-                    ) : (
-                      level.desc
-                    )}
-                  </p>
+                  <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{level.desc}</p>
                 </div>
               </>
             )
-            if (!level.selectable) {
-              return (
-                <div key={level.id} className={cardClass}>
-                  {inner}
-                </div>
-              )
-            }
             return (
-              <button key={level.id} type="button" onClick={level.onSelect} className={cardClass}>
+              <button
+                key={level.mode}
+                type="button"
+                onClick={() => patch({ mode: level.mode })}
+                className={cardClass}
+                aria-pressed={selected}
+              >
                 {inner}
               </button>
             )

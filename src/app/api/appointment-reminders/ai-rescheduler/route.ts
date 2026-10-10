@@ -5,8 +5,10 @@ import {
   loadAppointmentPlatformConfig,
   saveAppointmentPlatformConfig,
 } from "@/lib/appointments/settings";
-import type { AiReschedulerConfig } from "@/lib/appointment-reminders/ai-rescheduler/types";
-import { resolveAiReschedulerConfig } from "@/lib/appointment-reminders/ai-rescheduler/types";
+import {
+  resolveAiReschedulerConfig,
+  type AiReschedulerConfig,
+} from "@/lib/appointment-reminders/ai-rescheduler/types";
 import { getPrisma } from "@/lib/db";
 import { evaluateArCalendarReadiness } from "@/lib/appointment-reminders/ai-rescheduler/calendar-readiness";
 import type { CalendarConfig } from "@/lib/voice/calendar/providers";
@@ -63,9 +65,14 @@ export async function PATCH(request: Request) {
     const body = (await request.json()) as Partial<AiReschedulerConfig>;
     const platform = await loadAppointmentPlatformConfig(auth.workspaceId);
     const current = resolveAiReschedulerConfig(platform);
+    const mode =
+      body.mode === "reminders_only" || body.mode === "notify" || body.mode === "ai"
+        ? body.mode
+        : current.mode;
     const next: AiReschedulerConfig = {
       ...current,
       ...body,
+      mode,
       weeklyHours: body.weeklyHours
         ? { ...current.weeklyHours, ...body.weeklyHours }
         : current.weeklyHours,

@@ -55,6 +55,14 @@ describe("arReplyInstructionsSuffixForAppointment", () => {
     });
     expect(suffix).toBe(AR_REPLY_INSTRUCTIONS_SUFFIX);
   });
+
+  it("omits suffix entirely in reminders_only mode", () => {
+    const suffix = arReplyInstructionsSuffixForAppointment({
+      config: { ...DEFAULT_AI_RESCHEDULER_CONFIG, mode: "reminders_only" },
+      startsAt,
+    });
+    expect(suffix).toBe("");
+  });
 });
 
 describe("resolveArRescheduleSmsCutoffMinutes", () => {
