@@ -1,7 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import { Loader2 } from 'lucide-react'
+import { arSettingsTab } from '@/lib/appointment-reminders/routes'
 import type {
   AiReschedulerConfig,
   AiReschedulerMode,
@@ -353,27 +355,40 @@ export function ArAiReschedulerOpusPage() {
           <Pill tone={aiOn ? 'success' : 'neutral'}>{aiOn ? 'AI enabled' : 'Notify only'}</Pill>
         </div>
         <p className="text-sm text-muted-foreground max-w-2xl">
-          Let customers confirm, reschedule, or cancel appointments by replying to their reminder texts.
-          Changes sync with your connected Google or Microsoft calendar.
+          Choose how Transovo handles appointment changes when customers reply to reminders or use email action
+          links. Reminders-only keeps outbound messages without change handling; notify and AI modes build on
+          your existing calendar connection.
         </p>
       </header>
 
       {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
 
       <section className="space-y-4">
-        <h2 className="text-base font-medium">How should rescheduling work?</h2>
+        <h2 className="text-base font-medium">How should Transovo handle appointment changes?</h2>
         <div className="grid gap-3">
+          <div className="rounded-lg border border-border px-4 py-3">
+            <div className="font-medium">Reminders only</div>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Send scheduled SMS and email reminders without capturing reschedule or cancellation requests in
+              Transovo. Use templates without confirm / reschedule / cancel reply instructions, or turn off
+              customer response actions in{' '}
+              <Link href={arSettingsTab('notifications')} className="font-medium text-primary underline underline-offset-2">
+                Settings → Notifications &amp; responses
+              </Link>
+              .
+            </p>
+          </div>
           {(
             [
               {
                 mode: 'notify' as AiReschedulerMode,
                 title: 'Notify me',
-                desc: 'Collect the customer’s request and notify your business. You handle the calendar change.',
+                desc: 'Capture cancellation and reschedule requests, notify your business, and let staff update the calendar.',
               },
               {
                 mode: 'ai' as AiReschedulerMode,
-                title: 'AI reschedules',
-                desc: 'AI checks your connected calendar, offers available times, and updates the original appointment after confirmation.',
+                title: 'AI handles changes',
+                desc: 'AI offers times from your connected calendar and updates the appointment per your approval rules below.',
               },
             ] as const
           ).map((opt) => (

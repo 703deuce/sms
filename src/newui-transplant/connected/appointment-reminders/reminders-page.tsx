@@ -8,7 +8,7 @@ import type {
   ArReminderOperationalRow,
   ArRemindersPagePayload,
 } from '@/lib/appointment-reminders/reminders-page-types'
-import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
+import { AR_ROUTES, AR_SETTINGS_INTEGRATIONS } from '@/lib/appointment-reminders/routes'
 import {
   ArStatGrid,
   OpusDataSurface,
@@ -219,7 +219,7 @@ export function AppointmentRemindersLogPage() {
             description="Connect a calendar, select import calendars, and configure your SMS sequence."
             action={
               <div className="flex flex-wrap justify-center gap-2">
-                <Button variant="outline" render={<Link href={AR_ROUTES.calendars} />}>Calendars</Button>
+                <Button variant="outline" render={<Link href={AR_SETTINGS_INTEGRATIONS} />}>Connections</Button>
                 <Button render={<Link href={AR_ROUTES.settings} />}>Reminder settings</Button>
               </div>
             }

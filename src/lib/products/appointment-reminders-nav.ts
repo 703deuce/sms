@@ -1,17 +1,16 @@
 import {
   Bell,
   Calendar,
-  CalendarCog,
-  CalendarDays,
   BarChart3,
   LayoutDashboard,
   Settings2,
   Sparkles,
-  MessageSquareWarning,
+  MessageSquare,
   CreditCard,
   Building2,
   Link2,
   Video,
+  CalendarDays,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
 import { AR_ROUTES } from "@/lib/appointment-reminders/routes";
@@ -53,6 +52,16 @@ export function buildAppointmentRemindersNav(): NavItem[] {
       icon: Bell,
     },
     {
+      label: "Responses",
+      href: AR_ROUTES.responses,
+      icon: MessageSquare,
+    },
+    {
+      label: "AI Rescheduler",
+      href: AR_ROUTES.aiRescheduler,
+      icon: Sparkles,
+    },
+    {
       label: "Analytics",
       href: AR_ROUTES.analytics,
       icon: BarChart3,
@@ -61,23 +70,6 @@ export function buildAppointmentRemindersNav(): NavItem[] {
       label: "Settings",
       href: AR_ROUTES.settings,
       icon: Settings2,
-    },
-    {
-      label: "Held SMS replies",
-      href: AR_ROUTES.heldInbound,
-      icon: MessageSquareWarning,
-      sectionLabel: "More",
-    },
-    {
-      label: "Calendar connections",
-      href: AR_ROUTES.calendars,
-      icon: CalendarCog,
-      sectionLabel: "More",
-    },
-    {
-      label: "AI Rescheduler",
-      href: AR_ROUTES.aiRescheduler,
-      icon: Sparkles,
     },
     {
       label: "Booking page",
@@ -116,10 +108,11 @@ export function getAppointmentRemindersPageTitle(pathname: string): string {
   ) {
     return "Calendar";
   }
-  if (pathname.startsWith(AR_ROUTES.heldInbound)) return "Held SMS replies";
+  if (pathname.startsWith(AR_ROUTES.responses)) return "Responses";
+  if (pathname.startsWith(AR_ROUTES.heldInbound)) return "Responses";
   if (pathname.startsWith(AR_ROUTES.reminders)) return "Reminders";
   if (pathname.startsWith(AR_ROUTES.analytics)) return "Analytics";
-  if (pathname.startsWith(AR_ROUTES.calendars)) return "Calendar connections";
+  if (pathname.startsWith(AR_ROUTES.calendars)) return "Settings";
   if (pathname.startsWith(AR_ROUTES.settings)) return "Settings";
   if (pathname.startsWith(AR_ROUTES.aiRescheduler)) return "AI Rescheduler";
   if (pathname.startsWith(AR_ROUTES.bookingServices)) return "Meetings";

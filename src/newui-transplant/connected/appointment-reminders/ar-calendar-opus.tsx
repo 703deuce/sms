@@ -27,7 +27,7 @@ import { ArCalendarOpusView } from '@/newui-transplant/components/appointment-re
 import { OpusDataSurface } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
 import { Callout, EmptyState, Page, PageHeader, Pill } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
-import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
+import { AR_ROUTES, AR_SETTINGS_INTEGRATIONS } from '@/lib/appointment-reminders/routes'
 
 /** Poll while the calendar tab is open so Outlook/Google webhook imports appear without Sync now. */
 const CALENDAR_AUTO_REFRESH_MS = 20_000
@@ -330,9 +330,9 @@ export function AppointmentRemindersCalendarPage() {
                 </Button>
               </>
             ) : null}
-            <Button variant="outline" size="sm" nativeButton={false} render={<Link href={AR_ROUTES.calendars} />}>
+            <Button variant="outline" size="sm" nativeButton={false} render={<Link href={AR_SETTINGS_INTEGRATIONS} />}>
               <Calendar className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-              Calendar connections
+              Manage connections
             </Button>
             <Button variant="outline" size="sm" onClick={handleRefresh} disabled={syncing}>
               <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} aria-hidden />
@@ -346,7 +346,7 @@ export function AppointmentRemindersCalendarPage() {
         <div className="mb-4">
         <Callout tone="info" icon={Info} title="Microsoft 365 calendars">
           {nativeActions.syncNote}{' '}
-          <Link href={AR_ROUTES.calendars} className="font-medium underline underline-offset-2">
+          <Link href={AR_SETTINGS_INTEGRATIONS} className="font-medium underline underline-offset-2">
             Choose calendars to sync
           </Link>
           {' · '}
@@ -368,10 +368,10 @@ export function AppointmentRemindersCalendarPage() {
         <EmptyState
           icon={Calendar}
           title="Connect a calendar"
-          description="Authorize Microsoft 365 or Google on Calendar connections, then return here to view imported appointments."
+          description="Authorize Microsoft 365 or Google under Settings → Integrations, then return here to view imported appointments."
           action={
-            <Button nativeButton={false} size="sm" render={<Link href={AR_ROUTES.calendars} />}>
-              Open calendar connections
+            <Button nativeButton={false} size="sm" render={<Link href={AR_SETTINGS_INTEGRATIONS} />}>
+              Manage connections
             </Button>
           }
         />

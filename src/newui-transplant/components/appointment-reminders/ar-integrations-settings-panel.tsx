@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { Panel } from '@/newui-transplant/components/app/kit'
-import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
+import { AR_SETTINGS_INTEGRATIONS } from '@/lib/appointment-reminders/routes'
 import { CalendarIntegrationsOpus } from '@/newui-transplant/connected/integrations/calendar-integrations-opus'
 import { TextLink } from '@/newui-transplant/components/app/kit'
 
@@ -13,7 +13,7 @@ export function ArIntegrationsSettingsPanel() {
         title="Microsoft 365"
         description="Primary supported calendar source for Appointment Reminders."
       >
-        <CalendarIntegrationsOpus returnPath={AR_ROUTES.settings} variant="appointment_reminders" />
+        <CalendarIntegrationsOpus returnPath={AR_SETTINGS_INTEGRATIONS} variant="appointment_reminders" />
       </Panel>
 
       <Panel title="Appointment sources">

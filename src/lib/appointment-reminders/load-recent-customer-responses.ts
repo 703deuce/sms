@@ -17,6 +17,8 @@ const OVERVIEW_OUTCOME_KINDS = new Set<ArCustomerResponseKind>([
   "rescheduled",
   "reschedule_requested",
   "reschedule_pending",
+  "replied",
+  "awaiting_reply",
 ]);
 
 export type ArOverviewCustomerResponseRow = {
@@ -79,5 +81,5 @@ export async function loadRecentArCustomerResponses(
   }
 
   rows.sort((a, b) => new Date(b.responseAt).getTime() - new Date(a.responseAt).getTime());
-  return rows.slice(0, Math.max(1, Math.min(limit, 20)));
+  return rows.slice(0, Math.max(1, Math.min(limit, 200)));
 }

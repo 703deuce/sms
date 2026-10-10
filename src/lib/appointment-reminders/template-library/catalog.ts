@@ -4,6 +4,30 @@ import type {
   TemplateLibraryEntry,
   TemplateMessageType,
 } from "./types";
+
+/** Curated defaults shown before “browse full library”. */
+const RECOMMENDED_MESSAGE_TYPES = new Set<TemplateMessageType>([
+  "booking_confirmation",
+  "advance_reminder",
+  "day_before",
+  "same_day",
+  "confirmation_request",
+]);
+
+const RECOMMENDED_INDUSTRIES = new Set([
+  "general",
+  "healthcare",
+  "dental",
+  "salon_spa",
+  "automotive",
+]);
+
+export function isRecommendedLibraryTemplate(entry: TemplateLibraryEntry): boolean {
+  return (
+    RECOMMENDED_INDUSTRIES.has(entry.industry) &&
+    RECOMMENDED_MESSAGE_TYPES.has(entry.messageType)
+  );
+}
 import { STEP_TO_MESSAGE_TYPE } from "./types";
 import catalogJson from "./transovo-reminder-templates.json";
 
@@ -56,11 +80,13 @@ export function listLibraryTemplateSummaries(filters?: {
   channel?: "sms" | "email";
   messageType?: TemplateMessageType;
   q?: string;
+  recommendedOnly?: boolean;
   limit?: number;
   offset?: number;
 }): { rows: TemplateLibrarySummary[]; total: number } {
   const q = filters?.q?.trim().toLowerCase();
   const filtered = catalog.templates.filter((t) => {
+    if (filters?.recommendedOnly && !isRecommendedLibraryTemplate(t)) return false;
     if (filters?.industry && t.industry !== filters.industry) return false;
     if (filters?.channel && t.channel !== filters.channel) return false;
     if (filters?.messageType && t.messageType !== filters.messageType) return false;

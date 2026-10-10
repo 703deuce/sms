@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, Bell, CheckCircle2, Loader2, Sparkles } from 'lucide-react'
-import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
+import { AR_ROUTES, AR_SETTINGS_INTEGRATIONS } from '@/lib/appointment-reminders/routes'
 import {
   Callout,
   ConfigSection,
@@ -80,7 +80,7 @@ export function AppointmentRemindersSetupConnectPage() {
         <CalendarIntegrationsOpus returnPath={AR_ROUTES.setupConnect} variant="appointment_reminders" />
       </div>
       <div className="mt-6 flex justify-end gap-2">
-        <Button variant="outline" nativeButton={false} render={<Link href={AR_ROUTES.calendars} />}>
+        <Button variant="outline" nativeButton={false} render={<Link href={AR_SETTINGS_INTEGRATIONS} />}>
           Open calendars
         </Button>
         {canContinue ? (

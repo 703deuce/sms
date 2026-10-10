@@ -12,7 +12,7 @@ import { loadRecentArCustomerResponses } from "@/lib/appointment-reminders/load-
 import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
 import { loadArNeedsAttentionRows } from "@/lib/appointment-reminders/load-ar-needs-attention";
 import { evaluateAppointmentRemindersSetupReadiness } from "@/lib/appointment-reminders/activation";
-import { AR_ROUTES } from "@/lib/appointment-reminders/routes";
+import { AR_ROUTES, AR_SETTINGS_INTEGRATIONS } from "@/lib/appointment-reminders/routes";
 
 export async function loadAppointmentRemindersOverview(workspaceId: string) {
   const prisma = getPrisma();
@@ -129,7 +129,7 @@ export async function loadAppointmentRemindersOverview(workspaceId: string) {
           setupReadiness.calendarConnected && setupReadiness.hasImportCalendars
             ? "Connected"
             : "Connect and select import calendars",
-        href: AR_ROUTES.calendars,
+        href: AR_SETTINGS_INTEGRATIONS,
       },
       {
         id: "sms",

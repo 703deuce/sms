@@ -1,5 +1,6 @@
-import { ArHeldInboundOpusPage } from "@/newui-transplant/connected/appointment-reminders/ar-held-inbound-opus";
+import { redirect } from "next/navigation";
+import { AR_ROUTES } from "@/lib/appointment-reminders/routes";
 
-export default function AppointmentRemindersHeldInboundRoute() {
-  return <ArHeldInboundOpusPage />;
+export default function HeldInboundLegacyRedirect() {
+  redirect(`${AR_ROUTES.responses}?view=held`);
 }

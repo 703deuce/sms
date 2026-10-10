@@ -13,7 +13,7 @@ import {
   Send,
 } from 'lucide-react'
 import type { ArAppointmentRow, ArAppointmentsPagePayload } from '@/lib/appointment-reminders/appointments-page-types'
-import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
+import { AR_ROUTES, AR_SETTINGS_INTEGRATIONS } from '@/lib/appointment-reminders/routes'
 import { formatPhone } from '@/lib/utils'
 import { AppointmentDetailDrawer } from '@/newui-transplant/components/appointment-reminders/appointment-detail-drawer'
 import { ReminderStatusPill } from '@/newui-transplant/components/appointment-reminders/reminder-status-pill'
@@ -56,7 +56,7 @@ const DATE_OPTIONS = [
 const ENGAGEMENT_TABS = [
   { value: 'all', label: 'All' },
   { value: 'upcoming', label: 'Upcoming' },
-  { value: 'awaiting_confirmation', label: 'Awaiting confirmation' },
+  { value: 'awaiting_confirmation', label: 'Awaiting reply' },
   { value: 'confirmed', label: 'Confirmed' },
   { value: 'reschedule_requested', label: 'Reschedule requested' },
   { value: 'cancellation_requested', label: 'Cancellation requested' },
@@ -116,7 +116,9 @@ export function AppointmentRemindersAppointmentsPage() {
 
   const date = searchParams.get('date') || 'upcoming'
   const reminderStatus = searchParams.get('reminderStatus') || 'all'
-  const engagement = searchParams.get('engagement') || 'all'
+  const engagementRaw = searchParams.get('engagement') || 'all'
+  const engagement =
+    engagementRaw === 'awaiting_reply' ? 'awaiting_confirmation' : engagementRaw
   const calendarId = searchParams.get('calendarId') || 'all'
   const page = Number(searchParams.get('page') || '1')
   const pageSize = Number(searchParams.get('pageSize') || '25')
@@ -314,7 +316,7 @@ export function AppointmentRemindersAppointmentsPage() {
                   Sync now
                 </Button>
               ) : (
-                <Button variant="outline" className="h-9" render={<Link href={AR_ROUTES.calendars} />}>
+                <Button variant="outline" className="h-9" render={<Link href={AR_SETTINGS_INTEGRATIONS} />}>
                   Connect calendar
                 </Button>
               )}
@@ -445,7 +447,7 @@ export function AppointmentRemindersAppointmentsPage() {
             icon={Calendar}
             title="Connect your calendar"
             description="Connect Google Calendar or Microsoft Outlook to automatically find appointments and schedule SMS reminders."
-            action={<Button render={<Link href={AR_ROUTES.calendars} />}>Connect calendar</Button>}
+            action={<Button render={<Link href={AR_SETTINGS_INTEGRATIONS} />}>Connect calendar</Button>}
           />
         ) : emptyKind === 'sync_error' ? (
           <EmptyState
@@ -455,7 +457,7 @@ export function AppointmentRemindersAppointmentsPage() {
             action={
               <div className="flex gap-2">
                 <Button variant="outline" onClick={syncNow} disabled={syncing}>Retry sync</Button>
-                <Button variant="outline" render={<Link href={AR_ROUTES.calendars} />}>Manage connection</Button>
+                <Button variant="outline" render={<Link href={AR_SETTINGS_INTEGRATIONS} />}>Manage connection</Button>
               </div>
             }
           />
@@ -503,7 +505,7 @@ export function AppointmentRemindersAppointmentsPage() {
                     <th scope="col" className={th}>Date &amp; time</th>
                     <th scope="col" className={th}>Phone</th>
                     <th scope="col" className={th}>Reminder</th>
-                    <th scope="col" className={th}>Customer response</th>
+                    <th scope="col" className={th}>Response</th>
                     <th scope="col" className={cn(th, 'hidden lg:table-cell')}>Source</th>
                     <th scope="col" className={cn(th, 'w-8')}>
                       <span className="sr-only">Open</span>

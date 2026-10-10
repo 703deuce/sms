@@ -63,6 +63,7 @@ export function ArTemplateLibraryBrowser({
   const [channel, setChannel] = useState('all')
   const [messageType, setMessageType] = useState('all')
   const [q, setQ] = useState('')
+  const [browseAll, setBrowseAll] = useState(false)
   const [page, setPage] = useState(1)
   const [rows, setRows] = useState<SummaryRow[]>([])
   const [total, setTotal] = useState(0)
@@ -85,6 +86,7 @@ export function ArTemplateLibraryBrowser({
     setLoading(true)
     try {
       const sp = new URLSearchParams({ summaries: '1', page: String(page), pageSize: '50' })
+      if (!browseAll) sp.set('recommended', '1')
       if (industry !== 'all') sp.set('industry', industry)
       if (channel !== 'all') sp.set('channel', channel)
       if (messageType !== 'all') sp.set('messageType', messageType)
@@ -96,7 +98,7 @@ export function ArTemplateLibraryBrowser({
     } finally {
       setLoading(false)
     }
-  }, [channel, industry, messageType, page, q])
+  }, [browseAll, channel, industry, messageType, page, q])
 
   useEffect(() => {
     const t = setTimeout(() => void load(), 200)
@@ -161,7 +163,25 @@ export function ArTemplateLibraryBrowser({
             ]}
           />
         </Panel>
-        <p className="text-xs text-muted-foreground">{total} templates in library</p>
+        <label className="flex cursor-pointer items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={browseAll}
+            onChange={(e) => {
+              setPage(1)
+              setBrowseAll(e.target.checked)
+            }}
+          />
+          <span>
+            <span className="font-medium">Browse full library</span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">
+              {browseAll
+                ? `${total} approved templates`
+                : `Showing recommended templates (${total}). Enable to search all industries.`}
+            </span>
+          </span>
+        </label>
       </aside>
 
       <div className="min-w-0 flex-1">

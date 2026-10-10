@@ -12,9 +12,12 @@ import {
   Sparkles,
   UserCheck,
 } from 'lucide-react'
-import type { ArCustomerResponseSummary } from '@/lib/appointment-reminders/ar-sms-customer-outcome'
+import type {
+  ArCustomerResponseKind,
+  ArCustomerResponseSummary,
+} from '@/lib/appointment-reminders/ar-sms-customer-outcome'
 import { CustomerResponsePill } from '@/newui-transplant/components/appointment-reminders/customer-response-pill'
-import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
+import { AR_ROUTES, AR_SETTINGS_INTEGRATIONS } from '@/lib/appointment-reminders/routes'
 import { ArStatGrid } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
 import {
   Callout,
@@ -192,7 +195,7 @@ export function AppointmentRemindersOverviewPage() {
       <PageHeader
         title="Appointment Reminders"
         meta={<Pill tone={activeTone}>{activeLabel}</Pill>}
-        description="Overview of upcoming appointments, reminders, and customer responses."
+        description="Your upcoming appointments and customer responses — who is confirmed, who needs attention, and whether reminders are active."
         actions={
           <div className="flex flex-wrap gap-2">
             <Link href={AR_ROUTES.appointments} className={cn(buttonVariants({ variant: 'default' }), 'h-9')}>
@@ -224,7 +227,7 @@ export function AppointmentRemindersOverviewPage() {
           href={`${AR_ROUTES.appointments}?engagement=upcoming`}
         />
         <Stat
-          label="Awaiting confirmation"
+          label="Awaiting reply"
           value={loading ? '—' : String(counts?.awaitingConfirmation ?? 0)}
           icon={UserCheck}
           href={`${AR_ROUTES.appointments}?engagement=awaiting_confirmation`}
@@ -239,7 +242,7 @@ export function AppointmentRemindersOverviewPage() {
           label="Needs attention"
           value={loading ? '—' : String(counts?.needsAttention ?? 0)}
           icon={AlertTriangle}
-          href={`${AR_ROUTES.appointments}?engagement=needs_attention`}
+          href={`${AR_ROUTES.responses}?view=needs_attention`}
         />
       </ArStatGrid>
 
@@ -264,9 +267,63 @@ export function AppointmentRemindersOverviewPage() {
       ) : null}
 
       <Panel
+        title="Upcoming appointments"
+        description="Next scheduled visits with customer response status."
+        action={<TextLink href={AR_ROUTES.appointments}>View all</TextLink>}
+        bodyClassName="p-0"
+        className="mb-6"
+      >
+        {loading ? (
+          <p className="p-5 text-sm text-muted-foreground">Loading…</p>
+        ) : upcomingAppointments.length === 0 ? (
+          <EmptyState icon={CalendarClock} title="No upcoming appointments" description="Connect a calendar or add appointments manually." />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left text-sm">
+              <thead className={OPUS_TABLE_HEAD}>
+                <tr>
+                  <th scope="col" className={th}>Customer</th>
+                  <th scope="col" className={th}>Appointment</th>
+                  <th scope="col" className={th}>Response</th>
+                  <th scope="col" className={th}><span className="sr-only">Action</span></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {upcomingAppointments.map((row) => (
+                  <tr key={row.appointmentId} className="hover:bg-muted/30">
+                    <td className={`${td} font-medium`}>{row.customerName}</td>
+                    <td className={td}>
+                      <span className="block truncate">{row.appointmentTitle}</span>
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {new Date(row.startsAt).toLocaleString()}
+                      </span>
+                    </td>
+                    <td className={td}>
+                      <CustomerResponsePill
+                        label={row.responseStatus}
+                        kind={(row.responseKind || 'awaiting_reply') as ArCustomerResponseKind}
+                      />
+                    </td>
+                    <td className={td}>
+                      <Link
+                        href={`${AR_ROUTES.appointments}?highlight=${encodeURIComponent(row.appointmentId)}`}
+                        className="text-xs font-medium text-primary hover:underline"
+                      >
+                        Open
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+
+      <Panel
         title="Needs attention"
         description="Missing details, delivery issues, and open customer requests."
-        action={<TextLink href={`${AR_ROUTES.appointments}?engagement=needs_attention`}>View all</TextLink>}
+        action={<TextLink href={`${AR_ROUTES.responses}?view=needs_attention`}>View responses</TextLink>}
         bodyClassName="p-0"
         className="mb-6"
       >
@@ -322,59 +379,11 @@ export function AppointmentRemindersOverviewPage() {
         )}
       </Panel>
 
-      <Panel
-        title="Upcoming appointments"
-        description="Next scheduled visits and reminder status."
-        action={<TextLink href={AR_ROUTES.appointments}>View all</TextLink>}
-        bodyClassName="p-0"
-        className="mb-6"
-      >
-        {loading ? (
-          <p className="p-5 text-sm text-muted-foreground">Loading…</p>
-        ) : upcomingAppointments.length === 0 ? (
-          <EmptyState icon={CalendarClock} title="No upcoming appointments" description="Connect a calendar or add appointments manually." />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[800px] text-left text-sm">
-              <thead className={OPUS_TABLE_HEAD}>
-                <tr>
-                  <th scope="col" className={th}>Customer</th>
-                  <th scope="col" className={th}>Service</th>
-                  <th scope="col" className={th}>Date / time</th>
-                  <th scope="col" className={th}>Next reminder</th>
-                  <th scope="col" className={th}>Response</th>
-                  <th scope="col" className={th}><span className="sr-only">Action</span></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {upcomingAppointments.map((row) => (
-                  <tr key={row.appointmentId} className="hover:bg-muted/30">
-                    <td className={`${td} font-medium`}>{row.customerName}</td>
-                    <td className={td}>{row.appointmentTitle}</td>
-                    <td className={`${td} tabular-nums`}>{new Date(row.startsAt).toLocaleString()}</td>
-                    <td className={td}>{row.nextReminder}</td>
-                    <td className={td}>{row.responseStatus}</td>
-                    <td className={td}>
-                      <Link
-                        href={`${AR_ROUTES.appointments}?highlight=${encodeURIComponent(row.appointmentId)}`}
-                        className="text-xs font-medium text-primary hover:underline"
-                      >
-                        Open
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Panel>
-
       {!calendarHealthy && !loading ? (
         <div className="mb-6">
           <Callout tone="warning" icon={Calendar} title="Calendar connection needs attention">
             Connect Google Calendar or Microsoft 365 and select import calendars.{' '}
-            <TextLink href={AR_ROUTES.calendars}>Open calendars</TextLink>
+            <TextLink href={AR_SETTINGS_INTEGRATIONS}>Manage connections</TextLink>
           </Callout>
         </div>
       ) : null}
@@ -392,7 +401,7 @@ export function AppointmentRemindersOverviewPage() {
             description="Transovo reads appointments from calendars you choose and sends timed SMS reminders. This is not a booking or availability product — connect, import, and remind."
             action={
               <Link
-                href={AR_ROUTES.calendars}
+                href={AR_SETTINGS_INTEGRATIONS}
                 className="inline-flex h-9 items-center rounded-md bg-sidebar-foreground px-3.5 text-xs font-semibold text-sidebar transition-opacity hover:opacity-90"
               >
                 Manage calendars
@@ -403,7 +412,7 @@ export function AppointmentRemindersOverviewPage() {
           <Panel
             title="Recent customer responses"
             description="Confirmations, cancellations, and reschedules after reminder SMS."
-            action={<TextLink href={AR_ROUTES.appointments}>All appointments</TextLink>}
+            action={<TextLink href={AR_ROUTES.responses}>All responses</TextLink>}
             bodyClassName="p-0"
           >
             {loading ? (
@@ -465,7 +474,7 @@ export function AppointmentRemindersOverviewPage() {
                 title="No reminder activity yet"
                 description="After calendars import appointments and reminders send, activity appears here."
                 action={
-                  <Button variant="outline" nativeButton={false} render={<Link href={AR_ROUTES.calendars} />}>
+                  <Button variant="outline" nativeButton={false} render={<Link href={AR_SETTINGS_INTEGRATIONS} />}>
                     Connect calendar
                   </Button>
                 }
@@ -507,7 +516,7 @@ export function AppointmentRemindersOverviewPage() {
           <Panel
             title="Connected calendars"
             description="Accounts and import selection for appointment sync."
-            action={<TextLink href={AR_ROUTES.calendars}>Manage</TextLink>}
+            action={<TextLink href={AR_SETTINGS_INTEGRATIONS}>Manage</TextLink>}
             bodyClassName="divide-y py-0"
           >
             {loading ? (
@@ -518,7 +527,7 @@ export function AppointmentRemindersOverviewPage() {
                 title="No calendar connected"
                 description="Authorize Google or Microsoft and pick calendars that hold customer appointments."
                 action={
-                  <Button nativeButton={false} render={<Link href={AR_ROUTES.calendars} />}>
+                  <Button nativeButton={false} render={<Link href={AR_SETTINGS_INTEGRATIONS} />}>
                     Connect calendar
                   </Button>
                 }
@@ -530,7 +539,7 @@ export function AppointmentRemindersOverviewPage() {
                     label={c.provider === 'microsoft' ? 'Microsoft 365' : 'Google Calendar'}
                     value={c.label || c.provider}
                     tone={calendarStatusTone(c.status)}
-                    href={AR_ROUTES.calendars}
+                    href={AR_SETTINGS_INTEGRATIONS}
                   />
                   <div className="border-b border-dashed px-5 pb-3 text-xs text-muted-foreground last:border-0">
                     {c.accountEmail ? <p>{c.accountEmail}</p> : null}
@@ -552,6 +561,7 @@ export function AppointmentRemindersOverviewPage() {
 
           <Panel title="Quick links" bodyClassName="divide-y py-0">
             <KeyValueRow label="Appointments" value="View imported events" href={AR_ROUTES.appointments} />
+            <KeyValueRow label="Responses" value="Customer replies and requests" href={AR_ROUTES.responses} />
             <KeyValueRow label="Reminder log" value="Delivery outcomes" href={AR_ROUTES.reminders} />
             <KeyValueRow label="SMS sequence" value="Timing and templates" href={AR_ROUTES.settings} />
           </Panel>

@@ -1,5 +1,7 @@
-import { AppointmentRemindersCalendarsPage } from "@/newui-transplant/connected/appointment-reminders/calendars-page";
+import { redirect } from "next/navigation";
+import { AR_ROUTES } from "@/lib/appointment-reminders/routes";
 
-export default function AppointmentRemindersCalendarsRoute() {
-  return <AppointmentRemindersCalendarsPage />;
+/** Calendar connection management lives under Settings → Integrations. */
+export default function AppointmentRemindersCalendarsRedirect() {
+  redirect(`${AR_ROUTES.settings}?tab=integrations`);
 }

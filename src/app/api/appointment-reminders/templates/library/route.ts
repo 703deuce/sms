@@ -34,6 +34,7 @@ export async function GET(request: Request) {
         messageType: messageType || undefined,
         channel,
         q: searchParams.get("q") || undefined,
+        recommendedOnly: searchParams.get("recommended") === "1",
         offset: (page - 1) * pageSize,
         limit: pageSize,
       });
