@@ -14,6 +14,7 @@ export async function GET(request: Request) {
       q: searchParams.get("q") || undefined,
       date: searchParams.get("date") || "upcoming",
       reminderStatus: searchParams.get("reminderStatus") || "all",
+      engagement: searchParams.get("engagement") || "all",
       calendarId: searchParams.get("calendarId") || "all",
       page: searchParams.get("page") ? Number(searchParams.get("page")) : 1,
       pageSize: searchParams.get("pageSize") ? Number(searchParams.get("pageSize")) : 25,

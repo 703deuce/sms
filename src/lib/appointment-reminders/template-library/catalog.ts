@@ -42,6 +42,47 @@ export function listMessageTypesForIndustry(industry: string): TemplateMessageTy
   return [...set];
 }
 
+export type TemplateLibrarySummary = {
+  id: string;
+  industry: string;
+  messageType: TemplateMessageType;
+  channel: "sms" | "email";
+  label: string;
+  preview: string;
+};
+
+export function listLibraryTemplateSummaries(filters?: {
+  industry?: string;
+  channel?: "sms" | "email";
+  messageType?: TemplateMessageType;
+  q?: string;
+  limit?: number;
+  offset?: number;
+}): { rows: TemplateLibrarySummary[]; total: number } {
+  const q = filters?.q?.trim().toLowerCase();
+  const filtered = catalog.templates.filter((t) => {
+    if (filters?.industry && t.industry !== filters.industry) return false;
+    if (filters?.channel && t.channel !== filters.channel) return false;
+    if (filters?.messageType && t.messageType !== filters.messageType) return false;
+    if (q) {
+      const hay = `${t.label} ${t.body} ${t.industry} ${t.messageType}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+  const offset = Math.max(0, filters?.offset ?? 0);
+  const limit = Math.min(200, Math.max(1, filters?.limit ?? 50));
+  const rows = filtered.slice(offset, offset + limit).map((t) => ({
+    id: t.id,
+    industry: t.industry,
+    messageType: t.messageType,
+    channel: t.channel,
+    label: t.label,
+    preview: t.body.replace(/\s+/g, " ").trim().slice(0, 140),
+  }));
+  return { rows, total: filtered.length };
+}
+
 function patchStepFromLibrary(
   step: ReminderStepConfig,
   industry: string,

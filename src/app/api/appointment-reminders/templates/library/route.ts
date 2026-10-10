@@ -5,6 +5,7 @@ import {
   getLibraryTemplateByParts,
   getTemplateLibraryCatalog,
   listLibraryIndustries,
+  listLibraryTemplateSummaries,
   listMessageTypesForIndustry,
 } from "@/lib/appointment-reminders/template-library/catalog";
 import {
@@ -21,9 +22,26 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const industry = searchParams.get("industry");
     const messageType = searchParams.get("messageType") as TemplateMessageType | null;
-    const channel = searchParams.get("channel") === "email" ? "email" : "sms";
+    const channelParam = searchParams.get("channel");
+    const channel =
+      channelParam === "email" ? "email" : channelParam === "sms" ? "sms" : undefined;
+
+    if (searchParams.get("summaries") === "1") {
+      const page = Math.max(1, Number(searchParams.get("page") || "1"));
+      const pageSize = Math.min(100, Math.max(10, Number(searchParams.get("pageSize") || "50")));
+      const { rows, total } = listLibraryTemplateSummaries({
+        industry: industry || undefined,
+        messageType: messageType || undefined,
+        channel,
+        q: searchParams.get("q") || undefined,
+        offset: (page - 1) * pageSize,
+        limit: pageSize,
+      });
+      return NextResponse.json({ data: { rows, total, page, pageSize } });
+    }
 
     if (industry && messageType) {
+      const channel = channelParam === "email" ? "email" : "sms";
       const entry = getLibraryTemplateByParts(industry, messageType, channel);
       if (!entry) {
         return NextResponse.json({ error: "Template not found" }, { status: 404 });

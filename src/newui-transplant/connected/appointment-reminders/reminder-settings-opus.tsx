@@ -31,7 +31,6 @@ import { OPUS_META_STRIP } from '@/newui-transplant/components/app/opus-surfaces
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Input } from '@/newui-transplant/components/ui/input'
 import { Textarea } from '@/newui-transplant/components/ui/textarea'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/newui-transplant/components/ui/tabs'
 import {
   Sheet,
   SheetContent,
@@ -41,6 +40,18 @@ import {
 import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
 import { ReminderTemplateEditor } from '@/newui-transplant/components/appointment-reminders/reminder-template-editor'
 import { ArSchedulingPreferencesPanel } from '@/newui-transplant/components/appointment-reminders/ar-scheduling-preferences-panel'
+import {
+  ArBusinessProfilePanel,
+  type ArBusinessProfileFields,
+} from '@/newui-transplant/components/appointment-reminders/ar-business-profile-panel'
+import { ArTemplateLibraryBrowser } from '@/newui-transplant/components/appointment-reminders/ar-template-library-browser'
+import { ArNotificationsResponsesPanel } from '@/newui-transplant/components/appointment-reminders/ar-notifications-responses-panel'
+import { ArIntegrationsSettingsPanel } from '@/newui-transplant/components/appointment-reminders/ar-integrations-settings-panel'
+import {
+  ArWeeklyHoursEditor,
+  type WeeklyHoursMap,
+  normalizeWeeklyHours,
+} from '@/newui-transplant/components/appointment-reminders/ar-weekly-hours-editor'
 import {
   INDUSTRY_LABELS,
   MESSAGE_TYPE_LABELS,
@@ -80,7 +91,18 @@ type WorkspaceStats = {
   }
 }
 
-export function AppointmentRemindersSettingsOpus() {
+const SETTINGS_TABS = [
+  'sequence',
+  'templates',
+  'scheduling',
+  'business',
+  'notifications',
+  'integrations',
+] as const
+
+export type ArSettingsTab = (typeof SETTINGS_TABS)[number]
+
+export function AppointmentRemindersSettingsOpus({ activeTab = 'sequence' }: { activeTab?: ArSettingsTab }) {
   const [config, setConfig] = useState<RemindersApiConfig | null>(null)
   const [previews, setPreviews] = useState<ReminderPreviewMap>({})
   const [workspace, setWorkspace] = useState<WorkspaceStats | null>(null)
@@ -105,6 +127,16 @@ export function AppointmentRemindersSettingsOpus() {
   const [libraryIndustries, setLibraryIndustries] = useState<
     Array<{ id: string; label: string; messageTypes: Array<{ id: string; label: string }> }>
   >([])
+  const [businessProfile, setBusinessProfile] = useState<ArBusinessProfileFields>({
+    businessDisplayName: '',
+    businessPhone: '',
+    businessAddress: '',
+    directionsUrl: '',
+    brandColor: '',
+    preparationInstructions: '',
+    logoUrl: '',
+  })
+  const [weeklyHours, setWeeklyHours] = useState<WeeklyHoursMap>({})
 
   const loadWorkspace = useCallback(() => {
     void fetch('/api/appointment-reminders/reminders/workspace')
@@ -150,6 +182,16 @@ export function AppointmentRemindersSettingsOpus() {
           reminderEmailBranding: data.reminderEmailBranding,
           reminderPreferences: data.reminderPreferences,
         }
+        setBusinessProfile({
+          businessDisplayName: data.businessDisplayName || json.workspace?.name || '',
+          businessPhone: data.businessPhone || data.reminderEmailBranding?.contactPhone || '',
+          businessAddress: data.businessAddress || '',
+          directionsUrl: data.reminderEmailBranding?.directionsUrl || '',
+          brandColor: data.reminderEmailBranding?.brandColor || '',
+          preparationInstructions: data.reminderPreferences?.preparationInstructions || '',
+          logoUrl: data.reminderEmailBranding?.logoUrl || json.workspace?.logoUrl || '',
+        })
+        setWeeklyHours(normalizeWeeklyHours(data.weeklyHours))
         setConfig(nextConfig)
         setPreviews(await loadPreviews(nextConfig))
         loadWorkspace()
@@ -187,8 +229,21 @@ export function AppointmentRemindersSettingsOpus() {
         body: JSON.stringify({
           reminders: config.reminders,
           timezone: config.timezone,
-          reminderEmailBranding: config.reminderEmailBranding,
-          reminderPreferences: config.reminderPreferences,
+          businessDisplayName: businessProfile.businessDisplayName,
+          businessPhone: businessProfile.businessPhone,
+          businessAddress: businessProfile.businessAddress,
+          weeklyHours,
+          reminderEmailBranding: {
+            ...config.reminderEmailBranding,
+            brandColor: businessProfile.brandColor,
+            logoUrl: businessProfile.logoUrl,
+            directionsUrl: businessProfile.directionsUrl,
+            contactPhone: businessProfile.businessPhone,
+          },
+          reminderPreferences: {
+            ...config.reminderPreferences,
+            preparationInstructions: businessProfile.preparationInstructions,
+          },
         }),
       })
       if (!res.ok) throw new Error('save failed')
@@ -200,7 +255,7 @@ export function AppointmentRemindersSettingsOpus() {
     } finally {
       setSaving(false)
     }
-  }, [config, loadWorkspace])
+  }, [businessProfile, config, loadWorkspace, weeklyHours])
 
   if (loading) {
     return (
@@ -269,16 +324,9 @@ export function AppointmentRemindersSettingsOpus() {
         </ArStatGrid>
       ) : null}
 
-      <Tabs defaultValue="sequence">
-        <TabsList className="h-10">
-          <TabsTrigger value="sequence">Reminder sequence</TabsTrigger>
-          <TabsTrigger value="preview">Customer preview</TabsTrigger>
-          <TabsTrigger value="scheduling">Scheduling & rules</TabsTrigger>
-          <TabsTrigger value="presets">Presets & email</TabsTrigger>
-          <TabsTrigger value="test">Send test</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="sequence" className="mt-5 space-y-4">
+      <div className="space-y-5">
+        {activeTab === 'sequence' ? (
+        <div className="space-y-4">
           <Panel
             title="Reminder sequence"
             description="Confirmations and timed reminders per channel. Changes apply to future appointments only."
@@ -309,42 +357,12 @@ export function AppointmentRemindersSettingsOpus() {
             <Link href="/compliance" className="font-medium underline">Compliance</Link>
             {' '}and phone extraction in calendar field mapping.
           </Callout>
-        </TabsContent>
+        </div>
+        ) : null}
 
-        <TabsContent value="preview" className="mt-5">
-          <Panel
-            title="What customers receive"
-            description="Rendered with sample merge data — matches production wording."
-          >
-            <ul className="space-y-4">
-              {previewSteps.length === 0 ? (
-                <li className="text-sm text-muted-foreground">Enable at least one step to preview.</li>
-              ) : (
-                previewSteps.map((r) => (
-                  <li key={r.stepKey} className="rounded-xl border bg-muted/20 p-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">
-                      {r.badge} · {r.channel}
-                    </p>
-                    <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{r.preview || r.template}</p>
-                  </li>
-                ))
-              )}
-            </ul>
-          </Panel>
-        </TabsContent>
-
-        <TabsContent value="scheduling" className="mt-5 space-y-4">
-          <ArSchedulingPreferencesPanel
-            config={config}
-            onChange={(next) => {
-              setConfig(next)
-              setSaved(false)
-            }}
-          />
-        </TabsContent>
-
-        <TabsContent value="presets" className="mt-5 space-y-4">
-          <Panel title="Starter packs" description="Industry wording, tone, and timing — all editable after apply.">
+        {activeTab === 'templates' ? (
+        <div className="space-y-4">
+          <Panel title="Starter packs" description="Apply industry wording, tone, and timing to your reminder sequence.">
             <div className="grid gap-4 sm:grid-cols-2">
               <SimpleSelect
                 label="Industry"
@@ -377,27 +395,6 @@ export function AppointmentRemindersSettingsOpus() {
                   { value: 'confirmation_focused', label: 'Confirmation-focused' },
                   { value: 'long_lead', label: 'Long lead' },
                   { value: 'custom', label: 'Custom (templates only)' },
-                ]}
-              />
-              <SimpleSelect
-                label="Cancellation policy"
-                value={presetPolicy}
-                onChange={setPresetPolicy}
-                options={[
-                  { value: 'flexible_24h', label: '24-hour notice' },
-                  { value: 'same_day', label: 'Same-day courtesy' },
-                  { value: 'healthcare', label: 'Healthcare courtesy' },
-                  { value: 'no_fee', label: 'No fee stated' },
-                ]}
-              />
-              <SimpleSelect
-                label="Template language"
-                value={presetLocale}
-                onChange={setPresetLocale}
-                options={[
-                  { value: 'en', label: 'English' },
-                  { value: 'es', label: 'Spanish (store templates)' },
-                  { value: 'fr', label: 'French (store templates)' },
                 ]}
               />
             </div>
@@ -443,112 +440,119 @@ export function AppointmentRemindersSettingsOpus() {
               {applyingPreset ? 'Applying…' : 'Apply preset pack'}
             </Button>
           </Panel>
-          <Panel title="Email branding" description="Used for HTML reminder emails (logo, color, footer).">
-            <div className="grid gap-4 sm:max-w-lg">
-              <label className="block text-sm">
-                <span className="mb-1.5 block font-medium">Brand color</span>
-                <Input
-                  className="h-10"
-                  value={config.reminderEmailBranding?.brandColor || ''}
-                  onChange={(e) => {
-                    setConfig(patchReminderEmailBranding(config, { brandColor: e.target.value }))
-                    setSaved(false)
-                  }}
-                  placeholder="#0d9488"
-                />
-              </label>
-              <label className="block text-sm">
-                <span className="mb-1.5 block font-medium">Logo URL</span>
-                <Input
-                  className="h-10"
-                  value={config.reminderEmailBranding?.logoUrl || ''}
-                  onChange={(e) => {
-                    setConfig(patchReminderEmailBranding(config, { logoUrl: e.target.value }))
-                    setSaved(false)
-                  }}
-                />
-              </label>
-              <label className="block text-sm">
-                <span className="mb-1.5 block font-medium">Preparation instructions</span>
-                <Textarea
-                  value={config.reminderPreferences?.preparationInstructions || ''}
-                  onChange={(e) => {
-                    setConfig(patchReminderPreferences(config, { preparationInstructions: e.target.value }))
-                    setSaved(false)
-                  }}
-                />
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={config.reminderPreferences?.skipConfirmationStepsWhenConfirmed !== false}
-                  onChange={(e) => {
-                    setConfig(
-                      patchReminderPreferences(config, {
-                        skipConfirmationStepsWhenConfirmed: e.target.checked,
-                      }),
-                    )
-                    setSaved(false)
-                  }}
-                />
-                Skip confirmation steps after customer confirms
-              </label>
-            </div>
+          <Panel title="Template library" description="Browse all 306 SMS and email templates. Select a step in Reminder sequence to apply.">
+            <ArTemplateLibraryBrowser
+              businessName={businessProfile.businessDisplayName || workspaceName}
+              timezone={config.timezone}
+              businessPhone={businessProfile.businessPhone}
+              location={businessProfile.businessAddress}
+              templateLocked={templateLocked}
+            />
           </Panel>
-        </TabsContent>
+          <Panel title="Customer preview" description="Rendered with sample merge data from your business profile.">
+            <ul className="space-y-4">
+              {previewSteps.length === 0 ? (
+                <li className="text-sm text-muted-foreground">Enable at least one step to preview.</li>
+              ) : (
+                previewSteps.map((r) => (
+                  <li key={r.stepKey} className="rounded-xl border bg-muted/20 p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">
+                      {r.badge} · {r.channel}
+                    </p>
+                    <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{r.preview || r.template}</p>
+                  </li>
+                ))
+              )}
+            </ul>
+          </Panel>
+        </div>
+        ) : null}
 
-        <TabsContent value="test" className="mt-5">
-          <Panel title="Send test" description="Live SMS or email using saved templates.">
-            <div className={OPUS_META_STRIP + ' mb-4 text-muted-foreground'}>
-              Tests use the same pipeline as appointment reminders — not a mock composer.
-            </div>
-            <div className="grid gap-4 sm:max-w-md">
-              <SimpleSelect
-                label="Reminder step"
-                value={testStep}
-                onChange={(v) => setTestStep(v as ReminderStepKey)}
-                options={stepOptions}
-              />
-              <label className="block text-sm">
-                <span className="mb-1.5 block font-medium">Test phone (SMS)</span>
-                <Input value={testPhone} onChange={(e) => setTestPhone(e.target.value)} autoComplete="tel" className="h-10" />
-              </label>
-              <label className="block text-sm">
-                <span className="mb-1.5 block font-medium">Test email</span>
-                <Input value={testEmail} onChange={(e) => setTestEmail(e.target.value)} autoComplete="email" className="h-10" />
-              </label>
-              {testError ? <p className="text-xs text-destructive" role="alert">{testError}</p> : null}
-              <Button
-                className="h-10"
-                disabled={testing || (!testPhone.trim() && !testEmail.trim())}
-                onClick={async () => {
-                  setTesting(true)
-                  setTestError('')
-                  try {
-                    const res = await fetch('/api/appointment-reminders/reminders/test', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        stepKey: testStep,
-                        phone: testPhone.trim() || undefined,
-                        email: testEmail.trim() || undefined,
-                      }),
-                    })
-                    const json = await res.json()
-                    if (!res.ok) throw new Error(json.error || 'Send failed')
-                  } catch (e) {
-                    setTestError(e instanceof Error ? e.message : 'Send failed')
-                  } finally {
-                    setTesting(false)
-                  }
-                }}
-              >
-                {testing ? 'Sending…' : 'Send test'}
-              </Button>
-            </div>
-          </Panel>
-        </TabsContent>
-      </Tabs>
+        {activeTab === 'scheduling' ? (
+        <div className="space-y-4">
+          <ArSchedulingPreferencesPanel
+            config={config}
+            onChange={(next) => {
+              setConfig(next)
+              setSaved(false)
+            }}
+          />
+          <ArWeeklyHoursEditor
+            timezone={config.timezone}
+            weeklyHours={weeklyHours}
+            onChange={(next) => {
+              setWeeklyHours(next)
+              setSaved(false)
+            }}
+            onTimezoneChange={(tz) => {
+              setConfig({ ...config, timezone: tz })
+              setSaved(false)
+            }}
+          />
+        </div>
+        ) : null}
+
+        {activeTab === 'business' ? (
+        <div className="space-y-4">
+          <ArBusinessProfilePanel
+            fields={businessProfile}
+            onChange={(patch) => {
+              setBusinessProfile((prev) => ({ ...prev, ...patch }))
+              setSaved(false)
+            }}
+          />
+        </div>
+        ) : null}
+
+        {activeTab === 'notifications' ? (
+        <div className="space-y-4">
+          <ArNotificationsResponsesPanel
+            prefs={config.reminderPreferences || {}}
+            onPrefsChange={(patch) => {
+              setConfig(patchReminderPreferences(config, patch))
+              setSaved(false)
+            }}
+            readiness={workspace?.readiness || { sms: '—', email: '—' }}
+            testPhone={testPhone}
+            testEmail={testEmail}
+            testStep={testStep}
+            stepOptions={stepOptions}
+            onTestPhoneChange={setTestPhone}
+            onTestEmailChange={setTestEmail}
+            onTestStepChange={(v) => setTestStep(v as ReminderStepKey)}
+            testing={testing}
+            testError={testError}
+            onSendTest={async () => {
+              setTesting(true)
+              setTestError('')
+              try {
+                const res = await fetch('/api/appointment-reminders/reminders/test', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    stepKey: testStep,
+                    phone: testPhone.trim() || undefined,
+                    email: testEmail.trim() || undefined,
+                  }),
+                })
+                const json = await res.json()
+                if (!res.ok) throw new Error(json.error || 'Send failed')
+              } catch (e) {
+                setTestError(e instanceof Error ? e.message : 'Send failed')
+              } finally {
+                setTesting(false)
+              }
+            }}
+          />
+        </div>
+        ) : null}
+
+        {activeTab === 'integrations' ? (
+        <div className="space-y-4">
+          <ArIntegrationsSettingsPanel />
+        </div>
+        ) : null}
+      </div>
 
       <StepEditSheet
         step={editStep}

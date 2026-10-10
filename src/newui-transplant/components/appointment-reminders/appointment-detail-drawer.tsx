@@ -15,6 +15,7 @@ import type {
 } from '@/lib/appointment-reminders/ar-sms-customer-outcome'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Input } from '@/newui-transplant/components/ui/input'
+import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
 import {
   Sheet,
   SheetContent,
@@ -51,8 +52,10 @@ export function AppointmentDetailDrawer({
   const [timeline, setTimeline] = useState<TimelineEntry[]>([])
   const [loading, setLoading] = useState(false)
   const [phoneEdit, setPhoneEdit] = useState('')
+  const [emailEdit, setEmailEdit] = useState('')
   const [savingPhone, setSavingPhone] = useState(false)
   const [phoneError, setPhoneError] = useState('')
+  const [sheetTab, setSheetTab] = useState<'details' | 'reminders' | 'activity' | 'preferences'>('details')
   const [approvalBusy, setApprovalBusy] = useState<'approve' | 'reject' | null>(null)
   const [approvalError, setApprovalError] = useState('')
   const [customerResponse, setCustomerResponse] = useState<ArCustomerResponseSummary | null>(null)
@@ -102,6 +105,7 @@ export function AppointmentDetailDrawer({
         ?.recipientNotificationChannel
       if (ch === 'sms' || ch === 'email' || ch === 'both') setRecipientChannel(ch)
       setPhoneEdit(row.phone || '')
+      setEmailEdit(row.contactEmail || String((apptJson?.data?.metadata as { inviteeEmail?: string })?.inviteeEmail || ''))
     } finally {
       setLoading(false)
     }
@@ -111,7 +115,7 @@ export function AppointmentDetailDrawer({
     if (open && row) void loadDetail()
   }, [open, row, loadDetail])
 
-  async function savePhone() {
+  async function saveContactPrefs() {
     if (!row) return
     setSavingPhone(true)
     setPhoneError('')
@@ -119,7 +123,11 @@ export function AppointmentDetailDrawer({
       const res = await fetch(`/api/appointment-reminders/appointments/${row.id}/reminder-contact`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: phoneEdit }),
+        body: JSON.stringify({
+          phone: phoneEdit,
+          email: emailEdit,
+          recipientNotificationChannel: recipientChannel,
+        }),
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error || 'Could not save phone')
@@ -200,7 +208,7 @@ export function AppointmentDetailDrawer({
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md md:max-w-[480px]">
+      <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md md:max-w-[600px] lg:max-w-[720px]">
         {row ? (
           <>
             <SheetHeader className="border-b px-5 py-4 text-left">
@@ -228,6 +236,32 @@ export function AppointmentDetailDrawer({
               ) : null}
             </SheetHeader>
 
+            <div className="border-b px-5">
+              <div className="flex gap-1 overflow-x-auto py-2" role="tablist" aria-label="Appointment sections">
+                {(
+                  [
+                    ['details', 'Details'],
+                    ['reminders', 'Reminders'],
+                    ['activity', 'Activity'],
+                    ['preferences', 'Preferences'],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="tab"
+                    aria-selected={sheetTab === id}
+                    onClick={() => setSheetTab(id)}
+                    className={`shrink-0 rounded-md px-3 py-1.5 text-sm font-medium ${
+                      sheetTab === id ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="flex-1 overflow-y-auto px-5 py-5">
               {loading ? (
                 <p className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -236,6 +270,8 @@ export function AppointmentDetailDrawer({
                 </p>
               ) : (
                 <div className="space-y-6">
+                  {sheetTab === 'details' ? (
+                  <>
                   {customerResponse && customerResponse.kind !== 'none' ? (
                     <section className="rounded-lg border bg-muted/20 px-4 py-3">
                       <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -369,6 +405,10 @@ export function AppointmentDetailDrawer({
                     </section>
                   ) : null}
 
+                  </>
+                  ) : null}
+
+                  {sheetTab === 'preferences' ? (
                   <section>
                     <h2 className="mb-3 text-sm font-semibold">Reminder contact</h2>
                     <dl className="mb-3 space-y-2">
@@ -382,11 +422,15 @@ export function AppointmentDetailDrawer({
                               : 'Missing phone'
                         }
                       />
+                      <KeyValueRow
+                        label="Email"
+                        value={emailEdit || row.contactEmail || 'Missing email'}
+                      />
                       <KeyValueRow label="Consent" value={consentLabel} />
                     </dl>
                     <div className="space-y-2">
                       <label className="text-xs font-medium text-muted-foreground" htmlFor="ar-phone">
-                        Reminder phone (saved in Transovo only)
+                        Reminder phone
                       </label>
                       <Input
                         id="ar-phone"
@@ -395,16 +439,38 @@ export function AppointmentDetailDrawer({
                         placeholder="+1 703 555 0142"
                         autoComplete="tel"
                       />
+                      <label className="text-xs font-medium text-muted-foreground" htmlFor="ar-email">
+                        Reminder email
+                      </label>
+                      <Input
+                        id="ar-email"
+                        type="email"
+                        value={emailEdit}
+                        onChange={(e) => setEmailEdit(e.target.value)}
+                        placeholder="customer@example.com"
+                        autoComplete="email"
+                      />
                       {phoneError ? (
                         <p className="text-xs text-destructive" role="alert">{phoneError}</p>
                       ) : null}
-                      <Button size="sm" onClick={savePhone} disabled={savingPhone}>
-                        {savingPhone ? 'Saving…' : 'Save phone number'}
+                      <SimpleSelect
+                        label="Notification preference"
+                        value={recipientChannel}
+                        onChange={(v) => setRecipientChannel(v as 'sms' | 'email' | 'both')}
+                        options={[
+                          { value: 'both', label: 'SMS and email (per step)' },
+                          { value: 'sms', label: 'SMS only' },
+                          { value: 'email', label: 'Email only' },
+                        ]}
+                      />
+                      <Button size="sm" onClick={() => void saveContactPrefs()} disabled={savingPhone}>
+                        {savingPhone ? 'Saving…' : 'Save preferences'}
                       </Button>
                     </div>
                   </section>
+                  ) : null}
 
-                  {actionHistory.length > 0 ? (
+                  {sheetTab === 'activity' && actionHistory.length > 0 ? (
                     <section>
                       <h2 className="mb-3 text-sm font-semibold">Customer action history</h2>
                       <ol className="space-y-4 border-l border-border pl-4">
@@ -437,7 +503,7 @@ export function AppointmentDetailDrawer({
                     </section>
                   ) : null}
 
-                  {dispatches.length > 0 ? (
+                  {sheetTab === 'activity' && dispatches.length > 0 ? (
                     <section>
                       <h2 className="mb-3 text-sm font-semibold">Delivery ledger</h2>
                       <ul className="space-y-2 text-sm">
@@ -456,6 +522,7 @@ export function AppointmentDetailDrawer({
                     </section>
                   ) : null}
 
+                  {sheetTab === 'reminders' ? (
                   <section>
                     <h2 className="mb-3 text-sm font-semibold">Reminders &amp; customer actions</h2>
                     {reminderEngagement.length > 0 ? (
@@ -520,6 +587,7 @@ export function AppointmentDetailDrawer({
                       </ol>
                     )}
                   </section>
+                  ) : null}
                 </div>
               )}
             </div>

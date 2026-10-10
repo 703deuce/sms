@@ -37,6 +37,10 @@ import { Button } from '@/newui-transplant/components/ui/button'
 type OverviewCounts = {
   todayTotal: number
   reminderFailed: number
+  upcoming?: number
+  awaitingConfirmation?: number
+  confirmed?: number
+  needsAttention?: number
 }
 
 type WorkspaceStats = {
@@ -148,13 +152,16 @@ export function AppointmentRemindersOverviewPage() {
   return (
     <Page className="max-w-[1440px]">
       <PageHeader
-        title="Overview"
+        title="Appointment Reminders"
         meta={<Pill tone={activeTone}>{activeLabel}</Pill>}
-        description="Calendar-synced SMS reminders for upcoming appointments — delivery health and connection status at a glance."
+        description="Overview of upcoming appointments, reminders, and customer responses."
         actions={
           <div className="flex flex-wrap gap-2">
+            <Link href={AR_ROUTES.appointments} className={cn(buttonVariants({ variant: 'default' }), 'h-9')}>
+              Add appointment
+            </Link>
             <Link href={AR_ROUTES.settings} className={cn(buttonVariants({ variant: 'outline' }), 'h-9')}>
-              Reminder settings
+              View settings
             </Link>
             <Button variant="outline" className="h-9" onClick={() => load()} disabled={loading}>
               Refresh
@@ -173,29 +180,28 @@ export function AppointmentRemindersOverviewPage() {
 
       <ArStatGrid className="mb-6">
         <Stat
-          label="Appointments today"
-          value={loading ? '—' : String(counts?.todayTotal ?? 0)}
+          label="Upcoming appointments"
+          value={loading ? '—' : String(counts?.upcoming ?? stats?.scheduledCount ?? 0)}
           icon={CalendarClock}
-          href={AR_ROUTES.appointments}
+          href={`${AR_ROUTES.appointments}?engagement=upcoming`}
         />
         <Stat
-          label="Reminders sent today"
-          value={loading ? '—' : String(stats?.sentToday ?? 0)}
+          label="Awaiting confirmation"
+          value={loading ? '—' : String(counts?.awaitingConfirmation ?? 0)}
+          icon={UserCheck}
+          href={`${AR_ROUTES.appointments}?engagement=awaiting_confirmation`}
+        />
+        <Stat
+          label="Confirmed"
+          value={loading ? '—' : String(counts?.confirmed ?? 0)}
           icon={Send}
-          href={AR_ROUTES.reminders}
+          href={`${AR_ROUTES.appointments}?engagement=confirmed`}
         />
         <Stat
-          label="Scheduled reminders"
-          value={loading ? '—' : String(stats?.scheduledCount ?? 0)}
-          hint="Upcoming automated texts"
-          icon={Bell}
-          href={`${AR_ROUTES.reminders}?status=scheduled`}
-        />
-        <Stat
-          label="Failed (7 days)"
-          value={loading ? '—' : String(stats?.failed7d ?? 0)}
-          icon={MessagesSquare}
-          href={`${AR_ROUTES.reminders}?status=failed`}
+          label="Needs attention"
+          value={loading ? '—' : String(counts?.needsAttention ?? 0)}
+          icon={AlertTriangle}
+          href={`${AR_ROUTES.appointments}?engagement=needs_attention`}
         />
       </ArStatGrid>
 

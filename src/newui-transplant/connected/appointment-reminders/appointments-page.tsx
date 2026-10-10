@@ -54,6 +54,17 @@ const DATE_OPTIONS = [
   { value: 'all', label: 'All' },
 ]
 
+const ENGAGEMENT_TABS = [
+  { value: 'all', label: 'All' },
+  { value: 'upcoming', label: 'Upcoming' },
+  { value: 'awaiting_confirmation', label: 'Awaiting confirmation' },
+  { value: 'confirmed', label: 'Confirmed' },
+  { value: 'reschedule_requested', label: 'Reschedule requested' },
+  { value: 'cancellation_requested', label: 'Cancellation requested' },
+  { value: 'needs_attention', label: 'Needs attention' },
+  { value: 'completed', label: 'Completed' },
+] as const
+
 const STATUS_OPTIONS = [
   { value: 'all', label: 'All statuses' },
   { value: 'scheduled', label: 'Scheduled' },
@@ -70,6 +81,9 @@ function buildQueryString(params: Record<string, string | number>) {
   if (params.date && params.date !== 'upcoming') sp.set('date', String(params.date))
   if (params.reminderStatus && params.reminderStatus !== 'all') {
     sp.set('reminderStatus', String(params.reminderStatus))
+  }
+  if (params.engagement && params.engagement !== 'all') {
+    sp.set('engagement', String(params.engagement))
   }
   if (params.calendarId && params.calendarId !== 'all') {
     sp.set('calendarId', String(params.calendarId))
@@ -107,6 +121,7 @@ export function AppointmentRemindersAppointmentsPage() {
 
   const date = searchParams.get('date') || 'upcoming'
   const reminderStatus = searchParams.get('reminderStatus') || 'all'
+  const engagement = searchParams.get('engagement') || 'all'
   const calendarId = searchParams.get('calendarId') || 'all'
   const page = Number(searchParams.get('page') || '1')
   const pageSize = Number(searchParams.get('pageSize') || '25')
@@ -117,17 +132,25 @@ export function AppointmentRemindersAppointmentsPage() {
         q: patch.q ?? qInput,
         date: patch.date ?? date,
         reminderStatus: patch.reminderStatus ?? reminderStatus,
+        engagement: patch.engagement ?? engagement,
         calendarId: patch.calendarId ?? calendarId,
         page: patch.page ?? page,
         pageSize: patch.pageSize ?? pageSize,
       }
-      if (patch.page === undefined && (patch.q !== undefined || patch.date || patch.reminderStatus || patch.calendarId)) {
+      if (
+        patch.page === undefined &&
+        (patch.q !== undefined ||
+          patch.date ||
+          patch.reminderStatus ||
+          patch.engagement ||
+          patch.calendarId)
+      ) {
         next.page = 1
       }
       const qs = buildQueryString(next)
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
     },
-    [calendarId, date, page, pageSize, pathname, qInput, reminderStatus, router],
+    [calendarId, date, engagement, page, pageSize, pathname, qInput, reminderStatus, router],
   )
 
   useEffect(() => {
@@ -155,6 +178,7 @@ export function AppointmentRemindersAppointmentsPage() {
       const params = new URLSearchParams({
         date,
         reminderStatus,
+        engagement,
         calendarId,
         page: String(page),
         pageSize: String(pageSize),
@@ -172,7 +196,7 @@ export function AppointmentRemindersAppointmentsPage() {
     } finally {
       setLoading(false)
     }
-  }, [calendarId, date, page, pageSize, qInput, reminderStatus])
+  }, [calendarId, date, engagement, page, pageSize, qInput, reminderStatus])
 
   useEffect(() => {
     void load()
@@ -329,6 +353,24 @@ export function AppointmentRemindersAppointmentsPage() {
           icon={AlertTriangle}
         />
       </ArStatGrid>
+
+      <nav className="mb-4 flex gap-1 overflow-x-auto border-b" aria-label="Appointment filters">
+        {ENGAGEMENT_TABS.map((tab) => (
+          <button
+            key={tab.value}
+            type="button"
+            onClick={() => replaceParams({ engagement: tab.value, page: 1 })}
+            className={cn(
+              'shrink-0 border-b-2 px-3 py-2 text-sm font-medium transition-colors',
+              engagement === tab.value
+                ? 'border-primary text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </nav>
 
       <OpusDataSurface
         toolbar={
