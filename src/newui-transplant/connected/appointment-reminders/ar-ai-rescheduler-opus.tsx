@@ -1,9 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
 import { Bell, Check, Loader2, Sparkles, UserRoundCog } from 'lucide-react'
-import { arSettingsTab } from '@/lib/appointment-reminders/routes'
 import type {
   AiReschedulerConfig,
   AiReschedulerMode,
