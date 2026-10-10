@@ -4,6 +4,7 @@ import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
 import { isAiReschedulerSmsEnabled, resolveAiReschedulerConfig } from "../ai-rescheduler/types";
 import { runArV3RescheduleSmsTurn } from "../ai-rescheduler/v3-workflow/run-turn";
 import { verifyArReplySessionForInboundTurn } from "./verify-reply-session";
+import { markArReplySessionLifecycle } from "./reply-session";
 
 /**
  * Platform AR SMS follow-up — every turn bound to ArSmsReplySession (no contact heuristics).
@@ -30,6 +31,17 @@ export async function tryHandleArReminderFollowUp(input: {
     appointmentId: input.appointmentId,
   });
   if (!verified.ok) return { handled: false };
+
+  if (
+    verified.session.lifecycleState === "AWAITING_REPLY" ||
+    verified.session.lifecycleState === "COMPLETED"
+  ) {
+    await markArReplySessionLifecycle({
+      sessionId: input.replySessionId,
+      workspaceId: input.workspaceId,
+      lifecycleState: "RESCHEDULING",
+    });
+  }
 
   const v3 = await runArV3RescheduleSmsTurn({
     workspaceId: input.workspaceId,

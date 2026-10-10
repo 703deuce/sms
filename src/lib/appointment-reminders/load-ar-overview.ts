@@ -10,6 +10,9 @@ import {
 import { loadAppointmentRemindersActivation } from "@/lib/appointment-reminders/activation";
 import { loadRecentArCustomerResponses } from "@/lib/appointment-reminders/load-recent-customer-responses";
 import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
+import { loadArNeedsAttentionRows } from "@/lib/appointment-reminders/load-ar-needs-attention";
+import { evaluateAppointmentRemindersSetupReadiness } from "@/lib/appointment-reminders/activation";
+import { AR_ROUTES } from "@/lib/appointment-reminders/routes";
 
 export async function loadAppointmentRemindersOverview(workspaceId: string) {
   const prisma = getPrisma();
@@ -21,12 +24,42 @@ export async function loadAppointmentRemindersOverview(workspaceId: string) {
   const activation = await loadAppointmentRemindersActivation(workspaceId);
   const platform = await loadAppointmentPlatformConfig(workspaceId);
 
-  const [todayPage, upcomingPage, remindersPage, customerResponses] = await Promise.all([
+  const [
+    todayPage,
+    upcomingPage,
+    upcomingSample,
+    remindersPage,
+    customerResponses,
+    needsAttentionRows,
+    setupReadiness,
+  ] = await Promise.all([
     loadAppointmentRemindersPage(workspaceId, { date: "today", page: 1, pageSize: 500 }),
     loadAppointmentRemindersPage(workspaceId, { date: "upcoming", page: 1, pageSize: 1 }),
+    loadAppointmentRemindersPage(workspaceId, { date: "upcoming", page: 1, pageSize: 250 }),
     loadAppointmentRemindersOperationalPage(workspaceId, { page: 1, pageSize: 8 }),
     loadRecentArCustomerResponses(workspaceId, 5),
+    loadArNeedsAttentionRows(workspaceId, 20),
+    evaluateAppointmentRemindersSetupReadiness(workspaceId),
   ]);
+
+  let awaitingConfirmation = 0;
+  let confirmedAppointments = 0;
+  let needsAttentionCount = 0;
+  for (const row of upcomingSample.rows) {
+    const kind = row.customerResponse.kind;
+    const status = String(row.status || "").toLowerCase();
+    if (kind === "awaiting_reply" || status === "awaiting_confirmation") awaitingConfirmation += 1;
+    if (kind === "confirmed" || status === "confirmed") confirmedAppointments += 1;
+    if (
+      row.reminder.status === "needs_attention" ||
+      row.reminder.status === "failed" ||
+      row.phoneState !== "ok" ||
+      kind === "cancel_pending" ||
+      kind === "reschedule_pending"
+    ) {
+      needsAttentionCount += 1;
+    }
+  }
 
   const calendars = connections.map((c) => {
     const config = (c.config || {}) as { email?: string; importCalendarIds?: string[] };
@@ -48,17 +81,9 @@ export async function loadAppointmentRemindersOverview(workspaceId: string) {
   const hasUsableConnection = connections.some((c) => isCalendarConnectionLinked(c.status));
   const syncHealthy = Boolean(todayPage.sync.connected) && !todayPage.sync.syncError;
 
-  let smsSenderReady = false;
-  try {
-    const { getMerchantPaymentStatus } = await import("@/lib/merchant-payments/service");
-    const merchantStatus = await getMerchantPaymentStatus(workspaceId);
-    smsSenderReady = Boolean(
-      merchantStatus &&
-        (merchantStatus as { sms?: { ready?: boolean } }).sms?.ready !== false,
-    );
-  } catch {
-    smsSenderReady = false;
-  }
+  const smsSenderReady = setupReadiness.smsSenderReady;
+  const emailSenderReady = setupReadiness.emailSenderReady;
+  const remindersActivated = setupReadiness.activated;
 
   const operationalStatus =
     activation.activatedAt && calendarHealthy && hasImportCalendars && syncHealthy && smsSenderReady
@@ -75,6 +100,10 @@ export async function loadAppointmentRemindersOverview(workspaceId: string) {
     counts: {
       todayTotal: todayPage.total,
       reminderFailed: remindersPage.summary.failed7d,
+      upcoming: upcomingPage.total,
+      awaitingConfirmation,
+      confirmed: confirmedAppointments,
+      needsAttention: needsAttentionCount,
     },
     stats: {
       scheduledCount: upcomingPage.summary.scheduled,
@@ -87,12 +116,72 @@ export async function loadAppointmentRemindersOverview(workspaceId: string) {
       hasImportCalendars,
       syncHealthy,
       smsSenderReady,
+      emailSenderReady,
+      remindersActivated,
       operationalStatus,
     },
+    productStatus: [
+      {
+        id: "calendar",
+        label: "Microsoft calendar",
+        status: setupReadiness.calendarConnected && setupReadiness.hasImportCalendars ? "ready" : "needs_setup",
+        detail:
+          setupReadiness.calendarConnected && setupReadiness.hasImportCalendars
+            ? "Connected"
+            : "Connect and select import calendars",
+        href: AR_ROUTES.calendars,
+      },
+      {
+        id: "sms",
+        label: "SMS readiness",
+        status: smsSenderReady ? "ready" : "needs_setup",
+        detail: smsSenderReady ? "Sender ready" : "Complete SMS sender setup",
+        href: `${AR_ROUTES.settings}?tab=notifications`,
+      },
+      {
+        id: "email",
+        label: "Email readiness",
+        status: emailSenderReady ? "ready" : "needs_setup",
+        detail: emailSenderReady
+          ? "Ready to send"
+          : setupReadiness.emailSenderDetail || "Configure email delivery",
+        href: `${AR_ROUTES.settings}?tab=notifications`,
+      },
+      {
+        id: "activation",
+        label: "Reminder activation",
+        status: remindersActivated ? "ready" : "needs_setup",
+        detail: remindersActivated ? "Active" : "Finish setup and activate",
+        href: AR_ROUTES.setupActivate,
+      },
+      {
+        id: "sync",
+        label: "Last calendar sync",
+        status: syncHealthy && setupReadiness.lastSyncAt ? "ready" : "needs_setup",
+        detail: setupReadiness.lastSyncAt
+          ? new Date(setupReadiness.lastSyncAt).toLocaleString()
+          : "Not synced yet",
+        href: AR_ROUTES.appointments,
+      },
+    ],
     sync: todayPage.sync,
-    activity: remindersPage.rows.slice(0, 6).map((r) => ({
+    needsAttentionRows,
+    upcomingAppointments: upcomingSample.rows.slice(0, 8).map((row) => ({
+      appointmentId: row.id,
+      customerName: row.customerName,
+      appointmentTitle: row.appointmentTitle,
+      startsAt: row.startsAt,
+      nextReminder: row.reminder.label,
+      responseStatus: row.customerResponse.label,
+      responseKind: row.customerResponse.kind,
+    })),
+    activity: remindersPage.rows.slice(0, 8).map((r) => ({
       id: r.id,
+      appointmentId: r.appointmentId,
       at: r.occurredAt || r.scheduledFor || new Date().toISOString(),
+      recipient: r.customerLabel,
+      channel: r.channel,
+      message: r.reminderLabel,
       customerLabel: r.customerLabel,
       reminderLabel: r.reminderLabel,
       status: r.statusLabel,

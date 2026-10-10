@@ -1,12 +1,11 @@
 import "server-only";
 
 import type { ArSmsReplySession } from "@/lib/domain";
-import { resolveArWorkspaceIdFromConsumerPlatformSender } from "./ar-consumer-platform-sender-assignment";
 import {
   findPersistentArConversationId,
   groupArSessionsByWorkspace,
   listArInboundRoutableSessions,
-  resolveArInboundPrimarySession,
+  pickPrimaryArReplySessionForInbound,
   syncArReplySessionsToConversation,
 } from "./persistent-conversation";
 import { logArSmsPipeline } from "./pipeline-log";
@@ -14,7 +13,6 @@ import { logArSmsPipeline } from "./pipeline-log";
 export type ResolveInitiatedArInboundResult =
   | { status: "matched"; session: ArSmsReplySession; conversationId: string | null }
   | { status: "ambiguous_workspace"; workspaceIds: string[]; sessions: ArSmsReplySession[] }
-  | { status: "ambiguous_appointment"; appointmentIds: string[]; sessions: ArSmsReplySession[] }
   | { status: "none" };
 
 /**
@@ -25,21 +23,7 @@ export async function resolveArInboundFromOutboundInitiatedConversation(input: {
   consumerE164: string;
   platformPhoneNumberId: string;
 }): Promise<ResolveInitiatedArInboundResult> {
-  let sessions = await listArInboundRoutableSessions(input);
-  const assignmentWorkspaceId = await resolveArWorkspaceIdFromConsumerPlatformSender({
-    consumerE164: input.consumerE164,
-    platformPhoneNumberId: input.platformPhoneNumberId,
-  });
-  if (assignmentWorkspaceId) {
-    sessions = sessions.filter((s) => s.workspaceId === assignmentWorkspaceId);
-    logArSmsPipeline({
-      step: "route_assignment_workspace",
-      workspaceId: assignmentWorkspaceId,
-      platformPhoneNumberId: input.platformPhoneNumberId,
-      sessionCount: sessions.length,
-    });
-  }
-
+  const sessions = await listArInboundRoutableSessions(input);
   logArSmsPipeline({
     step: "route_sessions_listed",
     platformPhoneNumberId: input.platformPhoneNumberId,
@@ -47,7 +31,6 @@ export async function resolveArInboundFromOutboundInitiatedConversation(input: {
     meta: {
       appointmentIds: sessions.map((s) => s.appointmentId),
       lifecycleStates: sessions.map((s) => s.lifecycleState),
-      assignmentWorkspaceId,
     },
   });
   if (!sessions.length) {
@@ -71,25 +54,10 @@ export async function resolveArInboundFromOutboundInitiatedConversation(input: {
 
   const workspaceSessions = sessions;
   const workspaceId = workspaceSessions[0]!.workspaceId;
-  const primaryRes = resolveArInboundPrimarySession(workspaceSessions);
-  if (primaryRes.status === "none") {
+  const primary = pickPrimaryArReplySessionForInbound(workspaceSessions);
+  if (!primary) {
     return { status: "none" };
   }
-  if (primaryRes.status === "ambiguous_appointment") {
-    logArSmsPipeline({
-      step: "route_ambiguous_appointment",
-      workspaceId,
-      platformPhoneNumberId: input.platformPhoneNumberId,
-      sessionCount: workspaceSessions.length,
-      meta: { appointmentIds: primaryRes.appointmentIds },
-    });
-    return {
-      status: "ambiguous_appointment",
-      appointmentIds: primaryRes.appointmentIds,
-      sessions: workspaceSessions,
-    };
-  }
-  const primary = primaryRes.session;
 
   let conversationId = primary.conversationId;
   if (!conversationId) {

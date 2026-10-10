@@ -21,10 +21,38 @@ export type ArAppointmentsQuery = {
   q?: string;
   date?: string;
   reminderStatus?: string;
+  engagement?: string;
   calendarId?: string;
   page?: number;
   pageSize?: number;
 };
+
+function matchesEngagementFilter(row: ArAppointmentRow, engagement: string | undefined): boolean {
+  if (!engagement || engagement === "all") return true;
+  const kind = row.customerResponse.kind;
+  const status = String(row.status || "").toLowerCase();
+  const reminderNeedsAttention = row.reminder.status === "needs_attention" || row.reminder.status === "failed";
+  const contactMissing = row.phoneState === "missing" || row.phoneState === "invalid";
+
+  switch (engagement) {
+    case "upcoming":
+      return new Date(row.startsAt).getTime() >= Date.now() && status !== "completed" && status !== "cancelled" && status !== "canceled";
+    case "awaiting_confirmation":
+      return kind === "awaiting_reply" || status === "awaiting_confirmation";
+    case "confirmed":
+      return kind === "confirmed" || status === "confirmed";
+    case "reschedule_requested":
+      return kind === "reschedule_pending" || kind === "reschedule_requested" || status === "reschedule_requested";
+    case "cancellation_requested":
+      return kind === "cancel_pending";
+    case "needs_attention":
+      return reminderNeedsAttention || contactMissing || kind === "cancel_pending" || kind === "reschedule_pending";
+    case "completed":
+      return status === "completed" || new Date(row.startsAt).getTime() < Date.now();
+    default:
+      return true;
+  }
+}
 
 export type { ArAppointmentRow, ArAppointmentsPagePayload } from "@/lib/appointment-reminders/appointments-page-types";
 import type { ArAppointmentRow, ArAppointmentsPagePayload } from "@/lib/appointment-reminders/appointments-page-types";
@@ -166,6 +194,7 @@ export async function loadAppointmentRemindersPage(
 
   const needsInMemoryFilter =
     Boolean(query.reminderStatus && query.reminderStatus !== "all") ||
+    Boolean(query.engagement && query.engagement !== "all") ||
     Boolean(query.calendarId && query.calendarId !== "all") ||
     Boolean(query.q?.trim());
 
@@ -272,6 +301,10 @@ export async function loadAppointmentRemindersPage(
 
   if (query.reminderStatus && query.reminderStatus !== "all") {
     mapped = mapped.filter((r) => matchesReminderStatusFilter(r.reminder, query.reminderStatus!));
+  }
+
+  if (query.engagement && query.engagement !== "all") {
+    mapped = mapped.filter((r) => matchesEngagementFilter(r, query.engagement));
   }
 
   const upcomingRows = mapped.filter((r) => isUpcomingActive(r, now));

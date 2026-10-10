@@ -30,6 +30,8 @@ import {
   TextLink,
   type Tone,
 } from '@/newui-transplant/components/app/kit'
+import { OPUS_TABLE_HEAD } from '@/newui-transplant/components/app/opus-surfaces'
+import { th, td } from '@/newui-transplant/components/app/opus-tables'
 import { buttonVariants } from '@/newui-transplant/components/ui/button'
 import { cn } from '@/lib/utils'
 import { Button } from '@/newui-transplant/components/ui/button'
@@ -37,6 +39,10 @@ import { Button } from '@/newui-transplant/components/ui/button'
 type OverviewCounts = {
   todayTotal: number
   reminderFailed: number
+  upcoming?: number
+  awaitingConfirmation?: number
+  confirmed?: number
+  needsAttention?: number
 }
 
 type WorkspaceStats = {
@@ -59,7 +65,37 @@ type OverviewReadiness = {
   hasImportCalendars?: boolean
   syncHealthy?: boolean
   smsSenderReady?: boolean
+  emailSenderReady?: boolean
+  remindersActivated?: boolean
   operationalStatus?: 'active' | 'needs_attention' | 'setup_incomplete'
+}
+
+type ProductStatusItem = {
+  id: string
+  label: string
+  status: 'ready' | 'needs_setup'
+  detail: string
+  href: string
+}
+
+type NeedsAttentionRow = {
+  appointmentId: string
+  customerName: string
+  appointmentTitle: string
+  startsAt: string
+  issue: string
+  lastActivityAt: string | null
+  lastActivityLabel: string
+}
+
+type UpcomingRow = {
+  appointmentId: string
+  customerName: string
+  appointmentTitle: string
+  startsAt: string
+  nextReminder: string
+  responseStatus: string
+  responseKind: string
 }
 
 function calendarStatusTone(status: string): Tone {
@@ -98,6 +134,9 @@ export function AppointmentRemindersOverviewPage() {
   const [error, setError] = useState(false)
   const [loading, setLoading] = useState(true)
   const [readiness, setReadiness] = useState<OverviewReadiness | null>(null)
+  const [productStatus, setProductStatus] = useState<ProductStatusItem[]>([])
+  const [needsAttentionRows, setNeedsAttentionRows] = useState<NeedsAttentionRow[]>([])
+  const [upcomingAppointments, setUpcomingAppointments] = useState<UpcomingRow[]>([])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -113,6 +152,9 @@ export function AppointmentRemindersOverviewPage() {
       setCustomerResponses(data?.customerResponses ?? [])
       setCalendars(data?.calendars ?? [])
       setReadiness(data?.readiness ?? null)
+      setProductStatus(data?.productStatus ?? [])
+      setNeedsAttentionRows(data?.needsAttentionRows ?? [])
+      setUpcomingAppointments(data?.upcomingAppointments ?? [])
     } catch {
       setError(true)
     } finally {
@@ -148,13 +190,16 @@ export function AppointmentRemindersOverviewPage() {
   return (
     <Page className="max-w-[1440px]">
       <PageHeader
-        title="Overview"
+        title="Appointment Reminders"
         meta={<Pill tone={activeTone}>{activeLabel}</Pill>}
-        description="Calendar-synced SMS reminders for upcoming appointments — delivery health and connection status at a glance."
+        description="Overview of upcoming appointments, reminders, and customer responses."
         actions={
           <div className="flex flex-wrap gap-2">
+            <Link href={AR_ROUTES.appointments} className={cn(buttonVariants({ variant: 'default' }), 'h-9')}>
+              Add appointment
+            </Link>
             <Link href={AR_ROUTES.settings} className={cn(buttonVariants({ variant: 'outline' }), 'h-9')}>
-              Reminder settings
+              Settings
             </Link>
             <Button variant="outline" className="h-9" onClick={() => load()} disabled={loading}>
               Refresh
@@ -173,31 +218,157 @@ export function AppointmentRemindersOverviewPage() {
 
       <ArStatGrid className="mb-6">
         <Stat
-          label="Appointments today"
-          value={loading ? '—' : String(counts?.todayTotal ?? 0)}
+          label="Upcoming appointments"
+          value={loading ? '—' : String(counts?.upcoming ?? stats?.scheduledCount ?? 0)}
           icon={CalendarClock}
-          href={AR_ROUTES.appointments}
+          href={`${AR_ROUTES.appointments}?engagement=upcoming`}
         />
         <Stat
-          label="Reminders sent today"
-          value={loading ? '—' : String(stats?.sentToday ?? 0)}
+          label="Awaiting confirmation"
+          value={loading ? '—' : String(counts?.awaitingConfirmation ?? 0)}
+          icon={UserCheck}
+          href={`${AR_ROUTES.appointments}?engagement=awaiting_confirmation`}
+        />
+        <Stat
+          label="Confirmed"
+          value={loading ? '—' : String(counts?.confirmed ?? 0)}
           icon={Send}
-          href={AR_ROUTES.reminders}
+          href={`${AR_ROUTES.appointments}?engagement=confirmed`}
         />
         <Stat
-          label="Scheduled reminders"
-          value={loading ? '—' : String(stats?.scheduledCount ?? 0)}
-          hint="Upcoming automated texts"
-          icon={Bell}
-          href={`${AR_ROUTES.reminders}?status=scheduled`}
-        />
-        <Stat
-          label="Failed (7 days)"
-          value={loading ? '—' : String(stats?.failed7d ?? 0)}
-          icon={MessagesSquare}
-          href={`${AR_ROUTES.reminders}?status=failed`}
+          label="Needs attention"
+          value={loading ? '—' : String(counts?.needsAttention ?? 0)}
+          icon={AlertTriangle}
+          href={`${AR_ROUTES.appointments}?engagement=needs_attention`}
         />
       </ArStatGrid>
+
+      {productStatus.length > 0 ? (
+        <div className="mb-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          {productStatus.map((item) => (
+            <Link
+              key={item.id}
+              href={item.href}
+              className="rounded-lg border bg-card px-3 py-2.5 transition-colors hover:bg-muted/40"
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{item.label}</p>
+              <p className="mt-1 flex items-center gap-2 text-sm font-medium">
+                <Pill tone={item.status === 'ready' ? 'success' : 'warning'} dot={false}>
+                  {item.status === 'ready' ? 'Ready' : 'Action needed'}
+                </Pill>
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{item.detail}</p>
+            </Link>
+          ))}
+        </div>
+      ) : null}
+
+      <Panel
+        title="Needs attention"
+        description="Missing details, delivery issues, and open customer requests."
+        action={<TextLink href={`${AR_ROUTES.appointments}?engagement=needs_attention`}>View all</TextLink>}
+        bodyClassName="p-0"
+        className="mb-6"
+      >
+        {loading ? (
+          <p className="p-5 text-sm text-muted-foreground">Loading…</p>
+        ) : needsAttentionRows.length === 0 ? (
+          <EmptyState
+            icon={UserCheck}
+            title="Nothing needs attention"
+            description="Upcoming appointments have recipient details and no open requests."
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left text-sm">
+              <thead className={OPUS_TABLE_HEAD}>
+                <tr>
+                  <th scope="col" className={th}>Customer</th>
+                  <th scope="col" className={th}>Appointment</th>
+                  <th scope="col" className={th}>Issue</th>
+                  <th scope="col" className={th}>Last activity</th>
+                  <th scope="col" className={th}><span className="sr-only">Action</span></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {needsAttentionRows.map((row) => (
+                  <tr key={row.appointmentId} className="hover:bg-muted/30">
+                    <td className={`${td} font-medium`}>{row.customerName}</td>
+                    <td className={td}>
+                      <span className="block truncate">{row.appointmentTitle}</span>
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {new Date(row.startsAt).toLocaleString()}
+                      </span>
+                    </td>
+                    <td className={td}>{row.issue}</td>
+                    <td className={`${td} text-muted-foreground`}>
+                      {row.lastActivityAt
+                        ? new Date(row.lastActivityAt).toLocaleString()
+                        : row.lastActivityLabel || '—'}
+                    </td>
+                    <td className={td}>
+                      <Link
+                        href={`${AR_ROUTES.appointments}?highlight=${encodeURIComponent(row.appointmentId)}`}
+                        className="text-xs font-medium text-primary hover:underline"
+                      >
+                        Open
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+
+      <Panel
+        title="Upcoming appointments"
+        description="Next scheduled visits and reminder status."
+        action={<TextLink href={AR_ROUTES.appointments}>View all</TextLink>}
+        bodyClassName="p-0"
+        className="mb-6"
+      >
+        {loading ? (
+          <p className="p-5 text-sm text-muted-foreground">Loading…</p>
+        ) : upcomingAppointments.length === 0 ? (
+          <EmptyState icon={CalendarClock} title="No upcoming appointments" description="Connect a calendar or add appointments manually." />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[800px] text-left text-sm">
+              <thead className={OPUS_TABLE_HEAD}>
+                <tr>
+                  <th scope="col" className={th}>Customer</th>
+                  <th scope="col" className={th}>Service</th>
+                  <th scope="col" className={th}>Date / time</th>
+                  <th scope="col" className={th}>Next reminder</th>
+                  <th scope="col" className={th}>Response</th>
+                  <th scope="col" className={th}><span className="sr-only">Action</span></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {upcomingAppointments.map((row) => (
+                  <tr key={row.appointmentId} className="hover:bg-muted/30">
+                    <td className={`${td} font-medium`}>{row.customerName}</td>
+                    <td className={td}>{row.appointmentTitle}</td>
+                    <td className={`${td} tabular-nums`}>{new Date(row.startsAt).toLocaleString()}</td>
+                    <td className={td}>{row.nextReminder}</td>
+                    <td className={td}>{row.responseStatus}</td>
+                    <td className={td}>
+                      <Link
+                        href={`${AR_ROUTES.appointments}?highlight=${encodeURIComponent(row.appointmentId)}`}
+                        className="text-xs font-medium text-primary hover:underline"
+                      >
+                        Open
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
 
       {!calendarHealthy && !loading ? (
         <div className="mb-6">
@@ -300,28 +471,34 @@ export function AppointmentRemindersOverviewPage() {
                 }
               />
             ) : (
-              <ul className="divide-y">
-                {activity.map((row) => (
-                  <li key={row.id}>
-                    <Link
-                      href={AR_ROUTES.reminders}
-                      className="flex items-start gap-3 px-5 py-3.5 transition-colors hover:bg-muted/40"
-                    >
-                      <Initials name={row.customerLabel} className="size-8" />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <span className="truncate text-sm font-medium">{row.customerLabel}</span>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[640px] text-left text-sm">
+                  <thead className={OPUS_TABLE_HEAD}>
+                    <tr>
+                      <th scope="col" className={th}>Recipient</th>
+                      <th scope="col" className={th}>Channel</th>
+                      <th scope="col" className={th}>Message</th>
+                      <th scope="col" className={th}>Status</th>
+                      <th scope="col" className={th}>Time</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {activity.map((row) => (
+                      <tr key={row.id} className="hover:bg-muted/30">
+                        <td className={`${td} font-medium`}>{row.customerLabel}</td>
+                        <td className={td}>{(row as { channel?: string }).channel || '—'}</td>
+                        <td className={`${td} max-w-[200px] truncate text-muted-foreground`}>{row.reminderLabel}</td>
+                        <td className={td}>
                           <Pill tone={activityStatusTone(row.status)}>{row.status}</Pill>
-                        </div>
-                        <p className="truncate text-xs text-muted-foreground">{row.reminderLabel}</p>
-                        <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
+                        </td>
+                        <td className={`${td} tabular-nums text-muted-foreground`}>
                           {new Date(row.at).toLocaleString()}
-                        </p>
-                      </div>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </Panel>
         </div>

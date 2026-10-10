@@ -7,6 +7,11 @@ import {
 } from "@/lib/appointments/types";
 import { resolveAppointmentOutboundSmsRoute } from "@/lib/appointments/sms-sender";
 import { listReminderStepIds, resolveReminderStep } from "@/lib/appointments/reminders/reminders-config";
+import { getLibraryTemplateByParts } from "@/lib/appointment-reminders/template-library/catalog";
+import {
+  STEP_TO_MESSAGE_TYPE,
+  type TemplateMessageType,
+} from "@/lib/appointment-reminders/template-library/types";
 
 /** Merge tags allowed for platform-sender Appointment Reminders (calendar-import product). */
 export const PLATFORM_AR_ALLOWED_MERGE_TAGS = [
@@ -16,8 +21,12 @@ export const PLATFORM_AR_ALLOWED_MERGE_TAGS = [
   "{{appointment_date}}",
   "{{appointment_time}}",
   "{{business_name}}",
+  "{{location}}",
+  "{{business_phone}}",
   "{{meeting_link}}",
   "{{join_meeting_line}}",
+  "{{appointment_link}}",
+  "{{directions_link}}",
 ];
 
 export async function usesPlatformAppointmentSmsSender(workspaceId: string): Promise<boolean> {
@@ -42,10 +51,27 @@ function stripDisallowedMergeTags(template: string): string {
   });
 }
 
+function librarySmsBody(step: ReminderStepConfig, stepKey: string): string | null {
+  const industry = step.libraryIndustry;
+  const messageType = (step.libraryMessageType ||
+    STEP_TO_MESSAGE_TYPE[stepKey]) as TemplateMessageType | undefined;
+  if (!industry || !messageType) return null;
+  const entry = getLibraryTemplateByParts(industry, messageType, "sms");
+  return entry?.body?.trim() || null;
+}
+
 function lockStepTemplate(step: ReminderStepConfig, stepKey: string): ReminderStepConfig {
+  const isSms = step.channel === "sms";
+  const approvedSms = isSms ? librarySmsBody(step, stepKey) : null;
+  const base =
+    approvedSms ||
+    (step.template?.trim() ? step.template : defaultTemplateForKey(stepKey));
   return {
     ...step,
-    template: stripDisallowedMergeTags(defaultTemplateForKey(stepKey)),
+    template: isSms ? stripDisallowedMergeTags(base) : step.template,
+    emailSubject: step.emailSubject
+      ? stripDisallowedMergeTags(step.emailSubject)
+      : step.emailSubject,
   };
 }
 
@@ -89,7 +115,19 @@ export async function applyAppointmentRemindersPlatformTemplatePolicy(
   patch: Partial<AppointmentPlatformConfig>,
 ): Promise<Partial<AppointmentPlatformConfig>> {
   const platformSender = await usesPlatformAppointmentSmsSender(workspaceId);
-  if (!platformSender || !patch.reminders) return patch;
+  if (!platformSender) return patch;
+
+  if (patch.reminderPreferences?.customMergeFields) {
+    patch = {
+      ...patch,
+      reminderPreferences: {
+        ...patch.reminderPreferences,
+        customMergeFields: {},
+      },
+    };
+  }
+
+  if (!patch.reminders) return patch;
 
   const { loadAppointmentPlatformConfig } = await import("@/lib/appointments/settings");
   const current = await loadAppointmentPlatformConfig(workspaceId);

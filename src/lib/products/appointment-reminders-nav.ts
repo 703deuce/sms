@@ -3,6 +3,7 @@ import {
   Calendar,
   CalendarCog,
   CalendarDays,
+  BarChart3,
   LayoutDashboard,
   Settings2,
   Sparkles,
@@ -52,19 +53,26 @@ export function buildAppointmentRemindersNav(): NavItem[] {
       icon: Bell,
     },
     {
+      label: "Analytics",
+      href: AR_ROUTES.analytics,
+      icon: BarChart3,
+    },
+    {
+      label: "Settings",
+      href: AR_ROUTES.settings,
+      icon: Settings2,
+    },
+    {
       label: "Held SMS replies",
       href: AR_ROUTES.heldInbound,
       icon: MessageSquareWarning,
+      sectionLabel: "More",
     },
     {
       label: "Calendar connections",
       href: AR_ROUTES.calendars,
       icon: CalendarCog,
-    },
-    {
-      label: "Reminder Settings",
-      href: AR_ROUTES.settings,
-      icon: Settings2,
+      sectionLabel: "More",
     },
     {
       label: "AI Rescheduler",
@@ -110,8 +118,9 @@ export function getAppointmentRemindersPageTitle(pathname: string): string {
   }
   if (pathname.startsWith(AR_ROUTES.heldInbound)) return "Held SMS replies";
   if (pathname.startsWith(AR_ROUTES.reminders)) return "Reminders";
+  if (pathname.startsWith(AR_ROUTES.analytics)) return "Analytics";
   if (pathname.startsWith(AR_ROUTES.calendars)) return "Calendar connections";
-  if (pathname.startsWith(AR_ROUTES.settings)) return "Reminder Settings";
+  if (pathname.startsWith(AR_ROUTES.settings)) return "Settings";
   if (pathname.startsWith(AR_ROUTES.aiRescheduler)) return "AI Rescheduler";
   if (pathname.startsWith(AR_ROUTES.bookingServices)) return "Meetings";
   if (pathname.startsWith(AR_ROUTES.bookingMeetings)) return "Meetings";
