@@ -26,8 +26,58 @@ export type ReminderStepConfig = {
   stopOnReply?: boolean;
   template: string;
   label: string;
+  /** Email subject when channel is email (supports merge tags). */
+  emailSubject?: string;
+  /** When true, skip this step if the appointment is already confirmed. */
+  skipIfAppointmentConfirmed?: boolean;
+  /** Template locale tag (must match stored content; no auto-translate). */
+  locale?: string;
+  /** Include ICS attachment on email sends for this step (default true for email). */
+  attachIcs?: boolean;
+  /** Source industry in the Transovo template library (when applied from pack). */
+  libraryIndustry?: string;
+  /** Source message type in the Transovo template library. */
+  libraryMessageType?: string;
   /** Voice reminder template when channel is voice */
   voiceReminderTemplateId?: string;
+};
+
+export type ReminderEmailBranding = {
+  logoUrl?: string;
+  brandColor?: string;
+  footerText?: string;
+  directionsUrl?: string;
+  contactPhone?: string;
+};
+
+export type ReminderServiceRule = {
+  id: string;
+  /** Case-insensitive substring match on appointment service name. */
+  serviceNameContains: string;
+  /** Disable specific reminder step keys for matching appointments. */
+  disabledStepKeys?: string[];
+  /** Force channel for timed reminders on matching appointments (optional). */
+  channelOverride?: ReminderChannel;
+};
+
+export type ReminderPreferences = {
+  skipConfirmationStepsWhenConfirmed?: boolean;
+  preparationInstructions?: string;
+  cancellationPolicyText?: string;
+  templateLocale?: string;
+  /** Selected industry pack from the template library. */
+  templateIndustry?: string;
+  communicationTone?: "formal" | "casual" | "warm" | "friendly";
+  /** Workspace default when recipient has no explicit preference. */
+  defaultNotificationChannel?: "sms" | "email" | "both";
+  /** Do not schedule reminders when appointment starts sooner than this (minutes). */
+  minimumLeadTimeMinutes?: number;
+  /** Extra merge fields available in templates (key → default when appointment has no value). */
+  customMergeFields?: Record<string, string>;
+  /** Per-service reminder overrides. */
+  serviceReminderRules?: ReminderServiceRule[];
+  /** Skip immediate booking confirmation on calendar backfill / bulk import. */
+  skipConfirmationOnHistoricalImport?: boolean;
 };
 
 export type DateOverride = {
@@ -308,6 +358,16 @@ export type AppointmentPlatformConfig = {
     /** Optional extra timed steps — same runtime as core reminders. */
     additionalSteps?: Array<ReminderStepConfig & { id: string }>;
   };
+  reminderEmailBranding?: ReminderEmailBranding;
+  reminderPreferences?: ReminderPreferences;
+  /** Workspace quiet hours for reminder send-time shifting (IANA timezone on config.timezone). */
+  reminderQuietHours?: {
+    enabled?: boolean;
+    /** Local time HH:mm — no sends before this time when skipOffHours is on. */
+    start?: string;
+    /** Local time HH:mm — no sends after this time when skipOffHours is on. */
+    end?: string;
+  };
   /** Automated outbound voice reminder templates and settings */
   voiceReminders?: VoiceRemindersPlatformConfig;
   /** Appointment Reminders — AI Rescheduler (SMS C/R/X + optional AI calendar mutation). */
@@ -516,6 +576,11 @@ export const DEFAULT_PLATFORM_CONFIG: AppointmentPlatformConfig = {
       label: "2-hour reminder",
       template: DEFAULT_REMINDER_TEMPLATES.reminder2h,
     },
+  },
+  reminderPreferences: {
+    skipConfirmationStepsWhenConfirmed: true,
+    templateLocale: "en",
+    defaultNotificationChannel: "both",
   },
   aiRescheduler: {
     mode: "notify",

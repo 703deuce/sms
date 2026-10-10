@@ -16,8 +16,12 @@ export const PLATFORM_AR_ALLOWED_MERGE_TAGS = [
   "{{appointment_date}}",
   "{{appointment_time}}",
   "{{business_name}}",
+  "{{location}}",
+  "{{business_phone}}",
   "{{meeting_link}}",
   "{{join_meeting_line}}",
+  "{{appointment_link}}",
+  "{{directions_link}}",
 ];
 
 export async function usesPlatformAppointmentSmsSender(workspaceId: string): Promise<boolean> {
@@ -43,9 +47,13 @@ function stripDisallowedMergeTags(template: string): string {
 }
 
 function lockStepTemplate(step: ReminderStepConfig, stepKey: string): ReminderStepConfig {
+  const base = step.template?.trim() ? step.template : defaultTemplateForKey(stepKey);
   return {
     ...step,
-    template: stripDisallowedMergeTags(defaultTemplateForKey(stepKey)),
+    template: stripDisallowedMergeTags(base),
+    emailSubject: step.emailSubject
+      ? stripDisallowedMergeTags(step.emailSubject)
+      : step.emailSubject,
   };
 }
 

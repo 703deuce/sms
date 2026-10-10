@@ -43,6 +43,7 @@ export {
   previewReminderMessage,
   scanPlatformAppointmentReminders,
   sendTestReminderSms,
+  sendTestReminderEmail,
 } from "./reminder-delivery";
 export {
   buildFutureReminderSchedule,

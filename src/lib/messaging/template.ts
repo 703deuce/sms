@@ -7,7 +7,11 @@ export function mergeTemplate(
   template: string,
   vars: Record<string, string | null | undefined>,
 ): string {
-  return template.replace(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g, (_m, key: string) => {
+  const withDouble = template.replace(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g, (_m, key: string) => {
+    const value = vars[key];
+    return value == null ? "" : String(value);
+  });
+  return withDouble.replace(/\{([a-z_]+)\}/g, (_m, key: string) => {
     const value = vars[key];
     return value == null ? "" : String(value);
   });

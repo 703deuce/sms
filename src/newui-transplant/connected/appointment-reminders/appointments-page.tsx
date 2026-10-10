@@ -29,6 +29,14 @@ import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
 import { OPUS_META_STRIP, OPUS_TABLE_HEAD } from '@/newui-transplant/components/app/opus-surfaces'
 import { th, td } from '@/newui-transplant/components/app/opus-tables'
 import { Button } from '@/newui-transplant/components/ui/button'
+import { Input } from '@/newui-transplant/components/ui/input'
+import { Textarea } from '@/newui-transplant/components/ui/textarea'
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/newui-transplant/components/ui/sheet'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,6 +54,17 @@ const DATE_OPTIONS = [
   { value: 'all', label: 'All' },
 ]
 
+const ENGAGEMENT_TABS = [
+  { value: 'all', label: 'All' },
+  { value: 'upcoming', label: 'Upcoming' },
+  { value: 'awaiting_confirmation', label: 'Awaiting confirmation' },
+  { value: 'confirmed', label: 'Confirmed' },
+  { value: 'reschedule_requested', label: 'Reschedule requested' },
+  { value: 'cancellation_requested', label: 'Cancellation requested' },
+  { value: 'needs_attention', label: 'Needs attention' },
+  { value: 'completed', label: 'Completed' },
+] as const
+
 const STATUS_OPTIONS = [
   { value: 'all', label: 'All statuses' },
   { value: 'scheduled', label: 'Scheduled' },
@@ -62,6 +81,9 @@ function buildQueryString(params: Record<string, string | number>) {
   if (params.date && params.date !== 'upcoming') sp.set('date', String(params.date))
   if (params.reminderStatus && params.reminderStatus !== 'all') {
     sp.set('reminderStatus', String(params.reminderStatus))
+  }
+  if (params.engagement && params.engagement !== 'all') {
+    sp.set('engagement', String(params.engagement))
   }
   if (params.calendarId && params.calendarId !== 'all') {
     sp.set('calendarId', String(params.calendarId))
@@ -85,10 +107,21 @@ export function AppointmentRemindersAppointmentsPage() {
   const [syncError, setSyncError] = useState<string | null>(null)
   const [selected, setSelected] = useState<ArAppointmentRow | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+  const [importCsv, setImportCsv] = useState('')
+  const [importBusy, setImportBusy] = useState(false)
+  const [importResult, setImportResult] = useState<string | null>(null)
+  const [manualOpen, setManualOpen] = useState(false)
+  const [manualName, setManualName] = useState('')
+  const [manualEmail, setManualEmail] = useState('')
+  const [manualPhone, setManualPhone] = useState('')
+  const [manualService, setManualService] = useState('Appointment')
+  const [manualStartsAt, setManualStartsAt] = useState('')
   const highlightId = searchParams.get('highlight')
 
   const date = searchParams.get('date') || 'upcoming'
   const reminderStatus = searchParams.get('reminderStatus') || 'all'
+  const engagement = searchParams.get('engagement') || 'all'
   const calendarId = searchParams.get('calendarId') || 'all'
   const page = Number(searchParams.get('page') || '1')
   const pageSize = Number(searchParams.get('pageSize') || '25')
@@ -99,17 +132,25 @@ export function AppointmentRemindersAppointmentsPage() {
         q: patch.q ?? qInput,
         date: patch.date ?? date,
         reminderStatus: patch.reminderStatus ?? reminderStatus,
+        engagement: patch.engagement ?? engagement,
         calendarId: patch.calendarId ?? calendarId,
         page: patch.page ?? page,
         pageSize: patch.pageSize ?? pageSize,
       }
-      if (patch.page === undefined && (patch.q !== undefined || patch.date || patch.reminderStatus || patch.calendarId)) {
+      if (
+        patch.page === undefined &&
+        (patch.q !== undefined ||
+          patch.date ||
+          patch.reminderStatus ||
+          patch.engagement ||
+          patch.calendarId)
+      ) {
         next.page = 1
       }
       const qs = buildQueryString(next)
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
     },
-    [calendarId, date, page, pageSize, pathname, qInput, reminderStatus, router],
+    [calendarId, date, engagement, page, pageSize, pathname, qInput, reminderStatus, router],
   )
 
   useEffect(() => {
@@ -137,6 +178,7 @@ export function AppointmentRemindersAppointmentsPage() {
       const params = new URLSearchParams({
         date,
         reminderStatus,
+        engagement,
         calendarId,
         page: String(page),
         pageSize: String(pageSize),
@@ -154,7 +196,7 @@ export function AppointmentRemindersAppointmentsPage() {
     } finally {
       setLoading(false)
     }
-  }, [calendarId, date, page, pageSize, qInput, reminderStatus])
+  }, [calendarId, date, engagement, page, pageSize, qInput, reminderStatus])
 
   useEffect(() => {
     void load()
@@ -267,16 +309,24 @@ export function AppointmentRemindersAppointmentsPage() {
         actions={
           <div className="flex flex-col items-end gap-2">
             <span className={cn(OPUS_META_STRIP, 'text-xs text-muted-foreground')}>{syncLabel}</span>
-            {data?.sync.connected ? (
-              <Button variant="outline" className="h-9" disabled={syncing} onClick={syncNow}>
-                <RefreshCw className={cn('mr-1.5 size-3.5', syncing && 'animate-spin')} aria-hidden="true" />
-                Sync now
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button variant="outline" className="h-9" type="button" onClick={() => setManualOpen(true)}>
+                Add appointment
               </Button>
-            ) : (
-              <Button variant="outline" className="h-9" render={<Link href={AR_ROUTES.calendars} />}>
-                Connect calendar
+              <Button variant="outline" className="h-9" type="button" onClick={() => setImportOpen(true)}>
+                Import CSV
               </Button>
-            )}
+              {data?.sync.connected ? (
+                <Button variant="outline" className="h-9" disabled={syncing} onClick={syncNow}>
+                  <RefreshCw className={cn('mr-1.5 size-3.5', syncing && 'animate-spin')} aria-hidden="true" />
+                  Sync now
+                </Button>
+              ) : (
+                <Button variant="outline" className="h-9" render={<Link href={AR_ROUTES.calendars} />}>
+                  Connect calendar
+                </Button>
+              )}
+            </div>
             {syncError ? (
               <p className="text-xs text-destructive" role="alert">{syncError}</p>
             ) : null}
@@ -303,6 +353,24 @@ export function AppointmentRemindersAppointmentsPage() {
           icon={AlertTriangle}
         />
       </ArStatGrid>
+
+      <nav className="mb-4 flex gap-1 overflow-x-auto border-b" aria-label="Appointment filters">
+        {ENGAGEMENT_TABS.map((tab) => (
+          <button
+            key={tab.value}
+            type="button"
+            onClick={() => replaceParams({ engagement: tab.value, page: 1 })}
+            className={cn(
+              'shrink-0 border-b-2 px-3 py-2 text-sm font-medium transition-colors',
+              engagement === tab.value
+                ? 'border-primary text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </nav>
 
       <OpusDataSurface
         toolbar={
@@ -490,6 +558,134 @@ export function AppointmentRemindersAppointmentsPage() {
         timezone={data?.timezone || 'America/New_York'}
         onPhoneSaved={load}
       />
+
+      <Sheet open={importOpen} onOpenChange={setImportOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-lg">
+          <SheetHeader>
+            <SheetTitle>Import appointments (CSV)</SheetTitle>
+          </SheetHeader>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Columns: name, date, time, email, phone, service, timezone. Header row required.
+          </p>
+          <Textarea
+            className="mt-4 min-h-[200px] font-mono text-xs"
+            value={importCsv}
+            onChange={(e) => setImportCsv(e.target.value)}
+            placeholder="name,date,time,email,phone,service&#10;Jane Doe,2026-10-15,14:30,jane@example.com,+15551234567,Consultation"
+          />
+          {importResult ? <p className="mt-2 text-sm" role="status">{importResult}</p> : null}
+          <div className="mt-4 flex gap-2">
+            <Button
+              variant="secondary"
+              disabled={importBusy || !importCsv.trim()}
+              onClick={async () => {
+                setImportBusy(true)
+                setImportResult(null)
+                try {
+                  const res = await fetch('/api/appointment-reminders/appointments/import', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ csv: importCsv, preview: true }),
+                  })
+                  const json = await res.json()
+                  if (!res.ok) throw new Error(json.error || 'Preview failed')
+                  setImportResult(`${json.data.valid} valid · ${json.data.invalid} with errors`)
+                } catch (e) {
+                  setImportResult(e instanceof Error ? e.message : 'Preview failed')
+                } finally {
+                  setImportBusy(false)
+                }
+              }}
+            >
+              Preview
+            </Button>
+            <Button
+              disabled={importBusy || !importCsv.trim()}
+              onClick={async () => {
+                setImportBusy(true)
+                setImportResult(null)
+                try {
+                  const res = await fetch('/api/appointment-reminders/appointments/import', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ csv: importCsv }),
+                  })
+                  const json = await res.json()
+                  if (!res.ok) throw new Error(json.error || 'Import failed')
+                  setImportResult(`Created ${json.data.created}, skipped ${json.data.skipped}`)
+                  void load()
+                } catch (e) {
+                  setImportResult(e instanceof Error ? e.message : 'Import failed')
+                } finally {
+                  setImportBusy(false)
+                }
+              }}
+            >
+              {importBusy ? 'Importing…' : 'Import'}
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={manualOpen} onOpenChange={setManualOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-md">
+          <SheetHeader>
+            <SheetTitle>Add appointment</SheetTitle>
+          </SheetHeader>
+          <div className="mt-4 space-y-3">
+            <label className="block text-sm">
+              <span className="mb-1 block font-medium">Customer name</span>
+              <Input value={manualName} onChange={(e) => setManualName(e.target.value)} className="h-10" />
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1 block font-medium">Start (local)</span>
+              <Input
+                type="datetime-local"
+                value={manualStartsAt}
+                onChange={(e) => setManualStartsAt(e.target.value)}
+                className="h-10"
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1 block font-medium">Email</span>
+              <Input value={manualEmail} onChange={(e) => setManualEmail(e.target.value)} className="h-10" />
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1 block font-medium">Phone</span>
+              <Input value={manualPhone} onChange={(e) => setManualPhone(e.target.value)} className="h-10" />
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1 block font-medium">Service</span>
+              <Input value={manualService} onChange={(e) => setManualService(e.target.value)} className="h-10" />
+            </label>
+            <Button
+              className="h-10 w-full"
+              disabled={!manualName.trim() || !manualStartsAt || (!manualEmail.trim() && !manualPhone.trim())}
+              onClick={async () => {
+                const res = await fetch('/api/appointment-reminders/appointments', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    inviteeName: manualName.trim(),
+                    inviteeEmail: manualEmail.trim() || undefined,
+                    inviteePhone: manualPhone.trim() || undefined,
+                    serviceName: manualService.trim(),
+                    startsAt: new Date(manualStartsAt).toISOString(),
+                  }),
+                })
+                if (!res.ok) return
+                setManualOpen(false)
+                setManualName('')
+                setManualEmail('')
+                setManualPhone('')
+                void load()
+              }}
+            >
+              Save appointment
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
     </Page>
   )
 }

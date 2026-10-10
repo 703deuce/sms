@@ -21,12 +21,33 @@ export async function loadAppointmentRemindersOverview(workspaceId: string) {
   const activation = await loadAppointmentRemindersActivation(workspaceId);
   const platform = await loadAppointmentPlatformConfig(workspaceId);
 
-  const [todayPage, upcomingPage, remindersPage, customerResponses] = await Promise.all([
+  const [todayPage, upcomingPage, upcomingSample, remindersPage, customerResponses] =
+    await Promise.all([
     loadAppointmentRemindersPage(workspaceId, { date: "today", page: 1, pageSize: 500 }),
     loadAppointmentRemindersPage(workspaceId, { date: "upcoming", page: 1, pageSize: 1 }),
+    loadAppointmentRemindersPage(workspaceId, { date: "upcoming", page: 1, pageSize: 250 }),
     loadAppointmentRemindersOperationalPage(workspaceId, { page: 1, pageSize: 8 }),
     loadRecentArCustomerResponses(workspaceId, 5),
   ]);
+
+  let awaitingConfirmation = 0;
+  let confirmedAppointments = 0;
+  let needsAttentionCount = 0;
+  for (const row of upcomingSample.rows) {
+    const kind = row.customerResponse.kind;
+    const status = String(row.status || "").toLowerCase();
+    if (kind === "awaiting_reply" || status === "awaiting_confirmation") awaitingConfirmation += 1;
+    if (kind === "confirmed" || status === "confirmed") confirmedAppointments += 1;
+    if (
+      row.reminder.status === "needs_attention" ||
+      row.reminder.status === "failed" ||
+      row.phoneState !== "ok" ||
+      kind === "cancel_pending" ||
+      kind === "reschedule_pending"
+    ) {
+      needsAttentionCount += 1;
+    }
+  }
 
   const calendars = connections.map((c) => {
     const config = (c.config || {}) as { email?: string; importCalendarIds?: string[] };
@@ -75,6 +96,10 @@ export async function loadAppointmentRemindersOverview(workspaceId: string) {
     counts: {
       todayTotal: todayPage.total,
       reminderFailed: remindersPage.summary.failed7d,
+      upcoming: upcomingPage.total,
+      awaitingConfirmation,
+      confirmed: confirmedAppointments,
+      needsAttention: needsAttentionCount,
     },
     stats: {
       scheduledCount: upcomingPage.summary.scheduled,
