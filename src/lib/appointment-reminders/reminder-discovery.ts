@@ -147,7 +147,11 @@ export async function discoverAndEnqueueDueAppointmentReminders(): Promise<{
         }
 
         if (now < fireMs - FIRE_TOLERANCE_MS || now > fireMs + FIRE_TOLERANCE_MS) continue;
-        if (shouldSkipStepNow(scheduled.step, fireAt, weeklyHours, row.timezone || config.timezone)) {
+        const bypassQuietHours = process.env.AR_REMINDER_DISCOVERY_BYPASS_QUIET_HOURS === "1";
+        if (
+          !bypassQuietHours &&
+          shouldSkipStepNow(scheduled.step, fireAt, weeklyHours, row.timezone || config.timezone)
+        ) {
           continue;
         }
 
