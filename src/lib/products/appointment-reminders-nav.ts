@@ -3,6 +3,7 @@ import {
   Calendar,
   CalendarCog,
   CalendarDays,
+  BarChart3,
   LayoutDashboard,
   Settings2,
   Sparkles,
@@ -50,6 +51,11 @@ export function buildAppointmentRemindersNav(): NavItem[] {
       label: "Reminders",
       href: AR_ROUTES.reminders,
       icon: Bell,
+    },
+    {
+      label: "Analytics",
+      href: AR_ROUTES.analytics,
+      icon: BarChart3,
     },
     {
       label: "Held SMS replies",
@@ -110,6 +116,7 @@ export function getAppointmentRemindersPageTitle(pathname: string): string {
   }
   if (pathname.startsWith(AR_ROUTES.heldInbound)) return "Held SMS replies";
   if (pathname.startsWith(AR_ROUTES.reminders)) return "Reminders";
+  if (pathname.startsWith(AR_ROUTES.analytics)) return "Analytics";
   if (pathname.startsWith(AR_ROUTES.calendars)) return "Calendar connections";
   if (pathname.startsWith(AR_ROUTES.settings)) return "Reminder Settings";
   if (pathname.startsWith(AR_ROUTES.aiRescheduler)) return "AI Rescheduler";

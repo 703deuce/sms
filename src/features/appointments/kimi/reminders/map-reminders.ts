@@ -1,6 +1,11 @@
 import { createId } from "@/lib/supabase/id";
 import { DEFAULT_REMINDER_TEMPLATES } from "@/lib/appointments/types";
-import type { ReminderChannel, ReminderStepConfig } from "@/lib/appointments/types";
+import type {
+  ReminderChannel,
+  ReminderEmailBranding,
+  ReminderPreferences,
+  ReminderStepConfig,
+} from "@/lib/appointments/types";
 import { estimateSmsSegments } from "@/lib/utils";
 import {
   formatMinutesBeforeLabel,
@@ -16,7 +21,11 @@ export const REMINDER_MERGE_TAGS = [
   "{{appointment_date}}",
   "{{appointment_time}}",
   "{{business_name}}",
+  "{{location}}",
+  "{{business_phone}}",
   "{{manage_link}}",
+  "{{appointment_link}}",
+  "{{directions_link}}",
   "{{reschedule_link}}",
   "{{cancel_link}}",
   "{{confirm_link}}",
@@ -32,6 +41,8 @@ export type RemindersApiConfig = {
     reminder2h: ReminderStepConfig;
     additionalSteps?: Array<ReminderStepConfig & { id: string }>;
   };
+  reminderEmailBranding?: ReminderEmailBranding;
+  reminderPreferences?: ReminderPreferences;
 };
 
 export type ReminderPreviewMap = Partial<Record<string, string>>;
@@ -68,6 +79,7 @@ function mapReminderItem(
         ? "Sent when a customer books online."
         : `Scheduled ${timingLabel.toLowerCase()}.`,
     channel: step.channel || "sms",
+    emailSubject: step.emailSubject,
     template: step.template,
     preview,
     characters,
@@ -155,6 +167,25 @@ export function patchReminderTemplate(
   return updateStep(config, stepKey, (step) => ({ ...step, template }));
 }
 
+export function patchReminderLibraryTemplate(
+  config: RemindersApiConfig,
+  stepKey: ReminderStepId,
+  input: {
+    industry: string;
+    messageType: string;
+    template: string;
+    emailSubject?: string;
+  },
+): RemindersApiConfig {
+  return updateStep(config, stepKey, (step) => ({
+    ...step,
+    template: input.template,
+    emailSubject: input.emailSubject ?? step.emailSubject,
+    libraryIndustry: input.industry,
+    libraryMessageType: input.messageType,
+  }));
+}
+
 export function patchReminderEnabled(
   config: RemindersApiConfig,
   stepKey: ReminderStepId,
@@ -169,6 +200,34 @@ export function patchReminderChannel(
   channel: ReminderChannel,
 ): RemindersApiConfig {
   return updateStep(config, stepKey, (step) => ({ ...step, channel }));
+}
+
+export function patchReminderEmailSubject(
+  config: RemindersApiConfig,
+  stepKey: ReminderStepId,
+  emailSubject: string,
+): RemindersApiConfig {
+  return updateStep(config, stepKey, (step) => ({ ...step, emailSubject }));
+}
+
+export function patchReminderPreferences(
+  config: RemindersApiConfig,
+  patch: Partial<ReminderPreferences>,
+): RemindersApiConfig {
+  return {
+    ...config,
+    reminderPreferences: { ...config.reminderPreferences, ...patch },
+  };
+}
+
+export function patchReminderEmailBranding(
+  config: RemindersApiConfig,
+  patch: Partial<ReminderEmailBranding>,
+): RemindersApiConfig {
+  return {
+    ...config,
+    reminderEmailBranding: { ...config.reminderEmailBranding, ...patch },
+  };
 }
 
 export function patchReminderMinutesBefore(
@@ -190,12 +249,16 @@ export function patchReminderAdvanced(
     skipWeekends: boolean;
     skipOffHours: boolean;
     stopOnReply: boolean;
+    skipIfAppointmentConfirmed: boolean;
     label: string;
   }>,
 ): RemindersApiConfig {
   return updateStep(config, stepKey, (step) => {
     const next = { ...step };
     if (patch.label !== undefined) next.label = patch.label;
+    if (patch.skipIfAppointmentConfirmed !== undefined) {
+      next.skipIfAppointmentConfirmed = patch.skipIfAppointmentConfirmed;
+    }
     if (patch.timeOfDayAt !== undefined) {
       next.timeOfDay = {
         at: patch.timeOfDayAt,

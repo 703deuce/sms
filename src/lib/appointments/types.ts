@@ -26,8 +26,40 @@ export type ReminderStepConfig = {
   stopOnReply?: boolean;
   template: string;
   label: string;
+  /** Email subject when channel is email (supports merge tags). */
+  emailSubject?: string;
+  /** When true, skip this step if the appointment is already confirmed. */
+  skipIfAppointmentConfirmed?: boolean;
+  /** Template locale tag (must match stored content; no auto-translate). */
+  locale?: string;
+  /** Include ICS attachment on email sends for this step (default true for email). */
+  attachIcs?: boolean;
+  /** Source industry in the Transovo template library (when applied from pack). */
+  libraryIndustry?: string;
+  /** Source message type in the Transovo template library. */
+  libraryMessageType?: string;
   /** Voice reminder template when channel is voice */
   voiceReminderTemplateId?: string;
+};
+
+export type ReminderEmailBranding = {
+  logoUrl?: string;
+  brandColor?: string;
+  footerText?: string;
+  directionsUrl?: string;
+  contactPhone?: string;
+};
+
+export type ReminderPreferences = {
+  skipConfirmationStepsWhenConfirmed?: boolean;
+  preparationInstructions?: string;
+  cancellationPolicyText?: string;
+  templateLocale?: string;
+  /** Selected industry pack from the template library. */
+  templateIndustry?: string;
+  communicationTone?: "formal" | "casual" | "warm" | "friendly";
+  /** Workspace default when recipient has no explicit preference. */
+  defaultNotificationChannel?: "sms" | "email" | "both";
 };
 
 export type DateOverride = {
@@ -308,6 +340,8 @@ export type AppointmentPlatformConfig = {
     /** Optional extra timed steps — same runtime as core reminders. */
     additionalSteps?: Array<ReminderStepConfig & { id: string }>;
   };
+  reminderEmailBranding?: ReminderEmailBranding;
+  reminderPreferences?: ReminderPreferences;
   /** Automated outbound voice reminder templates and settings */
   voiceReminders?: VoiceRemindersPlatformConfig;
   /** Appointment Reminders — AI Rescheduler (SMS C/R/X + optional AI calendar mutation). */
@@ -516,6 +550,11 @@ export const DEFAULT_PLATFORM_CONFIG: AppointmentPlatformConfig = {
       label: "2-hour reminder",
       template: DEFAULT_REMINDER_TEMPLATES.reminder2h,
     },
+  },
+  reminderPreferences: {
+    skipConfirmationStepsWhenConfirmed: true,
+    templateLocale: "en",
+    defaultNotificationChannel: "both",
   },
   aiRescheduler: {
     mode: "notify",

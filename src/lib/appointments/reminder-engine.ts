@@ -134,16 +134,26 @@ export async function sendReminderEmailWithTracking(input: {
   serviceName: string;
   businessName: string;
   manageUrl?: string;
+  branding?: import("@/lib/appointments/types").ReminderEmailBranding;
+  preparationInstructions?: string;
+  cancellationPolicyText?: string;
+  actionLinks?: { confirm?: string; reschedule?: string; cancel?: string };
 }) {
   const trackingId = `rem_${input.appointmentId}_${Date.now()}`;
   const base = (process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
   const openPixel = `${base}/api/appointments/reminders/track/open?id=${trackingId}`;
   const clickBase = `${base}/api/appointments/reminders/track/click?id=${trackingId}&url=`;
 
-  const html = `
-    ${input.body.replace(/\n/g, "<br/>")}
-    <img src="${openPixel}" width="1" height="1" alt="" style="display:none" />
-  `;
+  const { wrapReminderEmailHtml } = await import("@/lib/appointment-reminders/reminder-email-html");
+  const bodyHtml = input.body.replace(/\n/g, "<br/>");
+  const html = `${wrapReminderEmailHtml({
+    bodyHtml,
+    businessName: input.businessName,
+    branding: input.branding,
+    preparationInstructions: input.preparationInstructions,
+    cancellationPolicyText: input.cancellationPolicyText,
+    actionLinks: input.actionLinks,
+  })}<img src="${openPixel}" width="1" height="1" alt="" style="display:none" />`;
 
   const { sendTransactionalEmail } = await import("@/lib/email/brevo");
   const attachments = input.attachIcs

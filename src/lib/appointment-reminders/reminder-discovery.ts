@@ -98,8 +98,23 @@ export async function discoverAndEnqueueDueAppointmentReminders(): Promise<{
       const weeklyHours = resolveWeeklyHours(config);
       const generation = currentReminderGeneration(meta);
 
+      const { shouldSkipReminderStepForConfirmation } = await import(
+        "@/lib/appointment-reminders/reminder-confirmation-guard"
+      );
+
       for (const scheduled of steps) {
         if (wasReminderSent(meta, scheduled.timelineType)) continue;
+        if (
+          shouldSkipReminderStepForConfirmation({
+            stepKey: scheduled.key,
+            step: scheduled.step,
+            appointmentStatus: row.status,
+            metadata: meta,
+            platform: config,
+          })
+        ) {
+          continue;
+        }
         const fireAt = resolveStepFireTime(scheduled.step, row.startsAt);
         const fireMs = fireAt.getTime();
 
