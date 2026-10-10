@@ -59,6 +59,10 @@ export function AppointmentDetailDrawer({
   const [reminderEngagement, setReminderEngagement] = useState<ArReminderEngagementStep[]>([])
   const [actionHistory, setActionHistory] = useState<ArCustomerActionHistoryItem[]>([])
   const [evidenceSummary, setEvidenceSummary] = useState<ArSmsEvidenceSummary | null>(null)
+  const [dispatches, setDispatches] = useState<
+    Array<{ timelineType: string; channel: string; status: string; scheduledFor: string | null }>
+  >([])
+  const [recipientChannel, setRecipientChannel] = useState<'sms' | 'email' | 'both'>('both')
 
   const loadDetail = useCallback(async () => {
     if (!row?.id) return
@@ -93,6 +97,10 @@ export function AppointmentDetailDrawer({
       setReminderEngagement((tlJson?.data?.reminderEngagement as ArReminderEngagementStep[]) || [])
       setActionHistory((tlJson?.data?.customerActionHistory as ArCustomerActionHistoryItem[]) || [])
       setEvidenceSummary((tlJson?.data?.evidenceSummary as ArSmsEvidenceSummary) || null)
+      setDispatches((tlJson?.data?.dispatches as typeof dispatches) || [])
+      const ch = (apptJson?.data?.metadata as { recipientNotificationChannel?: string })
+        ?.recipientNotificationChannel
+      if (ch === 'sms' || ch === 'email' || ch === 'both') setRecipientChannel(ch)
       setPhoneEdit(row.phone || '')
     } finally {
       setLoading(false)
@@ -426,6 +434,25 @@ export function AppointmentDetailDrawer({
                           </li>
                         ))}
                       </ol>
+                    </section>
+                  ) : null}
+
+                  {dispatches.length > 0 ? (
+                    <section>
+                      <h2 className="mb-3 text-sm font-semibold">Delivery ledger</h2>
+                      <ul className="space-y-2 text-sm">
+                        {dispatches.map((d) => (
+                          <li key={d.timelineType} className="rounded-md border px-3 py-2">
+                            <p className="font-medium">{d.timelineType}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {d.channel.toUpperCase()} · {d.status}
+                              {d.scheduledFor
+                                ? ` · intended ${new Date(d.scheduledFor).toLocaleString(undefined, { timeZone: tz })}`
+                                : ''}
+                            </p>
+                          </li>
+                        ))}
+                      </ul>
                     </section>
                   ) : null}
 

@@ -40,6 +40,7 @@ import {
 } from '@/newui-transplant/components/ui/sheet'
 import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
 import { ReminderTemplateEditor } from '@/newui-transplant/components/appointment-reminders/reminder-template-editor'
+import { ArSchedulingPreferencesPanel } from '@/newui-transplant/components/appointment-reminders/ar-scheduling-preferences-panel'
 import {
   INDUSTRY_LABELS,
   MESSAGE_TYPE_LABELS,
@@ -272,6 +273,7 @@ export function AppointmentRemindersSettingsOpus() {
         <TabsList className="h-10">
           <TabsTrigger value="sequence">Reminder sequence</TabsTrigger>
           <TabsTrigger value="preview">Customer preview</TabsTrigger>
+          <TabsTrigger value="scheduling">Scheduling & rules</TabsTrigger>
           <TabsTrigger value="presets">Presets & email</TabsTrigger>
           <TabsTrigger value="test">Send test</TabsTrigger>
         </TabsList>
@@ -329,6 +331,16 @@ export function AppointmentRemindersSettingsOpus() {
               )}
             </ul>
           </Panel>
+        </TabsContent>
+
+        <TabsContent value="scheduling" className="mt-5 space-y-4">
+          <ArSchedulingPreferencesPanel
+            config={config}
+            onChange={(next) => {
+              setConfig(next)
+              setSaved(false)
+            }}
+          />
         </TabsContent>
 
         <TabsContent value="presets" className="mt-5 space-y-4">
@@ -655,6 +667,7 @@ function StepEditSheet({
     libraryIndustries.find((i) => i.id === templateIndustry)?.messageTypes || []
   ).filter((mt) => mt.id !== 'follow_up')
 
+  const isConfirmation = step?.stepKey === 'confirmation'
   const smsLocked = Boolean(templateLocked && step?.channel === 'sms')
   const mergeTags =
     templateLocked && step?.channel === 'sms'
@@ -696,6 +709,45 @@ function StepEditSheet({
                   { value: 'voice', label: 'Voice' },
                 ]}
               />
+              {!isConfirmation ? (
+                <div className="space-y-2 rounded-lg border bg-muted/20 p-3 text-sm">
+                  <p className="font-medium">Send-time controls</p>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={step.skipWeekends === true}
+                      onChange={(e) => onAdvancedChange({ skipWeekends: e.target.checked })}
+                    />
+                    Skip weekends
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={step.skipOffHours === true}
+                      onChange={(e) => onAdvancedChange({ skipOffHours: e.target.checked })}
+                    />
+                    Skip outside business hours
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={step.skipClosedDays === true}
+                      onChange={(e) => onAdvancedChange({ skipClosedDays: e.target.checked })}
+                    />
+                    Skip closed days
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={step.skipIfAppointmentConfirmed === true}
+                      onChange={(e) =>
+                        onAdvancedChange({ skipIfAppointmentConfirmed: e.target.checked })
+                      }
+                    />
+                    Skip if appointment already confirmed
+                  </label>
+                </div>
+              ) : null}
               {templateLocked && step.channel === 'sms' ? (
                 <p className="text-xs text-amber-700 dark:text-amber-300 rounded-lg border border-amber-200/60 bg-amber-50/50 px-3 py-2 dark:bg-amber-950/20">
                   Platform sender — SMS uses approved library wording. You can switch industry pack and timing; link tags are stripped at send.

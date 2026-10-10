@@ -248,6 +248,7 @@ export function patchReminderAdvanced(
     timeOfDayDaysBefore: number;
     skipWeekends: boolean;
     skipOffHours: boolean;
+    skipClosedDays: boolean;
     stopOnReply: boolean;
     skipIfAppointmentConfirmed: boolean;
     label: string;
@@ -259,6 +260,7 @@ export function patchReminderAdvanced(
     if (patch.skipIfAppointmentConfirmed !== undefined) {
       next.skipIfAppointmentConfirmed = patch.skipIfAppointmentConfirmed;
     }
+    if (patch.skipClosedDays !== undefined) next.skipClosedDays = patch.skipClosedDays;
     if (patch.timeOfDayAt !== undefined) {
       next.timeOfDay = {
         at: patch.timeOfDayAt,

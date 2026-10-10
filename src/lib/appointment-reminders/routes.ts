@@ -15,6 +15,7 @@ export const AR_ROUTES = {
   bookingServices: "/appointment-reminders/booking/services",
   bookingMeetings: "/appointment-reminders/booking/meetings",
   setupConnect: "/appointment-reminders/setup/connect",
+  setupConfigure: "/appointment-reminders/setup/configure",
   setupActivate: "/appointment-reminders/setup/activate",
 } as const;
 

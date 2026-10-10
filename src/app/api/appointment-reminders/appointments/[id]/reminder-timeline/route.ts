@@ -7,6 +7,8 @@ import {
 } from "@/lib/appointments/reminder-engine";
 import { getAppointment, loadAppointmentPlatformConfig } from "@/lib/appointments";
 import { resolveWeeklyHours } from "@/lib/appointments/availability-engine-policy";
+import { listEnabledReminderSteps } from "@/lib/appointments/reminders/reminders-config";
+import { loadArDispatchHistoryForAppointment } from "@/lib/appointment-reminders/ar-dispatch-history";
 import type { AppointmentMetadata } from "@/lib/appointments/types";
 import { loadArReminderEngagementPayload } from "@/lib/appointment-reminders/ar-reminder-engagement.server";
 
@@ -23,17 +25,18 @@ export async function GET(_request: Request, { params }: Params) {
     const config = await loadAppointmentPlatformConfig(auth.workspaceId);
     const weeklyHours = resolveWeeklyHours(config);
     const meta = appt.metadata as AppointmentMetadata;
+    const enabledSteps = listEnabledReminderSteps(config).map((s) => ({
+      key: s.id,
+      step: s.step,
+    }));
     const future = buildFutureReminderSchedule({
       startsAt: appt.startsAt,
       timezone: appt.timezone || config.timezone,
-      steps: [
-        { key: "confirmation", step: config.reminders.confirmation },
-        { key: "reminder24h", step: config.reminders.reminder24h },
-        { key: "reminder2h", step: config.reminders.reminder2h },
-      ],
+      steps: enabledSteps,
       metadata: meta,
       weeklyHours,
     });
+    const dispatches = await loadArDispatchHistoryForAppointment(auth.workspaceId, id);
     const timeline = buildDedicatedReminderTimeline(meta);
     const engagement = await loadArReminderEngagementPayload({
       workspaceId: auth.workspaceId,
@@ -54,6 +57,9 @@ export async function GET(_request: Request, { params }: Params) {
         customerActionHistory: engagement.customerActionHistory,
         evidenceSummary: engagement.evidenceSummary,
         reminderEngagement: engagement.reminderEngagement,
+        dispatches,
+        appointmentStatus: appt.status,
+        confirmationSource: meta.confirmationSource ?? null,
       },
     });
   } catch (err) {

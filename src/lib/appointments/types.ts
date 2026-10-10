@@ -50,6 +50,16 @@ export type ReminderEmailBranding = {
   contactPhone?: string;
 };
 
+export type ReminderServiceRule = {
+  id: string;
+  /** Case-insensitive substring match on appointment service name. */
+  serviceNameContains: string;
+  /** Disable specific reminder step keys for matching appointments. */
+  disabledStepKeys?: string[];
+  /** Force channel for timed reminders on matching appointments (optional). */
+  channelOverride?: ReminderChannel;
+};
+
 export type ReminderPreferences = {
   skipConfirmationStepsWhenConfirmed?: boolean;
   preparationInstructions?: string;
@@ -60,6 +70,14 @@ export type ReminderPreferences = {
   communicationTone?: "formal" | "casual" | "warm" | "friendly";
   /** Workspace default when recipient has no explicit preference. */
   defaultNotificationChannel?: "sms" | "email" | "both";
+  /** Do not schedule reminders when appointment starts sooner than this (minutes). */
+  minimumLeadTimeMinutes?: number;
+  /** Extra merge fields available in templates (key → default when appointment has no value). */
+  customMergeFields?: Record<string, string>;
+  /** Per-service reminder overrides. */
+  serviceReminderRules?: ReminderServiceRule[];
+  /** Skip immediate booking confirmation on calendar backfill / bulk import. */
+  skipConfirmationOnHistoricalImport?: boolean;
 };
 
 export type DateOverride = {
@@ -342,6 +360,14 @@ export type AppointmentPlatformConfig = {
   };
   reminderEmailBranding?: ReminderEmailBranding;
   reminderPreferences?: ReminderPreferences;
+  /** Workspace quiet hours for reminder send-time shifting (IANA timezone on config.timezone). */
+  reminderQuietHours?: {
+    enabled?: boolean;
+    /** Local time HH:mm — no sends before this time when skipOffHours is on. */
+    start?: string;
+    /** Local time HH:mm — no sends after this time when skipOffHours is on. */
+    end?: string;
+  };
   /** Automated outbound voice reminder templates and settings */
   voiceReminders?: VoiceRemindersPlatformConfig;
   /** Appointment Reminders — AI Rescheduler (SMS C/R/X + optional AI calendar mutation). */

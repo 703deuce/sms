@@ -94,7 +94,20 @@ export async function discoverAndEnqueueDueAppointmentReminders(): Promise<{
       }
 
       const config = await loadAppointmentPlatformConfig(row.workspaceId);
-      const steps = configuredReminderSteps(config).filter((s) => !s.immediate);
+      const {
+        isReminderStepDisabledForService,
+        appointmentWithinMinimumLeadTime,
+        resolveRecipientNotificationPreference,
+        shouldRunReminderStepForRecipient,
+        resolveStepChannelForAppointment,
+      } = await import("@/lib/appointment-reminders/reminder-scheduling-policy");
+      const recipientPref = resolveRecipientNotificationPreference(meta, config);
+      const steps = configuredReminderSteps(config).filter((s) => {
+        if (s.immediate) return false;
+        if (isReminderStepDisabledForService(config, s.key, row.serviceName)) return false;
+        const ch = resolveStepChannelForAppointment(s.step, config, row.serviceName);
+        return shouldRunReminderStepForRecipient(ch, recipientPref);
+      });
       const weeklyHours = resolveWeeklyHours(config);
       const generation = currentReminderGeneration(meta);
 
@@ -117,6 +130,10 @@ export async function discoverAndEnqueueDueAppointmentReminders(): Promise<{
         }
         const fireAt = resolveStepFireTime(scheduled.step, row.startsAt);
         const fireMs = fireAt.getTime();
+
+        if (appointmentWithinMinimumLeadTime(row.startsAt, config, now)) {
+          continue;
+        }
 
         if (fireMs < now - REMINDER_MAX_LATE_MS) {
           suppressedLate += await suppressLateDispatch({

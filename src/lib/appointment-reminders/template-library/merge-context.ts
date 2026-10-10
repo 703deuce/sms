@@ -15,7 +15,20 @@ export function reminderAppointmentMergeVars(input: {
   rescheduleToken?: string;
 }): Record<string, string> {
   const manage = resolveManageLinkFromMetadata(input.metadata, input.rescheduleToken);
-  return appointmentMergeVars({
+  const custom =
+    input.platform.reminderPreferences?.customMergeFields &&
+    typeof input.metadata === "object"
+      ? Object.fromEntries(
+          Object.entries(input.platform.reminderPreferences.customMergeFields).map(([k, v]) => {
+            const fromMeta = (input.metadata as Record<string, unknown>)[k];
+            const fromBooking = (input.metadata as { bookingAnswers?: Record<string, string> })
+              .bookingAnswers?.[k];
+            return [k, String(fromMeta ?? fromBooking ?? v ?? "")];
+          }),
+        )
+      : {};
+
+  const base = appointmentMergeVars({
     firstName: input.firstName,
     businessName: input.businessName,
     service: input.service,
@@ -39,4 +52,5 @@ export function reminderAppointmentMergeVars(input: {
       "",
     directionsLink: input.platform.reminderEmailBranding?.directionsUrl || "",
   });
+  return { ...base, ...custom };
 }

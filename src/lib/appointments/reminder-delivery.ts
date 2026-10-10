@@ -336,7 +336,30 @@ async function trySendStep(input: {
     return false;
   }
 
-  if (input.step.channel === "voice") {
+  const {
+    isReminderStepDisabledForService,
+    resolveRecipientNotificationPreference,
+    shouldRunReminderStepForRecipient,
+    resolveStepChannelForAppointment,
+  } = await import("@/lib/appointment-reminders/reminder-scheduling-policy");
+  if (isReminderStepDisabledForService(platform, input.stepKey, input.serviceName)) {
+    return false;
+  }
+  const effectiveChannel = resolveStepChannelForAppointment(
+    input.step,
+    platform,
+    input.serviceName,
+  );
+  const recipientPref = resolveRecipientNotificationPreference(input.metadata, platform);
+  if (!shouldRunReminderStepForRecipient(effectiveChannel, recipientPref)) {
+    return false;
+  }
+
+  const stepForSend = effectiveChannel === input.step.channel
+    ? input.step
+    : { ...input.step, channel: effectiveChannel };
+
+  if (stepForSend.channel === "voice") {
     try {
       const { executeAppointmentVoiceReminder } = await import(
         "@/lib/appointment-voice-reminders/service"
@@ -375,8 +398,17 @@ async function trySendStep(input: {
     }
   }
 
-  if (input.step.channel === "email") {
-    const email = input.email?.trim();
+  if (stepForSend.channel === "email") {
+    const { evaluateEmailReminderEligibility } = await import(
+      "@/lib/appointment-reminders/email-reminder-eligibility"
+    );
+    const emailCheck = evaluateEmailReminderEligibility({
+      metadata: input.metadata,
+      inviteeEmail: input.email,
+      appointmentStatus: input.appointmentStatus,
+    });
+    if (!emailCheck.eligible) return false;
+    const email = emailCheck.email?.trim();
     if (!email) return false;
 
     const mergeVars = reminderAppointmentMergeVars({
@@ -392,7 +424,7 @@ async function trySendStep(input: {
       rescheduleToken: input.rescheduleToken,
     });
 
-    const body = renderAppointmentTemplate(input.step.template, mergeVars);
+    const body = renderAppointmentTemplate(stepForSend.template, mergeVars);
 
     try {
       const endsAt = new Date(input.startsAt.getTime() + 30 * 60_000);
@@ -472,7 +504,7 @@ async function trySendStep(input: {
     }
   }
 
-  if (input.step.channel !== "sms") return false;
+  if (stepForSend.channel !== "sms") return false;
 
   const smsEligibility = evaluateSmsReminderEligibility({
     metadata: input.metadata,
