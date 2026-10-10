@@ -9,6 +9,41 @@ import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
 import { resolveAiReschedulerConfig, isAiBusinessApprovalMode } from "./types";
 import { sendInternationalAppointmentSms } from "@/lib/appointments/reminder-engine";
 
+async function sendArMeteredApprovalSms(input: {
+  workspaceId: string;
+  appointmentId: string;
+  timelineType: string;
+  to: string;
+  body: string;
+}): Promise<void> {
+  const { analyzeSmsBody } = await import("@/lib/sms/segment-encoding");
+  const { reserveArReminderSmsUnit, releaseArReminderSmsReservation } = await import(
+    "@/lib/appointment-reminders/ar-sms-usage"
+  );
+  const segments = Math.max(1, analyzeSmsBody(input.body).segmentCount);
+  const reservation = await reserveArReminderSmsUnit({
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+    timelineType: input.timelineType,
+    segments,
+  });
+  if (!reservation.reserved) return;
+  try {
+    await sendInternationalAppointmentSms({
+      workspaceId: input.workspaceId,
+      to: input.to,
+      body: input.body,
+    });
+  } catch {
+    await releaseArReminderSmsReservation({
+      workspaceId: input.workspaceId,
+      appointmentId: input.appointmentId,
+      timelineType: input.timelineType,
+      segments,
+    });
+  }
+}
+
 export type ArRescheduleRequestMeta = {
   status:
     | "pending_business"
@@ -83,11 +118,13 @@ export async function queueArRescheduleBusinessApproval(input: {
       select: { phone: true },
     });
     if (contact?.phone) {
-      await sendInternationalAppointmentSms({
+      await sendArMeteredApprovalSms({
         workspaceId: input.workspaceId,
+        appointmentId: input.appointmentId,
+        timelineType: "ar_approval_ack_sent",
         to: contact.phone,
         body: `Thanks — we received your request to move your appointment to ${when}. The business will confirm shortly.`,
-      }).catch(() => undefined);
+      });
     }
   }
 }
@@ -195,11 +232,13 @@ export async function approveArRescheduleRequest(input: {
       timeStyle: "short",
       timeZone: row.timezone || undefined,
     });
-    await sendInternationalAppointmentSms({
+    await sendArMeteredApprovalSms({
       workspaceId: input.workspaceId,
+      appointmentId: input.appointmentId,
+      timelineType: "ar_approval_approved_sent",
       to: phone,
       body: `You're rescheduled for ${when}. Your appointment has been updated.`,
-    }).catch(() => undefined);
+    });
   }
 
   return { ok: true };
@@ -254,11 +293,13 @@ export async function rejectArRescheduleRequest(input: {
 
   const phone = row.contact?.phone;
   if (phone) {
-    await sendInternationalAppointmentSms({
+    await sendArMeteredApprovalSms({
       workspaceId: input.workspaceId,
+      appointmentId: input.appointmentId,
+      timelineType: "ar_approval_rejected_sent",
       to: phone,
       body: `We couldn't move your appointment. You're still scheduled for ${when}.`,
-    }).catch(() => undefined);
+    });
   }
 
   return { ok: true };
