@@ -31,3 +31,43 @@ export async function GET(_request: Request, { params }: Params) {
     return jsonError(err, 500);
   }
 }
+
+export async function PATCH(request: Request, { params }: Params) {
+  try {
+    const auth = await requireAppointmentRemindersAccess("appointment_reminders.write");
+    if ("error" in auth) return auth.error;
+    const { id } = await params;
+    const body = (await request.json()) as { status?: string; attendanceOutcome?: string };
+    const { getPrisma } = await import("@/lib/db");
+    const prisma = getPrisma();
+    const row = await prisma.voiceAppointment.findFirst({
+      where: { id, workspaceId: auth.workspaceId },
+    });
+    if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    const status =
+      body.attendanceOutcome === "no_show"
+        ? "no_show"
+        : body.attendanceOutcome === "attended"
+          ? "completed"
+          : body.status;
+
+    if (!status) {
+      return NextResponse.json({ error: "status or attendanceOutcome required" }, { status: 400 });
+    }
+
+    const meta = (row.metadata || {}) as Record<string, unknown>;
+    if (body.attendanceOutcome) {
+      meta.attendanceOutcome = body.attendanceOutcome;
+      meta.attendanceRecordedAt = new Date().toISOString();
+    }
+
+    const updated = await prisma.voiceAppointment.update({
+      where: { id },
+      data: { status, metadata: meta as object },
+    });
+    return NextResponse.json({ data: { id: updated.id, status: updated.status } });
+  } catch (err) {
+    return jsonError(err, 400);
+  }
+}

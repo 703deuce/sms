@@ -5,6 +5,7 @@ export const AR_ROUTES = {
   /** Read-only grid synced from connected provider calendars */
   calendar: "/appointment-reminders/calendar",
   reminders: "/appointment-reminders/reminders",
+  analytics: "/appointment-reminders/analytics",
   /** OAuth, import selection, and sync settings */
   calendars: "/appointment-reminders/calendars",
   settings: "/appointment-reminders/settings",
@@ -14,6 +15,7 @@ export const AR_ROUTES = {
   bookingServices: "/appointment-reminders/booking/services",
   bookingMeetings: "/appointment-reminders/booking/meetings",
   setupConnect: "/appointment-reminders/setup/connect",
+  setupConfigure: "/appointment-reminders/setup/configure",
   setupActivate: "/appointment-reminders/setup/activate",
 } as const;
 

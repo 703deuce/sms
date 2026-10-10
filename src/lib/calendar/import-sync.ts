@@ -301,6 +301,11 @@ export async function processCalendarProviderEvent(input: {
     reminderEligibility,
   ) as Record<string, unknown>;
 
+  const existingBeforeImport = await getPrisma().voiceAppointment.findFirst({
+    where: { workspaceId, externalId },
+    select: { id: true },
+  });
+
   const saved = await upsertWorkspaceAppointmentByExternalId({
     workspaceId,
     externalId,
@@ -328,12 +333,20 @@ export async function processCalendarProviderEvent(input: {
 
   await applyImportedReminderEligibility(saved.id, reminderEligibility, null);
 
-  if (reminderEligibility.eligible && event.start.getTime() > Date.now()) {
+  const isNewImport = !existingBeforeImport;
+  if (reminderEligibility.eligible && event.start.getTime() > Date.now() && isNewImport) {
     try {
       const { maybeSendImmediateConfirmationForAppointment } = await import(
         "@/lib/appointments/reminder-delivery"
       );
-      await maybeSendImmediateConfirmationForAppointment(workspaceId, saved.id);
+      const { loadAppointmentPlatformConfig } = await import("@/lib/appointments/settings");
+      const platform = await loadAppointmentPlatformConfig(workspaceId);
+      const skipHistorical =
+        platform.reminderPreferences?.skipConfirmationOnHistoricalImport === true &&
+        event.start.getTime() < Date.now() - 24 * 60 * 60_000;
+      if (!skipHistorical) {
+        await maybeSendImmediateConfirmationForAppointment(workspaceId, saved.id);
+      }
     } catch (err) {
       console.warn("[calendar] immediate confirmation after import failed", saved.id, err);
     }

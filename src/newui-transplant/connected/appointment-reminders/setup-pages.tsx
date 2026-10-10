@@ -17,15 +17,20 @@ import {
 import { CalendarIntegrationsOpus } from '@/newui-transplant/connected/integrations/calendar-integrations-opus'
 import { Button } from '@/newui-transplant/components/ui/button'
 
+type SetupReadiness = {
+  calendarConnected: boolean
+  hasImportCalendars: boolean
+  smsSenderReady?: boolean
+  emailSenderReady?: boolean
+  emailSenderDetail?: string
+  canActivate: boolean
+  blockers: string[]
+  activated: boolean
+  activatedAt: string | null
+}
+
 type SetupPayload = {
-  readiness: {
-    calendarConnected: boolean
-    hasImportCalendars: boolean
-    canActivate: boolean
-    blockers: string[]
-    activated: boolean
-    activatedAt: string | null
-  }
+  readiness: SetupReadiness
 }
 
 export function AppointmentRemindersSetupConnectPage() {
@@ -52,7 +57,7 @@ export function AppointmentRemindersSetupConnectPage() {
       <PageHeader
         title="Connect your calendar"
         meta={<Pill tone="primary">Step 1</Pill>}
-        description="Authorize Google or Microsoft and select calendars that contain appointments you want to remind."
+        description="Connect Microsoft 365 and select calendars that contain appointments you want to remind."
       />
       <FeatureEmphasisStrip
         icon={Sparkles}
@@ -78,7 +83,7 @@ export function AppointmentRemindersSetupConnectPage() {
           Open calendars
         </Button>
         {canContinue ? (
-          <Button nativeButton={false} render={<Link href={AR_ROUTES.setupActivate} />}>
+          <Button nativeButton={false} render={<Link href={AR_ROUTES.setupConfigure} />}>
             Continue
           </Button>
         ) : (
@@ -86,6 +91,68 @@ export function AppointmentRemindersSetupConnectPage() {
             Continue
           </Button>
         )}
+      </div>
+    </Page>
+  )
+}
+
+export function AppointmentRemindersSetupConfigurePage() {
+  const [applying, setApplying] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  const applyStarterPack = async () => {
+    setApplying(true)
+    setSaved(false)
+    try {
+      const res = await fetch('/api/appointment-reminders/settings/presets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          industry: 'general',
+          tone: 'friendly',
+          timing: 'standard_48h_3h',
+          apply: true,
+        }),
+      })
+      if (!res.ok) {
+        const json = await res.json()
+        throw new Error(json.error || 'Could not apply starter pack')
+      }
+      setSaved(true)
+    } finally {
+      setApplying(false)
+    }
+  }
+
+  return (
+    <Page className="max-w-3xl">
+      <PageHeader
+        title="Configure reminders"
+        meta={<Pill tone="primary">Step 2</Pill>}
+        description="Choose industry templates, timing, and scheduling rules before you go live."
+      />
+      <Panel title="Starter pack" description="Applies professionally written SMS and email templates you can edit later.">
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" onClick={() => void applyStarterPack()} disabled={applying}>
+            {applying ? 'Applying…' : 'Apply general starter pack'}
+          </Button>
+          <Button variant="outline" nativeButton={false} render={<Link href={AR_ROUTES.settings} />}>
+            Open full settings
+          </Button>
+        </div>
+        {saved ? (
+          <p className="mt-3 text-sm text-emerald-600 dark:text-emerald-400" role="status">
+            Starter pack saved. You can fine-tune each step in Reminder settings.
+          </p>
+        ) : null}
+      </Panel>
+      <div className="mt-6 flex justify-between gap-2">
+        <Button variant="outline" nativeButton={false} render={<Link href={AR_ROUTES.setupConnect} />}>
+          Back
+        </Button>
+        <Button nativeButton={false} render={<Link href={AR_ROUTES.setupActivate} />}>
+          Continue to activation
+        </Button>
       </div>
     </Page>
   )
@@ -131,8 +198,8 @@ export function AppointmentRemindersSetupActivatePage() {
     <Page className="max-w-3xl">
       <PageHeader
         title="Configure and activate"
-        meta={<Pill tone="primary">Step 2</Pill>}
-        description="Set reminder timing and templates, then confirm SMS readiness."
+        meta={<Pill tone="primary">Step 3</Pill>}
+        description="Confirm SMS and email readiness, then activate automated reminders."
       />
       <ConfigSection
         icon={Bell}
@@ -156,6 +223,10 @@ export function AppointmentRemindersSetupActivatePage() {
                 </li>
                 <li>
                   {readiness?.smsSenderReady ? '✓' : '○'} SMS sender ready
+                </li>
+                <li>
+                  {readiness?.emailSenderReady ? '✓' : '○'} Email sender ready
+                  {readiness?.emailSenderDetail ? ` — ${readiness.emailSenderDetail}` : ''}
                 </li>
                 <li>
                   <TextLink href={AR_ROUTES.settings}>Reminder settings</TextLink> configured

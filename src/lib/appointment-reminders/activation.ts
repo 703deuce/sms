@@ -62,6 +62,8 @@ export type AppointmentRemindersSetupReadiness = {
   lastSyncAt: string | null;
   syncError: string | null;
   smsSenderReady: boolean;
+  emailSenderReady: boolean;
+  emailSenderDetail?: string;
   remindersConfigured: boolean;
   activated: boolean;
   activatedAt: string | null;
@@ -107,6 +109,12 @@ export async function evaluateAppointmentRemindersSetupReadiness(
     smsSenderReady = false;
   }
 
+  const { evaluateArEmailSenderReadiness } = await import(
+    "@/lib/appointment-reminders/ar-email-readiness"
+  );
+  const emailReadiness = await evaluateArEmailSenderReadiness(workspaceId);
+  const emailSenderReady = emailReadiness.ready;
+
   const stepsEnabled =
     platform.reminders.confirmation.enabled ||
     platform.reminders.reminder24h.enabled ||
@@ -119,6 +127,14 @@ export async function evaluateAppointmentRemindersSetupReadiness(
   if (!lastSyncAt) blockers.push("Run an initial calendar sync");
   if (syncError) blockers.push("Resolve calendar sync errors");
   if (!smsSenderReady) blockers.push("SMS sender is not ready");
+  const anyEmailStep =
+    platform.reminders.confirmation.channel === "email" ||
+    platform.reminders.reminder24h.channel === "email" ||
+    platform.reminders.reminder2h.channel === "email" ||
+    (platform.reminders.additionalSteps || []).some((s) => s.enabled && s.channel === "email");
+  if (anyEmailStep && !emailSenderReady) {
+    blockers.push("Email sender is not configured for reminder emails");
+  }
   if (!stepsEnabled) blockers.push("Enable at least one reminder step");
 
   const canActivate = blockers.length === 0;
@@ -129,6 +145,8 @@ export async function evaluateAppointmentRemindersSetupReadiness(
     lastSyncAt: lastSyncAt?.toISOString() ?? null,
     syncError: syncError ?? null,
     smsSenderReady,
+    emailSenderReady,
+    emailSenderDetail: emailReadiness.detail,
     remindersConfigured: stepsEnabled,
     activated: Boolean(activation.activatedAt),
     activatedAt: activation.activatedAt ?? null,

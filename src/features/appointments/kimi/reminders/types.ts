@@ -12,6 +12,7 @@ export type ReminderItem = {
   badge: string;
   description: string;
   channel: ReminderChannel;
+  emailSubject?: string;
   template: string;
   preview: string;
   characters: number;

@@ -6,6 +6,7 @@ import {
   loadAppointmentPlatformConfig,
   previewReminderMessage,
   sendTestReminderSms,
+  sendTestReminderEmail,
 } from "@/lib/appointments";
 
 const TEST_COOLDOWN_MS = 60_000;
@@ -56,11 +57,18 @@ export async function POST(request: Request) {
     if (limited) {
       return NextResponse.json({ error: limited }, { status: 429 });
     }
-    const body = (await request.json()) as { stepKey?: string; phone?: string };
-    if (!body.phone?.trim()) {
-      return NextResponse.json({ error: "phone is required" }, { status: 400 });
-    }
+    const body = (await request.json()) as { stepKey?: string; phone?: string; email?: string };
     const stepKey = body.stepKey || "confirmation";
+    if (body.email?.trim()) {
+      const result = await sendTestReminderEmail(auth.workspaceId, {
+        stepKey,
+        email: body.email.trim(),
+      });
+      return NextResponse.json({ data: result });
+    }
+    if (!body.phone?.trim()) {
+      return NextResponse.json({ error: "phone or email is required" }, { status: 400 });
+    }
     const result = await sendTestReminderSms(auth.workspaceId, {
       stepKey,
       phone: body.phone.trim(),
