@@ -8,6 +8,7 @@ import { Button } from '@/newui-transplant/components/ui/button'
 import { Input } from '@/newui-transplant/components/ui/input'
 import { OPUS_TABLE_HEAD, OPUS_META_STRIP } from '@/newui-transplant/components/app/opus-surfaces'
 import { th, td } from '@/newui-transplant/components/app/opus-tables'
+import { cn } from '@/lib/utils'
 
 type AnalyticsPayload = {
   reminders: {
@@ -138,15 +139,15 @@ export function AppointmentRemindersAnalyticsPage() {
           <table className="w-full text-sm">
             <thead className={OPUS_TABLE_HEAD}>
               <tr>
-                {th('Channel')}
-                {th('Count', 'right')}
+                <th scope="col" className={th}>Channel</th>
+                <th scope="col" className={cn(th, 'text-right')}>Count</th>
               </tr>
             </thead>
             <tbody>
               {Object.entries(data.reminders.byChannel).map(([ch, n]) => (
                 <tr key={ch} className="border-t">
-                  {td(ch.toUpperCase())}
-                  {td(String(n), 'right')}
+                  <td className={td}>{ch.toUpperCase()}</td>
+                  <td className={cn(td, 'text-right tabular-nums')}>{String(n)}</td>
                 </tr>
               ))}
             </tbody>
@@ -156,15 +157,15 @@ export function AppointmentRemindersAnalyticsPage() {
           <table className="w-full text-sm">
             <thead className={OPUS_TABLE_HEAD}>
               <tr>
-                {th('Step')}
-                {th('Dispatches', 'right')}
+                <th scope="col" className={th}>Step</th>
+                <th scope="col" className={cn(th, 'text-right')}>Dispatches</th>
               </tr>
             </thead>
             <tbody>
               {Object.entries(data.reminders.byStep).map(([step, n]) => (
                 <tr key={step} className="border-t">
-                  {td(step)}
-                  {td(String(n), 'right')}
+                  <td className={td}>{step}</td>
+                  <td className={cn(td, 'text-right tabular-nums')}>{String(n)}</td>
                 </tr>
               ))}
             </tbody>

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
-import { Bell, Loader2, Sparkles } from 'lucide-react'
+import { AlertTriangle, Bell, CheckCircle2, Loader2, Sparkles } from 'lucide-react'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
 import {
   Callout,
@@ -72,7 +72,7 @@ export function AppointmentRemindersSetupConnectPage() {
         </p>
       ) : null}
       {!loading && status && !status.readiness.hasImportCalendars ? (
-        <Callout tone="warning" title="Select import calendars" className="mt-4">
+        <Callout tone="warning" icon={AlertTriangle} title="Select import calendars" className="mt-4">
           Choose at least one calendar below and save before continuing.
         </Callout>
       ) : null}
@@ -200,11 +200,11 @@ export function AppointmentRemindersSetupActivatePage() {
                 </li>
               </ul>
               {readiness?.activated ? (
-                <Callout tone="success" title="Appointment Reminders is active">
+                <Callout tone="success" icon={CheckCircle2} title="Appointment Reminders is active">
                   Activated {readiness.activatedAt ? new Date(readiness.activatedAt).toLocaleString() : ''}.
                 </Callout>
               ) : readiness?.blockers?.length ? (
-                <Callout tone="warning" title="Complete setup">
+                <Callout tone="warning" icon={AlertTriangle} title="Complete setup">
                   <ul className="mt-2 list-disc pl-4">
                     {readiness.blockers.map((b) => (
                       <li key={b}>{b}</li>

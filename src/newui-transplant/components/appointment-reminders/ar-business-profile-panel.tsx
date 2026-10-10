@@ -1,6 +1,7 @@
 'use client'
 
 import { Panel, Callout } from '@/newui-transplant/components/app/kit'
+import { AlertTriangle } from 'lucide-react'
 import { Input } from '@/newui-transplant/components/ui/input'
 import { Textarea } from '@/newui-transplant/components/ui/textarea'
 import { KeyValueRow } from '@/newui-transplant/components/app/kit'
@@ -113,7 +114,7 @@ export function ArBusinessProfilePanel({ fields, onChange }: Props) {
           ))}
         </div>
         {mergePreview.some((r) => r.value === '—') ? (
-          <Callout tone="warning" title="Incomplete business profile" className="mt-3">
+          <Callout tone="warning" icon={AlertTriangle} title="Incomplete business profile" className="mt-3">
             Fill missing fields so customers see complete reminder messages.
           </Callout>
         ) : null}

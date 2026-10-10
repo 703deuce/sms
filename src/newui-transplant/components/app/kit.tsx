@@ -249,21 +249,24 @@ export function Callout({
   title,
   children,
   action,
+  className,
 }: {
   tone?: Tone
-  icon: LucideIcon
+  icon?: LucideIcon
   title: string
   children?: React.ReactNode
   action?: React.ReactNode
+  className?: string
 }) {
   return (
     <div
       className={cn(
         'flex flex-col gap-3 rounded-xl px-4 py-3.5 ring-1 ring-inset sm:flex-row sm:items-center',
         toneClass[tone],
+        className,
       )}
     >
-      <Icon className="size-4 shrink-0" aria-hidden="true" />
+      {Icon ? <Icon className="size-4 shrink-0" aria-hidden="true" /> : null}
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <p className="text-sm font-semibold">{title}</p>
         {children ? <div className="text-sm opacity-90">{children}</div> : null}
