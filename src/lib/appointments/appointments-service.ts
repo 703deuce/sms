@@ -250,6 +250,9 @@ export function appointmentMergeVars(input: {
   bookingLink?: string | null;
   paymentLink?: string | null;
   meetingLink?: string | null;
+  businessPhone?: string | null;
+  appointmentLink?: string | null;
+  directionsLink?: string | null;
 }): Record<string, string> {
   const tz = input.timezone || "America/New_York";
   const dateFmt = new Intl.DateTimeFormat(undefined, {
@@ -281,6 +284,9 @@ export function appointmentMergeVars(input: {
     payment_link: input.paymentLink || "",
     meeting_link: input.meetingLink || "",
     join_meeting_line: input.meetingLink ? ` Join meeting: ${input.meetingLink}` : "",
+    business_phone: input.businessPhone || "",
+    appointment_link: input.appointmentLink || input.manageLink || "",
+    directions_link: input.directionsLink || "",
   };
 }
 

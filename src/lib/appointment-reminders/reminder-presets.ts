@@ -1,22 +1,32 @@
 import type { AppointmentPlatformConfig, ReminderStepConfig } from "@/lib/appointments/types";
 import { DEFAULT_REMINDER_TEMPLATES } from "@/lib/appointments/types";
 import { createId } from "@/lib/supabase/id";
+import { applyIndustryTemplatePackToReminders } from "@/lib/appointment-reminders/template-library/catalog";
+import { INDUSTRY_LABELS } from "@/lib/appointment-reminders/template-library/types";
+import { resolveLibraryIndustrySlug } from "@/lib/appointment-reminders/template-library/industry-slug";
 
 export type ReminderIndustryId =
   | "general"
-  | "healthcare_dental"
+  | "dental"
+  | "healthcare"
   | "salon_spa"
   | "legal"
   | "financial"
   | "real_estate"
-  | "counseling_wellness"
+  | "counseling"
   | "massage"
   | "fitness"
   | "education"
+  | "tattoo"
   | "photography"
+  | "government"
   | "automotive"
   | "home_services"
-  | "veterinary";
+  | "veterinary"
+  /** @deprecated Use healthcare or dental */
+  | "healthcare_dental"
+  /** @deprecated Use counseling */
+  | "counseling_wellness";
 
 export type ReminderToneId = "formal" | "casual" | "warm" | "friendly";
 
@@ -50,18 +60,23 @@ function tonePrefix(tone: ReminderToneId): { sms: string; email: string } {
   }
 }
 
-const INDUSTRY_SERVICE_LABEL: Record<ReminderIndustryId, string> = {
+const INDUSTRY_SERVICE_LABEL: Record<string, string> = {
   general: "appointment",
+  dental: "visit",
+  healthcare: "visit",
   healthcare_dental: "visit",
   salon_spa: "appointment",
   legal: "consultation",
   financial: "meeting",
   real_estate: "showing",
+  counseling: "session",
   counseling_wellness: "session",
   massage: "massage",
   fitness: "training session",
   education: "lesson",
+  tattoo: "appointment",
   photography: "session",
+  government: "appointment",
   automotive: "service appointment",
   home_services: "service visit",
   veterinary: "pet visit",
@@ -196,14 +211,9 @@ export function applyReminderPresetBundle(input: {
   const industry = input.industry || "general";
   const tone = input.tone || "friendly";
   const timing = input.timing || "custom";
-  const templates = buildIndustryReminderTemplates(industry, tone);
+  const librarySlug = resolveLibraryIndustrySlug(industry);
 
-  let reminders = {
-    ...input.config.reminders,
-    confirmation: { ...input.config.reminders.confirmation, template: templates.confirmation },
-    reminder24h: { ...input.config.reminders.reminder24h, template: templates.reminder24h },
-    reminder2h: { ...input.config.reminders.reminder2h, template: templates.reminder2h },
-  };
+  let reminders = applyIndustryTemplatePackToReminders(input.config.reminders, librarySlug);
   reminders = REMINDER_TIMING_PRESETS[timing].apply(reminders);
 
   const policy = CANCELLATION_POLICY_PRESETS.find((p) => p.id === input.cancellationPolicyId);
@@ -213,6 +223,8 @@ export function applyReminderPresetBundle(input: {
     reminders,
     reminderPreferences: {
       ...input.config.reminderPreferences,
+      templateIndustry: librarySlug,
+      communicationTone: tone,
       templateLocale: input.locale || input.config.reminderPreferences?.templateLocale || "en",
       cancellationPolicyText:
         policy?.text || input.config.reminderPreferences?.cancellationPolicyText,
@@ -221,8 +233,12 @@ export function applyReminderPresetBundle(input: {
 }
 
 export function listReminderPresetCatalog() {
+  const industries = Object.keys(INDUSTRY_LABELS).filter(
+    (id) => id !== "healthcare_dental" && id !== "counseling_wellness",
+  ) as ReminderIndustryId[];
   return {
-    industries: Object.keys(INDUSTRY_SERVICE_LABEL) as ReminderIndustryId[],
+    industries,
+    industryLabels: INDUSTRY_LABELS,
     tones: ["formal", "casual", "warm", "friendly"] as ReminderToneId[],
     timing: Object.entries(REMINDER_TIMING_PRESETS).map(([id, v]) => ({
       id,

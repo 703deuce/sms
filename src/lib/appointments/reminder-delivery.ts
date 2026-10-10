@@ -18,6 +18,7 @@ import {
   reminderTimelineType,
   wasReminderSent,
 } from "@/lib/appointments/reminder-state";
+import { reminderAppointmentMergeVars } from "@/lib/appointment-reminders/template-library/merge-context";
 import {
   buildFutureReminderSchedule,
   resolvePerCalendarReminderDefaults,
@@ -258,21 +259,20 @@ async function buildReminderSmsBodyForOutbound(input: {
     effectiveStep = resolvePlatformLockedReminderTemplate(input.stepKey, input.step);
   }
 
+  const platform = await loadAppointmentPlatformConfig(input.workspaceId);
   const body = renderAppointmentTemplate(
     effectiveStep.template,
-    appointmentMergeVars({
+    reminderAppointmentMergeVars({
+      platform,
+      metadata: input.metadata,
       firstName: input.firstName,
       businessName: input.businessName,
       service: input.service,
       startsAt: input.startsAt,
       timezone: input.timezone,
-      confirmLink: input.confirmToken ? publicActionUrl("confirm", input.confirmToken) : "",
-      cancelLink: input.cancelToken ? publicActionUrl("cancel", input.cancelToken) : "",
-      rescheduleLink: input.rescheduleToken
-        ? publicActionUrl("reschedule", input.rescheduleToken)
-        : "",
-      manageLink: resolveManageLinkFromMetadata(input.metadata, input.rescheduleToken),
-      meetingLink: input.metadata.meetingUrl || input.metadata.joinUrl || "",
+      confirmToken: input.confirmToken,
+      cancelToken: input.cancelToken,
+      rescheduleToken: input.rescheduleToken,
     }),
   );
 
@@ -281,7 +281,6 @@ async function buildReminderSmsBodyForOutbound(input: {
     smsBody = stripHttpUrlsFromSmsBody(smsBody);
   }
 
-  const platform = await loadAppointmentPlatformConfig(input.workspaceId);
   const {
     isAiReschedulerSmsEnabled,
     arReplyInstructionsSuffixForAppointment,
@@ -380,43 +379,27 @@ async function trySendStep(input: {
     const email = input.email?.trim();
     if (!email) return false;
 
-    const body = renderAppointmentTemplate(
-      input.step.template,
-      appointmentMergeVars({
-        firstName: input.metadata.inviteeName?.split(/\s+/)[0],
-        businessName: input.businessName,
-        service: input.serviceName,
-        startsAt: input.startsAt,
-        timezone: input.timezone,
-        confirmLink: input.confirmToken ? publicActionUrl("confirm", input.confirmToken) : "",
-        cancelLink: input.cancelToken ? publicActionUrl("cancel", input.cancelToken) : "",
-        rescheduleLink: input.rescheduleToken
-          ? publicActionUrl("reschedule", input.rescheduleToken)
-          : "",
-        manageLink: resolveManageLinkFromMetadata(input.metadata, input.rescheduleToken),
-        meetingLink: input.metadata.meetingUrl || input.metadata.joinUrl || "",
-      }),
-    );
+    const mergeVars = reminderAppointmentMergeVars({
+      platform,
+      metadata: input.metadata,
+      firstName: input.metadata.inviteeName?.split(/\s+/)[0],
+      businessName: input.businessName,
+      service: input.serviceName,
+      startsAt: input.startsAt,
+      timezone: input.timezone,
+      confirmToken: input.confirmToken,
+      cancelToken: input.cancelToken,
+      rescheduleToken: input.rescheduleToken,
+    });
+
+    const body = renderAppointmentTemplate(input.step.template, mergeVars);
 
     try {
       const endsAt = new Date(input.startsAt.getTime() + 30 * 60_000);
       const { stepEmailSubjectDefault } = await import("@/lib/appointment-reminders/reminder-presets");
       const subjectRendered = renderAppointmentTemplate(
         stepEmailSubjectDefault(input.step, input.businessName),
-        appointmentMergeVars({
-          firstName: input.metadata.inviteeName?.split(/\s+/)[0],
-          businessName: input.businessName,
-          service: input.serviceName,
-          startsAt: input.startsAt,
-          timezone: input.timezone,
-          confirmLink: input.confirmToken ? publicActionUrl("confirm", input.confirmToken) : "",
-          cancelLink: input.cancelToken ? publicActionUrl("cancel", input.cancelToken) : "",
-          rescheduleLink: input.rescheduleToken
-            ? publicActionUrl("reschedule", input.rescheduleToken)
-            : "",
-          manageLink: resolveManageLinkFromMetadata(input.metadata, input.rescheduleToken),
-          meetingLink: input.metadata.meetingUrl || input.metadata.joinUrl || "",
-        }),
+        mergeVars,
       );
       const result = await sendReminderEmailWithTracking({
         workspaceId: input.workspaceId,
@@ -782,22 +765,23 @@ export function previewReminderMessage(input: {
   tokens?: { confirm?: string; cancel?: string; reschedule?: string };
 }) {
   const startsAt = input.startsAt || new Date(Date.now() + 86400000);
-  return renderAppointmentTemplate(
-    input.step.template,
-    appointmentMergeVars({
-      firstName: "Alex",
-      businessName: input.platform.businessDisplayName || input.workspaceName,
-      service: input.serviceName || "Consultation",
-      startsAt,
-      timezone: input.platform.timezone,
-      confirmLink: input.tokens?.confirm ? publicActionUrl("confirm", input.tokens.confirm) : publicActionUrl("confirm", "preview"),
-      cancelLink: input.tokens?.cancel ? publicActionUrl("cancel", input.tokens.cancel) : publicActionUrl("cancel", "preview"),
-      rescheduleLink: input.tokens?.reschedule
-        ? publicActionUrl("reschedule", input.tokens.reschedule)
-        : publicActionUrl("reschedule", "preview"),
-      manageLink: publicActionUrl("reschedule", input.tokens?.reschedule || "preview"),
-    }),
-  );
+  const meta = {
+    source: "preview",
+    location: input.platform.businessAddress || undefined,
+  };
+  const vars = reminderAppointmentMergeVars({
+    platform: input.platform,
+    metadata: meta,
+    firstName: "Alex",
+    businessName: input.platform.businessDisplayName || input.workspaceName,
+    service: input.serviceName || "Consultation",
+    startsAt,
+    timezone: input.platform.timezone,
+    confirmToken: input.tokens?.confirm || "preview",
+    cancelToken: input.tokens?.cancel || "preview",
+    rescheduleToken: input.tokens?.reschedule || "preview",
+  });
+  return renderAppointmentTemplate(input.step.template, vars);
 }
 
 export async function sendTestReminderSms(

@@ -34,6 +34,10 @@ export type ReminderStepConfig = {
   locale?: string;
   /** Include ICS attachment on email sends for this step (default true for email). */
   attachIcs?: boolean;
+  /** Source industry in the Transovo template library (when applied from pack). */
+  libraryIndustry?: string;
+  /** Source message type in the Transovo template library. */
+  libraryMessageType?: string;
   /** Voice reminder template when channel is voice */
   voiceReminderTemplateId?: string;
 };
@@ -51,6 +55,9 @@ export type ReminderPreferences = {
   preparationInstructions?: string;
   cancellationPolicyText?: string;
   templateLocale?: string;
+  /** Selected industry pack from the template library. */
+  templateIndustry?: string;
+  communicationTone?: "formal" | "casual" | "warm" | "friendly";
   /** Workspace default when recipient has no explicit preference. */
   defaultNotificationChannel?: "sms" | "email" | "both";
 };

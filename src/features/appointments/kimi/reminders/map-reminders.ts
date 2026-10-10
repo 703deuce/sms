@@ -21,7 +21,11 @@ export const REMINDER_MERGE_TAGS = [
   "{{appointment_date}}",
   "{{appointment_time}}",
   "{{business_name}}",
+  "{{location}}",
+  "{{business_phone}}",
   "{{manage_link}}",
+  "{{appointment_link}}",
+  "{{directions_link}}",
   "{{reschedule_link}}",
   "{{cancel_link}}",
   "{{confirm_link}}",
@@ -161,6 +165,25 @@ export function patchReminderTemplate(
   template: string,
 ): RemindersApiConfig {
   return updateStep(config, stepKey, (step) => ({ ...step, template }));
+}
+
+export function patchReminderLibraryTemplate(
+  config: RemindersApiConfig,
+  stepKey: ReminderStepId,
+  input: {
+    industry: string;
+    messageType: string;
+    template: string;
+    emailSubject?: string;
+  },
+): RemindersApiConfig {
+  return updateStep(config, stepKey, (step) => ({
+    ...step,
+    template: input.template,
+    emailSubject: input.emailSubject ?? step.emailSubject,
+    libraryIndustry: input.industry,
+    libraryMessageType: input.messageType,
+  }));
 }
 
 export function patchReminderEnabled(

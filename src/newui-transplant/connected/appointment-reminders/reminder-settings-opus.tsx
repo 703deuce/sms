@@ -14,6 +14,7 @@ import {
   patchReminderMinutesBefore,
   patchReminderPreferences,
   patchReminderTemplate,
+  patchReminderLibraryTemplate,
   removeReminderStep,
   resetReminderTemplate,
   type RemindersApiConfig,
@@ -38,6 +39,13 @@ import {
   SheetTitle,
 } from '@/newui-transplant/components/ui/sheet'
 import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
+import { ReminderTemplateEditor } from '@/newui-transplant/components/appointment-reminders/reminder-template-editor'
+import {
+  INDUSTRY_LABELS,
+  MESSAGE_TYPE_LABELS,
+  STEP_TO_MESSAGE_TYPE,
+  type TemplateMessageType,
+} from '@/lib/appointment-reminders/template-library/types'
 
 function asPlatformConfig(config: RemindersApiConfig): AppointmentPlatformConfig {
   return { ...DEFAULT_PLATFORM_CONFIG, timezone: config.timezone, reminders: config.reminders }
@@ -92,6 +100,10 @@ export function AppointmentRemindersSettingsOpus() {
   const [testing, setTesting] = useState(false)
   const [testError, setTestError] = useState('')
   const [templateLocked, setTemplateLocked] = useState(false)
+  const [workspaceName, setWorkspaceName] = useState('Your business')
+  const [libraryIndustries, setLibraryIndustries] = useState<
+    Array<{ id: string; label: string; messageTypes: Array<{ id: string; label: string }> }>
+  >([])
 
   const loadWorkspace = useCallback(() => {
     void fetch('/api/appointment-reminders/reminders/workspace')
@@ -121,7 +133,11 @@ export function AppointmentRemindersSettingsOpus() {
       })
       .then(async (json) => {
         setTemplateLocked(Boolean(json.messaging?.templateEditingLocked))
+        if (json.workspace?.name) setWorkspaceName(json.workspace.name)
         const data = json.data
+        if (data.reminderPreferences?.templateIndustry) {
+          setPresetIndustry(data.reminderPreferences.templateIndustry)
+        }
         const nextConfig: RemindersApiConfig = {
           timezone: data.timezone,
           reminders: {
@@ -144,6 +160,15 @@ export function AppointmentRemindersSettingsOpus() {
   useEffect(() => {
     load()
   }, [load])
+
+  useEffect(() => {
+    void fetch('/api/appointment-reminders/templates/library')
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.data?.industries) setLibraryIndustries(json.data.industries)
+      })
+      .catch(() => setLibraryIndustries([]))
+  }, [])
 
   const model = useMemo(
     () => (config ? buildRemindersPageModel(config, previews) : null),
@@ -313,22 +338,11 @@ export function AppointmentRemindersSettingsOpus() {
                 label="Industry"
                 value={presetIndustry}
                 onChange={setPresetIndustry}
-                options={[
-                  { value: 'general', label: 'General appointments' },
-                  { value: 'healthcare_dental', label: 'Healthcare & dental' },
-                  { value: 'salon_spa', label: 'Salon & spa' },
-                  { value: 'legal', label: 'Legal' },
-                  { value: 'financial', label: 'Financial' },
-                  { value: 'real_estate', label: 'Real estate' },
-                  { value: 'counseling_wellness', label: 'Counseling & wellness' },
-                  { value: 'massage', label: 'Massage therapy' },
-                  { value: 'fitness', label: 'Fitness & training' },
-                  { value: 'education', label: 'Education' },
-                  { value: 'photography', label: 'Photography' },
-                  { value: 'automotive', label: 'Automotive' },
-                  { value: 'home_services', label: 'Home services' },
-                  { value: 'veterinary', label: 'Veterinary' },
-                ]}
+                options={
+                  libraryIndustries.length > 0
+                    ? libraryIndustries.map((i) => ({ value: i.id, label: i.label }))
+                    : Object.entries(INDUSTRY_LABELS).map(([value, label]) => ({ value, label }))
+                }
               />
               <SimpleSelect
                 label="Tone"
@@ -526,10 +540,31 @@ export function AppointmentRemindersSettingsOpus() {
 
       <StepEditSheet
         step={editStep}
+        config={config}
+        workspaceName={workspaceName}
+        templateIndustry={config.reminderPreferences?.templateIndustry || presetIndustry}
+        libraryIndustries={libraryIndustries}
         onClose={() => setEditStep(null)}
         onTemplateChange={(template) => {
           if (!editStep) return
           setConfig(patchReminderTemplate(config, editStep.stepKey, template))
+          setSaved(false)
+        }}
+        onIndustryPackChange={(industry) => {
+          setPresetIndustry(industry)
+          setConfig(patchReminderPreferences(config, { templateIndustry: industry }))
+          setSaved(false)
+        }}
+        onApplyLibraryTemplate={(entry) => {
+          if (!editStep) return
+          setConfig(
+            patchReminderLibraryTemplate(config, editStep.stepKey, {
+              industry: entry.industry,
+              messageType: entry.messageType,
+              template: entry.body,
+              emailSubject: entry.subject || undefined,
+            }),
+          )
           setSaved(false)
         }}
         onReset={() => {
@@ -570,8 +605,14 @@ export function AppointmentRemindersSettingsOpus() {
 
 function StepEditSheet({
   step,
+  config,
+  workspaceName,
+  templateIndustry,
+  libraryIndustries,
   onClose,
   onTemplateChange,
+  onIndustryPackChange,
+  onApplyLibraryTemplate,
   onReset,
   onRemove,
   onChannelChange,
@@ -580,8 +621,19 @@ function StepEditSheet({
   templateLocked,
 }: {
   step: ReminderItem | null
+  config: RemindersApiConfig
+  workspaceName: string
+  templateIndustry: string
+  libraryIndustries: Array<{ id: string; label: string; messageTypes: Array<{ id: string; label: string }> }>
   onClose: () => void
   onTemplateChange: (t: string) => void
+  onIndustryPackChange: (industry: string) => void
+  onApplyLibraryTemplate: (entry: {
+    industry: string
+    messageType: string
+    body: string
+    subject: string | null
+  }) => void
   onReset: () => void
   onRemove?: () => void
   onChannelChange: (channel: import('@/lib/appointments/types').ReminderChannel) => void
@@ -589,6 +641,34 @@ function StepEditSheet({
   onAdvancedChange: (patch: Record<string, unknown>) => void
   templateLocked?: boolean
 }) {
+  const defaultMessageType =
+    step && STEP_TO_MESSAGE_TYPE[step.stepKey]
+      ? STEP_TO_MESSAGE_TYPE[step.stepKey]
+      : ('advance_reminder' as TemplateMessageType)
+
+  const industryOptions =
+    libraryIndustries.length > 0
+      ? libraryIndustries.map((i) => ({ value: i.id, label: i.label }))
+      : Object.entries(INDUSTRY_LABELS).map(([value, label]) => ({ value, label }))
+
+  const messageTypeOptions = (
+    libraryIndustries.find((i) => i.id === templateIndustry)?.messageTypes || []
+  ).filter((mt) => mt.id !== 'follow_up')
+
+  const smsLocked = Boolean(templateLocked && step?.channel === 'sms')
+  const mergeTags =
+    templateLocked && step?.channel === 'sms'
+      ? REMINDER_MERGE_TAGS.filter(
+          (t) =>
+            !t.includes('manage_link') &&
+            !t.includes('reschedule_link') &&
+            !t.includes('cancel_link') &&
+            !t.includes('confirm_link') &&
+            !t.includes('appointment_link') &&
+            !t.includes('directions_link'),
+        )
+      : REMINDER_MERGE_TAGS
+
   return (
     <Sheet open={Boolean(step)} onOpenChange={(v) => !v && onClose()}>
       <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
@@ -618,74 +698,83 @@ function StepEditSheet({
               />
               {templateLocked && step.channel === 'sms' ? (
                 <p className="text-xs text-amber-700 dark:text-amber-300 rounded-lg border border-amber-200/60 bg-amber-50/50 px-3 py-2 dark:bg-amber-950/20">
-                  Platform sender — SMS text uses approved templates. You can change timing, channel, and on/off.
+                  Platform sender — SMS uses approved library wording. You can switch industry pack and timing; link tags are stripped at send.
                 </p>
               ) : null}
-              {step.channel === 'email' ? (
-                <label className="block text-sm">
-                  <span className="mb-1.5 block font-medium">Email subject</span>
-                  <Input
-                    className="h-10"
-                    value={step.emailSubject || `${step.title} — {{business_name}}`}
-                    onChange={(e) => onEmailSubjectChange(e.target.value)}
-                  />
-                </label>
-              ) : null}
-              <div>
-                <div className="mb-1.5 flex items-center justify-between">
-                  <span className="text-sm font-medium">Message</span>
-                  {!templateLocked ? (
-                    <Button type="button" variant="ghost" size="sm" onClick={onReset}>Reset default</Button>
-                  ) : null}
-                </div>
-                <Textarea
-                  className="min-h-[160px] font-mono text-sm leading-relaxed"
-                  value={step.template}
-                  readOnly={templateLocked}
-                  disabled={templateLocked}
-                  onChange={(e) => onTemplateChange(e.target.value)}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <SimpleSelect
+                  label="Industry pack"
+                  value={templateIndustry}
+                  onChange={async (industry) => {
+                    onIndustryPackChange(industry)
+                    const mt = defaultMessageType
+                    const ch = step.channel === 'email' ? 'email' : 'sms'
+                    const res = await fetch(
+                      `/api/appointment-reminders/templates/library?industry=${encodeURIComponent(industry)}&messageType=${encodeURIComponent(mt)}&channel=${ch}`,
+                    )
+                    const json = await res.json()
+                    if (res.ok && json.data) {
+                      onApplyLibraryTemplate({
+                        industry,
+                        messageType: mt,
+                        body: json.data.body,
+                        subject: json.data.subject,
+                      })
+                    }
+                  }}
+                  options={industryOptions}
                 />
-                <p className="mt-1.5 text-xs text-muted-foreground">
-                  {step.template.length} characters · {step.segments} SMS segment{step.segments === 1 ? '' : 's'}
-                </p>
+                <SimpleSelect
+                  label="Message type"
+                  value={defaultMessageType}
+                  onChange={async (messageType) => {
+                    const ch = step.channel === 'email' ? 'email' : 'sms'
+                    const res = await fetch(
+                      `/api/appointment-reminders/templates/library?industry=${encodeURIComponent(templateIndustry)}&messageType=${encodeURIComponent(messageType)}&channel=${ch}`,
+                    )
+                    const json = await res.json()
+                    if (res.ok && json.data) {
+                      onApplyLibraryTemplate({
+                        industry: templateIndustry,
+                        messageType,
+                        body: json.data.body,
+                        subject: json.data.subject,
+                      })
+                    }
+                  }}
+                  options={
+                    messageTypeOptions.length > 0
+                      ? messageTypeOptions.map((m) => ({ value: m.id, label: m.label }))
+                      : Object.entries(MESSAGE_TYPE_LABELS)
+                          .filter(([id]) => id !== 'follow_up')
+                          .map(([value, label]) => ({ value, label }))
+                  }
+                />
               </div>
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Insert variable
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {(templateLocked
-                    ? REMINDER_MERGE_TAGS.filter(
-                        (t) =>
-                          !t.includes('manage_link') &&
-                          !t.includes('reschedule_link') &&
-                          !t.includes('cancel_link') &&
-                          !t.includes('confirm_link'),
-                      )
-                    : REMINDER_MERGE_TAGS
-                  ).map((tag) => (
-                    <Button
-                      key={tag}
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 text-[11px]"
-                      disabled={templateLocked}
-                      onClick={() =>
-                        !templateLocked &&
-                        onTemplateChange(`${step.template}${step.template.endsWith(' ') ? '' : ' '}${tag}`)
-                      }
-                    >
-                      {tag}
-                    </Button>
-                  ))}
-                </div>
+              <div className="flex justify-end">
+                <Button type="button" variant="ghost" size="sm" onClick={onReset}>
+                  Reset to engine default
+                </Button>
               </div>
-              {step.preview ? (
-                <div className="rounded-xl border bg-muted/25 p-4 text-sm whitespace-pre-wrap leading-relaxed">
-                  {step.preview}
-                </div>
-              ) : null}
+              <ReminderTemplateEditor
+                channel={step.channel === 'email' ? 'email' : 'sms'}
+                template={step.template}
+                emailSubject={step.emailSubject || `${step.title} — {{business_name}}`}
+                readOnly={smsLocked}
+                mergeTags={mergeTags}
+                businessName={workspaceName}
+                timezone={config.timezone}
+                businessPhone={config.reminderEmailBranding?.contactPhone}
+                location={undefined}
+                onTemplateChange={onTemplateChange}
+                onEmailSubjectChange={
+                  step.channel === 'email' ? onEmailSubjectChange : undefined
+                }
+                onInsertTag={(tag) => {
+                  if (smsLocked) return
+                  onTemplateChange(`${step.template}${step.template.endsWith(' ') ? '' : ' '}${tag}`)
+                }}
+              />
               {onRemove ? (
                 <Button type="button" variant="destructive" size="sm" onClick={onRemove}>
                   Remove step
