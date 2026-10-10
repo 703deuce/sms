@@ -7,8 +7,12 @@ import {
   addAdditionalReminderStep,
   buildRemindersPageModel,
   patchReminderAdvanced,
+  patchReminderChannel,
+  patchReminderEmailBranding,
+  patchReminderEmailSubject,
   patchReminderEnabled,
   patchReminderMinutesBefore,
+  patchReminderPreferences,
   patchReminderTemplate,
   removeReminderStep,
   resetReminderTemplate,
@@ -77,7 +81,14 @@ export function AppointmentRemindersSettingsOpus() {
   const [saved, setSaved] = useState(true)
   const [editStep, setEditStep] = useState<ReminderItem | null>(null)
   const [testPhone, setTestPhone] = useState('')
+  const [testEmail, setTestEmail] = useState('')
   const [testStep, setTestStep] = useState<ReminderStepKey>('confirmation')
+  const [presetIndustry, setPresetIndustry] = useState('general')
+  const [presetTone, setPresetTone] = useState('friendly')
+  const [presetTiming, setPresetTiming] = useState('standard_48h_3h')
+  const [presetPolicy, setPresetPolicy] = useState('flexible_24h')
+  const [presetLocale, setPresetLocale] = useState('en')
+  const [applyingPreset, setApplyingPreset] = useState(false)
   const [testing, setTesting] = useState(false)
   const [testError, setTestError] = useState('')
   const [templateLocked, setTemplateLocked] = useState(false)
@@ -119,6 +130,8 @@ export function AppointmentRemindersSettingsOpus() {
             reminder2h: data.reminders.reminder2h,
             additionalSteps: data.reminders.additionalSteps || [],
           },
+          reminderEmailBranding: data.reminderEmailBranding,
+          reminderPreferences: data.reminderPreferences,
         }
         setConfig(nextConfig)
         setPreviews(await loadPreviews(nextConfig))
@@ -145,7 +158,12 @@ export function AppointmentRemindersSettingsOpus() {
       const res = await fetch('/api/appointment-reminders/settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reminders: config.reminders, timezone: config.timezone }),
+        body: JSON.stringify({
+          reminders: config.reminders,
+          timezone: config.timezone,
+          reminderEmailBranding: config.reminderEmailBranding,
+          reminderPreferences: config.reminderPreferences,
+        }),
       })
       if (!res.ok) throw new Error('save failed')
       setSaved(true)
@@ -178,15 +196,15 @@ export function AppointmentRemindersSettingsOpus() {
   }
 
   const stepOptions = model.reminders.map((r) => ({ value: r.stepKey, label: r.title }))
-  const smsSteps = model.reminders.filter((r) => r.enabled && r.channel === 'sms')
+  const previewSteps = model.reminders.filter((r) => r.enabled)
 
   return (
     <div className="space-y-6">
       <FeatureEmphasisStrip
         icon={MessageSquare}
-        title="SMS reminder sequence"
+        title="Reminder sequence"
         badge={<Pill tone="success" dot={false}>Workspace engine</Pill>}
-        description="Drip-style timing and templates — like campaigns, but tied to imported appointments. Changes apply to future sends only."
+        description="SMS and email steps with shared timing rules. Changes apply to future sends only."
         action={
           saved && !saving ? (
             <span className="text-xs font-medium text-[oklch(0.82_0.12_158)]" role="status">Saved</span>
@@ -229,13 +247,14 @@ export function AppointmentRemindersSettingsOpus() {
         <TabsList className="h-10">
           <TabsTrigger value="sequence">Reminder sequence</TabsTrigger>
           <TabsTrigger value="preview">Customer preview</TabsTrigger>
+          <TabsTrigger value="presets">Presets & email</TabsTrigger>
           <TabsTrigger value="test">Send test</TabsTrigger>
         </TabsList>
 
         <TabsContent value="sequence" className="mt-5 space-y-4">
           <Panel
-            title="SMS reminder sequence"
-            description="Like a drip campaign: confirmations and timed texts before each appointment. Changes apply to future appointments only."
+            title="Reminder sequence"
+            description="Confirmations and timed reminders per channel. Changes apply to future appointments only."
             bodyClassName="p-0"
           >
             <ReminderSequenceTimeline
@@ -268,15 +287,17 @@ export function AppointmentRemindersSettingsOpus() {
         <TabsContent value="preview" className="mt-5">
           <Panel
             title="What customers receive"
-            description="Rendered with sample merge data — matches production SMS wording."
+            description="Rendered with sample merge data — matches production wording."
           >
             <ul className="space-y-4">
-              {smsSteps.length === 0 ? (
-                <li className="text-sm text-muted-foreground">Enable at least one SMS step to preview.</li>
+              {previewSteps.length === 0 ? (
+                <li className="text-sm text-muted-foreground">Enable at least one step to preview.</li>
               ) : (
-                smsSteps.map((r) => (
+                previewSteps.map((r) => (
                   <li key={r.stepKey} className="rounded-xl border bg-muted/20 p-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">{r.badge}</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">
+                      {r.badge} · {r.channel}
+                    </p>
                     <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{r.preview || r.template}</p>
                   </li>
                 ))
@@ -285,8 +306,173 @@ export function AppointmentRemindersSettingsOpus() {
           </Panel>
         </TabsContent>
 
+        <TabsContent value="presets" className="mt-5 space-y-4">
+          <Panel title="Starter packs" description="Industry wording, tone, and timing — all editable after apply.">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <SimpleSelect
+                label="Industry"
+                value={presetIndustry}
+                onChange={setPresetIndustry}
+                options={[
+                  { value: 'general', label: 'General appointments' },
+                  { value: 'healthcare_dental', label: 'Healthcare & dental' },
+                  { value: 'salon_spa', label: 'Salon & spa' },
+                  { value: 'legal', label: 'Legal' },
+                  { value: 'financial', label: 'Financial' },
+                  { value: 'real_estate', label: 'Real estate' },
+                  { value: 'counseling_wellness', label: 'Counseling & wellness' },
+                  { value: 'massage', label: 'Massage therapy' },
+                  { value: 'fitness', label: 'Fitness & training' },
+                  { value: 'education', label: 'Education' },
+                  { value: 'photography', label: 'Photography' },
+                  { value: 'automotive', label: 'Automotive' },
+                  { value: 'home_services', label: 'Home services' },
+                  { value: 'veterinary', label: 'Veterinary' },
+                ]}
+              />
+              <SimpleSelect
+                label="Tone"
+                value={presetTone}
+                onChange={setPresetTone}
+                options={[
+                  { value: 'formal', label: 'Formal' },
+                  { value: 'casual', label: 'Casual' },
+                  { value: 'warm', label: 'Warm' },
+                  { value: 'friendly', label: 'Friendly' },
+                ]}
+              />
+              <SimpleSelect
+                label="Timing preset"
+                value={presetTiming}
+                onChange={setPresetTiming}
+                options={[
+                  { value: 'simple_24h', label: 'Simple — 24h' },
+                  { value: 'standard_48h_3h', label: 'Standard — 48h & 3h' },
+                  { value: 'confirmation_focused', label: 'Confirmation-focused' },
+                  { value: 'long_lead', label: 'Long lead' },
+                  { value: 'custom', label: 'Custom (templates only)' },
+                ]}
+              />
+              <SimpleSelect
+                label="Cancellation policy"
+                value={presetPolicy}
+                onChange={setPresetPolicy}
+                options={[
+                  { value: 'flexible_24h', label: '24-hour notice' },
+                  { value: 'same_day', label: 'Same-day courtesy' },
+                  { value: 'healthcare', label: 'Healthcare courtesy' },
+                  { value: 'no_fee', label: 'No fee stated' },
+                ]}
+              />
+              <SimpleSelect
+                label="Template language"
+                value={presetLocale}
+                onChange={setPresetLocale}
+                options={[
+                  { value: 'en', label: 'English' },
+                  { value: 'es', label: 'Spanish (store templates)' },
+                  { value: 'fr', label: 'French (store templates)' },
+                ]}
+              />
+            </div>
+            <Button
+              className="mt-4 h-10"
+              disabled={applyingPreset}
+              onClick={async () => {
+                setApplyingPreset(true)
+                try {
+                  const res = await fetch('/api/appointment-reminders/settings/presets', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      industry: presetIndustry,
+                      tone: presetTone,
+                      timing: presetTiming,
+                      cancellationPolicyId: presetPolicy,
+                      locale: presetLocale,
+                      apply: true,
+                    }),
+                  })
+                  const json = await res.json()
+                  if (!res.ok) throw new Error(json.error || 'Apply failed')
+                  const data = json.data
+                  setConfig({
+                    timezone: data.timezone,
+                    reminders: data.reminders,
+                    reminderEmailBranding: data.reminderEmailBranding,
+                    reminderPreferences: data.reminderPreferences,
+                  })
+                  setSaved(false)
+                  setPreviews(await loadPreviews({
+                    timezone: data.timezone,
+                    reminders: data.reminders,
+                    reminderEmailBranding: data.reminderEmailBranding,
+                    reminderPreferences: data.reminderPreferences,
+                  }))
+                } finally {
+                  setApplyingPreset(false)
+                }
+              }}
+            >
+              {applyingPreset ? 'Applying…' : 'Apply preset pack'}
+            </Button>
+          </Panel>
+          <Panel title="Email branding" description="Used for HTML reminder emails (logo, color, footer).">
+            <div className="grid gap-4 sm:max-w-lg">
+              <label className="block text-sm">
+                <span className="mb-1.5 block font-medium">Brand color</span>
+                <Input
+                  className="h-10"
+                  value={config.reminderEmailBranding?.brandColor || ''}
+                  onChange={(e) => {
+                    setConfig(patchReminderEmailBranding(config, { brandColor: e.target.value }))
+                    setSaved(false)
+                  }}
+                  placeholder="#0d9488"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1.5 block font-medium">Logo URL</span>
+                <Input
+                  className="h-10"
+                  value={config.reminderEmailBranding?.logoUrl || ''}
+                  onChange={(e) => {
+                    setConfig(patchReminderEmailBranding(config, { logoUrl: e.target.value }))
+                    setSaved(false)
+                  }}
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1.5 block font-medium">Preparation instructions</span>
+                <Textarea
+                  value={config.reminderPreferences?.preparationInstructions || ''}
+                  onChange={(e) => {
+                    setConfig(patchReminderPreferences(config, { preparationInstructions: e.target.value }))
+                    setSaved(false)
+                  }}
+                />
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={config.reminderPreferences?.skipConfirmationStepsWhenConfirmed !== false}
+                  onChange={(e) => {
+                    setConfig(
+                      patchReminderPreferences(config, {
+                        skipConfirmationStepsWhenConfirmed: e.target.checked,
+                      }),
+                    )
+                    setSaved(false)
+                  }}
+                />
+                Skip confirmation steps after customer confirms
+              </label>
+            </div>
+          </Panel>
+        </TabsContent>
+
         <TabsContent value="test" className="mt-5">
-          <Panel title="Send test SMS" description="One live text using your saved templates and workspace sender.">
+          <Panel title="Send test" description="Live SMS or email using saved templates.">
             <div className={OPUS_META_STRIP + ' mb-4 text-muted-foreground'}>
               Tests use the same pipeline as appointment reminders — not a mock composer.
             </div>
@@ -298,13 +484,17 @@ export function AppointmentRemindersSettingsOpus() {
                 options={stepOptions}
               />
               <label className="block text-sm">
-                <span className="mb-1.5 block font-medium">Test phone</span>
+                <span className="mb-1.5 block font-medium">Test phone (SMS)</span>
                 <Input value={testPhone} onChange={(e) => setTestPhone(e.target.value)} autoComplete="tel" className="h-10" />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1.5 block font-medium">Test email</span>
+                <Input value={testEmail} onChange={(e) => setTestEmail(e.target.value)} autoComplete="email" className="h-10" />
               </label>
               {testError ? <p className="text-xs text-destructive" role="alert">{testError}</p> : null}
               <Button
                 className="h-10"
-                disabled={testing || !testPhone.trim()}
+                disabled={testing || (!testPhone.trim() && !testEmail.trim())}
                 onClick={async () => {
                   setTesting(true)
                   setTestError('')
@@ -312,7 +502,11 @@ export function AppointmentRemindersSettingsOpus() {
                     const res = await fetch('/api/appointment-reminders/reminders/test', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ stepKey: testStep, phone: testPhone.trim() }),
+                      body: JSON.stringify({
+                        stepKey: testStep,
+                        phone: testPhone.trim() || undefined,
+                        email: testEmail.trim() || undefined,
+                      }),
                     })
                     const json = await res.json()
                     if (!res.ok) throw new Error(json.error || 'Send failed')
@@ -323,7 +517,7 @@ export function AppointmentRemindersSettingsOpus() {
                   }
                 }}
               >
-                {testing ? 'Sending…' : 'Send test SMS'}
+                {testing ? 'Sending…' : 'Send test'}
               </Button>
             </div>
           </Panel>
@@ -353,6 +547,16 @@ export function AppointmentRemindersSettingsOpus() {
               }
             : undefined
         }
+        onChannelChange={(channel) => {
+          if (!editStep) return
+          setConfig(patchReminderChannel(config, editStep.stepKey, channel))
+          setSaved(false)
+        }}
+        onEmailSubjectChange={(subject) => {
+          if (!editStep) return
+          setConfig(patchReminderEmailSubject(config, editStep.stepKey, subject))
+          setSaved(false)
+        }}
         onAdvancedChange={(patch) => {
           if (!editStep) return
           setConfig(patchReminderAdvanced(config, editStep.stepKey, patch))
@@ -370,6 +574,8 @@ function StepEditSheet({
   onTemplateChange,
   onReset,
   onRemove,
+  onChannelChange,
+  onEmailSubjectChange,
   onAdvancedChange,
   templateLocked,
 }: {
@@ -378,6 +584,8 @@ function StepEditSheet({
   onTemplateChange: (t: string) => void
   onReset: () => void
   onRemove?: () => void
+  onChannelChange: (channel: import('@/lib/appointments/types').ReminderChannel) => void
+  onEmailSubjectChange: (subject: string) => void
   onAdvancedChange: (patch: Record<string, unknown>) => void
   templateLocked?: boolean
 }) {
@@ -398,14 +606,31 @@ function StepEditSheet({
                   onChange={(e) => onAdvancedChange({ label: e.target.value })}
                 />
               </label>
-              <p className="text-xs text-muted-foreground rounded-lg border bg-muted/30 px-3 py-2">
-                Channel: <span className="font-medium text-foreground">SMS</span> (Appointment Reminders)
-                {templateLocked ? (
-                  <span className="mt-1 block text-amber-700 dark:text-amber-300">
-                    Platform sender — message text uses approved templates. You can change timing and on/off.
-                  </span>
-                ) : null}
-              </p>
+              <SimpleSelect
+                label="Channel"
+                value={step.channel}
+                onChange={(v) => onChannelChange(v as import('@/lib/appointments/types').ReminderChannel)}
+                options={[
+                  { value: 'sms', label: 'SMS' },
+                  { value: 'email', label: 'Email' },
+                  { value: 'voice', label: 'Voice' },
+                ]}
+              />
+              {templateLocked && step.channel === 'sms' ? (
+                <p className="text-xs text-amber-700 dark:text-amber-300 rounded-lg border border-amber-200/60 bg-amber-50/50 px-3 py-2 dark:bg-amber-950/20">
+                  Platform sender — SMS text uses approved templates. You can change timing, channel, and on/off.
+                </p>
+              ) : null}
+              {step.channel === 'email' ? (
+                <label className="block text-sm">
+                  <span className="mb-1.5 block font-medium">Email subject</span>
+                  <Input
+                    className="h-10"
+                    value={step.emailSubject || `${step.title} — {{business_name}}`}
+                    onChange={(e) => onEmailSubjectChange(e.target.value)}
+                  />
+                </label>
+              ) : null}
               <div>
                 <div className="mb-1.5 flex items-center justify-between">
                   <span className="text-sm font-medium">Message</span>
