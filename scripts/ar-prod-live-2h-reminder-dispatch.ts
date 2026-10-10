@@ -106,7 +106,7 @@ async function main() {
   const row = await createManualArAppointment(WORKSPACE_ID, {
     inviteeName: "Anthony",
     inviteePhone: PHONE,
-    serviceName: "Consultation",
+    serviceName: "Follow-up visit",
     startsAt,
     timezone: platform.timezone || "America/New_York",
   });
