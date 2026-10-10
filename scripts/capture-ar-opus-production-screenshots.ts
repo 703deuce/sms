@@ -19,6 +19,8 @@ const ROUTES = [
   { slug: "04-calendars", path: "/appointment-reminders/calendars" },
   { slug: "05-settings", path: "/appointment-reminders/settings" },
   { slug: "06-setup-connect", path: "/appointment-reminders/setup/connect" },
+  { slug: "07-settings-templates", path: "/appointment-reminders/settings?tab=templates" },
+  { slug: "08-analytics", path: "/appointment-reminders/analytics" },
 ];
 
 async function main() {
