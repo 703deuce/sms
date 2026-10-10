@@ -16,6 +16,7 @@ const TAB_LINKS: Array<{ id: ArSettingsTab; label: string }> = [
   { id: 'business', label: 'Business profile' },
   { id: 'notifications', label: 'Notifications & responses' },
   { id: 'integrations', label: 'Integrations' },
+  { id: 'billing', label: 'Plan & billing' },
 ]
 
 function SettingsPageInner() {

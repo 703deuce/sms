@@ -245,6 +245,22 @@ export async function patchWorkspaceCalendarConnection(
   const conn = await getWorkspaceCalendarConnection(workspaceId, connectionId);
   if (!conn) return null;
 
+  if (input.importCalendarIds !== undefined) {
+    const { workspaceHasAppointmentReminders } = await import(
+      "@/lib/appointment-reminders/entitlement"
+    );
+    if (await workspaceHasAppointmentReminders(workspaceId)) {
+      const { assertWorkspaceImportCalendarPatchAllowed } = await import(
+        "@/lib/appointment-reminders/commercial/ar-calendar-limits"
+      );
+      await assertWorkspaceImportCalendarPatchAllowed(
+        workspaceId,
+        connectionId,
+        input.importCalendarIds,
+      );
+    }
+  }
+
   const config = { ...(conn.config || {}) } as CalendarConfig;
   if (input.writeCalendarId !== undefined) config.writeCalendarId = input.writeCalendarId;
   if (input.blockingCalendarIds !== undefined) config.blockingCalendarIds = input.blockingCalendarIds;

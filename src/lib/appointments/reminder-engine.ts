@@ -167,6 +167,25 @@ export async function sendReminderEmailWithTracking(input: {
     actionLinks: input.actionLinks,
   })}<img src="${openPixel}" width="1" height="1" alt="" style="display:none" />`;
 
+  const emailIdempotency = `ar-email:${input.appointmentId}:${trackingId}`;
+  const { reserveArReminderEmailUnit, releaseArReminderEmailReservation } = await import(
+    "@/lib/appointment-reminders/commercial/ar-email-usage"
+  );
+  const emailReservation = await reserveArReminderEmailUnit({
+    workspaceId: input.workspaceId,
+    idempotencyKey: emailIdempotency,
+  });
+  if (!emailReservation.reserved) {
+    return {
+      status: "failed" as const,
+      error:
+        emailReservation.reason === "ar_email_limit_reached"
+          ? "Monthly Appointment Reminders email allowance reached"
+          : "Email allowance not available",
+      trackingId,
+    };
+  }
+
   const { sendTransactionalEmail } = await import("@/lib/email/brevo");
   const attachments = input.attachIcs
     ? [
@@ -194,6 +213,14 @@ export async function sendReminderEmailWithTracking(input: {
     senderName: input.businessName,
     ...(attachments ? { attachments } : {}),
   });
+
+  if (result.status === "failed") {
+    await releaseArReminderEmailReservation({
+      workspaceId: input.workspaceId,
+      idempotencyKey: emailIdempotency,
+    });
+    return { ...result, trackingId, status: "failed" as const };
+  }
 
   const prisma = getPrisma();
   const row = await prisma.voiceAppointment.findFirst({

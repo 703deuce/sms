@@ -1,3 +1,5 @@
+import { parseArUsagePeriodKey } from "@/lib/appointment-reminders/commercial/ar-usage-period";
+
 /**
  * Appointment Reminders SMS allowance — limits come from configuration, not hardcoded product prices.
  *
@@ -32,6 +34,9 @@ export function currentArSmsUsagePeriodKey(now = new Date()): string {
 }
 
 export function arSmsUsagePeriodUtcBounds(periodKey: string): { start: Date; end: Date } {
+  const commercial = parseArUsagePeriodKey(periodKey.trim());
+  if (commercial) return commercial;
+
   const match = /^(\d{4})-(\d{2})$/.exec(periodKey.trim());
   if (!match) {
     const now = new Date();

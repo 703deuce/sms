@@ -20,6 +20,7 @@ export const AR_ROUTES = {
   setupConnect: "/appointment-reminders/setup/connect",
   setupConfigure: "/appointment-reminders/setup/configure",
   setupActivate: "/appointment-reminders/setup/activate",
+  pricing: "/appointment-reminders/pricing",
 } as const;
 
 export function appointmentRemindersShellHome(): string {

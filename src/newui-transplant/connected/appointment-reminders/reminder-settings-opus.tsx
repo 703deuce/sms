@@ -24,6 +24,7 @@ import {
 import { listReminderStepIds, resolveReminderStep } from '@/lib/appointments/reminders/reminders-config'
 import { DEFAULT_PLATFORM_CONFIG, type AppointmentPlatformConfig } from '@/lib/appointments/types'
 import type { ReminderItem, ReminderStepKey } from '@/features/appointments/kimi/reminders/types'
+import { ArBillingSettingsOpus } from '@/newui-transplant/connected/appointment-reminders/ar-billing-settings-opus'
 import { ArStatGrid } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
 import { ReminderSequenceTimeline } from '@/newui-transplant/components/appointment-reminders/reminder-sequence-timeline'
 import { Callout, FeatureEmphasisStrip, Panel, Pill, Stat } from '@/newui-transplant/components/app/kit'
@@ -98,6 +99,7 @@ const SETTINGS_TABS = [
   'business',
   'notifications',
   'integrations',
+  'billing',
 ] as const
 
 export type ArSettingsTab = (typeof SETTINGS_TABS)[number]
@@ -129,6 +131,10 @@ const SETTINGS_TAB_STRIP: Record<
   integrations: {
     title: 'Integrations',
     description: 'Connect Microsoft 365 or Google calendars and manage import selection.',
+  },
+  billing: {
+    title: 'Plan & billing',
+    description: 'Subscription, monthly allowances, and upgrades.',
   },
 }
 
@@ -593,6 +599,12 @@ export function AppointmentRemindersSettingsOpus({ activeTab = 'sequence' }: { a
         {activeTab === 'integrations' ? (
         <div className="space-y-4">
           <ArIntegrationsSettingsPanel />
+        </div>
+        ) : null}
+
+        {activeTab === 'billing' ? (
+        <div className="space-y-4">
+          <ArBillingSettingsOpus />
         </div>
         ) : null}
       </div>

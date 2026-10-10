@@ -33,6 +33,7 @@ export type PlatformSubscriptionRow = {
 
 type PlatformSubscriptionFamily =
   | PlatformProductFamily
+  | "appointment_reminders"
   | "mctb_ai_recovery"
   | "mctb_own_sender";
 
@@ -50,6 +51,7 @@ function parseFamilyFromMetadata(
   if (family === "mctb" || family === "smart_routing" || family === "call_forwarding") return family;
   if (family === "ai_transcription") return "ai_transcription";
   if (family === "fax") return "fax";
+  if (family === "appointment_reminders") return "appointment_reminders";
   if (productKey.startsWith("mctb_") && productKey !== "mctb_ai_recovery" && productKey !== "mctb_own_sender") {
     return "mctb";
   }
@@ -58,6 +60,12 @@ function parseFamilyFromMetadata(
   if (metadata.platformProductKey?.startsWith("call_forwarding")) return "call_forwarding";
   if (metadata.platformProductKey?.startsWith("ai_transcription")) return "ai_transcription";
   if (metadata.platformProductKey?.startsWith("fax")) return "fax";
+  if (
+    metadata.platformProductFamily === "appointment_reminders" ||
+    metadata.platformProductKey?.startsWith("appointment_reminders")
+  ) {
+    return "appointment_reminders";
+  }
   return null;
 }
 
@@ -95,7 +103,9 @@ export function isPlatformProductSubscription(
     key === "smart_routing" ||
     key === "call_forwarding" ||
     key === "fax" ||
-    key === "bundle_mctb_sr"
+    key === "bundle_mctb_sr" ||
+    key.startsWith("appointment_reminders") ||
+    key === "appointment_reminders"
   );
 }
 
@@ -162,6 +172,31 @@ export async function upsertPlatformProductSubscriptionFromStripe(
       metadataJson: metadata as object,
     },
   });
+
+  if (family === "appointment_reminders") {
+    if (active) {
+      const { clearArFreePlanMarker } = await import(
+        "@/lib/appointment-reminders/commercial/ar-workspace-plan"
+      );
+      await clearArFreePlanMarker(workspaceId);
+    }
+    await prisma.platformProductSubscription.update({
+      where: { id: row.id },
+      data: {
+        usagePeriodStart: periodStart,
+        usagePeriodEnd: periodEnd,
+      },
+    });
+    await syncDualProductDiscountForWorkspace(workspaceId);
+    return {
+      id: row.id,
+      workspaceId: row.workspaceId,
+      productFamily: row.productFamily,
+      tier: row.tier,
+      stripeSubscriptionId: row.stripeSubscriptionId,
+      status: row.status,
+    };
+  }
 
   if (family === "mctb_ai_recovery" || family === "mctb_own_sender") {
     const { applyMctbCommercialAddonProductKey, MCTB_COMMERCIAL_ADDON_PRODUCT_KEYS } = await import(

@@ -70,6 +70,25 @@ export async function executeArSendCustomerSmsJob(payload: Record<string, unknow
     throw new Error("ar_reply_session_sender_missing");
   }
 
+  const { analyzeSmsBody } = await import("@/lib/sms/segment-encoding");
+  const { reserveArReminderSmsUnit, releaseArReminderSmsReservation } = await import(
+    "@/lib/appointment-reminders/ar-sms-usage"
+  );
+  const segments = Math.max(1, analyzeSmsBody(body).segmentCount);
+  const reservation = await reserveArReminderSmsUnit({
+    workspaceId,
+    appointmentId: session.appointmentId,
+    timelineType: `ai_reply:${replySessionId}`,
+    segments,
+  });
+  if (!reservation.reserved) {
+    throw new Error(
+      reservation.reason === "ar_sms_limit_reached"
+        ? "ar_sms_monthly_allowance_reached"
+        : "ar_sms_allowance_unavailable",
+    );
+  }
+
   const result = await sendAppointmentSmsViaPlatformSender({
     workspaceId,
     customerWorkspaceId: workspaceId,
@@ -102,6 +121,15 @@ export async function executeArSendCustomerSmsJob(payload: Record<string, unknow
         throw err;
       }
     }
+  }
+
+  if (!result?.providerId && !result?.messageId) {
+    await releaseArReminderSmsReservation({
+      workspaceId,
+      appointmentId: session.appointmentId,
+      timelineType: `ai_reply:${replySessionId}`,
+      segments,
+    });
   }
 
   logArSmsPipeline({

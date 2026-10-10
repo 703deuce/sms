@@ -521,10 +521,33 @@ async function trySendStep(input: {
     return false;
   }
 
+  let effectiveStep = input.step;
+  if (await usesPlatformAppointmentSmsSender(input.workspaceId)) {
+    effectiveStep = resolvePlatformLockedReminderTemplate(input.stepKey, input.step);
+  }
+
+  const smsBodyPreview = await buildReminderSmsBodyForOutbound({
+    workspaceId: input.workspaceId,
+    stepKey: input.stepKey,
+    step: input.step,
+    firstName: input.metadata.inviteeName?.split(/\s+/)[0],
+    businessName: input.businessName,
+    service: input.serviceName,
+    startsAt: input.startsAt,
+    timezone: input.timezone,
+    confirmToken: input.confirmToken,
+    cancelToken: input.cancelToken,
+    rescheduleToken: input.rescheduleToken,
+    metadata: input.metadata,
+  });
+  const { analyzeSmsBody } = await import("@/lib/sms/segment-encoding");
+  const segmentCount = Math.max(1, analyzeSmsBody(smsBodyPreview).segmentCount);
+
   const reservation = await reserveArReminderSmsUnit({
     workspaceId: input.workspaceId,
     appointmentId: input.appointmentId,
     timelineType: input.timelineType,
+    segments: segmentCount,
   });
   if (!reservation.reserved) {
     await markReminderAllowanceBlocked({
@@ -539,26 +562,8 @@ async function trySendStep(input: {
     return false;
   }
 
-  let effectiveStep = input.step;
-  if (await usesPlatformAppointmentSmsSender(input.workspaceId)) {
-    effectiveStep = resolvePlatformLockedReminderTemplate(input.stepKey, input.step);
-  }
-
   try {
-    const smsBody = await buildReminderSmsBodyForOutbound({
-      workspaceId: input.workspaceId,
-      stepKey: input.stepKey,
-      step: input.step,
-      firstName: input.metadata.inviteeName?.split(/\s+/)[0],
-      businessName: input.businessName,
-      service: input.serviceName,
-      startsAt: input.startsAt,
-      timezone: input.timezone,
-      confirmToken: input.confirmToken,
-      cancelToken: input.cancelToken,
-      rescheduleToken: input.rescheduleToken,
-      metadata: input.metadata,
-    });
+    const smsBody = smsBodyPreview;
     const apptRowForContact = await getPrisma().voiceAppointment.findFirst({
       where: { id: input.appointmentId, workspaceId: input.workspaceId },
       select: { contactId: true },

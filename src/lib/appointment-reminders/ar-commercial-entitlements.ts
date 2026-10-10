@@ -1,14 +1,31 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/db";
-import { getPlatformSettingsCached, getTrialLimits } from "@/lib/platform-flags";
-import { listActivePlatformSubscriptions } from "@/lib/products/platform-subscriptions";
-import { workspaceHasAppointmentReminders } from "@/lib/appointment-reminders/entitlement";
+import { arPlanDefinition } from "@/lib/appointment-reminders/commercial/ar-plan-catalog";
 import {
-  AR_PAID_SMS_LIMIT_BY_TIER,
-  AR_PLATFORM_PRODUCT_FAMILY,
-  LIMITS_OVERRIDE_KEY,
-} from "@/lib/appointment-reminders/ar-sms-usage-constants";
+  arPlanLimitsForWorkspace,
+  resolveArWorkspaceCommercial,
+} from "@/lib/appointment-reminders/commercial/ar-workspace-plan";
+import { workspaceHasAppointmentReminders } from "@/lib/appointment-reminders/entitlement";
+import { AR_PLATFORM_PRODUCT_FAMILY } from "@/lib/appointment-reminders/ar-sms-usage-constants";
+import { getPrisma } from "@/lib/db";
+import { listActivePlatformSubscriptions } from "@/lib/products/platform-subscriptions";
+
+export type ArCommercialEntitlements = {
+  arProductActive: boolean;
+  paid: boolean;
+  paidTier: string | null;
+  billingPlan: string;
+  planKey: string;
+};
+
+export type ArMonthlySmsLimitResolution = {
+  limit: number;
+  source:
+    | "workspace_override"
+    | "ar_plan_catalog"
+    | "platform_subscription"
+    | "unconfigured";
+};
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -16,43 +33,12 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
-export type ArCommercialEntitlements = {
-  arProductActive: boolean;
-  paid: boolean;
-  paidTier: string | null;
-  billingPlan: string;
-};
-
-export type ArMonthlySmsLimitResolution = {
-  limit: number;
-  source:
-    | "workspace_override"
-    | "platform_subscription"
-    | "workspace_billing_plan"
-    | "platform_trial_config"
-    | "unconfigured";
-};
-
-function normalizeBillingPlanId(plan: string): string {
-  const p = plan.trim().toLowerCase();
-  if (!p) return "";
-  if (p.startsWith("plan_")) return p;
-  return `plan_${p}`;
-}
-
-function isPaidBillingPlan(plan: string): boolean {
-  const p = plan.trim().toLowerCase();
-  if (!p || p === "trial" || p === "trial_pending_card" || p === "free" || p === "onboarding") {
-    return false;
-  }
-  return !["canceled", "cancelled", "suspended", "expired"].includes(p);
-}
-
 export async function resolveArCommercialEntitlements(
   workspaceId: string,
 ): Promise<ArCommercialEntitlements> {
-  const [arProductActive, subs, ws] = await Promise.all([
+  const [arProductActive, commercial, subs, ws] = await Promise.all([
     workspaceHasAppointmentReminders(workspaceId),
+    resolveArWorkspaceCommercial(workspaceId),
     listActivePlatformSubscriptions(workspaceId),
     getPrisma().workspace.findUnique({
       where: { id: workspaceId },
@@ -61,16 +47,14 @@ export async function resolveArCommercialEntitlements(
   ]);
 
   const arSub = subs.find((s) => s.productFamily === AR_PLATFORM_PRODUCT_FAMILY);
-  const billingPlan = String(ws?.billingPlan || "");
-  const paid =
-    Boolean(arSub) ||
-    (isPaidBillingPlan(billingPlan) && arProductActive);
+  const paid = Boolean(arSub && arSub.tier !== "free") || (commercial.planKey !== "free" && commercial.stripeSubscriptionId);
 
   return {
     arProductActive,
     paid,
-    paidTier: arSub?.tier ?? null,
-    billingPlan,
+    paidTier: arSub?.tier ?? (paid ? commercial.planKey : null),
+    billingPlan: String(ws?.billingPlan || ""),
+    planKey: commercial.planKey,
   };
 }
 
@@ -83,35 +67,28 @@ export async function resolveArMonthlySmsLimit(
     select: { limits: true },
   });
   const limits = asRecord(limitsRow?.limits);
-  const override = limits[LIMITS_OVERRIDE_KEY];
+  const override = limits.arAppointmentRemindersMonthlySmsLimit;
   if (typeof override === "number" && override >= 0) {
     return { limit: override, source: "workspace_override" };
   }
 
-  const commercial = await resolveArCommercialEntitlements(workspaceId);
-
-  if (commercial.paidTier) {
-    const tierLimit = AR_PAID_SMS_LIMIT_BY_TIER[commercial.paidTier];
-    if (typeof tierLimit === "number" && tierLimit > 0) {
-      return { limit: tierLimit, source: "platform_subscription" };
-    }
+  const commercial = await resolveArWorkspaceCommercial(workspaceId);
+  if (!commercial.hasProductAccess) {
+    return { limit: 0, source: "unconfigured" };
   }
 
-  if (commercial.paid && isPaidBillingPlan(commercial.billingPlan)) {
-    const settings = await getPlatformSettingsCached();
-    const planId = normalizeBillingPlanId(commercial.billingPlan);
-    const planRow = settings.plans.find(
-      (p) => p.id === planId || p.id === commercial.billingPlan || p.name.toLowerCase() === commercial.billingPlan.toLowerCase(),
-    );
-    if (planRow && planRow.messages > 0) {
-      return { limit: planRow.messages, source: "workspace_billing_plan" };
-    }
-  }
+  const plan = arPlanLimitsForWorkspace(commercial);
+  return { limit: plan.smsSegmentsPerMonth, source: "ar_plan_catalog" };
+}
 
-  const trial = await getTrialLimits();
-  if (trial.messages > 0) {
-    return { limit: trial.messages, source: "platform_trial_config" };
-  }
+export async function resolveArMonthlyEmailLimit(workspaceId: string): Promise<number> {
+  const commercial = await resolveArWorkspaceCommercial(workspaceId);
+  if (!commercial.hasProductAccess) return 0;
+  return arPlanDefinition(commercial.planKey).emailsPerMonth;
+}
 
-  return { limit: 0, source: "unconfigured" };
+export async function resolveArMonthlyAiConversationLimit(workspaceId: string): Promise<number> {
+  const commercial = await resolveArWorkspaceCommercial(workspaceId);
+  if (!commercial.hasProductAccess) return 0;
+  return arPlanDefinition(commercial.planKey).aiConversationsPerMonth;
 }

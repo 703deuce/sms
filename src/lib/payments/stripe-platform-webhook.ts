@@ -118,6 +118,12 @@ export async function handlePlatformSubscriptionEvent(
         const { deactivateFaxAccount } = await import("@/lib/fax/fax-billing");
         await deactivateFaxAccount(workspaceId);
       }
+      if (family === "appointment_reminders" && workspaceId) {
+        const { assignArFreePlan } = await import(
+          "@/lib/appointment-reminders/commercial/ar-workspace-plan"
+        );
+        await assignArFreePlan(workspaceId);
+      }
       await syncDualProductDiscountForWorkspace(workspaceId);
     }
     return { handled: true, deactivated: true };

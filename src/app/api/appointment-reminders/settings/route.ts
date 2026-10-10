@@ -53,6 +53,18 @@ export async function PATCH(request: Request) {
     if ("error" in auth) return auth.error;
     const body = (await request.json()) as Partial<AppointmentPlatformConfig>;
     const policyPatch = await applyAppointmentRemindersPlatformTemplatePolicy(auth.workspaceId, body);
+    const { validateReminderConfigForPlan, ArFeatureGateError } = await import(
+      "@/lib/appointment-reminders/commercial/ar-feature-gates"
+    );
+    const merged = { ...(await loadAppointmentPlatformConfig(auth.workspaceId)), ...policyPatch };
+    try {
+      await validateReminderConfigForPlan(auth.workspaceId, merged);
+    } catch (err) {
+      if (err instanceof ArFeatureGateError) {
+        return NextResponse.json({ error: err.message, code: err.code }, { status: 403 });
+      }
+      throw err;
+    }
     const data = await saveAppointmentPlatformConfig(auth.workspaceId, policyPatch);
     return NextResponse.json({ data });
   } catch (err) {

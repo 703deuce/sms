@@ -69,6 +69,18 @@ export async function PATCH(request: Request) {
       body.mode === "reminders_only" || body.mode === "notify" || body.mode === "ai"
         ? body.mode
         : current.mode;
+    const { assertAiReschedulerModeAllowed, ArFeatureGateError } = await import(
+      "@/lib/appointment-reminders/commercial/ar-feature-gates"
+    );
+    try {
+      await assertAiReschedulerModeAllowed(auth.workspaceId, mode);
+    } catch (err) {
+      if (err instanceof ArFeatureGateError) {
+        return NextResponse.json({ error: err.message, code: err.code }, { status: 403 });
+      }
+      throw err;
+    }
+
     const next: AiReschedulerConfig = {
       ...current,
       ...body,

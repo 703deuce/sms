@@ -3,6 +3,7 @@ import "server-only";
 import { getPrisma } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import { resolveArMonthlySmsLimit } from "@/lib/appointment-reminders/ar-commercial-entitlements";
+import { getArCommercialUsagePeriodKey } from "@/lib/appointment-reminders/commercial/ar-usage-keys";
 import { usesPlatformAppointmentSmsSender } from "@/lib/appointment-reminders/platform-template-policy";
 import {
   arSmsUsagePeriodUtcBounds,
@@ -66,7 +67,7 @@ export async function getArSmsUsageSnapshot(workspaceId: string): Promise<ArSmsU
     resolveArMonthlySmsLimit(workspaceId),
   ]);
 
-  const periodKey = currentArSmsUsagePeriodKey();
+  const periodKey = await getArCommercialUsagePeriodKey(workspaceId);
   const limit = limitResolution.limit;
 
   if (!meteringActive) {
@@ -229,6 +230,8 @@ export async function reserveArReminderSmsUnit(input: {
   appointmentId?: string | null;
   timelineType?: string | null;
   excludeFromUsage?: boolean;
+  /** Billable SMS segments for this outbound message (GSM-7 / Unicode). */
+  segments?: number;
 }): Promise<ArSmsReservationResult> {
   const metering = await shouldMeterAppointmentRemindersSms(input.workspaceId);
   if (!metering) {
@@ -256,9 +259,10 @@ export async function reserveArReminderSmsUnit(input: {
     return { reserved: false, used: 0, limit: 0, reason: "unconfigured_limit" };
   }
 
-  const periodKey = currentArSmsUsagePeriodKey();
+  const periodKey = await getArCommercialUsagePeriodKey(input.workspaceId);
   const appointmentId = input.appointmentId?.trim() || null;
   const timelineType = input.timelineType?.trim() || "reminder";
+  const segments = Math.max(1, Math.min(10, Math.floor(input.segments ?? 1)));
 
   return withArSmsMeteringLock(input.workspaceId, async () => {
     const prisma = getPrisma();
@@ -291,11 +295,11 @@ export async function reserveArReminderSmsUnit(input: {
     const counted = await countBillableArReminderSmsSentInPeriod(input.workspaceId, periodKey);
     if (counted > used) used = counted;
 
-    if (used >= limit) {
+    if (used + segments > limit) {
       return { reserved: false, used, limit, reason: "ar_sms_limit_reached" };
     }
 
-    const nextUsed = used + 1;
+    const nextUsed = used + segments;
     const revision = Number(limits[USAGE_REVISION_KEY] || 0);
     const nextLimits = {
       ...limits,
@@ -322,11 +326,13 @@ export async function releaseArReminderSmsReservation(input: {
   workspaceId: string;
   appointmentId?: string | null;
   timelineType?: string | null;
+  segments?: number;
 }): Promise<void> {
   const metering = await shouldMeterAppointmentRemindersSms(input.workspaceId);
   if (!metering) return;
 
-  const periodKey = currentArSmsUsagePeriodKey();
+  const periodKey = await getArCommercialUsagePeriodKey(input.workspaceId);
+  const segments = Math.max(1, Math.min(10, Math.floor(input.segments ?? 1)));
   const appointmentId = input.appointmentId?.trim() || null;
   const timelineType = input.timelineType?.trim() || "reminder";
 
@@ -358,7 +364,7 @@ export async function releaseArReminderSmsReservation(input: {
     const limits = asRecord(limitsRow.limits);
     if (String(limits[USAGE_PERIOD_KEY] || "") !== periodKey) return;
     const revision = Number(limits[USAGE_REVISION_KEY] || 0);
-    const used = Math.max(0, Number(limits[USAGE_USED] || 0) - 1);
+    const used = Math.max(0, Number(limits[USAGE_USED] || 0) - segments);
     await prisma.workspaceLimits.update({
       where: { workspaceId: input.workspaceId },
       data: {

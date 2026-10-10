@@ -32,10 +32,25 @@ export async function tryHandleArReminderFollowUp(input: {
   });
   if (!verified.ok) return { handled: false };
 
-  if (
+  const enteringAi =
     verified.session.lifecycleState === "AWAITING_REPLY" ||
-    verified.session.lifecycleState === "COMPLETED"
-  ) {
+    verified.session.lifecycleState === "COMPLETED";
+
+  if (enteringAi) {
+    const { reserveArAiConversation } = await import(
+      "@/lib/appointment-reminders/commercial/ar-ai-conversation-usage"
+    );
+    const aiReserve = await reserveArAiConversation({
+      workspaceId: input.workspaceId,
+      replySessionId: input.replySessionId,
+    });
+    if (!aiReserve.reserved) {
+      return {
+        handled: true,
+        replyText:
+          "Our automated rescheduling assistant is unavailable for this month. A team member will follow up shortly.",
+      };
+    }
     await markArReplySessionLifecycle({
       sessionId: input.replySessionId,
       workspaceId: input.workspaceId,
