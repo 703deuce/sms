@@ -32,15 +32,16 @@ Scripts:
 
 ## Send-time controls
 
-`skipWeekends`, `skipClosedDays`, and `skipOffHours` on each step are enforced in discovery via `shouldSkipReminderSendNow` (timezone-aware weekly hours and date overrides). Optional `reminderQuietHours` on platform config applies when `skipOffHours` is enabled.
+`skipWeekends`, `skipClosedDays`, and `skipOffHours` on each step feed `resolveEffectiveReminderFireTime`:
 
-**Note:** When a send is skipped at the fire instant, discovery does not automatically defer to the next open window within the same tick; the appointment must still fall inside the discovery fire tolerance on a later job run. For live certification, use real offsets and avoid stacking skip flags during narrow test windows.
+1. Compute the **nominal** offset from `minutesBefore` / `timeOfDay`.
+2. If restrictions block that instant, shift to the **latest permitted time before** the nominal instant (respecting appointment `createdAt` and a 14-day lookback).
+3. If no prior window exists (e.g. booked too late), use the **earliest permitted time after booking** and before `startsAt`.
+4. If still none, record dispatch `suppressed` with `no_allowed_send_window`.
 
-## Gaps
+Discovery enqueues when `now` is within tolerance of the **effective** fire time (not the nominal offset). Appointment timeline preview uses the same resolver.
 
-| Item | Status |
-|------|--------|
-| Deferred send (shift to next open hour) | Not implemented; skips tick only |
+Optional `reminderQuietHours` applies when `skipOffHours` is enabled.
 
 ## Verification
 

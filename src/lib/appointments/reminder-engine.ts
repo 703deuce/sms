@@ -18,7 +18,7 @@ import {
   wasReminderSent,
 } from "@/lib/appointments/reminder-state";
 import { buildIcsAttachment } from "@/lib/appointments/ics-builder";
-import { shouldSkipReminderSendNow } from "@/lib/appointment-reminders/reminder-send-time-policy";
+import { resolveEffectiveReminderFireTime } from "@/lib/appointment-reminders/reminder-effective-fire-time";
 import type { AppointmentPlatformConfig } from "@/lib/appointments/types";
 
 export type ScheduledReminderPreview = {
@@ -26,7 +26,9 @@ export type ScheduledReminderPreview = {
   label: string;
   channel: string;
   scheduledFor: string;
-  status: "scheduled" | "sent" | "skipped" | "failed" | "past_due";
+  nominalScheduledFor?: string;
+  deferStrategy?: string;
+  status: "scheduled" | "sent" | "skipped" | "failed" | "past_due" | "unschedulable";
 };
 
 function resolveStepFireTime(
@@ -47,6 +49,7 @@ function resolveStepFireTime(
 
 export function buildFutureReminderSchedule(input: {
   startsAt: string;
+  createdAt?: string;
   timezone: string;
   steps: Array<{ key: string; step: ReminderStepExtended }>;
   metadata: AppointmentMetadata;
@@ -55,20 +58,40 @@ export function buildFutureReminderSchedule(input: {
   reminderQuietHours?: AppointmentPlatformConfig["reminderQuietHours"];
 }): ScheduledReminderPreview[] {
   const startsAt = new Date(input.startsAt);
+  const createdAt = input.createdAt ? new Date(input.createdAt) : startsAt;
   const now = Date.now();
   const weekly = input.weeklyHours || {};
   return input.steps.map(({ key, step }) => {
     if (!step.enabled) {
       return { stepKey: key, label: step.label, channel: step.channel, scheduledFor: "", status: "skipped" };
     }
-    const fireAt = resolveStepFireTime(step, startsAt, input.timezone);
     const timelineType = reminderTimelineType(key as "confirmation" | "reminder24h" | "reminder2h", step.minutesBefore);
+    const resolved = resolveEffectiveReminderFireTime({
+      step,
+      startsAt,
+      createdAt,
+      weeklyHours: weekly,
+      timezone: input.timezone,
+      dateOverrides: input.dateOverrides,
+      reminderQuietHours: input.reminderQuietHours,
+    });
+    if ("reason" in resolved) {
+      return {
+        stepKey: key,
+        label: step.label,
+        channel: step.channel,
+        scheduledFor: resolved.nominalFireAt.toISOString(),
+        status: "unschedulable",
+      };
+    }
+    const fireAt = resolved.effectiveFireAt;
     if (wasReminderSent(input.metadata, timelineType)) {
       return {
         stepKey: key,
         label: step.label,
         channel: step.channel,
         scheduledFor: fireAt.toISOString(),
+        nominalScheduledFor: resolved.deferred ? resolved.nominalFireAt.toISOString() : undefined,
         status: "sent",
       };
     }
@@ -78,25 +101,8 @@ export function buildFutureReminderSchedule(input: {
         label: step.label,
         channel: step.channel,
         scheduledFor: fireAt.toISOString(),
+        nominalScheduledFor: resolved.deferred ? resolved.nominalFireAt.toISOString() : undefined,
         status: "past_due",
-      };
-    }
-    if (
-      shouldSkipReminderSendNow({
-        step,
-        fireAt,
-        weeklyHours: weekly,
-        timezone: input.timezone,
-        dateOverrides: input.dateOverrides,
-        reminderQuietHours: input.reminderQuietHours,
-      })
-    ) {
-      return {
-        stepKey: key,
-        label: step.label,
-        channel: step.channel,
-        scheduledFor: fireAt.toISOString(),
-        status: "skipped",
       };
     }
     return {
@@ -104,6 +110,8 @@ export function buildFutureReminderSchedule(input: {
       label: step.label,
       channel: step.channel,
       scheduledFor: fireAt.toISOString(),
+      nominalScheduledFor: resolved.deferred ? resolved.nominalFireAt.toISOString() : undefined,
+      deferStrategy: resolved.deferred ? resolved.strategy : undefined,
       status: "scheduled",
     };
   });

@@ -31,6 +31,7 @@ export async function GET(_request: Request, { params }: Params) {
     }));
     const future = buildFutureReminderSchedule({
       startsAt: appt.startsAt,
+      createdAt: appt.createdAt,
       timezone: appt.timezone || config.timezone,
       steps: enabledSteps,
       metadata: meta,

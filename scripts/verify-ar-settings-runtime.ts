@@ -89,6 +89,11 @@ assertFileContains(
   "send-time policy",
 );
 assertFileContains(
+  "src/lib/appointment-reminders/reminder-discovery.ts",
+  "resolveEffectiveReminderFireTime",
+  "deferred effective fire time in discovery",
+);
+assertFileContains(
   "src/lib/appointments/settings.ts",
   "reminderPreferences: patch.reminderPreferences",
   "deep merge reminderPreferences",

@@ -3,10 +3,9 @@ import "server-only";
 import { getPrisma } from "@/lib/db";
 import {
   configuredReminderSteps,
-  resolveStepFireTime,
-  shouldSkipStepNow,
   workspaceRemindersOperational,
 } from "@/lib/appointments/reminder-delivery";
+import { resolveEffectiveReminderFireTime } from "@/lib/appointment-reminders/reminder-effective-fire-time";
 import { currentReminderGeneration, wasReminderSent } from "@/lib/appointments/reminder-state";
 import type { AppointmentMetadata } from "@/lib/appointments/types";
 import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
@@ -35,6 +34,7 @@ export async function discoverAndEnqueueDueAppointmentReminders(): Promise<{
   let due = 0;
   let enqueued = 0;
   let suppressedLate = 0;
+  let suppressedNoWindow = 0;
 
   let cursorStartsAt: Date | null = null;
   let cursorId: string | null = null;
@@ -128,7 +128,29 @@ export async function discoverAndEnqueueDueAppointmentReminders(): Promise<{
         ) {
           continue;
         }
-        const fireAt = resolveStepFireTime(scheduled.step, row.startsAt);
+        const tz = row.timezone || config.timezone || "America/New_York";
+        const resolved = resolveEffectiveReminderFireTime({
+          step: scheduled.step,
+          startsAt: row.startsAt,
+          createdAt: row.createdAt,
+          weeklyHours,
+          timezone: tz,
+          dateOverrides: config.dateOverrides,
+          reminderQuietHours: config.reminderQuietHours,
+        });
+
+        if ("reason" in resolved) {
+          suppressedNoWindow += await suppressNoWindowDispatch({
+            workspaceId: row.workspaceId,
+            appointmentId: row.id,
+            timelineType: scheduled.timelineType,
+            generation,
+            intendedFireAt: resolved.nominalFireAt,
+          });
+          continue;
+        }
+
+        const fireAt = resolved.effectiveFireAt;
         const fireMs = fireAt.getTime();
 
         if (appointmentWithinMinimumLeadTime(row.startsAt, config, now)) {
@@ -147,20 +169,6 @@ export async function discoverAndEnqueueDueAppointmentReminders(): Promise<{
         }
 
         if (now < fireMs - FIRE_TOLERANCE_MS || now > fireMs + FIRE_TOLERANCE_MS) continue;
-        const bypassQuietHours = process.env.AR_REMINDER_DISCOVERY_BYPASS_QUIET_HOURS === "1";
-        if (
-          !bypassQuietHours &&
-          shouldSkipStepNow(
-            scheduled.step,
-            fireAt,
-            weeklyHours,
-            row.timezone || config.timezone || "America/New_York",
-            config.reminderQuietHours,
-            config.dateOverrides,
-          )
-        ) {
-          continue;
-        }
 
         due += 1;
         const dispatchId = await upsertPendingDispatch({
@@ -170,6 +178,12 @@ export async function discoverAndEnqueueDueAppointmentReminders(): Promise<{
           generation,
           intendedFireAt: fireAt,
           stepKey: scheduled.key,
+          deferMeta: resolved.deferred
+            ? {
+                nominalFireAt: resolved.nominalFireAt.toISOString(),
+                strategy: resolved.strategy,
+              }
+            : undefined,
         });
         if (!dispatchId) continue;
 
@@ -197,7 +211,7 @@ export async function discoverAndEnqueueDueAppointmentReminders(): Promise<{
     if (rows.length < DISCOVERY_BATCH) break;
   }
 
-  return { examined, due, enqueued, suppressedLate };
+  return { examined, due, enqueued, suppressedLate, suppressedNoWindow };
 }
 
 async function upsertPendingDispatch(input: {
@@ -207,6 +221,7 @@ async function upsertPendingDispatch(input: {
   generation: number;
   intendedFireAt: Date;
   stepKey: string;
+  deferMeta?: { nominalFireAt: string; strategy: string };
 }): Promise<string | null> {
   const prisma = getPrisma();
   const existing = await prisma.arReminderDispatch.findUnique({
@@ -237,15 +252,55 @@ async function upsertPendingDispatch(input: {
       reminderGeneration: input.generation,
       intendedFireAt: input.intendedFireAt,
       status: "pending",
-      metadata: { stepKey: input.stepKey },
+      metadata: { stepKey: input.stepKey, ...input.deferMeta },
     },
     update: {
       intendedFireAt: input.intendedFireAt,
       status: existing?.status === "failed" ? "pending" : existing?.status || "pending",
-      metadata: { stepKey: input.stepKey },
+      metadata: { stepKey: input.stepKey, ...input.deferMeta },
     },
   });
   return row.id;
+}
+
+async function suppressNoWindowDispatch(input: {
+  workspaceId: string;
+  appointmentId: string;
+  timelineType: string;
+  generation: number;
+  intendedFireAt: Date;
+}): Promise<number> {
+  const prisma = getPrisma();
+  const existing = await prisma.arReminderDispatch.findUnique({
+    where: {
+      appointmentId_timelineType_reminderGeneration: {
+        appointmentId: input.appointmentId,
+        timelineType: input.timelineType,
+        reminderGeneration: input.generation,
+      },
+    },
+  });
+  if (existing?.status === "suppressed") return 0;
+  await prisma.arReminderDispatch.upsert({
+    where: {
+      appointmentId_timelineType_reminderGeneration: {
+        appointmentId: input.appointmentId,
+        timelineType: input.timelineType,
+        reminderGeneration: input.generation,
+      },
+    },
+    create: {
+      workspaceId: input.workspaceId,
+      appointmentId: input.appointmentId,
+      timelineType: input.timelineType,
+      reminderGeneration: input.generation,
+      intendedFireAt: input.intendedFireAt,
+      status: "suppressed",
+      lastError: "no_allowed_send_window",
+    },
+    update: { status: "suppressed", lastError: "no_allowed_send_window" },
+  });
+  return 1;
 }
 
 async function suppressLateDispatch(input: {
