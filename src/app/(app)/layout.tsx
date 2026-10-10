@@ -16,6 +16,7 @@ import { loadCallHandlingOwnershipState } from "@/lib/call-handling/ownership-st
 import { shouldShowCallHandlingSwitcher } from "@/lib/call-handling/show-switcher";
 import { logNavTiming, timedNavSection, type NavTimingReport } from "@/lib/observability/nav-timing";
 import { redirect } from "next/navigation";
+import { workspaceHasAppointmentReminders } from "@/lib/appointment-reminders/entitlement";
 
 export default async function AppLayout({
   children,
@@ -68,7 +69,9 @@ export default async function AppLayout({
       ? (customCfg.mctb as Record<string, unknown>)
       : {};
   const hasMctb = isActiveEntitlement(productFeatures.mctb);
-  const hasAppointmentReminders = productAccess.hasVoice;
+  const hasAppointmentReminders = await workspaceHasAppointmentReminders(workspaceId, {
+    isPlatformAdmin: session.isAdmin,
+  });
   const hasAiAfterHours = isAiAfterHoursEntitled(productAccess.hasVoice);
   const showTryIt =
     hasMctb &&

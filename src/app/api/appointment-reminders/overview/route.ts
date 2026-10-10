@@ -7,6 +7,10 @@ export async function GET() {
   try {
     const auth = await requireAppointmentRemindersAccess("appointment_reminders.read");
     if ("error" in auth) return auth.error;
+    const { scheduleAppointmentRemindersCalendarSync } = await import(
+      "@/lib/appointment-reminders/calendar/ensure-calendars-synced"
+    );
+    scheduleAppointmentRemindersCalendarSync(auth.workspaceId);
     const data = await loadAppointmentRemindersOverview(auth.workspaceId);
     return NextResponse.json({ data });
   } catch (err) {

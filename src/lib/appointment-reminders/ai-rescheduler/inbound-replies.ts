@@ -88,8 +88,10 @@ export async function handleArCancelConfirmation(input: {
   };
   if (!meta.arCancelPending) return { handled: false };
 
-  const platform = await loadAppointmentPlatformConfig(input.workspaceId);
-  const ar = resolveAiReschedulerConfig(platform);
+  const { resolveArAiReschedulerConfigForWorkspace } = await import(
+    "@/lib/appointment-reminders/commercial/ar-ai-rescheduler-plan"
+  );
+  const ar = await resolveArAiReschedulerConfigForWorkspace(input.workspaceId);
   const whenLabel = await formatWhen(input.workspaceId, row.id);
   const cancelPolicy = resolveArCancelSmsPolicy(ar);
   const policyGate = gateArSmsCalendarWriteByPolicy({
@@ -293,8 +295,10 @@ export async function handleArReminderLetterReply(input: {
   letter: "C" | "R" | "X";
   providerMessageId?: string;
 }): Promise<ArInboundReplyResult> {
-  const platform = await loadAppointmentPlatformConfig(input.workspaceId);
-  const ar = resolveAiReschedulerConfig(platform);
+  const { resolveArAiReschedulerConfigForWorkspace } = await import(
+    "@/lib/appointment-reminders/commercial/ar-ai-rescheduler-plan"
+  );
+  const ar = await resolveArAiReschedulerConfigForWorkspace(input.workspaceId);
   if (!isAiReschedulerSmsEnabled(ar)) return { handled: false };
 
   let appointmentId: string | null = input.explicitAppointmentId?.trim() || null;

@@ -14,12 +14,22 @@ import {
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
 import { AR_ROUTES } from "@/lib/appointment-reminders/routes";
+import { appointmentRemindersHideBookingNav } from "@/lib/appointment-reminders/ar-launch-nav";
 
 const ACCOUNT_SECTION = "Account";
 
 /** Product-local sidebar for Appointment Reminders. */
 /** Bottom nav (4 slots + More) — creation paths must be one tap away on mobile. */
 export function buildAppointmentRemindersMobileNav(): NavItem[] {
+  const hideBooking = appointmentRemindersHideBookingNav();
+  if (hideBooking) {
+    return [
+      { label: "Home", href: AR_ROUTES.home, icon: LayoutDashboard, matchExact: true },
+      { label: "Appointments", href: AR_ROUTES.appointments, icon: CalendarDays },
+      { label: "Reminders", href: AR_ROUTES.reminders, icon: Bell },
+      { label: "Settings", href: AR_ROUTES.settings, icon: Settings2 },
+    ];
+  }
   return [
     { label: "Home", href: AR_ROUTES.home, icon: LayoutDashboard, matchExact: true },
     { label: "Meetings", href: AR_ROUTES.bookingMeetings, icon: Video },
@@ -29,7 +39,8 @@ export function buildAppointmentRemindersMobileNav(): NavItem[] {
 }
 
 export function buildAppointmentRemindersNav(): NavItem[] {
-  return [
+  const hideBooking = appointmentRemindersHideBookingNav();
+  const items: NavItem[] = [
     {
       label: "Overview",
       href: AR_ROUTES.home,
@@ -71,21 +82,27 @@ export function buildAppointmentRemindersNav(): NavItem[] {
       href: AR_ROUTES.settings,
       icon: Settings2,
     },
-    {
-      label: "Booking page",
-      href: AR_ROUTES.booking,
-      icon: Link2,
-      sectionLabel: "Booking",
-    },
-    {
-      label: "Meetings",
-      href: AR_ROUTES.bookingMeetings,
-      icon: Video,
-      sectionLabel: "Booking",
-    },
+  ];
+  if (!hideBooking) {
+    items.push(
+      {
+        label: "Booking page",
+        href: AR_ROUTES.booking,
+        icon: Link2,
+        sectionLabel: "Booking",
+      },
+      {
+        label: "Meetings",
+        href: AR_ROUTES.bookingMeetings,
+        icon: Video,
+        sectionLabel: "Booking",
+      },
+    );
+  }
+  items.push(
     {
       label: "Plan & Billing",
-      href: "/settings/billing",
+      href: AR_ROUTES.settingsBilling,
       icon: CreditCard,
       sectionLabel: ACCOUNT_SECTION,
     },
@@ -94,11 +111,15 @@ export function buildAppointmentRemindersNav(): NavItem[] {
       href: "/settings/business",
       icon: Building2,
     },
-  ];
+  );
+  return items;
 }
 
 export function getAppointmentRemindersPageTitle(pathname: string): string {
   if (pathname.startsWith("/settings/billing")) return "Plan & Billing";
+  if (pathname.startsWith(AR_ROUTES.settings) && pathname.includes("tab=billing")) {
+    return "Plan & Billing";
+  }
   if (pathname.startsWith("/settings/business")) return "Business Settings";
   if (pathname === AR_ROUTES.home) return "Overview";
   if (pathname.startsWith(AR_ROUTES.appointments)) return "Appointments";

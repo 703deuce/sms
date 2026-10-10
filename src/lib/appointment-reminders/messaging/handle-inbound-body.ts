@@ -28,6 +28,24 @@ export async function handleAppointmentRemindersInboundBody(input: {
   const { inboundKind, bodyLength } = classifyArInboundBody(body);
   if (!body) return { handled: false };
 
+  const { workspaceAllowsSmsCustomerResponses } = await import(
+    "@/lib/appointment-reminders/commercial/ar-feature-gates"
+  );
+  const smsResponsesAllowed = await workspaceAllowsSmsCustomerResponses(input.workspaceId);
+  if (!smsResponsesAllowed) {
+    const upper = body.toUpperCase();
+    const looksLikeReply =
+      upper === "C" || upper === "R" || upper === "X" || /^(yes|y)$/i.test(body);
+    if (looksLikeReply) {
+      return {
+        handled: true,
+        replyText:
+          "SMS replies aren't included on the Free plan. Upgrade to Starter in Appointment Reminders settings to confirm, reschedule, or cancel by text.",
+      };
+    }
+    return { handled: false };
+  }
+
   const { resolveArAiReschedulerConfigForWorkspace } = await import(
     "@/lib/appointment-reminders/commercial/ar-ai-rescheduler-plan"
   );

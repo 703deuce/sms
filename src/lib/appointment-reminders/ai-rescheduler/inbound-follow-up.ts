@@ -14,8 +14,10 @@ export async function tryHandleArReminderFollowUp(input: {
   message: string;
   providerMessageId?: string;
 }): Promise<{ handled: true; replyText: string } | { handled: false }> {
-  const platform = await loadAppointmentPlatformConfig(input.workspaceId);
-  const ar = resolveAiReschedulerConfig(platform);
+  const { resolveArAiReschedulerConfigForWorkspace } = await import(
+    "@/lib/appointment-reminders/commercial/ar-ai-rescheduler-plan"
+  );
+  const ar = await resolveArAiReschedulerConfigForWorkspace(input.workspaceId);
   if (!isAiReschedulerSmsEnabled(ar)) return { handled: false };
 
   const prisma = getPrisma();

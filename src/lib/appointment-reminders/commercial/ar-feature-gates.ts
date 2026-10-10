@@ -94,6 +94,21 @@ export async function assertImportCalendarCountAllowed(
   }
 }
 
+export async function workspaceAllowsSmsCustomerResponses(workspaceId: string): Promise<boolean> {
+  const commercial = await resolveArWorkspaceCommercial(workspaceId);
+  const plan = arPlanLimitsForWorkspace(commercial);
+  return plan.smsConfirmationsAndResponses;
+}
+
+export async function assertSmsCustomerResponsesAllowed(workspaceId: string): Promise<void> {
+  if (!(await workspaceAllowsSmsCustomerResponses(workspaceId))) {
+    throw new ArFeatureGateError(
+      "ar_plan_sms_responses",
+      "SMS confirmations and replies require Starter or higher. Upgrade in Plan & billing.",
+    );
+  }
+}
+
 export async function assertStaffNotifiedFlowsAllowed(workspaceId: string): Promise<void> {
   const commercial = await resolveArWorkspaceCommercial(workspaceId);
   const plan = arPlanLimitsForWorkspace(commercial);

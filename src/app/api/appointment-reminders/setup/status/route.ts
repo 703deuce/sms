@@ -11,6 +11,10 @@ export async function GET() {
   try {
     const auth = await requireAppointmentRemindersAccess("appointment_reminders.read");
     if ("error" in auth) return auth.error;
+    const { ensureAppointmentRemindersCalendarsSynced } = await import(
+      "@/lib/appointment-reminders/calendar/ensure-calendars-synced"
+    );
+    await ensureAppointmentRemindersCalendarsSynced(auth.workspaceId, { awaitInitial: true });
     const [readiness, activation] = await Promise.all([
       evaluateAppointmentRemindersSetupReadiness(auth.workspaceId),
       loadAppointmentRemindersActivation(auth.workspaceId),

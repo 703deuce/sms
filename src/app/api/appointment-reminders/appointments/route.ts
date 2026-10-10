@@ -9,6 +9,10 @@ export async function GET(request: Request) {
   try {
     const auth = await requireAppointmentRemindersAccess("appointment_reminders.read");
     if ("error" in auth) return auth.error;
+    const { scheduleAppointmentRemindersCalendarSync } = await import(
+      "@/lib/appointment-reminders/calendar/ensure-calendars-synced"
+    );
+    scheduleAppointmentRemindersCalendarSync(auth.workspaceId);
     const { searchParams } = new URL(request.url);
     const data = await loadAppointmentRemindersPage(auth.workspaceId, {
       q: searchParams.get("q") || undefined,

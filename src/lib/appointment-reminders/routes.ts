@@ -21,6 +21,7 @@ export const AR_ROUTES = {
   setupConfigure: "/appointment-reminders/setup/configure",
   setupActivate: "/appointment-reminders/setup/activate",
   pricing: "/appointment-reminders/pricing",
+  settingsBilling: "/appointment-reminders/settings?tab=billing",
 } as const;
 
 export function appointmentRemindersShellHome(): string {

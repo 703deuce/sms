@@ -305,11 +305,38 @@ export async function patchWorkspaceCalendarConnection(
     }
   }
 
-  if (row && importNewlyEnabled) {
-    const { enqueueCalendarConnectionSync } = await import("@/lib/calendar/import-sync");
-    await enqueueCalendarConnectionSync(workspaceId, connectionId, false).catch((err) => {
-      console.warn("[calendar] auto-sync after import enable failed", connectionId, err);
+  const importSelectionSaved =
+    row &&
+    input.importCalendarIds !== undefined &&
+    hasImport &&
+    syncEnabled &&
+    JSON.stringify(prevConfig.importCalendarIds ?? []) !==
+      JSON.stringify(config.importCalendarIds ?? []);
+
+  if (row && (importNewlyEnabled || importSelectionSaved)) {
+    const { enqueueCalendarConnectionSync, syncWorkspaceCalendarConnection } = await import(
+      "@/lib/calendar/import-sync",
+    );
+    await enqueueCalendarConnectionSync(workspaceId, connectionId, false, {
+      priority: 20,
+      wake: true,
+    }).catch((err) => {
+      console.warn("[calendar] auto-sync enqueue after import enable failed", connectionId, err);
     });
+
+    const { workspaceHasAppointmentReminders } = await import(
+      "@/lib/appointment-reminders/entitlement",
+    );
+    const isAr = await workspaceHasAppointmentReminders(workspaceId);
+    const needsInitialImport = isAr && !conn.lastSyncAt;
+    if (needsInitialImport || (isAr && importSelectionSaved)) {
+      await syncWorkspaceCalendarConnection(workspaceId, connectionId, {
+        incremental: Boolean(conn.lastSyncAt),
+        manual: false,
+      }).catch((err) => {
+        console.warn("[calendar] inline AR sync after import save failed", connectionId, err);
+      });
+    }
   }
 
   return row;
