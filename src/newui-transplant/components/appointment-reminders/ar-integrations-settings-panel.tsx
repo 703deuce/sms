@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { Panel } from '@/newui-transplant/components/app/kit'
-import { AR_SETTINGS_INTEGRATIONS } from '@/lib/appointment-reminders/routes'
+import { AR_ROUTES, AR_SETTINGS_INTEGRATIONS } from '@/lib/appointment-reminders/routes'
 import { CalendarIntegrationsOpus } from '@/newui-transplant/connected/integrations/calendar-integrations-opus'
 import { TextLink } from '@/newui-transplant/components/app/kit'
 

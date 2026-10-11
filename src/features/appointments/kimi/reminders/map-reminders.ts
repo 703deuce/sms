@@ -99,6 +99,7 @@ function mapReminderItem(
     stopOnReply: step.stopOnReply,
     attachIcs: step.channel === "email",
     isCustom: !CORE_ORDER.includes(stepKey as CoreReminderStepKey),
+    libraryMessageType: step.libraryMessageType,
   };
 }
 

@@ -25,7 +25,6 @@ export function SimpleSelect({
   const current = value ?? inner
   return (
     <Select
-      items={options}
       value={current}
       onValueChange={(v) => {
         if (v == null) return
@@ -33,10 +32,10 @@ export function SimpleSelect({
         onChange?.(v as string)
       }}
     >
-      <SelectTrigger id={id} aria-label={label} className={cn('h-9 bg-card', className)}>
+      <SelectTrigger id={id} aria-label={label} className={cn('h-9 w-full bg-card', className)}>
         <SelectValue />
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent className="z-[200]">
         {options.map((o) => (
           <SelectItem key={o.value} value={o.value}>
             {o.label}

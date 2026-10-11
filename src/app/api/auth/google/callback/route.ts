@@ -88,8 +88,10 @@ export async function GET(request: Request) {
       const { assignArFreePlan } = await import(
         "@/lib/appointment-reminders/commercial/ar-workspace-plan"
       );
-      await assignArFreePlan(workspaceId);
-      await grantProductEntitlement(workspaceId, "voice", "active");
+      await Promise.all([
+        assignArFreePlan(workspaceId),
+        grantProductEntitlement(workspaceId, "voice", "active"),
+      ]);
     } else if (wantsVoiceWorkspace) {
       const voiceWs = account.created
         ? await ensureProductWorkspace(account.userId, "voice")

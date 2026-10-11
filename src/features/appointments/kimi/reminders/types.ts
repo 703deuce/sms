@@ -28,6 +28,7 @@ export type ReminderItem = {
   attachIcs?: boolean;
   minutesBefore?: number;
   isCustom?: boolean;
+  libraryMessageType?: string;
 };
 
 export type ReminderTestOption = {

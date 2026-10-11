@@ -59,6 +59,7 @@ import {
   STEP_TO_MESSAGE_TYPE,
   type TemplateMessageType,
 } from '@/lib/appointment-reminders/template-library/types'
+import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
 
 function asPlatformConfig(config: RemindersApiConfig): AppointmentPlatformConfig {
   return { ...DEFAULT_PLATFORM_CONFIG, timezone: config.timezone, reminders: config.reminders }
@@ -183,6 +184,7 @@ export function AppointmentRemindersSettingsOpus({ activeTab = 'sequence' }: { a
   const [applyStepKey, setApplyStepKey] = useState('confirmation')
   const [applyingLibraryTemplate, setApplyingLibraryTemplate] = useState(false)
   const [applyTemplateError, setApplyTemplateError] = useState('')
+  const [reminderStepsMax, setReminderStepsMax] = useState<number | undefined>(undefined)
 
   const loadWorkspace = useCallback(() => {
     void fetch('/api/appointment-reminders/reminders/workspace')
@@ -267,6 +269,16 @@ export function AppointmentRemindersSettingsOpus({ activeTab = 'sequence' }: { a
   useEffect(() => {
     load()
   }, [load])
+
+  useEffect(() => {
+    void fetch('/api/appointment-reminders/billing')
+      .then((r) => r.json())
+      .then((json) => {
+        const max = json.data?.plan?.features?.reminderStepsMax
+        if (typeof max === 'number' && max > 0) setReminderStepsMax(max)
+      })
+      .catch(() => setReminderStepsMax(undefined))
+  }, [])
 
   useEffect(() => {
     void fetch('/api/appointment-reminders/templates/library')
@@ -402,6 +414,8 @@ export function AppointmentRemindersSettingsOpus({ activeTab = 'sequence' }: { a
           >
             <ReminderSequenceTimeline
               steps={model.reminders}
+              reminderStepsMax={reminderStepsMax}
+              billingUpgradeHref={`${AR_ROUTES.settings}?tab=billing`}
               onToggle={(stepKey) => {
                 const step = resolveReminderStep(asPlatformConfig(config), stepKey)
                 if (!step) return
@@ -707,9 +721,21 @@ export function AppointmentRemindersSettingsOpus({ activeTab = 'sequence' }: { a
         step={editStep}
         config={config}
         workspaceName={workspaceName}
+        businessDisplayName={businessProfile.businessDisplayName}
+        businessPhone={businessProfile.businessPhone}
+        businessAddress={businessProfile.businessAddress}
+        customMergeFields={config.reminderPreferences?.customMergeFields || {}}
         templateIndustry={config.reminderPreferences?.templateIndustry || presetIndustry}
         libraryIndustries={libraryIndustries}
         onClose={() => setEditStep(null)}
+        onBusinessProfilePatch={(patch) => {
+          setBusinessProfile((prev) => ({ ...prev, ...patch }))
+          setSaved(false)
+        }}
+        onCustomMergeFieldsChange={(fields) => {
+          setConfig(patchReminderPreferences(config, { customMergeFields: fields }))
+          setSaved(false)
+        }}
         onTemplateChange={(template) => {
           if (!editStep) return
           setConfig(patchReminderTemplate(config, editStep.stepKey, template))
@@ -772,6 +798,10 @@ function StepEditSheet({
   step,
   config,
   workspaceName,
+  businessDisplayName,
+  businessPhone,
+  businessAddress,
+  customMergeFields,
   templateIndustry,
   libraryIndustries,
   onClose,
@@ -783,11 +813,17 @@ function StepEditSheet({
   onChannelChange,
   onEmailSubjectChange,
   onAdvancedChange,
+  onBusinessProfilePatch,
+  onCustomMergeFieldsChange,
   templateLocked,
 }: {
   step: ReminderItem | null
   config: RemindersApiConfig
   workspaceName: string
+  businessDisplayName: string
+  businessPhone: string
+  businessAddress: string
+  customMergeFields: Record<string, string>
   templateIndustry: string
   libraryIndustries: Array<{ id: string; label: string; messageTypes: Array<{ id: string; label: string }> }>
   onClose: () => void
@@ -804,12 +840,26 @@ function StepEditSheet({
   onChannelChange: (channel: import('@/lib/appointments/types').ReminderChannel) => void
   onEmailSubjectChange: (subject: string) => void
   onAdvancedChange: (patch: Record<string, unknown>) => void
+  onBusinessProfilePatch: (patch: { businessDisplayName?: string; businessPhone?: string; businessAddress?: string }) => void
+  onCustomMergeFieldsChange: (fields: Record<string, string>) => void
   templateLocked?: boolean
 }) {
-  const defaultMessageType =
-    step && STEP_TO_MESSAGE_TYPE[step.stepKey]
+  const fallbackMessageType =
+    step?.libraryMessageType ||
+    (step && STEP_TO_MESSAGE_TYPE[step.stepKey]
       ? STEP_TO_MESSAGE_TYPE[step.stepKey]
-      : ('advance_reminder' as TemplateMessageType)
+      : 'advance_reminder')
+
+  const [messageType, setMessageType] = useState<string>(fallbackMessageType)
+
+  useEffect(() => {
+    if (!step) return
+    setMessageType(
+      step.libraryMessageType ||
+        STEP_TO_MESSAGE_TYPE[step.stepKey] ||
+        'advance_reminder',
+    )
+  }, [step?.stepKey, step?.libraryMessageType])
 
   const industryOptions =
     libraryIndustries.length > 0
@@ -843,7 +893,7 @@ function StepEditSheet({
             <SheetHeader>
               <SheetTitle>Edit {step.title}</SheetTitle>
             </SheetHeader>
-            <div className="mt-6 space-y-5">
+            <div className="mt-2 space-y-5">
               <label className="block text-sm">
                 <span className="mb-1.5 block font-medium">Step name</span>
                 <Input
@@ -912,7 +962,7 @@ function StepEditSheet({
                   value={templateIndustry}
                   onChange={async (industry) => {
                     onIndustryPackChange(industry)
-                    const mt = defaultMessageType
+                    const mt = messageType
                     const ch = step.channel === 'email' ? 'email' : 'sms'
                     const res = await fetch(
                       `/api/appointment-reminders/templates/library?industry=${encodeURIComponent(industry)}&messageType=${encodeURIComponent(mt)}&channel=${ch}`,
@@ -930,18 +980,19 @@ function StepEditSheet({
                   options={industryOptions}
                 />
                 <SimpleSelect
-                  label="Message type"
-                  value={defaultMessageType}
-                  onChange={async (messageType) => {
+                  label="Template"
+                  value={messageType}
+                  onChange={async (nextType) => {
+                    setMessageType(nextType)
                     const ch = step.channel === 'email' ? 'email' : 'sms'
                     const res = await fetch(
-                      `/api/appointment-reminders/templates/library?industry=${encodeURIComponent(templateIndustry)}&messageType=${encodeURIComponent(messageType)}&channel=${ch}`,
+                      `/api/appointment-reminders/templates/library?industry=${encodeURIComponent(templateIndustry)}&messageType=${encodeURIComponent(nextType)}&channel=${ch}`,
                     )
                     const json = await res.json()
                     if (res.ok && json.data) {
                       onApplyLibraryTemplate({
                         industry: templateIndustry,
-                        messageType,
+                        messageType: nextType,
                         body: json.data.body,
                         subject: json.data.subject,
                       })
@@ -961,16 +1012,68 @@ function StepEditSheet({
                   Reset to engine default
                 </Button>
               </div>
+              <Panel
+                title="Preview variable defaults"
+                description="Used when appointment or contact data is missing. Save changes applies to your workspace."
+              >
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block text-sm">
+                    <span className="mb-1 block font-medium">Business name</span>
+                    <Input
+                      className="h-9"
+                      value={businessDisplayName || workspaceName}
+                      onChange={(e) => onBusinessProfilePatch({ businessDisplayName: e.target.value })}
+                    />
+                  </label>
+                  <label className="block text-sm">
+                    <span className="mb-1 block font-medium">Business phone</span>
+                    <Input
+                      className="h-9"
+                      value={businessPhone}
+                      onChange={(e) => onBusinessProfilePatch({ businessPhone: e.target.value })}
+                    />
+                  </label>
+                  <label className="block text-sm sm:col-span-2">
+                    <span className="mb-1 block font-medium">Location</span>
+                    <Input
+                      className="h-9"
+                      value={businessAddress}
+                      onChange={(e) => onBusinessProfilePatch({ businessAddress: e.target.value })}
+                    />
+                  </label>
+                  <label className="block text-sm">
+                    <span className="mb-1 block font-medium">Default first name</span>
+                    <Input
+                      className="h-9"
+                      value={customMergeFields.first_name || ''}
+                      onChange={(e) =>
+                        onCustomMergeFieldsChange({ ...customMergeFields, first_name: e.target.value })
+                      }
+                    />
+                  </label>
+                  <label className="block text-sm">
+                    <span className="mb-1 block font-medium">Default last name</span>
+                    <Input
+                      className="h-9"
+                      value={customMergeFields.last_name || ''}
+                      onChange={(e) =>
+                        onCustomMergeFieldsChange({ ...customMergeFields, last_name: e.target.value })
+                      }
+                    />
+                  </label>
+                </div>
+              </Panel>
               <ReminderTemplateEditor
                 channel={step.channel === 'email' ? 'email' : 'sms'}
                 template={step.template}
                 emailSubject={step.emailSubject || `${step.title} — {{business_name}}`}
                 readOnly={smsLocked}
                 mergeTags={mergeTags}
-                businessName={workspaceName}
+                businessName={businessDisplayName || workspaceName}
                 timezone={config.timezone}
-                businessPhone={config.reminderEmailBranding?.contactPhone}
-                location={undefined}
+                businessPhone={businessPhone || config.reminderEmailBranding?.contactPhone}
+                location={businessAddress}
+                customMergeFields={customMergeFields}
                 onTemplateChange={onTemplateChange}
                 onEmailSubjectChange={
                   step.channel === 'email' ? onEmailSubjectChange : undefined
