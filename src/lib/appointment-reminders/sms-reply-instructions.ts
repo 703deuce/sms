@@ -1,8 +1,13 @@
-/** Remove two-way reply CTAs from rendered reminder SMS (Free / reminders-only). */
+/**
+ * Remove two-way reply CTAs from reminder SMS bodies.
+ * Reply instructions are appended at send time on paid plans only — never stored in templates.
+ */
 
 export function stripEmbeddedSmsReplyInstructions(body: string): string {
   let text = body.trim();
   const patterns: RegExp[] = [
+    /\s*Reply\s+C\s+to\s+confirm,\s*R\s+to\s+reschedule,\s*or\s+X\s+to\s+(?:cancel|request\s+cancellation)\.?\s*/gi,
+    /\s*Reply\s+C\s+to\s+confirm\s+or\s+R\s+to\s+request\s+a\s+new\s+time\.?\s*/gi,
     /\s*Reply\s+C\s+to\s+confirm,\s*R\s+to\s+reschedule,\s*or\s+X\s+to\s+cancel\.?\s*/gi,
     /\s*Reply\s+C\s+to\s+confirm\s+or\s+X\s+to\s+cancel\.?\s*/gi,
     /\s*Reply\s+YES\s+to\s+confirm[^.!?]*[.!?]?\s*/gi,
