@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { ChevronLeft, Loader2, MessageSquare } from 'lucide-react'
+import { ArConversationThreadSheet } from '@/newui-transplant/components/appointment-reminders/ar-conversation-thread-sheet'
 import { formatPhone } from '@/lib/utils'
 import type { ArAppointmentRow } from '@/lib/appointment-reminders/appointments-page-types'
 import { KeyValueRow } from '@/newui-transplant/components/app/kit'
@@ -74,6 +75,10 @@ export function AppointmentDetailDrawer({
   const [recipientChannel, setRecipientChannel] = useState<'sms' | 'email' | 'both'>('both')
   const [suppressBusy, setSuppressBusy] = useState(false)
   const [suppressError, setSuppressError] = useState('')
+  const [conversationOpen, setConversationOpen] = useState(false)
+
+  const isPanel = layout === 'panel'
+  const chromePad = isPanel ? 'px-4' : 'px-5'
 
   const loadDetail = useCallback(async () => {
     if (!row?.id) return
@@ -243,10 +248,38 @@ export function AppointmentDetailDrawer({
     if (initialTab) setSheetTab(initialTab)
   }, [initialTab, row?.id])
 
+  useEffect(() => {
+    if (!open) setConversationOpen(false)
+  }, [open])
+
   const detailContent =
     row && open ? (
           <>
-            <SheetHeader className="border-b px-5 py-4 text-left">
+            <SheetHeader className={`border-b py-3 text-left ${chromePad} ${isPanel ? 'py-3' : 'py-4'}`}>
+              {isPanel ? (
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="-ml-2 h-8 px-2 text-xs"
+                    onClick={onClose}
+                  >
+                    <ChevronLeft className="mr-0.5 size-4" aria-hidden />
+                    Activity
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 shrink-0 px-2 text-xs"
+                    onClick={() => setConversationOpen(true)}
+                  >
+                    <MessageSquare className="mr-1 size-3.5" aria-hidden />
+                    Conversation
+                  </Button>
+                </div>
+              ) : null}
               <SheetTitle className="text-base font-semibold">
                 {row.appointmentTitle || row.customerName}
               </SheetTitle>
@@ -271,7 +304,7 @@ export function AppointmentDetailDrawer({
               ) : null}
             </SheetHeader>
 
-            <div className="border-b px-5">
+            <div className={`border-b ${chromePad}`}>
               <div className="flex gap-1 overflow-x-auto py-2" role="tablist" aria-label="Appointment sections">
                 {(
                   [
@@ -287,7 +320,9 @@ export function AppointmentDetailDrawer({
                     role="tab"
                     aria-selected={sheetTab === id}
                     onClick={() => setSheetTab(id)}
-                    className={`shrink-0 rounded-md px-3 py-1.5 text-sm font-medium ${
+                    className={`shrink-0 rounded-md py-1.5 font-medium ${
+                      isPanel ? 'px-2 text-xs' : 'px-3 text-sm'
+                    } ${
                       sheetTab === id ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
@@ -297,7 +332,7 @@ export function AppointmentDetailDrawer({
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-5 py-5">
+            <div className={`min-h-0 flex-1 overflow-y-auto py-4 ${chromePad}`}>
               {loading ? (
                 <p className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="size-4 animate-spin" aria-hidden="true" />
@@ -505,6 +540,21 @@ export function AppointmentDetailDrawer({
                   </section>
                   ) : null}
 
+                  {sheetTab === 'activity' ? (
+                    <section className="mb-4">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-full justify-center"
+                        onClick={() => setConversationOpen(true)}
+                      >
+                        <MessageSquare className="mr-2 size-4" aria-hidden />
+                        Open full conversation
+                      </Button>
+                    </section>
+                  ) : null}
+
                   {sheetTab === 'activity' && actionHistory.length > 0 ? (
                     <section>
                       <h2 className="mb-3 text-sm font-semibold">Customer action history</h2>
@@ -652,38 +702,53 @@ export function AppointmentDetailDrawer({
               )}
             </div>
 
-            <footer className="flex gap-2 border-t px-5 py-4">
-              {row.sourceEventUrl ? (
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => window.open(row.sourceEventUrl!, '_blank', 'noopener,noreferrer')}
-                >
-                  Open in calendar
+            {!isPanel ? (
+              <footer className={`flex gap-2 border-t py-4 ${chromePad}`}>
+                {row.sourceEventUrl ? (
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => window.open(row.sourceEventUrl!, '_blank', 'noopener,noreferrer')}
+                  >
+                    Open in calendar
+                  </Button>
+                ) : null}
+                <Button variant="outline" className="flex-1" onClick={onClose}>
+                  Close
                 </Button>
-              ) : null}
-              <Button variant="outline" className="flex-1" onClick={onClose}>
-                Close
-              </Button>
-            </footer>
+              </footer>
+            ) : null}
           </>
     ) : null
+
+  const conversationSheet = row ? (
+    <ArConversationThreadSheet
+      appointmentId={row.id}
+      open={conversationOpen}
+      onOpenChange={setConversationOpen}
+      responsesDeepLink={!isPanel}
+    />
+  ) : null
 
   if (layout === 'panel') {
     if (!detailContent) return null
     return (
       <div className="flex h-full min-h-0 flex-col overflow-hidden bg-card">
         {detailContent}
+        {conversationSheet}
       </div>
     )
   }
 
   return (
-    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md md:max-w-[600px] lg:max-w-[720px]">
-        {detailContent}
-      </SheetContent>
-    </Sheet>
+    <>
+      <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
+        <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md md:max-w-[600px] lg:max-w-[720px]">
+          {detailContent}
+        </SheetContent>
+      </Sheet>
+      {conversationSheet}
+    </>
   )
 }
 

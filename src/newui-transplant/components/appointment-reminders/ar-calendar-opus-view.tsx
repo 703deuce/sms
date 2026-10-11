@@ -24,8 +24,11 @@ import {
 import { OpusDataSurface } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
 import { Segmented } from '@/newui-transplant/components/app/segmented-nav'
 import { OPUS_INSET_LIST } from '@/newui-transplant/components/app/opus-surfaces'
+import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { cn } from '@/lib/utils'
+
+export type ArCalendarFilterOption = { value: string; label: string }
 
 const VIEW_OPTIONS: CalendarViewMode[] = ['day', 'week', 'month', 'agenda']
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -340,6 +343,9 @@ export function ArCalendarOpusView({
   onToday,
   onSelectEvent,
   onSelectDay,
+  calendarFilter,
+  calendarFilterOptions,
+  onCalendarFilterChange,
   compactChrome,
   fillHeight,
 }: {
@@ -354,6 +360,9 @@ export function ArCalendarOpusView({
   onSelectEvent: (id: string) => void
   /** Month grid: open day view for the selected date. */
   onSelectDay?: (date: Date, dayKey: string) => void
+  calendarFilter?: string
+  calendarFilterOptions?: ArCalendarFilterOption[]
+  onCalendarFilterChange?: (connectionId: string) => void
   /** Workspace layout: toolbar only, no duplicate page title. */
   compactChrome?: boolean
   fillHeight?: boolean
@@ -403,6 +412,16 @@ export function ArCalendarOpusView({
               onChange={(v) => onViewChange(v as CalendarViewMode)}
               formatLabel={(v) => v.charAt(0).toUpperCase() + v.slice(1)}
             />
+            {calendarFilterOptions && calendarFilterOptions.length > 1 && onCalendarFilterChange ? (
+              <SimpleSelect
+                id="ar-calendar-connection-filter"
+                label="Calendars"
+                value={calendarFilter || 'all'}
+                onChange={onCalendarFilterChange}
+                options={calendarFilterOptions}
+                className="w-[min(220px,100%)] shrink-0"
+              />
+            ) : null}
           </div>
         </div>
       </div>

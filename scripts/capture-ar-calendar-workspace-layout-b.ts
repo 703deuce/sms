@@ -47,10 +47,10 @@ async function installMocks(page: import("playwright").Page) {
         data: [
           {
             id: "demo-conn",
+            name: "Outlook Main",
             provider: "microsoft",
             status: "connected",
-            importCalendarCount: 1,
-            accountEmail: "demo@transovo.ai",
+            config: { importCalendarIds: ["cal-1"], email: "demo@transovo.ai" },
           },
         ],
       }),
@@ -149,20 +149,10 @@ async function main() {
 
   const desktop = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   await installMocks(desktop);
-  await desktop.goto(`${BASE_URL}/api/auth/dev-bypass?next=/appointment-reminders`, {
-    waitUntil: "commit",
-    timeout: 120000,
-  });
-  await desktop.evaluate(() => {
-    try {
-      window.localStorage.setItem("transovo.productSwitcherOnboarding.v3", "1");
-    } catch {
-      // ignore
-    }
-  });
-  await desktop.goto(`${BASE_URL}/appointment-reminders?view=week&date=2026-10-09`, {
+  const previewPath = "/dev/ar-layout-b?view=week&date=2026-10-09";
+  await desktop.goto(`${BASE_URL}${previewPath}`, {
     waitUntil: "domcontentloaded",
-    timeout: 120000,
+    timeout: 300000,
   });
   await desktop.getByRole("heading", { level: 1, name: "Calendar" }).waitFor({ timeout: 20000 });
   await desktop.waitForTimeout(800);
@@ -172,20 +162,39 @@ async function main() {
   });
 
   await desktop.getByRole("button", { name: /12:00/i }).first().click();
-  await desktop.getByRole("tab", { name: "Reminders" }).waitFor({ timeout: 10000 });
+  await desktop.getByRole("tab", { name: "Reminders" }).waitFor({ timeout: 15000 });
   await desktop.waitForTimeout(400);
   await desktop.screenshot({
     path: join(OUT_DIR, "ar-layout-b-desktop-week-selected.png"),
     fullPage: false,
   });
 
+  await desktop.goto(`${BASE_URL}/dev/ar-layout-b?view=month&date=2026-10-09`, {
+    waitUntil: "domcontentloaded",
+    timeout: 300000,
+  });
+  await desktop.waitForTimeout(600);
+  await desktop.screenshot({
+    path: join(OUT_DIR, "ar-layout-b-desktop-month.png"),
+    fullPage: false,
+  });
+
+  await desktop.goto(`${BASE_URL}/dev/ar-layout-b?view=day&date=2026-10-09`, {
+    waitUntil: "domcontentloaded",
+    timeout: 300000,
+  });
+  await desktop.waitForTimeout(600);
+  await desktop.screenshot({
+    path: join(OUT_DIR, "ar-layout-b-desktop-day.png"),
+    fullPage: false,
+  });
+
   const tablet = await browser.newPage({ viewport: { width: 1024, height: 800 } });
   await installMocks(tablet);
-  await tablet.goto(`${BASE_URL}/api/auth/dev-bypass?next=/appointment-reminders`, {
-    waitUntil: "networkidle",
+  await tablet.goto(`${BASE_URL}/dev/ar-layout-b?view=week`, {
+    waitUntil: "domcontentloaded",
     timeout: 120000,
   });
-  await tablet.goto(`${BASE_URL}/appointment-reminders?view=week`, { waitUntil: "networkidle", timeout: 120000 });
   await tablet.waitForTimeout(800);
   await tablet.screenshot({
     path: join(OUT_DIR, "ar-layout-b-tablet-week.png"),
@@ -194,11 +203,10 @@ async function main() {
 
   const mobile = await browser.newPage({ viewport: { width: 390, height: 844 } });
   await installMocks(mobile);
-  await mobile.goto(`${BASE_URL}/api/auth/dev-bypass?next=/appointment-reminders`, {
-    waitUntil: "networkidle",
+  await mobile.goto(`${BASE_URL}/dev/ar-layout-b?view=day`, {
+    waitUntil: "domcontentloaded",
     timeout: 120000,
   });
-  await mobile.goto(`${BASE_URL}/appointment-reminders?view=day`, { waitUntil: "networkidle", timeout: 120000 });
   await mobile.waitForTimeout(800);
   await mobile.screenshot({
     path: join(OUT_DIR, "ar-layout-b-mobile-day.png"),

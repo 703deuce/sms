@@ -23,7 +23,10 @@ import {
   isArCalendarViewerReadyFromOverview,
 } from '@/lib/appointment-reminders/calendar/ar-calendar-viewer-ready'
 import { ArCalendarActivityPanel } from '@/newui-transplant/components/appointment-reminders/ar-calendar-activity-panel'
-import { ArCalendarOpusView } from '@/newui-transplant/components/appointment-reminders/ar-calendar-opus-view'
+import {
+  ArCalendarOpusView,
+  type ArCalendarFilterOption,
+} from '@/newui-transplant/components/appointment-reminders/ar-calendar-opus-view'
 import { AppointmentDetailDrawer } from '@/newui-transplant/components/appointment-reminders/appointment-detail-drawer'
 import { ArOpusPage, OpusSearchField } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
 import { EmptyState, Pill } from '@/newui-transplant/components/app/kit'
@@ -66,13 +69,24 @@ export function AppointmentRemindersCalendarWorkspacePage() {
   const [panelTab, setPanelTab] = useState<'details' | 'reminders' | 'activity' | 'preferences'>('details')
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false)
   const [mobileActivityOpen, setMobileActivityOpen] = useState(false)
+  const [calendarConnections, setCalendarConnections] = useState<ArCalendarFilterOption[]>([])
+  const [calendarFilter, setCalendarFilter] = useState(() => searchParams.get('calendar') || 'all')
 
   const range = useMemo(() => getArCalendarRange(cursor, view), [view, cursor])
 
+  const calendarFilterOptions = useMemo((): ArCalendarFilterOption[] => {
+    if (calendarConnections.length === 0) return [{ value: 'all', label: 'All calendars' }]
+    return [{ value: 'all', label: 'All calendars' }, ...calendarConnections]
+  }, [calendarConnections])
+
   const filteredEvents = useMemo(() => {
+    let list = events
+    if (calendarFilter && calendarFilter !== 'all') {
+      list = list.filter((ev) => (ev.metadata?.connectionId as string) === calendarFilter)
+    }
     const q = searchQ.trim().toLowerCase()
-    if (!q) return events
-    return events.filter((ev) => {
+    if (!q) return list
+    return list.filter((ev) => {
       const hay = [
         ev.inviteeName,
         ev.serviceName,
@@ -84,7 +98,7 @@ export function AppointmentRemindersCalendarWorkspacePage() {
         .toLowerCase()
       return hay.includes(q)
     })
-  }, [events, searchQ])
+  }, [events, searchQ, calendarFilter])
 
   const selectedEvent = useMemo(
     () => events.find((e) => e.id === selectedId) ?? null,
@@ -97,7 +111,13 @@ export function AppointmentRemindersCalendarWorkspacePage() {
   }, [selectedEvent, timezone])
 
   const syncUrl = useCallback(
-    (nextView: CalendarViewMode, nextCursor: Date, nextDayKey: string, q: string) => {
+    (
+      nextView: CalendarViewMode,
+      nextCursor: Date,
+      nextDayKey: string,
+      q: string,
+      calendar: string,
+    ) => {
       const params = buildCalendarSearchParams({
         view: nextView,
         cursor: nextCursor,
@@ -105,6 +125,7 @@ export function AppointmentRemindersCalendarWorkspacePage() {
         filters: { q, staffIds: [], locationId: '', resourceId: '', status: 'all', domainType: 'all' },
       })
       const nextParams = new URLSearchParams(params.toString())
+      if (calendar && calendar !== 'all') nextParams.set('calendar', calendar)
       const currentParams = new URLSearchParams(searchParams.toString())
       if (!calendarUrlEquals(currentParams, nextParams)) {
         router.replace(`${AR_ROUTES.home}?${nextParams.toString()}`, { scroll: false })
@@ -122,7 +143,26 @@ export function AppointmentRemindersCalendarWorkspacePage() {
       let linked = false
       if (integrationsRes.ok) {
         const calJson = await integrationsRes.json()
-        linked = isArCalendarViewerReadyFromIntegrationRows(calJson.data)
+        const rows = (calJson.data || []) as Array<{
+          id: string
+          name?: string
+          provider?: string
+          status?: string
+          config?: { importCalendarIds?: string[]; email?: string }
+        }>
+        linked = isArCalendarViewerReadyFromIntegrationRows(rows)
+        const opts: ArCalendarFilterOption[] = rows
+          .filter((r) => (r.config?.importCalendarIds?.length ?? 0) > 0 || r.status === 'connected')
+          .map((r) => {
+            const provider =
+              r.provider === 'microsoft' ? 'Outlook' : r.provider === 'google' ? 'Google' : 'Calendar'
+            const email = r.config?.email ? ` · ${r.config.email}` : ''
+            return {
+              value: r.id,
+              label: `${r.name || provider}${email}`,
+            }
+          })
+        setCalendarConnections(opts)
       }
       if (overviewRes.ok) {
         const json = await overviewRes.json()
@@ -190,8 +230,8 @@ export function AppointmentRemindersCalendarWorkspacePage() {
   }, [connected, overviewReady, loadEvents])
 
   useEffect(() => {
-    syncUrl(view, cursor, selectedDayKey, searchQ)
-  }, [view, cursor, selectedDayKey, searchQ, syncUrl])
+    syncUrl(view, cursor, selectedDayKey, searchQ, calendarFilter)
+  }, [view, cursor, selectedDayKey, searchQ, calendarFilter, syncUrl])
 
   const selectAppointment = useCallback(
     (id: string, tab?: 'details' | 'reminders' | 'activity') => {
@@ -329,6 +369,9 @@ export function AppointmentRemindersCalendarWorkspacePage() {
                 onToday={onToday}
                 onSelectEvent={(id) => selectAppointment(id)}
                 onSelectDay={onSelectDay}
+                calendarFilter={calendarFilter}
+                calendarFilterOptions={calendarFilterOptions}
+                onCalendarFilterChange={setCalendarFilter}
                 compactChrome
                 fillHeight
               />

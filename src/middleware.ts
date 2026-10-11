@@ -137,6 +137,9 @@ function isPublicPath(pathname: string) {
   if (pathname === "/dev/appointment-wizard" || pathname.startsWith("/dev/appointment-wizard/")) {
     return true;
   }
+  if (pathname === "/dev/ar-layout-b" || pathname.startsWith("/dev/ar-layout-b/")) {
+    return true;
+  }
   return false;
 }
 

@@ -19,7 +19,21 @@
 | Calendar grid | `ar-calendar-opus-view.tsx` + `ar-calendar-layout.ts` |
 | UI2 shell | `ArOpusPage`, `OpusSearchField`, `OpusDataSurface`, `Segmented`, `Button` |
 
-## Out of scope (this pass)
+## Calendar filter
 
-- Per-connection calendar filter dropdown (no prior standalone filter UI; all imported events in range).
-- Engine/eligibility/dispatch behavior changes.
+Toolbar **Calendars** dropdown (`SimpleSelect`) filters client-side by `metadata.connectionId` on calendar events (same identity as Appointments list). URL param: `calendar=<connectionId>`.
+
+## Verification
+
+```bash
+PORT=3010 npm run dev
+UI_AGENT_BASE_URL=http://localhost:3010 npx tsx scripts/verify-ar-layout-b-ui.ts
+UI_AGENT_BASE_URL=http://localhost:3010 npx tsx scripts/capture-ar-calendar-workspace-layout-b.ts
+```
+
+Dev visual QA route (no login): `/dev/ar-layout-b` (404 in production unless `ALLOW_AR_LAYOUT_B_PREVIEW=1`).
+
+## Out of scope
+
+- Engine/eligibility/dispatch/OAuth backend changes.
+- Per-provider-calendar sub-filter within one connection (only when `metadata.calendarId` is populated consistently).
