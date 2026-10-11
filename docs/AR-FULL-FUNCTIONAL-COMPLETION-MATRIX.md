@@ -8,20 +8,20 @@
 
 | Metric | Count |
 |--------|------:|
-| Workstream requirement rows | 90 |
+| Workstream requirement rows | 94 |
 | Policy exclusions (AR-X table, not implementable rows) | 5 |
 | Excluded within workstreams (in-table) | 4 |
-| Applicable implementable rows | 86 |
-| Implementation **complete** | 86 |
+| Applicable implementable rows | 90 |
+| Implementation **complete** | 90 |
 | Implementation **partial** | 0 |
 | Implementation **missing** | 0 |
-| Automated verification **pass** | 85 |
+| Automated verification **pass** | 89 |
 | Automated verification **fail** | 0 |
 | Production verification **pass** | 20 |
-| Production verification **not_run** | 65 |
+| Production verification **not_run** | 69 |
 | Production verification **n/a** | 5 |
 
-**Completion pass status:** **FINISHED** — 0 partial and 0 missing among 86 applicable rows (implementation). Summary derived from row-level Impl columns. See `docs/AR-FULL-FUNCTIONAL-COMPLETION-INTEGRITY-AUDIT-2026-10-11.md`.
+**Completion pass status:** **FINISHED** — 0 partial and 0 missing among 90 applicable rows (implementation). Summary derived from row-level Impl columns. See `docs/AR-FULL-FUNCTIONAL-COMPLETION-INTEGRITY-AUDIT-2026-10-11.md`.
 
 ### Verification legend
 
