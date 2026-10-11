@@ -242,7 +242,7 @@ export async function processCalendarProviderEvent(input: {
     const externalId = formatImportedExternalId(provider, connectionId, event.id);
     const status = event.status === "cancelled" ? "canceled" : "confirmed";
     const prevMeta = (existing.metadata || {}) as Record<string, unknown>;
-    const metadata = buildImportMetadata(
+    const metadata = (await buildImportMetadata(
       event,
       provider,
       connectionId,
@@ -250,7 +250,7 @@ export async function processCalendarProviderEvent(input: {
       input.calendarId,
       reminderEligibility,
       prevMeta,
-    ) as Record<string, unknown>;
+    )) as Record<string, unknown>;
 
     await upsertWorkspaceAppointmentByExternalId({
       workspaceId,
@@ -296,14 +296,14 @@ export async function processCalendarProviderEvent(input: {
 
   const contact = await resolveContactForImportedEvent(workspaceId, event, config.email);
   const externalId = formatImportedExternalId(provider, connectionId, event.id);
-  const metadata = buildImportMetadata(
+  const metadata = (await buildImportMetadata(
     event,
     provider,
     connectionId,
     contact,
     input.calendarId,
     reminderEligibility,
-  ) as Record<string, unknown>;
+  )) as Record<string, unknown>;
 
   const existingBeforeImport = await getPrisma().voiceAppointment.findFirst({
     where: { workspaceId, externalId },
@@ -457,7 +457,7 @@ async function applyImportedReminderEligibility(
   });
 }
 
-function buildImportMetadata(
+async function buildImportMetadata(
   event: ProviderCalendarEvent,
   provider: string,
   connectionId: string,
@@ -466,7 +466,7 @@ function buildImportMetadata(
   reminderEligibility?: { eligible: boolean; reason?: string },
   previousMetadata?: Record<string, unknown> | null,
 ) {
-  const phoneMerge = mergeReminderPhoneOnImport({
+  const phoneMerge = await mergeReminderPhoneOnImport({
     event,
     previousMetadata: (previousMetadata || null) as AppointmentMetadata | null,
     contactPhone: contact.inviteePhone,

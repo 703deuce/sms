@@ -538,6 +538,8 @@ export type AppointmentMetadata = {
     fingerprint?: string;
     candidateCount?: number;
     extractedAt?: string;
+    lunaAttemptedAt?: string;
+    evidence?: string | null;
   };
   /** When true, automatic calendar re-extraction must not overwrite phone. */
   reminderPhoneUserLocked?: boolean;

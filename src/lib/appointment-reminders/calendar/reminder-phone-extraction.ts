@@ -1,7 +1,6 @@
 /**
- * Deterministic reminder phone discovery from calendar events (import/sync only).
- * AI disambiguation is reserved for ambiguous multi-number cases — not implemented in v1;
- * those rows are marked needs_review instead of guessing.
+ * Reminder phone discovery from calendar events (import/sync only).
+ * Deterministic parser first; Luna (gpt-6-luna) when missing or uncertain.
  */
 
 import { createHash } from "node:crypto";
@@ -9,6 +8,11 @@ import { extractIdentityFromEventFields } from "@/lib/voice-v3/calendar/appointm
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import type { ProviderCalendarEvent } from "@/lib/calendar/providers";
 import type { AppointmentMetadata } from "@/lib/appointments/types";
+import {
+  buildAppointmentEventSourceTexts,
+  eventLocationText,
+} from "@/lib/appointment-reminders/calendar/reminder-phone-content";
+import type { LunaReminderPhoneResult } from "@/lib/appointment-reminders/calendar/reminder-phone-evidence";
 
 export type ReminderPhoneDiscoveryStatus = "found" | "missing" | "needs_review" | "invalid";
 
@@ -17,10 +21,12 @@ export type ReminderPhoneExtraction = {
   display: string | null;
   status: ReminderPhoneDiscoveryStatus;
   sourceField: string | null;
-  method: "labeled_parse" | "single_candidate" | "manual" | "contact" | "none";
+  method: "labeled_parse" | "single_candidate" | "luna" | "manual" | "contact" | "none";
   confidence: "high" | "medium" | "low";
   fingerprint: string;
   candidateCount: number;
+  lunaAttemptedAt?: string | null;
+  evidence?: string | null;
 };
 
 const CUSTOMER_LABEL_RE =
@@ -36,7 +42,7 @@ export function reminderPhoneRelevantFingerprint(event: ProviderCalendarEvent): 
   const payload = JSON.stringify({
     summary: event.summary || "",
     description: event.description || "",
-    location: event.location || "",
+    location: eventLocationText(event),
   });
   return createHash("sha256").update(payload).digest("hex").slice(0, 16);
 }
@@ -64,13 +70,14 @@ function labeledNumbers(plain: string): { customer: string[]; office: string[] }
   return { customer, office };
 }
 
+/** Step 1 — deterministic parser only (no Luna). */
 export function extractReminderPhoneFromCalendarEvent(
   event: ProviderCalendarEvent,
 ): ReminderPhoneExtraction {
   const fingerprint = reminderPhoneRelevantFingerprint(event);
   const subject = (event.summary || "").trim();
   const description = event.description || "";
-  const location = (event.location || "").trim();
+  const location = eventLocationText(event);
   const plain = stripHtml(`${subject}\n${description}\n${location}`);
 
   const identity = extractIdentityFromEventFields({
@@ -155,16 +162,83 @@ export function extractReminderPhoneFromCalendarEvent(
   };
 }
 
-export function mergeReminderPhoneOnImport(input: {
-  event: ProviderCalendarEvent;
-  previousMetadata?: AppointmentMetadata | null;
-  contactPhone: string | null;
-}): {
+export type LunaPhoneExtractFn = (
+  event: ProviderCalendarEvent,
+) => Promise<LunaReminderPhoneResult>;
+
+async function defaultLunaExtract(event: ProviderCalendarEvent): Promise<LunaReminderPhoneResult> {
+  const { lunaExtractCustomerPhoneFromCalendarEvent } = await import(
+    "@/lib/appointment-reminders/calendar/reminder-phone-luna"
+  );
+  return lunaExtractCustomerPhoneFromCalendarEvent(event);
+}
+
+function parserNeedsLuna(parser: ReminderPhoneExtraction): boolean {
+  return parser.status === "missing" || parser.status === "needs_review";
+}
+
+function toReminderPhoneMeta(extracted: ReminderPhoneExtraction): AppointmentMetadata["reminderPhone"] {
+  return {
+    e164: extracted.e164,
+    status: extracted.status,
+    sourceField: extracted.sourceField,
+    method: extracted.method,
+    confidence: extracted.confidence,
+    fingerprint: extracted.fingerprint,
+    candidateCount: extracted.candidateCount,
+    extractedAt: new Date().toISOString(),
+    lunaAttemptedAt: extracted.lunaAttemptedAt ?? undefined,
+    evidence: extracted.evidence ?? undefined,
+  };
+}
+
+export async function resolveReminderPhoneWithLunaFallback(
+  event: ProviderCalendarEvent,
+  options?: { lunaExtract?: LunaPhoneExtractFn },
+): Promise<ReminderPhoneExtraction> {
+  const parser = extractReminderPhoneFromCalendarEvent(event);
+  if (!parserNeedsLuna(parser)) {
+    return parser;
+  }
+
+  const lunaExtract = options?.lunaExtract ?? defaultLunaExtract;
+  const attemptedAt = new Date().toISOString();
+  const luna = await lunaExtract(event);
+
+  if (luna.ok) {
+    return {
+      e164: luna.e164,
+      display: luna.e164,
+      status: "found",
+      sourceField: luna.sourceField,
+      method: "luna",
+      confidence: "medium",
+      fingerprint: parser.fingerprint,
+      candidateCount: parser.candidateCount,
+      lunaAttemptedAt: attemptedAt,
+      evidence: luna.evidence,
+    };
+  }
+
+  return {
+    ...parser,
+    lunaAttemptedAt: attemptedAt,
+  };
+}
+
+export async function mergeReminderPhoneOnImport(
+  input: {
+    event: ProviderCalendarEvent;
+    previousMetadata?: AppointmentMetadata | null;
+    contactPhone: string | null;
+  },
+  options?: { lunaExtract?: LunaPhoneExtractFn },
+): Promise<{
   inviteePhone: string | null;
   reminderPhone: AppointmentMetadata["reminderPhone"];
   smsCapable: boolean;
   emailOnly: boolean;
-} {
+}> {
   const prev = input.previousMetadata || {};
   const userLocked = Boolean(prev.reminderPhoneUserLocked || prev.reminderOverride?.phone?.trim());
 
@@ -182,34 +256,40 @@ export function mergeReminderPhoneOnImport(input: {
     };
   }
 
-  const prevFp = (prev.reminderPhone as { fingerprint?: string } | undefined)?.fingerprint;
   const nextFp = reminderPhoneRelevantFingerprint(input.event);
-  if (prevFp && prevFp === nextFp && prev.inviteePhone?.trim()) {
-    return {
-      inviteePhone: prev.inviteePhone.trim(),
-      reminderPhone: prev.reminderPhone,
-      smsCapable: Boolean(prev.inviteePhone),
-      emailOnly: !prev.inviteePhone,
-    };
+  const prevFp = (prev.reminderPhone as { fingerprint?: string } | undefined)?.fingerprint;
+  const prevLunaAttempted = Boolean(
+    (prev.reminderPhone as { lunaAttemptedAt?: string } | undefined)?.lunaAttemptedAt,
+  );
+
+  if (prevFp && prevFp === nextFp) {
+    const prevStatus = (prev.reminderPhone as { status?: string } | undefined)?.status;
+    if (prev.inviteePhone?.trim() && prevStatus === "found") {
+      return {
+        inviteePhone: prev.inviteePhone.trim(),
+        reminderPhone: prev.reminderPhone,
+        smsCapable: Boolean(prev.inviteePhone),
+        emailOnly: !prev.inviteePhone,
+      };
+    }
+    if (prevLunaAttempted) {
+      return {
+        inviteePhone: prev.inviteePhone?.trim() || null,
+        reminderPhone: prev.reminderPhone,
+        smsCapable: Boolean(prev.inviteePhone) && prevStatus !== "needs_review",
+        emailOnly: !prev.inviteePhone,
+      };
+    }
   }
 
-  const extracted = extractReminderPhoneFromCalendarEvent(input.event);
+  const extracted = await resolveReminderPhoneWithLunaFallback(input.event, options);
   const inviteePhone =
     input.contactPhone?.trim() ||
     (extracted.status === "found" ? extracted.e164 : null) ||
     prev.inviteePhone?.trim() ||
     null;
 
-  const reminderPhone = {
-    e164: extracted.e164,
-    status: extracted.status,
-    sourceField: extracted.sourceField,
-    method: extracted.method,
-    confidence: extracted.confidence,
-    fingerprint: extracted.fingerprint,
-    candidateCount: extracted.candidateCount,
-    extractedAt: new Date().toISOString(),
-  };
+  const reminderPhone = toReminderPhoneMeta(extracted);
 
   return {
     inviteePhone,
