@@ -10,7 +10,7 @@ export type ArAppointmentRow = {
   timezone: string | null;
   isAllDay: boolean;
   phone: string | null;
-  phoneState: "ok" | "missing" | "invalid";
+  phoneState: "ok" | "missing" | "invalid" | "needs_review";
   contactEmail?: string | null;
   reminder: AggregateReminderView;
   customerResponse: ArCustomerResponseSummary;

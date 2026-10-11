@@ -20,6 +20,7 @@ import { resolveArAppointmentContactDisplay } from "@/lib/appointment-reminders/
 import type { ArRescheduleRequestMeta } from "@/lib/appointment-reminders/ai-rescheduler/business-approval";
 import { expireArRescheduleRequestIfNeeded } from "@/lib/appointment-reminders/ai-rescheduler/reschedule-request-lifecycle";
 import { resolveArCustomerResponseSummary } from "@/lib/appointment-reminders/ar-sms-customer-outcome";
+import { loadAppointmentRemindersActivation } from "@/lib/appointment-reminders/activation";
 
 export type ArAppointmentsQuery = {
   q?: string;
@@ -96,6 +97,7 @@ function mapRow(
   opts?: {
     serviceId?: string | null;
     workflowConflict?: ReturnType<typeof describePlatformReminderWorkflowConflictFromContext>;
+    appointmentRemindersActivatedAt?: string | null;
   },
 ): ArAppointmentRow {
   const meta = row.metadata as AppointmentMetadata;
@@ -109,6 +111,7 @@ function mapRow(
     metadata: meta,
     platform,
     workflowConflict: opts?.workflowConflict,
+    appointmentRemindersActivatedAt: opts?.appointmentRemindersActivatedAt,
   });
   const contact = resolveArAppointmentContactDisplay(
     meta,
@@ -117,14 +120,17 @@ function mapRow(
     row.serviceName,
   );
   const phone = contact.phone;
+  const discoveryStatus = meta.reminderPhone?.status;
   const phoneState =
-    contact.phoneState === "email_only"
-      ? "missing"
-      : contact.phoneState === "invalid" || reminder.attentionReason === "invalid_phone"
-        ? "invalid"
-        : contact.phoneState === "ok"
-          ? "ok"
-          : "missing";
+    discoveryStatus === "needs_review"
+      ? "needs_review"
+      : contact.phoneState === "email_only"
+        ? "missing"
+        : contact.phoneState === "invalid" || reminder.attentionReason === "invalid_phone"
+          ? "invalid"
+          : contact.phoneState === "ok"
+            ? "ok"
+            : "missing";
 
   const connectionId = (meta.connectionId as string) || null;
   const cal = connectionId ? calendarNames.get(connectionId) : undefined;
@@ -187,7 +193,7 @@ export async function loadAppointmentRemindersPage(
     config: unknown;
   };
 
-  const [platform, connections, workflowCtx, voiceServices] = await Promise.all([
+  const [platform, connections, workflowCtx, voiceServices, activation] = await Promise.all([
     loadAppointmentPlatformConfig(workspaceId),
     prisma.voiceCalendarConnection.findMany({
       where: { workspaceId, provider: { in: ["google", "microsoft"] } },
@@ -198,7 +204,9 @@ export async function loadAppointmentRemindersPage(
       where: { workspaceId },
       select: { id: true, name: true },
     }),
+    loadAppointmentRemindersActivation(workspaceId),
   ]);
+  const appointmentRemindersActivatedAt = activation.activatedAt ?? null;
 
   const serviceNameToId = new Map(voiceServices.map((s) => [s.name, s.id]));
 
@@ -317,7 +325,11 @@ export async function loadAppointmentRemindersPage(
         serviceId,
         r.serviceName,
       );
-      return mapRow(r, platform, calendarNames, { serviceId, workflowConflict });
+      return mapRow(r, platform, calendarNames, {
+        serviceId,
+        workflowConflict,
+        appointmentRemindersActivatedAt,
+      });
     });
 
   if (query.calendarId && query.calendarId !== "all") {

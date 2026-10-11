@@ -1,13 +1,15 @@
-import type { AppointmentMetadata } from "@/lib/appointments/types";
+import type { AppointmentMetadata, AppointmentPlatformConfig } from "@/lib/appointments/types";
 import {
   classifyReminderPhone,
   resolveEffectiveReminderPhone,
 } from "@/lib/appointment-reminders/effective-phone";
+import { hasWorkspaceExistingCustomerSmsConsent } from "@/lib/appointment-reminders/workspace-existing-sms-consent";
 
 export type SmsReminderBlockReason =
   | "suppressed"
   | "missing_phone"
   | "invalid_phone"
+  | "phone_needs_review"
   | "consent_required"
   | "opted_out"
   | "sender_unavailable"
@@ -45,6 +47,9 @@ export function evaluateSmsReminderEligibility(input: {
   inviteePhone?: string | null;
   contactPhone?: string | null;
   appointmentStatus?: string;
+  platform?: AppointmentPlatformConfig | null;
+  /** Workspaces activated before workspace attestation shipped may send until they certify. */
+  appointmentRemindersActivatedAt?: string | null;
 }): SmsReminderEligibility {
   const meta = input.metadata;
   const status = (input.appointmentStatus || "").toLowerCase();
@@ -64,6 +69,16 @@ export function evaluateSmsReminderEligibility(input: {
       eligible: false,
       blockReason: "suppressed",
       detail: "Appointment is not active",
+      phone: null,
+      phoneState: "missing",
+    };
+  }
+
+  if (meta.reminderPhone?.status === "needs_review") {
+    return {
+      eligible: false,
+      blockReason: "phone_needs_review",
+      detail: "Multiple phone numbers found — confirm the customer number on this appointment",
       phone: null,
       phoneState: "missing",
     };
@@ -102,11 +117,14 @@ export function evaluateSmsReminderEligibility(input: {
     };
   }
 
-  if (needsRecipientConsent(meta)) {
+  const workspaceConsent = hasWorkspaceExistingCustomerSmsConsent(input.platform, {
+    grandfatherActivatedAt: input.appointmentRemindersActivatedAt,
+  });
+  if (!workspaceConsent && needsRecipientConsent(meta)) {
     return {
       eligible: false,
       blockReason: "consent_required",
-      detail: "SMS consent or certified existing permission required",
+      detail: "Certify existing customer SMS permission in Setup or record consent on this appointment",
       phone,
       phoneState,
     };
@@ -131,7 +149,8 @@ export function eligibilityToBlockDetail(eligibility: SmsReminderEligibility): {
     suppressed: "Open appointment in Appointments",
     missing_phone: "Add phone on Appointments page",
     invalid_phone: "Correct phone on Appointments page",
-    consent_required: "Complete consent in Compliance or certify existing permission",
+    phone_needs_review: "Open appointment and confirm customer phone",
+    consent_required: "Finish Setup — certify existing customer SMS permission",
     opted_out: "Recipient opted out — cannot send",
     sender_unavailable: "Fix SMS sender in Business settings",
     none: "",

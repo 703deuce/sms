@@ -321,7 +321,14 @@ async function trySendStep(input: {
   if (!input.step.enabled) return false;
   if (wasReminderSent(input.metadata, input.timelineType)) return false;
 
-  const platform = await loadAppointmentPlatformConfig(input.workspaceId);
+  const { loadAppointmentRemindersActivation } = await import(
+    "@/lib/appointment-reminders/activation"
+  );
+  const [platform, activation] = await Promise.all([
+    loadAppointmentPlatformConfig(input.workspaceId),
+    loadAppointmentRemindersActivation(input.workspaceId),
+  ]);
+  const appointmentRemindersActivatedAt = activation.activatedAt ?? null;
   const { shouldSkipReminderStepForConfirmation } = await import(
     "@/lib/appointment-reminders/reminder-confirmation-guard"
   );
@@ -521,6 +528,8 @@ async function trySendStep(input: {
     inviteePhone: input.metadata.inviteePhone,
     contactPhone: input.phone,
     appointmentStatus: input.appointmentStatus,
+    platform,
+    appointmentRemindersActivatedAt,
   });
   if (!smsEligibility.eligible) {
     await markReminderAllowanceBlocked({
@@ -745,7 +754,14 @@ export async function maybeSendImmediateConfirmationForAppointment(
     return { sent: false, skipped: "not_activated" };
   }
 
-  const config = await loadAppointmentPlatformConfig(workspaceId);
+  const { loadAppointmentRemindersActivation } = await import(
+    "@/lib/appointment-reminders/activation"
+  );
+  const [config, activation] = await Promise.all([
+    loadAppointmentPlatformConfig(workspaceId),
+    loadAppointmentRemindersActivation(workspaceId),
+  ]);
+  const appointmentRemindersActivatedAt = activation.activatedAt ?? null;
   const confirmation = configuredReminderSteps(config).find((s) => s.immediate);
   if (!confirmation || !confirmation.step.enabled) {
     return { sent: false, skipped: "confirmation_disabled" };
@@ -766,6 +782,8 @@ export async function maybeSendImmediateConfirmationForAppointment(
     inviteePhone: meta.inviteePhone,
     contactPhone: contact?.phone,
     appointmentStatus: row.status,
+    platform: config,
+    appointmentRemindersActivatedAt,
   });
   if (confirmation.step.channel === "sms" && !smsEligibility.eligible) {
     return { sent: false, skipped: smsEligibility.blockReason };

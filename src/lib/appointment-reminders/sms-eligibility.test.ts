@@ -8,7 +8,36 @@ const baseMeta = {
 assert.equal(
   evaluateSmsReminderEligibility({ metadata: baseMeta, appointmentStatus: "confirmed" }).eligible,
   false,
-  "missing consent should block",
+  "missing workspace + per-appointment consent should block",
+);
+
+assert.equal(
+  evaluateSmsReminderEligibility({
+    metadata: baseMeta,
+    appointmentStatus: "confirmed",
+    platform: {
+      appointmentReminders: {
+        existingCustomerSmsConsent: {
+          attestedAt: new Date().toISOString(),
+          attestedByUserId: "u1",
+          version: "ar_existing_sms_v1",
+          attestationText: "x",
+        },
+      },
+    } as import("@/lib/appointments/types").AppointmentPlatformConfig,
+  }).eligible,
+  true,
+  "workspace existing-customer attestation satisfies consent for calendar imports",
+);
+
+assert.equal(
+  evaluateSmsReminderEligibility({
+    metadata: baseMeta,
+    appointmentStatus: "confirmed",
+    appointmentRemindersActivatedAt: new Date().toISOString(),
+  }).eligible,
+  true,
+  "grandfather activated workspace without per-appointment consent",
 );
 
 assert.equal(

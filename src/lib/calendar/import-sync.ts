@@ -46,6 +46,8 @@ import {
   upsertWorkspaceAppointmentByExternalId,
 } from "@/lib/appointments/domain";
 import { getPrisma } from "@/lib/db";
+import { mergeReminderPhoneOnImport } from "@/lib/appointment-reminders/calendar/reminder-phone-extraction";
+import type { AppointmentMetadata } from "@/lib/appointments/types";
 
 export type CalendarSyncStats = {
   imported: number;
@@ -239,14 +241,16 @@ export async function processCalendarProviderEvent(input: {
     const contact = await resolveContactForImportedEvent(workspaceId, event, config.email);
     const externalId = formatImportedExternalId(provider, connectionId, event.id);
     const status = event.status === "cancelled" ? "canceled" : "confirmed";
-    const metadata = buildImportMetadata(
+    const prevMeta = (existing.metadata || {}) as Record<string, unknown>;
+    const metadata = (await buildImportMetadata(
       event,
       provider,
       connectionId,
       contact,
       input.calendarId,
       reminderEligibility,
-    ) as Record<string, unknown>;
+      prevMeta,
+    )) as Record<string, unknown>;
 
     await upsertWorkspaceAppointmentByExternalId({
       workspaceId,
@@ -292,14 +296,14 @@ export async function processCalendarProviderEvent(input: {
 
   const contact = await resolveContactForImportedEvent(workspaceId, event, config.email);
   const externalId = formatImportedExternalId(provider, connectionId, event.id);
-  const metadata = buildImportMetadata(
+  const metadata = (await buildImportMetadata(
     event,
     provider,
     connectionId,
     contact,
     input.calendarId,
     reminderEligibility,
-  ) as Record<string, unknown>;
+  )) as Record<string, unknown>;
 
   const existingBeforeImport = await getPrisma().voiceAppointment.findFirst({
     where: { workspaceId, externalId },
@@ -453,14 +457,21 @@ async function applyImportedReminderEligibility(
   });
 }
 
-function buildImportMetadata(
+async function buildImportMetadata(
   event: ProviderCalendarEvent,
   provider: string,
   connectionId: string,
   contact: Awaited<ReturnType<typeof resolveContactForImportedEvent>>,
   calendarId?: string,
   reminderEligibility?: { eligible: boolean; reason?: string },
+  previousMetadata?: Record<string, unknown> | null,
 ) {
+  const phoneMerge = await mergeReminderPhoneOnImport({
+    event,
+    previousMetadata: (previousMetadata || null) as AppointmentMetadata | null,
+    contactPhone: contact.inviteePhone,
+  });
+
   return {
     source: "calendar_import",
     reminderSmsEligible: reminderEligibility?.eligible ?? false,
@@ -473,9 +484,10 @@ function buildImportMetadata(
     providerEventId: event.id,
     inviteeEmail: contact.inviteeEmail,
     inviteeName: contact.inviteeName,
-    inviteePhone: contact.inviteePhone,
-    smsCapable: contact.smsCapable,
-    emailOnly: contact.emailOnly,
+    inviteePhone: phoneMerge.inviteePhone,
+    reminderPhone: phoneMerge.reminderPhone,
+    smsCapable: phoneMerge.smsCapable,
+    emailOnly: phoneMerge.emailOnly,
     contactMatch: contact.matchedExistingContact ? "existing" : contact.createdContact ? "created" : "none",
     timezone: event.timezone,
     isAllDay: event.isAllDay,
