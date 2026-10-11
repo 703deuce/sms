@@ -34,24 +34,49 @@ import {
 import { OpusProductSwitcher } from '@/newui-transplant/components/app/opus-product-switcher'
 import { resolveCustomerNavSections, type NavItem, type NavSubItem } from '@/newui-transplant/lib/nav'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
+import { hrefPath, scoreNavHref } from '@/lib/nav-active'
 import {
-  isReceptionistWizardAreaPath,
   isReceptionistWizardEditPath,
   stepIdFromReceptionistQuery,
 } from '@/lib/voice/receptionist/wizard-step-url'
 
-function isTopNavActive(pathname: string, item: NavItem) {
+function searchStringFromParams(searchParams: URLSearchParams): string {
+  const q = searchParams.toString()
+  return q ? `?${q}` : ''
+}
+
+function isTopNavActive(pathname: string, search: string, item: NavItem) {
   if (item.children?.length) {
-    if (pathname === item.href) return true
-    if (item.matchPrefix && pathname.startsWith(item.matchPrefix)) {
+    const prefixPath = item.matchPrefix ? hrefPath(item.matchPrefix) : hrefPath(item.href)
+    if (pathname === hrefPath(item.href) || pathname.startsWith(`${prefixPath}/`)) {
       if (isReceptionistWizardEditPath(pathname)) return false
       return true
     }
+    const childHit = item.children.some((c) => scoreNavHref(pathname, search, c.href) >= 0)
+    if (childHit) return true
     return false
   }
-  if (pathname === item.href) return true
-  if (item.matchPrefix && pathname.startsWith(item.matchPrefix)) return true
+  if (scoreNavHref(pathname, search, item.href, item.matchExact ? true : undefined) >= 0) {
+    return true
+  }
   return false
+}
+
+function bestMatchingChild(
+  pathname: string,
+  search: string,
+  children: NavSubItem[],
+): NavSubItem | null {
+  let best: NavSubItem | null = null
+  let bestScore = -1
+  for (const child of children) {
+    const score = scoreNavHref(pathname, search, child.href)
+    if (score > bestScore) {
+      bestScore = score
+      best = child
+    }
+  }
+  return bestScore >= 0 ? best : null
 }
 
 function isSubNavActive(pathname: string, searchParams: URLSearchParams, child: NavSubItem) {
@@ -66,10 +91,6 @@ function isSubNavActive(pathname: string, searchParams: URLSearchParams, child: 
   const activeId = stepIdFromReceptionistQuery(stepParam)
   const childId = stepIdFromReceptionistQuery(childStep)
   return activeId !== null && childId !== null && activeId === childId
-}
-
-function receptionistAreaExpanded(pathname: string) {
-  return isReceptionistWizardAreaPath(pathname)
 }
 
 export type AppSidebarProps = {
@@ -135,13 +156,13 @@ export function AppSidebar({
               <SidebarMenu>
                 {section.items.map((item) => {
                   const hasChildren = Boolean(item.children?.length)
-                  const parentActive = isTopNavActive(pathname, item)
-                  const showChildren = hasChildren && receptionistAreaExpanded(pathname)
-                  const parentHighlighted =
-                    parentActive ||
-                    (hasChildren &&
-                      isReceptionistWizardEditPath(pathname) &&
-                      receptionistAreaExpanded(pathname))
+                  const search = searchStringFromParams(searchParams)
+                  const parentActive = isTopNavActive(pathname, search, item)
+                  const activeChild = hasChildren
+                    ? bestMatchingChild(pathname, search, item.children!)
+                    : null
+                  const showChildren = hasChildren
+                  const parentHighlighted = parentActive || Boolean(activeChild)
 
                   return (
                     <SidebarMenuItem key={item.href}>
@@ -162,7 +183,9 @@ export function AppSidebar({
                       {showChildren ? (
                         <SidebarMenuSub>
                           {item.children!.map((child) => {
-                            const childActive = isSubNavActive(pathname, searchParams, child)
+                            const childActive = isReceptionistWizardEditPath(pathname)
+                              ? isSubNavActive(pathname, searchParams, child)
+                              : activeChild?.href === child.href
                             return (
                               <SidebarMenuSubItem key={child.href}>
                                 <SidebarMenuSubButton

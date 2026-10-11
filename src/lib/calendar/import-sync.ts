@@ -247,7 +247,6 @@ export async function processCalendarProviderEvent(input: {
     : event;
 
   const mirrorEligibility = isEventEligibleForCalendarMirror(eventForProcessing);
-  const reminderEligibility = isEventEligibleForReminderImport(eventForProcessing, rules, config.email);
 
   if (existing) {
     if (isTransovoOwnedProviderEvent(existing, event.id)) {
@@ -266,9 +265,24 @@ export async function processCalendarProviderEvent(input: {
     }
 
     const contact = await resolveImportContact(eventForProcessing);
+    const prevMeta = (existing.metadata || {}) as Record<string, unknown>;
+    const phonePreview = await mergeReminderPhoneOnImport({
+      event: eventForProcessing,
+      previousMetadata: prevMeta as AppointmentMetadata | null,
+      contactPhone: contact.inviteePhone,
+      graphCustomerPhonePropertyKeys: config.graphCustomerPhonePropertyKeys,
+    });
+    const reminderEligibility = isEventEligibleForReminderImport(
+      eventForProcessing,
+      rules,
+      config.email,
+      {
+        microsoftUserId: config.microsoftUserId,
+        customerPhoneE164: phonePreview.smsCapable ? phonePreview.inviteePhone : null,
+      },
+    );
     const externalId = formatImportedExternalId(provider, connectionId, event.id);
     const status = event.status === "cancelled" ? "canceled" : "confirmed";
-    const prevMeta = (existing.metadata || {}) as Record<string, unknown>;
     const metadata = (await buildImportMetadata(
       workspaceId,
       event,
@@ -325,6 +339,21 @@ export async function processCalendarProviderEvent(input: {
   }
 
   const contact = await resolveImportContact(eventForProcessing);
+  const phonePreview = await mergeReminderPhoneOnImport({
+    event: eventForProcessing,
+    previousMetadata: null,
+    contactPhone: contact.inviteePhone,
+    graphCustomerPhonePropertyKeys: config.graphCustomerPhonePropertyKeys,
+  });
+  const reminderEligibility = isEventEligibleForReminderImport(
+    eventForProcessing,
+    rules,
+    config.email,
+    {
+      microsoftUserId: config.microsoftUserId,
+      customerPhoneE164: phonePreview.smsCapable ? phonePreview.inviteePhone : null,
+    },
+  );
   const externalId = formatImportedExternalId(provider, connectionId, event.id);
   const metadata = (await buildImportMetadata(
     workspaceId,
@@ -584,9 +613,25 @@ export async function syncWorkspaceCalendarConnection(
     await ensureMicrosoftCalendarSubscription(workspaceId, connectionId).catch((err) => {
       console.warn("[calendar] ensure microsoft subscription before sync failed", connectionId, err);
     });
+    const { healMicrosoftSplitConnectionTokens } = await import(
+      "@/lib/calendar/microsoft-connection-heal"
+    );
+    const heal = await healMicrosoftSplitConnectionTokens(workspaceId, connectionId);
+    if (heal.healed) {
+      console.info(
+        "[calendar] microsoft_oauth_healed_from_sibling",
+        JSON.stringify({
+          workspaceId,
+          targetConnectionId: heal.targetConnectionId,
+          donorConnectionId: heal.donorConnectionId,
+        }),
+      );
+    }
   }
 
-  const token = await getValidAccessToken(conn.id, provider, config);
+  const freshConnForToken = await getWorkspaceCalendarConnection(workspaceId, connectionId);
+  const configForToken = (freshConnForToken?.config || config) as CalendarConfig;
+  const token = await getValidAccessToken(conn.id, provider, configForToken);
   if (!token) {
     await updateWorkspaceCalendarConnection(workspaceId, connectionId, {
       status: "needs_reauth",

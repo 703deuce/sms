@@ -201,6 +201,39 @@ export async function completeMicrosoftOAuth(code: string, state: string) {
   });
 
   try {
+    const { canonicalizeMicrosoftConnectionAfterOAuth } = await import(
+      "@/lib/calendar/microsoft-canonical-connection"
+    );
+    const canonical = await canonicalizeMicrosoftConnectionAfterOAuth({
+      workspaceId: parsed.workspaceId,
+      activeConnectionId: parsed.connectionId,
+      identity: {
+        microsoftUserId: profile.microsoftUserId,
+        tenantId: profile.tenantId,
+        email: profile.email,
+      },
+      oauthConfig: config,
+    });
+    if (canonical.redirectedFromId || canonical.disconnectedIds.length) {
+      console.info(
+        "[calendar] microsoft_oauth_canonicalized",
+        JSON.stringify({
+          workspaceId: parsed.workspaceId,
+          canonicalConnectionId: canonical.canonicalConnectionId,
+          redirectedFromId: canonical.redirectedFromId,
+          disconnectedIds: canonical.disconnectedIds,
+        }),
+      );
+      parsed.connectionId = canonical.canonicalConnectionId;
+    }
+  } catch (err) {
+    console.warn(
+      "[calendar] microsoft_oauth_canonicalize_failed",
+      err instanceof Error ? err.message : err,
+    );
+  }
+
+  try {
     const { migrateMctbAiBookingMicrosoftConnectionPointers } = await import(
       "@/lib/mctb/ai-booking/microsoft-connection"
     );

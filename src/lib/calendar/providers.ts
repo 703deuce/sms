@@ -5,7 +5,7 @@ import {
   extractMicrosoftTenantIdFromToken,
   extractMicrosoftUserIdFromToken,
 } from "@/lib/microsoft/oauth-config";
-import { withMicrosoftTokenRefreshLock } from "@/lib/microsoft/token-refresh-lock";
+import { withMicrosoftCalendarTokenRefreshLock } from "@/lib/microsoft/token-refresh-advisory-lock";
 import type { MicrosoftTokenRefreshResult } from "@/lib/microsoft/token-errors";
 import {
   GRAPH_PREFER_OUTLOOK_UTC,
@@ -182,6 +182,7 @@ async function persistTokenRefreshDiagnostics(
     ok: boolean;
     kind?: string;
     error?: string | null;
+    errorDescription?: string | null;
     scope?: string;
     source?: string;
     buildSha?: string | null;
@@ -195,17 +196,26 @@ async function persistTokenRefreshDiagnostics(
     ...config,
     lastTokenRefreshAt: new Date().toISOString(),
     lastTokenRefreshKind: input.kind || (input.ok ? "success" : "unknown"),
-    lastTokenRefreshError: input.ok ? null : input.error || "refresh_failed",
+    lastTokenRefreshError: input.ok
+      ? null
+      : [input.error || "refresh_failed", (input as { errorDescription?: string }).errorDescription]
+          .filter(Boolean)
+          .join(": ")
+          .slice(0, 500),
     lastTokenRefreshSource: input.source || "production_web",
     lastTokenRefreshBuildSha: input.buildSha ?? null,
     ...(input.scope ? { grantedScopes: input.scope } : {}),
   };
-  await getPrisma()
-    .voiceCalendarConnection.update({
-      where: { id: connectionId },
-      data: { config: patch as object },
-    })
-    .catch(() => undefined);
+  const { updateWorkspaceCalendarConnection } = await import("@/lib/calendar/connections");
+  const row = await getPrisma().voiceCalendarConnection.findUnique({
+    where: { id: connectionId },
+    select: { workspaceId: true },
+  });
+  if (row?.workspaceId) {
+    await updateWorkspaceCalendarConnection(row.workspaceId, connectionId, {
+      config: patch as Record<string, unknown>,
+    }).catch(() => undefined);
+  }
   return patch;
 }
 
@@ -222,8 +232,14 @@ type RefreshFailure = {
   result: MicrosoftTokenRefreshResult & { ok: false };
 };
 
-async function refreshMicrosoftTokens(refreshToken: string): Promise<RefreshSuccess | RefreshFailure> {
-  const refreshed = await refreshMicrosoftAccessToken(refreshToken);
+async function refreshMicrosoftTokens(
+  refreshToken: string,
+  config: CalendarConfig,
+): Promise<RefreshSuccess | RefreshFailure> {
+  const { resolveMicrosoftRefreshScopes } = await import("@/lib/microsoft/oauth-config");
+  const refreshed = await refreshMicrosoftAccessToken(refreshToken, {
+    scope: resolveMicrosoftRefreshScopes(config),
+  });
   if (!refreshed.ok) {
     return { ok: false, result: refreshed };
   }
@@ -279,7 +295,7 @@ export async function getValidAccessToken(
 
     const refreshed =
       provider === "microsoft"
-        ? await refreshMicrosoftTokens(activeConfig.refreshToken)
+        ? await refreshMicrosoftTokens(activeConfig.refreshToken, activeConfig)
         : await refreshGoogle(activeConfig.refreshToken);
 
     if (!refreshed || refreshed.ok === false) {
@@ -293,7 +309,8 @@ export async function getValidAccessToken(
       const nextConfig = await persistTokenRefreshDiagnostics(connectionId, activeConfig, {
         ok: false,
         kind: failure?.kind || "unknown",
-        error: failure?.error || failure?.errorDescription || "refresh_failed",
+        error: failure?.error || "refresh_failed",
+        errorDescription: failure?.errorDescription || null,
         source: provenance.source,
         buildSha: provenance.buildSha,
       });
@@ -355,13 +372,14 @@ export async function getValidAccessToken(
     }
   }
 
-  return withMicrosoftTokenRefreshLock(connectionId, async () => {
+  return withMicrosoftCalendarTokenRefreshLock(connectionId, async () => {
     try {
       const row = await getPrisma().voiceCalendarConnection.findUnique({
         where: { id: connectionId },
         select: { config: true, status: true },
       });
       const freshConfig = { ...config, ...((row?.config || {}) as CalendarConfig) };
+      const refreshTokenBefore = freshConfig.refreshToken;
       const notExpired =
         !forceRefresh &&
         freshConfig.expiresAt &&
@@ -372,7 +390,29 @@ export async function getValidAccessToken(
         }
         return freshConfig.accessToken;
       }
-      return await resolveTokens(freshConfig);
+      const token = await resolveTokens(freshConfig);
+      if (token) return token;
+
+      const rowAfter = await getPrisma().voiceCalendarConnection.findUnique({
+        where: { id: connectionId },
+        select: { config: true, status: true },
+      });
+      const afterConfig = (rowAfter?.config || {}) as CalendarConfig;
+      const rotated =
+        afterConfig.refreshToken &&
+        refreshTokenBefore &&
+        afterConfig.refreshToken !== refreshTokenBefore;
+      const accessValidAfter =
+        afterConfig.accessToken &&
+        afterConfig.expiresAt &&
+        afterConfig.expiresAt > Date.now() + TOKEN_EXPIRY_BUFFER_MS;
+      if (rotated || accessValidAfter) {
+        if (!readOnly && rowAfter?.status === "needs_reauth" && accessValidAfter) {
+          await markCalendarConnectionConnected(connectionId);
+        }
+        return accessValidAfter ? afterConfig.accessToken ?? null : await resolveTokens(afterConfig);
+      }
+      return null;
     } catch (err) {
       console.warn("[calendar] microsoft token refresh failed", connectionId, err);
       await persistTokenRefreshDiagnostics(connectionId, config, {

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { SidebarInset, SidebarProvider } from "@/newui-transplant/components/ui/sidebar";
 import { TooltipProvider } from "@/newui-transplant/components/ui/tooltip";
 import { AppSidebar } from "@/newui-transplant/components/app/app-sidebar";
+import { MobileSidebarOpenBridge } from "@/newui-transplant/components/app/mobile-sidebar-open-bridge";
 import { Topbar } from "@/newui-transplant/components/app/topbar";
 import { OpusWorkspaceDataProvider } from "@/newui-transplant/context/opus-workspace-data";
 import { cn } from "@/lib/utils";
@@ -40,6 +41,9 @@ export type NewUiTransplantShellLayoutProps = {
   hasAppointmentReminders?: boolean;
   hasAiAfterHours?: boolean;
   workspaces?: unknown[];
+  /** Bottom nav “More” — opens mobile sidebar sheet */
+  mobileMenuOpen?: boolean;
+  onMobileMenuClose?: () => void;
 };
 
 export function NewUiTransplantShellLayout({
@@ -50,6 +54,8 @@ export function NewUiTransplantShellLayout({
   hasMctb = true,
   hasAppointmentReminders = true,
   hasAiAfterHours = false,
+  mobileMenuOpen = false,
+  onMobileMenuClose,
 }: NewUiTransplantShellLayoutProps) {
   const wsName = workspaceName?.trim() || "Workspace";
   return (
@@ -57,6 +63,10 @@ export function NewUiTransplantShellLayout({
       <OpusWorkspaceDataProvider workspaceName={wsName}>
         <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
         <SidebarProvider className="flex h-full min-h-0 w-full flex-1 overflow-hidden">
+          <MobileSidebarOpenBridge
+            menuOpen={mobileMenuOpen}
+            onMenuClose={onMobileMenuClose}
+          />
           <AppSidebar
             userName={userName}
             hasMctb={hasMctb}
