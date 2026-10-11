@@ -25,7 +25,7 @@ async function openArHome(page: Page, query = "view=week") {
     .waitFor({ timeout: 60_000 })
     .catch(() => {});
   await page.locator("aside[aria-label='Appointment context']").waitFor({ timeout: 30_000 }).catch(() => {});
-  await page.getByText(/^Today$/).waitFor({ timeout: 30_000 }).catch(() => {});
+  await page.getByText(/^(Today|Selected day)$/i).waitFor({ timeout: 30_000 }).catch(() => {});
   await page.waitForTimeout(1200);
 }
 
@@ -36,15 +36,13 @@ async function shot(page: Page, name: string) {
 }
 
 function calendarGridAppointmentButtons(page: Page): Locator {
-  return page
-    .locator("div.min-w-\\[640px\\]")
-    .locator("button.absolute.inset-x-1");
+  return page.locator("div.min-w-\\[640px\\]").locator("button.absolute.z-10");
 }
 
 async function waitForAppointmentDetail(page: Page) {
   const ctx = page.locator("aside[aria-label='Appointment context']");
   await Promise.race([
-    ctx.getByRole("button", { name: /Back to Today/i }).waitFor({ timeout: 90_000 }),
+    ctx.getByRole("button", { name: /Back to (Today|overview)/i }).waitFor({ timeout: 90_000 }),
     ctx.getByRole("tab", { name: "Details" }).waitFor({ timeout: 90_000 }),
     page.getByText(/Reminders are (on|off)/i).waitFor({ timeout: 90_000 }),
   ]);
@@ -86,10 +84,10 @@ async function openRemindersTab(page: Page) {
 async function backToActivity(page: Page) {
   const back = page
     .locator("aside[aria-label='Appointment context']")
-    .getByRole("button", { name: /Back to Today/i });
+    .getByRole("button", { name: /Back to (Today|overview)/i });
   if (await back.isVisible().catch(() => false)) {
     await back.click();
-    await page.getByText(/^Today$/).waitFor({ timeout: 15_000 }).catch(() => {});
+    await page.getByText(/^(Today|Selected day)$/i).waitFor({ timeout: 15_000 }).catch(() => {});
     await page.waitForTimeout(400);
   }
 }
@@ -211,6 +209,19 @@ async function main() {
 
   await openArHome(page, "view=month");
   await safeShot(page, "ar-layout-b-prod-desktop-month.png");
+
+  await openArHome(page, "view=agenda");
+  await page.getByText("Appointment", { exact: true }).first().waitFor({ timeout: 30_000 }).catch(() => {});
+  await safeShot(page, "ar-layout-b-prod-desktop-agenda.png");
+
+  await openArHome(page, "view=week");
+  const displayBtn = page.getByRole("button", { name: "Display" });
+  if (await displayBtn.isVisible().catch(() => false)) {
+    await displayBtn.click();
+    await page.waitForTimeout(300);
+    await safeShot(page, "ar-layout-b-prod-desktop-display-menu.png");
+    await page.keyboard.press("Escape");
+  }
 
   await openArHome(page, "view=week");
   try {
