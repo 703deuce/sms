@@ -1,5 +1,6 @@
 import type { CalendarApiAppointment } from "@/features/appointments/kimi/calendar/map-calendar";
 import type { ArAppointmentRow } from "@/lib/appointment-reminders/appointments-page-types";
+import { eventSubtitle, eventTitle, looksLikePhoneOnly } from "@/lib/appointment-reminders/calendar/ar-calendar-layout";
 
 /** Minimal row for detail drawer until full list payload is loaded. */
 export function calendarEventToAppointmentRow(
@@ -7,10 +8,21 @@ export function calendarEventToAppointmentRow(
   timezone: string,
 ): ArAppointmentRow {
   const meta = ev.metadata || {};
+  const primary = eventTitle(ev);
+  const secondary = eventSubtitle(ev);
+  const rawName = ev.inviteeName?.trim() || "";
+  const rawService = ev.serviceName?.trim() || "";
+  const customerName =
+    rawName && !looksLikePhoneOnly(rawName)
+      ? rawName
+      : primary !== "Appointment"
+        ? primary
+        : rawName || rawService || "Customer";
+  const appointmentTitle = secondary || (rawService && !looksLikePhoneOnly(rawService) ? rawService : primary);
   return {
     id: ev.id,
-    customerName: ev.inviteeName?.trim() || ev.serviceName?.trim() || "Customer",
-    appointmentTitle: ev.serviceName?.trim() || "Appointment",
+    customerName,
+    appointmentTitle,
     startsAt: ev.startsAt,
     endsAt: ev.endsAt ?? null,
     timezone: ev.timezone ?? timezone,

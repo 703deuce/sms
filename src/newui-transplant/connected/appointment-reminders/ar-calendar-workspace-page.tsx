@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { isCalendarConnectionUsable } from '@/lib/appointment-reminders/calendar-connection'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AlertTriangle, Bell, Calendar, ExternalLink, RefreshCw } from 'lucide-react'
@@ -84,6 +85,11 @@ export function AppointmentRemindersCalendarWorkspacePage() {
     stats?: { failed7d?: number }
     sync?: { syncError?: string | null }
     calendarHealthy?: boolean
+    calendars?: Array<{
+      status: string
+      importCalendarCount?: number | null
+      label?: string
+    }>
   } | null>(null)
   const [feedLoading, setFeedLoading] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -137,6 +143,46 @@ export function AppointmentRemindersCalendarWorkspacePage() {
   }, [selectedId, selectedEvent, timezone, overviewFeed])
 
   const upcomingLite = overviewFeed?.upcomingAppointments
+
+  const calendarConnectionCallout = useMemo(() => {
+    if (!overviewReady || !connected) return null
+    const cals = overviewMeta?.calendars ?? []
+    const importing = cals.filter((c) => (c.importCalendarCount ?? 0) > 0)
+    const syncErr = overviewMeta?.sync?.syncError
+    if (syncErr) {
+      return {
+        title: 'Calendar sync error',
+        body: String(syncErr),
+      }
+    }
+    if (!overviewMeta?.readiness?.hasImportCalendars || importing.length === 0) {
+      return {
+        title: 'Select calendars to import',
+        body: 'Connect Microsoft 365 or Google and choose which calendars Transovo should mirror.',
+      }
+    }
+    const needsReauth = importing.some((c) => String(c.status).toLowerCase() === 'needs_reauth')
+    if (needsReauth) {
+      return {
+        title: 'Calendar needs re-authentication',
+        body: 'Your provider connection expired. Reconnect under Settings → Integrations to keep sync healthy.',
+      }
+    }
+    const broken = importing.filter((c) => !isCalendarConnectionUsable(c.status))
+    if (broken.length > 0) {
+      return {
+        title: 'Calendar connection needs attention',
+        body: 'One or more import calendars are disconnected. Appointments may be stale until you reconnect.',
+      }
+    }
+    if (overviewMeta?.readiness?.syncHealthy === false) {
+      return {
+        title: 'Calendar sync needs attention',
+        body: 'Transovo has not received a successful sync recently. Try Sync now or check Integrations.',
+      }
+    }
+    return null
+  }, [overviewReady, connected, overviewMeta])
 
   const syncUrl = useCallback(
     (
@@ -201,6 +247,7 @@ export function AppointmentRemindersCalendarWorkspacePage() {
           stats: data?.stats,
           sync: data?.sync,
           calendarHealthy: data?.calendarHealthy,
+          calendars: data?.calendars,
         })
         if (!linked) linked = isArCalendarViewerReadyFromOverview(data)
         if (data?.timezone) setTimezone(data.timezone)
@@ -472,10 +519,12 @@ export function AppointmentRemindersCalendarWorkspacePage() {
         </Callout>
       ) : null}
 
-      {overviewMeta?.calendarHealthy === false && overviewReady ? (
-        <Callout tone="warning" icon={Calendar} title="Calendar connection needs attention" className="mb-2">
-          Connect Microsoft 365 or Google and select import calendars.{' '}
-          <TextLink href={AR_SETTINGS_INTEGRATIONS}>Manage connections</TextLink>
+      {calendarConnectionCallout ? (
+        <Callout tone="warning" icon={Calendar} title={calendarConnectionCallout.title} className="mb-2">
+          <p className="text-sm text-muted-foreground">
+            {calendarConnectionCallout.body}{' '}
+            <TextLink href={AR_SETTINGS_INTEGRATIONS}>Manage connections</TextLink>
+          </p>
         </Callout>
       ) : null}
 

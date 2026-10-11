@@ -33,7 +33,9 @@ export function SimpleSelect({
       }}
     >
       <SelectTrigger id={id} aria-label={label} className={cn('h-9 w-full bg-card', className)}>
-        <SelectValue />
+        <SelectValue placeholder={label}>
+          {options.find((o) => o.value === current)?.label ?? current}
+        </SelectValue>
       </SelectTrigger>
       <SelectContent className="z-[200]">
         {options.map((o) => (

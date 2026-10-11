@@ -3,7 +3,7 @@ import type { CalendarViewMode } from "@/features/appointments/kimi/calendar/typ
 
 export const AR_CALENDAR_DAY_START_HOUR = 6;
 export const AR_CALENDAR_DAY_END_HOUR = 21;
-export const AR_CALENDAR_HOUR_PX = 58;
+export const AR_CALENDAR_HOUR_PX = 50;
 
 export function startOfWeek(d: Date) {
   const copy = new Date(d);
@@ -157,8 +157,33 @@ export function groupEventsByDay(events: CalendarApiAppointment[], timeZone: str
   return map;
 }
 
+export function looksLikePhoneOnly(value: string) {
+  const t = value.trim();
+  if (!t) return false;
+  const digits = t.replace(/\D/g, "");
+  return digits.length >= 7 && /^[\d\s().+\-]+$/.test(t);
+}
+
+/** Primary line for calendar blocks — prefer real customer name over phone-like strings. */
 export function eventTitle(ev: CalendarApiAppointment) {
-  return ev.serviceName || ev.inviteeName || "Appointment";
+  const name = ev.inviteeName?.trim() || "";
+  const service = ev.serviceName?.trim() || "";
+  const nameOk = Boolean(name) && !looksLikePhoneOnly(name);
+  const serviceOk = Boolean(service) && !looksLikePhoneOnly(service);
+  if (nameOk) return name;
+  if (serviceOk) return service;
+  if (name) return name;
+  return service || "Appointment";
+}
+
+/** Secondary line when both name and service are meaningful. */
+export function eventSubtitle(ev: CalendarApiAppointment): string | null {
+  const name = ev.inviteeName?.trim() || "";
+  const service = ev.serviceName?.trim() || "";
+  const nameOk = Boolean(name) && !looksLikePhoneOnly(name);
+  const serviceOk = Boolean(service) && !looksLikePhoneOnly(service);
+  if (nameOk && serviceOk && service !== name) return service;
+  return null;
 }
 
 export function formatEventTime(iso: string, timeZone: string) {

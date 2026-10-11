@@ -10,6 +10,7 @@ import {
   buildMonthGrid,
   eventHeightPx,
   eventTitle,
+  eventSubtitle,
   eventTopPx,
   formatArCalendarSubtitle,
   formatArCalendarTitle,
@@ -74,12 +75,13 @@ function EventChip({
 }) {
   const canceled = ev.status === 'canceled'
   const reminder = reminderBlockHint(ev)
+  const subtitle = eventSubtitle(ev)
   return (
     <button
       type="button"
       onClick={() => onSelect(ev.id)}
       className={cn(
-        'w-full rounded-md border px-2 py-1.5 text-left text-xs transition-colors',
+        'w-full rounded-lg border px-2 py-1.5 text-left text-xs transition-colors',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
         canceled
           ? 'border-border/60 bg-muted/40 text-muted-foreground line-through'
@@ -91,12 +93,12 @@ function EventChip({
         {reminder ? <ReminderDot state={reminder} /> : null}
         <span className="truncate">{eventTitle(ev)}</span>
       </span>
+      {subtitle && !compact ? (
+        <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{subtitle}</span>
+      ) : null}
       <span className="mt-0.5 block text-[11px] font-semibold tabular-nums text-muted-foreground">
         {formatEventTime(ev.startsAt, timeZone)}
       </span>
-      {!compact && ev.inviteeName && ev.serviceName ? (
-        <span className="mt-0.5 block truncate text-muted-foreground">{ev.inviteeName}</span>
-      ) : null}
     </button>
   )
 }
@@ -118,8 +120,8 @@ function MonthView({
   const byDay = groupEventsByDay(events, timeZone)
 
   return (
-    <div className="overflow-hidden rounded-lg border bg-background">
-      <div className="grid grid-cols-7 border-b bg-muted/40">
+    <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border bg-background">
+      <div className="grid shrink-0 grid-cols-7 border-b bg-muted/40">
         {DOW.map((label) => (
           <div
             key={label}
@@ -129,14 +131,14 @@ function MonthView({
           </div>
         ))}
       </div>
-      <div className="grid grid-cols-7">
+      <div className="grid min-h-0 flex-1 auto-rows-fr grid-cols-7 overflow-y-auto overscroll-contain">
         {cells.map((cell) => {
           const dayEvents = byDay.get(cell.key) || []
           return (
             <div
               key={cell.key}
               className={cn(
-                'min-h-[120px] border-b border-r border-border/70 p-2 last:border-r-0',
+                'min-h-[104px] border-b border-r border-border/70 p-1.5 last:border-r-0',
                 !cell.inMonth && 'bg-muted/20',
                 cell.isToday && 'bg-primary/[0.06]',
               )}
@@ -280,14 +282,15 @@ function TimeGridView({
                 style={{
                   top: eventTopPx(ev.startsAt, timeZone),
                   height: eventHeightPx(ev.startsAt, ev.endsAt, timeZone),
-                  minHeight: 28,
+                  minHeight: 32,
                 }}
+                title={eventSubtitle(ev) ? `${eventTitle(ev)} · ${eventSubtitle(ev)}` : eventTitle(ev)}
               >
-                <span className="flex items-center gap-1 font-medium leading-snug">
+                <span className="flex items-start gap-1 font-medium leading-snug">
                   {reminder ? <ReminderDot state={reminder} /> : null}
-                  <span className="line-clamp-2">{eventTitle(ev)}</span>
+                  <span className="line-clamp-2 text-[12px]">{eventTitle(ev)}</span>
                 </span>
-                <span className="mt-0.5 truncate text-[11px] font-semibold tabular-nums text-muted-foreground">
+                <span className="mt-0.5 truncate text-[10px] font-semibold tabular-nums text-muted-foreground">
                   {formatEventTime(ev.startsAt, timeZone)}
                 </span>
               </button>
@@ -399,11 +402,11 @@ export function ArCalendarOpusView({
     >
       <div
         className={cn(
-          'border-b bg-gradient-to-b from-card to-muted/25 px-4 py-3 md:px-5',
-          compactChrome ? 'py-2.5' : 'px-5 py-5 md:px-6',
+          'border-b bg-gradient-to-b from-card to-muted/25 px-3 py-2.5 md:px-4',
+          compactChrome ? '' : 'px-5 py-5 md:px-6',
         )}
       >
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between lg:gap-3">
           {!compactChrome ? (
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Calendar</p>
@@ -416,11 +419,11 @@ export function ArCalendarOpusView({
               {subtitle ? <p className="text-[11px] text-muted-foreground">{subtitle}</p> : null}
             </div>
           )}
-          <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={onToday}>
+          <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2">
+            <Button type="button" variant="outline" size="sm" className="h-8" onClick={onToday}>
               Today
             </Button>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-0.5">
               <Button type="button" variant="outline" size="icon-sm" onClick={onPrev} aria-label="Previous">
                 <ChevronLeft className="size-4" aria-hidden="true" />
               </Button>
@@ -442,7 +445,7 @@ export function ArCalendarOpusView({
                 value={calendarFilter || 'all'}
                 onChange={onCalendarFilterChange}
                 options={calendarFilterOptions}
-                className="w-[min(220px,100%)] shrink-0"
+                className="h-8 w-[min(200px,100%)] shrink-0 text-xs"
               />
             ) : null}
           </div>
@@ -451,12 +454,12 @@ export function ArCalendarOpusView({
 
       <div
         className={cn(
-          'p-3 md:p-4',
+          'p-2 md:p-3',
           fillHeight ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : '',
         )}
       >
         {view === 'month' ? (
-          <div className={fillHeight ? 'min-h-0 flex-1 overflow-y-auto overscroll-contain' : undefined}>
+          <div className={fillHeight ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : undefined}>
           <MonthView
             cursor={cursor}
             events={events}

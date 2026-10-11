@@ -1,10 +1,10 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { ChevronDown, ChevronUp } from 'lucide-react'
+import { useMemo } from 'react'
+import { ChevronDown, ChevronRight, ChevronUp } from 'lucide-react'
 import type { ArOverviewFeedShape } from '@/lib/appointment-reminders/calendar/overview-feed-appointment-row'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
-import { TextLink } from '@/newui-transplant/components/app/kit'
+import { Pill, TextLink } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -23,12 +23,22 @@ type Props = {
   className?: string
 }
 
-function Column({
+function statusTone(status: string): 'neutral' | 'warning' | 'danger' | 'primary' {
+  const t = status.toLowerCase()
+  if (t.includes('fail') || t.includes('block')) return 'danger'
+  if (t.includes('past') || t.includes('attention') || t.includes('progress')) return 'warning'
+  if (t.includes('sched') || t.includes('sent') || t.includes('deliver')) return 'primary'
+  return 'neutral'
+}
+
+function StripCard({
   title,
   count,
   empty,
   primary,
   secondary,
+  statusLabel,
+  actionLabel,
   onClick,
 }: {
   title: string
@@ -36,15 +46,19 @@ function Column({
   empty: string
   primary?: string
   secondary?: string
+  statusLabel?: string
+  actionLabel?: string
   onClick?: () => void
 }) {
   const interactive = Boolean(onClick && primary)
   return (
-    <div className="min-w-0 flex-1 border-border lg:border-r lg:last:border-r-0 lg:pr-4 lg:last:pr-0">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
+    <div className="min-w-0 flex-1 lg:border-r lg:border-border/80 lg:pr-3 lg:last:border-r-0">
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
         {count > 0 ? (
-          <span className="text-[11px] font-medium tabular-nums text-muted-foreground">{count}</span>
+          <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-foreground">
+            {count}
+          </span>
         ) : null}
       </div>
       {primary ? (
@@ -53,15 +67,38 @@ function Column({
           onClick={onClick}
           disabled={!interactive}
           className={cn(
-            'mt-1.5 w-full text-left',
-            interactive && 'rounded-md px-1 py-0.5 -mx-1 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            'group w-full rounded-lg border border-border/80 bg-muted/15 px-2.5 py-2 text-left transition-colors',
+            interactive &&
+              'hover:border-primary/30 hover:bg-muted/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           )}
         >
-          <p className="truncate text-[13px] font-medium text-foreground">{primary}</p>
-          {secondary ? <p className="truncate text-[11px] text-muted-foreground">{secondary}</p> : null}
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              {statusLabel ? (
+                <Pill tone={statusTone(statusLabel)} className="mb-1 text-[10px]">
+                  {statusLabel}
+                </Pill>
+              ) : null}
+              <p className="truncate text-[13px] font-semibold text-foreground">{primary}</p>
+              {secondary ? (
+                <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted-foreground">{secondary}</p>
+              ) : null}
+            </div>
+            {interactive ? (
+              <ChevronRight
+                className="mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground"
+                aria-hidden
+              />
+            ) : null}
+          </div>
+          {actionLabel && interactive ? (
+            <p className="mt-1.5 text-[10px] font-medium text-primary">{actionLabel}</p>
+          ) : null}
         </button>
       ) : (
-        <p className="mt-1.5 text-xs text-muted-foreground">{empty}</p>
+        <p className="rounded-lg border border-dashed border-border/70 px-2.5 py-2 text-xs text-muted-foreground">
+          {empty}
+        </p>
       )}
     </div>
   )
@@ -76,16 +113,15 @@ export function ArCalendarOperationsStrip({ data, collapsed, onCollapsedChange, 
   const latestReply = replies[0]
   const reminderAct = activity[0]
 
-  const attentionCount = attention.length
-  const replyCount = replies.length
-
   const reminderPreview = useMemo(() => {
     if (!reminderAct) return null
     const failed = /fail/i.test(reminderAct.status)
+    const blocked = /block/i.test(reminderAct.status)
     return {
       primary: reminderAct.customerLabel,
-      secondary: `${reminderAct.reminderLabel} · ${reminderAct.status}`,
-      failed,
+      secondary: reminderAct.reminderLabel,
+      status: reminderAct.status,
+      tone: failed || blocked ? 'danger' : statusTone(reminderAct.status),
     }
   }, [reminderAct])
 
@@ -93,12 +129,12 @@ export function ArCalendarOperationsStrip({ data, collapsed, onCollapsedChange, 
     <section
       aria-label="Activity and attention"
       className={cn(
-        'shrink-0 rounded-xl border border-border bg-card shadow-sm transition-[height] duration-200',
-        collapsed ? 'h-10' : 'min-h-[6.5rem]',
+        'shrink-0 rounded-xl border border-border/80 bg-card/95 shadow-sm backdrop-blur-[2px] transition-[height] duration-200',
+        collapsed ? 'h-10' : 'min-h-[6.75rem]',
         className,
       )}
     >
-      <div className="flex items-center justify-between gap-2 border-b border-border/80 px-3 py-1.5">
+      <div className="flex items-center justify-between gap-2 border-b border-border/70 px-3 py-1.5">
         <p className="text-xs font-semibold text-foreground">Activity &amp; attention</p>
         <div className="flex items-center gap-2">
           <TextLink href={AR_ROUTES.reminders}>View all</TextLink>
@@ -119,26 +155,27 @@ export function ArCalendarOperationsStrip({ data, collapsed, onCollapsedChange, 
       {collapsed ? (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-1.5 text-[11px] text-muted-foreground">
           <span>
-            Needs attention: <strong className="font-medium text-foreground">{attentionCount || '0'}</strong>
+            Attention{' '}
+            <strong className="font-semibold text-foreground">{attention.length || '0'}</strong>
           </span>
           <span>
-            Replies: <strong className="font-medium text-foreground">{replyCount || '0'}</strong>
+            Replies <strong className="font-semibold text-foreground">{replies.length || '0'}</strong>
           </span>
           <span className="truncate">
-            Reminders:{' '}
-            <strong className="font-medium text-foreground">
-              {reminderAct ? reminderAct.status : '—'}
-            </strong>
+            Reminders{' '}
+            <strong className="font-semibold text-foreground">{reminderAct?.status ?? '—'}</strong>
           </span>
         </div>
       ) : (
-        <div className="grid gap-4 px-3 py-3 md:grid-cols-3">
-          <Column
+        <div className="grid gap-3 px-3 py-2.5 md:grid-cols-3">
+          <StripCard
             title="Needs attention"
-            count={attentionCount}
+            count={attention.length}
             empty="All caught up"
             primary={urgent ? urgent.customerName || urgent.title : undefined}
             secondary={urgent ? urgent.reason || urgent.issue : undefined}
+            statusLabel={urgent ? 'Needs attention' : undefined}
+            actionLabel="Open appointment"
             onClick={
               urgent
                 ? () =>
@@ -150,12 +187,14 @@ export function ArCalendarOperationsStrip({ data, collapsed, onCollapsedChange, 
                 : undefined
             }
           />
-          <Column
+          <StripCard
             title="Customer replies"
-            count={replyCount}
+            count={replies.length}
             empty="No new replies"
             primary={latestReply?.customerName}
-            secondary={latestReply?.customerResponse?.label || 'Reply'}
+            secondary={latestReply?.customerResponse?.label || 'New message'}
+            statusLabel={latestReply ? 'Reply' : undefined}
+            actionLabel="Open conversation"
             onClick={
               latestReply
                 ? () =>
@@ -168,12 +207,16 @@ export function ArCalendarOperationsStrip({ data, collapsed, onCollapsedChange, 
                 : undefined
             }
           />
-          <Column
+          <StripCard
             title="Reminder activity"
             count={activity.length}
             empty="No upcoming reminders"
             primary={reminderPreview?.primary}
-            secondary={reminderPreview?.secondary}
+            secondary={
+              reminderPreview ? `${reminderPreview.secondary} · ${reminderPreview.status}` : undefined
+            }
+            statusLabel={reminderPreview?.status}
+            actionLabel="View reminders"
             onClick={
               reminderAct
                 ? () =>

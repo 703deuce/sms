@@ -14,6 +14,8 @@ import type {
   ArReminderEngagementStep,
   ArSmsEvidenceSummary,
 } from '@/lib/appointment-reminders/ar-sms-customer-outcome'
+import { buildArReminderReadinessSummary } from '@/lib/appointment-reminders/ar-reminder-readiness-summary'
+import { looksLikePhoneOnly } from '@/lib/appointment-reminders/calendar/ar-calendar-layout'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Input } from '@/newui-transplant/components/ui/input'
 import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
@@ -261,20 +263,19 @@ export function AppointmentDetailDrawer({
   }, [open, openConversationOnLoad, row?.id])
 
   const panelTitle = row ? primaryAppointmentHeading(row) : ''
-  const nextScheduled = timeline.find((t) => t.status === 'Scheduled' || t.status === 'scheduled')
   const effectivePhone =
     phoneEdit || row?.phone || (meta.inviteePhone as string) || (meta.phone as string) || ''
-  const readinessLine = remindersSuppressed
-    ? 'Reminders off for this appointment'
-    : row?.reminder.status === 'needs_attention' || row?.reminder.status === 'failed'
-      ? row.reminder.secondaryLine || row.reminder.label
-      : nextScheduled?.scheduledFor
-        ? `Next: ${new Date(nextScheduled.scheduledFor).toLocaleString(undefined, {
-            dateStyle: 'medium',
-            timeStyle: 'short',
-            timeZone: tz,
-          })}`
-        : row?.reminder.label
+  const readinessSummary =
+    row && open
+      ? buildArReminderReadinessSummary({
+          remindersSuppressed,
+          row,
+          timeline,
+          reminderEngagement,
+          meta,
+          timeZone: tz,
+        })
+      : null
 
   const detailContent =
     row && open ? (
@@ -365,9 +366,23 @@ export function AppointmentDetailDrawer({
                       </Button>
                     </dd>
                   </div>
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <dt className="text-muted-foreground">Next reminder</dt>
-                    <dd className="text-foreground">{readinessLine}</dd>
+                  <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between">
+                    <dt className="text-muted-foreground">Automation</dt>
+                    <dd className="text-foreground">{readinessSummary?.automationLabel}</dd>
+                  </div>
+                  <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between">
+                    <dt className="text-muted-foreground">Next send</dt>
+                    <dd
+                      className={
+                        readinessSummary?.tone === 'danger'
+                          ? 'text-destructive'
+                          : readinessSummary?.tone === 'warning'
+                            ? 'text-amber-700 dark:text-amber-400'
+                            : 'text-foreground'
+                      }
+                    >
+                      {readinessSummary?.nextDispatchLabel}
+                    </dd>
                   </div>
                   {customerResponse?.detailLine ? (
                     <div>
@@ -687,9 +702,20 @@ export function AppointmentDetailDrawer({
                     <h2 className="mb-3 text-sm font-semibold">Reminders &amp; customer actions</h2>
                     <div className="mb-4 rounded-md border bg-muted/20 px-3 py-3">
                       <p className="text-sm font-medium text-foreground">
-                        {remindersSuppressed ? 'Reminders are off for this appointment' : 'Reminders are on'}
+                        {readinessSummary?.automationLabel}
                       </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
+                      <p
+                        className={`mt-1 text-xs ${
+                          readinessSummary?.tone === 'danger'
+                            ? 'text-destructive'
+                            : readinessSummary?.tone === 'warning'
+                              ? 'text-amber-700 dark:text-amber-400'
+                              : 'text-muted-foreground'
+                        }`}
+                      >
+                        {readinessSummary?.nextDispatchLabel}
+                      </p>
+                      <p className="mt-2 text-xs text-muted-foreground">
                         Stop or resume automated reminder texts and emails for this appointment only.
                       </p>
                       {suppressError ? (
@@ -878,13 +904,6 @@ function formatDateTimeRange(
 ) {
   if (allDay) return `${formatDate(start, tz)} · All day`
   return `${formatDate(start, tz)} · ${formatTimeRange(start, end, tz, false)}`
-}
-
-function looksLikePhoneOnly(value: string) {
-  const t = value.trim()
-  if (!t) return false
-  const digits = t.replace(/\D/g, '')
-  return digits.length >= 7 && /^[\d\s().+\-]+$/.test(t)
 }
 
 function primaryAppointmentHeading(row: ArAppointmentRow) {

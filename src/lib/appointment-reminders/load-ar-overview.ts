@@ -75,12 +75,15 @@ export async function loadAppointmentRemindersOverview(workspaceId: string) {
     };
   });
 
-  const calendarHealthy =
-    calendars.length > 0 && calendars.every((c) => isCalendarConnectionUsable(c.status));
-
   const hasImportCalendars = calendars.some((c) => (c.importCalendarCount ?? 0) > 0);
   const hasUsableConnection = connections.some((c) => isCalendarConnectionLinked(c.status));
   const syncHealthy = Boolean(todayPage.sync.connected) && !todayPage.sync.syncError;
+
+  const importingCalendars = calendars.filter((c) => (c.importCalendarCount ?? 0) > 0);
+  const calendarHealthy =
+    importingCalendars.length > 0 &&
+    importingCalendars.every((c) => isCalendarConnectionUsable(c.status)) &&
+    syncHealthy;
 
   const smsSenderReady = setupReadiness.smsSenderReady;
   const emailSenderReady = setupReadiness.emailSenderReady;
