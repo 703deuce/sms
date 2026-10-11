@@ -51,7 +51,20 @@ import {
 } from "@/lib/appointments/domain";
 import { getPrisma } from "@/lib/db";
 import { mergeReminderPhoneOnImport } from "@/lib/appointment-reminders/calendar/reminder-phone-extraction";
+import { eventLocationText } from "@/lib/appointment-reminders/calendar/reminder-phone-content";
+import { extractIdentityFromEventFields } from "@/lib/voice-v3/calendar/appointment-discovery-identity";
 import type { AppointmentMetadata } from "@/lib/appointments/types";
+
+function resolveDisplayNameFromEvent(event: ProviderCalendarEvent): string | null {
+  const identity = extractIdentityFromEventFields({
+    subject: event.summary || "",
+    description: event.description || "",
+    location: eventLocationText(event),
+    attendeeNames: (event.attendees || []).map((a) => a.name).filter(Boolean) as string[],
+    attendeeEmails: (event.attendees || []).map((a) => a.email).filter(Boolean) as string[],
+  });
+  return identity.names[0] || null;
+}
 
 export type CalendarSyncStats = {
   imported: number;
@@ -219,7 +232,9 @@ export async function processCalendarProviderEvent(input: {
   const staffLabel = config.displayName?.trim() || config.email?.trim() || null;
 
   async function resolveImportContact(eventForContact: ProviderCalendarEvent) {
-    const base = await resolveContactForImportedEvent(workspaceId, eventForContact, config.email);
+    const base = await resolveContactForImportedEvent(workspaceId, eventForContact, config.email, {
+      graphCustomerPhonePropertyKeys: config.graphCustomerPhonePropertyKeys,
+    });
     if (provider !== "microsoft") return base;
     return enrichContactWithOutlookGraphPhone(base, input.microsoftAccessToken);
   }
@@ -263,6 +278,7 @@ export async function processCalendarProviderEvent(input: {
       input.calendarId,
       reminderEligibility,
       prevMeta,
+      config.graphCustomerPhonePropertyKeys,
     )) as Record<string, unknown>;
 
     await upsertWorkspaceAppointmentByExternalId({
@@ -318,6 +334,8 @@ export async function processCalendarProviderEvent(input: {
     contact,
     input.calendarId,
     reminderEligibility,
+    undefined,
+    config.graphCustomerPhonePropertyKeys,
   )) as Record<string, unknown>;
 
   const existingBeforeImport = await getPrisma().voiceAppointment.findFirst({
@@ -482,13 +500,21 @@ async function buildImportMetadata(
   calendarId?: string,
   reminderEligibility?: { eligible: boolean; reason?: string },
   previousMetadata?: Record<string, unknown> | null,
+  graphPhoneKeys?: string[] | null,
 ) {
   const phoneMerge = await mergeReminderPhoneOnImport({
     event,
     previousMetadata: (previousMetadata || null) as AppointmentMetadata | null,
     contactPhone: contact.inviteePhone,
+    graphCustomerPhonePropertyKeys: graphPhoneKeys,
   });
 
+  const displayName =
+    contact.inviteeName?.trim() ||
+    resolveDisplayNameFromEvent(event) ||
+    contact.inviteeEmail ||
+    null;
+  const nameParts = displayName?.split(/\s+/).filter(Boolean) ?? [];
   const base = {
     source: "calendar_import",
     reminderSmsEligible: reminderEligibility?.eligible ?? false,
@@ -500,7 +526,8 @@ async function buildImportMetadata(
     calendarId,
     providerEventId: event.id,
     inviteeEmail: contact.inviteeEmail,
-    inviteeName: contact.inviteeName,
+    inviteeName: displayName,
+    customerFirstName: nameParts[0] || undefined,
     inviteePhone: phoneMerge.inviteePhone,
     reminderPhone: phoneMerge.reminderPhone,
     smsCapable: phoneMerge.smsCapable,

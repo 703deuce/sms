@@ -47,6 +47,20 @@ export async function PATCH(request: Request, context: RouteContext) {
         skipAllDay?: boolean;
       };
       graphMailboxUserPrincipalName?: string;
+      graphCustomerPhonePropertyKeys?: string[];
+      importRulesByCalendarId?: Record<
+        string,
+        {
+          requireExternalAttendees?: boolean;
+          requireAttendeeEmail?: boolean;
+          requireOrganizerIsConnection?: boolean;
+          skipFreeShowAs?: boolean;
+          skipInternalDomainOnlyMeetings?: boolean;
+          titleIncludePatterns?: string[];
+          titleExcludePatterns?: string[];
+          skipAllDay?: boolean;
+        }
+      >;
       reminderDefaults?: {
         smsEnabled?: boolean;
         emailEnabled?: boolean;

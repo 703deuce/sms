@@ -78,6 +78,8 @@ export type CalendarConfig = {
    * When set, Graph calendar reads use `/users/{upn}/` instead of `/me/` (delegated/shared mailbox).
    */
   graphMailboxUserPrincipalName?: string;
+  /** Workspace-configured Graph extended property keys for customer phone (overrides env when set). */
+  graphCustomerPhonePropertyKeys?: string[];
   /** Per-calendar delta sync state for Microsoft import calendars. */
   microsoftDeltaLinks?: Record<
     string,

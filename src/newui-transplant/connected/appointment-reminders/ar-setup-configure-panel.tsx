@@ -23,6 +23,10 @@ export function ArSetupConfigurePanel({ onSaved }: { onSaved?: () => void }) {
   const [channel, setChannel] = useState<'sms' | 'email' | 'both'>('both')
   const [previewSms, setPreviewSms] = useState('')
   const [industries, setIndustries] = useState<Array<{ id: string; label: string }>>([])
+  const [previewAppointments, setPreviewAppointments] = useState<
+    Array<{ id: string; label: string }>
+  >([])
+  const [previewAppointmentId, setPreviewAppointmentId] = useState('')
 
   useEffect(() => {
     void fetch('/api/appointment-reminders/settings')
@@ -38,6 +42,23 @@ export function ArSetupConfigurePanel({ onSaved }: { onSaved?: () => void }) {
         }
       })
       .finally(() => setLoading(false))
+    void fetch('/api/appointment-reminders/appointments?pageSize=15&date=upcoming')
+      .then((r) => r.json())
+      .then((json) => {
+        const rows = (json.data?.appointments || json.data?.rows || []) as Array<{
+          id: string
+          serviceName?: string
+          inviteeName?: string
+          startsAt?: string
+        }>
+        setPreviewAppointments(
+          rows.map((row) => ({
+            id: row.id,
+            label: `${row.inviteeName || 'Customer'} — ${row.serviceName || 'Appointment'}${row.startsAt ? ` (${new Date(row.startsAt).toLocaleString()})` : ''}`,
+          })),
+        )
+      })
+      .catch(() => undefined)
     void fetch('/api/appointment-reminders/templates/library')
       .then((r) => r.json())
       .then((json) => {
@@ -47,6 +68,16 @@ export function ArSetupConfigurePanel({ onSaved }: { onSaved?: () => void }) {
   }, [])
 
   const loadPreview = useCallback(async () => {
+    if (previewAppointmentId) {
+      const res = await fetch(
+        `/api/appointment-reminders/reminders/test?step=advance_reminder&appointmentId=${encodeURIComponent(previewAppointmentId)}`,
+      )
+      const json = await res.json()
+      if (res.ok && json.data?.preview) {
+        setPreviewSms(String(json.data.preview))
+        return
+      }
+    }
     const res = await fetch(
       `/api/appointment-reminders/templates/library?industry=${encodeURIComponent(industry)}&messageType=advance_reminder&channel=sms`,
     )
@@ -63,7 +94,7 @@ export function ArSetupConfigurePanel({ onSaved }: { onSaved?: () => void }) {
         appointment_time: '2:30 PM',
       }),
     )
-  }, [businessAddress, businessName, businessPhone, industry])
+  }, [businessAddress, businessName, businessPhone, industry, previewAppointmentId])
 
   useEffect(() => {
     void loadPreview()
@@ -182,8 +213,22 @@ export function ArSetupConfigurePanel({ onSaved }: { onSaved?: () => void }) {
         </Button>
       </div>
       <div className="lg:col-span-2">
-        <Panel title="Preview" description="Example SMS from your selected industry pack.">
-          <p className="whitespace-pre-wrap rounded-lg border bg-muted/25 p-4 text-sm leading-relaxed">{previewSms || '…'}</p>
+        <Panel
+          title="Preview"
+          description="Sample pack or a real upcoming appointment from your calendar import."
+        >
+          <SimpleSelect
+            label="Preview source"
+            value={previewAppointmentId || '__sample__'}
+            onChange={(v) => setPreviewAppointmentId(v === '__sample__' ? '' : v)}
+            options={[
+              { value: '__sample__', label: 'Industry sample (no appointment)' },
+              ...previewAppointments.map((a) => ({ value: a.id, label: a.label })),
+            ]}
+          />
+          <p className="mt-3 whitespace-pre-wrap rounded-lg border bg-muted/25 p-4 text-sm leading-relaxed">
+            {previewSms || '…'}
+          </p>
         </Panel>
       </div>
     </div>

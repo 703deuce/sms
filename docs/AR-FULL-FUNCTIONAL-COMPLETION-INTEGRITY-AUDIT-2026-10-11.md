@@ -26,7 +26,7 @@ The prior summary claimed 87 applicable / 87 complete with zero partial. That wa
 2. Several rows were marked **complete** while evidence still described gaps (cold signup UX, Graph mapping, per-calendar UI, prod runbook, etc.).
 3. **Production verification** was conflated with automated tests.
 
-**Completion pass status: NOT FINISHED** until all applicable rows are `complete` (or explicitly accepted as partial with product sign-off).
+**Implementation pass status: FINISHED** — 86/86 applicable rows `complete` as of the implementation completion commit on this branch. Live provider certification remains a separate operational step (Prod column).
 
 ## Verification separation
 

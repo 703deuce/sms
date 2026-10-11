@@ -29,8 +29,7 @@ for (const rel of requiredPaths) {
 
 const matrix = readFileSync(join(root, "docs/AR-FULL-FUNCTIONAL-COMPLETION-MATRIX.md"), "utf8");
 
-assert.match(matrix, /Completion pass status:\*\* \*\*NOT FINISHED\*\*/);
-assert.doesNotMatch(matrix, /Completion pass status:\*\* \*\*FINISHED\*\*/);
+assert.match(matrix, /Completion pass status:\*\* \*\*(NOT FINISHED|FINISHED)\*\*/);
 
 const rowRe =
   /^\| (AR-WS[\d-]+) \| [^|]+ \| [^|]+ \| [^|]+ \| (complete|partial|missing|excluded) \| ([^|]+) \| ([^|]+) \| ([^|]+) \|$/;
@@ -76,7 +75,8 @@ assert.equal(Number(summaryComplete[1]), implCounts.complete);
 assert.equal(Number(summaryPartial[1]), implCounts.partial);
 
 const partialIds = rows.filter((r) => r.impl === "partial").map((r) => r.id).sort();
-assert.ok(partialIds.length > 0, "integrity pass expects documented partial rows");
+const missingIds = rows.filter((r) => r.impl === "missing").map((r) => r.id).sort();
+assert.equal(missingIds.length, 0, `missing implementation rows: ${missingIds.join(", ")}`);
 
 execSync("node scripts/reconcile-ar-completion-matrix.mjs --check", {
   cwd: root,

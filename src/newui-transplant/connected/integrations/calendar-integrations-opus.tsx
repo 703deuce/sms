@@ -40,6 +40,12 @@ type CalendarConnection = {
     lastVerificationOk?: boolean;
     lastVerificationError?: string | null;
     microsoftSubscription?: { expiresAt?: string };
+    graphMailboxUserPrincipalName?: string;
+    graphCustomerPhonePropertyKeys?: string[];
+    importRulesByCalendarId?: Record<
+      string,
+      NonNullable<CalendarConnection["config"]>["importRules"]
+    >;
   } | null;
 };
 
@@ -474,6 +480,12 @@ function ConnectionRow({
   const [graphMailboxUpn, setGraphMailboxUpn] = useState(
     connection.config?.graphMailboxUserPrincipalName || "",
   );
+  const [graphPhonePropertyKeys, setGraphPhonePropertyKeys] = useState(
+    (connection.config?.graphCustomerPhonePropertyKeys || []).join(", "),
+  );
+  const [perCalendarRules, setPerCalendarRules] = useState<
+    Record<string, NonNullable<CalendarConnection["config"]>["importRules"]>
+  >(connection.config?.importRulesByCalendarId || {});
   const [smsReminders, setSmsReminders] = useState(
     connection.config?.reminderDefaults?.smsEnabled !== false,
   );
@@ -526,6 +538,27 @@ function ConnectionRow({
     setSyncNotice(null);
     const enableSync = isReminders ? importIds.length > 0 : importIds.length > 0 && syncEnabled;
     const hadImportBefore = (connection.config?.importCalendarIds?.length ?? 0) > 0;
+    const defaultImportRules = {
+      requireExternalAttendees,
+      requireAttendeeEmail,
+      requireOrganizerIsConnection,
+      skipFreeShowAs,
+      skipInternalDomainOnlyMeetings: skipInternalDomainOnly,
+      skipAllDay,
+      titleIncludePatterns: includeKeywords
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+      titleExcludePatterns: excludeKeywords
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+    };
+    const importRulesByCalendarId = Object.fromEntries(
+      importIds
+        .filter((calId) => perCalendarRules[calId])
+        .map((calId) => [calId, { ...defaultImportRules, ...perCalendarRules[calId] }]),
+    );
     await fetch(`/api/integrations/calendars/${connection.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -534,23 +567,14 @@ function ConnectionRow({
         blockingCalendarIds: blockingIds,
         importCalendarIds: importIds,
         syncEnabled: enableSync,
-        importRules: {
-          requireExternalAttendees,
-          requireAttendeeEmail,
-          requireOrganizerIsConnection,
-          skipFreeShowAs,
-          skipInternalDomainOnlyMeetings: skipInternalDomainOnly,
-          skipAllDay,
-          titleIncludePatterns: includeKeywords
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean),
-          titleExcludePatterns: excludeKeywords
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean),
-        },
+        importRules: defaultImportRules,
+        importRulesByCalendarId:
+          Object.keys(importRulesByCalendarId).length > 0 ? importRulesByCalendarId : undefined,
         graphMailboxUserPrincipalName: graphMailboxUpn.trim() || undefined,
+        graphCustomerPhonePropertyKeys: graphPhonePropertyKeys
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
         reminderDefaults: {
           smsEnabled: smsReminders,
           emailEnabled: emailReminders,
@@ -799,6 +823,71 @@ function ConnectionRow({
                       <p className="mt-1 text-[11px] text-muted-foreground">
                         Uses Microsoft Graph /users/… when your admin granted calendar access to a shared mailbox.
                       </p>
+                      <p className="text-[11px] font-medium text-muted-foreground mt-3 mb-1">
+                        Graph extended property keys (customer phone)
+                      </p>
+                      <input
+                        className="w-full rounded border border-border px-2 py-1.5 text-[12px]"
+                        placeholder="CustomerMobile, customPhoneField (comma-separated)"
+                        value={graphPhonePropertyKeys}
+                        onChange={(e) => setGraphPhonePropertyKeys(e.target.value)}
+                      />
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Maps your Outlook custom fields to SMS phone discovery on import.
+                      </p>
+                    </div>
+                  ) : null}
+                  {isReminders && importIds.length > 1 ? (
+                    <div className="space-y-2 border-t border-border pt-2">
+                      <p className="text-[11px] font-semibold text-muted-foreground">
+                        Per-calendar rule overrides
+                      </p>
+                      {importIds.map((calId) => {
+                        const cal = providerCalendars.find((c) => c.id === calId);
+                        const enabled = Boolean(perCalendarRules[calId]);
+                        return (
+                          <div key={calId} className="rounded border border-border/80 p-2">
+                            <label className="flex items-center gap-2 text-[12px] font-medium">
+                              <input
+                                type="checkbox"
+                                checked={enabled}
+                                onChange={(e) => {
+                                  setPerCalendarRules((prev) => {
+                                    const next = { ...prev };
+                                    if (e.target.checked) {
+                                      next[calId] = { requireExternalAttendees: false };
+                                    } else {
+                                      delete next[calId];
+                                    }
+                                    return next;
+                                  });
+                                }}
+                              />
+                              {cal?.name || calId}
+                            </label>
+                            {enabled ? (
+                              <label className="mt-2 flex items-center gap-2 text-[12px]">
+                                <input
+                                  type="checkbox"
+                                  checked={
+                                    perCalendarRules[calId]?.requireExternalAttendees !== false
+                                  }
+                                  onChange={(e) =>
+                                    setPerCalendarRules((prev) => ({
+                                      ...prev,
+                                      [calId]: {
+                                        ...prev[calId],
+                                        requireExternalAttendees: e.target.checked,
+                                      },
+                                    }))
+                                  }
+                                />
+                                Require external attendees for this calendar only
+                              </label>
+                            ) : null}
+                          </div>
+                        );
+                      })}
                     </div>
                   ) : null}
                   <div>

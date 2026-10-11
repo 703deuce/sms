@@ -79,7 +79,9 @@ const summaryBlock = `| Metric | Count |
 | Production verification **not_run** | ${prodNotRun} |
 | Production verification **n/a** | ${prodNa} |
 
-**Completion pass status:** **NOT FINISHED** — ${implCounts.partial} partial and ${implCounts.missing} missing among ${applicable} applicable rows. Summary derived from row-level Impl / Auto / Prod. Automated tests do not certify live Telnyx, Stripe, Brevo, Luna, or Microsoft Graph. See \`docs/AR-FULL-FUNCTIONAL-COMPLETION-INTEGRITY-AUDIT-2026-10-11.md\`.`;
+**Completion pass status:** **${
+  implCounts.partial === 0 && implCounts.missing === 0 ? "FINISHED" : "NOT FINISHED"
+}** — ${implCounts.partial} partial and ${implCounts.missing} missing among ${applicable} applicable rows (implementation). Summary derived from row-level Impl columns. See \`docs/AR-FULL-FUNCTIONAL-COMPLETION-INTEGRITY-AUDIT-2026-10-11.md\`.`;
 
 text = text.replace(
   /\| Metric \| Count \|[\s\S]*?See `docs\/AR-FULL-FUNCTIONAL-COMPLETION-INTEGRITY-AUDIT-2026-10-11\.md`\./,

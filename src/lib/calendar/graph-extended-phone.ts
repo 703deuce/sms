@@ -11,9 +11,11 @@ export function graphExtendedPhonePropertyKeys(): string[] {
 
 export function extractPhoneFromExtendedProperties(
   privateProps: Record<string, string> | undefined | null,
+  connectionPropertyKeys?: string[] | null,
 ): string | null {
   if (!privateProps) return null;
-  const keys = graphExtendedPhonePropertyKeys();
+  const fromConnection = (connectionPropertyKeys || []).map((k) => k.trim()).filter(Boolean);
+  const keys = fromConnection.length ? fromConnection : graphExtendedPhonePropertyKeys();
   const candidates = keys.length
     ? keys.map((k) => privateProps[k]).filter(Boolean)
     : Object.values(privateProps);

@@ -98,6 +98,7 @@ function SignupForm() {
         phone,
         productIntent: resolveProductIntent(params.get("product")),
         next: resolvedNext,
+        appointmentRemindersSignup: isArSignup,
       }),
     });
     setLoading(false);

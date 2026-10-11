@@ -74,9 +74,13 @@ function labeledNumbers(plain: string): { customer: string[]; office: string[] }
 /** Step 1 — deterministic parser only (no Luna). */
 export function extractReminderPhoneFromCalendarEvent(
   event: ProviderCalendarEvent,
+  options?: { graphCustomerPhonePropertyKeys?: string[] | null },
 ): ReminderPhoneExtraction {
   const fingerprint = reminderPhoneRelevantFingerprint(event);
-  const fromExtended = extractPhoneFromExtendedProperties(event.extendedPropertiesPrivate);
+  const fromExtended = extractPhoneFromExtendedProperties(
+    event.extendedPropertiesPrivate,
+    options?.graphCustomerPhonePropertyKeys,
+  );
   if (fromExtended) {
     return {
       e164: fromExtended,
@@ -208,9 +212,11 @@ function toReminderPhoneMeta(extracted: ReminderPhoneExtraction): AppointmentMet
 
 export async function resolveReminderPhoneWithLunaFallback(
   event: ProviderCalendarEvent,
-  options?: { lunaExtract?: LunaPhoneExtractFn },
+  options?: { lunaExtract?: LunaPhoneExtractFn; graphCustomerPhonePropertyKeys?: string[] | null },
 ): Promise<ReminderPhoneExtraction> {
-  const parser = extractReminderPhoneFromCalendarEvent(event);
+  const parser = extractReminderPhoneFromCalendarEvent(event, {
+    graphCustomerPhonePropertyKeys: options?.graphCustomerPhonePropertyKeys,
+  });
   if (!parserNeedsLuna(parser)) {
     return parser;
   }
@@ -245,6 +251,7 @@ export async function mergeReminderPhoneOnImport(
     event: ProviderCalendarEvent;
     previousMetadata?: AppointmentMetadata | null;
     contactPhone: string | null;
+    graphCustomerPhonePropertyKeys?: string[] | null;
   },
   options?: { lunaExtract?: LunaPhoneExtractFn },
 ): Promise<{
@@ -296,7 +303,10 @@ export async function mergeReminderPhoneOnImport(
     }
   }
 
-  const extracted = await resolveReminderPhoneWithLunaFallback(input.event, options);
+  const extracted = await resolveReminderPhoneWithLunaFallback(input.event, {
+    ...options,
+    graphCustomerPhonePropertyKeys: input.graphCustomerPhonePropertyKeys,
+  });
   const inviteePhone =
     input.contactPhone?.trim() ||
     (extracted.status === "found" ? extracted.e164 : null) ||
