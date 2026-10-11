@@ -45,16 +45,16 @@ export function ArSetupConfigurePanel({ onSaved }: { onSaved?: () => void }) {
     void fetch('/api/appointment-reminders/appointments?pageSize=15&date=upcoming')
       .then((r) => r.json())
       .then((json) => {
-        const rows = (json.data?.appointments || json.data?.rows || []) as Array<{
+        const rows = (json.data?.rows || []) as Array<{
           id: string
-          serviceName?: string
-          inviteeName?: string
+          customerName?: string
+          appointmentTitle?: string
           startsAt?: string
         }>
         setPreviewAppointments(
           rows.map((row) => ({
             id: row.id,
-            label: `${row.inviteeName || 'Customer'} — ${row.serviceName || 'Appointment'}${row.startsAt ? ` (${new Date(row.startsAt).toLocaleString()})` : ''}`,
+            label: `${row.customerName || 'Customer'} — ${row.appointmentTitle || 'Appointment'}${row.startsAt ? ` (${new Date(row.startsAt).toLocaleString()})` : ''}`,
           })),
         )
       })
@@ -70,7 +70,7 @@ export function ArSetupConfigurePanel({ onSaved }: { onSaved?: () => void }) {
   const loadPreview = useCallback(async () => {
     if (previewAppointmentId) {
       const res = await fetch(
-        `/api/appointment-reminders/reminders/test?step=advance_reminder&appointmentId=${encodeURIComponent(previewAppointmentId)}`,
+        `/api/appointment-reminders/reminders/test?step=reminder24h&appointmentId=${encodeURIComponent(previewAppointmentId)}`,
       )
       const json = await res.json()
       if (res.ok && json.data?.preview) {

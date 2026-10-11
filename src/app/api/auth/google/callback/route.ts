@@ -58,22 +58,39 @@ export async function GET(request: Request) {
     const account = await findOrCreateUserFromGoogle(profile);
     const access = await getUserProductAccess(account.userId);
     const pathProduct = preferredProductFromPath(nextPath);
+    const isArPath =
+      nextPath.includes("/appointment-reminders") ||
+      nextPath.includes("appointment_reminders") ||
+      nextPath.includes("/api/appointment-reminders/");
     const isMctbPath =
-      nextPath.includes("/onboarding/mctb") ||
-      nextPath.startsWith("/mctb") ||
-      nextPath.startsWith("/voice/setup") ||
-      nextPath.startsWith("/voice/missed-calls");
+      !isArPath &&
+      (nextPath.includes("/onboarding/mctb") ||
+        nextPath.startsWith("/mctb") ||
+        nextPath.startsWith("/voice/setup") ||
+        nextPath.startsWith("/voice/missed-calls"));
 
     let workspaceId = account.workspaceId;
     let workspaceType = account.workspaceType;
 
     const wantsVoiceWorkspace =
       isMctbPath ||
-      pathProduct === "voice" ||
-      access.lastActiveProduct === "voice" ||
-      access.productIntent === "voice";
+      (!isArPath &&
+        (pathProduct === "voice" ||
+          access.lastActiveProduct === "voice" ||
+          access.productIntent === "voice"));
 
-    if (wantsVoiceWorkspace) {
+    if (isArPath) {
+      const voiceWs = account.created
+        ? await ensureProductWorkspace(account.userId, "voice")
+        : await resolveAuthenticatedWorkspace(account.userId, "voice");
+      workspaceId = voiceWs.workspaceId;
+      workspaceType = voiceWs.workspaceType;
+      const { assignArFreePlan } = await import(
+        "@/lib/appointment-reminders/commercial/ar-workspace-plan"
+      );
+      await assignArFreePlan(workspaceId);
+      await grantProductEntitlement(workspaceId, "voice", "active");
+    } else if (wantsVoiceWorkspace) {
       const voiceWs = account.created
         ? await ensureProductWorkspace(account.userId, "voice")
         : await resolveAuthenticatedWorkspace(account.userId, "voice");

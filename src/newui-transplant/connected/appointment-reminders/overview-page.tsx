@@ -193,12 +193,18 @@ export function AppointmentRemindersOverviewPage() {
   async function setWorkspacePause(paused: boolean) {
     setPauseBusy(true)
     try {
-      await fetch('/api/appointment-reminders/operational-pause', {
+      const res = await fetch('/api/appointment-reminders/operational-pause', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(paused ? { action: 'pause', indefinite: true } : { action: 'resume' }),
       })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error((json as { error?: string }).error || 'Could not update pause state')
+      }
       await load()
+    } catch (err) {
+      console.error('[ar-overview] pause', err)
     } finally {
       setPauseBusy(false)
     }

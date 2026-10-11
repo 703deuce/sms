@@ -559,41 +559,51 @@ function ConnectionRow({
         .filter((calId) => perCalendarRules[calId])
         .map((calId) => [calId, { ...defaultImportRules, ...perCalendarRules[calId] }]),
     );
-    await fetch(`/api/integrations/calendars/${connection.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        writeCalendarId: writeCalendarId || undefined,
-        blockingCalendarIds: blockingIds,
-        importCalendarIds: importIds,
-        syncEnabled: enableSync,
-        importRules: defaultImportRules,
-        importRulesByCalendarId:
-          Object.keys(importRulesByCalendarId).length > 0 ? importRulesByCalendarId : undefined,
-        graphMailboxUserPrincipalName: graphMailboxUpn.trim() || undefined,
-        graphCustomerPhonePropertyKeys: graphPhonePropertyKeys
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean),
-        reminderDefaults: {
-          smsEnabled: smsReminders,
-          emailEnabled: emailReminders,
-          voiceEnabled: voiceReminders,
-          replyDestinationPhone: replyPhone || undefined,
-          replyDestinationEmail: replyEmail || undefined,
-          attachIcs,
-        },
-      }),
-    });
-    setSaving(false);
-    if (isReminders && importIds.length > 0 && (!hadImportBefore || importIds.length)) {
-      setSyncNotice(
-        connection.lastSyncAt
-          ? "Settings saved. Syncing calendar updates in the background."
-          : "Settings saved. Starting initial calendar import — appointments will appear shortly.",
-      );
+    try {
+      const res = await fetch(`/api/integrations/calendars/${connection.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          writeCalendarId: writeCalendarId || undefined,
+          blockingCalendarIds: blockingIds,
+          importCalendarIds: importIds,
+          syncEnabled: enableSync,
+          importRules: defaultImportRules,
+          importRulesByCalendarId,
+          graphMailboxUserPrincipalName: graphMailboxUpn.trim() || undefined,
+          graphCustomerPhonePropertyKeys: graphPhonePropertyKeys
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
+          reminderDefaults: {
+            smsEnabled: smsReminders,
+            emailEnabled: emailReminders,
+            voiceEnabled: voiceReminders,
+            replyDestinationPhone: replyPhone || undefined,
+            replyDestinationEmail: replyEmail || undefined,
+            attachIcs,
+          },
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error((json as { error?: string }).error || "Could not save calendar settings");
+      }
+      if (isReminders && importIds.length > 0 && (!hadImportBefore || importIds.length)) {
+        setSyncNotice(
+          connection.lastSyncAt
+            ? "Settings saved. Syncing calendar updates in the background."
+            : "Settings saved. Starting initial calendar import — appointments will appear shortly.",
+        );
+      } else {
+        setSyncNotice("Settings saved.");
+      }
+      onRefresh();
+    } catch (err) {
+      setSyncNotice(err instanceof Error ? err.message : "Could not save calendar settings");
+    } finally {
+      setSaving(false);
     }
-    onRefresh();
   }
 
   async function syncNow() {

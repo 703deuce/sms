@@ -140,6 +140,15 @@ export function AppointmentRemindersLogPage() {
               <RefreshCw className={cn('mr-1.5 size-3.5', loading && 'animate-spin')} aria-hidden="true" />
               Refresh
             </Button>
+            <Button
+              variant="outline"
+              className="h-9"
+              onClick={() => {
+                window.location.href = '/api/appointment-reminders/export/reminders?days=30'
+              }}
+            >
+              Export CSV
+            </Button>
           </div>
         }
       />

@@ -106,6 +106,17 @@ export function ArResponsesOpusPage() {
       <PageHeader
         title="Responses"
         description="Customer confirmations, cancellation and reschedule requests, and messages that need staff review — in one place."
+        actions={
+          <Button
+            variant="outline"
+            className="h-9"
+            onClick={() => {
+              window.location.href = '/api/appointment-reminders/export/responses?days=30'
+            }}
+          >
+            Export CSV
+          </Button>
+        }
       />
 
       <nav className="mb-4 flex gap-1 overflow-x-auto border-b" aria-label="Response views">

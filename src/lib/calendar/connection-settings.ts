@@ -311,7 +311,11 @@ export async function patchWorkspaceCalendarConnection(
     config.graphCustomerPhonePropertyKeys = keys.length ? keys : undefined;
   }
   if (input.importRulesByCalendarId !== undefined) {
-    config.importRulesByCalendarId = input.importRulesByCalendarId;
+    const entries = Object.entries(input.importRulesByCalendarId || {});
+    config.importRulesByCalendarId =
+      entries.length > 0
+        ? Object.fromEntries(entries)
+        : undefined;
   }
   if (input.reminderDefaults !== undefined) {
     (config as CalendarConfig & { reminderDefaults?: unknown }).reminderDefaults =
