@@ -61,6 +61,11 @@ export function buildAppointmentRemindersNav(): NavItem[] {
       label: "Reminders",
       href: AR_ROUTES.reminders,
       icon: Bell,
+      children: [
+        { label: "Activity & delivery", href: AR_ROUTES.reminders },
+        { label: "Sequences", href: AR_ROUTES.remindersSequences },
+        { label: "Templates", href: AR_ROUTES.remindersTemplates },
+      ],
     },
     {
       label: "Responses",
@@ -131,6 +136,8 @@ export function getAppointmentRemindersPageTitle(pathname: string): string {
   }
   if (pathname.startsWith(AR_ROUTES.responses)) return "Responses";
   if (pathname.startsWith(AR_ROUTES.heldInbound)) return "Responses";
+  if (pathname.startsWith(AR_ROUTES.remindersSequences)) return "Sequences";
+  if (pathname.startsWith(AR_ROUTES.remindersTemplates)) return "Templates";
   if (pathname.startsWith(AR_ROUTES.reminders)) return "Reminders";
   if (pathname.startsWith(AR_ROUTES.analytics)) return "Analytics";
   if (pathname.startsWith(AR_ROUTES.calendars)) return "Settings";

@@ -5,6 +5,8 @@ export const AR_ROUTES = {
   /** Read-only grid synced from connected provider calendars */
   calendar: "/appointment-reminders/calendar",
   reminders: "/appointment-reminders/reminders",
+  remindersSequences: "/appointment-reminders/reminders/sequences",
+  remindersTemplates: "/appointment-reminders/reminders/templates",
   analytics: "/appointment-reminders/analytics",
   /** OAuth, import selection, and sync settings */
   calendars: "/appointment-reminders/calendars",
@@ -34,6 +36,10 @@ export function arSettingsTab(tab: string): string {
 }
 
 export const AR_SETTINGS_INTEGRATIONS = arSettingsTab("integrations");
+
+export function arRemindersSequenceStepEditPath(stepKey: string): string {
+  return `${AR_ROUTES.remindersSequences}/${encodeURIComponent(stepKey)}/edit`;
+}
 
 export function isAppointmentRemindersProductPath(pathname: string): boolean {
   return pathname === AR_ROUTES.home || pathname.startsWith(`${AR_ROUTES.home}/`);

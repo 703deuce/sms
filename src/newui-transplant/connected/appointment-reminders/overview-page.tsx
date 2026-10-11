@@ -532,7 +532,7 @@ export function AppointmentRemindersOverviewPage() {
             <KeyValueRow label="Appointments" value="View imported events" href={AR_ROUTES.appointments} />
             <KeyValueRow label="Responses" value="Customer replies and requests" href={AR_ROUTES.responses} />
             <KeyValueRow label="Reminder log" value="Delivery outcomes" href={AR_ROUTES.reminders} />
-            <KeyValueRow label="SMS sequence" value="Timing and templates" href={AR_ROUTES.settings} />
+            <KeyValueRow label="SMS sequence" value="Timing and templates" href={AR_ROUTES.remindersSequences} />
           </Panel>
         </div>
       </div>

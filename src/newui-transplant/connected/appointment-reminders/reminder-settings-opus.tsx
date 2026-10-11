@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { AlertTriangle, Loader2, MessageSquare } from 'lucide-react'
 import {
   addAdditionalReminderStep,
@@ -59,7 +60,8 @@ import {
   STEP_TO_MESSAGE_TYPE,
   type TemplateMessageType,
 } from '@/lib/appointment-reminders/template-library/types'
-import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
+import { AR_ROUTES, arRemindersSequenceStepEditPath } from '@/lib/appointment-reminders/routes'
+import { ArOpusPage } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
 
 function asPlatformConfig(config: RemindersApiConfig): AppointmentPlatformConfig {
   return { ...DEFAULT_PLATFORM_CONFIG, timezone: config.timezone, reminders: config.reminders }
@@ -139,7 +141,24 @@ const SETTINGS_TAB_STRIP: Record<
   },
 }
 
-export function AppointmentRemindersSettingsOpus({ activeTab = 'sequence' }: { activeTab?: ArSettingsTab }) {
+export type ArReminderSettingsPresentation =
+  | 'settings'
+  | 'sequence-hub'
+  | 'templates-hub'
+  | 'step-editor-page'
+
+export function AppointmentRemindersSettingsOpus({
+  activeTab = 'sequence',
+  presentation = 'settings',
+  fullPageStepKey,
+  onBackFromStepEditor,
+}: {
+  activeTab?: ArSettingsTab
+  presentation?: ArReminderSettingsPresentation
+  fullPageStepKey?: string | null
+  onBackFromStepEditor?: () => void
+}) {
+  const router = useRouter()
   const [config, setConfig] = useState<RemindersApiConfig | null>(null)
   const [previews, setPreviews] = useState<ReminderPreviewMap>({})
   const [workspace, setWorkspace] = useState<WorkspaceStats | null>(null)
@@ -359,19 +378,167 @@ export function AppointmentRemindersSettingsOpus({ activeTab = 'sequence' }: { a
   const stepOptions = model.reminders.map((r) => ({ value: r.stepKey, label: r.title }))
   const previewSteps = model.reminders.filter((r) => r.enabled)
 
+  const resolvedTab =
+    presentation === 'sequence-hub'
+      ? 'sequence'
+      : presentation === 'templates-hub'
+        ? 'templates'
+        : activeTab
+
+  const fullPageStep =
+    fullPageStepKey && model
+      ? model.reminders.find((r) => r.stepKey === fullPageStepKey) ?? null
+      : null
+
+  if (presentation === 'step-editor-page') {
+    if (!fullPageStepKey) {
+      return (
+        <Callout tone="danger" title="Missing step">
+          <Link href={AR_ROUTES.remindersSequences} className="font-medium underline">
+            Back to sequences
+          </Link>
+        </Callout>
+      )
+    }
+    if (!fullPageStep) {
+      return (
+        <Callout tone="danger" title="Step not found">
+          <Button type="button" variant="secondary" size="sm" className="mt-2" onClick={() => onBackFromStepEditor?.()}>
+            Back to sequences
+          </Button>
+        </Callout>
+      )
+    }
+    return (
+      <ArOpusPage>
+        <div className="sticky top-0 z-20 -mx-1 mb-4 flex flex-wrap items-center justify-between gap-3 border-b bg-background/95 py-3 backdrop-blur supports-backdrop-filter:bg-background/80">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => (onBackFromStepEditor ? onBackFromStepEditor() : router.push(AR_ROUTES.remindersSequences))}
+          >
+            ← Sequences
+          </Button>
+          <div className="flex items-center gap-2">
+            {saved && !saving ? (
+              <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Saved</span>
+            ) : null}
+            <Button onClick={() => void save()} disabled={saving} className="h-10 px-5">
+              {saving ? 'Saving…' : 'Save changes'}
+            </Button>
+          </div>
+        </div>
+        <h1 className="text-xl font-semibold tracking-tight">Edit {fullPageStep.title}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Timing and channel for this step are managed on the sequence builder. Message wording follows platform-sender rules.
+        </p>
+        <div className="mt-6 grid gap-8 lg:grid-cols-2 lg:items-start">
+          <div className="min-w-0">
+          <SequenceStepEditor
+            variant="page"
+            step={fullPageStep}
+            config={config}
+            workspaceName={workspaceName}
+            businessDisplayName={businessProfile.businessDisplayName}
+            businessPhone={businessProfile.businessPhone}
+            businessAddress={businessProfile.businessAddress}
+            customMergeFields={config.reminderPreferences?.customMergeFields || {}}
+            templateIndustry={config.reminderPreferences?.templateIndustry || presetIndustry}
+            libraryIndustries={libraryIndustries}
+            onClose={() => undefined}
+            onTemplateChange={(template) => {
+              setConfig(patchReminderTemplate(config, fullPageStep.stepKey, template))
+              setSaved(false)
+            }}
+            onIndustryPackChange={(industry) => {
+              setPresetIndustry(industry)
+              setConfig(patchReminderPreferences(config, { templateIndustry: industry }))
+              setSaved(false)
+            }}
+            onApplyLibraryTemplate={(entry) => {
+              setConfig(
+                patchReminderLibraryTemplate(config, fullPageStep.stepKey, {
+                  industry: entry.industry,
+                  messageType: entry.messageType,
+                  template: entry.body,
+                  emailSubject: entry.subject || undefined,
+                }),
+              )
+              setSaved(false)
+            }}
+            onReset={() => {
+              setConfig(resetReminderTemplate(config, fullPageStep.stepKey))
+              setSaved(false)
+            }}
+            onRemove={
+              fullPageStep.isCustom
+                ? () => {
+                    setConfig(removeReminderStep(config, fullPageStep.stepKey))
+                    setSaved(false)
+                    router.push(AR_ROUTES.remindersSequences)
+                  }
+                : undefined
+            }
+            onChannelChange={(channel) => {
+              setConfig(patchReminderChannel(config, fullPageStep.stepKey, channel))
+              setSaved(false)
+            }}
+            onEmailSubjectChange={(subject) => {
+              setConfig(patchReminderEmailSubject(config, fullPageStep.stepKey, subject))
+              setSaved(false)
+            }}
+            onAdvancedChange={(patch) => {
+              setConfig(patchReminderAdvanced(config, fullPageStep.stepKey, patch))
+              setSaved(false)
+            }}
+            onBusinessProfilePatch={(patch) => {
+              setBusinessProfile((prev) => ({ ...prev, ...patch }))
+              setSaved(false)
+            }}
+            onCustomMergeFieldsChange={(fields) => {
+              setConfig(patchReminderPreferences(config, { customMergeFields: fields }))
+              setSaved(false)
+            }}
+            templateLocked={templateLocked}
+          />
+          </div>
+          <aside className="min-w-0 lg:sticky lg:top-20 lg:self-start">
+            <Panel
+              title="Message preview"
+              description="Sample merge data — matches SMS cleanup rules used at send time for empty links and tags."
+            >
+              <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                {fullPageStep.preview || fullPageStep.template}
+              </p>
+              {fullPageStep.channel === 'sms' ? (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  ~{fullPageStep.segments} SMS segment{fullPageStep.segments === 1 ? '' : 's'} ·{' '}
+                  {fullPageStep.characters} characters
+                </p>
+              ) : null}
+            </Panel>
+          </aside>
+        </div>
+      </ArOpusPage>
+    )
+  }
+
   return (
     <div className="space-y-6">
+      {presentation === 'settings' ? (
       <FeatureEmphasisStrip
         icon={MessageSquare}
-        title={SETTINGS_TAB_STRIP[activeTab].title}
+        title={SETTINGS_TAB_STRIP[resolvedTab].title}
         badge={<Pill tone="success" dot={false}>Workspace engine</Pill>}
-        description={SETTINGS_TAB_STRIP[activeTab].description}
+        description={SETTINGS_TAB_STRIP[resolvedTab].description}
         action={
           saved && !saving ? (
             <span className="text-xs font-medium text-[oklch(0.82_0.12_158)]" role="status">Saved</span>
           ) : null
         }
       />
+      ) : null}
 
       <div className="flex flex-wrap items-center justify-end gap-2">
         {saved && !saving ? (
@@ -384,7 +551,7 @@ export function AppointmentRemindersSettingsOpus({ activeTab = 'sequence' }: { a
         </Button>
       </div>
 
-      {workspace && (activeTab === 'sequence' || activeTab === 'scheduling') ? (
+      {workspace && presentation === 'settings' && (resolvedTab === 'sequence' || resolvedTab === 'scheduling') ? (
         <ArStatGrid>
           <Stat label="Active steps" value={String(workspace.activeSteps)} />
           <Stat label="Scheduled" value={String(workspace.scheduledCount)} hint="Upcoming sends" />
@@ -405,7 +572,7 @@ export function AppointmentRemindersSettingsOpus({ activeTab = 'sequence' }: { a
       ) : null}
 
       <div className="space-y-5">
-        {activeTab === 'sequence' ? (
+        {resolvedTab === 'sequence' ? (
         <div className="space-y-4">
           <Panel
             title="Reminder sequence"
@@ -422,7 +589,13 @@ export function AppointmentRemindersSettingsOpus({ activeTab = 'sequence' }: { a
                 setConfig(patchReminderEnabled(config, stepKey, !step.enabled))
                 setSaved(false)
               }}
-              onEdit={setEditStep}
+              onEdit={(step) => {
+                if (presentation === 'sequence-hub') {
+                  router.push(arRemindersSequenceStepEditPath(step.stepKey))
+                  return
+                }
+                setEditStep(step)
+              }}
               onAdd={() => {
                 setConfig(addAdditionalReminderStep(config))
                 setSaved(false)
@@ -442,7 +615,7 @@ export function AppointmentRemindersSettingsOpus({ activeTab = 'sequence' }: { a
         </div>
         ) : null}
 
-        {activeTab === 'templates' ? (
+        {resolvedTab === 'templates' ? (
         <div className="space-y-4">
           <Panel title="Starter packs" description="Apply approved industry templates and timing to your reminder sequence.">
             <div className="grid gap-4 sm:grid-cols-2">
@@ -550,7 +723,7 @@ export function AppointmentRemindersSettingsOpus({ activeTab = 'sequence' }: { a
         </div>
         ) : null}
 
-        {activeTab === 'scheduling' ? (
+        {resolvedTab === 'scheduling' ? (
         <div className="space-y-4">
           <ArSchedulingPreferencesPanel
             config={config}
@@ -575,7 +748,7 @@ export function AppointmentRemindersSettingsOpus({ activeTab = 'sequence' }: { a
         </div>
         ) : null}
 
-        {activeTab === 'business' ? (
+        {resolvedTab === 'business' ? (
         <div className="space-y-4">
           <ArBusinessProfilePanel
             fields={businessProfile}
@@ -587,7 +760,7 @@ export function AppointmentRemindersSettingsOpus({ activeTab = 'sequence' }: { a
         </div>
         ) : null}
 
-        {activeTab === 'notifications' ? (
+        {resolvedTab === 'notifications' ? (
         <div className="space-y-4">
           <ArNotificationsResponsesPanel
             prefs={config.reminderPreferences || {}}
@@ -630,13 +803,13 @@ export function AppointmentRemindersSettingsOpus({ activeTab = 'sequence' }: { a
         </div>
         ) : null}
 
-        {activeTab === 'integrations' ? (
+        {resolvedTab === 'integrations' ? (
         <div className="space-y-4">
           <ArIntegrationsSettingsPanel />
         </div>
         ) : null}
 
-        {activeTab === 'billing' ? (
+        {resolvedTab === 'billing' ? (
         <div className="space-y-4">
           <ArBillingSettingsOpus />
         </div>
@@ -717,7 +890,9 @@ export function AppointmentRemindersSettingsOpus({ activeTab = 'sequence' }: { a
         </SheetContent>
       </Sheet>
 
-      <StepEditSheet
+      {presentation === 'sequence-hub' ? null : (
+      <SequenceStepEditor
+        variant="sheet"
         step={editStep}
         config={config}
         workspaceName={workspaceName}
@@ -790,11 +965,13 @@ export function AppointmentRemindersSettingsOpus({ activeTab = 'sequence' }: { a
         }}
         templateLocked={templateLocked}
       />
+      )}
     </div>
   )
 }
 
-function StepEditSheet({
+function SequenceStepEditor({
+  variant = 'sheet',
   step,
   config,
   workspaceName,
@@ -843,6 +1020,7 @@ function StepEditSheet({
   onBusinessProfilePatch: (patch: { businessDisplayName?: string; businessPhone?: string; businessAddress?: string }) => void
   onCustomMergeFieldsChange: (fields: Record<string, string>) => void
   templateLocked?: boolean
+  variant?: 'sheet' | 'page'
 }) {
   const fallbackMessageType =
     step?.libraryMessageType ||
@@ -866,9 +1044,14 @@ function StepEditSheet({
       ? libraryIndustries.map((i) => ({ value: i.id, label: i.label }))
       : Object.entries(INDUSTRY_LABELS).map(([value, label]) => ({ value, label }))
 
+  const canonicalMessageType =
+    step && STEP_TO_MESSAGE_TYPE[step.stepKey] ? STEP_TO_MESSAGE_TYPE[step.stepKey] : null
+
   const messageTypeOptions = (
     libraryIndustries.find((i) => i.id === templateIndustry)?.messageTypes || []
-  ).filter((mt) => mt.id !== 'follow_up')
+  )
+    .filter((mt) => mt.id !== 'follow_up')
+    .filter((mt) => (canonicalMessageType ? mt.id === canonicalMessageType : true))
 
   const isConfirmation = step?.stepKey === 'confirmation'
   const smsLocked = Boolean(templateLocked && step?.channel === 'sms')
@@ -885,15 +1068,8 @@ function StepEditSheet({
         )
       : REMINDER_MERGE_TAGS
 
-  return (
-    <Sheet open={Boolean(step)} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
-        {step ? (
-          <>
-            <SheetHeader>
-              <SheetTitle>Edit {step.title}</SheetTitle>
-            </SheetHeader>
-            <div className="mt-2 space-y-5">
+  const fields = step ? (
+            <div className={variant === 'page' ? 'space-y-5' : 'mt-2 space-y-5'}>
               <label className="block text-sm">
                 <span className="mb-1.5 block font-medium">Step name</span>
                 <Input
@@ -952,9 +1128,9 @@ function StepEditSheet({
                 </div>
               ) : null}
               {templateLocked && step.channel === 'sms' ? (
-                <p className="text-xs text-amber-700 dark:text-amber-300 rounded-lg border border-amber-200/60 bg-amber-50/50 px-3 py-2 dark:bg-amber-950/20">
-                  Platform sender — SMS uses approved library wording. You can switch industry pack and timing; link tags are stripped at send.
-                </p>
+                <Callout tone="info" title="Platform SMS sender">
+                  Approved library templates only. Switch industry pack and message type; unsupported link variables are removed at send time.
+                </Callout>
               ) : null}
               <div className="grid gap-3 sm:grid-cols-2">
                 <SimpleSelect
@@ -1089,6 +1265,25 @@ function StepEditSheet({
                 </Button>
               ) : null}
             </div>
+  ) : null
+
+  if (variant === 'page') {
+    return (
+      <div className="min-w-0 space-y-5">
+        {fields}
+      </div>
+    )
+  }
+
+  return (
+    <Sheet open={Boolean(step)} onOpenChange={(v) => !v && onClose()}>
+      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
+        {step ? (
+          <>
+            <SheetHeader>
+              <SheetTitle>Edit {step.title}</SheetTitle>
+            </SheetHeader>
+            {fields}
           </>
         ) : null}
       </SheetContent>

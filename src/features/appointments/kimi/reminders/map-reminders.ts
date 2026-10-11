@@ -12,6 +12,7 @@ import {
   type CoreReminderStepKey,
   type ReminderStepId,
 } from "@/lib/appointments/reminders/reminders-config";
+import { STEP_TO_MESSAGE_TYPE } from "@/lib/appointment-reminders/template-library/types";
 import type { ReminderItem, RemindersPageModel } from "./types";
 
 export const REMINDER_MERGE_TAGS = [
@@ -173,6 +174,16 @@ export function patchReminderTemplate(
   return updateStep(config, stepKey, (step) => ({ ...step, template }));
 }
 
+/** Core sequence steps map to one library message type (confirmation → booking_confirmation, etc.). */
+export function canonicalLibraryMessageTypeForStep(
+  stepKey: ReminderStepId,
+  requested?: string | null,
+): string {
+  const mapped = STEP_TO_MESSAGE_TYPE[stepKey];
+  if (mapped) return mapped;
+  return requested?.trim() || "advance_reminder";
+}
+
 export function patchReminderLibraryTemplate(
   config: RemindersApiConfig,
   stepKey: ReminderStepId,
@@ -183,12 +194,13 @@ export function patchReminderLibraryTemplate(
     emailSubject?: string;
   },
 ): RemindersApiConfig {
+  const messageType = canonicalLibraryMessageTypeForStep(stepKey, input.messageType);
   return updateStep(config, stepKey, (step) => ({
     ...step,
     template: input.template,
     emailSubject: input.emailSubject ?? step.emailSubject,
     libraryIndustry: input.industry,
-    libraryMessageType: input.messageType,
+    libraryMessageType: messageType,
   }));
 }
 

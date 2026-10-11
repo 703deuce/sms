@@ -10,15 +10,15 @@ import type {
 } from '@/lib/appointment-reminders/reminders-page-types'
 import { AR_ROUTES, AR_SETTINGS_INTEGRATIONS } from '@/lib/appointment-reminders/routes'
 import {
-  ArOpusPage,
   ArStatGrid,
   OpusDataSurface,
   OpusSearchField,
   OpusTableSkeleton,
 } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
+import { ArRemindersHubShell } from '@/newui-transplant/components/appointment-reminders/ar-reminders-hub-shell'
 import { ReminderStatusPill } from '@/newui-transplant/components/appointment-reminders/reminder-status-pill'
 import type { AggregateReminderStatus } from '@/lib/appointment-reminders/aggregate-reminder-status'
-import { EmptyState, Initials, PageHeader, Stat } from '@/newui-transplant/components/app/kit'
+import { EmptyState, Initials, Stat } from '@/newui-transplant/components/app/kit'
 import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
 import { OPUS_TABLE_HEAD } from '@/newui-transplant/components/app/opus-surfaces'
 import { th, td } from '@/newui-transplant/components/app/opus-tables'
@@ -127,14 +127,15 @@ export function AppointmentRemindersLogPage() {
   const pageCount = Math.max(1, Math.ceil(total / pageSize))
 
   return (
-    <ArOpusPage>
-      <PageHeader
-        title="Reminders"
-        description="Scheduled SMS, confirmed sends, recorded internal events, failures, and blocked delivery — one operational log."
-        actions={
+    <ArRemindersHubShell
+      tab="activity"
+      title="Activity & delivery"
+      description="Scheduled SMS, confirmed sends, recorded internal events, failures, and blocked delivery."
+    >
+      <div className="mb-4 flex flex-wrap justify-end gap-2">
           <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" className="h-9" render={<Link href={AR_ROUTES.settings} />}>
-              Edit SMS sequence
+            <Button variant="secondary" className="h-9" render={<Link href={AR_ROUTES.remindersSequences} />}>
+              Edit sequence
             </Button>
             <Button variant="outline" className="h-9" onClick={load} disabled={loading}>
               <RefreshCw className={cn('mr-1.5 size-3.5', loading && 'animate-spin')} aria-hidden="true" />
@@ -150,8 +151,7 @@ export function AppointmentRemindersLogPage() {
               Export CSV
             </Button>
           </div>
-        }
-      />
+      </div>
 
       <ArStatGrid className="mb-6">
         <Stat label="Scheduled" value={String(data?.summary.scheduled ?? '—')} icon={Bell} />
@@ -230,7 +230,7 @@ export function AppointmentRemindersLogPage() {
             action={
               <div className="flex flex-wrap justify-center gap-2">
                 <Button variant="outline" render={<Link href={AR_SETTINGS_INTEGRATIONS} />}>Connections</Button>
-                <Button render={<Link href={AR_ROUTES.settings} />}>Reminder settings</Button>
+                <Button render={<Link href={AR_ROUTES.remindersSequences} />}>Configure sequence</Button>
               </div>
             }
           />
@@ -337,6 +337,6 @@ export function AppointmentRemindersLogPage() {
           ) : null}
         </SheetContent>
       </Sheet>
-    </ArOpusPage>
+    </ArRemindersHubShell>
   )
 }

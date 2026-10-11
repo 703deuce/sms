@@ -5,9 +5,14 @@ export function finalizeReminderSmsBody(body: string): string {
     .replace(/\s*Manage:\s*$/gim, "")
     .replace(/\s*Manage appointment:\s*$/gim, "")
     .replace(/\s*Reschedule:\s*$/gim, "")
+    .replace(/\s*Details:\s*[.,]?\s*$/gim, "")
     .replace(/\s*Manage:\s*/gi, " ")
     .replace(/\s*Manage appointment:\s*/gi, " ")
     .replace(/\s*Reschedule:\s*/gi, " ")
+    .replace(/\s*Details:\s*[.,]?\s*/gi, " ")
+    .replace(/,\s*,/g, ",")
+    .replace(/\s+,/g, ",")
+    .replace(/,\s*\./g, ".")
     .replace(/\s{2,}/g, " ")
     .trim();
   return out;
