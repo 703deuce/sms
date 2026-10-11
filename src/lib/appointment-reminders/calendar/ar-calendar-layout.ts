@@ -170,10 +170,12 @@ export function eventTitle(ev: CalendarApiAppointment) {
   const service = ev.serviceName?.trim() || "";
   const nameOk = Boolean(name) && !looksLikePhoneOnly(name);
   const serviceOk = Boolean(service) && !looksLikePhoneOnly(service);
-  if (nameOk) return name;
-  if (serviceOk) return service;
-  if (name) return name;
-  return service || "Appointment";
+  const junk = (s: string) => /^(microsoft|google|outlook|follow|untitled)$/i.test(s.trim());
+  if (nameOk && !junk(name)) return name;
+  if (serviceOk && !junk(service)) return service;
+  if (name && !junk(name)) return name;
+  if (service && !junk(service)) return service;
+  return "Appointment";
 }
 
 /** Secondary line when both name and service are meaningful. */

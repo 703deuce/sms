@@ -10,8 +10,26 @@ export type ArOverviewFeedShape = {
     nextReminder?: string
     reminderSecondary?: string
     reminderStatus?: string
+    reminderAttentionReason?: string
     responseStatus?: string
     responseKind?: string
+  }>
+  operationalSummary?: {
+    rangeLabel: string
+    appointments: number
+    scheduledSends: number
+    replies: number
+    attention: number
+  }
+  upcomingScheduledSends?: Array<{
+    appointmentId: string
+    customerName: string
+    appointmentTitle: string
+    startsAt: string
+    channel: string
+    stepLabel: string
+    sendAtLabel: string
+    detail?: string
   }>
   customerResponses?: Array<{
     appointmentId: string

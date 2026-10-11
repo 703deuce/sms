@@ -91,6 +91,15 @@ export async function loadAppointmentRemindersOverview(workspaceId: string) {
 
   const remindersPaused = isArRemindersPaused(platform);
 
+  const scheduledSendRows = upcomingSample.rows.filter(
+    (row) =>
+      row.reminder.status === "scheduled" &&
+      row.reminder.attentionReason !== "workflow_conflict" &&
+      !/^workflow active$/i.test(row.reminder.label),
+  );
+
+  const replyCount = upcomingSample.rows.filter((row) => row.customerResponse.kind !== "none").length;
+
   const operationalStatus = remindersPaused
     ? "needs_attention"
     : activation.activatedAt && calendarHealthy && hasImportCalendars && syncHealthy && smsSenderReady
@@ -177,6 +186,23 @@ export async function loadAppointmentRemindersOverview(workspaceId: string) {
     ],
     sync: todayPage.sync,
     needsAttentionRows,
+    operationalSummary: {
+      rangeLabel: "Upcoming appointments",
+      appointments: upcomingPage.total,
+      scheduledSends: upcomingPage.summary.scheduled,
+      replies: replyCount,
+      attention: needsAttentionCount,
+    },
+    upcomingScheduledSends: scheduledSendRows.slice(0, 6).map((row) => ({
+      appointmentId: row.id,
+      customerName: row.customerName,
+      appointmentTitle: row.appointmentTitle,
+      startsAt: row.startsAt,
+      channel: "SMS",
+      stepLabel: row.reminder.label,
+      sendAtLabel: row.reminder.secondaryLine || row.reminder.label,
+      detail: row.reminder.secondaryLine,
+    })),
     upcomingAppointments: upcomingSample.rows.slice(0, 8).map((row) => ({
       appointmentId: row.id,
       customerName: row.customerName,
@@ -185,6 +211,7 @@ export async function loadAppointmentRemindersOverview(workspaceId: string) {
       nextReminder: row.reminder.label,
       reminderSecondary: row.reminder.secondaryLine,
       reminderStatus: row.reminder.status,
+      reminderAttentionReason: row.reminder.attentionReason,
       responseStatus: row.customerResponse.label,
       responseKind: row.customerResponse.kind,
     })),

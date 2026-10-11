@@ -361,6 +361,21 @@ export function AppointmentDetailDrawer({
 
             {isPanel ? (
               <section className={`border-b py-3 ${chromePad}`} aria-label="Reminder readiness">
+                {readinessSummary?.headline ? (
+                  <p
+                    className={`mb-2 text-sm font-semibold ${
+                      readinessSummary.tone === 'danger'
+                        ? 'text-destructive'
+                        : readinessSummary.tone === 'warning'
+                          ? 'text-amber-800 dark:text-amber-300'
+                          : readinessSummary.tone === 'success'
+                            ? 'text-emerald-800 dark:text-emerald-300'
+                            : 'text-foreground'
+                    }`}
+                  >
+                    {readinessSummary.headline}
+                  </p>
+                ) : null}
                 <div className="flex flex-wrap items-center gap-2">
                   <ReminderStatusPill label={row.reminder.label} status={row.reminder.status} />
                   {customerResponse && customerResponse.kind !== 'none' ? (

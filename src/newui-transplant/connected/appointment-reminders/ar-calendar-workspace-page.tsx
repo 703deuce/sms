@@ -18,6 +18,7 @@ import {
   dayKeyInTimeZone,
   getArCalendarRange,
   startOfWeek,
+  weekDayHeaders,
 } from '@/lib/appointment-reminders/calendar/ar-calendar-layout'
 import { calendarEventToAppointmentRow } from '@/lib/appointment-reminders/calendar/calendar-event-to-row'
 import {
@@ -299,6 +300,17 @@ export function AppointmentRemindersCalendarWorkspacePage() {
   useEffect(() => {
     loadOverview()
   }, [loadOverview])
+
+  useEffect(() => {
+    if (view !== 'week') return
+    const todayKey = dayKeyInTimeZone(new Date(), timezone)
+    const keys = weekDayHeaders(cursor, timezone).map((d) => d.key)
+    if (keys.includes(todayKey)) {
+      setSelectedDayKey(todayKey)
+    } else if (!keys.includes(selectedDayKey)) {
+      setSelectedDayKey(keys[0]!)
+    }
+  }, [view, cursor, timezone, selectedDayKey])
 
   useEffect(() => {
     void fetch('/api/appointment-reminders/calendar/native-actions')
@@ -619,7 +631,7 @@ export function AppointmentRemindersCalendarWorkspacePage() {
               ) : (
                 <ArCalendarRightContextPanel
                   className="min-h-0 flex-1"
-                  cursor={cursor}
+                  focusDayKey={selectedDayKey}
                   view={view}
                   timeZone={timezone}
                   events={filteredEvents}

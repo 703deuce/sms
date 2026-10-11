@@ -1,5 +1,6 @@
 import type { CalendarApiAppointment } from "@/features/appointments/kimi/calendar/map-calendar";
 import { eventSubtitle, eventTitle, formatEventTime, looksLikePhoneOnly } from "./ar-calendar-layout";
+import { compactReminderFeedLine, isWorkflowManagedReminder, looksLikeJunkCalendarTitle } from "./reminder-display-copy";
 
 export type CalendarEventEnrichment = {
   nextReminder?: string;
@@ -8,6 +9,7 @@ export type CalendarEventEnrichment = {
   responseLabel?: string;
   responseKind?: string;
   attentionIssue?: string;
+  attentionReason?: string;
 };
 
 export type EventStatusIconKind =
@@ -32,8 +34,17 @@ export function customerDisplayName(ev: CalendarApiAppointment): string | null {
 export function serviceOrTitleLine(ev: CalendarApiAppointment): string {
   const sub = eventSubtitle(ev);
   const title = eventTitle(ev);
-  if (sub) return sub;
-  if (!looksLikePhoneOnly(title)) return title;
+  if (sub && !looksLikeJunkCalendarTitle(sub)) return sub;
+  if (!looksLikePhoneOnly(title) && !looksLikeJunkCalendarTitle(title)) return title;
+  const meta = ev.metadata || {};
+  const fromMeta =
+    (meta.appointmentTitle as string) ||
+    (meta.serviceName as string) ||
+    (meta.subject as string) ||
+    "";
+  if (fromMeta.trim() && !looksLikeJunkCalendarTitle(fromMeta)) return fromMeta.trim();
+  const customer = customerDisplayName(ev);
+  if (customer) return customer;
   return "Appointment";
 }
 
@@ -63,6 +74,15 @@ export function pickEventStatusIcon(
   if (meta.remindersSuppressed || (meta.reminderOverride as { suppressed?: boolean })?.suppressed) {
     return "off";
   }
+  if (
+    isWorkflowManagedReminder({
+      label: enrichment?.nextReminder,
+      attentionReason: enrichment?.attentionReason,
+      secondaryLine: enrichment?.reminderSecondary,
+    })
+  ) {
+    return "scheduled";
+  }
   if (enrichment?.attentionIssue || meta.reminderSmsIneligibleReason || meta.reminderImportIneligibleReason) {
     return "attention";
   }
@@ -82,6 +102,16 @@ export function eventVisualTone(
   const meta = ev.metadata || {};
   if (meta.remindersSuppressed || (meta.reminderOverride as { suppressed?: boolean })?.suppressed) {
     return "off";
+  }
+  if (
+    isWorkflowManagedReminder({
+      label: enrichment?.nextReminder,
+      status: enrichment?.reminderStatus,
+      attentionReason: enrichment?.attentionReason,
+      secondaryLine: enrichment?.reminderSecondary,
+    })
+  ) {
+    return "neutral";
   }
   if (enrichment?.attentionIssue || meta.reminderSmsIneligibleReason || meta.reminderImportIneligibleReason) {
     return "attention";
@@ -116,8 +146,26 @@ export function eventStatusLine(
 ): string | null {
   if (eventMissingSmsRecipient(ev)) return "Missing phone";
   if (enrichment?.responseLabel) return enrichment.responseLabel;
-  if (enrichment?.reminderSecondary && !/^reminders?$/i.test(enrichment.reminderSecondary)) {
-    return enrichment.reminderSecondary;
+  if (
+    isWorkflowManagedReminder({
+      label: enrichment?.nextReminder,
+      status: enrichment?.reminderStatus,
+      attentionReason: enrichment?.attentionReason,
+      secondaryLine: enrichment?.reminderSecondary,
+    })
+  ) {
+    return compactReminderFeedLine({
+      label: enrichment?.nextReminder,
+      secondaryLine: enrichment?.reminderSecondary,
+      attentionReason: enrichment?.attentionReason,
+    });
+  }
+  if (enrichment?.reminderSecondary) {
+    return compactReminderFeedLine({
+      label: enrichment?.nextReminder,
+      secondaryLine: enrichment.reminderSecondary,
+      status: enrichment.reminderStatus,
+    });
   }
   if (enrichment?.nextReminder && !/^reminders?$/i.test(enrichment.nextReminder)) {
     return enrichment.nextReminder;

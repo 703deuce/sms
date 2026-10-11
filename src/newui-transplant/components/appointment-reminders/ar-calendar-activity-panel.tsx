@@ -1,6 +1,7 @@
 'use client'
 
 import { Bell } from 'lucide-react'
+import { compactReminderFeedLine } from '@/lib/appointment-reminders/calendar/reminder-display-copy'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
 import { TextLink } from '@/newui-transplant/components/app/kit'
 import { cn } from '@/lib/utils'
@@ -12,6 +13,9 @@ type OverviewPayload = {
     appointmentTitle: string
     startsAt: string
     nextReminder?: string
+    reminderSecondary?: string
+    reminderStatus?: string
+    reminderAttentionReason?: string
   }>
   customerResponses?: Array<{
     appointmentId: string
@@ -133,7 +137,12 @@ export function ArCalendarActivityPanel({
               <li key={row.appointmentId}>
                 <FeedRow
                   primary={row.customerName || row.appointmentTitle}
-                  secondary={row.nextReminder || 'Reminders scheduled'}
+                  secondary={compactReminderFeedLine({
+                    label: row.nextReminder,
+                    secondaryLine: row.reminderSecondary,
+                    status: row.reminderStatus,
+                    attentionReason: row.reminderAttentionReason,
+                  })}
                   meta={new Date(row.startsAt).toLocaleString(undefined, {
                     month: 'short',
                     day: 'numeric',

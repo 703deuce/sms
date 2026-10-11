@@ -11,6 +11,7 @@ import {
   serviceOrTitleLine,
 } from '@/lib/appointment-reminders/calendar/calendar-event-display'
 import { dayKeyInTimeZone, formatEventTime } from '@/lib/appointment-reminders/calendar/ar-calendar-layout'
+import { compactReminderFeedLine, isWorkflowManagedReminder } from '@/lib/appointment-reminders/calendar/reminder-display-copy'
 import { EmptyState, Pill } from '@/newui-transplant/components/app/kit'
 import { OPUS_INSET_LIST } from '@/newui-transplant/components/app/opus-surfaces'
 import { cn } from '@/lib/utils'
@@ -92,8 +93,19 @@ export function ArCalendarAgendaView({
                 const tone = eventVisualTone(ev, en)
                 const customer = customerDisplayName(ev)
                 const phone = ev.inviteePhone?.trim()
-                const reminderLine = eventStatusLine(ev, en)
-                const nextSend = en?.nextReminder && !/^reminders?$/i.test(en.nextReminder) ? en.nextReminder : null
+                const reminderLine = compactReminderFeedLine({
+                  label: en?.nextReminder,
+                  secondaryLine: en?.reminderSecondary,
+                  status: en?.reminderStatus,
+                  attentionReason: en?.attentionReason,
+                })
+                const workflowManaged = isWorkflowManagedReminder({
+                  label: en?.nextReminder,
+                  attentionReason: en?.attentionReason,
+                  secondaryLine: en?.reminderSecondary,
+                })
+                const nextSend =
+                  !workflowManaged && en?.reminderStatus === 'scheduled' ? en?.reminderSecondary : null
                 const response = en?.responseLabel
                 const ends = ev.endsAt
                   ? new Date(ev.endsAt).toLocaleTimeString(undefined, {
@@ -136,10 +148,10 @@ export function ArCalendarAgendaView({
                         <Pill tone={toneForPill(tone)} className="text-[10px]">
                           {tone === 'off' ? 'Off' : tone === 'scheduled' ? 'Scheduled' : tone}
                         </Pill>
-                        <p className="text-[11px] text-muted-foreground">
-                          {en?.reminderSecondary || reminderLine || '—'}
+                        <p className="line-clamp-2 text-[11px] text-muted-foreground" title={en?.reminderSecondary || undefined}>
+                          {reminderLine || '—'}
                         </p>
-                        {nextSend && en?.reminderSecondary ? (
+                        {nextSend ? (
                           <p className="text-[10px] text-muted-foreground">Next: {nextSend}</p>
                         ) : null}
                       </div>

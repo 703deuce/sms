@@ -14,6 +14,7 @@ export function buildAgendaEnrichmentMap(
       nextReminder: row.nextReminder,
       reminderSecondary: row.reminderSecondary,
       reminderStatus: row.reminderStatus,
+      attentionReason: row.reminderAttentionReason,
       responseKind: row.responseKind,
       responseLabel: row.responseStatus,
     });

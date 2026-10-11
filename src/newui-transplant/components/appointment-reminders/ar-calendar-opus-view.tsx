@@ -24,6 +24,7 @@ import {
   eventTopPx,
   formatArCalendarSubtitle,
   formatArCalendarTitle,
+  formatEventTime,
   groupEventsByDay,
   hourLabels,
   layoutDayEventColumns,
@@ -42,9 +43,11 @@ import {
   eventToneClasses,
   eventTooltipTitle,
   eventVisualTone,
+  customerDisplayName,
   formatEventBlockLines,
   pickEventBlockLayout,
   pickEventStatusIcon,
+  serviceOrTitleLine,
   type EventStatusIconKind,
 } from '@/lib/appointment-reminders/calendar/calendar-event-display'
 import { ArCalendarAgendaView } from '@/newui-transplant/components/appointment-reminders/ar-calendar-agenda-view'
@@ -155,27 +158,39 @@ function CalendarEventBlock({
   )
 }
 
-function EventChip({
+function MonthEventPill({
   ev,
   timeZone,
-  onSelect,
   enrichment,
+  onSelect,
 }: {
   ev: CalendarApiAppointment
   timeZone: string
-  onSelect: (id: string) => void
   enrichment?: CalendarEventEnrichment | null
+  onSelect: (id: string) => void
 }) {
+  const time = formatEventTime(ev.startsAt, timeZone)
+  const customer = customerDisplayName(ev)
+  const service = serviceOrTitleLine(ev)
+  const primary = customer || service
+  const tone = eventVisualTone(ev, enrichment)
+  const tip = `${time} · ${service} · ${customer || '—'}`
+
   return (
-    <CalendarEventBlock
-      ev={ev}
-      timeZone={timeZone}
-      heightPx={48}
-      widthHint="narrow"
-      enrichment={enrichment}
-      onSelect={onSelect}
-      className="w-full py-1.5"
-    />
+    <button
+      type="button"
+      onClick={() => onSelect(ev.id)}
+      title={tip}
+      className={cn(
+        'flex w-full max-w-full items-center gap-1 overflow-hidden rounded px-1.5 py-0.5 text-left',
+        'border-l-2 text-[10px] leading-tight',
+        eventToneClasses(tone),
+        'hover:brightness-[0.98] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+      )}
+    >
+      <span className="shrink-0 font-semibold tabular-nums">{time}</span>
+      <span className="min-w-0 truncate font-medium">{primary}</span>
+    </button>
   )
 }
 
@@ -216,7 +231,7 @@ function MonthView({
             <div
               key={cell.key}
               className={cn(
-                'min-h-[104px] border-b border-r border-border/70 p-1.5 last:border-r-0',
+                'flex min-h-[108px] flex-col overflow-hidden border-b border-r border-border/70 p-1 last:border-r-0',
                 !cell.inMonth && 'bg-muted/20',
                 cell.isToday && 'bg-primary/[0.06]',
               )}
@@ -239,9 +254,9 @@ function MonthView({
                   {cell.dayNum}
                 </button>
               </div>
-              <div className="flex flex-col gap-1">
-                {dayEvents.slice(0, 3).map((ev) => (
-                  <EventChip
+              <div className="mt-1 flex min-h-0 flex-1 flex-col gap-0.5 overflow-hidden">
+                {dayEvents.slice(0, 2).map((ev) => (
+                  <MonthEventPill
                     key={ev.id}
                     ev={ev}
                     timeZone={timeZone}
@@ -249,10 +264,14 @@ function MonthView({
                     enrichment={enrichment?.get(ev.id)}
                   />
                 ))}
-                {dayEvents.length > 3 ? (
-                  <p className="px-1 text-[10px] font-medium text-muted-foreground">
-                    +{dayEvents.length - 3} more
-                  </p>
+                {dayEvents.length > 2 ? (
+                  <button
+                    type="button"
+                    onClick={() => onSelectDay?.(cell.date, cell.key)}
+                    className="px-1 py-0.5 text-left text-[10px] font-medium text-primary hover:underline"
+                  >
+                    +{dayEvents.length - 2} more
+                  </button>
                 ) : null}
               </div>
             </div>

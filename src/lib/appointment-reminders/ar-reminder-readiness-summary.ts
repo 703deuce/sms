@@ -1,7 +1,12 @@
 import type { ArAppointmentRow } from "@/lib/appointment-reminders/appointments-page-types";
 import type { ArReminderEngagementStep } from "@/lib/appointment-reminders/ar-sms-customer-outcome";
+import {
+  compactWorkflowManagedLabel,
+  isWorkflowManagedReminder,
+} from "@/lib/appointment-reminders/calendar/reminder-display-copy";
 
 export type ArReminderReadinessSummary = {
+  headline: string;
   automationLabel: string;
   nextDispatchLabel: string;
   tone: "neutral" | "success" | "warning" | "danger";
@@ -35,8 +40,27 @@ export function buildArReminderReadinessSummary(input: {
 
   if (remindersSuppressed) {
     return {
+      headline: "Reminders stopped for this appointment",
       automationLabel: "Reminders off for this appointment",
       nextDispatchLabel: "No automated sends while reminders are stopped",
+      tone: "neutral",
+    };
+  }
+
+  if (
+    isWorkflowManagedReminder({
+      label: row.reminder.label,
+      status: row.reminder.status,
+      attentionReason: row.reminder.attentionReason,
+      secondaryLine: row.reminder.secondaryLine,
+    })
+  ) {
+    const managed = compactWorkflowManagedLabel(row.reminder.secondaryLine);
+    return {
+      headline: managed,
+      automationLabel: "Appointment Reminders not used for this type",
+      nextDispatchLabel:
+        "Another active workflow sends messages when this appointment is booked. Open Reminders for details.",
       tone: "neutral",
     };
   }
@@ -49,6 +73,7 @@ export function buildArReminderReadinessSummary(input: {
     (meta.reminderBlockReason as string);
   if (ineligible) {
     return {
+      headline: "Reminder blocked",
       automationLabel,
       nextDispatchLabel: String(ineligible),
       tone: "warning",
@@ -62,6 +87,7 @@ export function buildArReminderReadinessSummary(input: {
         ? `${pastDueStep.reminderLabel} is past due — review timeline`
         : `${pastDueStep.reminderLabel} failed to send`;
     return {
+      headline: "Reminder needs attention",
       automationLabel,
       nextDispatchLabel: detail,
       tone: "danger",
@@ -80,6 +106,7 @@ export function buildArReminderReadinessSummary(input: {
 
   if (nextFuture?.scheduledFor) {
     return {
+      headline: "Next reminder scheduled",
       automationLabel,
       nextDispatchLabel: `${nextFuture.label} · ${formatWhen(nextFuture.scheduledFor, timeZone)}`,
       tone: "success",
@@ -89,6 +116,7 @@ export function buildArReminderReadinessSummary(input: {
   const blockedEngagement = reminderEngagement.find((s) => s.sendStatus === "skipped");
   if (blockedEngagement) {
     return {
+      headline: "Reminder skipped",
       automationLabel,
       nextDispatchLabel: `${blockedEngagement.reminderLabel} skipped — see Reminders tab`,
       tone: "warning",
@@ -97,6 +125,7 @@ export function buildArReminderReadinessSummary(input: {
 
   if (row.reminder.status === "needs_attention" || row.reminder.status === "failed") {
     return {
+      headline: "Reminder needs attention",
       automationLabel,
       nextDispatchLabel: row.reminder.secondaryLine || row.reminder.label,
       tone: "warning",
@@ -106,15 +135,27 @@ export function buildArReminderReadinessSummary(input: {
   const lastSent = reminderEngagement.find((s) => s.sendStatus === "sent" || s.sendStatus === "delivered");
   if (lastSent && reminderEngagement.every((s) => s.sendStatus !== "scheduled")) {
     return {
+      headline: "No further reminders scheduled",
       automationLabel,
-      nextDispatchLabel: "No further reminders scheduled for this appointment",
+      nextDispatchLabel: "All configured reminders for this appointment have been sent.",
       tone: "neutral",
     };
   }
 
+  if (row.reminder.status === "scheduled" && row.reminder.secondaryLine) {
+    return {
+      headline: "Reminder scheduled",
+      automationLabel,
+      nextDispatchLabel: row.reminder.secondaryLine,
+      tone: "success",
+    };
+  }
+
   return {
+    headline: "No reminder currently scheduled",
     automationLabel,
-    nextDispatchLabel: "No upcoming send scheduled yet — check Reminders tab for timeline",
+    nextDispatchLabel:
+      "Reminders are enabled, but nothing is queued to send yet. Check timing rules or the Reminders tab.",
     tone: "neutral",
   };
 }
