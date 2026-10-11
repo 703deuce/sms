@@ -13,6 +13,8 @@ import {
   type ArWorkspaceCommercialSnapshot,
 } from "@/lib/appointment-reminders/commercial/ar-usage-period";
 import { AR_PLATFORM_PRODUCT_FAMILY } from "@/lib/appointment-reminders/ar-sms-usage-constants";
+import { APPOINTMENTS_SOLUTION_TYPE } from "@/lib/appointments/settings";
+
 const LIMITS_PLAN_KEY = "arCommercialPlanKey";
 const LIMITS_FREE_STARTED = "arFreeEntitlementStartedAt";
 
@@ -37,6 +39,48 @@ function arLegacyGrandfatherWorkspaceIds(): Set<string> {
 
 function hasExplicitLegacyGrandfatherAccess(workspaceId: string): boolean {
   return arLegacyGrandfatherWorkspaceIds().has(workspaceId);
+}
+
+/**
+ * Pre-launch Appointment Reminders users (calendar and/or platform config) never hit
+ * `/product-open?plan=free` — grant Free automatically instead of 403 on settings.
+ */
+async function workspaceQualifiesForArLegacyFreeAccess(workspaceId: string): Promise<boolean> {
+  const prisma = getPrisma();
+  const [setup, calendar, appointment] = await Promise.all([
+    prisma.solutionSetup.findFirst({
+      where: { workspaceId, solutionType: APPOINTMENTS_SOLUTION_TYPE },
+      select: { id: true },
+    }),
+    prisma.voiceCalendarConnection.findFirst({
+      where: { workspaceId },
+      select: { id: true },
+    }),
+    prisma.voiceAppointment.findFirst({
+      where: { workspaceId },
+      select: { id: true },
+    }),
+  ]);
+  return Boolean(setup || calendar || appointment);
+}
+
+function freeCommercialSnapshot(
+  limits: Record<string, unknown>,
+): ArWorkspaceCommercialSnapshot {
+  const startedRaw = limits[LIMITS_FREE_STARTED];
+  const started =
+    typeof startedRaw === "string" ? new Date(startedRaw) : new Date(String(startedRaw || Date.now()));
+  const anchor = Number.isNaN(started.getTime()) ? new Date() : started;
+  return {
+    planKey: "free",
+    hasProductAccess: true,
+    usagePeriod: rollingFreeMonthPeriod(anchor),
+    stripeSubscriptionId: null,
+    stripeStatus: "free",
+    cancelAtPeriodEnd: false,
+    paidThrough: null,
+    isLegacyGrandfather: false,
+  };
 }
 
 async function workspaceLimitsRecord(workspaceId: string): Promise<Record<string, unknown>> {
@@ -80,20 +124,7 @@ export async function resolveArWorkspaceCommercial(
   const limits = await workspaceLimitsRecord(workspaceId);
   const storedPlan = String(limits[LIMITS_PLAN_KEY] || "");
   if (storedPlan === "free") {
-    const startedRaw = limits[LIMITS_FREE_STARTED];
-    const started =
-      typeof startedRaw === "string" ? new Date(startedRaw) : new Date(String(startedRaw || Date.now()));
-    const anchor = Number.isNaN(started.getTime()) ? new Date() : started;
-    return {
-      planKey: "free",
-      hasProductAccess: true,
-      usagePeriod: rollingFreeMonthPeriod(anchor),
-      stripeSubscriptionId: null,
-      stripeStatus: "free",
-      cancelAtPeriodEnd: false,
-      paidThrough: null,
-      isLegacyGrandfather: false,
-    };
+    return freeCommercialSnapshot(limits);
   }
 
   if (hasExplicitLegacyGrandfatherAccess(workspaceId)) {
@@ -107,6 +138,12 @@ export async function resolveArWorkspaceCommercial(
       paidThrough: null,
       isLegacyGrandfather: true,
     };
+  }
+
+  if (await workspaceQualifiesForArLegacyFreeAccess(workspaceId)) {
+    await assignArFreePlan(workspaceId);
+    const limitsAfter = await workspaceLimitsRecord(workspaceId);
+    return freeCommercialSnapshot(limitsAfter);
   }
 
   return {

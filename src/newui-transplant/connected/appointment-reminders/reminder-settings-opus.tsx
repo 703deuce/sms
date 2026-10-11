@@ -202,13 +202,25 @@ export function AppointmentRemindersSettingsOpus({ activeTab = 'sequence' }: { a
       .catch(() => setWorkspace(null))
   }, [])
 
+  const [loadErrorDetail, setLoadErrorDetail] = useState<string | null>(null)
+
   const load = useCallback(() => {
     setLoading(true)
     setFailed(false)
+    setLoadErrorDetail(null)
     fetch('/api/appointment-reminders/settings')
-      .then((r) => {
-        if (!r.ok) throw new Error('settings failed')
-        return r.json()
+      .then(async (r) => {
+        const json = await r.json().catch(() => ({}))
+        if (!r.ok) {
+          const msg =
+            typeof json?.error === 'string'
+              ? json.error
+              : r.status === 403
+                ? 'Appointment Reminders is not enabled for this workspace.'
+                : 'Could not load settings.'
+          throw new Error(msg)
+        }
+        return json
       })
       .then(async (json) => {
         setTemplateLocked(Boolean(json.messaging?.templateEditingLocked))
@@ -240,10 +252,15 @@ export function AppointmentRemindersSettingsOpus({ activeTab = 'sequence' }: { a
         })
         setWeeklyHours(normalizeWeeklyHours(data.weeklyHours))
         setConfig(nextConfig)
-        setPreviews(await loadPreviews(nextConfig))
         loadWorkspace()
+        void loadPreviews(nextConfig)
+          .then(setPreviews)
+          .catch(() => setPreviews({}))
       })
-      .catch(() => setFailed(true))
+      .catch((err: unknown) => {
+        setFailed(true)
+        setLoadErrorDetail(err instanceof Error ? err.message : null)
+      })
       .finally(() => setLoading(false))
   }, [loadWorkspace])
 
