@@ -139,9 +139,9 @@ export function ArCalendarRightContextPanel({
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
         <div className="mb-2 flex items-center justify-between gap-2">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Upcoming sends</h3>
-          <TextLink href={AR_ROUTES.reminders} className="text-[11px]">
-            View all
-          </TextLink>
+          <span className="text-[11px]">
+            <TextLink href={AR_ROUTES.reminders}>View all</TextLink>
+          </span>
         </div>
         {overviewLoading ? (
           <div className="space-y-2" aria-busy="true">
