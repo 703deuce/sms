@@ -789,7 +789,7 @@ export function AppointmentDetailDrawer({
                                 Scheduled for {new Date(step.scheduledFor).toLocaleString()}
                               </p>
                             ) : null}
-                            <p className="text-xs text-muted-foreground">Status: {step.status}</p>
+                            <p className="text-xs text-muted-foreground">Status: {step.sendStatus}</p>
                             {step.detail ? (
                               <p className="text-xs text-destructive">{step.detail}</p>
                             ) : null}
