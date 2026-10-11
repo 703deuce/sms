@@ -12,22 +12,17 @@ import {
   Sparkles,
   UserCheck,
 } from 'lucide-react'
-import type {
-  ArCustomerResponseKind,
-  ArCustomerResponseSummary,
-} from '@/lib/appointment-reminders/ar-sms-customer-outcome'
 import { AR_ROUTES, AR_SETTINGS_INTEGRATIONS } from '@/lib/appointment-reminders/routes'
 import { ArUpcomingAppointmentsPanel } from '@/newui-transplant/components/appointment-reminders/ar-upcoming-appointments-panel'
+import { ArOverviewConversationsPanel } from '@/newui-transplant/components/appointment-reminders/ar-overview-conversations-panel'
 import {
   ArOpusPage,
   ArStatGrid,
 } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
-import { CustomerResponsePill } from '@/newui-transplant/components/appointment-reminders/customer-response-pill'
 import {
   Callout,
   EmptyState,
   FeatureEmphasisStrip,
-  Initials,
   KeyValueRow,
   PageHeader,
   Panel,
@@ -136,16 +131,6 @@ export function AppointmentRemindersOverviewPage() {
       actionHint?: string | null
     }>
   >([])
-  const [customerResponses, setCustomerResponses] = useState<
-    Array<{
-      appointmentId: string
-      customerName: string
-      appointmentTitle: string
-      startsAt: string
-      responseAt: string
-      customerResponse: ArCustomerResponseSummary
-    }>
-  >([])
   const [error, setError] = useState(false)
   const [loading, setLoading] = useState(true)
   const [readiness, setReadiness] = useState<OverviewReadiness | null>(null)
@@ -165,7 +150,6 @@ export function AppointmentRemindersOverviewPage() {
       setCounts(data?.counts ?? null)
       setStats(data?.stats ?? null)
       setActivity(data?.activity ?? [])
-      setCustomerResponses(data?.customerResponses ?? [])
       setCalendars(data?.calendars ?? [])
       setReadiness(data?.readiness ?? null)
       setProductStatus(data?.productStatus ?? [])
@@ -288,6 +272,92 @@ export function AppointmentRemindersOverviewPage() {
         </div>
       ) : null}
 
+      {!calendarHealthy && !loading ? (
+        <div className="mb-4">
+          <Callout tone="warning" icon={Calendar} title="Calendar connection needs attention">
+            Connect Microsoft 365 or Google Calendar and select import calendars.{' '}
+            <TextLink href={AR_SETTINGS_INTEGRATIONS}>Manage connections</TextLink>
+          </Callout>
+        </div>
+      ) : null}
+
+      {!loading && (stats?.failed7d ?? 0) > 0 ? (
+        <div className="mb-4">
+          <Callout tone="danger" icon={AlertTriangle} title="Some reminders failed to deliver">
+            <p className="text-sm text-muted-foreground">
+              {stats?.failed7d} failed in the last 7 days. Review delivery details and recipient phone numbers.
+            </p>
+            <Link
+              href={AR_ROUTES.reminders}
+              className={cn(buttonVariants({ variant: 'secondary', size: 'sm' }), 'mt-3 inline-flex')}
+            >
+              Open reminder log
+            </Link>
+          </Callout>
+        </div>
+      ) : null}
+
+      <ArOverviewConversationsPanel />
+
+      <Panel
+        title="Needs attention"
+        description="Missing details, delivery issues, and open customer requests."
+        action={<TextLink href={`${AR_ROUTES.responses}?view=needs_attention`}>View responses</TextLink>}
+        bodyClassName="p-0"
+        className="mb-6"
+      >
+        {loading ? (
+          <p className="p-5 text-sm text-muted-foreground">Loading…</p>
+        ) : needsAttentionRows.length === 0 ? (
+          <EmptyState
+            icon={UserCheck}
+            title="Nothing needs attention"
+            description="Upcoming appointments have recipient details and no open requests."
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left text-sm">
+              <thead className={OPUS_TABLE_HEAD}>
+                <tr>
+                  <th scope="col" className={th}>Customer</th>
+                  <th scope="col" className={th}>Appointment</th>
+                  <th scope="col" className={th}>Issue</th>
+                  <th scope="col" className={th}>Last activity</th>
+                  <th scope="col" className={th}><span className="sr-only">Action</span></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {needsAttentionRows.map((row) => (
+                  <tr key={row.appointmentId} className="hover:bg-muted/30">
+                    <td className={`${td} font-medium`}>{row.customerName}</td>
+                    <td className={td}>
+                      <span className="block truncate">{row.appointmentTitle}</span>
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {new Date(row.startsAt).toLocaleString()}
+                      </span>
+                    </td>
+                    <td className={td}>{row.issue}</td>
+                    <td className={`${td} text-muted-foreground`}>
+                      {row.lastActivityAt
+                        ? new Date(row.lastActivityAt).toLocaleString()
+                        : row.lastActivityLabel || '—'}
+                    </td>
+                    <td className={td}>
+                      <Link
+                        href={`${AR_ROUTES.responses}?appointment=${encodeURIComponent(row.appointmentId)}`}
+                        className="text-xs font-medium text-primary hover:underline"
+                      >
+                        Conversation
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+
       <ArUpcomingAppointmentsPanel
         className="mb-6"
         loading={loading}
@@ -348,74 +418,6 @@ export function AppointmentRemindersOverviewPage() {
         </div>
       ) : null}
 
-      <Panel
-        title="Needs attention"
-        description="Missing details, delivery issues, and open customer requests."
-        action={<TextLink href={`${AR_ROUTES.responses}?view=needs_attention`}>View responses</TextLink>}
-        bodyClassName="p-0"
-        className="mb-6"
-      >
-        {loading ? (
-          <p className="p-5 text-sm text-muted-foreground">Loading…</p>
-        ) : needsAttentionRows.length === 0 ? (
-          <EmptyState
-            icon={UserCheck}
-            title="Nothing needs attention"
-            description="Upcoming appointments have recipient details and no open requests."
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-sm">
-              <thead className={OPUS_TABLE_HEAD}>
-                <tr>
-                  <th scope="col" className={th}>Customer</th>
-                  <th scope="col" className={th}>Appointment</th>
-                  <th scope="col" className={th}>Issue</th>
-                  <th scope="col" className={th}>Last activity</th>
-                  <th scope="col" className={th}><span className="sr-only">Action</span></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {needsAttentionRows.map((row) => (
-                  <tr key={row.appointmentId} className="hover:bg-muted/30">
-                    <td className={`${td} font-medium`}>{row.customerName}</td>
-                    <td className={td}>
-                      <span className="block truncate">{row.appointmentTitle}</span>
-                      <span className="text-xs text-muted-foreground tabular-nums">
-                        {new Date(row.startsAt).toLocaleString()}
-                      </span>
-                    </td>
-                    <td className={td}>{row.issue}</td>
-                    <td className={`${td} text-muted-foreground`}>
-                      {row.lastActivityAt
-                        ? new Date(row.lastActivityAt).toLocaleString()
-                        : row.lastActivityLabel || '—'}
-                    </td>
-                    <td className={td}>
-                      <Link
-                        href={`${AR_ROUTES.appointments}?highlight=${encodeURIComponent(row.appointmentId)}`}
-                        className="text-xs font-medium text-primary hover:underline"
-                      >
-                        Open
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Panel>
-
-      {!calendarHealthy && !loading ? (
-        <div className="mb-6">
-          <Callout tone="warning" icon={Calendar} title="Calendar connection needs attention">
-            Connect Google Calendar or Microsoft 365 and select import calendars.{' '}
-            <TextLink href={AR_SETTINGS_INTEGRATIONS}>Manage connections</TextLink>
-          </Callout>
-        </div>
-      ) : null}
-
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="flex flex-col gap-6 lg:col-span-2">
           <FeatureEmphasisStrip
@@ -436,57 +438,6 @@ export function AppointmentRemindersOverviewPage() {
               </Link>
             }
           />
-
-          <Panel
-            title="Recent customer responses"
-            description="Confirmations, cancellations, and reschedules after reminder SMS."
-            action={<TextLink href={AR_ROUTES.responses}>All responses</TextLink>}
-            bodyClassName="p-0"
-          >
-            {loading ? (
-              <p className="p-5 text-sm text-muted-foreground">Loading…</p>
-            ) : customerResponses.length === 0 ? (
-              <EmptyState
-                icon={UserCheck}
-                title="No customer responses yet"
-                description="When someone replies to a reminder — confirms, cancels, or reschedules — it appears here."
-                action={
-                  <Button variant="outline" nativeButton={false} render={<Link href={AR_ROUTES.appointments} />}>
-                    View appointments
-                  </Button>
-                }
-              />
-            ) : (
-              <ul className="divide-y">
-                {customerResponses.map((row) => (
-                  <li key={row.appointmentId}>
-                    <Link
-                      href={`${AR_ROUTES.appointments}?highlight=${encodeURIComponent(row.appointmentId)}`}
-                      className="flex items-start gap-3 px-5 py-3.5 transition-colors hover:bg-muted/40"
-                    >
-                      <Initials name={row.customerName} className="size-8" />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <span className="truncate text-sm font-medium">{row.customerName}</span>
-                          <CustomerResponsePill
-                            label={row.customerResponse.listDisplayLine || row.customerResponse.label}
-                            kind={row.customerResponse.kind}
-                          />
-                        </div>
-                        <p className="truncate text-xs text-muted-foreground">{row.appointmentTitle}</p>
-                        {row.customerResponse.detailLine ? (
-                          <p className="mt-0.5 text-xs text-foreground/90">{row.customerResponse.detailLine}</p>
-                        ) : null}
-                        <p className="mt-1 text-xs text-muted-foreground tabular-nums">
-                          Response {new Date(row.responseAt).toLocaleString()}
-                        </p>
-                      </div>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Panel>
 
           <Panel
             title="Recent reminder activity"
@@ -597,7 +548,7 @@ export function AppointmentRemindersOverviewPage() {
             <KeyValueRow label="Appointments" value="View imported events" href={AR_ROUTES.appointments} />
             <KeyValueRow label="Responses" value="Customer replies and requests" href={AR_ROUTES.responses} />
             <KeyValueRow label="Reminder log" value="Delivery outcomes" href={AR_ROUTES.reminders} />
-            <KeyValueRow label="SMS sequence" value="Timing and templates" href={AR_ROUTES.settings} />
+            <KeyValueRow label="SMS sequence" value="Timing and templates" href={AR_ROUTES.remindersSequences} />
           </Panel>
         </div>
       </div>

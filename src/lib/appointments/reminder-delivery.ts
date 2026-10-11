@@ -856,7 +856,11 @@ export function previewReminderMessage(input: {
     cancelToken: input.tokens?.cancel || "preview",
     rescheduleToken: input.tokens?.reschedule || "preview",
   });
-  return renderAppointmentTemplate(input.step.template, vars);
+  const rendered = renderAppointmentTemplate(input.step.template, vars);
+  if (input.step.channel === "sms") {
+    return finalizeReminderSmsBody(rendered);
+  }
+  return rendered;
 }
 
 export async function sendTestReminderSms(

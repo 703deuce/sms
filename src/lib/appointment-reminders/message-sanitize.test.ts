@@ -13,4 +13,12 @@ assert.equal(
   "strips leftover tokens",
 );
 
+assert.equal(
+  finalizeReminderSmsBody(
+    "Hi Alex, your appointment is booked. Details: {{appointment_link}}. Reply STOP to opt out.",
+  ),
+  "Hi Alex, your appointment is booked. Reply STOP to opt out.",
+  "removes empty Details clause when link token is blank",
+);
+
 console.log("message-sanitize.test.ts: ok");

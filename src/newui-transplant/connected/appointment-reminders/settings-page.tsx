@@ -1,6 +1,7 @@
 'use client'
 
-import { Suspense, useCallback } from 'react'
+import { Suspense, useCallback, useEffect } from 'react'
+import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { PageHeader } from '@/newui-transplant/components/app/kit'
 import { ArOpusPage } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
@@ -8,11 +9,10 @@ import {
   AppointmentRemindersSettingsOpus,
   type ArSettingsTab,
 } from '@/newui-transplant/connected/appointment-reminders/reminder-settings-opus'
+import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
 import { cn } from '@/lib/utils'
 
 const TAB_LINKS: Array<{ id: ArSettingsTab; label: string }> = [
-  { id: 'sequence', label: 'Reminder sequence' },
-  { id: 'templates', label: 'Templates' },
   { id: 'scheduling', label: 'Scheduling & rules' },
   { id: 'business', label: 'Business profile' },
   { id: 'notifications', label: 'Notifications & responses' },
@@ -26,7 +26,23 @@ function SettingsPageInner() {
   const searchParams = useSearchParams()
   const raw = searchParams.get('tab')
   const activeTab: ArSettingsTab =
-    raw && TAB_LINKS.some((t) => t.id === raw) ? (raw as ArSettingsTab) : 'sequence'
+    raw && TAB_LINKS.some((t) => t.id === raw) ? (raw as ArSettingsTab) : 'scheduling'
+
+  useEffect(() => {
+    if (raw === 'sequence') {
+      router.replace(AR_ROUTES.remindersSequences)
+      return
+    }
+    if (raw === 'templates') {
+      router.replace(AR_ROUTES.remindersTemplates)
+      return
+    }
+    if (!raw) {
+      const sp = new URLSearchParams(searchParams.toString())
+      sp.set('tab', 'scheduling')
+      router.replace(`${pathname}?${sp.toString()}`, { scroll: false })
+    }
+  }, [raw, router, pathname, searchParams])
 
   const setTab = useCallback(
     (tab: ArSettingsTab) => {
@@ -41,8 +57,19 @@ function SettingsPageInner() {
     <ArOpusPage>
       <PageHeader
         title="Settings"
-        description="Reminder sequence, templates, scheduling rules, business profile, and integrations."
+        description="Scheduling rules, business profile, notifications, and calendar integrations. Sequences and templates live under Reminders."
       />
+      <p className="mb-4 text-sm text-muted-foreground">
+        Manage your{' '}
+        <Link href={AR_ROUTES.remindersSequences} className="font-medium text-foreground underline">
+          reminder sequence
+        </Link>{' '}
+        and{' '}
+        <Link href={AR_ROUTES.remindersTemplates} className="font-medium text-foreground underline">
+          template library
+        </Link>{' '}
+        from the Reminders area.
+      </p>
       <nav
         className="mb-6 flex gap-1 overflow-x-auto border-b pb-0"
         aria-label="Reminder settings sections"

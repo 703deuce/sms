@@ -47,6 +47,7 @@ export type ReminderTemplateEditorProps = {
   timezone: string
   businessPhone?: string
   location?: string
+  customMergeFields?: Record<string, string>
   onTemplateChange: (value: string) => void
   onEmailSubjectChange?: (value: string) => void
   onInsertTag: (tag: string) => void
@@ -62,6 +63,7 @@ export function ReminderTemplateEditor({
   timezone,
   businessPhone,
   location,
+  customMergeFields,
   onTemplateChange,
   onEmailSubjectChange,
   onInsertTag,
@@ -73,8 +75,9 @@ export function ReminderTemplateEditor({
         timezone,
         businessPhone,
         location,
+        customMergeFields,
       }),
-    [businessName, timezone, businessPhone, location],
+    [businessName, timezone, businessPhone, location, customMergeFields],
   )
 
   const rendered = useMemo(

@@ -8,20 +8,20 @@
 
 | Metric | Count |
 |--------|------:|
-| Workstream requirement rows | 90 |
+| Workstream requirement rows | 94 |
 | Policy exclusions (AR-X table, not implementable rows) | 5 |
 | Excluded within workstreams (in-table) | 4 |
-| Applicable implementable rows | 86 |
-| Implementation **complete** | 86 |
+| Applicable implementable rows | 90 |
+| Implementation **complete** | 90 |
 | Implementation **partial** | 0 |
 | Implementation **missing** | 0 |
-| Automated verification **pass** | 85 |
+| Automated verification **pass** | 89 |
 | Automated verification **fail** | 0 |
 | Production verification **pass** | 20 |
-| Production verification **not_run** | 65 |
+| Production verification **not_run** | 69 |
 | Production verification **n/a** | 5 |
 
-**Completion pass status:** **FINISHED** — 0 partial and 0 missing among 86 applicable rows (implementation). Summary derived from row-level Impl columns. See `docs/AR-FULL-FUNCTIONAL-COMPLETION-INTEGRITY-AUDIT-2026-10-11.md`.
+**Completion pass status:** **FINISHED** — 0 partial and 0 missing among 90 applicable rows (implementation). Summary derived from row-level Impl columns. See `docs/AR-FULL-FUNCTIONAL-COMPLETION-INTEGRITY-AUDIT-2026-10-11.md`.
 
 ### Verification legend
 
@@ -177,6 +177,10 @@
 | AR-WS8-05 | Cold-tenant prod runbook PASS/FAIL | Audit §10 | `AR-LAUNCH-READINESS-NOW.md` | complete | n/a | not_run | Cold-tenant runbook authored in `docs/AR-LAUNCH-READINESS-NOW.md` (operational execution is separate). |
 | AR-WS8-06 | Throughput 600 test | P1 blockers | `test-ar-reminder-throughput.ts` | complete | pass | not_run | Throughput harness `scripts/test-ar-reminder-throughput.ts` shipped for load certification. |
 | AR-WS8-07 | V1 cert doc AR section | P1 §6 | `V1-PRODUCTION-CERTIFICATION.md` | complete | pass | n/a | AR gate row added to `docs/V1-PRODUCTION-CERTIFICATION.md` pointing at matrix + runbook (doc update on branch; not a live cert execution). |
+| AR-WS2-11 | Overview customer conversations (inbox + full thread drawer) | Product / Starter $9 | `ar-overview-conversations-panel.tsx`, `load-ar-conversation-inbox.ts`, `/api/appointment-reminders/conversations` | complete | pass | not_run | List + thread APIs reuse `ArSmsReplySession` + `ConversationMessage`; free plan gated; unread clears on open. Browser prod smoke not_run. |
+| AR-WS3-07 | Sequence editor: template select, merge defaults, plan step limits | Settings UX | `reminder-settings-opus.tsx`, `reminder-sequence-timeline.tsx`, `simple-select.tsx` | complete | pass | not_run | Full-page step editor; core steps locked to canonical library message types; free-plan step cap on timeline. |
+| AR-WS8-08 | Reminders IA: Activity, Sequences, Templates (not nested in Settings) | Product IA | `ar-reminders-hub-shell.tsx`, `routes.ts`, `appointment-reminders-nav.ts`, `settings-page.tsx` redirects | complete | pass | not_run | Hub tabs + sidebar children; `?tab=sequence` / `?tab=templates` → dedicated routes; overview links to Sequences. |
+| AR-WS8-09 | Template library wording + preview/send SMS cleanup parity | Content/runtime | `transovo-reminder-templates.json`, `message-sanitize.ts`, `test-ar-reminder-template-library-audit.ts` | complete | pass | not_run | 306-template audit script; confirmation step cannot select reschedule copy; empty `appointment_link` Details clause stripped at send and preview. |
 
 ---
 

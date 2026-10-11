@@ -1,6 +1,7 @@
 'use client'
 
-import { CalendarCheck, MessageSquare, Plus } from 'lucide-react'
+import Link from 'next/link'
+import { CalendarCheck, Lock, MessageSquare, Plus } from 'lucide-react'
 import type { ReminderItem } from '@/features/appointments/kimi/reminders/types'
 import { Pill } from '@/newui-transplant/components/app/kit'
 import { OPUS_CARD, OPUS_CONFIG_INSET } from '@/newui-transplant/components/app/opus-surfaces'
@@ -34,10 +35,22 @@ type Props = {
   onEdit: (step: ReminderItem) => void
   onAdd: () => void
   onMinutesChange: (stepKey: string, minutes: number) => void
+  /** Max reminder steps allowed on current plan (e.g. 1 free, 3 paid). */
+  reminderStepsMax?: number
+  billingUpgradeHref?: string
 }
 
-export function ReminderSequenceTimeline({ steps, onToggle, onEdit, onAdd, onMinutesChange }: Props) {
+export function ReminderSequenceTimeline({
+  steps,
+  onToggle,
+  onEdit,
+  onAdd,
+  onMinutesChange,
+  reminderStepsMax,
+  billingUpgradeHref = '/appointment-reminders/settings?tab=billing',
+}: Props) {
   const activeCount = steps.filter((s) => s.enabled).length
+  const atStepLimit = reminderStepsMax != null && activeCount >= reminderStepsMax
 
   return (
     <div className={cn(OPUS_CONFIG_INSET, 'relative overflow-hidden p-4 md:p-5')}>
@@ -60,7 +73,14 @@ export function ReminderSequenceTimeline({ steps, onToggle, onEdit, onAdd, onMin
             </p>
           </div>
         </div>
-        <Button type="button" size="sm" variant="outline" className="h-9" onClick={onAdd}>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-9"
+          disabled={atStepLimit}
+          onClick={onAdd}
+        >
           <Plus className="mr-1.5 size-3.5" aria-hidden="true" />
           Add step
         </Button>
@@ -72,6 +92,8 @@ export function ReminderSequenceTimeline({ steps, onToggle, onEdit, onAdd, onMin
           const parts = !isConfirmation && step.minutesBefore != null
             ? minutesToParts(step.minutesBefore)
             : null
+          const lockedByPlan =
+            reminderStepsMax != null && index >= reminderStepsMax && !step.enabled
 
           return (
             <li key={step.stepKey} className="relative flex gap-3 pb-3">
@@ -92,6 +114,7 @@ export function ReminderSequenceTimeline({ steps, onToggle, onEdit, onAdd, onMin
                   OPUS_CARD,
                   'mb-1 flex min-h-[72px] flex-1 flex-col gap-3 p-4 sm:flex-row sm:items-center',
                   !step.enabled && 'border-dashed bg-muted/25 opacity-80',
+                  lockedByPlan && 'pointer-events-none opacity-50 grayscale-[0.35]',
                 )}
               >
                 <div className="min-w-0 flex-1 space-y-1">
@@ -133,19 +156,34 @@ export function ReminderSequenceTimeline({ steps, onToggle, onEdit, onAdd, onMin
                 </div>
 
                 <div className="flex shrink-0 flex-wrap items-center gap-3 sm:flex-col sm:items-end sm:gap-2">
-                  <Pill tone={step.enabled ? 'primary' : 'neutral'} dot={false}>
-                    <MessageSquare className="size-3" aria-hidden="true" />
-                    SMS
-                  </Pill>
+                  {lockedByPlan ? (
+                    <Pill tone="neutral" dot={false}>
+                      <Lock className="size-3" aria-hidden="true" />
+                      Upgrade
+                    </Pill>
+                  ) : (
+                    <Pill tone={step.enabled ? 'primary' : 'neutral'} dot={false}>
+                      <MessageSquare className="size-3" aria-hidden="true" />
+                      SMS
+                    </Pill>
+                  )}
                   <div className="flex items-center gap-2">
                     <Switch
                       checked={step.enabled}
+                      disabled={lockedByPlan || (atStepLimit && !step.enabled)}
                       onCheckedChange={() => onToggle(step.stepKey)}
                       aria-label={`Enable ${step.title}`}
                     />
                     <span className="text-xs text-muted-foreground">{step.enabled ? 'On' : 'Off'}</span>
                   </div>
-                  <Button type="button" variant="secondary" size="sm" className="h-8" onClick={() => onEdit(step)}>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="h-8"
+                    disabled={lockedByPlan}
+                    onClick={() => onEdit(step)}
+                  >
                     Edit message
                   </Button>
                 </div>
@@ -156,13 +194,24 @@ export function ReminderSequenceTimeline({ steps, onToggle, onEdit, onAdd, onMin
 
         <li className="flex gap-3 pl-0.5">
           <span className="mt-1 size-2.5 rounded-full border border-dashed border-muted-foreground/50" aria-hidden="true" />
-          <button
-            type="button"
-            className="text-sm font-medium text-primary hover:underline"
-            onClick={onAdd}
-          >
-            + Add another reminder before the appointment
-          </button>
+          {atStepLimit ? (
+            <p className="text-sm text-muted-foreground">
+              Your plan allows {reminderStepsMax} active reminder step
+              {reminderStepsMax === 1 ? '' : 's'}.{' '}
+              <Link href={billingUpgradeHref} className="font-medium text-primary hover:underline">
+                Upgrade
+              </Link>{' '}
+              to add more drip steps.
+            </p>
+          ) : (
+            <button
+              type="button"
+              className="text-sm font-medium text-primary hover:underline"
+              onClick={onAdd}
+            >
+              + Add another reminder before the appointment
+            </button>
+          )}
         </li>
       </ol>
 

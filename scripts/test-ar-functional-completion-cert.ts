@@ -48,7 +48,7 @@ for (const line of matrix.split("\n")) {
   }
 }
 
-assert.equal(rows.length, 90, "expected 90 workstream rows with Evidence column");
+assert.equal(rows.length, 94, "expected 94 workstream rows with Evidence column");
 
 const stale =
   /\b(needs dedicated|optional gate not enforced|TBD merge|pending manual execution|Manual prod execution|Process doc update pending|not enforced)\b/i;
