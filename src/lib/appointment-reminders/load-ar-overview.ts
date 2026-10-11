@@ -187,6 +187,8 @@ export async function loadAppointmentRemindersOverview(workspaceId: string) {
       customerLabel: r.customerLabel,
       reminderLabel: r.reminderLabel,
       status: r.statusLabel,
+      detail: r.detail,
+      actionHint: r.actionHint,
     })),
     customerResponses: customerResponses.map((r) => ({
       appointmentId: r.appointmentId,

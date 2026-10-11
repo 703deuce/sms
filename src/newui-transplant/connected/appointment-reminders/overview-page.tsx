@@ -125,7 +125,15 @@ export function AppointmentRemindersOverviewPage() {
   const [stats, setStats] = useState<WorkspaceStats | null>(null)
   const [calendars, setCalendars] = useState<CalendarRow[]>([])
   const [activity, setActivity] = useState<
-    Array<{ id: string; at: string; customerLabel: string; reminderLabel: string; status: string }>
+    Array<{
+      id: string
+      at: string
+      customerLabel: string
+      reminderLabel: string
+      status: string
+      detail?: string | null
+      actionHint?: string | null
+    }>
   >([])
   const [customerResponses, setCustomerResponses] = useState<
     Array<{
@@ -461,6 +469,12 @@ export function AppointmentRemindersOverviewPage() {
                         <td className={`${td} max-w-[200px] truncate text-muted-foreground`}>{row.reminderLabel}</td>
                         <td className={td}>
                           <Pill tone={activityStatusTone(row.status)}>{row.status}</Pill>
+                          {row.detail ? (
+                            <span className="mt-0.5 block text-xs text-muted-foreground">{row.detail}</span>
+                          ) : null}
+                          {row.actionHint ? (
+                            <span className="mt-0.5 block text-xs text-foreground/80">{row.actionHint}</span>
+                          ) : null}
                         </td>
                         <td className={`${td} tabular-nums text-muted-foreground`}>
                           {new Date(row.at).toLocaleString()}

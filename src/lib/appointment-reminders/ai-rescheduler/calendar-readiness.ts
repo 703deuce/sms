@@ -55,7 +55,9 @@ export function evaluateArCalendarReadiness(input: {
         ? "Connected — confirm write calendar is selected"
         : level === 1
           ? "Connected for import — write scopes or calendar may be missing"
-          : "No connected calendar";
+          : connected
+            ? "OAuth connected — select import calendars in Settings → Integrations"
+            : "No connected calendar";
 
   return {
     level,

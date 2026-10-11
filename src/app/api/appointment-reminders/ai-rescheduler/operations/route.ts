@@ -24,14 +24,26 @@ export async function GET() {
         startsAt: true,
         status: true,
         metadata: true,
-        contact: { select: { firstName: true, lastName: true, phone: true } },
+        contactId: true,
       },
     });
+
+    const contactIds = [...new Set(rows.map((r) => r.contactId).filter(Boolean))] as string[];
+    const contacts =
+      contactIds.length > 0
+        ? await prisma.contact.findMany({
+            where: { workspaceId: auth.workspaceId, id: { in: contactIds } },
+            select: { id: true, firstName: true, lastName: true, phone: true },
+          })
+        : [];
+    const contactById = new Map(contacts.map((c) => [c.id, c]));
 
     const pendingApproval: Array<Record<string, unknown>> = [];
     const reconcilePending: Array<Record<string, unknown>> = [];
 
     for (const row of rows) {
+      const contact = row.contactId ? contactById.get(row.contactId) : undefined;
+      const metaInvitee = (row.metadata || {}) as AppointmentMetadata;
       const meta = (row.metadata || {}) as AppointmentMetadata & {
         arRescheduleRequest?: { status?: string; requestedAt?: string };
         arReconcilePending?: { operationId?: string; proposedStartsAt?: string };
@@ -50,8 +62,11 @@ export async function GET() {
           status: row.status,
           requestStatus: req.status,
           requestedAt: req.requestedAt,
-          contactPhone: row.contact?.phone,
-          contactName: [row.contact?.firstName, row.contact?.lastName].filter(Boolean).join(" "),
+          contactPhone: contact?.phone ?? metaInvitee.inviteePhone ?? null,
+          contactName:
+            [contact?.firstName, contact?.lastName].filter(Boolean).join(" ") ||
+            metaInvitee.inviteeName ||
+            "",
         });
       }
       if (meta.arReconcilePending?.operationId) {
