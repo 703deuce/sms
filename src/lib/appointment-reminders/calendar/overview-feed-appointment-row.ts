@@ -8,6 +8,9 @@ export type ArOverviewFeedShape = {
     appointmentTitle: string
     startsAt: string
     nextReminder?: string
+    reminderSecondary?: string
+    reminderStatus?: string
+    responseStatus?: string
     responseKind?: string
   }>
   customerResponses?: Array<{

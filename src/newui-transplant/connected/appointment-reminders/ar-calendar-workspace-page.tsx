@@ -33,7 +33,8 @@ import {
   ArCalendarOperationsStrip,
   type OperationsStripSelect,
 } from '@/newui-transplant/components/appointment-reminders/ar-calendar-operations-strip'
-import { ArCalendarTodayPanel } from '@/newui-transplant/components/appointment-reminders/ar-calendar-today-panel'
+import { buildAgendaEnrichmentMap } from '@/lib/appointment-reminders/calendar/build-agenda-enrichment'
+import { ArCalendarRightContextPanel } from '@/newui-transplant/components/appointment-reminders/ar-calendar-right-context-panel'
 import {
   ArCalendarOpusView,
   type ArCalendarFilterOption,
@@ -142,7 +143,10 @@ export function AppointmentRemindersCalendarWorkspacePage() {
     return appointmentRowFromOverviewFeed(selectedId, overviewFeed, timezone)
   }, [selectedId, selectedEvent, timezone, overviewFeed])
 
-  const upcomingLite = overviewFeed?.upcomingAppointments
+  const agendaEnrichment = useMemo(
+    () => buildAgendaEnrichmentMap(overviewFeed),
+    [overviewFeed],
+  )
 
   const calendarConnectionCallout = useMemo(() => {
     if (!overviewReady || !connected) return null
@@ -449,7 +453,7 @@ export function AppointmentRemindersCalendarWorkspacePage() {
   return (
     <ArOpusPage
       wide
-      className="flex min-h-0 flex-1 flex-col px-5 py-4 md:px-6 lg:h-full lg:max-h-full lg:overflow-hidden"
+      className="flex min-h-0 flex-1 flex-col gap-3 px-6 py-5 md:px-6 lg:h-full lg:max-h-full lg:overflow-hidden"
     >
       <header className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
@@ -560,7 +564,7 @@ export function AppointmentRemindersCalendarWorkspacePage() {
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
           <div
             className={cn(
-              'flex min-h-0 flex-1 flex-col gap-3 lg:grid lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(300px,350px)] lg:gap-4 lg:overflow-hidden',
+              'flex min-h-0 flex-1 flex-col gap-3 lg:grid lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(320px,360px)] lg:gap-4 lg:overflow-hidden',
             )}
           >
             <div className="flex min-h-[min(52vh,560px)] min-w-0 flex-1 flex-col lg:min-h-0">
@@ -584,6 +588,8 @@ export function AppointmentRemindersCalendarWorkspacePage() {
                   compactChrome
                   fillHeight
                   selectedEventId={selectedId}
+                  enrichment={agendaEnrichment}
+                  onSelectEventWithTab={(id, tab) => selectAppointment(id, tab)}
                 />
               )}
             </div>
@@ -608,19 +614,19 @@ export function AppointmentRemindersCalendarWorkspacePage() {
                   onPhoneSaved={refreshSelection}
                   initialTab={panelTab}
                   openConversationOnLoad={openConversationOnLoad}
-                  panelBackLabel="Back to Today"
+                  panelBackLabel="Back to overview"
                 />
               ) : (
-                <div className="min-h-0 flex-1 overflow-y-auto">
-                  <ArCalendarTodayPanel
-                    cursor={cursor}
-                    view={view}
-                    timeZone={timezone}
-                    events={filteredEvents}
-                    upcoming={upcomingLite}
-                    onSelectAppointment={(id) => selectAppointment(id)}
-                  />
-                </div>
+                <ArCalendarRightContextPanel
+                  className="min-h-0 flex-1"
+                  cursor={cursor}
+                  view={view}
+                  timeZone={timezone}
+                  events={filteredEvents}
+                  overview={overviewFeed}
+                  overviewLoading={feedLoading}
+                  onSelectAppointment={(id, tab) => selectAppointment(id, tab)}
+                />
               )}
             </aside>
           </div>

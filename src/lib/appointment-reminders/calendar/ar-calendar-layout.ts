@@ -3,7 +3,7 @@ import type { CalendarViewMode } from "@/features/appointments/kimi/calendar/typ
 
 export const AR_CALENDAR_DAY_START_HOUR = 6;
 export const AR_CALENDAR_DAY_END_HOUR = 21;
-export const AR_CALENDAR_HOUR_PX = 50;
+export const AR_CALENDAR_HOUR_PX = 56;
 
 export function startOfWeek(d: Date) {
   const copy = new Date(d);
@@ -194,8 +194,22 @@ export function formatEventTime(iso: string, timeZone: string) {
   });
 }
 
-export function eventTopPx(startsAt: string, timeZone: string) {
-  const d = new Date(startsAt);
+export type ArCalendarGrid = {
+  startHour: number;
+  endHour: number;
+  hourPx: number;
+};
+
+export function defaultArCalendarGrid(): ArCalendarGrid {
+  return {
+    startHour: AR_CALENDAR_DAY_START_HOUR,
+    endHour: AR_CALENDAR_DAY_END_HOUR,
+    hourPx: AR_CALENDAR_HOUR_PX,
+  };
+}
+
+function eventTimeHours(iso: string, timeZone: string) {
+  const d = new Date(iso);
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone,
     hour: "numeric",
@@ -204,20 +218,30 @@ export function eventTopPx(startsAt: string, timeZone: string) {
   }).formatToParts(d);
   const hour = Number(parts.find((p) => p.type === "hour")?.value || 0);
   const minute = Number(parts.find((p) => p.type === "minute")?.value || 0);
-  const fromStart = hour + minute / 60 - AR_CALENDAR_DAY_START_HOUR;
-  return Math.max(0, fromStart * AR_CALENDAR_HOUR_PX);
+  return hour + minute / 60;
 }
 
-export function eventHeightPx(startsAt: string, endsAt: string | null | undefined, timeZone: string) {
+export function eventTopPx(startsAt: string, timeZone: string, grid: ArCalendarGrid = defaultArCalendarGrid()) {
+  const fromStart = eventTimeHours(startsAt, timeZone) - grid.startHour;
+  return Math.max(0, fromStart * grid.hourPx);
+}
+
+export function eventHeightPx(
+  startsAt: string,
+  endsAt: string | null | undefined,
+  timeZone: string,
+  grid: ArCalendarGrid = defaultArCalendarGrid(),
+) {
   const start = new Date(startsAt).getTime();
   const end = endsAt ? new Date(endsAt).getTime() : start + 60 * 60 * 1000;
   const hours = Math.max(0.5, (end - start) / (60 * 60 * 1000));
-  return Math.min(hours * AR_CALENDAR_HOUR_PX, (AR_CALENDAR_DAY_END_HOUR - AR_CALENDAR_DAY_START_HOUR) * AR_CALENDAR_HOUR_PX);
+  const maxH = grid.endHour - grid.startHour;
+  return Math.min(hours * grid.hourPx, maxH * grid.hourPx);
 }
 
-export function hourLabels() {
+export function hourLabels(grid: ArCalendarGrid = defaultArCalendarGrid()) {
   const labels: string[] = [];
-  for (let h = AR_CALENDAR_DAY_START_HOUR; h <= AR_CALENDAR_DAY_END_HOUR; h++) {
+  for (let h = grid.startHour; h <= grid.endHour; h++) {
     const d = new Date();
     d.setHours(h, 0, 0, 0);
     labels.push(
@@ -225,6 +249,60 @@ export function hourLabels() {
     );
   }
   return labels;
+}
+
+function eventRangeMs(ev: CalendarApiAppointment) {
+  const start = new Date(ev.startsAt).getTime();
+  const end = ev.endsAt ? new Date(ev.endsAt).getTime() : start + 60 * 60 * 1000;
+  return { start, end };
+}
+
+/** Side-by-side columns for overlapping appointments in a day column. */
+export function layoutDayEventColumns(events: CalendarApiAppointment[]): Map<string, { col: number; cols: number }> {
+  const sorted = [...events].sort((a, b) => eventRangeMs(a).start - eventRangeMs(b).start);
+  const result = new Map<string, { col: number; cols: number }>();
+  const columns: { end: number }[][] = [];
+
+  for (const ev of sorted) {
+    const { start, end } = eventRangeMs(ev);
+    let placed = -1;
+    for (let c = 0; c < columns.length; c++) {
+      const colEvents = columns[c];
+      const last = colEvents[colEvents.length - 1];
+      if (!last || last.end <= start) {
+        placed = c;
+        colEvents.push({ end });
+        break;
+      }
+    }
+    if (placed < 0) {
+      placed = columns.length;
+      columns.push([{ end }]);
+    }
+    result.set(ev.id, { col: placed, cols: 1 });
+  }
+
+  for (const ev of sorted) {
+    const { start, end } = eventRangeMs(ev);
+    const overlapping = sorted.filter((o) => {
+      const r = eventRangeMs(o);
+      return r.start < end && r.end > start;
+    });
+    const cols = Math.max(...overlapping.map((o) => result.get(o.id)!.col)) + 1;
+    for (const o of overlapping) {
+      const prev = result.get(o.id)!;
+      result.set(o.id, { col: prev.col, cols });
+    }
+  }
+  return result;
+}
+
+export function currentTimeTopPx(timeZone: string, grid: ArCalendarGrid = defaultArCalendarGrid()) {
+  const now = new Date();
+  const key = dayKeyInTimeZone(now, timeZone);
+  const hours = eventTimeHours(now.toISOString(), timeZone);
+  if (hours < grid.startHour || hours > grid.endHour) return null;
+  return { top: (hours - grid.startHour) * grid.hourPx, dayKey: key };
 }
 
 export function weekDayHeaders(cursor: Date, timeZone: string) {

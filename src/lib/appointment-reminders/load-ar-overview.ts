@@ -183,6 +183,8 @@ export async function loadAppointmentRemindersOverview(workspaceId: string) {
       appointmentTitle: row.appointmentTitle,
       startsAt: row.startsAt,
       nextReminder: row.reminder.label,
+      reminderSecondary: row.reminder.secondaryLine,
+      reminderStatus: row.reminder.status,
       responseStatus: row.customerResponse.label,
       responseKind: row.customerResponse.kind,
     })),

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ChevronLeft, Loader2, MessageSquare } from 'lucide-react'
 import { ArConversationThreadSheet } from '@/newui-transplant/components/appointment-reminders/ar-conversation-thread-sheet'
 import { formatPhone } from '@/lib/utils'
@@ -277,6 +277,25 @@ export function AppointmentDetailDrawer({
         })
       : null
 
+  const messageCounts = useMemo(() => {
+    const sentEng = reminderEngagement.filter((s) => s.sendStatus === 'sent' || s.sendStatus === 'delivered').length
+    const failedEng = reminderEngagement.filter((s) => s.sendStatus === 'failed').length
+    const scheduledTl = timeline.filter((t) => /sched/i.test(t.status)).length
+    const sentTl = timeline.filter((t) => /sent|deliver/i.test(t.status)).length
+    return {
+      sent: sentEng || sentTl,
+      scheduled: scheduledTl,
+      failed: failedEng,
+    }
+  }, [reminderEngagement, timeline])
+
+  const nextScheduledMessage = useMemo(() => {
+    const now = Date.now()
+    return timeline
+      .filter((t) => t.scheduledFor && /sched/i.test(t.status) && new Date(t.scheduledFor).getTime() > now)
+      .sort((a, b) => new Date(a.scheduledFor!).getTime() - new Date(b.scheduledFor!).getTime())[0]
+  }, [timeline])
+
   const detailContent =
     row && open ? (
           <>
@@ -383,6 +402,35 @@ export function AppointmentDetailDrawer({
                     >
                       {readinessSummary?.nextDispatchLabel}
                     </dd>
+                  </div>
+                  {nextScheduledMessage ? (
+                    <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between">
+                      <dt className="text-muted-foreground">Next message</dt>
+                      <dd className="text-right text-foreground">
+                        {nextScheduledMessage.label}
+                        {nextScheduledMessage.scheduledFor
+                          ? ` · ${new Date(nextScheduledMessage.scheduledFor).toLocaleString(undefined, {
+                              dateStyle: 'medium',
+                              timeStyle: 'short',
+                              timeZone: tz,
+                            })}`
+                          : ''}
+                      </dd>
+                    </div>
+                  ) : null}
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1">
+                    <span className="text-[11px] text-muted-foreground">
+                      Sent <strong className="font-semibold text-foreground">{messageCounts.sent}</strong>
+                    </span>
+                    <span className="text-[11px] text-muted-foreground">
+                      Scheduled{' '}
+                      <strong className="font-semibold text-foreground">{messageCounts.scheduled}</strong>
+                    </span>
+                    {messageCounts.failed > 0 ? (
+                      <span className="text-[11px] text-destructive">
+                        Failed <strong className="font-semibold">{messageCounts.failed}</strong>
+                      </span>
+                    ) : null}
                   </div>
                   {customerResponse?.detailLine ? (
                     <div>
@@ -789,7 +837,7 @@ export function AppointmentDetailDrawer({
                                 Scheduled for {new Date(step.scheduledFor).toLocaleString()}
                               </p>
                             ) : null}
-                            <p className="text-xs text-muted-foreground">Status: {step.sendStatus}</p>
+                            <p className="text-xs text-muted-foreground">Status: {step.status}</p>
                             {step.detail ? (
                               <p className="text-xs text-destructive">{step.detail}</p>
                             ) : null}

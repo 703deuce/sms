@@ -23,8 +23,10 @@ type OverviewPayload = {
   needsAttentionRows?: Array<{
     appointmentId: string
     customerName: string
-    title: string
-    reason: string
+    title?: string
+    appointmentTitle?: string
+    reason?: string
+    issue?: string
   }>
   activity?: Array<{
     appointmentId: string
@@ -88,11 +90,14 @@ export function ArCalendarActivityPanel({
   loading,
   onSelectAppointment,
   className,
+  variant = 'full',
 }: {
   data: OverviewPayload | null
   loading?: boolean
   onSelectAppointment: (id: string, tab?: 'details' | 'reminders' | 'activity') => void
   className?: string
+  /** Right panel: fewer rows, no duplicate activity feed */
+  variant?: 'full' | 'context'
 }) {
   if (loading) {
     return (
@@ -104,13 +109,14 @@ export function ArCalendarActivityPanel({
     )
   }
 
-  const upcoming = data?.upcomingAppointments?.slice(0, 6) ?? []
-  const replies = data?.customerResponses?.slice(0, 5) ?? []
-  const attention = data?.needsAttentionRows?.slice(0, 6) ?? []
+  const isContext = variant === 'context'
+  const upcoming = data?.upcomingAppointments?.slice(0, isContext ? 4 : 6) ?? []
+  const replies = data?.customerResponses?.slice(0, isContext ? 3 : 5) ?? []
+  const attention = data?.needsAttentionRows?.slice(0, isContext ? 3 : 6) ?? []
   const activity = data?.activity?.slice(0, 5) ?? []
 
   return (
-    <div className={cn('flex flex-col gap-5 p-4', className)}>
+    <div className={cn('flex flex-col gap-4 p-4', isContext && 'gap-3.5 pt-2', className)}>
       <Section
         title="Upcoming reminders"
         action={
@@ -181,8 +187,8 @@ export function ArCalendarActivityPanel({
             {attention.map((row) => (
               <li key={row.appointmentId}>
                 <FeedRow
-                  primary={row.customerName || row.title}
-                  secondary={row.reason}
+                  primary={row.customerName || row.title || row.appointmentTitle || 'Appointment'}
+                  secondary={row.reason || row.issue || ''}
                   onClick={() => onSelectAppointment(row.appointmentId)}
                 />
               </li>
@@ -191,38 +197,42 @@ export function ArCalendarActivityPanel({
         )}
       </Section>
 
-      <Section title="Recent reminder activity">
-        {activity.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No recent reminder sends.</p>
-        ) : (
-          <ul className="space-y-1">
-            {activity.map((row, i) => (
-              <li key={`${row.appointmentId}-${row.at}-${i}`}>
-                <FeedRow
-                  primary={row.customerLabel}
-                  secondary={`${row.reminderLabel} · ${row.status}`}
-                  meta={
-                    row.channel
-                      ? `${row.channel.toUpperCase()} · ${new Date(row.at).toLocaleString(undefined, {
-                          month: 'short',
-                          day: 'numeric',
-                          hour: 'numeric',
-                          minute: '2-digit',
-                        })}`
-                      : undefined
-                  }
-                  onClick={() => onSelectAppointment(row.appointmentId, 'activity')}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
+      {!isContext ? (
+        <Section title="Recent reminder activity">
+          {activity.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No recent reminder sends.</p>
+          ) : (
+            <ul className="space-y-1">
+              {activity.map((row, i) => (
+                <li key={`${row.appointmentId}-${row.at}-${i}`}>
+                  <FeedRow
+                    primary={row.customerLabel}
+                    secondary={`${row.reminderLabel} · ${row.status}`}
+                    meta={
+                      row.channel
+                        ? `${row.channel.toUpperCase()} · ${new Date(row.at).toLocaleString(undefined, {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                          })}`
+                        : undefined
+                    }
+                    onClick={() => onSelectAppointment(row.appointmentId, 'activity')}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+      ) : null}
 
-      <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-        <Bell className="size-3.5 shrink-0" aria-hidden />
-        Operational feed — select a row to manage that appointment.
-      </p>
+      {!isContext ? (
+        <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <Bell className="size-3.5 shrink-0" aria-hidden />
+          Operational feed — select a row to manage that appointment.
+        </p>
+      ) : null}
     </div>
   )
 }

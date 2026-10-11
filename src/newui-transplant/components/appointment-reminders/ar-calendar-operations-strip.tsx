@@ -1,7 +1,7 @@
 'use client'
 
-import { useMemo } from 'react'
-import { ChevronDown, ChevronRight, ChevronUp } from 'lucide-react'
+import { useMemo, type ReactNode } from 'react'
+import { AlertTriangle, Bell, ChevronDown, ChevronRight, ChevronUp, MessageSquare } from 'lucide-react'
 import type { ArOverviewFeedShape } from '@/lib/appointment-reminders/calendar/overview-feed-appointment-row'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
 import { Pill, TextLink } from '@/newui-transplant/components/app/kit'
@@ -33,6 +33,7 @@ function statusTone(status: string): 'neutral' | 'warning' | 'danger' | 'primary
 
 function StripCard({
   title,
+  icon,
   count,
   empty,
   primary,
@@ -42,6 +43,7 @@ function StripCard({
   onClick,
 }: {
   title: string
+  icon: ReactNode
   count: number
   empty: string
   primary?: string
@@ -54,7 +56,10 @@ function StripCard({
   return (
     <div className="min-w-0 flex-1 lg:border-r lg:border-border/80 lg:pr-3 lg:last:border-r-0">
       <div className="mb-1.5 flex items-center justify-between gap-2">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
+        <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <span className="text-muted-foreground/90" aria-hidden>{icon}</span>
+          {title}
+        </p>
         {count > 0 ? (
           <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-foreground">
             {count}
@@ -130,7 +135,7 @@ export function ArCalendarOperationsStrip({ data, collapsed, onCollapsedChange, 
       aria-label="Activity and attention"
       className={cn(
         'shrink-0 rounded-xl border border-border/80 bg-card/95 shadow-sm backdrop-blur-[2px] transition-[height] duration-200',
-        collapsed ? 'h-10' : 'min-h-[6.75rem]',
+        collapsed ? 'h-11' : 'min-h-[7.5rem] max-h-[10rem]',
         className,
       )}
     >
@@ -167,9 +172,10 @@ export function ArCalendarOperationsStrip({ data, collapsed, onCollapsedChange, 
           </span>
         </div>
       ) : (
-        <div className="grid gap-3 px-3 py-2.5 md:grid-cols-3">
+        <div className="grid min-h-0 gap-3 px-3 py-2.5 md:grid-cols-3">
           <StripCard
             title="Needs attention"
+            icon={<AlertTriangle className="size-3.5" />}
             count={attention.length}
             empty="All caught up"
             primary={urgent ? urgent.customerName || urgent.title : undefined}
@@ -189,6 +195,7 @@ export function ArCalendarOperationsStrip({ data, collapsed, onCollapsedChange, 
           />
           <StripCard
             title="Customer replies"
+            icon={<MessageSquare className="size-3.5" />}
             count={replies.length}
             empty="No new replies"
             primary={latestReply?.customerName}
@@ -209,6 +216,7 @@ export function ArCalendarOperationsStrip({ data, collapsed, onCollapsedChange, 
           />
           <StripCard
             title="Reminder activity"
+            icon={<Bell className="size-3.5" />}
             count={activity.length}
             empty="No upcoming reminders"
             primary={reminderPreview?.primary}
