@@ -1,19 +1,11 @@
 import "server-only";
 
+import { isSameMicrosoftAccount } from "@/lib/calendar/microsoft-canonical-connection";
 import { updateWorkspaceCalendarConnection, getWorkspaceCalendarConnection } from "@/lib/calendar/connections";
 import type { CalendarConfig } from "@/lib/calendar/providers";
 import { getValidAccessToken } from "@/lib/calendar/providers";
 import { snapshotMicrosoftConnectionDiagnostics } from "@/lib/microsoft/connection-diagnostics";
 import { getPrisma } from "@/lib/db";
-
-function sameMicrosoftAccount(a: CalendarConfig, b: CalendarConfig): boolean {
-  const aId = a.microsoftUserId?.trim();
-  const bId = b.microsoftUserId?.trim();
-  if (aId && bId) return aId === bId;
-  const aEmail = a.email?.trim().toLowerCase();
-  const bEmail = b.email?.trim().toLowerCase();
-  return Boolean(aEmail && bEmail && aEmail === bEmail);
-}
 
 const OAUTH_TOKEN_KEYS = [
   "accessToken",
@@ -84,7 +76,7 @@ export async function healMicrosoftSplitConnectionTokens(
 
   for (const donor of siblings) {
     const donorConfig = (donor.config || {}) as CalendarConfig;
-    if (!sameMicrosoftAccount(targetConfig, donorConfig)) continue;
+    if (!isSameMicrosoftAccount(targetConfig, donorConfig)) continue;
 
     const donorToken = await getValidAccessToken(donor.id, "microsoft", donorConfig, {
       mutationSource: "manual_admin",
@@ -106,6 +98,9 @@ export async function healMicrosoftSplitConnectionTokens(
           replacedByConnectionId: targetConnectionId,
           replacedAt: new Date().toISOString(),
           replaceReason: "oauth_token_heal",
+          accessToken: null,
+          refreshToken: null,
+          expiresAt: null,
         },
       });
     }

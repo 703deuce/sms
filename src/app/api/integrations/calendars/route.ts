@@ -4,6 +4,7 @@ import {
   createWorkspaceCalendarConnection,
   listWorkspaceCalendarConnections,
 } from "@/lib/calendar/connections";
+import { resolveMicrosoftCalendarConnectionForCreate } from "@/lib/calendar/microsoft-canonical-connection";
 import { isCalendarProviderAllowedForAppointmentReminders } from "@/lib/appointment-reminders/calendar-provider-policy";
 
 export async function GET() {
@@ -39,6 +40,13 @@ export async function POST(request: Request) {
         },
         { status: 403 },
       );
+    }
+    if (provider === "microsoft") {
+      const { connection, created } = await resolveMicrosoftCalendarConnectionForCreate(
+        auth.workspaceId,
+        body,
+      );
+      return NextResponse.json({ data: connection }, { status: created ? 201 : 200 });
     }
     const row = await createWorkspaceCalendarConnection(auth.workspaceId, body);
     return NextResponse.json({ data: row }, { status: 201 });

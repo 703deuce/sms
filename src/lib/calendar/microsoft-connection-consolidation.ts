@@ -1,5 +1,6 @@
 import "server-only";
 
+import { isSameMicrosoftAccount } from "@/lib/calendar/microsoft-canonical-connection";
 import { mergeCalendarConnectionConfig } from "@/lib/calendar/connection-config-merge";
 import { updateWorkspaceCalendarConnection } from "@/lib/calendar/connections";
 import type { CalendarConfig } from "@/lib/calendar/providers";
@@ -15,11 +16,6 @@ const IMPORT_CONFIG_KEYS = [
   "microsoftDeltaLinks",
   "microsoftSubscription",
 ] as const;
-
-function normalizeEmail(email: string | undefined | null): string | null {
-  const v = email?.trim().toLowerCase();
-  return v || null;
-}
 
 function pickImportConfig(config: CalendarConfig): Partial<CalendarConfig> {
   const out: Partial<CalendarConfig> = {};
@@ -81,19 +77,12 @@ export async function consolidateMicrosoftCalendarConnectionsAfterOAuth(input: {
   }
 
   const activeConfig = (active.config || {}) as CalendarConfig;
-  const activeEmail = normalizeEmail(activeConfig.email);
   let patch: Record<string, unknown> = {};
   const mergedFromIds: string[] = [];
 
   for (const sibling of siblings) {
     const siblingConfig = (sibling.config || {}) as CalendarConfig;
-    const siblingEmail = normalizeEmail(siblingConfig.email);
-    const sameAccount =
-      (activeEmail && siblingEmail && activeEmail === siblingEmail) ||
-      (!activeEmail && !siblingEmail) ||
-      hasImportCalendars(siblingConfig);
-
-    if (!sameAccount && !hasImportCalendars(siblingConfig)) continue;
+    if (!isSameMicrosoftAccount(activeConfig, siblingConfig)) continue;
 
     const importPatch = pickImportConfig(siblingConfig);
     if (!Object.keys(importPatch).length) continue;

@@ -5,7 +5,7 @@ import {
   extractMicrosoftTenantIdFromToken,
   extractMicrosoftUserIdFromToken,
 } from "@/lib/microsoft/oauth-config";
-import { withMicrosoftTokenRefreshLock } from "@/lib/microsoft/token-refresh-lock";
+import { withMicrosoftCalendarTokenRefreshLock } from "@/lib/microsoft/token-refresh-advisory-lock";
 import type { MicrosoftTokenRefreshResult } from "@/lib/microsoft/token-errors";
 import {
   GRAPH_PREFER_OUTLOOK_UTC,
@@ -372,13 +372,14 @@ export async function getValidAccessToken(
     }
   }
 
-  return withMicrosoftTokenRefreshLock(connectionId, async () => {
+  return withMicrosoftCalendarTokenRefreshLock(connectionId, async () => {
     try {
       const row = await getPrisma().voiceCalendarConnection.findUnique({
         where: { id: connectionId },
         select: { config: true, status: true },
       });
       const freshConfig = { ...config, ...((row?.config || {}) as CalendarConfig) };
+      const refreshTokenBefore = freshConfig.refreshToken;
       const notExpired =
         !forceRefresh &&
         freshConfig.expiresAt &&
@@ -389,7 +390,29 @@ export async function getValidAccessToken(
         }
         return freshConfig.accessToken;
       }
-      return await resolveTokens(freshConfig);
+      const token = await resolveTokens(freshConfig);
+      if (token) return token;
+
+      const rowAfter = await getPrisma().voiceCalendarConnection.findUnique({
+        where: { id: connectionId },
+        select: { config: true, status: true },
+      });
+      const afterConfig = (rowAfter?.config || {}) as CalendarConfig;
+      const rotated =
+        afterConfig.refreshToken &&
+        refreshTokenBefore &&
+        afterConfig.refreshToken !== refreshTokenBefore;
+      const accessValidAfter =
+        afterConfig.accessToken &&
+        afterConfig.expiresAt &&
+        afterConfig.expiresAt > Date.now() + TOKEN_EXPIRY_BUFFER_MS;
+      if (rotated || accessValidAfter) {
+        if (!readOnly && rowAfter?.status === "needs_reauth" && accessValidAfter) {
+          await markCalendarConnectionConnected(connectionId);
+        }
+        return accessValidAfter ? afterConfig.accessToken ?? null : await resolveTokens(afterConfig);
+      }
+      return null;
     } catch (err) {
       console.warn("[calendar] microsoft token refresh failed", connectionId, err);
       await persistTokenRefreshDiagnostics(connectionId, config, {

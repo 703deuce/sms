@@ -201,26 +201,34 @@ export async function completeMicrosoftOAuth(code: string, state: string) {
   });
 
   try {
-    const { consolidateMicrosoftCalendarConnectionsAfterOAuth } = await import(
-      "@/lib/calendar/microsoft-connection-consolidation"
+    const { canonicalizeMicrosoftConnectionAfterOAuth } = await import(
+      "@/lib/calendar/microsoft-canonical-connection"
     );
-    const calendarMerge = await consolidateMicrosoftCalendarConnectionsAfterOAuth({
+    const canonical = await canonicalizeMicrosoftConnectionAfterOAuth({
       workspaceId: parsed.workspaceId,
       activeConnectionId: parsed.connectionId,
+      identity: {
+        microsoftUserId: profile.microsoftUserId,
+        tenantId: profile.tenantId,
+        email: profile.email,
+      },
+      oauthConfig: config,
     });
-    if (calendarMerge.consolidated) {
+    if (canonical.redirectedFromId || canonical.disconnectedIds.length) {
       console.info(
-        "[calendar] microsoft_oauth_import_config_merged",
+        "[calendar] microsoft_oauth_canonicalized",
         JSON.stringify({
           workspaceId: parsed.workspaceId,
-          activeConnectionId: calendarMerge.activeConnectionId,
-          mergedFromIds: calendarMerge.mergedFromIds,
+          canonicalConnectionId: canonical.canonicalConnectionId,
+          redirectedFromId: canonical.redirectedFromId,
+          disconnectedIds: canonical.disconnectedIds,
         }),
       );
+      parsed.connectionId = canonical.canonicalConnectionId;
     }
   } catch (err) {
     console.warn(
-      "[calendar] microsoft_oauth_import_config_merge_failed",
+      "[calendar] microsoft_oauth_canonicalize_failed",
       err instanceof Error ? err.message : err,
     );
   }

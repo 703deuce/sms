@@ -37,3 +37,20 @@ Forensics script: `scripts/ar-microsoft-oauth-forensics.ts`
 ## Remaining uncertainty
 
 We did not prove why the **old** refresh token died (revocation vs. superseded by a second OAuth without merging). Preventing duplicate rows + heal path addresses recurrence.
+
+## Pre-consolidation verification (2026-10-11 follow-up)
+
+### 1. Connection uniqueness
+
+- `resolveMicrosoftCalendarConnectionForCreate` — POST `/api/integrations/calendars` and legacy `/api/voice/calendars` reuse an active Microsoft row instead of creating another (Postgres advisory lock per workspace on create).
+- `canonicalizeMicrosoftConnectionAfterOAuth` — after OAuth callback, tokens + import config are consolidated onto the **canonical** row (prefers import-enabled row; same `microsoftUserId` / tenant+email only).
+- Reconnect UI still passes explicit `connectionId`; OAuth state targets that row, then canonicalize may redirect tokens to the import row.
+
+### 2. Cross-process token refresh
+
+- `withMicrosoftCalendarTokenRefreshLock` — in-process coalescing **plus** `pg_advisory_lock` per `connectionId` when Postgres supports it (Coolify production uses Postgres).
+- After a failed refresh, `getValidAccessToken` re-reads the row once; if another instance rotated the refresh token or left a valid access token, it uses that instead of forcing reconnect.
+
+### 3. Recovered appointment → reminder dispatch
+
+Imported appointment `cmv40nah2382u6l42683a5y03` (created during recovery sync) has **no** `ar_reminder_dispatch` rows because import metadata set `reminderSmsEligible: false` and `remindersSuppressed: true` with `reminderSmsIneligibleReason: "organizer_not_connection"`. Calendar OAuth recovery is working; this appointment is excluded from SMS reminder discovery by existing eligibility rules (separate from OAuth).
