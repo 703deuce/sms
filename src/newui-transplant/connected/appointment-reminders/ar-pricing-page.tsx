@@ -11,7 +11,8 @@ import {
   appointmentRemindersSignupPath,
 } from '@/lib/appointment-reminders/commercial/product-open'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
-import { Page, PageHeader, Panel } from '@/newui-transplant/components/app/kit'
+import { ArOpusPage } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
+import { PageHeader, Panel } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { formatCurrency } from '@/lib/utils'
 
@@ -37,7 +38,7 @@ export function AppointmentRemindersPricingPage() {
   }
 
   return (
-    <Page className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+    <ArOpusPage className="max-w-5xl">
       <PageHeader
         title="Appointment Reminders"
         description="Automated SMS and email reminders with Microsoft calendar sync. Pick a monthly plan — no overage charges."
@@ -70,6 +71,6 @@ export function AppointmentRemindersPricingPage() {
           Sign in
         </Link>
       </p>
-    </Page>
+    </ArOpusPage>
   )
 }

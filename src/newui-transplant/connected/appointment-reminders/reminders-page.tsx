@@ -10,6 +10,7 @@ import type {
 } from '@/lib/appointment-reminders/reminders-page-types'
 import { AR_ROUTES, AR_SETTINGS_INTEGRATIONS } from '@/lib/appointment-reminders/routes'
 import {
+  ArOpusPage,
   ArStatGrid,
   OpusDataSurface,
   OpusSearchField,
@@ -17,7 +18,7 @@ import {
 } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
 import { ReminderStatusPill } from '@/newui-transplant/components/appointment-reminders/reminder-status-pill'
 import type { AggregateReminderStatus } from '@/lib/appointment-reminders/aggregate-reminder-status'
-import { EmptyState, Initials, Page, PageHeader, Stat } from '@/newui-transplant/components/app/kit'
+import { EmptyState, Initials, PageHeader, Stat } from '@/newui-transplant/components/app/kit'
 import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
 import { OPUS_TABLE_HEAD } from '@/newui-transplant/components/app/opus-surfaces'
 import { th, td } from '@/newui-transplant/components/app/opus-tables'
@@ -126,7 +127,7 @@ export function AppointmentRemindersLogPage() {
   const pageCount = Math.max(1, Math.ceil(total / pageSize))
 
   return (
-    <Page className="max-w-[1440px]">
+    <ArOpusPage>
       <PageHeader
         title="Reminders"
         description="Scheduled SMS, confirmed sends, recorded internal events, failures, and blocked delivery — one operational log."
@@ -327,6 +328,6 @@ export function AppointmentRemindersLogPage() {
           ) : null}
         </SheetContent>
       </Sheet>
-    </Page>
+    </ArOpusPage>
   )
 }

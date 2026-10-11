@@ -19,12 +19,13 @@ import { AppointmentDetailDrawer } from '@/newui-transplant/components/appointme
 import { ReminderStatusPill } from '@/newui-transplant/components/appointment-reminders/reminder-status-pill'
 import { CustomerResponsePill } from '@/newui-transplant/components/appointment-reminders/customer-response-pill'
 import {
+  ArOpusPage,
   ArStatGrid,
   OpusDataSurface,
   OpusSearchField,
   OpusTableSkeleton,
 } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
-import { EmptyState, Initials, Page, PageHeader, Stat } from '@/newui-transplant/components/app/kit'
+import { EmptyState, Initials, PageHeader, Stat } from '@/newui-transplant/components/app/kit'
 import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
 import { OPUS_META_STRIP, OPUS_TABLE_HEAD } from '@/newui-transplant/components/app/opus-surfaces'
 import { th, td } from '@/newui-transplant/components/app/opus-tables'
@@ -299,7 +300,7 @@ export function AppointmentRemindersAppointmentsPage() {
             : null
 
   return (
-    <Page className="max-w-[1440px]">
+    <ArOpusPage>
       <PageHeader
         title="Appointments"
         description="Imported calendar events with reminder readiness, phone quality, and sync status."
@@ -612,7 +613,7 @@ export function AppointmentRemindersAppointmentsPage() {
           </div>
         </SheetContent>
       </Sheet>
-    </Page>
+    </ArOpusPage>
   )
 }
 

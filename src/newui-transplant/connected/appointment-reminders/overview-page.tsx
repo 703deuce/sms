@@ -18,14 +18,17 @@ import type {
 } from '@/lib/appointment-reminders/ar-sms-customer-outcome'
 import { AR_ROUTES, AR_SETTINGS_INTEGRATIONS } from '@/lib/appointment-reminders/routes'
 import { ArUpcomingAppointmentsPanel } from '@/newui-transplant/components/appointment-reminders/ar-upcoming-appointments-panel'
-import { ArStatGrid } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
+import {
+  ArOpusPage,
+  ArStatGrid,
+} from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
+import { CustomerResponsePill } from '@/newui-transplant/components/appointment-reminders/customer-response-pill'
 import {
   Callout,
   EmptyState,
   FeatureEmphasisStrip,
   Initials,
   KeyValueRow,
-  Page,
   PageHeader,
   Panel,
   Pill,
@@ -191,7 +194,7 @@ export function AppointmentRemindersOverviewPage() {
     operational === 'active' ? 'success' : operational === 'setup_incomplete' ? 'neutral' : 'warning'
 
   return (
-    <Page className="max-w-[1440px]">
+    <ArOpusPage>
       <PageHeader
         title="Appointment Reminders"
         meta={<Pill tone={activeTone}>{activeLabel}</Pill>}
@@ -526,6 +529,6 @@ export function AppointmentRemindersOverviewPage() {
           </Panel>
         </div>
       </div>
-    </Page>
+    </ArOpusPage>
   )
 }

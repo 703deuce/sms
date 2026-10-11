@@ -334,6 +334,9 @@ export function AppointmentRemindersSettingsOpus({ activeTab = 'sequence' }: { a
   if (failed || !model || !config) {
     return (
       <Callout tone="danger" icon={AlertTriangle} title="Could not load reminder settings">
+        {loadErrorDetail ? (
+          <p className="mt-1 text-sm text-muted-foreground">{loadErrorDetail}</p>
+        ) : null}
         <Button type="button" variant="secondary" size="sm" className="mt-2" onClick={load}>
           Try again
         </Button>

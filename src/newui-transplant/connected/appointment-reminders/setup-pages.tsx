@@ -8,7 +8,6 @@ import {
   Callout,
   ConfigSection,
   FeatureEmphasisStrip,
-  Page,
   PageHeader,
   Panel,
   Pill,
@@ -16,6 +15,7 @@ import {
 } from '@/newui-transplant/components/app/kit'
 import { CalendarIntegrationsOpus } from '@/newui-transplant/connected/integrations/calendar-integrations-opus'
 import { ArSetupConfigurePanel } from '@/newui-transplant/connected/appointment-reminders/ar-setup-configure-panel'
+import { ArOpusPage } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
 import { Button } from '@/newui-transplant/components/ui/button'
 
 type SetupReadiness = {
@@ -60,7 +60,7 @@ export function AppointmentRemindersSetupConnectPage() {
   const canContinue = status?.readiness?.hasImportCalendars && status?.readiness?.calendarConnected
 
   return (
-    <Page className="max-w-3xl">
+    <ArOpusPage className="max-w-3xl">
       <PageHeader
         title="Connect your calendar"
         meta={<Pill tone="primary">Step 1</Pill>}
@@ -99,7 +99,7 @@ export function AppointmentRemindersSetupConnectPage() {
           </Button>
         )}
       </div>
-    </Page>
+    </ArOpusPage>
   )
 }
 
@@ -107,7 +107,7 @@ export function AppointmentRemindersSetupConfigurePage() {
   const [saved, setSaved] = useState(false)
 
   return (
-    <Page className="max-w-[1200px]">
+    <ArOpusPage>
       <PageHeader
         title="Configure reminders"
         meta={<Pill tone="primary">Step 2</Pill>}
@@ -127,7 +127,7 @@ export function AppointmentRemindersSetupConfigurePage() {
           Continue to activation
         </Button>
       </div>
-    </Page>
+    </ArOpusPage>
   )
 }
 
@@ -168,7 +168,7 @@ export function AppointmentRemindersSetupActivatePage() {
   const readiness = status?.readiness
 
   return (
-    <Page className="max-w-3xl">
+    <ArOpusPage className="max-w-3xl">
       <PageHeader
         title="Configure and activate"
         meta={<Pill tone="primary">Step 3</Pill>}
@@ -270,6 +270,6 @@ export function AppointmentRemindersSetupActivatePage() {
           )}
         </Panel>
       </ConfigSection>
-    </Page>
+    </ArOpusPage>
   )
 }

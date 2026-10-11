@@ -7,7 +7,8 @@ import { Loader2, MessageSquare } from 'lucide-react'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
 import { CustomerResponsePill } from '@/newui-transplant/components/appointment-reminders/customer-response-pill'
 import type { ArCustomerResponseKind } from '@/lib/appointment-reminders/ar-sms-customer-outcome'
-import { EmptyState, Page, PageHeader, Panel } from '@/newui-transplant/components/app/kit'
+import { ArOpusPage } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
+import { EmptyState, PageHeader, Panel } from '@/newui-transplant/components/app/kit'
 import { OPUS_TABLE_HEAD } from '@/newui-transplant/components/app/opus-surfaces'
 import { th, td } from '@/newui-transplant/components/app/opus-tables'
 import { Button } from '@/newui-transplant/components/ui/button'
@@ -101,7 +102,7 @@ export function ArResponsesOpusPage() {
   }
 
   return (
-    <Page className="max-w-[1200px]">
+    <ArOpusPage>
       <PageHeader
         title="Responses"
         description="Customer confirmations, cancellation and reschedule requests, and messages that need staff review — in one place."
@@ -236,6 +237,6 @@ export function ArResponsesOpusPage() {
           </div>
         )}
       </Panel>
-    </Page>
+    </ArOpusPage>
   )
 }

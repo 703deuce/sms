@@ -24,8 +24,8 @@ import {
 } from '@/lib/appointment-reminders/calendar/ar-calendar-viewer-ready'
 import { ArCalendarEventSheet } from '@/newui-transplant/components/appointment-reminders/ar-calendar-event-sheet'
 import { ArCalendarOpusView } from '@/newui-transplant/components/appointment-reminders/ar-calendar-opus-view'
-import { OpusDataSurface } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
-import { Callout, EmptyState, Page, PageHeader, Pill } from '@/newui-transplant/components/app/kit'
+import { ArOpusPage, OpusDataSurface } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
+import { Callout, EmptyState, PageHeader, Pill } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { AR_ROUTES, AR_SETTINGS_INTEGRATIONS } from '@/lib/appointment-reminders/routes'
 
@@ -243,7 +243,7 @@ export function AppointmentRemindersCalendarPage() {
   }
 
   return (
-    <Page className="max-w-[1600px]">
+    <ArOpusPage wide>
       <PageHeader
         title="Calendar"
         meta={<Pill tone="neutral">Read-only</Pill>}
@@ -403,6 +403,6 @@ export function AppointmentRemindersCalendarPage() {
         onClose={() => setSheetOpen(false)}
         timezone={timezone}
       />
-    </Page>
+    </ArOpusPage>
   )
 }

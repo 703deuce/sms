@@ -2,7 +2,8 @@
 
 import { Suspense, useCallback } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { Page, PageHeader } from '@/newui-transplant/components/app/kit'
+import { PageHeader } from '@/newui-transplant/components/app/kit'
+import { ArOpusPage } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
 import {
   AppointmentRemindersSettingsOpus,
   type ArSettingsTab,
@@ -37,7 +38,7 @@ function SettingsPageInner() {
   )
 
   return (
-    <Page className="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8">
+    <ArOpusPage>
       <PageHeader
         title="Settings"
         description="Reminder sequence, templates, scheduling rules, business profile, and integrations."
@@ -63,7 +64,7 @@ function SettingsPageInner() {
         ))}
       </nav>
       <AppointmentRemindersSettingsOpus activeTab={activeTab} />
-    </Page>
+    </ArOpusPage>
   )
 }
 

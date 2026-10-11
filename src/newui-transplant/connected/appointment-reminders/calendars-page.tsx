@@ -2,12 +2,13 @@
 
 import { Link2 } from 'lucide-react'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
-import { FeatureEmphasisStrip, Page, PageHeader, Pill } from '@/newui-transplant/components/app/kit'
+import { FeatureEmphasisStrip, PageHeader, Pill } from '@/newui-transplant/components/app/kit'
+import { ArOpusPage } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
 import { CalendarIntegrationsOpus } from '@/newui-transplant/connected/integrations/calendar-integrations-opus'
 
 export function AppointmentRemindersCalendarsPage() {
   return (
-    <Page className="max-w-[1440px]">
+    <ArOpusPage>
       <PageHeader
         title="Calendars"
         meta={<Pill tone="info">Import for SMS</Pill>}
@@ -28,6 +29,6 @@ export function AppointmentRemindersCalendarsPage() {
       </div>
 
       <CalendarIntegrationsOpus returnPath={AR_ROUTES.calendars} variant="appointment_reminders" />
-    </Page>
+    </ArOpusPage>
   )
 }

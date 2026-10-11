@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Loader2 } from 'lucide-react'
-import { ArStatGrid } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
-import { Callout, Panel, Stat } from '@/newui-transplant/components/app/kit'
+import { ArOpusPage, ArStatGrid } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
+import { Callout, PageHeader, Panel, Stat } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Input } from '@/newui-transplant/components/ui/input'
 import { OPUS_TABLE_HEAD, OPUS_META_STRIP } from '@/newui-transplant/components/app/opus-surfaces'
@@ -82,25 +82,36 @@ export function AppointmentRemindersAnalyticsPage() {
 
   if (loading && !data) {
     return (
-      <p className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-        Loading analytics…
-      </p>
+      <ArOpusPage>
+        <PageHeader title="Analytics" description="Reminder delivery and appointment outcomes for the selected date range." />
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+          Loading analytics…
+        </p>
+      </ArOpusPage>
     )
   }
 
   if (failed || !data) {
     return (
-      <Callout tone="danger" icon={AlertTriangle} title="Could not load analytics">
-        <Button type="button" variant="secondary" size="sm" className="mt-2" onClick={load}>
-          Try again
-        </Button>
-      </Callout>
+      <ArOpusPage>
+        <PageHeader title="Analytics" description="Reminder delivery and appointment outcomes for the selected date range." />
+        <Callout tone="danger" icon={AlertTriangle} title="Could not load analytics">
+          <Button type="button" variant="secondary" size="sm" className="mt-2" onClick={load}>
+            Try again
+          </Button>
+        </Callout>
+      </ArOpusPage>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <ArOpusPage>
+      <div className="space-y-6">
+      <PageHeader
+        title="Analytics"
+        description="Reminder delivery and appointment outcomes for the selected date range."
+      />
       <div className="flex flex-wrap items-end gap-3">
         <label className="text-sm">
           <span className="mb-1 block font-medium">From</span>
@@ -201,6 +212,7 @@ export function AppointmentRemindersAnalyticsPage() {
           </div>
         </div>
       </Panel>
-    </div>
+      </div>
+    </ArOpusPage>
   )
 }

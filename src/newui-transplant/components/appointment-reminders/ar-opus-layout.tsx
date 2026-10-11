@@ -1,8 +1,29 @@
 'use client'
 
 import { Search } from 'lucide-react'
+import { Page } from '@/newui-transplant/components/app/kit'
 import { OPUS_CARD, OPUS_SEARCH_INPUT } from '@/newui-transplant/components/app/opus-surfaces'
 import { cn } from '@/lib/utils'
+
+/** Default horizontal rhythm for Appointment Reminders Opus pages (padding from `Page`). */
+export const AR_OPUS_PAGE_CLASS = 'max-w-[1440px]'
+
+/** Calendar / meetings grids that need extra width. */
+export const AR_OPUS_PAGE_WIDE_CLASS = 'max-w-[1600px]'
+
+export function ArOpusPage({
+  children,
+  wide,
+  className,
+}: {
+  children: React.ReactNode
+  wide?: boolean
+  className?: string
+}) {
+  return (
+    <Page className={cn(wide ? AR_OPUS_PAGE_WIDE_CLASS : AR_OPUS_PAGE_CLASS, className)}>{children}</Page>
+  )
+}
 
 /** New UI 2 data table shell — toolbar + table + optional footer in one card. */
 export function OpusDataSurface({

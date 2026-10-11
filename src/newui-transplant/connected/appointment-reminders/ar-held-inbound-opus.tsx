@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
-import { Panel } from '@/newui-transplant/components/app/kit'
+import { ArOpusPage } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
+import { PageHeader, Panel } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
 import Link from 'next/link'
@@ -72,20 +73,17 @@ export function ArHeldInboundOpusPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 pb-16">
-      <header className="space-y-2 border-b border-border/60 pb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Held SMS replies</h1>
-        <p className="text-sm text-muted-foreground max-w-2xl">
-          Inbound texts on shared platform numbers that could not be routed automatically. Review and
-          dismiss, or route to Appointment Reminders only when the reply session and appointment are
-          known. Messages are never auto-routed to Missed Call Text Back.
-        </p>
-        <p className="text-sm">
-          <Link href={AR_ROUTES.appointments} className="text-primary underline-offset-4 hover:underline">
+    <ArOpusPage>
+      <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Held SMS replies"
+        description="Inbound texts on shared platform numbers that could not be routed automatically. Review and dismiss, or route to Appointment Reminders only when the reply session and appointment are known. Messages are never auto-routed to Missed Call Text Back."
+        actions={
+          <Button variant="outline" nativeButton={false} render={<Link href={AR_ROUTES.appointments} />}>
             Open appointments
-          </Link>
-        </p>
-      </header>
+          </Button>
+        }
+      />
 
       {error ? (
         <p className="text-sm text-destructive" role="alert">{error}</p>
@@ -147,6 +145,7 @@ export function ArHeldInboundOpusPage() {
           })}
         </ul>
       )}
-    </div>
+      </div>
+    </ArOpusPage>
   )
 }

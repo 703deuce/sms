@@ -10,8 +10,8 @@ import type {
   ArSmsLateActionMode,
   ArSmsPenaltyType,
 } from '@/lib/appointment-reminders/ai-rescheduler/ar-sms-action-policy'
-import { OpusDataSurface } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
-import { Panel, Pill } from '@/newui-transplant/components/app/kit'
+import { ArOpusPage, OpusDataSurface } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
+import { PageHeader, Panel, Pill } from '@/newui-transplant/components/app/kit'
 import { OPUS_CARD } from '@/newui-transplant/components/app/opus-surfaces'
 import { cn } from '@/lib/utils'
 import { Button } from '@/newui-transplant/components/ui/button'
@@ -335,15 +335,21 @@ export function ArAiReschedulerOpusPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center text-muted-foreground">
-        <Loader2 className="mr-2 h-5 w-5 animate-spin" aria-hidden />
-        Loading…
-      </div>
+      <ArOpusPage>
+        <div className="flex min-h-[40vh] items-center justify-center text-muted-foreground">
+          <Loader2 className="mr-2 h-5 w-5 animate-spin" aria-hidden />
+          Loading…
+        </div>
+      </ArOpusPage>
     )
   }
 
   if (!config) {
-    return <p className="text-destructive">{error || 'Settings unavailable.'}</p>
+    return (
+      <ArOpusPage>
+        <p className="text-destructive" role="alert">{error || 'Settings unavailable.'}</p>
+      </ArOpusPage>
+    )
   }
 
   const aiOn = config.mode === 'ai'
@@ -384,18 +390,18 @@ export function ArAiReschedulerOpusPage() {
   ]
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 pb-16">
-      <header className="space-y-2 border-b border-border/60 pb-6">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight">AI Rescheduler</h1>
-          <Pill tone={modePill.tone}>{modePill.label}</Pill>
-        </div>
-        <p className="text-sm text-muted-foreground max-w-2xl">
-          Choose how Transovo handles appointment changes when customers reply to reminders or use email action
-          links. Reminders-only keeps outbound messages without change handling; notify and AI modes build on
-          your existing calendar connection.
-        </p>
-      </header>
+    <ArOpusPage>
+      <div className="flex flex-col gap-6">
+      <PageHeader
+        title="AI Rescheduler"
+        meta={<Pill tone={modePill.tone}>{modePill.label}</Pill>}
+        description="Choose how Transovo handles appointment changes when customers reply to reminders or use email action links. Reminders-only keeps outbound messages without change handling; notify and AI modes build on your existing calendar connection."
+        actions={
+          <Button onClick={() => void save()} disabled={saving || saved}>
+            {saving ? 'Saving…' : saved ? 'Saved' : 'Save changes'}
+          </Button>
+        }
+      />
 
       {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
 
@@ -693,12 +699,10 @@ export function ArAiReschedulerOpusPage() {
         <p className="text-xs">Live times are provider-verified; preview is illustrative only.</p>
       </Panel>
 
-      <div className="flex items-center gap-3 border-t border-border/60 pt-6">
-        <Button onClick={() => void save()} disabled={saving || saved}>
-          {saving ? 'Saving…' : saved ? 'Saved' : 'Save changes'}
-        </Button>
-        {!saved ? <span className="text-sm text-muted-foreground">Unsaved changes</span> : null}
+      {!saved ? (
+        <p className="text-sm text-muted-foreground" role="status">You have unsaved changes.</p>
+      ) : null}
       </div>
-    </div>
+    </ArOpusPage>
   )
 }
