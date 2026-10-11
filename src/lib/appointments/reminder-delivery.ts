@@ -271,13 +271,19 @@ async function buildReminderSmsBodyForOutbound(input: {
     smsBody = stripHttpUrlsFromSmsBody(smsBody);
   }
 
-  const {
-    isAiReschedulerSmsEnabled,
-    arReplyInstructionsSuffixForAppointment,
-    resolveAiReschedulerConfig,
-  } = await import("@/lib/appointment-reminders/ai-rescheduler/types");
-  const arConfig = resolveAiReschedulerConfig(platform);
-  if (isAiReschedulerSmsEnabled(arConfig)) {
+  const { workspaceAllowsSmsCustomerResponses } = await import(
+    "@/lib/appointment-reminders/commercial/ar-feature-gates"
+  );
+  const smsResponsesAllowed = await workspaceAllowsSmsCustomerResponses(input.workspaceId);
+
+  const { isAiReschedulerSmsEnabled, arReplyInstructionsSuffixForAppointment } = await import(
+    "@/lib/appointment-reminders/ai-rescheduler/types"
+  );
+  const { resolveArAiReschedulerConfigForWorkspace } = await import(
+    "@/lib/appointment-reminders/commercial/ar-ai-rescheduler-plan"
+  );
+  const arConfig = await resolveArAiReschedulerConfigForWorkspace(input.workspaceId);
+  if (smsResponsesAllowed && isAiReschedulerSmsEnabled(arConfig)) {
     if (!/reply\s+c\s+to\s+confirm/i.test(smsBody)) {
       const suffix = arReplyInstructionsSuffixForAppointment({
         config: arConfig,
@@ -285,6 +291,13 @@ async function buildReminderSmsBodyForOutbound(input: {
       });
       smsBody = `${smsBody.trim()}${suffix}`;
     }
+  }
+
+  if (!smsResponsesAllowed) {
+    const { stripEmbeddedSmsReplyInstructions } = await import(
+      "@/lib/appointment-reminders/sms-reply-instructions"
+    );
+    smsBody = stripEmbeddedSmsReplyInstructions(smsBody);
   }
   return smsBody;
 }
