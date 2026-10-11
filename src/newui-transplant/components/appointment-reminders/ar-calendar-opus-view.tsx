@@ -181,12 +181,14 @@ function TimeGridView({
   events,
   timeZone,
   onSelect,
+  fillViewport,
 }: {
   cursor: Date
   view: 'day' | 'week'
   events: CalendarApiAppointment[]
   timeZone: string
   onSelect: (id: string) => void
+  fillViewport?: boolean
 }) {
   const hours = hourLabels()
   const totalHeight = (AR_CALENDAR_DAY_END_HOUR - AR_CALENDAR_DAY_START_HOUR) * AR_CALENDAR_HOUR_PX
@@ -206,12 +208,12 @@ function TimeGridView({
   const eventsForDay = (dayKey: string) =>
     events.filter((ev) => dayKeyInTimeZone(ev.startsAt, timeZone) === dayKey)
 
-  return (
-    <div className="overflow-x-auto rounded-lg border bg-background">
+  const grid = (
       <div
         className="grid min-w-[640px]"
         style={{
           gridTemplateColumns: `4.5rem repeat(${days.length}, minmax(0, 1fr))`,
+          minHeight: totalHeight,
         }}
       >
         <div className="border-b bg-muted/40" />
@@ -285,8 +287,19 @@ function TimeGridView({
           </div>
         ))}
       </div>
-    </div>
   )
+
+  if (fillViewport) {
+    return (
+      <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border bg-background">
+        <div className="min-h-0 flex-1 overflow-auto overscroll-contain">
+          {grid}
+        </div>
+      </div>
+    )
+  }
+
+  return <div className="overflow-x-auto rounded-lg border bg-background">{grid}</div>
 }
 
 function AgendaView({
@@ -429,10 +442,11 @@ export function ArCalendarOpusView({
       <div
         className={cn(
           'p-3 md:p-4',
-          fillHeight ? 'min-h-0 flex-1 overflow-y-auto' : '',
+          fillHeight ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : '',
         )}
       >
         {view === 'month' ? (
+          <div className={fillHeight ? 'min-h-0 flex-1 overflow-y-auto overscroll-contain' : undefined}>
           <MonthView
             cursor={cursor}
             events={events}
@@ -440,18 +454,24 @@ export function ArCalendarOpusView({
             onSelect={onSelectEvent}
             onSelectDay={onSelectDay}
           />
+          </div>
         ) : null}
         {view === 'week' || view === 'day' ? (
+          <div className={fillHeight ? 'flex min-h-0 flex-1 flex-col' : undefined}>
           <TimeGridView
             cursor={view === 'week' ? startOfWeek(cursor) : cursor}
             view={view}
             events={events}
             timeZone={timeZone}
             onSelect={onSelectEvent}
+            fillViewport={fillHeight}
           />
+          </div>
         ) : null}
         {view === 'agenda' ? (
+          <div className={fillHeight ? 'min-h-0 flex-1 overflow-y-auto overscroll-contain' : undefined}>
           <AgendaView cursor={cursor} events={events} timeZone={timeZone} onSelect={onSelectEvent} />
+          </div>
         ) : null}
       </div>
     </OpusDataSurface>

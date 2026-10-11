@@ -303,7 +303,10 @@ export function AppointmentRemindersCalendarWorkspacePage() {
   }, [loadEvents, loadOverview])
 
   return (
-    <ArOpusPage wide className="flex min-h-0 flex-col px-5 py-4 md:px-6">
+    <ArOpusPage
+      wide
+      className="flex min-h-0 flex-col px-5 py-4 md:px-6 lg:h-[calc(100dvh-4.5rem)] lg:max-h-[calc(100dvh-4.5rem)]"
+    >
       <header className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-[22px] font-semibold tracking-tight md:text-2xl">Calendar</h1>
@@ -351,10 +354,10 @@ export function AppointmentRemindersCalendarWorkspacePage() {
       ) : (
         <div
           className={cn(
-            'flex min-h-0 flex-1 flex-col gap-3 lg:grid lg:min-h-[calc(100vh-11rem)] lg:grid-cols-[minmax(0,1fr)_minmax(300px,360px)] lg:gap-4',
+            'flex min-h-0 flex-1 flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(300px,360px)] lg:gap-4 lg:overflow-hidden',
           )}
         >
-          <div className="flex min-h-[min(70vh,720px)] min-w-0 flex-col lg:min-h-0">
+          <div className="flex min-h-[min(60vh,640px)] min-w-0 flex-1 flex-col lg:min-h-0">
             {loading && !events.length ? (
               <div className="min-h-[400px] flex-1 animate-pulse rounded-xl bg-muted/30" />
             ) : (
@@ -391,7 +394,7 @@ export function AppointmentRemindersCalendarWorkspacePage() {
           </div>
 
           <aside
-            className="hidden min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card lg:flex"
+            className="hidden h-full min-h-0 max-h-full flex-col overflow-hidden rounded-xl border border-border bg-card lg:flex"
             aria-label="Appointment context"
           >
             {selectedRow ? (
