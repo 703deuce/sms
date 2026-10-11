@@ -12,6 +12,7 @@ import {
   STEP_TO_MESSAGE_TYPE,
   type TemplateMessageType,
 } from "@/lib/appointment-reminders/template-library/types";
+import { stripEmbeddedSmsReplyInstructions } from "@/lib/appointment-reminders/sms-reply-instructions";
 
 /** Merge tags allowed for platform-sender Appointment Reminders (calendar-import product). */
 export const PLATFORM_AR_ALLOWED_MERGE_TAGS = [
@@ -68,7 +69,9 @@ function lockStepTemplate(step: ReminderStepConfig, stepKey: string): ReminderSt
     (step.template?.trim() ? step.template : defaultTemplateForKey(stepKey));
   return {
     ...step,
-    template: isSms ? stripDisallowedMergeTags(base) : step.template,
+    template: isSms
+      ? stripEmbeddedSmsReplyInstructions(stripDisallowedMergeTags(base))
+      : step.template,
     emailSubject: step.emailSubject
       ? stripDisallowedMergeTags(step.emailSubject)
       : step.emailSubject,

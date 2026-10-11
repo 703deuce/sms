@@ -33,16 +33,6 @@ export async function handleAppointmentRemindersInboundBody(input: {
   );
   const smsResponsesAllowed = await workspaceAllowsSmsCustomerResponses(input.workspaceId);
   if (!smsResponsesAllowed) {
-    const upper = body.toUpperCase();
-    const looksLikeReply =
-      upper === "C" || upper === "R" || upper === "X" || /^(yes|y)$/i.test(body);
-    if (looksLikeReply) {
-      return {
-        handled: true,
-        replyText:
-          "SMS replies aren't included on the Free plan. Upgrade to Starter in Appointment Reminders settings to confirm, reschedule, or cancel by text.",
-      };
-    }
     return { handled: false };
   }
 
@@ -50,6 +40,7 @@ export async function handleAppointmentRemindersInboundBody(input: {
     "@/lib/appointment-reminders/commercial/ar-ai-rescheduler-plan"
   );
   const ar = await resolveArAiReschedulerConfigForWorkspace(input.workspaceId);
+
   if (isAiReschedulerSmsEnabled(ar)) {
     const apptRow = await getPrisma().voiceAppointment.findFirst({
       where: { id: input.appointmentId, workspaceId: input.workspaceId },
@@ -200,6 +191,32 @@ export async function handleAppointmentRemindersInboundBody(input: {
       bodyLength,
     });
     return { handled: true, replyText: followUp.replyText };
+  }
+
+  if (ar.mode === "notify") {
+    const { tryRecordNotifyModeFreeTextReply } = await import(
+      "./handle-notify-customer-message"
+    );
+    await tryRecordNotifyModeFreeTextReply({
+      workspaceId: input.workspaceId,
+      appointmentId: input.appointmentId,
+      replySessionId: input.replySessionId,
+      body,
+      providerMessageId: input.providerMessageId,
+    });
+    logArSmsPipeline({
+      step: "inbound_handler_branch",
+      workspaceId: input.workspaceId,
+      replySessionId: input.replySessionId,
+      appointmentId: input.appointmentId,
+      conversationId: input.conversationId,
+      providerMessageId: input.providerMessageId,
+      handler: "notify_free_text",
+      branch: "recorded",
+      inboundKind,
+      bodyLength,
+    });
+    return { handled: false };
   }
 
   logArSmsPipeline({

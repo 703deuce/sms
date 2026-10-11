@@ -80,7 +80,7 @@ Need to make a change? {reschedule_link}
 ### Day Before — SMS
 
 ```text
-Hi {first_name}, {business_name} here. Your appointment is tomorrow at {appointment_time}. Please arrive a few minutes early. Reply C to confirm or R to request a new time. STOP to opt out.
+Hi {first_name}, {business_name} here. Your appointment is tomorrow at {appointment_time}. Please arrive a few minutes early.. STOP to opt out.
 ```
 
 ### Day Before — EMAIL
@@ -122,7 +122,7 @@ Directions: {directions_link}
 ### Confirmation Request — SMS
 
 ```text
-Hi {first_name}, please confirm your appointment with {business_name} on {appointment_date} at {appointment_time}. Reply C to confirm, R to reschedule, or X to request cancellation. STOP to opt out.
+Hi {first_name}, please confirm your appointment with {business_name} on {appointment_date} at {appointment_time}.. STOP to opt out.
 ```
 
 ### Confirmation Request — EMAIL
@@ -271,7 +271,7 @@ Need to make a change? {reschedule_link}
 ### Day Before — SMS
 
 ```text
-Hi {first_name}, {business_name} here. Your dental appointment is tomorrow at {appointment_time}. Please bring your insurance card and arrive 10 minutes early. Reply C to confirm or R to request a new time. STOP to opt out.
+Hi {first_name}, {business_name} here. Your dental appointment is tomorrow at {appointment_time}. Please bring your insurance card and arrive 10 minutes early.. STOP to opt out.
 ```
 
 ### Day Before — EMAIL
@@ -313,7 +313,7 @@ Directions: {directions_link}
 ### Confirmation Request — SMS
 
 ```text
-Hi {first_name}, please confirm your dental visit with {business_name} on {appointment_date} at {appointment_time}. Reply C to confirm, R to reschedule, or X to request cancellation. STOP to opt out.
+Hi {first_name}, please confirm your dental visit with {business_name} on {appointment_date} at {appointment_time}.. STOP to opt out.
 ```
 
 ### Confirmation Request — EMAIL
@@ -462,7 +462,7 @@ Need to make a change? {reschedule_link}
 ### Day Before — SMS
 
 ```text
-Hi {first_name}, {business_name} here. Your appointment is tomorrow at {appointment_time}. Please bring any required forms and identification. Reply C to confirm or R to request a new time. STOP to opt out.
+Hi {first_name}, {business_name} here. Your appointment is tomorrow at {appointment_time}. Please bring any required forms and identification.. STOP to opt out.
 ```
 
 ### Day Before — EMAIL
@@ -504,7 +504,7 @@ Directions: {directions_link}
 ### Confirmation Request — SMS
 
 ```text
-Hi {first_name}, please confirm your visit with {business_name} on {appointment_date} at {appointment_time}. Reply C to confirm, R to reschedule, or X to request cancellation. STOP to opt out.
+Hi {first_name}, please confirm your visit with {business_name} on {appointment_date} at {appointment_time}.. STOP to opt out.
 ```
 
 ### Confirmation Request — EMAIL
@@ -653,7 +653,7 @@ Need to make a change? {reschedule_link}
 ### Day Before — SMS
 
 ```text
-Hi {first_name}, {business_name} here. Your salon appointment is tomorrow at {appointment_time}. Please arrive with enough time for check-in. Reply C to confirm or R to request a new time. STOP to opt out.
+Hi {first_name}, {business_name} here. Your salon appointment is tomorrow at {appointment_time}. Please arrive with enough time for check-in.. STOP to opt out.
 ```
 
 ### Day Before — EMAIL
@@ -695,7 +695,7 @@ Directions: {directions_link}
 ### Confirmation Request — SMS
 
 ```text
-Hi {first_name}, please confirm your salon visit with {business_name} on {appointment_date} at {appointment_time}. Reply C to confirm, R to reschedule, or X to request cancellation. STOP to opt out.
+Hi {first_name}, please confirm your salon visit with {business_name} on {appointment_date} at {appointment_time}.. STOP to opt out.
 ```
 
 ### Confirmation Request — EMAIL
@@ -844,7 +844,7 @@ Need to make a change? {reschedule_link}
 ### Day Before — SMS
 
 ```text
-Hi {first_name}, {business_name} here. Your consultation is tomorrow at {appointment_time}. Please bring relevant documents to your consultation. Reply C to confirm or R to request a new time. STOP to opt out.
+Hi {first_name}, {business_name} here. Your consultation is tomorrow at {appointment_time}. Please bring relevant documents to your consultation.. STOP to opt out.
 ```
 
 ### Day Before — EMAIL
@@ -886,7 +886,7 @@ Directions: {directions_link}
 ### Confirmation Request — SMS
 
 ```text
-Hi {first_name}, please confirm your consultation with {business_name} on {appointment_date} at {appointment_time}. Reply C to confirm, R to reschedule, or X to request cancellation. STOP to opt out.
+Hi {first_name}, please confirm your consultation with {business_name} on {appointment_date} at {appointment_time}.. STOP to opt out.
 ```
 
 ### Confirmation Request — EMAIL
@@ -1035,7 +1035,7 @@ Need to make a change? {reschedule_link}
 ### Day Before — SMS
 
 ```text
-Hi {first_name}, {business_name} here. Your financial consultation is tomorrow at {appointment_time}. Please have any requested financial documents ready. Reply C to confirm or R to request a new time. STOP to opt out.
+Hi {first_name}, {business_name} here. Your financial consultation is tomorrow at {appointment_time}. Please have any requested financial documents ready.. STOP to opt out.
 ```
 
 ### Day Before — EMAIL
@@ -1077,7 +1077,7 @@ Directions: {directions_link}
 ### Confirmation Request — SMS
 
 ```text
-Hi {first_name}, please confirm your financial meeting with {business_name} on {appointment_date} at {appointment_time}. Reply C to confirm, R to reschedule, or X to request cancellation. STOP to opt out.
+Hi {first_name}, please confirm your financial meeting with {business_name} on {appointment_date} at {appointment_time}.. STOP to opt out.
 ```
 
 ### Confirmation Request — EMAIL
@@ -1226,7 +1226,7 @@ Need to make a change? {reschedule_link}
 ### Day Before — SMS
 
 ```text
-Hi {first_name}, {business_name} here. Your property appointment is tomorrow at {appointment_time}. Please review the property details before your visit. Reply C to confirm or R to request a new time. STOP to opt out.
+Hi {first_name}, {business_name} here. Your property appointment is tomorrow at {appointment_time}. Please review the property details before your visit.. STOP to opt out.
 ```
 
 ### Day Before — EMAIL
@@ -1268,7 +1268,7 @@ Directions: {directions_link}
 ### Confirmation Request — SMS
 
 ```text
-Hi {first_name}, please confirm your property appointment with {business_name} on {appointment_date} at {appointment_time}. Reply C to confirm, R to reschedule, or X to request cancellation. STOP to opt out.
+Hi {first_name}, please confirm your property appointment with {business_name} on {appointment_date} at {appointment_time}.. STOP to opt out.
 ```
 
 ### Confirmation Request — EMAIL
@@ -1417,7 +1417,7 @@ Need to make a change? {reschedule_link}
 ### Day Before — SMS
 
 ```text
-Hi {first_name}, {business_name} here. Your session is tomorrow at {appointment_time}. Please use your usual check-in instructions. Reply C to confirm or R to request a new time. STOP to opt out.
+Hi {first_name}, {business_name} here. Your session is tomorrow at {appointment_time}. Please use your usual check-in instructions.. STOP to opt out.
 ```
 
 ### Day Before — EMAIL
@@ -1459,7 +1459,7 @@ Directions: {directions_link}
 ### Confirmation Request — SMS
 
 ```text
-Hi {first_name}, please confirm your session with {business_name} on {appointment_date} at {appointment_time}. Reply C to confirm, R to reschedule, or X to request cancellation. STOP to opt out.
+Hi {first_name}, please confirm your session with {business_name} on {appointment_date} at {appointment_time}.. STOP to opt out.
 ```
 
 ### Confirmation Request — EMAIL
@@ -1608,7 +1608,7 @@ Need to make a change? {reschedule_link}
 ### Day Before — SMS
 
 ```text
-Hi {first_name}, {business_name} here. Your massage appointment is tomorrow at {appointment_time}. Please arrive a few minutes early and share any accessibility needs. Reply C to confirm or R to request a new time. STOP to opt out.
+Hi {first_name}, {business_name} here. Your massage appointment is tomorrow at {appointment_time}. Please arrive a few minutes early and share any accessibility needs.. STOP to opt out.
 ```
 
 ### Day Before — EMAIL
@@ -1650,7 +1650,7 @@ Directions: {directions_link}
 ### Confirmation Request — SMS
 
 ```text
-Hi {first_name}, please confirm your massage with {business_name} on {appointment_date} at {appointment_time}. Reply C to confirm, R to reschedule, or X to request cancellation. STOP to opt out.
+Hi {first_name}, please confirm your massage with {business_name} on {appointment_date} at {appointment_time}.. STOP to opt out.
 ```
 
 ### Confirmation Request — EMAIL
@@ -1799,7 +1799,7 @@ Need to make a change? {reschedule_link}
 ### Day Before — SMS
 
 ```text
-Hi {first_name}, {business_name} here. Your training session is tomorrow at {appointment_time}. Bring water, comfortable workout clothes, and any requested equipment. Reply C to confirm or R to request a new time. STOP to opt out.
+Hi {first_name}, {business_name} here. Your training session is tomorrow at {appointment_time}. Bring water, comfortable workout clothes, and any requested equipment.. STOP to opt out.
 ```
 
 ### Day Before — EMAIL
@@ -1841,7 +1841,7 @@ Directions: {directions_link}
 ### Confirmation Request — SMS
 
 ```text
-Hi {first_name}, please confirm your training session with {business_name} on {appointment_date} at {appointment_time}. Reply C to confirm, R to reschedule, or X to request cancellation. STOP to opt out.
+Hi {first_name}, please confirm your training session with {business_name} on {appointment_date} at {appointment_time}.. STOP to opt out.
 ```
 
 ### Confirmation Request — EMAIL
@@ -1990,7 +1990,7 @@ Need to make a change? {reschedule_link}
 ### Day Before — SMS
 
 ```text
-Hi {first_name}, {business_name} here. Your lesson is tomorrow at {appointment_time}. Please bring your learning materials. Reply C to confirm or R to request a new time. STOP to opt out.
+Hi {first_name}, {business_name} here. Your lesson is tomorrow at {appointment_time}. Please bring your learning materials.. STOP to opt out.
 ```
 
 ### Day Before — EMAIL
@@ -2032,7 +2032,7 @@ Directions: {directions_link}
 ### Confirmation Request — SMS
 
 ```text
-Hi {first_name}, please confirm your lesson with {business_name} on {appointment_date} at {appointment_time}. Reply C to confirm, R to reschedule, or X to request cancellation. STOP to opt out.
+Hi {first_name}, please confirm your lesson with {business_name} on {appointment_date} at {appointment_time}.. STOP to opt out.
 ```
 
 ### Confirmation Request — EMAIL
@@ -2181,7 +2181,7 @@ Need to make a change? {reschedule_link}
 ### Day Before — SMS
 
 ```text
-Hi {first_name}, {business_name} here. Your tattoo appointment is tomorrow at {appointment_time}. Please follow the preparation instructions provided by your artist. Reply C to confirm or R to request a new time. STOP to opt out.
+Hi {first_name}, {business_name} here. Your tattoo appointment is tomorrow at {appointment_time}. Please follow the preparation instructions provided by your artist.. STOP to opt out.
 ```
 
 ### Day Before — EMAIL
@@ -2223,7 +2223,7 @@ Directions: {directions_link}
 ### Confirmation Request — SMS
 
 ```text
-Hi {first_name}, please confirm your tattoo appointment with {business_name} on {appointment_date} at {appointment_time}. Reply C to confirm, R to reschedule, or X to request cancellation. STOP to opt out.
+Hi {first_name}, please confirm your tattoo appointment with {business_name} on {appointment_date} at {appointment_time}.. STOP to opt out.
 ```
 
 ### Confirmation Request — EMAIL
@@ -2372,7 +2372,7 @@ Need to make a change? {reschedule_link}
 ### Day Before — SMS
 
 ```text
-Hi {first_name}, {business_name} here. Your photo session is tomorrow at {appointment_time}. Please review your session location and outfit guidance. Reply C to confirm or R to request a new time. STOP to opt out.
+Hi {first_name}, {business_name} here. Your photo session is tomorrow at {appointment_time}. Please review your session location and outfit guidance.. STOP to opt out.
 ```
 
 ### Day Before — EMAIL
@@ -2414,7 +2414,7 @@ Directions: {directions_link}
 ### Confirmation Request — SMS
 
 ```text
-Hi {first_name}, please confirm your photo session with {business_name} on {appointment_date} at {appointment_time}. Reply C to confirm, R to reschedule, or X to request cancellation. STOP to opt out.
+Hi {first_name}, please confirm your photo session with {business_name} on {appointment_date} at {appointment_time}.. STOP to opt out.
 ```
 
 ### Confirmation Request — EMAIL
@@ -2563,7 +2563,7 @@ Need to make a change? {reschedule_link}
 ### Day Before — SMS
 
 ```text
-Hi {first_name}, {business_name} here. Your service appointment is tomorrow at {appointment_time}. Bring any required documents and identification. Reply C to confirm or R to request a new time. STOP to opt out.
+Hi {first_name}, {business_name} here. Your service appointment is tomorrow at {appointment_time}. Bring any required documents and identification.. STOP to opt out.
 ```
 
 ### Day Before — EMAIL
@@ -2605,7 +2605,7 @@ Directions: {directions_link}
 ### Confirmation Request — SMS
 
 ```text
-Hi {first_name}, please confirm your service appointment with {business_name} on {appointment_date} at {appointment_time}. Reply C to confirm, R to reschedule, or X to request cancellation. STOP to opt out.
+Hi {first_name}, please confirm your service appointment with {business_name} on {appointment_date} at {appointment_time}.. STOP to opt out.
 ```
 
 ### Confirmation Request — EMAIL
@@ -2754,7 +2754,7 @@ Need to make a change? {reschedule_link}
 ### Day Before — SMS
 
 ```text
-Hi {first_name}, {business_name} here. Your vehicle service appointment is tomorrow at {appointment_time}. Please bring your vehicle keys and any relevant service information. Reply C to confirm or R to request a new time. STOP to opt out.
+Hi {first_name}, {business_name} here. Your vehicle service appointment is tomorrow at {appointment_time}. Please bring your vehicle keys and any relevant service information.. STOP to opt out.
 ```
 
 ### Day Before — EMAIL
@@ -2796,7 +2796,7 @@ Directions: {directions_link}
 ### Confirmation Request — SMS
 
 ```text
-Hi {first_name}, please confirm your service visit with {business_name} on {appointment_date} at {appointment_time}. Reply C to confirm, R to reschedule, or X to request cancellation. STOP to opt out.
+Hi {first_name}, please confirm your service visit with {business_name} on {appointment_date} at {appointment_time}.. STOP to opt out.
 ```
 
 ### Confirmation Request — EMAIL
@@ -2945,7 +2945,7 @@ Need to make a change? {reschedule_link}
 ### Day Before — SMS
 
 ```text
-Hi {first_name}, {business_name} here. Your service visit is tomorrow at {appointment_time}. Please ensure someone can provide access at the scheduled time. Reply C to confirm or R to request a new time. STOP to opt out.
+Hi {first_name}, {business_name} here. Your service visit is tomorrow at {appointment_time}. Please ensure someone can provide access at the scheduled time.. STOP to opt out.
 ```
 
 ### Day Before — EMAIL
@@ -2987,7 +2987,7 @@ Directions: {directions_link}
 ### Confirmation Request — SMS
 
 ```text
-Hi {first_name}, please confirm your service appointment with {business_name} on {appointment_date} at {appointment_time}. Reply C to confirm, R to reschedule, or X to request cancellation. STOP to opt out.
+Hi {first_name}, please confirm your service appointment with {business_name} on {appointment_date} at {appointment_time}.. STOP to opt out.
 ```
 
 ### Confirmation Request — EMAIL
@@ -3136,7 +3136,7 @@ Need to make a change? {reschedule_link}
 ### Day Before — SMS
 
 ```text
-Hi {first_name}, {business_name} here. Your veterinary appointment is tomorrow at {appointment_time}. Please bring any requested records for your pet. Reply C to confirm or R to request a new time. STOP to opt out.
+Hi {first_name}, {business_name} here. Your veterinary appointment is tomorrow at {appointment_time}. Please bring any requested records for your pet.. STOP to opt out.
 ```
 
 ### Day Before — EMAIL
@@ -3178,7 +3178,7 @@ Directions: {directions_link}
 ### Confirmation Request — SMS
 
 ```text
-Hi {first_name}, please confirm your pet’s appointment with {business_name} on {appointment_date} at {appointment_time}. Reply C to confirm, R to reschedule, or X to request cancellation. STOP to opt out.
+Hi {first_name}, please confirm your pet’s appointment with {business_name} on {appointment_date} at {appointment_time}.. STOP to opt out.
 ```
 
 ### Confirmation Request — EMAIL

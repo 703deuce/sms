@@ -67,7 +67,16 @@ export async function handlePlatformSenderComplianceInbound(input: {
       platformSender: input.platformSender,
       consumerE164: from,
     });
-    const workspaceIds = [...new Set(contexts.map((c) => c.workspaceId))];
+    const workspaceIds = new Set(contexts.map((c) => c.workspaceId));
+    const { listArWorkspaceIdsForPlatformStop } = await import(
+      "@/lib/appointment-reminders/messaging/ar-platform-stop-workspaces"
+    );
+    for (const workspaceId of await listArWorkspaceIdsForPlatformStop({
+      consumerE164: from,
+      platformPhoneNumberId: input.platformSender.phoneNumberId,
+    })) {
+      workspaceIds.add(workspaceId);
+    }
     for (const workspaceId of workspaceIds) {
       await applyWorkspaceOptOut(workspaceId, from);
     }
