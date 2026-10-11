@@ -2,6 +2,7 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { externalAttendees } from "@/lib/calendar/eligibility";
+import { lookupOutlookContactPhoneByEmail } from "@/lib/calendar/outlook-contact-phone";
 import { upsertExternalContact } from "@/lib/integrations/connections";
 import type { ProviderCalendarEvent } from "@/lib/calendar/providers";
 
@@ -27,6 +28,26 @@ function phoneFromContact(phone: string | null | undefined) {
   if (!phone) return null;
   if (phone.startsWith("email:")) return null;
   return phone;
+}
+
+export async function enrichContactWithOutlookGraphPhone(
+  contact: ResolvedAttendeeContact,
+  microsoftAccessToken?: string | null,
+): Promise<ResolvedAttendeeContact> {
+  if (contact.inviteePhone || !contact.inviteeEmail || !microsoftAccessToken) {
+    return contact;
+  }
+  const hit = await lookupOutlookContactPhoneByEmail(microsoftAccessToken, contact.inviteeEmail);
+  if (!hit?.phone) return contact;
+  const phone = hit.phone.startsWith("+") ? hit.phone : null;
+  if (!phone) return contact;
+  return {
+    ...contact,
+    inviteePhone: phone,
+    inviteeName: contact.inviteeName || hit.displayName || contact.inviteeName,
+    smsCapable: true,
+    emailOnly: false,
+  };
 }
 
 export async function resolveContactForImportedEvent(

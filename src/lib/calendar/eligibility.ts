@@ -5,6 +5,17 @@ export type CalendarImportRules = {
   requireExternalAttendees?: boolean;
   /** When true, skip events where no attendee/organizer email is available. */
   requireAttendeeEmail?: boolean;
+  /** When true (default for AR), only remind on events the connected mailbox organizes. */
+  requireOrganizerIsConnection?: boolean;
+  /** Skip Microsoft `showAs: free` (and Google transparent) events for SMS eligibility. */
+  skipFreeShowAs?: boolean;
+  /** Skip tentative events for SMS eligibility. */
+  skipTentativeShowAs?: boolean;
+  /**
+   * When true (default), skip meetings where every external attendee shares the organizer's email domain
+   * (typical internal staff-only meetings with no customer).
+   */
+  skipInternalDomainOnlyMeetings?: boolean;
   /** Substrings that must appear in the event title (case-insensitive). */
   titleIncludePatterns?: string[];
   /** Substrings that exclude the event when matched in title (case-insensitive). */
@@ -34,6 +45,10 @@ export function defaultImportRules(): CalendarImportRules {
   return {
     requireExternalAttendees: true,
     requireAttendeeEmail: false,
+    requireOrganizerIsConnection: true,
+    skipFreeShowAs: true,
+    skipTentativeShowAs: false,
+    skipInternalDomainOnlyMeetings: true,
     skipAllDay: true,
     titleExcludePatterns: [],
   };
@@ -48,6 +63,22 @@ export function mergeImportRules(config: CalendarConfig): CalendarImportRules {
 
 function normalizeEmail(email?: string | null) {
   return email?.trim().toLowerCase() || "";
+}
+
+function emailDomain(email: string): string | null {
+  const at = email.indexOf("@");
+  if (at < 0) return null;
+  return email.slice(at + 1).trim().toLowerCase() || null;
+}
+
+function isFreeOrTransparentShowAs(showAs?: string | null): boolean {
+  const v = (showAs || "").toLowerCase();
+  return v === "free" || v === "transparent";
+}
+
+function isTentativeShowAs(showAs?: string | null): boolean {
+  const v = (showAs || "").toLowerCase();
+  return v === "tentative";
 }
 
 export function externalAttendees(
@@ -106,9 +137,36 @@ export function isEventEligibleForReminderImport(
     }
   }
 
+  if (rules.skipFreeShowAs !== false && isFreeOrTransparentShowAs(event.showAs)) {
+    return { eligible: false, reason: "show_as_free" };
+  }
+
+  if (rules.skipTentativeShowAs && isTentativeShowAs(event.showAs)) {
+    return { eligible: false, reason: "show_as_tentative" };
+  }
+
+  const self = normalizeEmail(connectionEmail);
+  const organizer = normalizeEmail(event.organizerEmail);
+  if (rules.requireOrganizerIsConnection !== false && self && organizer && organizer !== self) {
+    return { eligible: false, reason: "organizer_not_connection" };
+  }
+
   const attendees = externalAttendees(event, connectionEmail);
   if (rules.requireExternalAttendees !== false && attendees.length === 0) {
     return { eligible: false, reason: "no_external_attendees" };
+  }
+
+  if (rules.skipInternalDomainOnlyMeetings !== false && attendees.length > 0) {
+    const organizerDomain = emailDomain(organizer || self || "");
+    if (organizerDomain) {
+      const allSameDomain = attendees.every((a) => {
+        const domain = emailDomain(normalizeEmail(a.email));
+        return domain === organizerDomain;
+      });
+      if (allSameDomain) {
+        return { eligible: false, reason: "internal_domain_only_attendees" };
+      }
+    }
   }
 
   const primaryEmail =

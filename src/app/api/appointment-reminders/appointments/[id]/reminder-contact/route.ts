@@ -50,6 +50,7 @@ export async function PATCH(request: Request, { params }: Params) {
       }
       nextMeta.reminderOverride = { ...(meta.reminderOverride || {}), phone: e164 };
       nextMeta.inviteePhone = e164;
+      nextMeta.reminderPhoneUserLocked = true;
     }
 
     if (body.email !== undefined) {

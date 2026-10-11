@@ -16,6 +16,7 @@ export type ArExistingCustomerSmsConsentRecord = {
 
 export type AppointmentRemindersWorkspaceConfig = {
   existingCustomerSmsConsent?: ArExistingCustomerSmsConsentRecord | null;
+  operationalPause?: import("@/lib/appointment-reminders/ar-operational-pause").ArOperationalPauseState | null;
 };
 
 export function getAppointmentRemindersWorkspaceConfig(

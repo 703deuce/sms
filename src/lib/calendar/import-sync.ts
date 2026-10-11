@@ -1,6 +1,9 @@
 import "server-only";
 
-import { resolveContactForImportedEvent } from "@/lib/calendar/attendee-contact";
+import {
+  enrichContactWithOutlookGraphPhone,
+  resolveContactForImportedEvent,
+} from "@/lib/calendar/attendee-contact";
 import { mergeCalendarConnectionConfig } from "@/lib/calendar/connection-config-merge";
 import {
   getWorkspaceCalendarConnection,
@@ -209,8 +212,16 @@ export async function processCalendarProviderEvent(input: {
   event: ProviderCalendarEvent;
   config: CalendarConfig;
   calendarId?: string;
+  microsoftAccessToken?: string | null;
 }): Promise<{ result: ProcessEventResult; reason?: string }> {
   const { workspaceId, connectionId, provider, event, config } = input;
+  const staffLabel = config.displayName?.trim() || config.email?.trim() || null;
+
+  async function resolveImportContact(eventForContact: ProviderCalendarEvent) {
+    const base = await resolveContactForImportedEvent(workspaceId, eventForContact, config.email);
+    if (provider !== "microsoft") return base;
+    return enrichContactWithOutlookGraphPhone(base, input.microsoftAccessToken);
+  }
   const rules = mergeImportRules(config);
   const existing = await findExistingAppointment(workspaceId, provider, connectionId, event);
 
@@ -238,7 +249,7 @@ export async function processCalendarProviderEvent(input: {
       return { result: "skipped", reason: mirrorEligibility.reason };
     }
 
-    const contact = await resolveContactForImportedEvent(workspaceId, event, config.email);
+    const contact = await resolveImportContact(eventForProcessing);
     const externalId = formatImportedExternalId(provider, connectionId, event.id);
     const status = event.status === "cancelled" ? "canceled" : "confirmed";
     const prevMeta = (existing.metadata || {}) as Record<string, unknown>;
@@ -259,7 +270,7 @@ export async function processCalendarProviderEvent(input: {
         callId: null,
         contactId: contact.contactId,
         serviceName: event.summary || "Calendar event",
-        staffName: null,
+        staffName: staffLabel,
         startsAt: event.start,
         endsAt: event.end,
         timezone: event.timezone || null,
@@ -269,6 +280,7 @@ export async function processCalendarProviderEvent(input: {
       update: {
         contactId: contact.contactId,
         serviceName: event.summary || "Calendar event",
+        staffName: staffLabel,
         startsAt: event.start,
         endsAt: event.end,
         timezone: event.timezone || null,
@@ -294,10 +306,10 @@ export async function processCalendarProviderEvent(input: {
     return { result: "skipped", reason: mirrorEligibility.reason };
   }
 
-  const contact = await resolveContactForImportedEvent(workspaceId, event, config.email);
+  const contact = await resolveImportContact(eventForProcessing);
   const externalId = formatImportedExternalId(provider, connectionId, event.id);
   const metadata = (await buildImportMetadata(
-    event,
+    eventForProcessing,
     provider,
     connectionId,
     contact,
@@ -317,7 +329,7 @@ export async function processCalendarProviderEvent(input: {
       callId: null,
       contactId: contact.contactId,
       serviceName: event.summary || "Calendar event",
-      staffName: null,
+      staffName: staffLabel,
       startsAt: event.start,
       endsAt: event.end,
       timezone: event.timezone || null,
@@ -327,6 +339,7 @@ export async function processCalendarProviderEvent(input: {
     update: {
       contactId: contact.contactId,
       serviceName: event.summary || "Calendar event",
+      staffName: staffLabel,
       startsAt: event.start,
       endsAt: event.end,
       timezone: event.timezone || null,
@@ -638,6 +651,7 @@ export async function syncWorkspaceCalendarConnection(
           event,
           config,
           calendarId,
+          microsoftAccessToken: provider === "microsoft" ? token : null,
         });
         if (result === "imported") stats.imported += 1;
         else if (result === "updated") stats.updated += 1;
@@ -769,6 +783,7 @@ export async function syncCalendarProviderEventById(input: {
     event,
     config,
     calendarId: input.calendarId,
+    microsoftAccessToken: input.provider === "microsoft" ? token : null,
   });
 }
 

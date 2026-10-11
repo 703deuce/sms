@@ -12,6 +12,7 @@ import { loadRecentArCustomerResponses } from "@/lib/appointment-reminders/load-
 import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
 import { loadArNeedsAttentionRows } from "@/lib/appointment-reminders/load-ar-needs-attention";
 import { evaluateAppointmentRemindersSetupReadiness } from "@/lib/appointment-reminders/activation";
+import { isArRemindersPaused } from "@/lib/appointment-reminders/ar-operational-pause";
 import { AR_ROUTES, AR_SETTINGS_INTEGRATIONS } from "@/lib/appointment-reminders/routes";
 
 export async function loadAppointmentRemindersOverview(workspaceId: string) {
@@ -85,8 +86,11 @@ export async function loadAppointmentRemindersOverview(workspaceId: string) {
   const emailSenderReady = setupReadiness.emailSenderReady;
   const remindersActivated = setupReadiness.activated;
 
-  const operationalStatus =
-    activation.activatedAt && calendarHealthy && hasImportCalendars && syncHealthy && smsSenderReady
+  const remindersPaused = isArRemindersPaused(platform);
+
+  const operationalStatus = remindersPaused
+    ? "needs_attention"
+    : activation.activatedAt && calendarHealthy && hasImportCalendars && syncHealthy && smsSenderReady
       ? "active"
       : calendarHealthy && hasImportCalendars
         ? "needs_attention"
@@ -118,6 +122,8 @@ export async function loadAppointmentRemindersOverview(workspaceId: string) {
       smsSenderReady,
       emailSenderReady,
       remindersActivated,
+      remindersPaused,
+      operationalPause: platform.appointmentReminders?.operationalPause ?? null,
       operationalStatus,
     },
     productStatus: [

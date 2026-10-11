@@ -694,17 +694,25 @@ async function trySendStep(input: {
 /** Scan platform appointments and send configured reminder SMS using workspace settings. */
 export async function workspaceRemindersOperational(workspaceId: string): Promise<boolean> {
   const prisma = getPrisma();
-  const activationRow = await prisma.solutionSetup.findFirst({
-    where: { workspaceId, solutionType: "appointment-reminders-product" },
+  const activation = await loadAppointmentRemindersActivation(workspaceId);
+  const platform = await loadAppointmentPlatformConfig(workspaceId);
+  const { isArRemindersPaused } = await import("@/lib/appointment-reminders/ar-operational-pause");
+  if (isArRemindersPaused(platform)) return false;
+
+  if (activation.activatedAt) return true;
+
+  const priorDispatch = await prisma.arReminderDispatch.findFirst({
+    where: { workspaceId, status: { in: ["sent", "delivered", "queued", "sending"] } },
     select: { id: true },
   });
-  const activation = await loadAppointmentRemindersActivation(workspaceId);
-  if (activation.activatedAt) return true;
-  const { evaluateAppointmentRemindersSetupReadiness } = await import(
-    "@/lib/appointment-reminders/activation"
-  );
-  const readiness = await evaluateAppointmentRemindersSetupReadiness(workspaceId);
-  if (!activationRow && readiness.canActivate) return true;
+  if (priorDispatch) {
+    const { evaluateAppointmentRemindersSetupReadiness } = await import(
+      "@/lib/appointment-reminders/activation"
+    );
+    const readiness = await evaluateAppointmentRemindersSetupReadiness(workspaceId);
+    return readiness.canActivate;
+  }
+
   return false;
 }
 

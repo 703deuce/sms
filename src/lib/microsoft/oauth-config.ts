@@ -40,7 +40,7 @@ export function getMicrosoftOAuthScopes(): string {
   // Graph permission names are PascalCase; offline_access is required for refresh tokens.
   // openid/profile/email support identity; User.Read + Calendars.ReadWrite for calendar access.
   // @see https://learn.microsoft.com/en-us/graph/auth-v2-user
-  return "openid profile email offline_access User.Read Calendars.ReadWrite";
+  return "openid profile email offline_access User.Read Calendars.ReadWrite Contacts.Read";
 }
 
 export function getMicrosoftAuthorizeUrl(): string {
