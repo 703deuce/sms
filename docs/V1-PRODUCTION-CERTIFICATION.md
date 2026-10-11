@@ -20,7 +20,7 @@ Smart Routing, AI Receptionist, Call Forwarding, add-ons — code preserved, hid
 |---------|-------------------|-----------------|
 | Appointment Reminders | `npm run test:appointment-reminders` (includes `scripts/test-ar-functional-completion-cert.ts`) | `docs/AR-LAUNCH-READINESS-NOW.md` golden-tenant runbook |
 
-Inventory authority: `docs/AR-FULL-FUNCTIONAL-COMPLETION-MATRIX.md` (**FINISHED** on branch `cursor/ar-full-functional-completion-f350`).
+Inventory authority: `docs/AR-FULL-FUNCTIONAL-COMPLETION-MATRIX.md` (**NOT FINISHED** — integrity audit 2026-10-11 on branch `cursor/ar-full-functional-completion-f350`).
 
 ---
 

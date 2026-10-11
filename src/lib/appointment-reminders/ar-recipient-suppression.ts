@@ -2,6 +2,9 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import type { AppointmentMetadata } from "@/lib/appointments/types";
+import { applyRecipientSuppressionMetadata } from "@/lib/appointment-reminders/ar-recipient-suppression-metadata";
+
+export { applyRecipientSuppressionMetadata };
 
 export async function isWorkspacePhoneSuppressed(
   workspaceId: string,
@@ -30,11 +33,5 @@ export async function enrichImportMetadataWithRecipientSuppression(
 ): Promise<AppointmentMetadata> {
   if (!phone) return meta;
   const suppressed = await isWorkspacePhoneSuppressed(workspaceId, phone);
-  if (!suppressed) return meta;
-  return {
-    ...meta,
-    smsOptOut: true,
-    recipientOptedOut: true,
-    smsConsent: false,
-  };
+  return applyRecipientSuppressionMetadata(meta, suppressed);
 }

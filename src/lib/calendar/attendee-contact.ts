@@ -5,6 +5,8 @@ import { externalAttendees } from "@/lib/calendar/eligibility";
 import { lookupOutlookContactPhoneByEmail } from "@/lib/calendar/outlook-contact-phone";
 import { upsertExternalContact } from "@/lib/integrations/connections";
 import type { ProviderCalendarEvent } from "@/lib/calendar/providers";
+import { extractIdentityFromEventFields } from "@/lib/voice-v3/calendar/appointment-discovery-identity";
+import { eventLocationText } from "@/lib/appointment-reminders/calendar/reminder-phone-content";
 
 export type ResolvedAttendeeContact = {
   contactId: string | null;
@@ -58,7 +60,17 @@ export async function resolveContactForImportedEvent(
   const attendees = externalAttendees(event, connectionEmail);
   const primary = attendees.find((a) => a.email) || null;
   const inviteeEmail = primary?.email?.trim().toLowerCase() || null;
-  const inviteeName = primary?.name || null;
+  let inviteeName = primary?.name?.trim() || null;
+  if (!inviteeName) {
+    const identity = extractIdentityFromEventFields({
+      subject: event.summary || "",
+      description: event.description || "",
+      location: eventLocationText(event),
+      attendeeNames: (event.attendees || []).map((a) => a.name).filter(Boolean) as string[],
+      attendeeEmails: (event.attendees || []).map((a) => a.email).filter(Boolean) as string[],
+    });
+    inviteeName = identity.names[0] || null;
+  }
 
   if (!inviteeEmail) {
     return {
