@@ -65,10 +65,14 @@ async function openFirstGridAppointment(page: Page): Promise<boolean> {
 }
 
 async function openRemindersTab(page: Page) {
-  await page
+  const asideTab = page
     .locator("aside[aria-label='Appointment context']")
-    .getByRole("tab", { name: "Reminders" })
-    .click();
+    .getByRole("tab", { name: "Reminders" });
+  if (await asideTab.isVisible().catch(() => false)) {
+    await asideTab.click();
+  } else {
+    await page.getByRole("tab", { name: "Reminders" }).first().click();
+  }
   await page.waitForTimeout(600);
 }
 
