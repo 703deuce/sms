@@ -1,5 +1,5 @@
-import { AppointmentRemindersOverviewPage } from "@/newui-transplant/connected/appointment-reminders/overview-page";
+import { AppointmentRemindersCalendarWorkspacePage } from '@/newui-transplant/connected/appointment-reminders/ar-calendar-workspace-page'
 
 export default function AppointmentRemindersHomePage() {
-  return <AppointmentRemindersOverviewPage />;
+  return <AppointmentRemindersCalendarWorkspacePage />
 }

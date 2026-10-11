@@ -41,12 +41,16 @@ export function AppointmentDetailDrawer({
   onClose,
   timezone,
   onPhoneSaved,
+  layout = 'sheet',
+  initialTab,
 }: {
   row: ArAppointmentRow | null
   open: boolean
   onClose: () => void
   timezone: string
   onPhoneSaved: () => void
+  layout?: 'sheet' | 'panel'
+  initialTab?: 'details' | 'reminders' | 'activity' | 'preferences'
 }) {
   const [detail, setDetail] = useState<DetailPayload | null>(null)
   const [timeline, setTimeline] = useState<TimelineEntry[]>([])
@@ -55,7 +59,9 @@ export function AppointmentDetailDrawer({
   const [emailEdit, setEmailEdit] = useState('')
   const [savingPhone, setSavingPhone] = useState(false)
   const [phoneError, setPhoneError] = useState('')
-  const [sheetTab, setSheetTab] = useState<'details' | 'reminders' | 'activity' | 'preferences'>('details')
+  const [sheetTab, setSheetTab] = useState<'details' | 'reminders' | 'activity' | 'preferences'>(
+    initialTab || 'details',
+  )
   const [approvalBusy, setApprovalBusy] = useState<'approve' | 'reject' | null>(null)
   const [approvalError, setApprovalError] = useState('')
   const [customerResponse, setCustomerResponse] = useState<ArCustomerResponseSummary | null>(null)
@@ -233,10 +239,12 @@ export function AppointmentDetailDrawer({
     }
   }
 
-  return (
-    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md md:max-w-[600px] lg:max-w-[720px]">
-        {row ? (
+  useEffect(() => {
+    if (initialTab) setSheetTab(initialTab)
+  }, [initialTab, row?.id])
+
+  const detailContent =
+    row && open ? (
           <>
             <SheetHeader className="border-b px-5 py-4 text-left">
               <SheetTitle className="text-base font-semibold">
@@ -659,7 +667,21 @@ export function AppointmentDetailDrawer({
               </Button>
             </footer>
           </>
-        ) : null}
+    ) : null
+
+  if (layout === 'panel') {
+    if (!detailContent) return null
+    return (
+      <div className="flex h-full min-h-0 flex-col overflow-hidden bg-card">
+        {detailContent}
+      </div>
+    )
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
+      <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md md:max-w-[600px] lg:max-w-[720px]">
+        {detailContent}
       </SheetContent>
     </Sheet>
   )

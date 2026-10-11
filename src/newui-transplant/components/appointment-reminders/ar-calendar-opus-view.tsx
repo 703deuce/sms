@@ -1,10 +1,11 @@
 'use client'
 
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { Bell, BellOff, ChevronLeft, ChevronRight } from 'lucide-react'
 import type { CalendarApiAppointment } from '@/features/appointments/kimi/calendar/map-calendar'
 import type { CalendarViewMode } from '@/features/appointments/kimi/calendar/types'
 import {
   AR_CALENDAR_DAY_END_HOUR,
+  AR_CALENDAR_DAY_START_HOUR,
   AR_CALENDAR_HOUR_PX,
   buildMonthGrid,
   eventHeightPx,
@@ -29,6 +30,34 @@ import { cn } from '@/lib/utils'
 const VIEW_OPTIONS: CalendarViewMode[] = ['day', 'week', 'month', 'agenda']
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
+function reminderBlockHint(ev: CalendarApiAppointment): 'off' | 'blocked' | 'on' | null {
+  const meta = ev.metadata || {}
+  if (meta.remindersSuppressed || (meta.reminderOverride as { suppressed?: boolean })?.suppressed) {
+    return 'off'
+  }
+  if (meta.reminderImportIneligibleReason || meta.reminderSmsIneligibleReason) {
+    return 'blocked'
+  }
+  if (ev.status === 'canceled') return null
+  return 'on'
+}
+
+function ReminderDot({ state }: { state: 'off' | 'blocked' | 'on' }) {
+  if (state === 'off') {
+    return <BellOff className="size-3 shrink-0 text-muted-foreground" aria-hidden />
+  }
+  if (state === 'blocked') {
+    return (
+      <span
+        className="size-2 shrink-0 rounded-full bg-amber-500"
+        title="Reminder needs attention"
+        aria-hidden
+      />
+    )
+  }
+  return <Bell className="size-3 shrink-0 text-primary/70" aria-hidden />
+}
+
 function EventChip({
   ev,
   timeZone,
@@ -41,6 +70,7 @@ function EventChip({
   compact?: boolean
 }) {
   const canceled = ev.status === 'canceled'
+  const reminder = reminderBlockHint(ev)
   return (
     <button
       type="button"
@@ -54,7 +84,10 @@ function EventChip({
         compact ? 'py-1' : '',
       )}
     >
-      <span className="block font-semibold tabular-nums">{formatEventTime(ev.startsAt, timeZone)}</span>
+      <span className="flex items-center gap-1.5 font-semibold tabular-nums">
+        {reminder ? <ReminderDot state={reminder} /> : null}
+        <span>{formatEventTime(ev.startsAt, timeZone)}</span>
+      </span>
       <span className={cn('block font-medium', compact ? 'truncate' : 'line-clamp-2')}>{eventTitle(ev)}</span>
       {!compact && ev.inviteeName && ev.serviceName ? (
         <span className="mt-0.5 block truncate text-muted-foreground">{ev.inviteeName}</span>
@@ -68,11 +101,13 @@ function MonthView({
   events,
   timeZone,
   onSelect,
+  onSelectDay,
 }: {
   cursor: Date
   events: CalendarApiAppointment[]
   timeZone: string
   onSelect: (id: string) => void
+  onSelectDay?: (date: Date, dayKey: string) => void
 }) {
   const cells = buildMonthGrid(cursor, timeZone)
   const byDay = groupEventsByDay(events, timeZone)
@@ -102,18 +137,22 @@ function MonthView({
               )}
             >
               <div className="mb-1.5 flex justify-end">
-                <span
+                <button
+                  type="button"
+                  onClick={() => onSelectDay?.(cell.date, cell.key)}
                   className={cn(
                     'inline-flex size-7 items-center justify-center rounded-full text-sm font-semibold tabular-nums',
+                    'hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                     cell.isToday
                       ? 'bg-primary text-primary-foreground'
                       : cell.inMonth
                         ? 'text-foreground'
                         : 'text-muted-foreground',
                   )}
+                  aria-label={`View day ${cell.key}`}
                 >
                   {cell.dayNum}
-                </span>
+                </button>
               </div>
               <div className="flex flex-col gap-1">
                 {dayEvents.slice(0, 3).map((ev) => (
@@ -215,7 +254,9 @@ function TimeGridView({
                 aria-hidden="true"
               />
             ))}
-            {eventsForDay(d.key).map((ev) => (
+            {eventsForDay(d.key).map((ev) => {
+              const reminder = reminderBlockHint(ev)
+              return (
               <button
                 key={ev.id}
                 type="button"
@@ -231,10 +272,13 @@ function TimeGridView({
                   minHeight: 28,
                 }}
               >
-                <span className="block font-semibold tabular-nums">{formatEventTime(ev.startsAt, timeZone)}</span>
+                <span className="flex items-center gap-1 font-semibold tabular-nums">
+                  {reminder ? <ReminderDot state={reminder} /> : null}
+                  <span className="truncate">{formatEventTime(ev.startsAt, timeZone)}</span>
+                </span>
                 <span className="line-clamp-2 font-medium">{eventTitle(ev)}</span>
               </button>
-            ))}
+            )})}
           </div>
         ))}
       </div>
@@ -295,6 +339,9 @@ export function ArCalendarOpusView({
   onNext,
   onToday,
   onSelectEvent,
+  onSelectDay,
+  compactChrome,
+  fillHeight,
 }: {
   view: CalendarViewMode
   cursor: Date
@@ -305,19 +352,38 @@ export function ArCalendarOpusView({
   onNext: () => void
   onToday: () => void
   onSelectEvent: (id: string) => void
+  /** Month grid: open day view for the selected date. */
+  onSelectDay?: (date: Date, dayKey: string) => void
+  /** Workspace layout: toolbar only, no duplicate page title. */
+  compactChrome?: boolean
+  fillHeight?: boolean
 }) {
   const title = formatArCalendarTitle(cursor, view, timeZone)
   const subtitle = formatArCalendarSubtitle(cursor, view, timeZone)
 
   return (
-    <OpusDataSurface className="overflow-hidden">
-      <div className="border-b bg-gradient-to-b from-card to-muted/25 px-5 py-5 md:px-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Calendar</p>
-            <h2 className="mt-1 text-2xl font-semibold tracking-tight text-balance md:text-3xl">{title}</h2>
-            {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
-          </div>
+    <OpusDataSurface
+      className={cn('overflow-hidden', fillHeight ? 'flex min-h-0 flex-1 flex-col' : '')}
+    >
+      <div
+        className={cn(
+          'border-b bg-gradient-to-b from-card to-muted/25 px-4 py-3 md:px-5',
+          compactChrome ? 'py-2.5' : 'px-5 py-5 md:px-6',
+        )}
+      >
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          {!compactChrome ? (
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Calendar</p>
+              <h2 className="mt-1 text-2xl font-semibold tracking-tight text-balance md:text-3xl">{title}</h2>
+              {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
+            </div>
+          ) : (
+            <div className="min-w-0">
+              <p className="text-sm font-semibold tabular-nums text-foreground">{title}</p>
+              {subtitle ? <p className="text-[11px] text-muted-foreground">{subtitle}</p> : null}
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             <Button type="button" variant="outline" size="sm" onClick={onToday}>
               Today
@@ -341,9 +407,20 @@ export function ArCalendarOpusView({
         </div>
       </div>
 
-      <div className="p-4 md:p-6">
+      <div
+        className={cn(
+          'p-3 md:p-4',
+          fillHeight ? 'min-h-0 flex-1 overflow-y-auto' : '',
+        )}
+      >
         {view === 'month' ? (
-          <MonthView cursor={cursor} events={events} timeZone={timeZone} onSelect={onSelectEvent} />
+          <MonthView
+            cursor={cursor}
+            events={events}
+            timeZone={timeZone}
+            onSelect={onSelectEvent}
+            onSelectDay={onSelectDay}
+          />
         ) : null}
         {view === 'week' || view === 'day' ? (
           <TimeGridView

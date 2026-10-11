@@ -30,7 +30,7 @@ export function buildAppointmentRemindersMobileNav(): NavItem[] {
   const hideBooking = appointmentRemindersHideBookingNav();
   if (hideBooking) {
     return [
-      { label: "Home", href: AR_ROUTES.home, icon: LayoutDashboard, matchExact: true },
+      { label: "Calendar", href: AR_ROUTES.home, icon: Calendar, matchExact: true },
       { label: "Appointments", href: AR_ROUTES.appointments, icon: CalendarDays },
       { label: "Reminders", href: AR_ROUTES.reminders, icon: Bell },
       { label: "Settings", href: AR_SETTINGS_SCHEDULING, icon: Settings2 },
@@ -48,20 +48,15 @@ export function buildAppointmentRemindersNav(): NavItem[] {
   const hideBooking = appointmentRemindersHideBookingNav();
   const items: NavItem[] = [
     {
-      label: "Overview",
+      label: "Calendar",
       href: AR_ROUTES.home,
-      icon: LayoutDashboard,
+      icon: Calendar,
       matchExact: true,
     },
     {
       label: "Appointments",
       href: AR_ROUTES.appointments,
       icon: CalendarDays,
-    },
-    {
-      label: "Calendar",
-      href: AR_ROUTES.calendar,
-      icon: Calendar,
     },
     {
       label: "Reminders",
