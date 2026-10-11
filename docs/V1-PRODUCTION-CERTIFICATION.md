@@ -14,6 +14,14 @@
 
 Smart Routing, AI Receptionist, Call Forwarding, add-ons — code preserved, hidden from V1 nav unless `TRANSOVO_V1_SHOW_DEFERRED_NAV=1`.
 
+## Appointment Reminders (separate launch gate — not V1 scope freeze)
+
+| Product | Automated closure | Live prod smoke |
+|---------|-------------------|-----------------|
+| Appointment Reminders | `npm run test:appointment-reminders` (includes `scripts/test-ar-functional-completion-cert.ts`) | `docs/AR-LAUNCH-READINESS-NOW.md` golden-tenant runbook |
+
+Inventory authority: `docs/AR-FULL-FUNCTIONAL-COMPLETION-MATRIX.md` (**FINISHED** on branch `cursor/ar-full-functional-completion-f350`).
+
 ---
 
 ## Launch matrix (honest status)

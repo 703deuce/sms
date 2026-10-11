@@ -105,12 +105,22 @@ export function isMicrosoftBusyScheduleStatus(status?: string): boolean {
   return ["busy", "tentative", "oof"].includes(status);
 }
 
+function microsoftGraphUserPrefix(mailboxUserPrincipalName?: string): string {
+  const upn = mailboxUserPrincipalName?.trim();
+  if (!upn) return `${MICROSOFT_GRAPH_V1}/me`;
+  return `${MICROSOFT_GRAPH_V1}/users/${encodeURIComponent(upn)}`;
+}
+
 /** Build a calendarView URL per Graph list-calendarView docs. */
-export function microsoftCalendarViewUrl(calendarId?: string): string {
+export function microsoftCalendarViewUrl(
+  calendarId?: string,
+  mailboxUserPrincipalName?: string,
+): string {
+  const user = microsoftGraphUserPrefix(mailboxUserPrincipalName);
   if (calendarId) {
-    return `${MICROSOFT_GRAPH_V1}/me/calendars/${encodeURIComponent(calendarId)}/calendarView`;
+    return `${user}/calendars/${encodeURIComponent(calendarId)}/calendarView`;
   }
-  return `${MICROSOFT_GRAPH_V1}/me/calendar/calendarView`;
+  return `${user}/calendar/calendarView`;
 }
 
 export type MicrosoftGraphCollectionPage<T> = {
@@ -152,9 +162,13 @@ export async function parseMicrosoftGraphError(res: Response): Promise<Microsoft
 }
 
 /** Build a calendarView delta URL for incremental event sync. */
-export function microsoftCalendarViewDeltaUrl(calendarId?: string): string {
+export function microsoftCalendarViewDeltaUrl(
+  calendarId?: string,
+  mailboxUserPrincipalName?: string,
+): string {
+  const user = microsoftGraphUserPrefix(mailboxUserPrincipalName);
   if (calendarId) {
-    return `${MICROSOFT_GRAPH_V1}/me/calendars/${encodeURIComponent(calendarId)}/calendarView/delta`;
+    return `${user}/calendars/${encodeURIComponent(calendarId)}/calendarView/delta`;
   }
-  return `${MICROSOFT_GRAPH_V1}/me/calendar/calendarView/delta`;
+  return `${user}/calendar/calendarView/delta`;
 }

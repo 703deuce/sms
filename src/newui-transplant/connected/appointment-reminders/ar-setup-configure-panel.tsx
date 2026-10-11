@@ -106,6 +106,13 @@ export function ArSetupConfigurePanel({ onSaved }: { onSaved?: () => void }) {
       })
       const presetJson = await presetRes.json()
       if (!presetRes.ok) throw new Error(presetJson.error || 'Could not apply reminder pack')
+      const markRes = await fetch('/api/appointment-reminders/setup/configure-complete', {
+        method: 'POST',
+      })
+      if (!markRes.ok) {
+        const markJson = await markRes.json().catch(() => ({}))
+        throw new Error(markJson.error || 'Could not mark configuration complete')
+      }
       onSaved?.()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Save failed')

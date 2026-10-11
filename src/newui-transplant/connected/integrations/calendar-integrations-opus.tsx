@@ -462,6 +462,18 @@ function ConnectionRow({
   const [excludeKeywords, setExcludeKeywords] = useState(
     (connection.config?.importRules?.titleExcludePatterns || []).join(", "),
   );
+  const [requireOrganizerIsConnection, setRequireOrganizerIsConnection] = useState(
+    connection.config?.importRules?.requireOrganizerIsConnection !== false,
+  );
+  const [skipFreeShowAs, setSkipFreeShowAs] = useState(
+    connection.config?.importRules?.skipFreeShowAs !== false,
+  );
+  const [skipInternalDomainOnly, setSkipInternalDomainOnly] = useState(
+    connection.config?.importRules?.skipInternalDomainOnlyMeetings !== false,
+  );
+  const [graphMailboxUpn, setGraphMailboxUpn] = useState(
+    connection.config?.graphMailboxUserPrincipalName || "",
+  );
   const [smsReminders, setSmsReminders] = useState(
     connection.config?.reminderDefaults?.smsEnabled !== false,
   );
@@ -525,6 +537,9 @@ function ConnectionRow({
         importRules: {
           requireExternalAttendees,
           requireAttendeeEmail,
+          requireOrganizerIsConnection,
+          skipFreeShowAs,
+          skipInternalDomainOnlyMeetings: skipInternalDomainOnly,
           skipAllDay,
           titleIncludePatterns: includeKeywords
             .split(",")
@@ -535,6 +550,7 @@ function ConnectionRow({
             .map((s) => s.trim())
             .filter(Boolean),
         },
+        graphMailboxUserPrincipalName: graphMailboxUpn.trim() || undefined,
         reminderDefaults: {
           smsEnabled: smsReminders,
           emailEnabled: emailReminders,
@@ -741,6 +757,50 @@ function ConnectionRow({
                       ? "Require attendee email on the event"
                       : "Require attendee email (needed for email reminders)"}
                   </label>
+                  {isReminders ? (
+                    <>
+                      <label className="flex items-center gap-2 text-[12px]">
+                        <input
+                          type="checkbox"
+                          checked={requireOrganizerIsConnection}
+                          onChange={(e) => setRequireOrganizerIsConnection(e.target.checked)}
+                        />
+                        Only events this mailbox organizes
+                      </label>
+                      <label className="flex items-center gap-2 text-[12px]">
+                        <input
+                          type="checkbox"
+                          checked={skipFreeShowAs}
+                          onChange={(e) => setSkipFreeShowAs(e.target.checked)}
+                        />
+                        Skip free / transparent calendar blocks
+                      </label>
+                      <label className="flex items-center gap-2 text-[12px]">
+                        <input
+                          type="checkbox"
+                          checked={skipInternalDomainOnly}
+                          onChange={(e) => setSkipInternalDomainOnly(e.target.checked)}
+                        />
+                        Skip internal-only meetings (no external customer domain)
+                      </label>
+                    </>
+                  ) : null}
+                  {isReminders && connection.provider === "microsoft" ? (
+                    <div>
+                      <p className="text-[11px] font-medium text-muted-foreground mb-1">
+                        Delegated / shared mailbox (optional)
+                      </p>
+                      <input
+                        className="w-full rounded border border-border px-2 py-1.5 text-[12px]"
+                        placeholder="user@company.com"
+                        value={graphMailboxUpn}
+                        onChange={(e) => setGraphMailboxUpn(e.target.value)}
+                      />
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Uses Microsoft Graph /users/… when your admin granted calendar access to a shared mailbox.
+                      </p>
+                    </div>
+                  ) : null}
                   <div>
                     <p className="text-[11px] font-medium text-muted-foreground mb-1">Import only if title contains</p>
                     <input

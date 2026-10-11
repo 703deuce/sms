@@ -232,6 +232,7 @@ export async function patchWorkspaceCalendarConnection(
     syncEnabled?: boolean;
     timezone?: string;
     importRules?: CalendarConfig["importRules"];
+    graphMailboxUserPrincipalName?: string;
     reminderDefaults?: {
       smsEnabled?: boolean;
       emailEnabled?: boolean;
@@ -268,6 +269,9 @@ export async function patchWorkspaceCalendarConnection(
   if (input.syncEnabled !== undefined) config.syncEnabled = input.syncEnabled;
   if (input.timezone !== undefined) config.timezone = input.timezone;
   if (input.importRules !== undefined) config.importRules = input.importRules;
+  if (input.graphMailboxUserPrincipalName !== undefined) {
+    config.graphMailboxUserPrincipalName = input.graphMailboxUserPrincipalName || undefined;
+  }
   if (input.reminderDefaults !== undefined) {
     (config as CalendarConfig & { reminderDefaults?: unknown }).reminderDefaults =
       input.reminderDefaults;

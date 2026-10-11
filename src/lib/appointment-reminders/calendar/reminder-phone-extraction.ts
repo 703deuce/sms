@@ -12,6 +12,7 @@ import {
   buildAppointmentEventSourceTexts,
   eventLocationText,
 } from "@/lib/appointment-reminders/calendar/reminder-phone-content";
+import { extractPhoneFromExtendedProperties } from "@/lib/calendar/graph-extended-phone";
 import type { LunaReminderPhoneResult } from "@/lib/appointment-reminders/calendar/reminder-phone-evidence";
 
 export type ReminderPhoneDiscoveryStatus = "found" | "missing" | "needs_review" | "invalid";
@@ -75,6 +76,19 @@ export function extractReminderPhoneFromCalendarEvent(
   event: ProviderCalendarEvent,
 ): ReminderPhoneExtraction {
   const fingerprint = reminderPhoneRelevantFingerprint(event);
+  const fromExtended = extractPhoneFromExtendedProperties(event.extendedPropertiesPrivate);
+  if (fromExtended) {
+    return {
+      e164: fromExtended,
+      display: fromExtended,
+      status: "found",
+      sourceField: "extended_property",
+      method: "labeled_parse",
+      confidence: "high",
+      fingerprint,
+      candidateCount: 1,
+    };
+  }
   const subject = (event.summary || "").trim();
   const description = event.description || "";
   const location = eventLocationText(event);

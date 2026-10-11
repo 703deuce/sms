@@ -38,10 +38,15 @@ export async function PATCH(request: Request, context: RouteContext) {
       importRules?: {
         requireExternalAttendees?: boolean;
         requireAttendeeEmail?: boolean;
+        requireOrganizerIsConnection?: boolean;
+        skipFreeShowAs?: boolean;
+        skipTentativeShowAs?: boolean;
+        skipInternalDomainOnlyMeetings?: boolean;
         titleIncludePatterns?: string[];
         titleExcludePatterns?: string[];
         skipAllDay?: boolean;
       };
+      graphMailboxUserPrincipalName?: string;
       reminderDefaults?: {
         smsEnabled?: boolean;
         emailEnabled?: boolean;

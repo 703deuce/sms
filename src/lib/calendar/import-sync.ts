@@ -12,9 +12,10 @@ import {
 import {
   isEventEligibleForCalendarMirror,
   isEventEligibleForReminderImport,
-  mergeImportRules,
   shouldImportFromConnection,
 } from "@/lib/calendar/eligibility";
+import { resolveImportRulesForCalendar } from "@/lib/calendar/import-rules";
+import { enrichImportMetadataWithRecipientSuppression } from "@/lib/appointment-reminders/ar-recipient-suppression";
 import {
   formatImportedExternalId,
   isTransovoBookedExternalId,
@@ -222,7 +223,7 @@ export async function processCalendarProviderEvent(input: {
     if (provider !== "microsoft") return base;
     return enrichContactWithOutlookGraphPhone(base, input.microsoftAccessToken);
   }
-  const rules = mergeImportRules(config);
+  const rules = resolveImportRulesForCalendar(config, input.calendarId);
   const existing = await findExistingAppointment(workspaceId, provider, connectionId, event);
 
   const transovoOwned = Boolean(existing && isTransovoOwnedProviderEvent(existing, event.id));
@@ -254,6 +255,7 @@ export async function processCalendarProviderEvent(input: {
     const status = event.status === "cancelled" ? "canceled" : "confirmed";
     const prevMeta = (existing.metadata || {}) as Record<string, unknown>;
     const metadata = (await buildImportMetadata(
+      workspaceId,
       event,
       provider,
       connectionId,
@@ -309,6 +311,7 @@ export async function processCalendarProviderEvent(input: {
   const contact = await resolveImportContact(eventForProcessing);
   const externalId = formatImportedExternalId(provider, connectionId, event.id);
   const metadata = (await buildImportMetadata(
+    workspaceId,
     eventForProcessing,
     provider,
     connectionId,
@@ -471,6 +474,7 @@ async function applyImportedReminderEligibility(
 }
 
 async function buildImportMetadata(
+  workspaceId: string,
   event: ProviderCalendarEvent,
   provider: string,
   connectionId: string,
@@ -485,7 +489,7 @@ async function buildImportMetadata(
     contactPhone: contact.inviteePhone,
   });
 
-  return {
+  const base = {
     source: "calendar_import",
     reminderSmsEligible: reminderEligibility?.eligible ?? false,
     reminderSmsIneligibleReason: reminderEligibility?.eligible
@@ -513,7 +517,10 @@ async function buildImportMetadata(
     recurrence: event.recurrence,
     originalStart: event.originalStart?.toISOString(),
     description: event.description,
-  } as object;
+    location: event.locationDisplay,
+  } as AppointmentMetadata;
+
+  return enrichImportMetadataWithRecipientSuppression(workspaceId, phoneMerge.inviteePhone, base);
 }
 
 export async function syncWorkspaceCalendarConnection(

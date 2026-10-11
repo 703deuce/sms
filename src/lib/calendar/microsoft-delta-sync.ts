@@ -138,7 +138,9 @@ export async function syncMicrosoftCalendarDelta(input: {
     }
   }
 
-  const url = new URL(microsoftCalendarViewDeltaUrl(calendarId));
+  const url = new URL(
+    microsoftCalendarViewDeltaUrl(calendarId, config.graphMailboxUserPrincipalName),
+  );
   url.searchParams.set("startDateTime", timeMin.toISOString());
   url.searchParams.set("endDateTime", timeMax.toISOString());
   // Graph rejects $top on calendarView/delta (ErrorInvalidUrlQuery). Page size via Prefer header.

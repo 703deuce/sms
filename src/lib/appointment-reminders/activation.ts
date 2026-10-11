@@ -3,7 +3,10 @@ import "server-only";
 import { getPrisma } from "@/lib/db";
 import { isCalendarConnectionUsable } from "@/lib/appointment-reminders/calendar-connection";
 import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
-import { hasWorkspaceExistingCustomerSmsConsent } from "@/lib/appointment-reminders/workspace-existing-sms-consent";
+import {
+  getAppointmentRemindersWorkspaceConfig,
+  hasWorkspaceExistingCustomerSmsConsent,
+} from "@/lib/appointment-reminders/workspace-existing-sms-consent";
 
 export const APPOINTMENT_REMINDERS_SOLUTION_TYPE = "appointment-reminders-product";
 
@@ -167,6 +170,11 @@ export async function evaluateAppointmentRemindersSetupReadiness(
     );
   }
   if (!stepsEnabled) blockers.push("Enable at least one reminder step");
+
+  const arWorkspace = getAppointmentRemindersWorkspaceConfig(platform);
+  if (!arWorkspace.setupConfigureCompletedAt && !activation.activatedAt) {
+    blockers.push("Save your reminder configuration in Setup before activating");
+  }
 
   const existingCustomerSmsConsentAttested = hasWorkspaceExistingCustomerSmsConsent(platform);
   const alreadyActivated = Boolean(activation.activatedAt);

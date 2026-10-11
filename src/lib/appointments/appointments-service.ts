@@ -241,6 +241,7 @@ export function appointmentMergeVars(input: {
   staffName?: string | null;
   location?: string | null;
   startsAt: Date;
+  endsAt?: Date | null;
   timezone?: string | null;
   confirmLink?: string | null;
   cancelLink?: string | null;
@@ -266,6 +267,12 @@ export function appointmentMergeVars(input: {
     hour: "numeric",
     minute: "2-digit",
   });
+  const endInstant = input.endsAt && input.endsAt.getTime() > input.startsAt.getTime() ? input.endsAt : null;
+  const endTime = endInstant ? timeFmt.format(endInstant) : "";
+  const appointmentTimeRange =
+    endInstant && endTime
+      ? `${timeFmt.format(input.startsAt)} – ${endTime}`
+      : timeFmt.format(input.startsAt);
   return {
     first_name: input.firstName || "there",
     last_name: input.lastName || "",
@@ -275,6 +282,8 @@ export function appointmentMergeVars(input: {
     location: input.location || "",
     appointment_date: dateFmt.format(input.startsAt),
     appointment_time: timeFmt.format(input.startsAt),
+    appointment_end_time: endTime,
+    appointment_time_range: appointmentTimeRange,
     confirm_link: input.confirmLink || "",
     cancel_link: input.cancelLink || "",
     reschedule_link: input.rescheduleLink || "",
