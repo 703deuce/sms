@@ -58,23 +58,26 @@ Pay by message/call/email volume rather than named tiers. Different GTM; not a r
 
 Competitors often quote **reminders/month**; Transovo quotes **SMS segments/month**. They are not 1:1.
 
+**Pricing page requirement:** State clearly that plans are metered in **SMS segments**, not “appointments” or “reminders.” A competitor’s “400 reminders” is not directly comparable to Transovo’s “200 segments” without knowing reminders-per-appointment and segments-per-message.
+
 **Rough planning math (ideal case):**
 
-- Assume **1 segment** per outbound SMS (GSM-7, short template; **notify suffix on Starter increases length**).
-- **3 enabled steps** per appointment ≈ **3 segments** per appointment per cycle (confirmation + 24h + 2h — actual config varies).
+- Assume **1 segment** per outbound reminder SMS (GSM-7, short template; **notify suffix on Starter+ increases length**).
+- **Free** allows **one reminder step** only — do **not** divide Free segments by three.
+- Paid plans may enable up to **three steps** per appointment; appointment capacity depends on how many steps you send per visit.
 
-| Plan | Segments | ≈ Appointments/mo @ 3 single-segment SMS each | Caveat |
-|------|----------|-----------------------------------------------|--------|
-| Free | 25 | ~**8** (only **1** step allowed on Free) | One-way only |
-| Starter | 200 | ~**66** | + auto-replies + multi-segment Unicode |
-| Growth | 500 | ~**166** | |
-| Business | 1,200 | ~**400** | Matches your AppointmentReminder.com mental model at 3× SMS |
+| Plan | SMS segments/mo | 1 SMS per appointment | 2 SMS per appointment | 3 SMS per appointment |
+|------|-----------------|----------------------|----------------------|----------------------|
+| **Free** | 25 | **25** | Not available (1 step max) | Not available |
+| **Starter $9** | 200 | 200 | 100 | **66** |
+| **Growth $19** | 500 | 500 | 250 | **166** |
+| **Business $39** | 1,200 | 1,200 | 600 | **400** |
 
-**Also consumes segments:** automated **outbound replies** (C/R/X flows, AI replies), business-approval SMS, tests. **Inbound SMS does not** increment segment meter (outbound only).
+These are **theoretical maximums** before multi-segment Unicode messages, notify suffix length, and automated **outbound** replies (C/R/X acks, AI, approval SMS, tests) consume the allowance. **Inbound SMS does not** increment the segment meter.
 
-**Before changing tiers:** instrument or sample prod: median segments per reminder step + reply rate on Starter. If real practices exceed ~66–166 appointments/mo on Starter/Growth, upgrade pressure is **by design** — document in pricing FAQ (“how we count segments”) rather than adding features.
+**Before changing tiers:** instrument prod usage (median segments per step + reply rate). Upgrade pressure from volume is **by design** — explain segments on pricing, not only competitor headline numbers.
 
-Optional post-launch (not launch scope): segment **pack add-on** or higher Business tier — only if prod usage data supports it.
+Optional post-launch (not launch scope): segment **pack add-on** or higher Business tier — only if usage data supports it.
 
 ---
 
@@ -85,9 +88,29 @@ Optional post-launch (not launch scope): segment **pack add-on** or higher Busin
 - **Free** real product (not time-limited trial) — one-way reminders.
 - **Microsoft-first** workflow for businesses already on Outlook (no full scheduling platform required).
 
+## Two upgrade axes (capacity vs capability)
+
+Customers upgrade for **independent** reasons:
+
+1. **Capacity** — more SMS segments, emails, import calendars.
+2. **Capability** — on paid plans, **see and act on customer responses** (C/R/X + free-text in notify mode); optional AI on Growth/Business only.
+
+A Business customer may pay **$39 for ten calendars and 1,200 segments** with AI **disabled**. Do not make AI the centerpiece of Business positioning.
+
+## Launch claims vs verification (Starter free-text)
+
+| Claim | Code (PR #635 branch) | Production (P2b runbook) |
+|-------|------------------------|---------------------------|
+| Arbitrary SMS stored on AR conversation | Yes (`acceptArInboundSmsIngress`) | Verify |
+| `customer_message` outcome + **Responses** row | Yes (`handle-notify-customer-message.ts`) | Verify |
+| Staff alert (`notifyWorkspace`) | Yes | Verify |
+| No auto-reply in **notify** mode | Yes (`handled: false`) | Verify |
+
+**Do not** market “never miss a reply” until **P2b PASS** is recorded in `AR-LAUNCH-VERIFICATION-PRIORITIES.md`.
+
 ## Where to be honest / verify
 
-- **Starter vs GoReminders:** Free-text SMS in **notify** mode records `customer_message` on the appointment, surfaces on **Responses**, and sends `notifyWorkspace` — **verify P2b on prod** after deploy (`AR-LAUNCH-VERIFICATION-PRIORITIES.md`).
+- **Starter vs GoReminders / Cal.com:** Structured C/R/X was already coded; **verbatim free-text** is **implemented in code** — **prod P2b required** before final pricing copy.
 - **Calendar limits** vs “unlimited” competitors — intentional; sell **10 calendars on Business** for multi-provider teams, not unlimited.
 - **Voice reminders** — not launch; don’t compare to Apptoto voice on day one.
 
@@ -97,4 +120,4 @@ Optional post-launch (not launch scope): segment **pack add-on** or higher Busin
 
 - **Keep** $0 / $9 / $19 / $39 and feature split in `ar-plan-catalog.ts`.
 - **Do not** add competitor feature parity (voice, unlimited calendars, workflows builder) pre-launch.
-- **Do:** prod verification per `AR-LAUNCH-VERIFICATION-PRIORITIES.md`; fix STOP/HELP and plan UI copy; resolve Starter **reply visibility** story before claiming GoReminders-class inbox.
+- **Do:** prod verification per `AR-LAUNCH-VERIFICATION-PRIORITIES.md` (P2b + STOP/HELP); plan UI copy alignment (P5). Final functional corrections before launch: **(1)** Starter+ arbitrary reply visibility + notify, **(2)** STOP/HELP on AR-only platform sender — both **in code** on launch branch; **sign off in prod**.

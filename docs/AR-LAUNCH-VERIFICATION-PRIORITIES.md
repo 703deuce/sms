@@ -32,56 +32,60 @@
 
 ---
 
-## Competitive question: “I’m running 20 minutes late” on Starter (notify)
+## P2b — “I’m running 20 minutes late” on Starter (`notify`)
 
-**What we want to promise:** Businesses see **what customers actually text**, not only C/R/X — a reason to choose Transovo over Cal.com SMS.
+**Product promise:** Businesses see **verbatim customer text** on **Responses**, tied to the appointment when possible, with **staff notified** — **no** automated SMS back in notify mode. Reuses existing `conversationMessage` storage; **does not** duplicate C/R/X rows (structured letters are handled before the free-text path).
 
-### What the code does today (Starter, `notify` mode)
+### Code status (launch branch — not prod sign-off)
 
-| Step | Behavior |
-|------|----------|
-| Webhook → `acceptArInboundSmsIngress` | **Yes** — inbound SMS is stored as `conversationMessage` on an AR-tagged conversation (`productSource: APPOINTMENT_REMINDERS`, `unread: true`). |
-| `handleAppointmentRemindersInboundBody` | **C/R/X / policy / yes** → handled; **free text** → `tryHandleArReminderFollowUp` runs only when mode is **`ai`** → on Starter **notify**, returns **`handled: false`**. |
-| Auto-reply SMS to customer | **No** for unhandled free text (correct for “human reads it”). |
-| **`/appointment-reminders/responses` feed** | Built from **`loadRecentArCustomerResponses`** → appointment **metadata outcomes** (`ar_sms_outcome_*`, cancel/reschedule structs, legacy `reminders_stopped_on_reply`). **Arbitrary free text does not create an outcome row.** |
-| Staff `notifyWorkspace` | Used for **reschedule/cancel request** paths in `business-approval.ts` / public email actions — **not** called for unhandled notify-mode free text. |
-| AR sidebar | **Responses** page exists; **no** primary nav link to shared **Conversations** (`/conversations`). |
+| Step | Expected behavior (after PR #635) |
+|------|-------------------------------------|
+| `acceptArInboundSmsIngress` | Inbound stored on AR-tagged `conversationMessage`. |
+| C / R / X | Structured handlers only; **no** duplicate `customer_message` outcome. |
+| Free text, `notify` mode | `tryRecordNotifyModeFreeTextReply` → `ar_sms_outcome_customer_message` on appointment, `notifyWorkspace`, **no** outbound auto-reply. |
+| **Responses** feed | `loadRecentArCustomerResponses` → kind **`replied`** with message snippet (`bodyPreview` on feed row). |
+| **AI mode** (`Growth`+) | Free text may enter AI follow-up first; different path — P3 covers AI. |
 
-### Honest positioning until verified/fixed
+**Marketing:** Treat as **implemented in code** until P2b **PASS** below. Do not claim “never miss a reply” in production copy until signed off.
 
-- **Today:** “Running 20 minutes late” is **likely persisted on the AR SMS conversation thread** (backend), but **not** surfaced as a first-class row on **Responses** and **not** guaranteed to trigger a **staff notification** on Starter notify-only.
-- **Starter’s strong suit in code today** is **structured** C/R/X + staff-notified **change requests**, not general inbox parity.
-- **Growth `ai` mode:** free text can enter **AI follow-up** (`tryHandleArReminderFollowUp`) — still not the same as “show verbatim message on Responses.”
+### P2b production test (required)
 
-### Launch verification item (add to P2)
+After Starter reminder, text: `I'm running 20 minutes late.`
 
-After Starter reminder, text: `I'm running 20 minutes late.` Then check:
+| # | Check | PASS |
+|---|--------|------|
+| 1 | **Responses** — row with verbatim preview | |
+| 2 | **In-app notification** — “Customer replied to reminder” (or equivalent) | |
+| 3 | Appointment detail — customer action / timeline shows inbound text | |
+| 4 | Customer receives **no** automated SMS reply | |
+| 5 | Underlying **conversation** still has inbound message (audit) | |
 
-1. **Responses** — does it appear? (expect **no** today unless other metadata exists)  
-2. **Conversations** (`/conversations`, filter if any) — does thread show inbound body?  
-3. **In-app notification** — any alert to workspace users?  
-4. Appointment detail **customer action history** — does it list the message?
-
-Record PASS/FAIL. If FAIL on Responses/notify, either **fix before marketing** (record outcome + notify on notify-mode unhandled inbound) or **narrow sales copy** to structured replies + Conversations.
+Record date, workspace ID, `commitSha`, PASS/FAIL.
 
 ---
 
-## STOP / HELP on every plan (critical compliance gap)
+## STOP / HELP on every plan (launch blocker)
 
-**Requirement:** STOP/HELP must work on **all** plans, independent of Free vs paid feature gates.
+**Requirement:** STOP/HELP on **all** plans (including **Free**), independent of notify/AI gates.
 
-**Code finding:** `dispatchSharedPlatformSmsInbound` only calls `handlePlatformSenderComplianceInbound` when `isPlatformSharedSmsMctbInboundEnabled()` is true.
+### Code status (launch branch — not prod sign-off)
 
-With **`APPOINTMENT_REMINDERS_V1_PRIMARY`** (current launch), that flag is **`false`** → compliance handler is **skipped** → STOP/HELP may **not** run on the shared platform toll-free path.
+| Item | Status |
+|------|--------|
+| `dispatchSharedPlatformSmsInbound` runs `handlePlatformSenderComplianceInbound` **before** AR routing | **Yes** (unconditional; not gated on MCTB flag) |
+| STOP resolves AR workspaces via `listArWorkspaceIdsForPlatformStop` (sessions, assignments, AR conversations) | **Yes** |
+| MCTB contexts still included via `loadPlatformMctbReplyContexts` when applicable | **Yes** |
 
-Even when compliance runs, `handlePlatformSenderComplianceInbound` resolves opt-out workspaces via **`loadPlatformMctbReplyContexts`** (MCTB `productSource` only), not **`APPOINTMENT_REMINDERS`** sessions — AR-only threads may not get correct workspace suppression.
+**Marketing:** Treat as **implemented in code** until prod STOP/HELP **PASS** below.
 
-**Launch verification:**
+### Production test (required)
 
-1. From a phone that received an AR reminder, text **HELP** → expect help copy.  
-2. Text **STOP** → expect opt-out; further reminders suppressed for that contact/workspace.
+From a phone that received an AR reminder on the **platform sender**:
 
-**Engineering (minor, not scope expansion):** Always run platform STOP/HELP before AR routing; include **AR reply-session workspace** in opt-out resolution for platform sender.
+1. **HELP** → help copy returned.  
+2. **STOP** → opt-out recorded; further reminders suppressed for that contact/workspace.
+
+Record date, workspace ID, `commitSha`, PASS/FAIL.
 
 ---
 
@@ -107,8 +111,8 @@ AI does **not** need to be enabled for Business to be justified.
 | AI Rescheduler UI | Free/Starter can still **select** notify/ai in UI | Disable/hide by `resolveArPlanCapabilities` |
 | Default `aiRescheduler.mode: notify` | Confusing on Free | Default Free to `reminders_only`; API reject `notify` on Free |
 | Pricing / landing copy | Doesn’t spell one-way vs notify vs AI | Match `AR-PLAN-PACKAGES-AND-GATES.md` |
-| Responses vs Conversations | Arbitrary SMS not on Responses | Fix or document; verify P2 |
-| STOP/HELP on AR-only platform ingress | Compliance skipped | Wire + AR workspace on STOP |
+| Responses vs Conversations | Arbitrary SMS on Responses (notify) | **Coded** — verify **P2b** |
+| STOP/HELP on AR-only platform ingress | AR workspace on STOP | **Coded** — verify prod STOP/HELP |
 
 ---
 
@@ -130,4 +134,4 @@ Sign-off block: date, `commitSha` from `/api/health`, tester, workspace IDs.
 
 ## Bottom line
 
-The question is not feature count vs competitors. It is whether **advantages we claim** — especially **seeing customer replies on Starter** and **compliance on every plan** — **match runtime behavior**. Code review suggests **structured Starter flows are real**; **verbatim free-text on Responses + staff alert on notify** and **STOP/HELP under AR-only launch** need **prod verification and likely small fixes** before marketing says otherwise.
+The question is not feature count vs competitors. It is whether **advantages we claim** — especially **seeing customer replies on Starter** and **compliance on every plan** — **match production behavior**. **Structured C/R/X**, **notify-mode free-text (P2b)**, and **STOP/HELP** are **implemented on the launch branch**; **prod runbook PASS** is still required before final GTM copy. No new product scope — complete the workflow already wired (conversation storage + Responses outcomes + existing notifications).

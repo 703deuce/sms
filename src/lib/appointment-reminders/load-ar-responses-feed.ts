@@ -38,6 +38,10 @@ const NEEDS_ATTENTION_KINDS = new Set<ArCustomerResponseKind>([
 function appointmentRowToEvent(row: ArOverviewCustomerResponseRow): ArResponseEventRow {
   const ch =
     row.customerResponse.detailLine?.toLowerCase().includes("email") ? "email" : "sms";
+  const verbatim =
+    row.customerResponse.kind === "replied"
+      ? row.customerResponse.detailLine || row.customerResponse.reasonLine
+      : undefined;
   return {
     id: `appt:${row.appointmentId}:${row.responseAt}`,
     source: "appointment",
@@ -49,6 +53,7 @@ function appointmentRowToEvent(row: ArOverviewCustomerResponseRow): ArResponseEv
     responseLabel: row.customerResponse.listDisplayLine || row.customerResponse.label,
     responseKind: row.customerResponse.kind,
     detailLine: row.customerResponse.detailLine || row.customerResponse.reasonLine,
+    bodyPreview: verbatim,
     occurredAt: row.responseAt,
     actionHref: `/appointment-reminders/appointments?highlight=${encodeURIComponent(row.appointmentId)}`,
   };
