@@ -3,6 +3,7 @@ import {
   isEventEligibleForCalendarMirror,
   isEventEligibleForReminderImport,
   mergeImportRules,
+  organizerMatchesConnection,
 } from "./eligibility";
 import type { ProviderCalendarEvent } from "./providers";
 
@@ -54,6 +55,28 @@ const internalOnly = {
 assert.equal(
   isEventEligibleForReminderImport(internalOnly, mergeImportRules({}), "owner@acme.com").reason,
   "internal_domain_only_attendees",
+);
+
+const outlookOrganizer = {
+  ...baseEvent,
+  summary: "5714776175",
+  organizerEmail: "outlook_06671ca542cd25e1@outlook.com",
+  attendees: [],
+};
+const outlookEligible = isEventEligibleForReminderImport(
+  outlookOrganizer,
+  mergeImportRules({}),
+  "anthony@transovo.ai",
+  { microsoftUserId: "06671ca542cd25e1", customerPhoneE164: "+15714776175" },
+);
+assert.equal(outlookEligible.eligible, true);
+
+assert.equal(
+  organizerMatchesConnection("outlook_06671CA542CD25E1@outlook.com", {
+    connectionEmail: "anthony@transovo.ai",
+    microsoftUserId: "06671ca542cd25e1",
+  }),
+  true,
 );
 
 console.log("eligibility.test.ts: ok");

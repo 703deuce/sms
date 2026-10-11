@@ -53,4 +53,12 @@ We did not prove why the **old** refresh token died (revocation vs. superseded b
 
 ### 3. Recovered appointment → reminder dispatch
 
-Imported appointment `cmv40nah2382u6l42683a5y03` (created during recovery sync) has **no** `ar_reminder_dispatch` rows because import metadata set `reminderSmsEligible: false` and `remindersSuppressed: true` with `reminderSmsIneligibleReason: "organizer_not_connection"`. Calendar OAuth recovery is working; this appointment is excluded from SMS reminder discovery by existing eligibility rules (separate from OAuth).
+### 4. `organizer_not_connection` on recovered import (fixed)
+
+**Why excluded:** `requireOrganizerIsConnection` compared Graph organizer `outlook_{microsoftUserId}@outlook.com` to OAuth mailbox SMTP (`config.email`). Same user, different strings → false negative.
+
+**Original intent:** Skip reminders for meetings **organized by someone else** on a shared calendar (see `eligibility.test.ts` colleague case).
+
+**Product:** Self-created Outlook events with a customer phone in the title are in scope; safeguards remain (`no_external_attendees` unless an extracted customer phone exists, title excludes, internal-only attendees, etc.).
+
+**Fix:** `organizerMatchesConnection()` (Outlook OID alias + SMTP) and phone-aware `no_external_attendees` bypass when `customerPhoneE164` is present. Re-sync on `cmv40nah2382u6l42683a5y03` → `reminderSmsEligible: true`, `remindersSuppressed: false`. Dispatch rows are created when the reminder fire time enters the discovery window (not at import time).

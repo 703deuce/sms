@@ -65,6 +65,38 @@ function normalizeEmail(email?: string | null) {
   return email?.trim().toLowerCase() || "";
 }
 
+export type ReminderImportConnectionContext = {
+  connectionEmail?: string | null;
+  microsoftUserId?: string | null;
+  /** E.164 customer phone extracted from title/body/contact — solo Outlook entries. */
+  customerPhoneE164?: string | null;
+};
+
+/**
+ * Microsoft Graph often reports the organizer as outlook_{oid}@outlook.com while OAuth
+ * stores the mailbox SMTP (e.g. custom domain). Same user must count as connection-organized.
+ */
+export function organizerMatchesConnection(
+  organizerEmail: string | null | undefined,
+  context: ReminderImportConnectionContext,
+): boolean {
+  const organizer = normalizeEmail(organizerEmail);
+  const self = normalizeEmail(context.connectionEmail);
+  if (!organizer) return true;
+  if (self && organizer === self) return true;
+
+  const oid = context.microsoftUserId?.trim().toLowerCase();
+  if (!oid) return false;
+
+  const outlookAlias = `outlook_${oid}@outlook.com`;
+  if (organizer === outlookAlias) return true;
+
+  const match = organizer.match(/^outlook_([a-f0-9]+)@outlook\.com$/i);
+  if (match && match[1].toLowerCase() === oid) return true;
+
+  return false;
+}
+
 function emailDomain(email: string): string | null {
   const at = email.indexOf("@");
   if (at < 0) return null;
@@ -112,7 +144,13 @@ export function isEventEligibleForReminderImport(
   event: ProviderCalendarEvent,
   rules: CalendarImportRules,
   connectionEmail?: string | null,
+  context?: Omit<ReminderImportConnectionContext, "connectionEmail">,
 ): { eligible: boolean; reason?: string } {
+  const connection: ReminderImportConnectionContext = {
+    connectionEmail,
+    microsoftUserId: context?.microsoftUserId,
+    customerPhoneE164: context?.customerPhoneE164,
+  };
   if (rules.skipAllDay !== false && event.isAllDay) {
     return { eligible: false, reason: "all_day" };
   }
@@ -145,14 +183,20 @@ export function isEventEligibleForReminderImport(
     return { eligible: false, reason: "show_as_tentative" };
   }
 
-  const self = normalizeEmail(connectionEmail);
+  const self = normalizeEmail(connection.connectionEmail);
   const organizer = normalizeEmail(event.organizerEmail);
-  if (rules.requireOrganizerIsConnection !== false && self && organizer && organizer !== self) {
+  if (
+    rules.requireOrganizerIsConnection !== false &&
+    self &&
+    organizer &&
+    !organizerMatchesConnection(event.organizerEmail, connection)
+  ) {
     return { eligible: false, reason: "organizer_not_connection" };
   }
 
-  const attendees = externalAttendees(event, connectionEmail);
-  if (rules.requireExternalAttendees !== false && attendees.length === 0) {
+  const attendees = externalAttendees(event, connection.connectionEmail);
+  const hasCustomerPhone = Boolean(connection.customerPhoneE164?.trim());
+  if (rules.requireExternalAttendees !== false && attendees.length === 0 && !hasCustomerPhone) {
     return { eligible: false, reason: "no_external_attendees" };
   }
 
