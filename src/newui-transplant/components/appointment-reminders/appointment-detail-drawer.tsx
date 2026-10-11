@@ -255,8 +255,10 @@ export function AppointmentDetailDrawer({
   const detailContent =
     row && open ? (
           <>
-            <SheetHeader className={`border-b py-3 text-left ${chromePad} ${isPanel ? 'py-3' : 'py-4'}`}>
-              {isPanel ? (
+            {isPanel ? (
+              <header
+                className={`border-b py-3 text-left ${chromePad}`}
+              >
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <Button
                     type="button"
@@ -279,11 +281,21 @@ export function AppointmentDetailDrawer({
                     Conversation
                   </Button>
                 </div>
+                <h2 className="text-base font-semibold">
+                  {row.appointmentTitle || row.customerName}
+                </h2>
+              </header>
+            ) : (
+              <SheetHeader className={`border-b py-4 text-left ${chromePad}`}>
+                <SheetTitle className="text-base font-semibold">
+                  {row.appointmentTitle || row.customerName}
+                </SheetTitle>
+              </SheetHeader>
+            )}
+            <div className={`border-b pb-3 ${chromePad}`}>
+              {!isPanel ? (
+                <p className="text-sm text-muted-foreground">{row.customerName}</p>
               ) : null}
-              <SheetTitle className="text-base font-semibold">
-                {row.appointmentTitle || row.customerName}
-              </SheetTitle>
-              <p className="text-sm text-muted-foreground">{row.customerName}</p>
               <p className="text-sm text-muted-foreground">
                 {formatDateTimeRange(row.startsAt, row.endsAt, tz, row.isAllDay)}
               </p>
@@ -302,7 +314,7 @@ export function AppointmentDetailDrawer({
               {customerResponse?.reasonLine ? (
                 <p className="text-xs text-muted-foreground">{customerResponse.reasonLine}</p>
               ) : null}
-            </SheetHeader>
+            </div>
 
             <div className={`border-b ${chromePad}`}>
               <div className="flex gap-1 overflow-x-auto py-2" role="tablist" aria-label="Appointment sections">

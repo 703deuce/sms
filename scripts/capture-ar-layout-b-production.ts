@@ -34,31 +34,34 @@ async function shot(page: Page, name: string) {
 function calendarGridAppointmentButtons(page: Page): Locator {
   return page
     .locator("div.min-w-\\[640px\\]")
-    .locator("button")
-    .filter({ hasText: /\d{1,2}:\d{2}\s*(AM|PM)/i });
+    .locator("button.absolute.inset-x-1");
 }
 
 async function waitForAppointmentDetail(page: Page) {
-  const aside = page.locator("aside[aria-label='Appointment context']");
-  if (await aside.isVisible().catch(() => false)) {
-    await aside.getByRole("tab", { name: "Reminders" }).waitFor({ timeout: 25_000 });
-    return;
-  }
+  const ctx = page.locator("aside[aria-label='Appointment context']");
+  await Promise.race([
+    ctx.getByRole("button", { name: /^Activity$/i }).waitFor({ timeout: 90_000 }),
+    ctx.getByRole("tab", { name: "Details" }).waitFor({ timeout: 90_000 }),
+    page.getByText(/Reminders are (on|off)/i).waitFor({ timeout: 90_000 }),
+  ]);
   await page
-    .getByRole("tab", { name: "Reminders" })
-    .first()
-    .waitFor({ timeout: 25_000 });
+    .getByText("Loading details…")
+    .waitFor({ state: "hidden", timeout: 90_000 })
+    .catch(() => {});
 }
 
-async function openFirstGridAppointment(page: Page): Promise<boolean> {
-  const btn = calendarGridAppointmentButtons(page).first();
-  if (!(await btn.isVisible().catch(() => false))) {
-    const fallback = page.locator("button").filter({ hasText: /\d{1,2}:\d{2}\s*(AM|PM)/i }).first();
-    if (!(await fallback.isVisible().catch(() => false))) return false;
-    await fallback.click();
-  } else {
-    await btn.click();
+async function openFirstActivityAppointment(page: Page): Promise<boolean> {
+  const gridBtn = calendarGridAppointmentButtons(page).first();
+  if (await gridBtn.isVisible().catch(() => false)) {
+    await gridBtn.click();
+    await waitForAppointmentDetail(page);
+    await page.waitForTimeout(800);
+    return true;
   }
+  const aside = page.locator("aside[aria-label='Appointment context']");
+  const row = aside.locator("section").first().locator("button").first();
+  if (!(await row.isVisible().catch(() => false))) return false;
+  await row.click();
   await waitForAppointmentDetail(page);
   await page.waitForTimeout(800);
   return true;
@@ -96,7 +99,11 @@ async function findAppointmentState(
   const count = Math.min(await buttons.count(), 12);
   for (let i = 0; i < count; i++) {
     await buttons.nth(i).click();
-    await waitForAppointmentDetail(page).catch(() => {});
+    const opened = await waitForAppointmentDetail(page).then(() => true).catch(() => false);
+    if (!opened) {
+      await backToActivity(page);
+      continue;
+    }
     await openRemindersTab(page);
     const aside = page.locator("aside[aria-label='Appointment context']");
     const body = (await aside.isVisible().catch(() => false))
@@ -134,6 +141,14 @@ async function verifyLegacyRedirect(page: Page): Promise<void> {
   );
 }
 
+async function safeShot(page: Page, name: string) {
+  try {
+    await shot(page, name);
+  } catch (e) {
+    console.warn(`Skipped ${name}:`, e instanceof Error ? e.message : e);
+  }
+}
+
 async function main() {
   if (
     !process.env.CERT_BROWSER_PASSWORD?.trim() &&
@@ -166,23 +181,28 @@ async function main() {
   });
 
   await openArHome(page);
-  await shot(page, "ar-layout-b-prod-desktop-week-activity.png");
+  await safeShot(page, "ar-layout-b-prod-desktop-week-activity.png");
 
-  if (await openFirstGridAppointment(page)) {
-    await shot(page, "ar-layout-b-prod-desktop-week-selected.png");
-    await backToActivity(page);
+  try {
+    if (await openFirstActivityAppointment(page)) {
+      await safeShot(page, "ar-layout-b-prod-desktop-week-selected.png");
+      await backToActivity(page);
+    }
+  } catch (e) {
+    console.warn("desktop-week-selected capture skipped:", e instanceof Error ? e.message : e);
   }
 
   await openArHome(page, "view=day");
-  await shot(page, "ar-layout-b-prod-desktop-day.png");
+  await safeShot(page, "ar-layout-b-prod-desktop-day.png");
 
   await openArHome(page, "view=month");
-  await shot(page, "ar-layout-b-prod-desktop-month.png");
+  await safeShot(page, "ar-layout-b-prod-desktop-month.png");
 
   await openArHome(page, "view=week");
+  try {
   if (await findAppointmentState(page, "reminders_on")) {
     await openRemindersTab(page);
-    await shot(page, "ar-layout-b-prod-desktop-reminders-enabled.png");
+    await safeShot(page, "ar-layout-b-prod-desktop-reminders-enabled.png");
     await backToActivity(page);
   } else {
     console.warn("No appointment with reminders enabled found for screenshot");
@@ -191,7 +211,7 @@ async function main() {
   await openArHome(page, "view=week");
   if (await findAppointmentState(page, "reminders_off")) {
     await openRemindersTab(page);
-    await shot(page, "ar-layout-b-prod-desktop-reminders-disabled.png");
+    await safeShot(page, "ar-layout-b-prod-desktop-reminders-disabled.png");
     await backToActivity(page);
   } else {
     console.warn("No appointment with reminders disabled found for screenshot");
@@ -199,7 +219,7 @@ async function main() {
 
   await openArHome(page, "view=week");
   if (await findAppointmentState(page, "blocker")) {
-    await shot(page, "ar-layout-b-prod-desktop-phone-or-blocker.png");
+    await safeShot(page, "ar-layout-b-prod-desktop-phone-or-blocker.png");
     await backToActivity(page);
   } else {
     console.warn("No appointment with phone/blocker state found for screenshot");
@@ -213,10 +233,13 @@ async function main() {
       .first()
       .click()
       .catch(() => {});
-    await shot(page, "ar-layout-b-prod-desktop-customer-replies.png");
+    await safeShot(page, "ar-layout-b-prod-desktop-customer-replies.png");
     await backToActivity(page);
   } else {
     console.warn("No appointment with customer replies found for screenshot");
+  }
+  } catch (e) {
+    console.warn("Optional reminder/reply screenshots skipped:", e instanceof Error ? e.message : e);
   }
 
   await verifyLegacyRedirect(page);
@@ -227,9 +250,13 @@ async function main() {
   });
   const tabPage = await tablet.newPage();
   await openArHome(tabPage);
-  await shot(tabPage, "ar-layout-b-prod-tablet-week.png");
-  if (await openFirstGridAppointment(tabPage)) {
-    await shot(tabPage, "ar-layout-b-prod-tablet-appointment-sheet.png");
+  await safeShot(tabPage, "ar-layout-b-prod-tablet-week.png");
+  try {
+    if (await openFirstActivityAppointment(tabPage)) {
+      await safeShot(tabPage, "ar-layout-b-prod-tablet-appointment-sheet.png");
+    }
+  } catch (e) {
+    console.warn("tablet appointment sheet skipped:", e instanceof Error ? e.message : e);
   }
 
   const mobile = await browser.newContext({
@@ -238,9 +265,13 @@ async function main() {
   });
   const mobPage = await mobile.newPage();
   await openArHome(mobPage, "view=day");
-  await shot(mobPage, "ar-layout-b-prod-mobile-day.png");
-  if (await openFirstGridAppointment(mobPage)) {
-    await shot(mobPage, "ar-layout-b-prod-mobile-appointment-sheet.png");
+  await safeShot(mobPage, "ar-layout-b-prod-mobile-day.png");
+  try {
+    if (await openFirstActivityAppointment(mobPage)) {
+      await safeShot(mobPage, "ar-layout-b-prod-mobile-appointment-sheet.png");
+    }
+  } catch (e) {
+    console.warn("mobile appointment sheet skipped:", e instanceof Error ? e.message : e);
   }
 
   await browser.close();

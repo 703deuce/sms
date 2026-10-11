@@ -291,8 +291,8 @@ function TimeGridView({
 
   if (fillViewport) {
     return (
-      <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border bg-background">
-        <div className="min-h-0 flex-1 overflow-auto overscroll-contain">
+      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-background">
+        <div className="h-full min-h-0 overflow-auto overscroll-contain">
           {grid}
         </div>
       </div>
