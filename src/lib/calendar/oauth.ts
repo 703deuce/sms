@@ -201,6 +201,31 @@ export async function completeMicrosoftOAuth(code: string, state: string) {
   });
 
   try {
+    const { consolidateMicrosoftCalendarConnectionsAfterOAuth } = await import(
+      "@/lib/calendar/microsoft-connection-consolidation"
+    );
+    const calendarMerge = await consolidateMicrosoftCalendarConnectionsAfterOAuth({
+      workspaceId: parsed.workspaceId,
+      activeConnectionId: parsed.connectionId,
+    });
+    if (calendarMerge.consolidated) {
+      console.info(
+        "[calendar] microsoft_oauth_import_config_merged",
+        JSON.stringify({
+          workspaceId: parsed.workspaceId,
+          activeConnectionId: calendarMerge.activeConnectionId,
+          mergedFromIds: calendarMerge.mergedFromIds,
+        }),
+      );
+    }
+  } catch (err) {
+    console.warn(
+      "[calendar] microsoft_oauth_import_config_merge_failed",
+      err instanceof Error ? err.message : err,
+    );
+  }
+
+  try {
     const { migrateMctbAiBookingMicrosoftConnectionPointers } = await import(
       "@/lib/mctb/ai-booking/microsoft-connection"
     );

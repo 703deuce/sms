@@ -246,7 +246,12 @@ export function CalendarIntegrationsOpus({
         envHint="MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET"
         rows={connections.filter((c) => c.provider === "microsoft")}
         busy={busyProvider === "microsoft"}
-        onConnect={() => void startConnect("microsoft")}
+        onConnect={
+          needsReauth.some((c) => c.provider === "microsoft")
+            ? undefined
+            : () => void startConnect("microsoft")
+        }
+        connectDisabled={needsReauth.some((c) => c.provider === "microsoft")}
         expandedId={expandedId}
         onExpand={setExpandedId}
         onReconnect={(id) => void startConnect("microsoft", id)}
@@ -255,7 +260,9 @@ export function CalendarIntegrationsOpus({
 
       {needsReauth.length > 0 ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
-          {needsReauth.length} connection(s) need re-authentication. Open settings and reconnect.
+          {needsReauth.length} connection(s) need re-authentication. Use <strong>Reconnect</strong> on
+          that calendar row (do not add a second Microsoft connection). Until you reconnect, new Outlook
+          events will not import and reminders will not run.
         </div>
       ) : null}
 
