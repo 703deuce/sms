@@ -73,6 +73,7 @@ type OverviewReadiness = {
   smsSenderReady?: boolean
   emailSenderReady?: boolean
   remindersActivated?: boolean
+  remindersPaused?: boolean
   operationalStatus?: 'active' | 'needs_attention' | 'setup_incomplete'
 }
 
@@ -151,6 +152,7 @@ export function AppointmentRemindersOverviewPage() {
   const [productStatus, setProductStatus] = useState<ProductStatusItem[]>([])
   const [needsAttentionRows, setNeedsAttentionRows] = useState<NeedsAttentionRow[]>([])
   const [upcomingAppointments, setUpcomingAppointments] = useState<UpcomingRow[]>([])
+  const [pauseBusy, setPauseBusy] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -188,8 +190,29 @@ export function AppointmentRemindersOverviewPage() {
     })
 
   const operational = readiness?.operationalStatus
-  const activeLabel =
-    operational === 'active'
+  async function setWorkspacePause(paused: boolean) {
+    setPauseBusy(true)
+    try {
+      const res = await fetch('/api/appointment-reminders/operational-pause', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(paused ? { action: 'pause', indefinite: true } : { action: 'resume' }),
+      })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error((json as { error?: string }).error || 'Could not update pause state')
+      }
+      await load()
+    } catch (err) {
+      console.error('[ar-overview] pause', err)
+    } finally {
+      setPauseBusy(false)
+    }
+  }
+
+  const activeLabel = readiness?.remindersPaused
+    ? 'Paused'
+    : operational === 'active'
       ? 'Active'
       : operational === 'needs_attention'
         ? 'Needs attention'
@@ -198,8 +221,13 @@ export function AppointmentRemindersOverviewPage() {
           : calendars.length
             ? 'Needs attention'
             : 'Setup incomplete'
-  const activeTone: Tone =
-    operational === 'active' ? 'success' : operational === 'setup_incomplete' ? 'neutral' : 'warning'
+  const activeTone: Tone = readiness?.remindersPaused
+    ? 'warning'
+    : operational === 'active'
+      ? 'success'
+      : operational === 'setup_incomplete'
+        ? 'neutral'
+        : 'warning'
 
   return (
     <ArOpusPage>
@@ -228,6 +256,36 @@ export function AppointmentRemindersOverviewPage() {
             Try again
           </Button>
         </Callout>
+      ) : null}
+
+      {readiness?.remindersPaused ? (
+        <Callout tone="warning" icon={Bell} title="Automated reminders are paused for this workspace">
+          <p className="text-sm text-muted-foreground">
+            No new reminder texts or emails will send until you resume. Calendar sync continues.
+          </p>
+          <Button
+            type="button"
+            variant="default"
+            size="sm"
+            className="mt-3"
+            disabled={pauseBusy}
+            onClick={() => void setWorkspacePause(false)}
+          >
+            Resume reminders
+          </Button>
+        </Callout>
+      ) : readiness?.remindersActivated ? (
+        <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={pauseBusy}
+            onClick={() => void setWorkspacePause(true)}
+          >
+            Pause all reminders
+          </Button>
+        </div>
       ) : null}
 
       <ArUpcomingAppointmentsPanel

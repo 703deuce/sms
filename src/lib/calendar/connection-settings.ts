@@ -13,6 +13,7 @@ import {
   type CalendarConfig,
 } from "@/lib/calendar/providers";
 
+import { MICROSOFT_GRAPH_V1 } from "@/lib/microsoft/graph-helpers";
 import { shouldImportFromConnection } from "@/lib/calendar/eligibility";
 import { registerCalendarPushNotifications, ensureMicrosoftCalendarSubscription, deleteMicrosoftCalendarSubscription } from "@/lib/calendar/webhooks";
 
@@ -131,6 +132,37 @@ export async function verifyWorkspaceCalendarConnection(
       } catch {
         // non-fatal
       }
+      try {
+        const contactsProbe = await fetch(`${MICROSOFT_GRAPH_V1}/me/contacts?$top=1&$select=id`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (contactsProbe.status === 403) {
+          errors.push(
+            "Outlook Contacts permission missing — reconnect this calendar to enable contact phone lookup.",
+          );
+        }
+      } catch {
+        // non-fatal
+      }
+      if (config.graphMailboxUserPrincipalName?.trim()) {
+        try {
+          const upn = encodeURIComponent(config.graphMailboxUserPrincipalName.trim());
+          const mailboxProbe = await fetch(
+            `${MICROSOFT_GRAPH_V1}/users/${upn}/calendars?$top=1&$select=id`,
+            { headers: { Authorization: `Bearer ${token}` } },
+          );
+          if (!mailboxProbe.ok) {
+            const msg = mailboxProbe.status === 403
+              ? "Delegated mailbox calendar access denied — confirm admin consent and mailbox UPN."
+              : `Could not read delegated mailbox calendars (HTTP ${mailboxProbe.status})`;
+            errors.push(msg);
+          }
+        } catch (err) {
+          errors.push(
+            err instanceof Error ? err.message : "Delegated mailbox verification failed",
+          );
+        }
+      }
     }
   }
 
@@ -232,6 +264,9 @@ export async function patchWorkspaceCalendarConnection(
     syncEnabled?: boolean;
     timezone?: string;
     importRules?: CalendarConfig["importRules"];
+    graphMailboxUserPrincipalName?: string;
+    graphCustomerPhonePropertyKeys?: string[];
+    importRulesByCalendarId?: CalendarConfig["importRulesByCalendarId"];
     reminderDefaults?: {
       smsEnabled?: boolean;
       emailEnabled?: boolean;
@@ -268,6 +303,20 @@ export async function patchWorkspaceCalendarConnection(
   if (input.syncEnabled !== undefined) config.syncEnabled = input.syncEnabled;
   if (input.timezone !== undefined) config.timezone = input.timezone;
   if (input.importRules !== undefined) config.importRules = input.importRules;
+  if (input.graphMailboxUserPrincipalName !== undefined) {
+    config.graphMailboxUserPrincipalName = input.graphMailboxUserPrincipalName || undefined;
+  }
+  if (input.graphCustomerPhonePropertyKeys !== undefined) {
+    const keys = input.graphCustomerPhonePropertyKeys.map((k) => k.trim()).filter(Boolean);
+    config.graphCustomerPhonePropertyKeys = keys.length ? keys : undefined;
+  }
+  if (input.importRulesByCalendarId !== undefined) {
+    const entries = Object.entries(input.importRulesByCalendarId || {});
+    config.importRulesByCalendarId =
+      entries.length > 0
+        ? Object.fromEntries(entries)
+        : undefined;
+  }
   if (input.reminderDefaults !== undefined) {
     (config as CalendarConfig & { reminderDefaults?: unknown }).reminderDefaults =
       input.reminderDefaults;

@@ -131,6 +131,15 @@ export async function executeArReminderDispatchJob(payload: { dispatchId?: strin
       where: { id: dispatchId },
       data: { status: "failed", lastError: result.detail || "send_failed" },
     });
+    const { notifyArStaffOfReminderDeliveryFailure } = await import(
+      "@/lib/appointment-reminders/ar-staff-delivery-alert"
+    );
+    await notifyArStaffOfReminderDeliveryFailure({
+      workspaceId: dispatch.workspaceId,
+      appointmentId: dispatch.appointmentId,
+      timelineType: dispatch.timelineType,
+      detail: result.detail || "send_failed",
+    }).catch(() => undefined);
     return { ok: false, reason: result.detail || "send_failed" };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -146,6 +155,15 @@ export async function executeArReminderDispatchJob(payload: { dispatchId?: strin
       where: { id: dispatchId },
       data: { status: "failed", lastError: message },
     });
+    const { notifyArStaffOfReminderDeliveryFailure } = await import(
+      "@/lib/appointment-reminders/ar-staff-delivery-alert"
+    );
+    await notifyArStaffOfReminderDeliveryFailure({
+      workspaceId: dispatch.workspaceId,
+      appointmentId: dispatch.appointmentId,
+      timelineType: dispatch.timelineType,
+      detail: message,
+    }).catch(() => undefined);
     throw err;
   }
 }

@@ -48,6 +48,8 @@ export type CalendarConfig = {
   syncLookaheadDays?: number;
   lastSyncError?: string | null;
   importRules?: CalendarImportRules;
+  /** Optional per-import-calendar eligibility overrides (calendar id → rules). */
+  importRulesByCalendarId?: Record<string, CalendarImportRules>;
   reminderDefaults?: {
     smsEnabled?: boolean;
     emailEnabled?: boolean;
@@ -72,6 +74,12 @@ export type CalendarConfig = {
   tenantId?: string;
   /** personal = Outlook.com/Hotmail; organizational = work/school; unknown = not yet determined. */
   accountType?: MicrosoftAccountType;
+  /**
+   * When set, Graph calendar reads use `/users/{upn}/` instead of `/me/` (delegated/shared mailbox).
+   */
+  graphMailboxUserPrincipalName?: string;
+  /** Workspace-configured Graph extended property keys for customer phone (overrides env when set). */
+  graphCustomerPhonePropertyKeys?: string[];
   /** Per-calendar delta sync state for Microsoft import calendars. */
   microsoftDeltaLinks?: Record<
     string,
@@ -785,7 +793,9 @@ async function getMicrosoftBusyViaCalendarView(
   calendarId?: string,
   ctx?: MicrosoftGraphContext,
 ): Promise<BusyInterval[]> {
-  const url = new URL(microsoftCalendarViewUrl(calendarId));
+  const url = new URL(
+    microsoftCalendarViewUrl(calendarId, ctx?.config?.graphMailboxUserPrincipalName),
+  );
   url.searchParams.set("startDateTime", timeMin.toISOString());
   url.searchParams.set("endDateTime", timeMax.toISOString());
   url.searchParams.set("$select", "start,end,showAs");
@@ -830,6 +840,8 @@ export type ProviderCalendarEvent = {
   type?: string;
   recurrence?: unknown;
   originalStart?: Date;
+  /** Provider private extended properties (Graph / Google). */
+  extendedPropertiesPrivate?: Record<string, string>;
 };
 
 export function resolveImportCalendarIds(config: CalendarConfig) {
@@ -898,6 +910,9 @@ export async function listGoogleCalendarEvents(
         updatedAt: item.updated ? new Date(item.updated) : undefined,
         isAllDay,
         transovoOriginated: Boolean(item.extendedProperties?.private?.transovoAppointmentId),
+        extendedPropertiesPrivate: item.extendedProperties?.private
+          ? { ...item.extendedProperties.private }
+          : undefined,
       };
     });
 }
@@ -981,12 +996,14 @@ export async function listMicrosoftCalendarEvents(
   calendarId?: string,
   ctx?: MicrosoftGraphContext,
 ): Promise<ProviderCalendarEvent[]> {
-  const url = new URL(microsoftCalendarViewUrl(calendarId));
+  const url = new URL(
+    microsoftCalendarViewUrl(calendarId, ctx?.config?.graphMailboxUserPrincipalName),
+  );
   url.searchParams.set("startDateTime", timeMin.toISOString());
   url.searchParams.set("endDateTime", timeMax.toISOString());
   url.searchParams.set(
     "$select",
-    "id,subject,bodyPreview,start,end,isCancelled,showAs,attendees,organizer,lastModifiedDateTime,isAllDay,seriesMasterId,type,recurrence,originalStart,transactionId",
+    "id,subject,bodyPreview,start,end,isCancelled,showAs,attendees,organizer,lastModifiedDateTime,isAllDay,seriesMasterId,type,recurrence,originalStart,transactionId,extendedProperties",
   );
   url.searchParams.set("$top", "250");
 
@@ -1031,12 +1048,14 @@ export async function listMicrosoftCalendarEventsForAppointmentDiscovery(
   calendarId?: string,
   ctx?: MicrosoftGraphContext,
 ): Promise<ProviderCalendarEvent[]> {
-  const url = new URL(microsoftCalendarViewUrl(calendarId));
+  const url = new URL(
+    microsoftCalendarViewUrl(calendarId, ctx?.config?.graphMailboxUserPrincipalName),
+  );
   url.searchParams.set("startDateTime", timeMin.toISOString());
   url.searchParams.set("endDateTime", timeMax.toISOString());
   url.searchParams.set(
     "$select",
-    "id,subject,bodyPreview,body,start,end,isCancelled,showAs,attendees,organizer,lastModifiedDateTime,isAllDay,seriesMasterId,type,recurrence,originalStart,transactionId,location",
+    "id,subject,bodyPreview,body,start,end,isCancelled,showAs,attendees,organizer,lastModifiedDateTime,isAllDay,seriesMasterId,type,recurrence,originalStart,transactionId,location,extendedProperties",
   );
   url.searchParams.set("$top", "250");
 
@@ -1087,6 +1106,8 @@ export function mapMicrosoftGraphEvent(item: {
   id: string;
   subject?: string;
   bodyPreview?: string;
+  body?: { content?: string };
+  location?: { displayName?: string };
   start: { dateTime?: string; date?: string; timeZone?: string };
   end: { dateTime?: string; date?: string; timeZone?: string };
   isCancelled?: boolean;
@@ -1100,16 +1121,20 @@ export function mapMicrosoftGraphEvent(item: {
   transactionId?: string;
   attendees?: Array<{ emailAddress?: { address?: string; name?: string }; status?: { response?: string } }>;
   organizer?: { emailAddress?: { address?: string } };
+  extendedProperties?: { private?: Record<string, string> };
   "@removed"?: { reason?: string };
 }): ProviderCalendarEvent {
-  const transovoOriginated = Boolean(
-    (item as { extendedProperties?: { private?: { transovoAppointmentId?: string } } }).extendedProperties
-      ?.private?.transovoAppointmentId,
-  );
+  const privateProps = item.extendedProperties?.private;
+  const transovoOriginated = Boolean(privateProps?.transovoAppointmentId);
+  const description =
+    item.bodyPreview ||
+    (item.body?.content ? item.body.content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() : undefined);
   return {
     id: item.id,
     summary: item.subject || "Calendar event",
-    description: item.bodyPreview,
+    description,
+    locationDisplay: item.location?.displayName,
+    showAs: item.showAs,
     start: parseMicrosoftEventDateTime(item.start, item.isAllDay),
     end: parseMicrosoftEventDateTime(item.end, item.isAllDay),
     timezone: item.start?.timeZone,
@@ -1123,6 +1148,7 @@ export function mapMicrosoftGraphEvent(item: {
     updatedAt: item.lastModifiedDateTime ? new Date(item.lastModifiedDateTime) : undefined,
     isAllDay: Boolean(item.isAllDay),
     transovoOriginated,
+    extendedPropertiesPrivate: privateProps ? { ...privateProps } : undefined,
     seriesMasterId: item.seriesMasterId,
     type: item.type,
     recurrence: item.recurrence,

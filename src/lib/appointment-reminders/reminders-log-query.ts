@@ -43,11 +43,15 @@ function blockReason(
   meta: AppointmentMetadata,
   phone: string | null,
   appointmentStatus: string,
+  platform: Awaited<ReturnType<typeof loadAppointmentPlatformConfig>>,
+  appointmentRemindersActivatedAt: string | null,
 ): { blocked: boolean; detail: string; hint: string } | null {
   const eligibility = evaluateSmsReminderEligibility({
     metadata: meta,
     inviteePhone: (meta.inviteePhone as string) || null,
     appointmentStatus,
+    platform,
+    appointmentRemindersActivatedAt,
   });
   return eligibilityToBlockDetail(eligibility);
 }
@@ -166,7 +170,14 @@ async function fetchFutureScheduledRows(
 ): Promise<{ rows: ArReminderOperationalRow[]; total: number }> {
   const now = Date.now();
   const prisma = getPrisma();
-  const platform = await loadAppointmentPlatformConfig(workspaceId);
+  const { loadAppointmentRemindersActivation } = await import(
+    "@/lib/appointment-reminders/activation"
+  );
+  const [platform, activation] = await Promise.all([
+    loadAppointmentPlatformConfig(workspaceId),
+    loadAppointmentRemindersActivation(workspaceId),
+  ]);
+  const appointmentRemindersActivatedAt = activation.activatedAt ?? null;
   const weeklyHours = resolveWeeklyHours(platform);
   const steps = listEnabledReminderSteps(platform);
   const smsSteps = steps.filter((s) => s.step.channel === "sms" && !s.immediate);
@@ -228,7 +239,7 @@ async function fetchFutureScheduledRows(
       serviceId,
       row.serviceName,
     );
-    let block = blockReason(meta, phone, row.status);
+    let block = blockReason(meta, phone, row.status, platform, appointmentRemindersActivatedAt);
     if (workflowConflict.blocked) {
       block = {
         blocked: true,

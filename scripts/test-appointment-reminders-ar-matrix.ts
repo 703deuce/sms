@@ -70,7 +70,10 @@ async function dbSection() {
 
   const { getArSmsUsageSnapshot } = await import("@/lib/appointment-reminders/ar-sms-usage");
   const snap = await getArSmsUsageSnapshot(ws.id);
-  assert.ok(snap.periodKey.match(/^\d{4}-\d{2}$/));
+  assert.ok(
+    /^\d{4}-\d{2}$/.test(snap.periodKey) || snap.periodKey.includes("__"),
+    `unexpected periodKey ${snap.periodKey}`,
+  );
 }
 
 dbSection()

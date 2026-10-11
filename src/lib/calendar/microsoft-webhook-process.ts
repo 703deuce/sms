@@ -28,21 +28,25 @@ export async function processMicrosoftCalendarWebhookJob(payload: {
 
   if (providerEventId) {
     const calendarIds = resolveImportCalendarIds(config);
-    try {
-      await syncCalendarProviderEventById({
-        workspaceId,
-        connectionId,
-        provider: "microsoft",
-        eventId: providerEventId,
-        calendarId: calendarIds[0],
-      });
-    } catch (err) {
-      console.warn(
-        "[calendar] microsoft webhook targeted sync failed",
-        connectionId,
-        providerEventId,
-        err,
-      );
+    const targets = calendarIds.length ? calendarIds : ["primary"];
+    for (const calendarId of targets) {
+      try {
+        await syncCalendarProviderEventById({
+          workspaceId,
+          connectionId,
+          provider: "microsoft",
+          eventId: providerEventId,
+          calendarId,
+        });
+      } catch (err) {
+        console.warn(
+          "[calendar] microsoft webhook targeted sync failed",
+          connectionId,
+          calendarId,
+          providerEventId,
+          err,
+        );
+      }
     }
   }
 

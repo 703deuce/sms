@@ -1,4 +1,4 @@
-import { parseArUsagePeriodKey } from "@/lib/appointment-reminders/commercial/ar-usage-period";
+import { parseArUsagePeriodKey } from "@/lib/appointment-reminders/commercial/ar-usage-period-keys";
 
 /**
  * Appointment Reminders SMS allowance — limits come from configuration, not hardcoded product prices.

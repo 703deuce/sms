@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import assert from "node:assert/strict";
 import {
   isEventEligibleForCalendarMirror,
   isEventEligibleForReminderImport,
@@ -16,20 +16,44 @@ const baseEvent: ProviderCalendarEvent = {
   organizerEmail: "owner@example.com",
 };
 
-describe("calendar mirror vs reminder eligibility", () => {
-  it("imports solo personal events for calendar mirror", () => {
-    const mirror = isEventEligibleForCalendarMirror(baseEvent);
-    expect(mirror.eligible).toBe(true);
+const mirror = isEventEligibleForCalendarMirror(baseEvent);
+assert.equal(mirror.eligible, true);
 
-    const reminder = isEventEligibleForReminderImport(baseEvent, mergeImportRules({}), "owner@example.com");
-    expect(reminder.eligible).toBe(false);
-    expect(reminder.reason).toBe("no_external_attendees");
-  });
+const reminder = isEventEligibleForReminderImport(baseEvent, mergeImportRules({}), "owner@example.com");
+assert.equal(reminder.eligible, false);
+assert.equal(reminder.reason, "no_external_attendees");
 
-  it("skips transovo-marked events from mirror import", () => {
-    const event = { ...baseEvent, transovoOriginated: true };
-    const mirror = isEventEligibleForCalendarMirror(event);
-    expect(mirror.eligible).toBe(false);
-    expect(mirror.reason).toBe("transovo_originated");
-  });
-});
+const transovo = { ...baseEvent, transovoOriginated: true };
+assert.equal(isEventEligibleForCalendarMirror(transovo).reason, "transovo_originated");
+
+const colleagueOrganized = {
+  ...baseEvent,
+  organizerEmail: "colleague@example.com",
+  attendees: [{ email: "client@other.com", name: "Client" }],
+};
+assert.equal(
+  isEventEligibleForReminderImport(colleagueOrganized, mergeImportRules({}), "owner@example.com").reason,
+  "organizer_not_connection",
+);
+
+const freeEvent = {
+  ...baseEvent,
+  showAs: "free",
+  attendees: [{ email: "client@other.com" }],
+};
+assert.equal(
+  isEventEligibleForReminderImport(freeEvent, mergeImportRules({}), "owner@example.com").reason,
+  "show_as_free",
+);
+
+const internalOnly = {
+  ...baseEvent,
+  organizerEmail: "owner@acme.com",
+  attendees: [{ email: "peer@acme.com", name: "Peer" }],
+};
+assert.equal(
+  isEventEligibleForReminderImport(internalOnly, mergeImportRules({}), "owner@acme.com").reason,
+  "internal_domain_only_attendees",
+);
+
+console.log("eligibility.test.ts: ok");

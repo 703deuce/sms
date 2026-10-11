@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { requireAppointmentRemindersAccess } from "@/lib/appointment-reminders/api-auth";
 import { publicRedirectUrl } from "@/lib/integrations/framework/app-url";
 import { applyWorkspaceCookies } from "@/lib/workspace/cookies";
 import { ensureProductWorkspace } from "@/lib/products/entitlements";
@@ -30,6 +31,10 @@ export async function GET(request: Request) {
   const plan: ArPlanKey = isArPlanKey(planRaw) ? planRaw : "free";
 
   if (plan === "free") {
+    const bootstrap = await requireAppointmentRemindersAccess("appointment_reminders.settings", {
+      bootstrap: true,
+    });
+    if ("error" in bootstrap) return bootstrap.error;
     await assignArFreePlan(workspace.workspaceId);
     const res = NextResponse.redirect(publicRedirectUrl(nextPath, request));
     applyWorkspaceCookies(

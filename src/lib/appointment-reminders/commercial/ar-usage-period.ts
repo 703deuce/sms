@@ -1,6 +1,10 @@
 import "server-only";
 
 import type { ArPlanKey } from "@/lib/appointment-reminders/commercial/ar-plan-catalog";
+import {
+  buildArUsagePeriodKey,
+  parseArUsagePeriodKey,
+} from "@/lib/appointment-reminders/commercial/ar-usage-period-keys";
 
 export type ArUsagePeriod = {
   periodKey: string;
@@ -9,19 +13,7 @@ export type ArUsagePeriod = {
   source: "stripe_subscription" | "free_entitlement" | "legacy_grandfather";
 };
 
-/** Stripe-aligned or free rolling month — stored as ISO bounds in workspace limits when free. */
-export function buildArUsagePeriodKey(start: Date, end: Date): string {
-  return `${start.toISOString()}__${end.toISOString()}`;
-}
-
-export function parseArUsagePeriodKey(key: string): { start: Date; end: Date } | null {
-  const parts = key.split("__");
-  if (parts.length !== 2) return null;
-  const start = new Date(parts[0]);
-  const end = new Date(parts[1]);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
-  return { start, end };
-}
+export { buildArUsagePeriodKey, parseArUsagePeriodKey };
 
 export function rollingFreeMonthPeriod(anchor: Date, now = new Date()): ArUsagePeriod {
   const start = new Date(anchor);

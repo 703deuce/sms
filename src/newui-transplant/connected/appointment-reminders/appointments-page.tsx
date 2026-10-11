@@ -665,6 +665,14 @@ function AppointmentTableRow({
               <span className="text-muted-foreground">Open appointment to add contact info</span>
             ) : null}
           </span>
+        ) : row.phoneState === 'needs_review' ? (
+          <span className="flex flex-col gap-0.5 text-xs text-amber-700">
+            <span className="flex items-center gap-1">
+              <AlertTriangle className="size-3.5" aria-hidden="true" />
+              Needs review
+            </span>
+            <span className="text-muted-foreground">Multiple numbers in calendar — confirm customer phone</span>
+          </span>
         ) : row.phoneState === 'invalid' ? (
           <span className="text-xs text-amber-700">Invalid phone</span>
         ) : row.phone ? (
