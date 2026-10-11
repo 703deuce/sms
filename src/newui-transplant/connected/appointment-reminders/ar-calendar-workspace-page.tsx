@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { AlertTriangle, Calendar, RefreshCw } from 'lucide-react'
+import { AlertTriangle, Bell, Calendar, ExternalLink, RefreshCw } from 'lucide-react'
 import type { CalendarApiAppointment } from '@/features/appointments/kimi/calendar/map-calendar'
 import type { CalendarViewMode } from '@/features/appointments/kimi/calendar/types'
 import {
@@ -14,22 +14,32 @@ import {
 import { parseArCalendarView } from '@/lib/appointment-reminders/calendar/ar-calendar-url-state'
 import {
   dateKey,
+  dayKeyInTimeZone,
   getArCalendarRange,
   startOfWeek,
 } from '@/lib/appointment-reminders/calendar/ar-calendar-layout'
 import { calendarEventToAppointmentRow } from '@/lib/appointment-reminders/calendar/calendar-event-to-row'
+import {
+  appointmentRowFromOverviewFeed,
+  type ArOverviewFeedShape,
+} from '@/lib/appointment-reminders/calendar/overview-feed-appointment-row'
 import {
   isArCalendarViewerReadyFromIntegrationRows,
   isArCalendarViewerReadyFromOverview,
 } from '@/lib/appointment-reminders/calendar/ar-calendar-viewer-ready'
 import { ArCalendarActivityPanel } from '@/newui-transplant/components/appointment-reminders/ar-calendar-activity-panel'
 import {
+  ArCalendarOperationsStrip,
+  type OperationsStripSelect,
+} from '@/newui-transplant/components/appointment-reminders/ar-calendar-operations-strip'
+import { ArCalendarTodayPanel } from '@/newui-transplant/components/appointment-reminders/ar-calendar-today-panel'
+import {
   ArCalendarOpusView,
   type ArCalendarFilterOption,
 } from '@/newui-transplant/components/appointment-reminders/ar-calendar-opus-view'
 import { AppointmentDetailDrawer } from '@/newui-transplant/components/appointment-reminders/appointment-detail-drawer'
 import { ArOpusPage, OpusSearchField } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
-import { EmptyState, Pill } from '@/newui-transplant/components/app/kit'
+import { Callout, EmptyState, Pill, TextLink } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
 import {
   Sheet,
@@ -63,12 +73,27 @@ export function AppointmentRemindersCalendarWorkspacePage() {
   const [connected, setConnected] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncLabel, setSyncLabel] = useState<string | null>(null)
-  const [overviewFeed, setOverviewFeed] = useState<Record<string, unknown> | null>(null)
+  const [overviewFeed, setOverviewFeed] = useState<ArOverviewFeedShape | null>(null)
+  const [overviewMeta, setOverviewMeta] = useState<{
+    readiness?: {
+      remindersPaused?: boolean
+      remindersActivated?: boolean
+      syncHealthy?: boolean
+      hasImportCalendars?: boolean
+    }
+    stats?: { failed7d?: number }
+    sync?: { syncError?: string | null }
+    calendarHealthy?: boolean
+  } | null>(null)
   const [feedLoading, setFeedLoading] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [panelTab, setPanelTab] = useState<'details' | 'reminders' | 'activity' | 'preferences'>('details')
+  const [openConversationOnLoad, setOpenConversationOnLoad] = useState(false)
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false)
   const [mobileActivityOpen, setMobileActivityOpen] = useState(false)
+  const [stripCollapsed, setStripCollapsed] = useState(false)
+  const [pauseBusy, setPauseBusy] = useState(false)
+  const [composeUrl, setComposeUrl] = useState<string | null>(null)
   const [calendarConnections, setCalendarConnections] = useState<ArCalendarFilterOption[]>([])
   const [calendarFilter, setCalendarFilter] = useState(() => searchParams.get('calendar') || 'all')
 
@@ -106,9 +131,12 @@ export function AppointmentRemindersCalendarWorkspacePage() {
   )
 
   const selectedRow = useMemo(() => {
-    if (!selectedEvent) return null
-    return calendarEventToAppointmentRow(selectedEvent, timezone)
-  }, [selectedEvent, timezone])
+    if (!selectedId) return null
+    if (selectedEvent) return calendarEventToAppointmentRow(selectedEvent, timezone)
+    return appointmentRowFromOverviewFeed(selectedId, overviewFeed, timezone)
+  }, [selectedId, selectedEvent, timezone, overviewFeed])
+
+  const upcomingLite = overviewFeed?.upcomingAppointments
 
   const syncUrl = useCallback(
     (
@@ -167,7 +195,13 @@ export function AppointmentRemindersCalendarWorkspacePage() {
       if (overviewRes.ok) {
         const json = await overviewRes.json()
         const data = json.data
-        setOverviewFeed(data)
+        setOverviewFeed(data as ArOverviewFeedShape)
+        setOverviewMeta({
+          readiness: data?.readiness,
+          stats: data?.stats,
+          sync: data?.sync,
+          calendarHealthy: data?.calendarHealthy,
+        })
         if (!linked) linked = isArCalendarViewerReadyFromOverview(data)
         if (data?.timezone) setTimezone(data.timezone)
         const last = data?.sync?.lastSyncAt
@@ -216,6 +250,20 @@ export function AppointmentRemindersCalendarWorkspacePage() {
   }, [loadOverview])
 
   useEffect(() => {
+    void fetch('/api/appointment-reminders/calendar/native-actions')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        const d = json?.data as {
+          microsoft?: { composeUrl?: string } | null
+          google?: { createEventUrl?: string } | null
+        }
+        const url = d?.microsoft?.composeUrl || d?.google?.createEventUrl
+        if (url) setComposeUrl(url)
+      })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
     loadEvents()
   }, [loadEvents])
 
@@ -233,21 +281,70 @@ export function AppointmentRemindersCalendarWorkspacePage() {
     syncUrl(view, cursor, selectedDayKey, searchQ, calendarFilter)
   }, [view, cursor, selectedDayKey, searchQ, calendarFilter, syncUrl])
 
+  const focusAppointmentDate = useCallback(
+    (startsAt: string) => {
+      const d = new Date(startsAt)
+      if (Number.isNaN(d.getTime())) return
+      setSelectedDayKey(dayKeyInTimeZone(d, timezone))
+      if (view === 'week') setCursor(startOfWeek(d))
+      else if (view === 'month') setCursor(new Date(d.getFullYear(), d.getMonth(), 1))
+      else setCursor(d)
+    },
+    [view, timezone],
+  )
+
   const selectAppointment = useCallback(
-    (id: string, tab?: 'details' | 'reminders' | 'activity') => {
+    (
+      id: string,
+      tab?: 'details' | 'reminders' | 'activity',
+      opts?: { startsAt?: string; openConversation?: boolean },
+    ) => {
+      if (opts?.startsAt) focusAppointmentDate(opts.startsAt)
       setSelectedId(id)
       setPanelTab(tab || 'details')
+      setOpenConversationOnLoad(Boolean(opts?.openConversation))
       if (typeof window !== 'undefined' && window.innerWidth < 1024) {
         setMobileSheetOpen(true)
       }
     },
-    [],
+    [focusAppointmentDate],
+  )
+
+  const handleStripSelect = useCallback(
+    (payload: OperationsStripSelect) => {
+      selectAppointment(payload.appointmentId, payload.tab, {
+        startsAt: payload.startsAt,
+        openConversation: payload.openConversation,
+      })
+    },
+    [selectAppointment],
   )
 
   const clearSelection = useCallback(() => {
     setSelectedId(null)
+    setOpenConversationOnLoad(false)
     setMobileSheetOpen(false)
   }, [])
+
+  async function setWorkspacePause(paused: boolean) {
+    setPauseBusy(true)
+    try {
+      const res = await fetch('/api/appointment-reminders/operational-pause', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(paused ? { action: 'pause', indefinite: true } : { action: 'resume' }),
+      })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error((json as { error?: string }).error || 'Could not update pause state')
+      }
+      await loadOverview()
+    } catch (err) {
+      console.error('[ar-calendar] pause', err)
+    } finally {
+      setPauseBusy(false)
+    }
+  }
 
   const onToday = useCallback(() => {
     const t = new Date()
@@ -329,8 +426,67 @@ export function AppointmentRemindersCalendarWorkspacePage() {
             <RefreshCw className={cn('mr-1.5 h-3.5 w-3.5', syncing && 'animate-spin')} aria-hidden />
             Sync
           </Button>
+          {composeUrl ? (
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => window.open(composeUrl, '_blank', 'noopener,noreferrer')}
+            >
+              <ExternalLink className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+              Add appointment
+            </Button>
+          ) : (
+            <Button nativeButton={false} size="sm" render={<Link href={AR_ROUTES.appointments} />}>
+              Add appointment
+            </Button>
+          )}
+          {overviewMeta?.readiness?.remindersActivated && !overviewMeta?.readiness?.remindersPaused ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={pauseBusy}
+              onClick={() => void setWorkspacePause(true)}
+            >
+              Pause reminders
+            </Button>
+          ) : null}
         </div>
       </header>
+
+      {overviewMeta?.readiness?.remindersPaused ? (
+        <Callout tone="warning" icon={Bell} title="Automated reminders are paused" className="mb-2">
+          <p className="text-sm text-muted-foreground">
+            No new reminder texts or emails will send until you resume. Calendar sync continues.
+          </p>
+          <Button
+            type="button"
+            variant="default"
+            size="sm"
+            className="mt-2"
+            disabled={pauseBusy}
+            onClick={() => void setWorkspacePause(false)}
+          >
+            Resume reminders
+          </Button>
+        </Callout>
+      ) : null}
+
+      {overviewMeta?.calendarHealthy === false && overviewReady ? (
+        <Callout tone="warning" icon={Calendar} title="Calendar connection needs attention" className="mb-2">
+          Connect Microsoft 365 or Google and select import calendars.{' '}
+          <TextLink href={AR_SETTINGS_INTEGRATIONS}>Manage connections</TextLink>
+        </Callout>
+      ) : null}
+
+      {(overviewMeta?.stats?.failed7d ?? 0) > 0 ? (
+        <Callout tone="danger" icon={AlertTriangle} title="Some reminders failed to deliver" className="mb-2">
+          <p className="text-sm text-muted-foreground">
+            {overviewMeta?.stats?.failed7d} failed in the last 7 days.{' '}
+            <TextLink href={AR_ROUTES.reminders}>Review reminders</TextLink>
+          </p>
+        </Callout>
+      ) : null}
 
       {!overviewReady ? (
         <div className="min-h-[480px] animate-pulse rounded-xl bg-muted/30" />
@@ -352,71 +508,81 @@ export function AppointmentRemindersCalendarWorkspacePage() {
           <Button size="sm" onClick={() => loadEvents({ refresh: true })}>Try again</Button>
         </div>
       ) : (
-        <div
-          className={cn(
-            'flex min-h-0 flex-1 flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(300px,360px)] lg:gap-4 lg:overflow-hidden',
-          )}
-        >
-          <div className="flex min-h-[min(60vh,640px)] min-w-0 flex-1 flex-col lg:min-h-0">
-            {loading && !events.length ? (
-              <div className="min-h-[400px] flex-1 animate-pulse rounded-xl bg-muted/30" />
-            ) : (
-              <ArCalendarOpusView
-                view={view}
-                cursor={cursor}
-                events={filteredEvents}
-                timeZone={timezone}
-                onViewChange={onViewChange}
-                onPrev={onPrev}
-                onNext={onNext}
-                onToday={onToday}
-                onSelectEvent={(id) => selectAppointment(id)}
-                onSelectDay={onSelectDay}
-                calendarFilter={calendarFilter}
-                calendarFilterOptions={calendarFilterOptions}
-                onCalendarFilterChange={setCalendarFilter}
-                compactChrome
-                fillHeight
-              />
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+          <div
+            className={cn(
+              'flex min-h-0 flex-1 flex-col gap-3 lg:grid lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(300px,350px)] lg:gap-4 lg:overflow-hidden',
             )}
-          </div>
-
-          <div className="flex justify-end lg:hidden">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setMobileActivityOpen(true)}
-              disabled={Boolean(selectedRow)}
-            >
-              Today&apos;s activity
-            </Button>
-          </div>
-
-          <aside
-            className="hidden h-full min-h-0 max-h-full flex-col overflow-hidden rounded-xl border border-border bg-card lg:flex"
-            aria-label="Appointment context"
           >
-            {selectedRow ? (
-              <AppointmentDetailDrawer
-                layout="panel"
-                row={selectedRow}
-                open
-                onClose={clearSelection}
-                timezone={timezone}
-                onPhoneSaved={refreshSelection}
-                initialTab={panelTab}
-              />
-            ) : (
-              <div className="min-h-0 flex-1 overflow-y-auto">
-                <ArCalendarActivityPanel
-                  data={overviewFeed as Parameters<typeof ArCalendarActivityPanel>[0]['data']}
-                  loading={feedLoading}
-                  onSelectAppointment={selectAppointment}
+            <div className="flex min-h-[min(52vh,560px)] min-w-0 flex-1 flex-col lg:min-h-0">
+              {loading && !events.length ? (
+                <div className="min-h-[400px] flex-1 animate-pulse rounded-xl bg-muted/30" />
+              ) : (
+                <ArCalendarOpusView
+                  view={view}
+                  cursor={cursor}
+                  events={filteredEvents}
+                  timeZone={timezone}
+                  onViewChange={onViewChange}
+                  onPrev={onPrev}
+                  onNext={onNext}
+                  onToday={onToday}
+                  onSelectEvent={(id) => selectAppointment(id)}
+                  onSelectDay={onSelectDay}
+                  calendarFilter={calendarFilter}
+                  calendarFilterOptions={calendarFilterOptions}
+                  onCalendarFilterChange={setCalendarFilter}
+                  compactChrome
+                  fillHeight
+                  selectedEventId={selectedId}
                 />
-              </div>
-            )}
-          </aside>
+              )}
+            </div>
+
+            <div className="flex justify-end lg:hidden">
+              <Button type="button" variant="outline" size="sm" onClick={() => setMobileActivityOpen(true)}>
+                Activity &amp; attention
+              </Button>
+            </div>
+
+            <aside
+              className="hidden h-full min-h-0 max-h-full flex-col overflow-hidden rounded-xl border border-border bg-card lg:flex"
+              aria-label="Appointment context"
+            >
+              {selectedRow ? (
+                <AppointmentDetailDrawer
+                  layout="panel"
+                  row={selectedRow}
+                  open
+                  onClose={clearSelection}
+                  timezone={timezone}
+                  onPhoneSaved={refreshSelection}
+                  initialTab={panelTab}
+                  openConversationOnLoad={openConversationOnLoad}
+                  panelBackLabel="Back to Today"
+                />
+              ) : (
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                  <ArCalendarTodayPanel
+                    cursor={cursor}
+                    view={view}
+                    timeZone={timezone}
+                    events={filteredEvents}
+                    upcoming={upcomingLite}
+                    onSelectAppointment={(id) => selectAppointment(id)}
+                  />
+                </div>
+              )}
+            </aside>
+          </div>
+
+          <ArCalendarOperationsStrip
+            className="hidden shrink-0 lg:block"
+            data={overviewFeed}
+            collapsed={stripCollapsed}
+            onCollapsedChange={setStripCollapsed}
+            onSelect={handleStripSelect}
+          />
         </div>
       )}
 
@@ -428,22 +594,35 @@ export function AppointmentRemindersCalendarWorkspacePage() {
         timezone={timezone}
         onPhoneSaved={refreshSelection}
         initialTab={panelTab}
+        openConversationOnLoad={openConversationOnLoad}
       />
 
       <Sheet open={mobileActivityOpen} onOpenChange={setMobileActivityOpen}>
         <SheetContent side="bottom" className="flex max-h-[85vh] flex-col gap-0 p-0">
           <SheetHeader className="border-b px-4 py-3 text-left">
-            <SheetTitle className="text-base font-semibold">Today&apos;s activity</SheetTitle>
+            <SheetTitle className="text-base font-semibold">Activity &amp; attention</SheetTitle>
           </SheetHeader>
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <ArCalendarActivityPanel
-              data={overviewFeed as Parameters<typeof ArCalendarActivityPanel>[0]['data']}
-              loading={feedLoading}
-              onSelectAppointment={(id, tab) => {
+          <div className="min-h-0 flex-1 overflow-y-auto p-3">
+            <ArCalendarOperationsStrip
+              data={overviewFeed}
+              collapsed={false}
+              onCollapsedChange={() => {}}
+              onSelect={(payload) => {
                 setMobileActivityOpen(false)
-                selectAppointment(id, tab)
+                handleStripSelect(payload)
               }}
+              className="border-0 shadow-none"
             />
+            <div className="mt-4 border-t pt-4">
+              <ArCalendarActivityPanel
+                data={overviewFeed as Parameters<typeof ArCalendarActivityPanel>[0]['data']}
+                loading={feedLoading}
+                onSelectAppointment={(id, tab) => {
+                  setMobileActivityOpen(false)
+                  selectAppointment(id, tab)
+                }}
+              />
+            </div>
           </div>
         </SheetContent>
       </Sheet>

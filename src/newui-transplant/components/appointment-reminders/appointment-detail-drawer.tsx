@@ -44,6 +44,8 @@ export function AppointmentDetailDrawer({
   onPhoneSaved,
   layout = 'sheet',
   initialTab,
+  openConversationOnLoad,
+  panelBackLabel = 'Back to Today',
 }: {
   row: ArAppointmentRow | null
   open: boolean
@@ -52,6 +54,8 @@ export function AppointmentDetailDrawer({
   onPhoneSaved: () => void
   layout?: 'sheet' | 'panel'
   initialTab?: 'details' | 'reminders' | 'activity' | 'preferences'
+  openConversationOnLoad?: boolean
+  panelBackLabel?: string
 }) {
   const [detail, setDetail] = useState<DetailPayload | null>(null)
   const [timeline, setTimeline] = useState<TimelineEntry[]>([])
@@ -252,6 +256,26 @@ export function AppointmentDetailDrawer({
     if (!open) setConversationOpen(false)
   }, [open])
 
+  useEffect(() => {
+    if (open && openConversationOnLoad) setConversationOpen(true)
+  }, [open, openConversationOnLoad, row?.id])
+
+  const panelTitle = row ? primaryAppointmentHeading(row) : ''
+  const nextScheduled = timeline.find((t) => t.status === 'Scheduled' || t.status === 'scheduled')
+  const effectivePhone =
+    phoneEdit || row?.phone || (meta.inviteePhone as string) || (meta.phone as string) || ''
+  const readinessLine = remindersSuppressed
+    ? 'Reminders off for this appointment'
+    : row?.reminder.status === 'needs_attention' || row?.reminder.status === 'failed'
+      ? row.reminder.secondaryLine || row.reminder.label
+      : nextScheduled?.scheduledFor
+        ? `Next: ${new Date(nextScheduled.scheduledFor).toLocaleString(undefined, {
+            dateStyle: 'medium',
+            timeStyle: 'short',
+            timeZone: tz,
+          })}`
+        : row?.reminder.label
+
   const detailContent =
     row && open ? (
           <>
@@ -268,7 +292,7 @@ export function AppointmentDetailDrawer({
                     onClick={onClose}
                   >
                     <ChevronLeft className="mr-0.5 size-4" aria-hidden />
-                    Activity
+                    {panelBackLabel}
                   </Button>
                   <Button
                     type="button"
@@ -281,40 +305,79 @@ export function AppointmentDetailDrawer({
                     Conversation
                   </Button>
                 </div>
-                <h2 className="text-base font-semibold">
-                  {row.appointmentTitle || row.customerName}
-                </h2>
+                <h2 className="text-base font-semibold">{panelTitle}</h2>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  {formatDateTimeRange(row.startsAt, row.endsAt, tz, row.isAllDay)}
+                </p>
               </header>
             ) : (
               <SheetHeader className={`border-b py-4 text-left ${chromePad}`}>
-                <SheetTitle className="text-base font-semibold">
-                  {row.appointmentTitle || row.customerName}
-                </SheetTitle>
+                <SheetTitle className="text-base font-semibold">{panelTitle}</SheetTitle>
               </SheetHeader>
             )}
-            <div className={`border-b pb-3 ${chromePad}`}>
-              {!isPanel ? (
+            {!isPanel ? (
+              <div className={`border-b pb-3 ${chromePad}`}>
                 <p className="text-sm text-muted-foreground">{row.customerName}</p>
-              ) : null}
-              <p className="text-sm text-muted-foreground">
-                {formatDateTimeRange(row.startsAt, row.endsAt, tz, row.isAllDay)}
-              </p>
-              <div className="flex flex-wrap items-center gap-2 pt-2">
-                <ReminderStatusPill label={row.reminder.label} status={row.reminder.status} />
-                {customerResponse ? (
-                  <CustomerResponsePill
-                    label={customerResponse.label}
-                    kind={customerResponse.kind}
-                  />
+                <p className="text-sm text-muted-foreground">
+                  {formatDateTimeRange(row.startsAt, row.endsAt, tz, row.isAllDay)}
+                </p>
+                <div className="flex flex-wrap items-center gap-2 pt-2">
+                  <ReminderStatusPill label={row.reminder.label} status={row.reminder.status} />
+                  {customerResponse ? (
+                    <CustomerResponsePill
+                      label={customerResponse.label}
+                      kind={customerResponse.kind}
+                    />
+                  ) : null}
+                </div>
+                {customerResponse?.detailLine ? (
+                  <p className="text-xs text-muted-foreground">{customerResponse.detailLine}</p>
+                ) : null}
+                {customerResponse?.reasonLine ? (
+                  <p className="text-xs text-muted-foreground">{customerResponse.reasonLine}</p>
                 ) : null}
               </div>
-              {customerResponse?.detailLine ? (
-                <p className="text-xs text-muted-foreground">{customerResponse.detailLine}</p>
-              ) : null}
-              {customerResponse?.reasonLine ? (
-                <p className="text-xs text-muted-foreground">{customerResponse.reasonLine}</p>
-              ) : null}
-            </div>
+            ) : null}
+
+            {isPanel ? (
+              <section className={`border-b py-3 ${chromePad}`} aria-label="Reminder readiness">
+                <div className="flex flex-wrap items-center gap-2">
+                  <ReminderStatusPill label={row.reminder.label} status={row.reminder.status} />
+                  {customerResponse && customerResponse.kind !== 'none' ? (
+                    <CustomerResponsePill
+                      label={customerResponse.label}
+                      kind={customerResponse.kind}
+                    />
+                  ) : null}
+                </div>
+                <dl className="mt-2 space-y-1.5 text-xs">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <dt className="text-muted-foreground">Recipient</dt>
+                    <dd className="font-medium text-foreground">
+                      {effectivePhone ? formatPhone(effectivePhone) : 'No phone on file'}
+                      <Button
+                        type="button"
+                        variant="link"
+                        className="ml-1 h-auto p-0 text-xs"
+                        onClick={() => setSheetTab('preferences')}
+                      >
+                        Edit
+                      </Button>
+                    </dd>
+                  </div>
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <dt className="text-muted-foreground">Next reminder</dt>
+                    <dd className="text-foreground">{readinessLine}</dd>
+                  </div>
+                  {customerResponse?.detailLine ? (
+                    <div>
+                      <dt className="text-muted-foreground">Latest response</dt>
+                      <dd className="mt-0.5 text-foreground">{customerResponse.detailLine}</dd>
+                    </div>
+                  ) : null}
+                </dl>
+              </section>
+            ) : null}
 
             <div className={`border-b ${chromePad}`}>
               <div className="flex gap-1 overflow-x-auto py-2" role="tablist" aria-label="Appointment sections">
@@ -815,4 +878,22 @@ function formatDateTimeRange(
 ) {
   if (allDay) return `${formatDate(start, tz)} · All day`
   return `${formatDate(start, tz)} · ${formatTimeRange(start, end, tz, false)}`
+}
+
+function looksLikePhoneOnly(value: string) {
+  const t = value.trim()
+  if (!t) return false
+  const digits = t.replace(/\D/g, '')
+  return digits.length >= 7 && /^[\d\s().+\-]+$/.test(t)
+}
+
+function primaryAppointmentHeading(row: ArAppointmentRow) {
+  const name = row.customerName?.trim() || ''
+  const title = row.appointmentTitle?.trim() || ''
+  if (name && !looksLikePhoneOnly(name)) {
+    if (title && title !== name) return `${name} · ${title}`
+    return name
+  }
+  if (title) return title
+  return name || 'Appointment'
 }

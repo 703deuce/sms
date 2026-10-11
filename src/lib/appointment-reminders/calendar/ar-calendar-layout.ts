@@ -3,7 +3,7 @@ import type { CalendarViewMode } from "@/features/appointments/kimi/calendar/typ
 
 export const AR_CALENDAR_DAY_START_HOUR = 6;
 export const AR_CALENDAR_DAY_END_HOUR = 21;
-export const AR_CALENDAR_HOUR_PX = 52;
+export const AR_CALENDAR_HOUR_PX = 58;
 
 export function startOfWeek(d: Date) {
   const copy = new Date(d);

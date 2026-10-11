@@ -20,8 +20,12 @@ async function openArHome(page: Page, query = "view=week") {
   await page.goto(url, { waitUntil: "networkidle", timeout: 180_000 });
   await dismissOnboarding(page);
   await page.getByRole("heading", { level: 1, name: "Calendar" }).waitFor({ timeout: 60_000 });
-  await page.getByText("Upcoming reminders").waitFor({ timeout: 60_000 }).catch(() => {});
+  await page
+    .getByRole("region", { name: /Activity and attention/i })
+    .waitFor({ timeout: 60_000 })
+    .catch(() => {});
   await page.locator("aside[aria-label='Appointment context']").waitFor({ timeout: 30_000 }).catch(() => {});
+  await page.getByText(/^Today$/).waitFor({ timeout: 30_000 }).catch(() => {});
   await page.waitForTimeout(1200);
 }
 
@@ -40,7 +44,7 @@ function calendarGridAppointmentButtons(page: Page): Locator {
 async function waitForAppointmentDetail(page: Page) {
   const ctx = page.locator("aside[aria-label='Appointment context']");
   await Promise.race([
-    ctx.getByRole("button", { name: /^Activity$/i }).waitFor({ timeout: 90_000 }),
+    ctx.getByRole("button", { name: /Back to Today/i }).waitFor({ timeout: 90_000 }),
     ctx.getByRole("tab", { name: "Details" }).waitFor({ timeout: 90_000 }),
     page.getByText(/Reminders are (on|off)/i).waitFor({ timeout: 90_000 }),
   ]);
@@ -82,10 +86,10 @@ async function openRemindersTab(page: Page) {
 async function backToActivity(page: Page) {
   const back = page
     .locator("aside[aria-label='Appointment context']")
-    .getByRole("button", { name: /Activity/i });
+    .getByRole("button", { name: /Back to Today/i });
   if (await back.isVisible().catch(() => false)) {
     await back.click();
-    await page.getByText("Upcoming reminders").waitFor({ timeout: 15_000 }).catch(() => {});
+    await page.getByText(/^Today$/).waitFor({ timeout: 15_000 }).catch(() => {});
     await page.waitForTimeout(400);
   }
 }
@@ -182,6 +186,16 @@ async function main() {
 
   await openArHome(page);
   await safeShot(page, "ar-layout-b-prod-desktop-week-activity.png");
+
+  const stripCollapse = page.getByRole("button", { name: /Collapse activity strip/i });
+  if (await stripCollapse.isVisible().catch(() => false)) {
+    await stripCollapse.click();
+    await page.waitForTimeout(400);
+    await safeShot(page, "ar-layout-b-prod-desktop-strip-collapsed.png");
+    await page.getByRole("button", { name: /Expand activity strip/i }).click().catch(() => {});
+    await page.waitForTimeout(400);
+    await safeShot(page, "ar-layout-b-prod-desktop-strip-expanded.png");
+  }
 
   try {
     if (await openFirstActivityAppointment(page)) {

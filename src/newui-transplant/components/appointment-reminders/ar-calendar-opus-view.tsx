@@ -87,11 +87,13 @@ function EventChip({
         compact ? 'py-1' : '',
       )}
     >
-      <span className="flex items-center gap-1.5 font-semibold tabular-nums">
+      <span className={cn('flex items-center gap-1.5 font-medium', compact ? 'truncate' : 'line-clamp-2')}>
         {reminder ? <ReminderDot state={reminder} /> : null}
-        <span>{formatEventTime(ev.startsAt, timeZone)}</span>
+        <span className="truncate">{eventTitle(ev)}</span>
       </span>
-      <span className={cn('block font-medium', compact ? 'truncate' : 'line-clamp-2')}>{eventTitle(ev)}</span>
+      <span className="mt-0.5 block text-[11px] font-semibold tabular-nums text-muted-foreground">
+        {formatEventTime(ev.startsAt, timeZone)}
+      </span>
       {!compact && ev.inviteeName && ev.serviceName ? (
         <span className="mt-0.5 block truncate text-muted-foreground">{ev.inviteeName}</span>
       ) : null}
@@ -182,6 +184,7 @@ function TimeGridView({
   timeZone,
   onSelect,
   fillViewport,
+  selectedEventId,
 }: {
   cursor: Date
   view: 'day' | 'week'
@@ -189,6 +192,7 @@ function TimeGridView({
   timeZone: string
   onSelect: (id: string) => void
   fillViewport?: boolean
+  selectedEventId?: string | null
 }) {
   const hours = hourLabels()
   const totalHeight = (AR_CALENDAR_DAY_END_HOUR - AR_CALENDAR_DAY_START_HOUR) * AR_CALENDAR_HOUR_PX
@@ -267,9 +271,11 @@ function TimeGridView({
                 type="button"
                 onClick={() => onSelect(ev.id)}
                 className={cn(
-                  'absolute inset-x-1 z-10 overflow-hidden rounded-md border px-2 py-1 text-left text-xs shadow-sm',
+                  'absolute inset-x-1 z-10 overflow-hidden rounded-lg border px-2 py-1.5 text-left text-xs shadow-sm',
                   'border-primary/30 bg-primary/10 hover:bg-primary/15',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  ev.id === selectedEventId && 'ring-2 ring-primary/50 border-primary/50 bg-primary/15',
+                  reminder === 'blocked' && 'border-amber-500/40 bg-amber-500/10',
                 )}
                 style={{
                   top: eventTopPx(ev.startsAt, timeZone),
@@ -277,11 +283,13 @@ function TimeGridView({
                   minHeight: 28,
                 }}
               >
-                <span className="flex items-center gap-1 font-semibold tabular-nums">
+                <span className="flex items-center gap-1 font-medium leading-snug">
                   {reminder ? <ReminderDot state={reminder} /> : null}
-                  <span className="truncate">{formatEventTime(ev.startsAt, timeZone)}</span>
+                  <span className="line-clamp-2">{eventTitle(ev)}</span>
                 </span>
-                <span className="line-clamp-2 font-medium">{eventTitle(ev)}</span>
+                <span className="mt-0.5 truncate text-[11px] font-semibold tabular-nums text-muted-foreground">
+                  {formatEventTime(ev.startsAt, timeZone)}
+                </span>
               </button>
             )})}
           </div>
@@ -361,6 +369,7 @@ export function ArCalendarOpusView({
   onCalendarFilterChange,
   compactChrome,
   fillHeight,
+  selectedEventId,
 }: {
   view: CalendarViewMode
   cursor: Date
@@ -379,6 +388,7 @@ export function ArCalendarOpusView({
   /** Workspace layout: toolbar only, no duplicate page title. */
   compactChrome?: boolean
   fillHeight?: boolean
+  selectedEventId?: string | null
 }) {
   const title = formatArCalendarTitle(cursor, view, timeZone)
   const subtitle = formatArCalendarSubtitle(cursor, view, timeZone)
@@ -465,6 +475,7 @@ export function ArCalendarOpusView({
             timeZone={timeZone}
             onSelect={onSelectEvent}
             fillViewport={fillHeight}
+            selectedEventId={selectedEventId}
           />
           </div>
         ) : null}
