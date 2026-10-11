@@ -21,8 +21,15 @@ const mirror = isEventEligibleForCalendarMirror(baseEvent);
 assert.equal(mirror.eligible, true);
 
 const reminder = isEventEligibleForReminderImport(baseEvent, mergeImportRules({}), "owner@example.com");
-assert.equal(reminder.eligible, false);
-assert.equal(reminder.reason, "no_external_attendees");
+assert.equal(reminder.eligible, true);
+
+const strictRules = mergeImportRules({
+  importRulesSchemaVersion: 2,
+  importRules: { requireExternalAttendees: true },
+});
+const strictReminder = isEventEligibleForReminderImport(baseEvent, strictRules, "owner@example.com");
+assert.equal(strictReminder.eligible, false);
+assert.equal(strictReminder.reason, "no_external_attendees");
 
 const transovo = { ...baseEvent, transovoOriginated: true };
 assert.equal(isEventEligibleForCalendarMirror(transovo).reason, "transovo_originated");
@@ -33,7 +40,15 @@ const colleagueOrganized = {
   attendees: [{ email: "client@other.com", name: "Client" }],
 };
 assert.equal(
-  isEventEligibleForReminderImport(colleagueOrganized, mergeImportRules({}), "owner@example.com").reason,
+  isEventEligibleForReminderImport(colleagueOrganized, mergeImportRules({}), "owner@example.com").eligible,
+  true,
+);
+const organizerStrict = mergeImportRules({
+  importRulesSchemaVersion: 2,
+  importRules: { requireOrganizerIsConnection: true },
+});
+assert.equal(
+  isEventEligibleForReminderImport(colleagueOrganized, organizerStrict, "owner@example.com").reason,
   "organizer_not_connection",
 );
 
@@ -43,7 +58,15 @@ const freeEvent = {
   attendees: [{ email: "client@other.com" }],
 };
 assert.equal(
-  isEventEligibleForReminderImport(freeEvent, mergeImportRules({}), "owner@example.com").reason,
+  isEventEligibleForReminderImport(freeEvent, mergeImportRules({}), "owner@example.com").eligible,
+  true,
+);
+const freeStrict = mergeImportRules({
+  importRulesSchemaVersion: 2,
+  importRules: { skipFreeShowAs: true },
+});
+assert.equal(
+  isEventEligibleForReminderImport(freeEvent, freeStrict, "owner@example.com").reason,
   "show_as_free",
 );
 
@@ -53,7 +76,15 @@ const internalOnly = {
   attendees: [{ email: "peer@acme.com", name: "Peer" }],
 };
 assert.equal(
-  isEventEligibleForReminderImport(internalOnly, mergeImportRules({}), "owner@acme.com").reason,
+  isEventEligibleForReminderImport(internalOnly, mergeImportRules({}), "owner@acme.com").eligible,
+  true,
+);
+const internalStrict = mergeImportRules({
+  importRulesSchemaVersion: 2,
+  importRules: { skipInternalDomainOnlyMeetings: true },
+});
+assert.equal(
+  isEventEligibleForReminderImport(internalOnly, internalStrict, "owner@acme.com").reason,
   "internal_domain_only_attendees",
 );
 

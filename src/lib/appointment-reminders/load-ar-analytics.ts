@@ -1,6 +1,8 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
+import type { AppointmentMetadata } from "@/lib/appointments/types";
+import { isAppointmentReminderImportEligible } from "@/lib/calendar/import-eligibility";
 
 export type ArAnalyticsRange = {
   from: Date;
@@ -65,7 +67,9 @@ export async function loadAppointmentRemindersAnalytics(
     if (st === "confirmed" || meta.arCustomerConfirmedAt) confirmationResponses += 1;
     if (st === "reschedule_requested") rescheduleRequests += 1;
     if (st === "canceled" || st === "cancelled") cancelRequests += 1;
-    if (meta.reminderSmsEligible === false || meta.remindersSuppressed) needsAttention += 1;
+    if (!isAppointmentReminderImportEligible(meta as AppointmentMetadata) || meta.remindersSuppressed) {
+      needsAttention += 1;
+    }
   }
 
   const sent = (byStatus.delivered || 0) + (byStatus.sent || 0);

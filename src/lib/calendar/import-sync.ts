@@ -474,35 +474,41 @@ async function applyImportedReminderEligibility(
   const row = await prisma.voiceAppointment.findFirst({ where: { id: appointmentId } });
   if (!row) return;
 
-  const prev = (previousMetadata || row.metadata || {}) as Record<string, unknown>;
-  const wasEligible = prev.reminderSmsEligible === true;
+  const prevMeta = (previousMetadata || row.metadata || {}) as AppointmentMetadata;
+  const wasEligible = isAppointmentReminderImportEligible(prevMeta);
   const base = { ...(row.metadata || {}) as Record<string, unknown> };
 
   if (!reminderEligibility.eligible) {
-    const { suppressAppointmentReminders } = await import("@/lib/appointments/reminder-state");
     await prisma.voiceAppointment.update({
       where: { id: appointmentId },
       data: {
-        metadata: suppressAppointmentReminders({
+        metadata: {
           ...base,
+          reminderImportEligible: false,
+          reminderImportIneligibleReason: reminderEligibility.reason,
           reminderSmsEligible: false,
           reminderSmsIneligibleReason: reminderEligibility.reason,
-        }) as object,
+        } as object,
       },
     });
     return;
   }
 
-  if (!wasEligible && reminderEligibility.eligible) {
+  const recoverImportSuppression = shouldRecoverFromImportOnlySuppression(prevMeta);
+  const patch = {
+    ...base,
+    reminderImportEligible: true,
+    reminderImportIneligibleReason: undefined,
+    reminderSmsEligible: undefined,
+    reminderSmsIneligibleReason: undefined,
+  };
+
+  if ((!wasEligible || recoverImportSuppression) && reminderEligibility.eligible) {
     const { resetAppointmentReminders } = await import("@/lib/appointments/reminder-state");
     await prisma.voiceAppointment.update({
       where: { id: appointmentId },
       data: {
-        metadata: resetAppointmentReminders({
-          ...base,
-          reminderSmsEligible: true,
-          reminderSmsIneligibleReason: undefined,
-        }) as object,
+        metadata: resetAppointmentReminders(patch as AppointmentMetadata) as object,
       },
     });
     return;
@@ -510,13 +516,7 @@ async function applyImportedReminderEligibility(
 
   await prisma.voiceAppointment.update({
     where: { id: appointmentId },
-    data: {
-      metadata: {
-        ...base,
-        reminderSmsEligible: true,
-        reminderSmsIneligibleReason: undefined,
-      } as object,
-    },
+    data: { metadata: patch as object },
   });
 }
 
@@ -546,8 +546,8 @@ async function buildImportMetadata(
   const nameParts = displayName?.split(/\s+/).filter(Boolean) ?? [];
   const base = {
     source: "calendar_import",
-    reminderSmsEligible: reminderEligibility?.eligible ?? false,
-    reminderSmsIneligibleReason: reminderEligibility?.eligible
+    reminderImportEligible: reminderEligibility?.eligible ?? true,
+    reminderImportIneligibleReason: reminderEligibility?.eligible
       ? undefined
       : reminderEligibility?.reason,
     provider,

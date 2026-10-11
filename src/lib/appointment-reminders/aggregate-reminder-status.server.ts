@@ -14,6 +14,7 @@ import {
 import { evaluateSmsReminderEligibility } from "@/lib/appointment-reminders/sms-eligibility";
 import type { PlatformReminderWorkflowConflict } from "@/lib/appointment-reminders/platform-reminder-workflow";
 import { evaluateEmailReminderEligibility } from "@/lib/appointment-reminders/email-reminder-eligibility";
+import { isAppointmentReminderImportEligible } from "@/lib/calendar/import-eligibility";
 
 function formatWhen(iso?: string | null): string {
   if (!iso) return "";
@@ -63,11 +64,24 @@ export function computeAggregateReminderView(input: {
     };
   }
 
-  if (meta.remindersSuppressed) {
+  if (meta.remindersSuppressed || meta.reminderOverride?.suppressed) {
     return {
       status: "not_scheduled",
-      label: "Not scheduled",
-      secondaryLine: "Reminders suppressed",
+      label: "Reminders off",
+      secondaryLine: "Turned off for this appointment",
+      attentionReason: "suppressed",
+    };
+  }
+
+  if (!isAppointmentReminderImportEligible(meta)) {
+    const code =
+      meta.reminderImportIneligibleReason ||
+      (meta.reminderSmsIneligibleReason as string | undefined);
+    return {
+      status: "not_scheduled",
+      label: "Excluded",
+      secondaryLine: code ? `Calendar rules (${code})` : "Excluded by calendar rules",
+      attentionReason: "calendar_excluded",
     };
   }
 
@@ -87,14 +101,16 @@ export function computeAggregateReminderView(input: {
     (input.platform.reminders.additionalSteps || []).some(
       (s) => s.enabled && s.channel === "email",
     );
-  if (needsEmail && !emailEligibility.eligible && emailEligibility.blockReason === "missing_email") {
-    return {
-      status: "needs_attention",
-      label: "Needs attention",
-      secondaryLine: emailEligibility.detail || "Email address required",
-      attentionReason: "missing_email",
-    };
-  }
+  const needsSms =
+    (input.platform.reminders.confirmation.enabled &&
+      input.platform.reminders.confirmation.channel === "sms") ||
+    (input.platform.reminders.reminder24h.enabled &&
+      input.platform.reminders.reminder24h.channel === "sms") ||
+    (input.platform.reminders.reminder2h.enabled &&
+      input.platform.reminders.reminder2h.channel === "sms") ||
+    (input.platform.reminders.additionalSteps || []).some(
+      (s) => s.enabled && s.channel === "sms",
+    );
 
   const eligibility = evaluateSmsReminderEligibility({
     metadata: meta,
@@ -103,7 +119,32 @@ export function computeAggregateReminderView(input: {
     platform: input.platform,
     appointmentRemindersActivatedAt: input.appointmentRemindersActivatedAt,
   });
-  if (!eligibility.eligible) {
+
+  const emailOk = !needsEmail || emailEligibility.eligible;
+  const smsOk =
+    !needsSms ||
+    (eligibility.eligible && Boolean(phone?.trim()) && isValidReminderPhone(phone));
+
+  if (!emailOk && !smsOk) {
+    const secondary =
+      needsEmail && emailEligibility.blockReason === "missing_email"
+        ? emailEligibility.detail
+        : eligibility.detail || "Missing contact information for reminders";
+    const attentionReason =
+      needsEmail && emailEligibility.blockReason === "missing_email"
+        ? "missing_email"
+        : eligibility.blockReason === "consent_required"
+          ? "consent"
+          : "missing_phone";
+    return {
+      status: "needs_attention",
+      label: "Needs attention",
+      secondaryLine: secondary,
+      attentionReason,
+    };
+  }
+
+  if (!smsOk && emailOk) {
     const reasonMap: Record<string, AggregateReminderView["attentionReason"]> = {
       missing_phone: "missing_phone",
       invalid_phone: "invalid_phone",
@@ -114,19 +155,43 @@ export function computeAggregateReminderView(input: {
       sender_unavailable: "delivery_failed",
       none: undefined,
     };
+    // Email reminders can still run — surface SMS gap without blocking overall schedule.
+    const smsNote = eligibility.detail || "SMS not available for this appointment";
+    const timelineEarly = buildDedicatedReminderTimeline(meta);
+    const failedEarly = timelineEarly.find((e) => e.type.includes("failed"));
+    if (failedEarly) {
+      return {
+        status: "failed",
+        label: "Failed",
+        secondaryLine: failedEarly.detail || "Delivery failed",
+        attentionReason: "delivery_failed",
+      };
+    }
+    const futureEarly = buildFutureReminderSchedule({
+      startsAt: input.startsAt,
+      timezone: input.timezone || input.platform.timezone,
+      steps: [
+        { key: "confirmation", step: input.platform.reminders.confirmation },
+        { key: "reminder24h", step: input.platform.reminders.reminder24h },
+        { key: "reminder2h", step: input.platform.reminders.reminder2h },
+      ],
+      metadata: meta,
+      weeklyHours: resolveWeeklyHours(input.platform),
+    });
+    const nextEarly = futureEarly.find((f) => f.status === "scheduled" && f.scheduledFor);
+    if (nextEarly?.scheduledFor) {
+      return {
+        status: "scheduled",
+        label: "Scheduled",
+        secondaryLine: `${formatWhen(nextEarly.scheduledFor)} · ${smsNote}`,
+        attentionReason: reasonMap[eligibility.blockReason],
+      };
+    }
     return {
       status: "needs_attention",
       label: "Needs attention",
-      secondaryLine: eligibility.detail || "Cannot send SMS",
+      secondaryLine: smsNote,
       attentionReason: reasonMap[eligibility.blockReason],
-    };
-  }
-  if (!phone?.trim() || !isValidReminderPhone(phone)) {
-    return {
-      status: "needs_attention",
-      label: "Needs attention",
-      secondaryLine: "Phone number required",
-      attentionReason: "missing_phone",
     };
   }
 

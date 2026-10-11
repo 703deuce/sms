@@ -11,6 +11,7 @@ import {
 } from "@/lib/appointment-reminders/reminder-effective-fire-time";
 import { currentReminderGeneration, wasReminderSent } from "@/lib/appointments/reminder-state";
 import type { AppointmentMetadata } from "@/lib/appointments/types";
+import { isAppointmentReminderImportEligible } from "@/lib/calendar/import-eligibility";
 import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
 import { resolveWeeklyHours } from "@/lib/appointments/availability-engine-policy";
 
@@ -69,7 +70,7 @@ export async function discoverAndEnqueueDueAppointmentReminders(): Promise<{
       if (!scopeWorkspaceId && !(await workspaceRemindersOperational(row.workspaceId))) continue;
       const meta = (row.metadata || {}) as AppointmentMetadata;
       if (meta.remindersSuppressed || meta.reminderOverride?.suppressed) continue;
-      if (meta.reminderSmsEligible === false) continue;
+      if (!isAppointmentReminderImportEligible(meta)) continue;
       const { shouldHoldRemindersForAppointment } = await import(
         "@/lib/appointment-reminders/ai-rescheduler/ar-reminder-guard"
       );

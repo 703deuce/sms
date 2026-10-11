@@ -3,6 +3,7 @@ import { resolveImportRulesForCalendar } from "@/lib/calendar/import-rules";
 import type { CalendarConfig } from "@/lib/calendar/providers";
 
 const config: CalendarConfig = {
+  importRulesSchemaVersion: 2,
   importRules: {
     requireExternalAttendees: true,
     skipFreeShowAs: true,

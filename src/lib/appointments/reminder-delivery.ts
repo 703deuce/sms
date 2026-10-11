@@ -748,7 +748,8 @@ export async function maybeSendImmediateConfirmationForAppointment(
   if (meta.remindersSuppressed || meta.reminderOverride?.suppressed) {
     return { sent: false, skipped: "suppressed" };
   }
-  if (meta.reminderSmsEligible === false) {
+  const { isAppointmentReminderImportEligible } = await import("@/lib/calendar/import-eligibility");
+  if (!isAppointmentReminderImportEligible(meta)) {
     return { sent: false, skipped: "reminder_not_eligible" };
   }
   const { shouldHoldRemindersForAppointment } = await import(

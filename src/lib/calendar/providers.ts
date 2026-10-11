@@ -48,6 +48,8 @@ export type CalendarConfig = {
   syncLookaheadDays?: number;
   lastSyncError?: string | null;
   importRules?: CalendarImportRules;
+  /** @see IMPORT_RULES_SCHEMA_VERSION — unset treated as legacy v1 for migration. */
+  importRulesSchemaVersion?: number;
   /** Optional per-import-calendar eligibility overrides (calendar id → rules). */
   importRulesByCalendarId?: Record<string, CalendarImportRules>;
   reminderDefaults?: {

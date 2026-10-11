@@ -302,7 +302,11 @@ export async function patchWorkspaceCalendarConnection(
   if (input.importCalendarIds !== undefined) config.importCalendarIds = input.importCalendarIds;
   if (input.syncEnabled !== undefined) config.syncEnabled = input.syncEnabled;
   if (input.timezone !== undefined) config.timezone = input.timezone;
-  if (input.importRules !== undefined) config.importRules = input.importRules;
+  if (input.importRules !== undefined) {
+    config.importRules = input.importRules;
+    const { IMPORT_RULES_SCHEMA_VERSION } = await import("@/lib/calendar/import-rules-migration");
+    config.importRulesSchemaVersion = IMPORT_RULES_SCHEMA_VERSION;
+  }
   if (input.graphMailboxUserPrincipalName !== undefined) {
     config.graphMailboxUserPrincipalName = input.graphMailboxUserPrincipalName || undefined;
   }

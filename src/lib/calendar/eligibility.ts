@@ -1,4 +1,5 @@
 import type { CalendarConfig, ProviderCalendarEvent } from "@/lib/calendar/providers";
+import { mergeImportRulesWithMigration } from "@/lib/calendar/import-rules-migration";
 
 export type CalendarImportRules = {
   /** When true (default), skip events with no attendees outside the connected account. */
@@ -22,6 +23,8 @@ export type CalendarImportRules = {
   titleExcludePatterns?: string[];
   /** Skip all-day events (default true — poor fit for timed reminders). */
   skipAllDay?: boolean;
+  /** When true, apply built-in personal/internal title blocklist (opt-in; default false). */
+  useBuiltinTitleExcludes?: boolean;
 };
 
 const DEFAULT_TITLE_EXCLUDES = [
@@ -43,22 +46,20 @@ const DEFAULT_TITLE_EXCLUDES = [
 
 export function defaultImportRules(): CalendarImportRules {
   return {
-    requireExternalAttendees: true,
+    requireExternalAttendees: false,
     requireAttendeeEmail: false,
-    requireOrganizerIsConnection: true,
-    skipFreeShowAs: true,
+    requireOrganizerIsConnection: false,
+    skipFreeShowAs: false,
     skipTentativeShowAs: false,
-    skipInternalDomainOnlyMeetings: true,
+    skipInternalDomainOnlyMeetings: false,
     skipAllDay: true,
+    useBuiltinTitleExcludes: false,
     titleExcludePatterns: [],
   };
 }
 
 export function mergeImportRules(config: CalendarConfig): CalendarImportRules {
-  return {
-    ...defaultImportRules(),
-    ...(config.importRules || {}),
-  };
+  return mergeImportRulesWithMigration(config);
 }
 
 function normalizeEmail(email?: string | null) {
@@ -161,7 +162,7 @@ export function isEventEligibleForReminderImport(
 
   const title = (event.summary || "").toLowerCase();
   const excludes = [
-    ...DEFAULT_TITLE_EXCLUDES,
+    ...(rules.useBuiltinTitleExcludes ? DEFAULT_TITLE_EXCLUDES : []),
     ...(rules.titleExcludePatterns || []).map((p) => p.toLowerCase()),
   ];
   if (excludes.some((pattern) => pattern && title.includes(pattern))) {

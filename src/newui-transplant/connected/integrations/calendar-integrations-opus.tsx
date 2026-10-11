@@ -6,6 +6,7 @@ import { Panel } from "@/newui-transplant/components/app/kit";
 import { Button } from "@/newui-transplant/components/ui/button";
 import { Checkbox } from "@/newui-transplant/components/ui/checkbox";
 import { CALENDAR_INTEGRATIONS_PATH } from "@/lib/calendar/constants";
+import { mergeImportRules } from "@/lib/calendar/eligibility";
 
 type ProviderCalendar = { id: string; name: string; primary?: boolean };
 
@@ -21,9 +22,14 @@ type CalendarConnection = {
     importCalendarIds?: string[];
     syncEnabled?: boolean;
     email?: string;
+    importRulesSchemaVersion?: number;
     importRules?: {
       requireExternalAttendees?: boolean;
       requireAttendeeEmail?: boolean;
+      requireOrganizerIsConnection?: boolean;
+      skipFreeShowAs?: boolean;
+      skipInternalDomainOnlyMeetings?: boolean;
+      useBuiltinTitleExcludes?: boolean;
       skipAllDay?: boolean;
       titleIncludePatterns?: string[];
       titleExcludePatterns?: string[];
@@ -460,15 +466,17 @@ function ConnectionRow({
     isReminders ? connection.config?.syncEnabled !== false : connection.config?.syncEnabled === true,
   );
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
+  const mergedImportRules = mergeImportRules({
+    importRules: connection.config?.importRules,
+    importRulesSchemaVersion: connection.config?.importRulesSchemaVersion,
+  });
   const [requireExternalAttendees, setRequireExternalAttendees] = useState(
-    connection.config?.importRules?.requireExternalAttendees !== false,
+    mergedImportRules.requireExternalAttendees === true,
   );
   const [requireAttendeeEmail, setRequireAttendeeEmail] = useState(
-    Boolean(connection.config?.importRules?.requireAttendeeEmail),
+    Boolean(mergedImportRules.requireAttendeeEmail),
   );
-  const [skipAllDay, setSkipAllDay] = useState(
-    connection.config?.importRules?.skipAllDay !== false,
-  );
+  const [skipAllDay, setSkipAllDay] = useState(mergedImportRules.skipAllDay !== false);
   const [includeKeywords, setIncludeKeywords] = useState(
     (connection.config?.importRules?.titleIncludePatterns || []).join(", "),
   );
@@ -476,13 +484,16 @@ function ConnectionRow({
     (connection.config?.importRules?.titleExcludePatterns || []).join(", "),
   );
   const [requireOrganizerIsConnection, setRequireOrganizerIsConnection] = useState(
-    connection.config?.importRules?.requireOrganizerIsConnection !== false,
+    mergedImportRules.requireOrganizerIsConnection === true,
   );
   const [skipFreeShowAs, setSkipFreeShowAs] = useState(
-    connection.config?.importRules?.skipFreeShowAs !== false,
+    mergedImportRules.skipFreeShowAs === true,
   );
   const [skipInternalDomainOnly, setSkipInternalDomainOnly] = useState(
-    connection.config?.importRules?.skipInternalDomainOnlyMeetings !== false,
+    mergedImportRules.skipInternalDomainOnlyMeetings === true,
+  );
+  const [useBuiltinTitleExcludes, setUseBuiltinTitleExcludes] = useState(
+    mergedImportRules.useBuiltinTitleExcludes === true,
   );
   const [graphMailboxUpn, setGraphMailboxUpn] = useState(
     connection.config?.graphMailboxUserPrincipalName || "",
@@ -551,6 +562,7 @@ function ConnectionRow({
       requireOrganizerIsConnection,
       skipFreeShowAs,
       skipInternalDomainOnlyMeetings: skipInternalDomainOnly,
+      useBuiltinTitleExcludes,
       skipAllDay,
       titleIncludePatterns: includeKeywords
         .split(",")
@@ -823,6 +835,13 @@ function ConnectionRow({
                           onChange={(e) => setSkipInternalDomainOnly(e.target.checked)}
                         />
                         Skip internal-only meetings (no external customer domain)
+                      </label>
+                      <label className="flex items-center gap-2 text-[12px]">
+                        <Checkbox
+                          checked={useBuiltinTitleExcludes}
+                          onChange={(e) => setUseBuiltinTitleExcludes(e.target.checked)}
+                        />
+                        Apply built-in title blocklist (OOO, lunch, focus time, personal, …)
                       </label>
                     </>
                   ) : null}
