@@ -46,6 +46,8 @@ import {
   upsertWorkspaceAppointmentByExternalId,
 } from "@/lib/appointments/domain";
 import { getPrisma } from "@/lib/db";
+import { mergeReminderPhoneOnImport } from "@/lib/appointment-reminders/calendar/reminder-phone-extraction";
+import type { AppointmentMetadata } from "@/lib/appointments/types";
 
 export type CalendarSyncStats = {
   imported: number;
@@ -239,6 +241,7 @@ export async function processCalendarProviderEvent(input: {
     const contact = await resolveContactForImportedEvent(workspaceId, event, config.email);
     const externalId = formatImportedExternalId(provider, connectionId, event.id);
     const status = event.status === "cancelled" ? "canceled" : "confirmed";
+    const prevMeta = (existing.metadata || {}) as Record<string, unknown>;
     const metadata = buildImportMetadata(
       event,
       provider,
@@ -246,6 +249,7 @@ export async function processCalendarProviderEvent(input: {
       contact,
       input.calendarId,
       reminderEligibility,
+      prevMeta,
     ) as Record<string, unknown>;
 
     await upsertWorkspaceAppointmentByExternalId({
@@ -460,7 +464,14 @@ function buildImportMetadata(
   contact: Awaited<ReturnType<typeof resolveContactForImportedEvent>>,
   calendarId?: string,
   reminderEligibility?: { eligible: boolean; reason?: string },
+  previousMetadata?: Record<string, unknown> | null,
 ) {
+  const phoneMerge = mergeReminderPhoneOnImport({
+    event,
+    previousMetadata: (previousMetadata || null) as AppointmentMetadata | null,
+    contactPhone: contact.inviteePhone,
+  });
+
   return {
     source: "calendar_import",
     reminderSmsEligible: reminderEligibility?.eligible ?? false,
@@ -473,9 +484,10 @@ function buildImportMetadata(
     providerEventId: event.id,
     inviteeEmail: contact.inviteeEmail,
     inviteeName: contact.inviteeName,
-    inviteePhone: contact.inviteePhone,
-    smsCapable: contact.smsCapable,
-    emailOnly: contact.emailOnly,
+    inviteePhone: phoneMerge.inviteePhone,
+    reminderPhone: phoneMerge.reminderPhone,
+    smsCapable: phoneMerge.smsCapable,
+    emailOnly: phoneMerge.emailOnly,
     contactMatch: contact.matchedExistingContact ? "existing" : contact.createdContact ? "created" : "none",
     timezone: event.timezone,
     isAllDay: event.isAllDay,

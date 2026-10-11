@@ -34,6 +34,7 @@ type SetupReadiness = {
   warnings?: string[]
   activated: boolean
   activatedAt: string | null
+  existingCustomerSmsConsentAttested?: boolean
 }
 
 type SetupPayload = {
@@ -136,6 +137,9 @@ export function AppointmentRemindersSetupActivatePage() {
   const [loading, setLoading] = useState(true)
   const [activating, setActivating] = useState(false)
   const [error, setError] = useState('')
+  const [consentText, setConsentText] = useState('')
+  const [consentChecked, setConsentChecked] = useState(false)
+  const [consentSaving, setConsentSaving] = useState(false)
 
   const refresh = useCallback(() => {
     setLoading(true)
@@ -150,10 +154,48 @@ export function AppointmentRemindersSetupActivatePage() {
     refresh()
   }, [refresh])
 
+  useEffect(() => {
+    fetch('/api/appointment-reminders/setup/existing-sms-consent')
+      .then((r) => r.json())
+      .then((json) => {
+        setConsentText(json.data?.attestationText || '')
+        if (json.data?.attested) setConsentChecked(true)
+      })
+      .catch(() => {})
+  }, [])
+
+  const readiness = status?.readiness
+
+  const saveConsentIfNeeded = async () => {
+    if (!readiness?.smsRemindersEnabled || readiness?.existingCustomerSmsConsentAttested) return true
+    if (!consentChecked) {
+      setError('Confirm existing customer SMS permission before activating.')
+      return false
+    }
+    setConsentSaving(true)
+    try {
+      const res = await fetch('/api/appointment-reminders/setup/existing-sms-consent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ attested: true }),
+      })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error(json.error || 'Could not save consent certification')
+      }
+      await refresh()
+      return true
+    } finally {
+      setConsentSaving(false)
+    }
+  }
+
   const activate = async () => {
     setActivating(true)
     setError('')
     try {
+      const ok = await saveConsentIfNeeded()
+      if (!ok) return
       const res = await fetch('/api/appointment-reminders/setup/status', { method: 'POST' })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || json.blockers?.join(' ') || 'Activation failed')
@@ -165,7 +207,18 @@ export function AppointmentRemindersSetupActivatePage() {
     }
   }
 
-  const readiness = status?.readiness
+  const showConsentAttestation =
+    Boolean(readiness?.smsRemindersEnabled) && !readiness?.existingCustomerSmsConsentAttested
+
+  const hardBlockers =
+    readiness?.blockers?.filter((b) => !b.includes("Certify that you already have permission")) ?? []
+  const canActivateNow =
+    Boolean(readiness) &&
+    !readiness?.activated &&
+    hardBlockers.length === 0 &&
+    (!readiness?.smsRemindersEnabled ||
+      readiness.existingCustomerSmsConsentAttested ||
+      consentChecked)
 
   return (
     <ArOpusPage className="max-w-3xl">
@@ -217,7 +270,28 @@ export function AppointmentRemindersSetupActivatePage() {
                 <li>
                   <TextLink href={AR_ROUTES.settings}>Reminder settings</TextLink> configured
                 </li>
+                <li>
+                  {readiness?.existingCustomerSmsConsentAttested
+                    ? '✓ Existing customer SMS permission certified'
+                    : readiness?.smsRemindersEnabled
+                      ? '○ Certify existing customer SMS permission (below)'
+                      : '— SMS consent certification not required'}
+                </li>
               </ul>
+              {showConsentAttestation ? (
+                <div className="rounded-lg border border-border/60 bg-muted/20 p-4 text-sm">
+                  <p className="mb-3 text-muted-foreground">{consentText}</p>
+                  <label className="flex cursor-pointer items-start gap-2">
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={consentChecked}
+                      onChange={(e) => setConsentChecked(e.target.checked)}
+                    />
+                    <span>I confirm on behalf of my business</span>
+                  </label>
+                </div>
+              ) : null}
               {readiness?.activated ? (
                 <>
                   <Callout tone="success" icon={CheckCircle2} title="Appointment Reminders is active">
@@ -255,9 +329,13 @@ export function AppointmentRemindersSetupActivatePage() {
               <div className="flex flex-wrap gap-2 pt-2">
                 <Button
                   onClick={() => void activate()}
-                  disabled={activating || !readiness?.canActivate || readiness?.activated}
+                  disabled={activating || consentSaving || readiness?.activated || !canActivateNow}
                 >
-                  {readiness?.activated ? 'Activated' : activating ? 'Activating…' : 'Activate reminders'}
+                  {readiness?.activated
+                    ? 'Activated'
+                    : activating || consentSaving
+                      ? 'Activating…'
+                      : 'Activate reminders'}
                 </Button>
                 <Button variant="outline" nativeButton={false} render={<Link href={AR_ROUTES.settings} />}>
                   Reminder settings

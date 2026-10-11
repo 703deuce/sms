@@ -39,6 +39,7 @@ export function computeAggregateReminderView(input: {
   metadata: AppointmentMetadata;
   platform: AppointmentPlatformConfig;
   workflowConflict?: PlatformReminderWorkflowConflict | null;
+  appointmentRemindersActivatedAt?: string | null;
 }): AggregateReminderView {
   const meta = input.metadata;
   const inactive = ["canceled", "cancelled", "completed", "no_show"].includes(
@@ -99,11 +100,14 @@ export function computeAggregateReminderView(input: {
     metadata: meta,
     inviteePhone: input.inviteePhone,
     appointmentStatus: input.status,
+    platform: input.platform,
+    appointmentRemindersActivatedAt: input.appointmentRemindersActivatedAt,
   });
   if (!eligibility.eligible) {
     const reasonMap: Record<string, AggregateReminderView["attentionReason"]> = {
       missing_phone: "missing_phone",
       invalid_phone: "invalid_phone",
+      phone_needs_review: "missing_phone",
       consent_required: "consent",
       opted_out: "consent",
       suppressed: undefined,
