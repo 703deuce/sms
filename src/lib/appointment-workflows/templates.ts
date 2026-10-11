@@ -17,7 +17,7 @@ export type PrebuiltWorkflowTemplate = {
 };
 
 const DEFAULT_CONFIRMATION =
-  "Hi {{first_name}}, your {{service}} appointment is booked for {{appointment_date}} at {{appointment_time}}. Manage: {{manage_link}} Reply YES to confirm.";
+  "Hi {{first_name}}, your {{service}} appointment is booked for {{appointment_date}} at {{appointment_time}}. Manage: {{manage_link}}";
 
 const DEFAULT_REMINDER =
   "Reminder: {{service}} on {{appointment_date}} at {{appointment_time}} with {{business_name}}. Manage: {{manage_link}}";
