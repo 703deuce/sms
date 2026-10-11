@@ -3,6 +3,10 @@ import "server-only";
 import { getPrisma } from "@/lib/db";
 import { isCalendarConnectionUsable } from "@/lib/appointment-reminders/calendar-connection";
 import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
+import {
+  getAppointmentRemindersWorkspaceConfig,
+  hasWorkspaceExistingCustomerSmsConsent,
+} from "@/lib/appointment-reminders/workspace-existing-sms-consent";
 
 export const APPOINTMENT_REMINDERS_SOLUTION_TYPE = "appointment-reminders-product";
 
@@ -78,6 +82,7 @@ export type AppointmentRemindersSetupReadiness = {
   canActivate: boolean;
   blockers: string[];
   warnings: string[];
+  existingCustomerSmsConsentAttested: boolean;
 };
 
 function stepUsesSms(
@@ -166,6 +171,24 @@ export async function evaluateAppointmentRemindersSetupReadiness(
   }
   if (!stepsEnabled) blockers.push("Enable at least one reminder step");
 
+  const arWorkspace = getAppointmentRemindersWorkspaceConfig(platform);
+  if (!arWorkspace.setupConfigureCompletedAt && !activation.activatedAt) {
+    blockers.push("Save your reminder configuration in Setup before activating");
+  }
+
+  const existingCustomerSmsConsentAttested = hasWorkspaceExistingCustomerSmsConsent(platform);
+  const alreadyActivated = Boolean(activation.activatedAt);
+  if (anySmsStep && !existingCustomerSmsConsentAttested && !alreadyActivated) {
+    blockers.push(
+      "Certify that you already have permission to text customers on your connected calendars",
+    );
+  }
+  if (anySmsStep && !existingCustomerSmsConsentAttested && alreadyActivated) {
+    warnings.push(
+      "Certify existing customer SMS permission on the activation page for compliance records.",
+    );
+  }
+
   const canActivate = blockers.length === 0;
 
   return {
@@ -187,5 +210,6 @@ export async function evaluateAppointmentRemindersSetupReadiness(
     canActivate,
     blockers,
     warnings,
+    existingCustomerSmsConsentAttested,
   };
 }

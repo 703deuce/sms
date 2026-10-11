@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { jsonError, requireSession } from "@/lib/api-auth";
+import { jsonError } from "@/lib/api-auth";
+import { requireAppointmentRemindersAccess } from "@/lib/appointment-reminders/api-auth";
 import { assignArFreePlan } from "@/lib/appointment-reminders/commercial/ar-workspace-plan";
 import { resolveArWorkspaceCommercial } from "@/lib/appointment-reminders/commercial/ar-workspace-plan";
 import { getPrisma } from "@/lib/db";
@@ -9,7 +10,9 @@ const ACTIVE = new Set(["active", "trialing", "past_due"]);
 
 export async function POST() {
   try {
-    const auth = await requireSession();
+    const auth = await requireAppointmentRemindersAccess("appointment_reminders.settings", {
+      bootstrap: true,
+    });
     if ("error" in auth) return auth.error;
 
     const existingSub = await getPrisma().platformProductSubscription.findUnique({

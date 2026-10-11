@@ -66,6 +66,8 @@ export function AppointmentDetailDrawer({
     Array<{ timelineType: string; channel: string; status: string; scheduledFor: string | null }>
   >([])
   const [recipientChannel, setRecipientChannel] = useState<'sms' | 'email' | 'both'>('both')
+  const [suppressBusy, setSuppressBusy] = useState(false)
+  const [suppressError, setSuppressError] = useState('')
 
   const loadDetail = useCallback(async () => {
     if (!row?.id) return
@@ -182,6 +184,31 @@ export function AppointmentDetailDrawer({
       setApprovalError(e instanceof Error ? e.message : 'Approval failed')
     } finally {
       setApprovalBusy(null)
+    }
+  }
+
+  const remindersSuppressed =
+    Boolean(meta.remindersSuppressed) ||
+    Boolean((meta.reminderOverride as { suppressed?: boolean } | undefined)?.suppressed)
+
+  async function toggleReminderSuppress(suppressed: boolean) {
+    if (!row) return
+    setSuppressBusy(true)
+    setSuppressError('')
+    try {
+      const res = await fetch(`/api/appointment-reminders/appointments/${row.id}/reminder-suppress`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ suppressed }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || 'Could not update reminders')
+      onPhoneSaved()
+      await loadDetail()
+    } catch (e) {
+      setSuppressError(e instanceof Error ? e.message : 'Could not update reminders')
+    } finally {
+      setSuppressBusy(false)
     }
   }
 
@@ -525,6 +552,31 @@ export function AppointmentDetailDrawer({
                   {sheetTab === 'reminders' ? (
                   <section>
                     <h2 className="mb-3 text-sm font-semibold">Reminders &amp; customer actions</h2>
+                    <div className="mb-4 rounded-md border bg-muted/20 px-3 py-3">
+                      <p className="text-sm font-medium text-foreground">
+                        {remindersSuppressed ? 'Reminders are off for this appointment' : 'Reminders are on'}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Stop or resume automated reminder texts and emails for this appointment only.
+                      </p>
+                      {suppressError ? (
+                        <p className="mt-2 text-xs text-destructive" role="alert">{suppressError}</p>
+                      ) : null}
+                      <div className="mt-3">
+                        <Button
+                          type="button"
+                          variant={remindersSuppressed ? 'default' : 'secondary'}
+                          size="sm"
+                          disabled={suppressBusy}
+                          onClick={() => void toggleReminderSuppress(!remindersSuppressed)}
+                        >
+                          {suppressBusy ? (
+                            <Loader2 className="mr-2 size-4 animate-spin" aria-hidden />
+                          ) : null}
+                          {remindersSuppressed ? 'Resume reminders' : 'Stop reminders'}
+                        </Button>
+                      </div>
+                    </div>
                     {reminderEngagement.length > 0 ? (
                       <ol className="space-y-4 border-l border-border pl-4">
                         {reminderEngagement.map((step) => (

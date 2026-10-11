@@ -372,6 +372,8 @@ export type AppointmentPlatformConfig = {
   voiceReminders?: VoiceRemindersPlatformConfig;
   /** Appointment Reminders — AI Rescheduler (SMS C/R/X + optional AI calendar mutation). */
   aiRescheduler?: import("@/lib/appointment-reminders/ai-rescheduler/types").AiReschedulerConfig;
+  /** Appointment Reminders workspace policy (consent attestation, etc.). */
+  appointmentReminders?: import("@/lib/appointment-reminders/workspace-existing-sms-consent").AppointmentRemindersWorkspaceConfig;
   /** Workspace-wide booking commerce defaults (offering config may override). */
   commerceDefaults?: CommerceDefaults;
 };
@@ -526,6 +528,21 @@ export type AppointmentMetadata = {
   bookingSource?: string;
   utm?: import("@/lib/appointments/scheduling-capabilities").UtmAttribution;
   reminderOverride?: import("@/lib/appointments/scheduling-capabilities").AppointmentReminderOverride;
+  /** Set on calendar import/sync — not re-parsed at reminder dispatch. */
+  reminderPhone?: {
+    e164?: string | null;
+    status?: "found" | "missing" | "needs_review" | "invalid";
+    sourceField?: string | null;
+    method?: string;
+    confidence?: string;
+    fingerprint?: string;
+    candidateCount?: number;
+    extractedAt?: string;
+    lunaAttemptedAt?: string;
+    evidence?: string | null;
+  };
+  /** When true, automatic calendar re-extraction must not overwrite phone. */
+  reminderPhoneUserLocked?: boolean;
   emailTracking?: Record<string, { sentAt?: string; opens?: number; clicks?: number }>;
   extraRecipients?: Array<{ email?: string; phone?: string; name?: string }>;
   internalNotes?: Array<{ id: string; at: string; authorId?: string; authorName?: string; body: string }>;

@@ -40,6 +40,12 @@ type CalendarConnection = {
     lastVerificationOk?: boolean;
     lastVerificationError?: string | null;
     microsoftSubscription?: { expiresAt?: string };
+    graphMailboxUserPrincipalName?: string;
+    graphCustomerPhonePropertyKeys?: string[];
+    importRulesByCalendarId?: Record<
+      string,
+      NonNullable<CalendarConnection["config"]>["importRules"]
+    >;
   } | null;
 };
 
@@ -462,6 +468,24 @@ function ConnectionRow({
   const [excludeKeywords, setExcludeKeywords] = useState(
     (connection.config?.importRules?.titleExcludePatterns || []).join(", "),
   );
+  const [requireOrganizerIsConnection, setRequireOrganizerIsConnection] = useState(
+    connection.config?.importRules?.requireOrganizerIsConnection !== false,
+  );
+  const [skipFreeShowAs, setSkipFreeShowAs] = useState(
+    connection.config?.importRules?.skipFreeShowAs !== false,
+  );
+  const [skipInternalDomainOnly, setSkipInternalDomainOnly] = useState(
+    connection.config?.importRules?.skipInternalDomainOnlyMeetings !== false,
+  );
+  const [graphMailboxUpn, setGraphMailboxUpn] = useState(
+    connection.config?.graphMailboxUserPrincipalName || "",
+  );
+  const [graphPhonePropertyKeys, setGraphPhonePropertyKeys] = useState(
+    (connection.config?.graphCustomerPhonePropertyKeys || []).join(", "),
+  );
+  const [perCalendarRules, setPerCalendarRules] = useState<
+    Record<string, NonNullable<CalendarConnection["config"]>["importRules"]>
+  >(connection.config?.importRulesByCalendarId || {});
   const [smsReminders, setSmsReminders] = useState(
     connection.config?.reminderDefaults?.smsEnabled !== false,
   );
@@ -514,46 +538,72 @@ function ConnectionRow({
     setSyncNotice(null);
     const enableSync = isReminders ? importIds.length > 0 : importIds.length > 0 && syncEnabled;
     const hadImportBefore = (connection.config?.importCalendarIds?.length ?? 0) > 0;
-    await fetch(`/api/integrations/calendars/${connection.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        writeCalendarId: writeCalendarId || undefined,
-        blockingCalendarIds: blockingIds,
-        importCalendarIds: importIds,
-        syncEnabled: enableSync,
-        importRules: {
-          requireExternalAttendees,
-          requireAttendeeEmail,
-          skipAllDay,
-          titleIncludePatterns: includeKeywords
+    const defaultImportRules = {
+      requireExternalAttendees,
+      requireAttendeeEmail,
+      requireOrganizerIsConnection,
+      skipFreeShowAs,
+      skipInternalDomainOnlyMeetings: skipInternalDomainOnly,
+      skipAllDay,
+      titleIncludePatterns: includeKeywords
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+      titleExcludePatterns: excludeKeywords
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+    };
+    const importRulesByCalendarId = Object.fromEntries(
+      importIds
+        .filter((calId) => perCalendarRules[calId])
+        .map((calId) => [calId, { ...defaultImportRules, ...perCalendarRules[calId] }]),
+    );
+    try {
+      const res = await fetch(`/api/integrations/calendars/${connection.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          writeCalendarId: writeCalendarId || undefined,
+          blockingCalendarIds: blockingIds,
+          importCalendarIds: importIds,
+          syncEnabled: enableSync,
+          importRules: defaultImportRules,
+          importRulesByCalendarId,
+          graphMailboxUserPrincipalName: graphMailboxUpn.trim() || undefined,
+          graphCustomerPhonePropertyKeys: graphPhonePropertyKeys
             .split(",")
             .map((s) => s.trim())
             .filter(Boolean),
-          titleExcludePatterns: excludeKeywords
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean),
-        },
-        reminderDefaults: {
-          smsEnabled: smsReminders,
-          emailEnabled: emailReminders,
-          voiceEnabled: voiceReminders,
-          replyDestinationPhone: replyPhone || undefined,
-          replyDestinationEmail: replyEmail || undefined,
-          attachIcs,
-        },
-      }),
-    });
-    setSaving(false);
-    if (isReminders && importIds.length > 0 && (!hadImportBefore || importIds.length)) {
-      setSyncNotice(
-        connection.lastSyncAt
-          ? "Settings saved. Syncing calendar updates in the background."
-          : "Settings saved. Starting initial calendar import — appointments will appear shortly.",
-      );
+          reminderDefaults: {
+            smsEnabled: smsReminders,
+            emailEnabled: emailReminders,
+            voiceEnabled: voiceReminders,
+            replyDestinationPhone: replyPhone || undefined,
+            replyDestinationEmail: replyEmail || undefined,
+            attachIcs,
+          },
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error((json as { error?: string }).error || "Could not save calendar settings");
+      }
+      if (isReminders && importIds.length > 0 && (!hadImportBefore || importIds.length)) {
+        setSyncNotice(
+          connection.lastSyncAt
+            ? "Settings saved. Syncing calendar updates in the background."
+            : "Settings saved. Starting initial calendar import — appointments will appear shortly.",
+        );
+      } else {
+        setSyncNotice("Settings saved.");
+      }
+      onRefresh();
+    } catch (err) {
+      setSyncNotice(err instanceof Error ? err.message : "Could not save calendar settings");
+    } finally {
+      setSaving(false);
     }
-    onRefresh();
   }
 
   async function syncNow() {
@@ -741,6 +791,115 @@ function ConnectionRow({
                       ? "Require attendee email on the event"
                       : "Require attendee email (needed for email reminders)"}
                   </label>
+                  {isReminders ? (
+                    <>
+                      <label className="flex items-center gap-2 text-[12px]">
+                        <input
+                          type="checkbox"
+                          checked={requireOrganizerIsConnection}
+                          onChange={(e) => setRequireOrganizerIsConnection(e.target.checked)}
+                        />
+                        Only events this mailbox organizes
+                      </label>
+                      <label className="flex items-center gap-2 text-[12px]">
+                        <input
+                          type="checkbox"
+                          checked={skipFreeShowAs}
+                          onChange={(e) => setSkipFreeShowAs(e.target.checked)}
+                        />
+                        Skip free / transparent calendar blocks
+                      </label>
+                      <label className="flex items-center gap-2 text-[12px]">
+                        <input
+                          type="checkbox"
+                          checked={skipInternalDomainOnly}
+                          onChange={(e) => setSkipInternalDomainOnly(e.target.checked)}
+                        />
+                        Skip internal-only meetings (no external customer domain)
+                      </label>
+                    </>
+                  ) : null}
+                  {isReminders && connection.provider === "microsoft" ? (
+                    <div>
+                      <p className="text-[11px] font-medium text-muted-foreground mb-1">
+                        Delegated / shared mailbox (optional)
+                      </p>
+                      <input
+                        className="w-full rounded border border-border px-2 py-1.5 text-[12px]"
+                        placeholder="user@company.com"
+                        value={graphMailboxUpn}
+                        onChange={(e) => setGraphMailboxUpn(e.target.value)}
+                      />
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Uses Microsoft Graph /users/… when your admin granted calendar access to a shared mailbox.
+                      </p>
+                      <p className="text-[11px] font-medium text-muted-foreground mt-3 mb-1">
+                        Graph extended property keys (customer phone)
+                      </p>
+                      <input
+                        className="w-full rounded border border-border px-2 py-1.5 text-[12px]"
+                        placeholder="CustomerMobile, customPhoneField (comma-separated)"
+                        value={graphPhonePropertyKeys}
+                        onChange={(e) => setGraphPhonePropertyKeys(e.target.value)}
+                      />
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Maps your Outlook custom fields to SMS phone discovery on import.
+                      </p>
+                    </div>
+                  ) : null}
+                  {isReminders && importIds.length > 1 ? (
+                    <div className="space-y-2 border-t border-border pt-2">
+                      <p className="text-[11px] font-semibold text-muted-foreground">
+                        Per-calendar rule overrides
+                      </p>
+                      {importIds.map((calId) => {
+                        const cal = providerCalendars.find((c) => c.id === calId);
+                        const enabled = Boolean(perCalendarRules[calId]);
+                        return (
+                          <div key={calId} className="rounded border border-border/80 p-2">
+                            <label className="flex items-center gap-2 text-[12px] font-medium">
+                              <input
+                                type="checkbox"
+                                checked={enabled}
+                                onChange={(e) => {
+                                  setPerCalendarRules((prev) => {
+                                    const next = { ...prev };
+                                    if (e.target.checked) {
+                                      next[calId] = { requireExternalAttendees: false };
+                                    } else {
+                                      delete next[calId];
+                                    }
+                                    return next;
+                                  });
+                                }}
+                              />
+                              {cal?.name || calId}
+                            </label>
+                            {enabled ? (
+                              <label className="mt-2 flex items-center gap-2 text-[12px]">
+                                <input
+                                  type="checkbox"
+                                  checked={
+                                    perCalendarRules[calId]?.requireExternalAttendees !== false
+                                  }
+                                  onChange={(e) =>
+                                    setPerCalendarRules((prev) => ({
+                                      ...prev,
+                                      [calId]: {
+                                        ...prev[calId],
+                                        requireExternalAttendees: e.target.checked,
+                                      },
+                                    }))
+                                  }
+                                />
+                                Require external attendees for this calendar only
+                              </label>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : null}
                   <div>
                     <p className="text-[11px] font-medium text-muted-foreground mb-1">Import only if title contains</p>
                     <input

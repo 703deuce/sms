@@ -1,6 +1,9 @@
 import "server-only";
 
-import { resolveContactForImportedEvent } from "@/lib/calendar/attendee-contact";
+import {
+  enrichContactWithOutlookGraphPhone,
+  resolveContactForImportedEvent,
+} from "@/lib/calendar/attendee-contact";
 import { mergeCalendarConnectionConfig } from "@/lib/calendar/connection-config-merge";
 import {
   getWorkspaceCalendarConnection,
@@ -9,9 +12,10 @@ import {
 import {
   isEventEligibleForCalendarMirror,
   isEventEligibleForReminderImport,
-  mergeImportRules,
   shouldImportFromConnection,
 } from "@/lib/calendar/eligibility";
+import { resolveImportRulesForCalendar } from "@/lib/calendar/import-rules";
+import { enrichImportMetadataWithRecipientSuppression } from "@/lib/appointment-reminders/ar-recipient-suppression";
 import {
   formatImportedExternalId,
   isTransovoBookedExternalId,
@@ -46,6 +50,21 @@ import {
   upsertWorkspaceAppointmentByExternalId,
 } from "@/lib/appointments/domain";
 import { getPrisma } from "@/lib/db";
+import { mergeReminderPhoneOnImport } from "@/lib/appointment-reminders/calendar/reminder-phone-extraction";
+import { eventLocationText } from "@/lib/appointment-reminders/calendar/reminder-phone-content";
+import { extractIdentityFromEventFields } from "@/lib/voice-v3/calendar/appointment-discovery-identity";
+import type { AppointmentMetadata } from "@/lib/appointments/types";
+
+function resolveDisplayNameFromEvent(event: ProviderCalendarEvent): string | null {
+  const identity = extractIdentityFromEventFields({
+    subject: event.summary || "",
+    description: event.description || "",
+    location: eventLocationText(event),
+    attendeeNames: (event.attendees || []).map((a) => a.name).filter(Boolean) as string[],
+    attendeeEmails: (event.attendees || []).map((a) => a.email).filter(Boolean) as string[],
+  });
+  return identity.names[0] || null;
+}
 
 export type CalendarSyncStats = {
   imported: number;
@@ -207,9 +226,19 @@ export async function processCalendarProviderEvent(input: {
   event: ProviderCalendarEvent;
   config: CalendarConfig;
   calendarId?: string;
+  microsoftAccessToken?: string | null;
 }): Promise<{ result: ProcessEventResult; reason?: string }> {
   const { workspaceId, connectionId, provider, event, config } = input;
-  const rules = mergeImportRules(config);
+  const staffLabel = config.displayName?.trim() || config.email?.trim() || null;
+
+  async function resolveImportContact(eventForContact: ProviderCalendarEvent) {
+    const base = await resolveContactForImportedEvent(workspaceId, eventForContact, config.email, {
+      graphCustomerPhonePropertyKeys: config.graphCustomerPhonePropertyKeys,
+    });
+    if (provider !== "microsoft") return base;
+    return enrichContactWithOutlookGraphPhone(base, input.microsoftAccessToken);
+  }
+  const rules = resolveImportRulesForCalendar(config, input.calendarId);
   const existing = await findExistingAppointment(workspaceId, provider, connectionId, event);
 
   const transovoOwned = Boolean(existing && isTransovoOwnedProviderEvent(existing, event.id));
@@ -236,17 +265,21 @@ export async function processCalendarProviderEvent(input: {
       return { result: "skipped", reason: mirrorEligibility.reason };
     }
 
-    const contact = await resolveContactForImportedEvent(workspaceId, event, config.email);
+    const contact = await resolveImportContact(eventForProcessing);
     const externalId = formatImportedExternalId(provider, connectionId, event.id);
     const status = event.status === "cancelled" ? "canceled" : "confirmed";
-    const metadata = buildImportMetadata(
+    const prevMeta = (existing.metadata || {}) as Record<string, unknown>;
+    const metadata = (await buildImportMetadata(
+      workspaceId,
       event,
       provider,
       connectionId,
       contact,
       input.calendarId,
       reminderEligibility,
-    ) as Record<string, unknown>;
+      prevMeta,
+      config.graphCustomerPhonePropertyKeys,
+    )) as Record<string, unknown>;
 
     await upsertWorkspaceAppointmentByExternalId({
       workspaceId,
@@ -255,7 +288,7 @@ export async function processCalendarProviderEvent(input: {
         callId: null,
         contactId: contact.contactId,
         serviceName: event.summary || "Calendar event",
-        staffName: null,
+        staffName: staffLabel,
         startsAt: event.start,
         endsAt: event.end,
         timezone: event.timezone || null,
@@ -265,6 +298,7 @@ export async function processCalendarProviderEvent(input: {
       update: {
         contactId: contact.contactId,
         serviceName: event.summary || "Calendar event",
+        staffName: staffLabel,
         startsAt: event.start,
         endsAt: event.end,
         timezone: event.timezone || null,
@@ -290,16 +324,19 @@ export async function processCalendarProviderEvent(input: {
     return { result: "skipped", reason: mirrorEligibility.reason };
   }
 
-  const contact = await resolveContactForImportedEvent(workspaceId, event, config.email);
+  const contact = await resolveImportContact(eventForProcessing);
   const externalId = formatImportedExternalId(provider, connectionId, event.id);
-  const metadata = buildImportMetadata(
-    event,
+  const metadata = (await buildImportMetadata(
+    workspaceId,
+    eventForProcessing,
     provider,
     connectionId,
     contact,
     input.calendarId,
     reminderEligibility,
-  ) as Record<string, unknown>;
+    undefined,
+    config.graphCustomerPhonePropertyKeys,
+  )) as Record<string, unknown>;
 
   const existingBeforeImport = await getPrisma().voiceAppointment.findFirst({
     where: { workspaceId, externalId },
@@ -313,7 +350,7 @@ export async function processCalendarProviderEvent(input: {
       callId: null,
       contactId: contact.contactId,
       serviceName: event.summary || "Calendar event",
-      staffName: null,
+      staffName: staffLabel,
       startsAt: event.start,
       endsAt: event.end,
       timezone: event.timezone || null,
@@ -323,6 +360,7 @@ export async function processCalendarProviderEvent(input: {
     update: {
       contactId: contact.contactId,
       serviceName: event.summary || "Calendar event",
+      staffName: staffLabel,
       startsAt: event.start,
       endsAt: event.end,
       timezone: event.timezone || null,
@@ -453,15 +491,31 @@ async function applyImportedReminderEligibility(
   });
 }
 
-function buildImportMetadata(
+async function buildImportMetadata(
+  workspaceId: string,
   event: ProviderCalendarEvent,
   provider: string,
   connectionId: string,
   contact: Awaited<ReturnType<typeof resolveContactForImportedEvent>>,
   calendarId?: string,
   reminderEligibility?: { eligible: boolean; reason?: string },
+  previousMetadata?: Record<string, unknown> | null,
+  graphPhoneKeys?: string[] | null,
 ) {
-  return {
+  const phoneMerge = await mergeReminderPhoneOnImport({
+    event,
+    previousMetadata: (previousMetadata || null) as AppointmentMetadata | null,
+    contactPhone: contact.inviteePhone,
+    graphCustomerPhonePropertyKeys: graphPhoneKeys,
+  });
+
+  const displayName =
+    contact.inviteeName?.trim() ||
+    resolveDisplayNameFromEvent(event) ||
+    contact.inviteeEmail ||
+    null;
+  const nameParts = displayName?.split(/\s+/).filter(Boolean) ?? [];
+  const base = {
     source: "calendar_import",
     reminderSmsEligible: reminderEligibility?.eligible ?? false,
     reminderSmsIneligibleReason: reminderEligibility?.eligible
@@ -472,10 +526,12 @@ function buildImportMetadata(
     calendarId,
     providerEventId: event.id,
     inviteeEmail: contact.inviteeEmail,
-    inviteeName: contact.inviteeName,
-    inviteePhone: contact.inviteePhone,
-    smsCapable: contact.smsCapable,
-    emailOnly: contact.emailOnly,
+    inviteeName: displayName,
+    customerFirstName: nameParts[0] || undefined,
+    inviteePhone: phoneMerge.inviteePhone,
+    reminderPhone: phoneMerge.reminderPhone,
+    smsCapable: phoneMerge.smsCapable,
+    emailOnly: phoneMerge.emailOnly,
     contactMatch: contact.matchedExistingContact ? "existing" : contact.createdContact ? "created" : "none",
     timezone: event.timezone,
     isAllDay: event.isAllDay,
@@ -488,7 +544,10 @@ function buildImportMetadata(
     recurrence: event.recurrence,
     originalStart: event.originalStart?.toISOString(),
     description: event.description,
-  } as object;
+    location: event.locationDisplay,
+  } as AppointmentMetadata;
+
+  return enrichImportMetadataWithRecipientSuppression(workspaceId, phoneMerge.inviteePhone, base);
 }
 
 export async function syncWorkspaceCalendarConnection(
@@ -626,6 +685,7 @@ export async function syncWorkspaceCalendarConnection(
           event,
           config,
           calendarId,
+          microsoftAccessToken: provider === "microsoft" ? token : null,
         });
         if (result === "imported") stats.imported += 1;
         else if (result === "updated") stats.updated += 1;
@@ -757,6 +817,7 @@ export async function syncCalendarProviderEventById(input: {
     event,
     config,
     calendarId: input.calendarId,
+    microsoftAccessToken: input.provider === "microsoft" ? token : null,
   });
 }
 

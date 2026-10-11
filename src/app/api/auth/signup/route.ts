@@ -55,6 +55,7 @@ export async function POST(request: Request) {
       stripePaymentMethodId?: string;
       next?: string;
       productIntent?: ProductKey;
+      appointmentRemindersSignup?: boolean;
     };
     if (!body.email || !body.password || !body.name) {
       return NextResponse.json({ error: "Name, email, and password required" }, { status: 400 });
@@ -86,15 +87,22 @@ export async function POST(request: Request) {
 
     const passwordHash = await hash(body.password, 10);
     const pathIntent = preferredProductFromPath(body.next || "");
+    const nextHint = String(body.next || "");
+    const isAppointmentRemindersSignup =
+      body.appointmentRemindersSignup === true ||
+      nextHint.includes("/appointment-reminders") ||
+      nextHint.includes("appointment_reminders") ||
+      nextHint.includes("product=appointment_reminders") ||
+      nextHint.includes("product=appointment-reminders");
     const productIntent: ProductKey =
       body.productIntent ??
       pathIntent ??
-      (isMctbV1Primary()
+      (isMctbV1Primary() && !isAppointmentRemindersSignup
         ? "voice"
         : body.workspaceType === "PERSONAL"
           ? "numbers"
           : "voice");
-    const isMctbSignup = productIntent === "voice";
+    const isMctbSignup = productIntent === "voice" && !isAppointmentRemindersSignup;
     const allowPersonal =
       isPersonalWorkspaceOffered() &&
       productIntent === "numbers" &&
@@ -216,6 +224,13 @@ export async function POST(request: Request) {
       await ensureMassTextingWorkspaceBootstrap(workspace.id);
     }
     await updateProductIntent(user.id, productIntent);
+
+    if (isAppointmentRemindersSignup) {
+      const { assignArFreePlan } = await import(
+        "@/lib/appointment-reminders/commercial/ar-workspace-plan"
+      );
+      await assignArFreePlan(workspace.id);
+    }
 
     if (isMctbSignup) {
       const { ensureMctbWorkspaceBootstrap } = await import(

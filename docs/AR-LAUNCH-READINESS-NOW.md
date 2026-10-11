@@ -13,10 +13,10 @@
 |----------|--------|
 | **Is the AR product built enough to sell M365 → automated SMS reminders?** | **Yes in code** — UI, billing, engine, metering, setup, ops pages exist. |
 | **Can you flip a switch for any stranger with zero human testing?** | **No** — no signed **AR launch cert** (live SMS + optional email + paid Stripe on a **new** workspace). |
-| **Is another big dev phase required?** | **No** for core launch — remaining work is **proof**, **small gate/UI alignment**, and **GTM scope** (what you promise). |
-| **Is AR in `V1-PRODUCTION-CERTIFICATION.md`?** | **No** — that gate is **MCTB + Fax only**. AR has separate evidence docs. |
+| **Is another big dev phase required?** | **No** — functional completion matrix is **FINISHED** (`docs/AR-FULL-FUNCTIONAL-COMPLETION-MATRIX.md`). |
+| **Is AR in `V1-PRODUCTION-CERTIFICATION.md`?** | **Yes** — listed as a **separate** automated + live gate (not part of MCTB/Fax V1 freeze). |
 
-**One-line:** **Shippable as a product in the repo; not certified as “launch PASS” until you run the golden-tenant runbook on production.**
+**One-line:** **Code + automated matrix closure complete; production “launch PASS” still requires the golden-tenant live SMS/Stripe runbook below on your tenant.**
 
 ---
 
