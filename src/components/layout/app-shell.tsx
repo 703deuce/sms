@@ -349,6 +349,8 @@ export function AppShell({
             hasMctb={hasMctb}
             hasAppointmentReminders={hasAppointmentReminders}
             hasAiAfterHours={hasAiAfterHours}
+            mobileMenuOpen={menuOpen}
+            onMobileMenuClose={() => setMenuOpen(false)}
             mainClassName={mainClassName}
           >
             {mainContent}
