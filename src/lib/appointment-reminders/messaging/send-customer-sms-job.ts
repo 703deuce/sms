@@ -34,9 +34,31 @@ export async function executeArSendCustomerSmsJob(payload: Record<string, unknow
   const prisma = getPrisma();
   const existingMessage = await prisma.message.findFirst({
     where: { workspaceId, idempotencyKey: outboundKey },
-    select: { id: true, providerId: true, status: true },
+    select: { id: true, providerId: true, status: true, body: true },
   });
   if (existingMessage?.providerId) {
+    let conversationIdForReplay = String(payload.conversationId || "").trim();
+    if (!conversationIdForReplay && replySessionId) {
+      const replaySession = await loadArReplySessionForWorkspace({
+        sessionId: replySessionId,
+        workspaceId,
+      });
+      conversationIdForReplay = replaySession?.conversationId?.trim() || "";
+    }
+    const providerId = existingMessage.providerId.trim();
+    const provenProvider =
+      providerId &&
+      !providerId.startsWith("idem:") &&
+      !providerId.startsWith("pending:") &&
+      existingMessage.status !== "failed";
+    if (conversationIdForReplay && provenProvider && existingMessage.body?.trim()) {
+      const { appendArConversationOutboundMessage } = await import("./persistent-conversation");
+      await appendArConversationOutboundMessage({
+        conversationId: conversationIdForReplay,
+        body: existingMessage.body.trim(),
+        providerMessageId: providerId,
+      });
+    }
     logArSmsPipeline({
       step: "outbound_reply_idempotent",
       workspaceId,

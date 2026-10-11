@@ -31,6 +31,7 @@ export type ArConversationThreadMessage = {
   createdAt: string;
   deliveryStatus?: string | null;
   label?: string | null;
+  providerMessageId?: string | null;
 };
 
 const NEEDS_ATTENTION_KINDS = new Set([
@@ -181,14 +182,26 @@ export async function loadArConversationThread(
   const session = await prisma.arSmsReplySession.findFirst({
     where: { workspaceId, appointmentId },
     orderBy: { lastUsedAt: "desc" },
-    select: { conversationId: true },
+    select: { conversationId: true, id: true },
   });
 
   const conversationId = session?.conversationId ?? null;
   const messages: ArConversationThreadMessage[] = [];
 
   if (conversationId) {
-    const take = Math.min(80, Math.max(10, pageSize));
+    if (!cursor) {
+      const { repairMissingArConversationOutboundFromLedger } = await import(
+        "@/lib/appointment-reminders/ar-conversation-thread-hydration"
+      );
+      await repairMissingArConversationOutboundFromLedger({
+        conversationId,
+        workspaceId,
+        appointmentId,
+        replySessionId: session?.id ?? null,
+      });
+    }
+
+    const take = Math.min(200, Math.max(10, pageSize));
     const rows = await prisma.conversationMessage.findMany({
       where: { conversationId },
       orderBy: { createdAt: "asc" },
@@ -204,10 +217,11 @@ export async function loadArConversationThread(
         body: true,
         direction: true,
         createdAt: true,
+        providerMessageId: true,
       },
     });
 
-    const nextCursor = rows.length >= take ? rows[rows.length - 1]?.id ?? null : null;
+    let nextCursor = rows.length >= take ? rows[rows.length - 1]?.id ?? null : null;
 
     for (const m of rows) {
       const dir = String(m.direction || "").toLowerCase();
@@ -216,6 +230,7 @@ export async function loadArConversationThread(
         direction: dir === "inbound" ? "inbound" : dir === "outbound" ? "outbound" : "system",
         body: m.body,
         createdAt: m.createdAt.toISOString(),
+        providerMessageId: m.providerMessageId,
         label:
           dir === "outbound"
             ? "Sent by Transovo"
@@ -223,6 +238,20 @@ export async function loadArConversationThread(
               ? "Customer"
               : "System",
       });
+    }
+
+    if (!cursor) {
+      const { loadProvenArAppointmentOutboundLedger, mergeArConversationThreadMessages } =
+        await import("@/lib/appointment-reminders/ar-conversation-thread-hydration");
+      const ledger = await loadProvenArAppointmentOutboundLedger({
+        workspaceId,
+        appointmentId,
+        replySessionId: session?.id ?? null,
+      });
+      const merged = mergeArConversationThreadMessages(messages, ledger);
+      messages.length = 0;
+      messages.push(...merged);
+      nextCursor = null;
     }
 
     await prisma.conversation.updateMany({
