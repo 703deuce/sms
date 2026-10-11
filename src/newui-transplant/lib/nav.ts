@@ -9,7 +9,7 @@ import { isVoiceProductCustomerVisible } from '@/lib/products/launch-product-ava
 import { RECEPTIONIST_WIZARD_NAV_ITEMS } from '@/lib/voice/receptionist/wizard-step-url'
 import { buildAppointmentRemindersNav } from '@/lib/products/appointment-reminders-nav'
 import { buildMctbV1Nav } from '@/lib/products/mctb-nav'
-import type { NavItem as ProductNavItem } from '@/lib/nav'
+import { flattenNavLinks, type NavItem as ProductNavItem } from '@/lib/nav'
 import { MCTB_ROUTES } from '@/lib/mctb/routes'
 import type { ProductShell } from '@/lib/products/product-shell'
 
@@ -68,6 +68,12 @@ function productNavItemToOpus(item: ProductNavItem): NavItem {
   if (item.badge !== undefined) opus.badge = String(item.badge)
   if (!item.matchExact) {
     opus.matchPrefix = item.href
+  }
+  if (item.children?.length) {
+    opus.children = flattenNavLinks(item.children).map((link) => ({
+      label: link.label,
+      href: link.href,
+    }))
   }
   return opus
 }

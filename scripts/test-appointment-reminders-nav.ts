@@ -15,7 +15,11 @@ function main() {
   const nav = buildAppointmentRemindersNav();
   assert.ok(nav.some((i) => i.href === AR_ROUTES.appointments));
   assert.ok(nav.some((i) => i.href === AR_ROUTES.reminders));
-  assert.ok(nav.some((i) => i.href === "/settings/billing"));
+  assert.ok(nav.some((i) => i.href === AR_ROUTES.settingsBilling));
+  const settings = nav.find((i) => i.label === "Settings");
+  assert.ok(settings?.children?.length === 4);
+  const reminders = nav.find((i) => i.label === "Reminders");
+  assert.ok(reminders?.children?.length === 3);
 
   if (isMctbV1Primary()) {
     const shells = visibleProductShells({

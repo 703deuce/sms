@@ -13,7 +13,13 @@ import {
   CalendarDays,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
-import { AR_ROUTES } from "@/lib/appointment-reminders/routes";
+import {
+  AR_ROUTES,
+  AR_SETTINGS_BUSINESS,
+  AR_SETTINGS_INTEGRATIONS,
+  AR_SETTINGS_NOTIFICATIONS,
+  AR_SETTINGS_SCHEDULING,
+} from "@/lib/appointment-reminders/routes";
 import { appointmentRemindersHideBookingNav } from "@/lib/appointment-reminders/ar-launch-nav";
 
 const ACCOUNT_SECTION = "Account";
@@ -27,7 +33,7 @@ export function buildAppointmentRemindersMobileNav(): NavItem[] {
       { label: "Home", href: AR_ROUTES.home, icon: LayoutDashboard, matchExact: true },
       { label: "Appointments", href: AR_ROUTES.appointments, icon: CalendarDays },
       { label: "Reminders", href: AR_ROUTES.reminders, icon: Bell },
-      { label: "Settings", href: AR_ROUTES.settings, icon: Settings2 },
+      { label: "Settings", href: AR_SETTINGS_SCHEDULING, icon: Settings2 },
     ];
   }
   return [
@@ -62,7 +68,7 @@ export function buildAppointmentRemindersNav(): NavItem[] {
       href: AR_ROUTES.reminders,
       icon: Bell,
       children: [
-        { label: "Activity & delivery", href: AR_ROUTES.reminders },
+        { label: "Activity & Delivery", href: AR_ROUTES.reminders },
         { label: "Sequences", href: AR_ROUTES.remindersSequences },
         { label: "Templates", href: AR_ROUTES.remindersTemplates },
       ],
@@ -84,8 +90,14 @@ export function buildAppointmentRemindersNav(): NavItem[] {
     },
     {
       label: "Settings",
-      href: AR_ROUTES.settings,
+      href: AR_SETTINGS_SCHEDULING,
       icon: Settings2,
+      children: [
+        { label: "Scheduling & Rules", href: AR_SETTINGS_SCHEDULING },
+        { label: "Business Profile", href: AR_SETTINGS_BUSINESS },
+        { label: "Notifications & Responses", href: AR_SETTINGS_NOTIFICATIONS },
+        { label: "Integrations", href: AR_SETTINGS_INTEGRATIONS },
+      ],
     },
   ];
   if (!hideBooking) {
@@ -140,7 +152,7 @@ export function getAppointmentRemindersPageTitle(pathname: string): string {
   if (pathname.startsWith(AR_ROUTES.remindersTemplates)) return "Templates";
   if (pathname.startsWith(AR_ROUTES.reminders)) return "Reminders";
   if (pathname.startsWith(AR_ROUTES.analytics)) return "Analytics";
-  if (pathname.startsWith(AR_ROUTES.calendars)) return "Settings";
+  if (pathname.startsWith(AR_ROUTES.calendars)) return "Integrations";
   if (pathname.startsWith(AR_ROUTES.settings)) return "Settings";
   if (pathname.startsWith(AR_ROUTES.aiRescheduler)) return "AI Rescheduler";
   if (pathname.startsWith(AR_ROUTES.bookingServices)) return "Meetings";

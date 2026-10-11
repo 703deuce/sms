@@ -31,10 +31,18 @@ function SettingsPageInner() {
   useEffect(() => {
     if (raw === 'sequence') {
       router.replace(AR_ROUTES.remindersSequences)
-    } else if (raw === 'templates') {
-      router.replace(AR_ROUTES.remindersTemplates)
+      return
     }
-  }, [raw, router])
+    if (raw === 'templates') {
+      router.replace(AR_ROUTES.remindersTemplates)
+      return
+    }
+    if (!raw) {
+      const sp = new URLSearchParams(searchParams.toString())
+      sp.set('tab', 'scheduling')
+      router.replace(`${pathname}?${sp.toString()}`, { scroll: false })
+    }
+  }, [raw, router, pathname, searchParams])
 
   const setTab = useCallback(
     (tab: ArSettingsTab) => {

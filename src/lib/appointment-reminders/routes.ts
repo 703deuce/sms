@@ -35,6 +35,10 @@ export function arSettingsTab(tab: string): string {
   return `${AR_ROUTES.settings}?tab=${encodeURIComponent(tab)}`;
 }
 
+/** Settings section deep links (sidebar submenu + bookmarks). */
+export const AR_SETTINGS_SCHEDULING = arSettingsTab("scheduling");
+export const AR_SETTINGS_BUSINESS = arSettingsTab("business");
+export const AR_SETTINGS_NOTIFICATIONS = arSettingsTab("notifications");
 export const AR_SETTINGS_INTEGRATIONS = arSettingsTab("integrations");
 
 export function arRemindersSequenceStepEditPath(stepKey: string): string {
