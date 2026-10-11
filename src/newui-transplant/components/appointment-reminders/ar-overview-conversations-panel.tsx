@@ -5,16 +5,10 @@ import Link from 'next/link'
 import { Loader2, MessagesSquare } from 'lucide-react'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
 import type { ArCustomerResponseSummary } from '@/lib/appointment-reminders/ar-sms-customer-outcome'
+import { ArConversationThreadSheet } from '@/newui-transplant/components/appointment-reminders/ar-conversation-thread-sheet'
 import { CustomerResponsePill } from '@/newui-transplant/components/appointment-reminders/customer-response-pill'
 import { EmptyState, Initials, Panel, TextLink } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from '@/newui-transplant/components/ui/sheet'
-import { cn } from '@/lib/utils'
 
 type ConversationRow = {
   appointmentId: string
@@ -29,28 +23,12 @@ type ConversationRow = {
   customerResponse: ArCustomerResponseSummary
 }
 
-type ThreadMessage = {
-  id: string
-  direction: 'inbound' | 'outbound' | 'system'
-  body: string
-  createdAt: string
-  label?: string | null
-}
-
 export function ArOverviewConversationsPanel() {
   const [rows, setRows] = useState<ConversationRow[]>([])
   const [gated, setGated] = useState(false)
   const [gateMessage, setGateMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [threadLoading, setThreadLoading] = useState(false)
-  const [thread, setThread] = useState<{
-    customerName: string
-    appointmentTitle: string
-    startsAt: string
-    customerResponse: ArCustomerResponseSummary
-    messages: ThreadMessage[]
-  } | null>(null)
 
   const loadList = useCallback(async () => {
     setLoading(true)
@@ -72,44 +50,19 @@ export function ArOverviewConversationsPanel() {
     void loadList()
   }, [loadList])
 
-  const openThread = useCallback(async (appointmentId: string) => {
-    setSelectedId(appointmentId)
-    setThreadLoading(true)
-    setThread(null)
-    try {
-      const res = await fetch(`/api/appointment-reminders/conversations/${appointmentId}`, {
-        cache: 'no-store',
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error('thread_failed')
-      setThread({
-        customerName: json.data.customerName,
-        appointmentTitle: json.data.appointmentTitle,
-        startsAt: json.data.startsAt,
-        customerResponse: json.data.customerResponse,
-        messages: json.data.messages || [],
-      })
-      void loadList()
-    } catch {
-      setThread(null)
-    } finally {
-      setThreadLoading(false)
-    }
-  }, [loadList])
-
   const unreadCount = rows.filter((r) => r.unread).length
 
   return (
     <>
       <Panel
-        title="Customer replies"
-        description="Recent SMS conversations from appointment reminders — open any thread without leaving Overview."
+        title="Customer replies & conversations"
+        description="Read the full SMS thread — outbound reminders and customer replies in order."
         action={
           <div className="flex items-center gap-3">
             {unreadCount > 0 ? (
               <span className="text-xs font-medium text-primary">{unreadCount} unread</span>
             ) : null}
-            <TextLink href={AR_ROUTES.responses}>View all conversations</TextLink>
+            <TextLink href={AR_ROUTES.responses}>View all in Responses</TextLink>
           </div>
         }
         bodyClassName="p-0"
@@ -154,14 +107,17 @@ export function ArOverviewConversationsPanel() {
                 <button
                   type="button"
                   className="flex w-full items-start gap-3 px-5 py-3.5 text-left transition-colors hover:bg-muted/40"
-                  onClick={() => void openThread(row.appointmentId)}
+                  onClick={() => setSelectedId(row.appointmentId)}
                 >
                   <Initials name={row.customerName} className="size-9" />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="truncate text-sm font-medium">
                         {row.unread ? (
-                          <span className="mr-1.5 inline-block size-2 rounded-full bg-primary align-middle" aria-hidden="true" />
+                          <span
+                            className="mr-1.5 inline-block size-2 rounded-full bg-primary align-middle"
+                            aria-hidden="true"
+                          />
                         ) : null}
                         {row.customerName}
                       </span>
@@ -184,7 +140,9 @@ export function ArOverviewConversationsPanel() {
                         kind={row.customerResponse.kind}
                       />
                       {row.needsAttention ? (
-                        <span className="text-xs font-medium text-amber-700 dark:text-amber-300">Needs attention</span>
+                        <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                          Needs attention
+                        </span>
                       ) : null}
                     </div>
                   </div>
@@ -195,56 +153,16 @@ export function ArOverviewConversationsPanel() {
         )}
       </Panel>
 
-      <Sheet open={Boolean(selectedId)} onOpenChange={(open) => !open && setSelectedId(null)}>
-        <SheetContent side="right" className="w-full sm:max-w-lg">
-          <SheetHeader>
-            <SheetTitle>{thread?.customerName || 'Conversation'}</SheetTitle>
-          </SheetHeader>
-          {threadLoading ? (
-            <p className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" />
-              Loading thread…
-            </p>
-          ) : thread ? (
-            <div className="space-y-4">
-              <div className="rounded-lg border bg-muted/20 p-3 text-sm">
-                <p className="font-medium">{thread.appointmentTitle}</p>
-                <p className="text-xs text-muted-foreground">
-                  {new Date(thread.startsAt).toLocaleString()}
-                </p>
-                <div className="mt-2">
-                  <CustomerResponsePill
-                    label={thread.customerResponse.listDisplayLine || thread.customerResponse.label}
-                    kind={thread.customerResponse.kind}
-                  />
-                </div>
-              </div>
-              <ol className="space-y-3" aria-label="Message history">
-                {thread.messages.length === 0 ? (
-                  <li className="text-sm text-muted-foreground">No messages stored for this appointment yet.</li>
-                ) : (
-                  thread.messages.map((m) => (
-                    <li
-                      key={m.id}
-                      className={cn(
-                        'rounded-xl border px-3 py-2 text-sm',
-                        m.direction === 'outbound' ? 'ml-4 bg-primary/5' : 'mr-4 bg-card',
-                      )}
-                    >
-                      <p className="text-[11px] font-medium text-muted-foreground">{m.label}</p>
-                      <p className="mt-1 whitespace-pre-wrap leading-relaxed">{m.body}</p>
-                      <p className="mt-1 text-[11px] tabular-nums text-muted-foreground">
-                        {new Date(m.createdAt).toLocaleString()}
-                      </p>
-                    </li>
-                  ))
-                )}
-              </ol>
-              <TextLink href={`${AR_ROUTES.responses}?view=needs_attention`}>Open in Responses</TextLink>
-            </div>
-          ) : null}
-        </SheetContent>
-      </Sheet>
+      <ArConversationThreadSheet
+        appointmentId={selectedId}
+        open={Boolean(selectedId)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedId(null)
+            void loadList()
+          }
+        }}
+      />
     </>
   )
 }

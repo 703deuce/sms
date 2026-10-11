@@ -8,6 +8,7 @@ import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
 import { CustomerResponsePill } from '@/newui-transplant/components/appointment-reminders/customer-response-pill'
 import type { ArCustomerResponseKind } from '@/lib/appointment-reminders/ar-sms-customer-outcome'
 import { ArOpusPage } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
+import { ArConversationThreadSheet } from '@/newui-transplant/components/appointment-reminders/ar-conversation-thread-sheet'
 import { EmptyState, PageHeader, Panel } from '@/newui-transplant/components/app/kit'
 import { OPUS_TABLE_HEAD } from '@/newui-transplant/components/app/opus-surfaces'
 import { th, td } from '@/newui-transplant/components/app/opus-tables'
@@ -57,6 +58,9 @@ export function ArResponsesOpusPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [busyHeldId, setBusyHeldId] = useState<string | null>(null)
+  const [conversationAppointmentId, setConversationAppointmentId] = useState<string | null>(null)
+
+  const appointmentFromUrl = searchParams.get('appointment')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -77,6 +81,12 @@ export function ArResponsesOpusPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    if (appointmentFromUrl && appointmentFromUrl.length > 0) {
+      setConversationAppointmentId(appointmentFromUrl)
+    }
+  }, [appointmentFromUrl])
 
   async function resolveHeld(id: string, resolution: 'dismiss' | 'route_ar', replySessionId?: string) {
     setBusyHeldId(id)
@@ -144,7 +154,11 @@ export function ArResponsesOpusPage() {
         </p>
       ) : null}
 
-      <Panel bodyClassName="p-0">
+      <Panel
+        title="Response list"
+        description="Select a row to read the full SMS conversation when an appointment is linked."
+        bodyClassName="p-0"
+      >
         {loading ? (
           <p className="flex items-center gap-2 p-5 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" aria-hidden="true" />
@@ -182,7 +196,17 @@ export function ArResponsesOpusPage() {
               </thead>
               <tbody className="divide-y">
                 {rows.map((row) => (
-                  <tr key={row.id} className="hover:bg-muted/30">
+                  <tr
+                    key={row.id}
+                    className={cn(
+                      'hover:bg-muted/30',
+                      row.appointmentId && 'cursor-pointer',
+                      conversationAppointmentId === row.appointmentId && 'bg-primary/5',
+                    )}
+                    onClick={() => {
+                      if (row.appointmentId) setConversationAppointmentId(row.appointmentId)
+                    }}
+                  >
                     <td className={`${td} font-medium`}>{row.customerLabel}</td>
                     <td className={td}>
                       <span className="block truncate">{row.appointmentLabel}</span>
@@ -208,7 +232,16 @@ export function ArResponsesOpusPage() {
                       {new Date(row.occurredAt).toLocaleString()}
                     </td>
                     <td className={td}>
-                      <div className="flex flex-col gap-2">
+                      <div className="flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
+                        {row.appointmentId ? (
+                          <button
+                            type="button"
+                            className="text-left text-xs font-medium text-primary hover:underline"
+                            onClick={() => setConversationAppointmentId(row.appointmentId)}
+                          >
+                            Read conversation
+                          </button>
+                        ) : null}
                         {row.actionHref ? (
                           <Link href={row.actionHref} className="text-xs font-medium text-primary hover:underline">
                             Open appointment
@@ -248,6 +281,22 @@ export function ArResponsesOpusPage() {
           </div>
         )}
       </Panel>
+
+      <ArConversationThreadSheet
+        appointmentId={conversationAppointmentId}
+        open={Boolean(conversationAppointmentId)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setConversationAppointmentId(null)
+            if (appointmentFromUrl) {
+              const sp = new URLSearchParams(searchParams.toString())
+              sp.delete('appointment')
+              router.replace(`${pathname}?${sp.toString()}`, { scroll: false })
+            }
+          }
+        }}
+        responsesDeepLink={false}
+      />
     </ArOpusPage>
   )
 }

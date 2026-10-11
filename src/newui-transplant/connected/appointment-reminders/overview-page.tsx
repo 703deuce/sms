@@ -272,67 +272,32 @@ export function AppointmentRemindersOverviewPage() {
         </div>
       ) : null}
 
-      <ArUpcomingAppointmentsPanel
-        className="mb-6"
-        loading={loading}
-        rows={upcomingAppointments.map((row) => ({
-          ...row,
-          needsAttention:
-            row.responseKind === 'cancel_pending' ||
-            row.responseKind === 'reschedule_pending' ||
-            row.responseKind === 'reschedule_requested' ||
-            row.responseKind === 'awaiting_reply',
-        }))}
-      />
-
-      <ArStatGrid className="mb-6">
-        <Stat
-          label="Upcoming appointments"
-          value={loading ? '—' : String(counts?.upcoming ?? stats?.scheduledCount ?? 0)}
-          icon={CalendarClock}
-          href={`${AR_ROUTES.appointments}?engagement=upcoming`}
-        />
-        <Stat
-          label="Awaiting reply"
-          value={loading ? '—' : String(counts?.awaitingConfirmation ?? 0)}
-          icon={UserCheck}
-          href={`${AR_ROUTES.appointments}?engagement=awaiting_confirmation`}
-        />
-        <Stat
-          label="Confirmed"
-          value={loading ? '—' : String(counts?.confirmed ?? 0)}
-          icon={Send}
-          href={`${AR_ROUTES.appointments}?engagement=confirmed`}
-        />
-        <Stat
-          label="Needs attention"
-          value={loading ? '—' : String(counts?.needsAttention ?? 0)}
-          icon={AlertTriangle}
-          href={`${AR_ROUTES.responses}?view=needs_attention`}
-        />
-      </ArStatGrid>
-
-      <ArOverviewConversationsPanel />
-
-      {productStatus.length > 0 ? (
-        <div className="mb-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-          {productStatus.map((item) => (
-            <Link
-              key={item.id}
-              href={item.href}
-              className="rounded-lg border bg-card px-3 py-2.5 transition-colors hover:bg-muted/40"
-            >
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{item.label}</p>
-              <p className="mt-1 flex items-center gap-2 text-sm font-medium">
-                <Pill tone={item.status === 'ready' ? 'success' : 'warning'} dot={false}>
-                  {item.status === 'ready' ? 'Ready' : 'Action needed'}
-                </Pill>
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{item.detail}</p>
-            </Link>
-          ))}
+      {!calendarHealthy && !loading ? (
+        <div className="mb-4">
+          <Callout tone="warning" icon={Calendar} title="Calendar connection needs attention">
+            Connect Microsoft 365 or Google Calendar and select import calendars.{' '}
+            <TextLink href={AR_SETTINGS_INTEGRATIONS}>Manage connections</TextLink>
+          </Callout>
         </div>
       ) : null}
+
+      {!loading && (stats?.failed7d ?? 0) > 0 ? (
+        <div className="mb-4">
+          <Callout tone="danger" icon={AlertTriangle} title="Some reminders failed to deliver">
+            <p className="text-sm text-muted-foreground">
+              {stats?.failed7d} failed in the last 7 days. Review delivery details and recipient phone numbers.
+            </p>
+            <Link
+              href={AR_ROUTES.reminders}
+              className={cn(buttonVariants({ variant: 'secondary', size: 'sm' }), 'mt-3 inline-flex')}
+            >
+              Open reminder log
+            </Link>
+          </Callout>
+        </div>
+      ) : null}
+
+      <ArOverviewConversationsPanel />
 
       <Panel
         title="Needs attention"
@@ -379,10 +344,10 @@ export function AppointmentRemindersOverviewPage() {
                     </td>
                     <td className={td}>
                       <Link
-                        href={`${AR_ROUTES.appointments}?highlight=${encodeURIComponent(row.appointmentId)}`}
+                        href={`${AR_ROUTES.responses}?appointment=${encodeURIComponent(row.appointmentId)}`}
                         className="text-xs font-medium text-primary hover:underline"
                       >
-                        Open
+                        Conversation
                       </Link>
                     </td>
                   </tr>
@@ -393,12 +358,63 @@ export function AppointmentRemindersOverviewPage() {
         )}
       </Panel>
 
-      {!calendarHealthy && !loading ? (
-        <div className="mb-6">
-          <Callout tone="warning" icon={Calendar} title="Calendar connection needs attention">
-            Connect Google Calendar or Microsoft 365 and select import calendars.{' '}
-            <TextLink href={AR_SETTINGS_INTEGRATIONS}>Manage connections</TextLink>
-          </Callout>
+      <ArUpcomingAppointmentsPanel
+        className="mb-6"
+        loading={loading}
+        rows={upcomingAppointments.map((row) => ({
+          ...row,
+          needsAttention:
+            row.responseKind === 'cancel_pending' ||
+            row.responseKind === 'reschedule_pending' ||
+            row.responseKind === 'reschedule_requested' ||
+            row.responseKind === 'awaiting_reply',
+        }))}
+      />
+
+      <ArStatGrid className="mb-6">
+        <Stat
+          label="Upcoming appointments"
+          value={loading ? '—' : String(counts?.upcoming ?? stats?.scheduledCount ?? 0)}
+          icon={CalendarClock}
+          href={`${AR_ROUTES.appointments}?engagement=upcoming`}
+        />
+        <Stat
+          label="Awaiting reply"
+          value={loading ? '—' : String(counts?.awaitingConfirmation ?? 0)}
+          icon={UserCheck}
+          href={`${AR_ROUTES.appointments}?engagement=awaiting_confirmation`}
+        />
+        <Stat
+          label="Confirmed"
+          value={loading ? '—' : String(counts?.confirmed ?? 0)}
+          icon={Send}
+          href={`${AR_ROUTES.appointments}?engagement=confirmed`}
+        />
+        <Stat
+          label="Needs attention"
+          value={loading ? '—' : String(counts?.needsAttention ?? 0)}
+          icon={AlertTriangle}
+          href={`${AR_ROUTES.responses}?view=needs_attention`}
+        />
+      </ArStatGrid>
+
+      {productStatus.length > 0 ? (
+        <div className="mb-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          {productStatus.map((item) => (
+            <Link
+              key={item.id}
+              href={item.href}
+              className="rounded-lg border bg-card px-3 py-2.5 transition-colors hover:bg-muted/40"
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{item.label}</p>
+              <p className="mt-1 flex items-center gap-2 text-sm font-medium">
+                <Pill tone={item.status === 'ready' ? 'success' : 'warning'} dot={false}>
+                  {item.status === 'ready' ? 'Ready' : 'Action needed'}
+                </Pill>
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{item.detail}</p>
+            </Link>
+          ))}
         </div>
       ) : null}
 
