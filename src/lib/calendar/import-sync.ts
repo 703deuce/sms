@@ -584,9 +584,25 @@ export async function syncWorkspaceCalendarConnection(
     await ensureMicrosoftCalendarSubscription(workspaceId, connectionId).catch((err) => {
       console.warn("[calendar] ensure microsoft subscription before sync failed", connectionId, err);
     });
+    const { healMicrosoftSplitConnectionTokens } = await import(
+      "@/lib/calendar/microsoft-connection-heal"
+    );
+    const heal = await healMicrosoftSplitConnectionTokens(workspaceId, connectionId);
+    if (heal.healed) {
+      console.info(
+        "[calendar] microsoft_oauth_healed_from_sibling",
+        JSON.stringify({
+          workspaceId,
+          targetConnectionId: heal.targetConnectionId,
+          donorConnectionId: heal.donorConnectionId,
+        }),
+      );
+    }
   }
 
-  const token = await getValidAccessToken(conn.id, provider, config);
+  const freshConnForToken = await getWorkspaceCalendarConnection(workspaceId, connectionId);
+  const configForToken = (freshConnForToken?.config || config) as CalendarConfig;
+  const token = await getValidAccessToken(conn.id, provider, configForToken);
   if (!token) {
     await updateWorkspaceCalendarConnection(workspaceId, connectionId, {
       status: "needs_reauth",

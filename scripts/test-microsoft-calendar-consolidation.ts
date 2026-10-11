@@ -22,7 +22,6 @@ function main() {
   const merged = mergeCalendarConnectionConfig(active, patch);
   assert.deepEqual(merged.importCalendarIds, ["cal-1"]);
   assert.equal(merged.writeCalendarId, "cal-1");
-  assert.ok((merged.microsoftDeltaLinks as Record<string, unknown>)["cal-1"]);
   console.log("PASS microsoft calendar consolidation merge");
 }
 

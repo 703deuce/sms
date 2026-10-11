@@ -131,8 +131,17 @@ export async function exchangeMicrosoftAuthorizationCode(code: string): Promise<
   return tokens;
 }
 
+export function resolveMicrosoftRefreshScopes(config?: {
+  grantedScopes?: string | null;
+} | null): string {
+  const granted = config?.grantedScopes?.trim();
+  if (granted) return granted;
+  return getMicrosoftOAuthScopes();
+}
+
 export async function refreshMicrosoftAccessToken(
   refreshToken: string,
+  options?: { scope?: string },
 ): Promise<import("./token-errors").MicrosoftTokenRefreshResult> {
   const { classifyMicrosoftOAuthError, microsoftTokenFailureNeedsReconnect, parseMicrosoftTokenErrorBody } =
     await import("./token-errors");
@@ -159,7 +168,7 @@ export async function refreshMicrosoftAccessToken(
         client_secret: clientSecret,
         refresh_token: refreshToken,
         grant_type: "refresh_token",
-        scope: getMicrosoftOAuthScopes(),
+        scope: options?.scope?.trim() || getMicrosoftOAuthScopes(),
       }),
     });
   } catch (err) {
