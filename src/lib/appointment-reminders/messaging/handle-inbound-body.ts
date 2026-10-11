@@ -40,6 +40,7 @@ export async function handleAppointmentRemindersInboundBody(input: {
     "@/lib/appointment-reminders/commercial/ar-ai-rescheduler-plan"
   );
   const ar = await resolveArAiReschedulerConfigForWorkspace(input.workspaceId);
+
   if (isAiReschedulerSmsEnabled(ar)) {
     const apptRow = await getPrisma().voiceAppointment.findFirst({
       where: { id: input.appointmentId, workspaceId: input.workspaceId },
@@ -190,6 +191,32 @@ export async function handleAppointmentRemindersInboundBody(input: {
       bodyLength,
     });
     return { handled: true, replyText: followUp.replyText };
+  }
+
+  if (ar.mode === "notify") {
+    const { tryRecordNotifyModeFreeTextReply } = await import(
+      "./handle-notify-customer-message"
+    );
+    await tryRecordNotifyModeFreeTextReply({
+      workspaceId: input.workspaceId,
+      appointmentId: input.appointmentId,
+      replySessionId: input.replySessionId,
+      body,
+      providerMessageId: input.providerMessageId,
+    });
+    logArSmsPipeline({
+      step: "inbound_handler_branch",
+      workspaceId: input.workspaceId,
+      replySessionId: input.replySessionId,
+      appointmentId: input.appointmentId,
+      conversationId: input.conversationId,
+      providerMessageId: input.providerMessageId,
+      handler: "notify_free_text",
+      branch: "recorded",
+      inboundKind,
+      bodyLength,
+    });
+    return { handled: false };
   }
 
   logArSmsPipeline({

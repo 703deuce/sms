@@ -17,7 +17,8 @@ export type ArSmsRecordableOutcome =
   | "policy_accepted"
   | "policy_declined"
   | "reminder_sent"
-  | "calendar_verified";
+  | "calendar_verified"
+  | "customer_message";
 
 const OUTCOME_LABELS: Record<ArSmsRecordableOutcome, string> = {
   confirmed: "Customer confirmed attendance",
@@ -31,6 +32,7 @@ const OUTCOME_LABELS: Record<ArSmsRecordableOutcome, string> = {
   policy_declined: "Customer declined policy",
   reminder_sent: "Reminder sent",
   calendar_verified: "Calendar update verified",
+  customer_message: "Customer replied",
 };
 
 async function resolveReminderTimelineType(

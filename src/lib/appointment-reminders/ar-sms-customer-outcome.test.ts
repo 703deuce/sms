@@ -47,6 +47,34 @@ describe("resolveArCustomerResponseSummary", () => {
     expect(summary.detailLine).toMatch(/Now/);
   });
 
+  it("returns replied for notify-mode free-text outcome", () => {
+    const meta: AppointmentMetadata = {
+      timeline: [
+        {
+          at: "2026-10-08T14:00:00.000Z",
+          type: arSmsOutcomeTimelineType("customer_message"),
+          label: "Customer replied",
+          detail: JSON.stringify({
+            v: 1,
+            reminderTimelineType: "reminder_24h_sent",
+            note: "Running 20 minutes late",
+            direction: "inbound",
+            messageText: "Running 20 minutes late",
+          }),
+        },
+      ],
+    };
+    const summary = resolveArCustomerResponseSummary({
+      status: "scheduled",
+      startsAt,
+      timezone: "America/New_York",
+      metadata: meta,
+    });
+    expect(summary.kind).toBe("replied");
+    expect(summary.detailLine).toContain("Running 20");
+    expect(summary.listDisplayLine).toMatch(/Replied/);
+  });
+
   it("returns none when no customer action", () => {
     const summary = resolveArCustomerResponseSummary({
       status: "scheduled",

@@ -52,7 +52,8 @@ export type ArSmsOutcomeSuffix =
   | "policy_accepted"
   | "policy_declined"
   | "reminder_sent"
-  | "calendar_verified";
+  | "calendar_verified"
+  | "customer_message";
 
 export function arSmsOutcomeTimelineType(outcome: ArSmsOutcomeSuffix): string {
   return `${AR_SMS_OUTCOME_PREFIX}${outcome}`;
@@ -128,6 +129,12 @@ function summaryFromOutcomeEvent(
       return { ...base, label: "Reschedule requested", detailLine: parsed.note || whenLabel };
     case "reschedule_pending":
       return { ...base, label: "Rescheduling in progress", detailLine: whenLabel };
+    case "replied":
+      return {
+        ...base,
+        label: "Customer replied",
+        detailLine: parsed.note?.trim() || base.reasonLine,
+      };
     default:
       return base;
   }
@@ -148,6 +155,8 @@ function kindFromOutcomeType(type: string): ArCustomerResponseKind | null {
       return "reschedule_requested";
     case "rescheduled":
       return "rescheduled";
+    case "customer_message":
+      return "replied";
     case "policy_disclosed":
     case "policy_accepted":
     case "policy_declined":
@@ -216,8 +225,15 @@ function enrichListDisplay(
   if (summary.kind === "reschedule_pending" || summary.kind === "reschedule_requested") {
     return { ...summary, listDisplayLine: "Reschedule in progress" };
   }
-  if (summary.kind === "awaiting_reply" || summary.kind === "replied") {
+  if (summary.kind === "awaiting_reply") {
     return { ...summary, listDisplayLine: "Awaiting response" };
+  }
+  if (summary.kind === "replied") {
+    const line = summary.detailLine || summary.reasonLine;
+    return {
+      ...summary,
+      listDisplayLine: line ? `Replied — ${line}` : "Customer replied",
+    };
   }
   if (summary.kind === "none") {
     return { ...summary, listDisplayLine: "Awaiting response" };
