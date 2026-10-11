@@ -53,6 +53,15 @@ function isFixedViewportSmsRoute(pathname: string): boolean {
   );
 }
 
+/** Layout B calendar workspace — scroll inside calendar grid + context panel only. */
+function isFixedViewportAppointmentRemindersCalendarHome(pathname: string): boolean {
+  return pathname === "/appointment-reminders";
+}
+
+function isFixedViewportMainRoute(pathname: string): boolean {
+  return isFixedViewportSmsRoute(pathname) || isFixedViewportAppointmentRemindersCalendarHome(pathname);
+}
+
 /** Automation builder/list — unchanged legacy chrome (excludes drip campaigns). */
 function isLegacyAutomationRoute(pathname: string): boolean {
   if (pathname.startsWith("/automations/drip-campaigns") || pathname.startsWith("/drip-campaigns")) {
@@ -194,7 +203,7 @@ export function AppShell({
     resolvedProduct ?? (isVoiceShellRoute(pathname) ? "voice" : null);
   const isLauncher = pathname === "/app" || pathname.startsWith("/app/");
   const legacyAutomation = isLegacyAutomationRoute(pathname);
-  const fixedViewport = isFixedViewportSmsRoute(pathname);
+  const fixedViewport = isFixedViewportMainRoute(pathname);
   const mctbAnalyticsFullWidth = isMctbAnalyticsFullWidthRoute(pathname);
   const mctbSetupFullWidth = isMctbSetupFullWidthRoute(pathname);
   const mctbWorkspaceFullWidth = mctbAnalyticsFullWidth || mctbSetupFullWidth;

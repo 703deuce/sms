@@ -305,7 +305,7 @@ export function AppointmentRemindersCalendarWorkspacePage() {
   return (
     <ArOpusPage
       wide
-      className="flex min-h-0 flex-col px-5 py-4 md:px-6 lg:h-[calc(100dvh-4.5rem)] lg:max-h-[calc(100dvh-4.5rem)]"
+      className="flex min-h-0 flex-1 flex-col px-5 py-4 md:px-6 lg:h-full lg:max-h-full lg:overflow-hidden"
     >
       <header className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
