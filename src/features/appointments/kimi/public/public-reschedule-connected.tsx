@@ -1,8 +1,7 @@
 "use client";
 
-import "@/components/appointments/kimi-ui/public-reschedule/reference.css";
-import { RescheduleFlow } from "@/components/appointments/kimi-ui/public-reschedule/components/RescheduleFlow";
+import { PublicRescheduleOpusPage } from "@/newui-transplant/connected/appointments/public-reschedule-opus-page";
 
 export function PublicRescheduleConnected({ token }: { token: string }) {
-  return <RescheduleFlow token={token} live />;
+  return <PublicRescheduleOpusPage token={token} />;
 }

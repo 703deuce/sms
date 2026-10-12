@@ -12,6 +12,10 @@ import { resolvePublicAppointmentChangeWorkflow } from "@/lib/appointment-remind
 import { listPublicSelfServiceRescheduleSlots } from "@/lib/appointment-reminders/public-self-service-slots";
 import { commitPublicSelfServiceReschedule } from "@/lib/appointment-reminders/public-self-service-commit";
 import { providerRefFromAppointment } from "@/lib/appointment-reminders/ai-rescheduler/provider-mutations";
+import {
+  assertPublicSelfServiceAllowed,
+  publicSelfServiceFieldsForAppointment,
+} from "@/lib/appointment-reminders/public-self-service-api";
 
 type Params = { params: Promise<{ token: string }> };
 
@@ -22,7 +26,19 @@ export async function GET(_request: Request, { params }: Params) {
     if (!row || (row.metadata as { rescheduleToken?: string })?.rescheduleToken !== token) {
       return NextResponse.json({ error: "Invalid token" }, { status: 404 });
     }
+    const selfService = publicSelfServiceFieldsForAppointment(row);
     const workflow = await resolvePublicAppointmentChangeWorkflow(row.workspaceId);
+    if (selfService.selfServiceBlocked) {
+      return NextResponse.json({
+        data: {
+          ...buildPublicAppointmentCustomerPreview(row),
+          endsAt: row.endsAt,
+          slots: [],
+          requestOnly: false,
+          ...selfService,
+        },
+      });
+    }
     if (workflow === "request_only") {
       return NextResponse.json({
         data: {
@@ -30,6 +46,7 @@ export async function GET(_request: Request, { params }: Params) {
           endsAt: row.endsAt,
           slots: [],
           requestOnly: true,
+          ...selfService,
         },
       });
     }
@@ -46,6 +63,7 @@ export async function GET(_request: Request, { params }: Params) {
           slots: [],
           requestOnly: false,
           durationUnavailable: slotsResult.reason === "duration_unknown",
+          ...selfService,
         },
       });
     }
@@ -57,6 +75,7 @@ export async function GET(_request: Request, { params }: Params) {
         slots: slotsResult.slots,
         requestOnly: false,
         durationMinutes: slotsResult.durationMinutes,
+        ...selfService,
       },
     });
   } catch (err) {
@@ -76,6 +95,10 @@ export async function POST(request: Request, { params }: Params) {
       preferredStartsAt?: string;
       note?: string;
     };
+    const allowed = assertPublicSelfServiceAllowed(row);
+    if (!allowed.ok) {
+      return NextResponse.json({ error: allowed.message }, { status: 409 });
+    }
     const workflow = await resolvePublicAppointmentChangeWorkflow(row.workspaceId);
     if (workflow === "request_only") {
       const result = await requestRescheduleViaPublicEmail({

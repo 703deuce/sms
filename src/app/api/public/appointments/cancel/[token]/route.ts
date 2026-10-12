@@ -10,6 +10,10 @@ import { resolvePublicAppointmentChangeWorkflow } from "@/lib/appointment-remind
 import { triggerArCalendarWriteBack } from "@/lib/appointment-reminders/calendar-write-back/trigger";
 import { commitPublicSelfServiceCancel } from "@/lib/appointment-reminders/public-self-service-cancel";
 import { providerRefFromAppointment } from "@/lib/appointment-reminders/ai-rescheduler/provider-mutations";
+import {
+  assertPublicSelfServiceAllowed,
+  publicSelfServiceFieldsForAppointment,
+} from "@/lib/appointment-reminders/public-self-service-api";
 
 type Params = { params: Promise<{ token: string }> };
 
@@ -19,6 +23,10 @@ export async function POST(_request: Request, { params }: Params) {
     const row = await findAppointmentByPublicToken(token);
     if (!row || (row.metadata as { cancelToken?: string })?.cancelToken !== token) {
       return NextResponse.json({ error: "Invalid token" }, { status: 404 });
+    }
+    const allowed = assertPublicSelfServiceAllowed(row);
+    if (!allowed.ok) {
+      return NextResponse.json({ error: allowed.message }, { status: 409 });
     }
     const workflow = await resolvePublicAppointmentChangeWorkflow(row.workspaceId);
     if (workflow === "request_only") {
@@ -81,6 +89,7 @@ export async function GET(_request: Request, { params }: Params) {
       data: {
         ...buildPublicAppointmentCustomerPreview(row),
         requestOnly: workflow === "request_only",
+        ...publicSelfServiceFieldsForAppointment(row),
       },
     });
   } catch (err) {

@@ -29,10 +29,7 @@ import type { CoreReminderStepKey } from "@/lib/appointments/reminders/reminders
 import { resolveWeeklyHours } from "@/lib/appointments/availability-engine-policy";
 import { resolveEffectiveReminderPhone } from "@/lib/appointment-reminders/effective-phone";
 import { evaluateSmsReminderEligibility } from "@/lib/appointment-reminders/sms-eligibility";
-import {
-  finalizeReminderSmsBody,
-  stripHttpUrlsFromSmsBody,
-} from "@/lib/appointment-reminders/message-sanitize";
+import { finalizeReminderSmsBody } from "@/lib/appointment-reminders/message-sanitize";
 import { loadAppointmentRemindersActivation } from "@/lib/appointment-reminders/activation";
 import {
   releaseArReminderSmsReservation,
@@ -268,35 +265,24 @@ async function buildReminderSmsBodyForOutbound(input: {
   );
 
   let smsBody = finalizeReminderSmsBody(body);
-  const { isSelfServiceLinkMode, isAiReschedulerSmsEnabled, arReplyInstructionsSuffixForAppointment } =
-    await import("@/lib/appointment-reminders/ai-rescheduler/types");
   const { resolveArAiReschedulerConfigForWorkspace } = await import(
     "@/lib/appointment-reminders/commercial/ar-ai-rescheduler-plan"
   );
-  const arConfig = await resolveArAiReschedulerConfigForWorkspace(input.workspaceId);
-  if (platformSender && !isSelfServiceLinkMode(arConfig)) {
-    smsBody = stripHttpUrlsFromSmsBody(smsBody);
-  }
-
-  const { stripEmbeddedSmsReplyInstructions } = await import(
-    "@/lib/appointment-reminders/sms-reply-instructions"
+  const { applyPlatformSenderReminderSmsPostProcess } = await import(
+    "@/lib/appointment-reminders/reminder-platform-sms-postprocess"
   );
-  smsBody = stripEmbeddedSmsReplyInstructions(smsBody);
-
+  const arConfig = await resolveArAiReschedulerConfigForWorkspace(input.workspaceId);
   const { workspaceAllowsSmsCustomerResponses } = await import(
     "@/lib/appointment-reminders/commercial/ar-feature-gates"
   );
   const smsResponsesAllowed = await workspaceAllowsSmsCustomerResponses(input.workspaceId);
-
-  if (smsResponsesAllowed && isAiReschedulerSmsEnabled(arConfig)) {
-    const suffix = arReplyInstructionsSuffixForAppointment({
-      config: arConfig,
-      startsAt: input.startsAt,
-    });
-    if (suffix.trim()) {
-      smsBody = `${smsBody.trim()}${suffix}`;
-    }
-  }
+  smsBody = applyPlatformSenderReminderSmsPostProcess({
+    smsBody,
+    platformSender,
+    arConfig,
+    startsAt: input.startsAt,
+    smsResponsesAllowed,
+  });
   return smsBody;
 }
 
