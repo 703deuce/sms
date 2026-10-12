@@ -60,8 +60,15 @@ export type CalendarConfig = {
     replyDestinationEmail?: string;
     attachIcs?: boolean;
   };
-  /** Microsoft Graph subscription id + expiry */
+  /** Microsoft Graph subscription id + expiry (legacy single sub; prefer microsoftCalendarSubscriptions). */
   microsoftSubscription?: { id: string; expiresAt: string; resource?: string };
+  /** One Graph change notification subscription per imported Outlook calendar. */
+  microsoftCalendarSubscriptions?: Array<{
+    calendarId: string;
+    id: string;
+    expiresAt: string;
+    resource: string;
+  }>;
   /** Google Calendar watch channel */
   googleWatchChannels?: Array<{ calendarId: string; channelId: string; resourceId: string; expiresAt: string }>;
   timezone?: string;

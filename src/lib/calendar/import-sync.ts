@@ -327,6 +327,15 @@ export async function processCalendarProviderEvent(input: {
     });
     await applyImportedReminderEligibility(existing.id, reminderEligibility, existing.metadata);
 
+    if (event.status !== "cancelled") {
+      await trySendImmediateConfirmationForImportedEvent({
+        workspaceId,
+        appointmentId: existing.id,
+        eventStart: event.start,
+        reminderEligible: reminderEligibility.eligible,
+      });
+    }
+
     return { result: event.status === "cancelled" ? "canceled" : "updated" };
   }
 
@@ -400,26 +409,50 @@ export async function processCalendarProviderEvent(input: {
 
   await applyImportedReminderEligibility(saved.id, reminderEligibility, null);
 
-  const isNewImport = !existingBeforeImport;
-  if (reminderEligibility.eligible && event.start.getTime() > Date.now() && isNewImport) {
-    try {
-      const { maybeSendImmediateConfirmationForAppointment } = await import(
-        "@/lib/appointments/reminder-delivery"
-      );
-      const { loadAppointmentPlatformConfig } = await import("@/lib/appointments/settings");
-      const platform = await loadAppointmentPlatformConfig(workspaceId);
-      const skipHistorical =
-        platform.reminderPreferences?.skipConfirmationOnHistoricalImport === true &&
-        event.start.getTime() < Date.now() - 24 * 60 * 60_000;
-      if (!skipHistorical) {
-        await maybeSendImmediateConfirmationForAppointment(workspaceId, saved.id);
-      }
-    } catch (err) {
-      console.warn("[calendar] immediate confirmation after import failed", saved.id, err);
-    }
+  if (!existingBeforeImport) {
+    await trySendImmediateConfirmationForImportedEvent({
+      workspaceId,
+      appointmentId: saved.id,
+      eventStart: event.start,
+      reminderEligible: reminderEligibility.eligible,
+    });
   }
 
   return { result: "imported" };
+}
+
+/** Fire booking confirmation once when an imported appointment is reminder-eligible (new or first time we could send). */
+async function trySendImmediateConfirmationForImportedEvent(input: {
+  workspaceId: string;
+  appointmentId: string;
+  eventStart: Date;
+  reminderEligible: boolean;
+}): Promise<void> {
+  if (!input.reminderEligible || input.eventStart.getTime() <= Date.now()) return;
+  try {
+    const { maybeSendImmediateConfirmationForAppointment } = await import(
+      "@/lib/appointments/reminder-delivery"
+    );
+    const { loadAppointmentPlatformConfig } = await import("@/lib/appointments/settings");
+    const platform = await loadAppointmentPlatformConfig(input.workspaceId);
+    const skipHistorical =
+      platform.reminderPreferences?.skipConfirmationOnHistoricalImport === true &&
+      input.eventStart.getTime() < Date.now() - 24 * 60 * 60_000;
+    if (skipHistorical) return;
+    const result = await maybeSendImmediateConfirmationForAppointment(
+      input.workspaceId,
+      input.appointmentId,
+    );
+    if (!result.sent && result.skipped) {
+      console.info(
+        "[calendar] immediate confirmation skipped",
+        input.appointmentId,
+        result.skipped,
+      );
+    }
+  } catch (err) {
+    console.warn("[calendar] immediate confirmation after import failed", input.appointmentId, err);
+  }
 }
 
 async function applyImportedAppointmentLifecycle(

@@ -55,6 +55,107 @@ export function parseCalendarWebhookState(state: string): { connectionId: string
   return { connectionId, workspaceId };
 }
 
+type MicrosoftCalendarSubRow = {
+  calendarId: string;
+  id: string;
+  expiresAt: string;
+  resource: string;
+};
+
+function microsoftEventsSubscriptionResource(calendarId: string): string {
+  if (!calendarId || calendarId === "primary") {
+    return OUTLOOK_EVENTS_SUBSCRIPTION_RESOURCE;
+  }
+  return `me/calendars/${encodeURIComponent(calendarId)}/events`;
+}
+
+function resolveMicrosoftSubscriptionCalendarTargets(config: CalendarConfig): string[] {
+  const ids = resolveImportCalendarIds(config);
+  if (ids.length) return ids;
+  return ["primary"];
+}
+
+async function renewOrCreateMicrosoftEventSubscription(input: {
+  workspaceId: string;
+  connectionId: string;
+  config: CalendarConfig;
+  calendarId: string;
+  existing?: MicrosoftCalendarSubRow | null;
+  clientState: string;
+  expirationDateTime: string;
+}): Promise<MicrosoftCalendarSubRow | null> {
+  const resource = microsoftEventsSubscriptionResource(input.calendarId);
+  const existing = input.existing;
+
+  if (existing?.id) {
+    const renewRes = await microsoftGraphFetch(
+      input.connectionId,
+      input.config,
+      `${MICROSOFT_GRAPH_V1}/subscriptions/${encodeURIComponent(existing.id)}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expirationDateTime: input.expirationDateTime }),
+      },
+    );
+    if (renewRes.ok) {
+      const renewed = await renewRes.json();
+      return {
+        calendarId: input.calendarId,
+        id: String(renewed.id || existing.id),
+        expiresAt: String(renewed.expirationDateTime || input.expirationDateTime),
+        resource: String(renewed.resource || resource),
+      };
+    }
+    if (renewRes.status !== 404) {
+      const err = await renewRes.text();
+      console.warn(
+        "[calendar] microsoft subscription renew failed",
+        input.connectionId,
+        input.calendarId,
+        err,
+      );
+    }
+  }
+
+  const res = await microsoftGraphFetch(
+    input.connectionId,
+    input.config,
+    `${MICROSOFT_GRAPH_V1}/subscriptions`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        changeType: "created,updated,deleted",
+        notificationUrl: getMicrosoftCalendarWebhookUrl(),
+        lifecycleNotificationUrl: getMicrosoftCalendarLifecycleWebhookUrl(),
+        resource,
+        expirationDateTime: input.expirationDateTime,
+        clientState: input.clientState,
+        latestSupportedTlsVersion: "v1_2",
+      }),
+    },
+  );
+
+  if (!res.ok) {
+    const err = await res.text();
+    console.warn("[calendar] microsoft subscription failed", input.connectionId, input.calendarId, err);
+    return null;
+  }
+
+  const json = await res.json();
+  return {
+    calendarId: input.calendarId,
+    id: String(json.id),
+    expiresAt: String(json.expirationDateTime),
+    resource: String(json.resource || resource),
+  };
+}
+
+/**
+ * Register (or renew) Graph change notifications for every imported Outlook calendar.
+ * `me/events` alone misses events on non-default calendars — each import calendar gets its own sub.
+ */
 export async function ensureMicrosoftCalendarSubscription(workspaceId: string, connectionId: string) {
   const conn = await getPrisma().voiceCalendarConnection.findFirst({
     where: { id: connectionId, workspaceId, provider: "microsoft" },
@@ -65,77 +166,63 @@ export async function ensureMicrosoftCalendarSubscription(workspaceId: string, c
   const token = await getValidAccessToken(connectionId, "microsoft", config);
   if (!token) return null;
 
-  const existing = config.microsoftSubscription;
-  if (existing?.expiresAt && new Date(existing.expiresAt).getTime() > Date.now() + 3600_000) {
-    return existing;
+  const targets = resolveMicrosoftSubscriptionCalendarTargets(config);
+  const stored = config.microsoftCalendarSubscriptions || [];
+  const allFresh =
+    targets.length > 0 &&
+    targets.every((calendarId) => {
+      const row = stored.find((s) => s.calendarId === calendarId);
+      return row?.expiresAt && new Date(row.expiresAt).getTime() > Date.now() + 3600_000;
+    });
+  if (allFresh && stored.length >= targets.length) {
+    return config.microsoftSubscription ?? stored[0] ?? null;
   }
 
   const expirationDateTime = outlookEventSubscriptionExpiration();
   const clientState = signCalendarWebhookState(connectionId, workspaceId);
+  const nextSubs: MicrosoftCalendarSubRow[] = [];
 
-  if (existing?.id) {
-    const renewRes = await microsoftGraphFetch(
+  for (const calendarId of targets) {
+    const existing =
+      stored.find((s) => s.calendarId === calendarId) ||
+      (config.microsoftSubscription?.resource?.includes(calendarId)
+        ? {
+            calendarId,
+            id: config.microsoftSubscription!.id,
+            expiresAt: config.microsoftSubscription!.expiresAt,
+            resource: config.microsoftSubscription!.resource || "",
+          }
+        : null);
+
+    const row = await renewOrCreateMicrosoftEventSubscription({
+      workspaceId,
       connectionId,
       config,
-      `${MICROSOFT_GRAPH_V1}/subscriptions/${encodeURIComponent(existing.id)}`,
-      {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ expirationDateTime }),
-      },
-    );
-    if (renewRes.ok) {
-      const renewed = await renewRes.json();
-      const subscription = {
-        id: String(renewed.id || existing.id),
-        expiresAt: String(renewed.expirationDateTime || expirationDateTime),
-        resource: String(renewed.resource || existing.resource || OUTLOOK_EVENTS_SUBSCRIPTION_RESOURCE),
-      };
-      await updateWorkspaceCalendarConnection(workspaceId, connectionId, {
-        config: { ...config, microsoftSubscription: subscription },
-      });
-      return subscription;
-    }
-    if (renewRes.status !== 404) {
-      const err = await renewRes.text();
-      console.warn("[calendar] microsoft subscription renew failed", connectionId, err);
-    }
-  }
-
-  const res = await microsoftGraphFetch(connectionId, config, `${MICROSOFT_GRAPH_V1}/subscriptions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      changeType: "created,updated,deleted",
-      notificationUrl: getMicrosoftCalendarWebhookUrl(),
-      lifecycleNotificationUrl: getMicrosoftCalendarLifecycleWebhookUrl(),
-      resource: OUTLOOK_EVENTS_SUBSCRIPTION_RESOURCE,
-      expirationDateTime,
+      calendarId,
+      existing,
       clientState,
-      latestSupportedTlsVersion: "v1_2",
-    }),
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    console.warn("[calendar] microsoft subscription failed", connectionId, err);
-    return null;
+      expirationDateTime,
+    });
+    if (row) nextSubs.push(row);
   }
 
-  const json = await res.json();
-  const subscription = {
-    id: String(json.id),
-    expiresAt: String(json.expirationDateTime),
-    resource: String(json.resource || OUTLOOK_EVENTS_SUBSCRIPTION_RESOURCE),
+  if (!nextSubs.length) return null;
+
+  const legacy = {
+    id: nextSubs[0].id,
+    expiresAt: nextSubs[0].expiresAt,
+    resource: nextSubs[0].resource,
   };
 
   await updateWorkspaceCalendarConnection(workspaceId, connectionId, {
-    config: { ...config, microsoftSubscription: subscription },
+    config: {
+      ...config,
+      microsoftCalendarSubscriptions: nextSubs,
+      microsoftSubscription: legacy,
+    },
   });
 
-  return subscription;
+  return legacy;
 }
 
 export async function ensureGoogleCalendarWatch(
@@ -242,10 +329,11 @@ export async function handleMicrosoftCalendarWebhook(notifications: Array<{
     const providerEventId = parseMicrosoftWebhookEventId(note);
     const idempotencyKey = `ms-cal:${note.subscriptionId || "sub"}:${providerEventId || "none"}:${note.changeType || "change"}`;
 
+    let duplicateWebhook = false;
     try {
       await recordWebhookOnce("microsoft", idempotencyKey, parsed.workspaceId, note);
     } catch {
-      continue;
+      duplicateWebhook = true;
     }
 
     const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
@@ -259,7 +347,9 @@ export async function handleMicrosoftCalendarWebhook(notifications: Array<{
         providerEventId,
         changeType: note.changeType || null,
       },
-      idempotencyKey: `ms-wh-process:${idempotencyKey}`,
+      idempotencyKey: duplicateWebhook
+        ? `ms-wh-process-dup:${idempotencyKey}:${Date.now()}`
+        : `ms-wh-process:${idempotencyKey}`,
       priority: WEBHOOK_CALENDAR_SYNC_PRIORITY,
       wake: true,
     });

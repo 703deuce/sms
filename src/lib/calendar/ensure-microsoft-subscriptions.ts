@@ -24,7 +24,17 @@ export async function ensureMicrosoftCalendarSubscriptionsForWorkspace(
   for (const conn of connections) {
     const config = (conn.config || {}) as CalendarConfig;
     if (!shouldImportFromConnection(config)) continue;
-    if (config.microsoftSubscription?.id) {
+    const subs = config.microsoftCalendarSubscriptions || [];
+    const importIds = config.importCalendarIds || [];
+    const targets = importIds.length ? importIds : ["primary"];
+    const allSubsFresh =
+      subs.length >= targets.length &&
+      targets.every((calendarId) => {
+        const row = subs.find((s) => s.calendarId === calendarId);
+        return row?.expiresAt && new Date(row.expiresAt).getTime() > Date.now() + 3600_000;
+      });
+    if (allSubsFresh) continue;
+    if (!subs.length && config.microsoftSubscription?.id) {
       const exp = config.microsoftSubscription.expiresAt;
       if (exp && new Date(exp).getTime() > Date.now() + 3600_000) continue;
     }
