@@ -52,4 +52,19 @@ if (fridayDay !== "Friday") {
   throw new Error(`expected Friday deferred send, got ${fridayDay}`);
 }
 
+const confirmationImmediate = resolveEffectiveReminderFireTime({
+  step: { ...step24h, minutesBefore: 0, label: "confirmation" },
+  startsAt: mondayStart,
+  createdAt: bookedFriday,
+  weeklyHours: weekly,
+  timezone: "America/New_York",
+  immediate: true,
+});
+if ("reason" in confirmationImmediate) {
+  throw new Error("confirmation immediate should resolve");
+}
+if (confirmationImmediate.nominalFireAt.getTime() !== bookedFriday.getTime()) {
+  throw new Error("confirmation should fire at createdAt, not appointment start");
+}
+
 console.log("PASS reminder-effective-fire-time");

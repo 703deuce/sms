@@ -64,6 +64,14 @@ export async function POST(request: Request) {
       location: body.location,
       notes: body.notes,
     });
+    try {
+      const { maybeSendImmediateConfirmationForAppointment } = await import(
+        "@/lib/appointments/reminder-delivery"
+      );
+      await maybeSendImmediateConfirmationForAppointment(auth.workspaceId, row.id);
+    } catch (err) {
+      console.warn("[ar] immediate confirmation after manual create failed", row.id, err);
+    }
     return NextResponse.json({ data: { id: row.id } });
   } catch (err) {
     return jsonError(err, 400);

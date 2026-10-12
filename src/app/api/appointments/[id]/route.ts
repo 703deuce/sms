@@ -27,10 +27,12 @@ export async function GET(_request: Request, { params }: Params) {
     const config = await loadAppointmentPlatformConfig(auth.workspaceId);
     const reminderSchedule = buildReminderSchedule({
       startsAt: data.startsAt,
+      createdAt: data.createdAt,
       metadata: data.metadata,
       config: config.reminders,
       timezone: data.timezone || config.timezone,
       weeklyHours: resolveWeeklyHours(config),
+      confirmationStepEnabled: config.reminders.confirmation.enabled,
     });
     return NextResponse.json({ data: { ...data, reminderSchedule } });
   } catch (err) {
@@ -122,8 +124,11 @@ export async function PATCH(request: Request, { params }: Params) {
       const config = await loadAppointmentPlatformConfig(auth.workspaceId);
       const reminderSchedule = buildReminderSchedule({
         startsAt: data?.startsAt || updated.startsAt.toISOString(),
+        createdAt: data?.createdAt || updated.createdAt.toISOString(),
         metadata: (data?.metadata || updated.metadata || {}) as AppointmentMetadata,
         config: config.reminders,
+        timezone: config.timezone,
+        confirmationStepEnabled: config.reminders.confirmation.enabled,
       });
       return NextResponse.json({
         data: data

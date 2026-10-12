@@ -33,6 +33,7 @@ function formatWhen(iso?: string | null): string {
 export function computeAggregateReminderView(input: {
   status: string;
   startsAt: string;
+  createdAt?: string;
   endsAt: string | null;
   timezone: string | null;
   inviteePhone: string | null;
@@ -169,6 +170,7 @@ export function computeAggregateReminderView(input: {
     }
     const futureEarly = buildFutureReminderSchedule({
       startsAt: input.startsAt,
+      createdAt: input.createdAt,
       timezone: input.timezone || input.platform.timezone,
       steps: [
         { key: "confirmation", step: input.platform.reminders.confirmation },
@@ -177,6 +179,7 @@ export function computeAggregateReminderView(input: {
       ],
       metadata: meta,
       weeklyHours: resolveWeeklyHours(input.platform),
+      confirmationStepEnabled: input.platform.reminders.confirmation.enabled,
     });
     const nextEarly = futureEarly.find((f) => f.status === "scheduled" && f.scheduledFor);
     if (nextEarly?.scheduledFor) {
@@ -210,6 +213,7 @@ export function computeAggregateReminderView(input: {
   const tz = input.timezone || input.platform.timezone;
   const future = buildFutureReminderSchedule({
     startsAt: input.startsAt,
+    createdAt: input.createdAt,
     timezone: tz,
     steps: [
       { key: "confirmation", step: input.platform.reminders.confirmation },
@@ -218,6 +222,7 @@ export function computeAggregateReminderView(input: {
     ],
     metadata: meta,
     weeklyHours,
+    confirmationStepEnabled: input.platform.reminders.confirmation.enabled,
   });
 
   const delivered = timeline.find((e) => e.type.includes("delivered"));

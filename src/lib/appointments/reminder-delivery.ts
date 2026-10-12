@@ -1004,6 +1004,7 @@ export async function sendTestReminderEmail(
 
 export function buildReminderSchedule(input: {
   startsAt: string;
+  createdAt?: string;
   metadata: AppointmentMetadata;
   config: {
     confirmation: ReminderStepConfig;
@@ -1013,6 +1014,7 @@ export function buildReminderSchedule(input: {
   };
   timezone?: string;
   weeklyHours?: Record<string, Array<{ open: string; close: string }>>;
+  confirmationStepEnabled?: boolean;
 }) {
   const steps = [
     { key: "confirmation", step: input.config.confirmation },
@@ -1022,10 +1024,12 @@ export function buildReminderSchedule(input: {
   ];
   const preview = buildFutureReminderSchedule({
     startsAt: input.startsAt,
+    createdAt: input.createdAt,
     timezone: input.timezone || "America/New_York",
     steps,
     metadata: input.metadata,
     weeklyHours: input.weeklyHours,
+    confirmationStepEnabled: input.confirmationStepEnabled ?? input.config.confirmation.enabled,
   });
   return preview.map((p) => ({
     key: p.stepKey,

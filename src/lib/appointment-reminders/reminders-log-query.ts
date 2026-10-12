@@ -250,10 +250,12 @@ async function fetchFutureScheduledRows(
 
     const future = buildFutureReminderSchedule({
       startsAt: row.startsAt.toISOString(),
+      createdAt: row.createdAt.toISOString(),
       timezone: row.timezone || platform.timezone,
       steps: smsSteps.map((s) => ({ key: s.id, step: { ...s.step, minutesBefore: s.minutesBefore } })),
       metadata: meta,
       weeklyHours,
+      confirmationStepEnabled: platform.reminders.confirmation.enabled,
     });
 
     for (const step of future) {

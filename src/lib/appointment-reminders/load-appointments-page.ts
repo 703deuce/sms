@@ -104,6 +104,7 @@ function mapRow(
   const reminder = computeAggregateReminderView({
     status: row.status,
     startsAt: row.startsAt,
+    createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
     endsAt: row.endsAt,
     timezone: row.timezone,
     inviteePhone: row.inviteePhone,

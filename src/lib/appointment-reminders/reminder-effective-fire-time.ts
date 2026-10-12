@@ -103,8 +103,12 @@ export function resolveEffectiveReminderFireTime(input: {
   reminderQuietHours?: AppointmentPlatformConfig["reminderQuietHours"];
   /** When true, do not schedule closer than REMINDER_MIN_GAP_AFTER_CONFIRMATION_MS after booking. */
   confirmationStepEnabled?: boolean;
+  /** Booking confirmation — fires at import/create time, not at appointment start. */
+  immediate?: boolean;
 }): EffectiveReminderFireTime | UnresolvedReminderFireTime {
-  const nominalFireAt = resolveStepFireTime(input.step, input.startsAt);
+  const nominalFireAt = input.immediate
+    ? input.createdAt
+    : resolveStepFireTime(input.step, input.startsAt);
   const ctx: ReminderSendTimeContext = {
     step: input.step,
     weeklyHours: input.weeklyHours,

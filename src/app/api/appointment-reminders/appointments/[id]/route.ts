@@ -21,10 +21,12 @@ export async function GET(_request: Request, { params }: Params) {
     const config = await loadAppointmentPlatformConfig(auth.workspaceId);
     const reminderSchedule = buildReminderSchedule({
       startsAt: data.startsAt,
+      createdAt: data.createdAt,
       metadata: data.metadata as AppointmentMetadata,
       config: config.reminders,
       timezone: data.timezone || config.timezone,
       weeklyHours: resolveWeeklyHours(config),
+      confirmationStepEnabled: config.reminders.confirmation.enabled,
     });
     const meta = data.metadata as AppointmentMetadata & {
       arCalendarWriteBack?: import("@/lib/appointment-reminders/calendar-write-back/types").ArCalendarWriteBackRecord;

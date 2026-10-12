@@ -66,6 +66,7 @@ export function buildFutureReminderSchedule(input: {
     if (!step.enabled) {
       return { stepKey: key, label: step.label, channel: step.channel, scheduledFor: "", status: "skipped" };
     }
+    const immediate = key === "confirmation";
     const timelineType = reminderTimelineType(key as "confirmation" | "reminder24h" | "reminder2h", step.minutesBefore);
     const resolved = resolveEffectiveReminderFireTime({
       step,
@@ -76,6 +77,7 @@ export function buildFutureReminderSchedule(input: {
       dateOverrides: input.dateOverrides,
       reminderQuietHours: input.reminderQuietHours,
       confirmationStepEnabled: input.confirmationStepEnabled,
+      immediate,
     });
     if ("reason" in resolved) {
       return {
@@ -95,6 +97,19 @@ export function buildFutureReminderSchedule(input: {
         scheduledFor: fireAt.toISOString(),
         nominalScheduledFor: resolved.deferred ? resolved.nominalFireAt.toISOString() : undefined,
         status: "sent",
+      };
+    }
+    if (
+      !immediate &&
+      resolved.nominalFireAt.getTime() < createdAt.getTime()
+    ) {
+      return {
+        stepKey: key,
+        label: step.label,
+        channel: step.channel,
+        scheduledFor: "",
+        nominalScheduledFor: resolved.nominalFireAt.toISOString(),
+        status: "skipped",
       };
     }
     if (fireAt.getTime() < now) {
