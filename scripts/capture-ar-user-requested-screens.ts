@@ -69,6 +69,21 @@ async function main() {
   let manageToken = "";
   let rescheduleToken = "";
   let bookingWasEnabled = true;
+  let priorArConfig: Record<string, unknown> | null = null;
+
+  const arGet = await page.request.get(`${BASE_URL}/api/appointment-reminders/ai-rescheduler`);
+  if (arGet.ok()) {
+    const arJson = (await arGet.json()) as { data?: Record<string, unknown> };
+    priorArConfig = arJson.data || null;
+    const patchRes = await page.request.patch(`${BASE_URL}/api/appointment-reminders/ai-rescheduler`, {
+      data: { mode: "self_service_link", approval: "automatic" },
+    });
+    if (patchRes.ok()) {
+      console.log("Temporarily set self-service link + automatic approval for slot screenshot");
+    } else {
+      console.warn("Could not patch AI rescheduler for slots:", await patchRes.text());
+    }
+  }
   const bookRes = await page.request.get(`${BASE_URL}/api/appointment-reminders/booking`);
   if (bookRes.ok()) {
     const bookJson = (await bookRes.json()) as {
@@ -176,6 +191,12 @@ async function main() {
     await shot(pub, "ar-public-reschedule-slots-opus.png");
   } else {
     console.warn("No rescheduleToken — skipping reschedule screenshot");
+  }
+
+  if (priorArConfig) {
+    await page.request.patch(`${BASE_URL}/api/appointment-reminders/ai-rescheduler`, {
+      data: priorArConfig,
+    });
   }
 
   await browser.close();
