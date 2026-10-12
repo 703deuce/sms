@@ -43,6 +43,12 @@ export function mergeCalendarConnectionConfig(
   if (patch.microsoftSubscription === undefined && prev.microsoftSubscription !== undefined) {
     merged.microsoftSubscription = prev.microsoftSubscription;
   }
+  if (
+    patch.microsoftCalendarSubscriptions === undefined &&
+    prev.microsoftCalendarSubscriptions !== undefined
+  ) {
+    merged.microsoftCalendarSubscriptions = prev.microsoftCalendarSubscriptions;
+  }
   if (patch.googleChannelWatches === undefined && prev.googleChannelWatches !== undefined) {
     merged.googleChannelWatches = prev.googleChannelWatches;
   }
