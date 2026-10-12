@@ -68,10 +68,27 @@ async function main() {
   let bookSlug = process.env.AR_BOOK_SLUG?.trim() || "";
   let manageToken = "";
   let rescheduleToken = "";
+  let bookingWasEnabled = true;
   const bookRes = await page.request.get(`${BASE_URL}/api/appointment-reminders/booking`);
   if (bookRes.ok()) {
-    const bookJson = (await bookRes.json()) as { data?: { workspace?: { slug?: string } } };
+    const bookJson = (await bookRes.json()) as {
+      data?: {
+        workspace?: { slug?: string };
+        settings?: { bookingEnabled?: boolean };
+      };
+    };
     bookSlug = bookSlug || bookJson.data?.workspace?.slug || "";
+    bookingWasEnabled = bookJson.data?.settings?.bookingEnabled === true;
+    if (!bookingWasEnabled) {
+      const enableRes = await page.request.patch(`${BASE_URL}/api/appointment-reminders/booking`, {
+        data: { bookingEnabled: true, publicBookingProfile: "simple" },
+      });
+      if (!enableRes.ok()) {
+        console.warn("Could not enable public booking for screenshot:", await enableRes.text());
+      } else {
+        console.log("Temporarily enabled public booking for production screenshot");
+      }
+    }
   }
   const apptRes = await page.request.get(
     `${BASE_URL}/api/appointment-reminders/appointments?pageSize=50&date=upcoming`,
@@ -92,7 +109,25 @@ async function main() {
         data?: { metadata?: { manageToken?: string; rescheduleToken?: string } };
       };
       const meta = detailJson.data?.metadata || {};
-      if (meta.manageToken && meta.rescheduleToken) {
+      if (!meta.manageToken || !meta.rescheduleToken) continue;
+      const slotProbe = await page.request.get(
+        `${BASE_URL}/api/public/appointments/reschedule/${meta.rescheduleToken}`,
+      );
+      if (!slotProbe.ok()) continue;
+      const slotJson = (await slotProbe.json()) as {
+        data?: { slots?: unknown[]; requestOnly?: boolean; selfServiceBlocked?: boolean };
+      };
+      const slotData = slotJson.data;
+      const hasSlots =
+        Array.isArray(slotData?.slots) &&
+        slotData.slots.length > 0 &&
+        !slotData.requestOnly &&
+        !slotData.selfServiceBlocked;
+      if (!manageToken) {
+        manageToken = meta.manageToken;
+        rescheduleToken = meta.rescheduleToken;
+      }
+      if (hasSlots) {
         manageToken = meta.manageToken;
         rescheduleToken = meta.rescheduleToken;
         break;
@@ -112,6 +147,12 @@ async function main() {
   });
   await pub.waitForTimeout(2500);
   await shot(pub, "ar-public-booking-link-page.png");
+
+  if (!bookingWasEnabled) {
+    await page.request.patch(`${BASE_URL}/api/appointment-reminders/booking`, {
+      data: { bookingEnabled: false },
+    });
+  }
 
   if (manageToken) {
     await pub.goto(`${BASE_URL}/appointments/manage/${manageToken}`, {
