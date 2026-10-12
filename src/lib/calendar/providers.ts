@@ -77,6 +77,8 @@ export type CalendarConfig = {
   webhookUrl?: string;
   email?: string;
   displayName?: string;
+  /** Routine reconcile deferred a sync because one was already queued (cleared after follow-up enqueue). */
+  microsoftRoutineSyncDeferred?: boolean;
   /** Microsoft object id from Graph /me or token claims. */
   microsoftUserId?: string;
   /** Microsoft Entra tenant id; personal accounts use the MSA tenant. */

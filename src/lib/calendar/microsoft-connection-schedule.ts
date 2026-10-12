@@ -72,4 +72,16 @@ export type MicrosoftSyncScheduleMetrics = {
   enqueued: number;
   skippedBackoff: number;
   skippedLease: number;
+  skippedNoCredentials: number;
+  skippedAlreadyQueued: number;
 };
+
+/** Push rediscovery out so needs_reauth rows without tokens are not scanned every tick. */
+export async function markMicrosoftConnectionPausedForReauth(connectionId: string) {
+  const prisma = getPrisma();
+  const pauseUntil = new Date(Date.now() + 24 * 60 * 60_000);
+  await prisma.voiceCalendarConnection.update({
+    where: { id: connectionId },
+    data: { nextSyncDueAt: pauseUntil },
+  });
+}

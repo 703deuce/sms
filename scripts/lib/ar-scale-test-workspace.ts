@@ -1,6 +1,18 @@
 import { getPrisma } from "../../src/lib/db";
+import { isSimMicrosoftConnectionId } from "../../src/lib/calendar/disposable-calendar-test-data-ids";
 
-const MARKER = "AR_SCALE_TEST_DO_NOT_USE";
+export const AR_SCALE_TEST_WORKSPACE_MARKER = "AR_SCALE_TEST_DO_NOT_USE";
+
+const MARKER = AR_SCALE_TEST_WORKSPACE_MARKER;
+
+export function assertArScaleTestAllowedInCurrentEnvironment() {
+  if (process.env.AR_SCALE_TEST_ALLOW_PRODUCTION === "1") return;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "AR/Microsoft scale tests are blocked against production DATABASE_URL. Set AR_SCALE_TEST_ALLOW_PRODUCTION=1 only on an isolated database.",
+    );
+  }
+}
 
 export async function getOrCreateArScaleTestWorkspace(): Promise<string> {
   const prisma = getPrisma();
@@ -36,6 +48,4 @@ export async function getOrCreateArScaleTestWorkspace(): Promise<string> {
   return ws.id;
 }
 
-export function isSimMicrosoftConnectionId(id: string): boolean {
-  return id.startsWith("sim-ms-conn-") || id.startsWith("sim-ms-renew-");
-}
+export { isSimMicrosoftConnectionId };

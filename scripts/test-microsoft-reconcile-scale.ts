@@ -4,11 +4,15 @@
  */
 import assert from "node:assert/strict";
 import { getPrisma } from "../src/lib/db";
-import { getOrCreateArScaleTestWorkspace } from "./lib/ar-scale-test-workspace";
+import {
+  assertArScaleTestAllowedInCurrentEnvironment,
+  getOrCreateArScaleTestWorkspace,
+} from "./lib/ar-scale-test-workspace";
 
 const count = Number(process.argv.find((a) => a.startsWith("--connections="))?.split("=")[1] || 100);
 
 async function main() {
+  assertArScaleTestAllowedInCurrentEnvironment();
   const prisma = getPrisma();
   const ws = { id: await getOrCreateArScaleTestWorkspace() };
 

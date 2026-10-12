@@ -839,6 +839,10 @@ export async function syncWorkspaceCalendarConnection(
         config: persistedConfig,
       });
       await markMicrosoftSyncSuccess(connectionId);
+      const { maybeEnqueueDeferredRoutineCalendarSync } = await import(
+        "@/lib/calendar/microsoft-routine-sync-coalesce"
+      );
+      await maybeEnqueueDeferredRoutineCalendarSync(workspaceId, connectionId);
     } else {
       await updateWorkspaceCalendarConnection(workspaceId, connectionId, {
         config: persistedConfig,
@@ -913,6 +917,11 @@ export type EnqueueCalendarConnectionSyncOptions = {
   /** Lower runs sooner on the default queue (webhook-driven sync uses ~15). */
   priority?: number;
   wake?: boolean;
+  /**
+   * routine_reconcile: one coalesced incremental job per connection (stable idempotency key).
+   * event_driven: webhook/minute-bucket coalescing (default).
+   */
+  scheduling?: "routine_reconcile" | "event_driven";
 };
 
 export async function enqueueCalendarConnectionSync(
@@ -922,8 +931,14 @@ export async function enqueueCalendarConnectionSync(
   options?: EnqueueCalendarConnectionSyncOptions,
 ) {
   const { enqueueJob } = await import("@/lib/messaging/enqueue-advance");
+  const { routineMicrosoftCalendarSyncIdempotencyKey } = await import(
+    "@/lib/calendar/microsoft-routine-sync-eligibility"
+  );
   const minuteBucket = Math.floor(Date.now() / 60_000);
-  const idempotencyKey = `calendar-sync-${connectionId}-${incremental ? "inc" : "full"}-${minuteBucket}`;
+  const idempotencyKey =
+    options?.scheduling === "routine_reconcile"
+      ? routineMicrosoftCalendarSyncIdempotencyKey(connectionId, incremental)
+      : `calendar-sync-${connectionId}-${incremental ? "inc" : "full"}-${minuteBucket}`;
 
   const prisma = getPrisma();
   const existing = await prisma.jobQueue.findUnique({ where: { idempotencyKey } });

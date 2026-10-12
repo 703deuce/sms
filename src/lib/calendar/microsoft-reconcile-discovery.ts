@@ -4,6 +4,12 @@ import { shouldImportFromConnection } from "@/lib/calendar/eligibility";
 import type { CalendarConfig } from "@/lib/calendar/providers";
 import { enqueueCalendarConnectionSync } from "@/lib/calendar/import-sync";
 import {
+  findOutstandingCalendarConnectionSync,
+  setMicrosoftRoutineSyncDeferred,
+} from "@/lib/calendar/microsoft-routine-sync-coalesce";
+import { isEligibleForRoutineMicrosoftCalendarSync } from "@/lib/calendar/microsoft-routine-sync-eligibility";
+import {
+  markMicrosoftConnectionPausedForReauth,
   markMicrosoftSyncEnqueueLease,
   type MicrosoftSyncScheduleMetrics,
 } from "@/lib/calendar/microsoft-connection-schedule";
@@ -31,6 +37,8 @@ export async function discoverAndEnqueueMicrosoftCalendarSyncs(input?: {
     enqueued: 0,
     skippedBackoff: 0,
     skippedLease: 0,
+    skippedNoCredentials: 0,
+    skippedAlreadyQueued: 0,
   };
 
   let cursorDueAt: Date | null = null;
@@ -44,10 +52,7 @@ export async function discoverAndEnqueueMicrosoftCalendarSyncs(input?: {
         provider: "microsoft",
         status: { in: ["connected", "needs_reauth"] },
         ...(input?.workspaceId ? { workspaceId: input.workspaceId } : {}),
-        OR: [
-          { nextSyncDueAt: null },
-          { nextSyncDueAt: { lte: now } },
-        ],
+        OR: [{ nextSyncDueAt: null }, { nextSyncDueAt: { lte: now } }],
         AND: [
           {
             OR: [{ syncBackoffUntil: null }, { syncBackoffUntil: { lte: now } }],
@@ -65,7 +70,15 @@ export async function discoverAndEnqueueMicrosoftCalendarSyncs(input?: {
       },
       orderBy: [{ nextSyncDueAt: "asc" }, { id: "asc" }],
       take,
-      select: { id: true, workspaceId: true, config: true, nextSyncDueAt: true, syncBackoffUntil: true },
+      select: {
+        id: true,
+        workspaceId: true,
+        status: true,
+        credentialsRef: true,
+        config: true,
+        nextSyncDueAt: true,
+        syncBackoffUntil: true,
+      },
     });
 
     if (!batch.length) break;
@@ -80,15 +93,32 @@ export async function discoverAndEnqueueMicrosoftCalendarSyncs(input?: {
         continue;
       }
 
-      // Legacy: connections without nextSyncDueAt but recently synced — skip until interval elapsed
-      if (!conn.nextSyncDueAt && conn.nextSyncDueAt === null) {
-        // handled by OR branch; null nextSyncDueAt is always due for initialization
+      const eligibility = isEligibleForRoutineMicrosoftCalendarSync(conn);
+      if (!eligibility.eligible) {
+        if (eligibility.reason === "needs_reauth_no_credentials") {
+          metrics.skippedNoCredentials += 1;
+          if (!input?.dryRun) {
+            await markMicrosoftConnectionPausedForReauth(conn.id);
+          }
+        }
+        continue;
+      }
+
+      const outstanding = await findOutstandingCalendarConnectionSync(conn.id);
+      if (outstanding) {
+        metrics.skippedAlreadyQueued += 1;
+        if (!input?.dryRun) {
+          await setMicrosoftRoutineSyncDeferred(conn.workspaceId, conn.id, true);
+          claimedIds.push(conn.id);
+        }
+        continue;
       }
 
       if (!input?.dryRun) {
         await enqueueCalendarConnectionSync(conn.workspaceId, conn.id, true, {
           priority: 25,
           wake: true,
+          scheduling: "routine_reconcile",
         });
       }
       claimedIds.push(conn.id);
