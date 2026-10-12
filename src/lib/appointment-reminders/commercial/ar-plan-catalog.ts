@@ -5,7 +5,11 @@
 
 export type ArPlanKey = "free" | "starter" | "growth" | "business";
 
-export type ArAiReschedulerModeAllowed = "reminders_only" | "notify" | "ai";
+export type ArAiReschedulerModeAllowed =
+  | "reminders_only"
+  | "notify"
+  | "ai"
+  | "self_service_link";
 
 export type ArPlanDefinition = {
   key: ArPlanKey;
@@ -51,7 +55,7 @@ export const AR_PLAN_CATALOG: Record<ArPlanKey, ArPlanDefinition> = {
     customReminderTiming: "full",
     smsConfirmationsAndResponses: true,
     staffNotifiedRescheduleCancel: true,
-    aiReschedulerModes: ["reminders_only", "notify"],
+    aiReschedulerModes: ["reminders_only", "notify", "self_service_link"],
     aiConversationsPerMonth: 0,
     aiInsights: false,
   },
@@ -66,7 +70,7 @@ export const AR_PLAN_CATALOG: Record<ArPlanKey, ArPlanDefinition> = {
     customReminderTiming: "full",
     smsConfirmationsAndResponses: true,
     staffNotifiedRescheduleCancel: true,
-    aiReschedulerModes: ["reminders_only", "notify", "ai"],
+    aiReschedulerModes: ["reminders_only", "notify", "ai", "self_service_link"],
     aiConversationsPerMonth: 25,
     aiInsights: true,
   },
@@ -81,7 +85,7 @@ export const AR_PLAN_CATALOG: Record<ArPlanKey, ArPlanDefinition> = {
     customReminderTiming: "full",
     smsConfirmationsAndResponses: true,
     staffNotifiedRescheduleCancel: true,
-    aiReschedulerModes: ["reminders_only", "notify", "ai"],
+    aiReschedulerModes: ["reminders_only", "notify", "ai", "self_service_link"],
     aiConversationsPerMonth: 100,
     aiInsights: true,
   },

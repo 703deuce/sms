@@ -577,7 +577,18 @@ async function buildImportMetadata(
     location: event.locationDisplay,
   } as AppointmentMetadata;
 
-  return enrichImportMetadataWithRecipientSuppression(workspaceId, phoneMerge.inviteePhone, base);
+  const prev = (previousMetadata || {}) as AppointmentMetadata;
+  const { ensurePublicActionTokensOnMetadata } = await import(
+    "@/lib/appointment-reminders/public-action-tokens"
+  );
+  const withTokens = ensurePublicActionTokensOnMetadata({
+    ...base,
+    confirmToken: prev.confirmToken,
+    cancelToken: prev.cancelToken,
+    rescheduleToken: prev.rescheduleToken,
+    manageToken: prev.manageToken,
+  });
+  return enrichImportMetadataWithRecipientSuppression(workspaceId, phoneMerge.inviteePhone, withTokens);
 }
 
 export async function syncWorkspaceCalendarConnection(

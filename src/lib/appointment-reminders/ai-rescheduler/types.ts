@@ -3,7 +3,7 @@ import type { ArSmsActionPolicyConfig } from "./ar-sms-action-policy";
 import { buildArReplyInstructionsSuffix } from "./ar-sms-action-policy";
 
 /** How outbound reminders and customer change requests are handled. */
-export type AiReschedulerMode = "reminders_only" | "notify" | "ai";
+export type AiReschedulerMode = "reminders_only" | "notify" | "ai" | "self_service_link";
 
 export type AiReschedulerApproval = "automatic" | "business";
 
@@ -18,6 +18,7 @@ export type AiReschedulerConfig = {
    * `reminders_only` — send template SMS/email only (no C/R/X suffix or inbound change handling).
    * `notify` — include reply actions; staff notified on cancel/reschedule requests.
    * `ai` — AI offers times and applies calendar changes per approval rules.
+   * `self_service_link` — secure manage link in SMS; no C/R/X suffix.
    */
   mode: AiReschedulerMode;
   approval: AiReschedulerApproval;
@@ -75,7 +76,14 @@ export const DEFAULT_AI_RESCHEDULER_CONFIG: AiReschedulerConfig = {
 };
 
 function normalizeAiReschedulerMode(mode: unknown): AiReschedulerMode {
-  if (mode === "reminders_only" || mode === "notify" || mode === "ai") return mode;
+  if (
+    mode === "reminders_only" ||
+    mode === "notify" ||
+    mode === "ai" ||
+    mode === "self_service_link"
+  ) {
+    return mode;
+  }
   return DEFAULT_AI_RESCHEDULER_CONFIG.mode;
 }
 
@@ -93,6 +101,10 @@ export function resolveAiReschedulerConfig(
 }
 
 /** Customer SMS reply handling (C/R/X suffix + inbound pipeline). False for reminders-only. */
+export function isSelfServiceLinkMode(config: AiReschedulerConfig): boolean {
+  return config.mode === "self_service_link";
+}
+
 export function isAiReschedulerSmsEnabled(config: AiReschedulerConfig): boolean {
   return config.mode === "ai" || config.mode === "notify";
 }

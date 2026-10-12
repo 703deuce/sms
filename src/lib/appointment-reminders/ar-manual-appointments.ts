@@ -27,6 +27,7 @@ export async function createManualArAppointment(workspaceId: string, input: Manu
   const confirmToken = publicToken();
   const cancelToken = publicToken();
   const rescheduleToken = publicToken();
+  const manageToken = publicToken();
 
   const metadata: AppointmentMetadata = {
     source: "admin",
@@ -36,6 +37,7 @@ export async function createManualArAppointment(workspaceId: string, input: Manu
     confirmToken,
     cancelToken,
     rescheduleToken,
+    manageToken,
     location: input.location,
     notes: input.notes,
     bookingSource: "ar_manual",

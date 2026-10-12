@@ -175,7 +175,10 @@ export function publicBookingUrl(workspaceSlug: string, serviceId?: string): str
   return base ? `${base.replace(/\/$/, "")}${path}` : path;
 }
 
-export function publicActionUrl(kind: "confirm" | "cancel" | "reschedule", token: string): string {
+export function publicActionUrl(
+  kind: "confirm" | "cancel" | "reschedule" | "manage",
+  token: string,
+): string {
   const base = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "";
   const path = `/appointments/${kind}/${encodeURIComponent(token)}`;
   return base ? `${base.replace(/\/$/, "")}${path}` : path;
@@ -183,12 +186,17 @@ export function publicActionUrl(kind: "confirm" | "cancel" | "reschedule", token
 
 /** Canonical manage-appointment URL from persisted metadata or legacy action links. */
 export function resolveManageLinkFromMetadata(
-  meta: { manageAppointmentUrl?: unknown; rescheduleUrl?: unknown },
+  meta: {
+    manageAppointmentUrl?: unknown;
+    rescheduleUrl?: unknown;
+    manageToken?: string;
+  },
   rescheduleToken?: string | null,
 ): string {
   if (typeof meta.manageAppointmentUrl === "string" && meta.manageAppointmentUrl.trim()) {
     return meta.manageAppointmentUrl;
   }
+  if (meta.manageToken) return publicActionUrl("manage", meta.manageToken);
   if (typeof meta.rescheduleUrl === "string" && meta.rescheduleUrl.trim()) {
     return meta.rescheduleUrl;
   }

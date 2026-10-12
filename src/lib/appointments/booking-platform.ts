@@ -431,6 +431,7 @@ export async function createPlatformAppointment(
   const confirmToken = publicToken();
   const cancelToken = publicToken();
   const rescheduleToken = publicToken();
+  const manageToken = publicToken();
 
   const result = await withAtomicSlotBooking(
     workspaceId,
@@ -534,6 +535,7 @@ export async function createPlatformAppointment(
       confirmToken,
       cancelToken,
       rescheduleToken,
+      manageToken,
       notes: input.notes,
       bookingAnswers: input.bookingAnswers,
       staffId: input.staffId,
@@ -961,6 +963,7 @@ export async function findAppointmentByPublicToken(token: string) {
         { metadata: { path: ["confirmToken"], equals: token } },
         { metadata: { path: ["cancelToken"], equals: token } },
         { metadata: { path: ["rescheduleToken"], equals: token } },
+        { metadata: { path: ["manageToken"], equals: token } },
       ],
     },
     take: 1,

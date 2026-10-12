@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Bell, Check, Loader2, Sparkles, UserRoundCog } from 'lucide-react'
+import { Bell, Check, Link2, Loader2, Sparkles, UserRoundCog } from 'lucide-react'
 import type {
   AiReschedulerConfig,
   AiReschedulerMode,
@@ -353,12 +353,16 @@ export function ArAiReschedulerOpusPage() {
   }
 
   const aiOn = config.mode === 'ai'
+  const selfServiceOn = config.mode === 'self_service_link'
+  const customerSchedulingOn = aiOn || selfServiceOn
   const modePill =
     config.mode === 'ai'
       ? { tone: 'success' as const, label: 'AI handles changes' }
-      : config.mode === 'notify'
-        ? { tone: 'primary' as const, label: 'Notify staff' }
-        : { tone: 'neutral' as const, label: 'Reminders only' }
+      : config.mode === 'self_service_link'
+        ? { tone: 'primary' as const, label: 'Self-service link' }
+        : config.mode === 'notify'
+          ? { tone: 'primary' as const, label: 'Notify staff' }
+          : { tone: 'neutral' as const, label: 'Reminders only' }
 
   const handlingLevels: Array<{
     mode: AiReschedulerMode
@@ -386,6 +390,13 @@ export function ArAiReschedulerOpusPage() {
       desc:
         'Same reply options as notify mode, but AI offers times from your calendar and updates the appointment per your approval rules below.',
       icon: Sparkles,
+    },
+    {
+      mode: 'self_service_link',
+      title: 'Self-service link',
+      desc:
+        'Send a secure Manage Appointment link in reminder SMS. Customers reschedule or cancel online — no reply-with-letter instructions.',
+      icon: Link2,
     },
   ]
 
@@ -417,7 +428,7 @@ export function ArAiReschedulerOpusPage() {
           </div>
         }
       >
-        <div className="grid gap-3 p-4 sm:grid-cols-1 lg:grid-cols-3">
+        <div className="grid gap-3 p-4 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-4">
           {handlingLevels.map((level) => {
             const Icon = level.icon
             const selected = config.mode === level.mode
@@ -500,7 +511,7 @@ export function ArAiReschedulerOpusPage() {
         </div>
       </Panel>
 
-      {aiOn ? (
+      {customerSchedulingOn ? (
         <>
           <section className="space-y-3 border-t border-border/60 pt-6">
             <h2 className="text-base font-medium">Approval</h2>
@@ -629,38 +640,42 @@ export function ArAiReschedulerOpusPage() {
                 />
               </label>
             </div>
-            <SmsActionPolicyFields
-              title="SMS rescheduling (reply R)"
-              defaultAfterCutoff="contact_business"
-              policy={config.rescheduleSmsPolicy}
-              legacyCutoffMinutes={config.rescheduleSmsCutoffMinutes}
-              onChange={(policy, legacyCutoff) =>
-                patch({
-                  rescheduleSmsPolicy: policy,
-                  rescheduleSmsCutoffMinutes: legacyCutoff,
-                })
-              }
-            />
-            <SmsActionPolicyFields
-              title="SMS cancellation (reply X)"
-              defaultAfterCutoff="allow"
-              policy={config.cancelSmsPolicy}
-              legacyCutoffMinutes={config.cancelSmsCutoffMinutes}
-              onChange={(policy, legacyCutoff) =>
-                patch({
-                  cancelSmsPolicy: policy,
-                  cancelSmsCutoffMinutes: legacyCutoff,
-                })
-              }
-            />
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={config.allowProviderCancel}
-                onChange={(e) => patch({ allowProviderCancel: e.target.checked })}
-              />
-              Allow SMS cancel to update the connected calendar (X)
-            </label>
+            {aiOn ? (
+              <>
+                <SmsActionPolicyFields
+                  title="SMS rescheduling (reply R)"
+                  defaultAfterCutoff="contact_business"
+                  policy={config.rescheduleSmsPolicy}
+                  legacyCutoffMinutes={config.rescheduleSmsCutoffMinutes}
+                  onChange={(policy, legacyCutoff) =>
+                    patch({
+                      rescheduleSmsPolicy: policy,
+                      rescheduleSmsCutoffMinutes: legacyCutoff,
+                    })
+                  }
+                />
+                <SmsActionPolicyFields
+                  title="SMS cancellation (reply X)"
+                  defaultAfterCutoff="allow"
+                  policy={config.cancelSmsPolicy}
+                  legacyCutoffMinutes={config.cancelSmsCutoffMinutes}
+                  onChange={(policy, legacyCutoff) =>
+                    patch({
+                      cancelSmsPolicy: policy,
+                      cancelSmsCutoffMinutes: legacyCutoff,
+                    })
+                  }
+                />
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={config.allowProviderCancel}
+                    onChange={(e) => patch({ allowProviderCancel: e.target.checked })}
+                  />
+                  Allow SMS cancel to update the connected calendar (X)
+                </label>
+              </>
+            ) : null}
           </section>
         </>
       ) : null}
@@ -677,7 +692,9 @@ export function ArAiReschedulerOpusPage() {
             {readiness ? (
               <p>
                 Readiness: level {readiness.level}/3 — {readiness.summary}
-                {aiOn && config.approval === 'automatic' && !readiness.writeCalendarOk ? (
+                {customerSchedulingOn &&
+                config.approval === 'automatic' &&
+                !readiness.writeCalendarOk ? (
                   <span className="block text-amber-700 dark:text-amber-400">
                     Automatic calendar updates need write access and a write calendar selected.
                   </span>

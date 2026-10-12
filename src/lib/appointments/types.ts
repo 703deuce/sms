@@ -479,6 +479,8 @@ export type AppointmentMetadata = {
   confirmToken?: string;
   cancelToken?: string;
   rescheduleToken?: string;
+  /** Customer-facing manage hub (reschedule + cancel entry). */
+  manageToken?: string;
   smsConsent?: boolean;
   smsConsentAt?: string;
   smsConsentVersion?: string;

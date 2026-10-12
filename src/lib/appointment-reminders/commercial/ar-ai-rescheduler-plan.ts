@@ -13,6 +13,7 @@ function capMode(
   allowed: AiReschedulerMode[],
 ): AiReschedulerMode {
   if (allowed.includes(requested)) return requested;
+  if (allowed.includes("self_service_link")) return "self_service_link";
   if (allowed.includes("notify")) return "notify";
   return "reminders_only";
 }

@@ -3,13 +3,15 @@ import { jsonError } from "@/lib/api-auth";
 import {
   buildPublicAppointmentCustomerPreview,
   findAppointmentByPublicToken,
-  getAvailability,
   reschedulePlatformAppointment,
 } from "@/lib/appointments";
 import {
-  publicEmailActionsUseStaffRequestWorkflow,
   requestRescheduleViaPublicEmail,
 } from "@/lib/appointment-reminders/public-customer-actions";
+import { resolvePublicAppointmentChangeWorkflow } from "@/lib/appointment-reminders/public-self-service-workflow";
+import { listPublicSelfServiceRescheduleSlots } from "@/lib/appointment-reminders/public-self-service-slots";
+import { commitPublicSelfServiceReschedule } from "@/lib/appointment-reminders/public-self-service-commit";
+import { providerRefFromAppointment } from "@/lib/appointment-reminders/ai-rescheduler/provider-mutations";
 
 type Params = { params: Promise<{ token: string }> };
 
@@ -20,8 +22,8 @@ export async function GET(_request: Request, { params }: Params) {
     if (!row || (row.metadata as { rescheduleToken?: string })?.rescheduleToken !== token) {
       return NextResponse.json({ error: "Invalid token" }, { status: 404 });
     }
-    const requestOnly = await publicEmailActionsUseStaffRequestWorkflow(row.workspaceId);
-    if (requestOnly) {
+    const workflow = await resolvePublicAppointmentChangeWorkflow(row.workspaceId);
+    if (workflow === "request_only") {
       return NextResponse.json({
         data: {
           ...buildPublicAppointmentCustomerPreview(row),
@@ -31,20 +33,30 @@ export async function GET(_request: Request, { params }: Params) {
         },
       });
     }
-    const availability = await getAvailability(row.workspaceId, {
-      serviceName: row.serviceName || undefined,
-      daysAhead: 14,
+
+    const slotsResult = await listPublicSelfServiceRescheduleSlots({
+      workspaceId: row.workspaceId,
+      appointmentId: row.id,
     });
-    const now = Date.now();
-    const slots = availability.slots.filter(
-      (slot) => new Date(slot.startsAt).getTime() > now + 60_000,
-    );
+    if (!slotsResult.ok) {
+      return NextResponse.json({
+        data: {
+          ...buildPublicAppointmentCustomerPreview(row),
+          endsAt: row.endsAt,
+          slots: [],
+          requestOnly: false,
+          durationUnavailable: slotsResult.reason === "duration_unknown",
+        },
+      });
+    }
+
     return NextResponse.json({
       data: {
         ...buildPublicAppointmentCustomerPreview(row),
         endsAt: row.endsAt,
-        slots,
+        slots: slotsResult.slots,
         requestOnly: false,
+        durationMinutes: slotsResult.durationMinutes,
       },
     });
   } catch (err) {
@@ -64,8 +76,8 @@ export async function POST(request: Request, { params }: Params) {
       preferredStartsAt?: string;
       note?: string;
     };
-    const requestOnly = await publicEmailActionsUseStaffRequestWorkflow(row.workspaceId);
-    if (requestOnly) {
+    const workflow = await resolvePublicAppointmentChangeWorkflow(row.workspaceId);
+    if (workflow === "request_only") {
       const result = await requestRescheduleViaPublicEmail({
         workspaceId: row.workspaceId,
         appointmentId: row.id,
@@ -90,7 +102,27 @@ export async function POST(request: Request, { params }: Params) {
     if (!body.startsAt) {
       return NextResponse.json({ error: "startsAt is required" }, { status: 400 });
     }
-    const updated = await reschedulePlatformAppointment(row.workspaceId, row.id, body.startsAt);
+
+    const ref = providerRefFromAppointment(row);
+    if (ref) {
+      const committed = await commitPublicSelfServiceReschedule({
+        workspaceId: row.workspaceId,
+        appointmentId: row.id,
+        startsAt: body.startsAt,
+      });
+      if (!committed.ok) {
+        return NextResponse.json({ error: committed.message }, { status: 400 });
+      }
+      const fresh = await findAppointmentByPublicToken(token);
+      if (!fresh) {
+        return NextResponse.json({ error: "Invalid token" }, { status: 404 });
+      }
+      return NextResponse.json({
+        data: buildPublicAppointmentCustomerPreview(fresh),
+      });
+    }
+
+    const updated = await reschedulePlatformAppointment(row.workspaceId, row.id, body.startsAt, "customer");
     return NextResponse.json({
       data: buildPublicAppointmentCustomerPreview(updated),
     });

@@ -26,7 +26,7 @@ import { applyArRescheduleRules } from "./availability-rules";
 
 const DAY_KEYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
 
-function arWeeklyToBusinessWindow(
+export function arWeeklyToBusinessWindow(
   weeklyHours: Record<string, AiReschedulerDayConfig>,
 ): BusinessHoursWindow {
   const weekdays: number[] = [];
@@ -40,7 +40,7 @@ function arWeeklyToBusinessWindow(
   return { weekdays, startLocal: open, endLocal: close };
 }
 
-function expandBusyWithBuffer(
+export function expandBusyWithBuffer(
   busy: CalendarBusyInterval[],
   bufferMinutes: number,
 ): CalendarBusyInterval[] {

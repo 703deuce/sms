@@ -61,6 +61,7 @@ export function RescheduleFlow({ token, live = false }: { token?: string; live?:
   const [requestOnly, setRequestOnly] = useState(false);
   const [requestNote, setRequestNote] = useState("");
   const [requestPreferred, setRequestPreferred] = useState("");
+  const [durationUnavailable, setDurationUnavailable] = useState(false);
 
   useEffect(() => {
     if (live && token) {
@@ -76,6 +77,7 @@ export function RescheduleFlow({ token, live = false }: { token?: string; live?:
         .then((json) => {
           setAppt(json.data);
           setRequestOnly(Boolean(json.data.requestOnly));
+          setDurationUnavailable(Boolean(json.data.durationUnavailable));
           setSlots(json.data.slots || []);
           setLoadState("ready");
         })
@@ -361,6 +363,21 @@ export function RescheduleFlow({ token, live = false }: { token?: string; live?:
 
             <div style={{ marginTop: 18 }}>{summaryRow}</div>
 
+            {durationUnavailable && !requestOnly ? (
+              <p
+                role="alert"
+                style={{
+                  marginTop: 18,
+                  fontSize: 14,
+                  lineHeight: 1.5,
+                  color: "var(--text-muted)",
+                }}
+              >
+                Online rescheduling isn&apos;t available for this appointment. Please contact the business
+                directly to request a new time.
+              </p>
+            ) : null}
+
             {requestOnly ? (
               <div style={{ marginTop: 22, display: "flex", flexDirection: "column", gap: 14 }}>
                 <label style={{ display: "block", fontSize: 13 }}>
@@ -399,7 +416,7 @@ export function RescheduleFlow({ token, live = false }: { token?: string; live?:
                   />
                 </label>
               </div>
-            ) : (
+            ) : durationUnavailable ? null : (
               <div style={{ marginTop: 22 }}>
                 <p
                   id="pick-time-label"

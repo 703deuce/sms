@@ -268,7 +268,13 @@ async function buildReminderSmsBodyForOutbound(input: {
   );
 
   let smsBody = finalizeReminderSmsBody(body);
-  if (platformSender) {
+  const { isSelfServiceLinkMode, isAiReschedulerSmsEnabled, arReplyInstructionsSuffixForAppointment } =
+    await import("@/lib/appointment-reminders/ai-rescheduler/types");
+  const { resolveArAiReschedulerConfigForWorkspace } = await import(
+    "@/lib/appointment-reminders/commercial/ar-ai-rescheduler-plan"
+  );
+  const arConfig = await resolveArAiReschedulerConfigForWorkspace(input.workspaceId);
+  if (platformSender && !isSelfServiceLinkMode(arConfig)) {
     smsBody = stripHttpUrlsFromSmsBody(smsBody);
   }
 
@@ -282,13 +288,6 @@ async function buildReminderSmsBodyForOutbound(input: {
   );
   const smsResponsesAllowed = await workspaceAllowsSmsCustomerResponses(input.workspaceId);
 
-  const { isAiReschedulerSmsEnabled, arReplyInstructionsSuffixForAppointment } = await import(
-    "@/lib/appointment-reminders/ai-rescheduler/types"
-  );
-  const { resolveArAiReschedulerConfigForWorkspace } = await import(
-    "@/lib/appointment-reminders/commercial/ar-ai-rescheduler-plan"
-  );
-  const arConfig = await resolveArAiReschedulerConfigForWorkspace(input.workspaceId);
   if (smsResponsesAllowed && isAiReschedulerSmsEnabled(arConfig)) {
     const suffix = arReplyInstructionsSuffixForAppointment({
       config: arConfig,
@@ -524,6 +523,22 @@ async function trySendStep(input: {
   }
 
   if (stepForSend.channel !== "sms") return false;
+
+  const { ensurePublicActionTokensForAppointment } = await import(
+    "@/lib/appointment-reminders/public-action-tokens"
+  );
+  await ensurePublicActionTokensForAppointment(input.workspaceId, input.appointmentId);
+  const prismaForTokens = getPrisma();
+  const tokenRow = await prismaForTokens.voiceAppointment.findFirst({
+    where: { id: input.appointmentId, workspaceId: input.workspaceId },
+    select: { metadata: true },
+  });
+  if (tokenRow?.metadata) {
+    input.metadata = tokenRow.metadata as AppointmentMetadata;
+    input.confirmToken = input.metadata.confirmToken;
+    input.cancelToken = input.metadata.cancelToken;
+    input.rescheduleToken = input.metadata.rescheduleToken;
+  }
 
   const smsEligibility = evaluateSmsReminderEligibility({
     metadata: input.metadata,
@@ -1090,8 +1105,17 @@ export async function trySendStepForDispatch(input: {
   const email = inviteeEmail(meta, contact?.email);
   if (!phones.length && !email) return { outcome: "blocked", detail: "no_recipient" };
 
+  const { ensurePublicActionTokensForAppointment } = await import(
+    "@/lib/appointment-reminders/public-action-tokens"
+  );
+  await ensurePublicActionTokensForAppointment(input.workspaceId, input.appointmentId);
+  const refreshedRow = await prisma.voiceAppointment.findFirst({
+    where: { id: input.appointmentId },
+    select: { metadata: true },
+  });
+  let liveMeta = (refreshedRow?.metadata || meta) as AppointmentMetadata;
+
   try {
-    let liveMeta = meta;
     let anySent = false;
     if (effectiveStep.channel === "email") {
       const ok = await trySendStep({
@@ -1108,9 +1132,9 @@ export async function trySendStepForDispatch(input: {
         phone: "",
         email,
         businessName: workspace?.displayName || workspace?.name || "our team",
-        confirmToken: meta.confirmToken,
-        cancelToken: meta.cancelToken,
-        rescheduleToken: meta.rescheduleToken,
+        confirmToken: liveMeta.confirmToken,
+        cancelToken: liveMeta.cancelToken,
+        rescheduleToken: liveMeta.rescheduleToken,
       });
       if (!ok) return { outcome: "blocked", detail: "send_returned_false" };
       anySent = true;
@@ -1134,9 +1158,9 @@ export async function trySendStepForDispatch(input: {
           phone,
           email,
           businessName: workspace?.displayName || workspace?.name || "our team",
-          confirmToken: meta.confirmToken,
-          cancelToken: meta.cancelToken,
-          rescheduleToken: meta.rescheduleToken,
+          confirmToken: liveMeta.confirmToken,
+          cancelToken: liveMeta.cancelToken,
+          rescheduleToken: liveMeta.rescheduleToken,
         });
         if (ok) {
           anySent = true;

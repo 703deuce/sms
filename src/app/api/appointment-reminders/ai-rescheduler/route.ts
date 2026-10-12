@@ -66,7 +66,10 @@ export async function PATCH(request: Request) {
     const platform = await loadAppointmentPlatformConfig(auth.workspaceId);
     const current = resolveAiReschedulerConfig(platform);
     const mode =
-      body.mode === "reminders_only" || body.mode === "notify" || body.mode === "ai"
+      body.mode === "reminders_only" ||
+      body.mode === "notify" ||
+      body.mode === "ai" ||
+      body.mode === "self_service_link"
         ? body.mode
         : current.mode;
     const { assertAiReschedulerModeAllowed, ArFeatureGateError } = await import(

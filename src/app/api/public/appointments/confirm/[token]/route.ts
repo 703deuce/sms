@@ -26,6 +26,13 @@ export async function POST(_request: Request, { params }: Params) {
       "customer",
       { confirmationSource: "web" },
     );
+    const { reflectCustomerConfirmationOnProvider } = await import(
+      "@/lib/appointment-reminders/ai-rescheduler/confirm-calendar"
+    );
+    await reflectCustomerConfirmationOnProvider({
+      workspaceId: row.workspaceId,
+      appointmentId: row.id,
+    }).catch(() => undefined);
     return NextResponse.json({ data: { id: updated.id, status: updated.status } });
   } catch (err) {
     return jsonError(err, 400);
