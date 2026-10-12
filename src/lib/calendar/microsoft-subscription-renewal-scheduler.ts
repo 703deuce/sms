@@ -8,10 +8,23 @@ import { getPrisma } from "@/lib/db";
 
 const RENEW_AHEAD_MS = 6 * 3600_000;
 
+/** Earliest Graph subscription expiry across per-calendar subs (falls back to legacy single sub). */
+export function microsoftSubscriptionExpiryMs(config: CalendarConfig): number | null {
+  const subs = config.microsoftCalendarSubscriptions || [];
+  if (subs.length) {
+    const times = subs
+      .map((s) => (s.expiresAt ? new Date(s.expiresAt).getTime() : NaN))
+      .filter((t) => !Number.isNaN(t));
+    if (times.length) return Math.min(...times);
+  }
+  const legacy = config.microsoftSubscription?.expiresAt;
+  return legacy ? new Date(legacy).getTime() : null;
+}
+
 function defaultRenewDueFromConfig(config: CalendarConfig): Date | null {
-  const exp = config.microsoftSubscription?.expiresAt;
-  if (!exp) return new Date();
-  return new Date(new Date(exp).getTime() - RENEW_AHEAD_MS);
+  const expiryMs = microsoftSubscriptionExpiryMs(config);
+  if (expiryMs == null) return new Date();
+  return new Date(expiryMs - RENEW_AHEAD_MS);
 }
 
 /**
@@ -65,9 +78,9 @@ export async function renewDueMicrosoftCalendarSubscriptions(input?: {
         continue;
       }
 
-      const exp = config.microsoftSubscription?.expiresAt;
+      const expiryMs = microsoftSubscriptionExpiryMs(config);
       const needsRenew =
-        !exp || new Date(exp).getTime() < now.getTime() + RENEW_AHEAD_MS;
+        expiryMs == null || expiryMs < now.getTime() + RENEW_AHEAD_MS;
 
       if (!needsRenew && conn.subscriptionRenewDueAt && conn.subscriptionRenewDueAt > now) {
         continue;

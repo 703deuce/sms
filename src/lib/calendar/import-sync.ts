@@ -409,16 +409,14 @@ export async function processCalendarProviderEvent(input: {
 
   await applyImportedReminderEligibility(saved.id, reminderEligibility, null);
 
-  if (!existingBeforeImport) {
-    await trySendImmediateConfirmationForImportedEvent({
-      workspaceId,
-      appointmentId: saved.id,
-      eventStart: event.start,
-      reminderEligible: reminderEligibility.eligible,
-    });
-  }
+  await trySendImmediateConfirmationForImportedEvent({
+    workspaceId,
+    appointmentId: saved.id,
+    eventStart: event.start,
+    reminderEligible: reminderEligibility.eligible,
+  });
 
-  return { result: "imported" };
+  return { result: existingBeforeImport ? "updated" : "imported" };
 }
 
 /** Fire booking confirmation once when an imported appointment is reminder-eligible (new or first time we could send). */

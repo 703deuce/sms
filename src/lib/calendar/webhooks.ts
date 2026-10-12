@@ -397,7 +397,11 @@ export async function handleMicrosoftCalendarLifecycleWebhook(notifications: Arr
     if (lifecycle === "subscriptionRemoved") {
       const config = (conn.config || {}) as CalendarConfig;
       await updateWorkspaceCalendarConnection(parsed.workspaceId, parsed.connectionId, {
-        config: { ...config, microsoftSubscription: undefined },
+        config: {
+          ...config,
+          microsoftSubscription: undefined,
+          microsoftCalendarSubscriptions: undefined,
+        },
       });
       await ensureMicrosoftCalendarSubscription(parsed.workspaceId, parsed.connectionId);
       await enqueueCalendarConnectionSync(parsed.workspaceId, parsed.connectionId, true, {
