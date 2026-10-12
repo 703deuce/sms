@@ -99,16 +99,17 @@ async function main() {
         ...(jobCursor ? { id: { gt: jobCursor } } : {}),
       },
       orderBy: { id: "asc" },
-      take: 2000,
+      take: 500,
       select: { id: true, workspaceId: true, payload: true },
     });
     if (!jobs.length) break;
     for (const job of jobs) {
       jobCounts.total += 1;
       const connectionId = (job.payload as { connectionId?: string })?.connectionId ?? "";
+      const wsDisposable = job.workspaceId ? isMctbPerfTestWorkspaceId(job.workspaceId) : false;
       if (protectedSet.has(connectionId)) {
         jobCounts.protected += 1;
-      } else if (disposableSet.has(connectionId)) {
+      } else if (disposableSet.has(connectionId) || wsDisposable) {
         jobCounts.disposable += 1;
         if (disposableJobSample.length < 50) disposableJobSample.push(job.id);
       } else {
