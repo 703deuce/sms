@@ -5,6 +5,29 @@ import type { CalendarConfig } from "@/lib/calendar/providers";
 import { getPrisma } from "@/lib/db";
 import { ensureMicrosoftCalendarSubscription } from "@/lib/calendar/webhooks";
 
+/** True when persisted Graph subs cover every import calendar and are not near expiry. */
+export function microsoftCalendarSubscriptionConfigIsCurrent(config: CalendarConfig): boolean {
+  const subs = config.microsoftCalendarSubscriptions || [];
+  const importIds = config.importCalendarIds || [];
+  const targets = importIds.length ? importIds : ["primary"];
+  const subsFresh =
+    subs.length >= targets.length &&
+    targets.every((calendarId) => {
+      const row = subs.find((s) => s.calendarId === calendarId);
+      return row?.expiresAt && new Date(row.expiresAt).getTime() > Date.now() + 3600_000;
+    });
+  if (subsFresh) return true;
+
+  const needsPerCalendarSub = targets.some((id) => id && id !== "primary");
+  if (needsPerCalendarSub) return false;
+
+  if (!subs.length && config.microsoftSubscription?.id) {
+    const exp = config.microsoftSubscription.expiresAt;
+    if (exp && new Date(exp).getTime() > Date.now() + 3600_000) return true;
+  }
+  return false;
+}
+
 /**
  * Register Graph change notifications for Microsoft connections that import calendars
  * but have no persisted subscription (common after legacy setup or silent register failures).
@@ -27,17 +50,7 @@ export async function ensureMicrosoftCalendarSubscriptionsForWorkspace(
     const subs = config.microsoftCalendarSubscriptions || [];
     const importIds = config.importCalendarIds || [];
     const targets = importIds.length ? importIds : ["primary"];
-    const allSubsFresh =
-      subs.length >= targets.length &&
-      targets.every((calendarId) => {
-        const row = subs.find((s) => s.calendarId === calendarId);
-        return row?.expiresAt && new Date(row.expiresAt).getTime() > Date.now() + 3600_000;
-      });
-    if (allSubsFresh) continue;
-    if (!subs.length && config.microsoftSubscription?.id) {
-      const exp = config.microsoftSubscription.expiresAt;
-      if (exp && new Date(exp).getTime() > Date.now() + 3600_000) continue;
-    }
+    if (microsoftCalendarSubscriptionConfigIsCurrent(config)) continue;
 
     const sub = await ensureMicrosoftCalendarSubscription(workspaceId, conn.id);
     if (sub?.id) ensured.push(conn.id);
