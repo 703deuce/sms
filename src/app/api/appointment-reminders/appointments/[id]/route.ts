@@ -26,7 +26,39 @@ export async function GET(_request: Request, { params }: Params) {
       timezone: data.timezone || config.timezone,
       weeklyHours: resolveWeeklyHours(config),
     });
-    return NextResponse.json({ data: { ...data, reminderSchedule } });
+    const meta = data.metadata as AppointmentMetadata & {
+      arCalendarWriteBack?: import("@/lib/appointment-reminders/calendar-write-back/types").ArCalendarWriteBackRecord;
+    };
+    const { calendarWriteBackUiStatus } = await import(
+      "@/lib/appointment-reminders/calendar-write-back/ui-status"
+    );
+    const { resolveArCalendarWriteBackSettings } = await import(
+      "@/lib/appointment-reminders/calendar-write-back/settings"
+    );
+    const { providerRefFromAppointment } = await import(
+      "@/lib/appointment-reminders/ai-rescheduler/provider-mutations"
+    );
+    const wbSettings = resolveArCalendarWriteBackSettings(config);
+    const ref = providerRefFromAppointment({
+      externalId: data.externalId,
+      metadata: data.metadata,
+      timezone: data.timezone,
+      startsAt: data.startsAt,
+      endsAt: data.endsAt,
+    });
+    const calendarWriteBack = calendarWriteBackUiStatus(meta.arCalendarWriteBack, {
+      settingEnabled: wbSettings.enabled,
+      hasMicrosoftLink: ref?.provider === "microsoft",
+    });
+
+    return NextResponse.json({
+      data: {
+        ...data,
+        reminderSchedule,
+        calendarWriteBack,
+        reminderRecipientPhones: meta.reminderRecipientPhones || [],
+      },
+    });
   } catch (err) {
     return jsonError(err, 500);
   }

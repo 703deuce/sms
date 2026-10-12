@@ -180,6 +180,37 @@ export function extractReminderPhoneFromCalendarEvent(
   };
 }
 
+/** Collect all eligible customer phone numbers from event text (deduped E.164). */
+export function extractAllReminderPhonesFromCalendarEvent(
+  event: ProviderCalendarEvent,
+  options?: { graphCustomerPhonePropertyKeys?: string[] | null },
+): string[] {
+  const parser = extractReminderPhoneFromCalendarEvent(event, options);
+  if (parser.e164) return [parser.e164];
+
+  const subject = (event.summary || "").trim();
+  const description = event.description || "";
+  const location = eventLocationText(event);
+  const plain = stripHtml(`${subject}\n${description}\n${location}`);
+  const labeled = labeledNumbers(plain);
+  const customerNormalized = [...new Set(labeled.customer.map(tryNormalize).filter(Boolean))] as string[];
+  if (customerNormalized.length > 1) return customerNormalized;
+
+  const identity = extractIdentityFromEventFields({
+    subject,
+    description,
+    location,
+    attendeeNames: event.attendees?.map((a) => a.name).filter(Boolean) as string[],
+    attendeeEmails: event.attendees?.map((a) => a.email).filter(Boolean) as string[],
+  });
+  const officeNormalized = new Set(labeled.office.map(tryNormalize).filter(Boolean));
+  const allCandidates = identity.phones
+    .map((digits) => tryNormalize(digits.length === 10 ? `+1${digits}` : `+${digits}`))
+    .filter(Boolean) as string[];
+  const unique = [...new Set(allCandidates)].filter((p) => !officeNormalized.has(p));
+  return unique.length > 1 ? unique : unique.length === 1 ? unique : [];
+}
+
 export type LunaPhoneExtractFn = (
   event: ProviderCalendarEvent,
 ) => Promise<LunaReminderPhoneResult>;
@@ -256,6 +287,7 @@ export async function mergeReminderPhoneOnImport(
   options?: { lunaExtract?: LunaPhoneExtractFn },
 ): Promise<{
   inviteePhone: string | null;
+  reminderRecipientPhones: string[];
   reminderPhone: AppointmentMetadata["reminderPhone"];
   smsCapable: boolean;
   emailOnly: boolean;
@@ -271,6 +303,7 @@ export async function mergeReminderPhoneOnImport(
       null;
     return {
       inviteePhone: phone,
+      reminderRecipientPhones: prev.reminderRecipientPhones || (phone ? [phone] : []),
       reminderPhone: prev.reminderPhone,
       smsCapable: Boolean(phone),
       emailOnly: !phone,
@@ -288,6 +321,7 @@ export async function mergeReminderPhoneOnImport(
     if (prev.inviteePhone?.trim() && prevStatus === "found") {
       return {
         inviteePhone: prev.inviteePhone.trim(),
+        reminderRecipientPhones: prev.reminderRecipientPhones || [prev.inviteePhone.trim()],
         reminderPhone: prev.reminderPhone,
         smsCapable: Boolean(prev.inviteePhone),
         emailOnly: !prev.inviteePhone,
@@ -296,6 +330,7 @@ export async function mergeReminderPhoneOnImport(
     if (prevLunaAttempted) {
       return {
         inviteePhone: prev.inviteePhone?.trim() || null,
+        reminderRecipientPhones: prev.reminderRecipientPhones || [],
         reminderPhone: prev.reminderPhone,
         smsCapable: Boolean(prev.inviteePhone) && prevStatus !== "needs_review",
         emailOnly: !prev.inviteePhone,
@@ -303,20 +338,44 @@ export async function mergeReminderPhoneOnImport(
     }
   }
 
+  const allPhones = extractAllReminderPhonesFromCalendarEvent(input.event, {
+    graphCustomerPhonePropertyKeys: input.graphCustomerPhonePropertyKeys,
+  });
+
   const extracted = await resolveReminderPhoneWithLunaFallback(input.event, {
     ...options,
     graphCustomerPhonePropertyKeys: input.graphCustomerPhonePropertyKeys,
   });
   const inviteePhone =
     input.contactPhone?.trim() ||
+    allPhones[0] ||
     (extracted.status === "found" ? extracted.e164 : null) ||
     prev.inviteePhone?.trim() ||
     null;
 
-  const reminderPhone = toReminderPhoneMeta(extracted);
+  const reminderRecipientPhones =
+    allPhones.length > 0
+      ? allPhones
+      : inviteePhone
+        ? [inviteePhone]
+        : [];
+
+  const reminderPhone = toReminderPhoneMeta(
+    allPhones.length > 1
+      ? {
+          ...extracted,
+          e164: allPhones[0]!,
+          status: "found",
+          method: "labeled_parse",
+          confidence: "high",
+          candidateCount: allPhones.length,
+        }
+      : extracted,
+  );
 
   return {
     inviteePhone,
+    reminderRecipientPhones,
     reminderPhone,
     smsCapable: Boolean(inviteePhone) && extracted.status !== "needs_review",
     emailOnly: !inviteePhone,

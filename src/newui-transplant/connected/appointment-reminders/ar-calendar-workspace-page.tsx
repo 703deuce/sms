@@ -489,6 +489,9 @@ export function AppointmentRemindersCalendarWorkspacePage() {
             <RefreshCw className={cn('mr-1.5 h-3.5 w-3.5', syncing && 'animate-spin')} aria-hidden />
             Sync
           </Button>
+          <Button nativeButton={false} variant="ghost" size="sm" render={<Link href={AR_SETTINGS_INTEGRATIONS} />}>
+            Calendar write-back
+          </Button>
           {composeUrl ? (
             <Button
               type="button"

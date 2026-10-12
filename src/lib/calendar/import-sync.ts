@@ -558,6 +558,7 @@ async function buildImportMetadata(
     inviteeName: displayName,
     customerFirstName: nameParts[0] || undefined,
     inviteePhone: phoneMerge.inviteePhone,
+    reminderRecipientPhones: phoneMerge.reminderRecipientPhones,
     reminderPhone: phoneMerge.reminderPhone,
     smsCapable: phoneMerge.smsCapable,
     emailOnly: phoneMerge.emailOnly,

@@ -17,6 +17,7 @@ import { notifyWorkspace } from "@/lib/notifications/in-app";
 import { AR_ROUTES } from "@/lib/appointment-reminders/routes";
 import { arSmsOutcomeTimelineType } from "@/lib/appointment-reminders/ar-sms-customer-outcome";
 import { recordArSmsCustomerOutcome } from "@/lib/appointment-reminders/record-ar-sms-outcome";
+import { triggerArCalendarWriteBack } from "@/lib/appointment-reminders/calendar-write-back/trigger";
 
 export type ArCancelPendingMeta = {
   requestedAt: string;
@@ -96,6 +97,13 @@ export async function requestRescheduleViaPublicEmail(input: {
     label: "Customer requested reschedule (email)",
   }).catch(() => undefined);
 
+  await triggerArCalendarWriteBack({
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+    kind: "reschedule_requested",
+    atIso: requestedAt,
+  }).catch(() => undefined);
+
   const whenLabel = row.startsAt.toLocaleString("en-US", {
     dateStyle: "medium",
     timeStyle: "short",
@@ -164,6 +172,13 @@ export async function requestCancellationViaPublicEmail(input: {
     outcome: "cancel_pending",
     note: input.note,
     label: "Customer requested cancellation (email)",
+  }).catch(() => undefined);
+
+  await triggerArCalendarWriteBack({
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+    kind: "cancellation_requested",
+    atIso: requestedAt,
   }).catch(() => undefined);
 
   const whenLabel = row.startsAt.toLocaleString("en-US", {

@@ -5,10 +5,12 @@ import { Panel } from '@/newui-transplant/components/app/kit'
 import { AR_ROUTES, AR_SETTINGS_INTEGRATIONS } from '@/lib/appointment-reminders/routes'
 import { CalendarIntegrationsOpus } from '@/newui-transplant/connected/integrations/calendar-integrations-opus'
 import { TextLink } from '@/newui-transplant/components/app/kit'
+import { ArCalendarWriteBackSettingsPanel } from '@/newui-transplant/components/appointment-reminders/ar-calendar-write-back-settings'
 
 export function ArIntegrationsSettingsPanel() {
   return (
     <div className="space-y-4">
+      <ArCalendarWriteBackSettingsPanel />
       <Panel
         title="Microsoft 365"
         description="Primary supported calendar source for Appointment Reminders."

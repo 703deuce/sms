@@ -26,6 +26,14 @@ import {
   SheetTitle,
 } from '@/newui-transplant/components/ui/sheet'
 
+type CalendarWriteBackUi = {
+  state: 'updated' | 'pending' | 'failed' | 'disabled' | 'unavailable'
+  label: string
+  detail?: string
+  lastSucceededAt?: string
+  canRetry: boolean
+}
+
 type DetailPayload = {
   serviceName?: string
   inviteeName?: string
@@ -34,6 +42,8 @@ type DetailPayload = {
   timezone?: string | null
   metadata?: Record<string, unknown>
   reminderSchedule?: Array<{ label: string; scheduledFor?: string; status: string; detail?: string }>
+  calendarWriteBack?: CalendarWriteBackUi
+  reminderRecipientPhones?: string[]
 }
 
 type TimelineEntry = { label: string; scheduledFor?: string; status: string; detail?: string }
@@ -82,6 +92,9 @@ export function AppointmentDetailDrawer({
   const [suppressBusy, setSuppressBusy] = useState(false)
   const [suppressError, setSuppressError] = useState('')
   const [conversationOpen, setConversationOpen] = useState(false)
+  const [calendarWriteBack, setCalendarWriteBack] = useState<CalendarWriteBackUi | null>(null)
+  const [recipientPhones, setRecipientPhones] = useState<string[]>([])
+  const [writeBackRetryBusy, setWriteBackRetryBusy] = useState(false)
 
   const isPanel = layout === 'panel'
   const chromePad = isPanel ? 'px-4' : 'px-5'
@@ -97,6 +110,12 @@ export function AppointmentDetailDrawer({
       const apptJson = apptRes.ok ? await apptRes.json() : null
       const tlJson = tlRes.ok ? await tlRes.json() : null
       setDetail(apptJson?.data ?? null)
+      setCalendarWriteBack((apptJson?.data?.calendarWriteBack as CalendarWriteBackUi) ?? null)
+      setRecipientPhones(
+        Array.isArray(apptJson?.data?.reminderRecipientPhones)
+          ? (apptJson.data.reminderRecipientPhones as string[])
+          : [],
+      )
       const future = (tlJson?.data?.future || []) as TimelineEntry[]
       const past = (tlJson?.data?.timeline || []).map(
         (e: { label?: string; type?: string; at?: string; detail?: string }) => ({
@@ -265,6 +284,29 @@ export function AppointmentDetailDrawer({
   const panelTitle = row ? primaryAppointmentHeading(row) : ''
   const effectivePhone =
     phoneEdit || row?.phone || (meta.inviteePhone as string) || (meta.phone as string) || ''
+  const displayRecipientPhones = useMemo(() => {
+    const fromApi = recipientPhones.filter(Boolean)
+    if (fromApi.length) return fromApi
+    return effectivePhone ? [effectivePhone] : []
+  }, [recipientPhones, effectivePhone])
+
+  async function retryCalendarWriteBack() {
+    if (!row?.id) return
+    setWriteBackRetryBusy(true)
+    try {
+      const res = await fetch(
+        `/api/appointment-reminders/appointments/${row.id}/calendar-write-back/retry`,
+        { method: 'POST' },
+      )
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error(json.error || 'Retry failed')
+      }
+      await loadDetail()
+    } finally {
+      setWriteBackRetryBusy(false)
+    }
+  }
   const readinessSummary =
     row && open
       ? buildArReminderReadinessSummary({
@@ -386,10 +428,12 @@ export function AppointmentDetailDrawer({
                   ) : null}
                 </div>
                 <dl className="mt-2 space-y-1.5 text-xs">
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <dt className="text-muted-foreground">Recipient</dt>
+                  <div className="flex flex-col gap-0.5">
+                    <dt className="text-muted-foreground">SMS recipients</dt>
                     <dd className="font-medium text-foreground">
-                      {effectivePhone ? formatPhone(effectivePhone) : 'No phone on file'}
+                      {displayRecipientPhones.length
+                        ? displayRecipientPhones.map((p) => formatPhone(p)).join(' · ')
+                        : 'No phone on file'}
                       <Button
                         type="button"
                         variant="link"
@@ -400,6 +444,49 @@ export function AppointmentDetailDrawer({
                       </Button>
                     </dd>
                   </div>
+                  {calendarWriteBack && calendarWriteBack.state !== 'unavailable' ? (
+                    <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between">
+                      <dt className="text-muted-foreground">Calendar sync</dt>
+                      <dd className="text-right text-foreground">
+                        <span
+                          className={
+                            calendarWriteBack.state === 'failed'
+                              ? 'text-destructive'
+                              : calendarWriteBack.state === 'pending'
+                                ? 'text-amber-700 dark:text-amber-400'
+                                : undefined
+                          }
+                        >
+                          {calendarWriteBack.label}
+                        </span>
+                        {calendarWriteBack.lastSucceededAt ? (
+                          <span className="block text-[11px] font-normal text-muted-foreground">
+                            {new Date(calendarWriteBack.lastSucceededAt).toLocaleString(undefined, {
+                              dateStyle: 'medium',
+                              timeStyle: 'short',
+                              timeZone: tz,
+                            })}
+                          </span>
+                        ) : null}
+                        {calendarWriteBack.detail ? (
+                          <span className="block text-[11px] font-normal text-muted-foreground">
+                            {calendarWriteBack.detail}
+                          </span>
+                        ) : null}
+                        {calendarWriteBack.canRetry ? (
+                          <Button
+                            type="button"
+                            variant="link"
+                            className="h-auto p-0 text-xs"
+                            disabled={writeBackRetryBusy}
+                            onClick={() => void retryCalendarWriteBack()}
+                          >
+                            {writeBackRetryBusy ? 'Retrying…' : 'Reconnect calendar / Retry'}
+                          </Button>
+                        ) : null}
+                      </dd>
+                    </div>
+                  ) : null}
                   <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between">
                     <dt className="text-muted-foreground">Automation</dt>
                     <dd className="text-foreground">{readinessSummary?.automationLabel}</dd>
@@ -551,6 +638,22 @@ export function AppointmentDetailDrawer({
                         <KeyValueRow
                           label="Source"
                           value={provider === 'google' ? 'Google Calendar' : 'Microsoft Outlook'}
+                        />
+                      ) : null}
+                      {displayRecipientPhones.length > 1 ? (
+                        <KeyValueRow
+                          label="SMS recipients"
+                          value={displayRecipientPhones.map((p) => formatPhone(p)).join(', ')}
+                        />
+                      ) : null}
+                      {calendarWriteBack ? (
+                        <KeyValueRow
+                          label="Calendar sync"
+                          value={
+                            calendarWriteBack.state === 'failed' && calendarWriteBack.canRetry
+                              ? `${calendarWriteBack.label} — use Retry in panel header`
+                              : calendarWriteBack.label
+                          }
                         />
                       ) : null}
                     </dl>

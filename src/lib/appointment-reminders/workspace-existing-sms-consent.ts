@@ -19,6 +19,11 @@ export type AppointmentRemindersWorkspaceConfig = {
   operationalPause?: import("@/lib/appointment-reminders/ar-operational-pause").ArOperationalPauseState | null;
   /** Set when setup configure step is saved (wizard step 2). */
   setupConfigureCompletedAt?: string | null;
+  /** Reflect customer confirmations / cancellations / reschedules on connected calendars. */
+  calendarWriteBack?: {
+    enabled?: boolean;
+    colorCodingEnabled?: boolean;
+  } | null;
 };
 
 export function getAppointmentRemindersWorkspaceConfig(

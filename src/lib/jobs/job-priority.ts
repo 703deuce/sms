@@ -16,6 +16,7 @@ export const AR_JOB_TYPES = new Set([
   "ar_process_inbound_sms",
   "ar_send_customer_sms",
   "ar_dispatch_reminder",
+  "ar_calendar_write_back",
 ]);
 
 export const MCTB_JOB_TYPES = new Set([

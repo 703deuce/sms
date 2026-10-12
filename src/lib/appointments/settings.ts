@@ -96,6 +96,18 @@ export async function saveAppointmentPlatformConfig(
     aiRescheduler: patch.aiRescheduler
       ? { ...(current.aiRescheduler || {}), ...patch.aiRescheduler }
       : current.aiRescheduler,
+    appointmentReminders: patch.appointmentReminders
+      ? {
+          ...(current.appointmentReminders || {}),
+          ...patch.appointmentReminders,
+          calendarWriteBack: patch.appointmentReminders.calendarWriteBack
+            ? {
+                ...(current.appointmentReminders?.calendarWriteBack || {}),
+                ...patch.appointmentReminders.calendarWriteBack,
+              }
+            : current.appointmentReminders?.calendarWriteBack,
+        }
+      : current.appointmentReminders,
   };
 
   const existing = await prisma.solutionSetup.findFirst({

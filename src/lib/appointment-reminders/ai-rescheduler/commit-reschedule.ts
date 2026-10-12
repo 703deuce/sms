@@ -204,6 +204,30 @@ export async function commitArReschedule(input: {
     };
   }
 
+  await recordArSmsCustomerOutcome({
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+    outcome: "rescheduled",
+    newStartsAtIso: start.toISOString(),
+    evidence: {
+      calendarResult: "verified",
+      action: "reschedule",
+      operationId: input.operationId,
+    },
+  });
+  const { triggerArCalendarWriteBack } = await import(
+    "@/lib/appointment-reminders/calendar-write-back/trigger"
+  );
+  await triggerArCalendarWriteBack({
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+    kind: "rescheduled",
+    previousStartsAtIso: row.startsAt.toISOString(),
+    previousEndsAtIso: row.endsAt.toISOString(),
+    newStartsAtIso: start.toISOString(),
+    newEndsAtIso: end.toISOString(),
+  });
+
   return { ok: true };
 }
 
@@ -269,6 +293,18 @@ export async function syncLocalAppointmentAfterProviderReschedule(input: {
       action: "reschedule",
       operationId: input.operationId,
     },
+  });
+  const { triggerArCalendarWriteBack } = await import(
+    "@/lib/appointment-reminders/calendar-write-back/trigger"
+  );
+  await triggerArCalendarWriteBack({
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+    kind: "rescheduled",
+    previousStartsAtIso: row.startsAt.toISOString(),
+    previousEndsAtIso: row.endsAt.toISOString(),
+    newStartsAtIso: start.toISOString(),
+    newEndsAtIso: end.toISOString(),
   });
   return { ok: true };
 }

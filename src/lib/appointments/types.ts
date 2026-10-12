@@ -474,6 +474,8 @@ export type AppointmentMetadata = {
   inviteeName?: string;
   inviteeEmail?: string;
   inviteePhone?: string;
+  /** Additional SMS reminder recipients (E.164), excluding duplicate of inviteePhone. */
+  reminderRecipientPhones?: string[];
   confirmToken?: string;
   cancelToken?: string;
   rescheduleToken?: string;

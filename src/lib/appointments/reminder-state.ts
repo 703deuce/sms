@@ -14,10 +14,28 @@ export function reminderTimelineType(stepKey: string, minutesBefore?: number): s
   return `reminder_${minutes}m_sent`;
 }
 
-export function wasReminderSent(meta: AppointmentMetadata, timelineType: string): boolean {
+function reminderKeyForRecipient(timelineType: string, generation: number, phoneE164?: string): string {
+  const base = reminderKey(timelineType, generation);
+  if (!phoneE164?.trim()) return base;
+  return `${base}:${phoneE164.trim()}`;
+}
+
+export function wasReminderSent(
+  meta: AppointmentMetadata,
+  timelineType: string,
+  phoneE164?: string,
+): boolean {
   const gen = currentReminderGeneration(meta);
   const keys = meta.reminderSentKeys || [];
+  if (phoneE164) {
+    if (keys.includes(reminderKeyForRecipient(timelineType, gen, phoneE164))) return true;
+    if (keys.includes(reminderKey(timelineType, gen)) && !keys.some((k) => k.startsWith(`${reminderKey(timelineType, gen)}:+`))) {
+      return true;
+    }
+    return false;
+  }
   if (keys.includes(reminderKey(timelineType, gen))) return true;
+  if (keys.some((k) => k.startsWith(`${reminderKey(timelineType, gen)}:+`))) return true;
   return (meta.timeline || []).some((e) => e.type === timelineType);
 }
 
@@ -43,10 +61,11 @@ export function resetAppointmentReminders(meta: AppointmentMetadata): Appointmen
 export function markReminderSentInMeta(
   meta: AppointmentMetadata,
   timelineType: string,
+  phoneE164?: string,
 ): AppointmentMetadata {
   const gen = currentReminderGeneration(meta);
   const keys = new Set(meta.reminderSentKeys || []);
-  keys.add(reminderKey(timelineType, gen));
+  keys.add(reminderKeyForRecipient(timelineType, gen, phoneE164));
   return {
     ...meta,
     reminderSentKeys: [...keys],

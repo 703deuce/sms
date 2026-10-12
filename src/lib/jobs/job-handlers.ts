@@ -200,6 +200,14 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       );
       return executeArReminderDispatchJob(payload as { dispatchId?: string });
     }
+    case "ar_calendar_write_back": {
+      const { processArCalendarWriteBackJob } = await import(
+        "@/lib/appointment-reminders/calendar-write-back/process-job"
+      );
+      return processArCalendarWriteBackJob(
+        payload as import("@/lib/appointment-reminders/calendar-write-back/types").ArCalendarWriteBackJobPayload,
+      );
+    }
     case "microsoft_calendar_webhook_process": {
       const { processMicrosoftCalendarWebhookJob } = await import(
         "@/lib/calendar/microsoft-webhook-process"

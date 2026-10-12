@@ -20,6 +20,7 @@ import { cancelPlatformAppointment } from "@/lib/appointments/booking-platform";
 import { notifyBusinessRescheduleInterest } from "./business-approval";
 import { evaluateArCustomerActionEligibility } from "./appointment-eligibility";
 import { reflectCustomerConfirmationOnProvider } from "./confirm-calendar";
+import { triggerArCalendarWriteBack } from "@/lib/appointment-reminders/calendar-write-back/trigger";
 import {
   evaluateArSmsActionPolicy,
   resolveArCancelSmsPolicy,
@@ -129,6 +130,11 @@ export async function handleArCancelConfirmation(input: {
       operationId: policyGate.ack?.operationId,
     },
   });
+  await triggerArCalendarWriteBack({
+    workspaceId: input.workspaceId,
+    appointmentId: row.id,
+    kind: "canceled",
+  });
   const fresh = await prisma.voiceAppointment.findFirst({ where: { id: row.id } });
   if (fresh) {
     let ackMeta = (fresh.metadata || {}) as AppointmentMetadata;
@@ -198,6 +204,11 @@ export async function beginArCancelPendingAfterPolicyAck(input: {
         }
       : undefined,
   });
+  await triggerArCalendarWriteBack({
+    workspaceId: input.workspaceId,
+    appointmentId: input.appointmentId,
+    kind: "cancellation_requested",
+  });
   return `Reply YES to confirm you want to cancel your appointment on ${input.whenLabel}.`;
 }
 
@@ -265,6 +276,11 @@ export async function continueArRescheduleAfterPolicyAcceptance(input: {
       appointmentId: input.appointmentId,
       replySessionId: input.replySessionId,
       outcome: "reschedule_requested",
+    });
+    await triggerArCalendarWriteBack({
+      workspaceId: input.workspaceId,
+      appointmentId: input.appointmentId,
+      kind: "reschedule_requested",
     });
     return {
       handled: true,

@@ -176,6 +176,7 @@ async function sendReminderSms(input: {
   const nextMeta = markReminderSentInMeta(
     appendTimeline(input.metadata, { type: input.timelineType, label: input.label }),
     input.timelineType,
+    input.phone,
   );
   await prisma.voiceAppointment.update({
     where: { id: input.appointmentId },
@@ -319,7 +320,7 @@ async function trySendStep(input: {
   rescheduleToken?: string;
 }) {
   if (!input.step.enabled) return false;
-  if (wasReminderSent(input.metadata, input.timelineType)) return false;
+  if (wasReminderSent(input.metadata, input.timelineType, input.phone || undefined)) return false;
 
   const { loadAppointmentRemindersActivation } = await import(
     "@/lib/appointment-reminders/activation"
@@ -389,6 +390,7 @@ async function trySendStep(input: {
           detail: "Voice reminder",
         }),
         input.timelineType,
+        input.phone,
       );
       await prisma.voiceAppointment.update({
         where: { id: input.appointmentId },
@@ -650,11 +652,13 @@ async function trySendStep(input: {
         label: effectiveStep.label,
       }),
       input.timelineType,
+      input.phone || undefined,
     );
     await prisma.voiceAppointment.update({
       where: { id: input.appointmentId },
       data: { metadata: nextMeta as object },
     });
+    input.metadata = nextMeta;
     const apptRow = await prisma.voiceAppointment.findFirst({
       where: { id: input.appointmentId },
       select: { contactId: true, metadata: true },
@@ -1076,30 +1080,75 @@ export async function trySendStepForDispatch(input: {
         select: { phone: true, email: true },
       })
     : null;
-  const phone = inviteePhone(meta, contact?.phone);
+  const { resolveReminderRecipientPhones } = await import(
+    "@/lib/appointment-reminders/reminder-recipients"
+  );
+  const { isWorkspacePhoneSuppressed } = await import(
+    "@/lib/appointment-reminders/ar-recipient-suppression"
+  );
+  const phones = resolveReminderRecipientPhones(meta, contact?.phone);
   const email = inviteeEmail(meta, contact?.email);
-  if (!phone && !email) return { outcome: "blocked", detail: "no_recipient" };
+  if (!phones.length && !email) return { outcome: "blocked", detail: "no_recipient" };
 
   try {
-    const ok = await trySendStep({
-      workspaceId: input.workspaceId,
-      appointmentId: input.appointmentId,
-      startsAt: row.startsAt,
-      serviceName: row.serviceName,
-      timezone: row.timezone || config.timezone,
-      stepKey: input.stepKey,
-      step: effectiveStep,
-      timelineType: input.timelineType,
-      appointmentStatus: row.status,
-      metadata: meta,
-      phone: phone || "",
-      email,
-      businessName: workspace?.displayName || workspace?.name || "our team",
-      confirmToken: meta.confirmToken,
-      cancelToken: meta.cancelToken,
-      rescheduleToken: meta.rescheduleToken,
-    });
-    if (!ok) return { outcome: "blocked", detail: "send_returned_false" };
+    let liveMeta = meta;
+    let anySent = false;
+    if (effectiveStep.channel === "email") {
+      const ok = await trySendStep({
+        workspaceId: input.workspaceId,
+        appointmentId: input.appointmentId,
+        startsAt: row.startsAt,
+        serviceName: row.serviceName,
+        timezone: row.timezone || config.timezone,
+        stepKey: input.stepKey,
+        step: effectiveStep,
+        timelineType: input.timelineType,
+        appointmentStatus: row.status,
+        metadata: liveMeta,
+        phone: "",
+        email,
+        businessName: workspace?.displayName || workspace?.name || "our team",
+        confirmToken: meta.confirmToken,
+        cancelToken: meta.cancelToken,
+        rescheduleToken: meta.rescheduleToken,
+      });
+      if (!ok) return { outcome: "blocked", detail: "send_returned_false" };
+      anySent = true;
+    } else {
+      const targets = phones.length ? phones : [inviteePhone(meta, contact?.phone) || ""].filter(Boolean);
+      for (const phone of targets) {
+        if (await isWorkspacePhoneSuppressed(input.workspaceId, phone)) {
+          continue;
+        }
+        const ok = await trySendStep({
+          workspaceId: input.workspaceId,
+          appointmentId: input.appointmentId,
+          startsAt: row.startsAt,
+          serviceName: row.serviceName,
+          timezone: row.timezone || config.timezone,
+          stepKey: input.stepKey,
+          step: effectiveStep,
+          timelineType: input.timelineType,
+          appointmentStatus: row.status,
+          metadata: liveMeta,
+          phone,
+          email,
+          businessName: workspace?.displayName || workspace?.name || "our team",
+          confirmToken: meta.confirmToken,
+          cancelToken: meta.cancelToken,
+          rescheduleToken: meta.rescheduleToken,
+        });
+        if (ok) {
+          anySent = true;
+          const refreshed = await prisma.voiceAppointment.findFirst({
+            where: { id: input.appointmentId },
+            select: { metadata: true },
+          });
+          liveMeta = (refreshed?.metadata || liveMeta) as AppointmentMetadata;
+        }
+      }
+      if (!anySent) return { outcome: "blocked", detail: "send_returned_false" };
+    }
     const dispatch = await prisma.arReminderDispatch.findUnique({
       where: { id: input.dispatchId },
       select: { telnyxMessageId: true, providerMessageId: true },
