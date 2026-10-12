@@ -136,7 +136,7 @@ export function getBullmqRedisUrl(): string {
   return url;
 }
 
-function connection() {
+export function getBullmqConnection() {
   const url = getBullmqRedisUrl();
   if (!sharedConnection) {
     sharedConnection = new IORedis(url, {
@@ -161,6 +161,11 @@ function connection() {
     });
   }
   return sharedConnection;
+}
+
+/** @internal alias */
+function connection() {
+  return getBullmqConnection();
 }
 
 /** Verify Redis is reachable before reporting worker_started. */
@@ -242,6 +247,12 @@ function createWorkerProcessor(queueName: string) {
 
       await handleJob(job.name, raw);
       await syncDbJob(idempotencyKey, "completed");
+      if (job.name === "calendar_connection_sync") {
+        const { notifyCalendarConnectionSyncJobTerminal } = await import(
+          "@/lib/calendar/microsoft-routine-sync-coalesce"
+        );
+        await notifyCalendarConnectionSyncJobTerminal(raw).catch(() => undefined);
+      }
 
       if (job.name === "send_campaign_sms" || job.name === "send_campaign_email") {
         logBullmq("bullmq_send_completed", {
@@ -328,6 +339,12 @@ function createWorkerProcessor(queueName: string) {
 
       if (err instanceof JobFailedError) {
         await syncDbJob(idempotencyKey, "failed", message);
+        if (job.name === "calendar_connection_sync") {
+          const { notifyCalendarConnectionSyncJobTerminal } = await import(
+            "@/lib/calendar/microsoft-routine-sync-coalesce"
+          );
+          await notifyCalendarConnectionSyncJobTerminal(raw).catch(() => undefined);
+        }
         throw new UnrecoverableError(message);
       }
       throw err;

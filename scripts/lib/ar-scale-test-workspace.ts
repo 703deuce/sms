@@ -5,11 +5,39 @@ export const AR_SCALE_TEST_WORKSPACE_MARKER = "AR_SCALE_TEST_DO_NOT_USE";
 
 const MARKER = AR_SCALE_TEST_WORKSPACE_MARKER;
 
+function urlsMatchForScaleTestIsolation(current: string | undefined, isolated: string | undefined) {
+  if (!current?.trim() || !isolated?.trim()) return false;
+  return current.trim() === isolated.trim();
+}
+
+/**
+ * Scale tests must target an isolated database and Redis — not production queue infrastructure.
+ * Set AR_SCALE_TEST_DATABASE_URL and AR_SCALE_TEST_REDIS_URL to the sandbox endpoints only.
+ */
 export function assertArScaleTestAllowedInCurrentEnvironment() {
+  const db = process.env.DATABASE_URL;
+  const redis = process.env.REDIS_URL || process.env.BULLMQ_REDIS_URL;
+  const isolatedDb = process.env.AR_SCALE_TEST_DATABASE_URL;
+  const isolatedRedis = process.env.AR_SCALE_TEST_REDIS_URL;
+
+  if (isolatedDb && isolatedRedis) {
+    if (!urlsMatchForScaleTestIsolation(db, isolatedDb)) {
+      throw new Error(
+        "Scale test blocked: DATABASE_URL does not match AR_SCALE_TEST_DATABASE_URL (isolated sandbox required).",
+      );
+    }
+    if (!urlsMatchForScaleTestIsolation(redis, isolatedRedis)) {
+      throw new Error(
+        "Scale test blocked: REDIS_URL does not match AR_SCALE_TEST_REDIS_URL (isolated sandbox required).",
+      );
+    }
+    return;
+  }
+
   if (process.env.AR_SCALE_TEST_ALLOW_PRODUCTION === "1") return;
   if (process.env.NODE_ENV === "production") {
     throw new Error(
-      "AR/Microsoft scale tests are blocked against production DATABASE_URL. Set AR_SCALE_TEST_ALLOW_PRODUCTION=1 only on an isolated database.",
+      "AR/Microsoft scale tests are blocked against production. Set AR_SCALE_TEST_DATABASE_URL + AR_SCALE_TEST_REDIS_URL to an isolated sandbox, or AR_SCALE_TEST_ALLOW_PRODUCTION=1 only on a non-production database.",
     );
   }
 }

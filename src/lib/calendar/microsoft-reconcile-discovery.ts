@@ -4,7 +4,8 @@ import { shouldImportFromConnection } from "@/lib/calendar/eligibility";
 import type { CalendarConfig } from "@/lib/calendar/providers";
 import { enqueueCalendarConnectionSync } from "@/lib/calendar/import-sync";
 import {
-  findOutstandingCalendarConnectionSync,
+  findBlockingOutstandingCalendarConnectionSync,
+  processDeferredRoutineCalendarSyncAfterJobTerminal,
   setMicrosoftRoutineSyncDeferred,
 } from "@/lib/calendar/microsoft-routine-sync-coalesce";
 import { isEligibleForRoutineMicrosoftCalendarSync } from "@/lib/calendar/microsoft-routine-sync-eligibility";
@@ -104,7 +105,11 @@ export async function discoverAndEnqueueMicrosoftCalendarSyncs(input?: {
         continue;
       }
 
-      const outstanding = await findOutstandingCalendarConnectionSync(conn.id);
+      if (!input?.dryRun) {
+        await processDeferredRoutineCalendarSyncAfterJobTerminal(conn.workspaceId, conn.id);
+      }
+
+      const outstanding = await findBlockingOutstandingCalendarConnectionSync(conn.id);
       if (outstanding) {
         metrics.skippedAlreadyQueued += 1;
         if (!input?.dryRun) {

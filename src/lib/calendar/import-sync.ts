@@ -839,16 +839,20 @@ export async function syncWorkspaceCalendarConnection(
         config: persistedConfig,
       });
       await markMicrosoftSyncSuccess(connectionId);
-      const { maybeEnqueueDeferredRoutineCalendarSync } = await import(
+      const { processDeferredRoutineCalendarSyncAfterJobTerminal } = await import(
         "@/lib/calendar/microsoft-routine-sync-coalesce"
       );
-      await maybeEnqueueDeferredRoutineCalendarSync(workspaceId, connectionId);
+      await processDeferredRoutineCalendarSyncAfterJobTerminal(workspaceId, connectionId);
     } else {
       await updateWorkspaceCalendarConnection(workspaceId, connectionId, {
         config: persistedConfig,
         lastSyncError: "partial_or_failed_microsoft_sync",
       });
       await markMicrosoftSyncFailure(connectionId);
+      const { processDeferredRoutineCalendarSyncAfterJobTerminal } = await import(
+        "@/lib/calendar/microsoft-routine-sync-coalesce"
+      );
+      await processDeferredRoutineCalendarSyncAfterJobTerminal(workspaceId, connectionId);
     }
   } else {
     await updateWorkspaceCalendarConnection(workspaceId, connectionId, {
