@@ -8,6 +8,7 @@ import {
 } from "@/newui-transplant/components/public-booking/opus-public-booking-states";
 import { Button } from "@/newui-transplant/components/ui/button";
 import { PublicCustomerAppointmentShell } from "@/newui-transplant/connected/appointments/public-customer-appointment-shell";
+import { PublicDayTimeSlotPicker } from "@/newui-transplant/components/public-booking/public-day-time-slot-picker";
 
 type Slot = { startsAt: string; endsAt: string };
 type Appt = {
@@ -149,26 +150,12 @@ export function PublicRescheduleOpusPage({ token }: { token: string }) {
       <p className="mt-1 text-sm text-muted-foreground">
         Current: {formatSlot(appt.startsAt, appt.timezone)}
       </p>
-      <p className="mt-4 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        Pick a new time
-      </p>
-      <ul className="mt-2 max-h-72 space-y-2 overflow-y-auto" aria-labelledby="pick-times">
-        {slots.map((s) => (
-          <li key={s.startsAt}>
-            <button
-              type="button"
-              onClick={() => setSelected(s.startsAt)}
-              className={`w-full rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
-                selected === s.startsAt
-                  ? "border-primary bg-primary/10 font-medium"
-                  : "border-border hover:bg-muted/50"
-              }`}
-            >
-              {formatSlot(s.startsAt, appt.timezone)}
-            </button>
-          </li>
-        ))}
-      </ul>
+      <PublicDayTimeSlotPicker
+        slots={slots}
+        timezone={appt.timezone}
+        selectedStartsAt={selected}
+        onSelectStartsAt={setSelected}
+      />
       {error ? (
         <p className="mt-3 text-sm text-destructive" role="alert">{error}</p>
       ) : null}

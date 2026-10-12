@@ -4,6 +4,7 @@ import { availableDays, slotsByDay } from "../mock-data";
 import { Button } from "./ui";
 import { cn, formatSlotTime, formatFullDate, formatPrice } from "./utils";
 import { ArrowLeft, CalendarCheck, ChevronRight, Globe2, ListPlus, Sparkles } from "lucide-react";
+import { PublicDayTimeSlotPicker } from "@/newui-transplant/components/public-booking/public-day-time-slot-picker";
 
 export function DateTimeStep({
   type,
@@ -273,45 +274,12 @@ export function DateTimeStep({
               ) : null}
             </div>
           ) : (
-            <div className="mt-4 max-h-[380px] space-y-5 overflow-y-auto pr-1">
-              {Object.entries(
-                (externalSlots || []).reduce<Record<string, Slot[]>>((acc, slot) => {
-                  const key = new Date(slot.startsAt).toLocaleDateString(undefined, {
-                    weekday: "long",
-                    month: "short",
-                    day: "numeric",
-                  });
-                  acc[key] = acc[key] || [];
-                  acc[key].push(slot);
-                  return acc;
-                }, {}),
-              ).map(([day, daySlots]) => (
-                <div key={day}>
-                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{day}</p>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-                    {daySlots.map((slot) => {
-                      const active = startsAt === slot.startsAt;
-                      return (
-                        <button
-                          key={slot.startsAt}
-                          type="button"
-                          onClick={() => onSelectSlot(slot.startsAt)}
-                          aria-pressed={active}
-                          className={cn(
-                            "rounded-lg border px-2 py-2 text-[13px] font-semibold transition-all",
-                            active
-                              ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                              : "border-border bg-card text-foreground hover:border-primary hover:text-primary",
-                          )}
-                        >
-                          {formatSlotTime(slot.startsAt, timezone)}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
+            <PublicDayTimeSlotPicker
+              slots={externalSlots || []}
+              timezone={timezone}
+              selectedStartsAt={startsAt}
+              onSelectStartsAt={onSelectSlot}
+            />
           )}
           <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
             <Button size="lg" className="flex-1" disabled={!startsAt} onClick={onContinue}>

@@ -71,7 +71,7 @@ export async function listPublicSelfServiceRescheduleSlots(input: {
       slotStepMinutes: 15,
       businessHours: arWeeklyToBusinessWindow(ar.weeklyHours),
       busyIntervals: busy,
-      maxSlots: 48,
+      maxSlots: 14 * 12,
     });
     rawSlots = generated.map((s) => ({
       startsAt: s.startUtc,
