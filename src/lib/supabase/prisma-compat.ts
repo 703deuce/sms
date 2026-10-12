@@ -1033,6 +1033,11 @@ function formatOrAtom(key: string, value: unknown): string | null {
   if (typeof value === "string") return `${key}.eq.${value}`;
   if (typeof value === "number" || typeof value === "boolean") return `${key}.eq.${value}`;
   if (!isObject(value)) return null;
+  if ("path" in value && Array.isArray(value.path) && "equals" in value) {
+    const jsonKey = jsonPathColumn(key, value.path as string[]);
+    if (value.equals === null) return `${jsonKey}.is.null`;
+    return `${jsonKey}.eq.${value.equals}`;
+  }
   if ("in" in value && Array.isArray(value.in)) {
     return `${key}.in.(${value.in.map(String).join(",")})`;
   }
