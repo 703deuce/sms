@@ -83,7 +83,15 @@ async function main() {
     const raw = apptJson.data as { rows?: Array<{ id?: string; metadata?: Record<string, unknown> }> };
     const rows = raw?.rows || [];
     for (const row of rows) {
-      const meta = (row.metadata || {}) as { manageToken?: string; rescheduleToken?: string };
+      if (!row.id) continue;
+      const detailRes = await page.request.get(
+        `${BASE_URL}/api/appointment-reminders/appointments/${row.id}`,
+      );
+      if (!detailRes.ok()) continue;
+      const detailJson = (await detailRes.json()) as {
+        data?: { metadata?: { manageToken?: string; rescheduleToken?: string } };
+      };
+      const meta = detailJson.data?.metadata || {};
       if (meta.manageToken && meta.rescheduleToken) {
         manageToken = meta.manageToken;
         rescheduleToken = meta.rescheduleToken;
