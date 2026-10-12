@@ -53,10 +53,14 @@ function isFixedViewportSmsRoute(pathname: string): boolean {
   );
 }
 
-/** Layout B calendar workspace — scroll inside calendar grid + context panel only. */
+/** Layout B calendar workspace — on desktop (lg+), scroll inside calendar grid + context panel only. */
 function isFixedViewportAppointmentRemindersCalendarHome(pathname: string): boolean {
   return pathname === "/appointment-reminders";
 }
+
+/** Main column: fixed viewport traps scroll on lg+ only; mobile uses document/main scroll. */
+const FIXED_VIEWPORT_MAIN_CLASS =
+  "flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain touch-pan-y [-webkit-overflow-scrolling:touch] lg:overflow-hidden";
 
 function isFixedViewportMainRoute(pathname: string): boolean {
   return isFixedViewportSmsRoute(pathname) || isFixedViewportAppointmentRemindersCalendarHome(pathname);
@@ -293,7 +297,7 @@ export function AppShell({
 
   /** Opus shell: full-bleed main column — no legacy px-4/pt-5 frame or mctb-page-canvas inset. */
   const newUiMainClassName = fixedViewport
-    ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+    ? FIXED_VIEWPORT_MAIN_CLASS
     : "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain touch-pan-y px-0 pb-28 pt-0 [-webkit-overflow-scrolling:touch] lg:pb-8";
 
   const mainClassName = newUiShell
@@ -301,7 +305,7 @@ export function AppShell({
     : legacyAutomation
       ? "h-dvh overflow-hidden px-0 pb-0 pt-0 lg:px-0"
       : fixedViewport
-        ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+        ? FIXED_VIEWPORT_MAIN_CLASS
         : mctbWorkspaceFullWidth
           ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-0 pb-28 pt-0 lg:pb-8"
           : isFullBleed
