@@ -465,7 +465,7 @@ export function AppointmentRemindersCalendarWorkspacePage() {
   return (
     <ArOpusPage
       wide
-      className="flex min-h-0 flex-1 flex-col gap-3 px-6 py-5 md:px-6 lg:h-full lg:max-h-full lg:overflow-hidden"
+      className="flex flex-col gap-3 px-6 py-5 md:px-6 lg:min-h-0 lg:flex-1 lg:h-full lg:max-h-full lg:overflow-hidden"
     >
       <header className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
@@ -576,13 +576,13 @@ export function AppointmentRemindersCalendarWorkspacePage() {
           <Button size="sm" onClick={() => loadEvents({ refresh: true })}>Try again</Button>
         </div>
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+        <div className="flex flex-col gap-3 max-lg:overflow-visible lg:min-h-0 lg:flex-1 lg:overflow-hidden">
           <div
             className={cn(
-              'flex min-h-0 flex-1 flex-col gap-3 lg:grid lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(320px,360px)] lg:gap-4 lg:overflow-hidden',
+              'flex flex-col gap-3 max-lg:overflow-visible lg:grid lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_minmax(320px,360px)] lg:gap-4 lg:overflow-hidden',
             )}
           >
-            <div className="flex min-h-[min(52vh,560px)] min-w-0 flex-1 flex-col lg:min-h-0">
+            <div className="flex min-w-0 flex-col max-lg:flex-none lg:min-h-0 lg:flex-1">
               {loading && !events.length ? (
                 <div className="min-h-[400px] flex-1 animate-pulse rounded-xl bg-muted/30" />
               ) : (

@@ -71,14 +71,14 @@ export function ArCalendarAgendaView({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-background">
+    <div className="flex flex-col overflow-visible rounded-lg border bg-background lg:min-h-0 lg:flex-1 lg:overflow-hidden">
       <div className="hidden shrink-0 border-b bg-muted/30 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground md:grid md:grid-cols-[30%_23%_28%_19%] md:gap-2">
         <span>Appointment</span>
         <span>Customer</span>
         <span>Reminders / messages</span>
         <span>Response</span>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+      <div className="max-lg:overflow-visible lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain">
         {grouped.map((group) => (
           <section key={group.key} className="border-b border-border/70 last:border-b-0">
             <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-border/60 bg-background/95 px-3 py-2 backdrop-blur-sm">

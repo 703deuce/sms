@@ -213,7 +213,7 @@ function MonthView({
   const byDay = groupEventsByDay(events, timeZone)
 
   return (
-    <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border bg-background">
+    <div className="flex flex-col overflow-visible rounded-lg border bg-background lg:min-h-0 lg:flex-1 lg:overflow-hidden">
       <div className="grid shrink-0 grid-cols-7 border-b bg-muted/40">
         {DOW.map((label) => (
           <div
@@ -224,7 +224,7 @@ function MonthView({
           </div>
         ))}
       </div>
-      <div className="grid min-h-0 flex-1 auto-rows-fr grid-cols-7 overflow-y-auto overscroll-contain">
+      <div className="grid auto-rows-fr grid-cols-7 max-lg:overflow-visible lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain">
         {cells.map((cell) => {
           const dayEvents = byDay.get(cell.key) || []
           return (
@@ -421,8 +421,8 @@ function TimeGridView({
 
   if (fillViewport) {
     return (
-      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-background">
-        <div className="h-full min-h-0 overflow-auto overscroll-contain">
+      <div className="flex flex-col overflow-visible rounded-lg border bg-background max-lg:overflow-x-auto lg:h-full lg:min-h-0 lg:flex-1 lg:overflow-hidden">
+        <div className="max-lg:overflow-visible lg:h-full lg:min-h-0 lg:overflow-auto lg:overscroll-contain">
           {timeGrid}
         </div>
       </div>
@@ -489,7 +489,11 @@ export function ArCalendarOpusView({
   return (
     <TooltipProvider delay={400}>
     <OpusDataSurface
-      className={cn('overflow-hidden', fillHeight ? 'flex min-h-0 flex-1 flex-col' : '')}
+      className={cn(
+        fillHeight
+          ? 'max-lg:overflow-visible lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden'
+          : 'overflow-hidden',
+      )}
     >
       <div
         className={cn(
@@ -547,11 +551,19 @@ export function ArCalendarOpusView({
       <div
         className={cn(
           'p-2 md:p-3',
-          fillHeight ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : '',
+          fillHeight
+            ? 'max-lg:overflow-visible lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden'
+            : '',
         )}
       >
         {view === 'month' ? (
-          <div className={fillHeight ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : undefined}>
+          <div
+            className={
+              fillHeight
+                ? 'max-lg:overflow-visible lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden'
+                : undefined
+            }
+          >
           <MonthView
             cursor={cursor}
             events={events}
@@ -563,7 +575,11 @@ export function ArCalendarOpusView({
           </div>
         ) : null}
         {view === 'week' || view === 'day' ? (
-          <div className={fillHeight ? 'flex min-h-0 flex-1 flex-col' : undefined}>
+          <div
+            className={
+              fillHeight ? 'max-lg:flex-none lg:flex lg:min-h-0 lg:flex-1 lg:flex-col' : undefined
+            }
+          >
           <TimeGridView
             cursor={view === 'week' ? startOfWeek(cursor) : cursor}
             view={view}
@@ -578,7 +594,13 @@ export function ArCalendarOpusView({
           </div>
         ) : null}
         {view === 'agenda' ? (
-          <div className={fillHeight ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : undefined}>
+          <div
+            className={
+              fillHeight
+                ? 'max-lg:overflow-visible lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden'
+                : undefined
+            }
+          >
             <ArCalendarAgendaView
               events={events}
               timeZone={timeZone}
