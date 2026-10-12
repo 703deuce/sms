@@ -105,6 +105,11 @@ function isPublicPath(pathname: string) {
   if (pathname.startsWith("/api/invite/")) return true;
   // Public appointment booking pages (no login required)
   if (pathname.startsWith("/book/")) return true;
+  // Customer self-service from reminder SMS (tokenized; no account login)
+  if (pathname.startsWith("/appointments/manage/")) return true;
+  if (pathname.startsWith("/appointments/reschedule/")) return true;
+  if (pathname.startsWith("/appointments/cancel/")) return true;
+  if (pathname.startsWith("/appointments/confirm/")) return true;
   if (pathname.startsWith("/messaging/payments/mock/")) return true;
   if (pathname.startsWith("/r/")) return true;
   if (pathname.startsWith("/p/")) return true;
