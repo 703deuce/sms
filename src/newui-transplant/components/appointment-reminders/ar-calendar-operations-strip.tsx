@@ -135,7 +135,7 @@ export function ArCalendarOperationsStrip({ data, collapsed, onCollapsedChange, 
       aria-label="Activity and attention"
       className={cn(
         'shrink-0 rounded-xl border border-border/80 bg-card/95 shadow-sm backdrop-blur-[2px] transition-[height] duration-200',
-        collapsed ? 'h-11' : 'min-h-[7.5rem] max-h-[10rem]',
+        collapsed ? 'h-11' : 'min-h-[7.5rem] max-h-[10rem] max-lg:max-h-none',
         className,
       )}
     >

@@ -57,7 +57,17 @@ async function main() {
     process.exit(1);
   }
 
-  console.log("PASS: mobile calendar main scroll works", { before, scrollResult });
+  const opsVisible = await page.getByText("Reminder operations").isVisible();
+  const stripVisible = await page.getByRole("region", { name: "Activity and attention" }).isVisible();
+  if (!opsVisible || !stripVisible) {
+    console.error("FAIL: mobile context panel or activity strip not in page flow", {
+      opsVisible,
+      stripVisible,
+    });
+    process.exit(1);
+  }
+
+  console.log("PASS: mobile calendar scroll + stacked panels", { before, scrollResult, opsVisible, stripVisible });
   await browser.close();
 }
 
