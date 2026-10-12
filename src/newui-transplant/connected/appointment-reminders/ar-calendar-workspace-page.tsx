@@ -29,7 +29,6 @@ import {
   isArCalendarViewerReadyFromIntegrationRows,
   isArCalendarViewerReadyFromOverview,
 } from '@/lib/appointment-reminders/calendar/ar-calendar-viewer-ready'
-import { ArCalendarActivityPanel } from '@/newui-transplant/components/appointment-reminders/ar-calendar-activity-panel'
 import {
   ArCalendarOperationsStrip,
   type OperationsStripSelect,
@@ -44,12 +43,6 @@ import { AppointmentDetailDrawer } from '@/newui-transplant/components/appointme
 import { ArOpusPage, OpusSearchField } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
 import { Callout, EmptyState, Pill, TextLink } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from '@/newui-transplant/components/ui/sheet'
 import { AR_ROUTES, AR_SETTINGS_INTEGRATIONS } from '@/lib/appointment-reminders/routes'
 import { cn } from '@/lib/utils'
 
@@ -98,7 +91,6 @@ export function AppointmentRemindersCalendarWorkspacePage() {
   const [panelTab, setPanelTab] = useState<'details' | 'reminders' | 'activity' | 'preferences'>('details')
   const [openConversationOnLoad, setOpenConversationOnLoad] = useState(false)
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false)
-  const [mobileActivityOpen, setMobileActivityOpen] = useState(false)
   const [stripCollapsed, setStripCollapsed] = useState(false)
   const [pauseBusy, setPauseBusy] = useState(false)
   const [composeUrl, setComposeUrl] = useState<string | null>(null)
@@ -609,11 +601,21 @@ export function AppointmentRemindersCalendarWorkspacePage() {
               )}
             </div>
 
-            <div className="flex justify-end lg:hidden">
-              <Button type="button" variant="outline" size="sm" onClick={() => setMobileActivityOpen(true)}>
-                Activity &amp; attention
-              </Button>
-            </div>
+            <aside
+              className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card max-lg:shrink-0 lg:hidden"
+              aria-label="Reminder operations and day context"
+            >
+              <ArCalendarRightContextPanel
+                className="min-h-0 flex-1"
+                focusDayKey={selectedDayKey}
+                view={view}
+                timeZone={timezone}
+                events={filteredEvents}
+                overview={overviewFeed}
+                overviewLoading={feedLoading}
+                onSelectAppointment={(id, tab) => selectAppointment(id, tab)}
+              />
+            </aside>
 
             <aside
               className="hidden h-full min-h-0 max-h-full flex-col overflow-hidden rounded-xl border border-border bg-card lg:flex"
@@ -647,7 +649,7 @@ export function AppointmentRemindersCalendarWorkspacePage() {
           </div>
 
           <ArCalendarOperationsStrip
-            className="hidden shrink-0 lg:block"
+            className="shrink-0 max-lg:max-h-none"
             data={overviewFeed}
             collapsed={stripCollapsed}
             onCollapsedChange={setStripCollapsed}
@@ -667,35 +669,6 @@ export function AppointmentRemindersCalendarWorkspacePage() {
         openConversationOnLoad={openConversationOnLoad}
       />
 
-      <Sheet open={mobileActivityOpen} onOpenChange={setMobileActivityOpen}>
-        <SheetContent side="bottom" className="flex max-h-[85vh] flex-col gap-0 p-0">
-          <SheetHeader className="border-b px-4 py-3 text-left">
-            <SheetTitle className="text-base font-semibold">Activity &amp; attention</SheetTitle>
-          </SheetHeader>
-          <div className="min-h-0 flex-1 overflow-y-auto p-3">
-            <ArCalendarOperationsStrip
-              data={overviewFeed}
-              collapsed={false}
-              onCollapsedChange={() => {}}
-              onSelect={(payload) => {
-                setMobileActivityOpen(false)
-                handleStripSelect(payload)
-              }}
-              className="border-0 shadow-none"
-            />
-            <div className="mt-4 border-t pt-4">
-              <ArCalendarActivityPanel
-                data={overviewFeed as Parameters<typeof ArCalendarActivityPanel>[0]['data']}
-                loading={feedLoading}
-                onSelectAppointment={(id, tab) => {
-                  setMobileActivityOpen(false)
-                  selectAppointment(id, tab)
-                }}
-              />
-            </div>
-          </div>
-        </SheetContent>
-      </Sheet>
     </ArOpusPage>
   )
 }
