@@ -18,6 +18,7 @@ const CAL_RECONCILE = "calendar_connections_reconcile";
 const ALLOWED_JOB_TYPES = new Set([CAL_SYNC, CAL_RECONCILE]);
 
 const dryRun = process.env.DRY_RUN !== "0";
+const skipBullmqDuringDb = process.env.RESET_BULLMQ_WITH_DB !== "1";
 const batchSize = Math.min(2000, Math.max(50, Number(process.env.BATCH_SIZE || 300)));
 const logPath = process.env.RESET_LOG || "/tmp/calendar-prelaunch-reset.log";
 const checkpointPath = process.env.RESET_CHECKPOINT || "/tmp/calendar-prelaunch-reset.checkpoint.json";
@@ -72,19 +73,33 @@ async function redisQueueDepths() {
   return { defaultWait: dw, maintenanceWait: dm };
 }
 
-async function removeBullmqByKey(queueName: string, idempotencyKey: string | null) {
-  if (!idempotencyKey || dryRun) return;
-  const queue = new Queue(queueName, { connection: getBullmqConnection() });
-  try {
+async function removeBullmqByKeys(
+  queueName: string,
+  keys: string[],
+  queueCache: Map<string, Queue>,
+) {
+  if (dryRun || !keys.length) return;
+  let queue = queueCache.get(queueName);
+  if (!queue) {
+    queue = new Queue(queueName, { connection: getBullmqConnection() });
+    queueCache.set(queueName, queue);
+  }
+  for (const idempotencyKey of keys) {
     const job = await queue.getJob(toBullmqJobId(idempotencyKey));
     if (job) await job.remove();
-  } finally {
-    await queue.close();
   }
+}
+
+async function closeQueueCache(queueCache: Map<string, Queue>) {
+  for (const q of queueCache.values()) {
+    await q.close();
+  }
+  queueCache.clear();
 }
 
 async function phaseDbCalSync(cp: Checkpoint): Promise<Checkpoint> {
   const prisma = getPrisma();
+  const queueCache = new Map<string, Queue>();
   let lastJobId = cp.lastJobId ?? "";
   let deleted = 0;
   let processed = 0;
@@ -101,30 +116,47 @@ async function phaseDbCalSync(cp: Checkpoint): Promise<Checkpoint> {
       select: { id: true, idempotencyKey: true, queueName: true },
     });
     if (!jobs.length) {
+      await closeQueueCache(queueCache);
       return { phase: "db_reconcile" };
     }
+    const bullKeysByQueue = new Map<string, string[]>();
     for (const job of jobs) {
       processed += 1;
       lastJobId = job.id;
       if (!dryRun) {
         await prisma.jobQueue.delete({ where: { id: job.id } });
-        await removeBullmqByKey(job.queueName || "default", job.idempotencyKey);
+        if (job.idempotencyKey) {
+          const qn = job.queueName || "default";
+          const list = bullKeysByQueue.get(qn) ?? [];
+          list.push(job.idempotencyKey);
+          bullKeysByQueue.set(qn, list);
+        }
       }
       deleted += 1;
     }
-    if (jobs.length < take) return { phase: "db_reconcile" };
+    if (!skipBullmqDuringDb) {
+      for (const [qn, keys] of bullKeysByQueue) {
+        await removeBullmqByKeys(qn, keys, queueCache);
+      }
+    }
+    if (jobs.length < take) {
+      await closeQueueCache(queueCache);
+      return { phase: "db_reconcile" };
+    }
   }
+  await closeQueueCache(queueCache);
 
   saveCheckpoint({ phase: "db_cal_sync", lastJobId });
   log(JSON.stringify({ phase: "db_cal_sync", deleted, processed, lastJobId, dryRun }));
   return { phase: "db_cal_sync", lastJobId };
 }
 
-async function phaseDbReconcile(): Promise<Checkpoint> {
+async function phaseDbReconcile(cp: Checkpoint): Promise<Checkpoint> {
   const prisma = getPrisma();
+  const queueCache = new Map<string, Queue>();
   let deleted = 0;
   let processed = 0;
-  let lastJobId = "";
+  let lastJobId = cp.lastJobId ?? "";
 
   while (processed < batchSize) {
     const take = Math.min(150, batchSize - processed);
@@ -137,21 +169,40 @@ async function phaseDbReconcile(): Promise<Checkpoint> {
       take,
       select: { id: true, idempotencyKey: true, queueName: true },
     });
-    if (!jobs.length) return { phase: "bullmq_default", bullmqOffset: 0 };
+    if (!jobs.length) {
+      await closeQueueCache(queueCache);
+      return { phase: "bullmq_default", bullmqOffset: 0 };
+    }
+    const bullKeysByQueue = new Map<string, string[]>();
     for (const job of jobs) {
       processed += 1;
       lastJobId = job.id;
       if (!dryRun) {
         await prisma.jobQueue.delete({ where: { id: job.id } });
-        await removeBullmqByKey(job.queueName || "maintenance", job.idempotencyKey);
+        if (job.idempotencyKey) {
+          const qn = job.queueName || "maintenance";
+          const list = bullKeysByQueue.get(qn) ?? [];
+          list.push(job.idempotencyKey);
+          bullKeysByQueue.set(qn, list);
+        }
       }
       deleted += 1;
     }
-    if (jobs.length < take) return { phase: "bullmq_default", bullmqOffset: 0 };
+    if (!skipBullmqDuringDb) {
+      for (const [qn, keys] of bullKeysByQueue) {
+        await removeBullmqByKeys(qn, keys, queueCache);
+      }
+    }
+    if (jobs.length < take) {
+      await closeQueueCache(queueCache);
+      return { phase: "bullmq_default", bullmqOffset: 0 };
+    }
   }
 
-  log(JSON.stringify({ phase: "db_reconcile", deleted, processed, dryRun }));
-  return { phase: "db_reconcile" };
+  await closeQueueCache(queueCache);
+  saveCheckpoint({ phase: "db_reconcile", lastJobId });
+  log(JSON.stringify({ phase: "db_reconcile", deleted, processed, lastJobId, dryRun }));
+  return { phase: "db_reconcile", lastJobId };
 }
 
 async function phaseBullmqSweep(queueName: string, jobNames: Set<string>, offset = 0): Promise<Checkpoint> {
@@ -239,11 +290,16 @@ async function main() {
       saveCheckpoint(cp);
       return;
     }
+    saveCheckpoint(cp);
   }
 
   if (cp.phase === "db_reconcile") {
-    cp = await phaseDbReconcile();
-    if (cp.phase === "db_reconcile") return;
+    cp = await phaseDbReconcile(cp);
+    if (cp.phase === "db_reconcile" && cp.lastJobId) {
+      saveCheckpoint(cp);
+      return;
+    }
+    if (cp.phase !== "db_reconcile") saveCheckpoint(cp);
   }
 
   if (cp.phase === "bullmq_default") {
