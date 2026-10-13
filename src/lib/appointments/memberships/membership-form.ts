@@ -15,6 +15,7 @@ export type MembershipFormState = {
   eligibleMeetingIds: string[];
   eligibleClassIds: string[];
   eligibleWorkshopIds: string[];
+  imageUrl: string;
 };
 
 export const EMPTY_MEMBERSHIP_FORM: MembershipFormState = {
@@ -30,6 +31,7 @@ export const EMPTY_MEMBERSHIP_FORM: MembershipFormState = {
   eligibleMeetingIds: [],
   eligibleClassIds: [],
   eligibleWorkshopIds: [],
+  imageUrl: "",
 };
 
 export type MembershipProductApiRow = {
@@ -45,6 +47,7 @@ export type MembershipProductApiRow = {
   metadata?: {
     purchaseAvailability?: string;
     cancelPolicy?: string;
+    imageUrl?: string;
   } | null;
   activeMemberCount?: number;
   pastDueCount?: number;
@@ -80,6 +83,7 @@ export function membershipFormFromRow(row: MembershipProductApiRow): MembershipF
     eligibleMeetingIds: [],
     eligibleClassIds: classIds,
     eligibleWorkshopIds: [],
+    imageUrl: typeof meta.imageUrl === "string" ? meta.imageUrl : "",
   };
 }
 
@@ -127,6 +131,7 @@ export function membershipSavePayload(form: MembershipFormState, id?: string) {
     metadata: {
       purchaseAvailability: form.purchaseAvailability,
       cancelPolicy: form.cancelPolicy,
+      imageUrl: form.imageUrl.trim() || undefined,
     },
   };
 }

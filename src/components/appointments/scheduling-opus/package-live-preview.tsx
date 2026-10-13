@@ -8,6 +8,7 @@ import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
 import { OpusIconBadge, Pill } from "@/newui-transplant/components/app/kit";
 import { Button } from "@/newui-transplant/components/ui/button";
 import { cn } from "@/lib/utils";
+import { OfferingCoverImage } from "./offering-cover-image";
 
 function templateLabel(form: PackageFormState): string {
   if (form.sellTemplate === "prepaid_sessions") return "Prepaid sessions";
@@ -32,6 +33,12 @@ export function PackageLivePreview({ form, includedOfferings, mode = "draft", cl
 
   return (
     <section className={cn(OPUS_CARD, "overflow-hidden bg-gradient-to-br from-card via-card to-primary/[0.06] p-5", className)}>
+      <OfferingCoverImage
+        imageUrl={form.imageUrl}
+        category="package"
+        alt={form.name || "Package cover"}
+        className="mb-4"
+      />
       <div className="flex items-start justify-between gap-3">
         <OpusIconBadge icon={Package} className="size-10 rounded-xl bg-primary/12" />
         <Pill tone={mode === "published" ? "success" : "neutral"} dot={false}>

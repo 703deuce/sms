@@ -29,6 +29,8 @@ export type PackageFormState = {
   /** Per-offering quantities when `packageKind === "itemized"`. */
   itemizedQuantities: Record<string, number>;
   maxPurchasesPerCustomer: number | null;
+  /** Public storefront cover — stored in product metadata. */
+  imageUrl: string;
 };
 
 export const EMPTY_PACKAGE_FORM: PackageFormState = {
@@ -50,6 +52,7 @@ export const EMPTY_PACKAGE_FORM: PackageFormState = {
   eligibleWorkshopIds: [],
   itemizedQuantities: {},
   maxPurchasesPerCustomer: null,
+  imageUrl: "",
 };
 
 export type PackageProductApiRow = {
@@ -145,7 +148,7 @@ export function packageFormFromRow(row: PackageProductApiRow): PackageFormState 
     name: row.name,
     description: row.description || "",
     priceCents: row.priceCents,
-    totalCredits: pooledRule?.quantity ?? totalCreditsFromRules(rules) || 1,
+    totalCredits: pooledRule?.quantity ?? (totalCreditsFromRules(rules) || 1),
     creditUnitLabel: String(meta.creditUnitLabel || "sessions"),
     expirationMode:
       meta.expirationMode === "fixed"
@@ -172,6 +175,7 @@ export function packageFormFromRow(row: PackageProductApiRow): PackageFormState 
       .filter((r) => r.classSeriesId && r.label === "Workshop")
       .map((r) => String(r.classSeriesId)),
     itemizedQuantities,
+    imageUrl: typeof meta.imageUrl === "string" ? meta.imageUrl : "",
   };
 }
 
@@ -252,6 +256,7 @@ export function packageSavePayload(form: PackageFormState, id?: string) {
       expirationMode: form.expirationMode,
       expirationDate: form.expirationMode === "fixed" ? form.expirationDate : undefined,
       maxPurchasesPerCustomer: form.maxPurchasesPerCustomer || undefined,
+      imageUrl: form.imageUrl.trim() || undefined,
     },
   };
 }

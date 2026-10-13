@@ -37,6 +37,7 @@ import { Input } from "@/newui-transplant/components/ui/input";
 import { Label } from "@/newui-transplant/components/ui/label";
 import { Textarea } from "@/newui-transplant/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { OpusCoverImageUploader } from "@/components/appointments/scheduling-opus/opus-cover-image-uploader";
 
 const API = "/api/appointments/service-booking/packages";
 const DRAFT_STORAGE_KEY = "transovo-package-wizard-draft";
@@ -323,6 +324,13 @@ export function CreatePackageWizard() {
               rows={3}
               value={form.description}
               onChange={(e) => onFormChange("description", e.target.value)}
+            />
+          </div>
+          <div className="mt-6 max-w-md">
+            <OpusCoverImageUploader
+              value={form.imageUrl}
+              onChange={(url) => onFormChange("imageUrl", url)}
+              category="package"
             />
           </div>
         </section>

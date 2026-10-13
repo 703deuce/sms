@@ -6,6 +6,7 @@ import { OpusIconBadge, Pill } from "@/newui-transplant/components/app/kit";
 import { Button } from "@/newui-transplant/components/ui/button";
 import { Package, Gift, CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { OfferingCoverImage } from "@/components/appointments/scheduling-opus/offering-cover-image";
 
 type StoreProductKind = "package" | "gift" | "membership";
 
@@ -15,6 +16,7 @@ type StoreProduct = {
   name: string;
   slug: string;
   description?: string | null;
+  imageUrl?: string | null;
   priceCents: number;
   billingInterval?: string | null;
   allowCustomAmount?: boolean;
@@ -230,9 +232,15 @@ export function PublicStoreCheckoutClient({ slug }: { slug: string }) {
               {filtered.map((product) => {
                 const Icon = product.kind === "package" ? Package : product.kind === "gift" ? Gift : CreditCard;
                 return (
-                <li key={`${product.kind}-${product.id}`} className={cn(OPUS_CARD, "flex flex-col p-5")}>
-                  <OpusIconBadge icon={Icon} className="mb-3 size-10 rounded-xl bg-primary/10" />
-                  <div className="flex flex-1 flex-col gap-3">
+                <li key={`${product.kind}-${product.id}`} className={cn(OPUS_CARD, "flex flex-col overflow-hidden p-0")}>
+                  <OfferingCoverImage
+                    imageUrl={product.imageUrl}
+                    category={product.kind === "gift" ? "gift" : product.kind}
+                    alt={product.name}
+                    className="rounded-none border-0 border-b"
+                  />
+                  <div className="flex flex-1 flex-col gap-3 p-5">
+                  <OpusIconBadge icon={Icon} className="size-10 rounded-xl bg-primary/10" />
                     <div>
                       <Pill tone="neutral" dot={false} className="mb-2">
                         {kindLabel(product.kind)}
@@ -271,15 +279,26 @@ export function PublicStoreCheckoutClient({ slug }: { slug: string }) {
           <button type="button" className="text-sm underline" onClick={() => setStep("browse")}>
             ← Back to products
           </button>
-          <h2 className="text-xl font-semibold">{selected.name}</h2>
-
           <form
-            className="space-y-4"
+            id="store-purchase-form"
+            className="grid gap-8 lg:grid-cols-[3fr_2fr]"
             onSubmit={(e) => {
               e.preventDefault();
               setStep("confirm");
             }}
           >
+            <div className="min-w-0 space-y-6">
+              <OfferingCoverImage
+                imageUrl={selected.imageUrl}
+                category={selected.kind === "gift" ? "gift" : selected.kind}
+                alt={selected.name}
+              />
+              <div>
+                <h2 className="text-2xl font-semibold">{selected.name}</h2>
+                {selected.description ? (
+                  <p className="mt-2 text-sm text-muted-foreground">{selected.description}</p>
+                ) : null}
+              </div>
             <fieldset className="space-y-3">
               <legend className="text-sm font-medium">Your information</legend>
               <label className="block text-sm">
@@ -379,10 +398,18 @@ export function PublicStoreCheckoutClient({ slug }: { slug: string }) {
                 </label>
               </fieldset>
             ) : null}
+            </div>
 
-            <button type="submit" className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground">
-              Continue to review
-            </button>
+            <aside className={cn(OPUS_CARD, "h-fit space-y-4 p-5 lg:sticky lg:top-6")}>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Total</p>
+              <p className="text-2xl font-semibold tabular-nums">
+                {formatMoney(resolvedAmount || selected.priceCents)}
+              </p>
+              {selected.kind === "membership" && selected.billingInterval ? (
+                <p className="text-sm text-muted-foreground">Billed {selected.billingInterval}</p>
+              ) : null}
+              <Button type="submit" className="w-full">Continue to review</Button>
+            </aside>
           </form>
         </section>
       ) : null}

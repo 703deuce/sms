@@ -20,7 +20,7 @@ type SchedulingWizardShellProps = {
   title: string;
   description: string;
   headerAction?: React.ReactNode;
-  steps: WizardStep[];
+  steps: readonly WizardStep[];
   currentStep: number;
   onStepSelect?: (index: number) => void;
   editor: React.ReactNode;

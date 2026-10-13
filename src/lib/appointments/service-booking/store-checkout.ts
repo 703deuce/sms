@@ -24,6 +24,7 @@ export type StoreProductView = {
   name: string;
   slug: string;
   description?: string | null;
+  imageUrl?: string | null;
   priceCents: number;
   billingInterval?: string | null;
   allowCustomAmount?: boolean;
@@ -42,14 +43,18 @@ export async function listActiveStoreProducts(workspaceId: string): Promise<Stor
   ]);
 
   const items: StoreProductView[] = [
-    ...packages.map((p: (typeof packages)[number]) => ({
-      id: p.id,
-      kind: "package" as const,
-      name: p.name,
-      slug: p.slug,
-      description: p.description,
-      priceCents: p.priceCents,
-    })),
+    ...packages.map((p: (typeof packages)[number]) => {
+      const meta = (p.metadata || {}) as { imageUrl?: string };
+      return {
+        id: p.id,
+        kind: "package" as const,
+        name: p.name,
+        slug: p.slug,
+        description: p.description,
+        imageUrl: meta.imageUrl ?? null,
+        priceCents: p.priceCents,
+      };
+    }),
     ...gifts.map((g: (typeof gifts)[number]) => ({
       id: g.id,
       kind: "gift" as const,
@@ -63,15 +68,19 @@ export async function listActiveStoreProducts(workspaceId: string): Promise<Stor
       minAmountCents: g.minAmountCents,
       maxAmountCents: g.maxAmountCents,
     })),
-    ...memberships.map((m: (typeof memberships)[number]) => ({
-      id: m.id,
-      kind: "membership" as const,
-      name: m.name,
-      slug: m.slug,
-      description: m.description,
-      priceCents: m.priceCents,
-      billingInterval: m.billingInterval,
-    })),
+    ...memberships.map((m: (typeof memberships)[number]) => {
+      const meta = (m.metadata || {}) as { imageUrl?: string };
+      return {
+        id: m.id,
+        kind: "membership" as const,
+        name: m.name,
+        slug: m.slug,
+        description: m.description,
+        imageUrl: meta.imageUrl ?? null,
+        priceCents: m.priceCents,
+        billingInterval: m.billingInterval,
+      };
+    }),
   ];
 
   return items;

@@ -10,15 +10,11 @@ import { PackageObjectHeader } from "./package-object-header";
 import { PackageSectionWorkspace } from "./package-section-workspace";
 import { PackageSummaryStrip } from "./package-summary-strip";
 import { PACKAGE_SECTIONS, type PackageSectionId } from "./package-section-types";
-import "@/components/appointments/kimi-ui/shared/appointments-pilot-tokens.css";
-import "@/components/appointments/kimi-ui/shared/bookable-workspace-pilot.css";
-import "@/components/appointments/kimi-ui/shared/workspace-pilot.css";
-import "@/components/appointments/kimi-ui/overview/appointments-overview-pilot.css";
-import "@/components/appointments/kimi-ui/overview/reference.css";
-import "@/components/appointments/kimi-ui/appointment-types/reference.css";
+import { SchedulingEditorSplit } from "@/components/appointments/scheduling-opus/scheduling-editor-split";
+import { PackageLivePreview } from "@/components/appointments/scheduling-opus/package-live-preview";
+import { ArOpusPage } from "@/newui-transplant/components/appointment-reminders/ar-opus-layout";
+import { Button } from "@/newui-transplant/components/ui/button";
 
-const SHELL_CLASS =
-  "appt-overview-pilot bookable-workspace-pilot ws-pilot appt-pilot-workspace ref-root";
 const VALID_SECTIONS = new Set<string>(PACKAGE_SECTIONS.map((s) => s.id));
 
 type Props = { packageId: string };
@@ -72,63 +68,76 @@ export function PackageEditorConnected({ packageId }: Props) {
   const redeemedCount = editor.activity.filter((row) => row.kind === "redeem").length;
 
   if (editor.loading) {
-    return <div className={`${SHELL_CLASS} p-8 text-[var(--text-secondary)]`}>Loading package…</div>;
+    return (
+      <ArOpusPage className="p-8 text-muted-foreground">Loading package…</ArOpusPage>
+    );
   }
 
   if (editor.failed) {
     return (
-      <div className={`${SHELL_CLASS} p-8`}>
-        <p className="text-[var(--state-error)]">Package not found.</p>
-        <Link href="/appointments/packages" className="ws-text-btn mt-2">Back to packages</Link>
-      </div>
+      <ArOpusPage className="p-8">
+        <p className="text-destructive">Package not found.</p>
+        <Link href="/appointments/packages" className="mt-2 inline-block text-sm font-medium text-primary hover:underline">
+          Back to packages
+        </Link>
+      </ArOpusPage>
     );
   }
 
   return (
-    <div className={`${SHELL_CLASS} min-h-full bg-[var(--surface-muted)]`}>
-      <div className="mx-auto flex w-full max-w-[1560px] flex-col">
-        {createdNotice ? (
-          <div className="ws-toast" role="status">
-            <Check className="h-4 w-4 shrink-0" aria-hidden />
-            {createdNotice}
-            <button type="button" aria-label="Dismiss" onClick={() => setCreatedNotice(null)}>
-              <X className="h-4 w-4" aria-hidden />
-            </button>
-          </div>
-        ) : null}
-
-        <PackageObjectHeader
-          form={editor.form}
-          saveStatus={editor.saveStatus}
-          saving={editor.saving}
-          error={editor.error}
-          menuOpen={menuOpen}
-          onMenuToggle={() => setMenuOpen((v) => !v)}
-          onMenuClose={() => setMenuOpen(false)}
-          onSave={() => void editor.save()}
-          onDuplicate={() => void editor.duplicatePackage()}
-          onDeactivate={() => void editor.deactivatePackage()}
-          onDelete={() => void editor.deletePackage()}
-        />
-
+    <SchedulingEditorSplit
+      header={
+        <>
+          {createdNotice ? (
+            <div className="mb-4 flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm" role="status">
+              <Check className="size-4 shrink-0 text-emerald-600" aria-hidden />
+              <span className="flex-1">{createdNotice}</span>
+              <Button type="button" variant="ghost" size="icon" className="size-8" aria-label="Dismiss" onClick={() => setCreatedNotice(null)}>
+                <X className="size-4" />
+              </Button>
+            </div>
+          ) : null}
+          <PackageObjectHeader
+            form={editor.form}
+            saveStatus={editor.saveStatus}
+            saving={editor.saving}
+            error={editor.error}
+            menuOpen={menuOpen}
+            onMenuToggle={() => setMenuOpen((v) => !v)}
+            onMenuClose={() => setMenuOpen(false)}
+            onSave={() => void editor.save()}
+            onDuplicate={() => void editor.duplicatePackage()}
+            onDeactivate={() => void editor.deactivatePackage()}
+            onDelete={() => void editor.deletePackage()}
+          />
+        </>
+      }
+      subHeader={
         <PackageSummaryStrip
           form={editor.form}
           ownerStats={{ active: editor.ownerStats.active, remaining: editor.ownerStats.remaining }}
           redeemedCount={redeemedCount}
         />
-
-        <PackageLocalNav active={section} onChange={setSection} attention={attention} />
-
-        <div className="px-4 py-4 lg:px-6">
+      }
+      nav={<PackageLocalNav active={section} onChange={setSection} attention={attention} />}
+      editor={
+        <>
           {attention.has(section) ? (
-            <p className="ws-inline-error mb-3" role="status">
-              <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
+            <p className="mb-4 flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400" role="status">
+              <AlertTriangle className="size-4 shrink-0" aria-hidden />
               This section still needs configuration before the package is ready to sell.
             </p>
           ) : null}
           <PackageSectionWorkspace section={section} editor={editor} onNavigate={setSection} />
-        </div>
-      </div>
-    </div>
+        </>
+      }
+      preview={
+        <PackageLivePreview
+          form={editor.form}
+          includedOfferings={editor.eligibleOfferings}
+          mode={editor.form.active ? "preview" : "draft"}
+        />
+      }
+    />
   );
 }

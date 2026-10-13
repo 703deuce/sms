@@ -44,21 +44,21 @@ import {
   newLocation,
   newStaffMember,
 } from "@/features/appointments/kimi/shared/platform-settings-types";
-import "@/components/appointments/kimi-ui/shared/appointments-pilot-tokens.css";
-import "@/components/appointments/kimi-ui/shared/bookable-workspace-pilot.css";
-import "@/components/appointments/kimi-ui/shared/workspace-pilot.css";
-import "@/components/appointments/kimi-ui/overview/appointments-overview-pilot.css";
-import "@/components/appointments/kimi-ui/overview/reference.css";
-import "@/components/appointments/kimi-ui/appointment-types/reference.css";
+import { SchedulingWizardShell } from "@/components/appointments/scheduling-opus/scheduling-wizard-shell";
+import { WorkshopLivePreview } from "@/components/appointments/scheduling-opus/workshop-live-preview";
+import { OpusCoverImageUploader } from "@/components/appointments/scheduling-opus/opus-cover-image-uploader";
+import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
+import { Button } from "@/newui-transplant/components/ui/button";
+import { ArOpusPage } from "@/newui-transplant/components/appointment-reminders/ar-opus-layout";
+import { cn } from "@/lib/utils";
 
-const SHELL_CLASS = "appt-overview-pilot bookable-workspace-pilot ws-pilot ref-root";
 const API = "/api/appointments/service-booking/workshops";
 
 const STEPS = [
-  { label: "Basics", icon: Presentation },
-  { label: "Date & place", icon: CalendarDays },
-  { label: "Registration", icon: Ticket },
-  { label: "Review", icon: ClipboardCheck },
+  { id: "basics", label: "Basics", icon: Presentation },
+  { id: "schedule", label: "Date & place", icon: CalendarDays },
+  { id: "registration", label: "Registration", icon: Ticket },
+  { id: "review", label: "Review", icon: ClipboardCheck },
 ] as const;
 
 const LENGTH_PRESETS = [60, 90, 120, 180, 240, 480];
@@ -73,88 +73,6 @@ function initials(name: string): string {
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase() || "")
     .join("");
-}
-
-function WorkshopSoFar({
-  form,
-  staffNames,
-  locationNames,
-}: {
-  form: WorkshopFormState;
-  staffNames: Map<string, string>;
-  locationNames: Map<string, string>;
-}) {
-  const range = sessionDraftToRange(form.schedule);
-  const place =
-    form.locationMode === "virtual"
-      ? form.virtualUrl.trim()
-        ? "Online"
-        : "Online — no link yet"
-      : form.locationMode === "custom"
-        ? form.locationNote.trim() || "Custom venue"
-        : locationNames.get(form.locationId) || "Not set";
-
-  const rows: Array<{
-    icon: React.ComponentType<{ className?: string }>;
-    label: string;
-    value: string;
-    set: boolean;
-  }> = [
-    { icon: Tag, label: "Category", value: form.category || "None", set: Boolean(form.category) },
-    {
-      icon: CalendarDays,
-      label: "Date",
-      value: range ? formatSessionFull(range.startsAt, range.endsAt) : "Not set",
-      set: Boolean(range),
-    },
-    {
-      icon: Clock,
-      label: "Length",
-      value: durationLabel(form.schedule.durationMinutes) || "Not set",
-      set: form.schedule.durationMinutes > 0,
-    },
-    {
-      icon: form.locationMode === "virtual" ? Globe : MapPin,
-      label: "Place",
-      value: place,
-      set: place !== "Not set" && place !== "Online — no link yet",
-    },
-    {
-      icon: UserRound,
-      label: "Host",
-      value: form.staffId ? staffNames.get(form.staffId) || "Assigned" : "Unassigned",
-      set: Boolean(form.staffId),
-    },
-    { icon: Users, label: "Spots", value: `${form.capacity} total`, set: form.capacity > 0 },
-    { icon: Wallet, label: "Price", value: workshopPriceLabel(form), set: true },
-  ];
-
-  return (
-    <aside className="ws-wizard-summary" aria-label="Workshop so far">
-      <h4>Workshop so far</h4>
-      <p className="mt-2 text-[0.9375rem] font-semibold leading-snug text-[var(--text-primary)]">
-        {form.name.trim() || "Untitled workshop"}
-      </p>
-      <dl className="mt-3 space-y-2 border-t border-[var(--border-soft)] pt-3 text-[var(--type-helper)]">
-        {rows.map((row) => (
-          <div key={row.label} className="flex items-center justify-between gap-3">
-            <dt className="inline-flex items-center gap-1.5 text-[var(--text-secondary)]">
-              <row.icon className="h-3 w-3" aria-hidden />
-              {row.label}
-            </dt>
-            <dd
-              className={`truncate font-semibold ${
-                row.set ? "text-[var(--text-primary)]" : "text-[var(--text-tertiary)]"
-              }`}
-              title={row.value}
-            >
-              {row.value}
-            </dd>
-          </div>
-        ))}
-      </dl>
-    </aside>
-  );
 }
 
 export function CreateWorkshopWizard() {
@@ -377,60 +295,20 @@ export function CreateWorkshopWizard() {
 
   if (loading) {
     return (
-      <div className={`${SHELL_CLASS} min-h-full animate-pulse bg-[var(--surface-muted)] p-6`}>
-        <div className="mx-auto h-96 max-w-3xl rounded-xl bg-[var(--surface)]" />
-      </div>
+      <ArOpusPage className="animate-pulse p-6">
+        <div className="h-96 max-w-3xl rounded-xl bg-muted" />
+      </ArOpusPage>
     );
   }
 
   const visibleError = showValidation ? stepError : null;
+  const sessionRange = sessionDraftToRange(form.schedule);
+  const sessionLabel = sessionRange
+    ? formatSessionFull(sessionRange.startsAt, sessionRange.endsAt)
+    : "";
 
-  return (
-    <div className={`${SHELL_CLASS} min-h-full bg-[var(--surface-muted)]`}>
-      <div className="ws-wizard-shell">
-        <Link href="/appointments/workshops" className="appt-pilot-back-link">
-          <ArrowLeft className="h-3.5 w-3.5" aria-hidden /> Workshops
-        </Link>
-
-        <div className="mt-3 flex items-center gap-3">
-          <span className="ws-object-icon" aria-hidden>
-            <Presentation className="h-4 w-4" />
-          </span>
-          <div className="min-w-0">
-            <h1 className="text-[1.375rem] font-semibold leading-tight tracking-tight text-[var(--text-primary)]">
-              Create workshop
-            </h1>
-            <p className="ws-section-sub">
-              Step {step + 1} of {STEPS.length} — {STEPS[step].label}
-            </p>
-          </div>
-        </div>
-
-        <ol className="ws-wizard-steps mt-6" aria-label="Progress">
-          {STEPS.map((s, i) => {
-            const Icon = s.icon;
-            const state = i === step ? "is-active" : i < step ? "is-done" : "";
-            return (
-              <li key={s.label} className="contents">
-                <div
-                  className={`ws-wizard-step ${state}`}
-                  aria-current={i === step ? "step" : undefined}
-                >
-                  <span className="ws-wizard-step-dot" aria-hidden>
-                    {i < step ? <Check className="h-3.5 w-3.5" /> : <Icon className="h-3.5 w-3.5" />}
-                  </span>
-                  <span className="ws-wizard-step-label hidden sm:block">{s.label}</span>
-                </div>
-                {i < STEPS.length - 1 ? (
-                  <span className={`ws-wizard-connector${i < step ? " is-done" : ""}`} aria-hidden />
-                ) : null}
-              </li>
-            );
-          })}
-        </ol>
-
-        <div className="ws-wizard-layout mt-6">
-          <div className="ws-wizard-card">
+  const stepEditor = (
+    <div className={cn(OPUS_CARD, "p-5 md:p-6")}>
             {step === 0 ? (
               <div className="space-y-4">
                 <div>
@@ -469,6 +347,13 @@ export function CreateWorkshopWizard() {
                     onChange={(e) => update("description", e.target.value)}
                   />
                 </Field>
+                <div className="mt-4 max-w-md">
+                  <OpusCoverImageUploader
+                    value={form.imageUrl}
+                    onChange={(url) => update("imageUrl", url)}
+                    category="workshop"
+                  />
+                </div>
               </div>
             ) : null}
 
@@ -894,47 +779,63 @@ export function CreateWorkshopWizard() {
               </div>
             ) : null}
 
-            {visibleError || error ? (
-              <p className="ws-inline-error mt-4" role="alert">
-                {error || visibleError}
-              </p>
-            ) : null}
-          </div>
-
-          <WorkshopSoFar form={form} staffNames={staffNames} locationNames={locationNames} />
-        </div>
-
-        <div className="mt-6 flex justify-between gap-3">
-          <button
-            type="button"
-            className="appt-pilot-outline-btn"
-            disabled={step === 0 || saving}
-            onClick={() => {
-              setShowValidation(false);
-              setStep((s) => Math.max(0, s - 1));
-            }}
-          >
-            <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
-            Back
-          </button>
-          {step < STEPS.length - 1 ? (
-            <button type="button" className="appt-pilot-primary-btn" onClick={goNext}>
-              Continue
-              <ArrowRight className="h-3.5 w-3.5" aria-hidden />
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="appt-pilot-primary-btn"
-              disabled={saving || Boolean(stepError)}
-              onClick={() => void createWorkshop()}
-            >
-              <Check className="h-3.5 w-3.5" aria-hidden />
-              {saving ? "Creating…" : "Create workshop"}
-            </button>
-          )}
-        </div>
-      </div>
+      {visibleError || error ? (
+        <p className="mt-4 text-sm text-destructive" role="alert">
+          {error || visibleError}
+        </p>
+      ) : null}
     </div>
+  );
+
+  return (
+    <SchedulingWizardShell
+      backHref="/appointments/workshops"
+      backLabel="Workshops"
+      title="Create workshop"
+      description="Set up a one-time workshop customers can register for."
+      steps={STEPS}
+      currentStep={step}
+      onStepSelect={(i) => {
+        setShowValidation(false);
+        setStep(i);
+      }}
+      editor={stepEditor}
+      preview={
+        <WorkshopLivePreview
+          form={form}
+          staffNames={staffNames}
+          locationNames={locationNames}
+          sessionLabel={sessionLabel}
+        />
+      }
+      footerLeft={
+        <Button
+          type="button"
+          variant="outline"
+          disabled={step === 0 || saving}
+          onClick={() => {
+            setShowValidation(false);
+            setStep((s) => Math.max(0, s - 1));
+          }}
+        >
+          <ArrowLeft className="mr-2 size-4" aria-hidden />
+          Back
+        </Button>
+      }
+      footerRight={
+        step < STEPS.length - 1 ? (
+          <Button type="button" onClick={goNext}>
+            Continue
+            <ArrowRight className="ml-2 size-4" aria-hidden />
+          </Button>
+        ) : (
+          <Button type="button" disabled={saving || Boolean(stepError)} onClick={() => void createWorkshop()}>
+            <Check className="mr-2 size-4" aria-hidden />
+            {saving ? "Creating…" : "Create workshop"}
+          </Button>
+        )
+      }
+      showPreviewOnMobile
+    />
   );
 }
