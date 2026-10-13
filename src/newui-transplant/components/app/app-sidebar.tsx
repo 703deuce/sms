@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { ChevronDown, PhoneCall } from 'lucide-react'
 import {
@@ -35,7 +35,7 @@ import { isSchedulingOpusChromePath } from '@/lib/products/newui-shell'
 import { OpusProductSwitcher } from '@/newui-transplant/components/app/opus-product-switcher'
 import { resolveCustomerNavSections, type NavItem, type NavSubItem } from '@/newui-transplant/lib/nav'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
-import { hrefPath, scoreNavHref } from '@/lib/nav-active'
+import { findBestNavMatch, hrefPath, scoreNavHref } from '@/lib/nav-active'
 import {
   isReceptionistWizardEditPath,
   stepIdFromReceptionistQuery,
@@ -85,19 +85,35 @@ function bestMatchingChild(
   return bestScore >= 0 ? best : null
 }
 
-function bestExpandedNavKey(
+function navItemsForMatch(sections: { items: NavItem[] }[]): NavItem[] {
+  return sections.flatMap((section) => section.items)
+}
+
+/** Single parent group to expand for the current route (accordion — one open at a time). */
+function expandedNavKeyForRoute(
   sections: { items: NavItem[] }[],
   pathname: string,
   search: string,
 ): string | null {
-  for (const section of sections) {
-    for (const item of section.items) {
-      if (!item.children?.length) continue
-      if (isTopNavActive(pathname, search, item)) {
-        return navItemExpandKey(item)
-      }
-    }
+  const items = navItemsForMatch(sections)
+  const best = findBestNavMatch(
+    items.map((item) => ({
+      href: item.href,
+      matchExact: item.matchExact,
+      children: item.children,
+    })),
+    pathname,
+    search,
+  )
+  if (!best) return null
+
+  if (best.isChild) {
+    const parent = items.find((item) => item.children?.some((child) => child.href === best.href))
+    return parent ? navItemExpandKey(parent) : null
   }
+
+  const parent = items.find((item) => item.href === best.href)
+  if (parent?.children?.length) return navItemExpandKey(parent)
   return null
 }
 
@@ -134,6 +150,10 @@ export function AppSidebar({
   const searchParams = useSearchParams()
   const pathShell = resolveProductShellFromPath(pathname)
   const [storedShell, setStoredShell] = useState<ProductShell | null>(null)
+  const search = searchStringFromParams(searchParams)
+  const routeSyncKey = `${pathname}|${search}`
+  const prevRouteSyncKey = useRef('')
+
   const [expandedKey, setExpandedKey] = useState<string | null>(null)
 
   useEffect(() => {
@@ -151,11 +171,11 @@ export function AppSidebar({
     [productShell, inboxBadge],
   )
 
-  const search = searchStringFromParams(searchParams)
-
   useEffect(() => {
-    setExpandedKey(bestExpandedNavKey(navSections, pathname, search))
-  }, [pathname, search, navSections])
+    if (prevRouteSyncKey.current === routeSyncKey) return
+    prevRouteSyncKey.current = routeSyncKey
+    setExpandedKey(expandedNavKeyForRoute(navSections, pathname, search))
+  }, [routeSyncKey, navSections, pathname, search])
 
   const brandHref =
     productShell === 'appointment_reminders' || productShell === 'appointments'
@@ -233,11 +253,13 @@ export function AppSidebar({
                             className="flex size-7 shrink-0 items-center justify-center rounded-md text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:hidden"
                             aria-expanded={isOpen}
                             aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${item.label}`}
-                            onClick={() =>
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
                               setExpandedKey((current) =>
                                 current === expandKey ? null : expandKey,
                               )
-                            }
+                            }}
                           >
                             <ChevronDown
                               className={cn('size-4 transition-transform', isOpen && 'rotate-180')}

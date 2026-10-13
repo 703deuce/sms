@@ -24,6 +24,7 @@ export type NavItem = {
   icon: LucideIcon
   badge?: string
   matchPrefix?: string
+  matchExact?: boolean
   /** Direct submenu entries (no extra nav tier). */
   children?: NavSubItem[]
 }
@@ -66,7 +67,9 @@ function productNavItemToOpus(item: ProductNavItem): NavItem {
     icon: item.icon as LucideIcon,
   }
   if (item.badge !== undefined) opus.badge = String(item.badge)
-  if (!item.matchExact) {
+  if (item.matchExact) {
+    opus.matchExact = true
+  } else {
     opus.matchPrefix = item.href
   }
   if (item.children?.length) {

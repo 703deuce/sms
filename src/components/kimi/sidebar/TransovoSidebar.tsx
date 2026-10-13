@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ChevronDown,
   ChevronsLeft,
@@ -225,14 +225,42 @@ export function TransovoSidebar({
   mctbBrandMark = false,
 }: TransovoSidebarProps) {
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const routeSyncKey = `${activeRoute}|${search}`;
+  const prevRouteSyncKey = useRef("");
 
   const toggleGroup = (label: string) =>
-    setExpandedGroups((prev) => ({ ...prev, [label]: !prev[label] }));
+    setExpandedGroups((prev) => {
+      const willOpen = !prev[label];
+      if (!willOpen) return { ...prev, [label]: false };
+      return { [label]: true };
+    });
 
   const bestMatch = useMemo(
     () => findBestNavMatch(navItems, activeRoute, search),
     [navItems, activeRoute, search],
   );
+
+  useEffect(() => {
+    if (prevRouteSyncKey.current === routeSyncKey) return;
+    prevRouteSyncKey.current = routeSyncKey;
+    if (!bestMatch) {
+      setExpandedGroups({});
+      return;
+    }
+    if (bestMatch.isChild) {
+      const parent = navItems.find((item) =>
+        item.children?.some((child) => child.href === bestMatch.href),
+      );
+      setExpandedGroups(parent ? { [parent.label]: true } : {});
+      return;
+    }
+    const parent = navItems.find((item) => item.href === bestMatch.href);
+    if (parent?.children?.length) {
+      setExpandedGroups({ [parent.label]: true });
+      return;
+    }
+    setExpandedGroups({});
+  }, [routeSyncKey, bestMatch, navItems]);
 
   const isActive = (item: KimiNavItem) =>
     bestMatch?.isChild === false && bestMatch.href === item.href;
@@ -285,8 +313,7 @@ export function TransovoSidebar({
               />
             );
           }
-          const childActive = item.children?.some((c) => isChildNavActive(c.href, bestMatch));
-          const expanded = expandedGroups[item.label] ?? (active || childActive);
+          const expanded = expandedGroups[item.label] === true;
           // Expandable parents are never the active row — only a leaf child highlights.
           const rowActive = item.children?.length ? false : active;
           return (
