@@ -46,13 +46,15 @@ import {
 } from '@/newui-transplant/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { isUnifiedAppointmentsExperience } from '@/lib/products/unified-appointments'
-import type { QuickCreatePrefill } from '@/components/appointments/calendar/calendar-quick-create-sheet'
+import type { ArQuickCreatePrefill } from '@/newui-transplant/components/appointment-reminders/ar-calendar-quick-create-sheet'
 
-const CalendarQuickCreateSheet = dynamic(
+const ArCalendarQuickCreateSheet = dynamic(
   () =>
-    import('@/components/appointments/calendar/calendar-quick-create-sheet').then((m) => ({
-      default: m.CalendarQuickCreateSheet,
-    })),
+    import('@/newui-transplant/components/appointment-reminders/ar-calendar-quick-create-sheet').then(
+      (m) => ({
+        default: m.ArCalendarQuickCreateSheet,
+      }),
+    ),
   { ssr: false },
 )
 
@@ -120,7 +122,7 @@ export function AppointmentRemindersAppointmentsPage() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [manualOpen, setManualOpen] = useState(false)
   const [quickCreateOpen, setQuickCreateOpen] = useState(false)
-  const [quickCreatePrefill, setQuickCreatePrefill] = useState<QuickCreatePrefill | null>(null)
+  const [quickCreatePrefill, setQuickCreatePrefill] = useState<ArQuickCreatePrefill | null>(null)
   const [schedulingWorkspace, setSchedulingWorkspace] = useState<{
     staff: Array<{ id: string; name: string }>
     services: Array<{ id: string; name: string }>
@@ -248,6 +250,7 @@ export function AppointmentRemindersAppointmentsPage() {
           phoneState: 'missing',
           contactEmail: appt.inviteeEmail,
           reminder: { status: 'scheduled', label: 'Scheduled', secondaryLine: '' },
+          customerResponse: { kind: 'none', label: 'No reply' },
           sourceProvider: null,
           sourceCalendarLabel: null,
           connectionId: null,
@@ -615,7 +618,7 @@ export function AppointmentRemindersAppointmentsPage() {
       />
 
       {unified ? (
-        <CalendarQuickCreateSheet
+        <ArCalendarQuickCreateSheet
           open={quickCreateOpen}
           prefill={quickCreatePrefill}
           workspace={schedulingWorkspace}

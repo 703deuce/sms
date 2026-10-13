@@ -13,8 +13,8 @@ export type BookingAdminSection = {
 };
 
 /**
- * Scheduling administration destinations for the Opus Booking hub.
- * Routes stay on legacy paths until each surface is Opus-wrapped; no duplicate engines.
+ * Scheduling administration destinations (inventory for migration matrix).
+ * Do not surface as a link hub to legacy Kimi UIs — each route must get a full Opus frontend.
  */
 export function buildBookingAdminCatalog(): BookingAdminSection[] {
   return [

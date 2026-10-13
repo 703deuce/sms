@@ -6,6 +6,7 @@ import { buildBookingAdminCatalog } from '@/lib/appointment-reminders/ar-booking
 import { OpusDataSurface } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
 import { cn } from '@/lib/utils'
 
+/** @deprecated Do not use — link hub to legacy Kimi routes violates unified Opus-only frontend policy. */
 export function ArBookingAdminHub({ className }: { className?: string }) {
   const sections = buildBookingAdminCatalog()
 

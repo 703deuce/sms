@@ -1,22 +1,12 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import dynamic from 'next/dynamic'
-import Link from 'next/link'
-import { ExternalLink, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import type { CalendarApiAppointment } from '@/features/appointments/kimi/calendar/map-calendar'
-import { appendReturnTo } from '@/lib/navigation/return-context'
 import { KeyValueRow } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
-import { CalendarRescheduleSheet } from '@/components/appointments/calendar/calendar-reschedule-sheet'
-
-const CalendarEventDrawer = dynamic(
-  () =>
-    import('@/components/appointments/calendar/calendar-event-drawer').then((m) => ({
-      default: m.CalendarEventDrawer,
-    })),
-  { ssr: false },
-)
+import { ArNativeAppointmentSheet } from '@/newui-transplant/components/appointment-reminders/ar-native-appointment-sheet'
+import { ArCalendarRescheduleSheet } from '@/newui-transplant/components/appointment-reminders/ar-calendar-reschedule-sheet'
 
 type SchedulingDetail = {
   id: string
@@ -91,7 +81,7 @@ export function ArAppointmentSchedulingPanel({
       status: detail.status,
       timezone: detail.timezone || null,
       contactId: detail.contactId,
-      staffLabel: detail.staffName,
+      staffLabel: detail.staffName || undefined,
       metadata: meta,
     }
   }, [detail])
@@ -157,23 +147,11 @@ export function ArAppointmentSchedulingPanel({
         <Button type="button" size="sm" variant="outline" onClick={() => setRescheduleOpen(true)}>
           Reschedule
         </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          render={
-            <Link
-              href={appendReturnTo(`/appointments/${encodeURIComponent(appointmentId)}`, returnTo)}
-            />
-          }
-        >
-          <ExternalLink className="mr-1.5 size-3.5" aria-hidden />
-          Open full scheduling record
-        </Button>
       </div>
 
       {fullEditorOpen && calendarEvent ? (
-        <CalendarEventDrawer
+        <ArNativeAppointmentSheet
+          open={fullEditorOpen}
           event={calendarEvent}
           onClose={() => setFullEditorOpen(false)}
           onRefresh={() => {
@@ -185,9 +163,13 @@ export function ArAppointmentSchedulingPanel({
       ) : null}
 
       {rescheduleOpen && calendarEvent ? (
-        <CalendarRescheduleSheet
+        <ArCalendarRescheduleSheet
+          open={rescheduleOpen}
           appointmentId={calendarEvent.id}
           currentStartsAt={calendarEvent.startsAt}
+          recurringSeriesId={
+            ((detail.metadata || {}) as { recurringSeriesId?: string }).recurringSeriesId
+          }
           onClose={() => setRescheduleOpen(false)}
           onDone={() => {
             setRescheduleOpen(false)

@@ -32,7 +32,6 @@ import { Label } from '@/newui-transplant/components/ui/label'
 import { Switch } from '@/newui-transplant/components/ui/switch'
 import { Textarea } from '@/newui-transplant/components/ui/textarea'
 import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
-import { ArBookingAdminHub } from '@/newui-transplant/components/appointment-reminders/ar-booking-admin-hub'
 
 function BookingSkeleton() {
   return (
@@ -175,7 +174,13 @@ export function AppointmentRemindersBookingOpus() {
         </div>
       </Panel>
 
-      <ArBookingAdminHub />
+      <Callout tone="info" title="Scheduling administration migration">
+        <p className="text-sm text-muted-foreground">
+          Classes, workshops, branding, forms, routing, and other booking admin screens are being rebuilt in New UI2
+          Opus. Use Meetings and Services above for migrated editors. Track route status in{' '}
+          <code className="text-xs">docs/UNIFIED-APPOINTMENTS-FRONTEND-MIGRATION-MATRIX.md</code>.
+        </p>
+      </Callout>
 
       <FeatureEmphasisStrip
         icon={Globe}

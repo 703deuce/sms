@@ -1,0 +1,113 @@
+/**
+ * Regenerates docs/UNIFIED-APPOINTMENTS-FRONTEND-MIGRATION-MATRIX.md from sidebar inventory.
+ * Run: npx tsx scripts/generate-unified-frontend-migration-matrix.ts
+ */
+import { writeFileSync } from 'node:fs'
+import { buildUnifiedAppointmentsNav } from '../src/lib/products/unified-appointments-nav'
+
+type Status = 'opus_complete' | 'opus_partial' | 'legacy_kimi' | 'redirect' | 'platform_shared'
+
+const ROUTE_STATUS: Record<string, { status: Status; replacement: string; legacy: string; notes?: string }> = {
+  '/appointment-reminders': {
+    status: 'opus_partial',
+    legacy: 'calendar-connected.tsx + kimi reference.css',
+    replacement: 'ar-calendar-workspace-page.tsx (Opus calendar; native sheets migrated)',
+    notes: 'Imported events use AppointmentDetailDrawer; native uses ArNativeAppointmentSheet',
+  },
+  '/appointment-reminders/appointments': {
+    status: 'opus_partial',
+    legacy: 'appointments list + kimi detail',
+    replacement: 'appointments-page.tsx + appointment-detail-drawer.tsx',
+    notes: 'Booking tab uses ArAppointmentSchedulingPanel; quick create Opus',
+  },
+  '/appointment-reminders/booking': {
+    status: 'opus_partial',
+    legacy: 'booking-settings-client + link hub',
+    replacement: 'booking-page-opus.tsx',
+    notes: 'Meetings/services Opus; other admin routes still legacy',
+  },
+  '/appointment-reminders/booking/meetings': { status: 'opus_complete', legacy: 'MeetingsWorkspaceConnected', replacement: 'ar-meetings-workspace-opus.tsx' },
+  '/appointment-reminders/booking/services': { status: 'opus_partial', legacy: 'services workspace kimi', replacement: 'AR booking services Opus routes' },
+  '/appointment-reminders/reminders': { status: 'opus_complete', legacy: '—', replacement: 'reminders-page.tsx' },
+  '/appointment-reminders/ai-rescheduler': { status: 'opus_complete', legacy: '—', replacement: 'ar-ai-rescheduler-opus.tsx' },
+  '/appointment-reminders/responses': { status: 'opus_complete', legacy: '—', replacement: 'ar-responses-opus.tsx' },
+  '/conversations': { status: 'platform_shared', legacy: 'kimi-inbox', replacement: 'kimi-conversations-connected (Mass Texting shell — migrate to Opus inbox)' },
+}
+
+function flattenNav() {
+  const items = buildUnifiedAppointmentsNav()
+  const rows: Array<{ section: string; label: string; href: string }> = []
+  for (const item of items) {
+    rows.push({ section: item.label, label: item.label, href: item.href })
+    for (const child of item.children || []) {
+      rows.push({ section: item.label, label: child.label, href: child.href })
+    }
+  }
+  return rows
+}
+
+function statusLabel(s: Status) {
+  switch (s) {
+    case 'opus_complete':
+      return 'Opus complete'
+    case 'opus_partial':
+      return 'Opus partial'
+    case 'legacy_kimi':
+      return 'Legacy Kimi (must replace)'
+    case 'redirect':
+      return 'Redirect'
+    case 'platform_shared':
+      return 'Shared platform (Opus migration TBD)'
+  }
+}
+
+function main() {
+  const rows = flattenNav()
+  const seen = new Set<string>()
+  const lines: string[] = [
+    '# Unified Appointments — frontend migration matrix',
+    '',
+    '**Doctrine:** Full New UI2 Opus frontend replacement. Legacy Scheduling/Kimi visuals must not render in unified nav destinations. Backends, hooks, and API clients may be reused.',
+    '',
+    'Regenerate: `npx tsx scripts/generate-unified-frontend-migration-matrix.ts`',
+    '',
+    '| Nav section | Label | Route | Migration status | Legacy frontend | Opus replacement | Notes |',
+    '|---|---|---|---|---|---|---|',
+  ]
+
+  for (const row of rows) {
+    if (seen.has(row.href)) continue
+    seen.add(row.href)
+    const meta = ROUTE_STATUS[row.href]
+    const status = meta?.status ?? 'legacy_kimi'
+    lines.push(
+      `| ${row.section} | ${row.label} | \`${row.href}\` | ${statusLabel(status)} | ${meta?.legacy ?? 'Scheduling/Kimi connected shell'} | ${meta?.replacement ?? '— (not started)'} | ${meta?.notes ?? ''} |`,
+    )
+  }
+
+  lines.push('', '## Calendar Opus components (unified mode)', '')
+  lines.push('| Capability | Legacy component | Opus component | Status |')
+  lines.push('|---|---|---|---|')
+  const cal = [
+    ['Quick create', 'CalendarQuickCreateSheet + reference.css', 'ArCalendarQuickCreateSheet', 'Done'],
+    ['Native detail / manage', 'CalendarEventDrawer', 'ArNativeAppointmentSheet', 'Done (core actions)'],
+    ['Reschedule', 'CalendarRescheduleSheet', 'ArCalendarRescheduleSheet', 'Done'],
+    ['Waitlist match', 'CalendarWaitlistMatchDrawer', 'ArCalendarWaitlistSheet', 'Done'],
+    ['Recurring scope', 'CalendarRecurringScopeDialog', 'ArCalendarRecurringScopeDialog', 'Done'],
+    ['Filters', 'CalendarFilterBar', 'ArCalendarFilterBar', 'Done'],
+    ['Imported detail', '—', 'AppointmentDetailDrawer / ArCalendarEventSheet', 'Partial'],
+  ]
+  for (const r of cal) lines.push(`| ${r[0]} | ${r[1]} | ${r[2]} | ${r[3]} |`)
+
+  lines.push('', '## Release gate (PR #653)', '')
+  lines.push('- [ ] Every row `legacy_kimi` → `opus_complete` or intentional redirect')
+  lines.push('- [ ] No `kimi-ui` / `cal-drawer` imports under `newui-transplant` unified paths')
+  lines.push('- [ ] `npm run build` green on CI')
+  lines.push('- [ ] Browser pass on all 13 nav sections')
+
+  const out = lines.join('\n') + '\n'
+  writeFileSync('docs/UNIFIED-APPOINTMENTS-FRONTEND-MIGRATION-MATRIX.md', out)
+  console.log('Wrote docs/UNIFIED-APPOINTMENTS-FRONTEND-MIGRATION-MATRIX.md')
+}
+
+main()

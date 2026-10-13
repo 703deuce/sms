@@ -14,17 +14,15 @@ import {
   parseCalendarFiltersFromSearch,
 } from '@/features/appointments/kimi/calendar/calendar-url-state'
 import { useCalendarReschedule } from '@/features/appointments/kimi/calendar/use-calendar-reschedule'
+import type { CalendarFilters } from '@/components/appointments/calendar/calendar-filter-bar'
+import { ArCalendarFilterBar } from '@/newui-transplant/components/appointment-reminders/ar-calendar-filter-bar'
+import { ArNativeAppointmentSheet } from '@/newui-transplant/components/appointment-reminders/ar-native-appointment-sheet'
+import { ArCalendarRecurringScopeDialog } from '@/newui-transplant/components/appointment-reminders/ar-calendar-recurring-scope-dialog'
 import {
-  CalendarFilterBar,
-  type CalendarFilters,
-} from '@/components/appointments/calendar/calendar-filter-bar'
-import { CalendarEventDrawer } from '@/components/appointments/calendar/calendar-event-drawer'
-import { CalendarRecurringScopeDialog } from '@/components/appointments/calendar/calendar-recurring-scope-dialog'
-import {
-  CalendarWaitlistMatchDrawer,
+  ArCalendarWaitlistSheet,
   type OpenSlotSummary,
   type WaitlistMatchRow,
-} from '@/components/appointments/calendar/calendar-waitlist-match-drawer'
+} from '@/newui-transplant/components/appointment-reminders/ar-calendar-waitlist-sheet'
 import { isUnifiedAppointmentsExperience } from '@/lib/products/unified-appointments'
 import { isImportedCalendarApiEvent } from '@/lib/appointment-reminders/calendar/calendar-event-ownership'
 import type { ArCalendarDragOverride } from '@/newui-transplant/components/appointment-reminders/ar-calendar-opus-view'
@@ -61,10 +59,9 @@ import { Callout, EmptyState, Pill, TextLink } from '@/newui-transplant/componen
 import { Button } from '@/newui-transplant/components/ui/button'
 import { AR_ROUTES, AR_SETTINGS_INTEGRATIONS } from '@/lib/appointment-reminders/routes'
 import {
-  CalendarQuickCreateSheet,
-  type QuickCreatePrefill,
-} from '@/components/appointments/calendar/calendar-quick-create-sheet'
-import '@/components/appointments/kimi-ui/calendar/reference.css'
+  ArCalendarQuickCreateSheet,
+  type ArQuickCreatePrefill,
+} from '@/newui-transplant/components/appointment-reminders/ar-calendar-quick-create-sheet'
 import { cn } from '@/lib/utils'
 
 type SchedulingCalendarWorkspace = {
@@ -94,7 +91,7 @@ export function AppointmentRemindersCalendarWorkspacePage() {
   const [schedulingWorkspace, setSchedulingWorkspace] = useState<SchedulingCalendarWorkspace | null>(
     null,
   )
-  const [quickCreatePrefill, setQuickCreatePrefill] = useState<QuickCreatePrefill | null>(null)
+  const [quickCreatePrefill, setQuickCreatePrefill] = useState<ArQuickCreatePrefill | null>(null)
   const [quickCreateOpen, setQuickCreateOpen] = useState(false)
   const [workspaceLoading, setWorkspaceLoading] = useState(false)
   const initialView = parseArCalendarView(searchParams.get('view'))
@@ -769,7 +766,7 @@ export function AppointmentRemindersCalendarWorkspacePage() {
       ) : (
         <div className="flex flex-col gap-3 max-lg:overflow-visible lg:min-h-0 lg:flex-1 lg:overflow-hidden">
           {unified ? (
-            <CalendarFilterBar
+            <ArCalendarFilterBar
               workspace={
                 schedulingWorkspace
                   ? {
@@ -905,12 +902,17 @@ export function AppointmentRemindersCalendarWorkspacePage() {
       )}
 
       {selectedEvent && selectedRow && !selectedIsImported ? (
-        <CalendarEventDrawer
+        <ArNativeAppointmentSheet
+          open
           event={selectedEvent}
           onClose={clearSelection}
           onRefresh={refreshSelection}
           returnTo={`${AR_ROUTES.home}?${searchParams.toString()}`}
           onCanceled={(slot) => openWaitlistDrawer(slot)}
+          onReschedule={(id, startsAt) => {
+            const meta = (selectedEvent?.metadata || {}) as { recurringSeriesId?: string }
+            void beginReschedule(id, startsAt, meta.recurringSeriesId)
+          }}
         />
       ) : null}
 
@@ -925,7 +927,7 @@ export function AppointmentRemindersCalendarWorkspacePage() {
         openConversationOnLoad={openConversationOnLoad}
       />
 
-      <CalendarQuickCreateSheet
+      <ArCalendarQuickCreateSheet
         open={quickCreateOpen}
         prefill={quickCreatePrefill}
         workspace={schedulingWorkspace}
@@ -951,7 +953,7 @@ export function AppointmentRemindersCalendarWorkspacePage() {
         }
       />
 
-      <CalendarWaitlistMatchDrawer
+      <ArCalendarWaitlistSheet
         open={Boolean(waitlistDrawer)}
         slot={waitlistDrawer}
         matches={waitlistMatches}
@@ -978,7 +980,7 @@ export function AppointmentRemindersCalendarWorkspacePage() {
         }}
       />
 
-      <CalendarRecurringScopeDialog
+      <ArCalendarRecurringScopeDialog
         open={recurringOpen}
         onClose={() => setRecurringOpen(false)}
         onConfirm={confirmRecurring}
