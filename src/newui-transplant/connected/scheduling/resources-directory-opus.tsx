@@ -23,7 +23,6 @@ import {
 import { Callout, EmptyState, Pill, Stat, TextLink } from '@/newui-transplant/components/app/kit'
 import { cn } from '@/lib/utils'
 import { Button } from '@/newui-transplant/components/ui/button'
-import Link from 'next/link'
 
 export function ResourcesDirectoryOpus() {
   const ws = useResourcesWorkspace()
