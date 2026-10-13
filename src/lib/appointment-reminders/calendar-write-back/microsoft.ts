@@ -2,9 +2,9 @@ import "server-only";
 
 import {
   microsoftGraphFetch,
-  MICROSOFT_GRAPH_V1,
   type CalendarConfig,
 } from "@/lib/calendar/providers";
+import { MICROSOFT_GRAPH_V1 } from "@/lib/microsoft/graph-helpers";
 import { providerRefFromAppointment } from "@/lib/appointment-reminders/ai-rescheduler/provider-mutations";
 import {
   buildTransovoStatusHtml,
