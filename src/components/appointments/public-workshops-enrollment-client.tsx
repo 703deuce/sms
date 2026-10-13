@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { PublicGroupEnrollmentClient } from "./public-group-enrollment-client";
 
 /** Public workshop registration — Workshop labels, filtered API. */
@@ -11,10 +12,12 @@ export function PublicWorkshopsEnrollmentClient({
   businessName: string;
 }) {
   return (
-    <PublicGroupEnrollmentClient
-      slug={slug}
-      businessName={businessName}
-      offeringKind="workshop"
-    />
+    <Suspense fallback={<p className="p-6 text-sm text-muted-foreground">Loading…</p>}>
+      <PublicGroupEnrollmentClient
+        slug={slug}
+        businessName={businessName}
+        offeringKind="workshop"
+      />
+    </Suspense>
   );
 }

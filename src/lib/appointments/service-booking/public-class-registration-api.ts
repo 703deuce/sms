@@ -1,6 +1,5 @@
 import "server-only";
 
-import { parseClassSeriesMetadata } from "@/lib/appointments/class-series-offering";
 import {
   classDirectEnrollBlockedReason,
   classRegistrationPaymentRequiredReason,
