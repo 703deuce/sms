@@ -354,7 +354,11 @@ export function AppShell({
             currentProduct={currentProduct}
             isLauncher={isLauncher}
             realtorMode={realtorMode}
-            inboxBadge={isAppointmentsV1Primary() ? inboxUnreadCount : unreadNotifications}
+            inboxBadge={
+              isAppointmentsV1Primary() || isUnifiedAppointmentsExperience()
+                ? inboxUnreadCount
+                : unreadNotifications
+            }
             primaryVoiceAgentId={primaryVoiceAgentId}
             showTryIt={showTryIt}
             productFeatures={productFeatures}
