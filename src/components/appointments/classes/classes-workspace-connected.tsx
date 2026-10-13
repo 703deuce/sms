@@ -19,6 +19,7 @@ import { ClassLocalNav } from "./class-local-nav";
 import { ClassObjectHeader } from "./class-object-header";
 import { ClassSectionWorkspace } from "./class-section-workspace";
 import { ClassSummaryStrip } from "./class-summary-strip";
+import { ClassRegistrationRecoveryPanel } from "./class-registration-recovery-panel";
 import { CLASS_SECTIONS, type ClassSectionId } from "./class-section-types";
 import { upcomingOccurrences } from "@/lib/appointments/classes/class-summary";
 import "@/components/appointments/kimi-ui/shared/appointments-pilot-tokens.css";
@@ -250,6 +251,10 @@ export function ClassesWorkspaceConnected({ classId }: Props) {
             <span className="truncate">{editor.form.name || "Select class"}</span>
             <ChevronDown className="h-4 w-4 shrink-0" aria-hidden />
           </button>
+        </div>
+
+        <div className="px-4 pt-3">
+          <ClassRegistrationRecoveryPanel />
         </div>
 
         <ClassObjectHeader

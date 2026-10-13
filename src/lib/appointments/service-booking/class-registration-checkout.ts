@@ -2,6 +2,7 @@ import "server-only";
 
 import { Prisma } from "@prisma/client";
 import { getPrisma } from "@/lib/db";
+import { getClassRegistrationDb } from "./class-registration-db";
 import { getStripe } from "@/lib/stripe/client";
 import { getAppBaseUrl } from "@/lib/messaging/telnyx/config";
 import { createId } from "@/lib/supabase/id";
@@ -307,7 +308,7 @@ export async function fulfillClassRegistrationCheckoutOnce(session: {
   id: string;
   metadata?: Record<string, string | null | undefined> | null;
 }) {
-  const prisma = getPrisma();
+  const prisma = getClassRegistrationDb();
   const metadata = (session.metadata || {}) as Record<string, string | undefined>;
   const workspaceId = metadata.workspaceId;
   if (!workspaceId || metadata.transaction_type !== CLASS_REGISTRATION_CHECKOUT_TYPE) {

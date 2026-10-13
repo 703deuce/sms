@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
+import { getServiceBookingPersistenceDb } from "./class-registration-db";
 import { packageBalanceSummary } from "./package-lifecycle";
 import { mintRemainingCreditsFromRules } from "./package-credit-keys";
 import type { PackageCreditRule } from "./types";
@@ -368,7 +369,7 @@ export async function purchasePackageForContact(
   productId: string,
   contactId: string,
 ) {
-  const prisma = getPrisma();
+  const prisma = process.env.DATABASE_URL ? getServiceBookingPersistenceDb() : getPrisma();
   const product = await prisma.packageProduct.findFirst({
     where: { id: productId, workspaceId, active: true },
   });

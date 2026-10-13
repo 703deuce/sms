@@ -2,6 +2,13 @@ import "server-only";
 
 import { Prisma } from "@prisma/client";
 import { getPrisma } from "@/lib/db";
+import { getClassRegistrationDb } from "./class-registration-db";
+import { isSupabaseConfigured } from "@/lib/supabase/admin";
+
+function getFulfillmentRecordDb() {
+  if (process.env.DATABASE_URL) return getClassRegistrationDb();
+  return isSupabaseConfigured() ? getPrisma() : getClassRegistrationDb();
+}
 import type { StoreProductKind } from "./store-checkout";
 
 export type StoreFulfillmentStatus = "processing" | "fulfilled" | "failed";
@@ -73,7 +80,7 @@ async function runStoreFulfillmentBody(
  * Durable, idempotent store checkout fulfillment (webhook + success-page poll).
  */
 export async function fulfillStoreCheckoutSessionOnce(session: StoreCheckoutSessionPayload) {
-  const prisma = getPrisma();
+  const prisma = getFulfillmentRecordDb();
   const metadata = (session.metadata || {}) as Record<string, string | undefined>;
   const workspaceId = metadata.workspaceId;
   const txType = metadata.transaction_type || "unknown";

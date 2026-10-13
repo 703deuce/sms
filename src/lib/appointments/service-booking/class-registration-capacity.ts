@@ -1,7 +1,8 @@
 import "server-only";
 
 import { createHash } from "crypto";
-import { getPrisma, type DbRow } from "@/lib/db";
+import type { DbRow } from "@/lib/db";
+import { getClassRegistrationDb } from "./class-registration-db";
 
 export const DEFAULT_CLASS_REGISTRATION_HOLD_MINUTES = 15;
 
@@ -19,7 +20,7 @@ export async function countActiveRegistrationHolds(
   occurrenceId: string,
   tx?: DbRow,
 ): Promise<number> {
-  const prisma = tx ?? getPrisma();
+  const prisma = tx ?? getClassRegistrationDb();
   const now = new Date();
   return prisma.classOccurrenceRegistrationHold.count({
     where: {
@@ -35,7 +36,7 @@ export async function assertOccurrenceCapacityWithHolds(
   occurrenceId: string,
   tx?: DbRow,
 ): Promise<{ seriesId: string; capacity: number; enrolled: number; holds: number }> {
-  const prisma = tx ?? getPrisma();
+  const prisma = tx ?? getClassRegistrationDb();
   const occ = await prisma.classOccurrence.findFirst({
     where: { id: occurrenceId, workspaceId, status: "scheduled" },
     include: { series: true },
@@ -60,7 +61,7 @@ export async function createClassRegistrationHold(input: {
   stripeCheckoutSessionId?: string;
   holdMinutes?: number;
 }) {
-  const prisma = getPrisma();
+  const prisma = getClassRegistrationDb();
   const minutes = input.holdMinutes ?? DEFAULT_CLASS_REGISTRATION_HOLD_MINUTES;
   const expiresAt = new Date(Date.now() + minutes * 60_000);
 
@@ -87,7 +88,7 @@ export async function consumeClassRegistrationHold(
   holdId: string,
   enrollmentId: string,
 ) {
-  const prisma = getPrisma();
+  const prisma = getClassRegistrationDb();
   return prisma.classOccurrenceRegistrationHold.update({
     where: { id: holdId },
     data: {
@@ -98,7 +99,7 @@ export async function consumeClassRegistrationHold(
 }
 
 export async function releaseClassRegistrationHold(holdId: string) {
-  const prisma = getPrisma();
+  const prisma = getClassRegistrationDb();
   return prisma.classOccurrenceRegistrationHold.update({
     where: { id: holdId },
     data: { status: "released", fulfillmentOutcome: "released" },
@@ -112,7 +113,7 @@ export async function recordClassCheckoutFulfillmentFailure(input: {
   reason: string;
   recovery: "refund_pending" | "manual_review";
 }) {
-  const prisma = getPrisma();
+  const prisma = getClassRegistrationDb();
   const row = input.holdId
     ? await prisma.classOccurrenceRegistrationHold.findUnique({ where: { id: input.holdId } })
     : input.stripeCheckoutSessionId
@@ -136,7 +137,7 @@ export async function recordClassCheckoutFulfillmentFailure(input: {
 }
 
 export async function expireStaleClassRegistrationHolds(workspaceId?: string) {
-  const prisma = getPrisma();
+  const prisma = getClassRegistrationDb();
   const now = new Date();
   return prisma.classOccurrenceRegistrationHold.updateMany({
     where: {
@@ -176,7 +177,7 @@ export async function enrollInOccurrenceWithCapacityLock(
     });
   };
   if (txOuter) return run(txOuter);
-  const prisma = getPrisma();
+  const prisma = getClassRegistrationDb();
   return prisma.$transaction(run);
 }
 
@@ -189,7 +190,7 @@ export async function createRegistrationHoldsForOccurrences(input: {
   stripeCheckoutSessionId?: string;
   holdMinutes?: number;
 }) {
-  const prisma = getPrisma();
+  const prisma = getClassRegistrationDb();
   const minutes = input.holdMinutes ?? DEFAULT_CLASS_REGISTRATION_HOLD_MINUTES;
   const expiresAt = new Date(Date.now() + minutes * 60_000);
 
@@ -226,7 +227,7 @@ function holdGroupId(metadata: unknown): string | null {
 }
 
 export async function releaseRegistrationHoldsByGroup(registrationGroupId: string) {
-  const prisma = getPrisma();
+  const prisma = getClassRegistrationDb();
   const active = await prisma.classOccurrenceRegistrationHold.findMany({
     where: { status: "active" },
     take: 500,
@@ -243,7 +244,7 @@ export async function consumeRegistrationHoldsByGroup(
   registrationGroupId: string,
   enrollmentIds: string[],
 ) {
-  const prisma = getPrisma();
+  const prisma = getClassRegistrationDb();
   const holds = await prisma.classOccurrenceRegistrationHold.findMany({
     where: { status: "active" },
     take: 500,
@@ -270,7 +271,7 @@ export async function enrollFullSeriesAtomic(
   workspaceId: string,
   input: { contactId: string; seriesId: string; paymentMetadata?: Record<string, unknown> },
 ) {
-  const prisma = getPrisma();
+  const prisma = getClassRegistrationDb();
   return prisma.$transaction(async (tx: DbRow) => {
     const lock = seriesLockId(input.seriesId);
     if (typeof tx.$executeRaw === "function") {
@@ -289,16 +290,16 @@ export async function enrollFullSeriesAtomic(
     const enrollments = [];
     for (const occ of occurrences) {
       enrollments.push(
-        await tx.classEnrollment.create({
-          data: {
-            workspaceId,
+        await enrollInOccurrenceWithCapacityLock(
+          workspaceId,
+          {
             occurrenceId: occ.id,
             seriesId: input.seriesId,
             contactId: input.contactId,
-            status: "enrolled",
-            metadata: input.paymentMetadata ?? undefined,
+            paymentMetadata: input.paymentMetadata,
           },
-        }),
+          tx,
+        ),
       );
     }
     return enrollments;

@@ -5,11 +5,14 @@
  */
 import { PrismaClient } from "@prisma/client";
 
-const SLUG = process.env.CERT_WORKSPACE_SLUG || "cert-appointments-mctb";
+import { applyCertDatabaseEnv } from "./lib/cert-database-url";
+
+const SLUG = process.env.CERT_WORKSPACE_SLUG || "cert-ar-isolated";
 
 async function main() {
-  if (!process.env.DATABASE_URL) {
-    console.error("DATABASE_URL required");
+  const env = applyCertDatabaseEnv();
+  if (!env.ok) {
+    console.error(env.message);
     process.exit(2);
   }
   const prisma = new PrismaClient();
@@ -21,20 +24,18 @@ async function main() {
   }
 
   const owner = await prisma.user.findFirst({ orderBy: { createdAt: "asc" } });
-  if (!owner) {
-    console.error("FAIL: no user in database to own cert workspace");
-    process.exit(1);
-  }
 
   const workspace = await prisma.workspace.create({
     data: {
       name: "Advanced Scheduling Cert",
       slug: SLUG,
       type: "BUSINESS",
-      ownerUserId: owner.id,
+      ownerUserId: owner?.id ?? null,
       billingPlan: "trial",
       creditBalanceCents: 0,
-      memberships: { create: { userId: owner.id, role: "OWNER" } },
+      ...(owner
+        ? { memberships: { create: { userId: owner.id, role: "OWNER" } } }
+        : {}),
       messagingRegistration: { create: {} },
       workspaceLimits: {
         create: {

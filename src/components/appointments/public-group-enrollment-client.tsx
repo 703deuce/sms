@@ -79,12 +79,16 @@ export function PublicGroupEnrollmentClient({
   const [seatMap, setSeatMap] = useState<SeatMapData | null>(null);
   const [seatMapLoading, setSeatMapLoading] = useState(false);
   const [selectedSeat, setSelectedSeat] = useState<SeatCell | null>(null);
-  const [packagePrompt, setPackagePrompt] = useState<{
-    occurrenceId: string;
+  const [entitlementPrompt, setEntitlementPrompt] = useState<{
+    mode: "occurrence" | "course";
+    occurrenceId?: string;
+    seriesId?: string;
     packages: Array<{ id: string; productName: string; creditsRemaining: number }>;
+    memberships: Array<{ id: string; productName: string; creditsRemaining: number }>;
     seat?: { seatMapId: string; rowIndex: number; colIndex: number; seatLabel: string };
   } | null>(null);
   const [selectedPackageId, setSelectedPackageId] = useState("");
+  const [selectedMembershipId, setSelectedMembershipId] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -161,13 +165,14 @@ export function PublicGroupEnrollmentClient({
     }
   }
 
-  async function loadPackages(occurrenceId: string) {
+  async function loadEntitlements(input: { occurrenceId?: string; seriesId?: string }) {
     const res = await fetch(apiBase, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "entitlements",
-        occurrenceId,
+        occurrenceId: input.occurrenceId,
+        seriesId: input.seriesId,
         firstName,
         lastName,
         phone,
@@ -175,11 +180,18 @@ export function PublicGroupEnrollmentClient({
       }),
     });
     const json = await res.json();
-    return (json.data?.packages || []) as Array<{
-      id: string;
-      productName: string;
-      creditsRemaining: number;
-    }>;
+    return {
+      packages: (json.data?.packages || []) as Array<{
+        id: string;
+        productName: string;
+        creditsRemaining: number;
+      }>,
+      memberships: (json.data?.memberships || []) as Array<{
+        id: string;
+        productName: string;
+        creditsRemaining: number;
+      }>,
+    };
   }
 
   async function startPaidCheckout(input: {
@@ -246,6 +258,25 @@ export function PublicGroupEnrollmentClient({
       await startPaidCheckout({ seriesId, enrollFullSeries: true });
       return;
     }
+    if (!packageBalanceId && !membershipSubscriptionId) {
+      const ent = await loadEntitlements({ seriesId });
+      const total = ent.packages.length + ent.memberships.length;
+      if (total === 1) {
+        if (ent.packages[0]) packageBalanceId = ent.packages[0].id;
+        else if (ent.memberships[0]) membershipSubscriptionId = ent.memberships[0].id;
+      } else if (total > 1) {
+        setEntitlementPrompt({
+          mode: "course",
+          seriesId,
+          packages: ent.packages,
+          memberships: ent.memberships,
+        });
+        setSelectedPackageId(ent.packages[0]?.id || "");
+        setSelectedMembershipId(ent.memberships[0]?.id || "");
+        return;
+      }
+    }
+
     setBusy(true);
     setError(null);
     try {
@@ -299,12 +330,24 @@ export function PublicGroupEnrollmentClient({
     setMessage(null);
     try {
       let packageId = packageBalanceId;
+      let membershipId: string | undefined;
       if (!packageId && !skipPackageLookup) {
-        const packages = await loadPackages(occurrenceId);
-        if (packages.length === 1) packageId = packages[0].id;
-        if (packages.length > 1) {
-          setPackagePrompt({ occurrenceId, packages, seat });
-          setSelectedPackageId(packages[0].id);
+        const ent = await loadEntitlements({ occurrenceId });
+        const total = ent.packages.length + ent.memberships.length;
+        if (ent.packages.length === 1 && ent.memberships.length === 0) {
+          packageId = ent.packages[0].id;
+        } else if (ent.memberships.length === 1 && ent.packages.length === 0) {
+          membershipId = ent.memberships[0].id;
+        } else if (total > 1) {
+          setEntitlementPrompt({
+            mode: "occurrence",
+            occurrenceId,
+            packages: ent.packages,
+            memberships: ent.memberships,
+            seat,
+          });
+          setSelectedPackageId(ent.packages[0]?.id || "");
+          setSelectedMembershipId(ent.memberships[0]?.id || "");
           setBusy(false);
           return;
         }
@@ -320,6 +363,7 @@ export function PublicGroupEnrollmentClient({
           phone,
           email: email || undefined,
           packageBalanceId: packageId || undefined,
+          membershipSubscriptionId: membershipId,
           seatMapId: seat?.seatMapId,
           rowIndex: seat?.rowIndex,
           colIndex: seat?.colIndex,
@@ -444,33 +488,63 @@ export function PublicGroupEnrollmentClient({
         </p>
       ) : null}
 
-      {packagePrompt ? (
-        <section className="rounded-lg border p-4 space-y-3" aria-label="Use a package">
-          <h2 className="text-sm font-semibold">Use a package</h2>
+      {entitlementPrompt ? (
+        <section className="rounded-lg border p-4 space-y-3" aria-label="Apply a benefit">
+          <h2 className="text-sm font-semibold">Use a package or membership</h2>
           <p className="text-sm text-muted-foreground">
-            You have more than one package that works for this booking. Choose which credit to use.
+            You have more than one benefit that works for this registration. Choose how to apply it.
           </p>
-          <label className="text-sm block">
-            <span className="text-muted-foreground">Package</span>
-            <select
-              className="mt-1 h-9 w-full rounded-md border px-2"
-              value={selectedPackageId}
-              onChange={(e) => setSelectedPackageId(e.target.value)}
-            >
-              {packagePrompt.packages.map((pkg) => (
-                <option key={pkg.id} value={pkg.id}>
-                  {pkg.productName} · {pkg.creditsRemaining} left
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="flex gap-2">
+          {entitlementPrompt.packages.length > 0 ? (
+            <label className="text-sm block">
+              <span className="text-muted-foreground">Package</span>
+              <select
+                className="mt-1 h-9 w-full rounded-md border px-2"
+                value={selectedPackageId}
+                onChange={(e) => {
+                  setSelectedPackageId(e.target.value);
+                  setSelectedMembershipId("");
+                }}
+              >
+                <option value="">—</option>
+                {entitlementPrompt.packages.map((pkg) => (
+                  <option key={pkg.id} value={pkg.id}>
+                    {pkg.productName} · {pkg.creditsRemaining} left
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {entitlementPrompt.memberships.length > 0 ? (
+            <label className="text-sm block">
+              <span className="text-muted-foreground">Membership</span>
+              <select
+                className="mt-1 h-9 w-full rounded-md border px-2"
+                value={selectedMembershipId}
+                onChange={(e) => {
+                  setSelectedMembershipId(e.target.value);
+                  setSelectedPackageId("");
+                }}
+              >
+                <option value="">—</option>
+                {entitlementPrompt.memberships.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.productName} · {m.creditsRemaining} class credit{m.creditsRemaining === 1 ? "" : "s"} left
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
               className="rounded-md border px-4 py-2 text-sm"
               onClick={() => {
-                void enroll(packagePrompt.occurrenceId, packagePrompt.seat, undefined, true);
-                setPackagePrompt(null);
+                if (entitlementPrompt.mode === "occurrence" && entitlementPrompt.occurrenceId) {
+                  void enroll(entitlementPrompt.occurrenceId, entitlementPrompt.seat, undefined, true);
+                } else if (entitlementPrompt.seriesId) {
+                  void enrollCourse(entitlementPrompt.seriesId);
+                }
+                setEntitlementPrompt(null);
               }}
             >
               Pay normally
@@ -478,16 +552,25 @@ export function PublicGroupEnrollmentClient({
             <button
               type="button"
               className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground"
+              disabled={!selectedPackageId && !selectedMembershipId}
               onClick={() => {
-                void enroll(
-                  packagePrompt.occurrenceId,
-                  packagePrompt.seat,
-                  selectedPackageId,
-                );
-                setPackagePrompt(null);
+                if (entitlementPrompt.mode === "occurrence" && entitlementPrompt.occurrenceId) {
+                  void enroll(
+                    entitlementPrompt.occurrenceId,
+                    entitlementPrompt.seat,
+                    selectedPackageId || undefined,
+                  );
+                } else if (entitlementPrompt.seriesId) {
+                  void enrollCourse(
+                    entitlementPrompt.seriesId,
+                    selectedPackageId || undefined,
+                    selectedMembershipId || undefined,
+                  );
+                }
+                setEntitlementPrompt(null);
               }}
             >
-              Use package
+              Apply benefit
             </button>
           </div>
         </section>

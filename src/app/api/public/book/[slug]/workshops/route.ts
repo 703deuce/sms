@@ -55,16 +55,22 @@ export async function POST(request: Request, { params }: Params) {
       );
       if (!contactId) return NextResponse.json({ data: { packages: [] } });
       const occurrenceId = body.occurrenceId ? String(body.occurrenceId) : undefined;
-      if (!occurrenceId) return NextResponse.json({ data: { packages: [] } });
-      const occ = await prisma.classOccurrence.findFirst({
-        where: { id: occurrenceId, workspaceId: workspace.id },
-        include: { series: true },
-      });
-      if (!occ?.series) return NextResponse.json({ data: { packages: [] } });
+      const seriesIdParam = body.seriesId ? String(body.seriesId) : undefined;
+      let classSeriesId = seriesIdParam;
+      if (!classSeriesId && occurrenceId) {
+        const occ = await prisma.classOccurrence.findFirst({
+          where: { id: occurrenceId, workspaceId: workspace.id },
+          include: { series: true },
+        });
+        classSeriesId = occ?.series?.id;
+      }
+      if (!classSeriesId) {
+        return NextResponse.json({ data: { packages: [], memberships: [] } });
+      }
       const entitlements = await lookupGroupRegistrationEntitlements({
         workspaceId: workspace.id,
         contactId,
-        classSeriesId: occ.series.id,
+        classSeriesId,
         offeringKind: "workshop",
       });
       return NextResponse.json({ data: entitlements });

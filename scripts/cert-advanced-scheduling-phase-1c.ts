@@ -7,12 +7,14 @@
  */
 import { PrismaClient } from "@prisma/client";
 import { creditKeyForBookingType } from "../src/lib/appointments/service-booking/package-credit-keys";
+import { applyCertDatabaseEnv } from "./lib/cert-database-url";
 
-const WORKSPACE_SLUG = process.env.CERT_WORKSPACE_SLUG || "cert-appointments-mctb";
+const WORKSPACE_SLUG = process.env.CERT_WORKSPACE_SLUG || "cert-ar-isolated";
 
 async function main() {
-  if (!process.env.DATABASE_URL) {
-    console.error("BLOCKED: DATABASE_URL not set — Phase 1c DB tests not executed");
+  const env = applyCertDatabaseEnv();
+  if (!env.ok) {
+    console.error("BLOCKED:", env.message);
     process.exit(2);
   }
 
