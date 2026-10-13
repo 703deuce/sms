@@ -1,6 +1,5 @@
 'use client'
 
-import type { ReactNode } from 'react'
 import { SchedulingPageGate } from '@/lib/appointments/scheduling-page-gate'
 import { StaffConnected } from '@/features/appointments/kimi/staff/staff-connected'
 import { LocationsConnected } from '@/features/appointments/kimi/locations/locations-connected'
@@ -11,17 +10,14 @@ import { StaffDirectoryOpus } from '@/newui-transplant/connected/scheduling/staf
 import { LocationsDirectoryOpus } from '@/newui-transplant/connected/scheduling/locations-directory-opus'
 import { ResourcesDirectoryOpus } from '@/newui-transplant/connected/scheduling/resources-directory-opus'
 import { ServiceBookingAdminOpus } from '@/newui-transplant/connected/scheduling/service-booking-admin-opus'
-import { schedulingAdminGate } from '@/newui-transplant/connected/scheduling/scheduling-admin-opus'
-import { WaitlistAdminOpus } from '@/newui-transplant/connected/scheduling/waitlist-admin-opus'
-import { WorkflowsListOpus } from '@/newui-transplant/connected/scheduling/workflows-list-opus'
 import { PackagesCatalogConnected } from '@/components/appointments/packages/packages-catalog-connected'
 import { MembershipsCatalogConnected } from '@/components/appointments/memberships/memberships-catalog-connected'
 import { ServiceBookingAdminClient } from '@/components/appointments/service-booking-admin-client'
 import { WaitlistAdminClient } from '@/components/appointments/waitlist-admin-client'
 import { AppointmentsAnalyticsShell } from '@/components/appointments/analytics-shell'
+import { WorkflowsListClient } from '@/components/appointments/workflows-list-client'
 import { AutomationsActivityClient } from '@/components/appointments/kimi-ui/automations-activity/components/AutomationsActivityClient'
 import { AutomationsTemplatesClient } from '@/components/appointments/automations-templates-client'
-import { WorkflowsListClient } from '@/components/appointments/workflows-list-client'
 import { TeamBookingConnected } from '@/features/appointments/kimi/team-booking/team-booking-connected'
 import { TeamPagesClient } from '@/components/appointments/team-pages-client'
 import { RoutingFormsClient } from '@/components/appointments/routing-forms-client'
@@ -38,37 +34,62 @@ import { RecallCampaignsClient } from '@/components/appointments/recall-campaign
 import { NoShowRecoveryClient } from '@/components/appointments/no-show-recovery-client'
 import { VoiceRemindersClient } from '@/components/appointments/voice-reminders-client'
 import { AppointmentSegmentsClient } from '@/components/appointments/appointment-segments-client'
-import { ContractsAdminClient } from '@/components/appointments/contracts-admin-client'
+import { ClassesWorkspaceConnected } from '@/components/appointments/classes/classes-workspace-connected'
+import { WorkshopsWorkspaceConnected } from '@/components/appointments/workshops/workshops-workspace-connected'
 import { AppointmentBookingSettingsClient } from '@/components/appointments/booking-settings-client'
+import { BookingShareHubClient } from '@/components/appointments/booking-share-hub-client'
+import { ContractsAdminClient } from '@/components/appointments/contracts-admin-client'
 import { AvailabilityWorkspaceOpus } from '@/newui-transplant/connected/scheduling/availability-workspace-opus'
 import { RoutingWorkspaceOpus } from '@/newui-transplant/connected/scheduling/routing-workspace-opus'
 import { PackagesCatalogOpus } from '@/newui-transplant/connected/scheduling/packages-catalog-opus'
 import { MembershipsCatalogOpus } from '@/newui-transplant/connected/scheduling/memberships-catalog-opus'
-import { ClassesWorkspaceConnected } from '@/components/appointments/classes/classes-workspace-connected'
-import { WorkshopsWorkspaceConnected } from '@/components/appointments/workshops/workshops-workspace-connected'
 import type { AppointmentsAnalyticsSection } from '@/lib/products/appointments-settings-tabs'
 import { AppointmentsAnalyticsOpusShell } from '@/newui-transplant/connected/scheduling/appointments-analytics-opus-shell'
-
-/** Opus page chrome without Kimi embed wrapper — body still migrates to native Opus UI over time. */
-function embedGate(
-  title: string,
-  description: string,
-  legacy: ReactNode,
-  body: ReactNode,
-) {
-  return schedulingAdminGate(title, description, legacy, body)
-}
+import { WaitlistAdminOpus } from '@/newui-transplant/connected/scheduling/waitlist-admin-opus'
+import { WorkflowsListOpus } from '@/newui-transplant/connected/scheduling/workflows-list-opus'
+import {
+  AiBookingOpus,
+  AutomationsActivityOpus,
+  AutomationsTemplatesOpus,
+  BookingSettingsOpus,
+  BookingShareOpus,
+  CommerceHubOpus,
+  ContractsOpus,
+  EnterpriseOpus,
+  FormsDocumentsOpus,
+  MeetingPollsOpus,
+  NoShowRecoveryOpus,
+  PointOfSaleOpus,
+  PoliciesOpus,
+  PricingPaymentsOpus,
+  RecallCampaignsOpus,
+  RecallsOpus,
+  RoutingFormsOpus,
+  SegmentsOpus,
+  SetupOpus,
+  TeamBookingOpus,
+  TeamPagesOpus,
+  VoiceRemindersOpus,
+} from '@/newui-transplant/connected/scheduling/scheduling-admin-surfaces-opus'
+import { ClassesWorkspaceOpus } from '@/newui-transplant/connected/scheduling/classes-workspace-opus'
+import { WorkshopsWorkspaceOpus } from '@/newui-transplant/connected/scheduling/workshops-workspace-opus'
+import { ContactMergeOpus } from '@/newui-transplant/connected/scheduling/contact-merge-opus'
+import { ContactMergeClient } from '@/components/appointments/commerce/contact-merge-client'
 
 export function StaffDirectoryGate() {
   return <SchedulingPageGate opus={<StaffDirectoryOpus />} legacy={<StaffConnected />} />
 }
 
 export function LocationsDirectoryGate() {
-  return <SchedulingPageGate opus={<LocationsDirectoryOpus />} legacy={<LocationsConnected />} />
+  return (
+    <SchedulingPageGate opus={<LocationsDirectoryOpus />} legacy={<LocationsConnected />} />
+  )
 }
 
 export function ResourcesDirectoryGate() {
-  return <SchedulingPageGate opus={<ResourcesDirectoryOpus />} legacy={<ResourcesConnected />} />
+  return (
+    <SchedulingPageGate opus={<ResourcesDirectoryOpus />} legacy={<ResourcesConnected />} />
+  )
 }
 
 export function AvailabilityGate() {
@@ -125,43 +146,40 @@ export function PackagesCatalogGate() {
 
 export function MembershipsCatalogGate() {
   return (
-    <SchedulingPageGate opus={<MembershipsCatalogOpus />} legacy={<MembershipsCatalogConnected />} />
+    <SchedulingPageGate
+      opus={<MembershipsCatalogOpus />}
+      legacy={<MembershipsCatalogConnected />}
+    />
   )
 }
 
 export function WaitlistAdminGate() {
   return (
-    <SchedulingPageGate
-      opus={<WaitlistAdminOpus />}
-      legacy={<WaitlistAdminClient />}
-    />
+    <SchedulingPageGate opus={<WaitlistAdminOpus />} legacy={<WaitlistAdminClient />} />
   )
 }
 
 export function WorkflowsGate() {
   return (
-    <SchedulingPageGate
-      opus={<WorkflowsListOpus />}
-      legacy={<WorkflowsListClient />}
-    />
+    <SchedulingPageGate opus={<WorkflowsListOpus />} legacy={<WorkflowsListClient />} />
   )
 }
 
 export function AutomationsActivityGate() {
-  return embedGate(
-    'Automation activity',
-    'Recent automation runs and outcomes.',
-    <AutomationsActivityClient />,
-    <AutomationsActivityClient />,
+  return (
+    <SchedulingPageGate
+      opus={<AutomationsActivityOpus />}
+      legacy={<AutomationsActivityClient />}
+    />
   )
 }
 
 export function AutomationsTemplatesGate() {
-  return embedGate(
-    'Automation templates',
-    'Reusable automation starting points.',
-    <AutomationsTemplatesClient />,
-    <AutomationsTemplatesClient />,
+  return (
+    <SchedulingPageGate
+      opus={<AutomationsTemplatesOpus />}
+      legacy={<AutomationsTemplatesClient />}
+    />
   )
 }
 
@@ -191,174 +209,119 @@ export function AnalyticsReportsGate() {
 }
 
 export function TeamBookingGate() {
-  return embedGate(
-    'Team booking',
-    'Shared booking links for your team.',
-    <TeamBookingConnected />,
-    <TeamBookingConnected />,
-  )
+  return <SchedulingPageGate opus={<TeamBookingOpus />} legacy={<TeamBookingConnected />} />
 }
 
 export function TeamPagesGate({ workspaceSlug }: { workspaceSlug: string }) {
-  return embedGate(
-    'Team pages',
-    'Public pages for team members.',
-    <TeamPagesClient workspaceSlug={workspaceSlug} />,
-    <TeamPagesClient workspaceSlug={workspaceSlug} />,
+  return (
+    <SchedulingPageGate
+      opus={<TeamPagesOpus workspaceSlug={workspaceSlug} />}
+      legacy={<TeamPagesClient workspaceSlug={workspaceSlug} />}
+    />
   )
 }
 
 export function RoutingFormsGate({ workspaceSlug }: { workspaceSlug: string }) {
-  return embedGate(
-    'Routing forms',
-    'Qualify callers before booking.',
-    <RoutingFormsClient workspaceSlug={workspaceSlug} />,
-    <RoutingFormsClient workspaceSlug={workspaceSlug} />,
+  return (
+    <SchedulingPageGate
+      opus={<RoutingFormsOpus workspaceSlug={workspaceSlug} />}
+      legacy={<RoutingFormsClient workspaceSlug={workspaceSlug} />}
+    />
   )
 }
 
 export function MeetingPollsGate() {
-  return embedGate(
-    'Meeting polls',
-    'Group scheduling polls.',
-    <MeetingPollsLibraryConnected />,
-    <MeetingPollsLibraryConnected />,
+  return (
+    <SchedulingPageGate
+      opus={<MeetingPollsOpus />}
+      legacy={<MeetingPollsLibraryConnected />}
+    />
   )
 }
 
 export function AiBookingGate() {
-  return embedGate(
-    'AI booking',
-    'Configure AI-assisted booking.',
-    <AiBookingAdminClient />,
-    <AiBookingAdminClient />,
+  return (
+    <SchedulingPageGate opus={<AiBookingOpus />} legacy={<AiBookingAdminClient />} />
   )
 }
 
 export function FormsDocumentsGate() {
-  return embedGate(
-    'Forms & documents',
-    'Intake forms and document collection.',
-    <FormsDocumentsClient />,
-    <FormsDocumentsClient />,
+  return (
+    <SchedulingPageGate opus={<FormsDocumentsOpus />} legacy={<FormsDocumentsClient />} />
   )
 }
 
 export function PoliciesGate() {
-  return embedGate(
-    'Policies',
-    'Cancellation, reschedule, and booking policies.',
-    <AppointmentsPoliciesClient />,
-    <AppointmentsPoliciesClient />,
+  return (
+    <SchedulingPageGate opus={<PoliciesOpus />} legacy={<AppointmentsPoliciesClient />} />
   )
 }
 
 export function SetupGate() {
-  return embedGate(
-    'Get started',
-    'Finish appointments setup.',
-    <AppointmentsSetupClient />,
-    <AppointmentsSetupClient />,
-  )
+  return <SchedulingPageGate opus={<SetupOpus />} legacy={<AppointmentsSetupClient />} />
 }
 
 export function EnterpriseGate() {
-  return embedGate(
-    'Enterprise',
-    'Enterprise scheduling options.',
-    <EnterpriseSchedulingClient />,
-    <EnterpriseSchedulingClient />,
+  return (
+    <SchedulingPageGate opus={<EnterpriseOpus />} legacy={<EnterpriseSchedulingClient />} />
   )
 }
 
 export function ServiceBookingHubGate() {
   return (
     <SchedulingPageGate
-      opus={<ServiceBookingAdminOpus />}
-      legacy={<ServiceBookingAdminClient />}
+      opus={<CommerceHubOpus />}
+      legacy={<ServiceBookingAdminClient showPageHeader />}
     />
   )
 }
 
 export function PricingPaymentsGate() {
-  return embedGate(
-    'Pricing & payments',
-    'Checkout, deposits, and payment rules.',
-    <PricingPaymentsClient />,
-    <PricingPaymentsClient />,
+  return (
+    <SchedulingPageGate opus={<PricingPaymentsOpus />} legacy={<PricingPaymentsClient />} />
   )
 }
 
 export function PointOfSaleGate() {
-  return embedGate(
-    'Point of sale',
-    'Take payment in person.',
-    <PointOfSaleConnected />,
-    <PointOfSaleConnected />,
+  return (
+    <SchedulingPageGate opus={<PointOfSaleOpus />} legacy={<PointOfSaleConnected />} />
   )
 }
 
 export function RecallsGate() {
-  return embedGate(
-    'Recalls',
-    'Bring clients back for rebooking.',
-    <RecallsHubClient />,
-    <RecallsHubClient />,
-  )
+  return <SchedulingPageGate opus={<RecallsOpus />} legacy={<RecallsHubClient />} />
 }
 
 export function RecallCampaignsGate() {
-  return embedGate(
-    'Recall campaigns',
-    'Campaign-style recall outreach.',
-    <RecallCampaignsClient />,
-    <RecallCampaignsClient />,
+  return (
+    <SchedulingPageGate opus={<RecallCampaignsOpus />} legacy={<RecallCampaignsClient />} />
   )
 }
 
 export function NoShowRecoveryGate() {
-  return embedGate(
-    'No-show recovery',
-    'Recover missed appointments.',
-    <NoShowRecoveryClient />,
-    <NoShowRecoveryClient />,
+  return (
+    <SchedulingPageGate opus={<NoShowRecoveryOpus />} legacy={<NoShowRecoveryClient />} />
   )
 }
 
 export function VoiceRemindersGate() {
-  return embedGate(
-    'Voice reminders',
-    'Outbound voice reminder settings.',
-    <VoiceRemindersClient />,
-    <VoiceRemindersClient />,
+  return (
+    <SchedulingPageGate opus={<VoiceRemindersOpus />} legacy={<VoiceRemindersClient />} />
   )
 }
 
 export function SegmentsGate() {
-  return embedGate(
-    'Segments',
-    'Client segments for outreach.',
-    <AppointmentSegmentsClient />,
-    <AppointmentSegmentsClient />,
+  return (
+    <SchedulingPageGate opus={<SegmentsOpus />} legacy={<AppointmentSegmentsClient />} />
   )
 }
 
 export function ContractsGate() {
-  return embedGate(
-    'Contracts',
-    'Booking contracts and agreements.',
-    <ContractsAdminClient />,
-    <ContractsAdminClient />,
-  )
+  return <SchedulingPageGate opus={<ContractsOpus />} legacy={<ContractsAdminClient />} />
 }
 
 export function BookingContractsGate() {
-  return embedGate(
-    'Contracts',
-    'Booking contracts.',
-    <ContractsAdminClient />,
-    <ContractsAdminClient />,
-  )
+  return ContractsGate()
 }
 
 export function RestrictionsGate() {
@@ -396,33 +359,90 @@ export function BookingSettingsGate({
   workspaceSlug: string
   workspaceName: string
 }) {
-  const client = (
+  const legacy = (
     <AppointmentBookingSettingsClient workspaceSlug={workspaceSlug} workspaceName={workspaceName} />
   )
-  return embedGate(
-    'Booking pages',
-    'Public booking links, embeds, and scheduler entry points.',
-    client,
-    client,
+  return (
+    <SchedulingPageGate
+      opus={<BookingSettingsOpus workspaceSlug={workspaceSlug} workspaceName={workspaceName} />}
+      legacy={legacy}
+    />
+  )
+}
+
+export function BookingShareGate({
+  workspaceSlug,
+  workspaceName,
+  types,
+}: {
+  workspaceSlug: string
+  workspaceName: string
+  types: { id: string; name: string }[]
+}) {
+  return (
+    <SchedulingPageGate
+      opus={
+        <BookingShareOpus
+          workspaceSlug={workspaceSlug}
+          workspaceName={workspaceName}
+          types={types}
+        />
+      }
+      legacy={
+        <BookingShareHubClient
+          workspaceSlug={workspaceSlug}
+          workspaceName={workspaceName}
+          types={types}
+        />
+      }
+    />
   )
 }
 
 export function ClassesWorkspaceGate({ classId }: { classId: string | null }) {
-  const legacy = <ClassesWorkspaceConnected classId={classId} />
-  return embedGate(
-    'Classes',
-    'Class series, schedules, capacity, and enrollment.',
-    legacy,
-    legacy,
+  return (
+    <SchedulingPageGate
+      opus={<ClassesWorkspaceOpus classId={classId} />}
+      legacy={<ClassesWorkspaceConnected classId={classId} />}
+    />
   )
 }
 
 export function WorkshopsWorkspaceGate({ workshopId }: { workshopId: string | null }) {
-  const legacy = <WorkshopsWorkspaceConnected workshopId={workshopId} />
-  return embedGate(
-    'Workshops',
-    'Workshop offerings, schedules, and enrollment.',
-    legacy,
-    legacy,
+  return (
+    <SchedulingPageGate
+      opus={<WorkshopsWorkspaceOpus workshopId={workshopId} />}
+      legacy={<WorkshopsWorkspaceConnected workshopId={workshopId} />}
+    />
+  )
+}
+
+function contactMergeLegacy() {
+  return (
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
+      <header>
+        <h1 className="text-2xl font-semibold text-foreground">Contact merge</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Combine duplicate contacts. Appointments, packages, and memberships move to the surviving
+          record.
+        </p>
+      </header>
+      <ContactMergeClient />
+    </div>
+  )
+}
+
+export function ContactMergeGate() {
+  return (
+    <SchedulingPageGate opus={<ContactMergeOpus />} legacy={contactMergeLegacy()} />
+  )
+}
+
+export function PaymentPlansGate() {
+  return (
+    <SchedulingPageGate
+      opus={<ServiceBookingAdminOpus initialSection="paymentPlans" title="Payments" />}
+      legacy={<ServiceBookingAdminClient initialSection="paymentPlans" title="Payments" />}
+    />
   )
 }

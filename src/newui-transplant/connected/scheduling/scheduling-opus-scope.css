@@ -1,0 +1,15 @@
+/**
+ * When legacy scheduling / Kimi workspace UI is embedded inside Opus page chrome,
+ * suppress duplicate page titles and outer pilot shells so one Opus header remains authoritative.
+ */
+.scheduling-opus-scope :where(.appt-overview-pilot, .bookable-workspace-pilot, .ws-pilot).ref-root > header,
+.scheduling-opus-scope :where(.appt-overview-pilot, .bookable-workspace-pilot) > div > header:first-child,
+.scheduling-opus-scope :where(h1.text-2xl.font-semibold):first-of-type {
+  display: none;
+}
+
+.scheduling-opus-scope :where(.appt-overview-pilot, .bookable-workspace-pilot, .ws-pilot).ref-root {
+  min-height: 0;
+  background: transparent;
+  padding: 0;
+}

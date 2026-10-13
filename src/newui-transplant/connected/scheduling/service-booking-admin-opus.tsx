@@ -12,6 +12,8 @@ const SECTION_TITLES: Record<string, string> = {
   coupons: 'Coupons',
   restrictions: 'Client restrictions',
   theme: 'Booking appearance',
+  paymentPlans: 'Payments',
+  reports: 'Service booking reports',
 }
 
 export function ServiceBookingAdminOpus(props: ServiceBookingAdminClientProps) {

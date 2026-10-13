@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { ServiceBookingHubGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
 export default function ServiceBookingCommercePage() {
-  redirect("/appointments/memberships");
+  return <ServiceBookingHubGate />
 }
