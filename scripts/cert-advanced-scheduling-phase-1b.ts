@@ -1,7 +1,7 @@
 /**
  * Phase 1b — paid class registration + atomic full-series (requires DATABASE_URL + migration).
  *
- *   npx tsx scripts/cert-advanced-scheduling-phase-1b.ts
+ *   NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/cert-advanced-scheduling-phase-1b.ts
  */
 import { PrismaClient } from "@prisma/client";
 

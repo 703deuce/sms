@@ -1,7 +1,9 @@
 /**
  * Phase 1c — durable fulfillment, atomic redeem, capacity + holds (requires DATABASE_URL).
  *
- *   npx tsx scripts/cert-advanced-scheduling-phase-1c.ts
+ *   NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/cert-advanced-scheduling-phase-1c.ts
+ *
+ * Also requires NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (production Supabase compat).
  */
 import { PrismaClient } from "@prisma/client";
 import { creditKeyForBookingType } from "../src/lib/appointments/service-booking/package-credit-keys";

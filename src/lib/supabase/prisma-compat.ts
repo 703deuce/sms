@@ -174,7 +174,9 @@ const MODEL_TO_TABLE: Record<string, string> = {
   posLineItem: "pos_line_items",
   classSeries: "class_series",
   classOccurrence: "class_occurrences",
+  classOccurrenceRegistrationHold: "class_occurrence_registration_holds",
   classEnrollment: "class_enrollments",
+  serviceBookingStoreFulfillment: "service_booking_store_fulfillments",
   classSeatMap: "class_seat_maps",
   classSeatReservation: "class_seat_reservations",
   classCheckIn: "class_check_ins",
@@ -722,10 +724,22 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
     workspace: { table: "Workspace", fk: "workspaceId" },
     series: { table: "class_series", fk: "seriesId" },
     enrollments: { table: "class_enrollments", fk: "occurrenceId", pk: "id" },
+    registrationHolds: {
+      table: "class_occurrence_registration_holds",
+      fk: "occurrenceId",
+      pk: "id",
+    },
+  },
+  classOccurrenceRegistrationHold: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    occurrence: { table: "class_occurrences", fk: "occurrenceId" },
   },
   classEnrollment: {
     workspace: { table: "Workspace", fk: "workspaceId" },
     occurrence: { table: "class_occurrences", fk: "occurrenceId" },
+  },
+  serviceBookingStoreFulfillment: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
   },
   classSeatMap: {
     workspace: { table: "Workspace", fk: "workspaceId" },
