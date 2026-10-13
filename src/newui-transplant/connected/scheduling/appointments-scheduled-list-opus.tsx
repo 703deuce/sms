@@ -3,9 +3,31 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Calendar, Plus } from 'lucide-react'
-import { ArOpusPage, OpusDataSurface, OpusSearchField } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
-import { Callout, EmptyState, PageHeader, Pill } from '@/newui-transplant/components/app/kit'
+import {
+  AlertCircle,
+  Calendar,
+  CalendarCheck,
+  CalendarClock,
+  Plus,
+} from 'lucide-react'
+import {
+  ArOpusPage,
+  ArStatGrid,
+  OpusDataSurface,
+  OpusSearchField,
+  OpusTableSkeleton,
+} from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
+import {
+  OpusListControls,
+  OpusMetricBand,
+  OpusSchedulingHero,
+  OpusTd,
+  OpusTh,
+  OPUS_TABLE_HEAD,
+  appointmentStatusTone,
+} from '@/newui-transplant/components/appointment-reminders/opus-scheduling-chrome'
+import { Callout, EmptyState, Initials, Pill, Stat, TextLink } from '@/newui-transplant/components/app/kit'
+import { cn } from '@/lib/utils'
 import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from '@/newui-transplant/components/ui/tabs'
@@ -86,7 +108,8 @@ export function AppointmentsScheduledListOpus() {
 
   return (
     <ArOpusPage wide>
-      <PageHeader
+      <OpusSchedulingHero
+        icon={CalendarClock}
         title="Scheduled appointments"
         description="Treatment history, service records, and upcoming visits."
         actions={
@@ -98,36 +121,57 @@ export function AppointmentsScheduledListOpus() {
       />
 
       {summary ? (
-        <div className="flex flex-wrap gap-2">
-          <Pill tone="neutral">{summary.upcoming} upcoming</Pill>
-          <Pill tone="neutral">{summary.today} today</Pill>
-          <Pill tone="neutral">{summary.attention} need attention</Pill>
-        </div>
+        <OpusMetricBand>
+          <ArStatGrid>
+            <Stat
+              label="Upcoming"
+              value={String(summary.upcoming)}
+              icon={CalendarClock}
+              hint="Visits on your calendar ahead"
+            />
+            <Stat
+              label="Today"
+              value={String(summary.today)}
+              icon={CalendarCheck}
+              hint="Same-day appointments"
+            />
+            <Stat
+              label="Needs attention"
+              value={String(summary.attention)}
+              icon={AlertCircle}
+              hint="Unpaid, forms, or follow-up"
+            />
+            <Stat label="Total in view" value={String(summary.total)} icon={Calendar} />
+          </ArStatGrid>
+        </OpusMetricBand>
       ) : null}
 
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          {TABS.map((t) => (
-            <TabsTrigger key={t.id} value={t.id}>{t.label}</TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
-
-      <OpusSearchField
-        id="scheduled-search"
-        label="Search appointments"
-        value={q}
-        onChange={setQ}
-        placeholder="Search customer or service"
-        className="max-w-md"
-      />
+      <OpusListControls>
+        <Tabs value={tab} onValueChange={setTab}>
+          <TabsList className="h-9">
+            {TABS.map((t) => (
+              <TabsTrigger key={t.id} value={t.id}>{t.label}</TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+        <OpusSearchField
+          id="scheduled-search"
+          label="Search appointments"
+          value={q}
+          onChange={setQ}
+          placeholder="Search customer or service"
+          className="w-full min-w-[220px] sm:max-w-sm"
+        />
+      </OpusListControls>
 
       {error ? (
         <Callout tone="danger" title="Could not load appointments">
           <Button type="button" size="sm" className="mt-2" onClick={load}>Retry</Button>
         </Callout>
       ) : loading ? (
-        <div className="h-48 animate-pulse rounded-xl bg-muted/40" />
+        <OpusDataSurface>
+          <OpusTableSkeleton label="Loading appointments" />
+        </OpusDataSurface>
       ) : rows.length === 0 ? (
         <EmptyState
           icon={Calendar}
@@ -140,35 +184,50 @@ export function AppointmentsScheduledListOpus() {
           }
         />
       ) : (
-        <OpusDataSurface className="overflow-x-auto p-0">
-          <table className="w-full min-w-[800px] text-left text-sm">
-            <thead className="border-b bg-muted/30 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              <tr>
-                <th scope="col" className="px-4 py-3">Customer</th>
-                <th scope="col" className="px-4 py-3">Service</th>
-                <th scope="col" className="px-4 py-3">When</th>
-                <th scope="col" className="px-4 py-3">Staff</th>
-                <th scope="col" className="px-4 py-3">Status</th>
-                <th scope="col" className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {rows.map((row) => (
-                <tr key={row.id} className="hover:bg-muted/30">
-                  <td className="px-4 py-3 font-medium">{row.inviteeName || '—'}</td>
-                  <td className="px-4 py-3">{row.serviceName || '—'}</td>
-                  <td className="px-4 py-3">{fmt(row.startsAt)}</td>
-                  <td className="px-4 py-3">{row.staffName || '—'}</td>
-                  <td className="px-4 py-3">
-                    <Pill tone="neutral">{row.status}</Pill>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Link href={`/appointments/${row.id}`} className="text-sm font-medium text-primary">Open</Link>
-                  </td>
+        <OpusDataSurface className="overflow-hidden bg-gradient-to-br from-card via-card to-primary/[0.02] p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[800px] text-left text-sm">
+              <thead className={OPUS_TABLE_HEAD}>
+                <tr>
+                  <th scope="col" className={OpusTh}>Customer</th>
+                  <th scope="col" className={OpusTh}>Service</th>
+                  <th scope="col" className={OpusTh}>When</th>
+                  <th scope="col" className={OpusTh}>Staff</th>
+                  <th scope="col" className={OpusTh}>Status</th>
+                  <th scope="col" className={cn(OpusTh, 'text-right')}>
+                    <span className="sr-only">Actions</span>
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y">
+                {rows.map((row) => {
+                  const name = row.inviteeName || 'Customer'
+                  return (
+                    <tr key={row.id} className="group relative hover:bg-muted/40">
+                      <td className={OpusTd}>
+                        <Link
+                          href={`/appointments/${row.id}`}
+                          className="flex items-center gap-3 font-medium after:absolute after:inset-0"
+                        >
+                          <Initials name={name} className="size-8" />
+                          <span className="min-w-0 truncate">{name}</span>
+                        </Link>
+                      </td>
+                      <td className={cn(OpusTd, 'text-muted-foreground')}>{row.serviceName || '—'}</td>
+                      <td className={cn(OpusTd, 'tabular-nums text-muted-foreground')}>{fmt(row.startsAt)}</td>
+                      <td className={OpusTd}>{row.staffName || '—'}</td>
+                      <td className={OpusTd}>
+                        <Pill tone={appointmentStatusTone(row.status)}>{row.status}</Pill>
+                      </td>
+                      <td className={cn(OpusTd, 'relative z-10 text-right')}>
+                        <TextLink href={`/appointments/${row.id}`}>Open</TextLink>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </OpusDataSurface>
       )}
     </ArOpusPage>

@@ -8,15 +8,18 @@ import {
   CheckCircle2,
   ChevronRight,
   Loader2,
+  CalendarPlus,
   Plus,
   Search,
+  UserRound,
   X,
 } from 'lucide-react'
 import { useAppointmentCreateForm } from '@/lib/appointments/use-appointment-create-form'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
 import { ArOpusPage } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
+import { OpusSchedulingHero } from '@/newui-transplant/components/appointment-reminders/opus-scheduling-chrome'
 import { ArAppointmentSlotPicker } from '@/newui-transplant/components/scheduling/ar-appointment-slot-picker'
-import { Callout, PageHeader, Panel, Pill } from '@/newui-transplant/components/app/kit'
+import { Callout, OpusIconBadge, Panel, Pill } from '@/newui-transplant/components/app/kit'
 import { OPUS_CONFIG_INSET } from '@/newui-transplant/components/app/opus-surfaces'
 import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
 import { Button } from '@/newui-transplant/components/ui/button'
@@ -34,16 +37,32 @@ import { Label } from '@/newui-transplant/components/ui/label'
 import { Textarea } from '@/newui-transplant/components/ui/textarea'
 import { cn } from '@/lib/utils'
 
-function StepHeading({ step, title, description }: { step: string; title: string; description?: string }) {
+function StepHeading({
+  step,
+  title,
+  description,
+  icon,
+}: {
+  step: string
+  title: string
+  description?: string
+  icon?: typeof CalendarPlus
+}) {
+  const Icon = icon
   return (
     <div className="flex items-start gap-3">
-      <span
-        className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-bold tabular-nums text-primary"
-        aria-hidden
-      >
-        {step}
-      </span>
+      {Icon ? (
+        <OpusIconBadge icon={Icon} className="size-9 rounded-xl" />
+      ) : (
+        <span
+          className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/15 to-primary/5 text-xs font-bold tabular-nums text-primary ring-1 ring-primary/15"
+          aria-hidden
+        >
+          {step}
+        </span>
+      )}
       <div>
+        <p className="text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">Step {step}</p>
         <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
         {description ? <p className="mt-0.5 text-xs text-muted-foreground">{description}</p> : null}
       </div>
@@ -135,7 +154,8 @@ export function ArAppointmentCreateOpus() {
         <span className="font-medium text-foreground" aria-current="page">New</span>
       </nav>
 
-      <PageHeader
+      <OpusSchedulingHero
+        icon={CalendarPlus}
         title="New appointment"
         description="Book a customer manually with live availability from your scheduling rules."
       />
@@ -149,7 +169,7 @@ export function ArAppointmentCreateOpus() {
       <div className="grid items-start gap-6 lg:grid-cols-[1fr_320px]">
         <div className="space-y-6">
           <Panel>
-            <StepHeading step="1" title="Service & time" description="Choose a type, then pick an open slot." />
+            <StepHeading step="1" icon={CalendarPlus} title="Service & time" description="Choose a type, then pick an open slot." />
             <div className="mt-5 space-y-4">
               <div>
                 <Label htmlFor="appt-type">Appointment type</Label>
@@ -187,7 +207,7 @@ export function ArAppointmentCreateOpus() {
           </Panel>
 
           <Panel>
-            <StepHeading step="2" title="Customer" description="Search a contact or enter details." />
+            <StepHeading step="2" icon={UserRound} title="Customer" description="Search a contact or enter details." />
             <div className="mt-5 space-y-4">
               <div ref={form.contactRef} className="relative">
                 <Label htmlFor="contact-search">Link existing contact</Label>

@@ -2,17 +2,31 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
-import { Plus, UserRound } from 'lucide-react'
+import { CalendarClock, Plus, UserRound, Users, Wallet } from 'lucide-react'
 import { useClientsWorkspace } from '@/features/appointments/kimi/clients/use-clients-workspace'
-import { ArOpusPage, OpusDataSurface, OpusSearchField } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
-import { Callout, EmptyState, PageHeader, Pill } from '@/newui-transplant/components/app/kit'
+import {
+  ArOpusPage,
+  ArStatGrid,
+  OpusDataSurface,
+  OpusSearchField,
+  OpusTableSkeleton,
+} from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
+import {
+  OpusListControls,
+  OpusMetricBand,
+  OpusPremiumDialogHeader,
+  OpusSchedulingHero,
+  OpusTd,
+  OpusTh,
+  OPUS_TABLE_HEAD,
+} from '@/newui-transplant/components/appointment-reminders/opus-scheduling-chrome'
+import { Callout, EmptyState, Initials, Pill, Stat, TextLink } from '@/newui-transplant/components/app/kit'
+import { cn } from '@/lib/utils'
 import { Button } from '@/newui-transplant/components/ui/button'
 import {
   Dialog,
   DialogContent,
   DialogFooter,
-  DialogHeader,
-  DialogTitle,
 } from '@/newui-transplant/components/ui/dialog'
 import { Input } from '@/newui-transplant/components/ui/input'
 import { Label } from '@/newui-transplant/components/ui/label'
@@ -67,11 +81,13 @@ function CreateClientDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Add client</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3 py-2">
+      <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-md">
+        <OpusPremiumDialogHeader
+          icon={UserRound}
+          title="Add client"
+          description="Create a profile for manual booking and reminders."
+        />
+        <div className="space-y-3 px-6 py-4">
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
@@ -92,7 +108,7 @@ function CreateClientDialog({
             <Input id="c-phone" className="mt-1" value={phone} onChange={(e) => setPhone(e.target.value)} />
           </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="border-t bg-muted/20 px-6 py-4">
           <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
           <Button type="button" disabled={saving} onClick={() => void submit()}>Save client</Button>
         </DialogFooter>
@@ -110,7 +126,8 @@ export function ClientsDirectoryOpus() {
 
   return (
     <ArOpusPage wide>
-      <PageHeader
+      <OpusSchedulingHero
+        icon={Users}
         title="Clients"
         description="Customer profiles, bookings, balances, and appointment history."
         actions={
@@ -127,29 +144,35 @@ export function ClientsDirectoryOpus() {
       />
 
       {summary ? (
-        <div className="flex flex-wrap gap-2">
-          <Pill tone="neutral">{summary.totalClients} total</Pill>
-          <Pill tone="neutral">{summary.active} active</Pill>
-          <Pill tone="neutral">{summary.upcomingBookings} upcoming</Pill>
-          <Pill tone="neutral">{summary.openBalances} open balances</Pill>
-        </div>
+        <OpusMetricBand>
+          <ArStatGrid>
+            <Stat label="Total clients" value={String(summary.totalClients)} icon={Users} />
+            <Stat label="Active" value={String(summary.active)} icon={UserRound} />
+            <Stat label="Upcoming bookings" value={String(summary.upcomingBookings)} icon={CalendarClock} />
+            <Stat label="Open balances" value={String(summary.openBalances)} icon={Wallet} />
+          </ArStatGrid>
+        </OpusMetricBand>
       ) : null}
 
-      <OpusSearchField
-        id="clients-search"
-        label="Search clients"
-        value={ws.q}
-        onChange={ws.setQ}
-        placeholder="Search name, email, phone"
-        className="max-w-md"
-      />
+      <OpusListControls>
+        <OpusSearchField
+          id="clients-search"
+          label="Search clients"
+          value={ws.q}
+          onChange={ws.setQ}
+          placeholder="Search name, email, phone"
+          className="w-full min-w-[220px] sm:max-w-md"
+        />
+      </OpusListControls>
 
       {ws.error ? (
         <Callout tone="danger" title="Could not load clients">
           <Button type="button" size="sm" className="mt-2" onClick={() => void ws.reload()}>Retry</Button>
         </Callout>
       ) : ws.loading && !ws.data ? (
-        <div className="h-48 animate-pulse rounded-xl bg-muted/40" />
+        <OpusDataSurface>
+          <OpusTableSkeleton label="Loading clients" />
+        </OpusDataSurface>
       ) : rows.length === 0 ? (
         <EmptyState
           icon={UserRound}
@@ -160,53 +183,58 @@ export function ClientsDirectoryOpus() {
           }
         />
       ) : (
-        <OpusDataSurface className="overflow-x-auto p-0">
-          <table className="w-full min-w-[1000px] text-left text-sm">
-            <thead className="border-b bg-muted/30 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              <tr>
-                <th scope="col" className="px-4 py-3">Client</th>
-                <th scope="col" className="px-4 py-3">Contact</th>
-                <th scope="col" className="px-4 py-3">Next appointment</th>
-                <th scope="col" className="px-4 py-3">Last appointment</th>
-                <th scope="col" className="px-4 py-3">Bookings</th>
-                <th scope="col" className="px-4 py-3">Balance</th>
-                <th scope="col" className="px-4 py-3">Status</th>
-                <th scope="col" className="px-4 py-3"><span className="sr-only">Actions</span></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {rows.map((row) => (
-                <tr key={row.id} className="hover:bg-muted/30">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <span className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                        {row.initials}
-                      </span>
-                      <span className="font-medium">{row.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div>{row.email || '—'}</div>
-                    <div className="text-muted-foreground">{row.phone}</div>
-                  </td>
-                  <td className="px-4 py-3">
-                    {row.nextAppointment ? `${fmt(row.nextAppointment.at)} · ${row.nextAppointment.label}` : '—'}
-                  </td>
-                  <td className="px-4 py-3">{row.lastAppointment ? fmt(row.lastAppointment.at) : '—'}</td>
-                  <td className="px-4 py-3">{row.bookingCount}</td>
-                  <td className="px-4 py-3">{row.balanceLabel}</td>
-                  <td className="px-4 py-3">
-                    <Pill tone="neutral">{row.statusLabel}</Pill>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Link href={`/appointments/clients/${row.id}`} className="text-sm font-medium text-primary">
-                      Open
-                    </Link>
-                  </td>
+        <OpusDataSurface className="overflow-hidden bg-gradient-to-br from-card via-card to-primary/[0.02] p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1000px] text-left text-sm">
+              <thead className={OPUS_TABLE_HEAD}>
+                <tr>
+                  <th scope="col" className={OpusTh}>Client</th>
+                  <th scope="col" className={OpusTh}>Contact</th>
+                  <th scope="col" className={OpusTh}>Next appointment</th>
+                  <th scope="col" className={OpusTh}>Last appointment</th>
+                  <th scope="col" className={OpusTh}>Bookings</th>
+                  <th scope="col" className={OpusTh}>Balance</th>
+                  <th scope="col" className={OpusTh}>Status</th>
+                  <th scope="col" className={cn(OpusTh, 'text-right')}>
+                    <span className="sr-only">Actions</span>
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y">
+                {rows.map((row) => (
+                  <tr key={row.id} className="group relative hover:bg-muted/40">
+                    <td className={OpusTd}>
+                      <Link
+                        href={`/appointments/clients/${row.id}`}
+                        className="flex items-center gap-3 font-medium after:absolute after:inset-0"
+                      >
+                        <Initials name={row.name} className="size-8" />
+                        <span className="min-w-0 truncate">{row.name}</span>
+                      </Link>
+                    </td>
+                    <td className={OpusTd}>
+                      <div>{row.email || '—'}</div>
+                      <div className="text-muted-foreground">{row.phone}</div>
+                    </td>
+                    <td className={cn(OpusTd, 'text-muted-foreground')}>
+                      {row.nextAppointment ? `${fmt(row.nextAppointment.at)} · ${row.nextAppointment.label}` : '—'}
+                    </td>
+                    <td className={cn(OpusTd, 'text-muted-foreground')}>
+                      {row.lastAppointment ? fmt(row.lastAppointment.at) : '—'}
+                    </td>
+                    <td className={OpusTd}>{row.bookingCount}</td>
+                    <td className={OpusTd}>{row.balanceLabel}</td>
+                    <td className={OpusTd}>
+                      <Pill tone="neutral">{row.statusLabel}</Pill>
+                    </td>
+                    <td className={cn(OpusTd, 'relative z-10 text-right')}>
+                      <TextLink href={`/appointments/clients/${row.id}`}>Open</TextLink>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </OpusDataSurface>
       )}
 

@@ -2,12 +2,28 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
-import { Box, Plus } from 'lucide-react'
+import { Box, Layers, Plus } from 'lucide-react'
 import { useResourcesWorkspace } from '@/features/appointments/kimi/resources/use-resources-workspace'
 import { CreateResourceModal } from '@/components/appointments/resources/create-resource-modal'
-import { ArOpusPage, OpusDataSurface, OpusSearchField } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
-import { Callout, EmptyState, PageHeader, Pill } from '@/newui-transplant/components/app/kit'
+import {
+  ArOpusPage,
+  ArStatGrid,
+  OpusDataSurface,
+  OpusSearchField,
+  OpusTableSkeleton,
+} from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
+import {
+  OpusListControls,
+  OpusMetricBand,
+  OpusSchedulingHero,
+  OpusTd,
+  OpusTh,
+  OPUS_TABLE_HEAD,
+} from '@/newui-transplant/components/appointment-reminders/opus-scheduling-chrome'
+import { Callout, EmptyState, Pill, Stat, TextLink } from '@/newui-transplant/components/app/kit'
+import { cn } from '@/lib/utils'
 import { Button } from '@/newui-transplant/components/ui/button'
+import Link from 'next/link'
 
 export function ResourcesDirectoryOpus() {
   const ws = useResourcesWorkspace()
@@ -16,7 +32,9 @@ export function ResourcesDirectoryOpus() {
   if (ws.loading && !ws.data) {
     return (
       <ArOpusPage>
-        <div className="h-48 animate-pulse rounded-xl bg-muted/40" />
+        <OpusDataSurface>
+          <OpusTableSkeleton label="Loading resources" />
+        </OpusDataSurface>
       </ArOpusPage>
     )
   }
@@ -25,7 +43,8 @@ export function ResourcesDirectoryOpus() {
 
   return (
     <ArOpusPage>
-      <PageHeader
+      <OpusSchedulingHero
+        icon={Box}
         title="Resources"
         description="Rooms, equipment, vehicles, and other capacity used by bookings."
         actions={
@@ -34,27 +53,28 @@ export function ResourcesDirectoryOpus() {
             Add resource
           </Button>
         }
-        meta={
-          summary ? (
-            <div className="flex flex-wrap gap-2">
-              <Pill tone="neutral" dot={false}>{summary.active} active</Pill>
-              <Pill tone="neutral" dot={false}>{summary.pools} pools</Pill>
-            </div>
-          ) : null
-        }
       />
 
-      <div className="mb-4 flex flex-wrap items-end gap-3">
+      {summary ? (
+        <OpusMetricBand>
+          <ArStatGrid>
+            <Stat label="Active" value={String(summary.active)} icon={Box} />
+            <Stat label="Resource pools" value={String(summary.pools)} icon={Layers} />
+          </ArStatGrid>
+        </OpusMetricBand>
+      ) : null}
+
+      <OpusListControls>
         <OpusSearchField
           id="resources-search"
           label="Search resources"
           value={ws.q}
           onChange={ws.setQ}
           placeholder="Search name, type, location"
-          className="max-w-md"
+          className="w-full min-w-[220px] sm:max-w-md"
         />
         <select
-          className="rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+          className="h-9 rounded-lg border border-input bg-background px-3 text-sm shadow-sm"
           value={ws.typeFilter}
           onChange={(e) => ws.setTypeFilter(e.target.value)}
           aria-label="Filter by type"
@@ -64,7 +84,7 @@ export function ResourcesDirectoryOpus() {
             <option key={t} value={t}>{t}</option>
           ))}
         </select>
-      </div>
+      </OpusListControls>
 
       {ws.error ? (
         <Callout tone="danger" title="Could not load resources">
@@ -78,33 +98,47 @@ export function ResourcesDirectoryOpus() {
           action={<Button type="button" onClick={() => setCreateOpen(true)}>Add resource</Button>}
         />
       ) : (
-        <OpusDataSurface className="overflow-x-auto p-0">
-          <table className="w-full min-w-[1000px] text-left text-sm">
-            <thead className="border-b bg-muted/30 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              <tr>
-                <th scope="col" className="px-4 py-3">Resource</th>
-                <th scope="col" className="px-4 py-3">Type</th>
-                <th scope="col" className="px-4 py-3">Location</th>
-                <th scope="col" className="px-4 py-3">Capacity</th>
-                <th scope="col" className="px-4 py-3">Status</th>
-                <th scope="col" className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {ws.rows.map((row) => (
-                <tr key={row.id}>
-                  <td className="px-4 py-3 font-medium">{row.name}</td>
-                  <td className="px-4 py-3">{row.typeLabel}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{row.locationLabel}</td>
-                  <td className="px-4 py-3">{row.quantity}</td>
-                  <td className="px-4 py-3"><Pill tone="neutral" dot={false}>{row.statusLabel}</Pill></td>
-                  <td className="px-4 py-3 text-right">
-                    <Link href={`/appointments/resources/${row.id}`} className="font-medium text-primary">Open</Link>
-                  </td>
+        <OpusDataSurface className="overflow-hidden bg-gradient-to-br from-card via-card to-primary/[0.02] p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1000px] text-left text-sm">
+              <thead className={OPUS_TABLE_HEAD}>
+                <tr>
+                  <th scope="col" className={OpusTh}>Resource</th>
+                  <th scope="col" className={OpusTh}>Type</th>
+                  <th scope="col" className={OpusTh}>Location</th>
+                  <th scope="col" className={OpusTh}>Capacity</th>
+                  <th scope="col" className={OpusTh}>Status</th>
+                  <th scope="col" className={cn(OpusTh, 'text-right')}>
+                    <span className="sr-only">Actions</span>
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y">
+                {ws.rows.map((row) => (
+                  <tr key={row.id} className="group relative hover:bg-muted/40">
+                    <td className={OpusTd}>
+                      <Link
+                        href={`/appointments/resources/${row.id}`}
+                        className="flex items-center gap-2 font-medium after:absolute after:inset-0"
+                      >
+                        <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                          <Box className="size-4" aria-hidden />
+                        </span>
+                        <span className="truncate">{row.name}</span>
+                      </Link>
+                    </td>
+                    <td className={OpusTd}>{row.typeLabel}</td>
+                    <td className={cn(OpusTd, 'text-muted-foreground')}>{row.locationLabel}</td>
+                    <td className={OpusTd}>{row.quantity}</td>
+                    <td className={OpusTd}><Pill tone="neutral" dot={false}>{row.statusLabel}</Pill></td>
+                    <td className={cn(OpusTd, 'relative z-10 text-right')}>
+                      <TextLink href={`/appointments/resources/${row.id}`}>Open</TextLink>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </OpusDataSurface>
       )}
 

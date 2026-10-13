@@ -2,11 +2,26 @@
 
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
-import { Plus, Users } from 'lucide-react'
+import { AlertTriangle, CalendarCheck, Plus, UserCheck, Users } from 'lucide-react'
 import { useStaffWorkspace } from '@/features/appointments/kimi/staff/use-staff-workspace'
 import { CreateStaffModal } from '@/components/appointments/staff/create-staff-modal'
-import { ArOpusPage, OpusDataSurface, OpusSearchField } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
-import { Callout, EmptyState, PageHeader, Pill } from '@/newui-transplant/components/app/kit'
+import {
+  ArOpusPage,
+  ArStatGrid,
+  OpusDataSurface,
+  OpusSearchField,
+  OpusTableSkeleton,
+} from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
+import {
+  OpusListControls,
+  OpusMetricBand,
+  OpusSchedulingHero,
+  OpusTd,
+  OpusTh,
+  OPUS_TABLE_HEAD,
+} from '@/newui-transplant/components/appointment-reminders/opus-scheduling-chrome'
+import { Callout, EmptyState, Pill, Stat, TextLink } from '@/newui-transplant/components/app/kit'
+import { cn } from '@/lib/utils'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from '@/newui-transplant/components/ui/tabs'
 
@@ -48,14 +63,17 @@ export function StaffDirectoryOpus() {
   if (ws.loading) {
     return (
       <ArOpusPage>
-        <div className="h-48 animate-pulse rounded-xl bg-muted/40" />
+        <OpusDataSurface>
+          <OpusTableSkeleton label="Loading staff" />
+        </OpusDataSurface>
       </ArOpusPage>
     )
   }
 
   return (
     <ArOpusPage>
-      <PageHeader
+      <OpusSchedulingHero
+        icon={Users}
         title="Staff"
         description="Manage providers, hosts, assignments, locations, and staff scheduling setup."
         actions={
@@ -64,37 +82,41 @@ export function StaffDirectoryOpus() {
             Add staff
           </Button>
         }
-        meta={
-          summary ? (
-            <div className="flex flex-wrap gap-2">
-              <Pill tone="neutral" dot={false}>{summary.activeStaff} active</Pill>
-              <Pill tone="neutral" dot={false}>{summary.bookable} bookable</Pill>
-              {summary.needsSetup > 0 ? (
-                <Pill tone="warning" dot={false}>{summary.needsSetup} need setup</Pill>
-              ) : null}
-            </div>
-          ) : null
-        }
       />
 
-      <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <OpusSearchField
-          id="staff-search"
-          label="Search staff"
-          value={query}
-          onChange={setQuery}
-          placeholder="Search name, role, email"
-          className="max-w-md"
-        />
+      {summary ? (
+        <OpusMetricBand>
+          <ArStatGrid>
+            <Stat label="Active staff" value={String(summary.activeStaff)} icon={UserCheck} />
+            <Stat label="Bookable" value={String(summary.bookable)} icon={CalendarCheck} />
+            <Stat
+              label="Needs setup"
+              value={String(summary.needsSetup)}
+              icon={AlertTriangle}
+              hint={summary.needsSetup > 0 ? 'Finish availability or services' : 'All set'}
+            />
+          </ArStatGrid>
+        </OpusMetricBand>
+      ) : null}
+
+      <OpusListControls>
         <Tabs value={filter} onValueChange={(v) => setFilter(v as StatusFilter)}>
-          <TabsList>
+          <TabsList className="h-9">
             <TabsTrigger value="all">All</TabsTrigger>
             <TabsTrigger value="active">Active</TabsTrigger>
             <TabsTrigger value="needs_setup">Needs setup</TabsTrigger>
             <TabsTrigger value="inactive">Inactive</TabsTrigger>
           </TabsList>
         </Tabs>
-      </div>
+        <OpusSearchField
+          id="staff-search"
+          label="Search staff"
+          value={query}
+          onChange={setQuery}
+          placeholder="Search name, role, email"
+          className="w-full min-w-[220px] sm:max-w-md"
+        />
+      </OpusListControls>
 
       {ws.error ? (
         <Callout tone="danger" title="Could not load staff">
@@ -108,47 +130,58 @@ export function StaffDirectoryOpus() {
           action={<Button type="button" onClick={() => setCreateOpen(true)}>Add staff</Button>}
         />
       ) : (
-        <OpusDataSurface className="overflow-x-auto p-0">
-          <table className="w-full min-w-[1100px] text-left text-sm">
-            <thead className="border-b bg-muted/30 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              <tr>
-                <th scope="col" className="px-4 py-3">Staff</th>
-                <th scope="col" className="px-4 py-3">Role</th>
-                <th scope="col" className="px-4 py-3">Services</th>
-                <th scope="col" className="px-4 py-3">Locations</th>
-                <th scope="col" className="px-4 py-3">Availability</th>
-                <th scope="col" className="px-4 py-3">Calendar</th>
-                <th scope="col" className="px-4 py-3">Status</th>
-                <th scope="col" className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {rows.map((row) => (
-                <tr key={row.id}>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <Avatar initials={row.initials} url={row.avatarUrl} />
-                      <div>
-                        <div className="font-medium">{row.name}</div>
-                        {row.email ? <div className="text-xs text-muted-foreground">{row.email}</div> : null}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">{row.title || '—'}</td>
-                  <td className="px-4 py-3">{row.serviceCount}</td>
-                  <td className="px-4 py-3">{row.locationLabels}</td>
-                  <td className="px-4 py-3">{row.availabilityLabel}</td>
-                  <td className="px-4 py-3">{row.calendarConnected ? `${row.calendarLabel} ✓` : row.calendarLabel}</td>
-                  <td className="px-4 py-3">
-                    <Pill tone="neutral" dot={false}>{row.statusLabel}</Pill>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Link href={`/appointments/staff/${row.id}`} className="font-medium text-primary">Open</Link>
-                  </td>
+        <OpusDataSurface className="overflow-hidden bg-gradient-to-br from-card via-card to-primary/[0.02] p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1100px] text-left text-sm">
+              <thead className={OPUS_TABLE_HEAD}>
+                <tr>
+                  <th scope="col" className={OpusTh}>Staff</th>
+                  <th scope="col" className={OpusTh}>Role</th>
+                  <th scope="col" className={OpusTh}>Services</th>
+                  <th scope="col" className={OpusTh}>Locations</th>
+                  <th scope="col" className={OpusTh}>Availability</th>
+                  <th scope="col" className={OpusTh}>Calendar</th>
+                  <th scope="col" className={OpusTh}>Status</th>
+                  <th scope="col" className={cn(OpusTh, 'text-right')}>
+                    <span className="sr-only">Actions</span>
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y">
+                {rows.map((row) => (
+                  <tr key={row.id} className="group relative hover:bg-muted/40">
+                    <td className={OpusTd}>
+                      <Link
+                        href={`/appointments/staff/${row.id}`}
+                        className="flex items-center gap-3 after:absolute after:inset-0"
+                      >
+                        <Avatar initials={row.initials} url={row.avatarUrl} />
+                        <div className="min-w-0">
+                          <div className="font-medium truncate">{row.name}</div>
+                          {row.email ? <div className="truncate text-xs text-muted-foreground">{row.email}</div> : null}
+                        </div>
+                      </Link>
+                    </td>
+                    <td className={OpusTd}>{row.title || '—'}</td>
+                    <td className={OpusTd}>{row.serviceCount}</td>
+                    <td className={cn(OpusTd, 'text-muted-foreground')}>{row.locationLabels}</td>
+                    <td className={cn(OpusTd, 'text-muted-foreground')}>{row.availabilityLabel}</td>
+                    <td className={cn(OpusTd, 'text-muted-foreground')}>
+                      {row.calendarConnected ? `${row.calendarLabel} ✓` : row.calendarLabel}
+                    </td>
+                    <td className={OpusTd}>
+                      <Pill tone={row.status === 'needs_setup' ? 'warning' : row.status === 'active' ? 'success' : 'neutral'} dot={false}>
+                        {row.statusLabel}
+                      </Pill>
+                    </td>
+                    <td className={cn(OpusTd, 'relative z-10 text-right')}>
+                      <TextLink href={`/appointments/staff/${row.id}`}>Open</TextLink>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </OpusDataSurface>
       )}
 
