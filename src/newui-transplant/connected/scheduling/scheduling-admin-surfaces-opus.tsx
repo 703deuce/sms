@@ -4,7 +4,6 @@ import type { ReactNode } from 'react'
 import { SchedulingOpusBody } from '@/newui-transplant/connected/scheduling/scheduling-opus-body'
 import { AutomationsActivityClient } from '@/components/appointments/kimi-ui/automations-activity/components/AutomationsActivityClient'
 import { AutomationsTemplatesClient } from '@/components/appointments/automations-templates-client'
-import { TeamBookingConnected } from '@/features/appointments/kimi/team-booking/team-booking-connected'
 import { TeamPagesClient } from '@/components/appointments/team-pages-client'
 import { RoutingFormsClient } from '@/components/appointments/routing-forms-client'
 import { MeetingPollsLibraryConnected } from '@/components/appointments/meeting-polls/meeting-polls-library-connected'
@@ -46,14 +45,6 @@ export function AutomationsTemplatesOpus() {
     'Automation templates',
     'Reusable automation starting points.',
     <AutomationsTemplatesClient />,
-  )
-}
-
-export function TeamBookingOpus() {
-  return surface(
-    'Team booking',
-    'Shared booking links for your team.',
-    <TeamBookingConnected />,
   )
 }
 

@@ -1,113 +1,495 @@
 {
-  "generatedAt": "2026-10-13T17:41:38.125Z",
+  "generatedAt": "2026-10-13T17:47:19.739Z",
   "status": "INCOMPLETE",
+  "contract": "docs/UNIFIED-APPOINTMENTS-MIGRATION-EXECUTION-CONTRACT.md",
+  "retainedAdminRoutes": 117,
+  "verifiedNativeRoutes": 12,
+  "pendingRoutes": 105,
   "routePages": {
     "appointments": 93,
     "appointmentReminders": 24,
     "total": 117
   },
   "matrixNavRows": {
-    "opusComplete": 12,
-    "opusPartial": 40,
+    "opusComplete": 13,
+    "opusPartial": 39,
     "legacyKimi": 26
   },
-  "retainedAdminRoutes": 117,
-  "fullyMigratedRoutes": null,
-  "remainingLegacyVisualRoutes": null,
-  "notes": "fullyMigratedRoutes and remainingLegacyVisualRoutes require audit-unified-legacy-visual-imports.ts exit 0 and manual matrix opus_complete for all retained routes.",
-  "appointmentRoutePaths": [
-    "/appointments/[id]",
-    "/appointments/[id]/video/host",
-    "/appointments/ai-booking",
-    "/appointments/analytics/automations",
-    "/appointments/analytics/booking",
-    "/appointments/analytics",
-    "/appointments/analytics/reminders",
-    "/appointments/analytics/reports",
-    "/appointments/automations/activity",
-    "/appointments/automations/templates",
-    "/appointments/availability",
-    "/appointments/booking/branding",
-    "/appointments/booking/contracts",
-    "/appointments/booking/forms",
-    "/appointments/booking",
-    "/appointments/booking/share",
-    "/appointments/calendar",
-    "/appointments/categories",
-    "/appointments/classes/[id]",
-    "/appointments/classes/new",
-    "/appointments/classes",
-    "/appointments/client-restrictions",
-    "/appointments/clients/[clientId]",
-    "/appointments/clients",
-    "/appointments/commerce/contact-merge",
-    "/appointments/commerce",
-    "/appointments/contracts",
-    "/appointments/coupons",
-    "/appointments/enterprise",
-    "/appointments/forms-documents/[id]/builder",
-    "/appointments/forms-documents/[id]",
-    "/appointments/forms-documents",
-    "/appointments/integrations",
-    "/appointments/list",
-    "/appointments/locations/[locationId]",
-    "/appointments/locations",
-    "/appointments/meeting-polls/[pollId]",
-    "/appointments/meeting-polls",
-    "/appointments/meetings/[id]",
-    "/appointments/meetings/new",
-    "/appointments/meetings",
-    "/appointments/memberships/[id]",
-    "/appointments/memberships/new",
-    "/appointments/memberships",
-    "/appointments/new",
-    "/appointments/no-show-recovery",
-    "/appointments/overview",
-    "/appointments/packages/[id]",
-    "/appointments/packages/new",
-    "/appointments/packages",
-    "/appointments/payments",
-    "/appointments/point-of-sale",
-    "/appointments/policies",
-    "/appointments/polls",
-    "/appointments/pos",
-    "/appointments/pricing-payments",
-    "/appointments/recall-campaigns",
-    "/appointments/recalls",
-    "/appointments/reminders",
-    "/appointments/reports/service-booking",
-    "/appointments/resources/[resourceId]",
-    "/appointments/resources",
-    "/appointments/restrictions",
-    "/appointments/routing",
-    "/appointments/routing-forms",
-    "/appointments/scheduled",
-    "/appointments/segments",
-    "/appointments/service-booking",
-    "/appointments/services/[id]",
-    "/appointments/services/new",
-    "/appointments/services",
-    "/appointments/setup",
-    "/appointments/staff/[staffId]",
-    "/appointments/staff",
-    "/appointments/team-booking",
-    "/appointments/team-pages",
-    "/appointments/types/classes",
-    "/appointments/types/editor",
-    "/appointments/types/meetings/[id]",
-    "/appointments/types/meetings/new",
-    "/appointments/types/meetings",
-    "/appointments/types",
-    "/appointments/types/services",
-    "/appointments/types/workshops",
-    "/appointments/voice-reminders",
-    "/appointments/waitlist",
-    "/appointments/workflows/[id]/edit",
-    "/appointments/workflows/new",
-    "/appointments/workflows",
-    "/appointments/workflows/setup/[templateId]",
-    "/appointments/workshops/[id]",
-    "/appointments/workshops/new",
-    "/appointments/workshops"
+  "verification": {
+    "transitiveLegacyVisualAudit": "FAIL (47 files with violations)",
+    "transitiveLegacyVisualAuditExitCode": 1,
+    "productionBuild": "not run this generation",
+    "browserVerification": "not run this generation",
+    "functionalParityPerRoute": "only routes in verifiedNativeRoutes[] are claimed verified"
+  },
+  "routes": [
+    {
+      "href": "/appointments/[id]",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/[id]/video/host",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/ai-booking",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/analytics/automations",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/analytics/booking",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/analytics",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/analytics/reminders",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/analytics/reports",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/automations/activity",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/automations/templates",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/availability",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/booking/branding",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/booking/contracts",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/booking/forms",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/booking",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/booking/share",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/calendar",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/categories",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/classes/[id]",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/classes/new",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/classes",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/client-restrictions",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/clients/[clientId]",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/clients",
+      "status": "verified_native"
+    },
+    {
+      "href": "/appointments/commerce/contact-merge",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/commerce",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/contracts",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/coupons",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/enterprise",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/forms-documents/[id]/builder",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/forms-documents/[id]",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/forms-documents",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/integrations",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/list",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/locations/[locationId]",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/locations",
+      "status": "verified_native"
+    },
+    {
+      "href": "/appointments/meeting-polls/[pollId]",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/meeting-polls",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/meetings/[id]",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/meetings/new",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/meetings",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/memberships/[id]",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/memberships/new",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/memberships",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/new",
+      "status": "verified_native"
+    },
+    {
+      "href": "/appointments/no-show-recovery",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/overview",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/packages/[id]",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/packages/new",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/packages",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/payments",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/point-of-sale",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/policies",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/polls",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/pos",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/pricing-payments",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/recall-campaigns",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/recalls",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/reminders",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/reports/service-booking",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/resources/[resourceId]",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/resources",
+      "status": "verified_native"
+    },
+    {
+      "href": "/appointments/restrictions",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/routing",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/routing-forms",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/scheduled",
+      "status": "verified_native"
+    },
+    {
+      "href": "/appointments/segments",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/service-booking",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/services/[id]",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/services/new",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/services",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/setup",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/staff/[staffId]",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/staff",
+      "status": "verified_native"
+    },
+    {
+      "href": "/appointments/team-booking",
+      "status": "verified_native"
+    },
+    {
+      "href": "/appointments/team-pages",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/types/classes",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/types/editor",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/types/meetings/[id]",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/types/meetings/new",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/types/meetings",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/types",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/types/services",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/types/workshops",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/voice-reminders",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/waitlist",
+      "status": "verified_native"
+    },
+    {
+      "href": "/appointments/workflows/[id]/edit",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/workflows/new",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/workflows",
+      "status": "verified_native"
+    },
+    {
+      "href": "/appointments/workflows/setup/[templateId]",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/workshops/[id]",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/workshops/new",
+      "status": "pending"
+    },
+    {
+      "href": "/appointments/workshops",
+      "status": "pending"
+    },
+    {
+      "href": "/appointment-reminders/ai-rescheduler",
+      "status": "verified_native"
+    },
+    {
+      "href": "/appointment-reminders/analytics",
+      "status": "pending"
+    },
+    {
+      "href": "/appointment-reminders/appointments",
+      "status": "pending"
+    },
+    {
+      "href": "/appointment-reminders/booking/meetings/[id]",
+      "status": "pending"
+    },
+    {
+      "href": "/appointment-reminders/booking/meetings/new",
+      "status": "pending"
+    },
+    {
+      "href": "/appointment-reminders/booking/meetings",
+      "status": "pending"
+    },
+    {
+      "href": "/appointment-reminders/booking",
+      "status": "pending"
+    },
+    {
+      "href": "/appointment-reminders/booking/services/[id]",
+      "status": "pending"
+    },
+    {
+      "href": "/appointment-reminders/booking/services/new",
+      "status": "pending"
+    },
+    {
+      "href": "/appointment-reminders/booking/services",
+      "status": "pending"
+    },
+    {
+      "href": "/appointment-reminders/calendar",
+      "status": "pending"
+    },
+    {
+      "href": "/appointment-reminders/calendars",
+      "status": "pending"
+    },
+    {
+      "href": "/appointment-reminders/held-inbound",
+      "status": "pending"
+    },
+    {
+      "href": "/appointment-reminders",
+      "status": "pending"
+    },
+    {
+      "href": "/appointment-reminders/pricing",
+      "status": "pending"
+    },
+    {
+      "href": "/appointment-reminders/reminders",
+      "status": "verified_native"
+    },
+    {
+      "href": "/appointment-reminders/reminders/sequences/[stepKey]/edit",
+      "status": "pending"
+    },
+    {
+      "href": "/appointment-reminders/reminders/sequences",
+      "status": "pending"
+    },
+    {
+      "href": "/appointment-reminders/reminders/templates",
+      "status": "pending"
+    },
+    {
+      "href": "/appointment-reminders/responses",
+      "status": "verified_native"
+    },
+    {
+      "href": "/appointment-reminders/settings",
+      "status": "pending"
+    },
+    {
+      "href": "/appointment-reminders/setup/activate",
+      "status": "pending"
+    },
+    {
+      "href": "/appointment-reminders/setup/configure",
+      "status": "pending"
+    },
+    {
+      "href": "/appointment-reminders/setup/connect",
+      "status": "pending"
+    }
   ]
 }

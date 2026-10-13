@@ -20,7 +20,7 @@ Regenerate: `npx tsx scripts/generate-unified-frontend-migration-matrix.ts`
 | Booking | Branding | `/appointments/booking/branding` | Opus partial | ServiceBookingAdminClient | ServiceBookingAdminOpus |  |
 | Booking | Forms | `/appointments/booking/forms` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
 | Booking | Contracts | `/appointments/booking/contracts` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
-| Booking | Team booking | `/appointments/team-booking` | Opus partial | TeamBookingConnected | TeamBookingOpus |  |
+| Booking | Team booking | `/appointments/team-booking` | Opus complete | TeamBookingWorkspaceConnected | team-booking-opus.tsx |  |
 | Booking | Team pages | `/appointments/team-pages` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
 | Booking | Routing forms | `/appointments/routing-forms` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
 | Booking | Meeting polls | `/appointments/meeting-polls` | Opus partial | MeetingPollsLibraryConnected | MeetingPollsOpus |  |

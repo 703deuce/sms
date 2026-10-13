@@ -67,13 +67,13 @@ import {
   RoutingFormsOpus,
   SegmentsOpus,
   SetupOpus,
-  TeamBookingOpus,
   TeamPagesOpus,
   VoiceRemindersOpus,
 } from '@/newui-transplant/connected/scheduling/scheduling-admin-surfaces-opus'
 import { ClassesWorkspaceOpus } from '@/newui-transplant/connected/scheduling/classes-workspace-opus'
 import { WorkshopsWorkspaceOpus } from '@/newui-transplant/connected/scheduling/workshops-workspace-opus'
 import { ContactMergeOpus } from '@/newui-transplant/connected/scheduling/contact-merge-opus'
+import { TeamBookingOpus } from '@/newui-transplant/connected/scheduling/team-booking-opus'
 import { ContactMergeClient } from '@/components/appointments/commerce/contact-merge-client'
 
 export function StaffDirectoryGate() {

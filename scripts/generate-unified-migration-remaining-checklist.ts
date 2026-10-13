@@ -1,11 +1,28 @@
 /**
- * Writes docs/UNIFIED-APPOINTMENTS-MIGRATION-REMAINING-CHECKLIST.json from route tree + matrix.
+ * Writes docs/UNIFIED-APPOINTMENTS-MIGRATION-REMAINING-CHECKLIST.json
  * Run: npx tsx scripts/generate-unified-migration-remaining-checklist.ts
  */
+import { execSync } from 'node:child_process'
 import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 
 const ROOT = join(import.meta.dirname, '..')
+
+/** Routes verified native New UI2 + functional parity (grow as migration proceeds). */
+const VERIFIED_NATIVE_ROUTES: string[] = [
+  '/appointments/team-booking',
+  '/appointments/staff',
+  '/appointments/locations',
+  '/appointments/resources',
+  '/appointments/clients',
+  '/appointments/scheduled',
+  '/appointments/new',
+  '/appointments/waitlist',
+  '/appointments/workflows',
+  '/appointment-reminders/responses',
+  '/appointment-reminders/reminders',
+  '/appointment-reminders/ai-rescheduler',
+]
 
 function walk(dir: string, acc: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
@@ -16,9 +33,17 @@ function walk(dir: string, acc: string[] = []): string[] {
   return acc
 }
 
+function routePathFromPage(pagePath: string): string {
+  const rel = relative(join(ROOT, 'src/app/(app)'), pagePath).replace(/\/page\.tsx$/, '')
+  return `/${rel}`
+}
+
 function main() {
   const appointmentPages = walk(join(ROOT, 'src/app/(app)/appointments'))
   const arPages = walk(join(ROOT, 'src/app/(app)/appointment-reminders'))
+  const allPages = [...appointmentPages, ...arPages]
+  const routePaths = allPages.map(routePathFromPage)
+
   const matrix = readFileSync(
     join(ROOT, 'docs/UNIFIED-APPOINTMENTS-FRONTEND-MIGRATION-MATRIX.md'),
     'utf8',
@@ -27,30 +52,52 @@ function main() {
   const legacy = (matrix.match(/Legacy Kimi/g) || []).length
   const complete = (matrix.match(/Opus complete/g) || []).length
 
+  let auditExitCode = 0
+  let auditSummary = 'not run'
+  try {
+    execSync('npx tsx scripts/audit-unified-legacy-visual-imports.ts', {
+      cwd: ROOT,
+      stdio: 'pipe',
+    })
+    auditSummary = 'PASS (0 transitive violations)'
+  } catch (e: unknown) {
+    auditExitCode = 1
+    const out = (e as { stdout?: Buffer }).stdout?.toString() || ''
+    const m = out.match(/Unique files with violations: (\d+)/)
+    auditSummary = m ? `FAIL (${m[1]} files with violations)` : 'FAIL'
+  }
+
+  const routes = routePaths.map((href) => ({
+    href,
+    status:
+      VERIFIED_NATIVE_ROUTES.includes(href) ? 'verified_native' : ('pending' as const),
+  }))
+
   const checklist = {
     generatedAt: new Date().toISOString(),
     status: 'INCOMPLETE',
+    contract: 'docs/UNIFIED-APPOINTMENTS-MIGRATION-EXECUTION-CONTRACT.md',
+    retainedAdminRoutes: routePaths.length,
+    verifiedNativeRoutes: VERIFIED_NATIVE_ROUTES.length,
+    pendingRoutes: routePaths.length - VERIFIED_NATIVE_ROUTES.length,
     routePages: {
       appointments: appointmentPages.length,
       appointmentReminders: arPages.length,
-      total: appointmentPages.length + arPages.length,
+      total: routePaths.length,
     },
     matrixNavRows: {
       opusComplete: complete,
       opusPartial: partial,
       legacyKimi: legacy,
     },
-    retainedAdminRoutes: appointmentPages.length + arPages.length,
-    fullyMigratedRoutes: null as number | null,
-    remainingLegacyVisualRoutes: null as number | null,
-    notes:
-      'fullyMigratedRoutes and remainingLegacyVisualRoutes require audit-unified-legacy-visual-imports.ts exit 0 and manual matrix opus_complete for all retained routes.',
-    appointmentRoutePaths: appointmentPages.map((p) =>
-      '/' +
-      relative(join(ROOT, 'src/app/(app)'), p)
-        .replace(/\/page\.tsx$/, '')
-        .replace(/^appointments\//, 'appointments/'),
-    ),
+    verification: {
+      transitiveLegacyVisualAudit: auditSummary,
+      transitiveLegacyVisualAuditExitCode: auditExitCode,
+      productionBuild: 'not run this generation',
+      browserVerification: 'not run this generation',
+      functionalParityPerRoute: 'only routes in verifiedNativeRoutes[] are claimed verified',
+    },
+    routes,
   }
 
   writeFileSync(

@@ -1,11 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import type { TeamBookingWorkspaceData } from "@/lib/appointments/team-booking/team-booking-workspace-types";
 
 export function useTeamBookingWorkspace() {
-  const [data, setData] = useState<Awaited<
-    ReturnType<typeof import("@/lib/appointments/team-booking/team-booking-workspace").buildTeamBookingWorkspace>
-  > | null>(null);
+  const [data, setData] = useState<TeamBookingWorkspaceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [simulating, setSimulating] = useState(false);

@@ -63,7 +63,7 @@ const ROUTE_STATUS: Record<string, { status: Status; replacement: string; legacy
   '/appointments/commerce': { status: 'opus_partial', legacy: 'redirect only', replacement: 'ServiceBookingHubGate / CommerceHubOpus' },
   '/appointments/commerce/contact-merge': { status: 'opus_partial', legacy: 'inline page', replacement: 'contact-merge-opus.tsx' },
   '/appointments/booking/share': { status: 'opus_partial', legacy: 'BookingShareHubClient', replacement: 'BookingShareOpus' },
-  '/appointments/team-booking': { status: 'opus_partial', legacy: 'TeamBookingConnected', replacement: 'TeamBookingOpus' },
+  '/appointments/team-booking': { status: 'opus_complete', legacy: 'TeamBookingWorkspaceConnected', replacement: 'team-booking-opus.tsx' },
   '/appointments/policies': { status: 'opus_partial', legacy: 'AppointmentsPoliciesClient', replacement: 'PoliciesOpus' },
   '/appointments/forms-documents': { status: 'opus_partial', legacy: 'FormsDocumentsClient', replacement: 'FormsDocumentsOpus' },
   '/appointments/automations/activity': { status: 'opus_partial', legacy: 'AutomationsActivityClient', replacement: 'AutomationsActivityOpus' },
