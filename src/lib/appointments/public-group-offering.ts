@@ -35,6 +35,7 @@ export type PublicGroupSeries = {
   showRemainingSpots: boolean;
   waitlistEnabled: boolean;
   confirmationMessage: string | null;
+  paymentMode?: string | null;
   /** Where it happens, in the customer's words. Null when nothing is set. */
   placeLabel: string | null;
   /** Null when registration is open; otherwise why it is not. */
@@ -156,6 +157,22 @@ export async function loadPublicGroupOfferings(
   );
 
   const occurrenceIds = occurrences.map((occ) => occ.id);
+  const now = new Date();
+  const activeHolds = occurrenceIds.length
+    ? await prisma.classOccurrenceRegistrationHold.groupBy({
+        by: ["occurrenceId"],
+        where: {
+          workspaceId,
+          occurrenceId: { in: occurrenceIds },
+          status: "active",
+          expiresAt: { gt: now },
+        },
+        _count: { occurrenceId: true },
+      })
+    : [];
+  const holdMap = new Map<string, number>(
+    activeHolds.map((h) => [String(h.occurrenceId), h._count.occurrenceId]),
+  );
   const seatMaps: Array<{
     id: string;
     occurrenceId: string | null;
@@ -175,6 +192,7 @@ export async function loadPublicGroupOfferings(
   const publicOccurrences: PublicGroupOccurrence[] = occurrences.map((occ) => {
     const seatMap = seatMapByOccurrence.get(occ.id);
     const enrolled = Number(countMap.get(occ.id) ?? 0);
+    const holds = Number(holdMap.get(occ.id) ?? 0);
     const cap = Number(occ.capacity ?? 0);
     return {
       id: occ.id,
@@ -183,7 +201,7 @@ export async function loadPublicGroupOfferings(
       endsAt: occ.endsAt.toISOString(),
       capacity: cap,
       enrolled,
-      remaining: Math.max(0, cap - enrolled),
+      remaining: Math.max(0, cap - enrolled - holds),
       seatMapId: seatMap?.id ?? null,
       seatMapName: seatMap?.name ?? null,
       requiresSeatSelection: Boolean(seatMap?.id),
@@ -205,6 +223,7 @@ export async function loadPublicGroupOfferings(
       showRemainingSpots: meta.showRemainingSpots !== false,
       waitlistEnabled: meta.waitlistEnabled === true,
       confirmationMessage: meta.confirmationMessage ?? null,
+      paymentMode: meta.paymentMode ?? null,
       placeLabel: publicPlaceLabel(meta, s.locationId, locationNames),
       registrationClosedReason: classRegistrationClosedReason(s.metadata),
     };

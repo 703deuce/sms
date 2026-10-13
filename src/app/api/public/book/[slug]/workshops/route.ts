@@ -70,6 +70,18 @@ export async function POST(request: Request, { params }: Params) {
       return NextResponse.json({ data: entitlements });
     }
 
+    if (body.action === "startCheckout" || body.action === "fulfillCheckout") {
+      const { handlePublicClassRegistrationAction } = await import(
+        "@/lib/appointments/service-booking/public-class-registration-api"
+      );
+      const actionResult = await handlePublicClassRegistrationAction(
+        { id: workspace.id, slug },
+        "workshop",
+        body as Record<string, unknown>,
+      );
+      return NextResponse.json({ data: actionResult });
+    }
+
     const phone = String(body.phone || "").trim();
     const firstName = String(body.firstName || "").trim();
     const lastName = String(body.lastName || "").trim();
@@ -168,16 +180,17 @@ export async function POST(request: Request, { params }: Params) {
         membershipSubscriptionId: body.membershipSubscriptionId
           ? String(body.membershipSubscriptionId)
           : undefined,
-        stripeCheckoutSessionId: body.stripeCheckoutSessionId
-          ? String(body.stripeCheckoutSessionId)
-          : undefined,
       };
+      const { classDirectEnrollBlockedReason, classRegistrationPaymentRequiredReason } =
+        await import("@/lib/appointments/service-booking/class-registration-entitlement");
       const closed = classRegistrationClosedReason(seriesForRegistration.metadata, undefined, {
         skipPaidEnrollmentGuard: Boolean(
           entitlement.packageBalanceId || entitlement.membershipSubscriptionId,
         ),
       });
       if (closed) return NextResponse.json({ error: closed }, { status: 400 });
+      const directBlock = classDirectEnrollBlockedReason(seriesForRegistration.metadata);
+      if (directBlock) return NextResponse.json({ error: directBlock }, { status: 403 });
       const paymentRequired = classRegistrationPaymentRequiredReason(
         seriesForRegistration.metadata,
         entitlement,

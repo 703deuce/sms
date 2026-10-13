@@ -112,6 +112,15 @@ async function routeCheckoutSessionCompleted(event: Stripe.Event, session: Strip
       mode: session.mode,
     });
   }
+  const { CLASS_REGISTRATION_CHECKOUT_TYPE, fulfillClassRegistrationCheckoutOnce } = await import(
+    "@/lib/appointments/service-booking/class-registration-checkout",
+  );
+  if (metadata.transaction_type === CLASS_REGISTRATION_CHECKOUT_TYPE) {
+    return fulfillClassRegistrationCheckoutOnce({
+      id: session.id,
+      metadata: session.metadata,
+    });
+  }
   const { isPaymentRequestCheckoutMetadata } = await import("@/lib/payment-requests/stripe-checkout");
   if (isPaymentRequestCheckoutMetadata(metadata)) {
     const auth = await authorizePaymentRequestConnectEvent(event, metadata);

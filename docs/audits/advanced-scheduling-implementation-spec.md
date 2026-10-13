@@ -186,9 +186,11 @@ On fulfill → call `enrollInClass` then attach payment to enrollment metadata.
 
 ## 7. Phase 1c — Correctness hardening
 
+**Status (in progress on `cursor/ar-package-phase0-1a-f350`):** `ServiceBookingStoreFulfillment` + `fulfillStoreCheckoutSessionOnce`, atomic `redeemPackageCreditAtomic`, `class-registration-capacity` (holds + locked enroll), membership class entitlement hooks, `scripts/cert-advanced-scheduling-phase-1c.ts` (requires `DATABASE_URL`).
+
 ### 7.1 Durable store idempotency
 
-**Replace** `fulfilledSessions` Set in `store-checkout.ts` with DB row e.g. `StoreFulfillment` (`stripeSessionId` unique, `fulfilledAt`, `resultJson`).
+**Replace** `fulfilledSessions` Set in `store-checkout.ts` with DB row e.g. `StoreFulfillment` (`stripeSessionId` unique, `fulfilledAt`, `resultJson`). **Implemented:** `service_booking_store_fulfillments` + `store-fulfillment.ts`.
 
 - `handleStoreCheckoutCompleted` and `fulfillStoreCheckoutBySessionId` check insert-first / unique constraint.
 - Webhook retries safe.

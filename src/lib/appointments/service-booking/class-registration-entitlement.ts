@@ -1,6 +1,8 @@
 import "server-only";
 
-import { parseClassSeriesMetadata } from "@/lib/appointments/class-series-offering";
+import {
+  parseClassSeriesMetadata,
+} from "@/lib/appointments/class-series-offering";
 import {
   classPackageCreditRequiredReason,
   classRequiresPackageToEnroll,
@@ -9,18 +11,24 @@ import {
 export type ClassRegistrationEntitlementInput = {
   packageBalanceId?: string | null;
   membershipSubscriptionId?: string | null;
-  stripeCheckoutSessionId?: string | null;
 };
 
-/** Whether POST supplied an entitlement path the server will validate (not trust blindly). */
+/** Whether POST supplied package/membership the server will validate (not trust blindly). */
 export function classRegistrationEntitlementSupplied(
   input: ClassRegistrationEntitlementInput,
 ): boolean {
-  return Boolean(
-    input.packageBalanceId ||
-      input.membershipSubscriptionId ||
-      input.stripeCheckoutSessionId,
-  );
+  return Boolean(input.packageBalanceId || input.membershipSubscriptionId);
+}
+
+/** Blocks direct enroll POST when Stripe checkout is required (payment verified only on fulfill path). */
+export function classDirectEnrollBlockedReason(metadata: unknown): string | null {
+  const meta = parseClassSeriesMetadata(metadata);
+  const priceCents = Number(meta.priceCents ?? 0);
+  if (meta.isFree === true || priceCents <= 0) return null;
+  if (meta.paymentMode === "pay_at_registration") {
+    return "Payment is required. Use Pay & register to complete checkout.";
+  }
+  return null;
 }
 
 /**

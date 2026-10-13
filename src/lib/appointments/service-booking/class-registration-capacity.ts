@@ -10,6 +10,11 @@ function occurrenceLockId(occurrenceId: string): bigint {
   return hash.readBigInt64BE(0);
 }
 
+function seriesLockId(seriesId: string): bigint {
+  const hash = createHash("sha256").update(`class-series|${seriesId}`).digest();
+  return hash.readBigInt64BE(0);
+}
+
 export async function countActiveRegistrationHolds(
   occurrenceId: string,
   tx?: DbRow,
@@ -149,10 +154,11 @@ export async function enrollInOccurrenceWithCapacityLock(
     occurrenceId: string;
     seriesId: string;
     contactId: string;
+    paymentMetadata?: Record<string, unknown>;
   },
+  txOuter?: DbRow,
 ) {
-  const prisma = getPrisma();
-  return prisma.$transaction(async (tx: DbRow) => {
+  const run = async (tx: DbRow) => {
     const lock = occurrenceLockId(input.occurrenceId);
     if (typeof tx.$executeRaw === "function") {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lock})`;
@@ -165,7 +171,136 @@ export async function enrollInOccurrenceWithCapacityLock(
         seriesId: input.seriesId,
         contactId: input.contactId,
         status: "enrolled",
+        metadata: input.paymentMetadata ?? undefined,
       },
     });
+  };
+  if (txOuter) return run(txOuter);
+  const prisma = getPrisma();
+  return prisma.$transaction(run);
+}
+
+/** Reserve capacity on every scheduled session before checkout (all-or-nothing). */
+export async function createRegistrationHoldsForOccurrences(input: {
+  workspaceId: string;
+  contactId: string;
+  occurrenceIds: string[];
+  registrationGroupId: string;
+  stripeCheckoutSessionId?: string;
+  holdMinutes?: number;
+}) {
+  const prisma = getPrisma();
+  const minutes = input.holdMinutes ?? DEFAULT_CLASS_REGISTRATION_HOLD_MINUTES;
+  const expiresAt = new Date(Date.now() + minutes * 60_000);
+
+  return prisma.$transaction(async (tx: DbRow) => {
+    const holds = [];
+    for (const occurrenceId of input.occurrenceIds) {
+      const lock = occurrenceLockId(occurrenceId);
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lock})`;
+      }
+      await assertOccurrenceCapacityWithHolds(input.workspaceId, occurrenceId, tx);
+      holds.push(
+        await tx.classOccurrenceRegistrationHold.create({
+          data: {
+            workspaceId: input.workspaceId,
+            occurrenceId,
+            contactId: input.contactId,
+            stripeCheckoutSessionId: input.stripeCheckoutSessionId,
+            status: "active",
+            expiresAt,
+            metadata: { registrationGroupId: input.registrationGroupId },
+          },
+        }),
+      );
+    }
+    return holds;
+  });
+}
+
+function holdGroupId(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== "object") return null;
+  const id = (metadata as { registrationGroupId?: string }).registrationGroupId;
+  return id ? String(id) : null;
+}
+
+export async function releaseRegistrationHoldsByGroup(registrationGroupId: string) {
+  const prisma = getPrisma();
+  const active = await prisma.classOccurrenceRegistrationHold.findMany({
+    where: { status: "active" },
+    take: 500,
+  });
+  const ids = active.filter((h) => holdGroupId(h.metadata) === registrationGroupId).map((h) => h.id);
+  if (!ids.length) return { count: 0 };
+  return prisma.classOccurrenceRegistrationHold.updateMany({
+    where: { id: { in: ids } },
+    data: { status: "released", fulfillmentOutcome: "released" },
+  });
+}
+
+export async function consumeRegistrationHoldsByGroup(
+  registrationGroupId: string,
+  enrollmentIds: string[],
+) {
+  const prisma = getPrisma();
+  const holds = await prisma.classOccurrenceRegistrationHold.findMany({
+    where: { status: "active" },
+    take: 500,
+  }).then((rows) => rows.filter((h) => holdGroupId(h.metadata) === registrationGroupId));
+  for (let i = 0; i < holds.length; i++) {
+    await prisma.classOccurrenceRegistrationHold.update({
+      where: { id: holds[i].id },
+      data: {
+        status: "consumed",
+        metadata: {
+          ...(typeof holds[i].metadata === "object" && holds[i].metadata
+            ? holds[i].metadata
+            : {}),
+          enrollmentId: enrollmentIds[i] || enrollmentIds[0],
+          consumedAt: new Date().toISOString(),
+        },
+      },
+    });
+  }
+}
+
+/** Enroll in every scheduled session atomically — all sessions or none. */
+export async function enrollFullSeriesAtomic(
+  workspaceId: string,
+  input: { contactId: string; seriesId: string; paymentMetadata?: Record<string, unknown> },
+) {
+  const prisma = getPrisma();
+  return prisma.$transaction(async (tx: DbRow) => {
+    const lock = seriesLockId(input.seriesId);
+    if (typeof tx.$executeRaw === "function") {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lock})`;
+    }
+    const occurrences = await tx.classOccurrence.findMany({
+      where: { workspaceId, seriesId: input.seriesId, status: "scheduled" },
+      orderBy: { startsAt: "asc" },
+    });
+    if (occurrences.length === 0) throw new Error("No scheduled sessions for this course");
+
+    for (const occ of occurrences) {
+      await assertOccurrenceCapacityWithHolds(workspaceId, occ.id, tx);
+    }
+
+    const enrollments = [];
+    for (const occ of occurrences) {
+      enrollments.push(
+        await tx.classEnrollment.create({
+          data: {
+            workspaceId,
+            occurrenceId: occ.id,
+            seriesId: input.seriesId,
+            contactId: input.contactId,
+            status: "enrolled",
+            metadata: input.paymentMetadata ?? undefined,
+          },
+        }),
+      );
+    }
+    return enrollments;
   });
 }

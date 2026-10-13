@@ -12,7 +12,7 @@ export function classPaidEnrollmentBlockedReason(metadata: unknown): string | nu
   if (meta.paymentMode === "package_only") return null;
 
   if (meta.paymentMode === "pay_at_registration") {
-    return "Online payment is required to register. Checkout is not available on this page yet — please contact the business.";
+    return null;
   }
 
   // Legacy / on_site: priced series must not enroll without package or payment.

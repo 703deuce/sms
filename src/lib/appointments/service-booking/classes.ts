@@ -344,27 +344,11 @@ export async function enrollInClass(
 
   if (input.enrollFullSeries && input.seriesId) {
     await assertSeriesMembership(input.seriesId);
-    const occurrences = await prisma.classOccurrence.findMany({
-      where: { workspaceId, seriesId: input.seriesId, status: "scheduled" },
+    const { enrollFullSeriesAtomic } = await import("./class-registration-capacity");
+    return enrollFullSeriesAtomic(workspaceId, {
+      contactId: input.contactId,
+      seriesId: input.seriesId,
     });
-    // Every session is checked before any seat is taken. Enrolling session by
-    // session and failing halfway used to leave the customer holding a partial
-    // series they had already been charged for.
-    for (const occ of occurrences) {
-      await assertOccurrenceCapacity(workspaceId, occ.id);
-    }
-    const { enrollInOccurrenceWithCapacityLock } = await import("./class-registration-capacity");
-    const enrollments = [];
-    for (const occ of occurrences) {
-      enrollments.push(
-        await enrollInOccurrenceWithCapacityLock(workspaceId, {
-          occurrenceId: occ.id,
-          seriesId: input.seriesId!,
-          contactId: input.contactId,
-        }),
-      );
-    }
-    return enrollments;
   }
   if (!input.occurrenceId) throw new Error("occurrenceId required");
   const { seriesId } = await assertOccurrenceCapacity(workspaceId, input.occurrenceId);

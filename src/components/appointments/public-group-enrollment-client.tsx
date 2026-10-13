@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   CLASS_SERIES_OFFERING_UI,
   type ClassSeriesOfferingKind,
@@ -18,6 +19,8 @@ type ClassSeries = {
   confirmationMessage?: string | null;
   placeLabel?: string | null;
   registrationClosedReason?: string | null;
+  paymentMode?: string | null;
+  requireFullSeries?: boolean;
 };
 type ClassOccurrence = {
   id: string;
@@ -59,6 +62,7 @@ export function PublicGroupEnrollmentClient({
   const copy = CLASS_SERIES_OFFERING_UI[offeringKind];
   const apiBase = `/api/public/book/${slug}/${copy.publicPathSuffix}`;
   const seatsApiBase = `/api/public/book/${slug}/classes/seats`;
+  const searchParams = useSearchParams();
 
   const [series, setSeries] = useState<ClassSeries[]>([]);
   const [occurrences, setOccurrences] = useState<ClassOccurrence[]>([]);
@@ -101,6 +105,35 @@ export function PublicGroupEnrollmentClient({
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const checkout = searchParams.get("checkout");
+    const sessionId = searchParams.get("session_id");
+    if (checkout !== "success" || !sessionId) return;
+    setBusy(true);
+    setError(null);
+    void (async () => {
+      try {
+        const res = await fetch(apiBase, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "fulfillCheckout", sessionId }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Could not complete registration");
+        setMessage("Payment received. You are registered.");
+        await load();
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Payment succeeded but registration is pending. The business will follow up.",
+        );
+      } finally {
+        setBusy(false);
+      }
+    })();
+  }, [apiBase, load, searchParams]);
 
   async function openSeatPicker(occ: ClassOccurrence) {
     if (!firstName.trim() || !phone.trim()) {
@@ -149,20 +182,118 @@ export function PublicGroupEnrollmentClient({
     }>;
   }
 
+  async function startPaidCheckout(input: {
+    occurrenceId?: string;
+    seriesId?: string;
+    enrollFullSeries?: boolean;
+    packageBalanceId?: string;
+    membershipSubscriptionId?: string;
+  }) {
+    if (!firstName.trim() || !phone.trim()) {
+      setError("First name and phone are required.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(apiBase, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "startCheckout",
+          firstName,
+          lastName,
+          phone,
+          email: email || undefined,
+          ...input,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Checkout failed");
+      if (json.data?.directEnroll) {
+        if (input.occurrenceId) {
+          await enroll(input.occurrenceId, undefined, input.packageBalanceId, true);
+        } else if (input.seriesId) {
+          await enrollCourse(input.seriesId, input.packageBalanceId, input.membershipSubscriptionId);
+        }
+        return;
+      }
+      if (json.data?.checkoutUrl) {
+        window.location.href = json.data.checkoutUrl as string;
+        return;
+      }
+      throw new Error("Checkout could not be started");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Checkout failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function enrollCourse(
+    seriesId: string,
+    packageBalanceId?: string,
+    membershipSubscriptionId?: string,
+  ) {
+    const s = seriesMap.get(seriesId);
+    if (!firstName.trim() || !phone.trim()) {
+      setError("First name and phone are required.");
+      return;
+    }
+    const needsPay =
+      s?.paymentMode === "pay_at_registration" && !packageBalanceId && !membershipSubscriptionId;
+    if (needsPay) {
+      await startPaidCheckout({ seriesId, enrollFullSeries: true });
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(apiBase, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          seriesId,
+          enrollFullSeries: true,
+          firstName,
+          lastName,
+          phone,
+          email: email || undefined,
+          packageBalanceId,
+          membershipSubscriptionId,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Registration failed");
+      setMessage(s?.confirmationMessage || "You are enrolled in the full course.");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Registration failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function enroll(
     occurrenceId: string,
     seat?: { seatMapId: string; rowIndex: number; colIndex: number; seatLabel: string },
     packageBalanceId?: string,
     skipPackageLookup = false,
   ) {
-    const occurrence = occurrences.find((o) => o.id === occurrenceId);
-    const confirmation = occurrence
-      ? series.find((s) => s.id === occurrence.seriesId)?.confirmationMessage
-      : null;
     if (!firstName.trim() || !phone.trim()) {
       setError("First name and phone are required.");
       return;
     }
+    const occurrence = occurrences.find((o) => o.id === occurrenceId);
+    const s = occurrence ? seriesMap.get(occurrence.seriesId) : null;
+    const confirmation = s?.confirmationMessage ?? null;
+    const needsPay =
+      s?.paymentMode === "pay_at_registration" && !packageBalanceId && !skipPackageLookup;
+    if (needsPay && !seat) {
+      await startPaidCheckout({ occurrenceId });
+      return;
+    }
+
     setBusy(true);
     setError(null);
     setMessage(null);
@@ -239,7 +370,11 @@ export function PublicGroupEnrollmentClient({
     });
   }
 
-  const seriesMap = new Map(series.map((s) => [s.id, s]));
+  const seriesMap = useMemo(() => new Map(series.map((s) => [s.id, s])), [series]);
+  const fullCourseSeries = useMemo(
+    () => series.filter((s) => s.requireFullSeries && !s.registrationClosedReason),
+    [series],
+  );
   const emptyLabel =
     offeringKind === "workshop" ? "No upcoming workshops." : "No upcoming class sessions.";
   const loadingLabel =
@@ -442,6 +577,43 @@ export function PublicGroupEnrollmentClient({
         </section>
       ) : null}
 
+      {fullCourseSeries.length > 0 ? (
+        <section className="rounded-lg border p-4 space-y-3">
+          <h2 className="text-sm font-semibold">Full courses</h2>
+          <p className="text-sm text-muted-foreground">
+            One purchase enrolls you in every scheduled session.
+          </p>
+          <ul className="space-y-3">
+            {fullCourseSeries.map((s) => {
+              const price =
+                s.isFree === false && s.priceCents
+                  ? `$${(s.priceCents / 100).toFixed(2)}`
+                  : "Free";
+              const paid = s.paymentMode === "pay_at_registration";
+              return (
+                <li key={s.id} className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="font-medium">{s.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {price}
+                      {paid ? " · Pay & register" : s.paymentMode === "package_only" ? " · Package required" : ""}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+                    onClick={() => void enrollCourse(s.id)}
+                  >
+                    {paid ? "Pay & register" : copy.registerVerb}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
+
       {loading ? (
         <p className="text-sm text-muted-foreground">{loadingLabel}</p>
       ) : occurrences.length === 0 ? (
@@ -453,7 +625,9 @@ export function PublicGroupEnrollmentClient({
             const full = occ.remaining <= 0;
             const closed = s?.registrationClosedReason || null;
             const waitlistable = full && s?.waitlistEnabled === true;
-            const price = s?.isFree === false && s.priceCents ? `$${(s.priceCents / 100).toFixed(2)}` : "Free";
+            const price =
+              s?.isFree === false && s.priceCents ? `$${(s.priceCents / 100).toFixed(2)}` : "Free";
+            const paidDropIn = s?.paymentMode === "pay_at_registration";
             const facts = [
               // Remaining seats are only shown when the class says to show them.
               s?.showRemainingSpots === false
@@ -494,7 +668,9 @@ export function PublicGroupEnrollmentClient({
                     ? "Join waitlist"
                     : occ.requiresSeatSelection
                       ? "Choose seat"
-                      : copy.registerVerb}
+                      : paidDropIn
+                        ? "Pay & register"
+                        : copy.registerVerb}
                 </button>
               </li>
             );
