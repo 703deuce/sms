@@ -284,6 +284,13 @@ export type JobQueueHealthSnapshot = {
     waiting: number;
     delayed: number;
     failed: number;
+    redisMemory?: {
+      usedMemoryBytes: number;
+      usedMemoryHuman: string;
+      maxMemoryBytes: number | null;
+      maxMemoryHuman: string | null;
+      maxmemoryPolicy: string | null;
+    };
   };
 };
 
@@ -349,8 +356,12 @@ export async function getJobQueueHealthSnapshot(): Promise<JobQueueHealthSnapsho
   let bullmq: JobQueueHealthSnapshot["bullmq"];
   if (process.env.REDIS_URL?.trim()) {
     try {
-      const { getBullmqQueueDepths } = await import("@/lib/jobs/bullmq-queue-health");
-      bullmq = await getBullmqQueueDepths();
+      const { getBullmqQueueDepths, getBullmqRedisMemorySummary } = await import(
+        "@/lib/jobs/bullmq-queue-health"
+      );
+      const depths = await getBullmqQueueDepths();
+      const redisMemory = await getBullmqRedisMemorySummary();
+      bullmq = { ...depths, ...(redisMemory ? { redisMemory } : {}) };
     } catch {
       bullmq = undefined;
     }

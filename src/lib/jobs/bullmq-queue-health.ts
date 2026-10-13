@@ -53,3 +53,50 @@ export async function getBullmqQueueDepths(): Promise<{
   }
   return { waiting, delayed, failed };
 }
+
+/** Read-only Redis memory summary for job-queue / ops health probes. */
+export async function getBullmqRedisMemorySummary(): Promise<
+  | {
+      usedMemoryBytes: number;
+      usedMemoryHuman: string;
+      maxMemoryBytes: number | null;
+      maxMemoryHuman: string | null;
+      maxmemoryPolicy: string | null;
+    }
+  | undefined
+> {
+  if (!process.env.REDIS_URL?.trim()) return undefined;
+  const conn = connection();
+  try {
+    const info = await conn.info("memory");
+    const used = /used_memory:(\d+)/.exec(info)?.[1];
+    const usedHuman = /used_memory_human:([^\r\n]+)/.exec(info)?.[1]?.trim();
+    const maxCfg = await conn.config("GET", "maxmemory").catch(() => null);
+    const policyCfg = await conn.config("GET", "maxmemory-policy").catch(() => null);
+    const maxRaw = maxCfg && typeof maxCfg === "object" && "maxmemory" in maxCfg
+      ? String((maxCfg as { maxmemory?: string }).maxmemory)
+      : Array.isArray(maxCfg)
+        ? String(maxCfg[1] ?? "")
+        : "";
+    const maxBytes = maxRaw && maxRaw !== "0" ? Number(maxRaw) : null;
+    const policy =
+      policyCfg && typeof policyCfg === "object" && "maxmemory-policy" in policyCfg
+        ? String((policyCfg as { "maxmemory-policy"?: string })["maxmemory-policy"])
+        : Array.isArray(policyCfg)
+          ? String(policyCfg[1] ?? "")
+          : null;
+    if (!used) return undefined;
+    return {
+      usedMemoryBytes: Number(used),
+      usedMemoryHuman: usedHuman || `${used}B`,
+      maxMemoryBytes: maxBytes != null && Number.isFinite(maxBytes) ? maxBytes : null,
+      maxMemoryHuman:
+        maxBytes != null && Number.isFinite(maxBytes) && maxBytes > 0
+          ? `${Math.round(maxBytes / (1024 * 1024))}MiB cap`
+          : null,
+      maxmemoryPolicy: policy,
+    };
+  } catch {
+    return undefined;
+  }
+}

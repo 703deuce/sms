@@ -36,6 +36,7 @@ import {
   commitMicrosoftDeltaCheckpoint,
   syncMicrosoftCalendarDelta,
 } from "@/lib/calendar/microsoft-delta-sync";
+import { JobFailedError } from "@/lib/messaging/types";
 import {
   markMicrosoftSyncFailure,
   markMicrosoftSyncSuccess,
@@ -640,7 +641,7 @@ export async function syncWorkspaceCalendarConnection(
     where: { id: connectionId, workspaceId },
   });
   if (!conn || !["google", "microsoft"].includes(conn.provider)) {
-    throw new Error("Calendar connection not found");
+    throw new JobFailedError("Calendar connection not found");
   }
 
   const config = (conn.config || {}) as CalendarConfig;
@@ -679,7 +680,7 @@ export async function syncWorkspaceCalendarConnection(
     await updateWorkspaceCalendarConnection(workspaceId, connectionId, {
       status: "needs_reauth",
     });
-    throw new Error("Calendar access token unavailable — reconnect required");
+    throw new JobFailedError("Calendar access token unavailable — reconnect required");
   }
 
   const calendarIds = resolveImportCalendarIds(config);
@@ -876,10 +877,10 @@ export async function syncCalendarProviderEventById(input: {
   const conn = await prisma.voiceCalendarConnection.findFirst({
     where: { id: input.connectionId, workspaceId: input.workspaceId },
   });
-  if (!conn) throw new Error("Connection not found");
+  if (!conn) throw new JobFailedError("Connection not found");
   const config = (conn.config || {}) as CalendarConfig;
   const token = await getValidAccessToken(conn.id, input.provider, config);
-  if (!token) throw new Error("Token unavailable");
+  if (!token) throw new JobFailedError("Calendar access token unavailable — reconnect required");
 
   const event =
     input.provider === "google"
