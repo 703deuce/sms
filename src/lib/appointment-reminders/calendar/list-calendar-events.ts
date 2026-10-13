@@ -6,12 +6,18 @@ import type { AppointmentMetadata } from "@/lib/appointments/types";
 import type { CalendarApiAppointment } from "@/features/appointments/kimi/calendar/map-calendar";
 import { parseImportedExternalId } from "@/lib/calendar/external-id";
 import { isImportedCalendarAppointmentRow } from "@/lib/appointment-reminders/calendar/ar-calendar-import-filter";
+import { listWorkspaceCalendarEvents } from "@/lib/calendar/workspace-calendar-events";
+import { isUnifiedAppointmentsExperience } from "@/lib/products/unified-appointments";
 
 export type ArCalendarEventsQuery = {
   from: Date;
   to: Date;
   q?: string;
   status?: string;
+  staffIds?: string[];
+  locationId?: string;
+  resourceId?: string;
+  domainType?: string;
 };
 
 function mapStatus(status: string): string {
@@ -27,6 +33,21 @@ export async function listAppointmentRemindersCalendarEvents(
   workspaceId: string,
   query: ArCalendarEventsQuery,
 ): Promise<CalendarApiAppointment[]> {
+  if (isUnifiedAppointmentsExperience()) {
+    return listWorkspaceCalendarEvents(workspaceId, {
+      from: query.from,
+      to: query.to,
+      filters: {
+        q: query.q,
+        status: query.status || "all",
+        staffIds: query.staffIds,
+        locationId: query.locationId,
+        resourceId: query.resourceId,
+        domainType: query.domainType || "all",
+      },
+    });
+  }
+
   const [appointments, platform] = await Promise.all([
     listAppointments(workspaceId, {
       from: query.from,

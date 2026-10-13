@@ -33,11 +33,20 @@ export async function GET(request: Request) {
       void maybeSyncStaleAppointmentRemindersCalendars(auth.workspaceId).catch(() => {});
     }
 
+    const staffRaw = searchParams.get("staffIds");
+    const staffIds = staffRaw
+      ? staffRaw.split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+
     const data = await listAppointmentRemindersCalendarEvents(auth.workspaceId, {
       from,
       to,
       q: searchParams.get("q") || undefined,
       status: searchParams.get("status") || undefined,
+      staffIds,
+      locationId: searchParams.get("locationId") || undefined,
+      resourceId: searchParams.get("resourceId") || undefined,
+      domainType: searchParams.get("domainType") || undefined,
     });
 
     return NextResponse.json({

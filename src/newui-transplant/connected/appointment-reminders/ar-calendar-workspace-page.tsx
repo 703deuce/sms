@@ -11,7 +11,23 @@ import {
   buildCalendarSearchParams,
   calendarUrlEquals,
   parseCalendarCursorFromSearch,
+  parseCalendarFiltersFromSearch,
 } from '@/features/appointments/kimi/calendar/calendar-url-state'
+import { useCalendarReschedule } from '@/features/appointments/kimi/calendar/use-calendar-reschedule'
+import {
+  CalendarFilterBar,
+  type CalendarFilters,
+} from '@/components/appointments/calendar/calendar-filter-bar'
+import { CalendarEventDrawer } from '@/components/appointments/calendar/calendar-event-drawer'
+import { CalendarRecurringScopeDialog } from '@/components/appointments/calendar/calendar-recurring-scope-dialog'
+import {
+  CalendarWaitlistMatchDrawer,
+  type OpenSlotSummary,
+  type WaitlistMatchRow,
+} from '@/components/appointments/calendar/calendar-waitlist-match-drawer'
+import { isUnifiedAppointmentsExperience } from '@/lib/products/unified-appointments'
+import { isImportedCalendarApiEvent } from '@/lib/appointment-reminders/calendar/calendar-event-ownership'
+import type { ArCalendarDragOverride } from '@/newui-transplant/components/appointment-reminders/ar-calendar-opus-view'
 import { parseArCalendarView } from '@/lib/appointment-reminders/calendar/ar-calendar-url-state'
 import {
   dateKey,
@@ -55,9 +71,22 @@ type SchedulingCalendarWorkspace = {
   staff: Array<{ id: string; name: string }>
   services: Array<{ id: string; name: string }>
   locations?: Array<{ id: string; name: string }>
+  resources?: Array<{ id: string; name: string }>
+  timezone?: string
 }
 
 const CALENDAR_AUTO_REFRESH_MS = 20_000
+const FILTER_KEY = 'tv-ar-calendar-filters'
+
+function loadFiltersFallback(): CalendarFilters {
+  try {
+    const raw = localStorage.getItem(FILTER_KEY)
+    if (raw) return JSON.parse(raw) as CalendarFilters
+  } catch {
+    /* ignore */
+  }
+  return { q: '', staffIds: [], locationId: '', resourceId: '', status: 'all', domainType: 'all' }
+}
 
 export function AppointmentRemindersCalendarWorkspacePage() {
   const router = useRouter()
@@ -77,7 +106,22 @@ export function AppointmentRemindersCalendarWorkspacePage() {
     const d = parseCalendarCursorFromSearch(new URLSearchParams(searchParams.toString()), initialView)
     return dateKey(d)
   })
-  const [searchQ, setSearchQ] = useState(() => searchParams.get('q') || '')
+  const [filters, setFilters] = useState<CalendarFilters>(() => {
+    const fromUrl = parseCalendarFiltersFromSearch(new URLSearchParams(searchParams.toString()))
+    if (
+      fromUrl.q ||
+      fromUrl.staffIds.length ||
+      fromUrl.locationId ||
+      fromUrl.resourceId ||
+      fromUrl.status !== 'all' ||
+      fromUrl.domainType !== 'all'
+    ) {
+      return fromUrl
+    }
+    return loadFiltersFallback()
+  })
+  const [filtersOpen, setFiltersOpen] = useState(true)
+  const [searchQ, setSearchQ] = useState(() => searchParams.get('q') || filters.q || '')
   const [events, setEvents] = useState<CalendarApiAppointment[]>([])
   const [timezone, setTimezone] = useState('America/New_York')
   const [loading, setLoading] = useState(true)
@@ -113,6 +157,15 @@ export function AppointmentRemindersCalendarWorkspacePage() {
   const [composeUrl, setComposeUrl] = useState<string | null>(null)
   const [calendarConnections, setCalendarConnections] = useState<ArCalendarFilterOption[]>([])
   const [calendarFilter, setCalendarFilter] = useState(() => searchParams.get('calendar') || 'all')
+  const [opusDragOverrides, setOpusDragOverrides] = useState<Record<string, ArCalendarDragOverride>>({})
+  const [waitlistDrawer, setWaitlistDrawer] = useState<OpenSlotSummary | null>(null)
+  const [waitlistMatches, setWaitlistMatches] = useState<WaitlistMatchRow[]>([])
+  const [waitlistLoading, setWaitlistLoading] = useState(false)
+  const [waitlistBusyEntry, setWaitlistBusyEntry] = useState<string | null>(null)
+  const [rescheduleToast, setRescheduleToast] = useState<string | null>(null)
+
+  const unified = isUnifiedAppointmentsExperience()
+  const calendarWorkspaceReady = connected || unified
 
   const range = useMemo(() => getArCalendarRange(cursor, view), [view, cursor])
 
@@ -203,14 +256,14 @@ export function AppointmentRemindersCalendarWorkspacePage() {
       nextView: CalendarViewMode,
       nextCursor: Date,
       nextDayKey: string,
-      q: string,
+      nextFilters: CalendarFilters,
       calendar: string,
     ) => {
       const params = buildCalendarSearchParams({
         view: nextView,
         cursor: nextCursor,
         selectedDayKey: nextDayKey,
-        filters: { q, staffIds: [], locationId: '', resourceId: '', status: 'all', domainType: 'all' },
+        filters: nextFilters,
       })
       const nextParams = new URLSearchParams(params.toString())
       if (calendar && calendar !== 'all') nextParams.set('calendar', calendar)
@@ -287,7 +340,13 @@ export function AppointmentRemindersCalendarWorkspacePage() {
           to: range.to.toISOString(),
         })
         if (opts?.refresh) qs.set('refresh', '1')
-        if (searchQ.trim()) qs.set('q', searchQ.trim())
+        const q = (filters.q || searchQ).trim()
+        if (q) qs.set('q', q)
+        if (filters.staffIds.length) qs.set('staffIds', filters.staffIds.join(','))
+        if (filters.locationId) qs.set('locationId', filters.locationId)
+        if (filters.resourceId) qs.set('resourceId', filters.resourceId)
+        if (filters.status !== 'all') qs.set('status', filters.status)
+        if (filters.domainType !== 'all') qs.set('domainType', filters.domainType)
         const res = await fetch(`/api/appointment-reminders/calendar/events?${qs}`)
         if (!res.ok) {
           const j = await res.json().catch(() => ({}))
@@ -303,7 +362,84 @@ export function AppointmentRemindersCalendarWorkspacePage() {
         if (!opts?.silent) setLoading(false)
       }
     },
-    [range.from, range.to, searchQ],
+    [range.from, range.to, searchQ, filters],
+  )
+
+  const refreshCalendar = useCallback(() => {
+    void loadEvents({ silent: true })
+    void loadOverview()
+  }, [loadEvents, loadOverview])
+
+  const {
+    beginReschedule,
+    recurringOpen,
+    setRecurringOpen,
+    confirmRecurring,
+    toast: rescheduleHookToast,
+    setToast: setRescheduleHookToast,
+  } = useCalendarReschedule(refreshCalendar)
+
+  useEffect(() => {
+    if (rescheduleHookToast) setRescheduleToast(rescheduleHookToast)
+  }, [rescheduleHookToast])
+
+  const onOpusDragPreview = useCallback(
+    (input: { id: string; dayKey: string; decimalHour: number }) => {
+      setOpusDragOverrides((prev) => ({
+        ...prev,
+        [input.id]: { dayKey: input.dayKey, decimalHour: input.decimalHour },
+      }))
+    },
+    [],
+  )
+
+  const onOpusDragClear = useCallback((id: string) => {
+    setOpusDragOverrides((prev) => {
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+  }, [])
+
+  const onOpusDragCommit = useCallback(
+    (input: { id: string; startsAt: string }) => {
+      const row = events.find((e) => e.id === input.id)
+      const meta = (row?.metadata || {}) as { recurringSeriesId?: string }
+      onOpusDragClear(input.id)
+      void beginReschedule(input.id, input.startsAt, meta.recurringSeriesId)
+    },
+    [beginReschedule, events, onOpusDragClear],
+  )
+
+  const fetchWaitlistMatches = useCallback(
+    async (slot: OpenSlotSummary) => {
+      setWaitlistLoading(true)
+      try {
+        const params = new URLSearchParams({ startsAt: slot.startsAt })
+        if (slot.endsAt) params.set('endsAt', slot.endsAt)
+        if (slot.serviceName) params.set('serviceName', slot.serviceName)
+        if (slot.staffLabel) {
+          const staff = schedulingWorkspace?.staff.find((s) => s.name === slot.staffLabel)
+          if (staff) params.set('staffId', staff.id)
+        }
+        const res = await fetch(`/api/appointments/calendar/waitlist-match?${params}`)
+        const json = await res.json()
+        setWaitlistMatches((json.data?.matches || []) as WaitlistMatchRow[])
+      } catch {
+        setWaitlistMatches([])
+      } finally {
+        setWaitlistLoading(false)
+      }
+    },
+    [schedulingWorkspace?.staff],
+  )
+
+  const openWaitlistDrawer = useCallback(
+    (slot: OpenSlotSummary) => {
+      setWaitlistDrawer(slot)
+      void fetchWaitlistMatches(slot)
+    },
+    [fetchWaitlistMatches],
   )
 
   useEffect(() => {
@@ -336,22 +472,32 @@ export function AppointmentRemindersCalendarWorkspacePage() {
   }, [])
 
   useEffect(() => {
+    if (!calendarWorkspaceReady && overviewReady) return
     loadEvents()
-  }, [loadEvents])
+  }, [loadEvents, calendarWorkspaceReady, overviewReady])
 
   useEffect(() => {
-    if (!connected || !overviewReady) return
+    try {
+      localStorage.setItem(FILTER_KEY, JSON.stringify(filters))
+    } catch {
+      /* ignore */
+    }
+  }, [filters])
+
+  useEffect(() => {
+    if (!calendarWorkspaceReady || !overviewReady) return
     const tick = () => {
       if (document.visibilityState !== 'visible') return
       void loadEvents({ silent: true })
     }
     const intervalId = window.setInterval(tick, CALENDAR_AUTO_REFRESH_MS)
     return () => window.clearInterval(intervalId)
-  }, [connected, overviewReady, loadEvents])
+  }, [calendarWorkspaceReady, overviewReady, loadEvents])
 
   useEffect(() => {
-    syncUrl(view, cursor, selectedDayKey, searchQ, calendarFilter)
-  }, [view, cursor, selectedDayKey, searchQ, calendarFilter, syncUrl])
+    const merged = { ...filters, q: searchQ || filters.q }
+    syncUrl(view, cursor, selectedDayKey, merged, calendarFilter)
+  }, [view, cursor, selectedDayKey, searchQ, filters, calendarFilter, syncUrl])
 
   const focusAppointmentDate = useCallback(
     (startsAt: string) => {
@@ -466,10 +612,9 @@ export function AppointmentRemindersCalendarWorkspacePage() {
     }
   }
 
-  const refreshSelection = useCallback(() => {
-    void loadEvents({ silent: true })
-    void loadOverview()
-  }, [loadEvents, loadOverview])
+  const refreshSelection = refreshCalendar
+
+  const selectedIsImported = selectedEvent ? isImportedCalendarApiEvent(selectedEvent) : true
 
   const ensureSchedulingWorkspace = useCallback(async () => {
     if (schedulingWorkspace) return schedulingWorkspace
@@ -487,6 +632,11 @@ export function AppointmentRemindersCalendarWorkspacePage() {
       setWorkspaceLoading(false)
     }
   }, [schedulingWorkspace])
+
+  useEffect(() => {
+    if (!unified) return
+    void ensureSchedulingWorkspace()
+  }, [unified, ensureSchedulingWorkspace])
 
   const openNativeQuickCreate = useCallback(async () => {
     await ensureSchedulingWorkspace()
@@ -599,7 +749,7 @@ export function AppointmentRemindersCalendarWorkspacePage() {
 
       {!overviewReady ? (
         <div className="min-h-[480px] animate-pulse rounded-xl bg-muted/30" />
-      ) : !connected ? (
+      ) : !calendarWorkspaceReady ? (
         <EmptyState
           icon={Calendar}
           title="Connect a calendar"
@@ -618,6 +768,45 @@ export function AppointmentRemindersCalendarWorkspacePage() {
         </div>
       ) : (
         <div className="flex flex-col gap-3 max-lg:overflow-visible lg:min-h-0 lg:flex-1 lg:overflow-hidden">
+          {unified ? (
+            <CalendarFilterBar
+              workspace={
+                schedulingWorkspace
+                  ? {
+                      ...schedulingWorkspace,
+                      locations: schedulingWorkspace.locations ?? [],
+                      resources: schedulingWorkspace.resources ?? [],
+                    }
+                  : null
+              }
+              filters={{ ...filters, q: searchQ || filters.q }}
+              onChange={(next) => {
+                setFilters(next)
+                setSearchQ(next.q)
+              }}
+              collapsed={!filtersOpen}
+              onSearchSubmit={() => void loadEvents()}
+              onWaitlist={() => router.push('/appointments/waitlist')}
+              onAdd={() => void openNativeQuickCreate()}
+            />
+          ) : null}
+          {rescheduleToast ? (
+            <Callout tone="warning" title="Could not reschedule" className="mb-0">
+              <p className="text-sm text-muted-foreground">{rescheduleToast}</p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="mt-1"
+                onClick={() => {
+                  setRescheduleToast(null)
+                  setRescheduleHookToast(null)
+                }}
+              >
+                Dismiss
+              </Button>
+            </Callout>
+          ) : null}
           <div
             className={cn(
               'flex flex-col gap-3 max-lg:overflow-visible lg:grid lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_minmax(320px,360px)] lg:gap-4 lg:overflow-hidden',
@@ -631,7 +820,7 @@ export function AppointmentRemindersCalendarWorkspacePage() {
                   view={view}
                   cursor={cursor}
                   events={filteredEvents}
-                  timeZone={timezone}
+                  timeZone={schedulingWorkspace?.timezone || timezone}
                   onViewChange={onViewChange}
                   onPrev={onPrev}
                   onNext={onNext}
@@ -646,6 +835,14 @@ export function AppointmentRemindersCalendarWorkspacePage() {
                   selectedEventId={selectedId}
                   enrichment={agendaEnrichment}
                   onSelectEventWithTab={(id, tab) => selectAppointment(id, tab)}
+                  dragOverrides={unified ? opusDragOverrides : undefined}
+                  onDragPreview={
+                    unified
+                      ? (input) => onOpusDragPreview(input)
+                      : undefined
+                  }
+                  onDragClear={unified ? onOpusDragClear : undefined}
+                  onDragCommit={unified ? onOpusDragCommit : undefined}
                 />
               )}
             </div>
@@ -670,7 +867,7 @@ export function AppointmentRemindersCalendarWorkspacePage() {
               className="hidden h-full min-h-0 max-h-full flex-col overflow-hidden rounded-xl border border-border bg-card lg:flex"
               aria-label="Appointment context"
             >
-              {selectedRow ? (
+              {selectedRow && selectedIsImported ? (
                 <AppointmentDetailDrawer
                   layout="panel"
                   row={selectedRow}
@@ -707,10 +904,20 @@ export function AppointmentRemindersCalendarWorkspacePage() {
         </div>
       )}
 
+      {selectedEvent && selectedRow && !selectedIsImported ? (
+        <CalendarEventDrawer
+          event={selectedEvent}
+          onClose={clearSelection}
+          onRefresh={refreshSelection}
+          returnTo={`${AR_ROUTES.home}?${searchParams.toString()}`}
+          onCanceled={(slot) => openWaitlistDrawer(slot)}
+        />
+      ) : null}
+
       <AppointmentDetailDrawer
         layout="sheet"
         row={selectedRow}
-        open={mobileSheetOpen && Boolean(selectedRow)}
+        open={mobileSheetOpen && Boolean(selectedRow) && selectedIsImported}
         onClose={clearSelection}
         timezone={timezone}
         onPhoneSaved={refreshSelection}
@@ -736,6 +943,45 @@ export function AppointmentRemindersCalendarWorkspacePage() {
           setQuickCreateOpen(false)
           router.push(`/appointments/new?${query.toString()}`)
         }}
+        onViewWaitlistMatches={(slot) =>
+          openWaitlistDrawer({
+            startsAt: slot.startsAt,
+            serviceName: slot.serviceName,
+          })
+        }
+      />
+
+      <CalendarWaitlistMatchDrawer
+        open={Boolean(waitlistDrawer)}
+        slot={waitlistDrawer}
+        matches={waitlistMatches}
+        loading={waitlistLoading}
+        busyEntryId={waitlistBusyEntry}
+        onClose={() => setWaitlistDrawer(null)}
+        onOffer={async (entryId) => {
+          if (!waitlistDrawer) return
+          setWaitlistBusyEntry(entryId)
+          try {
+            await fetch('/api/appointments/waitlist', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                entryId,
+                action: 'notify',
+                serviceName: waitlistDrawer.serviceName,
+                startsAt: waitlistDrawer.startsAt,
+              }),
+            })
+          } finally {
+            setWaitlistBusyEntry(null)
+          }
+        }}
+      />
+
+      <CalendarRecurringScopeDialog
+        open={recurringOpen}
+        onClose={() => setRecurringOpen(false)}
+        onConfirm={confirmRecurring}
       />
 
     </ArOpusPage>

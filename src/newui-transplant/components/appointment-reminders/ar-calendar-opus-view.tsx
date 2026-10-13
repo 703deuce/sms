@@ -1,7 +1,7 @@
 'use client'
 
-import type { CSSProperties } from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
   Bell,
@@ -58,8 +58,15 @@ import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/newui-transplant/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import {
+  decimalHourFromPointerY,
+  isoFromDayKeyAndDecimalHour,
+} from '@/lib/appointment-reminders/calendar/ar-calendar-drag'
+import { isOpusNativeCalendarEventDraggable } from '@/lib/appointment-reminders/calendar/calendar-event-ownership'
 
 export type ArCalendarFilterOption = { value: string; label: string }
+
+export type ArCalendarDragOverride = { dayKey: string; decimalHour: number }
 
 const VIEW_OPTIONS: CalendarViewMode[] = ['day', 'week', 'month', 'agenda']
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -83,7 +90,7 @@ function EventStatusIcon({ kind }: { kind: EventStatusIconKind }) {
   }
 }
 
-function CalendarEventBlock({
+export function CalendarEventBlock({
   ev,
   timeZone,
   heightPx,
@@ -93,6 +100,10 @@ function CalendarEventBlock({
   onSelect,
   className,
   style,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onPointerCancel,
 }: {
   ev: CalendarApiAppointment
   timeZone: string
@@ -103,6 +114,10 @@ function CalendarEventBlock({
   onSelect: (id: string) => void
   className?: string
   style?: CSSProperties
+  onPointerDown?: (e: ReactPointerEvent<HTMLButtonElement>) => void
+  onPointerMove?: (e: ReactPointerEvent<HTMLButtonElement>) => void
+  onPointerUp?: (e: ReactPointerEvent<HTMLButtonElement>) => void
+  onPointerCancel?: () => void
 }) {
   const canceled = ev.status === 'canceled'
   const statusIcon = ev.status === 'canceled' ? null : pickEventStatusIcon(ev, enrichment)
@@ -116,6 +131,10 @@ function CalendarEventBlock({
     <button
       type="button"
       onClick={() => onSelect(ev.id)}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
       style={style}
       className={cn(
         'overflow-hidden rounded-md border-l-[3px] border px-1.5 py-1 text-left shadow-sm transition-colors',
@@ -282,6 +301,151 @@ function MonthView({
   )
 }
 
+function DraggableCalendarEvent({
+  ev,
+  dayKey,
+  timeZone,
+  displayGrid,
+  heightPx,
+  widthHint,
+  enrichment,
+  selected,
+  onSelect,
+  className,
+  style,
+  dragOverride,
+  weekDayKeys,
+  onDragPreview,
+  onDragClear,
+  onDragCommit,
+}: {
+  ev: CalendarApiAppointment
+  dayKey: string
+  timeZone: string
+  displayGrid: ArCalendarGrid
+  heightPx: number
+  widthHint?: 'narrow' | 'wide'
+  enrichment?: CalendarEventEnrichment | null
+  selected?: boolean
+  onSelect: (id: string) => void
+  className?: string
+  style?: CSSProperties
+  dragOverride?: ArCalendarDragOverride | null
+  weekDayKeys?: string[]
+  onDragPreview?: (input: { id: string; dayKey: string; decimalHour: number }) => void
+  onDragClear?: (id: string) => void
+  onDragCommit?: (input: { id: string; startsAt: string }) => void
+}) {
+  const draggable = Boolean(onDragCommit) && isOpusNativeCalendarEventDraggable(ev)
+  const columnRef = useRef<HTMLElement | null>(null)
+  const [dragging, setDragging] = useState(false)
+  const moved = useRef(false)
+  const origin = useRef<{ dayKey: string; decimalHour: number } | null>(null)
+
+  const previewIso = dragOverride
+    ? isoFromDayKeyAndDecimalHour(dragOverride.dayKey, dragOverride.decimalHour, timeZone)
+    : ev.startsAt
+  const top = eventTopPx(previewIso, timeZone, displayGrid)
+
+  const onPointerDown = useCallback(
+    (e: ReactPointerEvent<HTMLButtonElement>) => {
+      if (!draggable || e.button !== 0) return
+      columnRef.current = e.currentTarget.closest('[data-ar-day-column]') as HTMLElement | null
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        hour: 'numeric',
+        minute: 'numeric',
+        hour12: false,
+      }).formatToParts(new Date(ev.startsAt))
+      const hour = Number(parts.find((p) => p.type === 'hour')?.value || 0)
+      const minute = Number(parts.find((p) => p.type === 'minute')?.value || 0)
+      origin.current = { dayKey, decimalHour: hour + minute / 60 }
+      moved.current = false
+      setDragging(true)
+      e.currentTarget.setPointerCapture(e.pointerId)
+    },
+    [draggable, dayKey, ev.startsAt, timeZone],
+  )
+
+  const onPointerMove = useCallback(
+    (e: ReactPointerEvent<HTMLButtonElement>) => {
+      if (!dragging || !columnRef.current || !origin.current || !onDragPreview) return
+      const rect = columnRef.current.getBoundingClientRect()
+      const decimalHour = decimalHourFromPointerY(rect.top, e.clientY, displayGrid)
+      let targetDayKey = dayKey
+      if (weekDayKeys && weekDayKeys.length > 1) {
+        const gridEl = columnRef.current.closest('[data-ar-time-grid]') as HTMLElement | null
+        if (gridEl) {
+          const gRect = gridEl.getBoundingClientRect()
+          const idx = Math.max(
+            0,
+            Math.min(
+              weekDayKeys.length - 1,
+              Math.floor(((e.clientX - gRect.left - 60) / (gRect.width - 60)) * weekDayKeys.length),
+            ),
+          )
+          targetDayKey = weekDayKeys[idx] ?? dayKey
+        }
+      }
+      if (
+        targetDayKey !== origin.current.dayKey ||
+        Math.abs(decimalHour - origin.current.decimalHour) > 0.01
+      ) {
+        moved.current = true
+      }
+      onDragPreview({ id: ev.id, dayKey: targetDayKey, decimalHour })
+    },
+    [dragging, dayKey, displayGrid, ev.id, onDragPreview, weekDayKeys],
+  )
+
+  const onPointerUp = useCallback(
+    (e: ReactPointerEvent<HTMLButtonElement>) => {
+      if (!dragging) return
+      setDragging(false)
+      e.currentTarget.releasePointerCapture(e.pointerId)
+      if (!moved.current || !dragOverride || !onDragCommit) {
+        onDragClear?.(ev.id)
+        if (!moved.current) onSelect(ev.id)
+        return
+      }
+      onDragCommit({
+        id: ev.id,
+        startsAt: isoFromDayKeyAndDecimalHour(
+          dragOverride.dayKey,
+          dragOverride.decimalHour,
+          timeZone,
+        ),
+      })
+    },
+    [dragging, dragOverride, ev.id, onDragClear, onDragCommit, onSelect, timeZone],
+  )
+
+  return (
+    <CalendarEventBlock
+      ev={ev}
+      timeZone={timeZone}
+      heightPx={heightPx}
+      widthHint={widthHint}
+      enrichment={enrichment}
+      selected={selected}
+      onSelect={onSelect}
+      className={className}
+      style={{ ...style, top, cursor: draggable ? (dragging ? 'grabbing' : 'grab') : style?.cursor }}
+      onPointerDown={draggable ? onPointerDown : undefined}
+      onPointerMove={draggable ? onPointerMove : undefined}
+      onPointerUp={draggable ? onPointerUp : undefined}
+      onPointerCancel={
+        draggable
+          ? () => {
+              setDragging(false)
+              onDragClear?.(ev.id)
+            }
+          : undefined
+      }
+    />
+  )
+}
+
 function TimeGridView({
   cursor,
   view,
@@ -292,6 +456,10 @@ function TimeGridView({
   selectedEventId,
   enrichment,
   grid: displayGrid,
+  dragOverrides,
+  onDragPreview,
+  onDragClear,
+  onDragCommit,
 }: {
   cursor: Date
   view: 'day' | 'week'
@@ -302,6 +470,10 @@ function TimeGridView({
   selectedEventId?: string | null
   enrichment?: Map<string, CalendarEventEnrichment>
   grid: ArCalendarGrid
+  dragOverrides?: Record<string, ArCalendarDragOverride>
+  onDragPreview?: (input: { id: string; dayKey: string; decimalHour: number }) => void
+  onDragClear?: (id: string) => void
+  onDragCommit?: (input: { id: string; startsAt: string }) => void
 }) {
   const hours = hourLabels(displayGrid)
   const totalHeight = (displayGrid.endHour - displayGrid.startHour) * displayGrid.hourPx
@@ -322,9 +494,12 @@ function TimeGridView({
   const eventsForDay = (dayKey: string) =>
     events.filter((ev) => dayKeyInTimeZone(ev.startsAt, timeZone) === dayKey)
 
+  const weekDayKeys = days.map((d) => d.key)
+
   const timeGrid = (
       <div
         className="grid min-w-[640px]"
+        data-ar-time-grid=""
         style={{
           gridTemplateColumns: `3.75rem repeat(${days.length}, minmax(0, 1fr))`,
           minHeight: totalHeight,
@@ -367,7 +542,12 @@ function TimeGridView({
           const dayEvents = eventsForDay(d.key)
           const layout = layoutDayEventColumns(dayEvents)
           return (
-          <div key={d.key} className="relative border-l" style={{ height: totalHeight }}>
+          <div
+            key={d.key}
+            data-ar-day-column=""
+            className="relative border-l"
+            style={{ height: totalHeight }}
+          >
             {hours.map((_, i) => (
               <div
                 key={i}
@@ -393,10 +573,12 @@ function TimeGridView({
               const widthPct = 100 / slot.cols
               const leftPct = slot.col * widthPct
               return (
-                <CalendarEventBlock
+                <DraggableCalendarEvent
                   key={ev.id}
                   ev={ev}
+                  dayKey={d.key}
                   timeZone={timeZone}
+                  displayGrid={displayGrid}
                   heightPx={h}
                   widthHint={view === 'week' ? 'narrow' : 'wide'}
                   enrichment={enrichment?.get(ev.id)}
@@ -404,12 +586,16 @@ function TimeGridView({
                   onSelect={onSelect}
                   className="absolute z-10"
                   style={{
-                    top: eventTopPx(ev.startsAt, timeZone, displayGrid),
                     height: h,
                     minHeight: 34,
                     left: `calc(${leftPct}% + 2px)`,
                     width: `calc(${widthPct}% - 4px)`,
                   }}
+                  dragOverride={dragOverrides?.[ev.id] ?? null}
+                  weekDayKeys={view === 'week' ? weekDayKeys : undefined}
+                  onDragPreview={onDragPreview}
+                  onDragClear={onDragClear}
+                  onDragCommit={onDragCommit}
                 />
               )
             })}
@@ -451,6 +637,10 @@ export function ArCalendarOpusView({
   selectedEventId,
   enrichment,
   onSelectEventWithTab,
+  dragOverrides,
+  onDragPreview,
+  onDragClear,
+  onDragCommit,
 }: {
   view: CalendarViewMode
   cursor: Date
@@ -472,6 +662,10 @@ export function ArCalendarOpusView({
   selectedEventId?: string | null
   enrichment?: Map<string, CalendarEventEnrichment>
   onSelectEventWithTab?: (id: string, tab?: 'details' | 'reminders' | 'activity') => void
+  dragOverrides?: Record<string, ArCalendarDragOverride>
+  onDragPreview?: (input: { id: string; dayKey: string; decimalHour: number }) => void
+  onDragClear?: (id: string) => void
+  onDragCommit?: (input: { id: string; startsAt: string }) => void
 }) {
   const handleAgendaSelect = (id: string, tab?: 'details' | 'reminders' | 'activity') => {
     if (onSelectEventWithTab) onSelectEventWithTab(id, tab)
@@ -590,6 +784,10 @@ export function ArCalendarOpusView({
             selectedEventId={selectedEventId}
             enrichment={enrichment}
             grid={grid}
+            dragOverrides={dragOverrides}
+            onDragPreview={onDragPreview}
+            onDragClear={onDragClear}
+            onDragCommit={onDragCommit}
           />
           </div>
         ) : null}

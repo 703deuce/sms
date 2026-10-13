@@ -1,9 +1,9 @@
-import { redirect } from "next/navigation";
-import { appointmentRemindersShellHome } from "@/lib/appointment-reminders/routes";
-import { isUnifiedAppointmentsExperience } from "@/lib/products/unified-appointments";
 import { AppointmentsCalendarClient } from "@/components/appointments/calendar-client";
 
+/**
+ * Legacy scheduling calendar route — kept reachable until Opus calendar (/appointment-reminders)
+ * reaches full parity (drag, waitlist, filters). Unified nav home remains Opus.
+ */
 export default function AppointmentsCalendarPage() {
-  if (isUnifiedAppointmentsExperience()) redirect(appointmentRemindersShellHome());
   return <AppointmentsCalendarClient />;
 }
