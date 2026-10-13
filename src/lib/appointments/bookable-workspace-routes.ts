@@ -52,3 +52,27 @@ export const AR_BOOKING_MEETINGS_ROUTES: MeetingsWorkspaceRoutes = {
       ? `/appointment-reminders/booking/meetings/${id}`
       : `/appointment-reminders/booking/meetings/${id}?section=${section}`,
 };
+
+export type ClassesWorkspaceRoutes = MeetingsWorkspaceRoutes;
+
+export const APPOINTMENTS_CLASSES_ROUTES: ClassesWorkspaceRoutes = {
+  list: "/appointments/classes",
+  new: "/appointments/classes/new",
+  detail: (id) => `/appointments/classes/${id}`,
+  detailWithSection: (id, section) =>
+    section === "overview"
+      ? `/appointments/classes/${id}`
+      : `/appointments/classes/${id}?section=${section}`,
+};
+
+export type WorkshopsWorkspaceRoutes = MeetingsWorkspaceRoutes;
+
+export const APPOINTMENTS_WORKSHOPS_ROUTES: WorkshopsWorkspaceRoutes = {
+  list: "/appointments/workshops",
+  new: "/appointments/workshops/new",
+  detail: (id) => `/appointments/workshops/${id}`,
+  detailWithSection: (id, section) =>
+    section === "overview"
+      ? `/appointments/workshops/${id}`
+      : `/appointments/workshops/${id}?section=${section}`,
+};

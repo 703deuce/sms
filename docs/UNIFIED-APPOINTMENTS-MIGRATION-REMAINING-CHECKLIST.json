@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-13T17:47:19.739Z",
+  "generatedAt": "2026-10-13T19:01:50.462Z",
   "status": "INCOMPLETE",
   "contract": "docs/UNIFIED-APPOINTMENTS-MIGRATION-EXECUTION-CONTRACT.md",
   "retainedAdminRoutes": 117,
@@ -11,12 +11,12 @@
     "total": 117
   },
   "matrixNavRows": {
-    "opusComplete": 13,
-    "opusPartial": 39,
+    "opusComplete": 15,
+    "opusPartial": 37,
     "legacyKimi": 26
   },
   "verification": {
-    "transitiveLegacyVisualAudit": "FAIL (47 files with violations)",
+    "transitiveLegacyVisualAudit": "FAIL (43 files with violations)",
     "transitiveLegacyVisualAuditExitCode": 1,
     "productionBuild": "not run this generation",
     "browserVerification": "not run this generation",

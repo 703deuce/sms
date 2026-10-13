@@ -13,8 +13,8 @@ Regenerate: `npx tsx scripts/generate-unified-frontend-migration-matrix.ts`
 | Booking | Booking | `/appointment-reminders/booking` | Opus partial | booking-settings-client + link hub | booking-page-opus.tsx | Meetings/services Opus; other admin routes still legacy |
 | Booking | Services | `/appointment-reminders/booking/services` | Opus partial | services workspace kimi | AR booking services Opus routes |  |
 | Booking | Meetings | `/appointment-reminders/booking/meetings` | Opus complete | MeetingsWorkspaceConnected | ar-meetings-workspace-opus.tsx |  |
-| Booking | Classes | `/appointments/classes` | Opus partial | ClassesWorkspaceConnected | ClassesWorkspaceGate + Opus shell embed |  |
-| Booking | Workshops | `/appointments/workshops` | Opus partial | WorkshopsWorkspaceConnected | WorkshopsWorkspaceGate + Opus shell embed |  |
+| Booking | Classes | `/appointments/classes` | Opus complete | ClassesWorkspaceConnected | ar-classes-workspace-opus.tsx |  |
+| Booking | Workshops | `/appointments/workshops` | Opus complete | WorkshopsWorkspaceConnected | ar-workshops-workspace-opus.tsx |  |
 | Booking | Booking pages admin | `/appointments/booking` | Opus partial | AppointmentBookingSettingsClient | BookingSettingsGate |  |
 | Booking | Share & embed | `/appointments/booking/share` | Opus partial | BookingShareHubClient | BookingShareOpus |  |
 | Booking | Branding | `/appointments/booking/branding` | Opus partial | ServiceBookingAdminClient | ServiceBookingAdminOpus |  |
