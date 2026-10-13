@@ -178,9 +178,6 @@ export async function POST(request: Request, { params }: Params) {
       const { classRegistrationClosedReason } = await import(
         "@/lib/appointments/public-group-offering"
       );
-      const { classRegistrationPaymentRequiredReason } = await import(
-        "@/lib/appointments/service-booking/class-registration-entitlement"
-      );
       const entitlement = {
         packageBalanceId: body.packageBalanceId ? String(body.packageBalanceId) : undefined,
         membershipSubscriptionId: body.membershipSubscriptionId
