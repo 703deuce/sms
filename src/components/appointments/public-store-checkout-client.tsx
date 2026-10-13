@@ -7,6 +7,8 @@ import { Button } from "@/newui-transplant/components/ui/button";
 import { Package, Gift, CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OfferingCoverImage } from "@/components/appointments/scheduling-opus/offering-cover-image";
+import { StorePurchaseSuccessPanel } from "@/components/appointments/scheduling-opus/store-purchase-success-panel";
+import { PublicFlowStepRail } from "@/components/appointments/scheduling-opus/public-flow-step-rail";
 
 type StoreProductKind = "package" | "gift" | "membership";
 
@@ -208,6 +210,17 @@ export function PublicStoreCheckoutClient({ slug }: { slug: string }) {
         <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" role="alert">
           {error}
         </p>
+      ) : null}
+
+      {step !== "browse" && step !== "success" ? (
+        <PublicFlowStepRail
+          steps={[
+            { id: "browse", label: "Browse" },
+            { id: "details", label: "Your details" },
+            { id: "confirm", label: "Review & pay" },
+          ]}
+          currentIndex={step === "details" ? 1 : 2}
+        />
       ) : null}
 
       {step === "browse" ? (
@@ -446,18 +459,19 @@ export function PublicStoreCheckoutClient({ slug }: { slug: string }) {
       ) : null}
 
       {step === "success" ? (
-        <section className="space-y-4 rounded-lg border border-green-600/30 bg-green-50 p-4" aria-live="polite">
-          <h2 className="text-xl font-semibold">Purchase complete</h2>
-          <p className="text-sm">Thank you. Your purchase has been recorded.</p>
-          {result?.code ? (
-            <p className="text-sm">
-              Gift certificate code: <strong>{String(result.code)}</strong>
-            </p>
-          ) : null}
-          <a href={`/book/${encodeURIComponent(slug)}`} className="inline-block text-sm underline">
-            Book an appointment
-          </a>
-        </section>
+        <StorePurchaseSuccessPanel
+          slug={slug}
+          productName={selected?.name}
+          productKind={selected?.kind}
+          giftCode={result?.code ? String(result.code) : null}
+          benefits={
+            selected?.description
+              ? [selected.description]
+              : selected
+                ? [`${kindLabel(selected.kind)}: ${selected.name}`]
+                : []
+          }
+        />
       ) : null}
     </main>
   );

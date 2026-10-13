@@ -6,6 +6,11 @@ import {
   CLASS_SERIES_OFFERING_UI,
   type ClassSeriesOfferingKind,
 } from "@/lib/appointments/class-series-offering";
+import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
+import { Button } from "@/newui-transplant/components/ui/button";
+import { PublicFlowStepRail } from "@/components/appointments/scheduling-opus/public-flow-step-rail";
+import { StorePurchaseSuccessPanel } from "@/components/appointments/scheduling-opus/store-purchase-success-panel";
+import { OpusPublicBookingLoading } from "@/newui-transplant/components/public-booking/opus-public-booking-states";
 
 type ClassSeries = {
   id: string;
@@ -89,6 +94,8 @@ export function PublicGroupEnrollmentClient({
   } | null>(null);
   const [selectedPackageId, setSelectedPackageId] = useState("");
   const [selectedMembershipId, setSelectedMembershipId] = useState("");
+  const [flowStep, setFlowStep] = useState<0 | 1>(0);
+  const detailsComplete = Boolean(firstName.trim() && phone.trim());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -425,14 +432,46 @@ export function PublicGroupEnrollmentClient({
     offeringKind === "workshop" ? "Loading upcoming workshops…" : "Loading upcoming classes…";
   const sessionFallback = offeringKind === "workshop" ? "Workshop" : "Class";
 
+  if (loading && series.length === 0 && occurrences.length === 0) {
+    return (
+      <main className="mx-auto max-w-[1120px] px-4 py-8">
+        <OpusPublicBookingLoading />
+      </main>
+    );
+  }
+
+  if (message && !entitlementPrompt && !seatPickerOpen) {
+    return (
+      <main className="mx-auto max-w-[1120px] space-y-6 px-4 py-8 md:px-8">
+        <header>
+          <h1 className="text-2xl font-semibold">{copy.pageTitle}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{businessName}</p>
+        </header>
+        <StorePurchaseSuccessPanel slug={slug} benefits={[message]} />
+        <Button type="button" variant="outline" onClick={() => { setMessage(null); setFlowStep(1); }}>
+          Register for another session
+        </Button>
+      </main>
+    );
+  }
+
   return (
-    <main className="mx-auto max-w-2xl space-y-6 p-6">
+    <main className="mx-auto max-w-[1120px] space-y-6 px-4 py-8 md:px-8">
       <header>
         <h1 className="text-2xl font-semibold">{copy.pageTitle}</h1>
         <p className="mt-1 text-sm text-muted-foreground">{businessName}</p>
       </header>
 
-      <section className="rounded-lg border p-4 space-y-3">
+      <PublicFlowStepRail
+        steps={[
+          { id: "details", label: "Your details" },
+          { id: "sessions", label: "Choose session" },
+          { id: "confirm", label: "Confirm" },
+        ]}
+        currentIndex={flowStep}
+      />
+
+      <section className={`${OPUS_CARD} space-y-3 p-5`}>
         <h2 className="text-sm font-semibold">Your details</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="text-sm">
@@ -469,16 +508,21 @@ export function PublicGroupEnrollmentClient({
             />
           </label>
         </div>
+        {flowStep === 0 ? (
+          <div className="flex justify-end pt-2">
+            <Button type="button" disabled={!detailsComplete} onClick={() => setFlowStep(1)}>
+              Continue to sessions
+            </Button>
+          </div>
+        ) : (
+          <div className="flex justify-start pt-2">
+            <Button type="button" variant="outline" onClick={() => setFlowStep(0)}>
+              Edit your details
+            </Button>
+          </div>
+        )}
       </section>
 
-      {message ? (
-        <p
-          className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"
-          role="status"
-        >
-          {message}
-        </p>
-      ) : null}
       {error ? (
         <p
           className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
@@ -488,8 +532,8 @@ export function PublicGroupEnrollmentClient({
         </p>
       ) : null}
 
-      {entitlementPrompt ? (
-        <section className="rounded-lg border p-4 space-y-3" aria-label="Apply a benefit">
+      {flowStep === 1 && entitlementPrompt ? (
+        <section className={`${OPUS_CARD} space-y-3 p-5`} aria-label="Apply a benefit">
           <h2 className="text-sm font-semibold">Use a package or membership</h2>
           <p className="text-sm text-muted-foreground">
             You have more than one benefit that works for this registration. Choose how to apply it.
@@ -535,9 +579,9 @@ export function PublicGroupEnrollmentClient({
             </label>
           ) : null}
           <div className="flex flex-wrap gap-2">
-            <button
+            <Button
               type="button"
-              className="rounded-md border px-4 py-2 text-sm"
+              variant="outline"
               onClick={() => {
                 if (entitlementPrompt.mode === "occurrence" && entitlementPrompt.occurrenceId) {
                   void enroll(entitlementPrompt.occurrenceId, entitlementPrompt.seat, undefined, true);
@@ -548,10 +592,9 @@ export function PublicGroupEnrollmentClient({
               }}
             >
               Pay normally
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground"
               disabled={!selectedPackageId && !selectedMembershipId}
               onClick={() => {
                 if (entitlementPrompt.mode === "occurrence" && entitlementPrompt.occurrenceId) {
@@ -571,13 +614,13 @@ export function PublicGroupEnrollmentClient({
               }}
             >
               Apply benefit
-            </button>
+            </Button>
           </div>
         </section>
       ) : null}
 
-      {seatPickerOpen && pendingOccurrence ? (
-        <section className="rounded-lg border p-4 space-y-4" aria-label="Choose your seat">
+      {flowStep === 1 && seatPickerOpen && pendingOccurrence ? (
+        <section className={`${OPUS_CARD} space-y-4 p-5`} aria-label="Choose your seat">
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold">Choose your seat</h2>
@@ -660,8 +703,8 @@ export function PublicGroupEnrollmentClient({
         </section>
       ) : null}
 
-      {fullCourseSeries.length > 0 ? (
-        <section className="rounded-lg border p-4 space-y-3">
+      {flowStep === 1 && fullCourseSeries.length > 0 ? (
+        <section className={`${OPUS_CARD} space-y-3 p-5`}>
           <h2 className="text-sm font-semibold">Full courses</h2>
           <p className="text-sm text-muted-foreground">
             One purchase enrolls you in every scheduled session.
@@ -682,14 +725,9 @@ export function PublicGroupEnrollmentClient({
                       {paid ? " · Pay & register" : s.paymentMode === "package_only" ? " · Package required" : ""}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
-                    onClick={() => void enrollCourse(s.id)}
-                  >
+                  <Button type="button" disabled={busy} onClick={() => void enrollCourse(s.id)}>
                     {paid ? "Pay & register" : copy.registerVerb}
-                  </button>
+                  </Button>
                 </li>
               );
             })}
@@ -697,12 +735,12 @@ export function PublicGroupEnrollmentClient({
         </section>
       ) : null}
 
-      {loading ? (
+      {flowStep === 1 && loading ? (
         <p className="text-sm text-muted-foreground">{loadingLabel}</p>
-      ) : occurrences.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{emptyLabel}</p>
-      ) : (
-        <ul className="divide-y rounded-lg border">
+      ) : flowStep === 1 && occurrences.length === 0 ? (
+        <p className={`${OPUS_CARD} p-5 text-sm text-muted-foreground`}>{emptyLabel}</p>
+      ) : flowStep === 1 ? (
+        <ul className={`${OPUS_CARD} divide-y overflow-hidden`}>
           {occurrences.map((occ) => {
             const s = seriesMap.get(occ.seriesId);
             const full = occ.remaining <= 0;
@@ -735,10 +773,9 @@ export function PublicGroupEnrollmentClient({
                     {closed || facts.join(" · ")}
                   </p>
                 </div>
-                <button
+                <Button
                   type="button"
                   disabled={busy || Boolean(closed) || (full && !waitlistable)}
-                  className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
                   onClick={() => {
                     if (occ.requiresSeatSelection && occ.seatMapId) {
                       void openSeatPicker(occ);
@@ -754,12 +791,12 @@ export function PublicGroupEnrollmentClient({
                       : paidDropIn
                         ? "Pay & register"
                         : copy.registerVerb}
-                </button>
+                </Button>
               </li>
             );
           })}
         </ul>
-      )}
+      ) : null}
     </main>
   );
 }

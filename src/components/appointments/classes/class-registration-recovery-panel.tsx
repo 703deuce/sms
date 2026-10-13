@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
+import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
+import { Callout, Pill } from "@/newui-transplant/components/app/kit";
+import { Button } from "@/newui-transplant/components/ui/button";
 
 type RecoveryRow = {
   id: string;
@@ -61,52 +64,43 @@ export function ClassRegistrationRecoveryPanel() {
   if (loading || rows.length === 0) return null;
 
   return (
-    <section
-      className="mb-4 rounded-lg border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm"
-      aria-label="Paid registration recovery"
+    <Callout
+      tone="warning"
+      title={`Paid registration needs attention (${rows.length})`}
+      className="mb-6"
     >
-      <div className="flex items-start gap-2">
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden />
-        <div className="min-w-0 flex-1 space-y-2">
-          <p className="font-medium text-amber-950">
-            Paid registration needs attention ({rows.length})
-          </p>
-          <p className="text-amber-900/80">
-            These customers may have paid but are not fully enrolled. Retry fulfillment after fixing
-            capacity or configuration — refunds are not automatic.
-          </p>
-          <ul className="space-y-2">
-            {rows.map((row) => (
-              <li
-                key={row.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-200/80 bg-white/60 px-3 py-2"
+      <p className="text-sm text-muted-foreground">
+        These customers may have paid but are not fully enrolled. Retry fulfillment after fixing
+        capacity or configuration — refunds are not automatic.
+      </p>
+      <ul className="mt-4 space-y-2">
+        {rows.map((row) => (
+          <li key={row.id} className={`${OPUS_CARD} flex flex-wrap items-center justify-between gap-3 p-3`}>
+            <div className="min-w-0">
+              <p className="truncate font-mono text-xs">{row.stripeCheckoutSessionId || row.id}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                <Pill tone="neutral" dot={false} className="mr-2 inline-flex text-xs">
+                  {row.recovery || row.status}
+                </Pill>
+                {row.reason || ""}
+              </p>
+            </div>
+            {row.stripeCheckoutSessionId ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={busyId === row.id}
+                onClick={() => void retry(row.stripeCheckoutSessionId, row.id)}
               >
-                <div className="min-w-0">
-                  <p className="font-mono text-xs text-amber-950 truncate">
-                    {row.stripeCheckoutSessionId || row.id}
-                  </p>
-                  <p className="text-xs text-amber-900/70">
-                    {row.recovery || row.status}
-                    {row.reason ? ` · ${row.reason}` : ""}
-                  </p>
-                </div>
-                {row.stripeCheckoutSessionId ? (
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-950 hover:bg-amber-50 disabled:opacity-50"
-                    disabled={busyId === row.id}
-                    onClick={() => void retry(row.stripeCheckoutSessionId, row.id)}
-                  >
-                    <RefreshCw className="h-3.5 w-3.5" aria-hidden />
-                    Retry enrollment
-                  </button>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-          {message ? <p className="text-xs text-amber-900" role="status">{message}</p> : null}
-        </div>
-      </div>
-    </section>
+                <RefreshCw className="mr-2 size-3.5" aria-hidden />
+                Retry enrollment
+              </Button>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+      {message ? <p className="mt-3 text-xs" role="status">{message}</p> : null}
+    </Callout>
   );
 }
