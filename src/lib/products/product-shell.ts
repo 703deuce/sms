@@ -12,6 +12,10 @@ import {
   isMctbV1Primary,
   isSmsStandaloneHidden,
 } from "@/lib/workspace/platform-launch";
+import {
+  isUnifiedAppointmentsExperience,
+  unifiedAppointmentsProductLabel,
+} from "@/lib/products/unified-appointments";
 import { isVoiceProductCustomerVisible } from "@/lib/products/launch-product-availability";
 
 export type ProductShell =
@@ -95,7 +99,9 @@ export function productShellLabel(shell: ProductShell): string {
     case "appointments":
       return "Appointments";
     case "appointment_reminders":
-      return "Appointment Reminders";
+      return isUnifiedAppointmentsExperience()
+        ? unifiedAppointmentsProductLabel()
+        : "Appointment Reminders";
     case "mass_sms":
       return "SMS";
     case "mctb":
@@ -138,7 +144,7 @@ export function isExplicitAppointmentRemindersShellPath(pathname: string): boole
 
 export function isExplicitAppointmentsShellPath(pathname: string): boolean {
   if (
-    isAppointmentsV1Primary() &&
+    (isAppointmentsV1Primary() || isUnifiedAppointmentsExperience()) &&
     isAppointmentsMessagesPath(pathname)
   ) {
     return true;
@@ -164,7 +170,9 @@ export function isExplicitMassSmsShellPath(pathname: string): boolean {
 export function resolveProductShellFromPath(pathname: string): ProductShell | null {
   if (isExplicitMctbShellPath(pathname)) return "mctb";
   if (isExplicitAppointmentRemindersShellPath(pathname)) return "appointment_reminders";
-  if (isExplicitAppointmentsShellPath(pathname)) return "appointments";
+  if (isExplicitAppointmentsShellPath(pathname)) {
+    return isUnifiedAppointmentsExperience() ? "appointment_reminders" : "appointments";
+  }
   if (isExplicitAiAfterHoursShellPath(pathname)) return "ai_after_hours";
   if (isExplicitMassSmsShellPath(pathname)) return "mass_sms";
   return null;

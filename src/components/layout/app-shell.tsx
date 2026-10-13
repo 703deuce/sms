@@ -18,6 +18,7 @@ import { getMctbPageTitle } from "@/lib/products/mctb-nav";
 import { isAppointmentRemindersProductPath } from "@/lib/appointment-reminders/routes";
 import { getAppointmentsPageTitle } from "@/lib/products/appointments-nav";
 import { isAppointmentsProductPath } from "@/lib/products/appointments-routes";
+import { isUnifiedAppointmentsExperience } from "@/lib/products/unified-appointments";
 import { isAppointmentsV1Primary } from "@/lib/workspace/platform-launch";
 import { isSmsShellRoute } from "@/lib/products/sms-routes";
 import { useProductShell } from "@/components/products/product-shell-tabs";
@@ -83,7 +84,7 @@ function shouldAutoCollapseSidebar(path: string) {
 }
 
 function isAppointmentsKimiFullBleedRoute(pathname: string): boolean {
-  if (!isAppointmentsV1Primary()) return false;
+  if (!isAppointmentsV1Primary() && !isUnifiedAppointmentsExperience()) return false;
   if (pathname.startsWith("/mctb")) return false;
   return isKimiIntegratedRoute(pathname) && !pathname.startsWith("/automations");
 }
@@ -285,7 +286,8 @@ export function AppShell({
   const autoCollapseSidebar = shouldAutoCollapseSidebar(pathname);
   const sidebarCollapsedEffective = autoCollapseSidebar || sidebarCollapsed;
   const isAppointmentsNeutralShell =
-    isAppointmentsV1Primary() && isAppointmentsProductPath(pathname);
+    (isAppointmentsV1Primary() || isUnifiedAppointmentsExperience()) &&
+    isAppointmentsProductPath(pathname);
   const isMctbNeutralShell = isMctbProductChromePath(pathname, productShell, { hasMctb });
   const legacyMctbPresentationCss = !isNewUiStage2Enabled() && isMctbNeutralShell;
   const isAppointmentsOverviewPilot =

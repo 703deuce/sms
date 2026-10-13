@@ -1,4 +1,5 @@
 import { isAppointmentsMessagesPath } from "@/lib/products/appointments-messages-routes";
+import { isUnifiedAppointmentsExperience } from "@/lib/products/unified-appointments";
 import { isAppointmentsV1Primary } from "@/lib/workspace/platform-launch";
 
 /** Appointments V1 route prefixes — shared shell routes included. */
@@ -40,12 +41,18 @@ export const APPOINTMENTS_API_ROUTE_PREFIXES = [
   "/api/video",
 ] as const;
 
-export function isAppointmentsProductPath(pathname: string): boolean {
-  if (pathname === "/appointments" || pathname.startsWith("/appointments/")) return true;
-  if (isAppointmentsV1Primary() && isAppointmentsMessagesPath(pathname)) return true;
+function isAppointmentsSharedShellPath(pathname: string): boolean {
   return APPOINTMENTS_APP_ROUTE_PREFIXES.some(
     (p) => p !== "/appointments" && (pathname === p || pathname.startsWith(`${p}/`)),
   );
+}
+
+export function isAppointmentsProductPath(pathname: string): boolean {
+  if (pathname === "/appointments" || pathname.startsWith("/appointments/")) return true;
+  const shellPrimary = isAppointmentsV1Primary() || isUnifiedAppointmentsExperience();
+  if (shellPrimary && isAppointmentsMessagesPath(pathname)) return true;
+  if (shellPrimary && isAppointmentsSharedShellPath(pathname)) return true;
+  return false;
 }
 
 export function isAppointmentsApiPath(pathname: string): boolean {

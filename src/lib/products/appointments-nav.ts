@@ -32,10 +32,14 @@ export type AppointmentsNavOptions = {
 function calendarChildren(): NavItem["children"] {
   return [
     { label: "Calendar", href: "/appointments/calendar" },
-    { label: "Appointments", href: "/appointments/overview" },
+    { label: "Scheduled list", href: "/appointments/scheduled" },
+    { label: "New appointment", href: "/appointments/new" },
+    { label: "Home", href: "/appointments/overview" },
     { label: "Clients", href: "/appointments/clients" },
     { label: "Waitlist", href: "/appointments/waitlist" },
     { label: "Recalls", href: "/appointments/recalls" },
+    { label: "Recall campaigns", href: "/appointments/recall-campaigns" },
+    { label: "No-show recovery", href: "/appointments/no-show-recovery" },
   ];
 }
 
@@ -52,7 +56,12 @@ function bookingChildren(modules: SchedulingModuleFlags): NavItem["children"] {
     children.push({ label: "Packages", href: "/appointments/packages" });
     children.push({ label: "Memberships", href: "/appointments/memberships" });
     children.push({ label: "Pricing & Payments", href: "/appointments/pricing-payments" });
+    children.push({ label: "Categories", href: "/appointments/categories" });
+    children.push({ label: "Coupons", href: "/appointments/coupons" });
+    children.push({ label: "Commerce hub", href: "/appointments/commerce" });
+    children.push({ label: "Service booking", href: "/appointments/service-booking" });
     children.push({ label: "Forms & Documents", href: "/appointments/forms-documents" });
+    children.push({ label: "Contracts", href: "/appointments/contracts" });
     children.push({ label: "Contact merge", href: "/appointments/commerce/contact-merge" });
     children.push({ label: "Point of Sale", href: "/appointments/point-of-sale" });
   }
@@ -70,9 +79,12 @@ function bookingChildren(modules: SchedulingModuleFlags): NavItem["children"] {
 function availabilityChildren(): NavItem["children"] {
   return [
     { label: "Schedules", href: "/appointments/availability" },
+    { label: "Staff", href: "/appointments/staff" },
     { label: "Routing", href: "/appointments/routing" },
     { label: "Locations", href: "/appointments/locations" },
     { label: "Resources", href: "/appointments/resources" },
+    { label: "Restrictions", href: "/appointments/restrictions" },
+    { label: "Client restrictions", href: "/appointments/client-restrictions" },
   ];
 }
 
@@ -115,6 +127,9 @@ function integrationsChildren(): NavItem["children"] {
 
 function settingsChildren(): NavItem["children"] {
   return [
+    { label: "Get started", href: "/appointments/setup" },
+    { label: "Policies", href: "/appointments/policies" },
+    { label: "Enterprise", href: "/appointments/enterprise" },
     { label: "Business", href: "/settings/business" },
     { label: "Team", href: "/settings/users" },
     { label: "Messaging", href: "/settings/messaging" },

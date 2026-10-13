@@ -1,5 +1,6 @@
 import { isMctbUniversalChromeActive } from "@/lib/mctb/universal-shell";
 import type { ProductShell } from "@/lib/products/product-shell";
+import { isUnifiedAppointmentsExperience } from "@/lib/products/unified-appointments";
 
 /**
  * New UI shell rollout — presentation transplant only (Category A/B/C rules).
@@ -39,6 +40,15 @@ export function shouldUseNewUiShell(
   if (pathname.startsWith("/voice/")) return true;
   if (pathname.startsWith("/mctb/") || pathname === "/mctb") return true;
   if (pathname.startsWith("/appointment-reminders")) return true;
+  if (isUnifiedAppointmentsExperience() && pathname.startsWith("/appointments")) return true;
+  if (
+    isUnifiedAppointmentsExperience() &&
+    (pathname.startsWith("/meetings") ||
+      pathname.startsWith("/video") ||
+      pathname.startsWith("/payments"))
+  ) {
+    return true;
+  }
   if (pathname === "/integrations" || pathname.startsWith("/integrations/")) return true;
   if (pathname === "/settings" || pathname.startsWith("/settings/")) return true;
 

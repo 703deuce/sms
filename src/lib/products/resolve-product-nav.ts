@@ -11,12 +11,18 @@ import { buildAiAfterHoursNav } from "@/lib/products/ai-after-hours-nav";
 import { buildSmsPlatformNav } from "@/lib/products/sms-platform-nav";
 import { buildMctbShellNav } from "@/lib/products/voice-nav";
 import {
+  isExplicitAppointmentsShellPath,
   resolveProductShellFromPath,
   type ProductShell,
 } from "@/lib/products/product-shell";
 import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlements";
 import { resolveMctbLaunchProductShell } from "@/lib/mctb/universal-shell";
 import { isAppointmentsV1Primary, isMctbV1Primary, isSmsOnlyAppNav } from "@/lib/workspace/platform-launch";
+import { isUnifiedAppointmentsExperience } from "@/lib/products/unified-appointments";
+import {
+  buildUnifiedAppointmentsMobileNav,
+  buildUnifiedAppointmentsNav,
+} from "@/lib/products/unified-appointments-nav";
 import { isVoiceProductCustomerVisible } from "@/lib/products/launch-product-availability";
 
 export type ResolveProductNavInput = {
@@ -45,6 +51,9 @@ function resolveEffectiveProductShell(
   const pathShell = resolveProductShellFromPath(pathname);
   if (pathShell) return pathShell;
   if (isMctbSharedWorkspacePath(pathname) && productShell === "mctb") return "mctb";
+  if (isUnifiedAppointmentsExperience() && isExplicitAppointmentsShellPath(pathname)) {
+    return "appointment_reminders";
+  }
   if (isAppointmentRemindersSharedWorkspacePath(pathname) && productShell === "appointment_reminders") {
     return "appointment_reminders";
   }
@@ -73,6 +82,9 @@ export function resolveProductSidebarNav(input: ResolveProductNavInput): NavItem
     return buildAppointmentsV1Nav({ conversationsBadge: input.inboxBadge });
   }
   if (effectiveShell === "appointment_reminders") {
+    if (isUnifiedAppointmentsExperience()) {
+      return buildUnifiedAppointmentsNav({ conversationsBadge: input.inboxBadge });
+    }
     return buildAppointmentRemindersNav();
   }
   if (effectiveShell === "mass_sms") {
@@ -142,6 +154,9 @@ export function resolveProductMobileNav(input: ResolveProductNavInput): NavItem[
     return buildAppointmentsMobileNav();
   }
   if (effectiveShell === "appointment_reminders") {
+    if (isUnifiedAppointmentsExperience()) {
+      return buildUnifiedAppointmentsMobileNav({ conversationsBadge: input.inboxBadge });
+    }
     return buildAppointmentRemindersMobileNav();
   }
   if (effectiveShell === "mass_sms") {
@@ -200,6 +215,13 @@ export function isAppointmentsShellActive(
   if (isMctbV1Primary() && hasMctb) return false;
   const pathShell = resolveProductShellFromPath(pathname);
   if (pathShell === "appointments") return true;
+  if (
+    isUnifiedAppointmentsExperience() &&
+    pathShell === "appointment_reminders" &&
+    isExplicitAppointmentsShellPath(pathname)
+  ) {
+    return true;
+  }
   if (pathShell === "mctb") return false;
   return multiProduct ? productShell === "appointments" : isAppointmentsV1Primary();
 }

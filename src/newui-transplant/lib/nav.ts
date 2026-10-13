@@ -8,6 +8,8 @@ import {
 import { isVoiceProductCustomerVisible } from '@/lib/products/launch-product-availability'
 import { RECEPTIONIST_WIZARD_NAV_ITEMS } from '@/lib/voice/receptionist/wizard-step-url'
 import { buildAppointmentRemindersNav } from '@/lib/products/appointment-reminders-nav'
+import { isUnifiedAppointmentsExperience } from '@/lib/products/unified-appointments'
+import { buildUnifiedAppointmentsNav } from '@/lib/products/unified-appointments-nav'
 import { buildMctbV1Nav } from '@/lib/products/mctb-nav'
 import { flattenNavLinks, type NavItem as ProductNavItem } from '@/lib/nav'
 import { MCTB_ROUTES } from '@/lib/mctb/routes'
@@ -79,7 +81,9 @@ function productNavItemToOpus(item: ProductNavItem): NavItem {
 }
 
 export function appointmentRemindersNavSections(): NavSection[] {
-  const flat = buildAppointmentRemindersNav()
+  const flat = isUnifiedAppointmentsExperience()
+    ? buildUnifiedAppointmentsNav()
+    : buildAppointmentRemindersNav()
   const sections: NavSection[] = []
   let bucket: NavItem[] = []
   let bucketLabel = 'Overview'

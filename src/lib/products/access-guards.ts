@@ -8,6 +8,7 @@ import { isAppointmentsPlatformPath } from "@/lib/products/appointments-routes";
 import { isMctbAppPath, isVoiceProductPath } from "@/lib/products/voice-routes";
 import type { ProductKey, UserProductAccess } from "@/lib/products/types";
 import { productHomePath } from "@/lib/products/types";
+import { isUnifiedAppointmentsExperience } from "@/lib/products/unified-appointments";
 import { isAppointmentsV1Primary, isSmsStandaloneHidden } from "@/lib/workspace/platform-launch";
 import { voiceCustomerHiddenRedirect } from "@/lib/products/launch-product-availability";
 
@@ -27,7 +28,10 @@ export function productAccessDeniedRedirect(
   if (voiceHidden) return voiceHidden;
 
   // Appointments V1 is the primary product — do not bounce to /dashboard (SMS entitlement loop).
-  if (isAppointmentsV1Primary() && isAppointmentsPlatformPath(pathname)) {
+  if (
+    (isAppointmentsV1Primary() || isUnifiedAppointmentsExperience()) &&
+    isAppointmentsPlatformPath(pathname)
+  ) {
     return null;
   }
   if (isMctbAppPath(pathname)) {
