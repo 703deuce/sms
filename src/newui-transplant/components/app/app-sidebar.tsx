@@ -1,9 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
-import { PhoneCall } from 'lucide-react'
+import { ChevronDown, PhoneCall } from 'lucide-react'
 import {
   Sidebar,
   SidebarContent,
@@ -31,6 +31,7 @@ import {
   readStoredProductShell,
   type ProductShell,
 } from '@/lib/products/product-shell'
+import { isSchedulingOpusChromePath } from '@/lib/products/newui-shell'
 import { OpusProductSwitcher } from '@/newui-transplant/components/app/opus-product-switcher'
 import { resolveCustomerNavSections, type NavItem, type NavSubItem } from '@/newui-transplant/lib/nav'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
@@ -39,10 +40,15 @@ import {
   isReceptionistWizardEditPath,
   stepIdFromReceptionistQuery,
 } from '@/lib/voice/receptionist/wizard-step-url'
+import { cn } from '@/lib/utils'
 
 function searchStringFromParams(searchParams: URLSearchParams): string {
   const q = searchParams.toString()
   return q ? `?${q}` : ''
+}
+
+function navItemExpandKey(item: NavItem): string {
+  return `${item.href}::${item.label}`
 }
 
 function isTopNavActive(pathname: string, search: string, item: NavItem) {
@@ -79,6 +85,22 @@ function bestMatchingChild(
   return bestScore >= 0 ? best : null
 }
 
+function bestExpandedNavKey(
+  sections: { items: NavItem[] }[],
+  pathname: string,
+  search: string,
+): string | null {
+  for (const section of sections) {
+    for (const item of section.items) {
+      if (!item.children?.length) continue
+      if (isTopNavActive(pathname, search, item)) {
+        return navItemExpandKey(item)
+      }
+    }
+  }
+  return null
+}
+
 function isSubNavActive(pathname: string, searchParams: URLSearchParams, child: NavSubItem) {
   if (!isReceptionistWizardEditPath(pathname)) return false
   const stepParam = searchParams.get('step')
@@ -98,6 +120,7 @@ export type AppSidebarProps = {
   hasMctb?: boolean
   hasAppointmentReminders?: boolean
   hasAiAfterHours?: boolean
+  inboxBadge?: number
 }
 
 export function AppSidebar({
@@ -105,19 +128,39 @@ export function AppSidebar({
   hasMctb = true,
   hasAppointmentReminders = true,
   hasAiAfterHours = false,
+  inboxBadge = 0,
 }: AppSidebarProps) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const pathShell = resolveProductShellFromPath(pathname)
   const [storedShell, setStoredShell] = useState<ProductShell | null>(null)
+  const [expandedKey, setExpandedKey] = useState<string | null>(null)
+
   useEffect(() => {
     setStoredShell(readStoredProductShell())
   }, [pathname])
-  const productShell: ProductShell =
-    pathShell ?? storedShell ?? (hasMctb ? 'mctb' : 'appointment_reminders')
-  const navSections = resolveCustomerNavSections(productShell)
+
+  const productShell: ProductShell = useMemo(() => {
+    if (pathShell) return pathShell
+    if (isSchedulingOpusChromePath(pathname)) return 'appointment_reminders'
+    return storedShell ?? (hasMctb ? 'mctb' : 'appointment_reminders')
+  }, [pathShell, pathname, storedShell, hasMctb])
+
+  const navSections = useMemo(
+    () => resolveCustomerNavSections(productShell, inboxBadge),
+    [productShell, inboxBadge],
+  )
+
+  const search = searchStringFromParams(searchParams)
+
+  useEffect(() => {
+    setExpandedKey(bestExpandedNavKey(navSections, pathname, search))
+  }, [pathname, search, navSections])
+
   const brandHref =
-    productShell === 'appointment_reminders' ? AR_ROUTES.home : mctbLaunchCustomerHome()
+    productShell === 'appointment_reminders' || productShell === 'appointments'
+      ? AR_ROUTES.home
+      : mctbLaunchCustomerHome()
 
   return (
     <Sidebar collapsible="icon">
@@ -156,31 +199,54 @@ export function AppSidebar({
               <SidebarMenu>
                 {section.items.map((item) => {
                   const hasChildren = Boolean(item.children?.length)
-                  const search = searchStringFromParams(searchParams)
+                  const expandKey = navItemExpandKey(item)
                   const parentActive = isTopNavActive(pathname, search, item)
                   const activeChild = hasChildren
                     ? bestMatchingChild(pathname, search, item.children!)
                     : null
-                  const showChildren = hasChildren
                   const parentHighlighted = parentActive || Boolean(activeChild)
+                  const isOpen = hasChildren && expandedKey === expandKey
 
                   return (
                     <SidebarMenuItem key={item.href}>
-                      <SidebarMenuButton
-                        isActive={parentHighlighted}
-                        tooltip={item.label}
-                        render={<Link href={item.href} />}
-                        className="h-8 data-active:bg-sidebar-accent data-active:text-sidebar-accent-foreground data-active:[&_svg]:text-sidebar-primary"
-                      >
-                        <item.icon aria-hidden="true" />
-                        <span>{item.label}</span>
-                      </SidebarMenuButton>
-                      {item.badge ? (
-                        <SidebarMenuBadge className="rounded-full bg-sidebar-primary/15 text-[10px] text-sidebar-primary">
-                          {item.badge}
-                        </SidebarMenuBadge>
-                      ) : null}
-                      {showChildren ? (
+                      <div className="flex w-full min-w-0 items-center gap-0.5 group-data-[collapsible=icon]:justify-center">
+                        <SidebarMenuButton
+                          isActive={parentHighlighted}
+                          tooltip={item.label}
+                          render={<Link href={item.href} />}
+                          className={cn(
+                            'h-8 min-w-0 flex-1 data-active:bg-sidebar-accent data-active:text-sidebar-accent-foreground data-active:[&_svg]:text-sidebar-primary',
+                            hasChildren && 'group-data-[collapsible=icon]:flex-none',
+                          )}
+                        >
+                          <item.icon aria-hidden="true" />
+                          <span className="truncate">{item.label}</span>
+                        </SidebarMenuButton>
+                        {item.badge ? (
+                          <SidebarMenuBadge className="rounded-full bg-sidebar-primary/15 text-[10px] text-sidebar-primary group-data-[collapsible=icon]:hidden">
+                            {item.badge}
+                          </SidebarMenuBadge>
+                        ) : null}
+                        {hasChildren ? (
+                          <button
+                            type="button"
+                            className="flex size-7 shrink-0 items-center justify-center rounded-md text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:hidden"
+                            aria-expanded={isOpen}
+                            aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${item.label}`}
+                            onClick={() =>
+                              setExpandedKey((current) =>
+                                current === expandKey ? null : expandKey,
+                              )
+                            }
+                          >
+                            <ChevronDown
+                              className={cn('size-4 transition-transform', isOpen && 'rotate-180')}
+                              aria-hidden="true"
+                            />
+                          </button>
+                        ) : null}
+                      </div>
+                      {hasChildren && isOpen ? (
                         <SidebarMenuSub>
                           {item.children!.map((child) => {
                             const childActive = isReceptionistWizardEditPath(pathname)

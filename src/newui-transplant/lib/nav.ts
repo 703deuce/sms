@@ -7,9 +7,7 @@ import {
 } from 'lucide-react'
 import { isVoiceProductCustomerVisible } from '@/lib/products/launch-product-availability'
 import { RECEPTIONIST_WIZARD_NAV_ITEMS } from '@/lib/voice/receptionist/wizard-step-url'
-import { buildAppointmentRemindersNav } from '@/lib/products/appointment-reminders-nav'
-import { isUnifiedAppointmentsExperience } from '@/lib/products/unified-appointments'
-import { buildUnifiedAppointmentsNav } from '@/lib/products/unified-appointments-nav'
+import { buildSchedulingOpusSidebarNav } from '@/lib/products/scheduling-opus-nav'
 import { buildMctbV1Nav } from '@/lib/products/mctb-nav'
 import { flattenNavLinks, type NavItem as ProductNavItem } from '@/lib/nav'
 import { MCTB_ROUTES } from '@/lib/mctb/routes'
@@ -80,10 +78,7 @@ function productNavItemToOpus(item: ProductNavItem): NavItem {
   return opus
 }
 
-export function appointmentRemindersNavSections(): NavSection[] {
-  const flat = isUnifiedAppointmentsExperience()
-    ? buildUnifiedAppointmentsNav()
-    : buildAppointmentRemindersNav()
+function flatNavToSections(flat: ProductNavItem[]): NavSection[] {
   const sections: NavSection[] = []
   let bucket: NavItem[] = []
   let bucketLabel = 'Overview'
@@ -102,6 +97,11 @@ export function appointmentRemindersNavSections(): NavSection[] {
   }
   flush()
   return sections
+}
+
+export function appointmentRemindersNavSections(inboxBadge = 0): NavSection[] {
+  const flat = buildSchedulingOpusSidebarNav({ conversationsBadge: inboxBadge })
+  return flatNavToSections(flat)
 }
 
 /** Launch MCTB IA — single source with `buildMctbV1Nav` (desktop legacy + Opus mobile drawer). */
@@ -152,8 +152,8 @@ export function resolveCustomerNavSections(
   productShell: ProductShell = 'mctb',
   inboxBadge = 0,
 ): NavSection[] {
-  if (productShell === 'appointment_reminders') {
-    return appointmentRemindersNavSections()
+  if (productShell === 'appointment_reminders' || productShell === 'appointments') {
+    return appointmentRemindersNavSections(inboxBadge)
   }
   const mctb = mctbLaunchNavSections(inboxBadge)
   if (productShell === 'ai_after_hours' && isVoiceProductCustomerVisible()) {

@@ -1,8 +1,5 @@
 import type { NavItem } from "@/lib/nav";
-import {
-  buildAppointmentRemindersMobileNav,
-  buildAppointmentRemindersNav,
-} from "@/lib/products/appointment-reminders-nav";
+import { buildAppointmentRemindersMobileNav } from "@/lib/products/appointment-reminders-nav";
 import { buildAppointmentsMobileNav, buildAppointmentsV1Nav } from "@/lib/products/appointments-nav";
 import { isMctbBundledAiReceptionistPath } from "@/lib/products/mctb-bundled-receptionist-paths";
 import { isAppointmentRemindersSharedWorkspacePath } from "@/lib/products/appointment-reminders-nav";
@@ -23,6 +20,7 @@ import {
   buildUnifiedAppointmentsMobileNav,
   buildUnifiedAppointmentsNav,
 } from "@/lib/products/unified-appointments-nav";
+import { buildSchedulingOpusSidebarNav } from "@/lib/products/scheduling-opus-nav";
 import { isVoiceProductCustomerVisible } from "@/lib/products/launch-product-availability";
 
 export type ResolveProductNavInput = {
@@ -81,11 +79,8 @@ export function resolveProductSidebarNav(input: ResolveProductNavInput): NavItem
   if (effectiveShell === "appointments") {
     return buildAppointmentsV1Nav({ conversationsBadge: input.inboxBadge });
   }
-  if (effectiveShell === "appointment_reminders") {
-    if (isUnifiedAppointmentsExperience()) {
-      return buildUnifiedAppointmentsNav({ conversationsBadge: input.inboxBadge });
-    }
-    return buildAppointmentRemindersNav();
+  if (effectiveShell === "appointment_reminders" || effectiveShell === "appointments") {
+    return buildSchedulingOpusSidebarNav({ conversationsBadge: input.inboxBadge });
   }
   if (effectiveShell === "mass_sms") {
     return buildSmsPlatformNav({ conversationsBadge: input.inboxBadge });

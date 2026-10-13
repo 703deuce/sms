@@ -1,6 +1,27 @@
 import { isMctbUniversalChromeActive } from "@/lib/mctb/universal-shell";
+import { isAppointmentsProductPath } from "@/lib/products/appointments-routes";
 import type { ProductShell } from "@/lib/products/product-shell";
+import {
+  isAppointmentRemindersV1Primary,
+  isAppointmentsV1Primary,
+} from "@/lib/workspace/platform-launch";
 import { isUnifiedAppointmentsExperience } from "@/lib/products/unified-appointments";
+
+/** Scheduling product uses Opus chrome on all platform routes (not only when UNIFIED_APPOINTMENTS=1). */
+export function isSchedulingOpusChromePath(pathname: string): boolean {
+  if (pathname.startsWith("/appointment-reminders")) return true;
+  if (isAppointmentsProductPath(pathname)) return true;
+  const schedulingLaunch =
+    isUnifiedAppointmentsExperience() ||
+    isAppointmentRemindersV1Primary() ||
+    isAppointmentsV1Primary();
+  if (!schedulingLaunch) return false;
+  return (
+    pathname.startsWith("/meetings") ||
+    pathname.startsWith("/video") ||
+    pathname.startsWith("/payments")
+  );
+}
 
 /**
  * New UI shell rollout — presentation transplant only (Category A/B/C rules).
@@ -39,16 +60,7 @@ export function shouldUseNewUiShell(
 
   if (pathname.startsWith("/voice/")) return true;
   if (pathname.startsWith("/mctb/") || pathname === "/mctb") return true;
-  if (pathname.startsWith("/appointment-reminders")) return true;
-  if (isUnifiedAppointmentsExperience() && pathname.startsWith("/appointments")) return true;
-  if (
-    isUnifiedAppointmentsExperience() &&
-    (pathname.startsWith("/meetings") ||
-      pathname.startsWith("/video") ||
-      pathname.startsWith("/payments"))
-  ) {
-    return true;
-  }
+  if (isSchedulingOpusChromePath(pathname)) return true;
   if (pathname === "/integrations" || pathname.startsWith("/integrations/")) return true;
   if (pathname === "/settings" || pathname.startsWith("/settings/")) return true;
 

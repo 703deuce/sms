@@ -56,6 +56,7 @@ export function NewUiTransplantShellLayout({
   hasAiAfterHours = false,
   mobileMenuOpen = false,
   onMobileMenuClose,
+  inboxBadge = 0,
 }: NewUiTransplantShellLayoutProps) {
   const wsName = workspaceName?.trim() || "Workspace";
   return (
@@ -72,6 +73,7 @@ export function NewUiTransplantShellLayout({
             hasMctb={hasMctb}
             hasAppointmentReminders={hasAppointmentReminders}
             hasAiAfterHours={hasAiAfterHours}
+            inboxBadge={inboxBadge}
           />
           <SidebarInset className="min-h-0 min-w-0 flex-1 bg-background">
             <div className="shrink-0">
