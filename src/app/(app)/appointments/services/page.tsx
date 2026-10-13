@@ -1,5 +1,5 @@
-import { ServicesWorkspaceConnected } from "@/components/appointments/services/services-workspace-connected";
+import { AppointmentsServicesListGate } from '@/newui-transplant/connected/scheduling/appointments-booking-routes-client'
 
 export default function AppointmentsServicesPage() {
-  return <ServicesWorkspaceConnected serviceId={null} />;
+  return <AppointmentsServicesListGate />
 }

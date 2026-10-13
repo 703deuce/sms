@@ -1,7 +1,7 @@
 'use client'
 
-import { ArMeetingsWorkspaceOpus } from '@/newui-transplant/connected/appointment-reminders/ar-meetings-workspace-opus'
+import { ArBookingMeetingsWorkspace } from '@/newui-transplant/connected/appointment-reminders/booking-meetings-routes-client'
 
 export function AppointmentRemindersBookingMeetingsPage() {
-  return <ArMeetingsWorkspaceOpus meetingId={null} />
+  return <ArBookingMeetingsWorkspace meetingId={null} />
 }

@@ -1,10 +1,10 @@
-import { MeetingsWorkspaceConnected } from "@/components/appointments/meetings/meetings-workspace-connected";
+import { AppointmentsMeetingDetailGate } from '@/newui-transplant/connected/scheduling/appointments-booking-routes-client'
 
 export default async function AppointmentsMeetingEditorPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ id: string }>
 }) {
-  const { id } = await params;
-  return <MeetingsWorkspaceConnected meetingId={id} />;
+  const { id } = await params
+  return <AppointmentsMeetingDetailGate meetingId={id} />
 }

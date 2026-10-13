@@ -1,6 +1,6 @@
-import { redirect } from 'next/navigation'
-import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
+import { CreateServiceWizard } from '@/components/appointments/services/create-service-wizard'
+import { AR_BOOKING_SERVICES_ROUTES } from '@/lib/appointments/bookable-workspace-routes'
 
-export default function AppointmentRemindersBookingServicesNewRedirect() {
-  redirect(`${AR_ROUTES.bookingMeetings}/new`)
+export default function AppointmentRemindersBookingServiceCreateRoute() {
+  return <CreateServiceWizard routes={AR_BOOKING_SERVICES_ROUTES} />
 }

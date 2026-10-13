@@ -1,5 +1,5 @@
-import { CreateMeetingWizard } from "@/components/appointments/meetings/create-meeting-wizard";
+import { AppointmentsMeetingCreateGate } from '@/newui-transplant/connected/scheduling/appointments-booking-routes-client'
 
 export default function CreateMeetingPage() {
-  return <CreateMeetingWizard />;
+  return <AppointmentsMeetingCreateGate />
 }

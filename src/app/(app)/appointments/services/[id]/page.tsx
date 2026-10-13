@@ -1,10 +1,10 @@
-import { ServicesWorkspaceConnected } from "@/components/appointments/services/services-workspace-connected";
+import { AppointmentsServiceDetailGate } from '@/newui-transplant/connected/scheduling/appointments-booking-routes-client'
 
 export default async function AppointmentsServiceEditorPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ id: string }>
 }) {
-  const { id } = await params;
-  return <ServicesWorkspaceConnected serviceId={id} />;
+  const { id } = await params
+  return <AppointmentsServiceDetailGate serviceId={id} />
 }

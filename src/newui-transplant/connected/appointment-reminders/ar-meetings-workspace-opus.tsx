@@ -31,7 +31,7 @@ import {
 import { MeetingSectionWorkspace } from '@/components/appointments/meetings/meeting-section-workspace'
 import { MEETING_SECTIONS, type MeetingSectionId } from '@/components/appointments/meetings/meeting-section-types'
 import {
-  AR_BOOKING_MEETINGS_ROUTES,
+  APPOINTMENTS_MEETINGS_ROUTES,
   type MeetingsWorkspaceRoutes,
 } from '@/lib/appointments/bookable-workspace-routes'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
@@ -57,7 +57,7 @@ type Props = {
 
 export function ArMeetingsWorkspaceOpus({
   meetingId,
-  routes = AR_BOOKING_MEETINGS_ROUTES,
+  routes = APPOINTMENTS_MEETINGS_ROUTES,
 }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()

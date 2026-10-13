@@ -1,11 +1,10 @@
-import { redirect } from 'next/navigation'
-import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
+import { ArBookingServicesWorkspace } from '@/newui-transplant/connected/appointment-reminders/booking-services-routes-client'
 
-export default async function AppointmentRemindersBookingServicesDetailRedirect({
+export default async function AppointmentRemindersBookingServiceDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  redirect(`${AR_ROUTES.bookingMeetings}/${id}`)
+  return <ArBookingServicesWorkspace serviceId={id} />
 }

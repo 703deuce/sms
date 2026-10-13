@@ -1,5 +1,5 @@
-import { MeetingsWorkspaceConnected } from "@/components/appointments/meetings/meetings-workspace-connected";
+import { AppointmentsMeetingsListGate } from '@/newui-transplant/connected/scheduling/appointments-booking-routes-client'
 
 export default function AppointmentsMeetingsPage() {
-  return <MeetingsWorkspaceConnected meetingId={null} />;
+  return <AppointmentsMeetingsListGate />
 }

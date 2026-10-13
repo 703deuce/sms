@@ -1,6 +1,5 @@
-import { redirect } from 'next/navigation'
-import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
+import { AppointmentRemindersBookingServicesPage } from '@/newui-transplant/connected/appointment-reminders/booking-services-page'
 
-export default function AppointmentRemindersBookingServicesRedirect() {
-  redirect(AR_ROUTES.bookingMeetings)
+export default function AppointmentRemindersBookingServicesRoute() {
+  return <AppointmentRemindersBookingServicesPage />
 }
