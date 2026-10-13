@@ -46,10 +46,10 @@ CREATE INDEX "class_occurrence_registration_holds_occurrenceId_status_expires_id
 CREATE INDEX "class_occurrence_registration_holds_workspaceId_expiresAt_idx" ON "class_occurrence_registration_holds"("workspaceId", "expiresAt");
 
 -- AddForeignKey
-ALTER TABLE "service_booking_store_fulfillments" ADD CONSTRAINT "service_booking_store_fulfillments_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "workspaces"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "service_booking_store_fulfillments" ADD CONSTRAINT "service_booking_store_fulfillments_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "class_occurrence_registration_holds" ADD CONSTRAINT "class_occurrence_registration_holds_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "workspaces"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "class_occurrence_registration_holds" ADD CONSTRAINT "class_occurrence_registration_holds_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "class_occurrence_registration_holds" ADD CONSTRAINT "class_occurrence_registration_holds_occurrenceId_fkey" FOREIGN KEY ("occurrenceId") REFERENCES "class_occurrences"("id") ON DELETE CASCADE ON UPDATE CASCADE;
