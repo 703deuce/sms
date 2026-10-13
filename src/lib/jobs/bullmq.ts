@@ -722,15 +722,38 @@ export async function syncDbOutboxToBullmq(limit = 50) {
 
   let synced = 0;
   let skipped = 0;
+  let alignedTerminal = 0;
   for (const job of due) {
     try {
+      const rawJobId = job.idempotencyKey || job.id;
+      const bullJobId = toBullmqJobId(rawJobId);
+      const queue = getQueue(job.queueName);
+      const existingBull = await queue.getJob(bullJobId);
+      if (existingBull) {
+        const { bullmqOutboxShouldAlignPostgresTerminal } = await import(
+          "@/lib/jobs/bullmq-outbox-recovery"
+        );
+        const terminal = bullmqOutboxShouldAlignPostgresTerminal(await existingBull.getState());
+        if (terminal === "completed") {
+          await completeJob(job.id);
+          alignedTerminal += 1;
+          continue;
+        }
+        if (terminal === "failed") {
+          const failReason = existingBull.failedReason || "bullmq_terminal_failed";
+          await failJob(job.id, failReason, undefined, undefined, true);
+          alignedTerminal += 1;
+          continue;
+        }
+      }
+
       const delay = Math.max(0, job.runAfter.getTime() - Date.now());
       await enqueueBullmq(
         job.queueName,
         job.jobType,
         (job.payload || {}) as Record<string, unknown>,
         {
-          jobId: job.idempotencyKey || job.id,
+          jobId: rawJobId,
           delay: delay || undefined,
           wake: delay === 0,
         },
@@ -745,5 +768,5 @@ export async function syncDbOutboxToBullmq(limit = 50) {
       console.warn("[syncDbOutboxToBullmq] failed for", job.id, err);
     }
   }
-  return { synced, skipped, examined: due.length };
+  return { synced, skipped, alignedTerminal, examined: due.length };
 }

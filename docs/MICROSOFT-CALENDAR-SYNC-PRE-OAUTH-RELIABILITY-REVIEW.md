@@ -40,7 +40,7 @@
 | Outbox drain | **Present** | `syncDbOutboxToBullmq(50)` every ~5s in `processDueJobs` (web `worker-all`). |
 | Duplicate executable jobs | **Mitigated** | `enqueueBullmq` uses stable `jobId` from idempotency key; skips if job is `waiting` / `active` / `delayed` (promote/wake). |
 | Outbox throughput ceiling | **Known limit** | ~600 rows/min best case (50 per 5s) — can lag during large incidents; acceptable for steady state, not a substitute for enqueue prevention. |
-| Completed Redis + pending PG | **Edge case** | If Redis job completed but PG not synced, outbox may re-add; worker `syncDbJob` normally aligns PG on terminal BullMQ outcome. |
+| Completed Redis + pending PG | **Mitigated** | `syncDbOutboxToBullmq` aligns PG to `completed`/`failed` when BullMQ job is already terminal (no duplicate enqueue). Regression: `bullmq-outbox-recovery.test.ts`. |
 
 ---
 
@@ -73,7 +73,8 @@
 ## Changes made in this review
 
 1. **`import-sync.ts`** — `JobFailedError` for missing connection, missing token, and webhook path token failures.  
-2. **`bullmq-queue-health.ts` + `job-queue-lifecycle.ts`** — Redis memory summary on job-queue health snapshot.
+2. **`bullmq-queue-health.ts` + `job-queue-lifecycle.ts`** — Redis memory summary on job-queue health snapshot.  
+3. **`bullmq.ts` + `bullmq-outbox-recovery.ts`** — outbox aligns PG when BullMQ job is already terminal (completed/failed).
 
 ---
 
