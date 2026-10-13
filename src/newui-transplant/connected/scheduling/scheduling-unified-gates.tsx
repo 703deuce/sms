@@ -11,8 +11,9 @@ import { StaffDirectoryOpus } from '@/newui-transplant/connected/scheduling/staf
 import { LocationsDirectoryOpus } from '@/newui-transplant/connected/scheduling/locations-directory-opus'
 import { ResourcesDirectoryOpus } from '@/newui-transplant/connected/scheduling/resources-directory-opus'
 import { ServiceBookingAdminOpus } from '@/newui-transplant/connected/scheduling/service-booking-admin-opus'
-import { SchedulingOpusShell } from '@/newui-transplant/connected/scheduling/scheduling-opus-shell'
-import { SchedulingOpusEmbed } from '@/newui-transplant/connected/scheduling/scheduling-opus-embed'
+import { schedulingAdminGate } from '@/newui-transplant/connected/scheduling/scheduling-admin-opus'
+import { WaitlistAdminOpus } from '@/newui-transplant/connected/scheduling/waitlist-admin-opus'
+import { WorkflowsListOpus } from '@/newui-transplant/connected/scheduling/workflows-list-opus'
 import { PackagesCatalogConnected } from '@/components/appointments/packages/packages-catalog-connected'
 import { MembershipsCatalogConnected } from '@/components/appointments/memberships/memberships-catalog-connected'
 import { ServiceBookingAdminClient } from '@/components/appointments/service-booking-admin-client'
@@ -48,22 +49,14 @@ import { WorkshopsWorkspaceConnected } from '@/components/appointments/workshops
 import type { AppointmentsAnalyticsSection } from '@/lib/products/appointments-settings-tabs'
 import { AppointmentsAnalyticsOpusShell } from '@/newui-transplant/connected/scheduling/appointments-analytics-opus-shell'
 
+/** Opus page chrome without Kimi embed wrapper — body still migrates to native Opus UI over time. */
 function embedGate(
   title: string,
   description: string,
   legacy: ReactNode,
   body: ReactNode,
 ) {
-  return (
-    <SchedulingPageGate
-      opus={
-        <SchedulingOpusShell title={title} description={description}>
-          <SchedulingOpusEmbed>{body}</SchedulingOpusEmbed>
-        </SchedulingOpusShell>
-      }
-      legacy={legacy}
-    />
-  )
+  return schedulingAdminGate(title, description, legacy, body)
 }
 
 export function StaffDirectoryGate() {
@@ -137,20 +130,20 @@ export function MembershipsCatalogGate() {
 }
 
 export function WaitlistAdminGate() {
-  return embedGate(
-    'Waitlist',
-    'Manage waitlist entries and offers.',
-    <WaitlistAdminClient />,
-    <WaitlistAdminClient />,
+  return (
+    <SchedulingPageGate
+      opus={<WaitlistAdminOpus />}
+      legacy={<WaitlistAdminClient />}
+    />
   )
 }
 
 export function WorkflowsGate() {
-  return embedGate(
-    'Workflows',
-    'Automate appointment follow-up and operations.',
-    <WorkflowsListClient />,
-    <WorkflowsListClient />,
+  return (
+    <SchedulingPageGate
+      opus={<WorkflowsListOpus />}
+      legacy={<WorkflowsListClient />}
+    />
   )
 }
 

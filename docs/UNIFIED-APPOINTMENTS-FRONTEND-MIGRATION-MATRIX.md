@@ -40,7 +40,7 @@ Regenerate: `npx tsx scripts/generate-unified-frontend-migration-matrix.ts`
 | Reminders | Reminders | `/appointment-reminders/reminders` | Opus complete | — | reminders-page.tsx |  |
 | Reminders | Sequences | `/appointment-reminders/reminders/sequences` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
 | Reminders | Templates | `/appointment-reminders/reminders/templates` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
-| Workflows & Automation | Workflows & Automation | `/appointments/workflows` | Opus partial | WorkflowsListClient | scheduling-unified-gates embed |  |
+| Workflows & Automation | Workflows & Automation | `/appointments/workflows` | Opus complete | WorkflowsListClient | workflows-list-opus.tsx |  |
 | Workflows & Automation | Automation activity | `/appointments/automations/activity` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
 | Workflows & Automation | Automation templates | `/appointments/automations/templates` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
 | Workflows & Automation | Voice reminders | `/appointments/voice-reminders` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
@@ -55,7 +55,7 @@ Regenerate: `npx tsx scripts/generate-unified-frontend-migration-matrix.ts`
 | Commerce | Payment requests | `/payments` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
 | Commerce | Transactions | `/payments/transactions` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
 | Commerce | Invoices | `/payments/invoices` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
-| Commerce | Waitlist | `/appointments/waitlist` | Opus partial | WaitlistAdminClient | scheduling-unified-gates embed |  |
+| Commerce | Waitlist | `/appointments/waitlist` | Opus complete | WaitlistAdminClient | waitlist-admin-opus.tsx |  |
 | Commerce | Recalls | `/appointments/recalls` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
 | Commerce | Recall campaigns | `/appointments/recall-campaigns` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
 | Commerce | No-show recovery | `/appointments/no-show-recovery` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |

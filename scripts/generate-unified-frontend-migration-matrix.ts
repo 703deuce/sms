@@ -56,8 +56,8 @@ const ROUTE_STATUS: Record<string, { status: Status; replacement: string; legacy
   '/appointments/analytics/reminders': { status: 'opus_partial', legacy: 'AppointmentsAnalyticsShell', replacement: 'appointments-analytics-opus-shell.tsx' },
   '/appointments/analytics/automations': { status: 'opus_partial', legacy: 'AppointmentsAnalyticsShell', replacement: 'appointments-analytics-opus-shell.tsx' },
   '/appointments/analytics/reports': { status: 'opus_partial', legacy: 'AppointmentsAnalyticsShell', replacement: 'appointments-analytics-opus-shell.tsx' },
-  '/appointments/workflows': { status: 'opus_partial', legacy: 'WorkflowsListClient', replacement: 'scheduling-unified-gates embed' },
-  '/appointments/waitlist': { status: 'opus_partial', legacy: 'WaitlistAdminClient', replacement: 'scheduling-unified-gates embed' },
+  '/appointments/workflows': { status: 'opus_complete', legacy: 'WorkflowsListClient', replacement: 'workflows-list-opus.tsx' },
+  '/appointments/waitlist': { status: 'opus_complete', legacy: 'WaitlistAdminClient', replacement: 'waitlist-admin-opus.tsx' },
   '/appointments/segments': { status: 'opus_partial', legacy: 'AppointmentSegmentsClient', replacement: 'scheduling-unified-gates embed' },
   '/appointments/service-booking': { status: 'opus_partial', legacy: 'ServiceBookingAdminClient', replacement: 'ServiceBookingAdminOpus' },
 }

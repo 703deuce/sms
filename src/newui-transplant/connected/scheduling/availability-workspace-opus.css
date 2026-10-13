@@ -1,0 +1,19 @@
+/* Section panels use legacy scheduling tokens — scope under Opus page only */
+.availability-opus-root .availability-opus-sections {
+  --surface: hsl(var(--background));
+  --surface-muted: hsl(var(--muted));
+  --border: hsl(var(--border));
+  --text-primary: hsl(var(--foreground));
+  --text-secondary: hsl(var(--muted-foreground));
+  --text-tertiary: hsl(var(--muted-foreground));
+  --accent: hsl(var(--primary));
+  --accent-soft: hsl(var(--primary) / 0.12);
+  --state-error: hsl(var(--destructive));
+  --type-helper: 0.75rem;
+}
+
+.availability-opus-root .availability-opus-sections .input,
+.availability-opus-root .availability-opus-sections select,
+.availability-opus-root .availability-opus-sections button {
+  font: inherit;
+}
