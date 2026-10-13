@@ -1,6 +1,8 @@
 # Advanced Scheduling — Phase 2/3 UX Architecture & Screen Inventory
 
 **Status:** Deliverable 1 (architecture only — **no UI implementation in this pass**)  
+**Deliverable 2 layout + Opus binding:** `docs/audits/advanced-scheduling-new-ui2-opus-implementation-spec.md`  
+**Wireframes:** `docs/audits/assets/advanced-scheduling-wireframes-reference.jpg`  
 **Date:** 2026-10-13  
 **Backend baseline:** PR **#657** (`cursor/ar-package-phase0-1a-f350`) — Phases 0, 1a, 1b, 1c integration-readiness (not merged; production app still on prior image)  
 **Prerequisites:**  
