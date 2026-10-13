@@ -35,8 +35,14 @@ export type ClassSeriesMetadata = {
   category?: string;
   priceCents?: number;
   isFree?: boolean;
-  /** How a seat is paid for. Only `free` and `on_site` have a runtime today. */
-  paymentMode?: "free" | "on_site";
+  /**
+   * How a seat is paid for.
+   * - `free` — no payment
+   * - `package_only` — redeem package/membership (store purchase)
+   * - `pay_at_registration` — card checkout on register (Phase 1b)
+   * - `on_site` — legacy label; treated like package/contact for public guard until checkout ships
+   */
+  paymentMode?: "free" | "package_only" | "pay_at_registration" | "on_site";
   packageProductIds?: string[];
   membershipProductIds?: string[];
   memberOnly?: boolean;

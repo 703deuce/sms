@@ -1,6 +1,6 @@
 # Advanced Scheduling — Coordinated Implementation Specification
 
-**Status:** Approved direction for implementation (post-audit). **Do not treat as shipped.**  
+**Status:** Approved for implementation with safeguards below (Phase 0 + 1a in progress).  
 **Prerequisite audit:** `docs/audits/advanced-scheduling-workflow-audit.md`  
 **Date:** 2026-10-13  
 **Principle:** Extend existing engines (`service-booking`, store checkout, package ledger, membership webhooks, `ClassSeries` enrollment). **No parallel payment or package systems.**
@@ -325,4 +325,39 @@ Before marketing “packages, memberships, paid classes, courses”:
 
 ---
 
-*This spec is the handoff for implementation. No code changes are implied until an explicit “implement Phase X” instruction.*
+## 15. Approved safeguards (product corrections)
+
+### 15.1 Package builder — business questions, not database questions
+
+- Wizard templates (`prepaid_sessions`, `bundle_classes`, `mixed_bundle`) set `packageKind` and copy; customers never choose “pooled vs itemized.”
+- Internal step count may be higher; **customer-facing publish path stays ≤ 4 steps** in `CreatePackageWizard`.
+- “Five tutoring sessions” → pooled automatically; “Bundle classes & workshops” → itemized lines with per-offering quantities.
+
+### 15.2 Payment + enrollment = one reliable transaction
+
+- **Phase 1c (required before paid class marketing):** temporary seat reservations (or equivalent) during Stripe Checkout; fulfillment verified server-side against Stripe + durable `StoreFulfillment` row — never browser-only payment references.
+- If capacity cannot be delivered after charge: explicit refund or recovery workflow (no silent failure).
+- **Phase 0 now:** block silent free enroll on priced series; `package_only` requires `packageBalanceId` on POST.
+
+### 15.3 Credit key migration — backward compatibility
+
+- Canonical keys: `type:{bookingTypeId}`, `series:{classSeriesId}`, `default` pooled bucket.
+- Redeem paths must accept **legacy bare ids** until balances are migrated.
+- **Gate:** `scripts/cert-package-credit-keys-compat.ts` PASS before enabling stricter mint-only paths in production.
+
+### 15.4 Customer + business acceptance tests
+
+- See `docs/audits/advanced-scheduling-customer-acceptance.md` (`ADV-CUST-IT-STARTER`, `ADV-BIZ-PKG-001`).
+- Milestone 1 done when **both** business publish and customer purchase→redeem→portal journeys pass with reload verification.
+
+### 15.5 Membership class credits (core, not optional)
+
+- Include in Phase 1b/1c delivery: membership `includedCredits` with `classSeriesId` and period counters — same commercial bar as service credits (`ADV-MEM-CLS-001`).
+
+### 15.6 Mobile per public change
+
+- Each PR touching `/book/[slug]/store`, class/workshop register, or package redemption includes `ADV-MOB-PKG-001` or scoped mobile check — not deferred to Phase 3 only.
+
+---
+
+*Implementation baseline: Phases 0 + 1a first; 1c seat holds + durable fulfillment before paid class launch.*

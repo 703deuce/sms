@@ -160,8 +160,21 @@ export async function POST(request: Request, { params }: Params) {
       const { classRegistrationClosedReason } = await import(
         "@/lib/appointments/public-group-offering"
       );
-      const closed = classRegistrationClosedReason(seriesForRegistration.metadata);
+      const { classPackageCreditRequiredReason } = await import(
+        "@/lib/appointments/class-public-payment-guard"
+      );
+      const packageBalanceId = body.packageBalanceId ? String(body.packageBalanceId) : undefined;
+      const closed = classRegistrationClosedReason(seriesForRegistration.metadata, undefined, {
+        skipPaidEnrollmentGuard: Boolean(packageBalanceId),
+      });
       if (closed) return NextResponse.json({ error: closed }, { status: 400 });
+      const packageRequired = classPackageCreditRequiredReason(
+        seriesForRegistration.metadata,
+        packageBalanceId,
+      );
+      if (packageRequired) {
+        return NextResponse.json({ error: packageRequired }, { status: 403 });
+      }
     }
 
     let enrollment;

@@ -1,7 +1,10 @@
 import "server-only";
 
 import type { PackageCreditRule } from "./types";
-import { packageCreditsRemaining, resolvePackageCreditKey } from "./booking-entitlements";
+import {
+  packageCreditsRemaining,
+  resolveClassSeriesCreditKey,
+} from "./package-credit-keys";
 import { listEligibleEntitlementsForContact, redeemPackageCredit } from "./entitlements";
 import { getPrisma } from "@/lib/db";
 import { packageGrantsOffering } from "@/lib/appointments/packages/package-form";
@@ -17,9 +20,6 @@ export function packageRulesIncludeSeries(
   });
 }
 
-export function pooledCreditKey(remainingCredits: Record<string, number>): string | null {
-  return resolvePackageCreditKey(remainingCredits, undefined, undefined);
-}
 
 export async function lookupGroupRegistrationEntitlements(input: {
   workspaceId: string;
@@ -41,11 +41,12 @@ export async function lookupGroupRegistrationEntitlements(input: {
         return false;
       }
       const credits = (pkg.remainingCredits || {}) as Record<string, number>;
-      return pooledCreditKey(credits) != null;
+      return resolveClassSeriesCreditKey(credits, input.classSeriesId) != null;
     })
     .map((pkg: (typeof packages)[number]) => {
       const credits = (pkg.remainingCredits || {}) as Record<string, number>;
-      const creditKey = pooledCreditKey(credits) || "default";
+      const creditKey =
+        resolveClassSeriesCreditKey(credits, input.classSeriesId) || "default";
       return {
         id: pkg.id,
         productName: pkg.product?.name || "Package",
@@ -87,7 +88,7 @@ export async function applyGroupRegistrationEntitlement(input: {
   }
 
   const credits = (balance.remainingCredits || {}) as Record<string, number>;
-  const creditKey = pooledCreditKey(credits);
+  const creditKey = resolveClassSeriesCreditKey(credits, input.classSeriesId);
   if (!creditKey || (credits[creditKey] ?? 0) <= 0) {
     throw new Error("No package credits remaining");
   }

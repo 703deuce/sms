@@ -5,29 +5,27 @@ import { calculatePaymentAmounts } from "@/lib/merchant-payments/amounts";
 import type { PaymentRequirement } from "@/lib/appointments/types";
 import { listEligibleEntitlementsForContact, redeemPackageCredit } from "./entitlements";
 import { redeemGiftCertificate } from "./gift-certificates";
+import {
+  PACKAGE_CREDIT_KEY_DEFAULT,
+  packageCreditsRemaining,
+  resolveBookingCreditKey,
+} from "./package-credit-keys";
 
 export type BookingEntitlementSelection =
   | { method: "package"; packageBalanceId: string }
   | { method: "gift"; giftCertificateCode: string }
   | { method: "none" };
 
+/** @deprecated Import from `package-credit-keys` — kept for callers. */
 export function resolvePackageCreditKey(
   remainingCredits: Record<string, number>,
   bookingTypeId?: string,
   serviceName?: string,
 ): string | null {
-  if (bookingTypeId && (remainingCredits[bookingTypeId] ?? 0) > 0) return bookingTypeId;
-  if (serviceName && (remainingCredits[serviceName] ?? 0) > 0) return serviceName;
-  if ((remainingCredits.default ?? 0) > 0) return "default";
-  for (const [key, value] of Object.entries(remainingCredits)) {
-    if (value > 0) return key;
-  }
-  return null;
+  return resolveBookingCreditKey(remainingCredits, bookingTypeId, serviceName);
 }
 
-export function packageCreditsRemaining(remainingCredits: Record<string, number>): number {
-  return Object.values(remainingCredits).reduce((sum, n) => sum + (n || 0), 0);
-}
+export { packageCreditsRemaining };
 
 export function suggestAutoEntitlement(
   entitlements: Awaited<ReturnType<typeof lookupBookingEntitlements>>,
@@ -57,7 +55,7 @@ export async function lookupBookingEntitlements(input: {
     .filter((pkg: (typeof packages)[number]) => {
       if (pkg.expiresAt && pkg.expiresAt.getTime() < now) return false;
       const credits = (pkg.remainingCredits || {}) as Record<string, number>;
-      if (resolvePackageCreditKey(credits, input.bookingTypeId, input.serviceName) != null) {
+      if (resolveBookingCreditKey(credits, input.bookingTypeId, input.serviceName) != null) {
         return true;
       }
       // A pooled package can still cover a listed service or meeting when credits
@@ -69,7 +67,7 @@ export async function lookupBookingEntitlements(input: {
     })
     .map((pkg: (typeof packages)[number]) => {
       const credits = (pkg.remainingCredits || {}) as Record<string, number>;
-      const creditKey = resolvePackageCreditKey(credits, input.bookingTypeId, input.serviceName);
+      const creditKey = resolveBookingCreditKey(credits, input.bookingTypeId, input.serviceName);
       return {
         id: pkg.id,
         productName: pkg.product?.name || "Package",
@@ -167,7 +165,8 @@ export async function applyBookingEntitlement(input: {
 
     const credits = (balance.remainingCredits || {}) as Record<string, number>;
     const creditKey =
-      resolvePackageCreditKey(credits, input.bookingTypeId, input.serviceName) || "default";
+      resolveBookingCreditKey(credits, input.bookingTypeId, input.serviceName) ||
+      PACKAGE_CREDIT_KEY_DEFAULT;
     if ((credits[creditKey] ?? 0) <= 0) throw new Error("No package credits remaining");
 
     if (creditKey === "default" && input.bookingTypeId) {

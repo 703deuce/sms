@@ -10,19 +10,22 @@ import {
   ClipboardCheck,
   Layers,
   Package,
-  Ticket,
   Wallet,
 } from "lucide-react";
 import {
   EMPTY_PACKAGE_FORM,
+  applyPackageSellTemplate,
+  buildCreditRules,
+  itemizedQuantityKey,
   packageSavePayload,
   validatePackageForm,
   type PackageFormState,
+  type PackageSellTemplate,
 } from "@/lib/appointments/packages/package-form";
 import { Field, NumberField, Panel, TextArea, TextInput } from "@/components/appointments/workspace-ui";
 import { PackageEligibilitySection } from "./package-eligibility-section";
-import { buildCreditRules } from "@/lib/appointments/packages/package-form";
 import { usePackageEditor } from "@/features/appointments/kimi/packages/use-package-editor";
+import type { OfferingOption } from "@/features/appointments/kimi/packages/use-package-editor";
 import "@/components/appointments/kimi-ui/shared/appointments-pilot-tokens.css";
 import "@/components/appointments/kimi-ui/shared/bookable-workspace-pilot.css";
 import "@/components/appointments/kimi-ui/shared/workspace-pilot.css";
@@ -33,12 +36,41 @@ import "@/components/appointments/kimi-ui/appointment-types/reference.css";
 const SHELL_CLASS = "appt-overview-pilot bookable-workspace-pilot ws-pilot ref-root";
 const API = "/api/appointments/service-booking/packages";
 
+const SELL_TEMPLATES: {
+  id: PackageSellTemplate;
+  title: string;
+  description: string;
+}[] = [
+  {
+    id: "prepaid_sessions",
+    title: "Prepaid sessions",
+    description: "Example: five tutoring sessions customers can use on any eligible service.",
+  },
+  {
+    id: "bundle_classes",
+    title: "Bundle classes & workshops",
+    description: "Example: IT career starter — one seat in each included course.",
+  },
+  {
+    id: "mixed_bundle",
+    title: "Mix services and classes",
+    description: "Example: two consultations plus one workshop, each with its own quantity.",
+  },
+];
+
 const STEPS = [
-  { label: "Basics", icon: Package },
-  { label: "Eligible bookings", icon: Layers },
+  { label: "What you sell", icon: Package },
+  { label: "What's included", icon: Layers },
   { label: "Price & validity", icon: Wallet },
   { label: "Review", icon: ClipboardCheck },
 ] as const;
+
+function offeringListKey(offering: OfferingOption): keyof PackageFormState {
+  if (offering.kind === "service") return "eligibleServiceIds";
+  if (offering.kind === "meeting") return "eligibleMeetingIds";
+  if (offering.kind === "workshop") return "eligibleWorkshopIds";
+  return "eligibleClassIds";
+}
 
 export function CreatePackageWizard() {
   const router = useRouter();
@@ -54,23 +86,42 @@ export function CreatePackageWizard() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }, []);
 
-  const toggleOffering = useCallback(
-    (offering: (typeof editor.options.offerings)[number], included: boolean) => {
-      const key =
-        offering.kind === "service"
-          ? "eligibleServiceIds"
-          : offering.kind === "workshop"
-            ? "eligibleWorkshopIds"
-            : "eligibleClassIds";
-      setForm((prev) => {
-        const current = prev[key];
-        const next = included
-          ? current.filter((id) => id !== offering.id)
-          : [...current, offering.id];
-        return { ...prev, [key]: next };
-      });
-    },
-    [],
+  const selectTemplate = useCallback((template: PackageSellTemplate) => {
+    setForm((prev) => applyPackageSellTemplate(template, prev));
+  }, []);
+
+  const toggleOffering = useCallback((offering: OfferingOption, included: boolean) => {
+    const listKey = offeringListKey(offering);
+    const qtyKey = itemizedQuantityKey(offering.kind, offering.id);
+    setForm((prev) => {
+      const current = prev[listKey] as string[];
+      const nextIds = included
+        ? current.filter((id) => id !== offering.id)
+        : [...current, offering.id];
+      const nextQty = { ...prev.itemizedQuantities };
+      if (!included) {
+        nextQty[qtyKey] = nextQty[qtyKey] ?? 1;
+      } else {
+        delete nextQty[qtyKey];
+      }
+      return { ...prev, [listKey]: nextIds, itemizedQuantities: nextQty };
+    });
+  }, []);
+
+  const setItemizedQty = useCallback((offering: OfferingOption, quantity: number) => {
+    const qtyKey = itemizedQuantityKey(offering.kind, offering.id);
+    setForm((prev) => ({
+      ...prev,
+      itemizedQuantities: { ...prev.itemizedQuantities, [qtyKey]: Math.max(1, quantity) },
+    }));
+  }, []);
+
+  const includedOfferings = useMemo(
+    () => editor.options.offerings.filter((o) => {
+      const listKey = offeringListKey(o);
+      return (form[listKey] as string[]).includes(o.id);
+    }),
+    [editor.options.offerings, form],
   );
 
   const createPackage = useCallback(async () => {
@@ -108,7 +159,9 @@ export function CreatePackageWizard() {
             </Link>
             <div>
               <h1 className="ws-event-title">Create package</h1>
-              <p className="ws-event-subtitle">Sell a prepaid bundle of booking credits.</p>
+              <p className="ws-event-subtitle">
+                Answer a few business questions — we configure credits and eligibility for you.
+              </p>
             </div>
           </div>
         </header>
@@ -131,26 +184,47 @@ export function CreatePackageWizard() {
         {error ? <p className="ws-inline-error" role="alert">{error}</p> : null}
 
         {step === 0 ? (
-          <Panel title="Basics" icon={Package}>
-            <div className="grid gap-3 lg:grid-cols-2">
+          <Panel title="What are you selling?" icon={Package}>
+            <div className="grid gap-3 lg:grid-cols-3">
+              {SELL_TEMPLATES.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  className="ws-card-btn text-left"
+                  aria-pressed={form.sellTemplate === t.id}
+                  onClick={() => selectTemplate(t.id)}
+                >
+                  <span className="ws-row-primary">{t.title}</span>
+                  <span className="ws-row-secondary">{t.description}</span>
+                </button>
+              ))}
+            </div>
+            <div className="mt-4 grid gap-3 lg:grid-cols-2">
               <Field label="Package name" htmlFor="wiz-name">
                 <TextInput
                   id="wiz-name"
                   value={form.name}
                   onChange={(e) => onFormChange("name", e.target.value)}
+                  placeholder="IT Career Starter Package"
                 />
               </Field>
-              <Field label="Credits / uses" htmlFor="wiz-credits">
-                <NumberField
-                  id="wiz-credits"
-                  min={1}
-                  suffix="credits"
-                  value={form.totalCredits}
-                  onChange={(e) => onFormChange("totalCredits", Number(e.target.value) || 1)}
-                />
-              </Field>
+              {form.packageKind === "pooled" ? (
+                <Field label="How many sessions?" htmlFor="wiz-credits">
+                  <NumberField
+                    id="wiz-credits"
+                    min={1}
+                    suffix={form.creditUnitLabel}
+                    value={form.totalCredits}
+                    onChange={(e) => onFormChange("totalCredits", Number(e.target.value) || 1)}
+                  />
+                </Field>
+              ) : (
+                <p className="ws-stat-note self-end">
+                  You will set how many of each class or service is included on the next step.
+                </p>
+              )}
             </div>
-            <Field label="Description" htmlFor="wiz-desc">
+            <Field label="Customer-facing description" htmlFor="wiz-desc">
               <TextArea
                 id="wiz-desc"
                 rows={3}
@@ -162,11 +236,31 @@ export function CreatePackageWizard() {
         ) : null}
 
         {step === 1 ? (
-          <PackageEligibilitySection
-            creditRules={creditRules}
-            offerings={editor.options.offerings}
-            onToggle={toggleOffering}
-          />
+          <>
+            <PackageEligibilitySection
+              creditRules={creditRules}
+              offerings={editor.options.offerings}
+              onToggle={toggleOffering}
+            />
+            {form.packageKind === "itemized" && includedOfferings.length > 0 ? (
+              <Panel title="How many of each?" icon={Layers}>
+                <ul className="ws-review-list">
+                  {includedOfferings.map((o) => (
+                    <li key={o.id} className="flex flex-wrap items-center justify-between gap-2">
+                      <span>{o.name}</span>
+                      <NumberField
+                        aria-label={`Quantity for ${o.name}`}
+                        min={1}
+                        suffix="included"
+                        value={form.itemizedQuantities[itemizedQuantityKey(o.kind, o.id)] ?? 1}
+                        onChange={(e) => setItemizedQty(o, Number(e.target.value) || 1)}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </Panel>
+            ) : null}
+          </>
         ) : null}
 
         {step === 2 ? (
@@ -207,14 +301,14 @@ export function CreatePackageWizard() {
         {step === 3 ? (
           <Panel title="Review" icon={ClipboardCheck}>
             <ul className="ws-review-list">
-              <li><strong>{form.name}</strong></li>
-              <li>{form.totalCredits} credits</li>
+              <li><strong>{form.name || "Untitled package"}</strong></li>
               <li>
-                Eligible for{" "}
-                {form.eligibleServiceIds.length +
-                  form.eligibleClassIds.length +
-                  form.eligibleWorkshopIds.length}{" "}
-                bookings
+                {form.packageKind === "pooled"
+                  ? `${form.totalCredits} ${form.creditUnitLabel} (any eligible booking)`
+                  : `${creditRules.filter((r) => r.quantity > 0).length} included items`}
+              </li>
+              <li>
+                {includedOfferings.length} offering{includedOfferings.length === 1 ? "" : "s"} in catalog
               </li>
               <li>${(form.priceCents / 100).toFixed(2)}</li>
               <li>{form.expirationMode === "days" ? `${form.expirationDays} days after purchase` : "No expiration"}</li>
@@ -248,7 +342,7 @@ export function CreatePackageWizard() {
               onClick={() => void createPackage()}
             >
               <Check className="h-4 w-4" aria-hidden />
-              {creating ? "Creating…" : "Create package"}
+              {creating ? "Creating…" : "Publish package"}
             </button>
           )}
         </div>

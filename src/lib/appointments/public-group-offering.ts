@@ -7,6 +7,7 @@ import {
   resolveClassSeriesOfferingKind,
   type ClassSeriesOfferingKind,
 } from "@/lib/appointments/class-series-offering";
+import { classPaidEnrollmentBlockedReason } from "@/lib/appointments/class-public-payment-guard";
 
 export type PublicGroupOccurrence = {
   id: string;
@@ -44,10 +45,21 @@ export type PublicGroupSeries = {
  * The registration window an operator configured, applied to a moment in time.
  * Exported so the write path enforces the same rule the read path advertises.
  */
+export type ClassRegistrationClosedOptions = {
+  /** When redeeming package credit on enroll POST, skip pay-at-registration block. */
+  skipPaidEnrollmentGuard?: boolean;
+};
+
 export function classRegistrationClosedReason(
   metadata: unknown,
   now = new Date(),
+  options?: ClassRegistrationClosedOptions,
 ): string | null {
+  if (!options?.skipPaidEnrollmentGuard) {
+    const paidBlock = classPaidEnrollmentBlockedReason(metadata);
+    if (paidBlock) return paidBlock;
+  }
+
   const meta = parseClassSeriesMetadata(metadata);
   // Calling a workshop off is not the same as deactivating it — the row stays
   // readable so existing registrations keep their history — so the refusal has

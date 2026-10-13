@@ -2,6 +2,7 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { packageBalanceSummary } from "./package-lifecycle";
+import { mintRemainingCreditsFromRules } from "./package-credit-keys";
 import type { PackageCreditRule } from "./types";
 
 export type PackageProductRow = {
@@ -384,16 +385,7 @@ export async function purchasePackageForContact(
   }
 
   const rules = (product.creditRules || []) as PackageCreditRule[];
-  const remainingCredits: Record<string, number> = {};
-  // Eligibility-only rules carry quantity 0; only positive quantities mint credits.
-  for (const rule of rules) {
-    if (!rule.quantity || rule.quantity <= 0) continue;
-    const key = rule.bookingTypeId || rule.serviceName || "default";
-    remainingCredits[key] = (remainingCredits[key] || 0) + rule.quantity;
-  }
-  if (Object.keys(remainingCredits).length === 0) {
-    remainingCredits.default = 1;
-  }
+  const remainingCredits = mintRemainingCreditsFromRules(rules);
 
   const expiresAt =
     product.expirationDays != null
