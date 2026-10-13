@@ -284,18 +284,9 @@ async function assertOccurrenceCapacity(
   workspaceId: string,
   occurrenceId: string,
 ): Promise<{ seriesId: string }> {
-  const prisma = getPrisma();
-  const occ = await prisma.classOccurrence.findFirst({
-    where: { id: occurrenceId, workspaceId, status: "scheduled" },
-    include: { series: true },
-  });
-  if (!occ) throw new Error("Occurrence not found or not open for registration");
-  const cap = occ.capacity ?? occ.series?.capacity ?? 0;
-  const enrolled = await prisma.classEnrollment.count({
-    where: { workspaceId, occurrenceId, status: "enrolled" },
-  });
-  if (enrolled >= cap) throw new Error("This session is full");
-  return { seriesId: String(occ.seriesId) };
+  const { assertOccurrenceCapacityWithHolds } = await import("./class-registration-capacity");
+  const { seriesId } = await assertOccurrenceCapacityWithHolds(workspaceId, occurrenceId);
+  return { seriesId };
 }
 
 export async function generateClassOccurrences(
@@ -362,17 +353,14 @@ export async function enrollInClass(
     for (const occ of occurrences) {
       await assertOccurrenceCapacity(workspaceId, occ.id);
     }
+    const { enrollInOccurrenceWithCapacityLock } = await import("./class-registration-capacity");
     const enrollments = [];
     for (const occ of occurrences) {
       enrollments.push(
-        await prisma.classEnrollment.create({
-          data: {
-            workspaceId,
-            occurrenceId: occ.id,
-            seriesId: input.seriesId,
-            contactId: input.contactId,
-            status: "enrolled",
-          },
+        await enrollInOccurrenceWithCapacityLock(workspaceId, {
+          occurrenceId: occ.id,
+          seriesId: input.seriesId!,
+          contactId: input.contactId,
         }),
       );
     }
@@ -381,17 +369,11 @@ export async function enrollInClass(
   if (!input.occurrenceId) throw new Error("occurrenceId required");
   const { seriesId } = await assertOccurrenceCapacity(workspaceId, input.occurrenceId);
   await assertSeriesMembership(input.seriesId || seriesId);
-  return prisma.classEnrollment.create({
-    data: {
-      workspaceId,
-      occurrenceId: input.occurrenceId,
-      // Derived rather than taken from the caller: the public page registers
-      // by occurrence alone, and an enrollment with no series is invisible to
-      // every series-level view — which is the only view a workshop has.
-      seriesId: input.seriesId || seriesId,
-      contactId: input.contactId,
-      status: "enrolled",
-    },
+  const { enrollInOccurrenceWithCapacityLock } = await import("./class-registration-capacity");
+  return enrollInOccurrenceWithCapacityLock(workspaceId, {
+    occurrenceId: input.occurrenceId,
+    seriesId: input.seriesId || seriesId,
+    contactId: input.contactId,
   });
 }
 

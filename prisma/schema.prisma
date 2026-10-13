@@ -383,6 +383,8 @@ model Workspace {
   householdAccounts                 HouseholdAccount[]
   packageProducts                   PackageProduct[]
   packageBalances                   PackageBalance[]
+  serviceBookingStoreFulfillments   ServiceBookingStoreFulfillment[]
+  classOccurrenceRegistrationHolds  ClassOccurrenceRegistrationHold[]
   giftCertificateProducts           GiftCertificateProduct[]
   giftCertificateBalances           GiftCertificateBalance[]
   serviceMembershipProducts         ServiceMembershipProduct[]
@@ -6688,6 +6690,44 @@ model PackageLedgerEntry {
   @@map("package_ledger_entries")
 }
 
+/// Durable idempotency for Stripe store / membership checkout fulfillment (Phase 1c).
+model ServiceBookingStoreFulfillment {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  stripeSessionId String    @unique
+  transactionType String
+  status          String    @default("processing")
+  resultJson      Json?
+  errorMessage    String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@map("service_booking_store_fulfillments")
+}
+
+/// Temporary capacity reservation during class checkout (Phase 1c / 1b).
+model ClassOccurrenceRegistrationHold {
+  id                      String          @id @default(cuid())
+  workspaceId             String
+  occurrenceId            String
+  contactId               String?
+  stripeCheckoutSessionId String?         @unique
+  status                  String          @default("active")
+  expiresAt               DateTime
+  fulfillmentOutcome      String?
+  metadata                Json?
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+  workspace               Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  occurrence              ClassOccurrence @relation(fields: [occurrenceId], references: [id], onDelete: Cascade)
+
+  @@index([occurrenceId, status, expiresAt])
+  @@index([workspaceId, expiresAt])
+  @@map("class_occurrence_registration_holds")
+}
+
 model GiftCertificateProduct {
   id                String                   @id @default(cuid())
   workspaceId       String
@@ -6867,7 +6907,8 @@ model ClassOccurrence {
   createdAt   DateTime          @default(now())
   workspace   Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   series      ClassSeries       @relation(fields: [seriesId], references: [id], onDelete: Cascade)
-  enrollments ClassEnrollment[]
+  enrollments         ClassEnrollment[]
+  registrationHolds   ClassOccurrenceRegistrationHold[]
 
   @@index([workspaceId, startsAt])
   @@index([seriesId, startsAt])

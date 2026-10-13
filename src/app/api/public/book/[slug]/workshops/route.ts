@@ -160,20 +160,30 @@ export async function POST(request: Request, { params }: Params) {
       const { classRegistrationClosedReason } = await import(
         "@/lib/appointments/public-group-offering"
       );
-      const { classPackageCreditRequiredReason } = await import(
-        "@/lib/appointments/class-public-payment-guard"
+      const { classRegistrationPaymentRequiredReason } = await import(
+        "@/lib/appointments/service-booking/class-registration-entitlement"
       );
-      const packageBalanceId = body.packageBalanceId ? String(body.packageBalanceId) : undefined;
+      const entitlement = {
+        packageBalanceId: body.packageBalanceId ? String(body.packageBalanceId) : undefined,
+        membershipSubscriptionId: body.membershipSubscriptionId
+          ? String(body.membershipSubscriptionId)
+          : undefined,
+        stripeCheckoutSessionId: body.stripeCheckoutSessionId
+          ? String(body.stripeCheckoutSessionId)
+          : undefined,
+      };
       const closed = classRegistrationClosedReason(seriesForRegistration.metadata, undefined, {
-        skipPaidEnrollmentGuard: Boolean(packageBalanceId),
+        skipPaidEnrollmentGuard: Boolean(
+          entitlement.packageBalanceId || entitlement.membershipSubscriptionId,
+        ),
       });
       if (closed) return NextResponse.json({ error: closed }, { status: 400 });
-      const packageRequired = classPackageCreditRequiredReason(
+      const paymentRequired = classRegistrationPaymentRequiredReason(
         seriesForRegistration.metadata,
-        packageBalanceId,
+        entitlement,
       );
-      if (packageRequired) {
-        return NextResponse.json({ error: packageRequired }, { status: 403 });
+      if (paymentRequired) {
+        return NextResponse.json({ error: paymentRequired }, { status: 403 });
       }
     }
 
@@ -232,22 +242,35 @@ export async function POST(request: Request, { params }: Params) {
 
     let packageApplied = null;
     const enrollmentId = Array.isArray(enrollment) ? enrollment[0]?.id : enrollment?.id;
-    if (body.packageBalanceId && seriesForRegistration && enrollmentId) {
-      const { applyGroupRegistrationEntitlement } = await import(
-        "@/lib/appointments/service-booking/group-registration-entitlements"
-      );
+    if (seriesForRegistration && enrollmentId) {
       const { updateClassEnrollment } = await import(
         "@/lib/appointments/service-booking/classes"
       );
       try {
-        packageApplied = await applyGroupRegistrationEntitlement({
-          workspaceId: workspace.id,
-          contactId,
-          classSeriesId: seriesForRegistration.id,
-          offeringKind: "workshop",
-          enrollmentId,
-          packageBalanceId: String(body.packageBalanceId),
-        });
+        if (body.packageBalanceId) {
+          const { applyGroupRegistrationEntitlement } = await import(
+            "@/lib/appointments/service-booking/group-registration-entitlements"
+          );
+          packageApplied = await applyGroupRegistrationEntitlement({
+            workspaceId: workspace.id,
+            contactId,
+            classSeriesId: seriesForRegistration.id,
+            offeringKind: "workshop",
+            enrollmentId,
+            packageBalanceId: String(body.packageBalanceId),
+          });
+        } else if (body.membershipSubscriptionId) {
+          const { applyMembershipClassRegistrationEntitlement } = await import(
+            "@/lib/appointments/service-booking/membership-booking"
+          );
+          packageApplied = await applyMembershipClassRegistrationEntitlement({
+            workspaceId: workspace.id,
+            contactId,
+            classSeriesId: seriesForRegistration.id,
+            enrollmentId,
+            membershipSubscriptionId: String(body.membershipSubscriptionId),
+          });
+        }
       } catch (err) {
         await updateClassEnrollment(workspace.id, enrollmentId, { status: "cancelled" });
         throw err;

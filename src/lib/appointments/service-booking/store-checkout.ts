@@ -283,68 +283,14 @@ export async function createStoreCheckoutSession(input: {
   };
 }
 
-const fulfilledSessions = new Set<string>();
-
 export async function handleStoreCheckoutCompleted(session: {
   id: string;
   metadata?: Record<string, string | null | undefined> | null;
   subscription?: string | null;
   mode?: string | null;
 }) {
-  const metadata = (session.metadata || {}) as Record<string, string | undefined>;
-  const txType = metadata.transaction_type;
-
-  if (txType === STORE_MEMBERSHIP_SUBSCRIPTION_TYPE) {
-    const workspaceId = metadata.workspaceId;
-    const productId = metadata.productId;
-    const contactId = metadata.contactId;
-    const stripeSubscriptionId =
-      typeof session.subscription === "string" ? session.subscription : undefined;
-    if (!workspaceId || !productId || !contactId || !stripeSubscriptionId) {
-      return { handled: false, skipped: true };
-    }
-    if (fulfilledSessions.has(session.id)) {
-      return { handled: true, duplicate: true };
-    }
-    const sub = await startMembershipSubscription(
-      workspaceId,
-      productId,
-      contactId,
-      stripeSubscriptionId,
-    );
-    fulfilledSessions.add(session.id);
-    return { handled: true, result: { kind: "membership", subscriptionId: sub.id } };
-  }
-
-  if (txType !== STORE_PURCHASE_TRANSACTION_TYPE) {
-    return { handled: false, skipped: true };
-  }
-
-  const workspaceId = metadata.workspaceId;
-  const kind = metadata.kind as StoreProductKind | undefined;
-  const productId = metadata.productId;
-  const contactId = metadata.contactId;
-  if (!workspaceId || !kind || !productId || !contactId) {
-    return { handled: false, skipped: true };
-  }
-
-  if (fulfilledSessions.has(session.id)) {
-    return { handled: true, duplicate: true };
-  }
-
-  const result = await fulfillStorePurchase({
-    workspaceId,
-    kind,
-    productId,
-    contactId,
-    amountCents: metadata.amountCents ? Number(metadata.amountCents) : undefined,
-    recipientName: metadata.recipientName,
-    recipientEmail: metadata.recipientEmail,
-    giftMessage: metadata.giftMessage,
-  });
-
-  fulfilledSessions.add(session.id);
-  return { handled: true, result };
+  const { fulfillStoreCheckoutSessionOnce } = await import("./store-fulfillment");
+  return fulfillStoreCheckoutSessionOnce(session);
 }
 
 export async function processStoreCheckout(input: {

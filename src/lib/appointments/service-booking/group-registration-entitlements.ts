@@ -56,7 +56,14 @@ export async function lookupGroupRegistrationEntitlements(input: {
       };
     });
 
-  return { packages: eligiblePackages };
+  const { lookupMembershipClassRegistrationEntitlement } = await import("./membership-booking");
+  const membershipEntitlements = await lookupMembershipClassRegistrationEntitlement({
+    workspaceId: input.workspaceId,
+    contactId: input.contactId,
+    classSeriesId: input.classSeriesId,
+  });
+
+  return { packages: eligiblePackages, memberships: membershipEntitlements.memberships };
 }
 
 export async function applyGroupRegistrationEntitlement(input: {

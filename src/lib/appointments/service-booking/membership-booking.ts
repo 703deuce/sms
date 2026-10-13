@@ -38,6 +38,22 @@ function includedCreditAllowance(
   );
 }
 
+function includedClassCreditAllowance(
+  benefits: MembershipBenefits,
+  classSeriesId: string,
+): PackageCreditRule | null {
+  const rules = benefits.includedCredits || [];
+  return (
+    rules.find(
+      (rule) => rule.classSeriesId === classSeriesId && (rule.quantity || 0) > 0,
+    ) || null
+  );
+}
+
+function classSeriesUsageKey(classSeriesId: string): string {
+  return `series:${classSeriesId}`;
+}
+
 export async function resolveMembershipPriceAdjustment(input: {
   workspaceId: string;
   contactId: string;
@@ -215,4 +231,97 @@ export async function recordMembershipBookingUsage(input: {
       },
     },
   });
+}
+
+export async function lookupMembershipClassRegistrationEntitlement(input: {
+  workspaceId: string;
+  contactId: string;
+  classSeriesId: string;
+}) {
+  const prisma = getPrisma();
+  const subscriptions = await prisma.serviceMembershipSubscription.findMany({
+    where: {
+      workspaceId: input.workspaceId,
+      contactId: input.contactId,
+      status: { in: ["active", "trialing"] },
+    },
+    include: { product: true },
+  });
+
+  const eligible = [];
+  for (const sub of subscriptions) {
+    if (!membershipEntitlementsActive(sub.status)) continue;
+    const benefits = (sub.product?.benefits || sub.benefitsSnapshot || {}) as MembershipBenefits;
+    const rule = includedClassCreditAllowance(benefits, input.classSeriesId);
+    if (!rule) continue;
+    const key = classSeriesUsageKey(input.classSeriesId);
+    const counts = usageCounts(sub.metadata);
+    const used = counts[key] || 0;
+    if (used >= (rule.quantity || 0)) continue;
+    eligible.push({
+      id: sub.id,
+      productName: sub.product?.name || "Membership",
+      creditsRemaining: (rule.quantity || 0) - used,
+      periodKey: periodUsageKey(sub.currentPeriodEnd),
+    });
+  }
+  return { memberships: eligible };
+}
+
+export async function applyMembershipClassRegistrationEntitlement(input: {
+  workspaceId: string;
+  contactId: string;
+  classSeriesId: string;
+  enrollmentId: string;
+  membershipSubscriptionId: string;
+}) {
+  const prisma = getPrisma();
+  const sub = await prisma.serviceMembershipSubscription.findFirst({
+    where: {
+      id: input.membershipSubscriptionId,
+      workspaceId: input.workspaceId,
+      contactId: input.contactId,
+      status: { in: ["active", "trialing"] },
+    },
+    include: { product: true },
+  });
+  if (!sub) throw new Error("Membership not found");
+  if (!membershipEntitlementsActive(sub.status)) {
+    throw new Error("Membership is not active");
+  }
+
+  const benefits = (sub.product?.benefits || sub.benefitsSnapshot || {}) as MembershipBenefits;
+  const rule = includedClassCreditAllowance(benefits, input.classSeriesId);
+  if (!rule) throw new Error("This membership does not include this class");
+
+  const key = classSeriesUsageKey(input.classSeriesId);
+  const meta = (sub.metadata || {}) as {
+    usage?: { periodKey?: string; counts?: Record<string, number> };
+    classEnrollments?: Record<string, string>;
+  };
+  const periodKey = periodUsageKey(sub.currentPeriodEnd);
+  const usage =
+    meta.usage?.periodKey === periodKey ? { ...(meta.usage?.counts || {}) } : {};
+  const used = usage[key] || 0;
+  if (used >= (rule.quantity || 0)) throw new Error("No membership class credits remaining");
+
+  if (meta.classEnrollments?.[input.enrollmentId]) {
+    return { membershipSubscriptionId: sub.id, duplicate: true as const };
+  }
+
+  usage[key] = used + 1;
+  await prisma.serviceMembershipSubscription.update({
+    where: { id: sub.id },
+    data: {
+      metadata: {
+        ...meta,
+        usage: { periodKey, counts: usage },
+        classEnrollments: {
+          ...(meta.classEnrollments || {}),
+          [input.enrollmentId]: input.classSeriesId,
+        },
+      },
+    },
+  });
+  return { membershipSubscriptionId: sub.id };
 }

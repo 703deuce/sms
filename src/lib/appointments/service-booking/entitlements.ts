@@ -56,31 +56,13 @@ export async function redeemPackageCredit(
   creditKey = "default",
   note?: string,
 ) {
-  const prisma = getPrisma();
-  const balance = await prisma.packageBalance.findUnique({ where: { id: balanceId } });
-  if (!balance || balance.status !== "active") throw new Error("Invalid package balance");
-
-  const remaining = (balance.remainingCredits || {}) as Record<string, number>;
-  const current = remaining[creditKey] ?? remaining.default ?? 0;
-  if (current <= 0) throw new Error("No package credits remaining");
-
-  const next = { ...remaining, [creditKey]: current - 1 };
-  const exhausted = Object.values(next).every((v) => v <= 0);
-  await prisma.packageBalance.update({
-    where: { id: balanceId },
-    data: {
-      remainingCredits: next,
-      status: exhausted ? "exhausted" : balance.status,
-    },
-  });
-  await prisma.packageLedgerEntry.create({
-    data: {
-      balanceId,
-      kind: "redeem",
-      delta: { [creditKey]: -1 },
-      appointmentId: referenceId,
-      note: note || `Redeemed for ${referenceLabel}`,
-    },
-  });
-  return { balanceId, remaining: next };
+  const { redeemPackageCreditAtomic } = await import("./package-credit-redeem");
+  const result = await redeemPackageCreditAtomic(
+    balanceId,
+    referenceLabel,
+    referenceId,
+    creditKey,
+    note,
+  );
+  return { balanceId: result.balanceId, remaining: result.remaining };
 }
