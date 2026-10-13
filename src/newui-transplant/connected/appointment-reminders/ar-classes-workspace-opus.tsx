@@ -23,6 +23,7 @@ import type { ClassSeriesRow } from '@/lib/appointments/classes/class-form'
 import { scheduleSummaryForClass } from '@/lib/appointments/classes/class-display'
 import { upcomingOccurrences } from '@/lib/appointments/classes/class-summary'
 import { ClassSectionWorkspace } from '@/components/appointments/classes/class-section-workspace'
+import { ClassRegistrationRecoveryPanel } from '@/components/appointments/classes/class-registration-recovery-panel'
 import { CLASS_SECTIONS, type ClassSectionId } from '@/components/appointments/classes/class-section-types'
 import {
   APPOINTMENTS_CLASSES_ROUTES,
@@ -432,6 +433,9 @@ export function ArClassesWorkspaceOpus({
           </div>
 
           <div className="flex-1 overflow-y-auto bg-muted/20 p-5">
+            <div className="mx-auto max-w-4xl">
+              <ClassRegistrationRecoveryPanel />
+            </div>
             <Panel className="max-w-4xl" bodyClassName="ar-service-opus">
               <ClassSectionWorkspace
                 section={section}
