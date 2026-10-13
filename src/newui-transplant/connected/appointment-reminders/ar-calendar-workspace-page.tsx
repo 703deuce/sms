@@ -44,13 +44,30 @@ import { ArOpusPage, OpusSearchField } from '@/newui-transplant/components/appoi
 import { Callout, EmptyState, Pill, TextLink } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { AR_ROUTES, AR_SETTINGS_INTEGRATIONS } from '@/lib/appointment-reminders/routes'
+import {
+  CalendarQuickCreateSheet,
+  type QuickCreatePrefill,
+} from '@/components/appointments/calendar/calendar-quick-create-sheet'
+import '@/components/appointments/kimi-ui/calendar/reference.css'
 import { cn } from '@/lib/utils'
+
+type SchedulingCalendarWorkspace = {
+  staff: Array<{ id: string; name: string }>
+  services: Array<{ id: string; name: string }>
+  locations?: Array<{ id: string; name: string }>
+}
 
 const CALENDAR_AUTO_REFRESH_MS = 20_000
 
 export function AppointmentRemindersCalendarWorkspacePage() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const [schedulingWorkspace, setSchedulingWorkspace] = useState<SchedulingCalendarWorkspace | null>(
+    null,
+  )
+  const [quickCreatePrefill, setQuickCreatePrefill] = useState<QuickCreatePrefill | null>(null)
+  const [quickCreateOpen, setQuickCreateOpen] = useState(false)
+  const [workspaceLoading, setWorkspaceLoading] = useState(false)
   const initialView = parseArCalendarView(searchParams.get('view'))
   const [cursor, setCursor] = useState(() =>
     parseCalendarCursorFromSearch(new URLSearchParams(searchParams.toString()), initialView),
@@ -454,6 +471,33 @@ export function AppointmentRemindersCalendarWorkspacePage() {
     void loadOverview()
   }, [loadEvents, loadOverview])
 
+  const ensureSchedulingWorkspace = useCallback(async () => {
+    if (schedulingWorkspace) return schedulingWorkspace
+    setWorkspaceLoading(true)
+    try {
+      const res = await fetch('/api/appointments/calendar/workspace')
+      if (!res.ok) return null
+      const json = await res.json()
+      const data = (json.data || null) as SchedulingCalendarWorkspace | null
+      setSchedulingWorkspace(data)
+      return data
+    } catch {
+      return null
+    } finally {
+      setWorkspaceLoading(false)
+    }
+  }, [schedulingWorkspace])
+
+  const openNativeQuickCreate = useCallback(async () => {
+    await ensureSchedulingWorkspace()
+    const startsAt = new Date()
+    startsAt.setSeconds(0, 0)
+    startsAt.setMinutes(0)
+    startsAt.setHours(startsAt.getHours() + 1)
+    setQuickCreatePrefill({ startsAt: startsAt.toISOString() })
+    setQuickCreateOpen(true)
+  }, [ensureSchedulingWorkspace])
+
   return (
     <ArOpusPage
       wide
@@ -484,20 +528,25 @@ export function AppointmentRemindersCalendarWorkspacePage() {
           <Button nativeButton={false} variant="ghost" size="sm" render={<Link href={AR_SETTINGS_INTEGRATIONS} />}>
             Calendar write-back
           </Button>
+          <Button
+            type="button"
+            size="sm"
+            disabled={workspaceLoading}
+            onClick={() => void openNativeQuickCreate()}
+          >
+            New appointment
+          </Button>
           {composeUrl ? (
             <Button
               type="button"
+              variant="outline"
               size="sm"
               onClick={() => window.open(composeUrl, '_blank', 'noopener,noreferrer')}
             >
               <ExternalLink className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-              Add appointment
+              Add in calendar app
             </Button>
-          ) : (
-            <Button nativeButton={false} size="sm" render={<Link href={AR_ROUTES.appointments} />}>
-              Add appointment
-            </Button>
-          )}
+          ) : null}
           {overviewMeta?.readiness?.remindersActivated && !overviewMeta?.readiness?.remindersPaused ? (
             <Button
               type="button"
@@ -667,6 +716,26 @@ export function AppointmentRemindersCalendarWorkspacePage() {
         onPhoneSaved={refreshSelection}
         initialTab={panelTab}
         openConversationOnLoad={openConversationOnLoad}
+      />
+
+      <CalendarQuickCreateSheet
+        open={quickCreateOpen}
+        prefill={quickCreatePrefill}
+        workspace={schedulingWorkspace}
+        onClose={() => {
+          setQuickCreateOpen(false)
+          setQuickCreatePrefill(null)
+        }}
+        onCreated={() => {
+          setQuickCreateOpen(false)
+          setQuickCreatePrefill(null)
+          void loadEvents({ refresh: true })
+          void loadOverview()
+        }}
+        onOpenFullForm={(query) => {
+          setQuickCreateOpen(false)
+          router.push(`/appointments/new?${query.toString()}`)
+        }}
       />
 
     </ArOpusPage>

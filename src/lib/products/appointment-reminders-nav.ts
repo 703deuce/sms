@@ -133,7 +133,7 @@ export function getAppointmentRemindersPageTitle(pathname: string): string {
     return "Plan & Billing";
   }
   if (pathname.startsWith("/settings/business")) return "Business Settings";
-  if (pathname === AR_ROUTES.home) return "Overview";
+  if (pathname === AR_ROUTES.home) return "Calendar";
   if (pathname.startsWith(AR_ROUTES.appointments)) return "Appointments";
   if (
     pathname === AR_ROUTES.calendar ||
