@@ -63,7 +63,7 @@ export function PackagesCatalogOpus() {
           <Button asChild>
             <Link href="/appointments/packages/new">
               <Plus className="mr-2 h-4 w-4" aria-hidden />
-              New package
+              Create package
             </Link>
           </Button>
         }
@@ -86,7 +86,7 @@ export function PackagesCatalogOpus() {
           placeholder="Search name or description"
           value={catalog.search}
           onChange={catalog.setSearch}
-          className="w-full min-w-[220px] sm:max-w-md"
+          className="w-full min-w-[280px] sm:max-w-[320px]"
         />
         <div className="flex flex-wrap items-center gap-3">
           <Tabs
@@ -157,7 +157,7 @@ export function PackagesCatalogOpus() {
                 const rules = (row.creditRules || []) as PackageCreditRule[]
                 const credits = packageCreditsTotal(rules)
                 return (
-                  <tr key={row.id} className="hover:bg-muted/40">
+                  <tr key={row.id} className="min-h-[4.5rem] hover:bg-muted/40">
                     <th scope="row" className={cn(OpusTd, 'font-normal')}>
                       <Link href={`/appointments/packages/${row.id}`} className="flex items-center gap-2 font-medium text-primary">
                         <Layers className="h-4 w-4 shrink-0" aria-hidden />

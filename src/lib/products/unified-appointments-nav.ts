@@ -139,6 +139,8 @@ export function buildUnifiedAppointmentsNav(
       href: "/appointments/commerce",
       icon: CreditCard,
       children: [
+        { label: "Scheduling overview", href: "/appointments/scheduling" },
+        { label: "Sell", href: "/appointments/sell" },
         { label: "Commerce hub", href: "/appointments/commerce" },
         { label: "Packages", href: "/appointments/packages" },
         { label: "Memberships", href: "/appointments/memberships" },

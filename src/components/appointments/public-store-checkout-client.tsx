@@ -1,6 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
+import { OpusIconBadge, Pill } from "@/newui-transplant/components/app/kit";
+import { Button } from "@/newui-transplant/components/ui/button";
+import { Package, Gift, CreditCard } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type StoreProductKind = "package" | "gift" | "membership";
 
@@ -184,7 +189,7 @@ export function PublicStoreCheckoutClient({ slug }: { slug: string }) {
   }
 
   return (
-    <main className="mx-auto max-w-3xl space-y-6 p-6">
+    <main className="mx-auto max-w-[1120px] space-y-6 px-4 py-6 md:px-8">
       <header className="space-y-2">
         <p className="text-sm text-muted-foreground">
           <a href={`/book/${encodeURIComponent(slug)}`} className="underline">
@@ -221,15 +226,18 @@ export function PublicStoreCheckoutClient({ slug }: { slug: string }) {
           {filtered.length === 0 ? (
             <p className="text-sm text-muted-foreground">No products are available right now.</p>
           ) : (
-            <ul className="space-y-3">
-              {filtered.map((product) => (
-                <li key={`${product.kind}-${product.id}`} className="rounded-lg border p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
+            <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {filtered.map((product) => {
+                const Icon = product.kind === "package" ? Package : product.kind === "gift" ? Gift : CreditCard;
+                return (
+                <li key={`${product.kind}-${product.id}`} className={cn(OPUS_CARD, "flex flex-col p-5")}>
+                  <OpusIconBadge icon={Icon} className="mb-3 size-10 rounded-xl bg-primary/10" />
+                  <div className="flex flex-1 flex-col gap-3">
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                      <Pill tone="neutral" dot={false} className="mb-2">
                         {kindLabel(product.kind)}
-                      </p>
-                      <h2 className="text-lg font-medium">{product.name}</h2>
+                      </Pill>
+                      <h2 className="text-lg font-semibold">{product.name}</h2>
                       {product.description ? (
                         <p className="mt-1 text-sm text-muted-foreground">{product.description}</p>
                       ) : null}
@@ -239,23 +247,20 @@ export function PublicStoreCheckoutClient({ slug }: { slug: string }) {
                         </p>
                       ) : null}
                     </div>
-                    <div className="text-right">
-                      <p className="font-medium">
+                    <div className="mt-auto pt-2">
+                      <p className="text-xl font-semibold tabular-nums">
                         {product.kind === "gift" && product.allowCustomAmount && !product.fixedAmountCents
                           ? "Custom amount"
                           : formatMoney(product.priceCents)}
                       </p>
-                      <button
-                        type="button"
-                        className="mt-2 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground"
-                        onClick={() => selectProduct(product)}
-                      >
-                        Select
-                      </button>
+                      <Button type="button" className="mt-3 w-full" onClick={() => selectProduct(product)}>
+                        View details
+                      </Button>
                     </div>
                   </div>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
         </section>

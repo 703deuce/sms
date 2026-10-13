@@ -5,7 +5,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useClientPortalSession, type PortalWorkspace } from "@/features/client-portal/use-client-portal";
 import "@/components/client-portal/client-portal.css";
 
-type Section = "home" | "appointments" | "forms" | "access" | "payments" | "profile";
+type Section = "home" | "appointments" | "forms" | "access" | "packages" | "payments" | "profile";
 
 function fmt(iso: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -282,6 +282,63 @@ export function ClientPortalApp() {
           </ul>
         )}
 
+        {section === "packages" && (
+          <div className="space-y-4">
+            <h2 className="text-lg font-semibold">My packages</h2>
+            <ul className="client-portal-list">
+              {d.packages.map((p) => {
+                const pkg = p as {
+                  id: string;
+                  name: string;
+                  remaining: number;
+                  expiresAt?: string | null;
+                  lines?: Array<{ label: string; remaining: number; total: number }>;
+                };
+                return (
+                  <li key={pkg.id} className="client-portal-card space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-semibold">{pkg.name}</p>
+                      <span className="rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-900">Active</span>
+                    </div>
+                    {pkg.expiresAt ? (
+                      <p className="text-xs" style={{ color: "var(--cp-muted)" }}>
+                        Expires {fmt(pkg.expiresAt)}
+                      </p>
+                    ) : null}
+                    {pkg.lines?.length ? (
+                      <ul className="space-y-2 border-t pt-3 text-sm">
+                        {pkg.lines.map((line) => (
+                          <li key={line.label} className="flex items-center justify-between gap-2">
+                            <span>{line.label}</span>
+                            <span className="tabular-nums text-muted-foreground">
+                              {line.remaining} of {line.total} remaining
+                            </span>
+                            <a href={d.bookUrlWithContact} className="text-xs font-semibold" style={{ color: accent }}>
+                              Book
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm" style={{ color: "var(--cp-muted)" }}>
+                        {pkg.remaining} credits remaining
+                      </p>
+                    )}
+                    <a href={d.bookUrlWithContact} className="client-portal-btn client-portal-btn-primary inline-flex w-full justify-center text-sm">
+                      Book a session
+                    </a>
+                  </li>
+                );
+              })}
+              {!d.packages.length && (
+                <li className="client-portal-card text-sm" style={{ color: "var(--cp-muted)" }}>
+                  No active packages. Purchases from the store appear here automatically.
+                </li>
+              )}
+            </ul>
+          </div>
+        )}
+
         {section === "access" && (
           <div className="space-y-4">
             <section>
@@ -375,10 +432,10 @@ export function ClientPortalApp() {
       <nav className="client-portal-nav" aria-label="Portal">
         {(
           [
-            ["home", "Home"],
-            ["appointments", "Appts"],
-            ["forms", "Forms"],
-            ["access", "Access"],
+            ["home", "Overview"],
+            ["appointments", "Bookings"],
+            ["packages", "Packages"],
+            ["access", "Memberships"],
             ["payments", "Pay"],
             ["profile", "Profile"],
           ] as const
