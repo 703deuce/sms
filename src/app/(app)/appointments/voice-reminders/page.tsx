@@ -1,5 +1,5 @@
-import { VoiceRemindersClient } from "@/components/appointments/voice-reminders-client";
+import { VoiceRemindersGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
-export default function AppointmentVoiceRemindersPage() {
-  return <VoiceRemindersClient />;
+export default function Page() {
+  return <VoiceRemindersGate />
 }

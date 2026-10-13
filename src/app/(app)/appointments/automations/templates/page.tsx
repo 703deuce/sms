@@ -1,5 +1,5 @@
-import { AutomationsTemplatesClient } from "@/components/appointments/automations-templates-client";
+import { AutomationsTemplatesGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
-export default function AutomationsTemplatesPage() {
-  return <AutomationsTemplatesClient />;
+export default function Page() {
+  return <AutomationsTemplatesGate />
 }

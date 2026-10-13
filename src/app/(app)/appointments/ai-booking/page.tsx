@@ -1,5 +1,5 @@
-import { AiBookingAdminClient } from "@/components/appointments/ai-booking-admin-client";
+import { AiBookingGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
-export default function AiBookingAdminPage() {
-  return <AiBookingAdminClient />;
+export default function Page() {
+  return <AiBookingGate />
 }

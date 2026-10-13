@@ -1,5 +1,5 @@
-import { MembershipsCatalogConnected } from "@/components/appointments/memberships/memberships-catalog-connected";
+import { MembershipsCatalogGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
-export default function MembershipsPage() {
-  return <MembershipsCatalogConnected />;
+export default function Page() {
+  return <MembershipsCatalogGate />
 }

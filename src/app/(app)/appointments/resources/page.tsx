@@ -1,5 +1,5 @@
-import { ResourcesConnected } from "@/features/appointments/kimi/resources/resources-connected";
+import { ResourcesDirectoryGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
-export default function SchedulingResourcesPage() {
-  return <ResourcesConnected />;
+export default function Page() {
+  return <ResourcesDirectoryGate />
 }

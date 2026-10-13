@@ -1,5 +1,5 @@
-import { PointOfSaleConnected } from "@/features/appointments/kimi/point-of-sale/point-of-sale-connected";
+import { PointOfSaleGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
-export default function PointOfSalePage() {
-  return <PointOfSaleConnected />;
+export default function Page() {
+  return <PointOfSaleGate />
 }

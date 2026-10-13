@@ -128,13 +128,18 @@ function rowLabel(item: Record<string, unknown>): string {
   );
 }
 
+export type ServiceBookingAdminClientProps = {
+  initialSection?: Section;
+  title?: string;
+  /** When false, omit built-in page title (Opus shell provides header). */
+  showPageHeader?: boolean;
+};
+
 export function ServiceBookingAdminClient({
   initialSection = "packages",
   title = "Service booking",
-}: {
-  initialSection?: Section;
-  title?: string;
-}) {
+  showPageHeader = true,
+}: ServiceBookingAdminClientProps) {
   const [section, setSection] = useState<Section>(initialSection);
   const [items, setItems] = useState<unknown[]>([]);
   const [extra, setExtra] = useState<Record<string, unknown>>({});
@@ -234,12 +239,14 @@ export function ServiceBookingAdminClient({
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-6">
-      <header>
-        <h1 className="text-2xl font-semibold text-foreground">{title}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Packages, memberships, gift certificates, classes, resources, and Acuity-class commerce.
-        </p>
-      </header>
+      {showPageHeader ? (
+        <header>
+          <h1 className="text-2xl font-semibold text-foreground">{title}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Packages, memberships, gift certificates, classes, resources, and Acuity-class commerce.
+          </p>
+        </header>
+      ) : null}
 
       <nav className="flex flex-wrap gap-2" aria-label="Service booking sections">
         {nav.map((item) => (

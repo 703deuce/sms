@@ -1,5 +1,5 @@
-import { WorkshopsWorkspaceConnected } from "@/components/appointments/workshops/workshops-workspace-connected";
+import { WorkshopsWorkspaceGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
-export default function AppointmentsWorkshopsPage() {
-  return <WorkshopsWorkspaceConnected workshopId={null} />;
+export default function Page() {
+  return <WorkshopsWorkspaceGate workshopId={null} />
 }

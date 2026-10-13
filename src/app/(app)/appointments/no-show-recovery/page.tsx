@@ -1,5 +1,5 @@
-import { NoShowRecoveryClient } from "@/components/appointments/no-show-recovery-client";
+import { NoShowRecoveryGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
-export default function NoShowRecoveryPage() {
-  return <NoShowRecoveryClient />;
+export default function Page() {
+  return <NoShowRecoveryGate />
 }

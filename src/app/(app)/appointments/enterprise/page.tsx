@@ -1,5 +1,5 @@
-import { EnterpriseSchedulingClient } from "@/components/appointments/enterprise-scheduling-client";
+import { EnterpriseGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
-export default function EnterpriseSchedulingPage() {
-  return <EnterpriseSchedulingClient />;
+export default function Page() {
+  return <EnterpriseGate />
 }

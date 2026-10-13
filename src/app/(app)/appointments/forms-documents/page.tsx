@@ -1,10 +1,5 @@
-import { Suspense } from "react";
-import { FormsDocumentsClient } from "@/components/appointments/forms-documents-client";
+import { FormsDocumentsGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
-export default function FormsDocumentsPage() {
-  return (
-    <Suspense fallback={<div className="p-8 text-sm text-muted-foreground">Loading forms…</div>}>
-      <FormsDocumentsClient />
-    </Suspense>
-  );
+export default function Page() {
+  return <FormsDocumentsGate />
 }

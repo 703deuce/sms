@@ -1,5 +1,5 @@
-import { AppointmentSegmentsClient } from "@/components/appointments/appointment-segments-client";
+import { SegmentsGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
-export default function AppointmentSegmentsPage() {
-  return <AppointmentSegmentsClient />;
+export default function Page() {
+  return <SegmentsGate />
 }

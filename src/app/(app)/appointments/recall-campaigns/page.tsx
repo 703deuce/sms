@@ -1,5 +1,5 @@
-import { RecallCampaignsClient } from "@/components/appointments/recall-campaigns-client";
+import { RecallCampaignsGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
-export default function RecallCampaignsPage() {
-  return <RecallCampaignsClient />;
+export default function Page() {
+  return <RecallCampaignsGate />
 }

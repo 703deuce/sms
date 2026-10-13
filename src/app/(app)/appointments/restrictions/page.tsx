@@ -1,10 +1,5 @@
-import { ServiceBookingAdminClient } from "@/components/appointments/service-booking-admin-client";
+import { RestrictionsGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
-export default function AppointmentsRestrictionsPage() {
-  return (
-    <ServiceBookingAdminClient
-      initialSection="restrictions"
-      title="Client booking restrictions"
-    />
-  );
+export default function Page() {
+  return <RestrictionsGate />
 }

@@ -1,5 +1,5 @@
-import { AppointmentsAnalyticsShell } from "@/components/appointments/analytics-shell";
+import { AnalyticsOverviewGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
-export default function AppointmentsAnalyticsPage() {
-  return <AppointmentsAnalyticsShell section="overview" />;
+export default function Page() {
+  return <AnalyticsOverviewGate />
 }

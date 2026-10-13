@@ -1,5 +1,5 @@
-import { AppointmentsSetupClient } from "@/components/appointments/setup-client";
+import { SetupGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
-export default function AppointmentsSetupPage() {
-  return <AppointmentsSetupClient />;
+export default function Page() {
+  return <SetupGate />
 }

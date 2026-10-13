@@ -1,10 +1,5 @@
-import { Suspense } from "react";
-import { PricingPaymentsClient } from "@/components/appointments/pricing-payments-client";
+import { PricingPaymentsGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
-export default function PricingPaymentsPage() {
-  return (
-    <Suspense fallback={<div className="min-h-[40vh] bg-[var(--surface-muted)]" aria-busy="true" />}>
-      <PricingPaymentsClient />
-    </Suspense>
-  );
+export default function Page() {
+  return <PricingPaymentsGate />
 }

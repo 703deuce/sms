@@ -1,5 +1,5 @@
-import { PackagesCatalogConnected } from "@/components/appointments/packages/packages-catalog-connected";
+import { PackagesCatalogGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
-export default function PackagesPage() {
-  return <PackagesCatalogConnected />;
+export default function Page() {
+  return <PackagesCatalogGate />
 }

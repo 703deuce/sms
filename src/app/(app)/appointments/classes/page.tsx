@@ -1,5 +1,5 @@
-import { ClassesWorkspaceConnected } from "@/components/appointments/classes/classes-workspace-connected";
+import { ClassesWorkspaceGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
-export default function AppointmentsClassesPage() {
-  return <ClassesWorkspaceConnected classId={null} />;
+export default function Page() {
+  return <ClassesWorkspaceGate classId={null} />
 }

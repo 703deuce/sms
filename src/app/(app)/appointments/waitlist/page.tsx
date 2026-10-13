@@ -1,5 +1,5 @@
-import { WaitlistAdminClient } from "@/components/appointments/waitlist-admin-client";
+import { WaitlistAdminGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
-export default function WaitlistPage() {
-  return <WaitlistAdminClient />;
+export default function Page() {
+  return <WaitlistAdminGate />
 }

@@ -1,10 +1,10 @@
-import { ClassesWorkspaceConnected } from "@/components/appointments/classes/classes-workspace-connected";
+import { ClassesWorkspaceGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
 export default async function AppointmentsClassEditorPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ id: string }>
 }) {
-  const { id } = await params;
-  return <ClassesWorkspaceConnected classId={id} />;
+  const { id } = await params
+  return <ClassesWorkspaceGate classId={id} />
 }

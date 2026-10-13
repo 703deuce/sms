@@ -1,5 +1,5 @@
-import { ContractsAdminClient } from "@/components/appointments/contracts-admin-client";
+import { ContractsGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
-export default function AppointmentsContractsPage() {
-  return <ContractsAdminClient />;
+export default function Page() {
+  return <ContractsGate />
 }

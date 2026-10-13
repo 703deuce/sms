@@ -1,5 +1,5 @@
-import { StaffConnected } from "@/features/appointments/kimi/staff/staff-connected";
+import { StaffDirectoryGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
-export default function AppointmentStaffPage() {
-  return <StaffConnected />;
+export default function Page() {
+  return <StaffDirectoryGate />
 }

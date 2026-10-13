@@ -1,5 +1,5 @@
-import { AutomationsActivityClient } from "@/components/appointments/automations-activity-client";
+import { AutomationsActivityGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
-export default function AutomationsActivityPage() {
-  return <AutomationsActivityClient />;
+export default function Page() {
+  return <AutomationsActivityGate />
 }

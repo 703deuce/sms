@@ -8,16 +8,16 @@ Regenerate: `npx tsx scripts/generate-unified-frontend-migration-matrix.ts`
 |---|---|---|---|---|---|---|
 | Calendar | Calendar | `/appointment-reminders` | Opus partial | calendar-connected.tsx + kimi reference.css | ar-calendar-workspace-page.tsx (Opus calendar; native sheets migrated) | Imported events use AppointmentDetailDrawer; native uses ArNativeAppointmentSheet |
 | Appointments | Appointments | `/appointment-reminders/appointments` | Opus partial | appointments list + kimi detail | appointments-page.tsx + appointment-detail-drawer.tsx | Booking tab uses ArAppointmentSchedulingPanel; quick create Opus |
-| Appointments | Scheduled list | `/appointments/scheduled` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
-| Appointments | New appointment | `/appointments/new` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
+| Appointments | Scheduled list | `/appointments/scheduled` | Opus complete | Scheduling/Kimi list | appointments-scheduled-list-opus.tsx |  |
+| Appointments | New appointment | `/appointments/new` | Opus complete | Kimi create | ar-appointment-create-opus.tsx |  |
 | Booking | Booking | `/appointment-reminders/booking` | Opus partial | booking-settings-client + link hub | booking-page-opus.tsx | Meetings/services Opus; other admin routes still legacy |
 | Booking | Services | `/appointment-reminders/booking/services` | Opus partial | services workspace kimi | AR booking services Opus routes |  |
 | Booking | Meetings | `/appointment-reminders/booking/meetings` | Opus complete | MeetingsWorkspaceConnected | ar-meetings-workspace-opus.tsx |  |
-| Booking | Classes | `/appointments/classes` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
-| Booking | Workshops | `/appointments/workshops` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
-| Booking | Booking pages admin | `/appointments/booking` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
+| Booking | Classes | `/appointments/classes` | Opus partial | ClassesWorkspaceConnected | ClassesWorkspaceGate + Opus shell embed |  |
+| Booking | Workshops | `/appointments/workshops` | Opus partial | WorkshopsWorkspaceConnected | WorkshopsWorkspaceGate + Opus shell embed |  |
+| Booking | Booking pages admin | `/appointments/booking` | Opus partial | AppointmentBookingSettingsClient | BookingSettingsGate |  |
 | Booking | Share & embed | `/appointments/booking/share` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
-| Booking | Branding | `/appointments/booking/branding` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
+| Booking | Branding | `/appointments/booking/branding` | Opus partial | ServiceBookingAdminClient | ServiceBookingAdminOpus |  |
 | Booking | Forms | `/appointments/booking/forms` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
 | Booking | Contracts | `/appointments/booking/contracts` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
 | Booking | Team booking | `/appointments/team-booking` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
@@ -25,46 +25,46 @@ Regenerate: `npx tsx scripts/generate-unified-frontend-migration-matrix.ts`
 | Booking | Routing forms | `/appointments/routing-forms` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
 | Booking | Meeting polls | `/appointments/meeting-polls` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
 | Booking | AI booking | `/appointments/ai-booking` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
-| Availability | Availability | `/appointments/availability` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
-| Availability | Staff | `/appointments/staff` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
-| Availability | Locations | `/appointments/locations` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
-| Availability | Resources | `/appointments/resources` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
-| Availability | Routing rules | `/appointments/routing` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
+| Availability | Availability | `/appointments/availability` | Opus partial | AvailabilityConnected | availability-workspace-opus.tsx |  |
+| Availability | Staff | `/appointments/staff` | Opus complete | StaffConnected | staff-directory-opus.tsx |  |
+| Availability | Locations | `/appointments/locations` | Opus complete | LocationsConnected | locations-directory-opus.tsx |  |
+| Availability | Resources | `/appointments/resources` | Opus complete | ResourcesConnected | resources-directory-opus.tsx |  |
+| Availability | Routing rules | `/appointments/routing` | Opus partial | RoutingConnected | routing-workspace-opus.tsx |  |
 | Availability | Restrictions | `/appointments/restrictions` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
-| Availability | Client restrictions | `/appointments/client-restrictions` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
-| Clients | Clients | `/appointments/clients` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
-| Clients | Segments | `/appointments/segments` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
+| Availability | Client restrictions | `/appointments/client-restrictions` | Opus partial | ServiceBookingAdminClient | ServiceBookingAdminOpus |  |
+| Clients | Clients | `/appointments/clients` | Opus complete | ClientsConnected | clients-directory-opus.tsx |  |
+| Clients | Segments | `/appointments/segments` | Opus partial | AppointmentSegmentsClient | scheduling-unified-gates embed |  |
 | Clients | Contact merge | `/appointments/commerce/contact-merge` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
 | Messages & Responses | Messages & Responses | `/conversations` | Shared platform (Opus migration TBD) | kimi-inbox | kimi-conversations-connected (Mass Texting shell — migrate to Opus inbox) |  |
 | Messages & Responses | Appointment replies | `/appointment-reminders/responses` | Opus complete | — | ar-responses-opus.tsx |  |
 | Reminders | Reminders | `/appointment-reminders/reminders` | Opus complete | — | reminders-page.tsx |  |
 | Reminders | Sequences | `/appointment-reminders/reminders/sequences` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
 | Reminders | Templates | `/appointment-reminders/reminders/templates` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
-| Workflows & Automation | Workflows & Automation | `/appointments/workflows` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
+| Workflows & Automation | Workflows & Automation | `/appointments/workflows` | Opus partial | WorkflowsListClient | scheduling-unified-gates embed |  |
 | Workflows & Automation | Automation activity | `/appointments/automations/activity` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
 | Workflows & Automation | Automation templates | `/appointments/automations/templates` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
 | Workflows & Automation | Voice reminders | `/appointments/voice-reminders` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
 | AI Rescheduler | AI Rescheduler | `/appointment-reminders/ai-rescheduler` | Opus complete | — | ar-ai-rescheduler-opus.tsx |  |
 | Commerce | Commerce | `/appointments/commerce` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
-| Commerce | Packages | `/appointments/packages` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
-| Commerce | Memberships | `/appointments/memberships` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
+| Commerce | Packages | `/appointments/packages` | Opus partial | PackagesCatalogConnected | packages-catalog-opus.tsx |  |
+| Commerce | Memberships | `/appointments/memberships` | Opus partial | MembershipsCatalogConnected | memberships-catalog-opus.tsx |  |
 | Commerce | Pricing & payments | `/appointments/pricing-payments` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
-| Commerce | Categories | `/appointments/categories` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
-| Commerce | Coupons | `/appointments/coupons` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
+| Commerce | Categories | `/appointments/categories` | Opus partial | ServiceBookingAdminClient | ServiceBookingAdminOpus |  |
+| Commerce | Coupons | `/appointments/coupons` | Opus partial | ServiceBookingAdminClient | ServiceBookingAdminOpus |  |
 | Commerce | Point of sale | `/appointments/point-of-sale` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
 | Commerce | Payment requests | `/payments` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
 | Commerce | Transactions | `/payments/transactions` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
 | Commerce | Invoices | `/payments/invoices` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
-| Commerce | Waitlist | `/appointments/waitlist` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
+| Commerce | Waitlist | `/appointments/waitlist` | Opus partial | WaitlistAdminClient | scheduling-unified-gates embed |  |
 | Commerce | Recalls | `/appointments/recalls` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
 | Commerce | Recall campaigns | `/appointments/recall-campaigns` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
 | Commerce | No-show recovery | `/appointments/no-show-recovery` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
 | Analytics & Reports | Analytics & Reports | `/appointment-reminders/analytics` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
-| Analytics & Reports | Scheduling overview | `/appointments/analytics` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
-| Analytics & Reports | Booking | `/appointments/analytics/booking` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
-| Analytics & Reports | Reminder analytics | `/appointments/analytics/reminders` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
-| Analytics & Reports | Automations | `/appointments/analytics/automations` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
-| Analytics & Reports | Reports | `/appointments/analytics/reports` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
+| Analytics & Reports | Scheduling overview | `/appointments/analytics` | Opus partial | AppointmentsAnalyticsShell | appointments-analytics-opus-shell.tsx |  |
+| Analytics & Reports | Booking | `/appointments/analytics/booking` | Opus partial | AppointmentsAnalyticsShell | appointments-analytics-opus-shell.tsx |  |
+| Analytics & Reports | Reminder analytics | `/appointments/analytics/reminders` | Opus partial | AppointmentsAnalyticsShell | appointments-analytics-opus-shell.tsx |  |
+| Analytics & Reports | Automations | `/appointments/analytics/automations` | Opus partial | AppointmentsAnalyticsShell | appointments-analytics-opus-shell.tsx |  |
+| Analytics & Reports | Reports | `/appointments/analytics/reports` | Opus partial | AppointmentsAnalyticsShell | appointments-analytics-opus-shell.tsx |  |
 | Analytics & Reports | Service booking | `/appointments/reports/service-booking` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
 | Integrations | Integrations | `/appointment-reminders/settings?tab=integrations` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
 | Integrations | Integrations directory | `/integrations?provider=calendar` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
@@ -83,7 +83,7 @@ Regenerate: `npx tsx scripts/generate-unified-frontend-migration-matrix.ts`
 | Settings | Policies | `/appointments/policies` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
 | Settings | Forms & documents | `/appointments/forms-documents` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
 | Settings | Enterprise | `/appointments/enterprise` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
-| Settings | Service booking admin | `/appointments/service-booking` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
+| Settings | Service booking admin | `/appointments/service-booking` | Opus partial | ServiceBookingAdminClient | ServiceBookingAdminOpus |  |
 | Help | Help | `/getting-started` | Legacy Kimi (must replace) | Scheduling/Kimi connected shell | — (not started) |  |
 
 ## Calendar Opus components (unified mode)

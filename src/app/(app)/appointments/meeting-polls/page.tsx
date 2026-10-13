@@ -1,5 +1,5 @@
-import { MeetingPollsLibraryConnected } from "@/components/appointments/meeting-polls/meeting-polls-library-connected";
+import { MeetingPollsGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
-export default function MeetingPollsPage() {
-  return <MeetingPollsLibraryConnected />;
+export default function Page() {
+  return <MeetingPollsGate />
 }

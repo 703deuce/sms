@@ -1,5 +1,5 @@
-import { WorkflowsListClient } from "@/components/appointments/workflows-list-client";
+import { WorkflowsGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
-export default function AppointmentWorkflowsPage() {
-  return <WorkflowsListClient />;
+export default function Page() {
+  return <WorkflowsGate />
 }

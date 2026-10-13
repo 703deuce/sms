@@ -1,5 +1,5 @@
-import { ServiceBookingAdminClient } from "@/components/appointments/service-booking-admin-client";
+import { ServiceBookingReportsGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
-export default function ServiceBookingReportsPage() {
-  return <ServiceBookingAdminClient initialSection="reports" />;
+export default function Page() {
+  return <ServiceBookingReportsGate />
 }

@@ -1,5 +1,5 @@
-import { RecallsHubClient } from "@/components/appointments/recalls-hub-client";
+import { RecallsGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
-export default function RecallsHubPage() {
-  return <RecallsHubClient />;
+export default function Page() {
+  return <RecallsGate />
 }

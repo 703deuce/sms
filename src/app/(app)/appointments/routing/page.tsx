@@ -1,5 +1,5 @@
-import { RoutingConnected } from "@/features/appointments/kimi/routing/routing-connected";
+import { RoutingGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
-export default function AppointmentRoutingPage() {
-  return <RoutingConnected />;
+export default function Page() {
+  return <RoutingGate />
 }

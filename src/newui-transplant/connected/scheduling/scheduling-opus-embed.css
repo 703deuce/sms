@@ -1,0 +1,15 @@
+/* Hide legacy pilot page chrome when functional UI is embedded in SchedulingOpusShell */
+.scheduling-opus-embed .ws-event-head {
+  display: none;
+}
+
+.scheduling-opus-embed .appt-overview-pilot,
+.scheduling-opus-embed .bookable-workspace-pilot,
+.scheduling-opus-embed .ws-pilot {
+  background: transparent !important;
+  min-height: 0 !important;
+}
+
+.scheduling-opus-embed .appt-overview-pilot > .mx-auto.flex.w-full.max-w-\[1560px\].flex-col.gap-4 {
+  padding-top: 0;
+}

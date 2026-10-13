@@ -1,7 +1,5 @@
-import { ServiceBookingAdminClient } from "@/components/appointments/service-booking-admin-client";
+import { BookingBrandingAdminGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
-export default function BookingBrandingPage() {
-  return (
-    <ServiceBookingAdminClient initialSection="theme" title="Booking appearance" />
-  );
+export default function Page() {
+  return <BookingBrandingAdminGate />
 }

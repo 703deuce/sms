@@ -1,5 +1,5 @@
-import { TeamBookingConnected } from "@/features/appointments/kimi/team-booking/team-booking-connected";
+import { TeamBookingGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
-export default function TeamBookingPage() {
-  return <TeamBookingConnected />;
+export default function Page() {
+  return <TeamBookingGate />
 }

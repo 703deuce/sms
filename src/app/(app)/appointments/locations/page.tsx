@@ -1,5 +1,5 @@
-import { LocationsConnected } from "@/features/appointments/kimi/locations/locations-connected";
+import { LocationsDirectoryGate } from '@/newui-transplant/connected/scheduling/scheduling-unified-gates'
 
-export default function AppointmentLocationsPage() {
-  return <LocationsConnected />;
+export default function Page() {
+  return <LocationsDirectoryGate />
 }
