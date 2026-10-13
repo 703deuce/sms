@@ -4,8 +4,9 @@ import {
   ServiceBookingAdminClient,
   type ServiceBookingAdminClientProps,
 } from '@/components/appointments/service-booking-admin-client'
+import { Settings2 } from 'lucide-react'
 import { ArOpusPage } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
-import { PageHeader } from '@/newui-transplant/components/app/kit'
+import { OpusSchedulingHero } from '@/newui-transplant/components/appointment-reminders/opus-scheduling-chrome'
 
 const SECTION_TITLES: Record<string, string> = {
   categories: 'Categories',
@@ -24,7 +25,8 @@ export function ServiceBookingAdminOpus(props: ServiceBookingAdminClientProps) {
   }
   return (
     <ArOpusPage>
-      <PageHeader
+      <OpusSchedulingHero
+        icon={Settings2}
         title={title}
         description="Packages, memberships, commerce rules, and service-booking configuration."
       />

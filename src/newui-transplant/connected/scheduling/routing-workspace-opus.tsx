@@ -14,9 +14,11 @@ import { RoutingActivitySection } from '@/components/appointments/routing/routin
 import { RoutingSettingsSection } from '@/components/appointments/routing/routing-settings-section'
 import { RoutingServiceDrawer } from '@/components/appointments/routing/routing-service-drawer'
 import type { StaffRoutingConfig } from '@/lib/appointments/types'
+import { Route } from 'lucide-react'
 import { ArOpusPage } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
+import { OpusSchedulingHero } from '@/newui-transplant/components/appointment-reminders/opus-scheduling-chrome'
 import { Button } from '@/newui-transplant/components/ui/button'
-import { Callout, PageHeader } from '@/newui-transplant/components/app/kit'
+import { Callout } from '@/newui-transplant/components/app/kit'
 import { Tabs, TabsList, TabsTrigger } from '@/newui-transplant/components/ui/tabs'
 import '@/newui-transplant/connected/scheduling/availability-workspace-opus.css'
 
@@ -76,7 +78,8 @@ export function RoutingWorkspaceOpus() {
 
   return (
     <ArOpusPage className="availability-opus-root">
-      <PageHeader
+      <OpusSchedulingHero
+        icon={Route}
         title="Routing"
         description="Control how eligible bookings are assigned to staff and resources."
         actions={

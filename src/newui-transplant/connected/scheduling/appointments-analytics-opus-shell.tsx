@@ -4,6 +4,7 @@ import { AnalyticsClient } from '@/components/appointments/kimi-ui/analytics/com
 import type { AppointmentsAnalyticsSection } from '@/lib/products/appointments-settings-tabs'
 import { appointmentsAnalyticsTabs } from '@/lib/products/appointments-settings-tabs'
 import { SchedulingOpusShell } from '@/newui-transplant/connected/scheduling/scheduling-opus-shell'
+import { BarChart3 } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
@@ -21,6 +22,7 @@ export function AppointmentsAnalyticsOpusShell({
 
   return (
     <SchedulingOpusShell
+      icon={BarChart3}
       title="Scheduling analytics"
       description="Bookings, reminders, automations, and operational reports."
     >

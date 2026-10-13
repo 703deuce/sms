@@ -7,7 +7,8 @@ import { ExternalLink, Users } from 'lucide-react'
 import { useStaffDetail } from '@/features/appointments/kimi/staff/use-staff-workspace'
 import { ContextBackLink } from '@/components/navigation/context-back-link'
 import { ArOpusPage } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
-import { Callout, PageHeader, Panel, Pill } from '@/newui-transplant/components/app/kit'
+import { OpusSchedulingHero } from '@/newui-transplant/components/appointment-reminders/opus-scheduling-chrome'
+import { Callout, Panel, Pill } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Input } from '@/newui-transplant/components/ui/input'
 import { Label } from '@/newui-transplant/components/ui/label'
@@ -132,7 +133,8 @@ export function StaffDetailOpus({ staffId }: { staffId: string }) {
     <ArOpusPage className="max-w-[1560px]">
       <ContextBackLink href="/appointments/staff" label="Staff" />
 
-      <PageHeader
+      <OpusSchedulingHero
+        icon={Users}
         title={displayName}
         description={m.title || m.role || 'Provider'}
         actions={
@@ -148,10 +150,10 @@ export function StaffDetailOpus({ staffId }: { staffId: string }) {
         meta={
           <div className="flex flex-wrap items-center gap-2">
             {m.avatarUrl ? (
-              <img src={m.avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover" />
+              <img src={m.avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover ring-2 ring-primary/20" />
             ) : (
               <span
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary"
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary ring-2 ring-primary/15"
                 aria-hidden
               >
                 {initials}

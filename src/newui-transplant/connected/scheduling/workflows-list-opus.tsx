@@ -11,6 +11,7 @@ import {
   mapApiWorkflowToKimi,
   mapPrebuiltTemplate,
 } from '@/features/appointments/kimi/workflows/map-workflows'
+import { Workflow } from 'lucide-react'
 import { SchedulingOpusPage } from '@/newui-transplant/connected/scheduling/scheduling-opus-page'
 
 export function WorkflowsListOpus() {
@@ -87,6 +88,7 @@ export function WorkflowsListOpus() {
 
   return (
     <SchedulingOpusPage
+      icon={Workflow}
       title="Workflows"
       description="Automate appointment follow-up and operations."
     >

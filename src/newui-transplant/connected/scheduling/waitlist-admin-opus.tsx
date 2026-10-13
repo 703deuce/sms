@@ -1,13 +1,26 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Search } from 'lucide-react'
+import { Clock, ListOrdered, Search } from 'lucide-react'
 import type { WaitlistEntry } from '@/components/appointments/kimi-ui/waitlist/mock-data'
 import { WaitlistEntryRow } from '@/components/appointments/kimi-ui/waitlist/components/WaitlistEntryRow'
 import { ConfirmRemoveModal } from '@/components/appointments/kimi-ui/waitlist/components/ConfirmRemoveModal'
 import { SchedulingOpusPage } from '@/newui-transplant/connected/scheduling/scheduling-opus-page'
-import { OpusDataSurface, OpusSearchField } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
-import { Callout, EmptyState, Pill } from '@/newui-transplant/components/app/kit'
+import {
+  ArStatGrid,
+  OpusDataSurface,
+  OpusSearchField,
+  OpusTableSkeleton,
+} from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
+import {
+  OpusListControls,
+  OpusMetricBand,
+  OpusTd,
+  OpusTh,
+  OPUS_TABLE_HEAD,
+} from '@/newui-transplant/components/appointment-reminders/opus-scheduling-chrome'
+import { Callout, EmptyState, Stat } from '@/newui-transplant/components/app/kit'
+import { cn } from '@/lib/utils'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from '@/newui-transplant/components/ui/tabs'
 
@@ -94,27 +107,31 @@ export function WaitlistAdminOpus() {
 
   return (
     <SchedulingOpusPage
+      icon={ListOrdered}
       title="Waitlist"
       description="Customers waiting for an opening. Notify them when a slot becomes available."
-      meta={
-        <div className="flex flex-wrap gap-2">
-          <Pill tone="neutral" dot={false}>{counts.active || 0} active</Pill>
-        </div>
-      }
     >
-      <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <OpusMetricBand>
+        <ArStatGrid>
+          <Stat label="Active" value={String(counts.active || 0)} icon={Clock} />
+          <Stat label="Total entries" value={String(counts.all || 0)} icon={ListOrdered} />
+        </ArStatGrid>
+      </OpusMetricBand>
+
+      <OpusListControls>
         <OpusSearchField
           id="waitlist-search"
           label="Search waitlist"
           placeholder="Service, phone, or email"
           value={query}
           onChange={setQuery}
+          className="w-full min-w-[220px] sm:max-w-md"
         />
         <Tabs
           value={statusFilter}
           onValueChange={(v) => setStatusFilter(v as StatusFilter)}
         >
-          <TabsList className="flex h-auto flex-wrap">
+          <TabsList className="flex h-auto max-w-full flex-wrap">
             {STATUS_FILTERS.map((f) => (
               <TabsTrigger key={f.key} value={f.key} className="text-xs">
                 {f.label} ({counts[f.key] || 0})
@@ -122,14 +139,16 @@ export function WaitlistAdminOpus() {
             ))}
           </TabsList>
         </Tabs>
-      </div>
+      </OpusListControls>
 
       {toast ? (
         <p className="mb-3 text-sm text-muted-foreground" role="status">{toast}</p>
       ) : null}
 
       {loading ? (
-        <div className="h-40 animate-pulse rounded-xl bg-muted/40" aria-busy="true" />
+        <OpusDataSurface>
+          <OpusTableSkeleton rows={5} label="Loading waitlist" />
+        </OpusDataSurface>
       ) : failed ? (
         <Callout tone="error" title="Could not load waitlist">
           <Button type="button" variant="outline" size="sm" onClick={load}>Retry</Button>
@@ -141,14 +160,14 @@ export function WaitlistAdminOpus() {
           description="When customers join a waitlist, they appear here for notification."
         />
       ) : (
-        <OpusDataSurface>
+        <OpusDataSurface className="overflow-hidden bg-gradient-to-br from-card via-card to-primary/[0.02] p-0">
           <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-left text-muted-foreground">
-                <th scope="col" className="px-4 py-3 font-medium">Customer</th>
-                <th scope="col" className="px-4 py-3 font-medium">Service</th>
-                <th scope="col" className="px-4 py-3 font-medium">Status</th>
-                <th scope="col" className="px-4 py-3 text-right font-medium">Actions</th>
+            <thead className={OPUS_TABLE_HEAD}>
+              <tr>
+                <th scope="col" className={OpusTh}>Customer</th>
+                <th scope="col" className={OpusTh}>Service</th>
+                <th scope="col" className={OpusTh}>Status</th>
+                <th scope="col" className={cn(OpusTh, 'text-right')}>Actions</th>
               </tr>
             </thead>
             <tbody>

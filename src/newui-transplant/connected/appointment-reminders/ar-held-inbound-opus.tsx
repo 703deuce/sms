@@ -1,9 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { Inbox, Loader2 } from 'lucide-react'
 import { ArOpusPage } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
-import { PageHeader, Panel } from '@/newui-transplant/components/app/kit'
+import { OpusSchedulingHero } from '@/newui-transplant/components/appointment-reminders/opus-scheduling-chrome'
+import { Panel } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
 import Link from 'next/link'
@@ -75,7 +76,8 @@ export function ArHeldInboundOpusPage() {
   return (
     <ArOpusPage>
       <div className="flex flex-col gap-6">
-      <PageHeader
+      <OpusSchedulingHero
+        icon={Inbox}
         title="Held SMS replies"
         description="Inbound texts on shared platform numbers that could not be routed automatically. Review and dismiss, or route to Appointment Reminders only when the reply session and appointment are known. Messages are never auto-routed to Missed Call Text Back."
         actions={

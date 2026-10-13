@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import {
+  CalendarCheck,
   Loader2,
   MessageSquare,
   Phone,
@@ -15,7 +16,11 @@ import type { Appointment } from '@/components/appointments/kimi-ui/detail/types
 import { ContextBackLink } from '@/components/navigation/context-back-link'
 import { ArOpusPage } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
 import { ArAppointmentSlotPicker } from '@/newui-transplant/components/scheduling/ar-appointment-slot-picker'
-import { Callout, PageHeader, Panel, Pill } from '@/newui-transplant/components/app/kit'
+import {
+  OpusSchedulingHero,
+  appointmentStatusTone,
+} from '@/newui-transplant/components/appointment-reminders/opus-scheduling-chrome'
+import { Callout, Panel, Pill } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
 import {
   Dialog,
@@ -182,10 +187,11 @@ export function ArAppointmentDetailOpus({ appointmentId }: { appointmentId: stri
     <ArOpusPage wide>
       <ContextBackLink fallbackHref="/appointments/scheduled" returnTo={returnTo} fallbackLabel="Back to appointments" />
 
-      <PageHeader
+      <OpusSchedulingHero
+        icon={CalendarCheck}
         title={appt.serviceName}
         description={when}
-        meta={<Pill tone="neutral">{appt.status}</Pill>}
+        meta={<Pill tone={appointmentStatusTone(appt.status)}>{appt.status}</Pill>}
         actions={
           terminal ? null : (
             <div className="flex flex-wrap gap-2">

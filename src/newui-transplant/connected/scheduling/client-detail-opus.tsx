@@ -8,7 +8,8 @@ import { useClientDetail } from '@/features/appointments/kimi/clients/use-client
 import { MergeClientsModal } from '@/components/appointments/clients/merge-clients-modal'
 import { ContextBackLink } from '@/components/navigation/context-back-link'
 import { ArOpusPage, OpusDataSurface } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
-import { Callout, PageHeader, Panel, Pill } from '@/newui-transplant/components/app/kit'
+import { OpusSchedulingHero } from '@/newui-transplant/components/appointment-reminders/opus-scheduling-chrome'
+import { Callout, Panel, Pill } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
 import {
   DropdownMenu,
@@ -183,7 +184,8 @@ export function ClientDetailOpus({ clientId }: { clientId: string }) {
     <ArOpusPage>
       <ContextBackLink returnTo={null} fallbackHref="/appointments/clients" fallbackLabel="Clients" />
 
-      <PageHeader
+      <OpusSchedulingHero
+        icon={UserRound}
         title={d.displayName}
         description={`${c.email || 'No email'} · ${c.phone}`}
         meta={

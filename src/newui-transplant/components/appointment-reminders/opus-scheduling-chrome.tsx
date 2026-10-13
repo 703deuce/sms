@@ -24,7 +24,7 @@ export function OpusSchedulingHero({
 }: {
   icon: LucideIcon
   title: string
-  description?: string
+  description?: React.ReactNode
   actions?: React.ReactNode
   meta?: React.ReactNode
   className?: string
@@ -47,7 +47,7 @@ export function OpusSchedulingHero({
               {meta}
             </div>
             {description ? (
-              <p className="max-w-2xl text-pretty text-sm text-muted-foreground">{description}</p>
+              <div className="max-w-2xl text-pretty text-sm text-muted-foreground">{description}</div>
             ) : null}
           </div>
         </div>
@@ -96,14 +96,16 @@ export function OpusPremiumDialogHeader({
 }: {
   icon: LucideIcon
   title: string
-  description?: string
+  description?: React.ReactNode
 }) {
   return (
     <div className="flex gap-3 border-b bg-gradient-to-b from-card to-muted/25 px-6 py-5 pr-12">
       <OpusIconBadge icon={icon} className="size-10 rounded-xl" />
       <div className="min-w-0 flex flex-col gap-0.5 text-left">
         <h2 className="text-lg font-semibold leading-tight">{title}</h2>
-        {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
+        {description ? (
+          <div className="text-sm text-muted-foreground">{description}</div>
+        ) : null}
       </div>
     </div>
   )

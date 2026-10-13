@@ -43,7 +43,8 @@ import {
   AR_BOOKING_MEETINGS_ROUTES,
   type MeetingsWorkspaceRoutes,
 } from '@/lib/appointments/bookable-workspace-routes'
-import { Page, PageHeader, Panel, Pill } from '@/newui-transplant/components/app/kit'
+import { OpusSchedulingHero } from '@/newui-transplant/components/appointment-reminders/opus-scheduling-chrome'
+import { Page, Panel, Pill } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
 import { cn } from '@/lib/utils'
 import '@/newui-transplant/connected/appointment-reminders/ar-meetings-editor-opus.css'
@@ -238,7 +239,8 @@ export function ArMeetingCreateOpus({
 
   return (
     <Page className="max-w-4xl">
-      <PageHeader
+      <OpusSchedulingHero
+        icon={Video}
         title="Create meeting"
         meta={<Pill tone="neutral" dot={false}>Step {step + 1} of {STEPS.length}</Pill>}
         description="Set up a bookable meeting for your public booking link."

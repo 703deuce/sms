@@ -36,7 +36,8 @@ import {
 } from '@/lib/appointments/bookable-workspace-routes'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
 import { OpusSearchField } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
-import { Callout, Page, PageHeader, Panel, Pill } from '@/newui-transplant/components/app/kit'
+import { OpusSchedulingHero } from '@/newui-transplant/components/appointment-reminders/opus-scheduling-chrome'
+import { Callout, Page, Panel, Pill } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
 import {
   DropdownMenu,
@@ -228,7 +229,8 @@ export function ArMeetingsWorkspaceOpus({
   if (!meetingId) {
     return (
       <Page className="max-w-[1600px]">
-        <PageHeader
+        <OpusSchedulingHero
+          icon={Video}
           title="Meetings"
           meta={<Pill tone="neutral" dot={false}>Bookable on your link</Pill>}
           description={

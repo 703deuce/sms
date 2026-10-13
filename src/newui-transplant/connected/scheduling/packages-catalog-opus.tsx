@@ -13,9 +13,24 @@ import {
   packageCreditsTotal,
   usePackagesCatalog,
 } from '@/lib/appointments/packages/use-packages-catalog'
-import { ArOpusPage, OpusDataSurface, OpusSearchField } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
+import {
+  ArOpusPage,
+  ArStatGrid,
+  OpusDataSurface,
+  OpusSearchField,
+  OpusTableSkeleton,
+} from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
+import {
+  OpusListControls,
+  OpusMetricBand,
+  OpusSchedulingHero,
+  OpusTd,
+  OpusTh,
+  OPUS_TABLE_HEAD,
+} from '@/newui-transplant/components/appointment-reminders/opus-scheduling-chrome'
 import { Button } from '@/newui-transplant/components/ui/button'
-import { Callout, EmptyState, PageHeader, Pill } from '@/newui-transplant/components/app/kit'
+import { Callout, EmptyState, Pill, Stat } from '@/newui-transplant/components/app/kit'
+import { cn } from '@/lib/utils'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,7 +55,8 @@ export function PackagesCatalogOpus() {
 
   return (
     <ArOpusPage>
-      <PageHeader
+      <OpusSchedulingHero
+        icon={Package}
         title="Packages"
         description="Sell prepaid bundles of bookings and manage customer credits."
         actions={
@@ -51,31 +67,33 @@ export function PackagesCatalogOpus() {
             </Link>
           </Button>
         }
-        meta={
-          catalog.stats ? (
-            <div className="flex flex-wrap gap-2">
-              <Pill tone="neutral" dot={false}>{catalog.stats.activePackages} active</Pill>
-              <Pill tone="neutral" dot={false}>{catalog.stats.customerPackages} sold</Pill>
-              <Pill tone="neutral" dot={false}>{catalog.stats.availableCredits} credits</Pill>
-            </div>
-          ) : null
-        }
       />
 
-      <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      {catalog.stats ? (
+        <OpusMetricBand>
+          <ArStatGrid>
+            <Stat label="Active packages" value={String(catalog.stats.activePackages)} icon={Package} />
+            <Stat label="Sold" value={String(catalog.stats.customerPackages)} icon={Layers} />
+            <Stat label="Credits available" value={String(catalog.stats.availableCredits)} icon={Layers} />
+          </ArStatGrid>
+        </OpusMetricBand>
+      ) : null}
+
+      <OpusListControls>
         <OpusSearchField
           id="packages-search"
           label="Search packages"
           placeholder="Search name or description"
           value={catalog.search}
           onChange={catalog.setSearch}
+          className="w-full min-w-[220px] sm:max-w-md"
         />
         <div className="flex flex-wrap items-center gap-3">
           <Tabs
             value={catalog.statusFilter}
             onValueChange={(v) => catalog.setStatusFilter(v as typeof catalog.statusFilter)}
           >
-            <TabsList>
+            <TabsList className="h-9">
               <TabsTrigger value="all">All</TabsTrigger>
               <TabsTrigger value="active">Active</TabsTrigger>
               <TabsTrigger value="inactive">Inactive</TabsTrigger>
@@ -84,7 +102,7 @@ export function PackagesCatalogOpus() {
           <label className="text-sm text-muted-foreground">
             <span className="sr-only">Sort</span>
             <select
-              className="rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+              className="h-9 rounded-lg border border-input bg-background px-3 text-sm"
               value={catalog.sort}
               onChange={(e) => catalog.setSort(e.target.value as typeof catalog.sort)}
             >
@@ -94,10 +112,12 @@ export function PackagesCatalogOpus() {
             </select>
           </label>
         </div>
-      </div>
+      </OpusListControls>
 
       {catalog.loading ? (
-        <div className="h-48 animate-pulse rounded-xl bg-muted/40" aria-busy="true" />
+        <OpusDataSurface>
+          <OpusTableSkeleton label="Loading packages" />
+        </OpusDataSurface>
       ) : catalog.failed ? (
         <Callout tone="error" title="Could not load packages">
           <Button type="button" variant="outline" size="sm" onClick={() => void catalog.reload()}>
@@ -116,26 +136,29 @@ export function PackagesCatalogOpus() {
           }
         />
       ) : (
-        <OpusDataSurface>
+        <OpusDataSurface className="overflow-hidden bg-gradient-to-br from-card via-card to-primary/[0.02] p-0">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-left text-muted-foreground">
-                <th scope="col" className="px-4 py-3 font-medium">Package</th>
-                <th scope="col" className="px-4 py-3 font-medium">Credits</th>
-                <th scope="col" className="px-4 py-3 font-medium">Price</th>
-                <th scope="col" className="px-4 py-3 font-medium">Eligible</th>
-                <th scope="col" className="px-4 py-3 font-medium">Customers</th>
-                <th scope="col" className="px-4 py-3 font-medium">Status</th>
-                <th scope="col" className="px-4 py-3 text-right font-medium">Actions</th>
+            <thead className={OPUS_TABLE_HEAD}>
+              <tr>
+                <th scope="col" className={OpusTh}>Package</th>
+                <th scope="col" className={OpusTh}>Credits</th>
+                <th scope="col" className={OpusTh}>Price</th>
+                <th scope="col" className={OpusTh}>Eligible</th>
+                <th scope="col" className={OpusTh}>Customers</th>
+                <th scope="col" className={OpusTh}>Status</th>
+                <th scope="col" className={cn(OpusTh, 'text-right')}>
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y">
               {catalog.filtered.map((row) => {
                 const rules = (row.creditRules || []) as PackageCreditRule[]
                 const credits = packageCreditsTotal(rules)
                 return (
-                  <tr key={row.id} className="border-b last:border-0">
-                    <th scope="row" className="px-4 py-3 font-normal">
+                  <tr key={row.id} className="hover:bg-muted/40">
+                    <th scope="row" className={cn(OpusTd, 'font-normal')}>
                       <Link href={`/appointments/packages/${row.id}`} className="flex items-center gap-2 font-medium text-primary">
                         <Layers className="h-4 w-4 shrink-0" aria-hidden />
                         <span>
@@ -146,16 +169,16 @@ export function PackagesCatalogOpus() {
                         </span>
                       </Link>
                     </th>
-                    <td className="px-4 py-3">{credits ? `${credits} uses` : '—'}</td>
-                    <td className="px-4 py-3">{formatMoney(row.priceCents)}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{eligibleLabel(rules)}</td>
-                    <td className="px-4 py-3">{row.ownerCount ?? 0}</td>
-                    <td className="px-4 py-3">
+                    <td className={OpusTd}>{credits ? `${credits} uses` : '—'}</td>
+                    <td className={OpusTd}>{formatMoney(row.priceCents)}</td>
+                    <td className={cn(OpusTd, 'text-muted-foreground')}>{eligibleLabel(rules)}</td>
+                    <td className={OpusTd}>{row.ownerCount ?? 0}</td>
+                    <td className={OpusTd}>
                       <Pill tone={row.active ? 'success' : 'neutral'} dot={false}>
                         {row.active ? 'Active' : 'Inactive'}
                       </Pill>
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className={cn(OpusTd, 'text-right')}>
                       <DropdownMenu
                         open={menuId === row.id}
                         onOpenChange={(open) => setMenuId(open ? row.id : null)}
@@ -187,6 +210,7 @@ export function PackagesCatalogOpus() {
               })}
             </tbody>
           </table>
+          </div>
         </OpusDataSurface>
       )}
     </ArOpusPage>

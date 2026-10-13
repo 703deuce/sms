@@ -11,7 +11,8 @@ import type {
   ArSmsPenaltyType,
 } from '@/lib/appointment-reminders/ai-rescheduler/ar-sms-action-policy'
 import { ArOpusPage, OpusDataSurface } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
-import { PageHeader, Panel, Pill } from '@/newui-transplant/components/app/kit'
+import { OpusSchedulingHero } from '@/newui-transplant/components/appointment-reminders/opus-scheduling-chrome'
+import { Panel, Pill } from '@/newui-transplant/components/app/kit'
 import { OPUS_CARD } from '@/newui-transplant/components/app/opus-surfaces'
 import { cn } from '@/lib/utils'
 import { Button } from '@/newui-transplant/components/ui/button'
@@ -403,7 +404,8 @@ export function ArAiReschedulerOpusPage() {
   return (
     <ArOpusPage>
       <div className="flex flex-col gap-6">
-      <PageHeader
+      <OpusSchedulingHero
+        icon={Sparkles}
         title="AI Rescheduler"
         meta={<Pill tone={modePill.tone}>{modePill.label}</Pill>}
         description="Choose how Transovo handles appointment changes when customers reply to reminders or use email action links. Reminders-only keeps outbound messages without change handling; notify and AI modes build on your existing calendar connection."

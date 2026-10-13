@@ -37,7 +37,8 @@ import {
   type ServicesWorkspaceRoutes,
 } from '@/lib/appointments/bookable-workspace-routes'
 import { OpusSearchField } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
-import { Callout, Page, PageHeader, Panel, Pill } from '@/newui-transplant/components/app/kit'
+import { OpusSchedulingHero } from '@/newui-transplant/components/appointment-reminders/opus-scheduling-chrome'
+import { Callout, Page, Panel, Pill } from '@/newui-transplant/components/app/kit'
 import { Button } from '@/newui-transplant/components/ui/button'
 import {
   DropdownMenu,
@@ -321,7 +322,8 @@ export function ArServicesWorkspaceOpus({
   if (!serviceId) {
     return (
       <Page className="max-w-[1600px]">
-        <PageHeader
+        <OpusSchedulingHero
+          icon={Briefcase}
           title="Services"
           meta={<Pill tone="neutral" dot={false}>Bookable on your link</Pill>}
           description="Define what customers can book — duration, staff, price, and availability. Turn on your public link from Booking page settings."

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useMemo } from 'react'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, CalendarClock, Users } from 'lucide-react'
 import { useAvailabilityWorkspace } from '@/features/appointments/kimi/availability/use-availability-workspace'
 import {
   AVAILABILITY_SECTIONS,
@@ -15,9 +15,10 @@ import { AvailabilityLocationsSection } from '@/components/appointments/availabi
 import { AvailabilityOverridesSection } from '@/components/appointments/availability/availability-overrides-section'
 import { AvailabilityBookingRulesSection } from '@/components/appointments/availability/availability-booking-rules-section'
 import { AvailabilityCalendarsSection } from '@/components/appointments/availability/availability-calendars-section'
-import { ArOpusPage } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
+import { ArOpusPage, ArStatGrid } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
+import { OpusMetricBand, OpusSchedulingHero } from '@/newui-transplant/components/appointment-reminders/opus-scheduling-chrome'
 import { Button } from '@/newui-transplant/components/ui/button'
-import { Callout, PageHeader, Pill } from '@/newui-transplant/components/app/kit'
+import { Callout, Stat } from '@/newui-transplant/components/app/kit'
 import { Tabs, TabsList, TabsTrigger } from '@/newui-transplant/components/ui/tabs'
 import '@/newui-transplant/connected/scheduling/availability-workspace-opus.css'
 
@@ -141,7 +142,8 @@ export function AvailabilityWorkspaceOpus() {
 
   return (
     <ArOpusPage className="availability-opus-root">
-      <PageHeader
+      <OpusSchedulingHero
+        icon={CalendarClock}
         title="Availability"
         description="Business hours, staff schedules, locations, and booking rules."
         actions={
@@ -149,15 +151,16 @@ export function AvailabilityWorkspaceOpus() {
             {saveLabel}
           </Button>
         }
-        meta={
-          ws.stats ? (
-            <div className="flex flex-wrap gap-2">
-              <Pill tone="neutral" dot={false}>{ws.stats.servicesWithStaff} services staffed</Pill>
-              <Pill tone="neutral" dot={false}>{ws.stats.staffScheduled} staff scheduled</Pill>
-            </div>
-          ) : null
-        }
       />
+
+      {ws.stats ? (
+        <OpusMetricBand>
+          <ArStatGrid>
+            <Stat label="Services staffed" value={String(ws.stats.servicesWithStaff)} icon={CalendarClock} />
+            <Stat label="Staff scheduled" value={String(ws.stats.staffScheduled)} icon={Users} />
+          </ArStatGrid>
+        </OpusMetricBand>
+      ) : null}
 
       {ws.error ? (
         <Callout tone="error" title="Save failed" className="mb-4">{ws.error}</Callout>

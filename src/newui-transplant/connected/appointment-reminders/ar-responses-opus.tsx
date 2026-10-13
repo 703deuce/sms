@@ -9,7 +9,8 @@ import { CustomerResponsePill } from '@/newui-transplant/components/appointment-
 import type { ArCustomerResponseKind } from '@/lib/appointment-reminders/ar-sms-customer-outcome'
 import { ArOpusPage } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
 import { ArConversationThreadSheet } from '@/newui-transplant/components/appointment-reminders/ar-conversation-thread-sheet'
-import { EmptyState, PageHeader, Panel } from '@/newui-transplant/components/app/kit'
+import { OpusSchedulingHero } from '@/newui-transplant/components/appointment-reminders/opus-scheduling-chrome'
+import { EmptyState, Panel } from '@/newui-transplant/components/app/kit'
 import { OPUS_TABLE_HEAD } from '@/newui-transplant/components/app/opus-surfaces'
 import { th, td } from '@/newui-transplant/components/app/opus-tables'
 import { Button } from '@/newui-transplant/components/ui/button'
@@ -113,7 +114,8 @@ export function ArResponsesOpusPage() {
 
   return (
     <ArOpusPage>
-      <PageHeader
+      <OpusSchedulingHero
+        icon={MessageSquare}
         title="Responses"
         description="Customer confirmations, cancellation and reschedule requests, and messages that need staff review — in one place."
         actions={

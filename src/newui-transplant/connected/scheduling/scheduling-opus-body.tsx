@@ -1,11 +1,13 @@
 'use client'
 
 import type { ReactNode } from 'react'
+import type { LucideIcon } from 'lucide-react'
 import { OpusDataSurface } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
 import { SchedulingOpusPage } from '@/newui-transplant/connected/scheduling/scheduling-opus-page'
 import '@/newui-transplant/connected/scheduling/scheduling-opus-scope.css'
 
 export type SchedulingOpusBodyProps = {
+  icon?: LucideIcon
   title: string
   description?: string
   actions?: ReactNode
@@ -15,6 +17,7 @@ export type SchedulingOpusBodyProps = {
 
 /** Opus page chrome + scoped functional body (legacy logic, Opus presentation shell). */
 export function SchedulingOpusBody({
+  icon,
   title,
   description,
   actions,
@@ -22,7 +25,7 @@ export function SchedulingOpusBody({
   children,
 }: SchedulingOpusBodyProps) {
   return (
-    <SchedulingOpusPage title={title} description={description} actions={actions} meta={meta}>
+    <SchedulingOpusPage icon={icon} title={title} description={description} actions={actions} meta={meta}>
       <OpusDataSurface className="scheduling-opus-scope min-w-0">{children}</OpusDataSurface>
     </SchedulingOpusPage>
   )

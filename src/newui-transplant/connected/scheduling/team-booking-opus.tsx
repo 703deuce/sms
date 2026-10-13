@@ -6,8 +6,13 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Users } from 'lucide-react'
 import { useTeamBookingWorkspace } from '@/features/appointments/kimi/team-booking/use-team-booking-workspace'
 import type { TeamBookingWorkspaceData } from '@/lib/appointments/team-booking/team-booking-workspace-types'
-import { ArOpusPage, OpusDataSurface } from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
-import { PageHeader, Panel, Pill } from '@/newui-transplant/components/app/kit'
+import {
+  ArOpusPage,
+  ArStatGrid,
+  OpusDataSurface,
+} from '@/newui-transplant/components/appointment-reminders/ar-opus-layout'
+import { OpusMetricBand, OpusSchedulingHero } from '@/newui-transplant/components/appointment-reminders/opus-scheduling-chrome'
+import { Panel, Pill, Stat } from '@/newui-transplant/components/app/kit'
 import { Button, buttonVariants } from '@/newui-transplant/components/ui/button'
 import { cn } from '@/lib/utils'
 import { Tabs, TabsList, TabsTrigger } from '@/newui-transplant/components/ui/tabs'
@@ -50,7 +55,7 @@ export function TeamBookingOpus() {
   if (!ws.data) {
     return (
       <ArOpusPage>
-        <PageHeader title="Team booking" description="Multi-staff appointment scheduling." />
+        <OpusSchedulingHero icon={Users} title="Team booking" description="Multi-staff appointment scheduling." />
         <p className="text-sm text-muted-foreground">{ws.error || 'Could not load team booking.'}</p>
       </ArOpusPage>
     )
@@ -61,7 +66,8 @@ export function TeamBookingOpus() {
 
   return (
     <ArOpusPage>
-      <PageHeader
+      <OpusSchedulingHero
+        icon={Users}
         title="Team booking"
         description="Schedule appointments that require multiple staff members at the same time."
         actions={
@@ -69,19 +75,16 @@ export function TeamBookingOpus() {
             Test availability
           </Button>
         }
-        meta={
-          <div className="flex flex-wrap gap-2">
-            <Pill tone="neutral" dot={false}>Team services {d.overview.teamServices}</Pill>
-            <Pill tone="neutral" dot={false}>Active rules {d.overview.activeRules}</Pill>
-            <Pill tone="neutral" dot={false}>Staff {d.overview.staffParticipating}</Pill>
-            <Pill tone="success" dot={false}>Ready {d.overview.ready}</Pill>
-            {d.overview.needsSetup > 0 ? (
-              <Pill tone="warning" dot={false}>Needs setup {d.overview.needsSetup}</Pill>
-            ) : null}
-            <Pill tone="neutral" dot={false}>Upcoming {d.overview.upcomingTeamBookings}</Pill>
-          </div>
-        }
       />
+
+      <OpusMetricBand>
+        <ArStatGrid>
+          <Stat label="Team services" value={String(d.overview.teamServices)} icon={Users} />
+          <Stat label="Active rules" value={String(d.overview.activeRules)} icon={Users} />
+          <Stat label="Staff participating" value={String(d.overview.staffParticipating)} icon={Users} />
+          <Stat label="Ready" value={String(d.overview.ready)} icon={Users} />
+        </ArStatGrid>
+      </OpusMetricBand>
 
       <Tabs value={section} onValueChange={(v) => setSection(v as SectionId)} className="mb-4">
         <TabsList className="h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
