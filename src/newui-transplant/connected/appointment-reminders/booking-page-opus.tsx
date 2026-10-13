@@ -32,6 +32,7 @@ import { Label } from '@/newui-transplant/components/ui/label'
 import { Switch } from '@/newui-transplant/components/ui/switch'
 import { Textarea } from '@/newui-transplant/components/ui/textarea'
 import { SimpleSelect } from '@/newui-transplant/components/app/simple-select'
+import { ArBookingAdminHub } from '@/newui-transplant/components/appointment-reminders/ar-booking-admin-hub'
 
 function BookingSkeleton() {
   return (
@@ -159,8 +160,22 @@ export function AppointmentRemindersBookingOpus() {
               All meetings
             </Link>
           </Button>
+          <Button type="button" variant="outline" asChild className="justify-center sm:justify-start">
+            <Link href={`${AR_ROUTES.bookingServices}/new`}>
+              <Layers className="mr-2 h-4 w-4" aria-hidden />
+              Create service
+            </Link>
+          </Button>
+          <Button type="button" variant="outline" asChild className="justify-center sm:justify-start">
+            <Link href={AR_ROUTES.bookingServices}>
+              <Layers className="mr-2 h-4 w-4" aria-hidden />
+              All services
+            </Link>
+          </Button>
         </div>
       </Panel>
+
+      <ArBookingAdminHub />
 
       <FeatureEmphasisStrip
         icon={Globe}

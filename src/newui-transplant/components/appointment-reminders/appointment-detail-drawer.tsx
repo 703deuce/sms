@@ -25,6 +25,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/newui-transplant/components/ui/sheet'
+import { isNativeArAppointmentRow } from '@/lib/appointment-reminders/ar-appointment-source'
+import { ArAppointmentSchedulingPanel } from '@/newui-transplant/components/appointment-reminders/ar-appointment-scheduling-panel'
 
 type CalendarWriteBackUi = {
   state: 'updated' | 'pending' | 'failed' | 'disabled' | 'unavailable'
@@ -58,6 +60,7 @@ export function AppointmentDetailDrawer({
   initialTab,
   openConversationOnLoad,
   panelBackLabel = 'Back to Today',
+  returnTo,
 }: {
   row: ArAppointmentRow | null
   open: boolean
@@ -65,9 +68,10 @@ export function AppointmentDetailDrawer({
   timezone: string
   onPhoneSaved: () => void
   layout?: 'sheet' | 'panel'
-  initialTab?: 'details' | 'reminders' | 'activity' | 'preferences'
+  initialTab?: 'details' | 'reminders' | 'activity' | 'preferences' | 'booking'
   openConversationOnLoad?: boolean
   panelBackLabel?: string
+  returnTo?: string
 }) {
   const [detail, setDetail] = useState<DetailPayload | null>(null)
   const [timeline, setTimeline] = useState<TimelineEntry[]>([])
@@ -76,9 +80,11 @@ export function AppointmentDetailDrawer({
   const [emailEdit, setEmailEdit] = useState('')
   const [savingPhone, setSavingPhone] = useState(false)
   const [phoneError, setPhoneError] = useState('')
-  const [sheetTab, setSheetTab] = useState<'details' | 'reminders' | 'activity' | 'preferences'>(
-    initialTab || 'details',
-  )
+  const [sheetTab, setSheetTab] = useState<
+    'details' | 'reminders' | 'activity' | 'preferences' | 'booking'
+  >(initialTab || 'details')
+  const showBookingTab = row ? isNativeArAppointmentRow(row) : false
+  const schedulingReturnTo = returnTo || '/appointment-reminders/appointments'
   const [approvalBusy, setApprovalBusy] = useState<'approve' | 'reject' | null>(null)
   const [approvalError, setApprovalError] = useState('')
   const [customerResponse, setCustomerResponse] = useState<ArCustomerResponseSummary | null>(null)
@@ -549,6 +555,7 @@ export function AppointmentDetailDrawer({
                 {(
                   [
                     ['details', 'Details'],
+                    ...(showBookingTab ? [['booking', 'Booking']] as const : []),
                     ['reminders', 'Reminders'],
                     ['activity', 'Activity'],
                     ['preferences', 'Preferences'],
@@ -860,6 +867,21 @@ export function AppointmentDetailDrawer({
                           </li>
                         ))}
                       </ul>
+                    </section>
+                  ) : null}
+
+                  {sheetTab === 'booking' && row && showBookingTab ? (
+                    <section>
+                      <h2 className="mb-3 text-sm font-semibold">Booking &amp; scheduling</h2>
+                      <p className="mb-4 text-xs text-muted-foreground">
+                        Staff, payments, intake, and reschedule actions use the same scheduling APIs as the
+                        original Appointments product. Reminder settings stay on other tabs.
+                      </p>
+                      <ArAppointmentSchedulingPanel
+                        appointmentId={row.id}
+                        returnTo={schedulingReturnTo}
+                        onRefresh={onPhoneSaved}
+                      />
                     </section>
                   ) : null}
 

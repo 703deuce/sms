@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
@@ -44,6 +45,16 @@ import {
   DropdownMenuTrigger,
 } from '@/newui-transplant/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
+import { isUnifiedAppointmentsExperience } from '@/lib/products/unified-appointments'
+import type { QuickCreatePrefill } from '@/components/appointments/calendar/calendar-quick-create-sheet'
+
+const CalendarQuickCreateSheet = dynamic(
+  () =>
+    import('@/components/appointments/calendar/calendar-quick-create-sheet').then((m) => ({
+      default: m.CalendarQuickCreateSheet,
+    })),
+  { ssr: false },
+)
 
 const DATE_OPTIONS = [
   { value: 'upcoming', label: 'Upcoming' },
@@ -108,6 +119,14 @@ export function AppointmentRemindersAppointmentsPage() {
   const [selected, setSelected] = useState<ArAppointmentRow | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [manualOpen, setManualOpen] = useState(false)
+  const [quickCreateOpen, setQuickCreateOpen] = useState(false)
+  const [quickCreatePrefill, setQuickCreatePrefill] = useState<QuickCreatePrefill | null>(null)
+  const [schedulingWorkspace, setSchedulingWorkspace] = useState<{
+    staff: Array<{ id: string; name: string }>
+    services: Array<{ id: string; name: string }>
+    locations?: Array<{ id: string; name: string }>
+  } | null>(null)
+  const unified = isUnifiedAppointmentsExperience()
   const [manualName, setManualName] = useState('')
   const [manualEmail, setManualEmail] = useState('')
   const [manualPhone, setManualPhone] = useState('')
@@ -287,7 +306,32 @@ export function AppointmentRemindersAppointmentsPage() {
         ? 'Connected — run Sync now to refresh'
         : 'Not synced yet'
 
-  const emptyKind = !data?.sync.connected
+  const listReturnTo = useMemo(() => {
+    const qs = searchParams.toString()
+    return qs ? `${pathname}?${qs}` : pathname
+  }, [pathname, searchParams])
+
+  const openQuickCreate = useCallback(async () => {
+    if (!schedulingWorkspace) {
+      try {
+        const res = await fetch('/api/appointments/calendar/workspace')
+        if (res.ok) {
+          const json = await res.json()
+          setSchedulingWorkspace(json.data || null)
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    const startsAt = new Date()
+    startsAt.setSeconds(0, 0)
+    startsAt.setMinutes(0)
+    startsAt.setHours(startsAt.getHours() + 1)
+    setQuickCreatePrefill({ startsAt: startsAt.toISOString() })
+    setQuickCreateOpen(true)
+  }, [schedulingWorkspace])
+
+  const emptyKind = !data?.sync.connected && !unified
     ? 'no_calendar'
     : data?.sync.syncError
       ? 'sync_error'
@@ -303,14 +347,29 @@ export function AppointmentRemindersAppointmentsPage() {
     <ArOpusPage>
       <PageHeader
         title="Appointments"
-        description="Imported calendar events with reminder readiness, phone quality, and sync status."
+        description={
+          unified
+            ? 'Native bookings and imported calendar events — reminders, engagement, and scheduling actions in one list.'
+            : 'Imported calendar events with reminder readiness, phone quality, and sync status.'
+        }
         actions={
           <div className="flex flex-col items-end gap-2">
             <span className={cn(OPUS_META_STRIP, 'text-xs text-muted-foreground')}>{syncLabel}</span>
             <div className="flex flex-wrap justify-end gap-2">
-              <Button variant="outline" className="h-9" type="button" onClick={() => setManualOpen(true)}>
-                Add appointment
-              </Button>
+              {unified ? (
+                <>
+                  <Button className="h-9" render={<Link href="/appointments/new" />}>
+                    New appointment
+                  </Button>
+                  <Button variant="outline" className="h-9" type="button" onClick={() => void openQuickCreate()}>
+                    Quick create
+                  </Button>
+                </>
+              ) : (
+                <Button variant="outline" className="h-9" type="button" onClick={() => setManualOpen(true)}>
+                  Add appointment
+                </Button>
+              )}
               {data?.sync.connected ? (
                 <Button variant="outline" className="h-9" disabled={syncing} onClick={syncNow}>
                   <RefreshCw className={cn('mr-1.5 size-3.5', syncing && 'animate-spin')} aria-hidden="true" />
@@ -552,7 +611,29 @@ export function AppointmentRemindersAppointmentsPage() {
         onClose={() => setDrawerOpen(false)}
         timezone={data?.timezone || 'America/New_York'}
         onPhoneSaved={load}
+        returnTo={listReturnTo}
       />
+
+      {unified ? (
+        <CalendarQuickCreateSheet
+          open={quickCreateOpen}
+          prefill={quickCreatePrefill}
+          workspace={schedulingWorkspace}
+          onClose={() => {
+            setQuickCreateOpen(false)
+            setQuickCreatePrefill(null)
+          }}
+          onCreated={() => {
+            setQuickCreateOpen(false)
+            setQuickCreatePrefill(null)
+            void load()
+          }}
+          onOpenFullForm={(query) => {
+            setQuickCreateOpen(false)
+            router.push(`/appointments/new?${query.toString()}`)
+          }}
+        />
+      ) : null}
 
       <Sheet open={manualOpen} onOpenChange={setManualOpen}>
         <SheetContent side="right" className="w-full sm:max-w-md">
