@@ -17,6 +17,8 @@ export async function sendAppointmentSmsViaPlatformSender(input: {
   fromE164: string;
   provider: string;
   idempotencyKey?: string;
+  platformDispatchPriority?: number;
+  platformDispatchNotBefore?: Date;
 }) {
   const senders = await listArEligiblePlatformSenders();
   const sender = senders.find(
@@ -40,18 +42,35 @@ export async function sendAppointmentSmsViaPlatformSender(input: {
     throw new Error("ar_platform_sender_phone_not_found");
   }
 
-  return sendQuickSms({
-    workspaceId: input.workspaceId,
-    to: input.to,
-    body: input.body,
-    from: sender.e164,
-    idempotencyKey: input.idempotencyKey,
-    omitConsumerTrackingLink: true,
-    skipRecipientSuppressionGate: true,
-    senderRoute: {
-      sendWorkspaceId: phone.workspaceId,
-      fromE164: sender.e164,
-      phoneNumberId: sender.phoneNumberId,
-    },
-  });
+  const { PLATFORM_DISPATCH_PRIORITY_AR_TRANSACTIONAL } = await import(
+    "@/lib/messaging/platform-dispatch/priority"
+  );
+  const { JobDeferredError } = await import("@/lib/messaging/types");
+  const { isPlatformDispatchDeferredError } = await import(
+    "@/lib/messaging/platform-dispatch/errors"
+  );
+  try {
+    return await sendQuickSms({
+      workspaceId: input.workspaceId,
+      to: input.to,
+      body: input.body,
+      from: sender.e164,
+      idempotencyKey: input.idempotencyKey,
+      omitConsumerTrackingLink: true,
+      skipRecipientSuppressionGate: true,
+      platformDispatchPriority:
+        input.platformDispatchPriority ?? PLATFORM_DISPATCH_PRIORITY_AR_TRANSACTIONAL,
+      platformDispatchNotBefore: input.platformDispatchNotBefore,
+      senderRoute: {
+        sendWorkspaceId: phone.workspaceId,
+        fromE164: sender.e164,
+        phoneNumberId: sender.phoneNumberId,
+      },
+    });
+  } catch (err) {
+    if (isPlatformDispatchDeferredError(err)) {
+      throw new JobDeferredError(err.message, err.deferMs, true);
+    }
+    throw err;
+  }
 }

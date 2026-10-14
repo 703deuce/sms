@@ -209,30 +209,36 @@ export async function sendCampaignMessageById(
   let providerId: string | null = null;
   let failReason: string | null = null;
 
+  let smsUsesPlatformSender = false;
+  if (channel === "sms") {
+    const { data: repSettings } = await supabase
+      .from("reputation_settings")
+      .select("settings_json")
+      .eq("business_id", businessId)
+      .maybeSingle();
+    const senderMode = parseMassMessagingSenderMode(
+      repSettings?.settings_json && typeof repSettings.settings_json === "object"
+        ? (repSettings.settings_json as Record<string, unknown>).senderMode
+        : undefined,
+      "WORKSPACE",
+    );
+    smsUsesPlatformSender = senderMode === "PLATFORM";
+  }
+
   try {
-    slot = await acquireProviderSlot(provider, 30_000);
+    if (provider === "brevo" || (channel === "sms" && !smsUsesPlatformSender)) {
+      slot = await acquireProviderSlot(provider === "brevo" ? "brevo" : "twilio", 30_000);
+    }
 
     if (channel === "sms" && recipient?.phone) {
       let body = String(claimed.message_body ?? "");
       body = appendSmsOptOut(body);
 
-      const { data: repSettings } = await supabase
-        .from("reputation_settings")
-        .select("settings_json")
-        .eq("business_id", businessId)
-        .maybeSingle();
-      const senderMode = parseMassMessagingSenderMode(
-        repSettings?.settings_json &&
-          typeof repSettings.settings_json === "object"
-          ? (repSettings.settings_json as Record<string, unknown>).senderMode
-          : undefined,
-        "WORKSPACE",
-      );
       const result = await dispatchReviewRequestSms({
         workspaceId: organizationId,
         toE164: recipient.phone,
         body,
-        senderMode,
+        senderMode: smsUsesPlatformSender ? "PLATFORM" : "WORKSPACE",
         idempotencyKey: `review_campaign_msg:${claimed.id}`,
         businessName: business?.name,
       });
@@ -259,6 +265,12 @@ export async function sendCampaignMessageById(
       failReason = "Missing recipient contact for channel";
     }
   } catch (e) {
+    const { isPlatformDispatchDeferredError } = await import(
+      "@/lib/messaging/platform-dispatch/errors"
+    );
+    if (isPlatformDispatchDeferredError(e)) {
+      throw e;
+    }
     failReason = e instanceof Error ? e.message : "Send failed";
   } finally {
     await slot?.release().catch(() => undefined);

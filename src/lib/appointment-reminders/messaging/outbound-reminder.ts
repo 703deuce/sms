@@ -110,6 +110,9 @@ export async function sendArReminderSmsWithSession(input: {
     timelineType: input.timelineType,
   });
 
+  const { PLATFORM_DISPATCH_PRIORITY_AR_REMINDER } = await import(
+    "@/lib/messaging/platform-dispatch/priority"
+  );
   const sendResult = await sendAppointmentSmsViaPlatformSender({
     workspaceId: input.workspaceId,
     customerWorkspaceId: input.workspaceId,
@@ -119,6 +122,7 @@ export async function sendArReminderSmsWithSession(input: {
     fromE164: selection.e164,
     provider: selection.provider,
     idempotencyKey,
+    platformDispatchPriority: PLATFORM_DISPATCH_PRIORITY_AR_REMINDER,
   });
 
   await attachOutboundProofToArReplySession({

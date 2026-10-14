@@ -210,6 +210,126 @@ try {
   fail("claimDueJobs_priority_order", e instanceof Error ? e.message : String(e));
 }
 
+section("Platform dispatch gate (memory, contention)");
+try {
+  process.env.PLATFORM_DISPATCH_USE_MEMORY = "1";
+  process.env.PLATFORM_DISPATCH_MAX_WAIT_MS = "50";
+  const {
+    resetPlatformDispatchMemoryForTests,
+    acquirePlatformDispatchSlot,
+  } = await import("@/lib/messaging/platform-dispatch/coordinator");
+  const {
+    PLATFORM_DISPATCH_PRIORITY_MCTB,
+    PLATFORM_DISPATCH_PRIORITY_AR_REMINDER,
+    PLATFORM_DISPATCH_PRIORITY_BULK,
+  } = await import("@/lib/messaging/platform-dispatch/priority");
+  const { clearRecordingSmsOutbox, getRecordingSmsOutbox } = await import(
+    "@/lib/voice/testing/headless/recording-sms"
+  );
+  const { sendQuickSms } = await import("@/lib/sms/send-quick");
+  const platformFrom = "+15714073615";
+  const route = {
+    sendWorkspaceId: "ws-platform-owner",
+    fromE164: platformFrom,
+    phoneNumberId: "test-platform-phone",
+  };
+
+  resetPlatformDispatchMemoryForTests();
+  clearRecordingSmsOutbox();
+  process.env.PLATFORM_DISPATCH_MPS = "1";
+  process.env.PLATFORM_DISPATCH_MAX_WAIT_MS = "0";
+
+  await sendQuickSms({
+    workspaceId: "ws-a",
+    to: "+15555550101",
+    body: "first",
+    demoBypass: true,
+    idempotencyKey: "coord-rate-1",
+    platformDispatchPriority: PLATFORM_DISPATCH_PRIORITY_BULK,
+    senderRoute: route,
+    omitConsumerTrackingLink: true,
+  });
+  let rateDeferred = false;
+  try {
+    await sendQuickSms({
+      workspaceId: "ws-a",
+      to: "+15555550102",
+      body: "second",
+      demoBypass: true,
+      idempotencyKey: "coord-rate-2",
+      platformDispatchPriority: PLATFORM_DISPATCH_PRIORITY_BULK,
+      senderRoute: route,
+      omitConsumerTrackingLink: true,
+    });
+  } catch (e) {
+    const { isPlatformDispatchDeferredError } = await import(
+      "@/lib/messaging/platform-dispatch/errors"
+    );
+    rateDeferred = isPlatformDispatchDeferredError(e);
+  }
+  assert.equal(rateDeferred, true, "second send should defer when MPS=1");
+
+  resetPlatformDispatchMemoryForTests();
+  clearRecordingSmsOutbox();
+  process.env.PLATFORM_DISPATCH_MPS = "2";
+
+  const workers = await Promise.allSettled([
+    sendQuickSms({
+      workspaceId: "ws-ar",
+      to: "+15555550102",
+      body: "reminder 1",
+      demoBypass: true,
+      idempotencyKey: "coord-ar-1",
+      platformDispatchPriority: PLATFORM_DISPATCH_PRIORITY_AR_REMINDER,
+      senderRoute: route,
+      omitConsumerTrackingLink: true,
+    }),
+    sendQuickSms({
+      workspaceId: "ws-ar",
+      to: "+15555550103",
+      body: "reminder 2",
+      demoBypass: true,
+      idempotencyKey: "coord-ar-2",
+      platformDispatchPriority: PLATFORM_DISPATCH_PRIORITY_AR_REMINDER,
+      senderRoute: route,
+      omitConsumerTrackingLink: true,
+    }),
+    sendQuickSms({
+      workspaceId: "ws-bulk",
+      to: "+15555550104",
+      body: "campaign",
+      demoBypass: true,
+      idempotencyKey: "coord-bulk-1",
+      platformDispatchPriority: PLATFORM_DISPATCH_PRIORITY_BULK,
+      senderRoute: route,
+      omitConsumerTrackingLink: true,
+    }),
+  ]);
+
+  const sent = getRecordingSmsOutbox().length;
+  assert.ok(sent >= 3, `expected sends in recording outbox, got ${sent}`);
+  const fulfilled = workers.filter((w) => w.status === "fulfilled").length;
+  assert.ok(fulfilled >= 2, "parallel workers should complete or soft-defer, not crash");
+
+  const future = Date.now() + 30_000;
+  let earlyBlocked = false;
+  try {
+    await acquirePlatformDispatchSlot({
+      platformE164: platformFrom,
+      reservationId: "future-msg",
+      priority: PLATFORM_DISPATCH_PRIORITY_MCTB,
+      notBeforeMs: future,
+    });
+  } catch (e) {
+    earlyBlocked = e instanceof Error && e.message.includes("not_before");
+  }
+  assert.equal(earlyBlocked, true);
+
+  pass("platform_gate_priority_rate_and_not_before");
+} catch (e) {
+  fail("platform_dispatch_gate", e instanceof Error ? e.message : String(e));
+}
+
 section("Campaign enqueue rate limit (in-process)");
 try {
   const { canDispatchNow, resetDispatchRateLimiterForTests } = await import(
@@ -219,6 +339,7 @@ try {
   if (!canDispatchNow || !resetDispatchRateLimiterForTests) {
     skip("campaign_rate_limit", "rate-limiter test hooks unavailable");
   } else {
+    process.env.DISPATCH_TENANT_MPS = "1";
     resetDispatchRateLimiterForTests();
     const ws = "ws-rate-limit-coord";
     const first = canDispatchNow({ workspaceId: ws });

@@ -192,19 +192,11 @@ async function testRateLimitsIndependentAndConfigurable() {
   resetDispatchRateLimiterForTests();
   const ws = await createWorkspace("RateLimits");
   try {
-    process.env.DISPATCH_PLATFORM_MPS = "1";
-    process.env.DISPATCH_TENANT_MPS = "100";
+    process.env.DISPATCH_TENANT_MPS = "1";
     process.env.DISPATCH_CAMPAIGN_MPS = "100";
     process.env.DISPATCH_SENDER_MPS = "100";
     resetDispatchRateLimiterForTests();
 
-    const platformLimits = getDispatchRateLimits();
-    assert.equal(platformLimits.platformPerSecond, 1);
-    assert.equal(canDispatchNow({ workspaceId: ws.id }).allowed, true);
-    assert.equal(canDispatchNow({ workspaceId: ws.id }).allowed, false);
-
-    resetDispatchRateLimiterForTests();
-    delete process.env.DISPATCH_PLATFORM_MPS;
     process.env.DISPATCH_TENANT_MPS = "1";
     assert.equal(getDispatchRateLimits().tenantPerSecond, 1);
     assert.equal(canDispatchNow({ workspaceId: ws.id }).allowed, true);

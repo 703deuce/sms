@@ -452,15 +452,31 @@ export async function sendCampaignMessageById(messageId: string) {
           if (!platformRoute?.fromE164) {
             throw new Error("Platform sender is not configured");
           }
-          const quick = await sendQuickSms({
-            workspaceId: message.workspaceId,
-            to: message.to,
-            body: message.body,
-            campaignId: message.campaignId,
-            mediaUrls: mediaUrlsForQueuedMessage(message),
-            senderRoute: platformRoute,
-            idempotencyKey: `campaign:${messageId}`,
-          });
+          const { PLATFORM_DISPATCH_PRIORITY_BULK } = await import(
+            "@/lib/messaging/platform-dispatch/priority"
+          );
+          const { isPlatformDispatchDeferredError } = await import(
+            "@/lib/messaging/platform-dispatch/errors"
+          );
+          let quick;
+          try {
+            quick = await sendQuickSms({
+              workspaceId: message.workspaceId,
+              to: message.to,
+              body: message.body,
+              campaignId: message.campaignId,
+              mediaUrls: mediaUrlsForQueuedMessage(message),
+              senderRoute: platformRoute,
+              idempotencyKey: `campaign:${messageId}`,
+              platformDispatchPriority: PLATFORM_DISPATCH_PRIORITY_BULK,
+              platformDispatchNotBefore: message.scheduledFor ?? undefined,
+            });
+          } catch (err) {
+            if (isPlatformDispatchDeferredError(err)) {
+              throw new JobDeferredError(err.message, err.deferMs, true);
+            }
+            throw err;
+          }
           providerAccepted = true;
           providerSid = quick.sid;
 

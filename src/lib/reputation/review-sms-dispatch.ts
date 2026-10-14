@@ -31,6 +31,9 @@ export async function dispatchReviewRequestSms(input: ReviewSmsDispatchInput) {
     if (!platformRoute?.fromE164) {
       return { ok: false as const, error: "Platform sender is not configured" };
     }
+    const { PLATFORM_DISPATCH_PRIORITY_BULK } = await import(
+      "@/lib/messaging/platform-dispatch/priority"
+    );
     const result = await sendQuickSms({
       workspaceId: input.workspaceId,
       to: input.toE164,
@@ -40,6 +43,7 @@ export async function dispatchReviewRequestSms(input: ReviewSmsDispatchInput) {
       destinationUrl: input.destinationUrl,
       customerName: input.customerName,
       businessName: input.businessName,
+      platformDispatchPriority: PLATFORM_DISPATCH_PRIORITY_BULK,
     });
 
     if (platformRoute.phoneNumberId) {

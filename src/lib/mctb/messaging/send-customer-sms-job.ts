@@ -1,6 +1,9 @@
 import { getPrisma } from "@/lib/db";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { logMctbInboundProcessingEvent } from "@/lib/mctb/messaging/inbound-processing-trace";
+import { JobDeferredError } from "@/lib/messaging/types";
+import { isPlatformDispatchDeferredError } from "@/lib/messaging/platform-dispatch/errors";
+import { PLATFORM_DISPATCH_PRIORITY_MCTB } from "@/lib/messaging/platform-dispatch/priority";
 import { sendQuickSms } from "@/lib/sms/send-quick";
 import { resolveMctbOutboundSmsRoute } from "@/lib/mctb/messaging/outbound-sms-route";
 
@@ -82,19 +85,28 @@ export async function executeMctbSendCustomerSmsJob(payload: Record<string, unkn
     select: { id: true, providerMessageId: true },
   });
 
-  const sendResult = await sendQuickSms({
-    workspaceId,
-    to: toE164,
-    body: outboundBody,
-    from: route.fromE164,
-    idempotencyKey,
-    omitConsumerTrackingLink: true,
-    senderRoute: {
-      sendWorkspaceId: route.sendWorkspaceId,
-      fromE164: route.fromE164,
-      phoneNumberId: route.phoneNumberId,
-    },
-  });
+  let sendResult;
+  try {
+    sendResult = await sendQuickSms({
+      workspaceId,
+      to: toE164,
+      body: outboundBody,
+      from: route.fromE164,
+      idempotencyKey,
+      omitConsumerTrackingLink: true,
+      platformDispatchPriority: PLATFORM_DISPATCH_PRIORITY_MCTB,
+      senderRoute: {
+        sendWorkspaceId: route.sendWorkspaceId,
+        fromE164: route.fromE164,
+        phoneNumberId: route.phoneNumberId,
+      },
+    });
+  } catch (err) {
+    if (isPlatformDispatchDeferredError(err)) {
+      throw new JobDeferredError(err.message, err.deferMs, true);
+    }
+    throw err;
+  }
 
   const providerMessageId =
     typeof sendResult.sid === "string" && !sendResult.sid.startsWith("idem:")

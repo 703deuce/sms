@@ -68,9 +68,7 @@ export function canDispatchNow(input: RateLimitCheckInput): {
 } {
   const limits = getDispatchRateLimits(input.workspaceLimits);
 
-  if (!takeToken(bucketKey(["platform"]), limits.platformPerSecond)) {
-    return { allowed: false, reason: "platform_rate_limited" };
-  }
+  // Combined platform-sender MPS is enforced in platform-dispatch at sendQuickSms (distributed).
   if (!takeToken(bucketKey(["tenant", input.workspaceId]), limits.tenantPerSecond)) {
     return { allowed: false, reason: "tenant_rate_limited" };
   }

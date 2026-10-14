@@ -44,23 +44,40 @@ export type QuickSendSmsInput = {
    * Message rows still belong to workspaceId. Does not skip credits/trial unless demoBypass.
    */
   senderRoute?: { sendWorkspaceId: string; fromE164: string; phoneNumberId?: string };
+  /** Lower = higher priority for shared platform sender dispatch (default bulk). */
+  platformDispatchPriority?: number;
+  /** Do not acquire a platform dispatch slot before this instant (scheduled sends). */
+  platformDispatchNotBefore?: Date;
 };
+
+async function applyPlatformDispatchGate(input: QuickSendSmsInput) {
+  const { assertPlatformDispatchForSendQuickSms } = await import(
+    "@/lib/messaging/platform-dispatch/coordinator"
+  );
+  await assertPlatformDispatchForSendQuickSms(input);
+}
 
 export async function sendQuickSms(input: QuickSendSmsInput) {
   const { isRecordingSmsMode, deliverRecordingSms } = await import(
     "@/lib/voice/testing/headless/recording-sms"
   );
-  if (isRecordingSmsMode()) {
-    return deliverRecordingSms(input);
-  }
+  const recording = isRecordingSmsMode();
 
-  if (!input.demoBypass) {
+  if (!recording && !input.demoBypass) {
     const entitlement = await checkCreditBalance(input.workspaceId);
     if (!entitlement.ok) throw new Error(entitlement.error);
     await assertWithinWorkspaceLimits(input.workspaceId);
   }
 
   const to = normalizeE164(input.to);
+
+  if (recording) {
+    if (input.senderRoute) {
+      await applyPlatformDispatchGate(input);
+    }
+    return deliverRecordingSms(input);
+  }
+
   const prisma = getPrisma();
   const { pickPreferredSmsSendingNumber } = await import(
     "@/lib/messaging/preferred-sending-number"
@@ -252,6 +269,8 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
     explicitFrom: input.from,
     preferredWorkspaceFrom: preferredFrom,
   });
+
+  await applyPlatformDispatchGate(input);
 
   let pending;
   try {
