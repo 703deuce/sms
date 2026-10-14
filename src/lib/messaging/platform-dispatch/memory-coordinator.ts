@@ -5,6 +5,7 @@ import {
 import { PlatformDispatchDeferredError } from "@/lib/messaging/platform-dispatch/errors";
 import {
   isInteractivePlatformDispatchPriority,
+  platformDispatchPriorityFromScore,
   platformDispatchScore,
 } from "@/lib/messaging/platform-dispatch/priority";
 
@@ -18,6 +19,7 @@ type Waiter = {
 type E164State = {
   waiters: Map<string, Waiter>;
   rateBySecond: Map<number, number>;
+  fifoSequence: number;
 };
 
 const byE164 = new Map<string, E164State>();
@@ -36,7 +38,7 @@ function stateFor(e164: string): E164State {
   const key = e164;
   let s = byE164.get(key);
   if (!s) {
-    s = { waiters: new Map(), rateBySecond: new Map() };
+    s = { waiters: new Map(), rateBySecond: new Map(), fifoSequence: 0 };
     byE164.set(key, s);
   }
   return s;
@@ -48,7 +50,6 @@ function tryAcquireOnce(
     reservationId: string;
     priority: number;
     notBeforeMs: number;
-    enqueueMs: number;
   },
 ): { ok: true } | { ok: false; reason: string; deferMs: number } {
   const now = Date.now();
@@ -61,8 +62,9 @@ function tryAcquireOnce(
   }
 
   const st = stateFor(e164);
-  const score = platformDispatchScore(input.priority, input.enqueueMs);
   if (!st.waiters.has(input.reservationId)) {
+    st.fifoSequence += 1;
+    const score = platformDispatchScore(input.priority, st.fifoSequence);
     st.waiters.set(input.reservationId, {
       reservationId: input.reservationId,
       score,
@@ -77,13 +79,13 @@ function tryAcquireOnce(
     return { ok: false, reason: "not_head", deferMs: platformDispatchDefaultDeferMs() };
   }
 
-  if (!isInteractivePlatformDispatchPriority(input.priority)) {
-    const interactiveDue = ordered.some(
-      (w) =>
-        isInteractivePlatformDispatchPriority(w.priority) &&
-        now >= w.notBeforeMs &&
-        w.reservationId !== input.reservationId,
-    );
+  const myPriority = platformDispatchPriorityFromScore(head.score);
+  if (!isInteractivePlatformDispatchPriority(myPriority)) {
+    const interactiveDue = ordered.some((w) => {
+      if (w.reservationId === input.reservationId) return false;
+      const p = platformDispatchPriorityFromScore(w.score);
+      return isInteractivePlatformDispatchPriority(p) && now >= w.notBeforeMs && p < myPriority;
+    });
     if (interactiveDue) {
       return { ok: false, reason: "interactive_waiting", deferMs: platformDispatchDefaultDeferMs() };
     }
@@ -109,7 +111,6 @@ export async function acquirePlatformDispatchSlotMemory(input: {
   maxWaitMs: number;
 }): Promise<void> {
   const notBeforeMs = input.notBeforeMs ?? Date.now();
-  const enqueueMs = input.enqueueMs ?? Date.now();
   const deadline = Date.now() + input.maxWaitMs;
 
   while (true) {
@@ -118,7 +119,6 @@ export async function acquirePlatformDispatchSlotMemory(input: {
         reservationId: input.reservationId,
         priority: input.priority,
         notBeforeMs,
-        enqueueMs,
       }),
     );
     if (outcome.ok) return;

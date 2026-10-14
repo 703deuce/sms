@@ -148,7 +148,7 @@
 | Behavior | Mechanism |
 |----------|-----------|
 | Distributed throughput | Redis Lua (`redis-coordinator.ts`) per `fromE164` per-second counter; env `PLATFORM_DISPATCH_MPS` (default 10) |
-| Priority + FIFO within tier | Sorted wait set score = `priority * 1e12 + enqueueMs` — MCTB 5, AR reminder 8, AR transactional 25, bulk 50 |
+| Priority + FIFO within tier | ZSET score = `priority * PLATFORM_DISPATCH_SCORE_STRIDE + monotonicSeq` (Redis `INCR` per sender; memory counter) — not wall-clock ms. MCTB 5, AR reminder 8, AR transactional 25, bulk 50 |
 | Bulk vs interactive | Bulk waiters defer while lower-score (interactive) waiters are due (`interactive_waiting`) |
 | Scheduled sends | `platformDispatchNotBefore` on `QuickSendSmsInput` |
 | Worker-safe deferral | `PlatformDispatchDeferredError` → `JobDeferredError` (soft) in MCTB / AR / mass campaign jobs |
@@ -163,8 +163,9 @@
 ## Remaining limitations
 
 1. **BullMQ dequeue order** unchanged — two workers can still *attempt* sends concurrently; gate serializes accepted dispatches to MPS.
-2. **Redis multi-process concurrency** covered by `scripts/test-platform-sms-dispatch-redis-concurrency.ts` (requires `REDIS_URL`); not a full BullMQ worker soak.
-3. **Weighted bulk reservation** (e.g. 30% cap) not implemented — strict priority with `interactive_waiting` guard only.
+2. **Redis multi-process concurrency** covered by `scripts/test-platform-sms-dispatch-redis-concurrency.ts` (requires `REDIS_URL`).
+3. **BullMQ four-queue probe** — `scripts/test-platform-sms-dispatch-bullmq.ts` (`mctb`, `appointment_reminders`, `sms-send`, `review-campaign`) with recording provider and `platform_dispatch_gate_probe` job (integration env only).
+4. **Weighted bulk reservation** (e.g. 30% cap) not implemented — strict priority with `interactive_waiting` guard only.
 
 ---
 
@@ -178,6 +179,14 @@ HEADLESS_PROVIDER_MODE=recording PLATFORM_DISPATCH_USE_MEMORY=1 \
 # Multi-process Redis gate (4 child processes, recording provider; requires REDIS_URL)
 HEADLESS_PROVIDER_MODE=recording PLATFORM_DISPATCH_MPS=10 \
   npx tsx scripts/test-platform-sms-dispatch-redis-concurrency.ts
+
+# BullMQ four-queue platform gate probe (REDIS_URL + DATABASE_URL)
+HEADLESS_PROVIDER_MODE=recording PLATFORM_DISPATCH_USE_MEMORY=1 \
+  PLATFORM_DISPATCH_BULLMQ_INTEGRATION_TEST=1 \
+  npx tsx scripts/test-platform-sms-dispatch-bullmq.ts
+
+# Priority score unit checks
+npx tsx --test src/lib/messaging/platform-dispatch/priority.test.ts
 
 # Existing SMS worker rate-limit unit checks
 npx tsx scripts/test-sms-worker-cert.ts

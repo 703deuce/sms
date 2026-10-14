@@ -41,7 +41,6 @@ export async function acquirePlatformDispatchSlot(
     reservationId: input.reservationId,
     priority: input.priority,
     notBeforeMs: input.notBeforeMs,
-    enqueueMs: Date.now(),
     maxWaitMs,
   };
 

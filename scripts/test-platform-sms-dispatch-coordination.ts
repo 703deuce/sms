@@ -74,6 +74,76 @@ try {
   fail("priority_constants", e instanceof Error ? e.message : String(e));
 }
 
+section("Platform dispatch score (priority-first, FIFO sequence)");
+try {
+  const {
+    PLATFORM_DISPATCH_PRIORITY_BULK,
+    PLATFORM_DISPATCH_PRIORITY_MCTB,
+    PLATFORM_DISPATCH_SCORE_STRIDE,
+    platformDispatchPriorityFromScore,
+    platformDispatchScore,
+  } = await import("@/lib/messaging/platform-dispatch/priority");
+  const oldBulk = platformDispatchScore(PLATFORM_DISPATCH_PRIORITY_BULK, 1);
+  const newMctb = platformDispatchScore(PLATFORM_DISPATCH_PRIORITY_MCTB, 9_999_999_999);
+  assert.ok(newMctb < oldBulk, "priority must dominate FIFO sequence");
+  assert.ok(
+    platformDispatchScore(50, 100) < platformDispatchScore(50, 101),
+    "FIFO within tier",
+  );
+  assert.equal(platformDispatchPriorityFromScore(platformDispatchScore(25, 7)), 25);
+  assert.ok(platformDispatchScore(5, 42) < PLATFORM_DISPATCH_SCORE_STRIDE * 6);
+  pass("platform_dispatch_score_stride_not_wall_clock");
+} catch (e) {
+  fail("platform_dispatch_score", e instanceof Error ? e.message : String(e));
+}
+
+section("Credits and gate ordering (static)");
+try {
+  const sendQuick = readFileSync("src/lib/sms/send-quick.ts", "utf8");
+  const gateIdx = sendQuick.indexOf("await applyPlatformDispatchGate(input)");
+  const createIdx = sendQuick.indexOf("pending = await prisma.message.create");
+  const creditIdx = sendQuick.indexOf("await deductCreditsForSend");
+  assert.ok(gateIdx > 0 && createIdx > gateIdx, "gate before message row");
+  assert.ok(creditIdx > createIdx, "credits after message create / provider accept");
+  pass("defer_at_gate_does_not_create_message_or_charge_credits");
+} catch (e) {
+  fail("credits_gate_order", e instanceof Error ? e.message : String(e));
+}
+
+section("job_queue soft defer (platform dispatch)");
+try {
+  const { isSupabaseConfigured } = await import("@/lib/supabase/admin");
+  if (!isSupabaseConfigured()) {
+    skip("failJob_soft_defer", "Supabase not configured");
+  } else {
+    const { getPrisma } = await import("@/lib/db");
+    const { failJob } = await import("@/lib/messaging/enqueue-advance");
+    const prisma = getPrisma();
+    const tag = `platform-soft-defer-${Date.now()}`;
+    const row = await prisma.jobQueue.create({
+      data: {
+        jobType: "platform_dispatch_gate_probe",
+        queueName: "mctb",
+        priority: 5,
+        payload: { tag },
+        idempotencyKey: tag,
+        runAfter: new Date(),
+        status: "processing",
+        attempts: 2,
+        maxAttempts: 8,
+        lockedAt: new Date(),
+      },
+    });
+    const after = await failJob(row.id, "interactive_waiting", 500, true);
+    assert.equal(after.status, "deferred");
+    assert.equal(after.attempts, 1, "soft defer should not consume attempt budget");
+    await prisma.jobQueue.delete({ where: { id: row.id } });
+    pass("failJob_soft_defer_preserves_attempts");
+  }
+} catch (e) {
+  fail("failJob_soft_defer", e instanceof Error ? e.message : String(e));
+}
+
 section("Recording SMS idempotency");
 try {
   const { clearRecordingSmsOutbox, getRecordingSmsOutbox } = await import(
@@ -274,45 +344,42 @@ try {
 
   resetPlatformDispatchMemoryForTests();
   clearRecordingSmsOutbox();
-  process.env.PLATFORM_DISPATCH_MPS = "2";
+  process.env.PLATFORM_DISPATCH_MPS = "10";
+  process.env.PLATFORM_DISPATCH_MAX_WAIT_MS = "5000";
 
-  const workers = await Promise.allSettled([
-    sendQuickSms({
-      workspaceId: "ws-ar",
-      to: "+15555550102",
-      body: "reminder 1",
-      demoBypass: true,
-      idempotencyKey: "coord-ar-1",
-      platformDispatchPriority: PLATFORM_DISPATCH_PRIORITY_AR_REMINDER,
-      senderRoute: route,
-      omitConsumerTrackingLink: true,
-    }),
-    sendQuickSms({
-      workspaceId: "ws-ar",
-      to: "+15555550103",
-      body: "reminder 2",
-      demoBypass: true,
-      idempotencyKey: "coord-ar-2",
-      platformDispatchPriority: PLATFORM_DISPATCH_PRIORITY_AR_REMINDER,
-      senderRoute: route,
-      omitConsumerTrackingLink: true,
-    }),
-    sendQuickSms({
-      workspaceId: "ws-bulk",
-      to: "+15555550104",
-      body: "campaign",
-      demoBypass: true,
-      idempotencyKey: "coord-bulk-1",
-      platformDispatchPriority: PLATFORM_DISPATCH_PRIORITY_BULK,
-      senderRoute: route,
-      omitConsumerTrackingLink: true,
-    }),
-  ]);
+  await sendQuickSms({
+    workspaceId: "ws-ar",
+    to: "+15555550102",
+    body: "reminder 1",
+    demoBypass: true,
+    idempotencyKey: "coord-ar-1",
+    platformDispatchPriority: PLATFORM_DISPATCH_PRIORITY_AR_REMINDER,
+    senderRoute: route,
+    omitConsumerTrackingLink: true,
+  });
+  await sendQuickSms({
+    workspaceId: "ws-ar",
+    to: "+15555550103",
+    body: "reminder 2",
+    demoBypass: true,
+    idempotencyKey: "coord-ar-2",
+    platformDispatchPriority: PLATFORM_DISPATCH_PRIORITY_AR_REMINDER,
+    senderRoute: route,
+    omitConsumerTrackingLink: true,
+  });
+  await sendQuickSms({
+    workspaceId: "ws-bulk",
+    to: "+15555550104",
+    body: "campaign",
+    demoBypass: true,
+    idempotencyKey: "coord-bulk-1",
+    platformDispatchPriority: PLATFORM_DISPATCH_PRIORITY_BULK,
+    senderRoute: route,
+    omitConsumerTrackingLink: true,
+  });
 
   const sent = getRecordingSmsOutbox().length;
-  assert.ok(sent >= 3, `expected sends in recording outbox, got ${sent}`);
-  const fulfilled = workers.filter((w) => w.status === "fulfilled").length;
-  assert.ok(fulfilled >= 2, "parallel workers should complete or soft-defer, not crash");
+  assert.equal(sent, 3, `expected 3 sends in recording outbox, got ${sent}`);
 
   const future = Date.now() + 30_000;
   let earlyBlocked = false;

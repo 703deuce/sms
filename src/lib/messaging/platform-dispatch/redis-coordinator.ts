@@ -7,7 +7,8 @@ import {
 import { PlatformDispatchDeferredError } from "@/lib/messaging/platform-dispatch/errors";
 import {
   isInteractivePlatformDispatchPriority,
-  platformDispatchScore,
+  PLATFORM_DISPATCH_SCORE_STRIDE,
+  platformDispatchPriorityFromScore,
 } from "@/lib/messaging/platform-dispatch/priority";
 
 let client: IORedis | null = null;
@@ -38,14 +39,24 @@ const ACQUIRE_LUA = `
 local waitKey = KEYS[1]
 local metaKey = KEYS[2]
 local ratePrefix = KEYS[3]
+local seqKey = KEYS[4]
 local member = ARGV[1]
-local score = tonumber(ARGV[2])
+local priority = tonumber(ARGV[2])
 local notBefore = tonumber(ARGV[3])
 local nowMs = tonumber(ARGV[4])
 local mps = tonumber(ARGV[5])
 local isInteractive = tonumber(ARGV[6])
+local stride = tonumber(ARGV[7])
 
-redis.call('ZADD', waitKey, 'NX', score, member)
+local existing = redis.call('ZSCORE', waitKey, member)
+local score
+if existing == false then
+  local seq = redis.call('INCR', seqKey)
+  score = priority * stride + seq
+  redis.call('ZADD', waitKey, score, member)
+else
+  score = tonumber(existing)
+end
 redis.call('HSET', metaKey, member, notBefore)
 
 if nowMs < notBefore then
@@ -59,13 +70,17 @@ end
 
 if isInteractive == 0 then
   local pairs = redis.call('ZRANGE', waitKey, 0, -1, 'WITHSCORES')
+  local myPriority = math.floor(score / stride)
   for i = 1, #pairs, 2 do
     local m = pairs[i]
     local s = tonumber(pairs[i+1])
-    if m ~= member and s < score then
-      local nb = tonumber(redis.call('HGET', metaKey, m) or '0')
-      if nowMs >= nb then
-        return {0, 'interactive_waiting', 300}
+    if m ~= member then
+      local otherPriority = math.floor(s / stride)
+      if otherPriority < myPriority then
+        local nb = tonumber(redis.call('HGET', metaKey, m) or '0')
+        if nowMs >= nb then
+          return {0, 'interactive_waiting', 300}
+        end
       end
     end
   end
@@ -91,6 +106,7 @@ function keysForE164(e164: string) {
     wait: `platform:sms:wait:${safe}`,
     meta: `platform:sms:meta:${safe}`,
     ratePrefix: `platform:sms:rate:${safe}:`,
+    seq: `platform:sms:seq:${safe}`,
   };
 }
 
@@ -104,10 +120,8 @@ export async function acquirePlatformDispatchSlotRedis(input: {
 }): Promise<void> {
   const r = await redis();
   const notBeforeMs = input.notBeforeMs ?? Date.now();
-  const enqueueMs = input.enqueueMs ?? Date.now();
-  const score = platformDispatchScore(input.priority, enqueueMs);
   const isInteractive = isInteractivePlatformDispatchPriority(input.priority) ? 1 : 0;
-  const { wait, meta, ratePrefix } = keysForE164(input.platformE164);
+  const { wait, meta, ratePrefix, seq } = keysForE164(input.platformE164);
   const mps = platformDispatchMps();
   const deadline = Date.now() + input.maxWaitMs;
 
@@ -115,16 +129,18 @@ export async function acquirePlatformDispatchSlotRedis(input: {
     const nowMs = Date.now();
     const raw = (await r.eval(
       ACQUIRE_LUA,
-      3,
+      4,
       wait,
       meta,
       ratePrefix,
+      seq,
       input.reservationId,
-      String(score),
+      String(Math.floor(input.priority)),
       String(notBeforeMs),
       String(nowMs),
       String(mps),
       String(isInteractive),
+      String(PLATFORM_DISPATCH_SCORE_STRIDE),
     )) as [number, string, number];
     const ok = Number(raw[0]) === 1;
     if (ok) return;
@@ -157,3 +173,5 @@ export async function disconnectPlatformDispatchRedis(): Promise<void> {
   client = null;
   connecting = null;
 }
+
+export { platformDispatchPriorityFromScore };

@@ -1344,6 +1344,44 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       );
       return processReputationCampaignQueue();
     }
+    case "platform_dispatch_gate_probe": {
+      if (process.env.PLATFORM_DISPATCH_BULLMQ_INTEGRATION_TEST !== "1") {
+        throw new JobFailedError("platform_dispatch_gate_probe_disabled");
+      }
+      const probeToken = String(payload.probeToken || "");
+      if (probeToken !== "platform-dispatch-bullmq-integration") {
+        throw new Error("invalid platform_dispatch_gate_probe token");
+      }
+      const { sendQuickSms } = await import("@/lib/sms/send-quick");
+      const { PLATFORM_DISPATCH_PRIORITY_BULK } = await import(
+        "@/lib/messaging/platform-dispatch/priority"
+      );
+      const platformFrom =
+        process.env.PLATFORM_DISPATCH_TEST_E164?.trim() || "+15714073615";
+      const priority =
+        typeof payload.platformDispatchPriority === "number"
+          ? payload.platformDispatchPriority
+          : PLATFORM_DISPATCH_PRIORITY_BULK;
+      const workspaceId = String(payload.workspaceId || "ws-platform-dispatch-probe");
+      const to = String(payload.to || "+15555559001");
+      const idempotencyKey = String(payload.idempotencyKey || "");
+      if (!idempotencyKey) throw new Error("idempotencyKey required");
+      await sendQuickSms({
+        workspaceId,
+        to,
+        body: String(payload.body || "platform dispatch bullmq probe"),
+        demoBypass: true,
+        idempotencyKey,
+        platformDispatchPriority: priority,
+        senderRoute: {
+          sendWorkspaceId: "ws-platform-owner-probe",
+          fromE164: platformFrom,
+          phoneNumberId: "platform-dispatch-probe-phone",
+        },
+        omitConsumerTrackingLink: true,
+      });
+      return { ok: true, idempotencyKey };
+    }
     default:
       throw new Error(`Unknown job type: ${jobType}`);
   }
