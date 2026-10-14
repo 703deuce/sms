@@ -153,6 +153,16 @@ The earlier broad audit covered **Mass Texting broadcast**, MCTB, AR, etc. It di
 
 ---
 
+## Repo-wide code inventory (all folders)
+
+For a **path-by-path** list of every review/reputation hit in this monorepo (agents, outcomes, automations, grow, surveys, what is *not* “review velocity”), see:
+
+**`docs/REVIEW-REPUTATION-CODE-INVENTORY.md`**
+
+Short version: the **Review Request Agent + Get More Reviews outcome** is the closest match to “one agent with review requests together”; **review velocity** and **`/businesses/.../reputation`** are **not** implemented here.
+
+---
+
 ## Key file references
 
 | Area | Path |
