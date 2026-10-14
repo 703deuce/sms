@@ -77,7 +77,7 @@ async function waitForPageReady(page: import("playwright").Page, path: string) {
       )
       .catch(() => undefined);
     await page
-      .getByText(/Missed calls today|Overview/i)
+      .getByText(/Missed call agenda|Recovery activity|Missed calls today|Overview/i)
       .first()
       .waitFor({ state: "visible", timeout: 60000 })
       .catch(() => undefined);
