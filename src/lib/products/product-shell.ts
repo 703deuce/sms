@@ -263,7 +263,6 @@ export function visibleProductShells(input: ProductShellEntitlementInput): Produ
 
   if (isMctbV1Primary()) {
     const shells: ProductShell[] = [];
-    if (input.hasAppointmentReminders) shells.push("appointment_reminders");
     if (input.hasMctb) shells.push("mctb");
     if (input.hasAiAfterHours && isVoiceProductCustomerVisible()) shells.push("ai_after_hours");
     return shells;
