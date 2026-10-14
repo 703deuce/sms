@@ -8,11 +8,11 @@
 /** Mass SMS marketing surfaces (Campaigns, Drips, Keywords, Playbooks, Grow, etc.). */
 export const MASS_MESSAGING_IN_V1_NAV = false;
 
-/** Appointments / scheduling product surfaces. */
-export const APPOINTMENTS_IN_V1_NAV = true;
+/** Appointments / scheduling product surfaces (hidden from primary nav while MCTB is primary). */
+export const APPOINTMENTS_IN_V1_NAV = false;
 
 /** Missed Call Text Back surfaces. */
-export const MISSED_CALL_TEXT_BACK_IN_V1_NAV = false;
+export const MISSED_CALL_TEXT_BACK_IN_V1_NAV = true;
 
 /** Shared launch surfaces always visible when entitled. */
 export const CONVERSATIONS_IN_V1_NAV = true;

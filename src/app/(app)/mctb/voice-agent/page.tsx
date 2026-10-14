@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
+import { receptionistEditStepHref } from "@/lib/voice/receptionist/wizard-step-url";
 
 /**
- * Legacy MCTB URL for Voice AI receptionist configuration.
- * Voice owns agent setup — not MCTB AI Recovery.
+ * MCTB sidebar entry — opens the Opus AI Voice Agent setup wizard (not the legacy agents list).
  */
 export default function MctbVoiceAgentLegacyRedirect() {
-  redirect("/voice/agents");
+  redirect(receptionistEditStepHref("goals"));
 }

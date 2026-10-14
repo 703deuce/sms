@@ -1,12 +1,16 @@
 import {
+  AudioLines,
   BarChart3,
   Bell,
+  ClipboardCheck,
   Home,
   LayoutDashboard,
   ListChecks,
   MessageSquare,
   Phone,
   PhoneMissed,
+  SlidersHorizontal,
+  Sparkles,
   Voicemail,
   MessageCircle,
   Shield,
@@ -75,6 +79,11 @@ export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
       icon: MessageCircle,
     },
     {
+      label: "AI Recovery",
+      href: MCTB_ROUTES.aiRecovery,
+      icon: Sparkles,
+    },
+    {
       label: "Notifications",
       href: MCTB_ROUTES.notifications,
       icon: Bell,
@@ -83,6 +92,21 @@ export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
       label: "Phone & Forwarding",
       href: MCTB_ROUTES.phone,
       icon: Phone,
+    },
+    {
+      label: "Consent Log",
+      href: MCTB_ROUTES.complianceConsent,
+      icon: ClipboardCheck,
+    },
+    {
+      label: "Setup",
+      href: MCTB_ROUTES.setup,
+      icon: SlidersHorizontal,
+    },
+    {
+      label: "AI Voice Agent",
+      href: MCTB_ROUTES.voiceAgent,
+      icon: AudioLines,
     },
   ];
 }

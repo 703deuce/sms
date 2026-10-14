@@ -11,6 +11,7 @@ import { mctbShellHome } from "@/lib/products/product-shell";
 import { isVoiceCustomerUiPath } from "@/lib/products/mctb-bundled-receptionist-paths";
 import { isDevAuthBypassEnabled } from "@/lib/auth/dev-auth-bypass";
 import { isMctbV1Primary } from "@/lib/workspace/platform-launch";
+import { isMctbBundledVoiceAgentWizardPath } from "@/lib/products/mctb-voice-agent-wizard-paths";
 
 export type LaunchProductKey = "mctb" | "voice" | "appointments" | "mass_sms" | "fax";
 
@@ -67,6 +68,9 @@ export function mctbLaunchCustomerHome(): string {
  */
 export function voiceCustomerHiddenRedirect(pathname: string): string | null {
   if (isVoiceProductCustomerVisible()) return null;
+  if (isMctbV1Primary() && isMctbBundledVoiceAgentWizardPath(pathname)) {
+    return null;
+  }
   if (isVoiceCustomerUiPath(pathname)) {
     return mctbLaunchCustomerHome();
   }

@@ -14,13 +14,13 @@ export const SMS_STANDALONE_HIDDEN = true;
 export const APPOINTMENTS_V1_PRIMARY = false;
 
 /**
- * Current launch: Appointment Reminders is the only visible customer product.
- * MCTB remains in the codebase and backend but is hidden from nav/onboarding.
+ * Appointment Reminders UI is hidden from primary customer chrome while MCTB is primary.
+ * Routes, APIs, jobs, and data remain in the codebase.
  */
-export const APPOINTMENT_REMINDERS_V1_PRIMARY = true;
+export const APPOINTMENT_REMINDERS_V1_PRIMARY = false;
 
-/** MCTB was primary during earlier launch passes — frozen while AR is visible-only. */
-export const MCTB_V1_PRIMARY = false;
+/** Missed Call Text Back is the default authenticated product experience. */
+export const MCTB_V1_PRIMARY = true;
 
 /** Sidebar/mobile show SMS mass marketing only — MCTB & AI After Hours hidden from chrome (routes preserved). */
 export const SMS_ONLY_APP_NAV = false;
