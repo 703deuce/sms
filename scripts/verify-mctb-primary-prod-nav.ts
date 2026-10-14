@@ -21,7 +21,9 @@ async function main() {
   });
   await page.goto(`${BASE}/mctb`, { waitUntil: "domcontentloaded", timeout: 120000 });
   await page.waitForTimeout(3500);
-  const navText = await page.locator("nav").innerText().catch(() => "");
+  const gotIt = page.getByRole("button", { name: "Got it" });
+  if (await gotIt.isVisible().catch(() => false)) await gotIt.click();
+  const navText = await page.locator("body").innerText();
   await page.screenshot({ path: "/opt/cursor/artifacts/mctb-restore-prod-nav.png", fullPage: true });
   await browser.close();
 
