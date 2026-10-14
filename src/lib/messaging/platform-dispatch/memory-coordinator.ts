@@ -5,6 +5,7 @@ import {
 import { PlatformDispatchDeferredError } from "@/lib/messaging/platform-dispatch/errors";
 import {
   isInteractivePlatformDispatchPriority,
+  PLATFORM_DISPATCH_SCORE_STRIDE,
   platformDispatchPriorityFromScore,
   platformDispatchScore,
 } from "@/lib/messaging/platform-dispatch/priority";
@@ -63,7 +64,9 @@ function tryAcquireOnce(
 
   const st = stateFor(e164);
   if (!st.waiters.has(input.reservationId)) {
+    const maxSeq = PLATFORM_DISPATCH_SCORE_STRIDE - 1;
     st.fifoSequence += 1;
+    if (st.fifoSequence > maxSeq) st.fifoSequence = 1;
     const score = platformDispatchScore(input.priority, st.fifoSequence);
     st.waiters.set(input.reservationId, {
       reservationId: input.reservationId,

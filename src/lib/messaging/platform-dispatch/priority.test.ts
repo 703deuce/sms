@@ -32,4 +32,11 @@ describe("platformDispatchScore", () => {
     const score = platformDispatchScore(25, 7);
     assert.equal(platformDispatchPriorityFromScore(score), 25);
   });
+
+  it("clamps sequence below stride so scores stay in-tier", () => {
+    const atMax = platformDispatchScore(5, PLATFORM_DISPATCH_SCORE_STRIDE - 1);
+    const nextTier = platformDispatchScore(6, 1);
+    assert.ok(atMax < nextTier);
+    assert.equal(platformDispatchPriorityFromScore(atMax), 5);
+  });
 });

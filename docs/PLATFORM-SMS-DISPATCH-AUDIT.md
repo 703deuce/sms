@@ -180,8 +180,8 @@ HEADLESS_PROVIDER_MODE=recording PLATFORM_DISPATCH_USE_MEMORY=1 \
 HEADLESS_PROVIDER_MODE=recording PLATFORM_DISPATCH_MPS=10 \
   npx tsx scripts/test-platform-sms-dispatch-redis-concurrency.ts
 
-# BullMQ four-queue platform gate probe (REDIS_URL + DATABASE_URL)
-HEADLESS_PROVIDER_MODE=recording PLATFORM_DISPATCH_USE_MEMORY=1 \
+# BullMQ four-queue platform gate probe (hydrates Supabase from Coolify; isolated Redis default 63791)
+HEADLESS_PROVIDER_MODE=recording PLATFORM_DISPATCH_USE_MEMORY=0 \
   PLATFORM_DISPATCH_BULLMQ_INTEGRATION_TEST=1 \
   npx tsx scripts/test-platform-sms-dispatch-bullmq.ts
 

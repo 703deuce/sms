@@ -47,11 +47,16 @@ local nowMs = tonumber(ARGV[4])
 local mps = tonumber(ARGV[5])
 local isInteractive = tonumber(ARGV[6])
 local stride = tonumber(ARGV[7])
+local maxSeq = tonumber(ARGV[8])
 
 local existing = redis.call('ZSCORE', waitKey, member)
 local score
 if existing == false then
   local seq = redis.call('INCR', seqKey)
+  if seq > maxSeq then
+    redis.call('SET', seqKey, '1')
+    seq = 1
+  end
   score = priority * stride + seq
   redis.call('ZADD', waitKey, score, member)
 else
@@ -141,6 +146,7 @@ export async function acquirePlatformDispatchSlotRedis(input: {
       String(mps),
       String(isInteractive),
       String(PLATFORM_DISPATCH_SCORE_STRIDE),
+      String(PLATFORM_DISPATCH_SCORE_STRIDE - 1),
     )) as [number, string, number];
     const ok = Number(raw[0]) === 1;
     if (ok) return;
