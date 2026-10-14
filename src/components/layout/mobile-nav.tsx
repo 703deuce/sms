@@ -139,11 +139,17 @@ export function MobileNav({
             const Icon = item.icon;
             const mctbShell = isMctbShellActive(pathname, multiProduct, productShell, hasMctb);
             const active = isBusinessMessagingUnifiedNav()
-              ? isBusinessMessagingNavItemActive(pathname, "", {
-                  label: item.label,
-                  href: item.href,
-                  icon: item.icon ?? Home,
-                })
+              ? item.label === "Services"
+                ? pathname.startsWith("/mctb") ||
+                  pathname.startsWith("/appointment-reminders") ||
+                  pathname.startsWith("/campaigns") ||
+                  pathname.startsWith("/templates") ||
+                  pathname.startsWith("/sms/analytics")
+                : isBusinessMessagingNavItemActive(pathname, "", {
+                    label: item.label,
+                    href: item.href,
+                    icon: item.icon ?? Home,
+                  })
               : mctbShell
                 ? item.href === MCTB_ROUTES.home
                   ? pathname === item.href

@@ -11,7 +11,6 @@ import {
 import type { NavItem } from "@/lib/nav";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import { AR_ROUTES } from "@/lib/appointment-reminders/routes";
-import { isLaunchProductCustomerVisible } from "@/lib/products/launch-product-availability";
 
 export type BusinessMessagingNavEntitlements = {
   inboxBadge?: number;
@@ -156,35 +155,27 @@ export function buildBusinessMessagingNav(input: BusinessMessagingNavEntitlement
     },
   ];
 
-  const services: NavItem[] = [];
-  if (input.hasMctb) {
-    services.push({
+  items.push(
+    {
       label: "Missed Call Text Back",
       href: MCTB_ROUTES.home,
       icon: PhoneMissed,
-      sectionLabel: services.length === 0 ? "Services" : undefined,
-    });
-  }
-  if (input.hasAppointmentReminders) {
-    services.push({
+      sectionLabel: "Services",
+      badge: input.hasMctb ? undefined : "Activate",
+    },
+    {
       label: "Appointment Reminders",
       href: AR_ROUTES.home,
       icon: CalendarClock,
-      sectionLabel: services.length === 0 ? "Services" : undefined,
-    });
-  }
-  const campaignsVisible =
-    input.hasMassSms || isLaunchProductCustomerVisible("mass_sms");
-  if (campaignsVisible) {
-    services.push({
+      badge: input.hasAppointmentReminders ? undefined : "Activate",
+    },
+    {
       label: "Campaigns",
       href: "/campaigns",
       icon: Megaphone,
-      sectionLabel: services.length === 0 ? "Services" : undefined,
-    });
-  }
-
-  items.push(...services);
+      badge: input.hasMassSms ? undefined : "Activate",
+    },
+  );
 
   items.push(
     {
@@ -263,7 +254,7 @@ export function buildBusinessMessagingMobileNav(input: BusinessMessagingNavEntit
     },
     {
       label: "Services",
-      href: input.hasMctb ? MCTB_ROUTES.home : input.hasAppointmentReminders ? AR_ROUTES.home : "/campaigns",
+      href: MCTB_ROUTES.home,
       icon: PhoneMissed,
     },
     { label: "Contacts", href: "/contacts", icon: Contact },

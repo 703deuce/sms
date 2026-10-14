@@ -160,6 +160,20 @@ export type ResolveCustomerNavInput = BusinessMessagingNavEntitlements & {
   inboxBadge?: number
 }
 
+/** Permanent Business Messaging sidebar — same eight links on every route. */
+export function businessMessagingNavSections(
+  inboxBadge = 0,
+  entitlements: Partial<BusinessMessagingNavEntitlements> = {},
+): NavSection[] {
+  const flat = buildBusinessMessagingNav({
+    inboxBadge,
+    hasMctb: entitlements.hasMctb ?? false,
+    hasAppointmentReminders: entitlements.hasAppointmentReminders ?? false,
+    hasMassSms: entitlements.hasMassSms ?? false,
+  })
+  return flatNavToSections(flat)
+}
+
 /** Customer-facing sidebar sections for the active product shell. */
 export function resolveCustomerNavSections(
   productShell: ProductShell = 'mctb',
@@ -167,13 +181,7 @@ export function resolveCustomerNavSections(
   entitlements?: Partial<BusinessMessagingNavEntitlements>,
 ): NavSection[] {
   if (isBusinessMessagingUnifiedNav()) {
-    const flat = buildBusinessMessagingNav({
-      inboxBadge,
-      hasMctb: entitlements?.hasMctb ?? true,
-      hasAppointmentReminders: entitlements?.hasAppointmentReminders ?? true,
-      hasMassSms: entitlements?.hasMassSms ?? false,
-    })
-    return flatNavToSections(flat)
+    return businessMessagingNavSections(inboxBadge, entitlements ?? {})
   }
   if (productShell === 'appointment_reminders' || productShell === 'appointments') {
     return appointmentRemindersNavSections(inboxBadge)

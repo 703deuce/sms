@@ -2,7 +2,9 @@
 
 Unified nav flag: `BUSINESS_MESSAGING_UNIFIED_NAV` (default `true` in `platform-launch.ts`; set env `BUSINESS_MESSAGING_UNIFIED_NAV=0` to disable).
 
-## Global sidebar (8 links)
+## Global sidebar (8 links — always visible)
+
+The same eight links render on every authenticated page. Entitlements do not remove items; inactive services show an **Activate** badge and still link to the service workspace (upgrade/activation UI on the destination).
 
 | Label | Route |
 |-------|--------|

@@ -84,7 +84,7 @@ export function UnifiedOverviewPage({
   ].filter(Boolean) as Array<{ label: string; href: string; hint: string }>;
 
   return (
-    <ArOpusPage width="wide" className="pb-8">
+    <ArOpusPage wide className="pb-8">
       <PageHeader title="Overview" description="Activity across your enabled messaging services." />
       <OpusDataSurface className={cn(OPUS_CARD, "p-6")}>
         <ul className="space-y-3">

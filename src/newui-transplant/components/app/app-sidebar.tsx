@@ -26,10 +26,7 @@ import {
   isVoiceProductCustomerVisible,
   mctbLaunchCustomerHome,
 } from '@/lib/products/launch-product-availability'
-import {
-  BUSINESS_MESSAGING_OVERVIEW_HREF,
-  isBusinessMessagingNavItemActive,
-} from '@/lib/products/business-messaging-nav'
+import { BUSINESS_MESSAGING_OVERVIEW_HREF } from '@/lib/products/business-messaging-nav'
 import { isBusinessMessagingUnifiedNav } from '@/lib/workspace/platform-launch'
 import {
   resolveProductShellFromPath,
@@ -38,7 +35,13 @@ import {
 } from '@/lib/products/product-shell'
 import { isSchedulingOpusChromePath } from '@/lib/products/newui-shell'
 import { OpusProductSwitcher } from '@/newui-transplant/components/app/opus-product-switcher'
-import { resolveCustomerNavSections, type NavItem, type NavSubItem } from '@/newui-transplant/lib/nav'
+import {
+  businessMessagingNavSections,
+  resolveCustomerNavSections,
+  type NavItem,
+  type NavSubItem,
+} from '@/newui-transplant/lib/nav'
+import { isBusinessMessagingNavItemActive } from '@/lib/products/business-messaging-nav'
 import { AR_ROUTES } from '@/lib/appointment-reminders/routes'
 import { findBestNavMatch, hrefPath, scoreNavHref } from '@/lib/nav-active'
 import {
@@ -174,15 +177,20 @@ export function AppSidebar({
     return storedShell ?? (hasMctb ? 'mctb' : 'appointment_reminders')
   }, [pathShell, pathname, storedShell, hasMctb])
 
-  const navSections = useMemo(
-    () =>
-      resolveCustomerNavSections(productShell, inboxBadge, {
+  const navSections = useMemo(() => {
+    if (unifiedNav) {
+      return businessMessagingNavSections(inboxBadge, {
         hasMctb,
         hasAppointmentReminders,
         hasMassSms,
-      }),
-    [productShell, inboxBadge, hasMctb, hasAppointmentReminders, hasMassSms],
-  )
+      })
+    }
+    return resolveCustomerNavSections(productShell, inboxBadge, {
+      hasMctb,
+      hasAppointmentReminders,
+      hasMassSms,
+    })
+  }, [unifiedNav, productShell, inboxBadge, hasMctb, hasAppointmentReminders, hasMassSms])
 
   useEffect(() => {
     if (prevRouteSyncKey.current === routeSyncKey) return
@@ -236,11 +244,14 @@ export function AppSidebar({
                 {section.items.map((item) => {
                   const hasChildren = Boolean(item.children?.length)
                   const expandKey = navItemExpandKey(item)
+                  const serviceNeedsActivation =
+                    unifiedNav && item.badge === 'Activate'
                   const parentActive = unifiedNav
                     ? isBusinessMessagingNavItemActive(pathname, search, {
                         label: item.label,
                         href: item.href,
                         icon: item.icon,
+                        badge: item.badge,
                       })
                     : isTopNavActive(pathname, search, item)
                   const activeChild = hasChildren
@@ -259,6 +270,9 @@ export function AppSidebar({
                           className={cn(
                             'h-8 min-w-0 flex-1 data-active:bg-sidebar-accent data-active:text-sidebar-accent-foreground data-active:[&_svg]:text-sidebar-primary',
                             hasChildren && 'group-data-[collapsible=icon]:flex-none',
+                            serviceNeedsActivation &&
+                              !parentHighlighted &&
+                              'opacity-80',
                           )}
                         >
                           <item.icon aria-hidden="true" />
@@ -319,7 +333,7 @@ export function AppSidebar({
         ))}
       </SidebarContent>
 
-      {isVoiceProductCustomerVisible() ? (
+      {isVoiceProductCustomerVisible() && !unifiedNav ? (
         <SidebarFooter className="px-3 pb-4 group-data-[collapsible=icon]:hidden">
           <div className="rounded-lg border border-sidebar-border bg-sidebar-accent/40 p-3">
             <div className="flex items-center justify-between text-xs">

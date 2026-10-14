@@ -20,13 +20,24 @@ import {
 } from '@/newui-transplant/components/ui/dropdown-menu'
 import { performClientLogout } from '@/lib/auth/logout-client'
 import { resolveProductShellFromPath } from '@/lib/products/product-shell'
-import { resolveCustomerNavSections } from '@/newui-transplant/lib/nav'
+import { businessMessagingNavSections, resolveCustomerNavSections } from '@/newui-transplant/lib/nav'
+import { isBusinessMessagingUnifiedNav } from '@/lib/workspace/platform-launch'
+import { isBusinessMessagingNavItemActive } from '@/lib/products/business-messaging-nav'
+import type { NavItem } from '@/lib/nav'
 
 function sectionFor(pathname: string) {
-  const shell = resolveProductShellFromPath(pathname) ?? 'mctb'
-  for (const section of resolveCustomerNavSections(shell)) {
+  const sections = isBusinessMessagingUnifiedNav()
+    ? businessMessagingNavSections()
+    : resolveCustomerNavSections(resolveProductShellFromPath(pathname) ?? 'mctb')
+  for (const section of sections) {
     for (const item of section.items) {
-      if (pathname === item.href || (item.matchPrefix && pathname.startsWith(item.matchPrefix))) {
+      const navItem = item as NavItem & { matchPrefix?: string }
+      if (
+        isBusinessMessagingUnifiedNav()
+          ? isBusinessMessagingNavItemActive(pathname, '', navItem)
+          : pathname === item.href ||
+            (navItem.matchPrefix && pathname.startsWith(navItem.matchPrefix))
+      ) {
         return { section: section.label, page: item.label }
       }
     }
