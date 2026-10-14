@@ -371,4 +371,104 @@ Business SMS / Mass texting (platform nav)
 
 ---
 
+## 6. Review requests / “Get More Reviews” (not a fourth top-level product)
+
+There was **no** standalone sidebar product named “Reviews” with a `/reviews` home (unlike MCTB or Campaigns). Review collection was a **solution + automations workflow**, surfaced in three ways:
+
+1. **Outcomes hub** — slug `review-requests`, title **“Get More Reviews”** (`src/lib/outcomes/registry.ts`)
+2. **Solutions catalog** — **Automated Review Requests** under Customer Growth
+3. **Runtime** — automation flows, SMS templates, `{{review_link}}` in settings, optional **Surveys** for NPS/polls
+
+**V1 policy:** AGENTS.md / phase-1 inventory note **Reviews not on master** as a launch product; routes and registry remain in repo.
+
+### A. Outcomes menu (local nav for “Get More Reviews”) — URLs still defined in code
+
+**Note:** Middleware currently **redirects all `/outcomes/*` → `/dashboard`** (`src/middleware.ts`). The page module still exists, but these URLs are not reachable until that redirect is removed.
+
+| Menu label | Route |
+|------------|-------|
+| Overview | `/outcomes/review-requests` |
+| Set Up | `/outcomes/review-requests/setup` |
+| Your Setups | `/outcomes/review-requests/active` |
+| Review Profiles | `/outcomes/review-requests/profiles` |
+| When It Runs | `/outcomes/review-requests/trigger` |
+| Customer Eligibility | `/outcomes/review-requests/eligibility` |
+| Request Messages | `/outcomes/review-requests/messages` |
+| Reminder Rules | `/outcomes/review-requests/reminders` |
+| Negative Feedback Routing | `/outcomes/review-requests/negative` |
+| Notifications | `/outcomes/review-requests/notifications` |
+| Test | `/outcomes/review-requests/test` |
+| Reviews & Results | `/outcomes/review-requests/results` |
+
+**Where those sections deep-link in the live app (launchHref):**
+
+| Purpose | Link |
+|---------|------|
+| Build flow | `/automations/new` |
+| Review links / business profile | `/settings/business` |
+| Message copy | `/templates` |
+| Negative feedback inbox | `/inbox` or `/conversations` |
+| Staff notifications | `/settings/notifications` |
+| Results reporting | `/reports/automations` |
+
+### B. Solutions catalog (discovery pages — still routable)
+
+| Page | Route |
+|------|-------|
+| Customer Growth category | `/solutions/customer-growth` |
+| Automated Review Requests | `/solutions/customer-growth/automated-review-requests` |
+| Customer Surveys (related) | `/solutions/customer-growth/customer-surveys` |
+| All solutions | `/solutions` |
+
+### C. Surveys (feedback / NPS — often paired with reviews)
+
+**Legacy full `appNav` item “Surveys”** (`src/lib/nav.ts`):
+
+| Menu label | Route |
+|------------|-------|
+| Surveys (parent) | `/surveys` |
+| All Surveys | `/surveys` |
+| Polls | `/surveys?type=poll` |
+| NPS | `/surveys?type=nps` |
+| Survey detail | `/surveys/[id]` |
+
+### D. Other review-related entry points (not a dedicated menu)
+
+| What | Route / note |
+|------|----------------|
+| Campaign intent “Request Reviews or Feedback” | `/campaigns/new` (category `review` in `src/lib/campaigns/catalog.ts`) |
+| Review Request **Agent** type | Agent id `review_request` — setup via automations/agents, not `/mctb` |
+| Record review on contact | API `POST /api/contacts/[id]/review` |
+| Messaging setting: default review link | `/settings` → messaging (`{{review_link}}`) |
+| Dashboard tile “Review Requests” | Links to `/solutions/customer-growth/automated-review-requests` |
+
+### E. Plain-text copy — review solution menus
+
+```
+Get More Reviews (Outcomes local nav — /outcomes/* redirects to /dashboard today)
+- Overview                      /outcomes/review-requests
+- Set Up                        /outcomes/review-requests/setup
+- Your Setups                   /outcomes/review-requests/active
+- Review Profiles               /outcomes/review-requests/profiles
+- When It Runs                  /outcomes/review-requests/trigger
+- Customer Eligibility          /outcomes/review-requests/eligibility
+- Request Messages              /outcomes/review-requests/messages
+- Reminder Rules                /outcomes/review-requests/reminders
+- Negative Feedback Routing     /outcomes/review-requests/negative
+- Notifications                 /outcomes/review-requests/notifications
+- Test                          /outcomes/review-requests/test
+- Reviews & Results             /outcomes/review-requests/results
+
+Solutions catalog
+- Automated Review Requests     /solutions/customer-growth/automated-review-requests
+- Customer Surveys              /solutions/customer-growth/customer-surveys
+
+Surveys (legacy app nav)
+- All Surveys                   /surveys
+- Polls                         /surveys?type=poll
+- NPS                           /surveys?type=nps
+```
+
+---
+
 *End of copy sheet.*
