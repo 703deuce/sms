@@ -28,12 +28,16 @@ export type BroadcastRecurrence = {
   runsCompleted?: number;
 };
 
+export type MassTextSenderMode = "PLATFORM" | "WORKSPACE";
+
 export type BroadcastCampaignConfig = {
   productSource: "mass_text";
   massTexting: true;
   broadcastVersion: 1;
   audience: BroadcastAudienceDefinition;
   numberId?: string;
+  /** PLATFORM uses shared Transovo platform sender; WORKSPACE uses customer A2P number. */
+  senderMode?: MassTextSenderMode;
   scheduleMode: BroadcastScheduleMode;
   timezone?: string;
   recurrence?: BroadcastRecurrence;
@@ -50,6 +54,7 @@ export type BroadcastCampaignInput = {
   /** Playbook category when created from /playbooks (broadcast | promotion). */
   category?: string | null;
   numberId?: string;
+  senderMode?: MassTextSenderMode;
   scheduleMode: BroadcastScheduleMode;
   scheduledAt?: string | null;
   timezone?: string;

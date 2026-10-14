@@ -436,47 +436,106 @@ export async function sendCampaignMessageById(messageId: string) {
       providerSid = result.id;
     } else {
       if (massTextCampaign) {
-    const { resolveMassTextSendingNumber } = await import("@/lib/mass-texting/messaging-registration");
-    const { readBroadcastConfig } = await import("@/lib/mass-texting/broadcast/service");
-    const broadcastConfig = readBroadcastConfig(message.campaign.configJson);
-    const sender = await resolveMassTextSendingNumber(
-      message.workspaceId,
-      broadcastConfig?.numberId,
-    );
-        if (!sender?.phoneE164) {
-          throw new Error("Mass Texting sending number not configured");
-        }
-        const result = await sendViaRegistration(
-          message.workspaceId,
-          message.to,
-          message.body,
-          mediaUrlsForQueuedMessage(message),
-          sender.phoneE164,
+        const { readBroadcastConfig } = await import("@/lib/mass-texting/broadcast/service");
+        const { parseMassMessagingSenderMode, resolveSharedPlatformOutboundSender } = await import(
+          "@/lib/messaging/platform-outbound-sender"
         );
-        providerAccepted = true;
-        providerSid = result.sid;
+        const { sendQuickSms } = await import("@/lib/sms/send-quick");
+        const { touchPlatformProductConsumerAssignment } = await import(
+          "@/lib/messaging/platform-product-consumer-assignment"
+        );
+        const broadcastConfig = readBroadcastConfig(message.campaign.configJson);
+        const senderMode = parseMassMessagingSenderMode(broadcastConfig?.senderMode, "WORKSPACE");
 
-        try {
-          const contact = await prisma.contact.findUnique({
-            where: {
-              workspaceId_phone: { workspaceId: message.workspaceId, phone: message.to },
-            },
-          });
-          if (contact) {
-            const { ensureProductConversation } = await import(
-              "@/lib/mass-texting/conversation-context"
-            );
-            await ensureProductConversation({
-              workspaceId: message.workspaceId,
-              contactId: contact.id,
-              productSource: "mass_text",
-              phoneNumberId: sender.phoneNumberId,
-              fromE164: sender.phoneE164,
-              campaignId: message.campaignId,
-            });
+        if (senderMode === "PLATFORM") {
+          const platformRoute = await resolveSharedPlatformOutboundSender();
+          if (!platformRoute?.fromE164) {
+            throw new Error("Platform sender is not configured");
           }
-        } catch {
-          // conversation tagging is best-effort
+          const quick = await sendQuickSms({
+            workspaceId: message.workspaceId,
+            to: message.to,
+            body: message.body,
+            campaignId: message.campaignId,
+            mediaUrls: mediaUrlsForQueuedMessage(message),
+            senderRoute: platformRoute,
+            idempotencyKey: `campaign:${messageId}`,
+          });
+          providerAccepted = true;
+          providerSid = quick.sid;
+
+          try {
+            const contact = await prisma.contact.findUnique({
+              where: {
+                workspaceId_phone: { workspaceId: message.workspaceId, phone: message.to },
+              },
+            });
+            if (contact && platformRoute.phoneNumberId) {
+              const { ensureProductConversation } = await import(
+                "@/lib/mass-texting/conversation-context"
+              );
+              const conv = await ensureProductConversation({
+                workspaceId: message.workspaceId,
+                contactId: contact.id,
+                productSource: "mass_text",
+                phoneNumberId: platformRoute.phoneNumberId,
+                fromE164: platformRoute.fromE164,
+                campaignId: message.campaignId,
+              });
+              await touchPlatformProductConsumerAssignment({
+                workspaceId: message.workspaceId,
+                consumerE164: message.to,
+                platformPhoneNumberId: platformRoute.phoneNumberId,
+                product: "mass_text",
+                conversationId: conv.conversationId,
+              });
+            }
+          } catch {
+            // conversation tagging is best-effort
+          }
+        } else {
+          const { resolveMassTextSendingNumber } = await import(
+            "@/lib/mass-texting/messaging-registration"
+          );
+          const sender = await resolveMassTextSendingNumber(
+            message.workspaceId,
+            broadcastConfig?.numberId,
+          );
+          if (!sender?.phoneE164) {
+            throw new Error("Mass Texting sending number not configured");
+          }
+          const result = await sendViaRegistration(
+            message.workspaceId,
+            message.to,
+            message.body,
+            mediaUrlsForQueuedMessage(message),
+            sender.phoneE164,
+          );
+          providerAccepted = true;
+          providerSid = result.sid;
+
+          try {
+            const contact = await prisma.contact.findUnique({
+              where: {
+                workspaceId_phone: { workspaceId: message.workspaceId, phone: message.to },
+              },
+            });
+            if (contact) {
+              const { ensureProductConversation } = await import(
+                "@/lib/mass-texting/conversation-context"
+              );
+              await ensureProductConversation({
+                workspaceId: message.workspaceId,
+                contactId: contact.id,
+                productSource: "mass_text",
+                phoneNumberId: sender.phoneNumberId,
+                fromE164: sender.phoneE164,
+                campaignId: message.campaignId,
+              });
+            }
+          } catch {
+            // conversation tagging is best-effort
+          }
         }
 
         try {

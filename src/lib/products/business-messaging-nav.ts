@@ -7,16 +7,19 @@ import {
   PhoneMissed,
   Puzzle,
   Settings,
+  Star,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import { AR_ROUTES } from "@/lib/appointment-reminders/routes";
+import { REVIEW_ROUTES } from "@/lib/reviews/routes";
 
 export type BusinessMessagingNavEntitlements = {
   inboxBadge?: number;
   hasMctb: boolean;
   hasAppointmentReminders: boolean;
   hasMassSms: boolean;
+  hasReviews?: boolean;
 };
 
 export type ServiceTab = {
@@ -51,6 +54,17 @@ export const AR_SERVICE_TABS: ServiceTab[] = [
   { label: "Sequences", href: AR_ROUTES.remindersSequences, matchPrefix: AR_ROUTES.remindersSequences },
   { label: "AI Rescheduler", href: AR_ROUTES.aiRescheduler, matchPrefix: AR_ROUTES.aiRescheduler },
   { label: "Analytics", href: AR_ROUTES.analytics, matchPrefix: AR_ROUTES.analytics },
+];
+
+export const REVIEWS_SERVICE_TABS: ServiceTab[] = [
+  { label: "Overview", href: REVIEW_ROUTES.home, matchExact: true },
+  { label: "Requests", href: REVIEW_ROUTES.requests, matchPrefix: REVIEW_ROUTES.requests },
+  { label: "Campaigns", href: REVIEW_ROUTES.campaigns, matchPrefix: REVIEW_ROUTES.campaigns },
+  { label: "QR Campaigns", href: REVIEW_ROUTES.qr, matchPrefix: REVIEW_ROUTES.qr },
+  { label: "Reviews", href: REVIEW_ROUTES.feed, matchPrefix: REVIEW_ROUTES.feed },
+  { label: "Velocity", href: REVIEW_ROUTES.velocity, matchPrefix: REVIEW_ROUTES.velocity },
+  { label: "Insights", href: REVIEW_ROUTES.insights, matchPrefix: REVIEW_ROUTES.insights },
+  { label: "Alerts", href: REVIEW_ROUTES.alerts, matchPrefix: REVIEW_ROUTES.alerts },
 ];
 
 export const CAMPAIGNS_SERVICE_TABS: ServiceTab[] = [
@@ -175,6 +189,12 @@ export function buildBusinessMessagingNav(input: BusinessMessagingNavEntitlement
       icon: Megaphone,
       badge: input.hasMassSms ? undefined : "Activate",
     },
+    {
+      label: "Reviews",
+      href: REVIEW_ROUTES.home,
+      icon: Star,
+      badge: input.hasReviews === false ? "Activate" : undefined,
+    },
   );
 
   items.push(
@@ -223,6 +243,9 @@ export function isBusinessMessagingNavItemActive(
       path.startsWith("/sms/analytics")
     );
   }
+  if (item.label === "Reviews") {
+    return path === REVIEW_ROUTES.home || path.startsWith("/reviews/");
+  }
   if (item.href.includes("?")) {
     const query = item.href.split("?")[1] ?? "";
     return path === item.href.split("?")[0] && search.includes(query);
@@ -239,7 +262,12 @@ export function isBusinessMessagingSharedShellPath(pathname: string): boolean {
   if (pathname === "/campaigns" || pathname.startsWith("/campaigns/")) return true;
   if (pathname === "/templates" || pathname.startsWith("/templates/")) return true;
   if (pathname === "/sms/analytics" || pathname.startsWith("/sms/analytics/")) return true;
+  if (pathname === REVIEW_ROUTES.home || pathname.startsWith("/reviews/")) return true;
   return false;
+}
+
+export function shouldShowReviewsServiceTabs(pathname: string): boolean {
+  return pathname === REVIEW_ROUTES.home || pathname.startsWith("/reviews/");
 }
 
 export function buildBusinessMessagingMobileNav(input: BusinessMessagingNavEntitlements): NavItem[] {

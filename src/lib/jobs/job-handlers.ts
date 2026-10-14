@@ -1300,6 +1300,31 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
     }
     case "job_queue_lifecycle_scheduler_fixture":
       return { ok: true, skipped: true, reason: "test_fixture" };
+    case "review_momentum_run": {
+      const businessId = String(payload.businessId || "");
+      const organizationId = String(payload.organizationId || "");
+      if (!businessId || !organizationId) throw new Error("review_momentum payload incomplete");
+      if (businessId !== organizationId) {
+        throw new Error("review_momentum businessId must match workspace organizationId");
+      }
+      const { runReviewMomentum } = await import("@/lib/reviews/momentum-engine");
+      return runReviewMomentum({
+        businessId,
+        organizationId,
+        scanBatchId:
+          typeof payload.scanBatchId === "string" ? payload.scanBatchId : undefined,
+        competitorLimit:
+          typeof payload.competitorLimit === "number" ? payload.competitorLimit : undefined,
+        lookbackDays:
+          typeof payload.lookbackDays === "number" ? payload.lookbackDays : undefined,
+      });
+    }
+    case "reputation_review_campaign_tick": {
+      const { processReputationCampaignQueue } = await import(
+        "@/lib/reputation/campaign-processor"
+      );
+      return processReputationCampaignQueue();
+    }
     default:
       throw new Error(`Unknown job type: ${jobType}`);
   }

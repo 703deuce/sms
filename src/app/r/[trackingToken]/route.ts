@@ -119,6 +119,25 @@ export async function GET(_request: Request, ctx: Ctx) {
     return NextResponse.redirect(destination);
   }
 
+  try {
+    const { recordTrackingClick } = await import("@/lib/reputation/campaigns");
+    const { sanitizeReviewRedirectUrl } = await import("@/lib/security/safe-redirect");
+    const reviewUrl = await recordTrackingClick({
+      token: trackingToken,
+      ip:
+        _request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+        _request.headers.get("x-real-ip") ??
+        "unknown",
+      userAgent: _request.headers.get("user-agent") ?? undefined,
+    });
+    const reviewSafe = sanitizeReviewRedirectUrl(reviewUrl);
+    if (reviewSafe) {
+      return NextResponse.redirect(reviewSafe, 302);
+    }
+  } catch {
+    // reputation tables may be unavailable during rollout
+  }
+
   const oneOff = await prisma.message.findUnique({
     where: { trackingToken },
     select: {

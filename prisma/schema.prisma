@@ -207,6 +207,12 @@ enum ArPlatformSmsInboundReceiptState {
 enum MessagingProductUseCase {
   MCTB_CUSTOMER_CARE
   MASS_TEXT_MARKETING
+  REVIEW_SOLICITATION
+}
+
+enum PlatformProductConsumerSource {
+  mass_text
+  review_requests
 }
 
 /// Mass Texting billing lifecycle (trial → paid production).
@@ -534,6 +540,7 @@ model Workspace {
   mctbPlatformSenderAssignments     MctbPlatformSenderAssignment[]
   arSmsReplySessions                ArSmsReplySession[]
   arSmsConsumerPlatformSenderAssignments ArSmsConsumerPlatformSenderAssignment[]
+  platformProductConsumerAssignments PlatformProductConsumerAssignment[]
   arSmsInboundHeldMessages          ArSmsInboundHeldMessage[]
   mctbNotificationDeliveries        MctbNotificationDelivery[]
   faxAccount                        FaxAccount?
@@ -753,6 +760,7 @@ model PhoneNumber {
   mctbPlatformSenderAssignments MctbPlatformSenderAssignment[]
   arSmsReplySessions            ArSmsReplySession[]
   arSmsConsumerPlatformSenderAssignments ArSmsConsumerPlatformSenderAssignment[]
+  platformProductConsumerAssignments PlatformProductConsumerAssignment[]
 
   @@unique([workspaceId, e164])
   @@index([twilioSid])
@@ -1749,6 +1757,7 @@ model Conversation {
   messages          ConversationMessage[]
   platformSenderAssignments MctbPlatformSenderAssignment[]
   arSmsReplySessions        ArSmsReplySession[]
+  platformProductConsumerAssignments PlatformProductConsumerAssignment[]
 
   @@index([workspaceId, productSource, updatedAt])
   @@index([workspaceId, phoneNumberId, updatedAt])
@@ -4877,6 +4886,26 @@ model ArSmsConsumerPlatformSenderAssignment {
   @@index([consumerE164, platformPhoneNumberId])
   @@index([workspaceId, consumerE164])
   @@map("ar_sms_consumer_platform_sender_assignments")
+}
+
+/// Shared platform number: map inbound consumer replies to workspace for mass text / review requests.
+model PlatformProductConsumerAssignment {
+  id                    String                        @id @default(cuid())
+  workspaceId           String
+  consumerE164          String
+  platformPhoneNumberId String
+  product               PlatformProductConsumerSource
+  conversationId        String?
+  createdAt             DateTime                      @default(now())
+  lastUsedAt            DateTime                      @default(now())
+  workspace             Workspace                     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  platformPhoneNumber   PhoneNumber                   @relation(fields: [platformPhoneNumberId], references: [id], onDelete: Restrict)
+  conversation          Conversation?                 @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  @@unique([consumerE164, platformPhoneNumberId, product])
+  @@index([workspaceId, consumerE164])
+  @@index([platformPhoneNumberId, consumerE164, product])
+  @@map("platform_product_consumer_assignments")
 }
 
 /// Appointment Reminders: outbound-initiated SMS reply context (product-scoped; not MCTB).

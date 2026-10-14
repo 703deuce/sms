@@ -67,6 +67,7 @@ function buildConfig(input: BroadcastCampaignInput): BroadcastCampaignConfig {
     broadcastVersion: 1,
     audience: input.audience,
     numberId: input.numberId,
+    senderMode: input.senderMode ?? "WORKSPACE",
     scheduleMode: input.scheduleMode,
     timezone: input.timezone,
     recurrence: input.recurrence,

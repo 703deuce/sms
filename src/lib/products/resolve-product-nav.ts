@@ -74,6 +74,7 @@ export function resolveProductSidebarNav(input: ResolveProductNavInput): NavItem
       hasMctb: input.hasMctb ?? false,
       hasAppointmentReminders: input.hasAppointmentReminders ?? false,
       hasMassSms: input.hasSms ?? false,
+      hasReviews: true,
     });
   }
   const effectiveShell = resolveEffectiveProductShell(
