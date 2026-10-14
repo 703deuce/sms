@@ -1,0 +1,15 @@
+export const brightDataCircuitLeaseMs = 60_000;
+export const brightDataCircuitMinSamples = 10;
+export const brightDataCircuitOpenDurationMs = 120_000;
+export const brightDataCircuitOpenThresholdPercent = 30;
+export const brightDataCircuitSampleSize = 20;
+export const brightDataDegradedWindowMs = 300_000;
+export const brightDataGlobalConcurrency = 10;
+export const brightDataStartRatePerMin = 10;
+export const dataForSeoMapsConcurrency = 5;
+export const scrapingDogMapsConcurrency = 5;
+export const dataForSeoMapsAppChunkSize = 25;
+export const dataForSeoMapsMaxTasksPerPost = 100;
+export const dataForSeoMapsPollGetConcurrency = 5;
+export const dataForSeoMapsPostDelayMinMs = 50;
+export const dataForSeoMapsPostDelayMaxMs = 100;
