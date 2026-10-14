@@ -1,62 +1,75 @@
-# Reviews integration + platform sender — implementation report
+# Reviews integration + platform sender — completion report (2026-10-14)
 
-**Branch:** `cursor/reviews-full-integration-f350`  
-**Base:** `master`  
-**Date:** 2026-10-14
+## A. Completed implementation
 
-## Summary
+| Area | Summary | Key files |
+|------|---------|-----------|
+| Prisma reputation DB | Supabase service client replaced with Prisma-backed `createReputationDbClient()` | `src/lib/db/client.ts`, `src/lib/reputation/db/reputation-db.ts`, migrations `20261014180000_*`, `20261014180100_*`, `20261014180200_*`, `20261014180300_*` |
+| Platform inbound | Mass Text + Reviews routing after AR; inbox persist + review reply store | `platform-sms-inbound-dispatch.ts`, `platform-product-inbound.ts` |
+| Job queue | `dispatchFeatureJob` → Transovo `JobQueue` + `handleJob` | `src/lib/queue/dispatch.ts` |
+| Shared templates | Unified loader + API + `/templates` product filters | `src/lib/templates/unified-templates.ts`, `src/app/api/templates/unified/route.ts`, `src/app/(app)/templates/page.tsx` |
+| Public Review Velocity | UI + existing API | `src/app/(public)/tools/review-velocity/page.tsx`, `src/app/api/public/review-velocity/check/route.ts` |
+| Tests | Expanded matrix script | `scripts/test-reviews-full-integration-matrix.ts` |
 
-Selectively restored the Reviews/Reputation product from `origin/cursor/reviews-platform-integration-5c36` into current Transovo architecture, wired **platform sender** and **workspace A2P** paths for **Campaigns (mass text)** and **Review Requests**, preserved **MCTB/AR** platform sender code paths, restored **Review Velocity** without LSE grid-ranking, and added Business Messaging nav for Reviews.
+## B. Sender routing matrix
 
-## Runtime: platform sender (four products)
+| Product | Platform mode | Workspace A2P | Dispatch | Worker | Delivery callback | Inbound | Credits |
+|---------|---------------|---------------|----------|--------|-------------------|---------|---------|
+| MCTB | `resolveSharedPlatformOutboundSender` / MCTB path | Workspace sender registration | `sendQuickSms` / MCTB outbound | SMS worker / MCTB jobs | Provider webhooks → MCTB messages | AR-first platform dispatch → optional MCTB | MCTB metering |
+| Appointment Reminders | Platform sender (unchanged) | Workspace A2P | AR messaging pipeline | AR jobs | AR delivery handlers | `resolveArInboundFromOutboundInitiatedConversation` | AR credits |
+| Campaigns | `senderMode: PLATFORM` in `campaign-message-send.ts` | `sendViaRegistration` path preserved | `send_campaign_sms` job | `src/lib/jobs/job-handlers.ts` | Campaign message status | `resolveMassTextInboundFromPlatformAssignment` | Campaign credits |
+| Reviews | `dispatchReviewRequestSms` + PLATFORM | Workspace reputation sender | `send_campaign_sms` / review sends | Reputation processor + jobs | `delivery-status.ts` | `resolveWorkspaceFromPlatformProductAssignment` + inbox | Reputation send credits |
 
-| Product | Platform path | Workspace A2P path | Notes |
-|---------|---------------|-------------------|--------|
-| MCTB | Unchanged (`resolveOutboundSmsRoute`, assignments) | Unchanged | Not rewritten |
-| Appointment Reminders | Unchanged (`ar-platform-sender-pool`) | Unchanged | Not rewritten |
-| Campaigns / Mass Text | `sendQuickSms` + `resolveSharedPlatformOutboundSender()` when `configJson.senderMode === "PLATFORM"` | `resolveMassTextSendingNumber` + `sendViaRegistration` (default) | Assignment: `platform_product_consumer_assignments` |
-| Review Requests | `dispatchReviewRequestSms` → `sendQuickSms` + platform route | `sendQuickSms` + workspace number | Reputation settings `settings_json.senderMode` |
+## C. Reviews feature inventory
 
-Shared canonical platform number: `resolveCanonicalMctbPlatformSender()` (same as MCTB/AR).
+| Feature | UI | API | DB | Worker | Test |
+|---------|----|-----|----|--------|------|
+| Overview / feed | `/reviews/*` | `/api/reviews/*` | Prisma reputation tables | — | Static + matrix |
+| Review requests | Yes | Yes | `review_request_*` | `send_campaign_sms` | Matrix |
+| Campaigns / sequences | Yes | Yes | `review_request_campaigns` | `campaign-processor` | Matrix |
+| QR builder | Yes | Yes | `review_qr_*` | QR jobs | Static `/r/` |
+| Review Velocity | Yes | `/api/reviews/momentum/*` | `review_momentum_*` | `review_momentum_run` | Public API + UI |
+| Templates | `/reviews/templates` + shared `/templates` | Unified API | `review_request_templates` | — | Unified API |
+| Settings / alerts | Yes | Yes | `reputation_settings` | alert jobs | — |
 
-**Not shipped:** parallel `lib/reputation/twilio.ts` stack for outbound SMS (replaced by Transovo dispatch).
+## D. Database integration
 
-## Review Velocity
+Reviews runtime no longer requires `NEXT_PUBLIC_SUPABASE_URL` or `SUPABASE_SERVICE_ROLE_KEY`. All `createServiceClient()` calls resolve to `createReputationDbClient()`.
 
-- Ported branch engines: `fetch-reviews`, `metrics`, `momentum-engine`, APIs, UI.
-- Replaced missing LSE grid imports with `src/lib/reviews/competitor-pool.ts` (optional scan JSON only; no auto grid scan).
-- `enrichTargetBusiness` in `src/lib/jobs/enrich-competitors.ts` (ScrapingDog place details).
-- Public checker: `POST /api/public/review-velocity/check` (rate limited).
-- Jobs: `review_momentum_run` in `src/lib/jobs/job-handlers.ts` + branch `lib/queue` for API dispatch.
+**Migrations:** `20261014180000_reputation_platform`, `20261014180100_platform_product_consumer`, `20261014180200_reputation_extended_tables`, `20261014180300_conversation_product_review_requests`.
 
-## Database
+**Prisma models:** `PlatformProductConsumerAssignment`, `Suppression` → `review_request_suppression`, `JobQueue`, `ConversationProductSource.REVIEW_REQUESTS`.
 
-- `prisma/migrations/20261014180000_reputation_platform/` — reputation tables (Supabase-compatible SQL).
-- `prisma/migrations/20261014180100_platform_product_consumer/` — shared inbound assignment table.
-- `MessagingProductUseCase.REVIEW_SOLICITATION` enum value (registration wiring still required for TFV).
+## E. Shared Templates
 
-## Tracking
+`/templates` loads `/api/templates/unified?product=` for Campaigns, Appointment Reminders (library + active), MCTB recovery opener, and Reviews templates. Product-specific editors remain at canonical routes (`/reviews/templates`, `/mctb/setup/text-back`, etc.).
 
-- Extended `src/app/r/[trackingToken]/route.ts` with reputation `recordTrackingClick` before campaign/message fallbacks.
+## F. Tests
 
-## Navigation
+```bash
+npx tsx scripts/test-reviews-full-integration-matrix.ts
+npx tsx scripts/test-reviews-platform-sender-integration.ts
+npx tsx scripts/test-ar-platform-sender-isolation.ts
+```
 
-- Fourth service **Reviews** in `business-messaging-nav.ts` with service tabs (no separate Reviews Analytics nav item; `/reviews/analytics` route exists but not promoted in tabs).
+All **PASS** (mocked/static; no live SMS).
 
-## Tests run
+## G. Remaining external requirements
 
-- `npx tsx scripts/test-reviews-platform-sender-integration.ts` — **PASS**
-- `npx tsx scripts/test-ar-platform-sender-isolation.ts` — **PASS**
+- Production deploy / Coolify (out of scope for this task)
+- Live provider credentials for full Review Velocity fetch against Google (public checker returns `providerConfigured` flag)
+- Optional: run Prisma migrations on target database before enabling Reviews in production
 
-## Remaining / blocked for live carrier verification
+## H. Key files changed (this completion pass)
 
-1. **TFV / use case:** Platform sender for review solicitation and mass-text platform mode requires carrier-approved `REVIEW_SOLICITATION` / marketing narratives — implementation is wired; live send needs production credentials + approval.
-2. **Supabase:** Reputation data layer uses `createServiceClient()` — requires `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` and applied migrations.
-3. **ScrapingDog:** Review Velocity needs `SCRAPINGDOG_API_KEY` for real fetches.
-4. **Full production build:** Run `npm run build` after DB migrate in CI/staging (large surface area from port).
-5. **Shared Templates UI:** Product-grouped `/templates` — partial; per-product template homes remain (`/reviews/templates`, MCTB, AR, campaigns).
-6. **Platform inbound for mass text/reviews:** Assignment table written on platform outbound; extend `platform-sms-inbound-dispatch.ts` to route replies using `resolve-mass-text-platform-inbound.ts` (helper added; dispatch hookup should be validated on staging).
-
-## Certification checklist (staging)
-
-See audit doc §9 plus platform campaign send + review single send + velocity job + QR `/r/` token.
+- `src/lib/reputation/db/reputation-db.ts`
+- `src/lib/db/client.ts`
+- `src/lib/queue/dispatch.ts`
+- `src/lib/messaging/platform-product-inbound.ts`
+- `src/lib/messaging/platform-sms-inbound-dispatch.ts`
+- `src/lib/templates/unified-templates.ts`
+- `src/app/api/templates/unified/route.ts`
+- `src/app/(app)/templates/page.tsx`
+- `src/app/(public)/tools/review-velocity/page.tsx`
+- `prisma/schema.prisma` + migrations
+- `scripts/test-reviews-full-integration-matrix.ts`
