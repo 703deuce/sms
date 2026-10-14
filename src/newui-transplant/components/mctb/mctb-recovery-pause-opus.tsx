@@ -7,6 +7,7 @@ import { Button } from "@/newui-transplant/components/ui/button";
 import { cn } from "@/lib/utils";
 import { saveMctbSetup } from "@/lib/newui-transplant/api/mctb-setup-client";
 import { addPauseUntil } from "@/lib/mctb/schedule-shared";
+import { formatMctbFriendlyDateTime } from "@/lib/mctb/display-datetime";
 
 type Props = {
   paused: boolean;
@@ -46,10 +47,7 @@ export function MctbRecoveryPauseOpus({
 
   const pauseLabel =
     pauseKind === "timed" && pauseUntil
-      ? `Paused until ${new Date(pauseUntil).toLocaleString(undefined, {
-          dateStyle: "medium",
-          timeStyle: "short",
-        })}`
+      ? `Paused until ${formatMctbFriendlyDateTime(pauseUntil, timezone)}`
       : "Paused until you resume";
 
   if (compact) {

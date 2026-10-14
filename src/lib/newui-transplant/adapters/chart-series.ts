@@ -1,8 +1,10 @@
+import { formatMctbChartWeekdayLabel } from "@/lib/mctb/display-datetime";
 import type { ChartWeekRow } from "@/newui-transplant/lib/view-models";
 
 /** Merge parallel daily `{ date, count }` series into newui chart rows. */
 export function mergeDailyTrends(input: {
   days: string[];
+  timeZone?: string | null;
   calls?: Array<{ date: string; count: number }>;
   missed?: Array<{ date: string; count: number }>;
   texts?: Array<{ date: string; count: number }>;
@@ -18,11 +20,7 @@ export function mergeDailyTrends(input: {
   const booked = byDate(input.booked);
 
   return input.days.map((date) => {
-    // Fixed locale + UTC so SSR and client hydration match (avoids React #418).
-    const dayLabel = new Date(`${date}T12:00:00Z`).toLocaleDateString("en-US", {
-      weekday: "short",
-      timeZone: "UTC",
-    });
+    const dayLabel = formatMctbChartWeekdayLabel(date, input.timeZone);
     return {
       day: dayLabel,
       calls: calls.get(date) ?? 0,

@@ -71,6 +71,8 @@ export type MctbOnboardingController = {
   setWebsiteUrl: (v: string) => void;
   businessNumber: string;
   setBusinessNumber: (v: string) => void;
+  businessTimezone: string;
+  setBusinessTimezone: (v: string) => void;
   carrier: MctbForwardingCarrier;
   setCarrier: (c: MctbForwardingCarrier) => void;
   messageTemplate: string;

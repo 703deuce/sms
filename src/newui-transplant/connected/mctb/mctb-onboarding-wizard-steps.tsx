@@ -14,6 +14,8 @@ import { formatCarrierStep } from "@/lib/mctb/onboarding/carriers";
 import type { MctbForwardingCarrier } from "@/lib/mctb/onboarding/types";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import { formatMctbPhoneLabel } from "@/lib/mctb/phone-display";
+import { MCTB_US_TIMEZONE_OPTIONS } from "@/lib/mctb/us-timezone-options";
+import { SimpleSelect } from "@/newui-transplant/components/app/simple-select";
 import { existingConsentIneligibleReason } from "@/lib/mctb/setup-consent-eligibility";
 import { clientPlatformVoicemailGreetingPreviewPath } from "@/lib/phone/voicemail-greeting-defaults";
 import { ensureVoicemailNumberBox } from "@/lib/newui-transplant/mctb-voicemail-fetch";
@@ -108,6 +110,7 @@ export function WizardBusinessStep({ c }: { c: MctbOnboardingController }) {
           websiteUrl: c.websiteUrl.trim(),
           businessNumberE164: c.businessNumber.trim(),
           forwardingCarrier: c.carrier,
+          timezone: c.businessTimezone,
         }),
     },
   });
@@ -138,6 +141,20 @@ export function WizardBusinessStep({ c }: { c: MctbOnboardingController }) {
             placeholder="(571) 555-0188"
           />
           <p className="text-xs text-muted-foreground">The number your customers already call.</p>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="onb-biz-timezone">Your time zone</Label>
+          <SimpleSelect
+            id="onb-biz-timezone"
+            label="Your time zone"
+            className="w-full"
+            value={c.businessTimezone}
+            options={MCTB_US_TIMEZONE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+            onChange={(v) => c.setBusinessTimezone(v)}
+          />
+          <p className="text-xs text-muted-foreground">
+            We use this for missed-call times, pause schedules, and reports in your local time.
+          </p>
         </div>
       </div>
       <div className="mt-8 border-t pt-6">

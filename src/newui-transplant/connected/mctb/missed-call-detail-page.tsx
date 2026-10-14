@@ -38,8 +38,13 @@ export function NewUiMctbMissedCallDetailPage({ eventId }: { eventId: string }) 
     }
     const senderLabel =
       business?.sender && business.sender !== "—" ? business.sender.trim() : undefined;
-    setWired(buildMctbMissedCallDetailWired(detailJson, { senderLabel }));
-  }, [detailJson, business?.sender]);
+    setWired(
+      buildMctbMissedCallDetailWired(detailJson, {
+        senderLabel,
+        timeZone: business?.timezone,
+      }),
+    );
+  }, [detailJson, business?.sender, business?.timezone]);
 
   if (loading) return <p className="p-6 text-sm text-muted-foreground">Loading missed call…</p>;
   if (error) {

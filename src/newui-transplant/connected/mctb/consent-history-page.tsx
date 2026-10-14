@@ -8,7 +8,9 @@ import { td, th } from "@/newui-transplant/components/app/opus-tables";
 import { OPUS_SEARCH_INPUT, OPUS_TABLE_HEAD } from "@/newui-transplant/components/app/opus-surfaces";
 import { Button } from "@/newui-transplant/components/ui/button";
 import { cn } from "@/lib/utils";
+import { formatMctbFriendlyDateTime } from "@/lib/mctb/display-datetime";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
+import { useOpusWorkspaceData } from "@/newui-transplant/context/opus-workspace-data";
 
 type ConsentLogEvent = {
   id: string;
@@ -43,22 +45,13 @@ function fmtPhone(e164: string) {
   return e164;
 }
 
-function fmtTime(iso: string) {
-  try {
-    return new Date(iso).toLocaleString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
+function fmtTime(iso: string, timeZone?: string | null) {
+  return formatMctbFriendlyDateTime(iso, timeZone);
 }
 
 export function NewUiMctbConsentHistoryPage() {
+  const { business } = useOpusWorkspaceData();
+  const timeZone = business?.timezone;
   const [events, setEvents] = useState<ConsentLogEvent[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -185,10 +178,10 @@ export function NewUiMctbConsentHistoryPage() {
                         <td className={td}>
                           <Pill tone="success">{row.consentMethod || "Press 1"}</Pill>
                         </td>
-                        <td className={cn(td, "text-muted-foreground")}>{fmtTime(row.consentedAt)}</td>
+                        <td className={cn(td, "text-muted-foreground")}>{fmtTime(row.consentedAt, timeZone)}</td>
                         <td className={cn(td, "text-muted-foreground")}>
                           {row.smsSentAt ? (
-                            <span className="text-success">Sent {fmtTime(row.smsSentAt)}</span>
+                            <span className="text-success">Sent {fmtTime(row.smsSentAt, timeZone)}</span>
                           ) : row.missedCallEventId ? (
                             row.missedCallStatus?.replace(/_/g, " ").toLowerCase() || "Queued"
                           ) : (

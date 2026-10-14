@@ -6,6 +6,7 @@ import { mapMctbMissedCallsListToNewUi } from "@/lib/newui-transplant/adapters/m
 import { buildMissedCallsListUrl } from "@/lib/newui-transplant/missed-calls-query";
 import type { MctbMissedCallsListData } from "@/lib/mctb/missed-calls-list-data";
 import { addMctbExclusion } from "@/lib/newui-transplant/api/mctb-setup-client";
+import { useOpusWorkspaceData } from "@/newui-transplant/context/opus-workspace-data";
 
 type ListQuery = {
   q: string;
@@ -38,6 +39,8 @@ export function NewUiMctbMissedCallsPage({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [exclusionError, setExclusionError] = useState<string | null>(null);
   const skipInitialFetch = useRef(Boolean(initialData));
+  const { business } = useOpusWorkspaceData();
+  const timeZone = business?.timezone;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -87,7 +90,7 @@ export function NewUiMctbMissedCallsPage({
     );
   }
 
-  const missedCalls = mapMctbMissedCallsListToNewUi(data);
+  const missedCalls = mapMctbMissedCallsListToNewUi(data, timeZone);
   const summary = data.summary;
   const pagination = data.pagination;
 

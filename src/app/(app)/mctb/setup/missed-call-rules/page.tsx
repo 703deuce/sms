@@ -9,7 +9,7 @@ export default function MctbSetupMissedCallRulesPage() {
   if (isNewUiStage2Enabled()) {
     redirect(
       resolveMctbSetupIaRedirect(MCTB_ROUTES.setupMissedCallRules) ??
-        `${MCTB_ROUTES.missedCallRecovery}?tab=rules`,
+        `${MCTB_ROUTES.missedCallRecovery}?tab=general`,
     );
   }
   return <MctbSetupMissedCallRulesView />;
