@@ -59,6 +59,7 @@ export function WorkshopLivePreview({
         imageUrl={form.imageUrl}
         category="workshop"
         alt={form.name || "Workshop cover"}
+        preview
         className="mb-4"
       />
       <div className="flex items-start justify-between gap-3">

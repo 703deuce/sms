@@ -41,6 +41,7 @@ export function MembershipLivePreview({
         imageUrl={form.imageUrl}
         category="membership"
         alt={form.name || "Membership cover"}
+        preview
         className="mb-4"
       />
       <div className="flex items-start justify-between gap-3">

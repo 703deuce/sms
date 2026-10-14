@@ -63,6 +63,7 @@ export function ServiceLivePreview({
         imageUrl={form.imageUrl}
         category="service"
         alt={form.name || "Service cover"}
+        preview
         className="mb-4"
       />
       <div className="flex items-start justify-between gap-3">
