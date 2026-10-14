@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@/newui-transplant/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { MetricCard, SectionHeader } from "@/components/ui/metric";
 import { cn, formatNumber, formatPercent } from "@/lib/utils";
@@ -355,14 +355,14 @@ export function SmsAnalyticsView() {
             </select>
             <Button
               variant={compare ? "secondary" : "ghost"}
-              size="md"
+              size="default"
               className={cn("text-[13px]", compare && "font-semibold")}
               onClick={() => setCompare((v) => !v)}
             >
               {compare ? <Check className="h-4 w-4" /> : null}
               Compare previous period
             </Button>
-            <Button variant="outline" size="md" className="text-[13px]" disabled>
+            <Button variant="outline" size="default" className="text-[13px]" disabled>
               <Download className="h-4 w-4" />
               Export CSV
             </Button>

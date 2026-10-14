@@ -1,5 +1,6 @@
 import { CampaignDetailView } from "@/components/campaigns/campaign-detail-view";
 import { CampaignResultsView } from "@/components/campaigns/broadcast/campaign-results";
+import { CampaignsOpusShell } from "@/newui-transplant/connected/campaigns/campaigns-opus-shell";
 import { listBroadcastRecipients } from "@/lib/mass-texting/broadcast/analytics";
 import { buildCampaignTimelineFromData } from "@/lib/campaigns/campaign-timeline";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -67,6 +68,7 @@ export default async function CampaignDetailPage({
   if (showResultsView) {
     const recipients = await listBroadcastRecipients(workspaceId, campaignId);
     return (
+      <CampaignsOpusShell wide>
       <CampaignResultsView
         campaign={{
           id: campaign.id,
@@ -100,10 +102,12 @@ export default async function CampaignDetailPage({
         segmentsPerMessage={segments.segments}
         cost={campaign.cost}
       />
+      </CampaignsOpusShell>
     );
   }
 
   return (
+    <CampaignsOpusShell wide>
     <CampaignDetailView
       campaign={campaign}
       campaignId={campaignId}
@@ -115,5 +119,6 @@ export default async function CampaignDetailPage({
         at: log.at,
       }))}
     />
+    </CampaignsOpusShell>
   );
 }

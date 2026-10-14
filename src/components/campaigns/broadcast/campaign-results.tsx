@@ -2,14 +2,13 @@
 
 import { CampaignActions, campaignLooksLikeMassText } from "@/components/campaigns/campaign-actions";
 import { campaignDetailIsKimiBroadcast } from "@/lib/campaigns/mass-text-detection";
-import { V1Breadcrumb, V1PageHeader } from "@/components/v1/v1-polish";
+import { PageHeader, Pill } from "@/newui-transplant/components/app/kit";
 import {
   campaignStatusEmoji,
   formatCampaignDateTime,
   type CampaignTimelineEvent,
 } from "@/lib/campaigns/campaign-detail-helpers";
-import { Button } from "@/components/ui/button";
-import { StatusChip } from "@/components/ui/status-chip";
+import { Button } from "@/newui-transplant/components/ui/button";
 import { cn, formatCurrency, formatNumber, formatPercent } from "@/lib/utils";
 import { Copy, Search } from "lucide-react";
 import Link from "next/link";
@@ -466,14 +465,17 @@ export function CampaignResultsView({
 
   return (
     <div className="mx-auto w-full max-w-[1200px] px-4 pb-10 lg:px-6">
-      <V1Breadcrumb items={[{ label: "Campaigns", href: "/campaigns" }, { label: campaign.name }]} />
+      <nav className="mb-4 text-xs text-muted-foreground" aria-label="Breadcrumb">
+        <Link href="/campaigns" className="hover:text-foreground">Campaigns</Link>
+        <span className="mx-1.5 text-border">/</span>
+        <span className="font-medium text-foreground">{campaign.name}</span>
+      </nav>
 
-      <V1PageHeader
-        emoji={campaignStatusEmoji(campaign.status)}
+      <PageHeader
         title={campaign.name}
         description={campaign.audience || "Campaign results"}
         actions={
-          <>
+          <div className="flex flex-wrap items-center gap-2">
             <Link href="/campaigns">
               <Button variant="outline">← Back</Button>
             </Link>
@@ -490,12 +492,12 @@ export function CampaignResultsView({
               status={liveStatus}
               isMassText={campaignLooksLikeMassText(campaign.configJson)}
             />
-          </>
+          </div>
         }
       />
 
       <div className="mb-6 flex flex-wrap items-center gap-3">
-        <StatusChip status={liveStatus} />
+        <Pill tone="neutral">{liveStatus}</Pill>
         {isSending ? (
           <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[12px] font-semibold text-amber-700">
             📤 Live updating…

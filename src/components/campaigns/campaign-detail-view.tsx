@@ -1,8 +1,7 @@
 import { CampaignActions } from "@/components/campaigns/campaign-actions";
 import { CampaignLaunchReview } from "@/components/campaigns/campaign-launch-review";
-import { V1Breadcrumb, V1PageHeader } from "@/components/v1/v1-polish";
-import { Button } from "@/components/ui/button";
-import { StatusChip } from "@/components/ui/status-chip";
+import { PageHeader, Pill } from "@/newui-transplant/components/app/kit";
+import { Button } from "@/newui-transplant/components/ui/button";
 import {
   campaignStatusEmoji,
   formatCampaignDateTime,
@@ -122,16 +121,19 @@ export function CampaignDetailView({ campaign, campaignId, activity, timeline }:
 
   return (
     <div className="mx-auto max-w-[1200px] px-1 pb-12">
-      <V1Breadcrumb items={[{ label: "Campaigns", href: "/campaigns" }, { label: campaign.name }]} />
+      <nav className="mb-4 text-xs text-muted-foreground" aria-label="Breadcrumb">
+        <Link href="/campaigns" className="hover:text-foreground">Campaigns</Link>
+        <span className="mx-1.5 text-border">/</span>
+        <span className="font-medium text-foreground">{campaign.name}</span>
+      </nav>
 
-      <V1PageHeader
-        emoji={campaignStatusEmoji(campaign.status)}
+      <PageHeader
         title={campaign.name}
         description={`${campaign.type} campaign · ${campaign.audience}`}
         actions={
-          <>
+          <div className="flex flex-wrap items-center gap-2">
             <Link href="/campaigns">
-              <Button variant="ghost">← Back</Button>
+              <Button variant="outline">← Back</Button>
             </Link>
             {(campaign.status === "Draft" || campaign.status === "Scheduled") &&
             campaignDetailIsKimiBroadcast(campaign.configJson) ? (
@@ -151,12 +153,12 @@ export function CampaignDetailView({ campaign, campaignId, activity, timeline }:
               status={campaign.status}
               isMassText={campaignLooksLikeMassText(campaign.configJson)}
             />
-          </>
+          </div>
         }
       />
 
       <div className="-mt-3 mb-6 flex flex-wrap items-center gap-x-3 gap-y-2">
-        <StatusChip status={campaign.status} />
+        <Pill tone="neutral">{campaign.status}</Pill>
         <span className="hidden h-4 w-px bg-border sm:block" aria-hidden />
         <span className="text-[13px] text-muted-foreground">
           Created by <span className="font-medium text-foreground/80">{campaign.createdBy || "—"}</span>

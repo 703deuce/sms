@@ -1,6 +1,7 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { CampaignsOpusShell } from "@/newui-transplant/connected/campaigns/campaigns-opus-shell";
+import { Button } from "@/newui-transplant/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   MetricCard,
@@ -110,6 +111,7 @@ export default function TemplatesPage() {
   const sharedCount = templates.filter((t) => t.shared).length;
 
   return (
+    <CampaignsOpusShell wide>
     <div className="text-[13px]">
       <SectionHeader
         icon={LayoutGrid}
@@ -400,5 +402,6 @@ export default function TemplatesPage() {
         </Card>
       )}
     </div>
+    </CampaignsOpusShell>
   );
 }

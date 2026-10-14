@@ -1,7 +1,7 @@
 "use client";
 
 import { campaignLooksLikeMassText } from "@/lib/campaigns/mass-text-detection";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/newui-transplant/components/ui/button";
 import { AlertTriangle, Pause, Play, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -117,7 +117,7 @@ export function CampaignActions({
 
   if (actions.length === 0) return null;
 
-  const size = variant === "row" ? "sm" : "md";
+  const size = variant === "row" ? "sm" : "default";
 
   return (
     <div
@@ -132,10 +132,10 @@ export function CampaignActions({
           size={size}
           variant={
             item.variant === "danger"
-              ? "danger"
+              ? "destructive"
               : item.variant === "outline"
                 ? "outline"
-                : "primary"
+                : "default"
           }
           disabled={loading !== null}
           onClick={() => runAction(item.action)}

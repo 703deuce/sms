@@ -1,6 +1,6 @@
 "use client";
 
-import { campaignUi } from "@/components/campaigns/broadcast/campaign-layout";
+import { Button } from "@/newui-transplant/components/ui/button";
 import { clearComposeDraft, loadComposeDraft } from "@/lib/campaigns/compose-draft";
 import { formatRecurrenceSummary } from "@/lib/campaigns/recurrence-format";
 import {
@@ -12,7 +12,6 @@ import {
   type LaunchReviewData,
 } from "@/lib/campaigns/kimi-campaigns-adapter";
 import { formatNumber } from "@/lib/utils";
-import { cn } from "@/lib/utils";
 import { Loader2, Send } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -101,16 +100,16 @@ export function CampaignSuccessView() {
       ) : null}
       <div className="mt-8 flex flex-wrap justify-center gap-3">
         {campaignId ? (
-          <Link href={`/campaigns/${campaignId}`} className={campaignUi.primaryBtn}>
-            View Campaign
+          <Link href={`/campaigns/${campaignId}`}>
+            <Button>View Campaign</Button>
           </Link>
         ) : (
-          <Link href="/campaigns" className={campaignUi.primaryBtn}>
-            View Campaigns
+          <Link href="/campaigns">
+            <Button>View Campaigns</Button>
           </Link>
         )}
-        <Link href="/campaigns/new" className={campaignUi.outlineBtn} onClick={() => clearComposeDraft()}>
-          Create Another
+        <Link href="/campaigns/new" onClick={() => clearComposeDraft()}>
+          <Button variant="outline">Create Another</Button>
         </Link>
       </div>
     </div>
@@ -306,27 +305,21 @@ export function CampaignQueueView() {
       ) : null}
       {!launching ? (
         <div className="mt-6 flex flex-wrap justify-center gap-3">
-          <button type="button" onClick={() => void cancelSend()} className={cn(campaignUi.outlineBtn)}>
+          <Button type="button" variant="outline" onClick={() => void cancelSend()}>
             Cancel Send
-          </button>
+          </Button>
           {requiresLargeConfirm ? (
-            <button
+            <Button
               type="button"
               disabled={loadingReview || !confirmLargeSend || inFlightRef.current}
               onClick={() => void runLaunch()}
-              className={campaignUi.primaryBtn}
             >
               Launch Campaign
-            </button>
+            </Button>
           ) : error ? (
-            <button
-              type="button"
-              disabled={inFlightRef.current}
-              onClick={() => void runLaunch()}
-              className={campaignUi.primaryBtn}
-            >
+            <Button type="button" disabled={inFlightRef.current} onClick={() => void runLaunch()}>
               Try Again
-            </button>
+            </Button>
           ) : null}
         </div>
       ) : null}

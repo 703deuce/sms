@@ -2,9 +2,10 @@
 
 import { CATEGORY_ICONS } from "@/components/campaigns/category-icons";
 import { AttachedMediaThumbs, MediaPicker } from "@/components/messaging/media-picker";
-import { Button } from "@/components/ui/button";
+import { CampaignsOpusShell } from "@/newui-transplant/connected/campaigns/campaigns-opus-shell";
+import { PageHeader } from "@/newui-transplant/components/app/kit";
+import { Button } from "@/newui-transplant/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/input";
-import { V1Breadcrumb, V1PageHeader, V1WizardSection } from "@/components/v1/v1-polish";
 import {
   DEFAULT_MESSAGES,
   getCampaignCategory,
@@ -221,25 +222,23 @@ export default function NewCategoryCampaignPage() {
   }
 
   return (
+    <CampaignsOpusShell wide>
     <div className="mx-auto max-w-[1200px] px-1 pb-10">
-      <V1Breadcrumb
-        items={[
-          { label: "Playbooks", href: "/playbooks" },
-          { label: category.title },
-        ]}
-      />
+      <nav className="mb-4 text-xs text-muted-foreground" aria-label="Breadcrumb">
+        <Link href="/playbooks" className="hover:text-foreground">Playbooks</Link>
+        <span className="mx-1.5 text-border">/</span>
+        <span className="font-medium text-foreground">{category.title}</span>
+      </nav>
 
-      <V1PageHeader
-        emoji={emoji}
+      <PageHeader
         title={category.title}
         description={category.description}
         actions={
-          <Link
-            href="/playbooks"
-            className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-4 text-[13px] font-semibold text-foreground shadow-sm hover:bg-muted"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            All playbooks
+          <Link href="/playbooks">
+            <Button variant="outline">
+              <ArrowLeft className="h-4 w-4" />
+              All playbooks
+            </Button>
           </Link>
         }
       />
@@ -263,11 +262,10 @@ export default function NewCategoryCampaignPage() {
 
       <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="space-y-4 rounded-[14px] border border-border bg-card p-5 shadow-sm">
-          <V1WizardSection
-            emoji="✏️"
-            title="Campaign details"
-            description="Name your sequence and choose who receives it."
-          />
+          <div className="mb-4">
+            <h2 className="text-base font-semibold text-foreground">Campaign details</h2>
+            <p className="text-sm text-muted-foreground">Name your sequence and choose who receives it.</p>
+          </div>
           <div>
             <Label htmlFor="name">Campaign name</Label>
             <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
@@ -509,5 +507,6 @@ export default function NewCategoryCampaignPage() {
         onConfirm={setMediaUrls}
       />
     </div>
+    </CampaignsOpusShell>
   );
 }
