@@ -143,7 +143,7 @@ export function PackagesCatalogOpus() {
                         />
                       </th>
                       <td className={cn(OpusTd, 'max-w-[16rem] text-muted-foreground')}>
-                        <span className="line-clamp-2 text-sm">{packageBenefitsSummary(rules)}</span>
+                        <span className="line-clamp-2 text-sm">{packageBenefitsSummary(rules, { active: row.active })}</span>
                       </td>
                       <td className={cn(OpusTd, 'font-medium tabular-nums')}>{formatMoney(row.priceCents)}</td>
                       <td className={OpusTd}>{row.ownerCount ?? 0}</td>

@@ -278,7 +278,7 @@ export function CreatePackageWizard() {
                   key={t.id}
                   type="button"
                   className={cn(
-                    "flex min-h-[12.5rem] flex-col rounded-xl border-2 p-4 text-left transition-colors",
+                    "flex min-h-[12rem] flex-col rounded-xl border-2 p-5 text-left transition-colors sm:min-h-[12.75rem]",
                     selected
                       ? "border-primary bg-primary/[0.06] ring-2 ring-primary/20"
                       : "border-border bg-card hover:border-primary/40",
@@ -290,9 +290,11 @@ export function CreatePackageWizard() {
                     <OpusIconBadge icon={Package} className="size-10 rounded-xl bg-primary/12" />
                     {selected ? <Check className="size-5 text-primary" aria-hidden /> : null}
                   </div>
-                  <span className="mt-3 font-semibold">{t.title}</span>
-                  <span className="mt-1 text-sm text-muted-foreground">{t.description}</span>
-                  <span className="mt-3 text-xs text-muted-foreground">{t.example}</span>
+                  <span className="mt-3 text-base font-semibold leading-[1.375rem]">{t.title}</span>
+                  <span className="mt-3 text-[0.8125rem] leading-[1.1875rem] text-muted-foreground">
+                    {t.description}
+                  </span>
+                  <span className="mt-3 text-xs leading-[1.125rem] text-muted-foreground">{t.example}</span>
                 </button>
               );
             })}
@@ -302,7 +304,7 @@ export function CreatePackageWizard() {
               <Label htmlFor="pkg-name">Package name</Label>
               <Input
                 id="pkg-name"
-                className="h-11 w-full"
+                className="h-11 w-full text-sm"
                 value={form.name}
                 onChange={(e) => onFormChange("name", e.target.value)}
                 placeholder="IT Career Starter Package"
@@ -326,12 +328,12 @@ export function CreatePackageWizard() {
             <Label htmlFor="pkg-desc">Short description (optional)</Label>
             <Textarea
               id="pkg-desc"
-              rows={3}
+              className="min-h-[6.25rem] w-full text-sm leading-[1.3125rem]"
               value={form.description}
               onChange={(e) => onFormChange("description", e.target.value)}
             />
           </div>
-          <div className="mt-6 max-w-md">
+          <div className="mt-6">
             <OpusCoverImageUploader
               value={form.imageUrl}
               onChange={(url) => onFormChange("imageUrl", url)}
@@ -364,9 +366,9 @@ export function CreatePackageWizard() {
                 return (
                   <li
                     key={o.id}
-                    className="flex min-h-[4.5rem] items-center gap-3 rounded-xl border bg-card px-3 py-3 shadow-[0_1px_2px_rgba(16,18,40,0.04)]"
+                    className="flex min-h-[5rem] items-center gap-3 rounded-[0.625rem] border bg-card px-4 py-3.5 shadow-[0_1px_2px_rgba(16,18,40,0.04)]"
                   >
-                    <OpusIconBadge icon={Layers} className="size-10 shrink-0 rounded-lg bg-primary/10" />
+                    <OpusIconBadge icon={Layers} className="size-11 shrink-0 rounded-lg bg-primary/10" />
                     <div className="min-w-0 flex-1">
                       <p className="font-medium">{o.name}</p>
                       <p className="text-xs text-muted-foreground">{o.meta}</p>

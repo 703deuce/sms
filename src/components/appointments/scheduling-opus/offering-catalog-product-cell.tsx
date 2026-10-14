@@ -17,7 +17,7 @@ type Props = {
   className?: string;
 };
 
-/** 52px catalog thumbnail + name stack (wireframe package/class rows). */
+/** 48px catalog thumbnail + vertically centered name stack. */
 export function OfferingCatalogProductCell({
   href,
   name,
@@ -28,7 +28,7 @@ export function OfferingCatalogProductCell({
 }: Props) {
   const thumb = (
     <div
-      className="relative size-[3.25rem] shrink-0 overflow-hidden rounded-lg border bg-muted/30"
+      className="relative size-12 shrink-0 overflow-hidden rounded-lg border bg-muted/30"
       aria-hidden={!imageUrl}
     >
       {imageUrl?.trim() ? (
@@ -40,10 +40,10 @@ export function OfferingCatalogProductCell({
   );
 
   const text = (
-    <div className="min-w-0">
-      <span className="block truncate text-sm font-semibold">{name}</span>
+    <div className="flex min-w-0 flex-col justify-center gap-1">
+      <span className="block truncate text-sm font-semibold leading-5 text-foreground">{name}</span>
       {description?.trim() ? (
-        <span className="mt-0.5 block truncate text-xs text-muted-foreground">{description}</span>
+        <span className="block truncate text-xs leading-4 text-muted-foreground">{description}</span>
       ) : null}
     </div>
   );
@@ -52,10 +52,13 @@ export function OfferingCatalogProductCell({
     return (
       <Link
         href={href}
-        className={cn("flex min-w-0 items-center gap-3 text-primary hover:underline", className)}
+        className={cn(
+          "group flex min-w-0 items-center gap-3 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+          className,
+        )}
       >
         {thumb}
-        {text}
+        <span className="min-w-0 [&_span:first-child]:group-hover:underline">{text}</span>
       </Link>
     );
   }

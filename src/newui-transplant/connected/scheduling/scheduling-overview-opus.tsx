@@ -8,7 +8,6 @@ import {
   GraduationCap,
   Package,
   Plus,
-  Store,
   TrendingUp,
 } from 'lucide-react'
 import {
@@ -21,9 +20,11 @@ import {
   OPUS_TABLE_HEAD,
 } from '@/newui-transplant/components/appointment-reminders/opus-scheduling-chrome'
 import { SchedulingPageHeader } from '@/components/appointments/scheduling-opus/scheduling-page-header'
+import { SchedulingCompactEmpty } from '@/components/appointments/scheduling-opus/scheduling-compact-empty'
+import { StorefrontReadinessPanel } from '@/components/appointments/scheduling-opus/storefront-readiness-panel'
 import { OfferingCatalogProductCell } from '@/components/appointments/scheduling-opus/offering-catalog-product-cell'
 import { Button } from '@/newui-transplant/components/ui/button'
-import { Callout, EmptyState, Pill } from '@/newui-transplant/components/app/kit'
+import { EmptyState, Pill } from '@/newui-transplant/components/app/kit'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/newui-transplant/components/ui/tabs'
 import {
   formatMoney,
@@ -107,7 +108,7 @@ export function SchedulingOverviewOpus() {
         ].map((m) => (
           <div
             key={m.label}
-            className="flex min-h-[6.5rem] flex-col rounded-xl border bg-card px-4 py-3 shadow-sm"
+            className="flex h-[6.75rem] flex-col rounded-xl border bg-card px-4 py-3 shadow-sm"
           >
             <div className="flex items-start justify-between gap-2">
               <span className="text-xs font-medium text-muted-foreground">{m.label}</span>
@@ -119,68 +120,63 @@ export function SchedulingOverviewOpus() {
         ))}
       </div>
 
-      <div className="mt-5 grid gap-5 lg:grid-cols-12">
+      <div className="mt-5 grid items-start gap-5 lg:grid-cols-12">
         <section className="lg:col-span-8">
           <OpusDataSurface className="overflow-hidden p-0">
-            <div className="border-b px-4 py-3">
-              <Tabs defaultValue="appointments">
+            <Tabs defaultValue="appointments">
+              <div className="border-b px-4 py-3">
                 <TabsList className="h-9">
                   <TabsTrigger value="appointments">Upcoming appointments</TabsTrigger>
                   <TabsTrigger value="classes">Upcoming classes</TabsTrigger>
                 </TabsList>
-              </Tabs>
-            </div>
-            <Tabs defaultValue="appointments">
+              </div>
               <TabsContent value="appointments" className="m-0 p-0">
-                <div className="flex min-h-[11.25rem] flex-col justify-center px-4 py-6">
-                  <EmptyState
-                    icon={CalendarDays}
-                    title="No upcoming appointments"
-                    description="Open the calendar to see today’s schedule."
-                    action={
-                      <Button nativeButton={false} variant="outline" size="sm" render={<Link href="/appointment-reminders" />}>
-                        Open calendar
-                      </Button>
-                    }
-                  />
-                </div>
+                <SchedulingCompactEmpty
+                  icon={CalendarDays}
+                  title="No upcoming appointments"
+                  description="Open the calendar to see today’s schedule."
+                  action={
+                    <Button
+                      nativeButton={false}
+                      variant="outline"
+                      size="sm"
+                      className="h-9"
+                      render={<Link href="/appointment-reminders" />}
+                    >
+                      Open calendar
+                    </Button>
+                  }
+                />
               </TabsContent>
               <TabsContent value="classes" className="m-0 p-0">
-                <div className="flex min-h-[11.25rem] flex-col justify-center px-4 py-6">
-                  <EmptyState
-                    icon={GraduationCap}
-                    title="No class sessions today"
-                    description="Manage classes and enrollments from the classes catalog."
-                    action={
-                      <Button nativeButton={false} variant="outline" size="sm" render={<Link href="/appointments/classes" />}>
-                        Classes
-                      </Button>
-                    }
-                  />
-                </div>
+                <SchedulingCompactEmpty
+                  icon={GraduationCap}
+                  title="No class sessions today"
+                  description="Manage classes and enrollments from the classes catalog."
+                  action={
+                    <Button
+                      nativeButton={false}
+                      variant="outline"
+                      size="sm"
+                      className="h-9"
+                      render={<Link href="/appointments/classes" />}
+                    >
+                      Classes
+                    </Button>
+                  }
+                />
               </TabsContent>
             </Tabs>
           </OpusDataSurface>
         </section>
         <aside className="lg:col-span-4">
-          <Callout tone="info" title="Storefront & payments" className="h-full">
-            <p className="text-sm">Publish packages and connect Stripe before selling online.</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Button nativeButton={false} size="sm" variant="outline" render={<Link href="/appointments/commerce" />}>
-                <Store className="mr-1.5 size-3.5" aria-hidden />
-                Commerce
-              </Button>
-              <Button nativeButton={false} size="sm" variant="outline" render={<Link href="/appointments/pricing-payments" />}>
-                Payments
-              </Button>
-            </div>
-          </Callout>
+          <StorefrontReadinessPanel />
         </aside>
       </div>
 
       <div className="mt-6">
         <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">Recently created products</h2>
+          <h2 className="text-lg font-semibold leading-[1.625rem]">Recently created products</h2>
           <Button nativeButton={false} variant="ghost" size="sm" render={<Link href="/appointments/packages" />}>
             View all
           </Button>
@@ -214,8 +210,8 @@ export function SchedulingOverviewOpus() {
                 {packages.map((row) => {
                   const parsed = packageFormFromRow(row as Parameters<typeof packageFormFromRow>[0])
                   return (
-                    <tr key={row.id} className="min-h-16 hover:bg-muted/40">
-                      <th scope="row" className={cn(OpusTd, 'py-3 font-normal')}>
+                    <tr key={row.id} className="h-[4.5rem] hover:bg-muted/40">
+                      <th scope="row" className={cn(OpusTd, 'py-2 font-normal')}>
                         <OfferingCatalogProductCell
                           href={`/appointments/packages/${row.id}`}
                           name={row.name}

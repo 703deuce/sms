@@ -301,12 +301,12 @@ export function CreateClassWizard() {
   const rule = form.recurrence;
 
   const stepEditor = (
-    <div className={cn(OPUS_CARD, "p-5 md:p-6")}>
+    <div className="space-y-5">
             {step === 0 ? (
-              <div className="space-y-4">
+              <div className="space-y-5">
                 <div>
-                  <p className="ws-section-heading">What are customers registering for?</p>
-                  <p className="ws-section-sub">
+                  <h2 className="text-lg font-semibold leading-[1.625rem]">What are customers registering for?</h2>
+                  <p className="mt-1.5 text-sm leading-[1.3125rem] text-muted-foreground">
                     Everything else can be adjusted after the class exists.
                   </p>
                 </div>
@@ -314,6 +314,7 @@ export function CreateClassWizard() {
                   <TextInput
                     id="wiz-cls-name"
                     autoFocus
+                    className="h-11 w-full"
                     placeholder="Sunrise Vinyasa"
                     value={form.name}
                     onChange={(e) => update("name", e.target.value)}
@@ -326,15 +327,23 @@ export function CreateClassWizard() {
                 >
                   <TextInput
                     id="wiz-cls-category"
+                    className="h-11 w-full max-w-md"
                     placeholder="Yoga"
                     value={form.category}
                     onChange={(e) => update("category", e.target.value)}
+                    list="wiz-cls-category-suggestions"
                   />
+                  <datalist id="wiz-cls-category-suggestions">
+                    <option value="Yoga" />
+                    <option value="Fitness" />
+                    <option value="Tutoring" />
+                    <option value="Workshop" />
+                  </datalist>
                 </Field>
                 <Field label="Description" htmlFor="wiz-cls-description" hint="Optional.">
                   <TextArea
                     id="wiz-cls-description"
-                    rows={3}
+                    className="min-h-[6.875rem] w-full"
                     placeholder="What happens in this class, and who it suits."
                     value={form.description}
                     onChange={(e) => update("description", e.target.value)}

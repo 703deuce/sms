@@ -1,11 +1,11 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { CalendarDays, MapPin, Repeat, Tag, UserRound, Users, Wallet } from "lucide-react";
+import { MapPin, Repeat, Tag, UserRound, Users, Wallet } from "lucide-react";
 import type { ClassFormState } from "@/lib/appointments/classes/class-form";
 import { classPriceLabel } from "@/lib/appointments/classes/class-summary";
 import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
-import { OpusIconBadge, Pill } from "@/newui-transplant/components/app/kit";
+import { Pill } from "@/newui-transplant/components/app/kit";
 import { cn } from "@/lib/utils";
 import { OfferingCoverImage } from "./offering-cover-image";
 
@@ -52,6 +52,10 @@ export function ClassLivePreview({
 
   return (
     <section className={cn(OPUS_CARD, "overflow-hidden p-5", className)}>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Live preview</p>
+        <Pill tone="neutral" dot={false}>Draft</Pill>
+      </div>
       <OfferingCoverImage
         imageUrl={form.imageUrl}
         category={form.requireFullSeries ? "course" : "class"}
@@ -59,21 +63,17 @@ export function ClassLivePreview({
         preview
         className="mb-4"
       />
-      <div className="flex items-start justify-between gap-3">
-        <OpusIconBadge icon={CalendarDays} className="size-10 rounded-xl bg-primary/12" />
-        <Pill tone="neutral" dot={false}>Draft</Pill>
-      </div>
-      <h2 className="mt-3 text-lg font-semibold">{form.name.trim() || "Untitled class"}</h2>
-      <dl className="mt-4 space-y-2 border-t pt-4 text-sm">
+      <h2 className="text-lg font-semibold leading-[1.375rem]">{form.name.trim() || "Untitled class"}</h2>
+      <dl className="mt-4 space-y-0 border-t pt-4 text-sm">
         {rows.map((row) => (
-          <div key={row.label} className="flex items-center justify-between gap-3">
-            <dt className="inline-flex items-center gap-1.5 text-muted-foreground">
+          <div key={row.label} className="flex min-h-7 items-center justify-between gap-3 py-0.5">
+            <dt className="inline-flex shrink-0 items-center gap-1.5 text-muted-foreground">
               <row.icon className="size-3.5" aria-hidden />
               {row.label}
             </dt>
             <dd
               className={cn(
-                "truncate font-medium",
+                "min-w-0 truncate text-right font-medium",
                 row.set ? "text-foreground" : "text-muted-foreground",
               )}
               title={row.value}

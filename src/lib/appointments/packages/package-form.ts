@@ -326,16 +326,26 @@ export function applyPackageSellTemplate(
 }
 
 /** Customer-facing one-line summary for catalog rows (no raw credit keys). */
-export function packageBenefitsSummary(rules: PackageCreditRule[]): string {
+export function packageBenefitsSummary(
+  rules: PackageCreditRule[],
+  options?: { active?: boolean },
+): string {
   const parts = rules
     .filter((r) => r.quantity > 0)
     .map((r) => {
-      const label = (r.label || "session").toLowerCase();
+      const name = r.serviceName?.trim();
+      const label = name || (r.label || "session").toLowerCase();
       const qty = r.quantity;
+      if (name) {
+        if (qty === 1) return `1 ${name}`;
+        return `${qty} ${name}`;
+      }
       if (qty === 1) return `1 ${label}`;
       return `${qty} ${label}${label.endsWith("s") ? "" : "s"}`;
     });
-  if (!parts.length) return "Configure inclusions";
+  if (!parts.length) {
+    return options?.active ? "Needs inclusions — edit package" : "Add inclusions when editing";
+  }
   if (parts.length <= 2) return parts.join(" · ");
   return `${parts.slice(0, 2).join(" · ")} +${parts.length - 2} more`;
 }
