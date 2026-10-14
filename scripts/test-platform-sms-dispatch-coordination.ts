@@ -3,7 +3,10 @@
  * Platform SMS dispatch coordination audit — focused checks without live Telnyx.
  *
  * Usage:
- *   HEADLESS_PROVIDER_MODE=recording npx tsx scripts/test-platform-sms-dispatch-coordination.ts
+ *   HEADLESS_PROVIDER_MODE=recording PLATFORM_DISPATCH_USE_MEMORY=1 npx tsx scripts/test-platform-sms-dispatch-coordination.ts
+ *
+ * Multi-process Redis (requires REDIS_URL):
+ *   HEADLESS_PROVIDER_MODE=recording npx tsx scripts/test-platform-sms-dispatch-redis-concurrency.ts
  *
  * Optional: REVIEWS_CERT_DATABASE_URL or DATABASE_URL for job_queue priority claim tests.
  */

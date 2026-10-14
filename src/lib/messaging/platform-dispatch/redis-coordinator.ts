@@ -145,3 +145,15 @@ export async function resetPlatformDispatchRedisForTests(): Promise<void> {
   const keys = await r.keys("platform:sms:*");
   if (keys.length) await r.del(...keys);
 }
+
+/** Release Redis connection so worker child processes can exit cleanly. */
+export async function disconnectPlatformDispatchRedis(): Promise<void> {
+  if (!client) return;
+  try {
+    await client.quit();
+  } catch {
+    client.disconnect();
+  }
+  client = null;
+  connecting = null;
+}

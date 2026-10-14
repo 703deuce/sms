@@ -140,11 +140,31 @@
 
 ---
 
-## Gaps and smallest safe follow-ups (not implemented here)
+## Implemented: shared platform dispatch gate (2026-10-14 follow-up)
 
-1. **Global send gate at `sendQuickSms`** (or shared Redis limiter keyed by platform `fromE164`) if carrier throughput must be enforced across MCTB + AR + campaigns + reviews simultaneously.
-2. **Unified BullMQ priority queue** (single queue + weighted fair queue) — larger change; conflicts with current queue isolation for ops/metrics.
-3. **Extend `acquireProviderSlot` to all platform-sender sends** — aligns reviews with MCTB/AR for provider throttling without rewriting product engines.
+**Module:** `src/lib/messaging/platform-dispatch/`  
+**Integration:** `sendQuickSms` → `assertPlatformDispatchForSendQuickSms` immediately before provider dispatch (and before recording adapter when `senderRoute` is set).
+
+| Behavior | Mechanism |
+|----------|-----------|
+| Distributed throughput | Redis Lua (`redis-coordinator.ts`) per `fromE164` per-second counter; env `PLATFORM_DISPATCH_MPS` (default 10) |
+| Priority + FIFO within tier | Sorted wait set score = `priority * 1e12 + enqueueMs` — MCTB 5, AR reminder 8, AR transactional 25, bulk 50 |
+| Bulk vs interactive | Bulk waiters defer while lower-score (interactive) waiters are due (`interactive_waiting`) |
+| Scheduled sends | `platformDispatchNotBefore` on `QuickSendSmsInput` |
+| Worker-safe deferral | `PlatformDispatchDeferredError` → `JobDeferredError` (soft) in MCTB / AR / mass campaign jobs |
+| Customer A2P | Gate runs only when `isTransovoPlatformOutboundSenderRoute(senderRoute)` |
+| Redis down (production) | `PLATFORM_DISPATCH_REQUIRE_REDIS` default on in production → defer (`redis_unavailable`), no silent bypass |
+| Tests / local | `PLATFORM_DISPATCH_USE_MEMORY=1` in-process coordinator |
+
+**Reconciled:** `canDispatchNow` no longer consumes a process-local platform bucket (tenant/campaign/sender only). Review platform SMS skips `acquireProviderSlot("twilio")` — platform gate owns throughput.
+
+**Still separate:** BullMQ queue workers and Postgres `job_queue` claim order — gate coordinates **provider dispatch** only, not job dequeue across Redis queues.
+
+## Remaining limitations
+
+1. **BullMQ dequeue order** unchanged — two workers can still *attempt* sends concurrently; gate serializes accepted dispatches to MPS.
+2. **Redis multi-process concurrency** covered by `scripts/test-platform-sms-dispatch-redis-concurrency.ts` (requires `REDIS_URL`); not a full BullMQ worker soak.
+3. **Weighted bulk reservation** (e.g. 30% cap) not implemented — strict priority with `interactive_waiting` guard only.
 
 ---
 
@@ -152,7 +172,12 @@
 
 ```bash
 # Topology + priority claim + recording idempotency + review routing (no live SMS)
-HEADLESS_PROVIDER_MODE=recording npx tsx scripts/test-platform-sms-dispatch-coordination.ts
+HEADLESS_PROVIDER_MODE=recording PLATFORM_DISPATCH_USE_MEMORY=1 \
+  npx tsx scripts/test-platform-sms-dispatch-coordination.ts
+
+# Multi-process Redis gate (4 child processes, recording provider; requires REDIS_URL)
+HEADLESS_PROVIDER_MODE=recording PLATFORM_DISPATCH_MPS=10 \
+  npx tsx scripts/test-platform-sms-dispatch-redis-concurrency.ts
 
 # Existing SMS worker rate-limit unit checks
 npx tsx scripts/test-sms-worker-cert.ts
@@ -170,5 +195,8 @@ npx tsx scripts/test-sms-worker-cert.ts
 | Campaign `canDispatchNow` blocks rapid re-enqueue | Pattern in `test-sms-worker-cert.ts` |
 | Recording `sendQuickSms` idempotency | Script |
 | Reviews BullMQ uses reputation sender | Code fix + routing test |
-| Production never exceeds combined Telnyx MPS across workers | **Not verified** — no global gate |
-| Credits never double-charged on retry | **Partial** — idempotency in `sendQuickSms` / product rows; not re-tested here |
+| Global platform dispatch gate (software MPS) across workers | **Implemented** — Redis Lua + `sendQuickSms`; see `platform-dispatch/` |
+| Multi-process Redis priority under contention | **Verified** — `test-platform-sms-dispatch-redis-concurrency.ts` (4 processes, MCTB before bulk, defer/retry, idempotent duplicate job) |
+| Carrier-assigned Telnyx throughput matches `PLATFORM_DISPATCH_MPS` | **Not verified** — config default only, not provider contract |
+| Full BullMQ worker soak (production queue names + job handlers) | **Not verified** — gate tested at `sendQuickSms` boundary with recording provider |
+| Credits never double-charged on retry | **Partial** — idempotency in recording duplicate-job path in Redis test; billing not re-tested here |
