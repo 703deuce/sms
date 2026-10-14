@@ -54,6 +54,22 @@ const ALLOWED_TABLES = new Set([
   "review_campaign_steps",
 ]);
 
+const TIMESTAMPTZ_COLUMNS = new Set([
+  "created_at",
+  "updated_at",
+  "scheduled_for",
+  "started_at",
+  "finished_at",
+  "sent_at",
+  "delivered_at",
+  "clicked_at",
+  "archived_at",
+  "scanned_at",
+  "last_used_at",
+  "published_at",
+  "owner_responded_at",
+]);
+
 const JSONB_COLUMN_HINTS = new Set([
   "settings_json",
   "payload_json",
@@ -112,6 +128,13 @@ function rowFromDb(table: string, row: Row): Row {
     return { ...rest, business_id: workspaceId };
   }
   return row;
+}
+
+/** Tables with a non-`id` primary key — do not inject a synthetic `id` on insert/upsert. */
+const TABLES_WITHOUT_AUTO_ID = new Set(["reputation_settings"]);
+
+function tableUsesAutoId(table: string): boolean {
+  return !TABLES_WITHOUT_AUTO_ID.has(table);
 }
 
 function insertPayload(table: string, payload: Row): Row {
@@ -327,7 +350,7 @@ class ReputationQueryBuilder {
       const inserted: Row[] = [];
       for (const raw of rows) {
         const p = insertPayload(table, { ...raw });
-        if (!p.id) p.id = randomUUID();
+        if (tableUsesAutoId(table) && !p.id) p.id = randomUUID();
         const cols = Object.keys(p);
         const vals = cols.map((_, i) => `$${i + 1}`);
         const castCols = cols.map((c) => {
@@ -341,6 +364,9 @@ class ReputationQueryBuilder {
           const v = p[c];
           if (v !== null && typeof v === "object" && JSONB_COLUMN_HINTS.has(c)) {
             return `$${i + 1}::jsonb`;
+          }
+          if (TIMESTAMPTZ_COLUMNS.has(c) && (typeof v === "string" || v instanceof Date)) {
+            return `$${i + 1}::timestamptz`;
           }
           return `$${i + 1}`;
         });
@@ -390,6 +416,9 @@ class ReputationQueryBuilder {
         if (v !== null && typeof v === "object" && JSONB_COLUMN_HINTS.has(c)) {
           return `"${c}" = $${i + 1}::jsonb`;
         }
+        if (TIMESTAMPTZ_COLUMNS.has(c) && (typeof v === "string" || v instanceof Date)) {
+          return `"${c}" = $${i + 1}::timestamptz`;
+        }
         return `"${c}" = $${i + 1}`;
       })
       .join(", ");
@@ -419,7 +448,7 @@ class ReputationQueryBuilder {
     const runUpsert = async (): Promise<{ data: Row | null; error: Error | null }> => {
           const prisma = getReputationPrisma();
           const p = insertPayload(this.table, { ...payload });
-          if (!p.id) p.id = randomUUID();
+          if (tableUsesAutoId(this.table) && !p.id) p.id = randomUUID();
           const cols = Object.keys(p);
           const vals = cols.map((_, i) => `$${i + 1}`);
           const updates = cols
@@ -430,6 +459,9 @@ class ReputationQueryBuilder {
         const v = p[c];
         if (v !== null && typeof v === "object" && JSONB_COLUMN_HINTS.has(c)) {
           return `$${i + 1}::jsonb`;
+        }
+        if (TIMESTAMPTZ_COLUMNS.has(c) && (typeof v === "string" || v instanceof Date)) {
+          return `$${i + 1}::timestamptz`;
         }
         return `$${i + 1}`;
       });
