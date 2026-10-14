@@ -6,12 +6,24 @@ import type { ServiceTab } from "@/lib/products/business-messaging-nav";
 import { hrefPath, scoreNavHref } from "@/lib/nav-active";
 import { cn } from "@/lib/utils";
 
-function tabActive(pathname: string, search: string, tab: ServiceTab): boolean {
+function tabActive(pathname: string, search: string, tab: ServiceTab, allTabs: ServiceTab[]): boolean {
   const prefix = tab.matchPrefix ?? hrefPath(tab.href);
-  const pathScore = scoreNavHref(pathname, search, tab.href, tab.href === prefix && prefix === hrefPath(tab.href));
+  if (tab.matchExact) {
+    return scoreNavHref(pathname, search, tab.href, true) >= 0;
+  }
+  const pathScore = scoreNavHref(pathname, search, tab.href);
   if (pathScore >= 0) return true;
   if (pathname === prefix || pathname.startsWith(`${prefix}/`)) {
     if (tab.href.includes("?")) return pathScore >= 0;
+    const longer = allTabs.some(
+      (other) =>
+        other.href !== tab.href &&
+        !other.matchExact &&
+        (pathname === hrefPath(other.matchPrefix ?? other.href) ||
+          pathname.startsWith(`${hrefPath(other.matchPrefix ?? other.href)}/`)) &&
+        hrefPath(other.matchPrefix ?? other.href).length > prefix.length,
+    );
+    if (longer) return false;
     return true;
   }
   return false;
@@ -56,7 +68,7 @@ export function ServiceWorkspaceTabs({
         <nav aria-label={`${title} sections`} className="-mb-px overflow-x-auto">
           <ul className="flex min-w-0 gap-1 pb-px">
             {tabs.map((tab) => {
-              const active = tabActive(pathname, search, tab);
+              const active = tabActive(pathname, search, tab, tabs);
               return (
                 <li key={tab.href} className="shrink-0">
                   <Link

@@ -24,6 +24,7 @@ export type ServiceTab = {
   label: string;
   href: string;
   matchPrefix?: string;
+  matchExact?: boolean;
 };
 
 export const BUSINESS_MESSAGING_OVERVIEW_HREF = "/overview";
@@ -36,7 +37,7 @@ export const INBOX_TAB_ROUTES = {
 } as const;
 
 export const MCTB_SERVICE_TABS: ServiceTab[] = [
-  { label: "Activity", href: MCTB_ROUTES.home, matchPrefix: MCTB_ROUTES.home },
+  { label: "Activity", href: MCTB_ROUTES.home, matchExact: true },
   { label: "Recovery Rules", href: MCTB_ROUTES.missedCallRecovery, matchPrefix: MCTB_ROUTES.missedCallRecovery },
   { label: "Text Back", href: MCTB_ROUTES.textBack, matchPrefix: MCTB_ROUTES.textBack },
   { label: "AI Recovery", href: MCTB_ROUTES.aiRecovery, matchPrefix: MCTB_ROUTES.aiRecovery },
@@ -45,7 +46,7 @@ export const MCTB_SERVICE_TABS: ServiceTab[] = [
 ];
 
 export const AR_SERVICE_TABS: ServiceTab[] = [
-  { label: "Calendar", href: AR_ROUTES.home, matchPrefix: AR_ROUTES.home },
+  { label: "Calendar", href: AR_ROUTES.home, matchExact: true },
   { label: "Appointments", href: AR_ROUTES.appointments, matchPrefix: AR_ROUTES.appointments },
   { label: "Reminders", href: AR_ROUTES.reminders, matchPrefix: AR_ROUTES.reminders },
   { label: "Sequences", href: AR_ROUTES.remindersSequences, matchPrefix: AR_ROUTES.remindersSequences },
@@ -54,7 +55,7 @@ export const AR_SERVICE_TABS: ServiceTab[] = [
 ];
 
 export const CAMPAIGNS_SERVICE_TABS: ServiceTab[] = [
-  { label: "All Campaigns", href: "/campaigns", matchPrefix: "/campaigns" },
+  { label: "All Campaigns", href: "/campaigns", matchExact: true },
   { label: "Drafts", href: "/campaigns/drafts", matchPrefix: "/campaigns/drafts" },
   { label: "Scheduled", href: "/campaigns/scheduled", matchPrefix: "/campaigns/scheduled" },
   { label: "Completed", href: "/campaigns/completed", matchPrefix: "/campaigns/completed" },
