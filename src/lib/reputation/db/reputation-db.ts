@@ -1,7 +1,21 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { getPrisma } from "@/lib/db";
+import type { PrismaClient } from "@prisma/client";
+
+let reputationPrisma: PrismaClient | null = null;
+
+/** Postgres Prisma client for reputation tables (not Supabase PostgREST compat). */
+function getReputationPrisma(): PrismaClient {
+  if (!process.env.DATABASE_URL?.trim()) {
+    throw new Error("DATABASE_URL is required for Reviews reputation database operations");
+  }
+  if (!reputationPrisma) {
+    const { PrismaClient: Client } = require("@prisma/client") as typeof import("@prisma/client");
+    reputationPrisma = new Client();
+  }
+  return reputationPrisma;
+}
 
 const ALLOWED_TABLES = new Set([
   "reputation_workspace_profile",
@@ -36,7 +50,31 @@ const ALLOWED_TABLES = new Set([
   "review_keyword_gaps",
   "reputation_tasks",
   "reputation_competitors",
+  "business_keywords",
+  "review_campaign_steps",
 ]);
+
+const JSONB_COLUMN_HINTS = new Set([
+  "settings_json",
+  "payload_json",
+  "config_json",
+  "raw_json",
+  "metadata",
+  "metrics_json",
+  "known_review_ids",
+  "tags",
+  "send_days",
+  "poster_config",
+  "warnings",
+]);
+
+function sqlValue(col: string, val: unknown): unknown {
+  if (val === undefined) return null;
+  if (val !== null && typeof val === "object" && JSONB_COLUMN_HINTS.has(col)) {
+    return JSON.stringify(val);
+  }
+  return val;
+}
 
 type Row = Record<string, unknown>;
 
@@ -48,7 +86,8 @@ type Filter =
   | { op: "gte"; col: string; val: unknown }
   | { op: "lt"; col: string; val: unknown }
   | { op: "is"; col: string; val: null }
-  | { op: "or"; expr: string };
+  | { op: "or"; expr: string }
+  | { op: "ilike"; col: string; pattern: string };
 
 function mapSuppressionColumn(table: string, col: string): string {
   if (table === "review_request_suppression" && col === "business_id") return "workspaceId";
@@ -98,6 +137,8 @@ class ReputationQueryBuilder {
   private orderBy: { col: string; ascending: boolean } | null = null;
   private limitN: number | null = null;
   private selectCols = "*";
+  private countOnly = false;
+  private headOnly = false;
 
   constructor(
     private readonly table: string,
@@ -105,8 +146,19 @@ class ReputationQueryBuilder {
     private updatePayload: Row | null = null,
   ) {}
 
-  select(cols: string) {
-    this.selectCols = cols;
+  select(cols: string, opts?: { count?: string; head?: boolean }) {
+    if (opts?.count === "exact" && opts?.head) {
+      this.countOnly = true;
+      this.headOnly = true;
+      this.selectCols = cols;
+      return this;
+    }
+    this.selectCols = cols.split("(")[0]?.trim() || cols;
+    return this;
+  }
+
+  ilike(col: string, pattern: string) {
+    this.filters.push({ op: "ilike", col, pattern });
     return this;
   }
 
@@ -191,6 +243,10 @@ class ReputationQueryBuilder {
       if (f.op === "is") {
         return `${sqlCol} IS NULL`;
       }
+      if (f.op === "ilike") {
+        params.push(f.pattern);
+        return `${sqlCol} ILIKE $${params.length}`;
+      }
       if (f.op === "or") {
         const clauses = f.expr.split(",").map((part) => {
           const m = part.trim().match(/^([a-zA-Z0-9_]+)\.(eq|neq|ilike)\.(.+)$/);
@@ -217,10 +273,15 @@ class ReputationQueryBuilder {
     return `WHERE ${parts.join(" AND ")}`;
   }
 
-  async maybeSingle(): Promise<{ data: Row | null; error: Error | null }> {
+  async maybeSingle(): Promise<{ data: Row | null; error: Error | null; count?: number }> {
+    if (this.mode === "update") {
+      const res = await this.limit(1).executeUpdate();
+      if (res.error) return res;
+      return { data: res.data?.[0] ?? null, error: null, count: res.count };
+    }
     const res = await this.limit(1).executeSelect();
     if (res.error) return res;
-    return { data: res.data?.[0] ?? null, error: null };
+    return { data: res.data?.[0] ?? null, error: null, count: res.count };
   }
 
   async single(): Promise<{ data: Row | null; error: Error | null }> {
@@ -230,10 +291,20 @@ class ReputationQueryBuilder {
     return res;
   }
 
-  private async executeSelect(): Promise<{ data: Row[] | null; error: Error | null }> {
-    const prisma = getPrisma();
+  private async executeSelect(): Promise<{ data: Row[] | null; error: Error | null; count?: number }> {
+    const prisma = getReputationPrisma();
     const params: unknown[] = [];
     const where = this.whereSql(params);
+    if (this.countOnly) {
+      const sql = `SELECT COUNT(*)::int AS count FROM "${this.table}" ${where}`;
+      try {
+        const rows = (await prisma.$queryRawUnsafe(sql, ...params)) as { count: number }[];
+        const count = rows[0]?.count ?? 0;
+        return { data: this.headOnly ? null : [{ count }], error: null, count };
+      } catch (e) {
+        return { data: null, error: e instanceof Error ? e : new Error(String(e)) };
+      }
+    }
     let sql = `SELECT ${this.selectCols === "*" ? "*" : this.selectCols} FROM "${this.table}" ${where}`;
     if (this.orderBy) {
       const col = mapSuppressionColumn(this.table, this.orderBy.col);
@@ -252,16 +323,33 @@ class ReputationQueryBuilder {
     const rows = Array.isArray(payload) ? payload : [payload];
     const table = this.table;
     const runSingle = async (): Promise<{ data: Row | null; error: Error | null }> => {
-      const prisma = getPrisma();
+      const prisma = getReputationPrisma();
       const inserted: Row[] = [];
       for (const raw of rows) {
         const p = insertPayload(table, { ...raw });
         if (!p.id) p.id = randomUUID();
         const cols = Object.keys(p);
         const vals = cols.map((_, i) => `$${i + 1}`);
-        const sql = `INSERT INTO "${table}" (${cols.map((c) => `"${c}"`).join(",")}) VALUES (${vals.join(",")}) RETURNING *`;
+        const castCols = cols.map((c) => {
+          const v = p[c];
+          if (v !== null && typeof v === "object" && JSONB_COLUMN_HINTS.has(c)) {
+            return `"${c}"`;
+          }
+          return `"${c}"`;
+        });
+        const valueExprs = cols.map((c, i) => {
+          const v = p[c];
+          if (v !== null && typeof v === "object" && JSONB_COLUMN_HINTS.has(c)) {
+            return `$${i + 1}::jsonb`;
+          }
+          return `$${i + 1}`;
+        });
+        const sql = `INSERT INTO "${table}" (${castCols.join(",")}) VALUES (${valueExprs.join(",")}) RETURNING *`;
         try {
-          const out = (await prisma.$queryRawUnsafe(sql, ...cols.map((c) => p[c]))) as Row[];
+          const out = (await prisma.$queryRawUnsafe(
+            sql,
+            ...cols.map((c) => sqlValue(c, p[c])),
+          )) as Row[];
           inserted.push(rowFromDb(table, out[0]!));
         } catch (e) {
           return { data: null, error: e instanceof Error ? e : new Error(String(e)) };
@@ -269,12 +357,19 @@ class ReputationQueryBuilder {
       }
       return { data: inserted[0] ?? null, error: null };
     };
-    return {
+    const chain = {
       select: (_cols?: string) => ({
         single: runSingle,
         maybeSingle: runSingle,
       }),
+      then<TResult1 = { data: Row | null; error: Error | null }, TResult2 = never>(
+        onfulfilled?: ((value: { data: Row | null; error: Error | null }) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+      ): Promise<TResult1 | TResult2> {
+        return runSingle().then(onfulfilled, onrejected);
+      },
     };
+    return chain;
   }
 
   update(payload: Row) {
@@ -285,11 +380,19 @@ class ReputationQueryBuilder {
 
   async executeUpdate(): Promise<{ data: Row[] | null; error: Error | null; count?: number }> {
     if (!this.updatePayload) return { data: null, error: new Error("missing update payload") };
-    const prisma = getPrisma();
+    const prisma = getReputationPrisma();
     const p = insertPayload(this.table, { ...this.updatePayload });
     const setCols = Object.keys(p);
-    const params: unknown[] = [...setCols.map((c) => p[c])];
-    const setSql = setCols.map((c, i) => `"${c}" = $${i + 1}`).join(", ");
+    const params: unknown[] = [...setCols.map((c) => sqlValue(c, p[c]))];
+    const setSql = setCols
+      .map((c, i) => {
+        const v = p[c];
+        if (v !== null && typeof v === "object" && JSONB_COLUMN_HINTS.has(c)) {
+          return `"${c}" = $${i + 1}::jsonb`;
+        }
+        return `"${c}" = $${i + 1}`;
+      })
+      .join(", ");
     const where = this.whereSql(params);
     const returning =
       this.selectCols === "*" ? "*" : this.selectCols.split(",").map((c) => c.trim()).join(", ");
@@ -304,13 +407,17 @@ class ReputationQueryBuilder {
 
   upsert(
     payload: Row,
-    opts?: { onConflict?: string },
-  ): { select: (_?: string) => { single: () => Promise<{ data: Row | null; error: Error | null }> } } {
+    opts?: { onConflict?: string; ignoreDuplicates?: boolean },
+  ): {
+    select: (_?: string) => { single: () => Promise<{ data: Row | null; error: Error | null }> };
+    then: (
+      onfulfilled?: (value: { error: Error | null }) => unknown,
+      onrejected?: (reason: unknown) => unknown,
+    ) => Promise<unknown>;
+  } {
     const conflict = opts?.onConflict ?? "id";
-    return {
-      select: () => ({
-        single: async () => {
-          const prisma = getPrisma();
+    const runUpsert = async (): Promise<{ data: Row | null; error: Error | null }> => {
+          const prisma = getReputationPrisma();
           const p = insertPayload(this.table, { ...payload });
           if (!p.id) p.id = randomUUID();
           const cols = Object.keys(p);
@@ -319,33 +426,56 @@ class ReputationQueryBuilder {
             .filter((c) => c !== conflict)
             .map((c) => `"${c}" = EXCLUDED."${c}"`)
             .join(", ");
-          const sql = `INSERT INTO "${this.table}" (${cols.map((c) => `"${c}"`).join(",")}) VALUES (${vals.join(",")})
-            ON CONFLICT ("${conflict}") DO UPDATE SET ${updates} RETURNING *`;
-          try {
-            const out = (await prisma.$queryRawUnsafe(sql, ...cols.map((c) => p[c]))) as Row[];
-            return { data: rowFromDb(this.table, out[0] ?? null), error: null };
-          } catch (e) {
-            return { data: null, error: e instanceof Error ? e : new Error(String(e)) };
-          }
-        },
+      const valueExprs = cols.map((c, i) => {
+        const v = p[c];
+        if (v !== null && typeof v === "object" && JSONB_COLUMN_HINTS.has(c)) {
+          return `$${i + 1}::jsonb`;
+        }
+        return `$${i + 1}`;
+      });
+      const onConflict = opts?.ignoreDuplicates
+        ? `ON CONFLICT ("${conflict}") DO NOTHING`
+        : `ON CONFLICT ("${conflict}") DO UPDATE SET ${updates}`;
+      const sql = `INSERT INTO "${this.table}" (${cols.map((c) => `"${c}"`).join(",")}) VALUES (${valueExprs.join(",")})
+            ${onConflict} RETURNING *`;
+      try {
+        const out = (await prisma.$queryRawUnsafe(
+          sql,
+          ...cols.map((c) => sqlValue(c, p[c])),
+        )) as Row[];
+        return { data: rowFromDb(this.table, out[0] ?? null), error: null };
+      } catch (e) {
+        return { data: null, error: e instanceof Error ? e : new Error(String(e)) };
+      }
+    };
+    return {
+      select: () => ({
+        single: runUpsert,
       }),
+      then(onfulfilled, onrejected) {
+        return runUpsert()
+          .then((r) => (onfulfilled ? onfulfilled({ error: r.error }) : r))
+          .catch(onrejected);
+      },
     };
   }
 
   delete() {
-    return this.executeDelete();
+    const builder = new ReputationQueryBuilder(this.table, "delete");
+    builder.filters = [...this.filters];
+    return builder;
   }
 
-  private async executeDelete(): Promise<{ error: Error | null }> {
-    const prisma = getPrisma();
+  private async executeDelete(): Promise<{ data: Row[] | null; error: Error | null }> {
+    const prisma = getReputationPrisma();
     const params: unknown[] = [];
     const where = this.whereSql(params);
     const sql = `DELETE FROM "${this.table}" ${where}`;
     try {
       await prisma.$queryRawUnsafe(sql, ...params);
-      return { error: null };
+      return { data: null, error: null };
     } catch (e) {
-      return { error: e instanceof Error ? e : new Error(String(e)) };
+      return { data: null, error: e instanceof Error ? e : new Error(String(e)) };
     }
   }
 
@@ -356,6 +486,9 @@ class ReputationQueryBuilder {
   ): Promise<TResult1 | TResult2> {
     if (this.mode === "update") {
       return this.executeUpdate().then(onfulfilled as never, onrejected);
+    }
+    if (this.mode === "delete") {
+      return this.executeDelete().then(onfulfilled as never, onrejected);
     }
     return this.executeSelect().then(onfulfilled, onrejected);
   }
@@ -368,10 +501,96 @@ export type ReputationDbClient = {
 export function createReputationDbClient(): ReputationDbClient {
   return {
     from(table: string) {
+      if (table === "businesses") {
+        return new BusinessesQueryBuilder();
+      }
       if (!ALLOWED_TABLES.has(table)) {
         throw new Error(`reputation_db_table_not_allowed:${table}`);
       }
       return new ReputationQueryBuilder(table);
     },
   };
+}
+
+/** Map legacy `businesses` reads to Transovo workspaces. */
+class BusinessesQueryBuilder extends ReputationQueryBuilder {
+  constructor() {
+    super("Workspace");
+  }
+
+  private workspaceIdFilter: string | null = null;
+  private updatePayload: Row | null = null;
+
+  update(payload: Row) {
+    this.updatePayload = payload;
+    return this;
+  }
+
+  eq(col: string, val: unknown) {
+    if (col === "id") this.workspaceIdFilter = String(val);
+    return this;
+  }
+
+  private async applyBusinessUpdate(): Promise<{ error: Error | null }> {
+    if (!this.workspaceIdFilter || !this.updatePayload) {
+      return { error: new Error("business update missing id or payload") };
+    }
+    const prisma = getReputationPrisma();
+    const cid = this.updatePayload.cid as string | undefined;
+    if (cid) {
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO reputation_workspace_profile (workspace_id, google_place_id, updated_at)
+         VALUES ($1, $2, now())
+         ON CONFLICT (workspace_id) DO UPDATE SET google_place_id = EXCLUDED.google_place_id, updated_at = now()`,
+        this.workspaceIdFilter,
+        cid,
+      );
+    }
+    return { error: null };
+  }
+
+  override async maybeSingle(): Promise<{ data: Row | null; error: Error | null }> {
+    if (!this.workspaceIdFilter) return { data: null, error: new Error("business id required") };
+    try {
+      const prisma = getReputationPrisma();
+      const row = await prisma.workspace.findUnique({
+        where: { id: this.workspaceIdFilter },
+        select: { id: true, name: true, displayName: true },
+      });
+      if (!row) return { data: null, error: null };
+      return {
+        data: {
+          id: row.id,
+          organization_id: row.id,
+          name: row.displayName ?? row.name,
+        },
+        error: null,
+      };
+    } catch (e) {
+      return { data: null, error: e instanceof Error ? e : new Error(String(e)) };
+    }
+  }
+
+  override async single(): Promise<{ data: Row | null; error: Error | null }> {
+    const res = await this.maybeSingle();
+    if (res.error) return res;
+    if (!res.data) return { data: null, error: new Error("No rows") };
+    return res;
+  }
+
+  then<TResult1 = { data: Row[] | null; error: Error | null }, TResult2 = never>(
+    onfulfilled?: ((value: { data: Row[] | null; error: Error | null }) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+  ): Promise<TResult1 | TResult2> {
+    if (this.updatePayload) {
+      return this.applyBusinessUpdate().then((r) => {
+        const wrapped = { data: null, error: r.error };
+        return onfulfilled ? onfulfilled(wrapped) : (wrapped as TResult1);
+      }, onrejected);
+    }
+    return this.maybeSingle().then((r) => {
+      const wrapped = { data: r.data ? [r.data] : [], error: r.error };
+      return onfulfilled ? onfulfilled(wrapped) : (wrapped as TResult1);
+    }, onrejected);
+  }
 }
