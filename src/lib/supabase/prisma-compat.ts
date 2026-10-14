@@ -92,6 +92,7 @@ const MODEL_TO_TABLE: Record<string, string> = {
   integrationWebhookEvent: "integration_webhook_events",
   conversation: "Conversation",
   conversationMessage: "ConversationMessage",
+  platformProductConsumerAssignment: "platform_product_consumer_assignments",
   template: "Template",
   automationFlow: "AutomationFlow",
   triggerDeployment: "trigger_deployments",
