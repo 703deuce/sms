@@ -4,11 +4,67 @@
 
 **Companion:** `docs/REVIEW-REQUESTS-REPUTATION-PRODUCT-AUDIT.md` (product/routes answer).
 
-**Date:** 2026-10-14
+**Date:** 2026-10-14 (updated after second pass — Local SEO Express / Reviews branch)
 
 ---
 
-## What you likely remember (and where it lives here)
+## Critical: you were right — it was brought over, but not on `master`
+
+A **large Reviews / Reputation port** (including **review velocity** UI and **review request** screens) **does exist in this GitHub repo**, but only on branch:
+
+**`origin/cursor/reviews-platform-integration-5c36`**
+
+| Commit | Message |
+|--------|---------|
+| `53490afe1` | **Add Reviews platform to SMS app alongside Missed Call Text Back** (~92k lines: routes, APIs, `src/lib/reviews/*`, `src/components/reputation/*`, migration `reputation_platform.sql`) |
+| `cd7f31e5e` | Unify SMS and Reviews in one sidebar; hide Numbers from menu |
+
+**`master` does not contain this work** (`git merge-base --is-ancestor 53490afe1 master` → **false**). Today’s production `master` has **zero** files under `src/app/(app)/reviews/`, `src/app/api/reputation/`, `src/lib/reviews/`, or `src/components/reputation/`.
+
+That matches a Cloud Agent that **connected SMS + Local SEO Express** into one tree on a **feature branch**, while day-to-day `master` kept only the **thin** automations/outcomes/review-link plumbing.
+
+### What’s on the integration branch (not on `master`)
+
+**Routes (examples):**
+
+- `/reviews/overview`, `/reviews/requests`, `/reviews/reviews`, `/reviews/insights`, `/reviews/analytics`, `/reviews/audit`, `/reviews/alerts`, `/reviews/settings`
+- `/reviews/qr-campaigns/*`, `/reviews/campaigns/*`, `/reviews/templates`, `/reviews/contacts`, `/reviews/automations`
+- `/tools/google-review-widget`, `/tools/review-response-generator`
+
+**Review velocity / momentum (the feature you named):**
+
+| Path (branch only) | Role |
+|--------------------|------|
+| `src/components/reviews/review-velocity-dashboard.tsx` | Review velocity dashboard UI |
+| `src/components/reviews/review-momentum-*.tsx` | Momentum sections / insights |
+| `src/lib/reviews/momentum-engine.ts` | Momentum engine (~700+ lines) |
+| `src/lib/reviews/review-momentum-preview-data.ts` | Preview/sample data |
+| `src/lib/providers/deepseek/review-momentum.ts` | LLM provider hook for momentum |
+| `src/app/api/reviews/momentum/latest/route.ts` | API |
+| `src/app/api/reviews/momentum/run/route.ts` | API |
+| `src/app/api/reviews/momentum/tasks/[taskId]/route.ts` | API |
+
+**Review request product (branch):**
+
+- `src/app/(app)/reviews/requests/page.tsx`
+- `src/app/api/reputation/review-requests/send-sms/route.ts`, `send-email`, bulk validate, campaigns, stats, etc.
+- **66** files under `src/components/reputation/` (campaign builder, automations hub, QR, etc.)
+- **22** files under `src/lib/reviews/` (store, analytics, feed, themes, fetch-reviews, …)
+
+**Infra on that branch:** `supabase/migrations/20260823000000_reputation_platform.sql`, shared security helpers (`src/lib/security/*`), reputation campaign/QR libs wired into `/r/[trackingToken]` on that branch.
+
+**Local SEO Express link on `master` today:** only **shared Supabase/Twilio-style config** comments (`src/lib/db.ts`, `.env.example`, `docs/TWILIO_ISV_MESSAGING.md`) — **not** the Reviews UI/runtime from the branch above.
+
+### How to verify locally
+
+```bash
+git fetch origin cursor/reviews-platform-integration-5c36
+git ls-tree -r --name-only origin/cursor/reviews-platform-integration-5c36 | rg 'review-velocity|momentum-engine|reputation/'
+```
+
+---
+
+## What you likely remember (and where it lives on **`master`** today)
 
 ### Combined “Review Request Agent” (requests + setup + light analytics)
 
@@ -43,7 +99,7 @@ This repo **does** have a first-class **Review Request Agent** wired to the **Ou
 | **Velocity** (unrelated) | Yes | `velocity_anomaly` in `src/lib/appointments/booking-protection-policy.ts` — booking abuse, not reviews |
 | **“Review Management” dashboard stats** | Yes (heuristic) | `src/lib/solution-dashboard.ts` — counts automations/campaigns whose name/trigger/body matches `/review|reputation|google.?business/i` plus `surveyResponse` count; **not** a velocity chart |
 
-**Conclusion:** Code that looks **ported or rebuilt** into `sms` is the **Outcomes + Agent + Automations + review link + contact review recording + solution dashboard heuristics** layer. The **multi-tenant reputation hub** (including **review velocity** as its own surface) is **not** present in this repository — likely still in another app or never merged under those URLs.
+**Conclusion for `master`:** Only the **Outcomes + Agent + Automations + review link + contact review recording + solution dashboard heuristics** layer ships on `master`. The **full reputation hub + review velocity** lives on **`cursor/reviews-platform-integration-5c36`**, not merged.
 
 ---
 
@@ -183,8 +239,9 @@ flowchart TB
 | Your memory | Best match in **this** repo |
 |-------------|----------------------------|
 | One agent for review requests + setup | **Review Request Agent** (`review_request`) + **Get More Reviews** outcome (`review-requests`) |
-| Review velocity / Google feed / reputation hub | **Not in repo** — only heuristic **Review Management** stats on `solution-dashboard.ts` |
-| Code “brought over” | **Automations, agents, outcomes registry, review link, suppression table name, appointment workflow, voice hook, grow QR type** — **not** the eight-page `/businesses/.../reputation` product |
+| Review velocity / Google feed / reputation hub | **On branch `cursor/reviews-platform-integration-5c36` only** — e.g. `review-velocity-dashboard.tsx`, `momentum-engine.ts`. **Not on `master`.** |
+| Code “brought over” | **Full port on integration branch** (~437 files in `53490afe1`). **`master`** kept **automations, agents, outcomes, review link, workflows, voice hook** only. |
+| Restore without re-building | Check out or merge **`origin/cursor/reviews-platform-integration-5c36`** (resolve drift vs current `master` first). |
 
 To restore the **combined UX** without rebuilding from scratch: re-enable `/outcomes/review-requests` (remove or narrow middleware redirect) and/or wire V1 nav to automations + settings; **velocity/Google pages would still need new implementation or import from the other codebase**.
 

@@ -10,7 +10,8 @@
 
 ## Short answer
 
-- The **eight-page reputation inventory** (`/businesses/{id}/reputation/...`) is **not implemented in this repository** as those routes or that hub.
+- On **`master`**: the **eight-page reputation inventory** (`/businesses/{id}/reputation/...`) is **not** live; you get automations/outcomes plumbing only.
+- On branch **`cursor/reviews-platform-integration-5c36`**: a **full Reviews platform** was added (`/reviews/*`, `src/app/api/reputation/*`, **review velocity** components, review-request send/bulk/QR) — **~92k lines, not merged to `master`**. See **`docs/REVIEW-REPUTATION-CODE-INVENTORY.md`** (section “Critical: you were right”).
 - **Review Requests does not work as a single end-to-end product UI** on Transovo `master` today.
 - **SMS can still send** “please leave a review” messages only via **scattered backends** (automations, appointment workflows, generic campaigns/templates) if you configure them and pass sender/A2P/worker gates.
 
