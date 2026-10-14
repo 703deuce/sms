@@ -4,7 +4,7 @@ import { requireOrganizationPermission } from "@/lib/auth/permissions";
 import { requireRecentAuth } from "@/lib/auth/reauth";
 import { requireBusinessAccess } from "@/lib/auth/api-auth";
 import { requireCampaignSendAccess } from "@/lib/auth/entitlements";
-import { enrollContactInCampaign } from "@/lib/automations/enroll-campaign";
+import { enrollContactInCampaign } from "@/lib/campaigns/enroll-campaign";
 import { createServiceClient } from "@/lib/db/client";
 import { parseTriggerConfig } from "@/lib/reputation/campaign-triggers";
 import { requestAuditMeta, writeSecurityAuditEvent } from "@/lib/security/audit-log";
