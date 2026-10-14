@@ -1,5 +1,3 @@
-import { isSmbLaunchNavEnabled } from "@/lib/product/smb-launch";
-
 /**
  * Client-safe trial check from org billing fields (no DB imports).
  * Keep in sync with `isTrialOrganization` in `trial.ts`.
@@ -18,8 +16,7 @@ export function organizationLooksLikeTrial(input: {
   if (billing === "active") return false;
   if (billing === "trialing") return true;
 
-  // SMB starter without an active subscription (manual/ok/canceled/etc.)
-  if (isSmbLaunchNavEnabled() && plan === "starter") return true;
+  if (plan === "starter") return true;
 
   return false;
 }
