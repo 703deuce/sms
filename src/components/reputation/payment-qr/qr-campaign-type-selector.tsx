@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Check, QrCode, Star, Wallet } from "lucide-react";
-import { ModulePage } from "@/components/ui/design-system";
+import { ReviewsOpusPage } from "@/newui-transplant/connected/reviews/reviews-opus-page";
 import { qrUi } from "@/components/reputation/qr-campaigns/qr-ui";
 import { cn } from "@/lib/utils";
 
@@ -10,7 +10,7 @@ export function QrCampaignTypeSelector({ businessId }: { businessId: string }) {
   const base = `/businesses/${businessId}/reputation/qr-campaigns`;
 
   return (
-    <ModulePage className="space-y-8">
+    <ReviewsOpusPage className="space-y-8">
       <div>
         <Link
           href={base}
@@ -81,6 +81,6 @@ export function QrCampaignTypeSelector({ businessId }: { businessId: string }) {
           </span>
         </Link>
       </div>
-    </ModulePage>
+    </ReviewsOpusPage>
   );
 }

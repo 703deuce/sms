@@ -32,7 +32,7 @@ import {
   RepTabs,
   rep,
 } from "@/components/reputation/rep-ui";
-import { ModulePage } from "@/components/ui/design-system";
+import { ReviewsOpusPage } from "@/newui-transplant/connected/reviews/reviews-opus-page";
 import { renderTemplate } from "@/lib/reputation/template-vars";
 import type { PosterConfig } from "@/lib/reputation/poster-config";
 import { cn } from "@/lib/utils";
@@ -187,7 +187,7 @@ function KpiCard({
     <div className={cn(rep.card, "p-4")}>
       <div className="flex items-start justify-between gap-2">
         <p className={rep.label}>{label}</p>
-        <span className={cn("flex h-8 w-8 items-center justify-center rounded-lg bg-[#ECFDF3] text-[#137752]", iconClassName)}>
+        <span className={cn("flex h-8 w-8 items-center justify-center rounded-lg bg-[#ECFDF3] text-primary", iconClassName)}>
           <Icon className="h-4 w-4" />
         </span>
       </div>
@@ -214,7 +214,7 @@ function SectionCard({
   return (
     <section className={cn(rep.card, "p-4", className)}>
       <div className="mb-3 flex items-center gap-2">
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#ECFDF3] text-xs font-bold text-[#137752]">
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#ECFDF3] text-xs font-bold text-primary">
           {number}
         </span>
         <h2 className="text-[15px] font-semibold text-[#101828]">{title}</h2>
@@ -244,14 +244,14 @@ function ChannelCard({
       className={cn(
         "flex w-full items-start gap-3 rounded-xl border p-3 text-left transition",
         active
-          ? "border-[#137752] bg-[#ECFDF3] shadow-[0_0_0_1px_rgba(19,119,82,0.14)]"
+          ? "border-primary bg-[#ECFDF3] shadow-[0_0_0_1px_rgba(19,119,82,0.14)]"
           : "border-[#E6EAF0] bg-white hover:bg-[#F9FAFB]"
       )}
     >
       <span
         className={cn(
           "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
-          active ? "bg-white text-[#137752]" : "bg-[#F2F4F7] text-[#667085]"
+          active ? "bg-white text-primary" : "bg-[#F2F4F7] text-[#667085]"
         )}
       >
         <Icon className="h-4 w-4" />
@@ -259,7 +259,7 @@ function ChannelCard({
       <span className="min-w-0">
         <span className="flex items-center gap-2 text-sm font-semibold text-[#101828]">
           {title}
-          {active ? <Check className="h-3.5 w-3.5 text-[#137752]" /> : null}
+          {active ? <Check className="h-3.5 w-3.5 text-primary" /> : null}
         </span>
         <span className="mt-0.5 block text-xs leading-relaxed text-[#667085]">{description}</span>
       </span>
@@ -625,7 +625,7 @@ function OneTimeSend({
                   </div>
                   <div className="flex items-center justify-between gap-3 rounded-lg border border-[#D1FADF] bg-[#ECFDF3] px-3 py-2.5">
                     <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4 text-[#137752]" />
+                      <Users className="h-4 w-4 text-primary" />
                       <span className="text-sm font-semibold text-[#027A48]">
                         {selectedCount} Contacts selected
                       </span>
@@ -781,7 +781,7 @@ function OneTimeSend({
           {/* Step 4: Preview */}
           <section className={cn(rep.card, "p-4")}>
             <div className="mb-3 flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#ECFDF3] text-xs font-bold text-[#137752]">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#ECFDF3] text-xs font-bold text-primary">
                 4
               </span>
               <h2 className="text-[15px] font-semibold text-[#101828]">Preview</h2>
@@ -840,7 +840,7 @@ function OneTimeSend({
         ].map((tip) => (
           <div key={tip.title} className={cn(rep.card, "p-4")}>
             <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#ECFDF3]">
-              <tip.icon className="h-4 w-4 text-[#137752]" />
+              <tip.icon className="h-4 w-4 text-primary" />
             </span>
             <h3 className="mt-3 text-sm font-semibold text-[#101828]">{tip.title}</h3>
             <p className="mt-1 text-sm leading-relaxed text-[#667085]">{tip.body}</p>
@@ -948,7 +948,7 @@ export function ReviewRequestsDashboard({
   );
 
   return (
-    <ModulePage className={rep.page}>
+    <ReviewsOpusPage className={rep.page}>
       <RepPageHeader
         title="Review Requests"
         subtitle="Send review requests to your customers and track results."
@@ -1034,6 +1034,6 @@ export function ReviewRequestsDashboard({
       {tab === "link" ? (
         <LinkSharePanel businessId={businessId} data={data} previewData={previewData} />
       ) : null}
-    </ModulePage>
+    </ReviewsOpusPage>
   );
 }

@@ -669,7 +669,7 @@ export function PublicQrGenerator({
               </p>
               <input
                 type="email"
-                className="mt-4 h-11 w-full rounded-xl border border-[#D0D5DD] px-3 text-sm outline-none focus:border-[#16A34A]"
+                className="mt-4 h-11 w-full rounded-xl border border-[#D0D5DD] px-3 text-sm outline-none focus:border-primary"
                 placeholder="you@business.com"
                 value={deliveryEmail}
                 onChange={(e) => setDeliveryEmail(e.target.value)}
@@ -741,7 +741,7 @@ export function PublicQrGenerator({
             </p>
             <input
               type="email"
-              className="mt-4 h-11 w-full rounded-xl border border-[#D0D5DD] px-3 text-sm outline-none focus:border-[#16A34A]"
+              className="mt-4 h-11 w-full rounded-xl border border-[#D0D5DD] px-3 text-sm outline-none focus:border-primary"
               placeholder="you@business.com"
               value={deliveryEmail}
               onChange={(e) => setDeliveryEmail(e.target.value)}

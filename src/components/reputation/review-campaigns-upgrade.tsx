@@ -12,7 +12,7 @@ export function ReviewCampaignsUpgrade({ businessId }: { businessId: string }) {
   return (
     <div className="mx-auto max-w-2xl rounded-xl border border-zinc-200 bg-white p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
       <div className="flex items-start gap-3">
-        <div className="rounded-lg bg-emerald-50 p-2 text-emerald-700">
+        <div className="rounded-lg bg-primary/10 p-2 text-primary">
           <MessageSquareText className="h-5 w-5" />
         </div>
         <div>
@@ -27,7 +27,7 @@ export function ReviewCampaignsUpgrade({ businessId }: { businessId: string }) {
       <ul className="mt-5 space-y-2">
         {BENEFITS.map((b) => (
           <li key={b} className="flex items-start gap-2 text-[13px] text-zinc-700">
-            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
             <span>{b}</span>
           </li>
         ))}
@@ -51,7 +51,7 @@ export function ReviewCampaignsUpgrade({ businessId }: { businessId: string }) {
       <div className="mt-6 flex flex-wrap items-center gap-2">
         <Link
           href={`/businesses/${businessId}/settings`}
-          className="inline-flex items-center rounded-full bg-[#137752] px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-[#0f6344]"
+          className="inline-flex items-center rounded-full bg-primary px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-[#0f6344]"
         >
           Upgrade / enable add-on
         </Link>

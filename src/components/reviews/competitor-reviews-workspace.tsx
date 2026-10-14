@@ -95,7 +95,7 @@ function ThemeBar({ label, positive, negative, total }: { label: string; positiv
         <span className="tabular-nums text-[#98A2B3]">{total}</span>
       </div>
       <div className="flex h-2 overflow-hidden rounded-full bg-[#F2F4F7]">
-        <div className="h-full bg-[#137752]" style={{ width: `${posPct}%` }} />
+        <div className="h-full bg-primary" style={{ width: `${posPct}%` }} />
         <div className="h-full bg-[#F04438]" style={{ width: `${negPct}%` }} />
       </div>
     </div>
@@ -304,7 +304,7 @@ export function CompetitorReviewsWorkspace({
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Filter reviews"
-                className="w-full rounded-lg border border-[#E6EAF0] bg-white py-2 pl-8 pr-3 text-sm text-[#101828] outline-none focus:border-[#137752]"
+                className="w-full rounded-lg border border-[#E6EAF0] bg-white py-2 pl-8 pr-3 text-sm text-[#101828] outline-none focus:border-primary"
               />
             </div>
           </label>
@@ -397,7 +397,7 @@ export function CompetitorReviewsWorkspace({
                   onClick={() => setThemeFilter(theme.label)}
                   className={cn(
                     "rounded-full px-2.5 py-1 text-[11px] font-semibold",
-                    themeFilter === theme.label ? "bg-[#137752] text-white" : "bg-[#F2F4F7] text-[#344054]"
+                    themeFilter === theme.label ? "bg-primary text-white" : "bg-[#F2F4F7] text-[#344054]"
                   )}
                 >
                   {theme.label} ({theme.count})
@@ -453,7 +453,7 @@ export function CompetitorReviewsWorkspace({
                   onClick={() => setSourceFilter(id)}
                   className={cn(
                     "rounded-md px-2.5 py-1.5 text-xs font-semibold transition",
-                    sourceFilter === id ? "bg-white text-[#137752] shadow-sm" : "text-[#667085] hover:text-[#101828]"
+                    sourceFilter === id ? "bg-white text-primary shadow-sm" : "text-[#667085] hover:text-[#101828]"
                   )}
                 >
                   {label}
@@ -563,7 +563,7 @@ export function CompetitorReviewsWorkspace({
                         className={cn(
                           "inline-flex h-8 min-w-8 items-center justify-center rounded-lg px-2 text-xs font-semibold",
                           safePage === item
-                            ? "bg-[#137752] text-white"
+                            ? "bg-primary text-white"
                             : "border border-[#E6EAF0] text-[#344054] hover:bg-[#F9FAFB]"
                         )}
                       >
@@ -723,7 +723,7 @@ function FilterRow({
         <span
           className={cn(
             "inline-flex h-3.5 w-3.5 items-center justify-center rounded border",
-            checked ? "border-[#137752] bg-[#137752] text-white" : "border-[#D0D5DD] bg-white"
+            checked ? "border-primary bg-primary text-white" : "border-[#D0D5DD] bg-white"
           )}
         >
           {checked ? <Check className="h-2.5 w-2.5" /> : null}

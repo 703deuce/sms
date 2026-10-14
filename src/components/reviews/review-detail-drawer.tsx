@@ -210,8 +210,8 @@ export function ReviewDetailDrawer({
           )}
 
           {ownerReply && (
-            <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Your reply</p>
+            <div className="rounded-lg border border-emerald-100 bg-primary/10/50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-primary">Your reply</p>
               <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-700">{ownerReply}</p>
             </div>
           )}
@@ -224,7 +224,7 @@ export function ReviewDetailDrawer({
                   type="button"
                   disabled={generating}
                   onClick={() => void generateReply()}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-[#137752] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#0f6344] disabled:opacity-60"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#0f6344] disabled:opacity-60"
                 >
                   {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                   {generating ? "Generating…" : "Generate"}
@@ -235,7 +235,7 @@ export function ReviewDetailDrawer({
                 onChange={(e) => setDraft(e.target.value)}
                 rows={6}
                 placeholder="Generated reply appears here. Copy into Google Business Profile to publish — we do not auto-post."
-                className="w-full rounded-md border border-zinc-200 px-3 py-2 text-[13px] outline-none focus:border-[#137752]"
+                className="w-full rounded-md border border-zinc-200 px-3 py-2 text-[13px] outline-none focus:border-primary"
               />
               {draft ? (
                 <button
@@ -244,7 +244,7 @@ export function ReviewDetailDrawer({
                     await navigator.clipboard.writeText(draft);
                     setStatusMsg("Copied to clipboard");
                   }}
-                  className="text-[12px] font-semibold text-[#137752] hover:underline"
+                  className="text-[12px] font-semibold text-primary hover:underline"
                 >
                   Copy reply
                 </button>
@@ -253,7 +253,7 @@ export function ReviewDetailDrawer({
           ) : null}
 
           {statusMsg ? (
-            <p className="inline-flex items-center gap-1.5 text-[12px] font-medium text-emerald-700">
+            <p className="inline-flex items-center gap-1.5 text-[12px] font-medium text-primary">
               <Check className="h-3.5 w-3.5" />
               {statusMsg}
             </p>
@@ -267,7 +267,7 @@ export function ReviewDetailDrawer({
               type="button"
               disabled={resolving}
               onClick={() => void toggleResolved()}
-              className="rounded-full bg-[#137752] px-4 py-2 text-sm font-medium text-white hover:bg-[#0f6344] disabled:opacity-60"
+              className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-[#0f6344] disabled:opacity-60"
             >
               {resolving ? "Saving…" : review.resolved ? "Reopen" : "Mark resolved"}
             </button>

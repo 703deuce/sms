@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Loader2, Pause, Play, UserPlus, Webhook, X } from "lucide-react";
-import { ModulePage } from "@/components/ui/design-system";
+import { ReviewsOpusPage } from "@/newui-transplant/connected/reviews/reviews-opus-page";
 import { cn } from "@/lib/utils";
 import { attributionDisplayLabel, type AttributionLevel } from "@/lib/reputation/contacts-normalize";
 import {
@@ -221,7 +221,7 @@ export function CampaignDetailClient({
   ];
 
   return (
-    <ModulePage>
+    <ReviewsOpusPage>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <Link
@@ -238,7 +238,7 @@ export function CampaignDetailClient({
             {autoPause ? ` · Sending paused: ${autoPause}` : ""}
           </p>
           <p className="mt-1 inline-flex items-center gap-1.5 text-[12px] font-medium text-zinc-700">
-            {isAutomatic ? <Webhook className="h-3.5 w-3.5 text-emerald-600" /> : <UserPlus className="h-3.5 w-3.5 text-emerald-600" />}
+            {isAutomatic ? <Webhook className="h-3.5 w-3.5 text-primary" /> : <UserPlus className="h-3.5 w-3.5 text-primary" />}
             Trigger: {triggerLabel(triggerType, triggerConfig)}
           </p>
           <p
@@ -294,7 +294,7 @@ export function CampaignDetailClient({
             <button
               type="button"
               onClick={() => void action(status === "draft" ? "start" : "resume")}
-              className="inline-flex items-center gap-1.5 rounded-full bg-[#137752] px-2.5 py-1.5 text-[12px] font-semibold text-white"
+              className="inline-flex items-center gap-1.5 rounded-full bg-primary px-2.5 py-1.5 text-[12px] font-semibold text-white"
             >
               <Play className="h-3.5 w-3.5" /> {status === "draft" ? "Activate / Launch" : "Resume sending"}
             </button>
@@ -366,7 +366,7 @@ export function CampaignDetailClient({
               return (
                 <div key={step.label} className="min-w-[4.5rem] flex-1">
                   <div
-                    className="rounded-sm bg-emerald-500/80"
+                    className="rounded-sm bg-primary/100/80"
                     style={{ height: `${Math.min(56, pct * 0.5)}px` }}
                   />
                   <p className="mt-1 text-[11px] font-medium text-zinc-800">
@@ -390,7 +390,7 @@ export function CampaignDetailClient({
                 className={cn(
                   "rounded-md px-2 py-1 text-[11px] font-medium",
                   filter === f.id
-                    ? "bg-emerald-50 text-emerald-800"
+                    ? "bg-primary/10 text-emerald-800"
                     : "bg-zinc-50 text-zinc-600 hover:bg-zinc-100"
                 )}
               >
@@ -461,7 +461,7 @@ export function CampaignDetailClient({
           {nextCursor && (
             <button
               type="button"
-              className="mt-2 text-[12px] font-medium text-emerald-700 hover:underline"
+              className="mt-2 text-[12px] font-medium text-primary hover:underline"
               onClick={() => void load({ append: true, cursor: nextCursor })}
             >
               Load more
@@ -527,7 +527,7 @@ export function CampaignDetailClient({
               ))}
             </div>
             {enrollResult ? (
-              <p className="mt-2 text-[12px] text-emerald-700">{enrollResult}</p>
+              <p className="mt-2 text-[12px] text-primary">{enrollResult}</p>
             ) : null}
             <div className="mt-3 flex justify-end gap-2">
               <button
@@ -543,7 +543,7 @@ export function CampaignDetailClient({
                   enrollBusy || (!enrollForm.phone.trim() && !enrollForm.email.trim())
                 }
                 onClick={() => void enrollManual()}
-                className="inline-flex items-center gap-1 rounded-full bg-[#137752] px-2.5 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50"
+                className="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50"
               >
                 {enrollBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                 Enroll
@@ -702,6 +702,6 @@ export function CampaignDetailClient({
           </div>
         </div>
       )}
-    </ModulePage>
+    </ReviewsOpusPage>
   );
 }

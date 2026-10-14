@@ -22,7 +22,7 @@ export async function ReviewRequestsOverviewCard({ businessId }: { businessId: s
     <OverviewCardShell href={`/businesses/${businessId}/review-requests`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-1 items-start gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-primary">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <Send className="h-4 w-4" />
           </span>
           <div className="min-w-0 flex-1">
@@ -40,7 +40,7 @@ export async function ReviewRequestsOverviewCard({ businessId }: { businessId: s
             )}
           </div>
         </div>
-        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-emerald-50/60 text-emerald-300">
+        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-primary/10/60 text-emerald-300">
           <Mail className="h-8 w-8" strokeWidth={1.5} />
         </div>
       </div>

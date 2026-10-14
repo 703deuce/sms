@@ -24,7 +24,9 @@ import {
   WeeklyPacePanel,
 } from "@/components/reviews/review-momentum-insights";
 import { ReputationModuleTabs, type ReputationModuleTabId } from "@/components/reputation/reputation-module-tabs";
-import { ModulePage, ModuleHeader, btnPrimary, btnSecondary, AlertBanner } from "@/components/ui/design-system";
+import { Callout, PageHeader } from "@/newui-transplant/components/app/kit";
+import { Button } from "@/newui-transplant/components/ui/button";
+import { ReviewsOpusPage } from "@/newui-transplant/connected/reviews/reviews-opus-page";
 import { useModuleJobRunner } from "@/components/jobs/use-module-job-runner";
 
 type TabId = Exclude<ReputationModuleTabId, "requests">;
@@ -194,36 +196,31 @@ export function ReputationAuditDashboard({ businessId }: { businessId: string })
   }
 
   return (
-    <ModulePage>
-      <ModuleHeader
+    <ReviewsOpusPage>
+      <PageHeader
         title="Reputation & Reviews"
-        subtitle="Track reviews, velocity, keywords, responses, and competitor gaps."
+        description="Track reviews, velocity, keywords, responses, and competitor gaps."
         actions={
           <>
-            <button type="button" onClick={() => void runAudit()} disabled={isRunning} className={btnPrimary}>
-              {isRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+            <Button type="button" onClick={() => void runAudit()} disabled={isRunning}>
+              {isRunning ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
               Run Reputation Audit
-            </button>
-            <button
-              type="button"
-              onClick={() => void load()}
-              disabled={loading}
-              className={btnSecondary}
-            >
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            </Button>
+            <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
+              {loading ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
               Refresh
-            </button>
-            {audit && (
-              <button type="button" onClick={() => void createTasks()} className={btnSecondary}>
-                <ListChecks className="h-4 w-4" />
+            </Button>
+            {audit ? (
+              <Button type="button" variant="outline" onClick={() => void createTasks()}>
+                <ListChecks className="size-4" />
                 Create Tasks
-              </button>
-            )}
+              </Button>
+            ) : null}
           </>
         }
       />
 
-      {error && <AlertBanner variant="error">{error}</AlertBanner>}
+      {error ? <Callout tone="danger" title="Error">{error}</Callout> : null}
 
       {Boolean(audit?.progress_stage) && isRunning && (
         <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
@@ -258,7 +255,7 @@ export function ReputationAuditDashboard({ businessId }: { businessId: string })
           <p className="text-text-muted">No reputation audit yet. Run your first audit to track reviews and gaps.</p>
           <Link
             href={`/businesses/${businessId}/review-requests`}
-            className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100"
+            className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-primary/10 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100"
           >
             <Link2 className="h-4 w-4" />
             Get Review Link
@@ -295,7 +292,7 @@ export function ReputationAuditDashboard({ businessId }: { businessId: string })
               )}
               <Link
                 href={`/businesses/${businessId}/review-requests`}
-                className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300"
+                className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-primary/10 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300"
               >
                 <Link2 className="h-4 w-4" />
                 Get Review Link
@@ -553,6 +550,6 @@ export function ReputationAuditDashboard({ businessId }: { businessId: string })
         </>
       )}
       </div>
-    </ModulePage>
+    </ReviewsOpusPage>
   );
 }

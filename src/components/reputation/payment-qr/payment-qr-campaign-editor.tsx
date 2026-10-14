@@ -11,7 +11,7 @@ import {
   Pause,
   Play,
 } from "lucide-react";
-import { ModulePage } from "@/components/ui/design-system";
+import { ReviewsOpusPage } from "@/newui-transplant/connected/reviews/reviews-opus-page";
 import { QrKpiCard, QrStatusBadge, qrUi } from "@/components/reputation/qr-campaigns/qr-ui";
 import type { ReviewQrCampaign } from "@/lib/reputation/qr-campaigns/types";
 import { cn } from "@/lib/utils";
@@ -100,7 +100,7 @@ export function PaymentQrCampaignEditor({
   }
 
   return (
-    <ModulePage className="space-y-6">
+    <ReviewsOpusPage className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Link href={base} className="text-sm font-medium text-[#64748B] hover:text-[#0B1B32]">
@@ -183,6 +183,6 @@ export function PaymentQrCampaignEditor({
           <p className="mt-3 text-xs text-[#64748B]">Tracked scan URL: {trackedUrl}</p>
         </div>
       </div>
-    </ModulePage>
+    </ReviewsOpusPage>
   );
 }

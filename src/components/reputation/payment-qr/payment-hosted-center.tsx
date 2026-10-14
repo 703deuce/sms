@@ -118,7 +118,7 @@ export function PaymentHostedCenter({
                     selected
                       ? dark
                         ? "border-[#D4AF37] bg-[#D4AF37] text-[#0B0B0B]"
-                        : "border-[#137752] bg-[#137752] text-white"
+                        : "border-primary bg-primary text-white"
                       : dark
                         ? "border-white/30 bg-white/10 text-white"
                         : "border-[#E6EAF0] bg-white text-[#0B1220]"
@@ -177,7 +177,7 @@ export function PaymentHostedCenter({
             }}
             className={cn(
               "mt-2 w-full rounded-lg py-2.5 text-[11px] font-extrabold text-white shadow-md",
-              dark ? "bg-[#D4AF37] text-[#0B0B0B]" : "bg-[#137752]"
+              dark ? "bg-[#D4AF37] text-[#0B0B0B]" : "bg-primary"
             )}
           >
             Leave a Google Review

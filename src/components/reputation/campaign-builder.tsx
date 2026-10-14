@@ -80,7 +80,7 @@ function StepPill({
     <span
       className={cn(
         "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium",
-        active && "bg-emerald-50 text-emerald-800",
+        active && "bg-primary/10 text-emerald-800",
         done && !active && "bg-zinc-100 text-zinc-700",
         !active && !done && "bg-zinc-50 text-zinc-500"
       )}
@@ -425,7 +425,7 @@ export function CampaignBuilder({
                 onClick={() => setAudienceMode(id)}
                 className={cn(
                   "rounded-md px-2.5 py-1 text-[12px] font-medium",
-                  audienceMode === id ? "bg-emerald-50 text-emerald-800" : "text-zinc-600 hover:bg-zinc-50"
+                  audienceMode === id ? "bg-primary/10 text-emerald-800" : "text-zinc-600 hover:bg-zinc-50"
                 )}
               >
                 {label}
@@ -579,7 +579,7 @@ export function CampaignBuilder({
                 className={cn(
                   "rounded-md border px-3 py-2 text-left text-[12px]",
                   channel === id
-                    ? "border-emerald-300 bg-emerald-50 text-emerald-900"
+                    ? "border-emerald-300 bg-primary/10 text-emerald-900"
                     : "border-zinc-200 text-zinc-700 hover:bg-zinc-50"
                 )}
               >
@@ -601,7 +601,7 @@ export function CampaignBuilder({
                 ? " This campaign is SMS-only — email steps are ignored."
                 : " This campaign is email-only — SMS steps are ignored."}
           </p>
-          <div className="rounded-md border border-emerald-200 bg-emerald-50/50 px-2.5 py-2 text-[12px]">
+          <div className="rounded-md border border-emerald-200 bg-primary/10/50 px-2.5 py-2 text-[12px]">
             <p className="font-semibold text-emerald-900">
               Trigger · {triggerTimelineLabel(triggerType, triggerConfig)}
             </p>
@@ -804,7 +804,7 @@ export function CampaignBuilder({
             type="button"
             disabled={!canNext() || busy}
             onClick={() => void goNext()}
-            className="inline-flex items-center gap-1 rounded-full bg-[#137752] px-2.5 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50"
+            className="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50"
           >
             Next <ArrowRight className="h-3.5 w-3.5" />
           </button>
@@ -822,7 +822,7 @@ export function CampaignBuilder({
               type="button"
               disabled={!canNext() || busy}
               onClick={() => void launch(startDate > new Date().toISOString().slice(0, 10) ? "scheduled" : "active")}
-              className="inline-flex items-center gap-1 rounded-full bg-[#137752] px-2.5 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50"
             >
               {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
               {isAutomatic ? "Activate campaign" : "Launch campaign"}

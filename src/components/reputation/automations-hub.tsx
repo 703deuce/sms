@@ -81,7 +81,7 @@ function IntegrationCard({
   return (
     <div className={cn(rep.card, "p-4")}>
       <div className="flex items-start gap-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#ECFDF3] text-[#137752]">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#ECFDF3] text-primary">
           {n.includes("zapier") ? <Zap className="h-5 w-5" />
             : n.includes("webhook") || n.includes("generic") ? <Webhook className="h-5 w-5" />
               : n.includes("api") ? <Code2 className="h-5 w-5" />
@@ -120,7 +120,7 @@ function ActivityFeed({ rows }: { rows: ActivityRow[] }) {
               <span
                 className={cn(
                   "mt-1 h-2.5 w-2.5 shrink-0 rounded-full",
-                  row.tone === "red" ? "bg-[#D92D20]" : row.tone === "amber" ? "bg-[#F79009]" : "bg-[#137752]"
+                  row.tone === "red" ? "bg-[#D92D20]" : row.tone === "amber" ? "bg-[#F79009]" : "bg-primary"
                 )}
               />
               <div>
@@ -490,7 +490,7 @@ export function AutomationsHub({
                     <span
                       className={cn(
                         "mt-1 h-2.5 w-2.5 shrink-0 rounded-full",
-                        row.tone === "red" ? "bg-[#D92D20]" : row.tone === "amber" ? "bg-[#F79009]" : "bg-[#137752]"
+                        row.tone === "red" ? "bg-[#D92D20]" : row.tone === "amber" ? "bg-[#F79009]" : "bg-primary"
                       )}
                     />
                     <div>

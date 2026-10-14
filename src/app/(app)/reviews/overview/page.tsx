@@ -21,12 +21,8 @@ async function ReviewOverviewLoaded({ businessId }: { businessId: string }) {
   );
 }
 
-export default async function ReviewOverviewPage({
-  params,
-}: {
-  params: Promise<{ businessId: string }>;
-}) {
-  const { businessId } = await params;
+export default async function ReviewOverviewPage() {
+  const businessId = await getReputationWorkspaceId();
 
   return (
     <Suspense

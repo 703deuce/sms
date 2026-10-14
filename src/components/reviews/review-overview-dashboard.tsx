@@ -19,16 +19,13 @@ import {
 } from "@/components/reputation/rep-charts";
 import { ReputationSyncButton } from "@/components/reputation/reputation-sync-button";
 import { Sparkline } from "@/components/overview/overview-charts";
-import {
-  ModulePage,
-  cardClass,
-  moduleStack,
-} from "@/components/ui/design-system";
+import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
+import { ReviewsOpusPage } from "@/newui-transplant/connected/reviews/reviews-opus-page";
 import { cn } from "@/lib/utils";
 import type { ReviewOverviewData } from "@/lib/reviews/review-overview-preview-data";
 
-const GREEN = "#137752";
-const GREEN_SOFT = "#ECFDF3";
+const GREEN = "var(--primary)";
+const GREEN_SOFT = "color-mix(in oklch, var(--primary) 12%, transparent)";
 const BLUE = "#3B82F6";
 const GREY_LINE = "#A1A1AA";
 
@@ -56,7 +53,7 @@ function YellowStars({ rating }: { rating: number }) {
 function DeltaPct({ value, suffix }: { value: number; suffix: string }) {
   const positive = value >= 0;
   return (
-    <p className={cn("mt-1 text-[11px] font-medium leading-snug", positive ? "text-emerald-600" : "text-red-600")}>
+    <p className={cn("mt-1 text-[11px] font-medium leading-snug", positive ? "text-primary" : "text-red-600")}>
       {positive ? "+" : ""}
       {value}% {suffix}
     </p>
@@ -64,7 +61,7 @@ function DeltaPct({ value, suffix }: { value: number; suffix: string }) {
 }
 
 function SoftCard({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <div className={cn(cardClass, "p-4", className)}>{children}</div>;
+  return <div className={cn(OPUS_CARD, "bg-card p-4", className)}>{children}</div>;
 }
 
 function CardLabel({ children }: { children: React.ReactNode }) {
@@ -77,7 +74,7 @@ function ViewLink({ href, children }: { href: string; children: React.ReactNode 
   return (
     <Link
       href={href}
-      className="inline-flex items-center gap-0.5 text-[12px] font-semibold text-[#137752] hover:underline"
+      className="inline-flex items-center gap-0.5 text-[12px] font-semibold text-primary hover:underline"
     >
       {children}
       <ChevronRight className="h-3.5 w-3.5" />
@@ -185,7 +182,7 @@ export function ReviewOverviewDashboard({
     data.momentumLabel === "Recovering";
 
   return (
-    <ModulePage className={moduleStack}>
+    <ReviewsOpusPage className="flex flex-col gap-4">
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Review Overview</h1>
@@ -236,7 +233,7 @@ export function ReviewOverviewDashboard({
           <p className="mt-1.5 text-2xl font-bold tabular-nums leading-none text-zinc-900">
             {data.totalReviews}
           </p>
-          <p className="mt-1.5 text-[11px] font-medium leading-snug text-emerald-600">
+          <p className="mt-1.5 text-[11px] font-medium leading-snug text-primary">
             + {data.gained30d} in last 30 days
           </p>
         </SoftCard>
@@ -303,7 +300,7 @@ export function ReviewOverviewDashboard({
               "mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[13px] font-semibold",
               data.momentumLabel === "Slowing" || data.momentumLabel === "Stalled"
                 ? "bg-amber-50 text-amber-800"
-                : "bg-[#ECFDF3] text-[#137752]"
+                : "bg-[#ECFDF3] text-primary"
             )}
           >
             {showMomentumArrow ? <ArrowUpRight className="h-3.5 w-3.5" /> : null}
@@ -331,7 +328,7 @@ export function ReviewOverviewDashboard({
             <p
               className={cn(
                 "mt-1.5 text-[11px] font-medium",
-                data.competitorRankDelta >= 0 ? "text-emerald-600" : "text-red-600"
+                data.competitorRankDelta >= 0 ? "text-primary" : "text-red-600"
               )}
             >
               {data.competitorRankDelta >= 0 ? "+" : ""}
@@ -454,7 +451,7 @@ export function ReviewOverviewDashboard({
                         <span
                           className={cn(
                             "ml-1.5 text-[11px] font-medium",
-                            row.isYou ? "text-emerald-600" : "text-zinc-500"
+                            row.isYou ? "text-primary" : "text-zinc-500"
                           )}
                         >
                           ({row.status})
@@ -466,7 +463,7 @@ export function ReviewOverviewDashboard({
                     <div
                       className={cn(
                         "h-full rounded-full transition-all",
-                        row.isYou ? "bg-[#137752]" : "bg-zinc-300"
+                        row.isYou ? "bg-primary" : "bg-zinc-300"
                       )}
                       style={{ width: `${row.barPct}%` }}
                     />
@@ -498,7 +495,7 @@ export function ReviewOverviewDashboard({
                     <p
                       className={cn(
                         "mt-1 text-[11px] font-medium",
-                        (data.mapsAvgRankDelta ?? 0) >= 0 ? "text-emerald-600" : "text-red-600"
+                        (data.mapsAvgRankDelta ?? 0) >= 0 ? "text-primary" : "text-red-600"
                       )}
                     >
                       {signedDelta(data.mapsAvgRankDelta, 1, " in last 30 days")}
@@ -518,7 +515,7 @@ export function ReviewOverviewDashboard({
                       <span
                         className={cn(
                           "text-[11px] font-medium",
-                          data.top3VisibilityDelta >= 0 ? "text-emerald-600" : "text-red-600"
+                          data.top3VisibilityDelta >= 0 ? "text-primary" : "text-red-600"
                         )}
                       >
                         {data.top3VisibilityDelta >= 0 ? "+" : ""}
@@ -535,7 +532,7 @@ export function ReviewOverviewDashboard({
                       <span
                         className={cn(
                           "text-[11px] font-medium",
-                          data.top10VisibilityDelta >= 0 ? "text-emerald-600" : "text-red-600"
+                          data.top10VisibilityDelta >= 0 ? "text-primary" : "text-red-600"
                         )}
                       >
                         {data.top10VisibilityDelta >= 0 ? "+" : ""}
@@ -594,7 +591,7 @@ export function ReviewOverviewDashboard({
           ) : (
             <p className="py-6 text-center text-[13px] text-zinc-500">
               No campaign sends in the last 30 days.{" "}
-              <Link href={`/businesses/${businessId}/reputation/requests`} className="font-semibold text-[#137752] hover:underline">
+              <Link href={`/businesses/${businessId}/reputation/requests`} className="font-semibold text-primary hover:underline">
                 Send a review request
               </Link>
             </p>
@@ -618,7 +615,7 @@ export function ReviewOverviewDashboard({
                 <p className="mt-1 text-[13px] leading-snug text-zinc-600">{data.nextAction.body}</p>
                 <Link
                   href={actionHref}
-                  className="mt-3 inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-[#137752] px-4 text-[13px] font-semibold text-white shadow-[0_4px_14px_rgba(19,119,82,0.28)] hover:bg-[#0f6244] sm:w-auto"
+                  className="mt-3 inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-4 text-[13px] font-semibold text-white shadow-[0_4px_14px_rgba(19,119,82,0.28)] hover:bg-[#0f6244] sm:w-auto"
                 >
                   {data.nextAction.ctaLabel}
                   <ChevronRight className="h-4 w-4" />
@@ -635,7 +632,7 @@ export function ReviewOverviewDashboard({
           </SoftCard>
         ) : null}
       </div>
-    </ModulePage>
+    </ReviewsOpusPage>
   );
 }
 

@@ -28,7 +28,7 @@ export function ReviewRequestsSubTabs({
           className={cn(
             "-mb-px border-b-2 px-1 pb-2.5 pt-1 text-[13px] font-medium transition-colors",
             active === tab.id
-              ? "border-primary text-emerald-700"
+              ? "border-primary text-primary"
               : "border-transparent text-text-muted hover:border-border hover:text-text"
           )}
         >

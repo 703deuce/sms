@@ -1,14 +1,10 @@
+import { OPUS_CARD, OPUS_SEARCH_INPUT } from "@/newui-transplant/components/app/opus-surfaces";
 "use client";
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, MoreHorizontal, Pause, Play, X } from "lucide-react";
 import { rrOutlineBtn } from "@/components/reputation/review-requests-ui";
-import {
-  dashboardCard,
-  dashboardCardTitle,
-  dashboardMicro,
-} from "@/components/overview/dashboard-ui";
 import { cn } from "@/lib/utils";
 
 export type CampaignRow = {
@@ -63,7 +59,7 @@ function statusBadge(status: string) {
   const styles: Record<string, string> = {
     draft: "bg-zinc-100 text-zinc-700",
     scheduled: "bg-blue-50 text-blue-700",
-    active: "bg-emerald-50 text-emerald-700",
+    active: "bg-primary/10 text-primary",
     paused: "bg-amber-50 text-amber-700",
     completed: "bg-zinc-100 text-zinc-600",
     cancelled: "bg-red-50 text-red-700",
@@ -180,7 +176,7 @@ export function ReviewRequestsCampaignsTable({
     return (
       <div
         className={cn(
-          dashboardCard,
+          OPUS_CARD,
           "border-dashed px-3.5 py-8 text-center text-[13px] text-zinc-500"
         )}
       >
@@ -190,15 +186,15 @@ export function ReviewRequestsCampaignsTable({
   }
 
   return (
-    <div className={cn(dashboardCard, "overflow-hidden")}>
+    <div className={cn(OPUS_CARD, "overflow-hidden")}>
       {error && (
         <div className="border-b border-red-100 bg-red-50 px-3.5 py-2 text-[12px] text-red-700">
           {error}
         </div>
       )}
       <div className="border-b border-zinc-100 px-3.5 py-2.5">
-        <h3 className={dashboardCardTitle}>{title}</h3>
-        <p className={dashboardMicro}>{description}</p>
+        <h3 className={OPUS_CARDTitle}>{title}</h3>
+        <p className={"text-xs text-muted-foreground"}>{description}</p>
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-full text-[12px]">
@@ -235,7 +231,7 @@ export function ReviewRequestsCampaignsTable({
                 <td className="px-3.5 py-2 font-medium text-zinc-900">
                   <Link
                     href={`/businesses/${businessId}/reputation/campaigns/${c.id}`}
-                    className="hover:text-emerald-700 hover:underline"
+                    className="hover:text-primary hover:underline"
                   >
                     {c.name}
                   </Link>
@@ -246,7 +242,7 @@ export function ReviewRequestsCampaignsTable({
                 <td className="px-3.5 py-2 text-right tabular-nums">{c.recipients_ready}</td>
                 {resultColumns ? (
                   <>
-                    <td className="px-3.5 py-2 text-right tabular-nums text-emerald-700">{c.sent}</td>
+                    <td className="px-3.5 py-2 text-right tabular-nums text-primary">{c.sent}</td>
                     <td className="px-3.5 py-2 text-right tabular-nums">{c.delivered ?? "—"}</td>
                     <td className="px-3.5 py-2 text-right tabular-nums">{c.clicked}</td>
                     <td className="px-3.5 py-2 text-right tabular-nums">
@@ -257,7 +253,7 @@ export function ReviewRequestsCampaignsTable({
                 ) : (
                   <>
                     <td className="px-3.5 py-2 text-right tabular-nums">{c.queued}</td>
-                    <td className="px-3.5 py-2 text-right tabular-nums text-emerald-700">{c.sent}</td>
+                    <td className="px-3.5 py-2 text-right tabular-nums text-primary">{c.sent}</td>
                     <td className="px-3.5 py-2 text-right tabular-nums text-red-600">{c.failed}</td>
                     <td className="px-3.5 py-2 text-right tabular-nums">{c.clicked}</td>
                   </>

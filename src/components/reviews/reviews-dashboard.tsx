@@ -123,7 +123,7 @@ function StarSummary({
 function EmptyState() {
   return (
     <div className="rounded-xl border border-dashed border-[#D0D5DD] bg-white px-6 py-12 text-center">
-      <CheckCircle2 className="mx-auto h-8 w-8 text-[#137752]" />
+      <CheckCircle2 className="mx-auto h-8 w-8 text-primary" />
       <p className="mt-3 text-sm font-semibold text-[#101828]">
         No reviews match these filters
       </p>
@@ -390,7 +390,7 @@ function ReviewDetailPanel({
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
                 rows={6}
-                className="w-full rounded-lg border border-[#E6EAF0] px-3 py-2 text-sm text-[#101828] outline-none focus:border-[#137752]"
+                className="w-full rounded-lg border border-[#E6EAF0] px-3 py-2 text-sm text-[#101828] outline-none focus:border-primary"
               />
               <button
                 type="button"
@@ -660,7 +660,7 @@ export function ReviewsDashboard({
   if (loading && !data) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-[#137752]" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }

@@ -100,9 +100,9 @@ export function CampaignCreateWizard({
           <button
             type="button"
             onClick={chooseManual}
-            className="flex w-full items-start gap-3 rounded-lg border border-zinc-200 bg-white px-3 py-3 text-left hover:border-emerald-300 hover:bg-emerald-50/40"
+            className="flex w-full items-start gap-3 rounded-lg border border-zinc-200 bg-white px-3 py-3 text-left hover:border-emerald-300 hover:bg-primary/10/40"
           >
-            <Upload className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+            <Upload className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
             <span>
               <span className="block text-[13px] font-semibold text-zinc-900">Start manually</span>
               <span className="mt-0.5 block text-[11px] text-zinc-500">
@@ -114,9 +114,9 @@ export function CampaignCreateWizard({
           <button
             type="button"
             onClick={chooseAutomatic}
-            className="flex w-full items-start gap-3 rounded-lg border border-zinc-200 bg-white px-3 py-3 text-left hover:border-emerald-300 hover:bg-emerald-50/40"
+            className="flex w-full items-start gap-3 rounded-lg border border-zinc-200 bg-white px-3 py-3 text-left hover:border-emerald-300 hover:bg-primary/10/40"
           >
-            <Webhook className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+            <Webhook className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
             <span>
               <span className="block text-[13px] font-semibold text-zinc-900">Start automatically</span>
               <span className="mt-0.5 block text-[11px] text-zinc-500">
@@ -180,7 +180,7 @@ export function CampaignCreateWizard({
               No webhook endpoints yet.{" "}
               <Link
                 href={`/businesses/${businessId}/reputation/automations`}
-                className="font-medium text-emerald-700 underline"
+                className="font-medium text-primary underline"
               >
                 Create one in Automations
               </Link>
@@ -212,7 +212,7 @@ export function CampaignCreateWizard({
             disabled={!endpointId}
             onClick={() => setStep("template")}
             className={cn(
-              "rounded-full bg-[#137752] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#0f6344]",
+              "rounded-full bg-primary px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#0f6344]",
               !endpointId && "opacity-50"
             )}
           >

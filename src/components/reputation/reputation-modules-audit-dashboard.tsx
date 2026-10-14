@@ -122,7 +122,7 @@ function Donut({ pct, label }: { pct: number; label?: string }) {
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-2xl font-bold text-[#101828]">{pct}%</span>
-        {label ? <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#137752]">{label}</span> : null}
+        {label ? <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">{label}</span> : null}
       </div>
     </div>
   );
@@ -147,7 +147,7 @@ function SectionCard({
     <section id={id} className={cn(rep.card, "p-4", className)}>
       <div className="mb-4 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ECFDF3] text-[#137752]">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ECFDF3] text-primary">
             <Icon className="h-4 w-4" />
           </span>
           <h2 className="text-sm font-semibold text-[#101828]">{title}</h2>
@@ -432,7 +432,7 @@ export function ReputationStrategyReport({
           <div className="space-y-2">
             {data.recommendedActions.days30.slice(0, 4).map((action, i) => (
               <div key={action} className="flex gap-3 rounded-lg bg-[#F9FAFB] p-3">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#137752] text-xs font-bold text-white">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-white">
                   {i + 1}
                 </span>
                 <p className="text-sm leading-5 text-[#344054]">{action}</p>
@@ -446,7 +446,7 @@ export function ReputationStrategyReport({
       <div id="action-plan" className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
         <section className={cn(rep.card, "p-4")}>
           <div className="mb-4 flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ECFDF3] text-[#137752]">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ECFDF3] text-primary">
               <Calendar className="h-4 w-4" />
             </span>
             <h2 className="text-sm font-semibold text-[#101828]">30/60/90 Day Action Plan Preview</h2>
@@ -459,13 +459,13 @@ export function ReputationStrategyReport({
             ].map((period) => (
               <div key={period.title} className="rounded-xl bg-[#F9FAFB] p-3">
                 <div className="mb-2 flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-[#137752]" />
+                  <Calendar className="h-4 w-4 text-primary" />
                   <h3 className="text-sm font-semibold text-[#101828]">{period.title}</h3>
                 </div>
                 <ul className="space-y-2 text-sm leading-5 text-[#667085]">
                   {period.items.slice(0, 3).map((item) => (
                     <li key={item} className="flex gap-2">
-                      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#137752]" />
+                      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
                       {item}
                     </li>
                   ))}
@@ -477,7 +477,7 @@ export function ReputationStrategyReport({
 
         <div className={cn(rep.card, "flex flex-col items-center justify-center p-6 text-center")}>
           <p className={rep.label}>Overall Reputation Score</p>
-          <p className="mt-3 text-6xl font-bold text-[#137752]">{overallScore}</p>
+          <p className="mt-3 text-6xl font-bold text-primary">{overallScore}</p>
           <RepBadge tone="green" >Excellent</RepBadge>
           <p className="mt-2 text-sm font-semibold text-[#027A48]">
             ↑{scoreDelta} points

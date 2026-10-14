@@ -64,11 +64,11 @@ export function ReputationModuleTabs({
               className={cn(
                 "-mb-px inline-flex shrink-0 items-center gap-1.5 border-b-2 px-1 pb-3 pt-0.5 text-sm transition-colors",
                 active
-                  ? "border-emerald-600 font-semibold text-emerald-700"
+                  ? "border-primary font-semibold text-primary"
                   : "border-transparent font-medium text-zinc-500 hover:text-zinc-800"
               )}
             >
-              <Icon className={cn("h-3.5 w-3.5 shrink-0", active ? "text-emerald-600" : "text-zinc-400")} />
+              <Icon className={cn("h-3.5 w-3.5 shrink-0", active ? "text-primary" : "text-zinc-400")} />
               {tab.label}
             </Link>
           );

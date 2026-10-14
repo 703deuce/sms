@@ -63,7 +63,7 @@ export function ReviewsOverviewTab({
               <button
                 type="button"
                 onClick={() => onTabChange?.("your-reviews")}
-                className="text-[12px] font-medium text-emerald-600 hover:text-emerald-700"
+                className="text-[12px] font-medium text-primary hover:text-primary"
               >
                 View all {data.yourReviews.length} →
               </button>
@@ -82,7 +82,7 @@ export function ReviewsOverviewTab({
                 <button
                   type="button"
                   onClick={() => onTabChange?.("competitor-reviews")}
-                  className="shrink-0 text-[12px] font-medium text-emerald-600 hover:text-emerald-700"
+                  className="shrink-0 text-[12px] font-medium text-primary hover:text-primary"
                 >
                   View all →
                 </button>
@@ -104,7 +104,7 @@ export function ReviewsOverviewTab({
                       <button
                         type="button"
                         onClick={() => onTabChange?.("competitor-reviews")}
-                        className="shrink-0 text-[11px] font-medium text-emerald-600 hover:text-emerald-700"
+                        className="shrink-0 text-[11px] font-medium text-primary hover:text-primary"
                       >
                         View Reviews
                       </button>
@@ -122,7 +122,7 @@ export function ReviewsOverviewTab({
                   <p className="text-[11px] text-zinc-500">
                     {data.fastestGrowingCompetitor.rating?.toFixed(1) ?? "—"} ★ rating
                   </p>
-                  <p className="mt-1 text-[12px] font-medium text-emerald-600">
+                  <p className="mt-1 text-[12px] font-medium text-primary">
                     +{data.fastestGrowingCompetitor.delta} reviews vs prior 90 days
                   </p>
                   <div className="mt-2">

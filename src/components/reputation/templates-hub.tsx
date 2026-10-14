@@ -183,7 +183,7 @@ function TemplatePreview({
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#ECFDF3] text-[#137752]">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#ECFDF3] text-primary">
               <TemplateChannelIcon channel={selected.channel} className="h-4 w-4" />
             </span>
             <div className="min-w-0">
@@ -213,7 +213,7 @@ function TemplatePreview({
                 <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-[#344054]">{renderedBody}</p>
               </div>
             ) : (
-              <div className="ml-auto max-w-[260px] rounded-2xl rounded-br-md bg-[#137752] px-3 py-2 text-sm leading-relaxed text-white shadow-sm">
+              <div className="ml-auto max-w-[260px] rounded-2xl rounded-br-md bg-primary px-3 py-2 text-sm leading-relaxed text-white shadow-sm">
                 {renderedBody}
               </div>
             )}
@@ -434,7 +434,7 @@ export function TemplatesHub({
                 setQuery("");
               }}
             >
-              <Sparkles className="h-4 w-4 text-[#137752]" />
+              <Sparkles className="h-4 w-4 text-primary" />
               Industry Templates
             </button>
           </>
@@ -503,7 +503,7 @@ export function TemplatesHub({
                 setQuery("");
               }}
             >
-              <Sparkles className="h-4 w-4 text-[#137752]" />
+              <Sparkles className="h-4 w-4 text-primary" />
               Use Campaign Template
             </button>
           </div>
@@ -627,7 +627,7 @@ export function TemplatesHub({
 
       <div className="rounded-xl border border-[#B7E4CC] bg-[#ECFDF3] p-4">
         <div className="flex items-start gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-[#137752]">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-primary">
             <Sparkles className="h-4 w-4" />
           </span>
           <div className="min-w-0 flex-1">
@@ -638,7 +638,7 @@ export function TemplatesHub({
               View best practices →
             </button>
           </div>
-          <Archive className="ml-auto hidden h-5 w-5 shrink-0 text-[#137752] sm:block" />
+          <Archive className="ml-auto hidden h-5 w-5 shrink-0 text-primary sm:block" />
         </div>
       </div>
     </div>

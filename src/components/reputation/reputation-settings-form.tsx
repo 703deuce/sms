@@ -68,7 +68,7 @@ const cardClass = "rounded-lg border border-zinc-200 bg-white p-3 shadow-sm";
 const labelClass = "text-[12px] font-medium text-zinc-700";
 const helpClass = "mt-0.5 text-[11px] leading-relaxed text-zinc-500";
 const inputClass =
-  "mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-[13px] text-zinc-900 outline-none transition focus:border-[#137752] focus:ring-2 focus:ring-[#137752]/10 disabled:bg-zinc-50";
+  "mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-[13px] text-zinc-900 outline-none transition focus:border-primary focus:ring-2 focus:ring-[#137752]/10 disabled:bg-zinc-50";
 
 function normalizeTime(value: string | null | undefined) {
   if (!value) return "";
@@ -76,7 +76,7 @@ function normalizeTime(value: string | null | undefined) {
 }
 
 function statusBadgeClass(status: string) {
-  if (status === "approved") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "approved") return "border-emerald-200 bg-primary/10 text-primary";
   if (status === "pending") return "border-amber-200 bg-amber-50 text-amber-700";
   if (status === "rejected" || status === "disabled") {
     return "border-red-200 bg-red-50 text-red-700";
@@ -98,7 +98,7 @@ function Section({
   return (
     <section className={cardClass}>
       <div className="flex gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-[#137752]">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
           <Icon className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">
@@ -257,7 +257,7 @@ export function ReputationSettingsForm({ businessId }: { businessId: string }) {
           type="button"
           onClick={() => void save()}
           disabled={saving}
-          className="inline-flex items-center gap-1.5 rounded-full bg-[#137752] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#0f6344] disabled:opacity-60"
+          className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#0f6344] disabled:opacity-60"
         >
           {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
           Save settings
@@ -271,7 +271,7 @@ export function ReputationSettingsForm({ businessId }: { businessId: string }) {
         </div>
       ) : null}
       {message ? (
-        <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-[12px] text-emerald-700">
+        <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-primary/10 p-3 text-[12px] text-primary">
           <CheckCircle2 className="h-3.5 w-3.5" />
           {message}
         </div>
@@ -305,7 +305,7 @@ export function ReputationSettingsForm({ businessId }: { businessId: string }) {
           <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex min-w-0 items-center gap-2">
-                <Link2 className="h-3.5 w-3.5 shrink-0 text-[#137752]" />
+                <Link2 className="h-3.5 w-3.5 shrink-0 text-primary" />
                 <div className="min-w-0">
                   <p className="text-[12px] font-medium text-zinc-800">Active review link</p>
                   {settings.reviewLink ? (
@@ -313,7 +313,7 @@ export function ReputationSettingsForm({ businessId }: { businessId: string }) {
                       href={settings.reviewLink}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="block truncate text-[12px] text-[#137752] hover:underline"
+                      className="block truncate text-[12px] text-primary hover:underline"
                     >
                       {displayReviewLink}
                     </a>
@@ -353,14 +353,14 @@ export function ReputationSettingsForm({ businessId }: { businessId: string }) {
           title="Review link and QR code"
           description="QR colors, poster copy, short link, and downloads live on the dedicated QR Poster page."
         >
-          <div className="rounded-lg border border-dashed border-emerald-200 bg-emerald-50/60 p-3 text-[12px] text-emerald-800">
+          <div className="rounded-lg border border-dashed border-emerald-200 bg-primary/10/60 p-3 text-[12px] text-emerald-800">
             <p>
               Open QR Poster to generate or update the active review link, QR code, brand colors, and
               printable poster.
             </p>
             <a
               href={`/businesses/${businessId}/reputation/qr`}
-              className="mt-2 inline-flex font-semibold text-[#137752] hover:underline"
+              className="mt-2 inline-flex font-semibold text-primary hover:underline"
             >
               Open QR Poster →
             </a>
@@ -406,7 +406,7 @@ export function ReputationSettingsForm({ businessId }: { businessId: string }) {
           <button
             type="button"
             onClick={() => patch({ quietHoursStart: "", quietHoursEnd: "" })}
-            className="mt-3 text-[11px] font-semibold text-[#137752] hover:underline"
+            className="mt-3 text-[11px] font-semibold text-primary hover:underline"
           >
             Clear quiet hours
           </button>

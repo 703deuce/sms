@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
-import { TabBar } from "@/components/ui/design-system";
+import { OpusLineTabs } from "@/newui-transplant/components/app/segmented-nav";
 import { renderTemplate } from "@/lib/reputation/template-vars";
 import { cn } from "@/lib/utils";
 
@@ -95,7 +95,7 @@ function CampaignTemplateCards({
           : "No sequence templates are available yet."}{" "}
         <Link
           href={`/businesses/${businessId}/reputation/campaigns`}
-          className="font-medium text-emerald-700 underline"
+          className="font-medium text-primary underline"
         >
           Open campaigns
         </Link>
@@ -370,7 +370,12 @@ export function TemplatesManager({ businessId }: { businessId: string }) {
 
   return (
     <div className="space-y-3">
-      <TabBar tabs={TEMPLATE_TABS} active={activeTab} onChange={changeTab} />
+      <OpusLineTabs
+        label="Template channels"
+        tabs={TEMPLATE_TABS.map((t) => ({ value: t.id, label: t.label }))}
+        value={activeTab}
+        onChange={(id) => changeTab(id as TemplateTab)}
+      />
 
       {(activeTab === "sms" || activeTab === "email") && (
         <div className="grid gap-3 lg:grid-cols-2">
@@ -387,7 +392,7 @@ export function TemplatesManager({ businessId }: { businessId: string }) {
               className={cn(
                 "rounded border px-2 py-1 text-[11px]",
                 activeId === t.id
-                  ? "border-emerald-600 text-emerald-800"
+                  ? "border-primary text-emerald-800"
                   : "border-zinc-200 text-zinc-600"
               )}
             >
@@ -459,7 +464,7 @@ export function TemplatesManager({ businessId }: { businessId: string }) {
                 type="button"
                 disabled={saving}
                 onClick={() => void save(!activeId)}
-                className="rounded-full bg-[#137752] px-2.5 py-1.5 text-[12px] font-semibold text-white disabled:opacity-60"
+                className="rounded-full bg-primary px-2.5 py-1.5 text-[12px] font-semibold text-white disabled:opacity-60"
               >
                 Save
               </button>
@@ -506,7 +511,7 @@ export function TemplatesManager({ businessId }: { businessId: string }) {
               </button>
             </div>
             {error && <p className="text-[12px] text-red-600">{error}</p>}
-            {msg && <p className="text-[12px] text-emerald-700">{msg}</p>}
+            {msg && <p className="text-[12px] text-primary">{msg}</p>}
           </>
         )}
           </div>
@@ -584,7 +589,7 @@ export function TemplatesManager({ businessId }: { businessId: string }) {
                         <p className="font-medium text-zinc-900">
                           {template.name}
                           {template.is_default ? (
-                            <span className="ml-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                            <span className="ml-1 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
                               Default
                             </span>
                           ) : null}

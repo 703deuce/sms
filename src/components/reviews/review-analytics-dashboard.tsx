@@ -247,7 +247,7 @@ function MomentumCard({ data }: { data: ReviewAnalyticsDashboardData }) {
           <p className="mt-3 text-4xl font-bold tracking-tight text-[#101828]">{score}/100</p>
           <p className="mt-1 text-sm text-[#667085]">{data.explanation}</p>
         </div>
-        <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#ECFDF3] text-[#137752]">
+        <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#ECFDF3] text-primary">
           <Flame className="h-6 w-6" />
         </span>
       </div>
@@ -259,7 +259,7 @@ function MomentumCard({ data }: { data: ReviewAnalyticsDashboardData }) {
           <div className="space-y-2">
             {data.drivers.map((driver) => (
               <div key={driver} className="flex items-start gap-2 rounded-lg bg-[#F9FAFB] px-3 py-2 text-sm text-[#344054]">
-                <ArrowUpRight className="mt-0.5 h-4 w-4 shrink-0 text-[#137752]" />
+                <ArrowUpRight className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 {driver}
               </div>
             ))}
@@ -411,7 +411,7 @@ export function ReviewAnalyticsDashboard({
               onClick={() => setGroupMode(mode)}
               className={cn(
                 "rounded-md px-3 py-1.5 text-xs font-semibold capitalize",
-                groupMode === mode ? "bg-white text-[#137752] shadow-sm" : "text-[#667085]"
+                groupMode === mode ? "bg-white text-primary shadow-sm" : "text-[#667085]"
               )}
             >
               {mode === "daily" ? "Day" : mode === "weekly" ? "Week" : "Month"}
@@ -509,7 +509,7 @@ export function ReviewAnalyticsDashboard({
               <div className="space-y-3">
                 {data.drivers.map((driver) => (
                   <div key={driver} className="flex items-start gap-3 rounded-xl border border-[#E6EAF0] bg-white p-3">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ECFDF3] text-[#137752]">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ECFDF3] text-primary">
                       <TrendingUp className="h-4 w-4" />
                     </span>
                     <p className="text-sm leading-6 text-[#344054]">{driver}</p>
@@ -523,7 +523,7 @@ export function ReviewAnalyticsDashboard({
           </Card>
           <Card title="Reviews by Period" className="xl:col-span-2">
             <div className="flex items-center gap-2 text-sm text-[#667085]">
-              <Table2 className="h-4 w-4 text-[#137752]" />
+              <Table2 className="h-4 w-4 text-primary" />
               Use the Timeline tab for the full period table and daily volume chart.
             </div>
           </Card>

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ArrowRight, Info, Loader2 } from "lucide-react";
-import { ModulePage } from "@/components/ui/design-system";
+import { ReviewsOpusPage } from "@/newui-transplant/connected/reviews/reviews-opus-page";
 import { QrKpiCard, qrUi } from "@/components/reputation/qr-campaigns/qr-ui";
 import type { QrCampaignAnalytics } from "@/lib/reputation/qr-campaigns/types";
 import { cn } from "@/lib/utils";
@@ -97,7 +97,7 @@ export function QrCampaignAnalyticsView({
   }, [data, maxDaily]);
 
   return (
-    <ModulePage className="space-y-6">
+    <ReviewsOpusPage className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <Link
@@ -355,7 +355,7 @@ export function QrCampaignAnalyticsView({
           </div>
         </>
       ) : null}
-    </ModulePage>
+    </ReviewsOpusPage>
   );
 }
 

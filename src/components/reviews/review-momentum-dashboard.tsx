@@ -46,7 +46,8 @@ import {
   formatChartDate,
   momentumCardClass,
 } from "@/components/reviews/review-momentum-ui";
-import { ModulePage, AlertBanner } from "@/components/ui/design-system";
+import { Callout } from "@/newui-transplant/components/app/kit";
+import { ReviewsOpusPage } from "@/newui-transplant/connected/reviews/reviews-opus-page";
 import { cn } from "@/lib/utils";
 
 interface EntityRow {
@@ -138,14 +139,14 @@ function priorityBadgeClass(priority: string): string {
 
 function impactBadgeClass(impact: string): string {
   const i = impact.toLowerCase();
-  if (i.includes("high")) return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100";
+  if (i.includes("high")) return "bg-primary/10 text-primary ring-1 ring-primary/20";
   if (i.includes("medium")) return "bg-orange-50 text-orange-700 ring-1 ring-orange-100";
   return "bg-sky-50 text-sky-700 ring-1 ring-sky-100";
 }
 
 const TASK_ICONS = [MessageSquare, Target, Flag, TrendingUp];
 const TASK_ICON_COLORS = [
-  "bg-emerald-50 text-emerald-600",
+  "bg-primary/10 text-primary",
   "bg-orange-50 text-orange-600",
   "bg-sky-50 text-sky-600",
   "bg-violet-50 text-violet-600",
@@ -260,7 +261,7 @@ export function ReviewMomentumDashboard({ businessId }: { businessId: string }) 
   }
 
   return (
-    <ModulePage wide className="space-y-5">
+    <ReviewsOpusPage wide className="space-y-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <MomentumPageHeader />
         <MomentumTopBar
@@ -270,7 +271,7 @@ export function ReviewMomentumDashboard({ businessId }: { businessId: string }) 
         />
       </div>
 
-      {error && <AlertBanner variant="error">{error}</AlertBanner>}
+      {error ? <Callout tone="danger" title="Error">{error}</Callout> : null}
 
       {!data?.run ? (
         <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-3.5 py-8 text-center text-[13px]">
@@ -386,7 +387,7 @@ export function ReviewMomentumDashboard({ businessId }: { businessId: string }) 
                               {e.name}
                             </span>
                             {isTarget ? (
-                              <span className="rounded bg-[#137752] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+                              <span className="rounded bg-primary px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
                                 You
                               </span>
                             ) : null}
@@ -607,7 +608,7 @@ export function ReviewMomentumDashboard({ businessId }: { businessId: string }) 
               {data.run.ai_summary && (
                 <div className="rounded-xl border border-[#A6F4C5] bg-[#ECFDF3] p-4 lg:col-span-4">
                   <div className="flex gap-3">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-[#137752] shadow-sm">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-primary shadow-sm">
                       <Lightbulb className="h-4 w-4" />
                     </span>
                     <div>
@@ -688,7 +689,7 @@ export function ReviewMomentumDashboard({ businessId }: { businessId: string }) 
           )}
         </>
       )}
-    </ModulePage>
+    </ReviewsOpusPage>
   );
 }
 

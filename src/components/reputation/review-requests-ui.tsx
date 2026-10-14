@@ -1,16 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { PageHeader, Pill, type Tone } from "@/newui-transplant/components/app/kit";
+import { OpusLineTabs } from "@/newui-transplant/components/app/segmented-nav";
+import { Button, buttonVariants } from "@/newui-transplant/components/ui/button";
 import { cn } from "@/lib/utils";
+import { OPUS_SEARCH_INPUT } from "@/newui-transplant/components/app/opus-surfaces";
 import type { ReviewRequestsSection } from "@/components/reputation/review-requests-sub-tabs";
-import {
-  ModuleHeader,
-  TabBar,
-  btnPrimary,
-  btnSecondary,
-  inputClass,
-  fieldLabelClass,
-} from "@/components/ui/design-system";
 
 export function ReviewRequestsPageHeader({
   campaignsHref,
@@ -18,21 +14,17 @@ export function ReviewRequestsPageHeader({
   campaignsHref?: string;
 } = {}) {
   return (
-    <div className="flex flex-wrap items-end gap-3">
-      <ModuleHeader
-        title="Review Requests"
-        subtitle="One-time and bulk sends only — choose contacts, channel, template, preview, then send or schedule."
-        className="[&_h1]:text-xl [&_p]:text-[13px] [&_p]:leading-snug"
-      />
-      {campaignsHref ? (
-        <Link
-          href={campaignsHref}
-          className="mb-1 inline-flex items-center rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-[12px] font-medium text-zinc-700 hover:bg-zinc-50"
-        >
-          Open Campaigns →
-        </Link>
-      ) : null}
-    </div>
+    <PageHeader
+      title="Review Requests"
+      description="One-time and bulk sends only — choose contacts, channel, template, preview, then send or schedule."
+      actions={
+        campaignsHref ? (
+          <Button variant="outline" size="sm" asChild>
+            <Link href={campaignsHref}>Open Campaigns</Link>
+          </Button>
+        ) : undefined
+      }
+    />
   );
 }
 
@@ -55,53 +47,42 @@ export function ReviewRequestsSubTabsBar({
   onChange: (section: ReviewRequestsSection) => void;
 }) {
   return (
-    <TabBar
-      tabs={SECTIONS}
-      active={active}
-      onChange={onChange}
-      className="[&_button]:pb-2.5 [&_button]:text-[13px] [&>div]:gap-4"
+    <OpusLineTabs
+      label="Review request sections"
+      tabs={SECTIONS.map((s) => ({ value: s.id, label: s.label }))}
+      value={active}
+      onChange={(id) => onChange(id as ReviewRequestsSection)}
     />
   );
 }
 
-export function statusPill(status: string, hasReply?: boolean) {
-  if (hasReply) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700 ring-1 ring-sky-100">
-        <span className="h-1.5 w-1.5 rounded-full bg-sky-500" />
-        Replied
-      </span>
-    );
-  }
-  const styles: Record<string, { pill: string; dot: string }> = {
-    sent: { pill: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100", dot: "bg-emerald-500" },
-    delivered: { pill: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100", dot: "bg-emerald-500" },
-    clicked: { pill: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100", dot: "bg-emerald-500" },
-    completed: { pill: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100", dot: "bg-emerald-500" },
-    failed: { pill: "bg-red-50 text-red-700 ring-1 ring-red-100", dot: "bg-red-500" },
-    pending: { pill: "bg-amber-50 text-amber-700 ring-1 ring-amber-100", dot: "bg-amber-500" },
-    queued: { pill: "bg-amber-50 text-amber-700 ring-1 ring-amber-100", dot: "bg-amber-500" },
-  };
-  const labels: Record<string, string> = {
-    sent: "Sent",
-    delivered: "Delivered",
-    clicked: "Clicked",
-    completed: "Completed",
-    failed: "Failed",
-    pending: "Pending",
-    queued: "Queued",
-  };
-  const key = status in styles ? status : "pending";
-  const s = styles[key]!;
-  return (
-    <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold", s.pill)}>
-      <span className={cn("h-1.5 w-1.5 rounded-full", s.dot)} />
-      {labels[key] ?? status}
-    </span>
-  );
+function deliveryTone(status: string, hasReply?: boolean): Tone {
+  if (hasReply) return "info";
+  const key = status.toLowerCase();
+  if (key === "failed") return "danger";
+  if (key === "pending" || key === "queued") return "warning";
+  if (key === "sent" || key === "delivered" || key === "clicked" || key === "completed") return "success";
+  return "neutral";
 }
 
-export { inputClass as rrInputClass };
-export { fieldLabelClass as rrLabelClass };
-export { btnSecondary as rrOutlineBtn };
-export { btnPrimary as rrPrimaryBtn };
+const DELIVERY_LABELS: Record<string, string> = {
+  sent: "Sent",
+  delivered: "Delivered",
+  clicked: "Clicked",
+  completed: "Completed",
+  failed: "Failed",
+  pending: "Pending",
+  queued: "Queued",
+};
+
+export function statusPill(status: string, hasReply?: boolean) {
+  const label = hasReply ? "Replied" : (DELIVERY_LABELS[status] ?? status);
+  return <Pill tone={deliveryTone(status, hasReply)}>{label}</Pill>;
+}
+
+export const rrInputClass = OPUS_SEARCH_INPUT;
+export const rrLabelClass = "text-sm font-medium text-foreground";
+export const rrOutlineBtn = cn(buttonVariants({ variant: "outline" }));
+export const rrPrimaryBtn = cn(buttonVariants({ variant: "default" }));
+
+export { Button as rrPrimaryButton, Button as rrOutlineButton };

@@ -10,7 +10,7 @@ import {
   Check,
   Loader2,
 } from "lucide-react";
-import { ModulePage } from "@/components/ui/design-system";
+import { ReviewsOpusPage } from "@/newui-transplant/connected/reviews/reviews-opus-page";
 import { BrandThemeHostedPage } from "@/components/reputation/payment-qr/brand-theme-hosted-page";
 import { PosterTemplatePicker } from "@/components/reputation/qr-campaigns/poster-template-picker";
 import { qrUi } from "@/components/reputation/qr-campaigns/qr-ui";
@@ -371,7 +371,7 @@ export function PaymentQrCreateWizard({ businessId }: { businessId: string }) {
   }
 
   return (
-    <ModulePage className="space-y-6">
+    <ReviewsOpusPage className="space-y-6">
       <div>
         <Link href={base} className="text-sm font-medium text-[#64748B] hover:text-[#0B1B32]">
           ← All campaigns
@@ -717,6 +717,6 @@ export function PaymentQrCreateWizard({ businessId }: { businessId: string }) {
           </button>
         )}
       </div>
-    </ModulePage>
+    </ReviewsOpusPage>
   );
 }

@@ -12,7 +12,7 @@ import {
   Loader2,
   Link2,
 } from "lucide-react";
-import { ModulePage } from "@/components/ui/design-system";
+import { ReviewsOpusPage } from "@/newui-transplant/connected/reviews/reviews-opus-page";
 import { ReviewPosterPreview } from "@/components/reputation/review-poster-preview";
 import { PlacementPicker } from "@/components/reputation/qr-campaigns/placement-picker";
 import { PosterTemplatePicker } from "@/components/reputation/qr-campaigns/poster-template-picker";
@@ -212,7 +212,7 @@ export function QrCampaignCreateForm({ businessId }: { businessId: string }) {
   }
 
   return (
-    <ModulePage className="space-y-6">
+    <ReviewsOpusPage className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <Link
@@ -573,6 +573,6 @@ export function QrCampaignCreateForm({ businessId }: { businessId: string }) {
           )}
         </div>
       </div>
-    </ModulePage>
+    </ReviewsOpusPage>
   );
 }

@@ -34,11 +34,11 @@ export function ReviewRequestsKpiCard({
   const composedSub = subParts.join(" · ") || undefined;
 
   const iconWrap = iconClass.includes("bg-")
-    ? iconClass.split(" ").find((c) => c.startsWith("bg-")) ?? "bg-emerald-50"
-    : "bg-emerald-50";
+    ? iconClass.split(" ").find((c) => c.startsWith("bg-")) ?? "bg-primary/10"
+    : "bg-primary/10";
   const iconColor = iconClass.includes("text-")
-    ? iconClass.split(" ").find((c) => c.startsWith("text-")) ?? "text-emerald-600"
-    : "text-emerald-600";
+    ? iconClass.split(" ").find((c) => c.startsWith("text-")) ?? "text-primary"
+    : "text-primary";
 
   return (
     <GridMetricCard

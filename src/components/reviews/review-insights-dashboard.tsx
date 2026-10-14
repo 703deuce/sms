@@ -20,10 +20,7 @@ import {
   Sparkles,
   UserRoundCheck,
 } from "lucide-react";
-import {
-  ModulePage,
-  moduleStack,
-} from "@/components/ui/design-system";
+import { ReviewsOpusPage } from "@/newui-transplant/connected/reviews/reviews-opus-page";
 import {
   REP_GREEN,
   RepBadge,
@@ -91,7 +88,7 @@ function ThemePanel({
   tone: "positive" | "negative";
 }) {
   const max = Math.max(...items.map((item) => item.count), 1);
-  const bar = tone === "positive" ? "bg-[#137752]" : "bg-[#D92D20]";
+  const bar = tone === "positive" ? "bg-primary" : "bg-[#D92D20]";
   const text = tone === "positive" ? "text-[#027A48]" : "text-[#B42318]";
 
   return (
@@ -179,7 +176,7 @@ function MentionList({
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-[#F2F4F7]">
             <div
-              className="h-full rounded-full bg-[#137752]"
+              className="h-full rounded-full bg-primary"
               style={{ width: `${Math.max(8, (item.count / max) * 100)}%` }}
             />
           </div>
@@ -248,7 +245,7 @@ export function ReviewInsightsDashboard({
   ];
 
   return (
-    <ModulePage className={moduleStack}>
+    <ReviewsOpusPage className="flex flex-col gap-4">
       <RepPageHeader
         title="Review Insights"
         subtitle="Discover what customers are saying and how you're responding."
@@ -280,7 +277,7 @@ export function ReviewInsightsDashboard({
             <div className={cn(rep.card, "p-4")}>
               <div className="flex items-start justify-between gap-2">
                 <p className={rep.label}>Positive Themes</p>
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ECFDF3] text-[#137752]">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ECFDF3] text-primary">
                   <Sparkles className="h-4 w-4" />
                 </span>
               </div>
@@ -306,7 +303,7 @@ export function ReviewInsightsDashboard({
             <div className={cn(rep.card, "p-4")}>
               <div className="flex items-start justify-between gap-2">
                 <p className={rep.label}>Total Review Text</p>
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ECFDF3] text-[#137752]">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ECFDF3] text-primary">
                   <FileText className="h-4 w-4" />
                 </span>
               </div>
@@ -324,7 +321,7 @@ export function ReviewInsightsDashboard({
             <div className={cn(rep.card, "p-4")}>
               <div className="flex items-start justify-between gap-2">
                 <p className={rep.label}>Avg Review Length</p>
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ECFDF3] text-[#137752]">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ECFDF3] text-primary">
                   <MessageSquareText className="h-4 w-4" />
                 </span>
               </div>
@@ -411,7 +408,7 @@ export function ReviewInsightsDashboard({
                     <thead>
                       <tr className="border-b border-[#E6EAF0] text-[11px] uppercase tracking-[0.06em] text-[#98A2B3]">
                         <th className="px-3 py-2 font-semibold">Theme</th>
-                        <th className="px-3 py-2 font-semibold text-[#137752]">You</th>
+                        <th className="px-3 py-2 font-semibold text-primary">You</th>
                         <th className="px-3 py-2 font-semibold">Top Competitor</th>
                         <th className="px-3 py-2 font-semibold">2nd Competitor</th>
                         <th className="px-3 py-2 font-semibold">Industry Avg</th>
@@ -421,7 +418,7 @@ export function ReviewInsightsDashboard({
                       {data.themes.competitorComparison.map((row) => (
                         <tr key={row.theme} className="border-b border-[#F2F4F7] last:border-0">
                           <td className="px-3 py-3 font-semibold text-[#101828]">{row.theme}</td>
-                          <td className="px-3 py-3 tabular-nums font-semibold text-[#137752]">{row.you}%</td>
+                          <td className="px-3 py-3 tabular-nums font-semibold text-primary">{row.you}%</td>
                           <td className="px-3 py-3 tabular-nums text-[#344054]">{row.topCompetitor}%</td>
                           <td className="px-3 py-3 tabular-nums text-[#344054]">{row.secondCompetitor}%</td>
                           <td className="px-3 py-3 tabular-nums text-[#344054]">{row.industryAvg}%</td>
@@ -504,7 +501,7 @@ export function ReviewInsightsDashboard({
           <Card
             title="Top Keyword Mentions"
             description="Uncategorized words and phrases found in recent written reviews."
-            action={<Search className="h-4 w-4 text-[#137752]" />}
+            action={<Search className="h-4 w-4 text-primary" />}
           >
             <div className="flex flex-wrap gap-2">
               {data.servicesAndKeywords.length === 0 ? (
@@ -630,11 +627,11 @@ export function ReviewInsightsDashboard({
         <div className="space-y-4">
           <div className={cn(rep.card, "border-[#D1FADF] bg-gradient-to-br from-[#ECFDF3]/80 to-white p-4")}>
             <div className="flex items-start gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#D1FADF] text-[#137752]">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#D1FADF] text-primary">
                 <MessageSquareText className="h-5 w-5" />
               </span>
               <div>
-                <p className={cn(rep.label, "text-[#137752]")}>Response Quality Summary</p>
+                <p className={cn(rep.label, "text-primary")}>Response Quality Summary</p>
                 <h2 className="mt-1 text-xl font-bold text-[#101828]">
                   {data.responseQuality.genericResponseSuspected} generic replies suspected
                 </h2>
@@ -698,6 +695,6 @@ export function ReviewInsightsDashboard({
       ) : null}
       </>
       ) : null}
-    </ModulePage>
+    </ReviewsOpusPage>
   );
 }

@@ -1,5 +1,5 @@
-import "./reputation-theme.css";
+import { ReviewsOpusShell } from "@/newui-transplant/connected/reviews/reviews-opus-shell";
 
 export default function ReviewsLayout({ children }: { children: React.ReactNode }) {
-  return <div className="reviews-platform">{children}</div>;
+  return <ReviewsOpusShell>{children}</ReviewsOpusShell>;
 }

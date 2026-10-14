@@ -67,7 +67,7 @@ export function ReviewFeedList({
                 <div className="flex flex-col items-end gap-1">
                   <ReviewStatusBadge replied={row.replied} variant="pill" />
                   {row.isTarget && row.campaignAttribution === "confirmed" && (
-                    <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800">
+                    <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800">
                       Confirmed attribution
                     </span>
                   )}
@@ -96,7 +96,7 @@ export function ReviewFeedList({
 
               <div className="mt-2 flex flex-wrap items-center gap-2 px-1">
                 {row.tags.length > 0 && <TagPills tags={row.tags} />}
-                <span className="text-[12px] font-medium text-emerald-600 group-hover:text-emerald-700">
+                <span className="text-[12px] font-medium text-primary group-hover:text-primary">
                   {showPreview ? "Read full review →" : "Open review →"}
                 </span>
               </div>

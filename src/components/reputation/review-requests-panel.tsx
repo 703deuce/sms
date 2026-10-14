@@ -1,3 +1,4 @@
+import { OPUS_CARD, OPUS_SEARCH_INPUT } from "@/newui-transplant/components/app/opus-surfaces";
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -26,12 +27,6 @@ import {
   ReviewRequestsKpiCard,
   ReviewRequestsKpiRow as KpiRow,
 } from "@/components/reputation/review-requests-kpi-cards";
-import {
-  dashboardBody,
-  dashboardCard,
-  dashboardCardTitle,
-  dashboardMicro,
-} from "@/components/overview/dashboard-ui";
 import { cn } from "@/lib/utils";
 
 type TemplateRow = {
@@ -132,7 +127,7 @@ function MessageWithLink({
         href={linkUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className={linkClassName ?? "font-medium text-emerald-700 underline underline-offset-2"}
+        className={linkClassName ?? "font-medium text-primary underline underline-offset-2"}
       >
         {linkLabel}
       </a>
@@ -311,8 +306,8 @@ export function ReviewRequestsPanel({
 
   if (!data?.link) {
     return (
-      <div className={cn(dashboardCard, "border-dashed px-3.5 py-8 text-center")}>
-        <h3 className={dashboardCardTitle}>Review poster & request kit</h3>
+      <div className={cn(OPUS_CARD, "border-dashed px-3.5 py-8 text-center")}>
+        <h3 className={OPUS_CARDTitle}>Review poster & request kit</h3>
         <p className="mx-auto mt-1.5 max-w-md text-[13px] text-text-muted">
           Generate a Google review link, QR poster, and message templates for your team to send manually.
         </p>
@@ -363,12 +358,12 @@ export function ReviewRequestsPanel({
       )}
 
       {section === "poster" && (
-        <div className={cn(dashboardCard, "overflow-hidden")}>
+        <div className={cn(OPUS_CARD, "overflow-hidden")}>
           <div className="grid lg:grid-cols-[minmax(0,1fr)_380px]">
             <div className="space-y-4 border-b border-zinc-100 p-3 lg:border-b-0 lg:border-r">
               <section className="border-b border-zinc-100 pb-4">
-                <h3 className={dashboardCardTitle}>Create a review link</h3>
-                <p className={`mt-0.5 ${dashboardMicro}`}>
+                <h3 className={OPUS_CARDTitle}>Create a review link</h3>
+                <p className={`mt-0.5 ${"text-xs text-muted-foreground"}`}>
                   Build a clean link to collect Google reviews and convert more customers.
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -386,7 +381,7 @@ export function ReviewRequestsPanel({
                 <button
                   type="button"
                   onClick={() => void copyReviewLink()}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-600 px-3.5 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-primary px-3.5 py-2 text-xs font-semibold text-primary hover:bg-primary/10"
                 >
                   {copied === "link" ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                   Copy Link
@@ -397,7 +392,7 @@ export function ReviewRequestsPanel({
                   href={reviewUrl ?? "#"}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:underline"
+                  className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
                 >
                   Open page
                   <ExternalLink className="h-3 w-3" />
@@ -408,12 +403,12 @@ export function ReviewRequestsPanel({
             {(data.keywordSuggestions ?? []).length > 0 && (
               <section className="border-b border-zinc-100 pb-4">
                 <div className="flex items-center gap-2">
-                  <h3 className={dashboardCardTitle}>Important phrases</h3>
-                  <button type="button" className="text-[10px] text-emerald-700 hover:underline">
+                  <h3 className={OPUS_CARDTitle}>Important phrases</h3>
+                  <button type="button" className="text-[10px] text-primary hover:underline">
                     Help
                   </button>
                 </div>
-                <p className={`mt-0.5 ${dashboardMicro}`}>
+                <p className={`mt-0.5 ${"text-xs text-muted-foreground"}`}>
                   Suggest themes customers can mention naturally in their reviews.
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -426,7 +421,7 @@ export function ReviewRequestsPanel({
                         onClick={() => togglePhrase(k.keyword)}
                         className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
                           selected
-                            ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                            ? "border-primary bg-primary/10 text-primary"
                             : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300"
                         }`}
                       >
@@ -445,8 +440,8 @@ export function ReviewRequestsPanel({
             )}
 
             <section className="border-b border-zinc-100 pb-4">
-              <h3 className={dashboardCardTitle}>Match colors with your brand</h3>
-              <p className={`mt-0.5 ${dashboardMicro}`}>
+              <h3 className={OPUS_CARDTitle}>Match colors with your brand</h3>
+              <p className={`mt-0.5 ${"text-xs text-muted-foreground"}`}>
                 Pick colors that reflect your brand identity. These will be used in the poster.
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
@@ -478,7 +473,7 @@ export function ReviewRequestsPanel({
                     maxLength={50}
                     value={poster.title}
                     onChange={(e) => setPoster((p) => ({ ...p, title: e.target.value }))}
-                    className="mt-1 w-full rounded-lg border border-zinc-200 px-3.5 py-2 text-[13px] outline-none focus:border-emerald-500"
+                    className="mt-1 w-full rounded-lg border border-zinc-200 px-3.5 py-2 text-[13px] outline-none focus:border-primary"
                   />
                   <p className="mt-1 text-right text-[10px] text-zinc-400">
                     {poster.title.length} / 50
@@ -491,7 +486,7 @@ export function ReviewRequestsPanel({
                     maxLength={60}
                     value={poster.description}
                     onChange={(e) => setPoster((p) => ({ ...p, description: e.target.value }))}
-                    className="mt-1 w-full rounded-lg border border-zinc-200 px-3.5 py-2 text-[13px] outline-none focus:border-emerald-500"
+                    className="mt-1 w-full rounded-lg border border-zinc-200 px-3.5 py-2 text-[13px] outline-none focus:border-primary"
                   />
                   <p className="mt-1 text-right text-[10px] text-zinc-400">
                     {poster.description.length} / 60
@@ -504,7 +499,7 @@ export function ReviewRequestsPanel({
                   <label className="flex cursor-pointer items-center gap-3">
                     <span
                       className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition ${
-                        poster.showFooter ? "bg-emerald-600" : "bg-zinc-200"
+                        poster.showFooter ? "bg-primary" : "bg-zinc-200"
                       }`}
                     >
                       <input
@@ -528,7 +523,7 @@ export function ReviewRequestsPanel({
                 <div>
                   <div className="flex items-center gap-2">
                     <p className="text-xs font-medium text-zinc-500">Choose the perfect format</p>
-                    <button type="button" className="text-[10px] text-emerald-700 hover:underline">
+                    <button type="button" className="text-[10px] text-primary hover:underline">
                       Help
                     </button>
                   </div>
@@ -751,7 +746,7 @@ function MessagesSection({
 
   return (
     <div className="grid gap-3 lg:grid-cols-2">
-      <div className={cn(dashboardCard, "space-y-3 p-3")}>
+      <div className={cn(OPUS_CARD, "space-y-3 p-3")}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex gap-1 rounded-lg border border-zinc-200 bg-zinc-50/50 p-0.5">
             {(
@@ -767,7 +762,7 @@ function MessagesSection({
                 onClick={() => setTemplateChannel(id)}
                 className={`inline-flex items-center gap-1.5 rounded-md px-3.5 py-2 text-[13px] font-medium ${
                   templateChannel === id
-                    ? "bg-emerald-600 text-white shadow-sm"
+                    ? "bg-primary text-white shadow-sm"
                     : "text-zinc-600 hover:bg-white"
                 }`}
               >
@@ -780,7 +775,7 @@ function MessagesSection({
             type="button"
             onClick={() => void onGenerate()}
             disabled={generating}
-            className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-emerald-600 px-3.5 py-2 text-[13px] font-medium text-emerald-700 hover:bg-emerald-50"
+            className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-primary px-3.5 py-2 text-[13px] font-medium text-primary hover:bg-primary/10"
           >
             {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
             AI Templates
@@ -852,7 +847,7 @@ function MessagesSection({
                     onClick={() => setTone(t)}
                     className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${
                       tone === t
-                        ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                        ? "border-primary bg-primary/10 text-primary"
                         : "border-zinc-200 text-zinc-500 hover:bg-zinc-50"
                     }`}
                   >
@@ -867,14 +862,14 @@ function MessagesSection({
             </div>
 
             <div className="rounded-lg border border-zinc-200 bg-zinc-50/80 p-3">
-              <p className={dashboardCardTitle}>Template Settings</p>
+              <p className={OPUS_CARDTitle}>Template Settings</p>
               <div className="mt-2.5 space-y-3">
                 <label className="flex items-start justify-between gap-3">
                   <div>
                     <span className="text-xs font-medium text-zinc-700">Include review link</span>
                     <p className="mt-0.5 text-[11px] text-zinc-400">Automatically append the review link to messages.</p>
                   </div>
-                  <span className="relative mt-0.5 inline-flex h-5 w-9 shrink-0 rounded-full bg-emerald-600">
+                  <span className="relative mt-0.5 inline-flex h-5 w-9 shrink-0 rounded-full bg-primary">
                     <span className="absolute left-4 top-0.5 h-4 w-4 rounded-full bg-white shadow" />
                   </span>
                 </label>
@@ -883,7 +878,7 @@ function MessagesSection({
                     <span className="text-xs font-medium text-zinc-700">Shorten link</span>
                     <p className="mt-0.5 text-[11px] text-zinc-400">Use a shortened version of the review link.</p>
                   </div>
-                  <span className="relative mt-0.5 inline-flex h-5 w-9 shrink-0 rounded-full bg-emerald-600">
+                  <span className="relative mt-0.5 inline-flex h-5 w-9 shrink-0 rounded-full bg-primary">
                     <span className="absolute left-4 top-0.5 h-4 w-4 rounded-full bg-white shadow" />
                   </span>
                 </label>
@@ -902,7 +897,7 @@ function MessagesSection({
               <button
                 type="button"
                 onClick={() => void onCopy(copyBody, templateChannel)}
-                className="inline-flex items-center gap-1.5 rounded-full bg-[#137752] px-4 py-2 text-[13px] font-medium text-white hover:bg-[#0f6344]"
+                className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-[13px] font-medium text-white hover:bg-[#0f6344]"
               >
                 <Copy className="h-3.5 w-3.5" />
                 {copied === templateChannel ? "Copied" : "Copy Template"}
@@ -922,11 +917,11 @@ function MessagesSection({
         )}
       </div>
 
-      <div className={cn(dashboardCard, "p-3")}>
+      <div className={cn(OPUS_CARD, "p-3")}>
         <div className="flex items-center justify-between">
           <div>
-            <h3 className={dashboardCardTitle}>Live Preview</h3>
-            <p className={`mt-0.5 ${dashboardMicro}`}>
+            <h3 className={OPUS_CARDTitle}>Live Preview</h3>
+            <p className={`mt-0.5 ${"text-xs text-muted-foreground"}`}>
               This is how your message will appear to customers.
             </p>
           </div>
@@ -968,7 +963,7 @@ function MessagesSection({
         <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
           <div className="flex gap-3">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100">
-              <Shield className="h-4 w-4 text-emerald-700" />
+              <Shield className="h-4 w-4 text-primary" />
             </div>
             <div>
               <p className="text-xs font-semibold text-zinc-900">Compliance Reminder</p>
@@ -978,7 +973,7 @@ function MessagesSection({
                 <li>Include business name in every message.</li>
                 <li>Provide an easy opt-out: &quot;Reply STOP to opt-out.&quot;</li>
               </ul>
-              <button type="button" className="mt-2 text-[11px] font-medium text-emerald-700 hover:underline">
+              <button type="button" className="mt-2 text-[11px] font-medium text-primary hover:underline">
                 Learn more about SMS compliance ↗
               </button>
             </div>
@@ -1065,13 +1060,13 @@ function TrackingSection({
             label="Requests Sent"
             value={stats.last_30_days}
             icon={Send}
-            iconClass="bg-emerald-50 text-emerald-600"
+            iconClass="bg-primary/10 text-primary"
           />
           <ReviewRequestsKpiCard
             label="Delivery Rate"
             value={deliveryRate}
             icon={Check}
-            iconClass="bg-emerald-50 text-emerald-600"
+            iconClass="bg-primary/10 text-primary"
           />
           <ReviewRequestsKpiCard
             label="Sent by Email"
@@ -1099,16 +1094,16 @@ function TrackingSection({
             value={stats.replies ?? 0}
             sub={responseRate(stats.replies ?? 0, total)}
             icon={ArrowLeftRight}
-            iconClass="bg-emerald-50 text-emerald-600"
+            iconClass="bg-primary/10 text-primary"
           />
         </KpiRow>
       )}
 
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
         <div className="space-y-3">
-          <div className={cn(dashboardCard, "p-3")}>
-            <h3 className={dashboardCardTitle}>Log a manual send</h3>
-            <p className={`mt-0.5 ${dashboardMicro}`}>
+          <div className={cn(OPUS_CARD, "p-3")}>
+            <h3 className={OPUS_CARDTitle}>Log a manual send</h3>
+            <p className={`mt-0.5 ${"text-xs text-muted-foreground"}`}>
               Record review requests sent outside the platform (in person, phone, etc.).
             </p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -1167,10 +1162,10 @@ function TrackingSection({
             </button>
           </div>
 
-          <div className={cn(dashboardCard, "overflow-hidden")}>
+          <div className={cn(OPUS_CARD, "overflow-hidden")}>
             <div className="border-b border-zinc-100 px-3.5 py-2.5">
-              <h3 className={dashboardCardTitle}>Recent Requests</h3>
-              <p className={`mt-0.5 ${dashboardMicro}`}>Track every review request sent from this business.</p>
+              <h3 className={OPUS_CARDTitle}>Recent Requests</h3>
+              <p className={`mt-0.5 ${"text-xs text-muted-foreground"}`}>Track every review request sent from this business.</p>
             </div>
             <div className="border-b border-zinc-100 px-3.5 py-2.5">
               <div className="relative min-w-[200px] max-w-md">
@@ -1179,7 +1174,7 @@ function TrackingSection({
                   placeholder="Search by customer, phone, email…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full rounded-lg border border-zinc-200 py-2 pl-8 pr-3 text-xs outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20"
+                  className="w-full rounded-lg border border-zinc-200 py-2 pl-8 pr-3 text-xs outline-none focus:border-primary focus:ring-1 focus:ring-emerald-500/20"
                 />
               </div>
             </div>
@@ -1251,14 +1246,14 @@ function TrackingSection({
           </div>
         </div>
 
-        <div className={cn(dashboardCard, "p-3 xl:sticky xl:top-4 xl:self-start")}>
+        <div className={cn(OPUS_CARD, "p-3 xl:sticky xl:top-4 xl:self-start")}>
           <div className="flex items-center gap-2">
-            <h3 className={dashboardCardTitle}>Customer Replies</h3>
-            <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">
+            <h3 className={OPUS_CARDTitle}>Customer Replies</h3>
+            <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-white">
               {replies.length}
             </span>
           </div>
-          <p className={`mt-1 ${dashboardMicro}`}>
+          <p className={`mt-1 ${"text-xs text-muted-foreground"}`}>
             View and manage replies from your review requests.
           </p>
           <div className="mt-3">
@@ -1288,12 +1283,12 @@ function ReviewRequestsHandoffCard({
   actionLabel: string;
 }) {
   return (
-    <div className={cn(dashboardCard, "p-4")}>
-      <p className={dashboardCardTitle}>{title}</p>
-      <p className={`mt-1 max-w-2xl ${dashboardMicro}`}>{description}</p>
+    <div className={cn(OPUS_CARD, "p-4")}>
+      <p className={OPUS_CARDTitle}>{title}</p>
+      <p className={`mt-1 max-w-2xl ${"text-xs text-muted-foreground"}`}>{description}</p>
       <a
         href={href}
-        className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-[13px] font-semibold text-white hover:bg-emerald-800"
+        className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-[13px] font-semibold text-white hover:bg-emerald-800"
       >
         {actionLabel}
         <ExternalLink className="h-3.5 w-3.5" />

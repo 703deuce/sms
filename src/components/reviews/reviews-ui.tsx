@@ -21,22 +21,12 @@ import {
   TrendingUp,
 } from "lucide-react";
 import Link from "next/link";
-import {
-  dashboardAccentLink,
-  dashboardCard,
-  dashboardCardTitle,
-  dashboardControl,
-  dashboardMicro,
-  dashboardSectionLabel,
-} from "@/components/overview/dashboard-ui";
 import { Sparkline } from "@/components/overview/overview-charts";
-import {
-  ModuleHeader,
-  TabBar,
-  btnPrimary,
-  btnSecondary,
-} from "@/components/ui/design-system";
-import { GridMetricCard, KpiRow } from "@/components/ui/metric-card";
+import { PageHeader, Panel, Stat, TextLink } from "@/newui-transplant/components/app/kit";
+import { OPUS_CARD, OPUS_SEARCH_INPUT } from "@/newui-transplant/components/app/opus-surfaces";
+import { OpusLineTabs } from "@/newui-transplant/components/app/segmented-nav";
+import { Button, buttonVariants } from "@/newui-transplant/components/ui/button";
+import { repBtnPrimary, repBtnSecondary } from "@/components/reputation/rep-ui";
 import { cn } from "@/lib/utils";
 import type { ReviewListItem, ReviewsPageData } from "@/lib/reviews/reviews-page-data";
 
@@ -50,15 +40,15 @@ export const REVIEWS_TABS = [
 export type ReviewsTabId = (typeof REVIEWS_TABS)[number]["id"];
 
 export function RvCard({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <div className={cn(dashboardCard, "p-3.5", className)}>{children}</div>;
+  return <div className={cn(OPUS_CARD, "bg-card p-4", className)}>{children}</div>;
 }
 
 export function RvSectionTitle({ title, subtitle, action }: { title: string; subtitle?: string; action?: React.ReactNode }) {
   return (
     <div className="mb-2.5 flex items-start justify-between gap-2">
       <div>
-        <h2 className={dashboardCardTitle}>{title}</h2>
-        {subtitle && <p className={`mt-0.5 ${dashboardMicro}`}>{subtitle}</p>}
+        <h2 className="text-sm font-semibold">{title}</h2>
+        {subtitle ? <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p> : null}
       </div>
       {action}
     </div>
@@ -95,7 +85,7 @@ export function DeltaText({
   }
   const positive = invert ? value < 0 : value > 0;
   return (
-    <span className={cn("text-xs font-medium", positive ? "text-emerald-600" : "text-red-600")}>
+    <span className={cn("text-xs font-medium", positive ? "text-primary" : "text-red-600")}>
       {positive ? "↑" : "↓"} {Math.abs(value)}
       {suffix}
     </span>
@@ -108,7 +98,7 @@ export function StarRating({ rating, size = "sm" }: { rating: number | null; siz
   return (
     <span className="inline-flex gap-0.5">
       {Array.from({ length: 5 }).map((_, i) => (
-        <Star key={i} className={cn(cls, i < Math.round(stars) ? "fill-emerald-500 text-emerald-500" : "text-zinc-200")} />
+        <Star key={i} className={cn(cls, i < Math.round(stars) ? "fill-primary text-primary" : "text-zinc-200")} />
       ))}
     </span>
   );
@@ -122,7 +112,7 @@ export function ReviewStatusBadge({ replied, variant = "default" }: { replied: b
           "inline-flex items-center gap-1 text-xs font-medium",
           variant === "pill"
             ? "rounded-md bg-[#FEF3C7] px-2.5 py-0.5 font-semibold text-[#92400E]"
-            : "text-emerald-700"
+            : "text-primary"
         )}
       >
         {variant !== "pill" ? <CheckCircle2 className="h-3 w-3" /> : null}
@@ -203,8 +193,8 @@ export function BusinessCell({ row }: { row: ReviewListItem }) {
   return (
     <div className="flex items-center gap-2">
       {row.isTarget ? (
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-50">
-          <MapPin className="h-3.5 w-3.5 text-emerald-600" />
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10">
+          <MapPin className="h-3.5 w-3.5 text-primary" />
         </span>
       ) : (
         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-zinc-100">
@@ -234,29 +224,29 @@ export function ReviewsHeader({
   return (
     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
       <div className="min-w-0">
-        <h1 className="text-[28px] font-bold tracking-tight text-[#101828]">{title}</h1>
-        <p className="mt-1 max-w-2xl text-sm text-[#667085]">{subtitle}</p>
+        <h1 className="text-[28px] font-bold tracking-tight text-foreground">{title}</h1>
+        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{subtitle}</p>
       </div>
       <div className="flex flex-wrap items-center gap-2 lg:justify-end">
         <button
           type="button"
           onClick={onRefresh}
           disabled={loading}
-          className="inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-[#475467] hover:bg-[#F2F4F7] disabled:opacity-50"
+          className="inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-[#475467] hover:bg-muted disabled:opacity-50"
         >
           {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
           Refresh
         </button>
         <Link
           href={`/businesses/${businessId}/review-requests`}
-          className="inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-[#475467] hover:bg-[#F2F4F7]"
+          className="inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-[#475467] hover:bg-muted"
         >
           <Mail className="h-3.5 w-3.5" />
           Request Review
         </Link>
         <Link
           href={`/businesses/${businessId}/review-requests`}
-          className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-[#137752] px-4 text-sm font-semibold text-white hover:bg-[#0f6244]"
+          className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90"
         >
           <Plus className="h-4 w-4" />
           Send Review Link
@@ -264,7 +254,7 @@ export function ReviewsHeader({
         <button
           type="button"
           onClick={onRunMomentum}
-          className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-[#D0D5DD] bg-white px-3 text-sm font-semibold text-[#344054] hover:bg-[#F9FAFB]"
+          className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-border bg-white px-3 text-sm font-semibold text-[#344054] hover:bg-muted"
         >
           <Plus className="h-3.5 w-3.5" />
           Analyze
@@ -284,7 +274,7 @@ export function ReviewsKpiRow({
   negativePct?: number;
 }) {
   const cardClass =
-    "rounded-xl border border-[#E6EAF0] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]";
+    "rounded-xl border border-border bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]";
 
   if (variant === "unanswered") {
     const cards = [
@@ -313,9 +303,9 @@ export function ReviewsKpiRow({
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map((c) => (
           <div key={c.label} className={cardClass}>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#98A2B3]">{c.label}</p>
-            <p className="mt-1.5 text-[26px] font-bold leading-none text-[#101828]">{c.value}</p>
-            <p className="mt-1.5 text-xs text-[#667085]">{c.sub}</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{c.label}</p>
+            <p className="mt-1.5 text-[26px] font-bold leading-none text-foreground">{c.value}</p>
+            <p className="mt-1.5 text-xs text-muted-foreground">{c.sub}</p>
           </div>
         ))}
       </div>
@@ -357,9 +347,9 @@ export function ReviewsKpiRow({
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
       {cards.map((c) => (
         <div key={c.label} className={cardClass}>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#98A2B3]">{c.label}</p>
-          <p className="mt-1.5 text-[26px] font-bold leading-none tracking-tight text-[#101828]">{c.value}</p>
-          <p className="mt-1.5 text-xs text-[#667085]">{c.sub}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{c.label}</p>
+          <p className="mt-1.5 text-[26px] font-bold leading-none tracking-tight text-foreground">{c.value}</p>
+          <p className="mt-1.5 text-xs text-muted-foreground">{c.sub}</p>
         </div>
       ))}
     </div>
@@ -374,7 +364,7 @@ export function ReviewsTabs({
   onChange: (tab: ReviewsTabId) => void;
 }) {
   return (
-    <div className="flex flex-wrap gap-1 border-b border-[#E6EAF0]">
+    <div className="flex flex-wrap gap-1 border-b border-border">
       {REVIEWS_TABS.map((tab) => {
         const isActive = tab.id === active;
         return (
@@ -385,8 +375,8 @@ export function ReviewsTabs({
             className={cn(
               "-mb-px border-b-2 px-3 pb-2.5 pt-1 text-sm font-semibold transition",
               isActive
-                ? "border-[#137752] text-[#137752]"
-                : "border-transparent text-[#667085] hover:text-[#344054]"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-[#344054]"
             )}
           >
             {tab.label}
@@ -415,7 +405,7 @@ export function FilterChips<T extends string>({
           onClick={() => onChange(opt.id)}
           className={cn(
             "rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors",
-            value === opt.id ? "bg-emerald-600 text-white" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+            value === opt.id ? "bg-primary text-white" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
           )}
         >
           {opt.label}
@@ -444,8 +434,8 @@ export function SuggestedActionsSidebar({
   return (
     <RvCard>
       <div className="mb-2.5 flex items-center gap-2">
-        <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
-        <h3 className={dashboardCardTitle}>Suggested Actions</h3>
+        <Sparkles className="h-3.5 w-3.5 text-primary" />
+        <h3 className={"text-sm font-semibold"}>Suggested Actions</h3>
       </div>
       <div className="space-y-1.5">
         {suggestions.map((s) => {
@@ -460,14 +450,14 @@ export function SuggestedActionsSidebar({
                 else if (s.type === "sentiment") onTabChange?.("sentiment");
                 else if (s.type === "competitor") onTabChange?.("competitor-reviews");
               }}
-              className="flex w-full items-start gap-2.5 rounded-lg border border-zinc-100 bg-zinc-50/50 p-2.5 text-left transition-colors hover:border-emerald-200 hover:bg-emerald-50/40"
+              className="flex w-full items-start gap-2.5 rounded-lg border border-zinc-100 bg-zinc-50/50 p-2.5 text-left transition-colors hover:border-emerald-200 hover:bg-primary/10/40"
             >
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white text-emerald-600 shadow-sm ring-1 ring-zinc-100">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white text-primary shadow-sm ring-1 ring-zinc-100">
                 <Icon className="h-3.5 w-3.5" />
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-[13px] font-medium text-zinc-900">{s.title}</p>
-                <p className={`mt-0.5 line-clamp-2 ${dashboardMicro}`}>{s.description}</p>
+                <p className={`mt-0.5 line-clamp-2 ${"text-xs text-muted-foreground"}`}>{s.description}</p>
               </div>
               <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-400" />
             </button>
@@ -477,7 +467,7 @@ export function SuggestedActionsSidebar({
       <button
         type="button"
         onClick={() => onTabChange?.("unanswered")}
-        className={cn("mt-3", dashboardAccentLink)}
+        className={cn("mt-3 text-sm font-medium text-primary underline-offset-4 hover:underline")}
       >
         View unanswered reviews →
       </button>
@@ -498,20 +488,20 @@ export function SuggestedReplyTasksSidebar({
   return (
     <RvCard>
       <div className="mb-2.5 flex items-center gap-2">
-        <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
-        <h3 className={dashboardCardTitle}>Suggested Reply Tasks</h3>
+        <Sparkles className="h-3.5 w-3.5 text-primary" />
+        <h3 className={"text-sm font-semibold"}>Suggested Reply Tasks</h3>
       </div>
       <div className="space-y-2.5 text-[13px]">
         {data.unanswered.length > 0 && (
           <div className="rounded-lg border border-zinc-100 bg-zinc-50/50 p-2.5">
             <div className="flex items-start gap-2">
-              <MessageSquare className="mt-0.5 h-3.5 w-3.5 text-emerald-600" />
+              <MessageSquare className="mt-0.5 h-3.5 w-3.5 text-primary" />
               <div>
                 <p className="font-medium text-zinc-900">{data.unanswered.length} reviews need a response</p>
                 <button
                   type="button"
                   onClick={() => onTabChange?.("unanswered")}
-                  className="mt-0.5 text-[11px] font-medium text-emerald-600"
+                  className="mt-0.5 text-[11px] font-medium text-primary"
                 >
                   View unanswered →
                 </button>
@@ -521,10 +511,10 @@ export function SuggestedReplyTasksSidebar({
         )}
         <div className="rounded-lg border border-zinc-100 bg-zinc-50/50 p-2.5">
           <div className="flex items-start gap-2">
-            <TrendingUp className="mt-0.5 h-3.5 w-3.5 text-emerald-600" />
+            <TrendingUp className="mt-0.5 h-3.5 w-3.5 text-primary" />
             <div>
               <p className="font-medium text-zinc-900">Maintain Momentum</p>
-              <p className={`mt-0.5 ${dashboardMicro}`}>
+              <p className={`mt-0.5 ${"text-xs text-muted-foreground"}`}>
                 {data.kpis.avgRatingDelta != null && data.kpis.avgRatingDelta > 0
                   ? `Your rating improved ${data.kpis.avgRatingDelta} stars this period.`
                   : "Keep replying quickly to protect your rating."}
@@ -534,10 +524,10 @@ export function SuggestedReplyTasksSidebar({
         </div>
         <div className="rounded-lg border border-zinc-100 bg-zinc-50/50 p-2.5">
           <div className="flex items-start gap-2">
-            <ThumbsUp className="mt-0.5 h-3.5 w-3.5 text-emerald-600" />
+            <ThumbsUp className="mt-0.5 h-3.5 w-3.5 text-primary" />
             <div>
               <p className="font-medium text-zinc-900">Top Positive Themes</p>
-              <ul className={`mt-1.5 space-y-0.5 ${dashboardMicro}`}>
+              <ul className={`mt-1.5 space-y-0.5 ${"text-xs text-muted-foreground"}`}>
                 {themes.map((t) => (
                   <li key={t.themeId} className="capitalize">
                     {t.label} ({t.reviewCount})
@@ -547,24 +537,24 @@ export function SuggestedReplyTasksSidebar({
               <button
                 type="button"
                 onClick={() => onTabChange?.("sentiment")}
-                className="mt-1.5 text-[11px] font-medium text-emerald-600"
+                className="mt-1.5 text-[11px] font-medium text-primary"
               >
                 View sentiment →
               </button>
             </div>
           </div>
         </div>
-        <div className="rounded-lg border border-emerald-100 bg-emerald-50/40 p-2.5">
+        <div className="rounded-lg border border-emerald-100 bg-primary/10/40 p-2.5">
           <div className="flex items-start gap-2">
-            <Shield className="mt-0.5 h-3.5 w-3.5 text-emerald-600" />
-            <p className={dashboardMicro}>
+            <Shield className="mt-0.5 h-3.5 w-3.5 text-primary" />
+            <p className={"text-xs text-muted-foreground"}>
               Your {data.kpis.responseRate}% response rate is above the local industry average.
             </p>
           </div>
         </div>
         <Link
           href={`/businesses/${businessId}/review-requests`}
-          className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 hover:text-emerald-700"
+          className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:text-primary"
         >
           Send review requests →
         </Link>
@@ -599,7 +589,7 @@ export function ReviewsPagination({
 
   return (
     <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-zinc-100 pt-2.5">
-      <span className={dashboardMicro}>
+      <span className={"text-xs text-muted-foreground"}>
         Showing {start}–{end} of {total} review{total === 1 ? "" : "s"}
         {totalPages > 1 ? ` · Page ${page} of ${totalPages}` : ""}
       </span>
@@ -620,7 +610,7 @@ export function ReviewsPagination({
               onClick={() => onPageChange(p)}
               className={cn(
                 "flex h-7 min-w-[1.75rem] items-center justify-center rounded-full px-2 text-xs font-medium",
-                p === page ? "bg-emerald-600 text-white" : "text-zinc-600 hover:bg-zinc-100"
+                p === page ? "bg-primary text-white" : "text-zinc-600 hover:bg-zinc-100"
               )}
             >
               {p}
@@ -659,20 +649,20 @@ export function ReviewsTable({
       <table className="w-full text-left text-[13px]">
         <thead>
           <tr className="border-b border-zinc-100">
-            {showBusiness ? <th className={cn(dashboardSectionLabel, "px-3.5 py-2 font-semibold")}>Business</th> : <th className={cn(dashboardSectionLabel, "px-3.5 py-2")}>Reviewer</th>}
-            <th className={cn(dashboardSectionLabel, "px-3.5 py-2")}>Rating</th>
-            {!showUrgency && <th className={cn(dashboardSectionLabel, "px-3.5 py-2")}>Date</th>}
-            <th className={cn(dashboardSectionLabel, "px-3.5 py-2")}>{showUrgency ? "Review (excerpt)" : "Review Text"}</th>
-            {!showBusiness && !showUrgency && <th className={cn(dashboardSectionLabel, "px-3.5 py-2")}>Source</th>}
-            <th className={cn(dashboardSectionLabel, "px-3.5 py-2")}>Keywords</th>
+            {showBusiness ? <th className={cn("text-xs font-medium uppercase tracking-wide text-muted-foreground", "px-3.5 py-2 font-semibold")}>Business</th> : <th className={cn("text-xs font-medium uppercase tracking-wide text-muted-foreground", "px-3.5 py-2")}>Reviewer</th>}
+            <th className={cn("text-xs font-medium uppercase tracking-wide text-muted-foreground", "px-3.5 py-2")}>Rating</th>
+            {!showUrgency && <th className={cn("text-xs font-medium uppercase tracking-wide text-muted-foreground", "px-3.5 py-2")}>Date</th>}
+            <th className={cn("text-xs font-medium uppercase tracking-wide text-muted-foreground", "px-3.5 py-2")}>{showUrgency ? "Review (excerpt)" : "Review Text"}</th>
+            {!showBusiness && !showUrgency && <th className={cn("text-xs font-medium uppercase tracking-wide text-muted-foreground", "px-3.5 py-2")}>Source</th>}
+            <th className={cn("text-xs font-medium uppercase tracking-wide text-muted-foreground", "px-3.5 py-2")}>Keywords</th>
             {showUrgency && (
               <>
-                <th className={cn(dashboardSectionLabel, "px-3.5 py-2")}>Days Waiting</th>
-                <th className={cn(dashboardSectionLabel, "px-3.5 py-2")}>SLA / Urgency</th>
+                <th className={cn("text-xs font-medium uppercase tracking-wide text-muted-foreground", "px-3.5 py-2")}>Days Waiting</th>
+                <th className={cn("text-xs font-medium uppercase tracking-wide text-muted-foreground", "px-3.5 py-2")}>SLA / Urgency</th>
               </>
             )}
-            <th className={cn(dashboardSectionLabel, "px-3.5 py-2")}>Status</th>
-            <th className={cn(dashboardSectionLabel, "px-3.5 py-2")}>Action</th>
+            <th className={cn("text-xs font-medium uppercase tracking-wide text-muted-foreground", "px-3.5 py-2")}>Status</th>
+            <th className={cn("text-xs font-medium uppercase tracking-wide text-muted-foreground", "px-3.5 py-2")}>Action</th>
           </tr>
         </thead>
         <tbody>
@@ -721,7 +711,7 @@ export function ReviewsTable({
                           e.stopPropagation();
                           onViewReview(row);
                         }}
-                        className="mt-1 text-xs font-medium text-emerald-600 hover:text-emerald-700"
+                        className="mt-1 text-xs font-medium text-primary hover:text-primary"
                       >
                         Read full review →
                       </button>
@@ -799,10 +789,10 @@ export function KeywordList({
 }) {
   return (
     <RvCard>
-      <h3 className={dashboardCardTitle}>{title}</h3>
+      <h3 className={"text-sm font-semibold"}>{title}</h3>
       <ul className="mt-2.5 space-y-2">
         {items.length === 0 ? (
-          <li className={dashboardMicro}>No keywords yet.</li>
+          <li className={"text-xs text-muted-foreground"}>No keywords yet.</li>
         ) : (
           items.map((k) => (
             <li key={k.keyword} className="flex items-center justify-between gap-2 text-[13px]">
@@ -813,7 +803,7 @@ export function KeywordList({
         )}
       </ul>
       {linkLabel && items.length > 0 && (
-        <button type="button" className={cn("mt-3", dashboardAccentLink)}>
+        <button type="button" className={cn("mt-3 text-sm font-medium text-primary underline-offset-4 hover:underline")}>
           {linkLabel} →
         </button>
       )}
@@ -824,10 +814,10 @@ export function KeywordList({
 export function KeywordCloud({ items, title, linkLabel }: { items: Array<{ keyword: string; count: number }>; title: string; linkLabel?: string }) {
   return (
     <RvCard>
-      <h3 className={dashboardCardTitle}>{title}</h3>
+      <h3 className={"text-sm font-semibold"}>{title}</h3>
       <div className="mt-2.5 flex flex-wrap gap-1.5">
         {items.length === 0 ? (
-          <p className={dashboardMicro}>No keywords yet.</p>
+          <p className={"text-xs text-muted-foreground"}>No keywords yet.</p>
         ) : (
           items.map((k) => (
             <span key={k.keyword} className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-[11px] text-zinc-700">
@@ -838,7 +828,7 @@ export function KeywordCloud({ items, title, linkLabel }: { items: Array<{ keywo
         )}
       </div>
       {linkLabel && items.length > 0 && (
-        <button type="button" className={cn("mt-3", dashboardAccentLink)}>
+        <button type="button" className={cn("mt-3 text-sm font-medium text-primary underline-offset-4 hover:underline")}>
           {linkLabel} →
         </button>
       )}

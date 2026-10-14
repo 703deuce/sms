@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { CheckCircle2, Circle } from "lucide-react";
 import type { ReviewsPageData } from "@/lib/reviews/reviews-page-data";
-import { mock } from "@/components/mockup/ui";
+import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
+import { cn } from "@/lib/utils";
+
 import { StarRating } from "@/components/reviews/reviews-ui";
 
 function competitorBlurb(reviewCount: number): string {
@@ -71,7 +73,7 @@ export function ReviewsCompetitorTab({ data, businessId }: Props) {
           <select
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className="rounded-lg border border-[#E6EAF0] bg-white px-3 py-1.5 text-[13px] font-semibold text-[#0F172A] outline-none focus:border-[#137752]"
+            className="rounded-lg border border-[#E6EAF0] bg-white px-3 py-1.5 text-[13px] font-semibold text-[#0F172A] outline-none focus:border-primary"
           >
             <option value="all">All Competitors ({competitors.length})</option>
             {competitors.map((c) => (
@@ -84,7 +86,7 @@ export function ReviewsCompetitorTab({ data, businessId }: Props) {
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
-        <div className={`${mock.card} p-5`}>
+        <div className={`${OPUS_CARD} bg-card p-5`}>
           <h3 className="text-[16px] font-bold text-[#0F172A]">
             Competitor Reviewing Analysis (Off-site)
           </h3>
@@ -110,7 +112,7 @@ export function ReviewsCompetitorTab({ data, businessId }: Props) {
                           </span>
                           <Link
                             href={competitorsHref}
-                            className="text-[12px] font-semibold text-[#137752] hover:underline"
+                            className="text-[12px] font-semibold text-primary hover:underline"
                           >
                             View Reviews
                           </Link>
@@ -128,14 +130,14 @@ export function ReviewsCompetitorTab({ data, businessId }: Props) {
 
           <Link
             href={competitorsHref}
-            className="mt-2 inline-block text-[13px] font-semibold text-[#137752] hover:underline"
+            className="mt-2 inline-block text-[13px] font-semibold text-primary hover:underline"
           >
             View all competitor reviews details →
           </Link>
         </div>
 
         <aside className="space-y-4">
-          <div className={`${mock.card} p-4`}>
+          <div className={`${OPUS_CARD} bg-card p-4`}>
             <h3 className="text-[14px] font-bold text-[#0F172A]">Top Insights</h3>
             <ul className="mt-3 space-y-2.5">
               {insights.map((item) => (
@@ -147,7 +149,7 @@ export function ReviewsCompetitorTab({ data, businessId }: Props) {
             </ul>
           </div>
 
-          <div className={`${mock.card} p-4`}>
+          <div className={`${OPUS_CARD} bg-card p-4`}>
             <h3 className="text-[14px] font-bold text-[#0F172A]">Common Product Themes</h3>
             <div className="mt-3 flex flex-wrap gap-2">
               {themePills.map((t) => (
@@ -161,19 +163,19 @@ export function ReviewsCompetitorTab({ data, businessId }: Props) {
             </div>
           </div>
 
-          <div className={`${mock.card} p-4`}>
+          <div className={`${OPUS_CARD} bg-card p-4`}>
             <h3 className="text-[14px] font-bold text-[#0F172A]">Opportunities for You</h3>
             <ul className="mt-3 space-y-2.5">
               {opportunities.map((item) => (
                 <li key={item} className="flex items-start gap-2.5 text-[13px] text-[#0F172A]">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#137752]" />
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                   <span>{item}</span>
                 </li>
               ))}
             </ul>
             <Link
               href={competitorsHref}
-              className="mt-3 inline-block text-[13px] font-semibold text-[#137752] hover:underline"
+              className="mt-3 inline-block text-[13px] font-semibold text-primary hover:underline"
             >
               View all competitor reports →
             </Link>

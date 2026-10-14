@@ -4,7 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Copy, Lightbulb, Pencil, Settings } from "lucide-react";
 import type { ReviewListItem, ReviewsPageData } from "@/lib/reviews/reviews-page-data";
-import { mock } from "@/components/mockup/ui";
+import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
+import { buttonVariants } from "@/newui-transplant/components/ui/button";
+import { cn } from "@/lib/utils";
+
 import { SourceIcon, StarRating, ReviewerAvatar } from "@/components/reviews/reviews-ui";
 
 type Props = {
@@ -121,7 +124,7 @@ export function ReviewsUnansweredTab({ data, businessId }: Props) {
           ))}
         </div>
 
-        <div className={`${mock.card} overflow-hidden`}>
+        <div className={`${OPUS_CARD} bg-card overflow-hidden`}>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-left text-[13px]">
               <thead>
@@ -169,13 +172,13 @@ export function ReviewsUnansweredTab({ data, businessId }: Props) {
                         <td className="max-w-[220px] px-4 py-3 text-[#475569]">
                           <span className="line-clamp-2">{text || "No review text"}</span>
                           {text.length > 80 ? (
-                            <span className="mt-0.5 block text-[11px] font-medium text-[#137752]">
+                            <span className="mt-0.5 block text-[11px] font-medium text-primary">
                               Read more...
                             </span>
                           ) : null}
                         </td>
                         <td className="px-4 py-3">
-                          <span className="font-semibold text-[#137752]">View review</span>
+                          <span className="font-semibold text-primary">View review</span>
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-[#64748B]">
                           {review.reviewDate
@@ -222,7 +225,7 @@ export function ReviewsUnansweredTab({ data, businessId }: Props) {
       </div>
 
       <aside className="space-y-4">
-        <div className={`${mock.card} p-4`}>
+        <div className={`${OPUS_CARD} bg-card p-4`}>
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <Lightbulb className="h-4 w-4 text-[#F59E0B]" />
@@ -251,7 +254,7 @@ export function ReviewsUnansweredTab({ data, businessId }: Props) {
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
                     rows={6}
-                    className="w-full resize-y rounded-md border border-[#E6EAF0] bg-white px-2.5 py-2 text-[12px] leading-relaxed text-[#0F172A] outline-none focus:border-[#137752]"
+                    className="w-full resize-y rounded-md border border-[#E6EAF0] bg-white px-2.5 py-2 text-[12px] leading-relaxed text-[#0F172A] outline-none focus:border-primary"
                   />
                 ) : (
                   <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-[#14532D]">
@@ -263,7 +266,7 @@ export function ReviewsUnansweredTab({ data, businessId }: Props) {
               <div className="flex gap-2">
                 <button
                   type="button"
-                  className={`${mock.btnPrimary} flex-1`}
+                  className={`${cn(buttonVariants({ variant: "default" }))} flex-1`}
                   disabled={!draft}
                   onClick={async () => {
                     await navigator.clipboard.writeText(draft);
@@ -275,7 +278,7 @@ export function ReviewsUnansweredTab({ data, businessId }: Props) {
                 </button>
                 <button
                   type="button"
-                  className={`${mock.btnGhost} flex-1`}
+                  className={`${cn(buttonVariants({ variant: "ghost" }))} flex-1`}
                   onClick={() => setEditing((v) => !v)}
                 >
                   <Pencil className="h-3.5 w-3.5" />
@@ -283,7 +286,7 @@ export function ReviewsUnansweredTab({ data, businessId }: Props) {
                 </button>
               </div>
               {statusMsg ? (
-                <p className="text-[11px] font-medium text-[#137752]">{statusMsg}</p>
+                <p className="text-[11px] font-medium text-primary">{statusMsg}</p>
               ) : null}
             </div>
           ) : (
@@ -291,7 +294,7 @@ export function ReviewsUnansweredTab({ data, businessId }: Props) {
           )}
         </div>
 
-        <div className={`${mock.card} p-4`}>
+        <div className={`${OPUS_CARD} bg-card p-4`}>
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-[14px] font-bold text-[#0F172A]">Notifications</h3>
             <Settings className="h-4 w-4 text-[#94A3B8]" />

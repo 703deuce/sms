@@ -324,7 +324,7 @@ export function ReputationAlertsDashboard({
                               type="button"
                               disabled={resolvingId === alert.id}
                               onClick={() => void resolveAlert(alert)}
-                              className="text-xs font-semibold text-[#137752] hover:underline disabled:opacity-60"
+                              className="text-xs font-semibold text-primary hover:underline disabled:opacity-60"
                             >
                               {resolvingId === alert.id ? "Resolving..." : "Resolve"}
                             </button>
@@ -381,7 +381,7 @@ export function ReputationAlertsDashboard({
           </div>
           <div className="rounded-xl border border-[#B7E4CC] bg-[#ECFDF3] p-4">
             <div className="flex items-start gap-3">
-              <Zap className="h-5 w-5 shrink-0 text-[#137752]" />
+              <Zap className="h-5 w-5 shrink-0 text-primary" />
               <p className="text-sm text-[#344054]">
                 <span className="font-semibold">Smart tip:</span> resolve unanswered negative reviews first — they affect conversion and Maps trust fastest.
               </p>

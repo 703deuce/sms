@@ -16,7 +16,7 @@ import {
   Pause,
   Play,
 } from "lucide-react";
-import { ModulePage } from "@/components/ui/design-system";
+import { ReviewsOpusPage } from "@/newui-transplant/connected/reviews/reviews-opus-page";
 import { ReviewPosterPreview } from "@/components/reputation/review-poster-preview";
 import {
   QR_MOCK_COLORS,
@@ -353,12 +353,12 @@ export function QrCampaignEditor({
 
   if (loading) {
     return (
-      <ModulePage className="space-y-6">
+      <ReviewsOpusPage className="space-y-6">
         <div className="flex items-center justify-center gap-2 py-16 text-sm text-[#667085]">
           <Loader2 className="h-5 w-5 animate-spin text-[#16A34A]" />
           Loading QR campaign…
         </div>
-      </ModulePage>
+      </ReviewsOpusPage>
     );
   }
 
@@ -368,7 +368,7 @@ export function QrCampaignEditor({
 
   if (!campaign) {
     return (
-      <ModulePage className="space-y-6">
+      <ReviewsOpusPage className="space-y-6">
         <div className={cn(qrUi.cardPad, "border-dashed text-center")}>
           <h2 className="text-lg font-bold text-[#0B1B32]">QR campaign unavailable</h2>
           <p className="mt-2 text-sm text-[#667085]">{error ?? "Could not load this campaign."}</p>
@@ -393,12 +393,12 @@ export function QrCampaignEditor({
             </Link>
           </div>
         </div>
-      </ModulePage>
+      </ReviewsOpusPage>
     );
   }
 
   return (
-    <ModulePage className="space-y-6">
+    <ReviewsOpusPage className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <h1 className={qrUi.title}>{name || "QR Campaign"}</h1>
@@ -738,6 +738,6 @@ export function QrCampaignEditor({
           </div>
         </div>
       </div>
-    </ModulePage>
+    </ReviewsOpusPage>
   );
 }

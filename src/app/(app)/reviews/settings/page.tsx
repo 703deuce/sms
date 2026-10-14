@@ -5,10 +5,9 @@ import { hasEntitlement } from "@/lib/auth/entitlements";
 import { ReviewCampaignsUpgrade } from "@/components/reputation/review-campaigns-upgrade";
 import { ReviewAlertSettings } from "@/components/reputation/review-alert-settings";
 import { ReputationSettingsForm } from "@/components/reputation/reputation-settings-form";
-import { ModulePage } from "@/components/ui/design-system";
-import { PageHeader } from "@/components/ui/page-header";
-import { getReputationWorkspaceId } from "@/lib/reputation/workspace-context";
-
+import { PageHeader, Panel } from "@/newui-transplant/components/app/kit";
+import { Button } from "@/newui-transplant/components/ui/button";
+import { ReviewsOpusPage } from "@/newui-transplant/connected/reviews/reviews-opus-page";
 export default async function ReputationSettingsPage({
   params,
 }: {
@@ -21,28 +20,28 @@ export default async function ReputationSettingsPage({
   if (!allowed) return <ReviewCampaignsUpgrade businessId={businessId} />;
 
   return (
-    <ModulePage>
+    <ReviewsOpusPage>
       <PageHeader
         title="Reputation Settings"
         description="Business-level reputation configuration, alert preferences, and links to QR poster tools."
       />
-      <div className="mt-3 space-y-3">
+      <div className="flex flex-col gap-4">
         <ReputationSettingsForm businessId={businessId} />
-        <div className="rounded-xl border border-[#E6EAF0] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
-          <h2 className="text-sm font-semibold text-[#101828]">QR campaigns & tracked review link</h2>
-          <p className="mt-1 text-sm text-[#667085]">
-            Manage printable Google review QR placements, brand colors, tracked links, and scan
-            analytics.
+        <Panel
+          title="QR campaigns & tracked review link"
+          description="Manage printable Google review QR placements, brand colors, tracked links, and scan analytics."
+          action={
+            <Button asChild>
+              <Link href={`/businesses/${businessId}/reputation/qr-campaigns`}>Open QR Campaigns</Link>
+            </Button>
+          }
+        >
+          <p className="text-sm text-muted-foreground">
+            QR campaigns live under Review Requests when your plan includes placements and analytics.
           </p>
-          <Link
-            href={`/businesses/${businessId}/reputation/qr-campaigns`}
-            className="mt-3 inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-[#0f6244]"
-          >
-            Open QR Campaigns
-          </Link>
-        </div>
+        </Panel>
         <ReviewAlertSettings businessId={businessId} />
       </div>
-    </ModulePage>
+    </ReviewsOpusPage>
   );
 }

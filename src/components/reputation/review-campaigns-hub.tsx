@@ -25,7 +25,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { ModulePage } from "@/components/ui/design-system";
+import { ReviewsOpusPage } from "@/newui-transplant/connected/reviews/reviews-opus-page";
 import type { CampaignRow } from "@/components/reputation/review-requests-campaigns";
 import { CampaignCreateWizard } from "@/components/reputation/campaign-create-wizard";
 import {
@@ -174,7 +174,7 @@ function ActivityIcon({ type }: { type: ActivityItem["type"] }) {
   if (type === "reviews_detected") {
     return (
       <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#ECFDF3]">
-        <Star className="h-3.5 w-3.5 text-[#137752]" />
+        <Star className="h-3.5 w-3.5 text-primary" />
       </span>
     );
   }
@@ -222,7 +222,7 @@ function CampaignPerformance({
   return (
     <section className={cn(rep.card, "p-4")}>
       <div className="mb-4 flex items-center gap-2">
-        <BarChart3 className="h-4 w-4 text-[#137752]" />
+        <BarChart3 className="h-4 w-4 text-primary" />
         <h2 className="text-[15px] font-semibold text-[#101828]">Campaign Performance (30 Days)</h2>
       </div>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -255,7 +255,7 @@ function CampaignPerformance({
               </div>
               <div className="h-2.5 overflow-hidden rounded-full bg-[#F2F4F7]">
                 <div
-                  className="h-full rounded-full bg-[#137752]"
+                  className="h-full rounded-full bg-primary"
                   style={{ width: `${Math.max(4, ((c.sent ?? 0) / maxSent) * 100)}%` }}
                 />
               </div>
@@ -297,7 +297,7 @@ function RecentActivity({ previewActivity, campaigns }: { previewActivity?: Acti
   return (
     <section className={cn(rep.card, "p-4")}>
       <div className="mb-4 flex items-center gap-2">
-        <Activity className="h-4 w-4 text-[#137752]" />
+        <Activity className="h-4 w-4 text-primary" />
         <h2 className="text-[15px] font-semibold text-[#101828]">Recent Activity</h2>
       </div>
       {activity.length === 0 ? (
@@ -428,7 +428,7 @@ export function ReviewCampaignsHub({
   }
 
   return (
-    <ModulePage className={rep.page}>
+    <ReviewsOpusPage className={rep.page}>
       <RepPageHeader
         title="Campaigns"
         subtitle="Build automated sequences to get more reviews."
@@ -590,7 +590,7 @@ export function ReviewCampaignsHub({
                       <td className="px-4 py-3">
                         <Link
                           href={`/businesses/${businessId}/reputation/campaigns/${c.id}`}
-                          className="font-semibold text-[#101828] hover:text-[#137752] hover:underline"
+                          className="font-semibold text-[#101828] hover:text-primary hover:underline"
                         >
                           {c.name}
                         </Link>
@@ -619,7 +619,7 @@ export function ReviewCampaignsHub({
                             </div>
                             <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-[#F2F4F7]">
                               <div
-                                className="h-full rounded-full bg-[#137752]"
+                                className="h-full rounded-full bg-primary"
                                 style={{ width: `${Math.max(2, sentProgress)}%` }}
                               />
                             </div>
@@ -707,6 +707,6 @@ export function ReviewCampaignsHub({
         />
         <RecentActivity previewActivity={activity} campaigns={campaigns} />
       </div>
-    </ModulePage>
+    </ReviewsOpusPage>
   );
 }

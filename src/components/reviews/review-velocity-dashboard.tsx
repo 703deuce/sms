@@ -436,7 +436,7 @@ function VelocityBreakdownTable({
                     <span
                       className={cn(
                         "h-2.5 w-2.5 rounded-full",
-                        row.kind === "source" ? "bg-[#137752]" : "bg-[#2563EB]"
+                        row.kind === "source" ? "bg-primary" : "bg-[#2563EB]"
                       )}
                     />
                     <div>
@@ -489,7 +489,7 @@ function ReviewCalendar({ points }: { points: ReviewAnalyticsTimelinePoint[] }) 
         <p className="font-semibold text-[#101828]">
           {latest.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" })}
         </p>
-        <CalendarDays className="h-4 w-4 text-[#137752]" />
+        <CalendarDays className="h-4 w-4 text-primary" />
       </div>
       <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-semibold text-[#98A2B3]">
         {["S", "M", "T", "W", "T", "F", "S"].map((day, index) => (
@@ -512,7 +512,7 @@ function ReviewCalendar({ points }: { points: ReviewAnalyticsTimelinePoint[] }) 
               )}
             >
               {day}
-              {active ? <span className="absolute bottom-1 h-1.5 w-1.5 rounded-full bg-[#137752]" /> : null}
+              {active ? <span className="absolute bottom-1 h-1.5 w-1.5 rounded-full bg-primary" /> : null}
             </div>
           );
         })}
@@ -803,7 +803,7 @@ export function ReviewVelocityDashboard({ businessId, data }: ReviewVelocityDash
                 onClick={() => setRange(option.id)}
                 className={cn(
                   "rounded-md px-3 py-1.5 text-xs font-semibold transition",
-                  range === option.id ? "bg-white text-[#137752] shadow-sm" : "text-[#667085] hover:text-[#101828]"
+                  range === option.id ? "bg-white text-primary shadow-sm" : "text-[#667085] hover:text-[#101828]"
                 )}
               >
                 {option.label}
@@ -844,7 +844,7 @@ export function ReviewVelocityDashboard({ businessId, data }: ReviewVelocityDash
                   </span>
                   <button
                     type="button"
-                    className="font-semibold text-[#137752] hover:underline"
+                    className="font-semibold text-primary hover:underline"
                     onClick={() => {
                       setFocusRowId(null);
                       setFocusDate(null);
@@ -907,7 +907,7 @@ export function ReviewVelocityDashboard({ businessId, data }: ReviewVelocityDash
           />
           <div className="mt-5 space-y-2 text-sm text-[#344054]">
             <p className="flex gap-2">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#137752]" />
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
               {sentiment.positive} positive review{sentiment.positive === 1 ? "" : "s"} in the stored rating mix.
             </p>
             <p className="flex gap-2">
@@ -933,7 +933,7 @@ export function ReviewVelocityDashboard({ businessId, data }: ReviewVelocityDash
             <MiniSparkline values={data.timelinePoints.slice(-30).map((point) => point.you)} color={BLUE} />
           </div>
           <div className="mt-5 h-3 overflow-hidden rounded-full bg-[#F2F4F7]">
-            <div className="h-full rounded-full bg-[#137752]" style={{ width: `${Math.max(0, Math.min(100, data.responseRate))}%` }} />
+            <div className="h-full rounded-full bg-primary" style={{ width: `${Math.max(0, Math.min(100, data.responseRate))}%` }} />
           </div>
         </SectionCard>
         <SectionCard title="Rating" subtitle="Average star rating and latest rating pattern.">
@@ -1044,7 +1044,7 @@ export function ReviewVelocityDashboard({ businessId, data }: ReviewVelocityDash
             </div>
           ) : (
             <div className="rounded-xl border border-dashed border-[#D0D5DD] p-6 text-center">
-              <ListChecks className="mx-auto h-6 w-6 text-[#137752]" />
+              <ListChecks className="mx-auto h-6 w-6 text-primary" />
               <p className="mt-2 text-sm text-[#667085]">
                 {focusRowId || focusDate
                   ? "No reviews match the current focus. Clear focus to see the full feed."

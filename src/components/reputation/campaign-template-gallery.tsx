@@ -172,7 +172,7 @@ export function CampaignTemplateGallery({
             className={cn(
               "rounded-full px-2 py-0.5 text-[11px] font-medium",
               filter === chip.id
-                ? "bg-emerald-600 text-white"
+                ? "bg-primary text-white"
                 : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
             )}
           >
@@ -196,7 +196,7 @@ export function CampaignTemplateGallery({
                 key={t.id}
                 className={cn(
                   "flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between",
-                  featured && "bg-emerald-50/40"
+                  featured && "bg-primary/10/40"
                 )}
               >
                 <div className="min-w-0 flex-1">
@@ -239,7 +239,7 @@ export function CampaignTemplateGallery({
                     type="button"
                     disabled={busyId === t.id}
                     onClick={() => void useTemplate(t.id)}
-                    className="inline-flex items-center gap-1 rounded-full bg-[#137752] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#0f6344] disabled:opacity-50"
+                    className="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#0f6344] disabled:opacity-50"
                   >
                     {busyId === t.id ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
                     Use template

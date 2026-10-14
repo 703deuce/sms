@@ -1,8 +1,8 @@
+import { OPUS_CARD, OPUS_SEARCH_INPUT } from "@/newui-transplant/components/app/opus-surfaces";
 "use client";
 
 import { useState } from "react";
 import Link from "next/link";
-import { dashboardCard } from "@/components/overview/dashboard-ui";
 import { cn } from "@/lib/utils";
 
 export type ReviewReplyRow = {
@@ -19,7 +19,7 @@ export type ReviewReplyRow = {
 };
 
 const AVATAR_COLORS = [
-  "bg-emerald-100 text-emerald-700",
+  "bg-emerald-100 text-primary",
   "bg-sky-100 text-sky-700",
   "bg-violet-100 text-violet-700",
   "bg-amber-100 text-amber-700",
@@ -87,7 +87,7 @@ export function ReviewRequestRepliesPanel({
               className={cn(
                 "-mb-px border-b-2 px-2.5 py-1.5 text-xs font-medium",
                 filter === tab.id
-                  ? "border-emerald-600 text-emerald-700"
+                  ? "border-primary text-primary"
                   : "border-transparent text-zinc-500 hover:text-zinc-700"
               )}
             >
@@ -108,7 +108,7 @@ export function ReviewRequestRepliesPanel({
           const avatarColor = AVATAR_COLORS[i % AVATAR_COLORS.length];
 
           return (
-            <li key={reply.id} className={compact ? "py-2" : cn(dashboardCard, "p-3.5")}>
+            <li key={reply.id} className={compact ? "py-2" : cn(OPUS_CARD, "p-3.5")}>
               <div className="flex items-start gap-2.5">
                 <span
                   className={cn(
@@ -149,7 +149,7 @@ export function ReviewRequestRepliesPanel({
                     </span>
                     <button
                       type="button"
-                      className="text-[10px] font-medium text-emerald-700 hover:underline"
+                      className="text-[10px] font-medium text-primary hover:underline"
                       onClick={() =>
                         setExpandedId((id) => (id === reply.id ? null : reply.id))
                       }
@@ -167,7 +167,7 @@ export function ReviewRequestRepliesPanel({
       {showViewAll && businessId && (
         <Link
           href={`/businesses/${businessId}/review-requests?tab=tracking`}
-          className="mt-2.5 inline-flex items-center gap-1 text-[12px] font-semibold text-emerald-700 hover:underline"
+          className="mt-2.5 inline-flex items-center gap-1 text-[12px] font-semibold text-primary hover:underline"
         >
           View all replies →
         </Link>

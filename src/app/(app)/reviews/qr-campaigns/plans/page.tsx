@@ -5,7 +5,7 @@ import { isDevPreviewBusiness } from "@/lib/auth/dev";
 import { hasEntitlement } from "@/lib/auth/entitlements";
 import { QrPlans } from "@/components/reputation/qr-campaigns/qr-plans";
 import { ReviewRequestsUpgrade } from "@/components/reputation/review-requests-upgrade";
-import { ModulePage } from "@/components/ui/design-system";
+import { ReviewsOpusPage } from "@/newui-transplant/connected/reviews/reviews-opus-page";
 import { getReputationWorkspaceId } from "@/lib/reputation/workspace-context";
 
 export default async function QrCampaignPlansPage({
@@ -33,9 +33,9 @@ export default async function QrCampaignPlansPage({
         </div>
       }
     >
-      <ModulePage className="py-2">
+      <ReviewsOpusPage className="py-2">
         <QrPlans businessId={businessId} />
-      </ModulePage>
+      </ReviewsOpusPage>
     </Suspense>
   );
 }

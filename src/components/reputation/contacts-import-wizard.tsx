@@ -268,7 +268,7 @@ export function ContactsImportWizard({
               key={label}
               className={cn(
                 "rounded px-1.5 py-0.5 text-[10px] font-medium",
-                i === step ? "bg-emerald-50 text-emerald-800" : "bg-zinc-50 text-zinc-500"
+                i === step ? "bg-primary/10 text-emerald-800" : "bg-zinc-50 text-zinc-500"
               )}
             >
               {i + 1}. {label}
@@ -298,7 +298,7 @@ export function ContactsImportWizard({
           <a
             href={`data:text/csv;charset=utf-8,${encodeURIComponent(CSV_TEMPLATE_HEADERS + "\n")}`}
             download="contacts-template.csv"
-            className="inline-flex items-center gap-1 text-[12px] font-medium text-emerald-700 hover:underline"
+            className="inline-flex items-center gap-1 text-[12px] font-medium text-primary hover:underline"
           >
             <Download className="h-3.5 w-3.5" /> Download template
           </a>
@@ -359,7 +359,7 @@ export function ContactsImportWizard({
             <button
               type="button"
               disabled={busy}
-              className="inline-flex items-center gap-1 rounded-full bg-[#137752] px-2.5 py-1.5 text-[12px] font-semibold text-white disabled:opacity-60"
+              className="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1.5 text-[12px] font-semibold text-white disabled:opacity-60"
               onClick={() => void runPreview()}
             >
               {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
@@ -373,7 +373,7 @@ export function ContactsImportWizard({
         <div className="space-y-2">
           <div className="flex flex-wrap gap-2">
             <Stat label="Total" value={preview.total} />
-            <Stat label="Ready" value={preview.ready} tone="text-emerald-700" />
+            <Stat label="Ready" value={preview.ready} tone="text-primary" />
             <Stat label="Invalid" value={preview.invalid} tone="text-red-600" />
             <Stat label="Dupes in file" value={preview.duplicatesInFile} />
             <Stat label="Existing" value={preview.existing} />
@@ -447,7 +447,7 @@ export function ContactsImportWizard({
             <button
               type="button"
               disabled={busy || preview.ready === 0}
-              className="inline-flex items-center gap-1 rounded-full bg-[#137752] px-2.5 py-1.5 text-[12px] font-semibold text-white disabled:opacity-60"
+              className="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1.5 text-[12px] font-semibold text-white disabled:opacity-60"
               onClick={() => void runImport()}
             >
               {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
@@ -473,14 +473,14 @@ export function ContactsImportWizard({
             </p>
           )}
           <div className="flex flex-wrap gap-2">
-            <Stat label="Imported" value={Number(result.imported ?? 0)} tone="text-emerald-700" />
+            <Stat label="Imported" value={Number(result.imported ?? 0)} tone="text-primary" />
             <Stat label="Skipped" value={Number(result.skipped ?? 0)} />
             <Stat label="Failed" value={Number(result.failed ?? 0)} tone="text-red-600" />
           </div>
           {typeof result.uploadId === "string" && Number(result.failed ?? 0) > 0 && (
             <a
               href={`/api/reputation/contacts/import?businessId=${businessId}&uploadId=${result.uploadId}&downloadErrors=1`}
-              className="inline-flex items-center gap-1 text-[12px] font-medium text-emerald-700 hover:underline"
+              className="inline-flex items-center gap-1 text-[12px] font-medium text-primary hover:underline"
             >
               <Download className="h-3.5 w-3.5" /> Download failed-row report
             </a>
@@ -529,7 +529,7 @@ export function ContactsImportWizard({
                       {(h.failed_rows ?? 0) > 0 ? (
                         <a
                           href={`/api/reputation/contacts/import?businessId=${businessId}&uploadId=${h.id}&downloadErrors=1`}
-                          className="text-emerald-700 hover:underline"
+                          className="text-primary hover:underline"
                         >
                           CSV
                         </a>

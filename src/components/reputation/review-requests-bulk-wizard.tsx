@@ -1,3 +1,4 @@
+import { OPUS_CARD, OPUS_SEARCH_INPUT } from "@/newui-transplant/components/app/opus-surfaces";
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
@@ -21,11 +22,6 @@ import {
 import type { ValidatedRecipient, ValidationSummary } from "@/lib/reputation/bulk-validate";
 import { estimateBusinessDays } from "@/lib/reputation/campaign-scheduler";
 import { rrInputClass, rrLabelClass, rrOutlineBtn, rrPrimaryBtn } from "@/components/reputation/review-requests-ui";
-import {
-  dashboardCard,
-  dashboardCardTitle,
-  dashboardMicro,
-} from "@/components/overview/dashboard-ui";
 import { cn } from "@/lib/utils";
 
 const STEPS = ["Upload", "Map Columns", "Review Contacts", "Schedule"] as const;
@@ -46,7 +42,7 @@ type TemplateRow = { id: string; channel: string; name: string };
 
 function SummaryCard({ label, value, tone }: { label: string; value: number; tone?: string }) {
   return (
-    <div className={cn(dashboardCard, "p-3")}>
+    <div className={cn(OPUS_CARD, "p-3")}>
       <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
       <p className={cn("mt-1 text-xl font-bold leading-none tabular-nums", tone ?? "text-zinc-900")}>{value}</p>
     </div>
@@ -241,8 +237,8 @@ export function ReviewRequestsBulkWizard({
 
   if (done) {
     return (
-      <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-8 text-center">
-        <Check className="mx-auto h-8 w-8 text-emerald-600" />
+      <div className="rounded-xl border border-emerald-200 bg-primary/10 px-3.5 py-8 text-center">
+        <Check className="mx-auto h-8 w-8 text-primary" />
         <h3 className="mt-2.5 text-[13px] font-semibold text-emerald-900">Campaign created</h3>
         <p className="mt-1 text-[13px] text-emerald-800">
           {readyCount} contacts queued for paced sending. View progress in Tracking.
@@ -254,8 +250,8 @@ export function ReviewRequestsBulkWizard({
   return (
     <div className="space-y-4">
       <div>
-        <h2 className={dashboardCardTitle}>Bulk Review Requests</h2>
-        <p className={`mt-0.5 ${dashboardMicro}`}>
+        <h2 className={OPUS_CARDTitle}>Bulk Review Requests</h2>
+        <p className={`mt-0.5 ${"text-xs text-muted-foreground"}`}>
           Upload a customer list and send review requests safely over time.
         </p>
       </div>
@@ -266,7 +262,7 @@ export function ReviewRequestsBulkWizard({
             key={label}
             className={cn(
               "flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium",
-              i === step ? "bg-emerald-600 text-white" : i < step ? "bg-emerald-50 text-emerald-800" : "bg-zinc-100 text-zinc-500"
+              i === step ? "bg-primary text-white" : i < step ? "bg-primary/10 text-emerald-800" : "bg-zinc-100 text-zinc-500"
             )}
           >
             <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-[10px]">{i + 1}</span>
@@ -326,7 +322,7 @@ export function ReviewRequestsBulkWizard({
           {mappingError && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2 text-[13px] text-amber-900">{mappingError}</div>
           )}
-          <div className={cn(dashboardCard, "overflow-hidden")}>
+          <div className={cn(OPUS_CARD, "overflow-hidden")}>
             <table className="min-w-full text-[12px]">
               <thead className="bg-zinc-50 text-left text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
                 <tr>
@@ -381,7 +377,7 @@ export function ReviewRequestsBulkWizard({
         <div className="space-y-4">
           <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
             <SummaryCard label="Total rows" value={summary.total_rows} />
-            <SummaryCard label="Ready to send" value={summary.ready} tone="text-emerald-700" />
+            <SummaryCard label="Ready to send" value={summary.ready} tone="text-primary" />
             <SummaryCard label="Duplicates removed" value={summary.duplicate} />
             <SummaryCard label="Invalid contact" value={summary.invalid_contact} tone="text-red-600" />
             <SummaryCard label="Missing contact" value={summary.missing_contact} />
@@ -500,7 +496,7 @@ export function ReviewRequestsBulkWizard({
           )}
 
           <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3.5 text-[13px] text-zinc-700">
-            <p className={dashboardCardTitle}>Campaign summary</p>
+            <p className={OPUS_CARDTitle}>Campaign summary</p>
             <ul className="mt-2 space-y-1 text-[11px]">
               <li>This campaign will send to {readyCount} customers over ~{businessDays} business days.</li>
               <li>Daily limit: {dailyLimit}/day</li>

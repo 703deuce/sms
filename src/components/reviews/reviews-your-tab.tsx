@@ -87,7 +87,7 @@ export function ReviewsYourTab({
             </p>
             <div className="mt-2 flex h-2 overflow-hidden rounded-full bg-[#F2F4F7]">
               <span
-                className="bg-[#137752]"
+                className="bg-primary"
                 style={{ width: `${Math.max(4, sentiment.positivePct)}%` }}
               />
               <span
@@ -102,7 +102,7 @@ export function ReviewsYourTab({
             <button
               type="button"
               onClick={() => setSelectedReview(data.yourReviews[0] ?? null)}
-              className="mt-2 text-xs font-semibold text-[#137752] hover:underline"
+              className="mt-2 text-xs font-semibold text-primary hover:underline"
             >
               View details →
             </button>
@@ -120,7 +120,7 @@ export function ReviewsYourTab({
                 placeholder="Search reviews..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="h-10 w-full rounded-lg border border-[#E6EAF0] bg-[#F9FAFB] pl-9 pr-3 text-sm text-[#101828] outline-none placeholder:text-[#98A2B3] focus:border-[#137752]"
+                className="h-10 w-full rounded-lg border border-[#E6EAF0] bg-[#F9FAFB] pl-9 pr-3 text-sm text-[#101828] outline-none placeholder:text-[#98A2B3] focus:border-primary"
               />
             </div>
             <button
@@ -183,7 +183,7 @@ export function ReviewsYourTab({
                       <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-[#344054]">
                         {row.reviewText?.trim() || "No review text."}
                       </p>
-                      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs font-semibold text-[#137752]">
+                      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs font-semibold text-primary">
                         <button type="button" onClick={() => setSelectedReview(row)}>
                           View full review
                         </button>
@@ -249,7 +249,7 @@ export function ReviewsYourTab({
                 .slice(0, 4)
                 .map((s) => (
                   <li key={s.id} className="flex items-start gap-2.5">
-                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#137752]" />
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                     <div>
                       <p className="text-sm font-medium text-[#101828]">{s.title}</p>
                       <p className="text-xs text-[#667085]">{s.description}</p>
@@ -269,10 +269,10 @@ export function ReviewsYourTab({
               ].map((item) => (
                 <li key={item.title} className="flex items-center justify-between gap-2">
                   <span className="flex items-center gap-2 text-sm text-[#344054]">
-                    <Plus className="h-3.5 w-3.5 text-[#137752]" />
+                    <Plus className="h-3.5 w-3.5 text-primary" />
                     {item.title}
                   </span>
-                  <Link href={item.href} className="text-xs font-semibold text-[#137752] hover:underline">
+                  <Link href={item.href} className="text-xs font-semibold text-primary hover:underline">
                     Manage…
                   </Link>
                 </li>

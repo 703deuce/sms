@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, Download, Info, Loader2 } from "lucide-react";
-import { ModulePage } from "@/components/ui/design-system";
+import { ReviewsOpusPage } from "@/newui-transplant/connected/reviews/reviews-opus-page";
 import { QrKpiCard, qrUi } from "@/components/reputation/qr-campaigns/qr-ui";
 import type { PaymentQrAnalytics } from "@/lib/reputation/payment-qr/types";
 import type { PaymentQrEntitlements } from "@/lib/reputation/payment-qr/entitlements";
@@ -91,7 +91,7 @@ export function PaymentQrAnalyticsView({
   const base = `/businesses/${businessId}/reputation/qr-campaigns/${campaignId}`;
 
   return (
-    <ModulePage className="space-y-6">
+    <ReviewsOpusPage className="space-y-6">
       <div>
         <Link
           href={base}
@@ -263,6 +263,6 @@ export function PaymentQrAnalyticsView({
           </div>
         </>
       )}
-    </ModulePage>
+    </ReviewsOpusPage>
   );
 }

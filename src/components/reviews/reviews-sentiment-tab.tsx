@@ -91,14 +91,14 @@ export function ReviewsSentimentTab({ data }: { data: ReviewsPageData }) {
 
         <div className="mt-2 flex flex-wrap items-center justify-center gap-4 text-xs text-[#667085]">
           <span className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-sm bg-[#137752]" />
+            <span className="h-2.5 w-2.5 rounded-sm bg-primary" />
             Mention Frequency
           </span>
         </div>
 
         <div className="mt-4 flex flex-col gap-3 rounded-xl border border-[#A6F4C5] bg-[#ECFDF3] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-[#137752] shadow-sm">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-primary shadow-sm">
               <Lightbulb className="h-4 w-4" />
             </span>
             <p className="text-sm text-[#027A48]">
@@ -109,7 +109,7 @@ export function ReviewsSentimentTab({ data }: { data: ReviewsPageData }) {
           <button
             type="button"
             onClick={() => setShowAll(true)}
-            className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg bg-[#137752] px-3.5 text-xs font-semibold text-white hover:bg-[#0f6244]"
+            className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg bg-primary px-3.5 text-xs font-semibold text-white hover:bg-[#0f6244]"
           >
             See more insights
           </button>
@@ -122,7 +122,7 @@ export function ReviewsSentimentTab({ data }: { data: ReviewsPageData }) {
           <ul className="mt-3 space-y-3">
             {topThemes.map((t) => (
               <li key={t.themeId} className="flex items-start gap-2.5">
-                <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-[#137752]" />
+                <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-sm font-semibold text-[#101828]">{t.label}</p>
@@ -144,7 +144,7 @@ export function ReviewsSentimentTab({ data }: { data: ReviewsPageData }) {
             <button
               type="button"
               onClick={() => setShowAll((v) => !v)}
-              className="mt-3 text-xs font-semibold text-[#137752] hover:underline"
+              className="mt-3 text-xs font-semibold text-primary hover:underline"
             >
               {showAll ? "Show fewer themes →" : "See all themes →"}
             </button>
@@ -158,7 +158,7 @@ export function ReviewsSentimentTab({ data }: { data: ReviewsPageData }) {
           </p>
           <div className="mt-4 space-y-3">
             {[
-              { label: "Positive", pct: sentiment.positivePct, color: "bg-[#137752]" },
+              { label: "Positive", pct: sentiment.positivePct, color: "bg-primary" },
               { label: "Neutral", pct: sentiment.neutralPct, color: "bg-[#98A2B3]" },
               { label: "Negative", pct: sentiment.negativePct, color: "bg-[#D0D5DD]" },
             ].map((row) => (
@@ -176,7 +176,7 @@ export function ReviewsSentimentTab({ data }: { data: ReviewsPageData }) {
               </div>
             ))}
           </div>
-          <p className="mt-3 text-xs font-semibold text-[#137752]">See sentiment analysis →</p>
+          <p className="mt-3 text-xs font-semibold text-primary">See sentiment analysis →</p>
         </div>
       </aside>
     </div>

@@ -1,3 +1,4 @@
+import { OPUS_CARD, OPUS_SEARCH_INPUT } from "@/newui-transplant/components/app/opus-surfaces";
 "use client";
 
 import type { ComponentType, ReactNode } from "react";
@@ -15,14 +16,6 @@ import {
 } from "lucide-react";
 import { momentumBadgeClass, type MomentumLabel } from "@/lib/reviews/metrics";
 import { GridMetricCard, KpiRow } from "@/components/ui/metric-card";
-import {
-  dashboardBadge,
-  dashboardCard,
-  dashboardCardMeta,
-  dashboardCardTitle,
-  dashboardMicro,
-  dashboardSectionLabel,
-} from "@/components/overview/dashboard-ui";
 import { cn } from "@/lib/utils";
 import {
   formatPace,
@@ -30,7 +23,6 @@ import {
   MomentumPanel,
   MomentumSectionTitle,
 } from "@/components/reviews/review-momentum-ui";
-import { mock } from "@/components/mockup/ui";
 import {
   recencyStatusClass,
   type MarketInsights,
@@ -135,7 +127,7 @@ export function ReviewMomentumTopKpis({
         value={reviewsPerMonth.toFixed(1)}
         sub={
           reviewsDelta != null && reviewsDelta !== 0 ? (
-            <span className={reviewsDelta > 0 ? "text-[#137752]" : "text-[#B42318]"}>
+            <span className={reviewsDelta > 0 ? "text-primary" : "text-[#B42318]"}>
               {reviewsDelta > 0 ? "↑" : "↓"}{" "}
               {reviewsDelta > 0 ? "up" : "down"} from {reviewsPerMonthPrev!.toFixed(1)}
             </span>
@@ -148,7 +140,7 @@ export function ReviewMomentumTopKpis({
         label="Momentum Trend"
         value={
           <span className="inline-flex items-center gap-2">
-            <Zap className="h-5 w-5 text-[#137752]" />
+            <Zap className="h-5 w-5 text-primary" />
             {momentumLabel}
           </span>
         }
@@ -204,19 +196,19 @@ export function ReviewMomentumHero({
     <MomentumPanel>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className={dashboardSectionLabel}>Review Momentum™</p>
+          <p className={"text-xs font-medium uppercase tracking-wide text-muted-foreground"}>Review Momentum™</p>
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <p className="text-lg font-semibold tabular-nums tracking-tight text-zinc-900">
               {Math.round(momentumScore)}
             </p>
-            <span className={cn(dashboardBadge, momentumBadgeClass(momentumLabel))}>
+            <span className={cn("inline-flex rounded-full bg-muted px-2 py-0.5 text-xs font-medium", momentumBadgeClass(momentumLabel))}>
               {momentumLabel}
             </span>
           </div>
         </div>
         <div className="flex flex-wrap gap-4 text-[13px]">
           <div>
-            <p className={dashboardSectionLabel}>Velocity trend</p>
+            <p className={"text-xs font-medium uppercase tracking-wide text-muted-foreground"}>Velocity trend</p>
             <span
               className={cn(
                 "mt-1 inline-flex rounded-md px-2 py-0.5 text-[12px] font-semibold",
@@ -227,7 +219,7 @@ export function ReviewMomentumHero({
             </span>
           </div>
           <div>
-            <p className={dashboardSectionLabel}>Share of new reviews (30d)</p>
+            <p className={"text-xs font-medium uppercase tracking-wide text-muted-foreground"}>Share of new reviews (30d)</p>
             <p className="mt-1 text-lg font-semibold tabular-nums text-zinc-900">{targetSharePct}%</p>
           </div>
         </div>
@@ -263,8 +255,8 @@ export function WeeklyPacePanel({ market }: { market: MarketInsights }) {
         <table className="min-w-full text-[13px]">
           <thead>
             <tr className="text-left">
-              <th className={cn(mock.label, "pb-2 pr-3")}>Business</th>
-              <th className={cn(mock.label, "pb-2")}>Avg / week</th>
+              <th className={cn("text-xs font-medium uppercase tracking-wide text-muted-foreground", "pb-2 pr-3")}>Business</th>
+              <th className={cn("text-xs font-medium uppercase tracking-wide text-muted-foreground", "pb-2")}>Avg / week</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#EEF1F5]">
@@ -307,7 +299,7 @@ function PaceStat({
         !highlight && !difference && "border-[#E6EAF0] bg-[#F9FAFB]"
       )}
     >
-      <p className={mock.label}>{label}</p>
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
       <p
         className={cn(
           "mt-1 text-[14px] font-semibold tabular-nums leading-tight",
@@ -347,7 +339,7 @@ export function ShareOfReviewsPanel({ market }: { market: MarketInsights }) {
                   className={cn(
                     "h-full rounded-full",
                     isTarget
-                      ? "bg-[#137752]"
+                      ? "bg-primary"
                       : isTopCompetitor
                         ? "bg-[#667085]"
                         : row.sharePct > 0
@@ -389,7 +381,7 @@ export function MomentumScoreBarsPanel({
           const isTopCompetitor = !isTarget && e.name === topCompetitorName;
           const widthPct = Math.round((e.momentum_score / maxScore) * 100);
           const barColor = isTarget
-            ? "bg-[#137752]"
+            ? "bg-primary"
             : isTopCompetitor
               ? "bg-[#667085]"
               : "bg-[#D0D5DD]";
@@ -470,9 +462,9 @@ export function RecencyAndStreakPanel({
       </ul>
 
       <div className="mt-3 rounded-lg border border-zinc-100 bg-zinc-50/60 p-2.5">
-        <p className={dashboardSectionLabel}>Review streak</p>
+        <p className={"text-xs font-medium uppercase tracking-wide text-muted-foreground"}>Review streak</p>
         {market.reviewStreakWeeks > 0 ? (
-          <p className="mt-1 text-[13px] font-semibold text-emerald-700">
+          <p className="mt-1 text-[13px] font-semibold text-primary">
             {market.reviewStreakWeeks} week{market.reviewStreakWeeks === 1 ? "" : "s"} with reviews
           </p>
         ) : market.daysWithoutReview != null && market.daysWithoutReview > 0 ? (
@@ -480,7 +472,7 @@ export function RecencyAndStreakPanel({
             No reviews for {market.daysWithoutReview} days
           </p>
         ) : (
-          <p className={cn(dashboardMicro, "mt-1")}>Run an audit to calculate streak.</p>
+          <p className={cn("text-xs text-muted-foreground", "mt-1")}>Run an audit to calculate streak.</p>
         )}
       </div>
     </MomentumPanel>
@@ -490,9 +482,9 @@ export function RecencyAndStreakPanel({
 export function MarketActivityBanner({ market }: { market: MarketInsights }) {
   return (
     <MomentumPanel className={marketActivityClass(market.marketActivityLevel)}>
-      <p className={dashboardSectionLabel}>Market review activity</p>
+      <p className={"text-xs font-medium uppercase tracking-wide text-muted-foreground"}>Market review activity</p>
       <p className="mt-1 text-lg font-semibold">{market.marketActivityLabel}</p>
-      <p className={cn(dashboardMicro, "mt-1.5 opacity-90")}>
+      <p className={cn("text-xs text-muted-foreground", "mt-1.5 opacity-90")}>
         Top {market.entityCount} businesses received{" "}
         <span className="font-semibold">{market.marketReviews30d}</span> new reviews in 30 days.
       </p>

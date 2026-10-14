@@ -82,7 +82,7 @@ export function PaymentThemePicker({
       <div>
         <div className="flex items-center gap-2">
           <h3 className="text-base font-extrabold text-[#0B1220]">Choose Your Page Template</h3>
-          <span className="rounded-full bg-[#137752] px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-white">
+          <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-white">
             Mobile
           </span>
         </div>
@@ -111,11 +111,11 @@ export function PaymentThemePicker({
               className={cn(
                 "group relative overflow-hidden rounded-2xl border bg-white text-left transition",
                 selected
-                  ? "border-[#137752] ring-2 ring-[#137752]/25"
-                  : "border-[#E6EAF0] hover:border-[#137752]/45"
+                  ? "border-primary ring-2 ring-[#137752]/25"
+                  : "border-[#E6EAF0] hover:border-primary/45"
               )}
             >
-              <span className="absolute left-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-[#137752] text-[11px] font-extrabold text-white shadow">
+              <span className="absolute left-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-[11px] font-extrabold text-white shadow">
                 {item.galleryNumber}
               </span>
               <div className="relative aspect-[3/4] overflow-hidden bg-[#F3F5F7]">
@@ -125,7 +125,7 @@ export function PaymentThemePicker({
                   description={description}
                 />
                 {selected ? (
-                  <span className="absolute right-1.5 top-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-[#137752] text-white shadow">
+                  <span className="absolute right-1.5 top-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-white shadow">
                     <Check className="h-3 w-3" />
                   </span>
                 ) : null}
@@ -144,7 +144,7 @@ export function PaymentThemePicker({
       <div className="flex flex-wrap items-center gap-3 text-[11px] font-semibold text-[#667085]">
         {FEATURE_CHIPS.map(({ icon: Icon, label }) => (
           <span key={label} className="inline-flex items-center gap-1.5">
-            <Icon className="h-3.5 w-3.5 text-[#137752]" />
+            <Icon className="h-3.5 w-3.5 text-primary" />
             {label}
           </span>
         ))}

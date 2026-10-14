@@ -462,7 +462,7 @@ export function ContactsPageClient({
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#ECFDF3] text-xs font-bold text-[#137752]">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#ECFDF3] text-xs font-bold text-primary">
                           {initials(name)}
                         </span>
                         <div className="min-w-0">
@@ -497,7 +497,7 @@ export function ContactsPageClient({
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          className="text-xs font-semibold text-[#137752] hover:underline"
+                          className="text-xs font-semibold text-primary hover:underline"
                           onClick={() => {
                             void (async () => {
                               const res = await fetch("/api/reputation/contacts", {
@@ -564,7 +564,7 @@ export function ContactsPageClient({
           { title: "Consent settings", body: "Manage opt-out and quiet-hour rules.", icon: Settings, href: `/businesses/${businessId}/reputation/settings` },
         ].map((card) => (
           <Link key={card.title} href={card.href} className={cn(rep.card, "block p-4 transition hover:-translate-y-0.5 hover:shadow-md")}>
-            <card.icon className="h-5 w-5 text-[#137752]" />
+            <card.icon className="h-5 w-5 text-primary" />
             <h3 className="mt-3 text-sm font-semibold text-[#101828]">{card.title}</h3>
             <p className="mt-1 text-sm text-[#667085]">{card.body}</p>
           </Link>

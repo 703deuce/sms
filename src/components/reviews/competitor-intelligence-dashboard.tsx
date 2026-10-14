@@ -256,7 +256,7 @@ function LeaderboardTable({
                     <span
                       className={cn(
                         "flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold",
-                        row.isYou ? "bg-white text-[#137752]" : "bg-[#F2F4F7] text-[#667085]"
+                        row.isYou ? "bg-white text-primary" : "bg-[#F2F4F7] text-[#667085]"
                       )}
                     >
                       {row.isYou ? "You" : row.name.slice(0, 2).toUpperCase()}
@@ -340,9 +340,9 @@ function GapWidgets({ data }: { data: CompetitorIntelligenceDashboardData }) {
   }));
 
   const OppIcon = ({ icon }: { icon: OpportunityItem["icon"] }) => {
-    if (icon === "star") return <Star className="h-4 w-4 shrink-0 text-[#137752]" />;
-    if (icon === "chat") return <MessageSquare className="h-4 w-4 shrink-0 text-[#137752]" />;
-    return <CheckCircle2 className="h-4 w-4 shrink-0 text-[#137752]" />;
+    if (icon === "star") return <Star className="h-4 w-4 shrink-0 text-primary" />;
+    if (icon === "chat") return <MessageSquare className="h-4 w-4 shrink-0 text-primary" />;
+    return <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />;
   };
 
   return (
@@ -359,7 +359,7 @@ function GapWidgets({ data }: { data: CompetitorIntelligenceDashboardData }) {
                 onClick={() => setGapMode(mode)}
                 className={cn(
                   "rounded-md px-2.5 py-1 text-xs font-semibold",
-                  gapMode === mode ? "bg-white text-[#137752] shadow-sm" : "text-[#667085]"
+                  gapMode === mode ? "bg-white text-primary shadow-sm" : "text-[#667085]"
                 )}
               >
                 {mode === "total" ? "Total Reviews Gap" : "Velocity Gap (30d)"}

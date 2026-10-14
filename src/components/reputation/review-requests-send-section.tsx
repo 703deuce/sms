@@ -1,3 +1,4 @@
+import { OPUS_CARD, OPUS_SEARCH_INPUT } from "@/newui-transplant/components/app/opus-surfaces";
 "use client";
 
 import { useState } from "react";
@@ -26,12 +27,6 @@ import {
   rrPrimaryBtn,
   statusPill,
 } from "@/components/reputation/review-requests-ui";
-import {
-  dashboardBody,
-  dashboardCard,
-  dashboardCardTitle,
-  dashboardMicro,
-} from "@/components/overview/dashboard-ui";
 import { cn } from "@/lib/utils";
 
 type TemplateRow = {
@@ -228,14 +223,14 @@ export function ReviewRequestsSendSection({
             value={stats.last_7_days}
             sub="Requests sent"
             icon={Calendar}
-            iconClass="bg-emerald-50 text-emerald-600"
+            iconClass="bg-primary/10 text-primary"
           />
           <ReviewRequestsKpiCard
             label="30 days"
             value={stats.last_30_days}
             sub="Requests sent"
             icon={Calendar}
-            iconClass="bg-emerald-50 text-emerald-600"
+            iconClass="bg-primary/10 text-primary"
           />
           <ReviewRequestsKpiCard
             label="Email"
@@ -256,7 +251,7 @@ export function ReviewRequestsSendSection({
             value={stats.replies ?? 0}
             sub={replyRate(stats.replies ?? 0, stats.total_sent)}
             icon={ArrowLeftRight}
-            iconClass="bg-emerald-50 text-emerald-600"
+            iconClass="bg-primary/10 text-primary"
           />
           <ReviewRequestsKpiCard
             label="Failed"
@@ -269,8 +264,8 @@ export function ReviewRequestsSendSection({
       )}
 
       <div className="grid gap-3 lg:grid-cols-2">
-        <div className={cn(dashboardCard, "p-3.5")}>
-          <h3 className={dashboardCardTitle}>Send review request</h3>
+        <div className={cn(OPUS_CARD, "p-3.5")}>
+          <h3 className={OPUS_CARDTitle}>Send review request</h3>
           <p className={`mt-0.5 ${dashboardBody}`}>
             Fill in the details below to send a review request to your customer.
           </p>
@@ -279,7 +274,7 @@ export function ReviewRequestsSendSection({
             <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-[13px] text-red-800">{error}</div>
           )}
           {success && (
-            <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-[13px] text-emerald-800">
+            <div className="mt-3 rounded-lg border border-emerald-200 bg-primary/10 p-3 text-[13px] text-emerald-800">
               {success}
             </div>
           )}
@@ -321,7 +316,7 @@ export function ReviewRequestsSendSection({
             </div>
             <div className="sm:col-span-2">
               <label className={rrLabelClass}>Phone</label>
-              <div className="mt-1 flex overflow-hidden rounded-lg border border-zinc-200 focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500/20">
+              <div className="mt-1 flex overflow-hidden rounded-lg border border-zinc-200 focus-within:border-primary focus-within:ring-1 focus-within:ring-emerald-500/20">
                 <span className="flex items-center border-r border-zinc-200 bg-zinc-50 px-2.5 text-xs text-zinc-500">
                   🇺🇸
                 </span>
@@ -347,11 +342,11 @@ export function ReviewRequestsSendSection({
                   className={cn(
                     "inline-flex items-center gap-1.5 rounded-lg border px-3.5 py-2 text-[13px] font-medium capitalize",
                     form.channel === ch
-                      ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                      ? "border-primary bg-primary/10 text-primary"
                       : "border-zinc-200 text-zinc-600 hover:bg-zinc-50"
                   )}
                 >
-                  {form.channel === ch && <span className="text-emerald-600">✓</span>}
+                  {form.channel === ch && <span className="text-primary">✓</span>}
                   {ch === "both" ? "Both" : ch}
                 </button>
               ))}
@@ -365,7 +360,7 @@ export function ReviewRequestsSendSection({
               maxLength={250}
               value={form.notes}
               onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-              className="mt-1 w-full rounded-lg border border-zinc-200 px-3.5 py-2 text-[13px] outline-none focus:border-emerald-500"
+              className="mt-1 w-full rounded-lg border border-zinc-200 px-3.5 py-2 text-[13px] outline-none focus:border-primary"
               placeholder="Internal notes about this request…"
             />
             <p className="mt-1 text-right text-[10px] text-zinc-400">{form.notes.length} / 250</p>
@@ -406,17 +401,17 @@ export function ReviewRequestsSendSection({
               onClick={() => void handleSend("both")}
               className={rrOutlineBtn}
             >
-              {sending === "both" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 text-emerald-600" />}
+              {sending === "both" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 text-primary" />}
               Send Both
             </button>
           </div>
         </div>
 
-        <div className={cn(dashboardCard, "p-3.5")}>
+        <div className={cn(OPUS_CARD, "p-3.5")}>
           <div className="flex items-center justify-between gap-2">
             <div>
-              <h3 className={dashboardCardTitle}>Message preview</h3>
-              <p className={`mt-0.5 ${dashboardMicro}`}>
+              <h3 className={OPUS_CARDTitle}>Message preview</h3>
+              <p className={`mt-0.5 ${"text-xs text-muted-foreground"}`}>
                 This is how your message will appear to the customer.
               </p>
             </div>
@@ -429,7 +424,7 @@ export function ReviewRequestsSendSection({
                   className={cn(
                     "rounded-md px-2.5 py-1 font-medium capitalize",
                     (form.channel === ch || (form.channel === "both" && ch === "email")) &&
-                      "bg-emerald-600 text-white"
+                      "bg-primary text-white"
                   )}
                 >
                   {ch}
@@ -445,7 +440,7 @@ export function ReviewRequestsSendSection({
                 </p>
                 <p className="whitespace-pre-wrap leading-relaxed text-zinc-700">{previewBody}</p>
                 <div className="pt-2 text-center">
-                  <span className="inline-block rounded-full bg-[#137752] px-4 py-2 text-[13px] font-semibold text-white">
+                  <span className="inline-block rounded-full bg-primary px-4 py-2 text-[13px] font-semibold text-white">
                     Leave a review on Google
                   </span>
                 </div>
@@ -459,9 +454,9 @@ export function ReviewRequestsSendSection({
         </div>
       </div>
 
-      <div className={cn(dashboardCard, "overflow-hidden")}>
+      <div className={cn(OPUS_CARD, "overflow-hidden")}>
         <div className="border-b border-zinc-100 px-3.5 py-2.5">
-          <h3 className={dashboardCardTitle}>Recent sends</h3>
+          <h3 className={OPUS_CARDTitle}>Recent sends</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full text-left text-[12px]">

@@ -88,7 +88,7 @@ export function AdminQrCampaignsClient() {
                 <td className="px-3 py-2 capitalize">{row.status}</td>
                 <td className="px-3 py-2">
                   <a
-                    className="max-w-[220px] truncate text-[#137752] underline"
+                    className="max-w-[220px] truncate text-primary underline"
                     href={row.destinationUrl}
                     target="_blank"
                     rel="noreferrer"

@@ -142,12 +142,12 @@ export function ReviewAlertSettings({ businessId }: { businessId: string }) {
         />
       </label>
       {error && <p className="text-[12px] text-red-600">{error}</p>}
-      {msg && <p className="text-[12px] text-emerald-700">{msg}</p>}
+      {msg && <p className="text-[12px] text-primary">{msg}</p>}
       <button
         type="button"
         disabled={busy}
         onClick={() => void save()}
-        className="inline-flex items-center gap-1 rounded-full bg-[#137752] px-2.5 py-1.5 text-[12px] font-semibold text-white disabled:opacity-60"
+        className="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1.5 text-[12px] font-semibold text-white disabled:opacity-60"
       >
         {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
         Save alerts
