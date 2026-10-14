@@ -173,6 +173,7 @@ enum ConversationProductSource {
   MANUAL
   AUTOMATION
   APPOINTMENT_REMINDERS
+  REVIEW_REQUESTS
 }
 
 enum ArSmsReplySessionState {

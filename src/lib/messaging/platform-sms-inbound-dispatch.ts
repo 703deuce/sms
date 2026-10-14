@@ -198,6 +198,55 @@ export async function dispatchSharedPlatformSmsInbound(input: {
     };
   }
 
+  const { routePlatformMassTextOrReviewInbound, persistPlatformProductInboundMessage } =
+    await import("@/lib/messaging/platform-product-inbound");
+  const productMatch = await routePlatformMassTextOrReviewInbound({
+    consumerE164: input.fromE164,
+    platformPhoneNumberId: input.destination.phoneNumberId,
+    body: input.body,
+    provider: input.channel,
+    providerMessageId,
+  });
+
+  if (productMatch.status === "ambiguous") {
+    await recordHeldPlatformInbound({
+      channel: input.channel,
+      destination: input.destination,
+      providerMessageId,
+      fromE164: input.fromE164,
+      body: input.body,
+      reason: "ambiguous_mass_text_or_review_workspace",
+      arSessions: [],
+    });
+    await patchArPlatformSmsInboundReceipt(providerMessageId, {
+      state: "HELD",
+      routingResolution: "ambiguous_cross_product_reply",
+      holdReason: "ambiguous_mass_text_or_review_workspace",
+    });
+    return { resolution: "ambiguous_cross_product_reply" };
+  }
+
+  if (productMatch.status === "matched") {
+    await persistPlatformProductInboundMessage({
+      workspaceId: productMatch.workspaceId,
+      product: productMatch.product,
+      consumerE164: input.fromE164,
+      platformPhoneNumberId: input.destination.phoneNumberId,
+      body: input.body,
+      providerMessageId,
+      conversationId: productMatch.conversationId,
+    });
+    await patchArPlatformSmsInboundReceipt(providerMessageId, {
+      state: "ROUTED",
+      routingResolution: "platform_reply_resolved",
+    });
+    return {
+      product: productMatch.product === "review_requests" ? undefined : "appointment_reminders",
+      resolution: "platform_reply_resolved",
+      workspaceId: productMatch.workspaceId,
+    };
+  }
+
   if (!isPlatformSharedSmsMctbInboundEnabled()) {
     logArSmsPipeline({
       step: "route_unmatched",

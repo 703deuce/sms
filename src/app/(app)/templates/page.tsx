@@ -34,6 +34,20 @@ const templateTabs = [
   { label: "AI generator", href: "/templates/ai" },
 ];
 
+const productFilters = [
+  { id: "all", label: "All products" },
+  { id: "campaigns", label: "Campaigns" },
+  { id: "appointment_reminders", label: "Appointment Reminders" },
+  { id: "mctb", label: "Missed Call Text Back" },
+  { id: "reviews", label: "Reviews" },
+] as const;
+
+type UnifiedTemplate = Template & {
+  product?: string;
+  href?: string;
+  editable?: boolean;
+};
+
 const categories = [
   "All",
   "Greetings",
@@ -79,16 +93,39 @@ export default function TemplatesPage() {
   const [category, setCategory] = useState<string>("All");
   const [typeFilter, setTypeFilter] = useState<string>("All types");
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
-  const [templates, setTemplates] = useState<Template[]>([]);
+  const [productFilter, setProductFilter] =
+    useState<(typeof productFilters)[number]["id"]>("all");
+  const [templates, setTemplates] = useState<UnifiedTemplate[]>([]);
   const [teamMembers, setTeamMembers] = useState<User[]>([]);
 
   useEffect(() => {
-    fetch("/api/templates")
+    fetch(`/api/templates/unified?product=${productFilter}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
-        if (json?.data) setTemplates(json.data);
+        if (json?.data) {
+          setTemplates(
+            json.data.map((row: UnifiedTemplate & { product: string }) => ({
+              id: row.id,
+              name: row.name,
+              category: row.category || row.product,
+              type: row.product,
+              channel: row.channel,
+              body: row.body,
+              shared: true,
+              tags: [],
+              createdAt: row.updatedAt || new Date().toISOString(),
+              updatedAt: row.updatedAt || new Date().toISOString(),
+              product: row.product,
+              href: row.href,
+              editable: row.editable,
+            })),
+          );
+        }
       })
       .catch(() => undefined);
+  }, [productFilter]);
+
+  useEffect(() => {
     fetch("/api/team")
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
@@ -116,7 +153,7 @@ export default function TemplatesPage() {
       <SectionHeader
         icon={LayoutGrid}
         title="Templates"
-        description="Reusable SMS and MMS message templates for campaigns, inbox replies, and automations."
+        description="Shared templates across Campaigns, Appointment Reminders, Missed Call Text Back, and Reviews."
         actions={
           <>
             <Link href="/templates/ai">
@@ -136,6 +173,24 @@ export default function TemplatesPage() {
       />
 
       <Tabs items={templateTabs} />
+
+      <div className="mb-4 flex flex-wrap gap-2">
+        {productFilters.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => setProductFilter(p.id)}
+            className={cn(
+              "rounded-full border px-3 py-1 text-[12px] font-medium transition-colors",
+              productFilter === p.id
+                ? "border-violet-600 bg-violet-600 text-white"
+                : "border-slate-200 bg-white text-slate-700 hover:border-violet-300",
+            )}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
 
       <div className="mb-5 grid gap-4 sm:grid-cols-3">
         <MetricCard
