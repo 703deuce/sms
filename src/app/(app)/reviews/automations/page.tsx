@@ -3,12 +3,8 @@ import { isDevPreviewBusiness } from "@/lib/auth/dev";
 import { reputationAutomationsPreviewData } from "@/lib/reputation/reputation-page-preview-data";
 import { getReputationWorkspaceId } from "@/lib/reputation/workspace-context";
 
-export default async function ReputationAutomationsPage({
-  params,
-}: {
-  params: Promise<{ businessId: string }>;
-}) {
-  const { businessId } = await params;
+export default async function ReputationAutomationsPage() {
+  const businessId = await getReputationWorkspaceId();
   const isPreview = isDevPreviewBusiness(businessId);
   return (
     <AutomationsHub

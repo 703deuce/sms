@@ -6,12 +6,8 @@ import { TemplatesManager } from "@/components/reputation/templates-manager";
 import { PageHeader } from "@/components/ui/page-header";
 import { getReputationWorkspaceId } from "@/lib/reputation/workspace-context";
 
-export default async function ReputationTemplatesPage({
-  params,
-}: {
-  params: Promise<{ businessId: string }>;
-}) {
-  const { businessId } = await params;
+export default async function ReputationTemplatesPage() {
+  const businessId = await getReputationWorkspaceId();
   const isPreview = isDevPreviewBusiness(businessId);
   const auth = await requireBusinessPage(businessId);
   const allowed = isPreview || (await hasEntitlement(auth.organizationId, "review_campaigns"));

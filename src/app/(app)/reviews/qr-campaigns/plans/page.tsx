@@ -8,12 +8,8 @@ import { ReviewRequestsUpgrade } from "@/components/reputation/review-requests-u
 import { ReviewsOpusPage } from "@/newui-transplant/connected/reviews/reviews-opus-page";
 import { getReputationWorkspaceId } from "@/lib/reputation/workspace-context";
 
-export default async function QrCampaignPlansPage({
-  params,
-}: {
-  params: Promise<{ businessId: string }>;
-}) {
-  const { businessId } = await params;
+export default async function QrCampaignPlansPage() {
+  const businessId = await getReputationWorkspaceId();
   const isPreview = isDevPreviewBusiness(businessId);
   const auth = await requireBusinessPage(businessId);
   const allowed =

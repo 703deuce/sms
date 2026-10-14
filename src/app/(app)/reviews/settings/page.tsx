@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getReputationWorkspaceId } from "@/lib/reputation/workspace-context";
 import { requireBusinessPage } from "@/lib/auth/require-business-page";
 import { isDevPreviewBusiness } from "@/lib/auth/dev";
 import { hasEntitlement } from "@/lib/auth/entitlements";
@@ -8,12 +9,8 @@ import { ReputationSettingsForm } from "@/components/reputation/reputation-setti
 import { PageHeader, Panel } from "@/newui-transplant/components/app/kit";
 import { Button } from "@/newui-transplant/components/ui/button";
 import { ReviewsOpusPage } from "@/newui-transplant/connected/reviews/reviews-opus-page";
-export default async function ReputationSettingsPage({
-  params,
-}: {
-  params: Promise<{ businessId: string }>;
-}) {
-  const { businessId } = await params;
+export default async function ReputationSettingsPage() {
+  const businessId = await getReputationWorkspaceId();
   const isPreview = isDevPreviewBusiness(businessId);
   const auth = await requireBusinessPage(businessId);
   const allowed = isPreview || (await hasEntitlement(auth.organizationId, "review_campaigns"));

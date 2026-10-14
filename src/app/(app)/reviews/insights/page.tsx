@@ -13,12 +13,8 @@ async function ReviewInsightsLoaded({ businessId }: { businessId: string }) {
   return <ReviewInsightsDashboard businessId={businessId} data={data} />;
 }
 
-export default async function ReputationInsightsPage({
-  params,
-}: {
-  params: Promise<{ businessId: string }>;
-}) {
-  const { businessId } = await params;
+export default async function ReputationInsightsPage() {
+  const businessId = await getReputationWorkspaceId();
 
   return (
     <Suspense

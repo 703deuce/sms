@@ -7,12 +7,8 @@ import { QrPosterPage } from "@/components/reputation/qr-poster-page";
 import { ReviewRequestsUpgrade } from "@/components/reputation/review-requests-upgrade";
 import { getReputationWorkspaceId } from "@/lib/reputation/workspace-context";
 
-export default async function ReputationQrPosterRoute({
-  params,
-}: {
-  params: Promise<{ businessId: string }>;
-}) {
-  const { businessId } = await params;
+export default async function ReputationQrPosterRoute() {
+  const businessId = await getReputationWorkspaceId();
   const isPreview = isDevPreviewBusiness(businessId);
   const auth = await requireBusinessPage(businessId);
   const allowed =

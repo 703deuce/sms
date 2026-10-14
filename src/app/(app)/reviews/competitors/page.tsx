@@ -40,12 +40,8 @@ async function CompetitorIntelligenceLoaded({ businessId }: { businessId: string
   }
 }
 
-export default async function ReputationCompetitorsPage({
-  params,
-}: {
-  params: Promise<{ businessId: string }>;
-}) {
-  const { businessId } = await params;
+export default async function ReputationCompetitorsPage() {
+  const businessId = await getReputationWorkspaceId();
 
   return (
     <Suspense

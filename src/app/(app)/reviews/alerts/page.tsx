@@ -13,12 +13,8 @@ async function ReputationAlertsLoaded({ businessId }: { businessId: string }) {
   return <ReputationAlertsDashboard businessId={businessId} data={data} />;
 }
 
-export default async function ReputationAlertsPage({
-  params,
-}: {
-  params: Promise<{ businessId: string }>;
-}) {
-  const { businessId } = await params;
+export default async function ReputationAlertsPage() {
+  const businessId = await getReputationWorkspaceId();
 
   return (
     <Suspense

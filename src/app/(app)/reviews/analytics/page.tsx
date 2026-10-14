@@ -43,12 +43,8 @@ async function ReviewVelocityLoaded({ businessId }: { businessId: string }) {
   return <ReviewVelocityDashboard businessId={businessId} data={live} />;
 }
 
-export default async function ReputationAnalyticsPage({
-  params,
-}: {
-  params: Promise<{ businessId: string }>;
-}) {
-  const { businessId } = await params;
+export default async function ReputationAnalyticsPage() {
+  const businessId = await getReputationWorkspaceId();
 
   return (
     <Suspense

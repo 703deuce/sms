@@ -6,12 +6,8 @@ import { loadReputationModulesAudit } from "@/lib/reputation/reputation-modules-
 import { reputationAuditPreviewData } from "@/lib/reputation/reputation-page-preview-data";
 import { getReputationWorkspaceId } from "@/lib/reputation/workspace-context";
 
-export default async function ReputationAuditPage({
-  params,
-}: {
-  params: Promise<{ businessId: string }>;
-}) {
-  const { businessId } = await params;
+export default async function ReputationAuditPage() {
+  const businessId = await getReputationWorkspaceId();
   const isPreview = isDevPreviewBusiness(businessId);
   const data = isPreview ? reputationAuditPreviewData : await loadReputationModulesAudit(businessId);
 

@@ -7,12 +7,8 @@ import { PaymentQrCreateWizard } from "@/components/reputation/payment-qr/paymen
 import { ReviewRequestsUpgrade } from "@/components/reputation/review-requests-upgrade";
 import { getReputationWorkspaceId } from "@/lib/reputation/workspace-context";
 
-export default async function QrCampaignNewPaymentPage({
-  params,
-}: {
-  params: Promise<{ businessId: string }>;
-}) {
-  const { businessId } = await params;
+export default async function QrCampaignNewPaymentPage() {
+  const businessId = await getReputationWorkspaceId();
   const isPreview = isDevPreviewBusiness(businessId);
   const auth = await requireBusinessPage(businessId);
   const allowed =
