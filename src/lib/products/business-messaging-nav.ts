@@ -56,16 +56,21 @@ export const AR_SERVICE_TABS: ServiceTab[] = [
   { label: "Analytics", href: AR_ROUTES.analytics, matchPrefix: AR_ROUTES.analytics },
 ];
 
+/** Primary workspace tabs (peer to MCTB / Campaigns service tabs). */
 export const REVIEWS_SERVICE_TABS: ServiceTab[] = [
-  { label: "Overview", href: REVIEW_ROUTES.home, matchExact: true },
+  { label: "Overview", href: REVIEW_ROUTES.overview, matchPrefix: REVIEW_ROUTES.overview },
   { label: "Requests", href: REVIEW_ROUTES.requests, matchPrefix: REVIEW_ROUTES.requests },
   { label: "Campaigns", href: REVIEW_ROUTES.campaigns, matchPrefix: REVIEW_ROUTES.campaigns },
-  { label: "QR Campaigns", href: REVIEW_ROUTES.qr, matchPrefix: REVIEW_ROUTES.qr },
-  { label: "Reviews", href: REVIEW_ROUTES.feed, matchPrefix: REVIEW_ROUTES.feed },
-  { label: "Velocity", href: REVIEW_ROUTES.velocity, matchPrefix: REVIEW_ROUTES.velocity },
   { label: "Insights", href: REVIEW_ROUTES.insights, matchPrefix: REVIEW_ROUTES.insights },
   { label: "Alerts", href: REVIEW_ROUTES.alerts, matchPrefix: REVIEW_ROUTES.alerts },
 ];
+
+/** Expandable sidebar links under Reviews (not top tabs). */
+export const REVIEWS_SIDEBAR_CHILDREN = [
+  { label: "QR campaigns", href: REVIEW_ROUTES.qr },
+  { label: "Review feed", href: REVIEW_ROUTES.feed },
+  { label: "Velocity", href: REVIEW_ROUTES.velocity },
+] as const;
 
 export const CAMPAIGNS_SERVICE_TABS: ServiceTab[] = [
   { label: "All Campaigns", href: "/campaigns", matchExact: true },
@@ -191,9 +196,10 @@ export function buildBusinessMessagingNav(input: BusinessMessagingNavEntitlement
     },
     {
       label: "Reviews",
-      href: REVIEW_ROUTES.home,
+      href: REVIEW_ROUTES.overview,
       icon: Star,
       badge: input.hasReviews === false ? "Activate" : undefined,
+      children: [...REVIEWS_SIDEBAR_CHILDREN],
     },
   );
 
@@ -267,7 +273,9 @@ export function isBusinessMessagingSharedShellPath(pathname: string): boolean {
 }
 
 export function shouldShowReviewsServiceTabs(pathname: string): boolean {
-  return pathname === REVIEW_ROUTES.home || pathname.startsWith("/reviews/");
+  if (!pathname.startsWith("/reviews")) return false;
+  if (pathname.startsWith("/reviews/messaging")) return false;
+  return true;
 }
 
 export function buildBusinessMessagingMobileNav(input: BusinessMessagingNavEntitlements): NavItem[] {

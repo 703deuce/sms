@@ -3,12 +3,8 @@ import { Loader2 } from "lucide-react";
 import { ReviewsDashboard } from "@/components/reviews/reviews-dashboard";
 import { getReputationWorkspaceId } from "@/lib/reputation/workspace-context";
 
-export default async function ReputationReviewsPage({
-  params,
-}: {
-  params: Promise<{ businessId: string }>;
-}) {
-  const { businessId } = await params;
+export default async function ReputationReviewsPage() {
+  const businessId = await getReputationWorkspaceId();
 
   return (
     <Suspense

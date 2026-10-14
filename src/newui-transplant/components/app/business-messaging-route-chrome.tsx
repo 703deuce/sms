@@ -12,9 +12,12 @@ import {
   shouldShowCampaignsServiceTabs,
   shouldShowContactsWorkspaceTabs,
   shouldShowMctbServiceTabs,
+  shouldShowReviewsServiceTabs,
+  REVIEWS_SERVICE_TABS,
 } from "@/lib/products/business-messaging-nav";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import { AR_ROUTES } from "@/lib/appointment-reminders/routes";
+import { REVIEW_ROUTES } from "@/lib/reviews/routes";
 import { isBusinessMessagingUnifiedNav } from "@/lib/workspace/platform-launch";
 import { InboxWorkspaceTabs } from "@/newui-transplant/components/app/inbox-workspace-tabs";
 import { ServiceWorkspaceTabs } from "@/newui-transplant/components/app/service-workspace-tabs";
@@ -60,6 +63,22 @@ export function BusinessMessagingRouteChrome() {
         description="Synced calendar reminders, confirmations, and SMS rescheduling."
         tabs={AR_SERVICE_TABS}
         actions={<ArServiceActions />}
+      />
+    );
+  }
+
+  if (shouldShowReviewsServiceTabs(pathname)) {
+    return (
+      <ServiceWorkspaceTabs
+        title="Reviews"
+        description="Review requests, campaigns, monitoring, and reputation insights."
+        tabs={REVIEWS_SERVICE_TABS}
+        actions={
+          <Button variant="outline" size="sm" render={<Link href={REVIEW_ROUTES.settings} />}>
+            Settings
+          </Button>
+        }
+        compact={pathname === REVIEW_ROUTES.overview}
       />
     );
   }
