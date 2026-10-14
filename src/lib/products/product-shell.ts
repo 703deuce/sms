@@ -11,7 +11,9 @@ import {
   isAppointmentRemindersV1Primary,
   isMctbV1Primary,
   isSmsStandaloneHidden,
+  isBusinessMessagingUnifiedNav,
 } from "@/lib/workspace/platform-launch";
+import { BUSINESS_MESSAGING_OVERVIEW_HREF } from "@/lib/products/business-messaging-nav";
 import {
   isUnifiedAppointmentsExperience,
   unifiedAppointmentsProductLabel,
@@ -79,6 +81,7 @@ export function massSmsShellHome(): string {
 }
 
 export function mctbShellHome(): string {
+  if (isBusinessMessagingUnifiedNav()) return BUSINESS_MESSAGING_OVERVIEW_HREF;
   return "/mctb";
 }
 
@@ -277,6 +280,7 @@ export function visibleProductShells(input: ProductShellEntitlementInput): Produ
 }
 
 export function shouldShowProductSwitcher(input: ProductShellEntitlementInput): boolean {
+  if (isBusinessMessagingUnifiedNav()) return false;
   if (isSmsOnlyAppNav()) return false;
   if (isAppointmentRemindersV1Primary()) return false;
   if (isAppointmentsV1Primary()) return false;

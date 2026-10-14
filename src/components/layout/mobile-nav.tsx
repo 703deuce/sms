@@ -11,7 +11,12 @@ import { resolveProductShellFromPath, shouldShowProductSwitcher } from "@/lib/pr
 import { isMctbShellActive } from "@/lib/products/resolve-product-nav";
 import { isMctbProductChromePath } from "@/lib/products/mctb-shell";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
-import { isSmsOnlyAppNav, isAppointmentsV1Primary } from "@/lib/workspace/platform-launch";
+import {
+  isBusinessMessagingUnifiedNav,
+  isSmsOnlyAppNav,
+  isAppointmentsV1Primary,
+} from "@/lib/workspace/platform-launch";
+import { isBusinessMessagingNavItemActive } from "@/lib/products/business-messaging-nav";
 import { cn } from "@/lib/utils";
 import {
   AudioLines,
@@ -48,6 +53,7 @@ export function MobileNav({
   hasMassSms = false,
   hasVoice = false,
   hasAiAfterHours = false,
+  hasAppointmentReminders = false,
   primaryVoiceAgentId = null,
 }: {
   onMore: () => void;
@@ -59,6 +65,7 @@ export function MobileNav({
   hasMassSms?: boolean;
   hasVoice?: boolean;
   hasAiAfterHours?: boolean;
+  hasAppointmentReminders?: boolean;
   primaryVoiceAgentId?: string | null;
 }) {
   const pathname = usePathname();
@@ -97,6 +104,7 @@ export function MobileNav({
     productFeatures,
     hasSms: hasMassSms,
     hasMctb,
+    hasAppointmentReminders,
     hasVoice,
   });
 
@@ -130,11 +138,17 @@ export function MobileNav({
           {items.map((item) => {
             const Icon = item.icon;
             const mctbShell = isMctbShellActive(pathname, multiProduct, productShell, hasMctb);
-            const active = mctbShell
-              ? item.href === MCTB_ROUTES.home
-                ? pathname === item.href
-                : pathname === item.href || pathname.startsWith(`${item.href}/`)
-              : isAppointmentsNavItemActive(item.href, pathname);
+            const active = isBusinessMessagingUnifiedNav()
+              ? isBusinessMessagingNavItemActive(pathname, "", {
+                  label: item.label,
+                  href: item.href,
+                  icon: item.icon ?? Home,
+                })
+              : mctbShell
+                ? item.href === MCTB_ROUTES.home
+                  ? pathname === item.href
+                  : pathname === item.href || pathname.startsWith(`${item.href}/`)
+                : isAppointmentsNavItemActive(item.href, pathname);
             return (
               <Link
                 key={`${item.label}-${item.href}`}

@@ -5,7 +5,8 @@ import { isMctbBundledAiReceptionistPath } from "@/lib/products/mctb-bundled-rec
 import { isMctbNeutralShellPath } from "@/lib/products/mctb-shell";
 import type { ProductShell } from "@/lib/products/product-shell";
 import { resolveProductShellFromPath } from "@/lib/products/product-shell";
-import { isMctbV1Primary } from "@/lib/workspace/platform-launch";
+import { isBusinessMessagingUnifiedNav, isMctbV1Primary } from "@/lib/workspace/platform-launch";
+import { isBusinessMessagingSharedShellPath } from "@/lib/products/business-messaging-nav";
 
 const MCTB_CHROME_EXCLUDED_PREFIXES = [
   "/login",
@@ -31,6 +32,9 @@ export function isMctbUniversalChromeActive(
   options?: { hasMctb?: boolean },
 ): boolean {
   if (isMctbChromeExcludedPath(pathname)) return false;
+  if (isBusinessMessagingUnifiedNav() && isBusinessMessagingSharedShellPath(pathname)) {
+    return true;
+  }
   if (isMctbNeutralShellPath(pathname)) return true;
   if (isAppointmentRemindersProductPath(pathname)) return true;
   if (productShell === "mctb" && isMctbSharedWorkspacePath(pathname)) return true;

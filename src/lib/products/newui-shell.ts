@@ -4,7 +4,9 @@ import type { ProductShell } from "@/lib/products/product-shell";
 import {
   isAppointmentRemindersV1Primary,
   isAppointmentsV1Primary,
+  isBusinessMessagingUnifiedNav,
 } from "@/lib/workspace/platform-launch";
+import { isBusinessMessagingSharedShellPath } from "@/lib/products/business-messaging-nav";
 import { isUnifiedAppointmentsExperience } from "@/lib/products/unified-appointments";
 
 /** Scheduling product uses Opus chrome on all platform routes (not only when UNIFIED_APPOINTMENTS=1). */
@@ -53,6 +55,10 @@ export function shouldUseNewUiShell(
   if (options.isLauncher) return false;
   if (isLegacyAutomationFullBleed(pathname)) return false;
   if (pathname === "/app" || pathname.startsWith("/app/")) return false;
+
+  if (isBusinessMessagingUnifiedNav() && isBusinessMessagingSharedShellPath(pathname)) {
+    return true;
+  }
 
   if (isMctbUniversalChromeActive(pathname, options.productShell, { hasMctb: options.hasMctb })) {
     return true;

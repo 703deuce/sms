@@ -27,6 +27,11 @@ import {
   mctbLaunchCustomerHome,
 } from '@/lib/products/launch-product-availability'
 import {
+  BUSINESS_MESSAGING_OVERVIEW_HREF,
+  isBusinessMessagingNavItemActive,
+} from '@/lib/products/business-messaging-nav'
+import { isBusinessMessagingUnifiedNav } from '@/lib/workspace/platform-launch'
+import {
   resolveProductShellFromPath,
   readStoredProductShell,
   type ProductShell,
@@ -135,6 +140,7 @@ export type AppSidebarProps = {
   userName?: string
   hasMctb?: boolean
   hasAppointmentReminders?: boolean
+  hasMassSms?: boolean
   hasAiAfterHours?: boolean
   inboxBadge?: number
 }
@@ -143,9 +149,11 @@ export function AppSidebar({
   userName,
   hasMctb = true,
   hasAppointmentReminders = true,
+  hasMassSms = false,
   hasAiAfterHours = false,
   inboxBadge = 0,
 }: AppSidebarProps) {
+  const unifiedNav = isBusinessMessagingUnifiedNav()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const pathShell = resolveProductShellFromPath(pathname)
@@ -167,8 +175,13 @@ export function AppSidebar({
   }, [pathShell, pathname, storedShell, hasMctb])
 
   const navSections = useMemo(
-    () => resolveCustomerNavSections(productShell, inboxBadge),
-    [productShell, inboxBadge],
+    () =>
+      resolveCustomerNavSections(productShell, inboxBadge, {
+        hasMctb,
+        hasAppointmentReminders,
+        hasMassSms,
+      }),
+    [productShell, inboxBadge, hasMctb, hasAppointmentReminders, hasMassSms],
   )
 
   useEffect(() => {
@@ -177,8 +190,9 @@ export function AppSidebar({
     setExpandedKey(expandedNavKeyForRoute(navSections, pathname, search))
   }, [routeSyncKey, navSections, pathname, search])
 
-  const brandHref =
-    productShell === 'appointment_reminders' || productShell === 'appointments'
+  const brandHref = unifiedNav
+    ? BUSINESS_MESSAGING_OVERVIEW_HREF
+    : productShell === 'appointment_reminders' || productShell === 'appointments'
       ? AR_ROUTES.home
       : mctbLaunchCustomerHome()
 
@@ -202,11 +216,13 @@ export function AppSidebar({
         <div className="hidden justify-center px-1 pt-1 group-data-[collapsible=icon]:flex">
           <SidebarCollapseButton />
         </div>
-        <OpusProductSwitcher
-          hasMctb={hasMctb}
-          hasAppointmentReminders={hasAppointmentReminders}
-          hasAiAfterHours={hasAiAfterHours}
-        />
+        {!unifiedNav ? (
+          <OpusProductSwitcher
+            hasMctb={hasMctb}
+            hasAppointmentReminders={hasAppointmentReminders}
+            hasAiAfterHours={hasAiAfterHours}
+          />
+        ) : null}
       </SidebarHeader>
 
       <SidebarContent className="pb-2 pt-0">
@@ -220,7 +236,13 @@ export function AppSidebar({
                 {section.items.map((item) => {
                   const hasChildren = Boolean(item.children?.length)
                   const expandKey = navItemExpandKey(item)
-                  const parentActive = isTopNavActive(pathname, search, item)
+                  const parentActive = unifiedNav
+                    ? isBusinessMessagingNavItemActive(pathname, search, {
+                        label: item.label,
+                        href: item.href,
+                        icon: item.icon,
+                      })
+                    : isTopNavActive(pathname, search, item)
                   const activeChild = hasChildren
                     ? bestMatchingChild(pathname, search, item.children!)
                     : null

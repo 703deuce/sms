@@ -10,7 +10,7 @@
 import { mctbShellHome } from "@/lib/products/product-shell";
 import { isVoiceCustomerUiPath } from "@/lib/products/mctb-bundled-receptionist-paths";
 import { isDevAuthBypassEnabled } from "@/lib/auth/dev-auth-bypass";
-import { isMctbV1Primary } from "@/lib/workspace/platform-launch";
+import { isBusinessMessagingUnifiedNav, isMctbV1Primary } from "@/lib/workspace/platform-launch";
 import { isMctbBundledVoiceAgentWizardPath } from "@/lib/products/mctb-voice-agent-wizard-paths";
 
 export type LaunchProductKey = "mctb" | "voice" | "appointments" | "mass_sms" | "fax";
@@ -49,6 +49,14 @@ export function isVoiceProductCustomerVisible(): boolean {
 
 export function isLaunchProductCustomerVisible(product: LaunchProductKey): boolean {
   if (product === "voice") return isVoiceProductCustomerVisible();
+  if (isBusinessMessagingUnifiedNav() && product === "mass_sms") {
+    if (envTruthy("TRANSOVO_MASS_SMS_CUSTOMER_VISIBLE")) return true;
+    const row = LAUNCH_PRODUCT_AVAILABILITY.mass_sms;
+    return row.enabled && (row.customerVisible || envTruthy("TRANSOVO_CAMPAIGNS_IN_UNIFIED_NAV"));
+  }
+  if (isBusinessMessagingUnifiedNav() && product === "appointments") {
+    if (envTruthy("TRANSOVO_APPOINTMENT_REMINDERS_CUSTOMER_VISIBLE")) return true;
+  }
   const row = LAUNCH_PRODUCT_AVAILABILITY[product];
   return row.enabled && row.customerVisible;
 }

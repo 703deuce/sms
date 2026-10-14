@@ -367,6 +367,7 @@ export function AppShell({
             hasNumbers={hasNumbers}
             hasMctb={hasMctb}
             hasAppointmentReminders={hasAppointmentReminders}
+            hasMassSms={hasSms}
             hasAiAfterHours={hasAiAfterHours}
             mobileMenuOpen={menuOpen}
             onMobileMenuClose={() => setMenuOpen(false)}
@@ -384,6 +385,7 @@ export function AppShell({
           hasMassSms={hasSms}
           hasVoice={hasVoice}
           hasAiAfterHours={hasAiAfterHours}
+          hasAppointmentReminders={hasAppointmentReminders}
           primaryVoiceAgentId={primaryVoiceAgentId}
           onMore={() => setMenuOpen(true)}
         />

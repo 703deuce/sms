@@ -22,6 +22,11 @@ import {
 } from "@/lib/products/unified-appointments-nav";
 import { buildSchedulingOpusSidebarNav } from "@/lib/products/scheduling-opus-nav";
 import { isVoiceProductCustomerVisible } from "@/lib/products/launch-product-availability";
+import {
+  buildBusinessMessagingMobileNav,
+  buildBusinessMessagingNav,
+} from "@/lib/products/business-messaging-nav";
+import { isBusinessMessagingUnifiedNav } from "@/lib/workspace/platform-launch";
 
 export type ResolveProductNavInput = {
   pathname: string;
@@ -33,6 +38,7 @@ export type ResolveProductNavInput = {
   productFeatures?: WorkspaceFeatureSnapshot | null;
   hasSms?: boolean;
   hasMctb?: boolean;
+  hasAppointmentReminders?: boolean;
   hasVoice?: boolean;
   hasNumbers?: boolean;
   smartRoutingFlowId?: string | null;
@@ -62,6 +68,14 @@ function resolveEffectiveProductShell(
 
 /** Sidebar nav for the active product shell — URL wins over stored shell tab. */
 export function resolveProductSidebarNav(input: ResolveProductNavInput): NavItem[] {
+  if (isBusinessMessagingUnifiedNav()) {
+    return buildBusinessMessagingNav({
+      inboxBadge: input.inboxBadge,
+      hasMctb: input.hasMctb ?? false,
+      hasAppointmentReminders: input.hasAppointmentReminders ?? false,
+      hasMassSms: input.hasSms ?? false,
+    });
+  }
   const effectiveShell = resolveEffectiveProductShell(
     input.pathname,
     input.productShell,
@@ -132,6 +146,14 @@ export function resolveProductSidebarNav(input: ResolveProductNavInput): NavItem
 }
 
 export function resolveProductMobileNav(input: ResolveProductNavInput): NavItem[] {
+  if (isBusinessMessagingUnifiedNav()) {
+    return buildBusinessMessagingMobileNav({
+      inboxBadge: input.inboxBadge,
+      hasMctb: input.hasMctb ?? false,
+      hasAppointmentReminders: input.hasAppointmentReminders ?? false,
+      hasMassSms: input.hasSms ?? false,
+    });
+  }
   const effectiveShell = resolveEffectiveProductShell(
     input.pathname,
     input.productShell,

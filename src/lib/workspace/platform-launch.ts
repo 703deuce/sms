@@ -22,6 +22,18 @@ export const APPOINTMENT_REMINDERS_V1_PRIMARY = false;
 /** Missed Call Text Back is the default authenticated product experience. */
 export const MCTB_V1_PRIMARY = true;
 
+/**
+ * One sidebar for MCTB + Appointment Reminders + Campaigns (Transovo Business Messaging).
+ * When true, product switcher and per-product sidebars are disabled for the Opus shell.
+ */
+export const BUSINESS_MESSAGING_UNIFIED_NAV = true;
+
+export function isBusinessMessagingUnifiedNav(): boolean {
+  if (process.env.BUSINESS_MESSAGING_UNIFIED_NAV?.trim() === "0") return false;
+  if (process.env.BUSINESS_MESSAGING_UNIFIED_NAV?.trim() === "false") return false;
+  return BUSINESS_MESSAGING_UNIFIED_NAV;
+}
+
 /** Sidebar/mobile show SMS mass marketing only — MCTB & AI After Hours hidden from chrome (routes preserved). */
 export const SMS_ONLY_APP_NAV = false;
 

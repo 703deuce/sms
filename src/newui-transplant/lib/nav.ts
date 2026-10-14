@@ -9,6 +9,11 @@ import { isVoiceProductCustomerVisible } from '@/lib/products/launch-product-ava
 import { RECEPTIONIST_WIZARD_NAV_ITEMS } from '@/lib/voice/receptionist/wizard-step-url'
 import { buildSchedulingOpusSidebarNav } from '@/lib/products/scheduling-opus-nav'
 import { buildMctbV1Nav } from '@/lib/products/mctb-nav'
+import {
+  buildBusinessMessagingNav,
+  type BusinessMessagingNavEntitlements,
+} from '@/lib/products/business-messaging-nav'
+import { isBusinessMessagingUnifiedNav } from '@/lib/workspace/platform-launch'
 import { flattenNavLinks, type NavItem as ProductNavItem } from '@/lib/nav'
 import { MCTB_ROUTES } from '@/lib/mctb/routes'
 import type { ProductShell } from '@/lib/products/product-shell'
@@ -150,11 +155,26 @@ export const INTEGRATION_TABS = [
   { label: 'Developer logs', href: '/integrations/logs' },
 ]
 
+export type ResolveCustomerNavInput = BusinessMessagingNavEntitlements & {
+  productShell?: ProductShell
+  inboxBadge?: number
+}
+
 /** Customer-facing sidebar sections for the active product shell. */
 export function resolveCustomerNavSections(
   productShell: ProductShell = 'mctb',
   inboxBadge = 0,
+  entitlements?: Partial<BusinessMessagingNavEntitlements>,
 ): NavSection[] {
+  if (isBusinessMessagingUnifiedNav()) {
+    const flat = buildBusinessMessagingNav({
+      inboxBadge,
+      hasMctb: entitlements?.hasMctb ?? true,
+      hasAppointmentReminders: entitlements?.hasAppointmentReminders ?? true,
+      hasMassSms: entitlements?.hasMassSms ?? false,
+    })
+    return flatNavToSections(flat)
+  }
   if (productShell === 'appointment_reminders' || productShell === 'appointments') {
     return appointmentRemindersNavSections(inboxBadge)
   }

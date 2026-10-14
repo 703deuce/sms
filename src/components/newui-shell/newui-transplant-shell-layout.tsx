@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/newui-transplant/components/ui/tooltip";
 import { AppSidebar } from "@/newui-transplant/components/app/app-sidebar";
 import { MobileSidebarOpenBridge } from "@/newui-transplant/components/app/mobile-sidebar-open-bridge";
 import { Topbar } from "@/newui-transplant/components/app/topbar";
+import { BusinessMessagingRouteChrome } from "@/newui-transplant/components/app/business-messaging-route-chrome";
 import { OpusWorkspaceDataProvider } from "@/newui-transplant/context/opus-workspace-data";
 import { cn } from "@/lib/utils";
 
@@ -39,6 +40,7 @@ export type NewUiTransplantShellLayoutProps = {
   hasNumbers?: boolean;
   hasMctb?: boolean;
   hasAppointmentReminders?: boolean;
+  hasMassSms?: boolean;
   hasAiAfterHours?: boolean;
   workspaces?: unknown[];
   /** Bottom nav “More” — opens mobile sidebar sheet */
@@ -53,6 +55,7 @@ export function NewUiTransplantShellLayout({
   userName,
   hasMctb = true,
   hasAppointmentReminders = true,
+  hasMassSms = false,
   hasAiAfterHours = false,
   mobileMenuOpen = false,
   onMobileMenuClose,
@@ -72,12 +75,14 @@ export function NewUiTransplantShellLayout({
             userName={userName}
             hasMctb={hasMctb}
             hasAppointmentReminders={hasAppointmentReminders}
+            hasMassSms={hasMassSms}
             hasAiAfterHours={hasAiAfterHours}
             inboxBadge={inboxBadge}
           />
           <SidebarInset className="min-h-0 min-w-0 flex-1 bg-background">
             <div className="shrink-0">
               <Topbar userName={userName} />
+              <BusinessMessagingRouteChrome />
             </div>
             <div className={cn(DEFAULT_MAIN_SCROLL_CLASS, mainClassName)}>{children}</div>
           </SidebarInset>
