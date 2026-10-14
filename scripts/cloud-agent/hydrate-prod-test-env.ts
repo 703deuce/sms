@@ -12,6 +12,7 @@ const PROD_WEB_CONTAINER_FILTER =
   process.env.MCTB_PROD_WEB_CONTAINER_FILTER?.trim() || "ds8s3hjin60qs6g7s0iqkixs";
 
 const VARS = [
+  "DATABASE_URL",
   "NEXT_PUBLIC_SUPABASE_URL",
   "SUPABASE_SERVICE_ROLE_KEY",
   "SUPABASE_ANON_KEY",
@@ -90,6 +91,15 @@ export function applyArTestSupabaseEnvOverrides(): boolean {
   process.env.NEXT_PUBLIC_SUPABASE_URL = url;
   process.env.SUPABASE_SERVICE_ROLE_KEY = key;
   return true;
+}
+
+export function hydrateProdDatabaseUrlFromCoolify(): boolean {
+  if (process.env.DATABASE_URL?.trim()) return true;
+  const applied = hydrateFromCoolify(["DATABASE_URL"]);
+  if (applied > 0) {
+    console.info(`[hydrate-prod-test-env] Loaded DATABASE_URL from production web.`);
+  }
+  return Boolean(process.env.DATABASE_URL?.trim());
 }
 
 export function hydrateProdSupabaseFromCoolify(): boolean {

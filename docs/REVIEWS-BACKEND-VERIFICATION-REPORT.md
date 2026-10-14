@@ -1,76 +1,62 @@
 # Reviews backend verification report (PR #663)
 
-Branch: `cursor/reviews-full-integration-f350`  
-Scope: Backend/runtime only — Templates and Reviews UI unchanged.
+Last run: Cloud Agent VM with `scripts/test-reviews-backend-runtime.ts`.
 
-## A. Actual runtime tests
+## How to run
 
-| Test | Kind | Result | Notes |
-|------|------|--------|-------|
-| `scripts/test-reviews-backend-runtime.ts` | mock + optional DB | **PASS** (mock portion) | DB section skipped without `DATABASE_URL` in this environment |
-| Campaign claim concurrency (`campaign-claim` memory store) | mock | **PASS** | Validates atomic queued→sending claim semantics |
-| Review Velocity metrics (`calcEntityMetrics`) | mock | **PASS** | Fixture reviews, 7d/30d buckets |
-| `scripts/test-reviews-full-integration-matrix.ts` | static | **PASS** | Wiring checks + nested platform-sender tests |
-| `scripts/test-reviews-platform-sender-integration.ts` | static | **PASS** | |
-| `scripts/test-ar-platform-sender-isolation.ts` | static | **PASS** | |
-| `src/lib/reputation/sequence-engine.test.ts` | unit | **PASS** | |
-| Reputation DB CRUD (15-step checklist) | **DB** | **Not run here** | Requires `DATABASE_URL` + `prisma migrate deploy` |
-| `dispatchFeatureJob` enqueue | **DB** | **Not run here** | Requires `DATABASE_URL` |
-| Platform inbound resolver | **handler** | **Not run here** | `getPrisma()` inbox path requires Supabase compat or DB |
-| Campaigns/Reviews E2E send with mock provider | **DB+mock** | **Not run here** | Use `scripts/test-sms-worker.ts` pattern locally with `DATABASE_URL` |
-
-**Run full DB suite locally:**
+**Local isolated Postgres (no Supabase):**
 
 ```bash
-export DATABASE_URL='postgresql://...'
-npx prisma migrate deploy
+bash scripts/setup-reviews-cert-database.sh
 NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-reviews-backend-runtime.ts
 ```
 
-## B. Bugs found and fixed
+**Integrated (hydrated `DATABASE_URL` + Supabase from Coolify web — same Postgres as production):**
 
-| Issue | Root cause | Fix |
-|-------|------------|-----|
-| `update().eq().select().maybeSingle()` ran SELECT | Adapter `maybeSingle` always called `executeSelect` | `maybeSingle`/`then` call `executeUpdate` when mode is `update` |
-| `await insert({})` no-op | `insert()` was not thenable | `insert()` chain is thenable and runs INSERT |
-| `delete().eq()` broken | `delete()` returned immediate promise | `delete()` returns filterable builder |
-| Missing query ops | Ported code uses `ilike`, count head, `or`, `is` | Added to `reputation-db.ts` |
-| JSONB inserts failed | Objects passed raw to SQL | `::jsonb` casts + `JSON.stringify` for known columns |
-| `businesses` table missing | LSE used separate businesses table | `businesses` view + `BusinessesQueryBuilder` on `Workspace` |
-| `getPrisma()` wrong for reputation SQL | App `getPrisma()` is Supabase PostgREST compat | Reputation uses direct `PrismaClient` via `DATABASE_URL` |
-| Schema drift | Ported code expects extra columns/tables | Migration `20261014180400_reputation_schema_alignment` |
+```bash
+REVIEWS_USE_INTEGRATED_DB=1 HEADLESS_PROVIDER_MODE=recording \
+  NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' \
+  npx tsx scripts/test-reviews-backend-runtime.ts
+```
 
-## C. Campaigns sending
+Apply pending migrations on the target DB when needed:
 
-Platform path remains in `src/lib/campaigns/campaign-message-send.ts` → `resolveSharedPlatformOutboundSender` → `sendQuickSms`. Worker: `send_campaign_sms` in `src/lib/jobs/job-handlers.ts`. **Full worker E2E not executed in this VM** (no `DATABASE_URL`); claim concurrency and static wiring verified.
+```bash
+REVIEWS_RUN_MIGRATE_DEPLOY=1 REVIEWS_USE_INTEGRATED_DB=1 … npx tsx scripts/test-reviews-backend-runtime.ts
+```
 
-## D. Reviews sending
+## Results (honest)
 
-`dispatchReviewRequestSms` + reputation `campaign-message-send.ts` for queued campaign messages. Claim path verified (memory). **Live DB send path** requires local `DATABASE_URL` + mocked provider (see `test-sms-worker.ts`).
+| Area | Local cert DB | Integrated DB (Coolify) |
+|------|---------------|-------------------------|
+| Reputation adapter CRUD (insert/update/upsert, JSONB, filters) | **PASS** | **PASS** |
+| Workspace isolation (`business_id` scoping) | **PASS** | **PASS** |
+| Campaign message claim | **PASS** (in CRUD suite) | **PASS** |
+| Review reply persistence | **PASS** | **PASS** |
+| QR scan row persistence | **PASS** | **PASS** |
+| Mocked outbound SMS (`HEADLESS_PROVIDER_MODE=recording`) | SKIP (needs Supabase) | **PASS** (not live carrier) |
+| Platform inbound match + persist | SKIP | **PASS** |
+| Job queue row for `review_momentum_run` | SKIP | **PASS** |
+| `runReviewMomentum` execute w/ mocked Google/review providers | **SKIP** | **SKIP** |
+| Review Velocity metrics unit fixture | **PASS** (mock) | **PASS** (mock) |
+| Claim concurrency (memory store) | **PASS** (mock) | **PASS** (mock) |
+| Static integration matrix | **PASS** | **PASS** |
 
-## E. Inbound routing
+## Fixes applied during verification
 
-`platform-sms-inbound-dispatch.ts` calls `routePlatformMassTextOrReviewInbound` after AR. Review replies call `storeReviewReply`. **Webhook E2E not run** without database.
+- `reputation-db.ts`: no synthetic `id` on `reputation_settings`; timestamptz casts for ISO date strings.
+- Migration `20261014180500_review_qr_campaign_columns` for QR columns used by runtime code.
+- Supabase compat: `platformProductConsumerAssignment` model mapping.
+- Missing shims used by reputation imports: `logger`, `app-url`, `env/secrets`, `fetch-with-timeout`, `jobs/process-scan`.
+- Runtime test harness: local cert vs integrated DB modes; no live SMS.
 
-## F. Reviews database
+## Still unverified / not customer-ready alone
 
-`createServiceClient()` → `createReputationDbClient()` using **Postgres `PrismaClient`**, not Supabase env vars. Migrations: `20261014180000`–`20261014180400`.
+- Full **Review Velocity** job execution with **mocked** external review fetch/enrich (would need provider mocks or recorded fixtures).
+- **Live** Telnyx/Twilio delivery and inbound webhooks (intentionally not run).
+- End-to-end UI flows (Templates/Reviews UI out of scope for this pass).
+- Production migration apply sign-off on your staging window (`REVIEWS_RUN_MIGRATE_DEPLOY=1`).
 
-## G. Review Velocity
+## Bottom line
 
-Metrics unit test passes. Momentum worker registered as `review_momentum_run` via `dispatchFeatureJob` → Transovo `JobQueue`. Provider fetch not run without API keys.
-
-## H. QR tracking
-
-Schema includes `review_qr_*`; static `/r/` wiring in matrix test. **Route E2E not run** without DB.
-
-## I. Regression
-
-AR platform sender isolation test **PASS**. MCTB/AR/Campaigns code paths not modified except shared inbound block (already on branch).
-
-## J. Remaining verification limitations
-
-- **No `DATABASE_URL`** in Cloud Agent VM → no Prisma migrate, no CRUD integration, no job enqueue, no inbound persistence tests.
-- **No Docker daemon** → cannot spin up local Postgres in this environment.
-- **No live SMS/email** (by policy).
-- **Supabase compat `getPrisma()`** still used for Contacts/Inbox; production Transovo deploy should use `DATABASE_URL` for Postgres (Coolify) — reputation tables require it.
+The Reviews **database layer and core runtime paths are exercised against real PostgreSQL** (local cert + integrated). Mocked SMS recording mode proves the platform sender path without carrier send. **Do not treat static wiring or unit mocks as live delivery.** Complete Velocity execute mocks + your staging migration window before calling the product customer-ready.
