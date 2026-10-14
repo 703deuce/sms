@@ -1,6 +1,6 @@
-import { OPUS_CARD, OPUS_SEARCH_INPUT } from "@/newui-transplant/components/app/opus-surfaces";
 "use client";
 
+import { OPUS_CARD, OPUS_SEARCH_INPUT } from "@/newui-transplant/components/app/opus-surfaces";
 import { useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";

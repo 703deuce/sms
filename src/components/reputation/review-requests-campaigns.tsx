@@ -1,6 +1,6 @@
-import { OPUS_CARD, OPUS_SEARCH_INPUT } from "@/newui-transplant/components/app/opus-surfaces";
 "use client";
 
+import { OPUS_CARD, OPUS_SEARCH_INPUT } from "@/newui-transplant/components/app/opus-surfaces";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, MoreHorizontal, Pause, Play, X } from "lucide-react";
