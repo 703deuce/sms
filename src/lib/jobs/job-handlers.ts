@@ -1,12 +1,31 @@
 import { JobDeferredError, JobFailedError } from "@/lib/messaging/types";
 import { claimDueJobs, completeJob, enqueueJob, failJob } from "@/lib/messaging/enqueue-advance";
 import { advanceMessagingRegistration } from "@/lib/messaging/registration-processor";
+import { getPrisma } from "@/lib/db";
 import { processCampaignSendBatch } from "@/lib/campaigns/campaign-processor";
-import { sendCampaignMessageById } from "@/lib/campaigns/campaign-message-send";
+import { sendCampaignMessageById as sendMassCampaignMessageById } from "@/lib/campaigns/campaign-message-send";
 import {
   processActiveAutomations,
   processAutomationTick,
 } from "@/lib/automations/processor";
+
+/**
+ * Mass Texting uses Prisma `CampaignMessage`; Review Requests use Supabase `review_request_messages`.
+ * Both enqueue `send_campaign_sms` / `send_campaign_email` on the sms-send queue.
+ */
+async function sendCampaignOrReviewMessageById(messageId: string) {
+  const mass = await getPrisma().campaignMessage.findUnique({
+    where: { id: messageId },
+    select: { id: true },
+  });
+  if (mass) {
+    return sendMassCampaignMessageById(messageId);
+  }
+  const { sendCampaignMessageById: sendReviewCampaignMessageById } = await import(
+    "@/lib/reputation/campaign-message-send"
+  );
+  return sendReviewCampaignMessageById(messageId);
+}
 
 export async function handleJob(jobType: string, payload: Record<string, unknown>) {
   switch (jobType) {
@@ -32,7 +51,7 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
     case "send_campaign_email": {
       const messageId = String(payload.messageId || "");
       if (!messageId) throw new Error("messageId required");
-      const result = await sendCampaignMessageById(messageId);
+      const result = await sendCampaignOrReviewMessageById(messageId);
       // Soft deferrals must not complete the job (BullMQ would drop re-enqueue by jobId)
       if (result && typeof result === "object" && "deferred" in result && (result as { deferred?: boolean }).deferred) {
         const reason = String((result as { reason?: string }).reason || "deferred");
