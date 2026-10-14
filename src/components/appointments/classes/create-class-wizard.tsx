@@ -340,7 +340,7 @@ export function CreateClassWizard() {
                     onChange={(e) => update("description", e.target.value)}
                   />
                 </Field>
-                <div className="mt-4 max-w-md">
+                <div className="mt-4">
                   <OpusCoverImageUploader
                     value={form.imageUrl}
                     onChange={(url) => update("imageUrl", url)}

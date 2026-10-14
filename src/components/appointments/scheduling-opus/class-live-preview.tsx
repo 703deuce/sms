@@ -56,6 +56,7 @@ export function ClassLivePreview({
         imageUrl={form.imageUrl}
         category={form.requireFullSeries ? "course" : "class"}
         alt={form.name || "Class cover"}
+        preview
         className="mb-4"
       />
       <div className="flex items-start justify-between gap-3">

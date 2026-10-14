@@ -57,6 +57,8 @@ type Props = {
   category: OfferingCoverCategory;
   className?: string;
   aspectClassName?: string;
+  /** Small catalog thumbnail — no large decorative gradient. */
+  variant?: "default" | "thumb";
 };
 
 /** 4:3 placeholder when no cover image is set. */
@@ -64,8 +66,23 @@ export function OfferingCoverPlaceholder({
   category,
   className,
   aspectClassName = "aspect-[4/3]",
+  variant = "default",
 }: Props) {
   const { icon: Icon, gradient, label } = CONFIG[category];
+  if (variant === "thumb") {
+    return (
+      <div
+        className={cn(
+          "flex h-full w-full items-center justify-center bg-gradient-to-br",
+          gradient,
+          className,
+        )}
+        aria-hidden
+      >
+        <Icon className="size-5 text-muted-foreground opacity-80" />
+      </div>
+    );
+  }
   return (
     <div
       className={cn(
@@ -77,8 +94,8 @@ export function OfferingCoverPlaceholder({
       aria-hidden
     >
       <div className="flex flex-col items-center gap-2 text-muted-foreground">
-        <Icon className="size-10 opacity-70" />
-        <span className="text-xs font-medium uppercase tracking-wide opacity-80">{label}</span>
+        <Icon className="size-8 opacity-70" />
+        <span className="text-[0.6875rem] font-medium uppercase tracking-wide opacity-80">{label}</span>
       </div>
     </div>
   );

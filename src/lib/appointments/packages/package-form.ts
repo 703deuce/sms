@@ -72,6 +72,7 @@ export type PackageProductApiRow = {
     expirationMode?: string;
     expirationDate?: string;
     maxPurchasesPerCustomer?: number;
+    imageUrl?: string;
   } | null;
   ownerCount?: number;
 };
@@ -322,6 +323,21 @@ export function applyPackageSellTemplate(
     default:
       return { ...prev, sellTemplate: "custom" };
   }
+}
+
+/** Customer-facing one-line summary for catalog rows (no raw credit keys). */
+export function packageBenefitsSummary(rules: PackageCreditRule[]): string {
+  const parts = rules
+    .filter((r) => r.quantity > 0)
+    .map((r) => {
+      const label = (r.label || "session").toLowerCase();
+      const qty = r.quantity;
+      if (qty === 1) return `1 ${label}`;
+      return `${qty} ${label}${label.endsWith("s") ? "" : "s"}`;
+    });
+  if (!parts.length) return "Configure inclusions";
+  if (parts.length <= 2) return parts.join(" · ");
+  return `${parts.slice(0, 2).join(" · ")} +${parts.length - 2} more`;
 }
 
 export function eligibilitySummary(rules: PackageCreditRule[]): {

@@ -263,8 +263,13 @@ export function CreatePackageWizard() {
       ) : null}
 
       {step === 0 ? (
-        <section className={cn(OPUS_CARD, "p-5 md:p-6")}>
+        <section className="space-y-6">
+          <div>
           <h2 className="text-lg font-semibold">What kind of package are you creating?</h2>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            Choose a template, then name your package and add a short customer-facing description.
+          </p>
+          </div>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             {TEMPLATE_OPTIONS.map((t) => {
               const selected = form.sellTemplate === t.id;
@@ -292,19 +297,19 @@ export function CreatePackageWizard() {
               );
             })}
           </div>
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
+          <div className="space-y-5">
             <div className="space-y-2">
               <Label htmlFor="pkg-name">Package name</Label>
               <Input
                 id="pkg-name"
-                className="h-11"
+                className="h-11 w-full"
                 value={form.name}
                 onChange={(e) => onFormChange("name", e.target.value)}
                 placeholder="IT Career Starter Package"
               />
             </div>
             {form.packageKind === "pooled" ? (
-              <div className="space-y-2">
+              <div className="scheduling-wizard-editor-compact-field space-y-2">
                 <Label htmlFor="pkg-sessions">How many sessions?</Label>
                 <Input
                   id="pkg-sessions"
@@ -337,7 +342,7 @@ export function CreatePackageWizard() {
       ) : null}
 
       {step === 1 ? (
-        <section className={cn(OPUS_CARD, "p-5 md:p-6")}>
+        <section className="space-y-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-semibold">Add what customers receive</h2>
             <Button type="button" onClick={() => setPickerOpen(true)}>
@@ -414,7 +419,7 @@ export function CreatePackageWizard() {
       ) : null}
 
       {step === 2 ? (
-        <section className={cn(OPUS_CARD, "space-y-8 p-5 md:p-6")}>
+        <section className="space-y-8">
           <div>
             <h3 className="font-semibold">Package price</h3>
             <div className="mt-3 flex max-w-xs items-center gap-2">
@@ -493,7 +498,7 @@ export function CreatePackageWizard() {
       ) : null}
 
       {step === 3 ? (
-        <section className={cn(OPUS_CARD, "space-y-6 p-5 md:p-6")}>
+        <section className="space-y-6">
           <h2 className="text-lg font-semibold">Review and publish</h2>
           {[
             { title: "Package", step: 0, body: form.name },

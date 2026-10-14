@@ -7,6 +7,7 @@ import { ArOpusPage } from "@/newui-transplant/components/appointment-reminders/
 import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
 import { Button } from "@/newui-transplant/components/ui/button";
 import { cn } from "@/lib/utils";
+import "./scheduling-wizard-editor.css";
 
 export type WizardStep = {
   id: string;
@@ -64,7 +65,10 @@ export function SchedulingWizardShell({
       </header>
 
       <nav
-        className={cn(OPUS_CARD, "mb-6 flex min-h-14 flex-wrap items-center gap-2 p-2 md:gap-3 md:px-4")}
+        className={cn(
+          OPUS_CARD,
+          "mb-6 flex min-h-[3.875rem] flex-wrap items-center gap-1.5 p-2 md:gap-2 md:px-3",
+        )}
         aria-label="Wizard progress"
       >
         {steps.map((step, index) => {
@@ -103,11 +107,11 @@ export function SchedulingWizardShell({
         })}
       </nav>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,32%)] lg:gap-6">
-        <div className="min-w-0 space-y-6">{editor}</div>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,2.1fr)_minmax(320px,1fr)] lg:gap-6">
+        <div className={cn(OPUS_CARD, "scheduling-wizard-editor min-w-0 space-y-6 p-6")}>{editor}</div>
         <aside
           className={cn(
-            "min-w-0 lg:sticky lg:top-24 lg:self-start",
+            "min-w-0 lg:sticky lg:top-20 lg:self-start",
             !showPreviewOnMobile && "hidden lg:block",
           )}
         >

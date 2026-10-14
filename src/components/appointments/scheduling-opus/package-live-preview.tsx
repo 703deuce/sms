@@ -1,11 +1,11 @@
 "use client";
 
-import { Layers, Package, ShoppingBag } from "lucide-react";
+import { Layers, ShoppingBag } from "lucide-react";
 import type { PackageFormState } from "@/lib/appointments/packages/package-form";
 import { formatMoney } from "@/lib/appointments/packages/package-form";
 import type { OfferingOption } from "@/features/appointments/kimi/packages/use-package-editor";
 import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
-import { OpusIconBadge, Pill } from "@/newui-transplant/components/app/kit";
+import { Pill } from "@/newui-transplant/components/app/kit";
 import { Button } from "@/newui-transplant/components/ui/button";
 import { cn } from "@/lib/utils";
 import { OfferingCoverImage } from "./offering-cover-image";
@@ -33,18 +33,19 @@ export function PackageLivePreview({ form, includedOfferings, mode = "draft", cl
 
   return (
     <section className={cn(OPUS_CARD, "overflow-hidden bg-gradient-to-br from-card via-card to-primary/[0.06] p-5", className)}>
-      <OfferingCoverImage
-        imageUrl={form.imageUrl}
-        category="package"
-        alt={form.name || "Package cover"}
-        className="mb-4"
-      />
-      <div className="flex items-start justify-between gap-3">
-        <OpusIconBadge icon={Package} className="size-10 rounded-xl bg-primary/12" />
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Live preview</p>
         <Pill tone={mode === "published" ? "success" : "neutral"} dot={false}>
           {mode === "published" ? "Published" : mode === "preview" ? "Preview" : "Draft"}
         </Pill>
       </div>
+      <OfferingCoverImage
+        imageUrl={form.imageUrl}
+        category="package"
+        alt={form.name || "Package cover"}
+        preview
+        className="mb-4"
+      />
       <h2 className="mt-4 text-lg font-semibold tracking-tight">
         {form.name.trim() || "Untitled package"}
       </h2>

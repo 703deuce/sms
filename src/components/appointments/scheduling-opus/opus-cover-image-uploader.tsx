@@ -73,7 +73,7 @@ export function OpusCoverImageUploader({
   };
 
   return (
-    <div className={cn("space-y-2", className)}>
+    <div className={cn("max-w-[21.25rem] space-y-2", className)}>
       <Label>{label}</Label>
       <div
         className={cn(
@@ -111,13 +111,13 @@ export function OpusCoverImageUploader({
         ) : (
           <button
             type="button"
-            className="flex w-full flex-col items-center gap-3 p-6 text-center disabled:opacity-60"
+            className="flex w-full flex-col items-center gap-2 p-4 text-center disabled:opacity-60"
             disabled={disabled || uploading}
             onClick={() => inputRef.current?.click()}
           >
-            <OfferingCoverPlaceholder category={category} className="border-0" />
-            <span className="text-sm text-muted-foreground">
-              Drag and drop or click to upload · 4:3 recommended
+            <OfferingCoverPlaceholder category={category} className="max-h-28 border-0" />
+            <span className="text-xs text-muted-foreground">
+              Drag and drop or click · 4:3 recommended
             </span>
             {uploading ? (
               <span className="inline-flex items-center gap-2 text-sm text-primary">

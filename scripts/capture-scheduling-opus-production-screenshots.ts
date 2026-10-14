@@ -49,14 +49,27 @@ async function main() {
     process.exit(1);
   }
 
+  const viewports: Array<{ label: string; width: number; height: number }> = [
+    { label: "desktop-1440", width: 1440, height: 900 },
+    { label: "mobile-390", width: 390, height: 844 },
+  ];
+  const only = process.env.SCHEDULING_SCREENSHOT_VIEWPORT?.trim();
+  const activeViewports = only
+    ? viewports.filter((v) => v.label.includes(only) || String(v.width) === only)
+    : viewports;
+
   mkdirSync(OUT_DIR, { recursive: true });
   const browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });
-  const context = await browser.newContext({
-    viewport: { width: 1440, height: 900 },
-    storageState: auth.storageState,
-    ignoreHTTPSErrors: true,
-  });
-  const page = await context.newPage();
+
+  for (const vp of activeViewports) {
+    const vpDir = join(OUT_DIR, vp.label);
+    mkdirSync(vpDir, { recursive: true });
+    const context = await browser.newContext({
+      viewport: { width: vp.width, height: vp.height },
+      storageState: auth.storageState,
+      ignoreHTTPSErrors: true,
+    });
+    const page = await context.newPage();
 
   const dismissProductSwitcherOnboarding = async () => {
     await page.evaluate(() => {
@@ -73,15 +86,17 @@ async function main() {
     }
   };
 
-  for (const route of ROUTES) {
-    const url = `${BASE_URL}${route.path}`;
-    console.log(`Capturing ${route.slug} → ${url}`);
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 120000 });
-    await dismissProductSwitcherOnboarding();
-    await page.waitForTimeout(3000);
-    const out = join(OUT_DIR, `${route.slug}.png`);
-    await page.screenshot({ path: out, fullPage: true });
-    console.log(`  ✓ ${out}`);
+    for (const route of ROUTES) {
+      const url = `${BASE_URL}${route.path}`;
+      console.log(`Capturing [${vp.label}] ${route.slug} → ${url}`);
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 120000 });
+      await dismissProductSwitcherOnboarding();
+      await page.waitForTimeout(3000);
+      const out = join(vpDir, `${route.slug}.png`);
+      await page.screenshot({ path: out, fullPage: true });
+      console.log(`  ✓ ${out}`);
+    }
+    await context.close();
   }
 
   await browser.close();

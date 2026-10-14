@@ -12,12 +12,19 @@ type Props = {
   category: OfferingCoverCategory;
   alt: string;
   className?: string;
+  /** Live preview column — cap decorative height per wireframe. */
+  preview?: boolean;
 };
 
-export function OfferingCoverImage({ imageUrl, category, alt, className }: Props) {
+export function OfferingCoverImage({ imageUrl, category, alt, className, preview }: Props) {
+  const frameClass = cn(
+    "relative aspect-[4/3] w-full overflow-hidden rounded-xl border",
+    preview && "max-h-[13.125rem]",
+    className,
+  );
   if (imageUrl?.trim()) {
     return (
-      <div className={cn("relative aspect-[4/3] w-full overflow-hidden rounded-xl border", className)}>
+      <div className={frameClass}>
         <Image
           src={imageUrl}
           alt={alt}
@@ -29,5 +36,10 @@ export function OfferingCoverImage({ imageUrl, category, alt, className }: Props
       </div>
     );
   }
-  return <OfferingCoverPlaceholder category={category} className={className} />;
+  return (
+    <OfferingCoverPlaceholder
+      category={category}
+      className={cn(preview && "max-h-[13.125rem]", className)}
+    />
+  );
 }
