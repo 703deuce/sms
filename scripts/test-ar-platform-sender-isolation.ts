@@ -55,16 +55,16 @@ assert.equal(
   "both senders occupied → no sender",
 );
 
-assert.ok(isAppointmentRemindersV1Primary(), "AR is V1 primary");
-assert.ok(!isMctbV1Primary(), "MCTB is not V1 primary during AR launch");
+assert.ok(isMctbV1Primary(), "MCTB is V1 primary");
+assert.ok(!isAppointmentRemindersV1Primary(), "AR is hidden from primary chrome");
 assert.equal(
   isPlatformSharedSmsMctbInboundEnabled(),
-  false,
-  "shared platform SMS must not route to MCTB during AR-only launch",
+  true,
+  "shared platform SMS may route to MCTB when MCTB is primary",
 );
 
 const ent = { hasMctb: true, hasMassSms: false, hasAiAfterHours: false, hasAppointmentReminders: true };
-assert.deepEqual(visibleProductShells(ent), ["appointment_reminders"]);
+assert.deepEqual(visibleProductShells(ent), ["mctb"]);
 assert.equal(shouldShowProductSwitcher(ent), false);
 
 assert.equal(AR_ROUTES.home, "/appointment-reminders");
