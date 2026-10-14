@@ -55,6 +55,8 @@ That matches a Cloud Agent that **connected SMS + Local SEO Express** into one t
 
 **Local SEO Express link on `master` today:** only **shared Supabase/Twilio-style config** comments (`src/lib/db.ts`, `.env.example`, `docs/TWILIO_ISV_MESSAGING.md`) — **not** the Reviews UI/runtime from the branch above.
 
+**Branch vs `master` (read-only):** see **`docs/REVIEW-REQUESTS-BRANCH-VS-MASTER-COMPARISON.md`** — reuse vs adapt vs broken; **do not merge** the branch blindly.
+
 ### How to verify locally
 
 ```bash
