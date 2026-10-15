@@ -50,6 +50,39 @@ async function main() {
   const businessId = WORKSPACE_ID;
   const organizationId = WORKSPACE_ID;
 
+  const { createServiceClient } = await import("../src/lib/db/client");
+  const supabase = createServiceClient();
+  const { data: existingLink } = await supabase
+    .from("review_request_links")
+    .select("id")
+    .eq("business_id", businessId)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (!existingLink) {
+    const { createOrRefreshReviewLink } = await import("../src/lib/reputation/review-requests");
+    const linkResult = await createOrRefreshReviewLink({
+      businessId,
+      organizationId,
+      forceRefresh: false,
+    });
+    if (!linkResult.link) {
+      const certUrl =
+        process.env.REVIEW_CERT_GOOGLE_URL?.trim() ||
+        "https://search.google.com/local/writereview?placeid=ChIJCERTPLACEHOLDER";
+      const { error } = await supabase.from("review_request_links").insert({
+        organization_id: organizationId,
+        business_id: businessId,
+        review_url: certUrl,
+        short_url: `cert-${businessId}`,
+        is_active: true,
+      });
+      if (error) throw new Error(`Failed to seed cert review link: ${error.message}`);
+      console.log("seeded cert review link", certUrl);
+    } else {
+      console.log("review link ready", linkResult.link.id);
+    }
+  }
+
   const { sendReviewRequestSms } = await import("../src/lib/reputation/review-sends");
   console.log("\n--- Review one-off SMS ---");
   for (const phone of PHONES) {
