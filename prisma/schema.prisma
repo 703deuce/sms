@@ -3127,11 +3127,13 @@ model VoiceAppointment {
   externalId  String?
   metadata    Json?
   createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
   call        VoiceCall? @relation(fields: [callId], references: [id], onDelete: SetNull)
   workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, externalId])
   @@index([workspaceId, startsAt])
+  @@index([workspaceId, updatedAt])
   @@map("voice_appointments")
 }
 

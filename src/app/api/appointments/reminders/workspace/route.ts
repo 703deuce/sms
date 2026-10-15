@@ -9,7 +9,7 @@ import {
 import { listEnabledReminderSteps } from "@/lib/appointments/reminders/reminders-config";
 import { withAppointmentsAuth } from "@/lib/appointments/service-booking/api-helpers";
 import type { AppointmentMetadata } from "@/lib/appointments/types";
-import { voiceAppointmentRecencyOrder } from "@/lib/appointments/voice-appointment-query";
+import { voiceAppointmentModificationRecencyOrder } from "@/lib/appointments/voice-appointment-query";
 
 export async function GET() {
   return withAppointmentsAuth("appointments.read", async ({ workspaceId }) => {
@@ -20,7 +20,7 @@ export async function GET() {
       listAppointmentTypes(workspaceId, { includeSecret: true, includeUnlisted: true }),
       prisma.voiceAppointment.findMany({
         where: { workspaceId },
-        orderBy: voiceAppointmentRecencyOrder,
+        orderBy: voiceAppointmentModificationRecencyOrder,
         take: 120,
         select: {
           id: true,

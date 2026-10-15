@@ -3,7 +3,12 @@ import { jsonError } from "@/lib/api-auth";
 import { requireAppointmentRemindersAccess } from "@/lib/appointment-reminders/api-auth";
 import { getPrisma } from "@/lib/db";
 import type { AppointmentMetadata } from "@/lib/appointments/types";
-import { voiceAppointmentRecencyOrder } from "@/lib/appointments/voice-appointment-query";
+import { voiceAppointmentModificationRecencyOrder } from "@/lib/appointments/voice-appointment-query";
+import {
+  AR_RESCHEDULER_OPERATIONS_LOOKBACK_MS,
+  buildAiReschedulerOperationsWhere,
+  type ReschedulerOperationsMetadata,
+} from "@/lib/appointment-reminders/ai-rescheduler/operations-query";
 
 export async function GET() {
   try {
@@ -11,13 +16,10 @@ export async function GET() {
     if ("error" in auth) return auth.error;
 
     const prisma = getPrisma();
-    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const since = new Date(Date.now() - AR_RESCHEDULER_OPERATIONS_LOOKBACK_MS);
     const rows = await prisma.voiceAppointment.findMany({
-      where: {
-        workspaceId: auth.workspaceId,
-        startsAt: { gte: since },
-      },
-      orderBy: voiceAppointmentRecencyOrder,
+      where: buildAiReschedulerOperationsWhere(auth.workspaceId, since),
+      orderBy: voiceAppointmentModificationRecencyOrder,
       take: 120,
       select: {
         id: true,
@@ -45,10 +47,7 @@ export async function GET() {
     for (const row of rows) {
       const contact = row.contactId ? contactById.get(row.contactId) : undefined;
       const metaInvitee = (row.metadata || {}) as AppointmentMetadata;
-      const meta = (row.metadata || {}) as AppointmentMetadata & {
-        arRescheduleRequest?: { status?: string; requestedAt?: string };
-        arReconcilePending?: { operationId?: string; proposedStartsAt?: string };
-      };
+      const meta = (row.metadata || {}) as ReschedulerOperationsMetadata;
       const req = meta.arRescheduleRequest;
       if (
         req &&

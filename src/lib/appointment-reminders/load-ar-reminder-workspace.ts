@@ -11,7 +11,7 @@ import {
 import { listEnabledReminderSteps } from "@/lib/appointments/reminders/reminders-config";
 import type { AppointmentMetadata } from "@/lib/appointments/types";
 import { getArSmsUsageSnapshot } from "@/lib/appointment-reminders/ar-sms-usage";
-import { voiceAppointmentRecencyOrder } from "@/lib/appointments/voice-appointment-query";
+import { voiceAppointmentModificationRecencyOrder } from "@/lib/appointments/voice-appointment-query";
 
 export async function loadArReminderWorkspacePanel(workspaceId: string) {
   const prisma = getPrisma();
@@ -21,7 +21,7 @@ export async function loadArReminderWorkspacePanel(workspaceId: string) {
     listAppointmentTypes(workspaceId, { includeSecret: true, includeUnlisted: true }),
     prisma.voiceAppointment.findMany({
       where: { workspaceId },
-      orderBy: voiceAppointmentRecencyOrder,
+      orderBy: voiceAppointmentModificationRecencyOrder,
       take: 300,
       select: {
         id: true,

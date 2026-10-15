@@ -13,23 +13,21 @@ function read(rel: string): string {
   return readFileSync(join(root, rel), "utf8");
 }
 
-function assertNoVoiceAppointmentUpdatedAt(rel: string) {
-  const src = read(rel);
-  if (!src.includes("voiceAppointment.findMany")) return;
-  const blocks = src.split("voiceAppointment.findMany");
-  for (let i = 1; i < blocks.length; i++) {
-    const chunk = blocks[i]!.slice(0, 600);
-    assert.equal(
-      /updatedAt/.test(chunk),
-      false,
-      `${rel}: voiceAppointment.findMany must not use updatedAt (model has startsAt/createdAt only)`,
-    );
-  }
-}
+const schema = read("prisma/schema.prisma");
+assert.ok(
+  schema.includes("updatedAt   DateTime   @updatedAt") && schema.includes("model VoiceAppointment"),
+  "VoiceAppointment must have updatedAt after schema fix",
+);
+assert.ok(
+  read("prisma/migrations/20261015114500_voice_appointments_updated_at/migration.sql").includes(
+    '"updatedAt"',
+  ),
+  "voice_appointments updatedAt migration must exist",
+);
 
-assertNoVoiceAppointmentUpdatedAt("src/lib/appointment-reminders/load-ar-reminder-workspace.ts");
-assertNoVoiceAppointmentUpdatedAt("src/app/api/appointment-reminders/ai-rescheduler/operations/route.ts");
-assertNoVoiceAppointmentUpdatedAt("src/app/api/appointments/reminders/workspace/route.ts");
+const opsRoute = read("src/app/api/appointment-reminders/ai-rescheduler/operations/route.ts");
+assert.ok(opsRoute.includes("buildAiReschedulerOperationsWhere"));
+assert.equal(/startsAt:\s*\{\s*gte:/.test(opsRoute), false);
 
 const unified = read("src/lib/templates/unified-templates.ts");
 assert.ok(!unified.includes("solutionKey"), "unified-templates must not query solutionKey");

@@ -8,6 +8,8 @@ import { providerRefFromAppointment } from "./provider-mutations";
 import { getGoogleCalendarEvent, getValidAccessToken, resolveWriteCalendarId } from "@/lib/calendar/providers";
 import type { CalendarConfig } from "@/lib/calendar/providers";
 import { fetchMicrosoftEventById } from "@/lib/calendar/ar-microsoft-primitives";
+import { voiceAppointmentModificationRecencyOrder } from "@/lib/appointments/voice-appointment-query";
+import { buildReconcilePendingScanWhere } from "@/lib/appointment-reminders/ai-rescheduler/operations-query";
 
 type ReconcileMeta = {
   operationId: string;
@@ -148,12 +150,11 @@ export async function reconcileArReschedulePending(input: {
 
 export async function scanArRescheduleReconcilePending(): Promise<{ scanned: number; enqueued: number }> {
   const prisma = getPrisma();
-  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const rows = await prisma.voiceAppointment.findMany({
-    where: { startsAt: { gte: since } },
+    where: buildReconcilePendingScanWhere(),
     select: { id: true, workspaceId: true, metadata: true },
     take: 300,
-    orderBy: { startsAt: "desc" },
+    orderBy: voiceAppointmentModificationRecencyOrder,
   });
   let enqueued = 0;
   for (const row of rows) {

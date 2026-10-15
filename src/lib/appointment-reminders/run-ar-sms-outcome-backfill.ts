@@ -11,6 +11,7 @@ import {
 import { arSmsOutcomeTimelineType } from "./ar-sms-customer-outcome";
 import { buildArSmsOutcomeDetail } from "./ar-sms-outcome-detail";
 import type { ArSmsRecordableOutcome } from "./record-ar-sms-outcome";
+import { voiceAppointmentModificationRecencyOrder } from "@/lib/appointments/voice-appointment-query";
 
 const OUTCOME_LABELS: Record<ArSmsRecordableOutcome, string> = {
   confirmed: "Customer confirmed attendance",
@@ -76,7 +77,7 @@ async function collectAppointmentIds(input: {
       ],
     },
     take: input.limit,
-    orderBy: { startsAt: "desc" },
+    orderBy: voiceAppointmentModificationRecencyOrder,
     select: { id: true, workspaceId: true },
   });
 
