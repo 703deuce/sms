@@ -8,6 +8,12 @@ export const OPUS_CARD =
 /** Section title inside an Opus card (Reviews requests, MCTB panels). */
 export const OPUS_CARDTitle = 'text-base font-semibold tracking-tight text-foreground'
 
+/** Secondary body copy inside Opus cards. */
+export const OPUS_CARD_BODY = 'text-sm text-muted-foreground'
+
+/** Legacy alias used by Reviews request surfaces. */
+export const dashboardBody = OPUS_CARD_BODY
+
 export const OPUS_TABLE_HEAD = 'border-b bg-muted/40'
 
 export const OPUS_SEARCH_INPUT =

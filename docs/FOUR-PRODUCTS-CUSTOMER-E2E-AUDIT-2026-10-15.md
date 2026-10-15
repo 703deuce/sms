@@ -16,6 +16,7 @@
 | ID | Product | Step | Severity | Issue | Root cause |
 |----|---------|------|----------|-------|------------|
 | F1 | Reviews | Open `/reviews/requests` | **P0** | Error boundary / “page couldn’t load” | `ReferenceError: OPUS_CARDTitle is not defined` in review request components (token used but never exported/imported) |
+| F1b | Reviews | Same route after F1 | **P0** | Still error boundary | `ReferenceError: dashboardBody is not defined` (same missing Opus token family) |
 | F2 | Reviews | Route smoke false negative | P2 | Playwright reported LOAD_OK while SSR threw | Error copy uses “couldn’t” not “could not”; audit patterns missed it |
 | F3 | MCTB | Recovery / Text Back tabs | P3 | Brief “Loading…” during audit | Transient `/api/mctb/setup` fetch; API returns 200 on probe — not a hang |
 | F4 | All | Live PSTN/SMS | N/A | Not exercised | Requires real phones; cert script guards prevent duplicate live sends |
@@ -25,6 +26,7 @@
 | ID | Fix |
 |----|-----|
 | F1 | Export `OPUS_CARDTitle` from `opus-surfaces.ts`; import in review-requests panel/send/bulk/campaigns |
+| F1b | Export `dashboardBody` / `OPUS_CARD_BODY`; import in panel + send-section |
 | F2 | Extend `ERROR_PATTERNS` in route audit script |
 
 ## API probe results (production, pre-deploy fix)

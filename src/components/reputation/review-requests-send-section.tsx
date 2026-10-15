@@ -4,6 +4,7 @@ import {
   OPUS_CARD,
   OPUS_CARDTitle,
   OPUS_SEARCH_INPUT,
+  dashboardBody,
 } from "@/newui-transplant/components/app/opus-surfaces";
 import { useState } from "react";
 import {
