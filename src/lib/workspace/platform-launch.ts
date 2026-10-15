@@ -35,9 +35,9 @@ export function isBusinessMessagingUnifiedNav(): boolean {
 }
 
 /**
- * Unified sidebar launch: Missed Call Text Back + AI Voice Agent only.
- * Appointment Reminders, Campaigns (mass texting), and Reviews stay routable — hidden from menu until re-enabled.
- * Override per product: BUSINESS_MESSAGING_SIDEBAR_APPOINTMENT_REMINDERS=1, _CAMPAIGNS=1, _REVIEWS=1
+ * Unified sidebar launch: MCTB + AI Voice Agent (+ Reviews on menu). AR and Campaigns hidden from menu.
+ * Routes stay live; re-enable AR/Campaigns via env or set this flag false.
+ * Override: BUSINESS_MESSAGING_SIDEBAR_APPOINTMENT_REMINDERS=1, _CAMPAIGNS=1, _REVIEWS=0 to hide Reviews.
  */
 export const BUSINESS_MESSAGING_SIDEBAR_MCTB_AND_VOICE_ONLY = true;
 
@@ -63,10 +63,7 @@ export function isMassSmsInBusinessMessagingSidebar(): boolean {
 }
 
 export function isReviewsInBusinessMessagingSidebar(): boolean {
-  return (
-    businessMessagingSidebarEnvFlag("BUSINESS_MESSAGING_SIDEBAR_REVIEWS") ??
-    !BUSINESS_MESSAGING_SIDEBAR_MCTB_AND_VOICE_ONLY
-  );
+  return businessMessagingSidebarEnvFlag("BUSINESS_MESSAGING_SIDEBAR_REVIEWS") ?? true;
 }
 
 /** Sidebar/mobile show SMS mass marketing only — MCTB & AI After Hours hidden from chrome (routes preserved). */
