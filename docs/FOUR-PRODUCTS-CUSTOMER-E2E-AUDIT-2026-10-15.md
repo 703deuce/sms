@@ -49,6 +49,12 @@
 | Campaigns | Yes | List + unified templates OK | Entitlement + launch |
 | Review Requests | **No until F1 deployed** | Contacts/stats OK | Campaign/drip after F1 |
 
+## Post-deploy verification (2026-10-15)
+
+- **Health:** `commitSha` `045d463699840e9dea679ecc792c871a8675cf7c`
+- **API probe:** all eight endpoints **OK** (`probe-prod-four-product-apis.ts`)
+- **Reviews requests:** Playwright cert session **PASS** — “Review Requests” visible, no error shell
+
 ## Re-run after deploy
 
 ```bash
@@ -56,4 +62,4 @@ UI_AGENT_BASE_URL=https://transovo.ai npx tsx scripts/audit-three-products-produ
 UI_AGENT_BASE_URL=https://transovo.ai npx tsx scripts/probe-prod-four-product-apis.ts
 ```
 
-Confirm `/reviews/requests` shows “Review Requests” header (not error shell) and no `OPUS_CARDTitle` in web container logs.
+Confirm `/reviews/requests` shows “Review Requests” header (not error shell) and no `OPUS_CARDTitle` / `dashboardBody` ReferenceErrors in web container logs.
