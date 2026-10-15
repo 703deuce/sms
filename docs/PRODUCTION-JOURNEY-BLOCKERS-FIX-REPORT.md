@@ -53,6 +53,33 @@ The first repair pass used `startsAt` where the original (broken) code reference
 
 ---
 
+## Pre-deploy checks (schema / migration safety)
+
+### VoiceAppointment `updatedAt`
+
+| Check | Result |
+|-------|--------|
+| Prisma model | `VoiceAppointment.updatedAt DateTime @updatedAt` on `@@map("voice_appointments")` |
+| Physical table | `"voice_appointments"."updatedAt"` TIMESTAMPTZ (camelCase quoted, matches `"workspaceId"` / `"createdAt"` style) |
+| Index | `voice_appointments_workspaceId_updatedAt_idx` on `("workspaceId", "updatedAt" DESC)` — aligns with `@@index([workspaceId, updatedAt])` |
+| Backfill | Migration adds nullable column → `UPDATE SET "updatedAt" = "createdAt"` → then `NOT NULL` + default `now()` (avoids stamping every row with migrate-time `now()`) |
+| Lock risk | `ADD COLUMN` + single `UPDATE` + `CREATE INDEX` (not `CONCURRENTLY`) — brief lock on large `voice_appointments`; acceptable for typical sizes; use maintenance window if millions of rows |
+
+### Reviews `review_request_contacts`
+
+| Check | Result |
+|-------|--------|
+| Table | `review_request_contacts` (snake_case, unquoted — reputation SQL layer) |
+| New columns | Nullable TEXT/TIMESTAMPTZ/JSONB except `campaign_attempts INT NOT NULL DEFAULT 0` |
+| Existing rows | Unchanged values; new fields null/zero |
+| Lock risk | `ADD COLUMN IF NOT EXISTS` only — low |
+
+### Deploy inclusion
+
+Coolify deploy runs `scripts/deploy-db-migrations.sh` → `prisma migrate deploy` when `DATABASE_URL` is set. Both migrations must appear under `prisma/migrations/` on the deployed commit (PR **#665**).
+
+---
+
 ## Post-deploy checklist
 
 1. `npx prisma migrate deploy` (includes `20261015103000_reputation_contacts_engagement_columns` and `20261015114500_voice_appointments_updated_at`).
