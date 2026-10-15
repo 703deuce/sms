@@ -4,7 +4,7 @@
 **Environment:** Production UI smoke `https://transovo.ai` (2026-10-15) + repository/runtime audit  
 **Machine JSON:** `/opt/cursor/artifacts/four-products-route-audit.json`  
 **Re-run route smoke:** `UI_AGENT_BASE_URL=https://transovo.ai npx tsx scripts/audit-three-products-production-routes.ts`  
-**Related:** `docs/THREE-PRODUCTS-PAGE-CONNECTIVITY-AUDIT.md` (page wiring detail), `docs/BUSINESS-MESSAGING-FUNCTIONAL-AUDIT.md` (send pipelines)
+**Related:** `docs/THREE-PRODUCTS-PAGE-CONNECTIVITY-AUDIT.md` (page wiring detail), `docs/BUSINESS-MESSAGING-FUNCTIONAL-AUDIT.md` (send pipelines), `docs/PRODUCTION-JOURNEY-BLOCKERS-FIX-REPORT.md` (P0 API fixes)
 
 ---
 
@@ -14,7 +14,8 @@
 |---------|---------|
 | **PASS (UI)** | Logged-in user can open the step; no error shell on screen. |
 | **PASS (API)** | Backend for that step returns 2xx on the cert browser account (or unit/matrix tests pass). |
-| **PASS (runtime)** | Code path exists through queue/worker/provider; **live SMS/voice proved on your tenant** (not fully done in this cloud pass). |
+| **PASS (runtime / code)** | Queue/worker/provider path exists in repository — **not** proof of delivery. |
+| **PASS (live delivery)** | Real SMS or PSTN on tenant — separate human cert; never infer from code alone. |
 | **FAIL** | Step breaks in production smoke or known API 500 on cert account. |
 | **BLOCKED** | Requires human action (PSTN call, M365 OAuth on your calendar, entitlement purchase, A2P approval, worker down). |
 | **N/A** | Out of scope for this audit (e.g. Google Calendar until you connect it). |
