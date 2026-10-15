@@ -22,7 +22,8 @@ async function main() {
       path: `/api/reputation/contacts?businessId=${encodeURIComponent(businessId)}&limit=5`,
     },
     { name: "mass_campaigns", path: "/api/mass-texting/campaigns?limit=5" },
-    { name: "reviews_kit", path: `/api/reputation/review-requests/kit?businessId=${encodeURIComponent(businessId)}` },
+    { name: "reviews_stats", path: `/api/reputation/review-requests/stats/${encodeURIComponent(businessId)}` },
+    { name: "reviews_link", path: `/api/reputation/review-link/${encodeURIComponent(businessId)}` },
   ];
 
   let failed = 0;
