@@ -126,6 +126,7 @@ type Filter =
   | { op: "in"; col: string; vals: unknown[] }
   | { op: "not"; col: string; kind: "is"; val: null }
   | { op: "gte"; col: string; val: unknown }
+  | { op: "lte"; col: string; val: unknown }
   | { op: "lt"; col: string; val: unknown }
   | { op: "is"; col: string; val: null }
   | { op: "or"; expr: string }
@@ -236,6 +237,11 @@ class ReputationQueryBuilder {
     return this;
   }
 
+  lte(col: string, val: unknown) {
+    this.filters.push({ op: "lte", col, val });
+    return this;
+  }
+
   lt(col: string, val: unknown) {
     this.filters.push({ op: "lt", col, val });
     return this;
@@ -284,6 +290,10 @@ class ReputationQueryBuilder {
       if (f.op === "gte") {
         params.push(f.val);
         return `${sqlCol} >= $${params.length}`;
+      }
+      if (f.op === "lte") {
+        params.push(f.val);
+        return `${sqlCol} <= $${params.length}`;
       }
       if (f.op === "lt") {
         params.push(f.val);
