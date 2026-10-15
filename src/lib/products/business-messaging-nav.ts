@@ -39,20 +39,28 @@ export const INBOX_TAB_ROUTES = {
   heldReplies: `${AR_ROUTES.responses}?view=held`,
 } as const;
 
+/** Sidebar sub-links under Missed Call Text Back (moved off horizontal product tabs). */
+export const MCTB_SIDEBAR_CHILDREN = [
+  { label: "Recovery Rules", href: MCTB_ROUTES.missedCallRecovery },
+  { label: "Text Back", href: MCTB_ROUTES.textBack },
+] as const;
+
 export const MCTB_SERVICE_TABS: ServiceTab[] = [
   { label: "Activity", href: MCTB_ROUTES.home, matchExact: true },
-  { label: "Recovery Rules", href: MCTB_ROUTES.missedCallRecovery, matchPrefix: MCTB_ROUTES.missedCallRecovery },
-  { label: "Text Back", href: MCTB_ROUTES.textBack, matchPrefix: MCTB_ROUTES.textBack },
   { label: "AI Recovery", href: MCTB_ROUTES.aiRecovery, matchPrefix: MCTB_ROUTES.aiRecovery },
   { label: "Phone Setup", href: MCTB_ROUTES.phone, matchPrefix: MCTB_ROUTES.phone },
   { label: "Analytics", href: MCTB_ROUTES.analytics, matchPrefix: MCTB_ROUTES.analytics },
 ];
 
+/** Sidebar sub-links under Appointment Reminders (moved off horizontal product tabs). */
+export const AR_SIDEBAR_CHILDREN = [
+  { label: "Sequences", href: AR_ROUTES.remindersSequences },
+] as const;
+
 export const AR_SERVICE_TABS: ServiceTab[] = [
   { label: "Calendar", href: AR_ROUTES.home, matchExact: true },
   { label: "Appointments", href: AR_ROUTES.appointments, matchPrefix: AR_ROUTES.appointments },
   { label: "Reminders", href: AR_ROUTES.reminders, matchPrefix: AR_ROUTES.reminders },
-  { label: "Sequences", href: AR_ROUTES.remindersSequences, matchPrefix: AR_ROUTES.remindersSequences },
   { label: "AI Rescheduler", href: AR_ROUTES.aiRescheduler, matchPrefix: AR_ROUTES.aiRescheduler },
   { label: "Analytics", href: AR_ROUTES.analytics, matchPrefix: AR_ROUTES.analytics },
 ];
@@ -182,12 +190,14 @@ export function buildBusinessMessagingNav(input: BusinessMessagingNavEntitlement
       icon: PhoneMissed,
       sectionLabel: "Services",
       badge: input.hasMctb ? undefined : "Activate",
+      children: [...MCTB_SIDEBAR_CHILDREN],
     },
     {
       label: "Appointment Reminders",
       href: AR_ROUTES.home,
       icon: CalendarClock,
       badge: input.hasAppointmentReminders ? undefined : "Activate",
+      children: [...AR_SIDEBAR_CHILDREN],
     },
     {
       label: "Campaigns",
