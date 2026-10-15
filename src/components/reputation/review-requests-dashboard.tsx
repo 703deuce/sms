@@ -24,6 +24,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { MessagingSetupCallout } from "@/components/messaging/messaging-setup-callout";
 import { ReviewRequestsPanel } from "@/components/reputation/review-requests-panel";
+import { ReviewRequestsSendSection } from "@/components/reputation/review-requests-send-section";
 import type { ReviewRequestsSection } from "@/components/reputation/review-requests-sub-tabs";
 import type { CampaignRow } from "@/components/reputation/review-requests-campaigns";
 import {
@@ -941,7 +942,7 @@ export function ReviewRequestsDashboard({
       setTab(nextTab);
       const params = new URLSearchParams(searchParams.toString());
       params.set("tab", nextTab);
-      router.replace(`/businesses/${businessId}/reputation/requests?${params.toString()}`, {
+      router.replace(`/reviews/requests?${params.toString()}`, {
         scroll: false,
       });
     },
@@ -995,13 +996,13 @@ export function ReviewRequestsDashboard({
       ) : null}
 
       {tab === "send" ? (
-        <OneTimeSend
+        <ReviewRequestsSendSection
           businessId={businessId}
-          data={data}
+          businessName={data?.businessName ?? ""}
+          reviewUrl={data?.link?.review_url ?? null}
+          templates={data?.templates ?? []}
           stats={stats}
-          loading={loading}
-          onRefresh={load}
-          onOpenBulk={() => handleTabChange("bulk")}
+          onSent={load}
         />
       ) : null}
 
