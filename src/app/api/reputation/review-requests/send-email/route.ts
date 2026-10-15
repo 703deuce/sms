@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getSession } from "@/lib/auth";
 import { requireBusinessAccess } from "@/lib/auth/api-auth";
 import { EntitlementError, requireCampaignSendAccess } from "@/lib/auth/entitlements";
 import { requireOrganizationPermission } from "@/lib/auth/permissions";
@@ -45,7 +46,8 @@ export async function POST(request: Request) {
     await requireRecentAuth();
     const access = await requireBusinessAccess(parsed.data.businessId);
     await requireCampaignSendAccess(access.organizationId);
-    const permAuth = await requireOrganizationPermission("campaign.send", access.organizationId);
+    await requireOrganizationPermission(access.organizationId, "campaign.send");
+    const session = await getSession();
     organizationId = access.organizationId;
     await reserveUsageOrThrow(access.organizationId, "review_emails_sent", 1);
     reserved = true;
@@ -71,8 +73,8 @@ export async function POST(request: Request) {
     await writeSecurityAuditEvent({
       action: "campaign.send",
       organizationId: access.organizationId,
-      actorUserId: permAuth.userId,
-      actorEmail: permAuth.email,
+      actorUserId: access.userId,
+      actorEmail: session?.email ?? null,
       resourceType: "review_request_send",
       resourceId: result.sendId ?? null,
       meta: { channel: "email", businessId: parsed.data.businessId },
