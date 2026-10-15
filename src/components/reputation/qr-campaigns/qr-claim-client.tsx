@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, Loader2, QrCode, ShieldCheck } from "lucide-react";
 import { qrUi } from "@/components/reputation/qr-campaigns/qr-ui";
+import { reviewQrRoutes } from "@/lib/reviews/qr-routes";
 import { cn } from "@/lib/utils";
 
 type Biz = { id: string; name: string };
@@ -48,7 +49,7 @@ export function QrClaimClient() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Claim failed");
       localStorage.removeItem("lse_qr_claim_token");
-      router.push(json.nextHref || `/businesses/${businessId}/reputation/qr-campaigns`);
+      router.push(json.nextHref || reviewQrRoutes.list);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Claim failed");
       setSaving(false);

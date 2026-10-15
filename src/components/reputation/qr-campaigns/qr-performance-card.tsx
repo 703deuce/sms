@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, Loader2, QrCode, TrendingUp } from "lucide-react";
 import { QrKpiCard, qrUi } from "@/components/reputation/qr-campaigns/qr-ui";
 import type { ReviewQrCampaign } from "@/lib/reputation/qr-campaigns/types";
+import { reviewQrRoutes } from "@/lib/reviews/qr-routes";
 import { cn } from "@/lib/utils";
 
 function isThisMonth(iso: string | null | undefined): boolean {
@@ -107,7 +108,7 @@ export function QrPerformanceCard({ businessId }: { businessId: string }) {
             <p className="mt-3 text-sm text-[#486581]">
               Top placement:{" "}
               <Link
-                href={`/businesses/${businessId}/reputation/qr-campaigns/${top.id}`}
+                href={reviewQrRoutes.detail(top.id)}
                 className="font-semibold text-[#027A48] hover:underline"
               >
                 {top.name}
@@ -120,7 +121,7 @@ export function QrPerformanceCard({ businessId }: { businessId: string }) {
 
       <div className="mt-5 flex flex-wrap gap-2">
         <Link
-          href={`/businesses/${businessId}/reputation/qr-campaigns`}
+          href={reviewQrRoutes.list}
           className={cn(qrUi.btnPrimary)}
         >
           <TrendingUp className="h-4 w-4" />
@@ -128,7 +129,7 @@ export function QrPerformanceCard({ businessId }: { businessId: string }) {
           <ArrowRight className="h-4 w-4" />
         </Link>
         <Link
-          href={`/businesses/${businessId}/reputation/qr-campaigns/new`}
+          href={reviewQrRoutes.new}
           className={qrUi.btnSecondary}
         >
           New placement

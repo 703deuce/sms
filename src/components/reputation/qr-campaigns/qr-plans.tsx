@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Check, X } from "lucide-react";
 import { qrUi } from "@/components/reputation/qr-campaigns/qr-ui";
+import { reviewQrRoutes } from "@/lib/reviews/qr-routes";
 import { cn } from "@/lib/utils";
 
 type PlanTier = {
@@ -161,7 +162,7 @@ export function QrPlans({ businessId }: { businessId: string }) {
       <p className="text-center text-xs text-[#98A2B3]">
         Pro and Agency plans use your existing billing settings.{" "}
         <Link
-          href={`/businesses/${businessId}/reputation/qr-campaigns`}
+          href={reviewQrRoutes.list}
           className="font-semibold text-[#16A34A] hover:underline"
         >
           Back to campaigns
@@ -195,7 +196,7 @@ export function QrUpgradeModal({
 
   if (!open) return null;
 
-  const plansHref = `/businesses/${businessId}/reputation/qr-campaigns/plans`;
+  const plansHref = reviewQrRoutes.plans;
   const settingsHref = "/settings/subscription";
 
   return (

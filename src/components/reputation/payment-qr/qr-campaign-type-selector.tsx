@@ -4,10 +4,11 @@ import Link from "next/link";
 import { Check, QrCode, Star, Wallet } from "lucide-react";
 import { ReviewsOpusPage } from "@/newui-transplant/connected/reviews/reviews-opus-page";
 import { qrUi } from "@/components/reputation/qr-campaigns/qr-ui";
+import { reviewQrRoutes } from "@/lib/reviews/qr-routes";
 import { cn } from "@/lib/utils";
 
-export function QrCampaignTypeSelector({ businessId }: { businessId: string }) {
-  const base = `/businesses/${businessId}/reputation/qr-campaigns`;
+export function QrCampaignTypeSelector({ businessId: _businessId }: { businessId: string }) {
+  const base = reviewQrRoutes.list;
 
   return (
     <ReviewsOpusPage className="space-y-8">
@@ -26,7 +27,7 @@ export function QrCampaignTypeSelector({ businessId }: { businessId: string }) {
 
       <div className="grid gap-6 md:grid-cols-2">
         <Link
-          href={`${base}/new/review`}
+          href={reviewQrRoutes.newReview}
           className={cn(
             qrUi.card,
             "group block p-6 transition hover:border-[#16A34A] hover:shadow-[0_12px_40px_rgba(22,163,74,0.12)]"
@@ -46,7 +47,7 @@ export function QrCampaignTypeSelector({ businessId }: { businessId: string }) {
         </Link>
 
         <Link
-          href={`${base}/new/payment`}
+          href={reviewQrRoutes.newPayment}
           className={cn(
             qrUi.card,
             "group relative block border-2 border-[#2563EB] p-6 shadow-[0_12px_40px_rgba(37,99,235,0.14)] transition hover:shadow-[0_16px_48px_rgba(37,99,235,0.2)]"

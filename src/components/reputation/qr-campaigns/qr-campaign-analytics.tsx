@@ -6,6 +6,7 @@ import { ArrowLeft, ArrowRight, Info, Loader2 } from "lucide-react";
 import { ReviewsOpusPage } from "@/newui-transplant/connected/reviews/reviews-opus-page";
 import { QrKpiCard, qrUi } from "@/components/reputation/qr-campaigns/qr-ui";
 import type { QrCampaignAnalytics } from "@/lib/reputation/qr-campaigns/types";
+import { reviewQrRoutes } from "@/lib/reviews/qr-routes";
 import { cn } from "@/lib/utils";
 
 const DAY_OPTIONS = [7, 30, 90] as const;
@@ -101,7 +102,7 @@ export function QrCampaignAnalyticsView({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <Link
-            href={`/businesses/${businessId}/reputation/qr-campaigns/${campaignId}`}
+            href={reviewQrRoutes.detail(campaignId)}
             className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold text-[#16A34A] hover:underline"
           >
             <ArrowLeft className="h-3.5 w-3.5" />

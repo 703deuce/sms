@@ -9,6 +9,7 @@ import { ReputationSettingsForm } from "@/components/reputation/reputation-setti
 import { PageHeader, Panel } from "@/newui-transplant/components/app/kit";
 import { Button } from "@/newui-transplant/components/ui/button";
 import { ReviewsOpusPage } from "@/newui-transplant/connected/reviews/reviews-opus-page";
+import { reviewQrRoutes } from "@/lib/reviews/qr-routes";
 export default async function ReputationSettingsPage() {
   const businessId = await getReputationWorkspaceId();
   const isPreview = isDevPreviewBusiness(businessId);
@@ -29,7 +30,7 @@ export default async function ReputationSettingsPage() {
           description="Manage printable Google review QR placements, brand colors, tracked links, and scan analytics."
           action={
             <Button asChild>
-              <Link href={`/businesses/${businessId}/reputation/qr-campaigns`}>Open QR Campaigns</Link>
+              <Link href={reviewQrRoutes.list}>Open QR Campaigns</Link>
             </Button>
           }
         >

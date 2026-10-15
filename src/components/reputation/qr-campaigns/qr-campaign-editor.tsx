@@ -45,6 +45,7 @@ import {
   type ReviewQrCampaign,
 } from "@/lib/reputation/qr-campaigns/types";
 import { PaymentQrCampaignEditor } from "@/components/reputation/payment-qr/payment-qr-campaign-editor";
+import { reviewQrRoutes } from "@/lib/reviews/qr-routes";
 import { cn } from "@/lib/utils";
 
 type LoadResponse = {
@@ -81,7 +82,7 @@ export function QrCampaignEditor({
   campaignId?: string;
 }) {
   const router = useRouter();
-  const plansHref = `/businesses/${businessId}/reputation/qr-campaigns/plans`;
+  const plansHref = reviewQrRoutes.plans;
   const posterRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -141,10 +142,10 @@ export function QrCampaignEditor({
     setError(null);
     setPlanLimit(false);
     try {
-      const accountRes = await fetch(`/api/businesses/${businessId}/account`);
-      if (accountRes.ok) {
-        const accountJson = (await accountRes.json()) as { account?: { name?: string } };
-        if (accountJson.account?.name) setBusinessName(accountJson.account.name);
+      const workspaceRes = await fetch("/api/workspace").catch(() => null);
+      if (workspaceRes?.ok) {
+        const workspaceJson = (await workspaceRes.json()) as { data?: { workspaceName?: string } };
+        if (workspaceJson.data?.workspaceName) setBusinessName(workspaceJson.data.workspaceName);
       }
 
       try {
@@ -181,7 +182,7 @@ export function QrCampaignEditor({
       if (!c) throw new Error("No QR campaign found. Create one to get started.");
       applyCampaign(c, json.trackedUrl);
       if (!campaignId && c.id) {
-        router.replace(`/businesses/${businessId}/reputation/qr-campaigns/${c.id}`);
+        router.replace(reviewQrRoutes.detail(c.id));
       }
       try {
         const aRes = await fetch(
@@ -318,7 +319,7 @@ export function QrCampaignEditor({
         throw new Error(json.error ?? "Duplicate failed");
       }
       if (json.campaign?.id) {
-        router.push(`/businesses/${businessId}/reputation/qr-campaigns/${json.campaign.id}`);
+        router.push(reviewQrRoutes.detail(json.campaign.id));
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Duplicate failed");
@@ -386,7 +387,7 @@ export function QrCampaignEditor({
               Retry
             </button>
             <Link
-              href={`/businesses/${businessId}/reputation/qr-campaigns/new`}
+              href={reviewQrRoutes.new}
               className={qrUi.btnPrimary}
             >
               Create campaign
@@ -408,13 +409,13 @@ export function QrCampaignEditor({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link
-            href={`/businesses/${businessId}/reputation/qr-campaigns`}
+            href={reviewQrRoutes.list}
             className={qrUi.btnSecondary}
           >
             All campaigns
           </Link>
           <Link
-            href={`/businesses/${businessId}/reputation/qr-campaigns/${campaign.id}/analytics`}
+            href={reviewQrRoutes.analytics(campaign.id)}
             className={qrUi.btnSecondary}
           >
             <BarChart3 className="h-4 w-4" />
@@ -701,7 +702,7 @@ export function QrCampaignEditor({
                 QR Only
               </button>
               <Link
-                href={`/businesses/${businessId}/reputation/qr-campaigns/${campaign.id}/analytics`}
+                href={reviewQrRoutes.analytics(campaign.id)}
                 className={qrUi.btnSecondary}
               >
                 <BarChart3 className="h-4 w-4" />

@@ -34,6 +34,7 @@ import {
   type QrPlacementType,
   type ReviewQrCampaign,
 } from "@/lib/reputation/qr-campaigns/types";
+import { reviewQrRoutes } from "@/lib/reviews/qr-routes";
 import { cn } from "@/lib/utils";
 
 const STEPS = [
@@ -46,7 +47,7 @@ const STEPS = [
 
 export function QrCampaignCreateForm({ businessId }: { businessId: string }) {
   const router = useRouter();
-  const plansHref = `/businesses/${businessId}/reputation/qr-campaigns/plans`;
+  const plansHref = reviewQrRoutes.plans;
   const previewRef = useRef<HTMLDivElement>(null);
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
@@ -74,26 +75,15 @@ export function QrCampaignCreateForm({ businessId }: { businessId: string }) {
     let cancelled = false;
     void (async () => {
       try {
-        const [accountRes, kitRes, usageRes] = await Promise.all([
-          fetch(`/api/businesses/${businessId}/account`),
+        const [workspaceRes, kitRes, usageRes] = await Promise.all([
+          fetch("/api/workspace").catch(() => null),
           fetch(`/api/reputation/review-link/${businessId}`).catch(() => null),
           fetch("/api/account/usage").catch(() => null),
         ]);
         if (cancelled) return;
-        if (accountRes.ok) {
-          const json = (await accountRes.json()) as {
-            account?: { name?: string; address_text?: string | null };
-          };
-          if (json.account?.name) setBusinessName(json.account.name);
-          if (json.account?.address_text) {
-            const parts = json.account.address_text.split(",").map((p) => p.trim());
-            // Prefer "City, ST …" fragment when present
-            if (parts.length >= 2) {
-              setBusinessCity(parts.slice(-2).join(", "));
-            } else if (parts[0]) {
-              setBusinessCity(parts[0]);
-            }
-          }
+        if (workspaceRes?.ok) {
+          const json = (await workspaceRes.json()) as { data?: { workspaceName?: string } };
+          if (json.data?.workspaceName) setBusinessName(json.data.workspaceName);
         }
         if (usageRes?.ok) {
           const usageJson = (await usageRes.json()) as {
@@ -189,9 +179,9 @@ export function QrCampaignCreateForm({ businessId }: { businessId: string }) {
         throw new Error(json.error ?? "Could not create campaign");
       }
       if (json.campaign?.id) {
-        router.push(`/businesses/${businessId}/reputation/qr-campaigns/${json.campaign.id}`);
+        router.push(reviewQrRoutes.detail(json.campaign.id));
       } else {
-        router.push(`/businesses/${businessId}/reputation/qr-campaigns`);
+        router.push(reviewQrRoutes.list);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not create campaign");
@@ -216,7 +206,7 @@ export function QrCampaignCreateForm({ businessId }: { businessId: string }) {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <Link
-            href={`/businesses/${businessId}/reputation/qr-campaigns`}
+            href={reviewQrRoutes.list}
             className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold text-[#16A34A] hover:underline"
           >
             <ArrowLeft className="h-3.5 w-3.5" />

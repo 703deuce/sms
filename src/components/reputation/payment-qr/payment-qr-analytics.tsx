@@ -7,6 +7,7 @@ import { ReviewsOpusPage } from "@/newui-transplant/connected/reviews/reviews-op
 import { QrKpiCard, qrUi } from "@/components/reputation/qr-campaigns/qr-ui";
 import type { PaymentQrAnalytics } from "@/lib/reputation/payment-qr/types";
 import type { PaymentQrEntitlements } from "@/lib/reputation/payment-qr/entitlements";
+import { reviewQrRoutes } from "@/lib/reviews/qr-routes";
 import { cn } from "@/lib/utils";
 
 const PROVIDER_LABELS: Record<string, string> = {
@@ -88,7 +89,7 @@ export function PaymentQrAnalyticsView({
     void load();
   }, [load]);
 
-  const base = `/businesses/${businessId}/reputation/qr-campaigns/${campaignId}`;
+  const base = reviewQrRoutes.detail(campaignId);
 
   return (
     <ReviewsOpusPage className="space-y-6">

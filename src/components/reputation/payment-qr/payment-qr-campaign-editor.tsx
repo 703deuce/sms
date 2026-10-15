@@ -14,6 +14,7 @@ import {
 import { ReviewsOpusPage } from "@/newui-transplant/connected/reviews/reviews-opus-page";
 import { QrKpiCard, QrStatusBadge, qrUi } from "@/components/reputation/qr-campaigns/qr-ui";
 import type { ReviewQrCampaign } from "@/lib/reputation/qr-campaigns/types";
+import { reviewQrRoutes } from "@/lib/reviews/qr-routes";
 import { cn } from "@/lib/utils";
 
 export function PaymentQrCampaignEditor({
@@ -23,7 +24,7 @@ export function PaymentQrCampaignEditor({
   businessId: string;
   campaignId: string;
 }) {
-  const base = `/businesses/${businessId}/reputation/qr-campaigns`;
+  const base = reviewQrRoutes.list;
   const [loading, setLoading] = useState(true);
   const [campaign, setCampaign] = useState<ReviewQrCampaign | null>(null);
   const [trackedUrl, setTrackedUrl] = useState("");
@@ -53,7 +54,9 @@ export function PaymentQrCampaignEditor({
         const slug = campaignJson.campaign.publicSlug ?? campaignJson.campaign.shortCode;
         const pageUrl =
           configJson.publicPageUrl ??
-          `""/p/${slug}`;
+          (typeof window !== "undefined"
+            ? `${window.location.origin}/p/${slug}`
+            : `/p/${slug}`);
         setPublicPageUrl(pageUrl);
         const qr = await QRCode.toDataURL(pageUrl, {
           width: 400,
@@ -119,7 +122,7 @@ export function PaymentQrCampaignEditor({
         </div>
         <div className="flex flex-wrap gap-2">
           <Link
-            href={`${base}/${campaignId}/analytics`}
+            href={reviewQrRoutes.analytics(campaignId)}
             className={cn(qrUi.btnSecondary, "inline-flex items-center gap-2")}
           >
             <BarChart3 className="h-4 w-4" /> Analytics

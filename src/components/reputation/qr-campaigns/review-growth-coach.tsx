@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import type { ReviewOverviewData } from "@/lib/reviews/review-overview-data";
 import type { ReviewQrCampaign } from "@/lib/reputation/qr-campaigns/types";
+import { REVIEW_ROUTES } from "@/lib/reviews/routes";
+import { reviewQrRoutes } from "@/lib/reviews/qr-routes";
 import { cn } from "@/lib/utils";
 import { qrUi } from "./qr-ui";
 
@@ -86,7 +88,7 @@ export function ReviewGrowthCoach({
           data.unansweredNegative === 1 ? "" : "s"
         }. A fast, helpful reply protects conversion while you grow volume.`,
         ctaLabel: "Open review feed",
-        href: `/businesses/${businessId}/reputation/reviews`,
+        href: REVIEW_ROUTES.feed,
         icon: MessageSquareText,
       };
     }
@@ -96,7 +98,7 @@ export function ReviewGrowthCoach({
         title: "Biggest opportunity this week",
         body: "You don’t have a tracked QR campaign yet. Put a front-desk poster where every customer waits — then measure scans.",
         ctaLabel: "Create QR campaign",
-        href: `/businesses/${businessId}/reputation/qr-campaigns/new`,
+        href: reviewQrRoutes.new,
         icon: QrCode,
       };
     }
@@ -110,7 +112,7 @@ export function ReviewGrowthCoach({
             ? `“${stale.c.name}” hasn’t recorded a scan yet. Print a second placement (waiting area or vehicle) and keep the tracked QR — not a direct Google link.`
             : `“${stale.c.name}” hasn’t been scanned in ${days} days. Print a second poster for your waiting area, or refresh the placement so customers can see it.`,
         ctaLabel: "Open QR campaign",
-        href: `/businesses/${businessId}/reputation/qr-campaigns/${stale.c.id}`,
+        href: reviewQrRoutes.detail(stale.c.id),
         icon: QrCode,
       };
     }
@@ -120,7 +122,7 @@ export function ReviewGrowthCoach({
         title: "Close the competitor gap",
         body: `You’re #${data.competitorRank} of ${data.competitorPoolSize} nearby. Competitors are gaining reviews — pair QR placements with SMS review requests after every job.`,
         ctaLabel: "Send review requests",
-        href: `/businesses/${businessId}/reputation/campaigns`,
+        href: REVIEW_ROUTES.campaigns,
         icon: TrendingUp,
       };
     }
@@ -129,7 +131,7 @@ export function ReviewGrowthCoach({
       title: data.nextAction.title,
       body: data.nextAction.body,
       ctaLabel: data.nextAction.ctaLabel,
-      href: `/businesses/${businessId}/reputation/campaigns`,
+      href: REVIEW_ROUTES.campaigns,
       icon: Lightbulb,
     };
   }, [businessId, campaigns, data]);

@@ -18,6 +18,7 @@ import {
   ShieldCheck,
   UserRound,
 } from "lucide-react";
+import { reviewQrRoutes } from "@/lib/reviews/qr-routes";
 import { cn } from "@/lib/utils";
 
 type ReputationSettings = {
@@ -359,7 +360,7 @@ export function ReputationSettingsForm({ businessId }: { businessId: string }) {
               printable poster.
             </p>
             <a
-              href={`/businesses/${businessId}/reputation/qr`}
+              href={reviewQrRoutes.posterEditor}
               className="mt-2 inline-flex font-semibold text-primary hover:underline"
             >
               Open QR Poster →

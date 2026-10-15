@@ -28,6 +28,7 @@ import { getPaymentProvider } from "@/lib/reputation/payment-qr/providers";
 import { CLASSIC_POSTER_TEMPLATE, getPosterTemplate, type PosterTemplateKey } from "@/lib/reputation/poster-templates";
 import { pageThemeFromPosterTemplate } from "@/lib/reputation/brand-themes";
 import { organizationLooksLikeTrial } from "@/lib/auth/trial-status";
+import { reviewQrRoutes } from "@/lib/reviews/qr-routes";
 import { cn } from "@/lib/utils";
 
 const WIZARD_STEPS = [
@@ -50,7 +51,7 @@ const PROVIDER_HINTS: Record<PaymentProvider, string> = {
 
 export function PaymentQrCreateWizard({ businessId }: { businessId: string }) {
   const router = useRouter();
-  const base = `/businesses/${businessId}/reputation/qr-campaigns`;
+  const base = reviewQrRoutes.list;
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -99,19 +100,20 @@ export function PaymentQrCreateWizard({ businessId }: { businessId: string }) {
     let cancelled = false;
     void (async () => {
       try {
-        const [accountRes, kitRes, entRes, usageRes] = await Promise.all([
-          fetch(`/api/businesses/${businessId}/account`),
+        const [workspaceRes, kitRes, entRes, usageRes] = await Promise.all([
+          fetch("/api/workspace").catch(() => null),
           fetch(`/api/reputation/review-link/${businessId}`).catch(() => null),
           fetch(`/api/reputation/payment-qr?businessId=${businessId}`),
           fetch(`/api/account/usage?businessId=${businessId}`).catch(() => null),
         ]);
         if (cancelled) return;
-        if (accountRes.ok) {
-          const json = (await accountRes.json()) as { account?: { name?: string } };
-          if (json.account?.name) {
-            setBusinessName(json.account.name);
-            setName(`${json.account.name} — Pay & Review`);
-            setTitle(`Pay ${json.account.name}`);
+        if (workspaceRes?.ok) {
+          const json = (await workspaceRes.json()) as { data?: { workspaceName?: string } };
+          const wsName = json.data?.workspaceName;
+          if (wsName) {
+            setBusinessName(wsName);
+            setName(`${wsName} — Pay & Review`);
+            setTitle(`Pay ${wsName}`);
           }
         }
         if (kitRes?.ok) {
@@ -354,8 +356,8 @@ export function PaymentQrCreateWizard({ businessId }: { businessId: string }) {
       });
       const json = (await res.json()) as { campaign?: ReviewQrCampaign; error?: string };
       if (!res.ok) throw new Error(json.error ?? "Could not create page");
-      if (json.campaign?.id) router.push(`${base}/${json.campaign.id}`);
-      else router.push(base);
+      if (json.campaign?.id) router.push(reviewQrRoutes.detail(json.campaign.id));
+      else router.push(reviewQrRoutes.list);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not create page");
     } finally {
@@ -464,7 +466,7 @@ export function PaymentQrCreateWizard({ businessId }: { businessId: string }) {
               <PosterTemplatePicker
                 value={templateKey}
                 canUsePremium={canUsePremiumTemplates}
-                upgradeHref={`/businesses/${businessId}/reputation/qr-campaigns/plans`}
+                upgradeHref={reviewQrRoutes.plans}
                 onChange={(key, meta) => {
                   setTemplateKey(key);
                   setPrimaryColor(getPosterTemplate(key).accent);

@@ -33,6 +33,7 @@ import {
   rep,
 } from "@/components/reputation/rep-ui";
 import { ReviewsOpusPage } from "@/newui-transplant/connected/reviews/reviews-opus-page";
+import { reviewQrRoutes } from "@/lib/reviews/qr-routes";
 import { renderTemplate } from "@/lib/reputation/template-vars";
 import type { PosterConfig } from "@/lib/reputation/poster-config";
 import { cn } from "@/lib/utils";
@@ -1021,7 +1022,7 @@ export function ReviewRequestsDashboard({
               downloads without mixing it into one-time sends.
             </p>
             <Link
-              href={`/businesses/${businessId}/reputation/qr`}
+              href={reviewQrRoutes.posterEditor}
               className={rep.btnPrimary}
             >
               Open QR Poster

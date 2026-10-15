@@ -27,6 +27,7 @@ import {
   type QrPlacementType,
   type ReviewQrCampaign,
 } from "@/lib/reputation/qr-campaigns/types";
+import { reviewQrRoutes } from "@/lib/reviews/qr-routes";
 import { cn } from "@/lib/utils";
 
 type ListResponse = {
@@ -70,7 +71,7 @@ function MiniSpark({ scans, max }: { scans: number; max: number }) {
 
 export function QrCampaignsList({ businessId }: { businessId: string }) {
   const router = useRouter();
-  const plansHref = `/businesses/${businessId}/reputation/qr-campaigns/plans`;
+  const plansHref = reviewQrRoutes.plans;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [campaigns, setCampaigns] = useState<ReviewQrCampaign[]>([]);
@@ -147,7 +148,7 @@ export function QrCampaignsList({ businessId }: { businessId: string }) {
       const json = (await res.json()) as { campaign?: ReviewQrCampaign; error?: string; limitKey?: string };
       if (!res.ok) throw new Error(json.error ?? "Duplicate failed");
       if (json.campaign?.id) {
-        router.push(`/businesses/${businessId}/reputation/qr-campaigns/${json.campaign.id}`);
+        router.push(reviewQrRoutes.detail(json.campaign.id));
       } else {
         await load();
       }
@@ -198,7 +199,7 @@ export function QrCampaignsList({ businessId }: { businessId: string }) {
         <div className="flex flex-wrap items-center gap-2">
           {canCreateMore ? (
             <Link
-              href={`/businesses/${businessId}/reputation/qr-campaigns/new`}
+              href={reviewQrRoutes.new}
               className={qrUi.btnPrimary}
             >
               <Plus className="h-4 w-4" />
@@ -290,10 +291,10 @@ export function QrCampaignsList({ businessId }: { businessId: string }) {
       ) : campaigns.length === 0 ? (
         <QrEmptyState
           title="No QR campaigns yet"
-          body="Create a tracked Google review QR code for your front desk, receipts, or job sites."
+          body="Start with a printable Google review poster (colors, headline, QR) or a Pay & Review page with Stripe and review links — then track scans here."
           action={
             <Link
-              href={`/businesses/${businessId}/reputation/qr-campaigns/new`}
+              href={reviewQrRoutes.new}
               className={qrUi.btnPrimary}
             >
               <Plus className="h-4 w-4" />
@@ -325,7 +326,7 @@ export function QrCampaignsList({ businessId }: { businessId: string }) {
                     <td className="px-5 py-4">
                       <div className="flex flex-wrap items-center gap-2">
                         <Link
-                          href={`/businesses/${businessId}/reputation/qr-campaigns/${c.id}`}
+                          href={reviewQrRoutes.detail(c.id)}
                           className="font-semibold text-[#0B1B32] hover:text-[#16A34A] hover:underline"
                         >
                           {c.name}
@@ -370,7 +371,7 @@ export function QrCampaignsList({ businessId }: { businessId: string }) {
                     <td className="px-5 py-4">
                       <div className="flex flex-wrap gap-1.5">
                         <Link
-                          href={`/businesses/${businessId}/reputation/qr-campaigns/${c.id}`}
+                          href={reviewQrRoutes.detail(c.id)}
                           className={cn(qrUi.btnGhost, "h-9 px-2.5 text-xs")}
                           title="Edit"
                         >
@@ -378,7 +379,7 @@ export function QrCampaignsList({ businessId }: { businessId: string }) {
                           Edit
                         </Link>
                         <Link
-                          href={`/businesses/${businessId}/reputation/qr-campaigns/${c.id}/analytics`}
+                          href={reviewQrRoutes.analytics(c.id)}
                           className={cn(qrUi.btnGhost, "h-9 px-2.5 text-xs")}
                           title="Analytics"
                         >
