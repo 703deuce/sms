@@ -1,7 +1,10 @@
 /**
- * Production route smoke: MCTB + Appointment Reminders + Campaigns (all service tabs + key subroutes).
+ * Production route smoke: MCTB + Appointment Reminders + Campaigns + Reviews.
  *
  *   UI_AGENT_BASE_URL=https://transovo.ai npx tsx scripts/audit-three-products-production-routes.ts
+ *
+ * Output default: /opt/cursor/artifacts/four-products-route-audit.json
+ * Doc: docs/FOUR-PRODUCTS-USER-JOURNEY-E2E-AUDIT.md
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -10,7 +13,7 @@ import { authenticate as certAuthenticate } from "./browser-cert/lib";
 
 const BASE_URL = process.env.UI_AGENT_BASE_URL?.trim() || "https://transovo.ai";
 const OUT_JSON =
-  process.env.AUDIT_OUT_JSON || "/opt/cursor/artifacts/three-products-route-audit.json";
+  process.env.AUDIT_OUT_JSON || "/opt/cursor/artifacts/four-products-route-audit.json";
 
 type RouteDef = { product: string; tab?: string; path: string; label: string };
 
@@ -63,6 +66,20 @@ const ROUTES: RouteDef[] = [
   { product: "Campaigns", path: "/campaigns/new", label: "Create campaign" },
   { product: "Campaigns", path: "/campaigns/new/review", label: "Create review" },
   { product: "Campaigns", path: "/templates/new", label: "New template" },
+  // —— Reviews (Reputation) ——
+  { product: "Reviews", tab: "Overview", path: "/reviews/overview", label: "Overview" },
+  { product: "Reviews", tab: "Requests", path: "/reviews/requests", label: "Requests" },
+  { product: "Reviews", tab: "Campaigns", path: "/reviews/campaigns", label: "Review campaigns" },
+  { product: "Reviews", tab: "Insights", path: "/reviews/insights", label: "Insights" },
+  { product: "Reviews", tab: "Alerts", path: "/reviews/alerts", label: "Alerts" },
+  { product: "Reviews", path: "/reviews/qr-campaigns", label: "QR campaigns list" },
+  { product: "Reviews", path: "/reviews/qr-campaigns/new", label: "QR create type" },
+  { product: "Reviews", path: "/reviews/qr-campaigns/new/review", label: "QR poster wizard" },
+  { product: "Reviews", path: "/reviews/qr-campaigns/new/payment", label: "Pay & Review wizard" },
+  { product: "Reviews", path: "/reviews/reviews", label: "Review feed" },
+  { product: "Reviews", path: "/reviews/analytics", label: "Velocity" },
+  { product: "Reviews", path: "/reviews/settings", label: "Settings" },
+  { product: "Reviews", path: "/reviews/contacts", label: "Contacts" },
 ];
 
 type Row = {
