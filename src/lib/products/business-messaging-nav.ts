@@ -1,4 +1,5 @@
 import {
+  AudioLines,
   CalendarClock,
   Contact,
   Inbox,
@@ -201,6 +202,11 @@ export function buildBusinessMessagingNav(input: BusinessMessagingNavEntitlement
       badge: input.hasReviews === false ? "Activate" : undefined,
       children: [...REVIEWS_SIDEBAR_CHILDREN],
     },
+    {
+      label: "AI Voice Agent",
+      href: MCTB_ROUTES.voiceAgent,
+      icon: AudioLines,
+    },
   );
 
   items.push(
@@ -252,6 +258,14 @@ export function isBusinessMessagingNavItemActive(
   if (item.label === "Reviews") {
     return path === REVIEW_ROUTES.home || path.startsWith("/reviews/");
   }
+  if (item.label === "AI Voice Agent") {
+    return (
+      path === MCTB_ROUTES.voiceAgent ||
+      path.startsWith(`${MCTB_ROUTES.voiceAgent}/`) ||
+      path === "/voice" ||
+      path.startsWith("/voice/")
+    );
+  }
   if (item.href.includes("?")) {
     const query = item.href.split("?")[1] ?? "";
     return path === item.href.split("?")[0] && search.includes(query);
@@ -269,6 +283,10 @@ export function isBusinessMessagingSharedShellPath(pathname: string): boolean {
   if (pathname === "/templates" || pathname.startsWith("/templates/")) return true;
   if (pathname === "/sms/analytics" || pathname.startsWith("/sms/analytics/")) return true;
   if (pathname === REVIEW_ROUTES.home || pathname.startsWith("/reviews/")) return true;
+  if (pathname === MCTB_ROUTES.voiceAgent || pathname.startsWith(`${MCTB_ROUTES.voiceAgent}/`)) {
+    return true;
+  }
+  if (pathname === "/voice" || pathname.startsWith("/voice/")) return true;
   return false;
 }
 

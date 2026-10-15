@@ -25,7 +25,7 @@ export type LaunchProductAvailabilityRow = {
 /** Default launch posture — override with env for internal QA only. */
 export const LAUNCH_PRODUCT_AVAILABILITY: Record<LaunchProductKey, LaunchProductAvailabilityRow> = {
   mctb: { enabled: true, customerVisible: true },
-  voice: { enabled: true, customerVisible: false },
+  voice: { enabled: true, customerVisible: true },
   appointments: { enabled: true, customerVisible: false },
   mass_sms: { enabled: true, customerVisible: false },
   fax: { enabled: true, customerVisible: false },
