@@ -101,7 +101,7 @@ async function main() {
   console.log("\n--- MCTB (missed call events) ---");
   console.log({ missedCalls: mctbTraces, withRecoverySms: mctbSms });
 
-  const arDispatches = await prisma.appointmentReminderDispatch.count({
+  const arDispatches = await prisma.arReminderDispatch.count({
     where: { workspaceId: WORKSPACE_ID, createdAt: { gte: since } },
   }).catch(() => null);
 
