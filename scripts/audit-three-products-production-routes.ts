@@ -105,6 +105,8 @@ const ERROR_PATTERNS = [
   /internal server error/i,
   /failed to load/i,
   /could not load/i,
+  /couldn't load/i,
+  /this page couldn't load/i,
   /unhandled runtime error/i,
 ];
 

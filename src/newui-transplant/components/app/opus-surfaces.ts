@@ -5,6 +5,9 @@
 export const OPUS_CARD =
   'rounded-xl border bg-card shadow-[0_1px_2px_rgba(16,18,40,0.04)]'
 
+/** Section title inside an Opus card (Reviews requests, MCTB panels). */
+export const OPUS_CARDTitle = 'text-base font-semibold tracking-tight text-foreground'
+
 export const OPUS_TABLE_HEAD = 'border-b bg-muted/40'
 
 export const OPUS_SEARCH_INPUT =

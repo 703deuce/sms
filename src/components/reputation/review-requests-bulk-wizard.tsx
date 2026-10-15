@@ -1,6 +1,10 @@
 "use client";
 
-import { OPUS_CARD, OPUS_SEARCH_INPUT } from "@/newui-transplant/components/app/opus-surfaces";
+import {
+  OPUS_CARD,
+  OPUS_CARDTitle,
+  OPUS_SEARCH_INPUT,
+} from "@/newui-transplant/components/app/opus-surfaces";
 import { useCallback, useMemo, useState } from "react";
 import {
   AlertTriangle,
