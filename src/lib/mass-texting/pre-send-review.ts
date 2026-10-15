@@ -8,8 +8,14 @@ import { MASS_TEXT_MMS_PRODUCTION_ENABLED } from "@/lib/mass-texting/pricing";
 import { creditsForRecipientBody, massTextMergeVarsFromContact } from "@/lib/mass-texting/personalization";
 import { getSegmentAvailability } from "@/lib/mass-texting/credit-accounting";
 import { mediaUrlsForSequenceStep, mediaUrlsFromCampaignConfig } from "@/lib/mass-texting/mms";
+import { parseMassMessagingSenderMode } from "@/lib/messaging/sender-mode";
+import type { MassTextSenderMode } from "@/lib/mass-texting/broadcast/types";
 
 const REVIEW_SEGMENT_SAMPLE = 25;
+
+function broadcastSenderModeFromConfig(config: Record<string, unknown>): MassTextSenderMode {
+  return parseMassMessagingSenderMode(config.senderMode, "WORKSPACE");
+}
 
 /** Local review gate — DB only. No Telnyx/provider sync on the review screen. */
 async function resolveReviewCreditsGate(
@@ -17,12 +23,26 @@ async function resolveReviewCreditsGate(
   configNumberId: string | undefined,
   estimatedSegments: number,
   mmsBlocked: boolean,
+  senderMode: MassTextSenderMode = "WORKSPACE",
 ) {
   const availability = await getSegmentAvailability(workspaceId);
   const { resolveMassTextSendingNumber } = await import("@/lib/mass-texting/messaging-registration");
   const { getRegistrationByWorkspace } = await import("@/lib/messaging/store");
+  const { resolveSharedPlatformOutboundSender } = await import(
+    "@/lib/messaging/platform-outbound-sender"
+  );
 
-  const sender = await resolveMassTextSendingNumber(workspaceId, configNumberId);
+  const sender =
+    senderMode === "PLATFORM"
+      ? await resolveSharedPlatformOutboundSender().then((route) =>
+          route
+            ? {
+                phoneE164: route.fromE164,
+                phoneNumberId: route.phoneNumberId,
+              }
+            : null,
+        )
+      : await resolveMassTextSendingNumber(workspaceId, configNumberId);
   const reg = await getRegistrationByWorkspace(workspaceId);
   const shortage = Math.max(0, estimatedSegments - availability.available);
   /** Review screen: credits math only — launch enforces A2P/sender separately. */
@@ -269,6 +289,7 @@ export async function buildPreSendReview(
       configNumberId,
       creditEstimate.estimatedSegments,
       creditEstimate.mmsBlocked,
+      broadcastSenderModeFromConfig(config),
     );
     return {
       campaignId,
@@ -437,6 +458,7 @@ export async function buildPreSendReview(
     configNumberId,
     creditEstimate.estimatedSegments,
     creditEstimate.mmsBlocked,
+    broadcastSenderModeFromConfig(config),
   );
 
   return {

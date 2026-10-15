@@ -13,6 +13,11 @@ import {
   validateRecurrence,
 } from "@/lib/campaigns/recurrence-format";
 import { formatZonedScheduleLabel, zonedLocalDateTimeToIso, zonedLocalDateTimeToUtc } from "@/lib/campaigns/schedule-time";
+import {
+  isPlatformComposeSenderId,
+  TRANSOVO_PLATFORM_SENDER_COMPOSE_ID,
+  type CampaignSendingNumberOption,
+} from "@/lib/messaging/platform-compose-sender";
 
 export type CampaignListRow = {
   id: string;
@@ -163,8 +168,13 @@ export function draftAudiencePayload(draft: CampaignComposeDraft) {
   };
 }
 
+export function composeSenderModeFromDraft(draft: CampaignComposeDraft): "PLATFORM" | "WORKSPACE" {
+  return isPlatformComposeSenderId(draft.numberId) ? "PLATFORM" : "WORKSPACE";
+}
+
 export function toBroadcastPayload(draft: CampaignComposeDraft) {
   const body = composeMessageBody(draft.message);
+  const senderMode = composeSenderModeFromDraft(draft);
   let scheduledAt: string | undefined;
   if (draft.scheduleMode === "later" && draft.scheduledDate && draft.scheduledTime) {
     scheduledAt = zonedLocalDateTimeToIso(
@@ -181,7 +191,8 @@ export function toBroadcastPayload(draft: CampaignComposeDraft) {
     name: draft.name.trim(),
     message: body,
     audience: draftAudiencePayload(draft),
-    numberId: draft.numberId || undefined,
+    numberId: senderMode === "WORKSPACE" ? draft.numberId || undefined : undefined,
+    senderMode,
     scheduleMode: draft.scheduleMode,
     scheduledAt,
     timezone: draft.timezone,
@@ -605,9 +616,62 @@ export type ReviewNavPaths = {
   successPath?: (campaignId: string, mode: string) => string;
 };
 
+export async function loadCampaignSendingNumbers(): Promise<CampaignSendingNumberOption[]> {
+  const res = await fetch("/api/mass-texting/sending-numbers");
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json.error || "Could not load sending numbers");
+  }
+  const platform = json.data?.platform;
+  const workspace = json.data?.workspace || [];
+  const options: CampaignSendingNumberOption[] = [];
+  if (platform?.id && platform?.number) {
+    options.push({
+      id: platform.id,
+      number: platform.number,
+      label: platform.label || "Transovo platform number",
+      senderMode: "PLATFORM",
+    });
+  }
+  for (const row of workspace) {
+    if (!row?.id || !row?.number) continue;
+    options.push({
+      id: row.id,
+      number: row.number,
+      label: row.label || row.display || row.number,
+      senderMode: "WORKSPACE",
+    });
+  }
+  return options;
+}
+
 export async function loadDefaultSendingNumber(): Promise<{ id: string; number: string } | null> {
+  try {
+    const res = await fetch("/api/mass-texting/sending-numbers");
+    const json = await res.json();
+    if (res.ok && json.data?.defaultId) {
+      const id = json.data.defaultId as string;
+      const platform = json.data.platform;
+      const workspace = json.data.workspace || [];
+      if (platform?.id === id) {
+        return { id: platform.id, number: platform.number };
+      }
+      const match = workspace.find((n: { id: string }) => n.id === id);
+      if (match?.number) return { id: match.id, number: match.number };
+    }
+  } catch {
+    // fall through to legacy numbers API
+  }
   const res = await fetch("/api/numbers");
   const json = await res.json();
   const numbers = json.data || [];
   return numbers[0] ? { id: numbers[0].id, number: numbers[0].number } : null;
+}
+
+export function resolveComposeNumberIdFromCampaignConfig(config: Record<string, unknown>): string {
+  const senderMode = config.senderMode;
+  if (senderMode === "PLATFORM" || senderMode === "platform") {
+    return TRANSOVO_PLATFORM_SENDER_COMPOSE_ID;
+  }
+  return typeof config.numberId === "string" ? config.numberId : "";
 }

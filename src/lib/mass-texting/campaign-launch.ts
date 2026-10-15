@@ -203,20 +203,23 @@ export async function launchCampaignWithAudit(input: {
     };
   }
 
-  const { assertMassTextMarketingSendAllowed } = await import(
-    "@/lib/mass-texting/a2p-enforcement"
-  );
-  const a2p = await assertMassTextMarketingSendAllowed(input.workspaceId);
-  if (!a2p.allowed) {
-    return { ok: false, error: a2p.reason || "Messaging A2P not ready" };
+  const { massTextProductConfigPatch } = await import("@/lib/mass-texting/campaign-send");
+  const { readBroadcastConfig } = await import("@/lib/mass-texting/broadcast/service");
+  const broadcastConfig = readBroadcastConfig(campaign.configJson);
+  const usesPlatformSender = broadcastConfig?.senderMode === "PLATFORM";
+
+  if (!usesPlatformSender) {
+    const { assertMassTextMarketingSendAllowed } = await import(
+      "@/lib/mass-texting/a2p-enforcement"
+    );
+    const a2p = await assertMassTextMarketingSendAllowed(input.workspaceId);
+    if (!a2p.allowed) {
+      return { ok: false, error: a2p.reason || "Messaging A2P not ready" };
+    }
   }
   if (!review.phoneE164) {
     return { ok: false, error: "No sending number configured" };
   }
-
-  const { massTextProductConfigPatch } = await import("@/lib/mass-texting/campaign-send");
-  const { readBroadcastConfig } = await import("@/lib/mass-texting/broadcast/service");
-  const broadcastConfig = readBroadcastConfig(campaign.configJson);
   const isRecurringTemplate = broadcastConfig?.scheduleMode === "recurring";
 
   await prisma.campaign.update({

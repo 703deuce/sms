@@ -220,7 +220,7 @@ export async function sendCampaignMessageById(
       repSettings?.settings_json && typeof repSettings.settings_json === "object"
         ? (repSettings.settings_json as Record<string, unknown>).senderMode
         : undefined,
-      "WORKSPACE",
+      "PLATFORM",
     );
     smsUsesPlatformSender = senderMode === "PLATFORM";
   }

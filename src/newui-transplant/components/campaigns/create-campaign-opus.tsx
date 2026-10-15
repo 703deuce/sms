@@ -29,15 +29,19 @@ import { formatRecurrenceSummary, validateRecurrence } from "@/lib/campaigns/rec
 import { zonedIsoToLocalDateTime } from "@/lib/campaigns/schedule-time";
 import {
   loadDefaultSendingNumber,
+  loadCampaignSendingNumbers,
   previewAudience,
   saveCampaignDraft,
   draftAudiencePayload,
   parseCampaignConfigJson,
+  resolveComposeNumberIdFromCampaignConfig,
   stripCampaignComplianceFooter,
   formatAudiencePreviewSummary,
   type AudiencePreviewData,
   type CampaignNavPaths,
 } from "@/lib/campaigns/kimi-campaigns-adapter";
+import type { CampaignSendingNumberOption } from "@/lib/messaging/platform-compose-sender";
+import { formatPhone } from "@/lib/utils";
 
 type SendMode = "Now" | "Later" | "Recurring";
 
@@ -91,7 +95,7 @@ export function CreateCampaignOpus({
   const [audiencePreviewError, setAudiencePreviewError] = useState("");
   const [audiencePreview, setAudiencePreview] = useState<AudiencePreviewData | null>(null);
   const [playbookId, setPlaybookId] = useState<string | null>(null);
-  const [numbers, setNumbers] = useState<Array<{ id: string; number: string }>>([]);
+  const [numbers, setNumbers] = useState<CampaignSendingNumberOption[]>([]);
 
   useEffect(() => {
     const playbook = searchParams.get("playbook");
@@ -183,7 +187,7 @@ export function CreateCampaignOpus({
               id: a.id,
               name: a.name,
             })),
-            numberId: typeof config?.numberId === "string" ? config.numberId : "",
+            numberId: resolveComposeNumberIdFromCampaignConfig(config || {}),
             mediaUrls: Array.isArray(config?.mediaUrls) ? (config.mediaUrls as string[]) : [],
             trackedLinks: Array.isArray(config?.trackedLinks)
               ? (config.trackedLinks as CampaignComposeDraft["trackedLinks"])
@@ -221,15 +225,8 @@ export function CreateCampaignOpus({
       });
     });
 
-    fetch("/api/numbers")
-      .then((r) => (r.ok ? r.json() : { data: [] }))
-      .then((json) => {
-        const rows = (json.data || []).map((n: { id: string; number: string }) => ({
-          id: n.id,
-          number: n.number,
-        }));
-        setNumbers(rows);
-      })
+    loadCampaignSendingNumbers()
+      .then(setNumbers)
       .catch(() => setNumbers([]));
   }, [searchParams]);
 
@@ -447,7 +444,9 @@ export function CreateCampaignOpus({
               <option value="">Select a number</option>
               {numbers.map((n) => (
                 <option key={n.id} value={n.id}>
-                  {n.number}
+                  {n.senderMode === "PLATFORM"
+                    ? `${formatPhone(n.number)} — ${n.label}`
+                    : formatPhone(n.number)}
                 </option>
               ))}
             </select>
@@ -712,6 +711,14 @@ export function CreateCampaignOpus({
 
           {!draft.numberId ? (
             <p className="mt-3 max-w-md text-[13px] text-amber-700">Select a send-from number before continuing.</p>
+          ) : null}
+
+          {!canReview && !loadingCampaign && !saving ? (
+            <p className="mt-3 max-w-md text-[12px] text-slate-500">
+              To continue: add a campaign name, message, audience, and sender
+              {laterIncomplete ? ", plus schedule date and time" : ""}
+              {recurringIncomplete ? ", plus a recurring schedule" : ""}.
+            </p>
           ) : null}
 
           {laterIncomplete ? (

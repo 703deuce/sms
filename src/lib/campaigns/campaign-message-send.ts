@@ -445,7 +445,10 @@ export async function sendCampaignMessageById(messageId: string) {
           "@/lib/messaging/platform-product-consumer-assignment"
         );
         const broadcastConfig = readBroadcastConfig(message.campaign.configJson);
-        const senderMode = parseMassMessagingSenderMode(broadcastConfig?.senderMode, "WORKSPACE");
+        const senderMode = parseMassMessagingSenderMode(
+          broadcastConfig?.senderMode,
+          broadcastConfig?.numberId ? "WORKSPACE" : "PLATFORM",
+        );
 
         if (senderMode === "PLATFORM") {
           const platformRoute = await resolveSharedPlatformOutboundSender();

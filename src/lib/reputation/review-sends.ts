@@ -33,7 +33,7 @@ async function loadReputationSenderMode(
     data?.settings_json && typeof data.settings_json === "object"
       ? (data.settings_json as Record<string, unknown>).senderMode
       : undefined;
-  return { senderMode: parseMassMessagingSenderMode(raw, "WORKSPACE") };
+  return { senderMode: parseMassMessagingSenderMode(raw, "PLATFORM") };
 }
 
 async function assertNotSuppressed(params: {
