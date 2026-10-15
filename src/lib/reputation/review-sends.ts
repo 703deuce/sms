@@ -41,6 +41,12 @@ async function assertNotSuppressed(params: {
   phone?: string | null;
   email?: string | null;
 }): Promise<void> {
+  const { shouldBypassSmsSuppressionForCertPhone } = await import(
+    "@/lib/messaging/cert-test-phone"
+  );
+  if (params.phone && shouldBypassSmsSuppressionForCertPhone(params.phone)) {
+    return;
+  }
   const supabase = createServiceClient();
   if (params.phone) {
     const { data } = await supabase

@@ -145,7 +145,12 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
     }
   }
 
-  if (!input.skipRecipientSuppressionGate) {
+  const { shouldBypassSmsSuppressionForCertPhone } = await import(
+    "@/lib/messaging/cert-test-phone"
+  );
+  const certBypassSuppression = shouldBypassSmsSuppressionForCertPhone(to);
+
+  if (!input.skipRecipientSuppressionGate && !certBypassSuppression) {
     const suppressed = await prisma.suppression.findFirst({
       where: { workspaceId: input.workspaceId, phone: to },
     });
@@ -160,7 +165,11 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
   if (contact?.status === "BLOCKED") {
     throw new Error(`Recipient contact status is ${contact.status}`);
   }
-  if (!input.skipRecipientSuppressionGate && contact?.status === "UNSUBSCRIBED") {
+  if (
+    !input.skipRecipientSuppressionGate &&
+    !certBypassSuppression &&
+    contact?.status === "UNSUBSCRIBED"
+  ) {
     throw new Error(`Recipient contact status is ${contact.status}`);
   }
 

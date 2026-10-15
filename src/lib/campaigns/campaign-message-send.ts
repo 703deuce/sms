@@ -307,11 +307,20 @@ export async function sendCampaignMessageById(messageId: string) {
     throw new JobDeferredError(reason, 60 * 60_000);
   }
 
+  const { shouldBypassSmsSuppressionForCertPhone } = await import(
+    "@/lib/messaging/cert-test-phone"
+  );
+
   if (isPhoneCampaignChannel(message.channel) && message.to) {
     const contact = await prisma.contact.findUnique({
       where: { workspaceId_phone: { workspaceId: message.workspaceId, phone: message.to } },
     });
-    if (contact && (contact.status === "UNSUBSCRIBED" || contact.status === "BLOCKED")) {
+    const certBypass = shouldBypassSmsSuppressionForCertPhone(message.to);
+    if (
+      !certBypass &&
+      contact &&
+      (contact.status === "UNSUBSCRIBED" || contact.status === "BLOCKED")
+    ) {
       await prisma.campaignMessage.update({
         where: { id: messageId },
         data: { status: "opted_out", error: `contact_${contact.status.toLowerCase()}` },
@@ -329,9 +338,11 @@ export async function sendCampaignMessageById(messageId: string) {
       return { optedOut: true };
     }
 
-    const suppressed = await prisma.suppression.findFirst({
-      where: { workspaceId: message.workspaceId, phone: message.to },
-    });
+    const suppressed =
+      !certBypass &&
+      (await prisma.suppression.findFirst({
+        where: { workspaceId: message.workspaceId, phone: message.to },
+      }));
     if (suppressed) {
       await prisma.campaignMessage.update({
         where: { id: messageId },
@@ -394,9 +405,11 @@ export async function sendCampaignMessageById(messageId: string) {
     return { skipped: true, status: "recipient_terminal" };
   }
   if (isPhoneCampaignChannel(message.channel) && message.to) {
-    const lateSuppressed = await prisma.suppression.findFirst({
-      where: { workspaceId: message.workspaceId, phone: message.to },
-    });
+    const lateSuppressed =
+      !shouldBypassSmsSuppressionForCertPhone(message.to) &&
+      (await prisma.suppression.findFirst({
+        where: { workspaceId: message.workspaceId, phone: message.to },
+      }));
     if (lateSuppressed) {
       await prisma.campaignMessage.updateMany({
         where: { id: messageId, status: "sending" },

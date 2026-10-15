@@ -126,8 +126,15 @@ export async function sendCampaignMessageById(
     .maybeSingle();
 
   if (recipient?.phone || recipient?.email) {
+    const { shouldBypassSmsSuppressionForCertPhone } = await import(
+      "@/lib/messaging/cert-test-phone"
+    );
     let suppressed = false;
-    if ((channel === "sms" || channel === "both" || !channel) && recipient.phone) {
+    if (
+      (channel === "sms" || channel === "both" || !channel) &&
+      recipient.phone &&
+      !shouldBypassSmsSuppressionForCertPhone(recipient.phone)
+    ) {
       const { data } = await supabase
         .from("review_request_suppression")
         .select("id, expires_at")
