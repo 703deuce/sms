@@ -10,7 +10,7 @@ import {
   sendTestReminderEmail,
 } from "@/lib/appointments";
 import { hasWorkspaceExistingCustomerSmsConsent } from "@/lib/appointment-reminders/workspace-existing-sms-consent";
-import { analyzeSmsBody } from "@/lib/mctb/sms-channel";
+import { analyzeSmsBody } from "@/lib/sms/segment-encoding";
 import { reminderAppointmentMergeVars } from "@/lib/appointment-reminders/template-library/merge-context";
 import { renderAppointmentTemplate } from "@/lib/appointments/appointments-service";
 import { resolveReminderStep } from "@/lib/appointments/reminders/reminders-config";
