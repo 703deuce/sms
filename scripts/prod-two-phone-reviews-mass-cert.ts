@@ -148,8 +148,8 @@ async function main() {
     Array<{ recipient_phone: string; status: string; error_message: string | null }>
   >(
     `SELECT recipient_phone, status, error_message FROM review_request_sends
-     WHERE recipient_phone = ANY($1::text[]) ORDER BY created_at DESC LIMIT 10`,
-    PHONES,
+     WHERE recipient_phone IN (${PHONES.map((p) => `'${p}'`).join(",")})
+     ORDER BY created_at DESC LIMIT 10`,
   );
   console.log("review one-off sends", reviewSends);
 
@@ -158,10 +158,22 @@ async function main() {
   >(
     `SELECT r.phone, m.status, m.step_key FROM review_request_messages m
      JOIN review_request_recipients r ON r.id = m.recipient_id
-     WHERE r.phone = ANY($1::text[]) ORDER BY m.created_at DESC LIMIT 20`,
-    PHONES,
+     WHERE r.phone IN (${PHONES.map((p) => `'${p}'`).join(",")})
+     ORDER BY m.created_at DESC LIMIT 20`,
   );
   console.log("review campaign messages", reviewMsgs);
+
+  const { sendCampaignMessageById } = await import("../src/lib/reputation/campaign-message-send");
+  const queuedReview = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+    `SELECT m.id FROM review_request_messages m
+     JOIN review_request_recipients r ON r.id = m.recipient_id
+     WHERE r.phone IN (${PHONES.map((p) => `'${p}'`).join(",")}) AND m.status IN ('queued','sending')
+     LIMIT 10`,
+  );
+  for (const row of queuedReview) {
+    const out = await sendCampaignMessageById(row.id);
+    console.log("review send", row.id, out);
+  }
 }
 
 main().catch((err) => {
