@@ -26,8 +26,8 @@ export async function POST(
     }
 
     const auth = await requireBusinessAccess(businessId);
-    const permAuth = await requireOrganizationPermission("campaign.send", auth.organizationId);
     await requireRecentAuth();
+    await requireOrganizationPermission(auth.organizationId, "campaign.send");
     await requireCampaignSendAccess(auth.organizationId);
 
     const supabase = createServiceClient();
