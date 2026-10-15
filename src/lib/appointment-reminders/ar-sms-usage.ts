@@ -58,7 +58,7 @@ export async function shouldMeterAppointmentRemindersSms(
 ): Promise<boolean> {
   const limits = await workspaceLimitsRecord(workspaceId);
   if (limits.arSmsMeteringEnabled === true) return true;
-  return usesPlatformAppointmentSmsSender(workspaceId);
+  return await usesPlatformAppointmentSmsSender(workspaceId);
 }
 
 export async function getArSmsUsageSnapshot(workspaceId: string): Promise<ArSmsUsageSnapshot> {

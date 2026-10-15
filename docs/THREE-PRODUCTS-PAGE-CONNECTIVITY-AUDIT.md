@@ -1,5 +1,7 @@
 # Three products — page & tab connectivity audit
 
+> **Reviews + user-journey audit:** see `docs/FOUR-PRODUCTS-USER-JOURNEY-E2E-AUDIT.md` (MCTB, AR, Campaigns, Reviews — start-to-finish PASS/FAIL).
+
 **Products:** Missed Call Text Back (MCTB) · Appointment Reminders (AR) · Campaigns (Mass Texting)  
 **Environment:** Production `https://transovo.ai`  
 **Smoke run:** 2026-10-14 (Playwright, cert browser account via `scripts/browser-cert/lib`)  

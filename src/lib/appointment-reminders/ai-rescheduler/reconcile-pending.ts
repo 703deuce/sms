@@ -150,10 +150,10 @@ export async function scanArRescheduleReconcilePending(): Promise<{ scanned: num
   const prisma = getPrisma();
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const rows = await prisma.voiceAppointment.findMany({
-    where: { updatedAt: { gte: since } },
+    where: { startsAt: { gte: since } },
     select: { id: true, workspaceId: true, metadata: true },
     take: 300,
-    orderBy: { updatedAt: "desc" },
+    orderBy: { startsAt: "desc" },
   });
   let enqueued = 0;
   for (const row of rows) {

@@ -76,7 +76,7 @@ async function collectAppointmentIds(input: {
       ],
     },
     take: input.limit,
-    orderBy: { updatedAt: "desc" },
+    orderBy: { startsAt: "desc" },
     select: { id: true, workspaceId: true },
   });
 

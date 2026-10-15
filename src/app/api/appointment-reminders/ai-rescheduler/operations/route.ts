@@ -3,6 +3,7 @@ import { jsonError } from "@/lib/api-auth";
 import { requireAppointmentRemindersAccess } from "@/lib/appointment-reminders/api-auth";
 import { getPrisma } from "@/lib/db";
 import type { AppointmentMetadata } from "@/lib/appointments/types";
+import { voiceAppointmentRecencyOrder } from "@/lib/appointments/voice-appointment-query";
 
 export async function GET() {
   try {
@@ -14,9 +15,9 @@ export async function GET() {
     const rows = await prisma.voiceAppointment.findMany({
       where: {
         workspaceId: auth.workspaceId,
-        updatedAt: { gte: since },
+        startsAt: { gte: since },
       },
-      orderBy: { updatedAt: "desc" },
+      orderBy: voiceAppointmentRecencyOrder,
       take: 120,
       select: {
         id: true,

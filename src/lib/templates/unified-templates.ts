@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
+import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { listTemplates as listReviewTemplates } from "@/lib/reputation/templates";
 import { getTemplateLibraryCatalog } from "@/lib/appointment-reminders/template-library/catalog";
 
@@ -25,7 +26,7 @@ export type UnifiedTemplateRow = {
 
 export async function loadUnifiedTemplates(
   workspaceId: string,
-  product?: UnifiedTemplateProduct | "all"
+  product?: UnifiedTemplateProduct | "all",
 ): Promise<UnifiedTemplateRow[]> {
   const rows: UnifiedTemplateRow[] = [];
   const want = product ?? "all";
@@ -34,7 +35,7 @@ export async function loadUnifiedTemplates(
     const prisma = getPrisma();
     const campaignTemplates = await prisma.template.findMany({
       where: { workspaceId },
-      orderBy: { updatedAt: "desc" },
+      orderBy: { name: "asc" },
     });
     for (const t of campaignTemplates) {
       rows.push({
@@ -44,7 +45,7 @@ export async function loadUnifiedTemplates(
         channel: t.channel,
         body: t.body,
         category: t.category,
-        updatedAt: t.updatedAt.toISOString(),
+        updatedAt: null,
         editable: true,
         href: `/templates`,
       });
@@ -85,21 +86,17 @@ export async function loadUnifiedTemplates(
   }
 
   if (want === "all" || want === "mctb") {
-    const setup = await getPrisma().solutionSetup.findFirst({
-      where: { workspaceId, solutionKey: "missed_call_text_back" },
-      select: { configJson: true },
-    });
-    const cfg = (setup?.configJson as Record<string, unknown> | null) ?? {};
-    const textBack = (cfg.textBack as Record<string, unknown> | undefined)?.opener;
-    if (typeof textBack === "string" && textBack.trim()) {
+    const mctb = await loadMissedCallTextConfig(workspaceId);
+    const opener = mctb.messageTemplate?.trim();
+    if (opener) {
       rows.push({
         id: "mctb-recovery-opener",
         product: "mctb",
         name: "Recovery opener",
         channel: "SMS",
-        body: textBack,
+        body: opener,
         editable: true,
-        href: "/mctb/setup/text-back",
+        href: "/mctb/text-back",
       });
     }
   }
