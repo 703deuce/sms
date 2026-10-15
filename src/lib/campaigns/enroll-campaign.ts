@@ -3,6 +3,7 @@ import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { parseSequence, waitDurationMs, type SequenceStep } from "./sequence-engine";
 import { advanceRecipient } from "./sequence-runner";
+import { workspaceSuppressionBlocksMassSms } from "@/lib/messaging/suppression-scope";
 
 export type EnrollContactInput = {
   workspaceId: string;
@@ -30,21 +31,23 @@ export async function enrollContactInCampaign(input: EnrollContactInput) {
   const phone = input.phone ? normalizeE164(input.phone) : undefined;
   const email = input.email?.trim().toLowerCase() || undefined;
 
-  if (phone) {
-    const suppressed = await prisma.suppression.findFirst({
-      where: { workspaceId: input.workspaceId, phone },
-    });
-    if (suppressed) {
-      throw new Error("Contact is on the suppression list");
+  if (workspaceSuppressionBlocksMassSms()) {
+    if (phone) {
+      const suppressed = await prisma.suppression.findFirst({
+        where: { workspaceId: input.workspaceId, phone },
+      });
+      if (suppressed) {
+        throw new Error("Contact is on the suppression list");
+      }
     }
-  }
 
-  if (email) {
-    const suppressed = await prisma.suppression.findFirst({
-      where: { workspaceId: input.workspaceId, email },
-    });
-    if (suppressed) {
-      throw new Error("Email is on the suppression list");
+    if (email) {
+      const suppressed = await prisma.suppression.findFirst({
+        where: { workspaceId: input.workspaceId, email },
+      });
+      if (suppressed) {
+        throw new Error("Email is on the suppression list");
+      }
     }
   }
 
@@ -170,13 +173,13 @@ export async function validateBulkRecipients(
   const emails = [...new Set(normalized.map((n) => n.email).filter(Boolean))] as string[];
 
   const [phoneSuppressions, emailSuppressions, activeEnrollments] = await Promise.all([
-    phones.length
+    workspaceSuppressionBlocksMassSms() && phones.length
       ? prisma.suppression.findMany({
           where: { workspaceId, phone: { in: phones } },
           select: { phone: true },
         })
       : Promise.resolve([]),
-    emails.length
+    workspaceSuppressionBlocksMassSms() && emails.length
       ? prisma.suppression.findMany({
           where: { workspaceId, email: { in: emails } },
           select: { email: true },

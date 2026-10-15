@@ -307,20 +307,13 @@ export async function sendCampaignMessageById(messageId: string) {
     throw new JobDeferredError(reason, 60 * 60_000);
   }
 
-  const { shouldBypassSmsSuppressionForCertPhone } = await import(
-    "@/lib/messaging/cert-test-phone"
-  );
+  const { workspaceSuppressionBlocksMassSms } = await import("@/lib/messaging/suppression-scope");
 
   if (isPhoneCampaignChannel(message.channel) && message.to) {
     const contact = await prisma.contact.findUnique({
       where: { workspaceId_phone: { workspaceId: message.workspaceId, phone: message.to } },
     });
-    const certBypass = shouldBypassSmsSuppressionForCertPhone(message.to);
-    if (
-      !certBypass &&
-      contact &&
-      (contact.status === "UNSUBSCRIBED" || contact.status === "BLOCKED")
-    ) {
+    if (contact?.status === "BLOCKED") {
       await prisma.campaignMessage.update({
         where: { id: messageId },
         data: { status: "opted_out", error: `contact_${contact.status.toLowerCase()}` },
@@ -338,35 +331,35 @@ export async function sendCampaignMessageById(messageId: string) {
       return { optedOut: true };
     }
 
-    const suppressed =
-      !certBypass &&
-      (await prisma.suppression.findFirst({
+    if (workspaceSuppressionBlocksMassSms()) {
+      const suppressed = await prisma.suppression.findFirst({
         where: { workspaceId: message.workspaceId, phone: message.to },
-      }));
-    if (suppressed) {
-      await prisma.campaignMessage.update({
-        where: { id: messageId },
-        data: { status: "opted_out", error: "suppressed" },
       });
-      await prisma.campaignRecipient.updateMany({
-        where: { id: message.recipientId, workflowStatus: { in: [...ACTIVE_RECIPIENT] } },
-        data: {
-          workflowStatus: "opted_out",
-          stopReason: "suppression",
-          completedAt: new Date(),
-          enrollmentKey: null,
-          nextActionAt: null,
-        },
-      });
-      await prisma.campaignMessage.updateMany({
-        where: { recipientId: message.recipientId, status: "queued" },
-        data: { status: "skipped", error: "stopped: opted_out" },
-      });
-      return { optedOut: true };
+      if (suppressed) {
+        await prisma.campaignMessage.update({
+          where: { id: messageId },
+          data: { status: "opted_out", error: "suppressed" },
+        });
+        await prisma.campaignRecipient.updateMany({
+          where: { id: message.recipientId, workflowStatus: { in: [...ACTIVE_RECIPIENT] } },
+          data: {
+            workflowStatus: "opted_out",
+            stopReason: "suppression",
+            completedAt: new Date(),
+            enrollmentKey: null,
+            nextActionAt: null,
+          },
+        });
+        await prisma.campaignMessage.updateMany({
+          where: { recipientId: message.recipientId, status: "queued" },
+          data: { status: "skipped", error: "stopped: opted_out" },
+        });
+        return { optedOut: true };
+      }
     }
   }
 
-  if (message.channel === "email" && message.to) {
+  if (message.channel === "email" && message.to && workspaceSuppressionBlocksMassSms()) {
     const suppressed = await prisma.suppression.findFirst({
       where: { workspaceId: message.workspaceId, email: message.to.toLowerCase() },
     });
@@ -404,12 +397,14 @@ export async function sendCampaignMessageById(messageId: string) {
     });
     return { skipped: true, status: "recipient_terminal" };
   }
-  if (isPhoneCampaignChannel(message.channel) && message.to) {
-    const lateSuppressed =
-      !shouldBypassSmsSuppressionForCertPhone(message.to) &&
-      (await prisma.suppression.findFirst({
-        where: { workspaceId: message.workspaceId, phone: message.to },
-      }));
+  if (
+    workspaceSuppressionBlocksMassSms() &&
+    isPhoneCampaignChannel(message.channel) &&
+    message.to
+  ) {
+    const lateSuppressed = await prisma.suppression.findFirst({
+      where: { workspaceId: message.workspaceId, phone: message.to },
+    });
     if (lateSuppressed) {
       await prisma.campaignMessage.updateMany({
         where: { id: messageId, status: "sending" },

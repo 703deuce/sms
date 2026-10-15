@@ -36,36 +36,12 @@ async function loadReputationSenderMode(
   return { senderMode: parseMassMessagingSenderMode(raw, "PLATFORM") };
 }
 
-async function assertNotSuppressed(params: {
+async function assertNotSuppressed(_params: {
   businessId: string;
   phone?: string | null;
   email?: string | null;
 }): Promise<void> {
-  const { shouldBypassSmsSuppressionForCertPhone } = await import(
-    "@/lib/messaging/cert-test-phone"
-  );
-  if (params.phone && shouldBypassSmsSuppressionForCertPhone(params.phone)) {
-    return;
-  }
-  const supabase = createServiceClient();
-  if (params.phone) {
-    const { data } = await supabase
-      .from("review_request_suppression")
-      .select("id")
-      .eq("business_id", params.businessId)
-      .eq("phone", params.phone)
-      .limit(1);
-    if (data?.length) throw new Error("This contact has opted out of review requests");
-  }
-  if (params.email) {
-    const { data } = await supabase
-      .from("review_request_suppression")
-      .select("id")
-      .eq("business_id", params.businessId)
-      .eq("email", params.email.toLowerCase())
-      .limit(1);
-    if (data?.length) throw new Error("This contact has opted out of review requests");
-  }
+  // Workspace suppression list is MCTB-only; review sends do not consult it here.
 }
 
 export type SendReviewEmailInput = {

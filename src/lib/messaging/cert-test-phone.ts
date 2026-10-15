@@ -1,6 +1,6 @@
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 
-const DEFAULT_CERT_PHONES = "+15714776175";
+const DEFAULT_CERT_PHONES = "+15714776175,+17038166017";
 
 /** E.164 numbers used for live product certification (comma-separated env override). */
 export function listSmsCertTestPhonesE164(): string[] {

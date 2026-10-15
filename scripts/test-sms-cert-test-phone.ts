@@ -6,6 +6,7 @@ import {
 } from "../src/lib/messaging/cert-test-phone";
 
 assert.equal(isSmsCertTestPhoneE164("+15714776175"), true);
+assert.equal(isSmsCertTestPhoneE164("+17038166017"), true);
 assert.equal(isSmsCertTestPhoneE164("5714776175"), true);
 assert.equal(isSmsCertTestPhoneE164("+15551234567"), false);
 assert.equal(shouldBypassSmsSuppressionForCertPhone("+15714776175"), true);

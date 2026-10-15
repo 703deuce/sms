@@ -125,59 +125,6 @@ export async function sendCampaignMessageById(
     .eq("id", claimed.recipient_id)
     .maybeSingle();
 
-  if (recipient?.phone || recipient?.email) {
-    const { shouldBypassSmsSuppressionForCertPhone } = await import(
-      "@/lib/messaging/cert-test-phone"
-    );
-    let suppressed = false;
-    if (
-      (channel === "sms" || channel === "both" || !channel) &&
-      recipient.phone &&
-      !shouldBypassSmsSuppressionForCertPhone(recipient.phone)
-    ) {
-      const { data } = await supabase
-        .from("review_request_suppression")
-        .select("id, expires_at")
-        .eq("business_id", businessId)
-        .eq("phone", recipient.phone)
-        .limit(5);
-      suppressed = Boolean(
-        (data ?? []).some(
-          (s) => !s.expires_at || new Date(String(s.expires_at)).getTime() > Date.now()
-        )
-      );
-    }
-    if (!suppressed && (channel === "email" || channel === "both" || !channel) && recipient.email) {
-      const { data } = await supabase
-        .from("review_request_suppression")
-        .select("id, expires_at")
-        .eq("business_id", businessId)
-        .eq("email", recipient.email.toLowerCase())
-        .limit(5);
-      suppressed = Boolean(
-        (data ?? []).some(
-          (s) => !s.expires_at || new Date(String(s.expires_at)).getTime() > Date.now()
-        )
-      );
-    }
-    if (suppressed) {
-      await supabase
-        .from("review_request_messages")
-        .update({ status: "opted_out", updated_at: claimTs })
-        .eq("id", claimed.id)
-        .eq("status", "sending");
-      await supabase
-        .from("review_request_recipients")
-        .update({
-          workflow_status: "opted_out",
-          next_action_at: null,
-          updated_at: claimTs,
-        })
-        .eq("id", claimed.recipient_id);
-      return { ok: true, skipped: true, channel };
-    }
-  }
-
   const usageKey = channel === "sms" ? "review_sms_sent" : "review_emails_sent";
   try {
     await reserveUsage(organizationId, usageKey, 1, { enforceLimit: true });

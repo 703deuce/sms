@@ -76,18 +76,23 @@ export async function validateBulkRecipients(params: {
     }
   }
 
-  const { data: suppressions } = await supabase
-    .from("review_request_suppression")
-    .select("phone, email, expires_at")
-    .eq("business_id", params.businessId);
-
+  const { workspaceSuppressionBlocksReviewSms } = await import(
+    "@/lib/messaging/suppression-scope"
+  );
   const suppressedPhones = new Set<string>();
   const suppressedEmails = new Set<string>();
-  const now = Date.now();
-  for (const s of suppressions ?? []) {
-    if (s.expires_at && new Date(s.expires_at).getTime() < now) continue;
-    if (s.phone) suppressedPhones.add(phoneDigitsForMatch(s.phone));
-    if (s.email) suppressedEmails.add(s.email.toLowerCase());
+  if (workspaceSuppressionBlocksReviewSms()) {
+    const { data: suppressions } = await supabase
+      .from("review_request_suppression")
+      .select("phone, email, expires_at")
+      .eq("business_id", params.businessId);
+
+    const now = Date.now();
+    for (const s of suppressions ?? []) {
+      if (s.expires_at && new Date(s.expires_at).getTime() < now) continue;
+      if (s.phone) suppressedPhones.add(phoneDigitsForMatch(s.phone));
+      if (s.email) suppressedEmails.add(s.email.toLowerCase());
+    }
   }
 
   // Also honor contact-level opt-out flags (may exist without a suppression row).
