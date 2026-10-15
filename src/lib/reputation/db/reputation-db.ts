@@ -84,7 +84,13 @@ const TIMESTAMPTZ_COLUMNS = new Set([
   "last_used_at",
   "published_at",
   "owner_responded_at",
+  "terms_acknowledged_at",
+  "next_action_at",
+  "enrolled_at",
+  "occurred_at",
 ]);
+
+const DATE_COLUMNS = new Set(["start_date", "service_date", "last_review_date_seen"]);
 
 const JSONB_COLUMN_HINTS = new Set([
   "settings_json",
@@ -96,6 +102,9 @@ const JSONB_COLUMN_HINTS = new Set([
   "known_review_ids",
   "tags",
   "send_days",
+  "sequence_json",
+  "mapping_json",
+  "trigger_config",
   "poster_config",
   "warnings",
   "aggregate_metrics",
@@ -385,6 +394,9 @@ class ReputationQueryBuilder {
           if (TIMESTAMPTZ_COLUMNS.has(c) && (typeof v === "string" || v instanceof Date)) {
             return `$${i + 1}::timestamptz`;
           }
+          if (DATE_COLUMNS.has(c) && typeof v === "string") {
+            return `$${i + 1}::date`;
+          }
           return `$${i + 1}`;
         });
         const sql = `INSERT INTO "${table}" (${castCols.join(",")}) VALUES (${valueExprs.join(",")}) RETURNING *`;
@@ -435,6 +447,9 @@ class ReputationQueryBuilder {
         }
         if (TIMESTAMPTZ_COLUMNS.has(c) && (typeof v === "string" || v instanceof Date)) {
           return `"${c}" = $${i + 1}::timestamptz`;
+        }
+        if (DATE_COLUMNS.has(c) && typeof v === "string") {
+          return `"${c}" = $${i + 1}::date`;
         }
         return `"${c}" = $${i + 1}`;
       })
