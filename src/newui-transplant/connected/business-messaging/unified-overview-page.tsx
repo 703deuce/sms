@@ -34,8 +34,8 @@ export function UnifiedOverviewPage({
         <PageHeader title="Overview" description="Transovo Business Messaging" />
         <OpusDataSurface className={cn(OPUS_CARD, "p-6")}>
           <p className="text-sm text-muted-foreground">
-            Activate a messaging service to see activity here. Choose Missed Call Text Back,
-            Appointment Reminders, or Campaigns from Settings → Billing.
+            Activate Missed Call Text Back to see activity here, or manage your plan under
+            Settings → Billing.
           </p>
           <TextLink href="/settings/billing" className="mt-3 inline-block">
             View plans
