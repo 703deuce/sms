@@ -52,4 +52,10 @@ for (const col of ["source", "last_contacted_at", "campaign_attempts", "latest_r
   assert.ok(migration.includes(col), `migration must add ${col}`);
 }
 
+const testRoute = read("src/app/api/appointment-reminders/reminders/test/route.ts");
+assert.ok(
+  testRoute.includes('from "@/lib/sms/segment-encoding"'),
+  "reminders/test must import analyzeSmsBody from segment-encoding",
+);
+
 console.log("test-production-journey-blocker-fixes: ok");
