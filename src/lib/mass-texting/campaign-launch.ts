@@ -459,6 +459,12 @@ export async function launchCampaignWithAudit(input: {
     } catch {
       // queue kick is best-effort
     }
+    try {
+      const { enqueueDueCampaignMessages } = await import("@/lib/campaigns/campaign-processor");
+      await enqueueDueCampaignMessages(input.workspaceId);
+    } catch {
+      // queue kick is best-effort
+    }
   }
 
   try {

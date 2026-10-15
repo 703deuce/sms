@@ -79,6 +79,8 @@ export function ReviewRequestsBulkWizard({
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
   const [consent, setConsent] = useState(false);
   const [bypassRecentContact, setBypassRecentContact] = useState(false);
+  const [quickPhone, setQuickPhone] = useState("");
+  const [quickFirstName, setQuickFirstName] = useState("");
 
   const sampleRows = useMemo(() => rows.slice(0, 3), [rows]);
   const readyCount = summary?.ready ?? 0;
@@ -195,6 +197,21 @@ export function ReviewRequestsBulkWizard({
     URL.revokeObjectURL(url);
   }
 
+  function startQuickSingleContact() {
+    setError(null);
+    const phone = quickPhone.replace(/\D/g, "");
+    if (phone.length < 10) {
+      setError("Enter a valid phone number (10+ digits).");
+      return;
+    }
+    const e164 = phone.startsWith("1") && phone.length === 11 ? `+${phone}` : `+1${phone.slice(-10)}`;
+    setFilename("single-contact.csv");
+    setHeaders(["phone", "first_name"]);
+    setRows([[e164, quickFirstName.trim() || "Customer"]]);
+    setMappings({ phone: "phone", first_name: "first_name" });
+    setStep(1);
+  }
+
   async function submitCampaign(asDraft: boolean) {
     if (!asDraft && !consent) {
       setError("Please confirm customer consent before starting.");
@@ -212,6 +229,9 @@ export function ReviewRequestsBulkWizard({
           channel,
           templateId: templateId || null,
           dailySendLimit: dailyLimit,
+          sendDays: [0, 1, 2, 3, 4, 5, 6],
+          sendWindowStart: "00:00",
+          sendWindowEnd: "23:59",
           startDate,
           consentConfirmed: consent,
           filename,
@@ -252,7 +272,15 @@ export function ReviewRequestsBulkWizard({
       <div>
         <h2 className={OPUS_CARDTitle}>Bulk Review Requests</h2>
         <p className={`mt-0.5 ${"text-xs text-muted-foreground"}`}>
-          Upload a customer list and send review requests safely over time.
+          Upload a list or add one number. Sends are paced by your daily limit and include automatic
+          SMS/email follow-ups if customers do not click your review link.
+        </p>
+        <p className="mt-1 text-[11px] text-zinc-500">
+          For custom multi-step sequences and templates, use{" "}
+          <a href="/reviews/campaigns" className="font-medium text-primary underline">
+            Review campaigns
+          </a>
+          .
         </p>
       </div>
 
@@ -311,6 +339,34 @@ export function ReviewRequestsBulkWizard({
             >
               <Download className="h-4 w-4" />
               Download CSV template
+            </button>
+          </div>
+          <div className="mx-auto mt-8 max-w-md rounded-xl border border-zinc-200 bg-white p-4 text-left">
+            <p className="text-[13px] font-semibold text-zinc-800">Or send to one number</p>
+            <p className="mt-1 text-[11px] text-zinc-500">
+              Creates a one-row list — useful for testing or a single customer.
+            </p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <label className="block text-[12px] sm:col-span-2">
+                <span className={rrLabelClass}>Phone</span>
+                <input
+                  className={rrInputClass}
+                  placeholder="+1 571 477 6175"
+                  value={quickPhone}
+                  onChange={(e) => setQuickPhone(e.target.value)}
+                />
+              </label>
+              <label className="block text-[12px]">
+                <span className={rrLabelClass}>First name (optional)</span>
+                <input
+                  className={rrInputClass}
+                  value={quickFirstName}
+                  onChange={(e) => setQuickFirstName(e.target.value)}
+                />
+              </label>
+            </div>
+            <button type="button" className={cn(rrOutlineBtn, "mt-3 w-full")} onClick={startQuickSingleContact}>
+              Continue with this number <ArrowRight className="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -500,7 +556,11 @@ export function ReviewRequestsBulkWizard({
             <ul className="mt-2 space-y-1 text-[11px]">
               <li>This campaign will send to {readyCount} customers over ~{businessDays} business days.</li>
               <li>Daily limit: {dailyLimit}/day</li>
-              <li>Send window: Monday–Friday, 10 AM–6 PM (America/New_York)</li>
+              <li>
+                Follow-up sequence: reminder after 2 days, final reminder after 4 more days if no
+                click (skipped when customer opts out).
+              </li>
+              <li>Send window: any time (paced by daily limit)</li>
               <li>Skipped contacts: {(summary?.total_rows ?? 0) - readyCount}</li>
             </ul>
           </div>

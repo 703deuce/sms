@@ -174,6 +174,16 @@ export async function POST(request: Request) {
 
     try {
       const result = await createReviewCampaign(input);
+      if (launchStatus === "active" || launchStatus === "scheduled") {
+        try {
+          const { enqueueDueCampaignMessages } = await import(
+            "@/lib/reputation/campaign-processor"
+          );
+          await enqueueDueCampaignMessages(50);
+        } catch {
+          // background workers also drain; kick queue after launch
+        }
+      }
       // Wire webhook endpoint → campaign for automatic triggers.
       if (
         (triggerType === "webhook" || result.campaign.trigger_type === "webhook") &&
