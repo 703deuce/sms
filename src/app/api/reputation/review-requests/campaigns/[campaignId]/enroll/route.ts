@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { httpErrorFromException } from "@/lib/security/http-errors";
 import { requireOrganizationPermission } from "@/lib/auth/permissions";
 import { requireRecentAuth } from "@/lib/auth/reauth";
+import { getSession } from "@/lib/auth";
 import { requireBusinessAccess } from "@/lib/auth/api-auth";
 import { requireCampaignSendAccess } from "@/lib/auth/entitlements";
 import { enrollContactInCampaign } from "@/lib/campaigns/enroll-campaign";
@@ -71,12 +72,13 @@ export async function POST(
       allowWhilePaused: false,
     });
 
+    const session = await getSession();
     const auditMeta = requestAuditMeta(request);
     await writeSecurityAuditEvent({
       action: "campaign.send",
       organizationId: auth.organizationId,
-      actorUserId: permAuth.userId,
-      actorEmail: permAuth.email,
+      actorUserId: auth.userId,
+      actorEmail: session?.email ?? null,
       resourceType: "review_request_campaign",
       resourceId: campaignId,
       meta: { enrollmentSource: "manual", contactId: result.contactId ?? null },
