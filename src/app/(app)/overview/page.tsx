@@ -5,6 +5,10 @@ import { isActiveEntitlement } from "@/lib/products/types";
 import { requireWorkspaceContext } from "@/lib/workspace-data";
 import { workspaceHasAppointmentReminders } from "@/lib/appointment-reminders/entitlement";
 import { getSession } from "@/lib/auth";
+import {
+  isAppointmentRemindersInBusinessMessagingSidebar,
+  isMassSmsInBusinessMessagingSidebar,
+} from "@/lib/workspace/platform-launch";
 
 export default async function BusinessMessagingOverviewPage() {
   const { workspaceId } = await requireWorkspaceContext();
@@ -21,9 +25,17 @@ export default async function BusinessMessagingOverviewPage() {
 
   const mctbData = hasMctb ? await loadMctbOverviewCore(workspaceId) : null;
 
+  const showArOnOverview =
+    hasAppointmentReminders && isAppointmentRemindersInBusinessMessagingSidebar();
+  const showMassOnOverview = hasMassSms && isMassSmsInBusinessMessagingSidebar();
+
   return (
     <UnifiedOverviewPage
-      services={{ hasMctb, hasAppointmentReminders, hasMassSms }}
+      services={{
+        hasMctb,
+        hasAppointmentReminders: showArOnOverview,
+        hasMassSms: showMassOnOverview,
+      }}
       mctbData={mctbData}
     />
   );

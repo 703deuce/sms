@@ -14,6 +14,11 @@ import type { NavItem } from "@/lib/nav";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import { AR_ROUTES } from "@/lib/appointment-reminders/routes";
 import { REVIEW_ROUTES } from "@/lib/reviews/routes";
+import {
+  isAppointmentRemindersInBusinessMessagingSidebar,
+  isMassSmsInBusinessMessagingSidebar,
+  isReviewsInBusinessMessagingSidebar,
+} from "@/lib/workspace/platform-launch";
 
 export type BusinessMessagingNavEntitlements = {
   inboxBadge?: number;
@@ -183,7 +188,7 @@ export function buildBusinessMessagingNav(input: BusinessMessagingNavEntitlement
     },
   ];
 
-  items.push(
+  const serviceItems: NavItem[] = [
     {
       label: "Missed Call Text Back",
       href: MCTB_ROUTES.home,
@@ -192,32 +197,44 @@ export function buildBusinessMessagingNav(input: BusinessMessagingNavEntitlement
       badge: input.hasMctb ? undefined : "Activate",
       children: [...MCTB_SIDEBAR_CHILDREN],
     },
-    {
+  ];
+
+  if (isAppointmentRemindersInBusinessMessagingSidebar()) {
+    serviceItems.push({
       label: "Appointment Reminders",
       href: AR_ROUTES.home,
       icon: CalendarClock,
       badge: input.hasAppointmentReminders ? undefined : "Activate",
       children: [...AR_SIDEBAR_CHILDREN],
-    },
-    {
+    });
+  }
+
+  if (isMassSmsInBusinessMessagingSidebar()) {
+    serviceItems.push({
       label: "Campaigns",
       href: "/campaigns",
       icon: Megaphone,
       badge: input.hasMassSms ? undefined : "Activate",
-    },
-    {
+    });
+  }
+
+  if (isReviewsInBusinessMessagingSidebar()) {
+    serviceItems.push({
       label: "Reviews",
       href: REVIEW_ROUTES.overview,
       icon: Star,
       badge: input.hasReviews === false ? "Activate" : undefined,
       children: [...REVIEWS_SIDEBAR_CHILDREN],
-    },
-    {
-      label: "AI Voice Agent",
-      href: MCTB_ROUTES.voiceAgent,
-      icon: AudioLines,
-    },
-  );
+    });
+  }
+
+  serviceItems.push({
+    label: "AI Voice Agent",
+    href: MCTB_ROUTES.voiceAgent,
+    icon: AudioLines,
+  });
+
+  items.push(...serviceItems);
 
   items.push(
     {
