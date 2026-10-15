@@ -73,6 +73,7 @@ const ALLOWED_TABLES = new Set([
 const TIMESTAMPTZ_COLUMNS = new Set([
   "created_at",
   "updated_at",
+  "sent_at",
   "scheduled_for",
   "started_at",
   "finished_at",
@@ -289,14 +290,32 @@ class ReputationQueryBuilder {
       }
       if (f.op === "gte") {
         params.push(f.val);
+        if (TIMESTAMPTZ_COLUMNS.has(col) && typeof f.val === "string") {
+          return `${sqlCol} >= $${params.length}::timestamptz`;
+        }
+        if (DATE_COLUMNS.has(col) && typeof f.val === "string") {
+          return `${sqlCol} >= $${params.length}::date`;
+        }
         return `${sqlCol} >= $${params.length}`;
       }
       if (f.op === "lte") {
         params.push(f.val);
+        if (TIMESTAMPTZ_COLUMNS.has(col) && typeof f.val === "string") {
+          return `${sqlCol} <= $${params.length}::timestamptz`;
+        }
+        if (DATE_COLUMNS.has(col) && typeof f.val === "string") {
+          return `${sqlCol} <= $${params.length}::date`;
+        }
         return `${sqlCol} <= $${params.length}`;
       }
       if (f.op === "lt") {
         params.push(f.val);
+        if (TIMESTAMPTZ_COLUMNS.has(col) && typeof f.val === "string") {
+          return `${sqlCol} < $${params.length}::timestamptz`;
+        }
+        if (DATE_COLUMNS.has(col) && typeof f.val === "string") {
+          return `${sqlCol} < $${params.length}::date`;
+        }
         return `${sqlCol} < $${params.length}`;
       }
       if (f.op === "is") {

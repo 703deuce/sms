@@ -71,6 +71,21 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
 
   const to = normalizeE164(input.to);
 
+  if (input.senderRoute?.phoneNumberId) {
+    const { resolveCanonicalMctbPlatformSender } = await import(
+      "@/lib/mctb/messaging/platform-sender-config"
+    );
+    const platform = await resolveCanonicalMctbPlatformSender();
+    if (platform?.phoneNumberId === input.senderRoute.phoneNumberId) {
+      const { isPlatformMctbSenderOptedOut } = await import(
+        "@/lib/mctb/messaging/platform-sender-suppression"
+      );
+      if (await isPlatformMctbSenderOptedOut(platform, to)) {
+        throw new Error("Recipient opted out on the shared platform sender (STOP)");
+      }
+    }
+  }
+
   if (recording) {
     if (input.senderRoute) {
       await applyPlatformDispatchGate(input);

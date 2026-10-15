@@ -13,35 +13,22 @@ import { resolveCanonicalMctbPlatformSender } from "../src/lib/mctb/messaging/pl
 import { resolveSharedPlatformOutboundSender } from "../src/lib/messaging/platform-outbound-sender";
 
 const WORKSPACE_ID = process.env.WORKSPACE_ID?.trim() || "ws_1";
+const SECOND_WORKSPACE_ID = process.env.SECOND_WORKSPACE_ID?.trim() || "";
 const HOURS = Number(process.env.SAMPLE_HOURS?.trim() || "48");
 const since = new Date(Date.now() - HOURS * 60 * 60 * 1000);
 
-async function main() {
-  const prisma = getPrisma();
-  const platform = await resolveCanonicalMctbPlatformSender();
-  const shared = await resolveSharedPlatformOutboundSender();
-
-  console.log("=== Platform sender (shared infrastructure) ===");
-  console.log({
-    canonical: platform,
-    sharedRoute: shared,
-    match:
-      platform?.e164 === shared?.fromE164 &&
-      platform?.phoneNumberId === shared?.phoneNumberId,
-  });
-
-  if (!platform?.e164) {
-    console.error("FAIL: no canonical platform sender configured");
-    process.exit(1);
-  }
-
-  const platformFrom = platform.e164;
-
-  console.log("\n=== Tenant scope:", WORKSPACE_ID, `(since ${since.toISOString()}) ===`);
+async function auditWorkspace(
+  prisma: ReturnType<typeof getPrisma>,
+  platformFrom: string,
+  platformPhoneNumberId: string,
+  platformOwnerWorkspaceId: string,
+  workspaceId: string,
+) {
+  console.log("\n=== Tenant scope:", workspaceId, `(since ${since.toISOString()}) ===`);
 
   const massMsgs = await prisma.message.findMany({
     where: {
-      workspaceId: WORKSPACE_ID,
+      workspaceId,
       createdAt: { gte: since },
       from: platformFrom,
     },
@@ -65,19 +52,7 @@ async function main() {
         select: { id: true, name: true, workspaceId: true },
       })
     : [];
-  const campaignWsMismatch = campaigns.filter((c) => c.workspaceId !== WORKSPACE_ID);
-
-  const wrongWorkspaceMass = await prisma.message.count({
-    where: {
-      workspaceId: { not: WORKSPACE_ID },
-      from: platformFrom,
-      createdAt: { gte: since },
-      OR: [
-        { campaignId: { in: campaigns.map((c) => c.id) } },
-        // quick heuristic: same body prefix as ws_1 mass cert — skip
-      ],
-    },
-  });
+  const campaignWsMismatch = campaigns.filter((c) => c.workspaceId !== workspaceId);
 
   console.log("\n--- Mass / quick SMS (Message table, platform FROM) ---");
   console.log({
@@ -88,11 +63,11 @@ async function main() {
   });
 
   const mctbTraces = await prisma.missedCallEvent.count({
-    where: { workspaceId: WORKSPACE_ID, createdAt: { gte: since } },
+    where: { workspaceId, createdAt: { gte: since } },
   });
   const mctbSms = await prisma.missedCallEvent.count({
     where: {
-      workspaceId: WORKSPACE_ID,
+      workspaceId,
       smsSentAt: { not: null },
       createdAt: { gte: since },
     },
@@ -102,42 +77,42 @@ async function main() {
   console.log({ missedCalls: mctbTraces, withRecoverySms: mctbSms });
 
   const arDispatches = await prisma.arReminderDispatch.count({
-    where: { workspaceId: WORKSPACE_ID, createdAt: { gte: since } },
+    where: { workspaceId, createdAt: { gte: since } },
   }).catch(() => null);
+
+  const arRecent = await prisma.arReminderDispatch.findMany({
+    where: { workspaceId, createdAt: { gte: since } },
+    select: { id: true, status: true, channel: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+    take: 5,
+  }).catch(() => []);
 
   console.log("\n--- Appointment reminders ---");
   console.log({
     reminderDispatches: arDispatches ?? "(model unavailable in compat)",
+    recentSamples: arRecent,
   });
 
   const sb = createServiceClient();
   const { data: reviewSends, error: rsErr } = await sb
     .from("review_request_sends")
     .select("id, business_id, recipient_phone, status, created_at")
-    .eq("business_id", WORKSPACE_ID)
+    .eq("business_id", workspaceId)
     .gte("created_at", since.toISOString())
     .order("created_at", { ascending: false })
     .limit(50);
-
-  const { data: reviewSendsOtherWs } = await sb
-    .from("review_request_sends")
-    .select("id, business_id")
-    .neq("business_id", WORKSPACE_ID)
-    .gte("created_at", since.toISOString())
-    .limit(5);
 
   console.log("\n--- Review requests ---");
   console.log({
     reviewSendsForWorkspace: reviewSends?.length ?? 0,
     reviewSendsQueryError: rsErr?.message ?? null,
-    sampleOtherBusinessIds: (reviewSendsOtherWs ?? []).map((r) => r.business_id),
   });
 
   const assignments = await prisma.mctbPlatformSenderAssignment.count({
-    where: { workspaceId: WORKSPACE_ID, state: "ACTIVE" },
+    where: { workspaceId, state: "ACTIVE" },
   });
   const productAssignments = await prisma.platformProductConsumerAssignment.count({
-    where: { workspaceId: WORKSPACE_ID },
+    where: { workspaceId },
   });
 
   console.log("\n--- Inbound routing maps (platform number → workspace) ---");
@@ -149,24 +124,102 @@ async function main() {
   const leakCheck = await prisma.message.findFirst({
     where: {
       campaignId: { in: campaigns.map((c) => c.id) },
-      workspaceId: { not: WORKSPACE_ID },
+      workspaceId: { not: workspaceId },
     },
     select: { id: true, workspaceId: true, campaignId: true },
   });
 
-  console.log("\n=== Isolation checks ===");
-  const ok =
-    campaignWsMismatch.length === 0 &&
-    !leakCheck &&
-    Boolean(platform?.e164);
+  const platformStopRows = await prisma.suppression.count({
+    where: {
+      workspaceId: platformOwnerWorkspaceId,
+      suppressionKey: { startsWith: `mctb_platform_sender:${platformPhoneNumberId}:` },
+      reason: { in: ["STOP", "OPT_OUT"] },
+    },
+  });
+
+  const workspaceStopRows = await prisma.suppression.count({
+    where: { workspaceId, reason: { in: ["STOP", "OPT_OUT"] } },
+  });
+
+  console.log("\n--- STOP records (read-only counts) ---");
+  console.log({
+    senderWidePlatformKeysOnOwnerWorkspace: platformStopRows,
+    workspaceScopedStopRows: workspaceStopRows,
+  });
+
+  console.log("\n=== Isolation checks:", workspaceId, "===");
+  const ok = campaignWsMismatch.length === 0 && !leakCheck;
   console.log({
     campaignsBelongToWorkspace: campaignWsMismatch.length === 0,
     noMessageLeakAcrossWorkspaceForThoseCampaigns: !leakCheck,
-    platformSenderResolved: Boolean(platform?.e164),
     overall: ok ? "PASS" : "NEEDS_REVIEW",
   });
+  return ok;
+}
 
-  if (!ok) process.exit(1);
+async function main() {
+  const prisma = getPrisma();
+  const platform = await resolveCanonicalMctbPlatformSender();
+  const shared = await resolveSharedPlatformOutboundSender();
+
+  console.log("=== Platform sender (shared infrastructure) ===");
+  console.log({
+    canonical: platform,
+    sharedRoute: shared,
+    match:
+      platform?.e164 === shared?.fromE164 &&
+      platform?.phoneNumberId === shared?.phoneNumberId,
+  });
+
+  if (!platform?.e164) {
+    console.error("FAIL: no canonical platform sender configured");
+    process.exit(1);
+  }
+
+  const platformFrom = platform.e164;
+
+  let secondWs = SECOND_WORKSPACE_ID;
+  if (!secondWs) {
+    const grouped = await prisma.message.groupBy({
+      by: ["workspaceId"],
+      where: { createdAt: { gte: since }, from: platformFrom },
+      _count: { id: true },
+      orderBy: { _count: { id: "desc" } },
+      take: 5,
+    });
+    secondWs =
+      grouped.find((g) => g.workspaceId !== WORKSPACE_ID)?.workspaceId ?? "";
+    console.log("\n--- Auto-selected comparison workspaces from platform FROM traffic ---");
+    console.log(grouped.map((g) => ({ workspaceId: g.workspaceId, count: g._count.id })));
+  }
+
+  const primaryOk = await auditWorkspace(
+    prisma,
+    platformFrom,
+    platform.phoneNumberId,
+    platform.workspaceId,
+    WORKSPACE_ID,
+  );
+  let secondaryOk = true;
+  if (secondWs && secondWs !== WORKSPACE_ID) {
+    secondaryOk = await auditWorkspace(
+      prisma,
+      platformFrom,
+      platform.phoneNumberId,
+      platform.workspaceId,
+      secondWs,
+    );
+  } else {
+    console.log("\n(No second workspace with platform FROM traffic in window — set SECOND_WORKSPACE_ID)");
+  }
+
+  console.log("\n=== Overall ===", {
+    primaryOk,
+    secondaryOk,
+    result: primaryOk && secondaryOk ? "PASS" : "NEEDS_REVIEW",
+  });
+
+  if (!primaryOk || !secondaryOk) process.exit(1);
 }
 
 main().catch((e) => {
