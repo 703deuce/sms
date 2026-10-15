@@ -52,6 +52,22 @@ const ALLOWED_TABLES = new Set([
   "reputation_competitors",
   "business_keywords",
   "review_campaign_steps",
+  "review_campaign_runs",
+  "review_records",
+  "review_request_clicks",
+  "review_request_uploads",
+  "review_response_drafts",
+  "scan_batches",
+  "scan_points",
+  "scan_results",
+  "scheduled_scans",
+  "maps_campaigns",
+  "integration_webhook_endpoints",
+  "organizations",
+  "payment_page_configurations",
+  "payment_page_methods",
+  "payment_page_suggested_amounts",
+  "payment_request_sessions",
 ]);
 
 const TIMESTAMPTZ_COLUMNS = new Set([
@@ -82,6 +98,7 @@ const JSONB_COLUMN_HINTS = new Set([
   "send_days",
   "poster_config",
   "warnings",
+  "aggregate_metrics",
 ]);
 
 function sqlValue(col: string, val: unknown): unknown {
