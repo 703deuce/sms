@@ -157,7 +157,17 @@ export function ReviewRequestsSendSection({
         templateId: smsTemplate?.id,
       }),
     });
-    const json = await res.json();
+    const raw = await res.text();
+    let json: { error?: string; usedTrialTemplate?: boolean } = {};
+    if (raw.trim()) {
+      try {
+        json = JSON.parse(raw) as { error?: string; usedTrialTemplate?: boolean };
+      } catch {
+        throw new Error(`SMS failed (${res.status}): invalid server response`);
+      }
+    } else if (!res.ok) {
+      throw new Error(`SMS failed (${res.status}): empty server response`);
+    }
     if (!res.ok) throw new Error(json.error ?? "SMS failed");
     return json as { usedTrialTemplate?: boolean };
   }

@@ -47,3 +47,19 @@ export async function isBillingHealthy(_organizationId: string): Promise<boolean
 export async function getOrgBillingStatus(_organizationId: string): Promise<string> {
   return "active";
 }
+
+/** Gate review / campaign one-off sends (SMS + email). */
+export async function requireCampaignSendAccess(organizationId: string): Promise<void> {
+  await requireEntitlement(organizationId, "review_campaigns");
+  if (await isOutboundPaused(organizationId)) {
+    throw new EntitlementError("Outbound messaging is paused", "outbound_paused");
+  }
+  if (!(await isBillingHealthy(organizationId))) {
+    throw new EntitlementError("Billing is not active for this workspace", "billing");
+  }
+  const { checkCreditBalance } = await import("@/lib/billing/entitlements");
+  const credit = await checkCreditBalance(organizationId);
+  if (!credit.ok) {
+    throw new EntitlementError(credit.error, "credits");
+  }
+}
