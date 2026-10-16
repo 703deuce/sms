@@ -74,3 +74,27 @@ CI proves **compiler + catalog + prompts**. It does **not** replace:
 3. Live FIND/BOOK against authorized Microsoft test calendar + cleanup
 
 Use `docs/CURSOR-CLOUD-COOLIFY-DEPLOYMENT.md` deploy + manual PSTN smoke when `DATABASE_URL` / workspace access is available.
+
+## Production proof checklist (after PR #677 deploy)
+
+1. Merge and deploy `cursor/voice-v3-wizard-capability-parity-f350` (PR #677).
+2. In the **real wizard UI** on isolated agent `cmu42zyel…` / **+15714073615**:
+   - Microsoft 365 **direct booking**
+   - Connected authorized test calendar
+   - Save Draft → hard reload → verify UI
+   - Publish / Activate
+3. **Inspect published compile** (prod container with `DATABASE_URL`):
+
+```bash
+WORKSPACE_ID=ws_1 AGENT_ID=cmu42zyel1c4x01090c6s335z \
+  COMPARE_AGENT_ID=cmshz2lc25c622c4i58303501 \
+  NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' \
+  npx tsx scripts/voice-v3-published-agent-tools-inspect.ts
+```
+
+Expect `compiledBookingStrategy: MICROSOFT_365`, `m365CalendarToolsComplete: true`, and seven calendar-related tools in `compiledAstraTools` when reschedule/cancel capabilities are on.
+
+4. **PSTN smoke:** call business line → ask availability → one safe book → confirm Graph event → delete test event.
+5. **UX:** single appropriate intro (connection + Amy coordinated); no phantom reply after silence.
+
+CI parity ≠ step 3–5. Step 3 catches wizard→publish gaps; steps 4–5 catch executor/calendar/runtime gaps.
