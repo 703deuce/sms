@@ -3,7 +3,8 @@
 **Audience:** Product / engineering review — “is the foundation wrong?”  
 **Canonical UI (Opus):** `/voice/receptionist` (summary) · `/voice/receptionist/edit?step=…` (8-step wizard)  
 **Primary API:** `POST/GET /api/solutions/appointment-receptionist`  
-**Last reviewed against repo:** `master` (Oct 2026), including lightweight goals/phone saves.
+**Last reviewed against repo:** `master` (Oct 2026).  
+**Lifecycle ADR (current target):** `docs/AI-RECEPTIONIST-CONFIG-LIFECYCLE-ADR.md` — **Save Draft** is DB-only (no live sync, hooks, or compile); **Activate** owns publish.
 
 ---
 
@@ -13,18 +14,18 @@ The AI Receptionist is **not** a single JSON blob in the browser. It is a **mult
 
 | Store | What it holds | Role |
 |--------|----------------|------|
-| **`VoiceAgent.draftConfig`** | Compiled `VoiceAgentConfig` + full wizard snapshot under `advanced.appointmentReceptionistWizard` | **Runtime source of truth for prompts, tools, voice, transfers** after compile/recompile |
+| **`VoiceAgent.draftConfig`** | Wizard snapshot under `advanced.appointmentReceptionistWizard` + `wizardConfigRevision`; full compile on **Activate** / test | **Authoritative editable config** on save; compiled fields updated on publish |
 | **`VoiceAgentVersion.config`** (when ACTIVE) | Published snapshot used on **live calls** | What callers hear until next publish/live-sync |
 | **`SolutionSetup.configJson.wizard`** | Copy of wizard fields for inventory / linking | Durability + catalog; merged on load with draft |
 | **Platform rows (side effects)** | `VoiceKnowledgeBase`, `VoiceService`, transfer destinations, `AutomationFlow`, phone `settingsJson`, Company Brain, etc. | Created/updated by **activate hooks** on every save (with exceptions below) |
 
-**Intended mental model:** Wizard UI → one POST → merge by step → build config → update draft → (optional) hooks → (optional) workflow compile → (on Activate) trigger deployments + Telnyx/LiveKit publish.
+**Intended mental model:** Edit → **Save Draft** (merge + persist snapshot) → **Test** (compile isolated) → **Activate** (hooks + compile + workflow + Telnyx/LiveKit publish).
 
 **Where teams often feel “the foundation is wrong”:**
 
 1. **Per-step merge** — Saving step A must not wipe step B; only “owned fields” for that step apply from the client payload.
-2. **Draft vs live** — Editing an **ACTIVE** agent saves draft; **live calls** use published version until `syncLiveWizardDraftToProvider` or full **Activate** succeeds.
-3. **Heavy work on save** — KB crawl, workflow compile, Telnyx sync, and calendar service sync run on many saves; goals/phone were recently exempted from the worst parts (see §4).
+2. **Draft vs live** — **Save Draft** must not change live callers; published `VoiceAgentVersion` stays until **Activate** succeeds.
+3. **Heavy work on save** — Historically KB crawl, workflow compile, and Telnyx sync ran on draft save; draft path now skips these (see ADR). Async KB and tracked publish are follow-ups.
 4. **Duplicate surfaces** — `/voice/knowledge`, `/voice/call-handling`, and wizard steps overlap; wizard is canonical for setup, ops pages for day-2 edits (must use same API/state).
 5. **Conversation “rules” toggles** — UI toggles were removed; **mandatory guardrails** are forced in API + hydrate (`conversation-guardrails.ts`).
 

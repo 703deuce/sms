@@ -15,7 +15,6 @@ import type {
 } from "@/lib/solutions/appointment-receptionist/types";
 import { applyMandatoryConversationGuardrails } from "@/lib/solutions/appointment-receptionist/conversation-guardrails";
 import { mergeWizardStateForSave } from "@/lib/solutions/appointment-receptionist/merge-wizard-state-on-save";
-import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import {
   loadAppointmentReceptionistSetup,
   outcomeSlugFromWizard,
@@ -35,6 +34,10 @@ import {
   traceIncomingPayload,
   tracePublishDiff,
 } from "@/lib/solutions/appointment-receptionist/config-tracing/route-tracing";
+import {
+  persistAppointmentReceptionistWizardDraft,
+  WizardDraftPersistError,
+} from "@/lib/solutions/appointment-receptionist/wizard-draft-persist";
 
 export async function GET(request: Request) {
   try {
@@ -76,11 +79,6 @@ export async function POST(request: Request) {
 
     const receptionistTraceId = resolveReceptionistTraceId(request, body);
     const action = body.action || "save_draft";
-    const wizardStepId = body.wizardStepId;
-    const lightweightDraftSave =
-      wizardStepId != null &&
-      (wizardStepId === "goals" || wizardStepId === "phone") &&
-      (action === "save_draft" || action === "create_draft");
     let state = body.state;
     if (!state || typeof state !== "object") {
       return NextResponse.json({ error: "state is required" }, { status: 400 });
@@ -131,6 +129,71 @@ export async function POST(request: Request) {
       beforeGuardrails: beforeGuardrailsState,
       afterGuardrails: state,
     });
+
+    if (action === "save_draft" || action === "create_draft") {
+      try {
+        traceCompileAndRuntime(routeTrace, {
+          state,
+          compiled: buildWizardAgentConfig(state),
+          mode: "draft_compile",
+        });
+        const draft = await persistAppointmentReceptionistWizardDraft({
+          workspaceId: auth.workspaceId,
+          state,
+          action,
+        });
+        const agentSnapshotAfter = await loadAgentLiveSnapshot(
+          auth.workspaceId,
+          draft.agentId,
+        );
+        await finalizeDraftSaveTrace(routeTrace, {
+          workspaceId: auth.workspaceId,
+          agentId: draft.agentId,
+          savedState: draft.state,
+          expectedRevision: draft.configRevision,
+          agentSnapshotAfter,
+        });
+        return NextResponse.json({
+          data: {
+            receptionistTraceId,
+            agentId: draft.agentId,
+            setupId: draft.setupId,
+            outcomeSlug: draft.outcomeSlug,
+            configRevision: draft.configRevision,
+            published: false,
+            liveSyncApplied: false,
+            liveSyncError: null,
+            liveSyncPending: false,
+            healthStatus: draft.healthStatus,
+            healthMessage: draft.healthMessage,
+            state: draft.state,
+            issues: draft.issues,
+            warnings: draft.warnings,
+          },
+        });
+      } catch (err) {
+        if (err instanceof WizardDraftPersistError) {
+          return NextResponse.json(
+            {
+              error: err.message,
+              data: {
+                receptionistTraceId,
+                agentId: err.data.agentId,
+                issues: [
+                  {
+                    severity: "error",
+                    message: err.message,
+                    id: err.data.code,
+                  },
+                ],
+              },
+            },
+            { status: 400 },
+          );
+        }
+        throw err;
+      }
+    }
 
     let activationMode = state.activationMode || "activate_now";
     const warnings: string[] = [];
@@ -186,28 +249,25 @@ export async function POST(request: Request) {
       workspaceId: auth.workspaceId,
       agentId,
       state,
-      mode: effectiveAction === "activate" ? "activate" : "save_draft",
+      mode: "activate",
       options: {
-        processKnowledgeSources: !lightweightDraftSave,
+        processKnowledgeSources: true,
       },
     });
     routeTrace.ledger.record("activate_hooks", {
-      mode: effectiveAction === "activate" ? "activate" : "save_draft",
-      lightweight: lightweightDraftSave,
+      mode: "activate",
+      lightweight: false,
     });
 
-    // Company-scoped answers → Company Brain (canonical). Amy retrieves; does not own a second copy.
-    if (!lightweightDraftSave) {
-      try {
-        const { syncCompanyBrainFromWizard } = await import(
-          "@/lib/agents/appointment-booking/sync-company-brain-from-wizard"
-        );
-        await syncCompanyBrainFromWizard(auth.workspaceId, state);
-      } catch (err) {
-        warnings.push(
-          `Company Brain sync: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
+    try {
+      const { syncCompanyBrainFromWizard } = await import(
+        "@/lib/agents/appointment-booking/sync-company-brain-from-wizard"
+      );
+      await syncCompanyBrainFromWizard(auth.workspaceId, state);
+    } catch (err) {
+      warnings.push(
+        `Company Brain sync: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
 
     const shouldPublish = effectiveAction === "activate";
@@ -349,43 +409,11 @@ export async function POST(request: Request) {
       status: shouldPublish || preserveActiveOnDraftSave ? undefined : "DRAFT",
     });
 
-    let liveSyncApplied = false;
-    let liveSyncError: string | null = null;
+    const liveSyncApplied = false;
+    const liveSyncError: string | null = null;
 
-    if (preserveActiveOnDraftSave && state.phoneNumberId && !lightweightDraftSave) {
-      const { syncLiveWizardDraftToProvider } = await import("@/lib/voice/agent-service");
-      routeTrace.ledger.record("telnyx_sync", { trigger: "active_draft_save" });
-      const liveSync = await syncLiveWizardDraftToProvider(auth.workspaceId, agentId);
-      if (!liveSync.synced && liveSync.error && liveSync.error !== "not_live") {
-        liveSyncError = liveSync.error;
-        const authoritativeOnSyncFail = await loadAppointmentReceptionistSetup(
-          auth.workspaceId,
-          { agentId },
-        );
-        return NextResponse.json(
-          {
-            error: "Saved, but live configuration could not be updated",
-            data: {
-              agentId,
-              liveSyncApplied: false,
-              liveSyncError,
-              liveSyncPending: true,
-              state: authoritativeOnSyncFail?.state ?? state,
-              issues: hooks.issues,
-              warnings: [
-                ...warnings,
-                "Your changes were saved. Live calls still use the previous configuration until sync succeeds — try saving again.",
-              ],
-            },
-          },
-          { status: 422 },
-        );
-      }
-      liveSyncApplied = liveSync.synced;
-    }
-
-    // Long-term memory via VoiceMemoryConfig — enable or explicitly disable.
-    if (shouldPublish || effectiveAction !== "create_draft") {
+    // Long-term memory via VoiceMemoryConfig — enable or explicitly disable (publish only).
+    if (shouldPublish) {
       try {
         const { saveMemoryConfig } = await import("@/lib/voice/platform/ai-platform");
         if (state.longTermMemory) {
@@ -434,12 +462,10 @@ export async function POST(request: Request) {
     if (workflowCompileError) {
       warnings.push(`Workflow compile: ${workflowCompileError}`);
     }
-    if (!lightweightDraftSave) {
-      routeTrace.ledger.record("workflow_compile", {
-        primaryFlowId,
-        error: workflowCompileError,
-      });
-    }
+    routeTrace.ledger.record("workflow_compile", {
+      primaryFlowId,
+      error: workflowCompileError,
+    });
 
     if (shouldPublish) {
       if (!state.phoneNumberId) {
@@ -707,14 +733,6 @@ export async function POST(request: Request) {
       setupId: setup.setupId,
     });
     const agentSnapshotAfter = await loadAgentLiveSnapshot(auth.workspaceId, agentId);
-    if (action === "save_draft" || action === "create_draft") {
-      await finalizeDraftSaveTrace(routeTrace, {
-        workspaceId: auth.workspaceId,
-        agentId,
-        savedState: (authoritative?.state ?? state) as AppointmentReceptionistWizardState,
-        agentSnapshotAfter,
-      });
-    }
     if (shouldPublish) {
       const refreshedAgent = await getPrisma().voiceAgent.findFirst({
         where: { id: agentId, workspaceId: auth.workspaceId },

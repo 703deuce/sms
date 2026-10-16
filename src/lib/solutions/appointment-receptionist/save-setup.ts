@@ -78,6 +78,8 @@ export type UpsertAppointmentReceptionistSetupInput = {
     preset?: string | null;
   };
   published: boolean;
+  /** When false, only mirror wizard JSON on SolutionSetup — no automation flow compile. */
+  compileWorkflow?: boolean;
   links?: {
     calendarConnectionId?: string | null;
     routingRuleIds?: string[];
@@ -264,6 +266,8 @@ export async function upsertAppointmentReceptionistSetup(
   // Activate publishes Telnyx routing from the trigger — not Use Agent → self.
   let primaryFlowId: string | null = null;
   let workflowCompileError: string | null = null;
+  const shouldCompileWorkflow = input.compileWorkflow !== false;
+  if (shouldCompileWorkflow) {
   try {
     const {
       ensureAgentPrimaryWorkflow,
@@ -333,6 +337,12 @@ export async function upsertAppointmentReceptionistSetup(
     workflowCompileError =
       err instanceof Error ? err.message : String(err);
     primaryFlowId = null;
+  }
+  } else {
+    primaryFlowId =
+      existing?.primaryFlowId ||
+      (agentRow?.linkedAutomationIds as string[] | undefined)?.[0] ||
+      null;
   }
 
   await emitPlatformEvent({
