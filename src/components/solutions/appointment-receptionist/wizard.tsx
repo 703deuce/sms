@@ -415,7 +415,9 @@ export function AppointmentReceptionistWizard({
         }),
       });
       const json = await res.json();
-      if (!res.ok) {
+      const liveSyncPending422 =
+        res.status === 422 && json?.data?.liveSyncPending === true;
+      if (!res.ok && !liveSyncPending422) {
         const issueMsgs = Array.isArray(json?.data?.issues)
           ? (json.data.issues as Array<{ message?: string }>)
               .map((i) => i.message)
@@ -457,9 +459,28 @@ export function AppointmentReceptionistWizard({
           ...(stateOverride || {}),
         });
       }
-      if (json.data?.liveSyncError) {
-        setError(String(json.data.liveSyncError));
-        return null;
+      if (json.data?.liveSyncError || liveSyncPending422) {
+        const syncMsg =
+          json.data?.liveSyncError ||
+          json.error ||
+          "Saved, but live calls could not be updated yet.";
+        const hint = Array.isArray(json.data?.warnings)
+          ? (json.data.warnings as string[]).filter(Boolean).join(" ")
+          : "";
+        setError([syncMsg, hint].filter(Boolean).join(" "));
+        if (liveSyncPending422 && json.data?.agentId) {
+          return {
+            agentId: json.data.agentId as string,
+            telnyxAssistantId:
+              (json.data.telnyxAssistantId as string | null | undefined) ??
+              payload.telnyxAssistantId,
+            clonedAgentId: null,
+            liveSyncPending: true,
+          };
+        }
+        if (json.data?.liveSyncError && !liveSyncPending422) {
+          return null;
+        }
       }
       if (warnings.length) {
         setError(warnings.join(" "));

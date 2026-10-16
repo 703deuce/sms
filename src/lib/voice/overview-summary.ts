@@ -33,8 +33,11 @@ import {
   buildOverviewAttentionRows,
   calendarProviderCustomerLabel,
   deriveOverviewPublicationStatus,
+  deriveOverviewLiveSyncStatus,
+  liveSyncStatusLabel,
   publicationStatusLabel,
   type OverviewAttentionRow,
+  type OverviewLiveSyncStatus,
   type OverviewPublicationStatus,
 } from "./overview-summary-present";
 
@@ -76,6 +79,9 @@ export type VoiceOverviewOperational = {
     label: string;
     tone: "ok" | "warn" | "muted";
   } | null;
+  liveSyncStatus: OverviewLiveSyncStatus;
+  liveSyncLabel: string;
+  healthMessage: string | null;
   setupProblems: string[];
   phone: {
     label: string;
@@ -326,6 +332,27 @@ async function buildOperationalState(input: {
     wizardPhoneNumberId: input.wizard?.phoneNumberId ?? null,
   });
 
+  let healthStatus: string | null = null;
+  let healthMessage: string | null = null;
+  if (agentId) {
+    const healthRow = await getPrisma().voiceAgent.findFirst({
+      where: { id: agentId, workspaceId: input.workspaceId },
+      select: { healthStatus: true, healthMessage: true, status: true },
+    });
+    healthStatus = healthRow?.healthStatus ?? null;
+    healthMessage = healthRow?.healthMessage ?? null;
+  }
+
+  const liveSyncStatus = deriveOverviewLiveSyncStatus({
+    publicationStatus: input.publicationStatus,
+    agentStatus: input.agent?.status ?? null,
+    hasPhone: Boolean(input.wizard?.phoneNumberId || input.agent?.primaryPhoneNumberId),
+    healthStatus,
+    healthMessage,
+    livekitTone: livekitStatus.tone,
+  });
+  const liveSyncLabel = liveSyncStatusLabel(liveSyncStatus);
+
   const setupProblems: string[] = [];
   if (livekitStatus.tone !== "ok") {
     setupProblems.push(livekitStatus.label);
@@ -335,6 +362,9 @@ async function buildOperationalState(input: {
   }
   if (input.publicationStatus !== "active") {
     setupProblems.push(publicationStatusLabel(input.publicationStatus));
+  }
+  if (liveSyncStatus === "pending_live_sync" && healthMessage) {
+    setupProblems.push(healthMessage);
   }
 
   return {
@@ -350,6 +380,9 @@ async function buildOperationalState(input: {
     transferSummary,
     callbackSummary,
     livekitStatus,
+    liveSyncStatus,
+    liveSyncLabel,
+    healthMessage,
     setupProblems,
     phone,
     calendar,

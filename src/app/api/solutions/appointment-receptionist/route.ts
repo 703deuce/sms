@@ -22,6 +22,7 @@ import {
 } from "@/lib/solutions/appointment-receptionist/save-setup";
 import { agentTypeFromOutcomeSlug } from "@/lib/agents/types";
 import { uniqueAgentDisplayName } from "@/lib/solutions/appointment-receptionist/wizard-presets";
+import { validateReceptionistPhoneSelection } from "@/lib/solutions/appointment-receptionist/validate-phone-selection";
 
 export async function GET(request: Request) {
   try {
@@ -172,116 +173,111 @@ export async function POST(request: Request) {
     const preserveActiveOnDraftSave =
       effectiveAction === "save_draft" && existingAgent?.status === "ACTIVE";
 
+    const { isAppointmentReceptionistAgent } = await import(
+      "@/lib/voice-v3/config/from-published-agent"
+    );
+    const receptionistAgent = isAppointmentReceptionistAgent(configWithKb);
+
+    if (state.phoneNumberId && receptionistAgent) {
+      const phoneValidation = await validateReceptionistPhoneSelection({
+        workspaceId: auth.workspaceId,
+        phoneNumberId: state.phoneNumberId,
+        agentId,
+        allowTakeoverFromOtherAgent: shouldPublish,
+      });
+      if (!phoneValidation.ok) {
+        return NextResponse.json(
+          {
+            error: phoneValidation.error,
+            data: {
+              agentId,
+              issues: [
+                {
+                  severity: "error",
+                  message: phoneValidation.error,
+                  id: phoneValidation.code,
+                },
+              ],
+              warnings,
+            },
+          },
+          { status: 400 },
+        );
+      }
+      if (
+        preserveActiveOnDraftSave &&
+        state.phoneNumberId !== existingAgent?.phoneNumberId
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "Changing the assigned phone on a live receptionist requires activation with takeover. Save other settings or use Activate.",
+            data: {
+              agentId,
+              issues: [
+                {
+                  severity: "error",
+                  message:
+                    "Live receptionist phone changes are not applied from draft save alone.",
+                  id: "active_phone_change_blocked",
+                },
+              ],
+              warnings,
+            },
+          },
+          { status: 400 },
+        );
+      }
+    }
+
+    const phonePatchForDraft =
+      preserveActiveOnDraftSave && state.phoneNumberId === existingAgent?.phoneNumberId
+        ? undefined
+        : state.phoneNumberId;
+
     const updated = await updateVoiceAgentDraft(auth.workspaceId, agentId, {
       name,
       description: `${productAgentType} — wizard setup`,
       agentType: productAgentType,
       displayName: state.agentName || name,
       purpose: "appointment_receptionist",
-      phoneNumberId: shouldPublish ? state.phoneNumberId : state.phoneNumberId,
+      phoneNumberId: shouldPublish ? state.phoneNumberId : phonePatchForDraft,
       draftConfig: configWithKb,
       status: shouldPublish || preserveActiveOnDraftSave ? undefined : "DRAFT",
     });
 
     let liveSyncApplied = false;
     let liveSyncError: string | null = null;
-    let phoneLiveKitProvision: { ok: boolean; error?: string } | null = null;
-
-    const { isAppointmentReceptionistAgent } = await import(
-      "@/lib/voice-v3/config/from-published-agent"
-    );
-    const receptionistAgent = isAppointmentReceptionistAgent(configWithKb);
-
-    if (
-      receptionistAgent &&
-      state.phoneNumberId &&
-      body.wizardStepId === "phone" &&
-      effectiveAction === "save_draft"
-    ) {
-      const { provisionAppointmentReceptionistLiveKit } = await import(
-        "@/lib/voice-v3/receptionist-livekit-provisioning"
-      );
-      phoneLiveKitProvision = await provisionAppointmentReceptionistLiveKit({
-        workspaceId: auth.workspaceId,
-        phoneNumberId: state.phoneNumberId,
-        agentId,
-        publishedVersionId: existingAgent?.publishedVersionId,
-        publishedConfig: configWithKb,
-        configOnly: existingAgent?.status === "ACTIVE",
-      });
-      if (!phoneLiveKitProvision.ok) {
-        warnings.push(
-          phoneLiveKitProvision.error ||
-            "LiveKit phone provisioning did not complete — fix telephony before activating.",
-        );
-      }
-    }
 
     if (preserveActiveOnDraftSave && state.phoneNumberId) {
       const { syncLiveWizardDraftToProvider } = await import("@/lib/voice/agent-service");
       const liveSync = await syncLiveWizardDraftToProvider(auth.workspaceId, agentId);
       if (!liveSync.synced && liveSync.error && liveSync.error !== "not_live") {
         liveSyncError = liveSync.error;
+        const authoritativeOnSyncFail = await loadAppointmentReceptionistSetup(
+          auth.workspaceId,
+          { agentId },
+        );
         return NextResponse.json(
           {
-            error: "Live configuration sync failed",
+            error: "Saved, but live configuration could not be updated",
             data: {
               agentId,
               liveSyncApplied: false,
               liveSyncError,
+              liveSyncPending: true,
+              state: authoritativeOnSyncFail?.state ?? state,
               issues: hooks.issues,
-              warnings,
+              warnings: [
+                ...warnings,
+                "Your changes were saved. Live calls still use the previous configuration until sync succeeds — try saving again.",
+              ],
             },
           },
           { status: 422 },
         );
       }
       liveSyncApplied = liveSync.synced;
-      if (liveSync.synced) {
-        try {
-          const { isMctbV1Primary } = await import("@/lib/workspace/platform-launch");
-          if (isMctbV1Primary() && state.phoneNumberId) {
-            const { hasExplicitCallHandlingSelection } = await import(
-              "@/lib/call-handling/phone-settings"
-            );
-            const { getPrisma } = await import("@/lib/db");
-            const phoneRow = await getPrisma().phoneNumber.findFirst({
-              where: { id: state.phoneNumberId, workspaceId: auth.workspaceId },
-              select: { settingsJson: true },
-            });
-            const explicitCallHandling = hasExplicitCallHandlingSelection(
-              phoneRow?.settingsJson,
-            );
-            const { persistMctbLineInboundConfig } = await import(
-              "@/lib/mctb/inbound-handling/line-config"
-            );
-            await persistMctbLineInboundConfig({
-              workspaceId: auth.workspaceId,
-              phoneNumberId: state.phoneNumberId,
-              patch: { voiceAgentId: agentId },
-            }).catch(() => undefined);
-            if (!explicitCallHandling) {
-              const { setInboundHandlingMode } = await import(
-                "@/lib/mctb/inbound-handling/switch-mode"
-              );
-              await setInboundHandlingMode({
-                workspaceId: auth.workspaceId,
-                mode: "VOICE_AGENT",
-                phoneNumberId: state.phoneNumberId,
-                voiceAgentId: agentId,
-              }).catch((err) => {
-                warnings.push(
-                  err instanceof Error
-                    ? `Voice call-handling refresh: ${err.message}`
-                    : "Voice call-handling refresh failed",
-                );
-              });
-            }
-          }
-        } catch {
-          // non-blocking
-        }
-      }
     }
 
     // Long-term memory via VoiceMemoryConfig — enable or explicitly disable.
@@ -436,6 +432,30 @@ export async function POST(request: Request) {
           );
         }
 
+        triggerDeployments = triggerResult.deployments;
+
+        if (state.phoneNumberId && receptionistAgent) {
+          const { setActiveCallHandler } = await import(
+            "@/lib/call-handling/set-active-call-handler"
+          );
+          await setActiveCallHandler({
+            workspaceId: auth.workspaceId,
+            voiceIngressPhoneNumberId: state.phoneNumberId,
+            handler: "ai_receptionist",
+            userId: auth.session.userId,
+          });
+        }
+
+        const refreshedAgent = await getPrisma().voiceAgent.findFirst({
+          where: { id: agentId, workspaceId: auth.workspaceId },
+          select: { status: true, publishedVersionId: true },
+        });
+        if (refreshedAgent?.status !== "ACTIVE" || !refreshedAgent.publishedVersionId) {
+          throw new Error(
+            "Activation did not reach ACTIVE with a published version — try again",
+          );
+        }
+
         const newVersion = Math.max(1, (flow.version || 0) + 1);
         await prisma.automationFlow.update({
           where: { id: primaryFlowId },
@@ -449,32 +469,6 @@ export async function POST(request: Request) {
         });
 
         published = true;
-        triggerDeployments = triggerResult.deployments;
-
-        if (published && state.phoneNumberId && receptionistAgent) {
-          const { provisionAppointmentReceptionistLiveKit } = await import(
-            "@/lib/voice-v3/receptionist-livekit-provisioning"
-          );
-          const lkConfirm = await provisionAppointmentReceptionistLiveKit({
-            workspaceId: auth.workspaceId,
-            phoneNumberId: state.phoneNumberId,
-            agentId,
-            publishedVersionId: (
-              await getPrisma().voiceAgent.findFirst({
-                where: { id: agentId, workspaceId: auth.workspaceId },
-                select: { publishedVersionId: true },
-              })
-            )?.publishedVersionId,
-            publishedConfig: configWithKb,
-            configOnly: false,
-          });
-          if (!lkConfirm.ok) {
-            publishError =
-              lkConfirm.error || "LiveKit SIP provisioning failed after activation";
-            published = false;
-            throw new Error(publishError);
-          }
-        }
 
         if (published && state.phoneNumberId) {
           const { isMctbV1Primary } = await import("@/lib/workspace/platform-launch");
@@ -491,7 +485,6 @@ export async function POST(request: Request) {
             const { hasExplicitCallHandlingSelection } = await import(
               "@/lib/call-handling/phone-settings"
             );
-            const { getPrisma } = await import("@/lib/db");
             const phoneRow = await getPrisma().phoneNumber.findFirst({
               where: { id: state.phoneNumberId, workspaceId: auth.workspaceId },
               select: { settingsJson: true },
@@ -501,21 +494,6 @@ export async function POST(request: Request) {
             );
 
             if (!explicitCallHandling) {
-              const { setInboundHandlingMode } = await import(
-                "@/lib/mctb/inbound-handling/switch-mode"
-              );
-              await setInboundHandlingMode({
-                workspaceId: auth.workspaceId,
-                mode: "VOICE_AGENT",
-                phoneNumberId: state.phoneNumberId,
-                voiceAgentId: agentId,
-              }).catch((err) => {
-                warnings.push(
-                  err instanceof Error
-                    ? `Voice call-handling mode: ${err.message}`
-                    : "Voice call-handling mode switch failed",
-                );
-              });
               const { persistInitialCallHandlerIfUnset } = await import(
                 "@/lib/call-handling/initial-selection"
               );
@@ -530,6 +508,11 @@ export async function POST(request: Request) {
           }
         }
 
+        await getPrisma().voiceAgent.update({
+          where: { id: agentId },
+          data: { healthStatus: "ok", healthMessage: null },
+        });
+
         await upsertAppointmentReceptionistSetup({
           workspaceId: auth.workspaceId,
           agentId,
@@ -543,6 +526,14 @@ export async function POST(request: Request) {
         publishError =
           err instanceof Error ? err.message : "Activation / Telnyx publish failed";
         published = false;
+        if (primaryFlowId) {
+          await getPrisma()
+            .automationFlow.update({
+              where: { id: primaryFlowId, workspaceId: auth.workspaceId },
+              data: { status: "DRAFT", updatedAt: new Date() },
+            })
+            .catch(() => undefined);
+        }
       }
 
     }
@@ -569,7 +560,7 @@ export async function POST(request: Request) {
         previousAiOwner,
         liveSyncApplied,
         liveSyncError,
-        phoneLiveKitProvision,
+        liveSyncPending: Boolean(liveSyncError),
         state: authoritative?.state ?? state,
         issues: hooks.issues,
         warnings,

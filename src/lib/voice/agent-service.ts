@@ -171,7 +171,8 @@ export async function updateVoiceAgentDraft(
     // Drafts reserve the DID without stealing a live ACTIVE agent's inbound ownership.
     // Publish/activate claims exclusively via publishVoiceAgent → sync (exclusive).
     const nextStatus = patch.status || existing.status;
-    const exclusive = nextStatus === "ACTIVE";
+    // Reserve DIDs on draft saves; only publish/activate claims exclusive inbound ownership.
+    const exclusive = patch.status === "ACTIVE";
     const appointmentWizard = Boolean(
       (nextConfig.advanced as Record<string, unknown> | undefined)
         ?.appointmentReceptionistWizard,
@@ -776,6 +777,8 @@ export async function syncLiveWizardDraftToProvider(
     return { synced: false, error: "not_live" };
   }
 
+  let previousPublishedConfig: unknown = null;
+
   try {
     const { applyFlowToAgentDraft } = await import("./flow/apply");
     const applied = await applyFlowToAgentDraft({
@@ -798,6 +801,12 @@ export async function syncLiveWizardDraftToProvider(
     );
     config = await enrichVoiceAgentConfigForCanonicalAiBooking(workspaceId, agentId, config);
 
+    const publishedVersion = await prisma.voiceAgentVersion.findFirst({
+      where: { id: agent.publishedVersionId, workspaceId },
+      select: { config: true },
+    });
+    previousPublishedConfig = publishedVersion?.config ?? null;
+
     await prisma.voiceAgentVersion.update({
       where: { id: agent.publishedVersionId },
       data: { config: config as object },
@@ -818,11 +827,12 @@ export async function syncLiveWizardDraftToProvider(
           (config.advanced as Record<string, unknown> | undefined)
             ?.appointmentReceptionistWizard,
         );
+        // Live config sync updates dispatch metadata only — do not steal DID ownership.
         await syncVoiceAgentPhoneAssignment({
           workspaceId,
           agentId,
           phoneNumberId: agent.phoneNumberId,
-          exclusive: true,
+          exclusive: false,
           allowMctbTexmlVoiceAgentTakeover: appointmentWizard,
         });
       }
@@ -866,6 +876,21 @@ export async function syncLiveWizardDraftToProvider(
               });
             }
             if (!lk.ok) {
+              if (previousPublishedConfig) {
+                await prisma.voiceAgentVersion.update({
+                  where: { id: agent.publishedVersionId },
+                  data: { config: previousPublishedConfig as object },
+                });
+              }
+              await prisma.voiceAgent.update({
+                where: { id: agentId },
+                data: {
+                  healthStatus: "warning",
+                  healthMessage: (
+                    lk.error || "Live configuration sync failed — draft saved"
+                  ).slice(0, 500),
+                },
+              });
               return {
                 synced: false,
                 error: lk.error || "LiveKit configuration sync failed",
@@ -901,9 +926,31 @@ export async function syncLiveWizardDraftToProvider(
       }
     }
 
+    await prisma.voiceAgent.update({
+      where: { id: agentId },
+      data: { healthStatus: "ok", healthMessage: null },
+    });
+
     return { synced: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    if (agent.publishedVersionId && previousPublishedConfig) {
+      await prisma.voiceAgentVersion
+        .update({
+          where: { id: agent.publishedVersionId },
+          data: { config: previousPublishedConfig as object },
+        })
+        .catch(() => undefined);
+    }
+    await prisma.voiceAgent
+      .update({
+        where: { id: agentId },
+        data: {
+          healthStatus: "warning",
+          healthMessage: `Live sync failed: ${message.slice(0, 450)}`,
+        },
+      })
+      .catch(() => undefined);
     return { synced: false, error: message };
   }
 }

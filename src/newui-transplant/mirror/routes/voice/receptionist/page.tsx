@@ -25,6 +25,8 @@ export type VoiceReceptionistWired = {
   setupProblems?: string[]
   published?: boolean
   versionLabel?: string
+  liveSyncStatus?: string
+  liveSyncLabel?: string
   capabilities?: VoiceReceptionistCapabilityWired[]
   editHref?: string
 }
@@ -50,7 +52,7 @@ export function TransplantVoiceReceptionistPage({ wired }: { wired?: VoiceRecept
   const voiceLabel = wired?.voiceLabel ?? 'Not configured'
   const greeting = wired?.greeting ?? 'Configure an opening greeting in setup.'
   const published = wired?.published ?? false
-  const versionLabel = wired?.versionLabel ?? 'Draft'
+  const versionLabel = wired?.liveSyncLabel ?? wired?.versionLabel ?? 'Draft'
   const editHref = wired?.editHref ?? '/voice/receptionist/edit'
   const capabilities = wired?.capabilities?.filter((c) => c.enabled) ?? []
   const enabledCount = capabilities.length

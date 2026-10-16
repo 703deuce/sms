@@ -31,8 +31,10 @@ export function NewUiVoiceReceptionistPage() {
           callbackSummary: op.callbackSummary || undefined,
           livekitStatus: op.livekitStatus || undefined,
           setupProblems: op.setupProblems || [],
-          published: data.mode === "active" && op.publicationStatus === "active",
-          versionLabel: op.publicationLabel || undefined,
+          published: data.mode === "active" && op.liveSyncStatus === "live",
+          versionLabel: op.liveSyncLabel || op.publicationLabel || undefined,
+          liveSyncStatus: op.liveSyncStatus,
+          liveSyncLabel: op.liveSyncLabel,
           capabilities: op.capabilities || [],
           editHref: op.manageReceptionistHref || "/voice/receptionist/edit",
         });
