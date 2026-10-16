@@ -28,6 +28,10 @@ import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import { livekitProfileFromConfig } from "@/lib/voice/frontdesk/agent-config";
 import { getLiveKitAgentTemplateFromAdvanced } from "@/lib/voice/templates/agent-template-config";
 import {
+  VOICE_V3_LIVEKIT_AGENT_NAME,
+  resolveLiveKitInboundDispatchAgentName,
+} from "@/lib/voice-v3/livekit-inbound-dispatch";
+import {
   ensureTelnyxLiveKitFqdnConnection,
   routeTelnyxNumberToConnection,
 } from "./telnyx/sip-connection";
@@ -137,11 +141,13 @@ async function buildDispatchMetadataForAgent(input: {
   const { buildPythonRuntimeBootstrapSnapshot } = await import(
     "@/lib/voice/python-runtime-bridge/build-bootstrap-snapshot"
   );
+  const livekitDispatchAgentName = resolveLiveKitInboundDispatchAgentName(config);
   const snapshot = buildPythonRuntimeBootstrapSnapshot(config, {
     workspaceId: input.workspaceId,
     agentId: input.agentId,
     agentName: agent?.name || undefined,
   });
+  const voiceV3Dispatch = livekitDispatchAgentName === VOICE_V3_LIVEKIT_AGENT_NAME;
   return buildExplicitDispatchMetadata({
     workspaceId: input.workspaceId,
     agentId: input.agentId,
@@ -150,9 +156,10 @@ async function buildDispatchMetadataForAgent(input: {
     agentTemplate: getLiveKitAgentTemplateFromAdvanced(
       config.advanced as Record<string, unknown>,
     ),
+    livekitDispatchAgentName,
     toE164: input.toE164,
     dispatchSource: "phone_provision",
-    pythonRuntimeBootstrapSnapshot: snapshot,
+    pythonRuntimeBootstrapSnapshot: voiceV3Dispatch ? undefined : snapshot,
   });
 }
 

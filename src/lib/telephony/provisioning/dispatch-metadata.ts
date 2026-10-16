@@ -13,6 +13,8 @@ export type ExplicitDispatchMetadata = RoomMetadata & {
   livekitProfile?: string;
   publishedVersionId?: string;
   agentTemplate?: string;
+  /** LiveKit worker name (transovo-voice-v3 vs transovo-voice-runtime). */
+  livekitDispatchAgentName?: string;
   dispatchSource?: "phone_provision" | "sip_metadata" | "job_metadata" | "did_lookup" | "livekit_job_metadata";
   pythonRuntimeBootstrapSnapshot?: PythonRuntimeBootstrapSnapshot;
 };
@@ -23,6 +25,7 @@ export function buildExplicitDispatchMetadata(input: {
   publishedVersionId?: string | null;
   livekitProfile?: string | null;
   agentTemplate?: string | null;
+  livekitDispatchAgentName?: string | null;
   fromE164?: string | null;
   toE164?: string | null;
   dispatchSource: ExplicitDispatchMetadata["dispatchSource"];
@@ -34,6 +37,7 @@ export function buildExplicitDispatchMetadata(input: {
     publishedVersionId: input.publishedVersionId || undefined,
     livekitProfile: input.livekitProfile || undefined,
     agentTemplate: input.agentTemplate || undefined,
+    livekitDispatchAgentName: input.livekitDispatchAgentName || undefined,
     fromE164: input.fromE164 || undefined,
     toE164: input.toE164 || undefined,
     dispatchSource: input.dispatchSource,

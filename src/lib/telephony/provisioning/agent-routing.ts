@@ -131,14 +131,7 @@ export async function resolveAgentByCalledNumber(
   }> = [];
 
   for (const phone of phones) {
-    const canonical = await resolveCanonicalVoiceV3WorkspaceAgent(phone.workspaceId);
-    const inbound = canonical
-      ? {
-          id: canonical.agentId,
-          status: canonical.status,
-          name: canonical.agentName,
-        }
-      : await resolveInboundAiAgent(phone.workspaceId, phone.id);
+    const inbound = await resolveInboundAiAgent(phone.workspaceId, phone.id);
     if (!inbound) continue;
     candidates.push({
       phone,
@@ -160,10 +153,29 @@ export async function resolveAgentByCalledNumber(
   return candidates[0]!.routing;
 }
 
-/** Never swap inbound calls to legacy frontdesk / recency agents — canonical V3 only. */
+function canonicalCertE164(): string {
+  return process.env.VOICE_V3_CANONICAL_E164?.trim() || "+15717491060";
+}
+
+function e164Matches(a: string | undefined | null, b: string | undefined | null): boolean {
+  const left = safeNormalizeE164(a);
+  const right = safeNormalizeE164(b);
+  if (left && right) return left === right;
+  if (!a?.trim() || !b?.trim()) return false;
+  return a.replace(/\D/g, "") === b.replace(/\D/g, "");
+}
+
+/**
+ * On the cert DID only, never swap inbound to a stale/legacy agent from dispatch metadata.
+ * Other DIDs keep per-number inbound AI owners (wizard test lines, etc.).
+ */
 async function applyCanonicalInboundAgent(
   routing: AgentRoutingResolution,
 ): Promise<AgentRoutingResolution> {
+  if (!e164Matches(routing.e164, canonicalCertE164())) {
+    return routing;
+  }
+
   const canonical = await resolveCanonicalVoiceV3WorkspaceAgent(routing.workspaceId);
   if (!canonical || canonical.agentId === routing.agentId) return routing;
 
