@@ -146,7 +146,9 @@ const CALENDAR_HREF = "/integrations";
 
 export async function loadVoiceOverviewSummary(
   workspaceId: string,
+  options?: { hubOnly?: boolean },
 ): Promise<VoiceOverviewSummaryResult> {
+  const hubOnly = options?.hubOnly === true;
   const errors: VoiceOverviewSummaryResult["errors"] = {};
   const { resolveWorkspaceAppointmentReceptionistAgent } = await import(
     "@/lib/solutions/appointment-receptionist/resolve-workspace-agent"
@@ -195,47 +197,50 @@ export async function loadVoiceOverviewSummary(
   });
 
   let attention: OverviewAttentionRow[] = [];
-  try {
-    const [voiceCallAttention, openGaps, failedSources] = await Promise.all([
-      countVoiceCallsNeedingAttention(workspaceId),
-      countOpenKnowledgeGaps(workspaceId),
-      countFailedKnowledgeSources(workspaceId),
-    ]);
-
-    const blocking =
-      wizard
-        ? getWizardActivationIssues(wizard, {
-            hasCalendarConnection: operational.calendar?.tone === "ok",
-          }).filter((i) => i.severity === "blocking")
-        : [];
-
-    attention = buildOverviewAttentionRows({
-      voiceCallsNeedingAttention: voiceCallAttention,
-      openKnowledgeGaps: openGaps,
-      blockingSetupIssues: publicationStatus === "active" ? [] : blocking,
-    });
-  } catch {
-    errors.attention = "unavailable";
-  }
-
   let metrics: VoiceOverviewMetrics | null = null;
-  try {
-    const snap = await loadReceptionistAnalyticsSnapshot(workspaceId, 7);
-    metrics = {
-      periodLabel: "Last 7 days",
-      totalCalls: snap.totalCalls,
-      appointmentsBooked: snap.appointmentsBooked,
-      callbacksRequested: snap.callbacksRequested,
-    };
-  } catch {
-    errors.metrics = "unavailable";
-  }
-
   let recentCalls: VoiceOverviewRecentCall[] = [];
-  try {
-    recentCalls = await loadRecentInboundCalls(workspaceId, 5);
-  } catch {
-    errors.recentCalls = "unavailable";
+
+  if (!hubOnly) {
+    try {
+      const [voiceCallAttention, openGaps, failedSources] = await Promise.all([
+        countVoiceCallsNeedingAttention(workspaceId),
+        countOpenKnowledgeGaps(workspaceId),
+        countFailedKnowledgeSources(workspaceId),
+      ]);
+
+      const blocking =
+        wizard
+          ? getWizardActivationIssues(wizard, {
+              hasCalendarConnection: operational.calendar?.tone === "ok",
+            }).filter((i) => i.severity === "blocking")
+          : [];
+
+      attention = buildOverviewAttentionRows({
+        voiceCallsNeedingAttention: voiceCallAttention,
+        openKnowledgeGaps: openGaps,
+        blockingSetupIssues: publicationStatus === "active" ? [] : blocking,
+      });
+    } catch {
+      errors.attention = "unavailable";
+    }
+
+    try {
+      const snap = await loadReceptionistAnalyticsSnapshot(workspaceId, 7);
+      metrics = {
+        periodLabel: "Last 7 days",
+        totalCalls: snap.totalCalls,
+        appointmentsBooked: snap.appointmentsBooked,
+        callbacksRequested: snap.callbacksRequested,
+      };
+    } catch {
+      errors.metrics = "unavailable";
+    }
+
+    try {
+      recentCalls = await loadRecentInboundCalls(workspaceId, 5);
+    } catch {
+      errors.recentCalls = "unavailable";
+    }
   }
 
   const dependencies = buildDependencies({

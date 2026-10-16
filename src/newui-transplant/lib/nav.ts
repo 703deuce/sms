@@ -6,7 +6,6 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { isVoiceProductCustomerVisible } from '@/lib/products/launch-product-availability'
-import { RECEPTIONIST_WIZARD_NAV_ITEMS } from '@/lib/voice/receptionist/wizard-step-url'
 import { buildSchedulingOpusSidebarNav } from '@/lib/products/scheduling-opus-nav'
 import { buildMctbV1Nav } from '@/lib/products/mctb-nav'
 import {
@@ -40,12 +39,11 @@ export const VOICE_RECEPTIONIST_OPERATIONAL_ROUTES = {
   callHandlingOps: '/voice/call-handling',
 } as const
 
-export const RECEPTIONIST_SIDEBAR_CHILDREN: NavSubItem[] = RECEPTIONIST_WIZARD_NAV_ITEMS.map(
-  (s) => ({
-    label: s.label,
-    href: s.href,
-  }),
-)
+/** Summary first — wizard steps live on the edit route stepper, not sidebar deep links. */
+export const RECEPTIONIST_SIDEBAR_CHILDREN: NavSubItem[] = [
+  { label: 'Summary', href: '/voice/receptionist' },
+  { label: 'Setup wizard', href: '/voice/receptionist/edit?step=goals' },
+]
 
 export type NavSection = { label: string; items: NavItem[] }
 

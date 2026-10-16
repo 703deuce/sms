@@ -13,7 +13,7 @@ export function NewUiVoiceReceptionistPage() {
     let cancelled = false;
     setLoading(true);
     setLoadError(null);
-    fetch("/api/voice/overview", { cache: "no-store" })
+    fetch("/api/voice/overview?hub=1", { cache: "no-store" })
       .then((r) => {
         if (!r.ok) throw new Error("Could not load receptionist overview");
         return r.json();

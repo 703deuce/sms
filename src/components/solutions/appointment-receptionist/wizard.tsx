@@ -41,6 +41,7 @@ import { wizardPatchFromCompanyBrain } from "@/lib/solutions/appointment-recepti
 import { isLiveSyncPendingHealthStatus } from "@/lib/voice/agent-health-status";
 import { normalizeWizardBookingStrategy } from "@/lib/solutions/appointment-receptionist/booking-strategy-ui";
 import { applyMandatoryConversationGuardrails } from "@/lib/solutions/appointment-receptionist/conversation-guardrails";
+import { cn } from "@/lib/utils";
 
 const STORAGE_KEY_LEGACY = "transovo.appointment-receptionist.wizard.v1";
 const STORAGE_KEY_MCTB = "transovo.mctb.voice-agent.wizard.v1";
@@ -99,6 +100,7 @@ export function AppointmentReceptionistWizard({
   const [error, setError] = useState("");
   const [saveNotice, setSaveNotice] = useState("");
   const [hydrated, setHydrated] = useState(false);
+  const [savedFingerprint, setSavedFingerprint] = useState("");
 
   useEffect(() => {
     onAgentIdChange?.(state.agentId || null);
@@ -151,11 +153,11 @@ export function AppointmentReceptionistWizard({
                 merged.solutionName =
                   serverState.solutionName?.trim() || merged.solutionName;
               }
-              setState(
-                applyMandatoryConversationGuardrails(
-                  normalizeWizardBookingStrategy(merged as AppointmentReceptionistWizardState),
-                ),
+              const hydratedState = applyMandatoryConversationGuardrails(
+                normalizeWizardBookingStrategy(merged as AppointmentReceptionistWizardState),
               );
+              setState(hydratedState);
+              setSavedFingerprint(JSON.stringify(hydratedState));
               const statusRaw = String(loaded.status || loaded.agentStatus || "").toUpperCase();
               const healthStatus = String(loaded.healthStatus || "");
               const life =
@@ -319,9 +321,13 @@ export function AppointmentReceptionistWizard({
     })();
   }, [hydrated, isMctb, state.calendarConnected]);
 
+  const fingerprintState = useCallback((s: AppointmentReceptionistWizardState) => JSON.stringify(s), []);
+
   const patch = useCallback((p: Partial<AppointmentReceptionistWizardState>) => {
     setState((prev) => ({ ...prev, ...p }));
   }, []);
+
+  const isDirty = hydrated && fingerprintState(state) !== savedFingerprint;
 
   const steps = useMemo(
     () =>
@@ -450,25 +456,30 @@ export function AppointmentReceptionistWizard({
       const authoritativeState = json.data?.state as
         | AppointmentReceptionistWizardState
         | undefined;
+      let savedState: AppointmentReceptionistWizardState = payload;
       if (authoritativeState && typeof authoritativeState === "object") {
-        setState((prev) => ({
-          ...prev,
+        savedState = {
+          ...payload,
           ...authoritativeState,
           agentId,
           setupId,
           outcomeSlug,
           telnyxAssistantId,
-        }));
+        };
+        setState(savedState);
       } else {
-        patch({
+        savedState = {
+          ...payload,
           agentId,
           setupId,
           outcomeSlug,
           telnyxAssistantId,
           preset: isMctb ? payload.preset || "after_hours" : preset || payload.preset || null,
           ...(stateOverride || {}),
-        });
+        };
+        setState(savedState);
       }
+      setSavedFingerprint(fingerprintState(savedState));
       if (json.data?.liveSyncError || liveSyncPending422) {
         const syncMsg =
           json.data?.liveSyncError ||
@@ -559,13 +570,18 @@ export function AppointmentReceptionistWizard({
   const navigateToStep = useCallback(
     async (index: number, opts?: { skipSave?: boolean }) => {
       const next = Math.min(Math.max(index, 0), steps.length - 1);
-      if (!opts?.skipSave && state.agentId && next !== stepIndex) {
+      if (next === stepIndex) return;
+      if (!opts?.skipSave && isDirty) {
+        const saveFirst = window.confirm(
+          "You have unsaved changes on this step.\n\nOK — Save draft, then continue.\nCancel — Stay on this step.",
+        );
+        if (!saveFirst) return;
         const saved = await persist("save_draft");
         if (!saved?.agentId) return;
       }
       goToStep(next);
     },
-    [goToStep, persist, state.agentId, stepIndex, steps.length],
+    [goToStep, isDirty, persist, stepIndex, steps.length],
   );
 
   async function onContinue() {
@@ -657,7 +673,7 @@ export function AppointmentReceptionistWizard({
         />
       </div>
 
-      <div className="flex-1">
+      <div className={cn("flex-1", isOpus && "pb-32 sm:pb-28")}>
         {step?.id === "goals" ? (
           <GoalsStep
             state={state}
@@ -714,7 +730,7 @@ export function AppointmentReceptionistWizard({
           isMctb
             ? "mctb-va-footer sticky bottom-0 z-20 mt-6"
             : isOpus
-              ? "fixed bottom-0 left-0 right-0 z-20 mt-6 border-t bg-background/95 px-4 py-3 backdrop-blur md:pl-[var(--sidebar-width,0px)]"
+              ? "fixed bottom-0 left-0 right-0 z-50 mt-6 border-t bg-background/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur md:pl-[var(--sidebar-width,0px)]"
               : "sticky bottom-0 z-20 -mx-4 mt-6 border-t border-border bg-card/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:static lg:mx-0 lg:mt-8 lg:rounded-xl lg:border lg:px-5"
         }
       >
@@ -770,8 +786,12 @@ export function AppointmentReceptionistWizard({
                   : stepIndex === steps.length - 1
                     ? hireMode
                       ? "Put Amy to work"
-                      : "Activate"
-                    : "Continue"}
+                      : isOpus
+                        ? "Save & activate"
+                        : "Activate"
+                    : isOpus
+                      ? "Save & continue"
+                      : "Continue"}
               </FooterButton>
             </div>
           </div>

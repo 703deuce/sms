@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { isReceptionistWizardEditPath } from "@/lib/voice/receptionist/wizard-step-url";
 import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlements";
 import type { CurrentProduct } from "@/lib/products/types";
 
@@ -69,6 +70,13 @@ export function MobileNav({
   primaryVoiceAgentId?: string | null;
 }) {
   const pathname = usePathname();
+  if (
+    isReceptionistWizardEditPath(pathname) ||
+    pathname === MCTB_ROUTES.voiceAgent ||
+    pathname.startsWith(`${MCTB_ROUTES.voiceAgent}/`)
+  ) {
+    return null;
+  }
   const multiProduct = shouldShowProductSwitcher({
     hasMctb,
     hasMassSms,

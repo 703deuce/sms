@@ -66,7 +66,9 @@ export function TransplantVoiceReceptionistPage({ wired }: { wired?: VoiceRecept
         actions={
           <>
             <ButtonLink href={editHref} variant="outline">Continue setup</ButtonLink>
-            <ButtonLink href={editHref}>Open setup editor</ButtonLink>
+            <ButtonLink href={editHref.includes('?') ? editHref : `${editHref}?step=goals`}>
+              Open setup wizard
+            </ButtonLink>
           </>
         }
       />
