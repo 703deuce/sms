@@ -96,6 +96,7 @@ export function AppointmentReceptionistWizard({
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [saveNotice, setSaveNotice] = useState("");
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -406,6 +407,7 @@ export function AppointmentReceptionistWizard({
   ) {
     setBusy(true);
     setError("");
+    setSaveNotice("");
     const payload = stateOverride ? { ...state, ...stateOverride } : state;
     try {
       const res = await fetch("/api/solutions/appointment-receptionist", {
@@ -470,7 +472,7 @@ export function AppointmentReceptionistWizard({
         const hint = Array.isArray(json.data?.warnings)
           ? (json.data.warnings as string[]).filter(Boolean).join(" ")
           : "";
-        setError([syncMsg, hint].filter(Boolean).join(" "));
+        setSaveNotice([syncMsg, hint].filter(Boolean).join(" "));
         if (liveSyncPending422 && json.data?.agentId) {
           return {
             agentId: json.data.agentId as string,
@@ -486,7 +488,7 @@ export function AppointmentReceptionistWizard({
         }
       }
       if (warnings.length && !liveSyncPending422 && !json.data?.liveSyncError) {
-        setError(warnings.join(" "));
+        setSaveNotice(warnings.join(" "));
       }
       if (action === "activate") {
         if (json.data.publishError) {
@@ -562,6 +564,11 @@ export function AppointmentReceptionistWizard({
   );
 
   async function onContinue() {
+    if (steps[stepIndex]?.id === "goals" && state.capabilities.length === 0) {
+      setError("Select at least one capability for this receptionist.");
+      setSaveNotice("");
+      return;
+    }
     if (stepIndex < steps.length - 1) {
       if (stepIndex === 0 && !state.agentId) {
         const created = await persist("create_draft");
@@ -712,16 +719,20 @@ export function AppointmentReceptionistWizard({
             Back
           </FooterButton>
           <div className="flex flex-1 flex-col items-end gap-1 sm:flex-row sm:items-center sm:justify-end">
-            {error ? (
+            {error || saveNotice ? (
               <p
                 className={
-                  isOpus
-                    ? "max-w-md text-right text-xs text-destructive sm:mr-3"
-                    : "max-w-md text-right text-xs text-danger sm:mr-3"
+                  error
+                    ? isOpus
+                      ? "max-w-md text-right text-xs text-destructive sm:mr-3"
+                      : "max-w-md text-right text-xs text-danger sm:mr-3"
+                    : isOpus
+                      ? "max-w-md text-right text-xs text-amber-700 dark:text-amber-400 sm:mr-3"
+                      : "max-w-md text-right text-xs text-amber-800 sm:mr-3"
                 }
-                role={error ? "alert" : undefined}
+                role="status"
               >
-                {error}
+                {error || saveNotice}
               </p>
             ) : null}
             <div className="flex gap-2">

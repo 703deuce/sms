@@ -146,6 +146,7 @@ export function WizardSelectField({
   className?: string;
 }) {
   const { Label: L } = pickWizardFieldComponents(presentation);
+  const selectedLabel = options.find((o) => o.value === value)?.label ?? value;
   if (presentation === "opus") {
     return (
       <div className={className}>
@@ -159,7 +160,7 @@ export function WizardSelectField({
           }}
         >
           <SelectTrigger className="mt-1 h-9 w-full" aria-labelledby={id}>
-            <SelectValue />
+            <SelectValue placeholder={label}>{selectedLabel}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             {options.map((o) => (

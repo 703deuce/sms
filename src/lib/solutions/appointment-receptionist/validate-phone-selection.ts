@@ -2,8 +2,6 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { getPhoneNumberAiOwner } from "@/lib/voice/agent-phone";
-import { isMctbTexmlIngressLocked } from "@/lib/mctb/sip-ingress/sync";
-
 export type ReceptionistPhoneValidationResult =
   | { ok: true; phoneNumberId: string; e164: string }
   | { ok: false; error: string; code: string };
@@ -36,14 +34,8 @@ export async function validateReceptionistPhoneSelection(input: {
     };
   }
 
-  if (isMctbTexmlIngressLocked(phone.settingsJson)) {
-    return {
-      ok: false,
-      error:
-        "This number is on Missed Call Text Back TeXML ingress. Change call handling or pick another number before using AI Receptionist.",
-      code: "mctb_texml_locked",
-    };
-  }
+  // MCTB TeXML lock is cleared on publish via syncVoiceAgentPhoneAssignment
+  // (allowMctbTexmlVoiceAgentTakeover). Draft saves may select these DIDs.
 
   if (!input.allowTakeoverFromOtherAgent) {
     const owner = await getPhoneNumberAiOwner(input.workspaceId, phoneNumberId);

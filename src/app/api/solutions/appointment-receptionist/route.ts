@@ -215,29 +215,31 @@ export async function POST(request: Request) {
       }
       if (
         preserveActiveOnDraftSave &&
-        state.phoneNumberId !== existingAgent?.phoneNumberId
+        existingAgent?.phoneNumberId &&
+        state.phoneNumberId !== existingAgent.phoneNumberId
       ) {
-        return NextResponse.json(
-          {
-            error:
-              "Changing the assigned phone on a live receptionist requires activation with takeover. Save other settings or use Activate.",
-            data: {
-              agentId,
-              issues: [
-                {
-                  severity: "error",
-                  message:
-                    "Live receptionist phone changes are not applied from draft save alone.",
-                  id: "active_phone_change_blocked",
-                },
-              ],
-              warnings,
-            },
-          },
-          { status: 400 },
+        warnings.push(
+          "Live phone assignment was not changed — use Activate to switch numbers. Other settings were saved.",
         );
+        const keptPhone = await getPrisma().phoneNumber.findFirst({
+          where: { id: existingAgent.phoneNumberId, workspaceId: auth.workspaceId },
+          select: { id: true, e164: true },
+        });
+        state = {
+          ...state,
+          phoneNumberId: existingAgent.phoneNumberId,
+          phoneNumberE164: keptPhone?.e164 ?? state.phoneNumberE164,
+        };
       }
     }
+
+    const draftConfigAfterPhone = buildWizardAgentConfig(state);
+    const configWithKbAfterPhone = {
+      ...draftConfigAfterPhone,
+      knowledgeBaseIds: hooks.knowledgeBaseId
+        ? [hooks.knowledgeBaseId]
+        : draftConfigAfterPhone.knowledgeBaseIds || [],
+    };
 
     const phonePatchForDraft =
       preserveActiveOnDraftSave && state.phoneNumberId === existingAgent?.phoneNumberId
@@ -251,7 +253,7 @@ export async function POST(request: Request) {
       displayName: state.agentName || name,
       purpose: "appointment_receptionist",
       phoneNumberId: shouldPublish ? state.phoneNumberId : phonePatchForDraft,
-      draftConfig: configWithKb,
+      draftConfig: configWithKbAfterPhone,
       status: shouldPublish || preserveActiveOnDraftSave ? undefined : "DRAFT",
     });
 

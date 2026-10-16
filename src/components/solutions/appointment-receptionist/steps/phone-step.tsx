@@ -1,6 +1,9 @@
 "use client";
 
-import { DEFAULT_CONNECTION_GREETING } from "@/lib/solutions/appointment-receptionist/defaults";
+import {
+  DEFAULT_CONNECTION_GREETING,
+  DEFAULT_CONNECTION_GREETING_WARM,
+} from "@/lib/solutions/appointment-receptionist/defaults";
 import { hasBookingCapability } from "@/lib/solutions/appointment-receptionist/wizard-presets";
 import type {
   AppointmentReceptionistWizardState,
@@ -9,7 +12,7 @@ import type {
 } from "@/lib/solutions/appointment-receptionist/types";
 import { formatPhone } from "@/lib/utils";
 import { CheckCircle2, Circle, Play } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ButtonLink } from "@/newui-transplant/components/app/button-link";
 import { Panel, Stat } from "@/newui-transplant/components/app/kit";
 import { pickWizardFieldComponents, WizardSelectField } from "../wizard-field-kit";
@@ -25,6 +28,13 @@ type PhoneRow = {
   hasSoftphoneAssignment?: boolean;
   mctbTexmlLocked?: boolean;
 };
+
+function connectionGreetingTextForMode(mode: ConnectionGreetingMode): string {
+  if (mode === "none") return "";
+  if (mode === "transovo_warm") return DEFAULT_CONNECTION_GREETING_WARM;
+  if (mode === "create_custom") return "";
+  return DEFAULT_CONNECTION_GREETING;
+}
 
 const GREETING_OPTIONS: Array<{ id: ConnectionGreetingMode; label: string }> = [
   { id: "none", label: "No connection greeting" },
@@ -93,6 +103,17 @@ export function PhoneStep({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const sortedNumbers = useMemo(() => {
+    const rank = (n: PhoneRow) => {
+      if (n.aiOwner?.id === state.agentId) return 0;
+      if (!n.aiOwner && !n.mctbTexmlLocked) return 1;
+      if (n.aiOwner && n.aiOwner.id !== state.agentId) return 2;
+      if (n.mctbTexmlLocked) return 3;
+      return 4;
+    };
+    return [...numbers].sort((a, b) => rank(a) - rank(b));
+  }, [numbers, state.agentId]);
+
   const selected = numbers.find((n) => n.id === state.phoneNumberId);
   const booking = hasBookingCapability(state.capabilities);
   const displayNumber = selected
@@ -128,8 +149,16 @@ export function PhoneStep({
 
   const readinessItems = [
     { label: "Phone number", ready: Boolean(state.phoneNumberId), optional: false },
-    { label: "Inbound calling", ready: true, optional: false },
-    { label: "AI Voice", ready: true, optional: false },
+    {
+      label: "Inbound calling",
+      ready: Boolean(state.phoneNumberId),
+      optional: false,
+    },
+    {
+      label: "AI Voice",
+      ready: Boolean(state.voiceId?.trim()),
+      optional: true,
+    },
     { label: "Call recording", ready: state.callRecording !== "off", optional: true },
   ];
   const readinessStrip = isOpus ? (
@@ -201,10 +230,9 @@ export function PhoneStep({
           {isMctb && mctbLineReuse ? (
             <SelectableCard
               variant={uiVariant}
-              selected={
-                state.phoneNumberId &&
-                state.numberSource === "forward_existing"
-              }
+              selected={Boolean(
+                state.phoneNumberId && state.numberSource === "forward_existing",
+              )}
               onClick={() =>
                 patch({
                   numberSource: "forward_existing",
@@ -288,7 +316,7 @@ export function PhoneStep({
             </ol>
             {numbers.length ? (
               <div className="mt-2 space-y-1">
-                {numbers.map((n) => (
+                {sortedNumbers.map((n) => (
                   <RadioRow
                     key={n.id}
                     variant={uiVariant}
@@ -327,7 +355,7 @@ export function PhoneStep({
               </ol>
               {numbers.length ? (
                 <div className="mt-2 space-y-1">
-                  {numbers.map((n) => (
+                  {sortedNumbers.map((n) => (
                     <RadioRow
                       key={n.id}
                       variant={uiVariant}
@@ -354,9 +382,9 @@ export function PhoneStep({
             </div>
           )
         ) : null}
-        {state.numberSource === "existing" && numbers.length ? (
+        {state.numberSource === "existing" && sortedNumbers.length ? (
           <div className="mt-3 space-y-1.5">
-            {numbers.map((n) => {
+            {sortedNumbers.map((n) => {
               const ownedByOther =
                 n.aiOwner && n.aiOwner.id !== state.agentId ? n.aiOwner : null;
               const subline = n.mctbTexmlLocked
@@ -501,15 +529,18 @@ export function PhoneStep({
                   key={opt.id}
                   variant={uiVariant}
                   selected={state.connectionGreeting === opt.id}
-                  onClick={() =>
+                  onClick={() => {
+                    const presetText = connectionGreetingTextForMode(opt.id);
                     patch({
                       connectionGreeting: opt.id,
                       connectionGreetingText:
                         opt.id === "none"
                           ? ""
-                          : state.connectionGreetingText || DEFAULT_CONNECTION_GREETING,
-                    })
-                  }
+                          : presetText ||
+                            state.connectionGreetingText ||
+                            DEFAULT_CONNECTION_GREETING,
+                    });
+                  }}
                   label={opt.label}
                 />
               ))}
@@ -521,12 +552,13 @@ export function PhoneStep({
                 <div className="flex items-center gap-3">
                   <Button
                     type="button"
-                    size="icon-lg"
-                    className="rounded-full"
+                    size="icon"
+                    className="h-11 w-11 shrink-0 rounded-full"
                     aria-label="Preview greeting"
                     onClick={() => {
                       const text =
                         state.connectionGreetingText ||
+                        connectionGreetingTextForMode(state.connectionGreeting) ||
                         DEFAULT_CONNECTION_GREETING;
                       if (typeof window !== "undefined" && window.speechSynthesis) {
                         window.speechSynthesis.cancel();
@@ -540,7 +572,9 @@ export function PhoneStep({
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-medium">Preview connection greeting</p>
                     <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">
-                      {state.connectionGreetingText || DEFAULT_CONNECTION_GREETING}
+                      {state.connectionGreetingText ||
+                        connectionGreetingTextForMode(state.connectionGreeting) ||
+                        DEFAULT_CONNECTION_GREETING}
                     </p>
                   </div>
                 </div>
@@ -589,12 +623,14 @@ export function PhoneStep({
                     <div className="flex items-center gap-3">
                       <Button
                         type="button"
-                        size="icon-lg"
-                        className="rounded-full"
+                        size="icon"
+                        className="h-11 w-11 shrink-0 rounded-full"
                         aria-label="Preview greeting"
                         onClick={() => {
                           const text =
-                            state.connectionGreetingText || DEFAULT_CONNECTION_GREETING;
+                            state.connectionGreetingText ||
+                            connectionGreetingTextForMode(state.connectionGreeting) ||
+                            DEFAULT_CONNECTION_GREETING;
                           if (typeof window !== "undefined" && window.speechSynthesis) {
                             window.speechSynthesis.cancel();
                             const u = new SpeechSynthesisUtterance(text);
@@ -607,7 +643,9 @@ export function PhoneStep({
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-medium">Preview connection greeting</p>
                         <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">
-                          {state.connectionGreetingText || DEFAULT_CONNECTION_GREETING}
+                          {state.connectionGreetingText ||
+                            connectionGreetingTextForMode(state.connectionGreeting) ||
+                            DEFAULT_CONNECTION_GREETING}
                         </p>
                       </div>
                     </div>

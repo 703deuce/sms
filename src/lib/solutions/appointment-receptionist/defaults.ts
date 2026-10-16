@@ -7,6 +7,9 @@ import {
 export const DEFAULT_CONNECTION_GREETING =
   "Thank you for calling. One moment, please, while I connect you with our receptionist.";
 
+export const DEFAULT_CONNECTION_GREETING_WARM =
+  "Thanks for calling! Hang on just a moment while I get our receptionist for you.";
+
 export const CAPABILITY_OPTIONS = [
   {
     id: "answer_questions" as const,
