@@ -3,7 +3,6 @@ import "server-only";
 import { getPrisma } from "@/lib/db";
 import { telnyxRequest } from "@/lib/messaging/telnyx/client";
 import { routePhoneToMctbCallHandlingIngress } from "@/lib/mctb/texml-ingress/provision";
-import { routePhoneToVoiceV3BasicCallControl } from "@/lib/voice-v3/provisioning/route-phone-to-voice-v3-basic";
 import { clearMctbTexmlIngressLockMetadataForVoiceAgent } from "@/lib/voice/mctb-voice-agent-phone-takeover";
 import { mergeCallHandlingIntoSettings, readCallHandlingBlock, resolvePersistedEffectiveCallHandler } from "./phone-settings";
 import { resolveEffectiveCallHandler } from "./effective-handler";
@@ -154,14 +153,39 @@ export async function setActiveCallHandler(input: {
           );
         }
 
-        const route = await routePhoneToVoiceV3BasicCallControl({
-          e164: phone.e164,
-          providerNumberId: phone.providerNumberId,
+        const agentRow = await getPrisma().voiceAgent.findFirst({
+          where: { id: readiness.agentId, workspaceId: input.workspaceId },
+          select: { publishedVersionId: true },
+        });
+        const versionRow = agentRow?.publishedVersionId
+          ? await getPrisma().voiceAgentVersion.findFirst({
+              where: {
+                id: agentRow.publishedVersionId,
+                workspaceId: input.workspaceId,
+              },
+              select: { config: true },
+            })
+          : null;
+        const { parseVoiceAgentConfig } = await import("@/lib/voice/types");
+        const publishedConfig = versionRow?.config
+          ? parseVoiceAgentConfig(versionRow.config)
+          : undefined;
+        const { provisionAppointmentReceptionistLiveKit } = await import(
+          "@/lib/voice-v3/receptionist-livekit-provisioning"
+        );
+        const lk = await provisionAppointmentReceptionistLiveKit({
           workspaceId: input.workspaceId,
           phoneNumberId: phone.id,
+          agentId: readiness.agentId,
+          publishedVersionId: agentRow?.publishedVersionId,
+          publishedConfig: publishedConfig as import("@/lib/voice/types").VoiceAgentConfig,
+          configOnly: false,
         });
-        if (!route.matched) {
-          throw new Error("Voice routing did not match the live voice ingress connection.");
+        if (!lk.ok) {
+          throw new Error(
+            lk.error ||
+              "LiveKit provisioning failed — AI Receptionist cannot use Voice V3 Basic.",
+          );
         }
 
         await clearMctbTexmlIngressLockMetadataForVoiceAgent({

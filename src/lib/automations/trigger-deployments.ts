@@ -364,47 +364,109 @@ export async function activateFlowTriggers(
       throw err;
     }
 
-    if (publishResult.telnyxSyncError) {
-      const message = `Telnyx sync error: ${String(publishResult.telnyxSyncError)}`;
-      await upsertTriggerRow({
-        workspaceId,
-        flowId,
-        trigger: inbound,
-        status: "error",
-        errorMessage: message,
-        providerConfig: {
-          provider: "telnyx",
-          telnyxPublished: false,
-          voiceAgentId,
-          publishResult,
+    const { parseVoiceAgentConfig } = await import("@/lib/voice/types");
+    const { isAppointmentReceptionistAgent } = await import(
+      "@/lib/voice-v3/config/from-published-agent"
+    );
+    const receptionistCfg = parseVoiceAgentConfig(agent.draftConfig);
+    const appointmentReceptionist = isAppointmentReceptionistAgent(receptionistCfg);
+
+    if (appointmentReceptionist) {
+      const livekitProvision = publishResult.livekitProvision as
+        | { ok?: boolean; error?: string }
+        | null
+        | undefined;
+      if (!livekitProvision?.ok) {
+        const message =
+          livekitProvision?.error ||
+          "LiveKit SIP provisioning failed — AI Receptionist cannot activate on Voice V3 Basic";
+        await upsertTriggerRow({
+          workspaceId,
+          flowId,
+          trigger: inbound,
+          status: "error",
+          errorMessage: message,
+          providerConfig: {
+            provider: "livekit",
+            telnyxPublished: false,
+            livekitProvision,
+            voiceAgentId,
+            publishResult,
+          },
+        });
+        throw new Error(message);
+      }
+      telnyxPublished = true;
+    } else {
+      if (publishResult.telnyxSyncError) {
+        const message = `Telnyx sync error: ${String(publishResult.telnyxSyncError)}`;
+        await upsertTriggerRow({
+          workspaceId,
+          flowId,
+          trigger: inbound,
+          status: "error",
+          errorMessage: message,
+          providerConfig: {
+            provider: "telnyx",
+            telnyxPublished: false,
+            voiceAgentId,
+            publishResult,
+          },
+        });
+        throw new Error(message);
+      }
+
+      const texmlRoute = publishResult.texmlRoute as
+        | { matched?: boolean; path?: string }
+        | null
+        | undefined;
+      if (texmlRoute && texmlRoute.matched !== true) {
+        const message = `TeXML route not confirmed live (${texmlRoute.path || "unknown"})`;
+        await upsertTriggerRow({
+          workspaceId,
+          flowId,
+          trigger: inbound,
+          status: "error",
+          errorMessage: message,
+          providerConfig: {
+            provider: "telnyx",
+            telnyxPublished: false,
+            voiceAgentId,
+            publishResult,
+          },
+        });
+        throw new Error(message);
+      }
+
+      telnyxPublished = true;
+
+      const refreshed = await prisma.voiceAgent.findFirst({
+        where: { id: voiceAgentId },
+        select: {
+          telnyxAssistantId: true,
+          telnyxConnectionId: true,
+          phoneNumberId: true,
         },
       });
-      throw new Error(message);
+      if (!refreshed?.telnyxAssistantId) {
+        const message =
+          "Telnyx assistant was not created — cannot mark trigger live";
+        await upsertTriggerRow({
+          workspaceId,
+          flowId,
+          trigger: inbound,
+          status: "error",
+          errorMessage: message,
+          providerConfig: {
+            provider: "telnyx",
+            telnyxPublished: false,
+            voiceAgentId,
+            publishResult,
+          },
+        });
+        throw new Error(message);
+      }
     }
-
-    const texmlRoute = publishResult.texmlRoute as
-      | { matched?: boolean; path?: string }
-      | null
-      | undefined;
-    if (texmlRoute && texmlRoute.matched !== true) {
-      const message = `TeXML route not confirmed live (${texmlRoute.path || "unknown"})`;
-      await upsertTriggerRow({
-        workspaceId,
-        flowId,
-        trigger: inbound,
-        status: "error",
-        errorMessage: message,
-        providerConfig: {
-          provider: "telnyx",
-          telnyxPublished: false,
-          voiceAgentId,
-          publishResult,
-        },
-      });
-      throw new Error(message);
-    }
-
-    telnyxPublished = true;
 
     const refreshed = await prisma.voiceAgent.findFirst({
       where: { id: voiceAgentId },
@@ -414,31 +476,25 @@ export async function activateFlowTriggers(
         phoneNumberId: true,
       },
     });
-    if (!refreshed?.telnyxAssistantId) {
-      const message =
-        "Telnyx assistant was not created — cannot mark trigger live";
-      await upsertTriggerRow({
-        workspaceId,
-        flowId,
-        trigger: inbound,
-        status: "error",
-        errorMessage: message,
-        providerConfig: {
-          provider: "telnyx",
-          telnyxPublished: false,
-          voiceAgentId,
-          publishResult,
-        },
-      });
-      throw new Error(message);
-    }
 
-    const publishedConfigHash = [
-      inbound.phoneNumberId,
-      voiceAgentId,
-      refreshed.telnyxAssistantId,
-      inbound.eventType,
-    ].join(":");
+    const livekitProvision = publishResult.livekitProvision as
+      | { ok?: boolean; provision?: { livekitInboundTrunkId?: string } }
+      | null
+      | undefined;
+
+    const publishedConfigHash = appointmentReceptionist
+      ? [
+          inbound.phoneNumberId,
+          voiceAgentId,
+          livekitProvision?.provision?.livekitInboundTrunkId || "livekit_sip",
+          inbound.eventType,
+        ].join(":")
+      : [
+          inbound.phoneNumberId,
+          voiceAgentId,
+          refreshed?.telnyxAssistantId,
+          inbound.eventType,
+        ].join(":");
 
     await upsertTriggerRow({
       workspaceId,
@@ -446,15 +502,18 @@ export async function activateFlowTriggers(
       trigger: inbound,
       status: "live",
       providerConfig: {
-        provider: "telnyx",
+        provider: appointmentReceptionist ? "livekit" : "telnyx",
         channel: "voice",
         telnyxPublished: true,
         voiceAgentId,
-        telnyxAssistantId: refreshed.telnyxAssistantId,
-        providerResourceId:
-          refreshed.telnyxConnectionId || refreshed.telnyxAssistantId,
+        telnyxAssistantId: refreshed?.telnyxAssistantId || null,
+        providerResourceId: appointmentReceptionist
+          ? livekitProvision?.provision?.livekitInboundTrunkId || "livekit_sip"
+          : refreshed?.telnyxConnectionId || refreshed?.telnyxAssistantId,
         publishedConfigHash,
-        publishedRoutingTarget: "texml_assistant",
+        publishedRoutingTarget: appointmentReceptionist
+          ? "livekit_sip"
+          : "texml_assistant",
         lastVerifiedAt: new Date().toISOString(),
         publishResult,
       },
