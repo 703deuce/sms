@@ -478,8 +478,6 @@ export async function loadAppointmentReceptionistSetup(
     agentName:
       String(wizardSnap.agentName || storedWizard.agentName || agent?.displayName || "") ||
       undefined,
-    phoneNumberId: resolvedPhoneNumberId,
-    phoneNumberE164,
     answerWhen: (wizardSnap.answerWhen ||
       storedWizard.answerWhen ||
       "every_call") as AppointmentReceptionistWizardState["answerWhen"],
@@ -494,6 +492,9 @@ export async function loadAppointmentReceptionistSetup(
     // Prefer draftConfig snapshot; fall back to durable setup.wizard (full form).
     ...storedWizard,
     ...wizardSnap,
+    // Authoritative phone after merges — ACTIVE uses agent row; drafts prefer wizard snapshot.
+    phoneNumberId: resolvedPhoneNumberId,
+    phoneNumberE164,
   };
 
   return {

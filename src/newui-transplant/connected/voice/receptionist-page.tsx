@@ -6,17 +6,31 @@ import type { VoiceReceptionistWired } from "@/newui-transplant/mirror/routes/vo
 
 export function NewUiVoiceReceptionistPage() {
   const [wired, setWired] = useState<VoiceReceptionistWired | undefined>(undefined);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setLoadError(null);
     fetch("/api/voice/overview", { cache: "no-store" })
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error("Could not load receptionist overview");
+        return r.json();
+      })
       .then((j) => {
+        if (cancelled) return;
         const data = j.data ?? j;
-        const op = data.operational;
-        if (!op) {
-          setWired(undefined);
+        if (data.mode === "first_run" || !data.operational) {
+          setWired({
+            editHref: "/voice/receptionist/edit",
+            published: false,
+            agentName: "AI Receptionist",
+            setupProblems: ["Finish setup to publish your receptionist."],
+          });
           return;
         }
+        const op = data.operational;
         setWired({
           agentId: op.agentId || undefined,
           agentInitial: (op.receptionistName || "R").slice(0, 1),
@@ -39,8 +53,42 @@ export function NewUiVoiceReceptionistPage() {
           editHref: op.manageReceptionistHref || "/voice/receptionist/edit",
         });
       })
-      .catch(() => setWired(undefined));
+      .catch((err) => {
+        if (!cancelled) {
+          setLoadError(err instanceof Error ? err.message : "Load failed");
+          setWired(undefined);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted-foreground">
+        Loading receptionist…
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-2 text-sm">
+        <p className="text-destructive">{loadError}</p>
+        <button
+          type="button"
+          className="text-primary underline"
+          onClick={() => window.location.reload()}
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return <TransplantVoiceReceptionistPage wired={wired} />;
 }

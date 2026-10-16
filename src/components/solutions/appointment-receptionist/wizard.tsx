@@ -125,26 +125,28 @@ export function AppointmentReceptionistWizard({
           if (res.ok) {
             const json = await res.json();
             const loaded = json?.data;
-            if (loaded?.state && !cancelled) {
+            if ((loaded?.state || loaded?.agentId) && !cancelled) {
               const base = isMctb
                 ? mctbDefaultState()
                 : applyWizardPreset(
                     createDefaultWizardState(),
                     preset || loaded.state.preset || null,
                   );
+              const serverState =
+                loaded.state && typeof loaded.state === "object" ? loaded.state : {};
               const merged = {
                 ...base,
-                ...loaded.state,
+                ...serverState,
                 setupId: loaded.setupId || undefined,
-                agentId: loaded.agentId || loaded.state.agentId,
-                outcomeSlug: loaded.outcomeSlug || loaded.state.outcomeSlug,
+                agentId: loaded.agentId || serverState.agentId,
+                outcomeSlug: loaded.outcomeSlug || serverState.outcomeSlug,
                 preset: isMctb
-                  ? loaded.state.preset || "after_hours"
-                  : preset || loaded.state.preset || null,
+                  ? serverState.preset || "after_hours"
+                  : preset || serverState.preset || null,
               };
               if (isMctb && loaded.agentId) {
                 merged.solutionName =
-                  loaded.state.solutionName?.trim() || merged.solutionName;
+                  serverState.solutionName?.trim() || merged.solutionName;
               }
               setState(merged);
               const statusRaw = String(loaded.status || loaded.agentStatus || "").toUpperCase();
@@ -161,11 +163,14 @@ export function AppointmentReceptionistWizard({
                       ? "draft"
                       : "needs_attention",
               );
-              if (isLiveSyncPendingHealthStatus(healthStatus) && loaded.healthMessage) {
-                setError(String(loaded.healthMessage));
+              if (isLiveSyncPendingHealthStatus(healthStatus)) {
+                setError(
+                  loaded.healthMessage?.trim() ||
+                    "Saved changes are not yet applied to live calls. Save again to retry sync.",
+                );
               }
               const visibleSteps = isMctb
-                ? mctbVisibleWizardSteps(loaded.state)
+                ? mctbVisibleWizardSteps(merged)
                 : visibleWizardSteps(merged, { hireMode, brainAlreadyDone: hireMode });
               const fromUrl = isMctb
                 ? stepIndexFromQuery(searchParams?.get("step"), visibleSteps)
@@ -479,7 +484,7 @@ export function AppointmentReceptionistWizard({
           return null;
         }
       }
-      if (warnings.length) {
+      if (warnings.length && !liveSyncPending422 && !json.data?.liveSyncError) {
         setError(warnings.join(" "));
       }
       if (action === "activate") {

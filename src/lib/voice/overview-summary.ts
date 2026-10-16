@@ -22,7 +22,7 @@ import {
 import { readTelephonyProvisionFromSettings } from "@/lib/voice-v3/receptionist-livekit-policy";
 import { buildCallHandlingBehaviorSummary } from "@/lib/voice/call-handling/behavior-summary";
 import { loadReceptionistAnalyticsSnapshot } from "@/lib/voice/analytics/receptionist-analytics-snapshot";
-import { resolveCanonicalVoiceV3WorkspaceAgent } from "@/lib/voice-v3/canonical-workspace-agent";
+import type { CanonicalVoiceV3WorkspaceAgent } from "@/lib/voice-v3/canonical-workspace-agent";
 import { loadWizardFromAgent } from "@/lib/voice/runtime/load-wizard";
 import { DEFAULT_VOICE_V2_OPERATING_MATURITY_CONFIG } from "@/lib/voice-receptionist-wizard/operating-maturity/defaults";
 import {
@@ -148,7 +148,10 @@ export async function loadVoiceOverviewSummary(
   workspaceId: string,
 ): Promise<VoiceOverviewSummaryResult> {
   const errors: VoiceOverviewSummaryResult["errors"] = {};
-  const agent = await resolveCanonicalVoiceV3WorkspaceAgent(workspaceId);
+  const { resolveWorkspaceAppointmentReceptionistAgent } = await import(
+    "@/lib/solutions/appointment-receptionist/resolve-workspace-agent"
+  );
+  const agent = await resolveWorkspaceAppointmentReceptionistAgent(workspaceId);
 
   if (!agent) {
     return {
@@ -257,7 +260,7 @@ export async function loadVoiceOverviewSummary(
 
 async function buildOperationalState(input: {
   workspaceId: string;
-  agent: Awaited<ReturnType<typeof resolveCanonicalVoiceV3WorkspaceAgent>>;
+  agent: CanonicalVoiceV3WorkspaceAgent;
   wizard: AppointmentReceptionistWizardState | null;
   publicationStatus: OverviewPublicationStatus;
   receptionistName: string | null;
@@ -363,8 +366,10 @@ async function buildOperationalState(input: {
   if (input.publicationStatus !== "active") {
     setupProblems.push(publicationStatusLabel(input.publicationStatus));
   }
-  if (liveSyncStatus === "pending_live_sync" && healthMessage) {
-    setupProblems.push(healthMessage);
+  if (liveSyncStatus === "pending_live_sync") {
+    setupProblems.push(
+      healthMessage || "Saved changes are not yet applied to live calls.",
+    );
   }
 
   return {

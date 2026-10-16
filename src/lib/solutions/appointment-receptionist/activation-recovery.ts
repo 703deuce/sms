@@ -63,7 +63,8 @@ export async function recoverIncompleteReceptionistActivation(input: {
     return { recovered: false, steps, error: "not_receptionist_agent" };
   }
 
-  const def = parseAutomationDefinition(flow.definition);
+  let flowDefinition = flow.definition;
+  const def = parseAutomationDefinition(flowDefinition);
   const triggers = extractTriggersFromDefinition(def);
   const inbound =
     triggers.find(
@@ -77,6 +78,37 @@ export async function recoverIncompleteReceptionistActivation(input: {
     return { recovered: false, steps, error: "inbound_trigger_missing" };
   }
   const routingPhoneNumberId = input.phoneNumberId || inbound.phoneNumberId;
+
+  if (
+    input.phoneNumberId &&
+    inbound.phoneNumberId &&
+    inbound.phoneNumberId !== input.phoneNumberId
+  ) {
+    steps.push("align_workflow_trigger_phone");
+    const aligned = parseAutomationDefinition(flowDefinition);
+    for (const node of aligned.nodes) {
+      if (node.type !== "trigger") continue;
+      if (node.data.blockType !== "inbound_call") continue;
+      const cfg = (node.data.config || {}) as Record<string, unknown>;
+      node.data.config = { ...cfg, phoneNumberId: routingPhoneNumberId };
+    }
+    flowDefinition = aligned as object;
+    await prisma.automationFlow.update({
+      where: { id: input.primaryFlowId },
+      data: {
+        definition: flowDefinition as object,
+        linkedPhoneNumberIds: [routingPhoneNumberId],
+        updatedAt: new Date(),
+      },
+    });
+    const realigned = extractTriggersFromDefinition(aligned);
+    const realignedInbound = realigned.find(
+      (t) => t.blockType === "inbound_call" && t.phoneNumberId,
+    );
+    if (realignedInbound) {
+      Object.assign(inbound, realignedInbound);
+    }
+  }
 
   const deployment = await prisma.triggerDeployment.findFirst({
     where: { flowId: input.primaryFlowId, triggerNodeId: inbound.nodeId },
@@ -160,7 +192,7 @@ export async function recoverIncompleteReceptionistActivation(input: {
     data: {
       status: "ACTIVE",
       version: newVersion,
-      publishedDefinition: flow.definition as object,
+      publishedDefinition: flowDefinition as object,
       publishedAt: new Date(),
       updatedAt: new Date(),
     },

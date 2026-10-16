@@ -32,12 +32,12 @@ export async function GET(request: Request) {
     let setupId = url.searchParams.get("setupId") || undefined;
     let agentId = url.searchParams.get("agentId") || undefined;
     if (!setupId && !agentId) {
-      const { resolveCanonicalVoiceV3WorkspaceAgent } = await import(
-        "@/lib/voice-v3/canonical-workspace-agent"
+      const { resolveWorkspaceAppointmentReceptionistAgent } = await import(
+        "@/lib/solutions/appointment-receptionist/resolve-workspace-agent"
       );
-      const canonical = await resolveCanonicalVoiceV3WorkspaceAgent(auth.workspaceId);
-      if (canonical?.agentId) {
-        agentId = canonical.agentId;
+      const resolved = await resolveWorkspaceAppointmentReceptionistAgent(auth.workspaceId);
+      if (resolved?.agentId) {
+        agentId = resolved.agentId;
       }
     }
     const data = await loadAppointmentReceptionistSetup(auth.workspaceId, {
@@ -547,9 +547,12 @@ export async function POST(request: Request) {
           }
         }
 
+        const { VOICE_AGENT_HEALTH_OK: healthOk } = await import(
+          "@/lib/voice/agent-health-status"
+        );
         await getPrisma().voiceAgent.update({
           where: { id: agentId },
-          data: { healthStatus: "ok", healthMessage: null },
+          data: { healthStatus: healthOk, healthMessage: null },
         });
 
         await upsertAppointmentReceptionistSetup({
