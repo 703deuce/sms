@@ -8,8 +8,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+} from "@/newui-transplant/components/ui/dialog";
+import { Button } from "@/newui-transplant/components/ui/button";
 
 export function VoiceProductSwitchDialog({
   open,
