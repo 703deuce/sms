@@ -12,6 +12,11 @@ export type LiveSideEffectKind =
   | "workflow_compile"
   | "build_agent_config";
 
+/** In-memory compile/logging on Save Draft — not live provider or published-version mutation. */
+const DRAFT_SAVE_ALLOWED_SIDE_EFFECTS: ReadonlySet<LiveSideEffectKind> = new Set([
+  "build_agent_config",
+]);
+
 export class ReceptionistSideEffectLedger {
   private readonly traceId: string;
   private readonly isDraftSave: boolean;
@@ -30,7 +35,7 @@ export class ReceptionistSideEffectLedger {
       draftSave: this.isDraftSave,
       ...detail,
     });
-    if (this.isDraftSave) {
+    if (this.isDraftSave && !DRAFT_SAVE_ALLOWED_SIDE_EFFECTS.has(kind)) {
       receptionistLog("SIDE_EFFECT", "UNEXPECTED_LIVE_EFFECT", {
         trace: this.traceId,
         kind,
@@ -45,7 +50,8 @@ export class ReceptionistSideEffectLedger {
   }
 
   unexpectedCountForDraftSave(): number {
-    return this.isDraftSave ? this.effects.length : 0;
+    if (!this.isDraftSave) return 0;
+    return this.effects.filter((k) => !DRAFT_SAVE_ALLOWED_SIDE_EFFECTS.has(k)).length;
   }
 }
 
