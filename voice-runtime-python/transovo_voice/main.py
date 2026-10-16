@@ -89,6 +89,8 @@ def main() -> None:
         extra={
             "agentName": VOICE_V3_AGENT_NAME,
             "workerProfile": WORKER_PROFILE,
+            "legacyWorkerDisabled": True,
+            "removedLegacyAgentName": "transovo-voice-runtime",
             "apiVersion": VOICE_RUNTIME_API_VERSION,
             "mediaBackend": active_backend,
             **get_voice_build_identity(),

@@ -26,7 +26,7 @@ MCTB SIP is a **fourth** app (`transovo-mctb-sip`) when deployed — see `docs/d
 | Base directory | `/` (repo root) |
 | **Build pack** | **`dockerfile`** — not Nixpacks |
 | **Dockerfile location** | `voice-runtime-python/Dockerfile` (Coolify DB: `/voice-runtime-python/Dockerfile`) |
-| **Start command** | *(empty in Coolify)* — image `CMD`: `start-transovo-voice-worker.sh` (default: **two processes** — legacy `8081` + V3 `8083`; set `VOICE_ENABLE_V3_PROFILE=0` for legacy-only) |
+| **Start command** | *(empty in Coolify)* — image `CMD`: `start-transovo-voice-worker.sh` (**Voice V3 only** on `8081`; legacy `transovo-voice-runtime` not started) |
 | Public domain | **None** (worker connects outbound to LiveKit WebSocket only) |
 | **Ports exposes** | **`8081`** only (LiveKit agent health HTTP server) |
 | **Health check** | Enabled, port `8081`, path `/` |
@@ -43,8 +43,8 @@ Minimum:
 - `OPENAI_API_KEY`
 - `TRANSOVO_BACKEND_URL` (public web URL where `GET /api/health` returns 200)
 - `TRANSOVO_INTERNAL_API_KEY` (same as web)
-- `LIVEKIT_AGENT_NAME` (primary dispatch agent)
-- `VOICE_V3_LIVEKIT_AGENT_NAME=transovo-voice-v3` (second profile on same worker)
+- `VOICE_V3_LIVEKIT_AGENT_NAME=transovo-voice-v3` (must match LiveKit dispatch `agentName`)
+- `LIVEKIT_AGENT_NAME` — ignored for inbound if set to removed `transovo-voice-runtime`; use `transovo-voice-v3`
 
 Do **not** rely on copying encrypted Coolify env rows via raw SQL — use Coolify UI or Laravel replicate (see `scripts/coolify-restore-transovo-voice-worker.sh`).
 

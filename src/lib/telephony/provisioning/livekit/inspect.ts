@@ -1,5 +1,11 @@
 import type { SIPDispatchRuleInfo, SIPInboundTrunkInfo } from "livekit-server-sdk";
-import { getLiveKitSipHost, getLiveKitSipHostSource } from "../config";
+import {
+  getLiveKitSipHost,
+  getLiveKitSipHostSource,
+  VOICE_V3_LIVEKIT_AGENT_NAME,
+} from "../config";
+
+const REMOVED_LEGACY_LIVEKIT_AGENT_NAME = "transovo-voice-runtime";
 import { trunkNumbersIncludeDid } from "./did";
 import { getLiveKitSipClient } from "./client";
 import { missingTelnyxSignalingIps } from "./telnyx-allowlist";
@@ -111,5 +117,25 @@ export function diagnoseLiveKitSipIssues(
   }
   const duplicateOwners = inspect.trunks.filter((t) => trunkNumbersIncludeDid(t.numbers, e164));
   if (duplicateOwners.length > 1) issues.push("duplicate_trunk_for_did");
+
+  const rulesToCheck =
+    inspect.dispatchRulesForTrunk.length > 0
+      ? inspect.dispatchRulesForTrunk
+      : inspect.dispatchRules;
+  for (const rule of rulesToCheck) {
+    const agent = rule.agentName?.trim();
+    if (!agent) {
+      issues.push(`dispatch_missing_agent_name:${rule.name || rule.id}`);
+      continue;
+    }
+    if (agent === REMOVED_LEGACY_LIVEKIT_AGENT_NAME) {
+      issues.push(
+        `dispatch_targets_removed_legacy_worker:${rule.name || rule.id} — PSTN will not connect until rule targets ${VOICE_V3_LIVEKIT_AGENT_NAME}`,
+      );
+    } else if (agent !== VOICE_V3_LIVEKIT_AGENT_NAME) {
+      issues.push(`dispatch_unexpected_agent:${agent}@${rule.name || rule.id}`);
+    }
+  }
+
   return issues;
 }

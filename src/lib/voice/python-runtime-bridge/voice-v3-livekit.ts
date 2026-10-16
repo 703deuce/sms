@@ -115,8 +115,27 @@ export async function resolveVoiceV3LiveKitSession(
 
   const routing = await resolveAgentByCalledNumber(dialed);
   if (!routing) {
+    console.error(
+      JSON.stringify({
+        event: "voice_v3_livekit_session_resolve_failed",
+        reason: "no_inbound_agent_for_dialed_number",
+        dialedE164: dialed,
+        roomName: payload.roomName,
+      }),
+    );
     throw new Error(`No active agent for dialed number ${dialed}`);
   }
+
+  console.log(
+    JSON.stringify({
+      event: "voice_v3_livekit_session_resolve",
+      dialedE164: dialed,
+      workspaceId: routing.workspaceId,
+      agentId: routing.agentId,
+      phoneNumberId: routing.phoneNumberId,
+      roomName: payload.roomName,
+    }),
+  );
 
   const agentConfig = await resolveVoiceV3AgentConfigForAgent({
     workspaceId: routing.workspaceId,
