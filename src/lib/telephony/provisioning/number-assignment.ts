@@ -194,6 +194,64 @@ export async function ensureNumberProvisioned(
   const routingMode = resolveRoutingMode(input.routingMode);
   const actions: string[] = [];
 
+  if (routingMode === "livekit_sip" && input.dispatchMetadataOnly) {
+    const existing = readProvision(phone.settingsJson);
+    const trunkId = existing.livekitInboundTrunkId;
+    if (existing.routingMode === "livekit_sip" && existing.state === "active" && trunkId && input.agentId) {
+      try {
+        const dispatchMetadata = await buildDispatchMetadataForAgent({
+          workspaceId: input.workspaceId,
+          agentId: input.agentId,
+          toE164: phone.e164,
+          publishedVersionId: input.publishedVersionId,
+          publishedConfig: input.publishedConfig,
+        });
+        const synced = await syncDidDispatchRuleSnapshot({
+          e164: phone.e164,
+          trunkId,
+          dispatchMetadata,
+        });
+        actions.push(...synced.actions, "dispatch_metadata_only");
+        const explicitDispatchPatch = explicitDispatchPatchForPhoneSettings(dispatchMetadata);
+        const provision = await writeProvision(phone.id, {
+          routingMode: "livekit_sip",
+          state: "active",
+          livekitDidDispatchRuleId: synced.ruleId,
+          lastError: null,
+          ...(explicitDispatchPatch || {}),
+        });
+        return {
+          ok: true,
+          phoneNumberId: phone.id,
+          e164: phone.e164,
+          routingMode: "livekit_sip",
+          provision,
+          actions,
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return {
+          ok: false,
+          phoneNumberId: phone.id,
+          e164: phone.e164,
+          routingMode: "livekit_sip",
+          provision: existing,
+          actions: [...actions, `dispatch_metadata_only_failed:${message}`],
+          error: message,
+        };
+      }
+    }
+    return {
+      ok: false,
+      phoneNumberId: phone.id,
+      e164: phone.e164,
+      routingMode: "livekit_sip",
+      provision: existing,
+      actions: ["dispatch_metadata_only_skipped_not_provisioned"],
+      error: "not_livekit_provisioned",
+    };
+  }
+
   if (routingMode === "telnyx_assistant") {
     const provision = await writeProvision(phone.id, {
       routingMode,

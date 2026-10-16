@@ -18,11 +18,15 @@ export function NewUiVoiceReceptionistPage() {
           return;
         }
         setWired({
-          agentInitial: (op.receptionistName || "A").slice(0, 1),
+          agentId: op.agentId || undefined,
+          agentInitial: (op.receptionistName || "R").slice(0, 1),
           agentName: op.receptionistName || "Receptionist",
           voiceLabel: op.voiceLabel || "Voice profile",
-          published: data.mode === "active" && op.publicationStatus === "published",
+          greeting: op.openingGreeting || undefined,
+          published: data.mode === "active" && op.publicationStatus === "active",
           versionLabel: op.publicationLabel || undefined,
+          capabilities: op.capabilities || [],
+          editHref: op.manageReceptionistHref || "/voice/receptionist/edit",
         });
       })
       .catch(() => setWired(undefined));

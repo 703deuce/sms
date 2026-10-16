@@ -15,6 +15,7 @@ import { getWizardActivationIssues } from "@/lib/solutions/appointment-reception
 import { resolveLiveCalendar } from "@/lib/solutions/appointment-receptionist/live-calendar";
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
 import { wizardBookingRequiresCalendarConnection } from "@/lib/solutions/appointment-receptionist/wizard-readiness";
+import { CAPABILITY_OPTIONS } from "@/lib/solutions/appointment-receptionist/defaults";
 import { buildCallHandlingBehaviorSummary } from "@/lib/voice/call-handling/behavior-summary";
 import { loadReceptionistAnalyticsSnapshot } from "@/lib/voice/analytics/receptionist-analytics-snapshot";
 import { resolveCanonicalVoiceV3WorkspaceAgent } from "@/lib/voice-v3/canonical-workspace-agent";
@@ -48,11 +49,21 @@ export type VoiceOverviewRecentCall = {
   transfers: Array<{ status: string | null; answered: boolean | null }>;
 };
 
+export type VoiceOverviewCapabilityRow = {
+  id: string;
+  label: string;
+  detail: string;
+  enabled: boolean;
+};
+
 export type VoiceOverviewOperational = {
+  agentId: string | null;
   publicationStatus: OverviewPublicationStatus;
   publicationLabel: string;
   receptionistName: string | null;
   voiceLabel: string | null;
+  openingGreeting: string | null;
+  capabilities: VoiceOverviewCapabilityRow[];
   phone: {
     label: string;
     tone: "ok" | "warn" | "muted";
@@ -264,16 +275,32 @@ async function buildOperationalState(input: {
 
   const businessHours = resolveBusinessHoursSummary(input.wizard);
 
+  const agentId = input.agent?.agentId ?? null;
+  const editBase = agentId
+    ? `/voice/receptionist/edit?agentId=${encodeURIComponent(agentId)}`
+    : "/voice/receptionist/edit";
+
+  const enabledCaps = new Set(input.wizard?.capabilities || []);
+  const capabilities: VoiceOverviewCapabilityRow[] = CAPABILITY_OPTIONS.map((opt) => ({
+    id: opt.id,
+    label: opt.title,
+    detail: opt.description,
+    enabled: enabledCaps.has(opt.id),
+  }));
+
   return {
+    agentId,
     publicationStatus: input.publicationStatus,
     publicationLabel: publicationStatusLabel(input.publicationStatus),
     receptionistName: input.receptionistName,
     voiceLabel: input.voiceLabel,
+    openingGreeting: input.wizard?.openingGreeting?.trim() || null,
+    capabilities,
     phone,
     calendar,
     businessKnowledge,
     businessHours,
-    manageReceptionistHref: "/voice/receptionist",
+    manageReceptionistHref: editBase,
   };
 }
 

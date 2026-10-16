@@ -422,6 +422,10 @@ export async function publishVoiceAgent(
     "./ai-booking/publish-config"
   );
   config = await enrichVoiceAgentConfigForCanonicalAiBooking(workspaceId, agentId, config);
+  const { assertAppointmentReceptionistLiveKitPublish } = await import(
+    "@/lib/voice-v3/receptionist-livekit-provisioning"
+  );
+  assertAppointmentReceptionistLiveKitPublish(config);
   const { shouldUseOpenAiRealtimeMediaBridge } = await import(
     "./telnyx/openai-realtime-bridge/flags"
   );
@@ -589,7 +593,10 @@ export async function publishVoiceAgent(
   );
   let skipLiveKitForMctb = false;
 
-  if (isLiveKitVoiceRuntime() && updated.phoneNumberId) {
+  const mustProvisionLiveKitForReceptionist =
+    voiceV3AppointmentReceptionist && Boolean(updated.phoneNumberId);
+
+  if ((isLiveKitVoiceRuntime() || mustProvisionLiveKitForReceptionist) && updated.phoneNumberId) {
     const phone = await prisma.phoneNumber.findFirst({
       where: { id: updated.phoneNumberId, workspaceId },
       select: { settingsJson: true },
@@ -603,22 +610,26 @@ export async function publishVoiceAgent(
           appointmentWizard,
         }),
     );
-    if (skipLiveKitForMctb) {
+    if (skipLiveKitForMctb && !mustProvisionLiveKitForReceptionist) {
       console.warn(
         "[voice] Skipping LiveKit provision on publish — MCTB TeXML / wizard voice line",
         updated.phoneNumberId,
       );
-    } else {
-      const { ensureNumberProvisioned } = await import(
-        "@/lib/telephony/provisioning"
+    } else if (skipLiveKitForMctb && mustProvisionLiveKitForReceptionist) {
+      await rollbackPublish(
+        "AI Receptionist cannot publish on an MCTB TeXML-locked line — assign a dedicated receptionist number or use LiveKit ingress",
       );
-      livekitProvision = await ensureNumberProvisioned({
+    } else {
+      const { provisionAppointmentReceptionistLiveKit } = await import(
+        "@/lib/voice-v3/receptionist-livekit-provisioning"
+      );
+      livekitProvision = await provisionAppointmentReceptionistLiveKit({
         workspaceId,
         phoneNumberId: updated.phoneNumberId,
         agentId,
-        routingMode: "livekit_sip",
         publishedVersionId: versionRow.id,
         publishedConfig: config,
+        configOnly: false,
       });
       if (!(livekitProvision as { ok?: boolean }).ok) {
         const detail =
@@ -675,48 +686,6 @@ export async function publishVoiceAgent(
       console.error("[voice] Call Control route for realtime bridge failed", err);
       await rollbackPublish(
         `Call Control routing failed (realtime media bridge) — deploy rolled back: ${detail}`,
-      );
-    }
-  } else if (
-    !skipIngressRoutingOnPublish &&
-    voiceV3AppointmentReceptionist &&
-    updated.phoneNumberId &&
-    !isLiveKitVoiceRuntime()
-  ) {
-    const phone = await prisma.phoneNumber.findFirst({
-      where: { id: updated.phoneNumberId, workspaceId },
-      select: { e164: true, providerNumberId: true },
-    });
-    if (!phone?.e164) {
-      await rollbackPublish(
-        "Phone number missing for Voice V3 Call Control route — deploy rolled back",
-      );
-    }
-    try {
-      const { routePhoneToVoiceV3BasicCallControl } = await import(
-        "@/lib/voice-v3/provisioning/route-phone-to-voice-v3-basic"
-      );
-      const ccRoute = await routePhoneToVoiceV3BasicCallControl({
-        e164: phone!.e164,
-        providerNumberId: phone!.providerNumberId,
-        workspaceId,
-        phoneNumberId: updated.phoneNumberId,
-      });
-      if (!ccRoute.matched) {
-        await rollbackPublish(
-          `Voice V3 Basic Call Control route did not match live connection — deploy rolled back (${ccRoute.path})`,
-        );
-      }
-      texmlRoute = ccRoute as unknown as typeof texmlRoute;
-      console.log("VOICE_V3_RECEPTIONIST_PHONE_ROUTED_V3_BASIC", {
-        e164: phone!.e164,
-        path: ccRoute.path,
-      });
-    } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err);
-      console.error("[voice] Voice V3 Call Control route failed", err);
-      await rollbackPublish(
-        `Voice V3 Call Control routing failed — deploy rolled back: ${detail}`,
       );
     }
   } else if (!skipIngressRoutingOnPublish && shouldRouteTexmlAssistant && updated.phoneNumberId) {
@@ -875,15 +844,33 @@ export async function syncLiveWizardDraftToProvider(
             "@/lib/voice-v3/config/from-published-agent"
           );
           if (isApptReceptionist(config)) {
-            const { routePhoneToVoiceV3BasicCallControl } = await import(
-              "@/lib/voice-v3/provisioning/route-phone-to-voice-v3-basic"
+            const { provisionAppointmentReceptionistLiveKit } = await import(
+              "@/lib/voice-v3/receptionist-livekit-provisioning"
             );
-            await routePhoneToVoiceV3BasicCallControl({
-              e164: phone.e164,
-              providerNumberId: phone.providerNumberId,
+            let lk = await provisionAppointmentReceptionistLiveKit({
               workspaceId,
               phoneNumberId: agent.phoneNumberId,
+              agentId,
+              publishedVersionId: agent.publishedVersionId,
+              publishedConfig: config,
+              configOnly: true,
             });
+            if (!lk.ok && lk.error === "not_livekit_provisioned") {
+              lk = await provisionAppointmentReceptionistLiveKit({
+                workspaceId,
+                phoneNumberId: agent.phoneNumberId,
+                agentId,
+                publishedVersionId: agent.publishedVersionId,
+                publishedConfig: config,
+                configOnly: false,
+              });
+            }
+            if (!lk.ok) {
+              return {
+                synced: false,
+                error: lk.error || "LiveKit configuration sync failed",
+              };
+            }
           } else {
             const refreshed = await prisma.voiceAgent.findUnique({
               where: { id: agentId },

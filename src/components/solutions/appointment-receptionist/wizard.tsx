@@ -496,8 +496,7 @@ export function AppointmentReceptionistWizard({
       if (stepIndex === 0 && !state.agentId) {
         const created = await persist("create_draft");
         if (!created?.agentId) return;
-      }
-      if (steps[stepIndex + 1]?.id === "test") {
+      } else if (state.agentId) {
         const saved = await persist("save_draft");
         if (!saved?.agentId) return;
       }
