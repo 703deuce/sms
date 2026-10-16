@@ -491,6 +491,7 @@ export async function publishVoiceAgent(
   });
 
   const previousStatus = agent.status;
+  const previousPublishedVersionId = agent.publishedVersionId;
   const updated = await prisma.voiceAgent.update({
     where: { id: agentId },
     data: {
@@ -502,10 +503,25 @@ export async function publishVoiceAgent(
   });
 
   const rollbackPublish = async (message: string) => {
+    await prisma.voiceAgentVersion
+      .update({
+        where: { id: versionRow.id },
+        data: { deploymentStatus: "rolled_back", isMain: false },
+      })
+      .catch(() => undefined);
+    if (previousPublishedVersionId) {
+      await prisma.voiceAgentVersion
+        .update({
+          where: { id: previousPublishedVersionId },
+          data: { isMain: true, deploymentStatus: "deployed" },
+        })
+        .catch(() => undefined);
+    }
     await prisma.voiceAgent
       .update({
         where: { id: agentId },
         data: {
+          publishedVersionId: previousPublishedVersionId,
           status: previousStatus === "ACTIVE" ? "DRAFT" : previousStatus,
           healthStatus: "error",
           healthMessage: message.slice(0, 500),
