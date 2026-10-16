@@ -10,6 +10,10 @@ import { customerSourceStatusLabel } from "@/lib/voice/knowledge/source-status-l
 import { upsertKnowledgeItem } from "@/lib/solutions/appointment-receptionist/knowledge-items-helpers";
 import { normalizeWebsiteUrl } from "@/lib/solutions/appointment-receptionist/knowledge-items-helpers";
 import { buildReceptionistEditHref } from "@/lib/voice/receptionist/wizard-step-url";
+import {
+  DEFAULT_US_BUSINESS_TIMEZONE,
+  US_BUSINESS_TIMEZONE_OPTIONS,
+} from "@/lib/solutions/appointment-receptionist/us-business-timezones";
 
 type KbSource = {
   id: string;
@@ -161,16 +165,26 @@ export function NewUiVoiceKnowledgePage() {
 
   const handleUpload = useCallback(
     async (file: File) => {
-      const kbId = state.linkedKnowledgeBaseId;
-      if (!kbId) throw new Error("Connect a knowledge base before uploading.");
+      const { ensureWizardKnowledgeBaseClient } = await import(
+        "@/lib/solutions/appointment-receptionist/ensure-wizard-knowledge-base-client"
+      );
+      const kbId = await ensureWizardKnowledgeBaseClient({
+        linkedKnowledgeBaseId: state.linkedKnowledgeBaseId,
+        solutionName: state.solutionName,
+        businessName: state.businessName,
+      });
+      if (kbId !== state.linkedKnowledgeBaseId) {
+        patch({ linkedKnowledgeBaseId: kbId });
+      }
       const form = new FormData();
       form.append("file", file);
       const res = await fetch(`/api/voice/knowledge/${kbId}/upload`, { method: "POST", body: form });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || "Upload failed");
+      await persistKnowledgeState({ ...state, linkedKnowledgeBaseId: kbId });
       await loadSources();
     },
-    [state.linkedKnowledgeBaseId, loadSources],
+    [state, patch, loadSources, persistKnowledgeState],
   );
 
   const wired = useMemo((): VoiceKnowledgeWired | undefined => {
@@ -196,7 +210,16 @@ export function NewUiVoiceKnowledgePage() {
       description: state.knowledgeItems.find((k) => k.id === "business_description")?.summary,
       services: state.knowledgeItems.find((k) => k.id === "services")?.summary,
       website: state.websiteUrl || undefined,
-      timezone: state.timezone || undefined,
+      timezone:
+        US_BUSINESS_TIMEZONE_OPTIONS.find(
+          (o) =>
+            o.value ===
+            (state.operatingMaturity?.businessSchedule?.timezone ||
+              state.timezone ||
+              DEFAULT_US_BUSINESS_TIMEZONE),
+        )?.label ||
+        state.operatingMaturity?.businessSchedule?.timezone ||
+        state.timezone,
       gaps,
       hours: hourRows.length ? hourRows : undefined,
       faqs: faqItems.map((f) => ({
@@ -215,15 +238,27 @@ export function NewUiVoiceKnowledgePage() {
       },
       onRecrawl: async () => {
         const merged = mergeDomIntoState();
-        await persistKnowledgeState(merged);
-        const kbId = merged.linkedKnowledgeBaseId;
+        const { ensureWizardKnowledgeBaseClient } = await import(
+          "@/lib/solutions/appointment-receptionist/ensure-wizard-knowledge-base-client"
+        );
         const websiteUrl = merged.websiteUrl;
-        if (!kbId || !websiteUrl) return;
-        await fetch("/api/voice/knowledge/crawl", {
+        if (!websiteUrl) throw new Error("Enter a website URL first.");
+        const kbId = await ensureWizardKnowledgeBaseClient({
+          linkedKnowledgeBaseId: merged.linkedKnowledgeBaseId,
+          solutionName: merged.solutionName,
+          businessName: merged.businessName,
+        });
+        const withKb = { ...merged, linkedKnowledgeBaseId: kbId };
+        await persistKnowledgeState(withKb);
+        const crawlRes = await fetch("/api/voice/knowledge/crawl", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ knowledgeBaseId: kbId, websiteUrl }),
         });
+        const crawlJson = await crawlRes.json().catch(() => ({}));
+        if (!crawlRes.ok) {
+          throw new Error(crawlJson.error || "Website crawl could not start");
+        }
         await reload();
         await loadSources();
       },

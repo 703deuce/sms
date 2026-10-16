@@ -205,9 +205,11 @@ function itemsForScanResult(input: {
   preview?: string | null;
   errorMessage?: string | null;
 }): KnowledgeItem[] {
+  const queued = input.sourceStatus === "crawl_queued";
   const ok =
     input.sourceStatus === "indexed" ||
     input.sourceStatus === "ready" ||
+    queued ||
     (input.chunkCount != null && input.chunkCount > 0);
   const preview = (input.preview || "").trim();
   return [
@@ -232,11 +234,17 @@ function itemsForScanResult(input: {
     {
       id: "services",
       label: "Services",
-      summary: ok
-        ? "Services and offerings from your website"
-        : input.errorMessage || "Scan incomplete",
+      summary: queued
+        ? "Website crawl started — indexed pages will appear shortly."
+        : ok
+          ? "Services and offerings from your website"
+          : input.errorMessage || "Scan incomplete",
       status: ok ? "extracted" : "warning",
-      statusLabel: ok ? "Extracted — approve to use" : "Needs review",
+      statusLabel: queued
+        ? "Crawl in progress"
+        : ok
+          ? "Extracted — approve to use"
+          : "Needs review",
     },
     {
       id: "pricing",
@@ -336,6 +344,9 @@ export function InformationStep({
       }
       const payload = json?.data || {};
       const source = payload?.source || payload;
+      const crawlQueued =
+        payload.crawlStatus === "DISCOVERING" ||
+        payload.embeddingStatus === "crawl_queued";
       patch({
         businessName,
         websiteUrl: url,
@@ -344,7 +355,9 @@ export function InformationStep({
         knowledgeItems: itemsForScanResult({
           businessName,
           url,
-          sourceStatus: source?.status || payload.sourceStatus,
+          sourceStatus: crawlQueued
+            ? "crawl_queued"
+            : source?.status || payload.sourceStatus,
           chunkCount: source?.chunkCount ?? payload.chunkCount,
           preview:
             source?.extractedPreview ||
@@ -374,21 +387,15 @@ export function InformationStep({
   }
 
   async function ensureWizardKnowledgeBase(): Promise<string> {
-    if (state.linkedKnowledgeBaseId) return state.linkedKnowledgeBaseId;
-    const name = `${state.solutionName || "Agent"} Knowledge`;
-    const res = await fetch("/api/voice/knowledge", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        name,
-        description: "Created from appointment receptionist wizard",
-      }),
+    const { ensureWizardKnowledgeBaseClient } = await import(
+      "@/lib/solutions/appointment-receptionist/ensure-wizard-knowledge-base-client"
+    );
+    const id = await ensureWizardKnowledgeBaseClient({
+      linkedKnowledgeBaseId: state.linkedKnowledgeBaseId,
+      solutionName: state.solutionName,
+      businessName: state.businessName,
     });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json?.error || "Could not create knowledge base");
-    const id = String(json?.data?.id || "");
-    if (!id) throw new Error("Knowledge base id missing");
-    patch({ linkedKnowledgeBaseId: id });
+    if (id !== state.linkedKnowledgeBaseId) patch({ linkedKnowledgeBaseId: id });
     return id;
   }
 

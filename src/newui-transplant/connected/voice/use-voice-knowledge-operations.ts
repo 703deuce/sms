@@ -120,28 +120,41 @@ export function useVoiceKnowledgeOperations(
 
   const handleUpload = useCallback(
     async (file: File) => {
-      const kbId = state.linkedKnowledgeBaseId;
-      if (!kbId) throw new Error("Connect a knowledge base before uploading.");
+      const { ensureWizardKnowledgeBaseClient } = await import(
+        "@/lib/solutions/appointment-receptionist/ensure-wizard-knowledge-base-client"
+      );
+      const kbId = await ensureWizardKnowledgeBaseClient({
+        linkedKnowledgeBaseId: state.linkedKnowledgeBaseId,
+      });
       const form = new FormData();
       form.append("file", file);
       const res = await fetch(`/api/voice/knowledge/${kbId}/upload`, { method: "POST", body: form });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || "Upload failed");
       await loadSources();
+      return kbId;
     },
     [state.linkedKnowledgeBaseId, loadSources],
   );
 
   const triggerRecrawl = useCallback(async () => {
-    const kbId = state.linkedKnowledgeBaseId;
+    const { ensureWizardKnowledgeBaseClient } = await import(
+      "@/lib/solutions/appointment-receptionist/ensure-wizard-knowledge-base-client"
+    );
     const websiteUrl = state.websiteUrl;
-    if (!kbId || !websiteUrl) return;
-    await fetch("/api/voice/knowledge/crawl", {
+    if (!websiteUrl) throw new Error("Enter a website URL first.");
+    const kbId = await ensureWizardKnowledgeBaseClient({
+      linkedKnowledgeBaseId: state.linkedKnowledgeBaseId,
+    });
+    const crawlRes = await fetch("/api/voice/knowledge/crawl", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ knowledgeBaseId: kbId, websiteUrl }),
     });
+    const json = await crawlRes.json().catch(() => ({}));
+    if (!crawlRes.ok) throw new Error(json.error || "Website crawl could not start");
     await loadSources();
+    return kbId;
   }, [state.linkedKnowledgeBaseId, state.websiteUrl, loadSources]);
 
   return {

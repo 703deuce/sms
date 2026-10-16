@@ -115,6 +115,8 @@ const MODEL_TO_TABLE: Record<string, string> = {
   voiceKnowledgeBase: "voice_knowledge_bases",
   voiceKnowledgeGap: "voice_knowledge_gaps",
   voiceKnowledgeSource: "voice_knowledge_sources",
+  voiceWebsiteCrawlJob: "voice_website_crawl_jobs",
+  voiceWebsiteCrawlPage: "voice_website_crawl_pages",
   voiceAgentKnowledgeBase: "voice_agent_knowledge_bases",
   voiceTool: "voice_tools",
   voiceAgentTool: "voice_agent_tools",
@@ -616,6 +618,14 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
   voiceKnowledgeSource: {
     workspace: { table: "Workspace", fk: "workspaceId" },
     knowledgeBase: { table: "voice_knowledge_bases", fk: "knowledgeBaseId" },
+  },
+  voiceWebsiteCrawlJob: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    knowledgeBase: { table: "voice_knowledge_bases", fk: "knowledgeBaseId" },
+  },
+  voiceWebsiteCrawlPage: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    crawlJob: { table: "voice_website_crawl_jobs", fk: "crawlJobId" },
   },
   voiceAgentKnowledgeBase: {
     workspace: { table: "Workspace", fk: "workspaceId" },

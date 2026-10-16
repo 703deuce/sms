@@ -20,6 +20,10 @@ import {
   WizardToggleField,
 } from "./wizard-field-kit";
 import { OpusCompactPanel } from "./wizard-opus-ui";
+import {
+  DEFAULT_US_BUSINESS_TIMEZONE,
+  US_BUSINESS_TIMEZONE_OPTIONS,
+} from "@/lib/solutions/appointment-receptionist/us-business-timezones";
 
 function LegacySection({
   title,
@@ -79,23 +83,29 @@ export function BusinessScheduleEditor({
       description="Used for after-hours operating state. Does not change phone routing."
     >
       <div>
-        <Label htmlFor="biz-tz">Timezone</Label>
-        <Input
+        <WizardSelectField
+          presentation={presentation}
           id="biz-tz"
-          className="mt-1 max-w-md"
-          value={schedule.timezone}
-          onChange={(e) =>
+          label="Timezone"
+          value={schedule.timezone || DEFAULT_US_BUSINESS_TIMEZONE}
+          onChange={(tz) =>
             patchMaturity(
               state,
               (cur) => ({
                 ...cur,
-                businessSchedule: { ...cur.businessSchedule, timezone: e.target.value },
+                businessSchedule: {
+                  ...cur.businessSchedule,
+                  timezone: tz || DEFAULT_US_BUSINESS_TIMEZONE,
+                },
               }),
               patch,
             )
           }
-          placeholder="America/New_York"
+          options={US_BUSINESS_TIMEZONE_OPTIONS}
         />
+        <WizardHint className="mt-1">
+          Used when deciding if a call is after hours. Pick the zone where your business operates.
+        </WizardHint>
       </div>
       <div className="space-y-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">

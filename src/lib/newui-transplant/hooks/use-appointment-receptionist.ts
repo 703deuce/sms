@@ -28,23 +28,26 @@ export function useAppointmentReceptionistWizard() {
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      let agentId: string | null = null;
-      const agentsRes = await fetch("/api/voice/agents", { cache: "no-store" });
-      if (agentsRes.ok) {
-        const agentsJson = await agentsRes.json();
-        const list = (agentsJson.data || []) as Array<{ id: string }>;
-        agentId = list[0]?.id ?? null;
-      }
-      const qs = agentId ? `?agentId=${encodeURIComponent(agentId)}` : "";
-      const res = await fetch(`/api/solutions/appointment-receptionist${qs}`, { cache: "no-store" });
+      const params = new URLSearchParams(
+        typeof window !== "undefined" ? window.location.search : "",
+      );
+      const qs = new URLSearchParams();
+      if (params.get("setupId")) qs.set("setupId", params.get("setupId")!);
+      if (params.get("agentId")) qs.set("agentId", params.get("agentId")!);
+      const res = await fetch(
+        `/api/solutions/appointment-receptionist${qs.toString() ? `?${qs.toString()}` : ""}`,
+        { cache: "no-store" },
+      );
       if (!res.ok) return;
       const json = await res.json();
       const loaded = json?.data;
-      if (loaded?.state) {
+      if (loaded?.state || loaded?.agentId) {
+        const serverState =
+          loaded.state && typeof loaded.state === "object" ? loaded.state : {};
         setState({
           ...baseState(),
-          ...loaded.state,
-          agentId: loaded.agentId || loaded.state.agentId,
+          ...serverState,
+          agentId: loaded.agentId || serverState.agentId,
           setupId: loaded.setupId || undefined,
         });
         setAgentStatus(loaded.status || "DRAFT");
@@ -83,10 +86,15 @@ export function useAppointmentReceptionistWizard() {
     const { persistKnowledgeWizardStep, ensureReceptionistAgentId } = await import(
       "@/lib/solutions/appointment-receptionist/knowledge-editor-persist"
     );
-    const agentId = await ensureReceptionistAgentId(state.agentId);
-    await persistKnowledgeWizardStep({ state: { ...state, agentId }, agentStatus });
+    const ensured = await ensureReceptionistAgentId(state);
+    if (!ensured.ok) throw new Error(ensured.error || "Could not create draft agent");
+    const result = await persistKnowledgeWizardStep({
+      state: ensured.state,
+      wizardStepId: "knowledge",
+    });
+    if (!result.ok) throw new Error(result.error || "Save failed");
     await reload();
-  }, [state, agentStatus, reload]);
+  }, [state, reload]);
 
   return { state, patch, loading, reload, saveDraft, saveKnowledge, agentStatus };
 }
