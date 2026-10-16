@@ -394,6 +394,7 @@ export function InformationStep({
       linkedKnowledgeBaseId: state.linkedKnowledgeBaseId,
       solutionName: state.solutionName,
       businessName: state.businessName,
+      agentId: state.agentId,
     });
     if (id !== state.linkedKnowledgeBaseId) patch({ linkedKnowledgeBaseId: id });
     return id;
@@ -1015,7 +1016,7 @@ export function InformationStep({
 
         <BusinessScheduleEditor state={state} patch={patch} presentation={presentation} />
 
-        <InformationStepOperationalExtras state={state} />
+        <InformationStepOperationalExtras state={state} patch={patch} />
       </div>
   );
 

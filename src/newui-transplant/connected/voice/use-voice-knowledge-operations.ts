@@ -26,7 +26,15 @@ type KbSource = {
 };
 
 export function useVoiceKnowledgeOperations(
-  state: Pick<AppointmentReceptionistWizardState, "linkedKnowledgeBaseId" | "websiteUrl">,
+  state: Pick<
+    AppointmentReceptionistWizardState,
+    | "linkedKnowledgeBaseId"
+    | "websiteUrl"
+    | "solutionName"
+    | "businessName"
+    | "agentId"
+  >,
+  patch?: (p: Partial<AppointmentReceptionistWizardState>) => void,
 ) {
   const [gaps, setGaps] = useState<KnowledgeGapRow[]>([]);
   const [sources, setSources] = useState<KnowledgeSourceRow[]>([]);
@@ -125,6 +133,14 @@ export function useVoiceKnowledgeOperations(
       );
       const kbId = await ensureWizardKnowledgeBaseClient({
         linkedKnowledgeBaseId: state.linkedKnowledgeBaseId,
+        solutionName: state.solutionName,
+        businessName: state.businessName,
+        agentId: state.agentId,
+      });
+      patch?.({
+        linkedKnowledgeBaseId: kbId,
+        knowledgeBaseEnabled: true,
+        knowledgeSource: "upload_docs",
       });
       const form = new FormData();
       form.append("file", file);
@@ -134,7 +150,14 @@ export function useVoiceKnowledgeOperations(
       await loadSources();
       return kbId;
     },
-    [state.linkedKnowledgeBaseId, loadSources],
+    [
+      state.linkedKnowledgeBaseId,
+      state.solutionName,
+      state.businessName,
+      state.agentId,
+      loadSources,
+      patch,
+    ],
   );
 
   const triggerRecrawl = useCallback(async () => {
@@ -145,6 +168,14 @@ export function useVoiceKnowledgeOperations(
     if (!websiteUrl) throw new Error("Enter a website URL first.");
     const kbId = await ensureWizardKnowledgeBaseClient({
       linkedKnowledgeBaseId: state.linkedKnowledgeBaseId,
+      solutionName: state.solutionName,
+      businessName: state.businessName,
+      agentId: state.agentId,
+    });
+    patch?.({
+      linkedKnowledgeBaseId: kbId,
+      knowledgeBaseEnabled: true,
+      websiteUrl,
     });
     const crawlRes = await fetch("/api/voice/knowledge/crawl", {
       method: "POST",
@@ -155,7 +186,15 @@ export function useVoiceKnowledgeOperations(
     if (!crawlRes.ok) throw new Error(json.error || "Website crawl could not start");
     await loadSources();
     return kbId;
-  }, [state.linkedKnowledgeBaseId, state.websiteUrl, loadSources]);
+  }, [
+    state.linkedKnowledgeBaseId,
+    state.websiteUrl,
+    state.solutionName,
+    state.businessName,
+    state.agentId,
+    loadSources,
+    patch,
+  ]);
 
   return {
     gaps,

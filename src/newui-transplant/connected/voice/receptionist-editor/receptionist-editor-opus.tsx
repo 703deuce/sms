@@ -139,10 +139,38 @@ export function ReceptionistEditorOpus({ editor }: { editor: Editor }) {
               {busy ? "Saving…" : "Save draft"}
             </Button>
             {stage === "identity" ? (
-              <Button type="button" onClick={() => setStage("responsibilities")}>Continue</Button>
+              <Button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  void (async () => {
+                    if (hasLocalEdits) {
+                      const saved = await editor.saveDraftGroups();
+                      if (!saved.ok) return;
+                    }
+                    setStage("responsibilities");
+                  })();
+                }}
+              >
+                Continue
+              </Button>
             ) : null}
             {stage === "responsibilities" ? (
-              <Button type="button" onClick={() => setStage("review")}>Review & test</Button>
+              <Button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  void (async () => {
+                    if (hasLocalEdits) {
+                      const saved = await editor.saveDraftGroups();
+                      if (!saved.ok) return;
+                    }
+                    setStage("review");
+                  })();
+                }}
+              >
+                Review & test
+              </Button>
             ) : null}
             {stage === "review" && (hasLocalEdits || pendingPublication || !isLive) ? (
               <Button type="button" disabled={busy} onClick={() => void editor.publish()}>

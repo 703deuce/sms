@@ -90,7 +90,7 @@ export function useAppointmentReceptionistWizard() {
     if (!ensured.ok) throw new Error(ensured.error || "Could not create draft agent");
     const result = await persistKnowledgeWizardStep({
       state: ensured.state,
-      wizardStepId: "knowledge",
+      wizardStepId: "information",
     });
     if (!result.ok) throw new Error(result.error || "Save failed");
     await reload();

@@ -70,6 +70,7 @@ const STEP_OWNED_FIELDS: Record<
     "collectFields",
   ],
   "call-handling": [
+    "bookingBehavior",
     "transferTriggers",
     "transferDestinationName",
     "transferDestinationPhone",

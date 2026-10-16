@@ -96,10 +96,10 @@ export function useVoiceReceptionistEditor() {
       if (loaded?.state || loaded?.agentId) {
         const serverState =
           loaded.state && typeof loaded.state === "object" ? loaded.state : {};
-        const { syncAppointmentTypesWithBookingStrategy } = await import(
-          "@/lib/voice-receptionist-wizard/booking-strategy"
+        const { normalizeWizardBookingStrategy } = await import(
+          "@/lib/solutions/appointment-receptionist/booking-strategy-ui"
         );
-        const merged = syncAppointmentTypesWithBookingStrategy({
+        const merged = normalizeWizardBookingStrategy({
           ...receptionistEditorBaseState(),
           ...serverState,
           agentId: loaded.agentId || serverState.agentId,

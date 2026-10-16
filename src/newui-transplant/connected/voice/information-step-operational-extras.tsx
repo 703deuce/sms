@@ -13,10 +13,12 @@ import { useVoiceKnowledgeOperations } from "./use-voice-knowledge-operations";
  */
 export function InformationStepOperationalExtras({
   state,
+  patch,
 }: {
   state: AppointmentReceptionistWizardState;
+  patch?: (p: Partial<AppointmentReceptionistWizardState>) => void;
 }) {
-  const ops = useVoiceKnowledgeOperations(state);
+  const ops = useVoiceKnowledgeOperations(state, patch);
 
   return (
     <div className="space-y-8 border-t border-border pt-8">
