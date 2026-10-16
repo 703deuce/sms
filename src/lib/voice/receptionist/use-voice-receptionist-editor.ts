@@ -99,11 +99,16 @@ export function useVoiceReceptionistEditor() {
         const { normalizeWizardBookingStrategy } = await import(
           "@/lib/solutions/appointment-receptionist/booking-strategy-ui"
         );
-        const merged = normalizeWizardBookingStrategy({
-          ...receptionistEditorBaseState(),
-          ...serverState,
-          agentId: loaded.agentId || serverState.agentId,
-        } as AppointmentReceptionistWizardState);
+        const { applyMandatoryConversationGuardrails } = await import(
+          "@/lib/solutions/appointment-receptionist/conversation-guardrails"
+        );
+        const merged = applyMandatoryConversationGuardrails(
+          normalizeWizardBookingStrategy({
+            ...receptionistEditorBaseState(),
+            ...serverState,
+            agentId: loaded.agentId || serverState.agentId,
+          } as AppointmentReceptionistWizardState),
+        );
         setState(merged);
         setBaseline(merged);
         setAgentStatus(loaded.status || "DRAFT");

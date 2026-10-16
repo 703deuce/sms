@@ -13,6 +13,8 @@ import type {
   WizardPersistAction,
   WizardStepId,
 } from "@/lib/solutions/appointment-receptionist/types";
+import { applyMandatoryConversationGuardrails } from "@/lib/solutions/appointment-receptionist/conversation-guardrails";
+import { applyMandatoryConversationGuardrails } from "@/lib/solutions/appointment-receptionist/conversation-guardrails";
 import { mergeWizardStateForSave } from "@/lib/solutions/appointment-receptionist/merge-wizard-state-on-save";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import {
@@ -86,6 +88,8 @@ export async function POST(request: Request) {
         );
       }
     }
+
+    state = applyMandatoryConversationGuardrails(state);
 
     let activationMode = state.activationMode || "activate_now";
     const warnings: string[] = [];

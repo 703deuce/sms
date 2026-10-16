@@ -65,16 +65,6 @@ export function IdentityConversationStage({
           showSidePanel={false}
         />
       </Panel>
-
-      <Panel title="Conversation rules" description="Guardrails applied on every call.">
-        <VoiceStep
-          state={state}
-          patch={patch}
-          presentation="opus"
-          parts={["conversation-rules"]}
-          showSidePanel={false}
-        />
-      </Panel>
     </div>
   );
 }

@@ -40,6 +40,7 @@ import { ActivateStep } from "./steps/activate-step";
 import { wizardPatchFromCompanyBrain } from "@/lib/solutions/appointment-receptionist/hydrate-from-brain";
 import { isLiveSyncPendingHealthStatus } from "@/lib/voice/agent-health-status";
 import { normalizeWizardBookingStrategy } from "@/lib/solutions/appointment-receptionist/booking-strategy-ui";
+import { applyMandatoryConversationGuardrails } from "@/lib/solutions/appointment-receptionist/conversation-guardrails";
 
 const STORAGE_KEY_LEGACY = "transovo.appointment-receptionist.wizard.v1";
 const STORAGE_KEY_MCTB = "transovo.mctb.voice-agent.wizard.v1";
@@ -150,7 +151,11 @@ export function AppointmentReceptionistWizard({
                 merged.solutionName =
                   serverState.solutionName?.trim() || merged.solutionName;
               }
-              setState(normalizeWizardBookingStrategy(merged as AppointmentReceptionistWizardState));
+              setState(
+                applyMandatoryConversationGuardrails(
+                  normalizeWizardBookingStrategy(merged as AppointmentReceptionistWizardState),
+                ),
+              );
               const statusRaw = String(loaded.status || loaded.agentStatus || "").toUpperCase();
               const healthStatus = String(loaded.healthStatus || "");
               const life =

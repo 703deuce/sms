@@ -12,8 +12,6 @@ import type {
   SpeakingPaceLevel,
   VoiceAccentStyle,
 } from "@/lib/voice-v3/prompts/live-prompt-controls";
-import { FieldRow } from "@/newui-transplant/components/app/kit";
-import { Switch } from "@/newui-transplant/components/ui/switch";
 import {
   pickWizardFieldComponents,
   type WizardPresentation,
@@ -28,7 +26,7 @@ import { InfoCallout, RadioRow, SelectableCard, SidePanel } from "../ui";
 
 const ALL_VOICES = [...WIZARD_VOICES, ...WIZARD_VOICE_BACKUPS];
 
-export type VoiceStepPart = "identity" | "greeting" | "voice" | "conversation-rules";
+export type VoiceStepPart = "identity" | "greeting" | "voice";
 
 export function VoiceStep({
   state,
@@ -113,45 +111,17 @@ export function VoiceStep({
     }
   }
 
-  const behaviors = state.conversationBehaviors;
   const stepPresentation: WizardPresentation = isOpus ? "opus" : isMctb ? "mctb" : "legacy";
+  const identityRoleOptions = [
+    "Appointment booking agent",
+    "Front-desk receptionist",
+    "Appointment coordinator",
+    "Office assistant",
+  ];
   const { Input, Label, Textarea, Button } = pickWizardFieldComponents(stepPresentation);
 
   if (isOpus && !parts) {
     return <IdentityConversationStage state={state} patch={patch} />;
-  }
-
-  const conversationRules = (
-    <div className="divide-y">
-      {(
-        [
-          ["keepBrief", "Keep answers brief"],
-          ["oneQuestionAtATime", "Ask one question at a time"],
-          ["confirmDetails", "Confirm names and numbers"],
-          ["neverInventPricing", "Never invent pricing"],
-          ["neverInventAvailability", "Never invent availability"],
-        ] as const
-      ).map(([key, label]) => (
-        <FieldRow key={key} label={label}>
-          <Switch
-            checked={Boolean(behaviors[key])}
-            onCheckedChange={(on) =>
-              patch({
-                conversationBehaviors: {
-                  ...behaviors,
-                  [key]: on,
-                },
-              })
-            }
-            aria-label={label}
-          />
-        </FieldRow>
-      ))}
-    </div>
-  );
-
-  if (isOpus && parts?.length === 1 && parts[0] === "conversation-rules") {
-    return conversationRules;
   }
 
   if (isOpus && parts?.length === 1 && parts[0] === "voice" && opusVoiceSlice === "prompts") {
@@ -268,11 +238,7 @@ export function VoiceStep({
                 label="Role"
                 value={state.role}
                 onChange={(role) => patch({ role })}
-                options={[
-                  "Front-desk receptionist",
-                  "Appointment coordinator",
-                  "Office assistant",
-                ].map((r) => ({ value: r, label: r }))}
+                options={identityRoleOptions.map((r) => ({ value: r, label: r }))}
               />
               <WizardSelectField
                 presentation={stepPresentation}
@@ -339,39 +305,6 @@ export function VoiceStep({
               </p>
             </div>
 
-            {!isOpus ? (
-            <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Conversation behavior
-              </p>
-              <div className="divide-y">
-                {(
-                  [
-                    ["keepBrief", "Keep answers brief"],
-                    ["oneQuestionAtATime", "Ask one question at a time"],
-                    ["confirmDetails", "Confirm names and numbers"],
-                    ["neverInventPricing", "Never invent pricing"],
-                    ["neverInventAvailability", "Never invent availability"],
-                  ] as const
-                ).map(([key, label]) => (
-                  <FieldRow key={key} label={label}>
-                    <Switch
-                      checked={Boolean(behaviors[key])}
-                      onCheckedChange={(on) =>
-                        patch({
-                          conversationBehaviors: {
-                            ...behaviors,
-                            [key]: on,
-                          },
-                        })
-                      }
-                      aria-label={label}
-                    />
-                  </FieldRow>
-                ))}
-              </div>
-            </div>
-            ) : null}
             </>
             ) : null}
           </div>

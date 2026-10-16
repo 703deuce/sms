@@ -229,12 +229,11 @@ export function buildSystemPromptLegacy(state: AppointmentReceptionistWizardStat
   }
   lines.push("");
   lines.push("Conversation behavior:");
-  const b = state.conversationBehaviors;
-  if (b.keepBrief) lines.push("- Keep answers brief.");
-  if (b.oneQuestionAtATime) lines.push("- Ask one question at a time.");
-  if (b.confirmDetails) lines.push("- Confirm names, numbers, dates, and addresses.");
-  if (b.neverInventPricing) lines.push("- Never invent pricing.");
-  if (b.neverInventAvailability) lines.push("- Never invent availability.");
+  lines.push("- Keep answers brief.");
+  lines.push("- Ask one question at a time.");
+  lines.push("- Confirm names, numbers, dates, and addresses.");
+  lines.push("- Never invent pricing.");
+  lines.push("- Never invent availability.");
   lines.push(
     "- Use the Business knowledge section for hours, pricing, services, policies, and FAQs — answer in your own words without calling tools.",
   );
@@ -393,7 +392,7 @@ export function buildWizardAgentConfig(
       goals: state.capabilities.join(", "),
       tone: state.tone,
       style: state.speakingStyle,
-      responseLength: state.conversationBehaviors.keepBrief ? "short" : "medium",
+      responseLength: "short",
       prohibited: state.guardrails,
       confirmation: state.bookingBehavior.confirmBeforeBooking
         ? "Confirm appointment details before booking."

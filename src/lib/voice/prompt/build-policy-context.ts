@@ -52,15 +52,14 @@ export function buildWorkspacePolicyContext(state: AppointmentReceptionistWizard
 }
 
 export function buildVoiceBehaviorRules(state: AppointmentReceptionistWizardState): string {
-  const b = state.conversationBehaviors;
   const lines: string[] = [];
   lines.push(`Tone: ${state.tone}. Speaking style: ${state.speakingStyle}.`);
   lines.push(`Primary language: ${state.language}.`);
-  if (b.keepBrief) lines.push("- Keep answers brief.");
-  if (b.oneQuestionAtATime) lines.push("- Ask one question at a time.");
-  if (b.confirmDetails) lines.push("- Confirm names, numbers, dates, and addresses.");
-  if (b.neverInventPricing) lines.push("- Never invent pricing.");
-  if (b.neverInventAvailability) lines.push("- Never invent availability.");
+  lines.push("- Keep answers brief.");
+  lines.push("- Ask one question at a time.");
+  lines.push("- Confirm names, numbers, dates, and addresses.");
+  lines.push("- Never invent pricing.");
+  lines.push("- Never invent availability.");
   for (const g of state.guardrails || []) lines.push(`- ${g}`);
   return lines.join("\n");
 }
