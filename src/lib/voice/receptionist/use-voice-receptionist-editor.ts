@@ -78,28 +78,40 @@ export function useVoiceReceptionistEditor() {
   const loadSetup = useCallback(async () => {
     setError("");
     try {
-      let agentId: string | null = null;
-      const agentsRes = await fetch("/api/voice/agents");
-      if (agentsRes.ok) {
-        const agentsJson = await agentsRes.json();
-        const list = (agentsJson.data || []) as Array<{ id: string }>;
-        agentId = list[0]?.id ?? null;
-      }
-      const qs = agentId ? `?agentId=${encodeURIComponent(agentId)}` : "";
-      const res = await fetch(`/api/solutions/appointment-receptionist${qs}`);
+      const params = new URLSearchParams(
+        typeof window !== "undefined" ? window.location.search : "",
+      );
+      const agentIdFromUrl = params.get("agentId");
+      const setupIdFromUrl = params.get("setupId");
+      const qs = new URLSearchParams();
+      if (setupIdFromUrl) qs.set("setupId", setupIdFromUrl);
+      if (agentIdFromUrl) qs.set("agentId", agentIdFromUrl);
+      const res = await fetch(
+        `/api/solutions/appointment-receptionist${qs.toString() ? `?${qs.toString()}` : ""}`,
+        { cache: "no-store" },
+      );
       if (!res.ok) throw new Error("Could not load receptionist configuration");
       const json = await res.json();
       const loaded = json?.data;
-      if (loaded?.state) {
-        const merged = {
+      if (loaded?.state || loaded?.agentId) {
+        const serverState =
+          loaded.state && typeof loaded.state === "object" ? loaded.state : {};
+        const { syncAppointmentTypesWithBookingStrategy } = await import(
+          "@/lib/voice-receptionist-wizard/booking-strategy"
+        );
+        const merged = syncAppointmentTypesWithBookingStrategy({
           ...receptionistEditorBaseState(),
-          ...loaded.state,
-          agentId: loaded.agentId || loaded.state.agentId,
-        } as AppointmentReceptionistWizardState;
+          ...serverState,
+          agentId: loaded.agentId || serverState.agentId,
+        } as AppointmentReceptionistWizardState);
         setState(merged);
         setBaseline(merged);
         setAgentStatus(loaded.status || "DRAFT");
         setPendingPublication(false);
+        const health = String(loaded.healthStatus || "");
+        if (health === "live_sync_pending" && loaded.healthMessage) {
+          setError(String(loaded.healthMessage));
+        }
       }
     } catch (e) {
       setError(toErrorMessage(e));

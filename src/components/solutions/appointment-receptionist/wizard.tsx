@@ -39,6 +39,7 @@ import { TestStep } from "./steps/test-step";
 import { ActivateStep } from "./steps/activate-step";
 import { wizardPatchFromCompanyBrain } from "@/lib/solutions/appointment-receptionist/hydrate-from-brain";
 import { isLiveSyncPendingHealthStatus } from "@/lib/voice/agent-health-status";
+import { syncAppointmentTypesWithBookingStrategy } from "@/lib/voice-receptionist-wizard/booking-strategy";
 
 const STORAGE_KEY_LEGACY = "transovo.appointment-receptionist.wizard.v1";
 const STORAGE_KEY_MCTB = "transovo.mctb.voice-agent.wizard.v1";
@@ -148,7 +149,7 @@ export function AppointmentReceptionistWizard({
                 merged.solutionName =
                   serverState.solutionName?.trim() || merged.solutionName;
               }
-              setState(merged);
+              setState(syncAppointmentTypesWithBookingStrategy(merged));
               const statusRaw = String(loaded.status || loaded.agentStatus || "").toUpperCase();
               const healthStatus = String(loaded.healthStatus || "");
               const life =
@@ -625,7 +626,13 @@ export function AppointmentReceptionistWizard({
           currentIndex={stepIndex}
           presentation={presentation}
           stepStatuses={stepStatuses}
-          onStepSelect={isMctb || isOpus ? (i) => void navigateToStep(i) : undefined}
+          onStepSelect={
+            isMctb
+              ? (i) => void navigateToStep(i)
+              : isOpus
+                ? (i) => void navigateToStep(i, { skipSave: true })
+                : undefined
+          }
         />
       </div>
 

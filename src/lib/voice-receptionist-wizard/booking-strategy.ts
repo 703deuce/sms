@@ -1,5 +1,8 @@
 import type { VoiceAgentConfig } from "@/lib/voice/types";
-import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
+import type {
+  AppointmentReceptionistWizardState,
+  BookingPermission,
+} from "@/lib/solutions/appointment-receptionist/types";
 
 /** Wizard-published booking mode — sole authority for live FIND/BOOK vs request vs message. */
 export type VoiceV2BookingStrategy =
@@ -26,6 +29,41 @@ function wizardFromConfig(
 ): AppointmentReceptionistWizardState | undefined {
   const advanced = (config?.advanced || {}) as Record<string, unknown>;
   return advanced.appointmentReceptionistWizard as AppointmentReceptionistWizardState | undefined;
+}
+
+/** Per-type permission that matches a wizard-level booking strategy (UI sync only). */
+export function bookingPermissionForStrategy(
+  strategy: VoiceV2BookingStrategy,
+): BookingPermission {
+  switch (strategy) {
+    case "SEND_LINK":
+      return "send_booking_link";
+    case "REQUEST_ONLY":
+      return "suggest_then_confirm";
+    case "MICROSOFT_365":
+    case "CALENDLY":
+      return "book_directly";
+    case "NONE":
+    default:
+      return "suggest_then_confirm";
+  }
+}
+
+/** Keep appointment type rows aligned with the single wizard booking choice. */
+export function syncAppointmentTypesWithBookingStrategy(
+  state: AppointmentReceptionistWizardState,
+): AppointmentReceptionistWizardState {
+  const strategy = deriveBookingStrategyFromWizard(state);
+  const perm = bookingPermissionForStrategy(strategy);
+  if (!state.appointmentTypes?.length) return state;
+  return {
+    ...state,
+    bookingStrategy: state.bookingStrategy ?? strategy,
+    appointmentTypes: state.appointmentTypes.map((t) => ({
+      ...t,
+      bookingPermission: perm,
+    })),
+  };
 }
 
 /** Derive strategy from wizard when `bookingStrategy` is not pinned on advanced config. */

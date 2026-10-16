@@ -44,7 +44,9 @@ export async function persistReceptionistDraftGroups(input: {
         }),
       });
       const json = await res.json();
-      if (!res.ok) {
+      const liveSyncPending422 =
+        res.status === 422 && json?.data?.liveSyncPending === true;
+      if (!res.ok && !liveSyncPending422) {
         failedGroups.push(group);
         return {
           ok: false,
@@ -58,8 +60,26 @@ export async function persistReceptionistDraftGroups(input: {
         };
       }
       agentId = (json.data?.agentId as string) || agentId;
+      if (json.data?.state && typeof json.data.state === "object") {
+        state = { ...state, ...(json.data.state as AppointmentReceptionistWizardState), agentId };
+      }
       if (Array.isArray(json.data?.warnings)) {
         warnings.push(...(json.data.warnings as string[]).filter(Boolean));
+      }
+      if (liveSyncPending422) {
+        const syncMsg =
+          json.data?.liveSyncError ||
+          json.error ||
+          "Saved to draft; live calls still use the previous configuration.";
+        warnings.push(syncMsg);
+        savedGroups.push(group);
+        return {
+          ok: true,
+          agentId,
+          warnings,
+          failedGroups,
+          savedGroups,
+        };
       }
       savedGroups.push(group);
       state = { ...state, agentId };

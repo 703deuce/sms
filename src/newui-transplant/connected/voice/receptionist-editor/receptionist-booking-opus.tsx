@@ -7,6 +7,7 @@ import type {
 import { FieldRow, Panel, TextLink } from "@/newui-transplant/components/app/kit";
 import { Switch } from "@/newui-transplant/components/ui/switch";
 import { SelectableCard } from "@/components/solutions/appointment-receptionist/ui";
+import { patchWizardBookingStrategy } from "@/lib/solutions/appointment-receptionist/booking-strategy-ui";
 import { Calendar } from "lucide-react";
 
 const STRATEGIES: Array<[VoiceWizardBookingStrategy, string, string]> = [
@@ -67,19 +68,7 @@ export function ReceptionistBookingOpus({
                 selected={selected}
                 title={label}
                 description={desc}
-                onClick={() => {
-                  const caps = new Set(state.capabilities);
-                  if (id === "NONE") {
-                    caps.delete("book_appointments");
-                    caps.add("take_messages");
-                  } else {
-                    caps.add("book_appointments");
-                  }
-                  patch({
-                    bookingStrategy: id,
-                    capabilities: [...caps],
-                  });
-                }}
+                onClick={() => patch(patchWizardBookingStrategy(state, id))}
               />
             );
           })}

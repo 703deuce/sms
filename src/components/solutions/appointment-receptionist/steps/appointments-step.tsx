@@ -36,6 +36,7 @@ import {
 } from "../wizard-opus-ui";
 import { FieldRow } from "@/newui-transplant/components/app/kit";
 import { InfoCallout, RadioRow, SelectableCard, SidePanel, StatusPill } from "../ui";
+import { patchWizardBookingStrategy } from "@/lib/solutions/appointment-receptionist/booking-strategy-ui";
 
 const CALENDARS = [
   { id: "google", label: "Google Calendar" },
@@ -390,24 +391,7 @@ export function AppointmentsStep({
                 key={id}
                 variant={uiVariant}
                 selected={(state.bookingStrategy || "MICROSOFT_365") === id}
-                onClick={() => {
-                  const caps = new Set(state.capabilities);
-                  if (id === "NONE") {
-                    caps.delete("book_appointments");
-                    caps.add("take_messages");
-                  } else {
-                    caps.add("book_appointments");
-                  }
-                  const next: Partial<AppointmentReceptionistWizardState> = {
-                    bookingStrategy: id,
-                    capabilities: [...caps],
-                  };
-                  if (id === "MICROSOFT_365") {
-                    next.calendarProvider =
-                      state.calendarProvider === "calendly" ? "microsoft" : state.calendarProvider;
-                  }
-                  patch(next);
-                }}
+                onClick={() => patch(patchWizardBookingStrategy(state, id))}
                 label={label}
                 description={desc}
               />
@@ -1013,37 +997,47 @@ export function AppointmentsStep({
                 </>
                 )}
               </div>
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Booking permissions
+              {isOpus || state.bookingStrategy ? (
+                <p className="text-xs text-muted-foreground">
+                  Booking behavior for this type follows{" "}
+                  <strong className="font-medium text-foreground">
+                    When someone wants an appointment
+                  </strong>{" "}
+                  above — change it there so live calls stay consistent.
                 </p>
-                <div className="space-y-2">
-                  {(
-                    [
-                      ["book_directly", "Book directly", "Allow callers to book the appointment."],
+              ) : (
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Booking permissions
+                  </p>
+                  <div className="space-y-2">
+                    {(
                       [
-                        "suggest_then_confirm",
-                        "Suggest times first",
-                        "Show options and confirm with the caller.",
-                      ],
-                      [
-                        "send_booking_link",
-                        "Send booking link",
-                        "Send a link for the caller to book later.",
-                      ],
-                    ] as Array<[BookingPermission, string, string]>
-                  ).map(([id, label, desc]) => (
-                    <RadioRow
-                      key={id}
-                      variant={uiVariant}
-                      selected={selected.bookingPermission === id}
-                      onClick={() => updateSelected({ bookingPermission: id })}
-                      label={label}
-                      description={desc}
-                    />
-                  ))}
+                        ["book_directly", "Book directly", "Allow callers to book the appointment."],
+                        [
+                          "suggest_then_confirm",
+                          "Suggest times first",
+                          "Show options and confirm with the caller.",
+                        ],
+                        [
+                          "send_booking_link",
+                          "Send booking link",
+                          "Send a link for the caller to book later.",
+                        ],
+                      ] as Array<[BookingPermission, string, string]>
+                    ).map(([id, label, desc]) => (
+                      <RadioRow
+                        key={id}
+                        variant={uiVariant}
+                        selected={selected.bookingPermission === id}
+                        onClick={() => updateSelected({ bookingPermission: id })}
+                        label={label}
+                        description={desc}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </SelectedAppointmentConfigShell>
         ) : null}
