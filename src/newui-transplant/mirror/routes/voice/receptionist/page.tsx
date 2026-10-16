@@ -29,6 +29,8 @@ export type VoiceReceptionistWired = {
   liveSyncLabel?: string
   capabilities?: VoiceReceptionistCapabilityWired[]
   editHref?: string
+  /** Summary home — defaults to /voice/receptionist */
+  summaryHref?: string
 }
 
 const CAPABILITY_ICONS: Record<string, typeof CalendarCheck> = {
@@ -53,7 +55,8 @@ export function TransplantVoiceReceptionistPage({ wired }: { wired?: VoiceRecept
   const greeting = wired?.greeting ?? 'Configure an opening greeting in setup.'
   const published = wired?.published ?? false
   const versionLabel = wired?.liveSyncLabel ?? wired?.versionLabel ?? 'Draft'
-  const editHref = wired?.editHref ?? '/voice/receptionist/edit'
+  const wizardHref = wired?.editHref ?? '/voice/receptionist/edit?step=goals'
+  const summaryHref = wired?.summaryHref ?? '/voice/receptionist'
   const capabilities = wired?.capabilities?.filter((c) => c.enabled) ?? []
   const enabledCount = capabilities.length
   const totalCount = wired?.capabilities?.length ?? 0
@@ -65,8 +68,8 @@ export function TransplantVoiceReceptionistPage({ wired }: { wired?: VoiceRecept
         description="A summary of how your AI receptionist greets and helps callers."
         actions={
           <>
-            <ButtonLink href={editHref} variant="outline">Continue setup</ButtonLink>
-            <ButtonLink href={editHref.includes('?') ? editHref : `${editHref}?step=goals`}>
+            <ButtonLink href={summaryHref} variant="outline">Refresh summary</ButtonLink>
+            <ButtonLink href={wizardHref}>
               Open setup wizard
             </ButtonLink>
           </>

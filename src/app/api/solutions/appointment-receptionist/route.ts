@@ -63,6 +63,11 @@ export async function POST(request: Request) {
     };
 
     const action = body.action || "save_draft";
+    const wizardStepId = body.wizardStepId;
+    const lightweightDraftSave =
+      wizardStepId != null &&
+      (wizardStepId === "goals" || wizardStepId === "phone") &&
+      (action === "save_draft" || action === "create_draft");
     let state = body.state;
     if (!state || typeof state !== "object") {
       return NextResponse.json({ error: "state is required" }, { status: 400 });
@@ -140,18 +145,23 @@ export async function POST(request: Request) {
       agentId,
       state,
       mode: effectiveAction === "activate" ? "activate" : "save_draft",
+      options: {
+        processKnowledgeSources: !lightweightDraftSave,
+      },
     });
 
     // Company-scoped answers → Company Brain (canonical). Amy retrieves; does not own a second copy.
-    try {
-      const { syncCompanyBrainFromWizard } = await import(
-        "@/lib/agents/appointment-booking/sync-company-brain-from-wizard"
-      );
-      await syncCompanyBrainFromWizard(auth.workspaceId, state);
-    } catch (err) {
-      warnings.push(
-        `Company Brain sync: ${err instanceof Error ? err.message : String(err)}`,
-      );
+    if (!lightweightDraftSave) {
+      try {
+        const { syncCompanyBrainFromWizard } = await import(
+          "@/lib/agents/appointment-booking/sync-company-brain-from-wizard"
+        );
+        await syncCompanyBrainFromWizard(auth.workspaceId, state);
+      } catch (err) {
+        warnings.push(
+          `Company Brain sync: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
     }
 
     const shouldPublish = effectiveAction === "activate";
@@ -263,7 +273,7 @@ export async function POST(request: Request) {
     let liveSyncApplied = false;
     let liveSyncError: string | null = null;
 
-    if (preserveActiveOnDraftSave && state.phoneNumberId) {
+    if (preserveActiveOnDraftSave && state.phoneNumberId && !lightweightDraftSave) {
       const { syncLiveWizardDraftToProvider } = await import("@/lib/voice/agent-service");
       const liveSync = await syncLiveWizardDraftToProvider(auth.workspaceId, agentId);
       if (!liveSync.synced && liveSync.error && liveSync.error !== "not_live") {

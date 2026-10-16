@@ -21,14 +21,17 @@ export function NewUiVoiceReceptionistPage() {
       .then((j) => {
         if (cancelled) return;
         const data = j.data ?? j;
-        if (data.mode === "first_run" || !data.operational) {
+        if (data.mode === "first_run") {
           setWired({
-            editHref: "/voice/receptionist/edit",
+            editHref: "/voice/receptionist/edit?step=goals",
             published: false,
             agentName: "AI Receptionist",
             setupProblems: ["Finish setup to publish your receptionist."],
           });
           return;
+        }
+        if (!data.operational) {
+          throw new Error("Receptionist summary is incomplete — try again.");
         }
         const op = data.operational;
         setWired({
@@ -50,7 +53,11 @@ export function NewUiVoiceReceptionistPage() {
           liveSyncStatus: op.liveSyncStatus,
           liveSyncLabel: op.liveSyncLabel,
           capabilities: op.capabilities || [],
-          editHref: op.manageReceptionistHref || "/voice/receptionist/edit",
+          editHref:
+            op.setupWizardHref ||
+            (op.agentId
+              ? `/voice/receptionist/edit?agentId=${encodeURIComponent(op.agentId)}&step=goals`
+              : "/voice/receptionist/edit?step=goals"),
         });
       })
       .catch((err) => {

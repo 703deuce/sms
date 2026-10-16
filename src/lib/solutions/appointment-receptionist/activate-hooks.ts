@@ -75,7 +75,9 @@ async function ensureWizardKnowledgeBase(input: {
   workspaceId: string;
   agentId: string;
   state: AppointmentReceptionistWizardState;
+  processSources?: boolean;
 }): Promise<string | null> {
+  const shouldProcessSources = input.processSources !== false;
   const prisma = getPrisma();
   const kbName = input.agentId
     ? `Agent ${input.agentId.slice(0, 12)} Knowledge`
@@ -175,20 +177,24 @@ async function ensureWizardKnowledgeBase(input: {
         data: { crawlUrl: url, status: "pending", errorMessage: null },
       });
     }
-    await processKnowledgeSource(urlSource.id).catch((err) =>
+    if (shouldProcessSources) {
+      await processKnowledgeSource(urlSource.id).catch((err) =>
+        console.warn(
+          "[appointment-receptionist] website knowledge sync failed",
+          err instanceof Error ? err.message : err,
+        ),
+      );
+    }
+  }
+
+  if (shouldProcessSources) {
+    await processKnowledgeSource(source.id).catch((err) =>
       console.warn(
-        "[appointment-receptionist] website knowledge sync failed",
+        "[appointment-receptionist] profile knowledge sync failed",
         err instanceof Error ? err.message : err,
       ),
     );
   }
-
-  await processKnowledgeSource(source.id).catch((err) =>
-    console.warn(
-      "[appointment-receptionist] profile knowledge sync failed",
-      err instanceof Error ? err.message : err,
-    ),
-  );
 
   await prisma.voiceAgentKnowledgeBase.upsert({
     where: {
@@ -389,12 +395,21 @@ async function ensureInsightsAttached(input: {
  * Run on activate (and optionally save_draft): push wizard state into platform
  * records other agents can also reuse (KB, services, destinations, insights).
  */
+export type ReceptionistHooksOptions = {
+  /** When false, persist KB rows but do not block on crawl/embed (save_draft UX). */
+  processKnowledgeSources?: boolean;
+};
+
 export async function runAppointmentReceptionistActivateHooks(input: {
   workspaceId: string;
   agentId: string;
   state: AppointmentReceptionistWizardState;
   mode: "save_draft" | "activate";
+  options?: ReceptionistHooksOptions;
 }): Promise<ActivateHooksResult> {
+  const processKnowledgeSources =
+    input.options?.processKnowledgeSources ??
+    (input.mode === "activate");
   const prisma = getPrisma();
   const calendar = await prisma.voiceCalendarConnection.findFirst({
     where: {
@@ -454,6 +469,7 @@ export async function runAppointmentReceptionistActivateHooks(input: {
     workspaceId: input.workspaceId,
     agentId: input.agentId,
     state: input.state,
+    processSources: processKnowledgeSources,
   }).catch((err) => {
     console.warn(
       "[appointment-receptionist] knowledge hook failed",

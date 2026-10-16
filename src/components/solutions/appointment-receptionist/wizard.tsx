@@ -421,16 +421,57 @@ export function AppointmentReceptionistWizard({
     setSaveNotice("");
     const payload = stateOverride ? { ...state, ...stateOverride } : state;
     try {
-      const res = await fetch("/api/solutions/appointment-receptionist", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          action,
-          state: payload,
-          wizardStepId: steps[stepIndex]?.id,
-        }),
-      });
-      const json = await res.json();
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 120_000);
+      let res: Response;
+      try {
+        res = await fetch("/api/solutions/appointment-receptionist", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            action,
+            state: payload,
+            wizardStepId: steps[stepIndex]?.id,
+          }),
+          signal: controller.signal,
+        });
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") {
+          throw new Error(
+            "Save timed out — the server may still be processing. Wait a moment, then try Save draft again.",
+          );
+        }
+        throw err;
+      } finally {
+        window.clearTimeout(timeout);
+      }
+      let json: {
+        error?: string;
+        data?: {
+          agentId?: string;
+          setupId?: string;
+          outcomeSlug?: string;
+          telnyxAssistantId?: string | null;
+          clonedAgentId?: string | null;
+          warnings?: string[];
+          state?: AppointmentReceptionistWizardState;
+          liveSyncPending?: boolean;
+          liveSyncError?: string | null;
+          issues?: Array<{ message?: string }>;
+          published?: boolean;
+          publishError?: string | null;
+        };
+      };
+      try {
+        json = await res.json();
+      } catch {
+        if (!res.ok) {
+          throw new Error(
+            `Request failed (${res.status} ${res.statusText || "error"})`,
+          );
+        }
+        throw new Error("Server returned an invalid response");
+      }
       const liveSyncPending422 =
         res.status === 422 && json?.data?.liveSyncPending === true;
       if (!res.ok && !liveSyncPending422) {

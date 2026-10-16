@@ -102,6 +102,7 @@ export type VoiceOverviewOperational = {
     href: string;
   } | null;
   manageReceptionistHref: string;
+  setupWizardHref: string;
 };
 
 export type VoiceOverviewMetrics = {
@@ -194,6 +195,7 @@ export async function loadVoiceOverviewSummary(
     receptionistName,
     voiceLabel,
     errors,
+    hubOnly,
   });
 
   let attention: OverviewAttentionRow[] = [];
@@ -271,8 +273,11 @@ async function buildOperationalState(input: {
   receptionistName: string | null;
   voiceLabel: string | null;
   errors: VoiceOverviewSummaryResult["errors"];
+  hubOnly?: boolean;
 }): Promise<VoiceOverviewOperational> {
-  const phone = await resolvePhoneStatus(input.workspaceId, input.agent!.agentId);
+  const phone = input.hubOnly
+    ? await resolvePhoneStatusLite(input.workspaceId, input.agent!)
+    : await resolvePhoneStatus(input.workspaceId, input.agent!.agentId);
   let calendar: VoiceOverviewOperational["calendar"] = null;
   try {
     calendar = await resolveCalendarStatus(input.workspaceId, input.wizard);
@@ -303,9 +308,9 @@ async function buildOperationalState(input: {
   const businessHours = resolveBusinessHoursSummary(input.wizard);
 
   const agentId = input.agent?.agentId ?? null;
-  const editBase = agentId
-    ? `/voice/receptionist/edit?agentId=${encodeURIComponent(agentId)}`
-    : "/voice/receptionist/edit";
+  const setupWizardHref = agentId
+    ? `/voice/receptionist/edit?agentId=${encodeURIComponent(agentId)}&step=goals`
+    : "/voice/receptionist/edit?step=goals";
 
   const enabledCaps = new Set(input.wizard?.capabilities || []);
   const capabilities: VoiceOverviewCapabilityRow[] = CAPABILITY_OPTIONS.map((opt) => ({
@@ -333,12 +338,17 @@ async function buildOperationalState(input: {
     ? "Callback requests enabled"
     : null;
 
-  const livekitStatus = await resolveLiveKitStatusForAgent({
-    workspaceId: input.workspaceId,
-    agentId,
-    phoneNumberId: input.agent?.primaryPhoneNumberId ?? null,
-    wizardPhoneNumberId: input.wizard?.phoneNumberId ?? null,
-  });
+  const livekitStatus = input.hubOnly
+    ? resolveLiveKitStatusLite({
+        wizardPhoneNumberId: input.wizard?.phoneNumberId ?? null,
+        agentPhoneNumberId: input.agent?.primaryPhoneNumberId ?? null,
+      })
+    : await resolveLiveKitStatusForAgent({
+        workspaceId: input.workspaceId,
+        agentId,
+        phoneNumberId: input.agent?.primaryPhoneNumberId ?? null,
+        wizardPhoneNumberId: input.wizard?.phoneNumberId ?? null,
+      });
 
   let healthStatus: string | null = null;
   let healthMessage: string | null = null;
@@ -398,8 +408,33 @@ async function buildOperationalState(input: {
     calendar,
     businessKnowledge,
     businessHours,
-    manageReceptionistHref: editBase,
+    manageReceptionistHref: "/voice/receptionist",
+    setupWizardHref,
   };
+}
+
+function resolveLiveKitStatusLite(input: {
+  wizardPhoneNumberId: string | null;
+  agentPhoneNumberId: string | null;
+}): { label: string; tone: "ok" | "warn" | "muted" } {
+  const phoneId = input.wizardPhoneNumberId || input.agentPhoneNumberId;
+  if (!phoneId) {
+    return { label: "No phone number assigned", tone: "warn" };
+  }
+  return { label: "Open summary for routing details", tone: "muted" };
+}
+
+async function resolvePhoneStatusLite(
+  _workspaceId: string,
+  agent: CanonicalVoiceV3WorkspaceAgent,
+): Promise<VoiceOverviewOperational["phone"]> {
+  if (agent.primaryPhoneE164) {
+    return { label: agent.primaryPhoneE164, tone: "ok" };
+  }
+  if (agent.primaryPhoneNumberId) {
+    return { label: "Phone assigned", tone: "ok" };
+  }
+  return { label: "Phone setup needs attention", tone: "warn" };
 }
 
 async function resolveLiveKitStatusForAgent(input: {
