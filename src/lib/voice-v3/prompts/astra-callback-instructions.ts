@@ -26,7 +26,7 @@ export function buildAstraCallbackInstructions(config: VoiceV3AgentConfig): stri
 
   const preferredTimeLine =
     config.callHandling?.callbackAskPreferredTime !== false
-      ? "Collect a preferred callback time (natural language) before calling request_callback when the caller has not given one."
+      ? "Preferred callback time is required for this business when the caller has not already given one. You may still call request_callback after the caller clearly requests a callback — if preferred_time is missing, the executor returns needs_information and Amy collects it before you call request_callback again. Do not collect booking-only fields while waiting."
       : "Preferred callback time is optional; use preferred_time only when the caller offers timing.";
 
   return `
@@ -39,6 +39,6 @@ ${aniLine}
 ${confirmLine ? `\n${confirmLine}` : ""}
 ${preferredTimeLine}
 
-Reuse caller facts already stored in shared call state for this call. When the caller has clearly requested a callback, invoke request_callback — the trusted executor validates requirements and returns needs_information with missingFields when more is needed. Do not require booking-only fields (for example email or scheduling preferences) unless they are also listed above for callback.
+Reuse caller facts already stored in shared call state for this call. When the caller has clearly requested a callback, invoke request_callback — the trusted executor validates requirements and returns needs_information with missingFields when more is needed. Do not require booking-only fields (for example email or scheduling preferences) unless they are also listed above for callback. Complete the callback only after authoritative callback_requested success — never treat conversational acknowledgement as completion.
 `.trim();
 }

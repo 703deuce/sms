@@ -8,4 +8,8 @@ Full Amy (GPT-Live frontend) + Astra/Luna (backend) instructions as compiled fro
 | [amy-and-astra-cert-m365.txt](./amy-and-astra-cert-m365.txt) | Cert PSTN booking (M365 tools) |
 | [both-scenarios-combined.txt](./both-scenarios-combined.txt) | Both in one file |
 
-Regenerate: `npx tsx scripts/write-voice-v3-prompt-snapshots.ts`
+Regenerate:
+
+```bash
+NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/write-voice-v3-prompt-snapshots.ts
+```

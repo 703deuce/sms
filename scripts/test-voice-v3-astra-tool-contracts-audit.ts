@@ -66,7 +66,7 @@ const prompts = buildVoiceV3Prompts({
   ...resolveVoiceV3DefaultPromptInput(new Date()),
   agentConfig: VOICE_V3_BOOKING_TEST_CONFIG,
 });
-assert.ok(prompts.astraInstructions.includes("New booking path"));
+assert.ok(prompts.astraInstructions.includes("Direct calendar booking"));
 assert.ok(prompts.astraInstructions.includes("update_intake"));
 assert.ok(prompts.astraInstructions.includes("set_scheduling_preference"));
 assert.ok(

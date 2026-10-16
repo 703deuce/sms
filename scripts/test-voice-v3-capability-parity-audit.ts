@@ -10,7 +10,12 @@ import {
   VOICE_V3_PARITY_TOOL_ORDER,
 } from "../src/lib/voice-v3/config/capability-parity-audit";
 import { buildVoiceV3Prompts } from "../src/lib/voice-v3/prompts/build-voice-v3-prompts";
+import { buildLiveFrontendInstructions } from "../src/lib/voice-v3/prompts/live-frontend-instructions";
+import { resolveConnectionGreetingRole } from "../src/lib/voice-v3/prompts/effective-prompt-capabilities";
 import { listVoiceV3AstraToolNamesForConfig } from "../src/lib/voice-v3/tools/voice-tool-catalog";
+import { applyMandatoryConversationGuardrails } from "@/lib/solutions/appointment-receptionist/conversation-guardrails";
+import { createDefaultWizardState } from "@/lib/solutions/appointment-receptionist/defaults";
+import { compileVoiceV3AgentConfig } from "../src/lib/voice-v3/config/compile-voice-v3-agent-config";
 
 function main(): void {
   const cert = compileScenario("cert_m365_reference");
@@ -49,7 +54,7 @@ function main(): void {
     toolNames: defaultTools,
   });
   assert.ok(
-    !defaultPrompts.astraInstructions.includes("New booking path (typical order)"),
+    !defaultPrompts.astraInstructions.includes("Direct calendar booking"),
     "REQUEST_ONLY astra should not include direct calendar booking workflow",
   );
   assert.ok(
@@ -66,10 +71,34 @@ function main(): void {
     toolNames: m365Tools,
   });
   assert.ok(m365Prompts.liveInstructions.includes("Transferring to a human"));
-  assert.ok(m365Prompts.astraInstructions.includes("New booking path"));
+  assert.ok(m365Prompts.astraInstructions.includes("Direct calendar booking"));
 
   const matrix = toolMatrixForConfigs(cert, wizardDefault);
   assert.equal(matrix.length, VOICE_V3_PARITY_TOOL_ORDER.length);
+
+  const wizardWithConnectionGreeting = compileVoiceV3AgentConfig({
+    wizard: applyMandatoryConversationGuardrails({
+      ...createDefaultWizardState(),
+      connectionGreeting: "transovo_professional",
+    }),
+  });
+  assert.equal(resolveConnectionGreetingRole(wizardWithConnectionGreeting), "holding");
+  const amyHolding = buildLiveFrontendInstructions({
+    agentConfig: wizardWithConnectionGreeting,
+  });
+  assert.ok(amyHolding.includes("Do not repeat that hold line"));
+  assert.ok(amyHolding.includes("Give the normal business introduction once"));
+
+  const wizardNoGreeting = compileVoiceV3AgentConfig({
+    wizard: applyMandatoryConversationGuardrails({
+      ...createDefaultWizardState(),
+      connectionGreeting: "none",
+      connectionGreetingText: "",
+    }),
+  });
+  assert.equal(resolveConnectionGreetingRole(wizardNoGreeting), "none");
+  const amyNoConn = buildLiveFrontendInstructions({ agentConfig: wizardNoGreeting });
+  assert.ok(amyNoConn.includes("greet the caller proactively"));
 
   console.log("VOICE_V3_CAPABILITY_PARITY_AUDIT: PASS");
 }
