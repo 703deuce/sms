@@ -80,11 +80,23 @@ function resolveSipHost(backend: MediaBackend, rawUrl: string): string {
   return "";
 }
 
+/**
+ * LiveKit Cloud is the only active media plane. Self-hosted (voice.transovo.ai) is retired.
+ * Stale Coolify `MEDIA_BACKEND_MODE=self_hosted` must not route SIP provisioning to that host (502).
+ */
 export function getMediaBackendMode(): MediaBackendMode {
   const raw = readEnv("MEDIA_BACKEND_MODE").toLowerCase();
-  if (raw === "self_hosted") return "self_hosted";
-  if (raw === "livekit_cloud") return "livekit_cloud";
-  return DEFAULT_MEDIA_BACKEND_MODE;
+  if (raw === "self_hosted") {
+    console.warn(
+      JSON.stringify({
+        service: "transovo-web",
+        event: "media_backend_self_hosted_ignored",
+        message:
+          "MEDIA_BACKEND_MODE=self_hosted is ignored; all voice uses livekit_cloud",
+      }),
+    );
+  }
+  return "livekit_cloud";
 }
 
 export function isMediaBackendConfigured(backend: MediaBackend): boolean {
