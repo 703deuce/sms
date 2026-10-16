@@ -39,7 +39,7 @@ import { TestStep } from "./steps/test-step";
 import { ActivateStep } from "./steps/activate-step";
 import { wizardPatchFromCompanyBrain } from "@/lib/solutions/appointment-receptionist/hydrate-from-brain";
 import { isLiveSyncPendingHealthStatus } from "@/lib/voice/agent-health-status";
-import { syncAppointmentTypesWithBookingStrategy } from "@/lib/voice-receptionist-wizard/booking-strategy";
+import { normalizeWizardBookingStrategy } from "@/lib/solutions/appointment-receptionist/booking-strategy-ui";
 
 const STORAGE_KEY_LEGACY = "transovo.appointment-receptionist.wizard.v1";
 const STORAGE_KEY_MCTB = "transovo.mctb.voice-agent.wizard.v1";
@@ -150,7 +150,7 @@ export function AppointmentReceptionistWizard({
                 merged.solutionName =
                   serverState.solutionName?.trim() || merged.solutionName;
               }
-              setState(syncAppointmentTypesWithBookingStrategy(merged));
+              setState(normalizeWizardBookingStrategy(merged as AppointmentReceptionistWizardState));
               const statusRaw = String(loaded.status || loaded.agentStatus || "").toUpperCase();
               const healthStatus = String(loaded.healthStatus || "");
               const life =
@@ -569,6 +569,17 @@ export function AppointmentReceptionistWizard({
       setSaveNotice("");
       return;
     }
+    if (steps[stepIndex]?.id === "appointments") {
+      const strategy =
+        state.bookingStrategy ||
+        normalizeWizardBookingStrategy(state).bookingStrategy ||
+        "MICROSOFT_365";
+      if (strategy === "SEND_LINK" && !state.bookingLinkUrl?.trim()) {
+        setError("Add a booking page URL before continuing.");
+        setSaveNotice("");
+        return;
+      }
+    }
     if (stepIndex < steps.length - 1) {
       if (stepIndex === 0 && !state.agentId) {
         const created = await persist("create_draft");
@@ -634,11 +645,9 @@ export function AppointmentReceptionistWizard({
           presentation={presentation}
           stepStatuses={stepStatuses}
           onStepSelect={
-            isMctb
+            isMctb || isOpus
               ? (i) => void navigateToStep(i)
-              : isOpus
-                ? (i) => void navigateToStep(i, { skipSave: true })
-                : undefined
+              : undefined
           }
         />
       </div>

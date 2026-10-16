@@ -36,7 +36,17 @@ import {
 } from "../wizard-opus-ui";
 import { FieldRow } from "@/newui-transplant/components/app/kit";
 import { InfoCallout, RadioRow, SelectableCard, SidePanel, StatusPill } from "../ui";
-import { patchWizardBookingStrategy } from "@/lib/solutions/appointment-receptionist/booking-strategy-ui";
+import {
+  effectiveBookingStrategyForUi,
+  normalizeWizardBookingStrategy,
+  patchWizardBookingStrategy,
+} from "@/lib/solutions/appointment-receptionist/booking-strategy-ui";
+import {
+  isCollectFieldEnabled,
+  patchCollectFieldEnabled,
+  patchCollectFieldRequired,
+  requiredCollectFieldIds,
+} from "@/lib/solutions/appointment-receptionist/collect-fields-ui";
 
 const CALENDARS = [
   { id: "google", label: "Google Calendar" },
@@ -128,11 +138,17 @@ export function AppointmentsStep({
   }, []);
 
   useEffect(() => {
-    if (state.bookingStrategy === "CALENDLY") {
-      patch({ bookingStrategy: "MICROSOFT_365" });
+    const normalized = normalizeWizardBookingStrategy(state);
+    if (normalized.bookingStrategy !== state.bookingStrategy) {
+      patch({
+        bookingStrategy: normalized.bookingStrategy,
+        appointmentTypes: normalized.appointmentTypes,
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const bookingStrategyUi = effectiveBookingStrategyForUi(state);
 
   useEffect(() => {
     if ((state.bookingStrategy || "MICROSOFT_365") !== "SEND_LINK") return;
@@ -162,6 +178,23 @@ export function AppointmentsStep({
     setBusyProvider(providerId);
     try {
       const provider = providerId === "outlook" ? "microsoft" : providerId;
+
+      if (isProviderConnected(providerId)) {
+        const row = calendars.find((c) => c.provider === provider);
+        const live = resolveLiveCalendar({
+          voiceCalendars: calendars,
+          integrationConnections: integrationProviders,
+        });
+        patch({
+          calendarProvider: provider,
+          calendarConnected: true,
+          calendarEmail:
+            row?.name ||
+            (live.connected && live.provider === provider ? live.name : null) ||
+            state.calendarEmail,
+        });
+        return;
+      }
 
       // Calendly / Acuity / Cal.com — prefer live Integrations connection.
       if (["calendly", "acuity", "calcom"].includes(provider)) {
@@ -221,7 +254,11 @@ export function AppointmentsStep({
         connectionId = json.data.id as string;
       }
       if (provider === "google" || provider === "microsoft") {
-        window.location.href = `/api/integrations/calendars/oauth/${provider}?connectionId=${connectionId}&returnTo=${encodeURIComponent("/integrations/calendars")}`;
+        const returnTo =
+          typeof window !== "undefined"
+            ? `${window.location.pathname}${window.location.search}`
+            : "/voice/receptionist/edit";
+        window.location.href = `/api/integrations/calendars/oauth/${provider}?connectionId=${connectionId}&returnTo=${encodeURIComponent(returnTo)}`;
         return;
       }
 
@@ -390,14 +427,14 @@ export function AppointmentsStep({
               <RadioRow
                 key={id}
                 variant={uiVariant}
-                selected={(state.bookingStrategy || "MICROSOFT_365") === id}
+                selected={bookingStrategyUi === id}
                 onClick={() => patch(patchWizardBookingStrategy(state, id))}
                 label={label}
                 description={desc}
               />
             ))}
           </div>
-          {(state.bookingStrategy || "MICROSOFT_365") === "SEND_LINK" ? (
+          {bookingStrategyUi === "SEND_LINK" ? (
             <div className="mt-4 space-y-4 border-t border-border pt-4">
               <p className="text-sm font-medium">Send a booking link</p>
               <div>
@@ -887,27 +924,37 @@ export function AppointmentsStep({
                       <WizardCheckboxInline
                         presentation={presentation}
                         label={field.label}
-                        checked={field.enabled !== false}
-                        onCheckedChange={() => {
-                          const next = state.collectFields.map((f, i) =>
-                            i === index ? { ...f, enabled: !f.enabled } : f,
+                        checked={isCollectFieldEnabled(field)}
+                        onCheckedChange={(on) => {
+                          const next = patchCollectFieldEnabled(
+                            state.collectFields,
+                            index,
+                            on,
                           );
                           patch({ collectFields: next });
+                          if (selected) {
+                            updateSelected({
+                              requiredFields: requiredCollectFieldIds(next),
+                            });
+                          }
                         }}
                       />
                       <WizardCheckboxInline
                         presentation={presentation}
                         label="Required"
                         checked={Boolean(field.required)}
-                        onCheckedChange={() => {
-                          const next = state.collectFields.map((f, i) =>
-                            i === index ? { ...f, required: !f.required } : f,
+                        onCheckedChange={(on) => {
+                          const next = patchCollectFieldRequired(
+                            state.collectFields,
+                            index,
+                            on,
                           );
                           patch({ collectFields: next });
-                          const ids = next
-                            .filter((f) => f.enabled !== false && f.required)
-                            .map((f) => f.id);
-                          if (selected) updateSelected({ requiredFields: ids });
+                          if (selected) {
+                            updateSelected({
+                              requiredFields: requiredCollectFieldIds(next),
+                            });
+                          }
                         }}
                       />
                       {state.qualificationEnabled ? (

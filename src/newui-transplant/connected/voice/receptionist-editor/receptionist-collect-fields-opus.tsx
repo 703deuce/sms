@@ -1,6 +1,12 @@
 "use client";
 
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
+import {
+  isCollectFieldEnabled,
+  patchCollectFieldEnabled,
+  patchCollectFieldRequired,
+  requiredCollectFieldIds,
+} from "@/lib/solutions/appointment-receptionist/collect-fields-ui";
 import { FieldRow } from "@/newui-transplant/components/app/kit";
 import { OpusTableShell } from "@/components/solutions/appointment-receptionist/wizard-opus-ui";
 import { Button } from "@/newui-transplant/components/ui/button";
@@ -29,6 +35,18 @@ export function ReceptionistCollectFieldsOpus({
     state.appointmentTypes.find((t) => t.id === state.selectedAppointmentTypeId) ||
     state.appointmentTypes[0];
 
+  function syncRequiredFieldsOnType(
+    fields: AppointmentReceptionistWizardState["collectFields"],
+  ) {
+    if (!selected) return;
+    const ids = requiredCollectFieldIds(fields);
+    patch({
+      appointmentTypes: state.appointmentTypes.map((t) =>
+        t.id === selected.id ? { ...t, requiredFields: ids } : t,
+      ),
+    });
+  }
+
   function moveField(index: number, dir: -1 | 1) {
     const next = index + dir;
     if (next < 0 || next >= state.collectFields.length) return;
@@ -46,7 +64,14 @@ export function ReceptionistCollectFieldsOpus({
       >
         <Switch
           checked={state.qualificationEnabled === true}
-          onCheckedChange={(on) => patch({ qualificationEnabled: on })}
+          onCheckedChange={(on) =>
+            patch({
+              qualificationEnabled: on,
+              capabilities: on
+                ? [...new Set([...state.capabilities, "qualify_callers"])]
+                : state.capabilities.filter((c) => c !== "qualify_callers"),
+            })
+          }
           aria-label="Qualify callers before booking"
         />
       </FieldRow>
@@ -66,12 +91,15 @@ export function ReceptionistCollectFieldsOpus({
               <TableRow key={field.id}>
                 <TableCell>
                   <Checkbox
-                    checked={field.enabled !== false}
-                    onCheckedChange={() => {
-                      const next = state.collectFields.map((f, i) =>
-                        i === index ? { ...f, enabled: !f.enabled } : f,
+                    checked={isCollectFieldEnabled(field)}
+                    onCheckedChange={(checked) => {
+                      const next = patchCollectFieldEnabled(
+                        state.collectFields,
+                        index,
+                        checked === true,
                       );
                       patch({ collectFields: next });
+                      syncRequiredFieldsOnType(next);
                     }}
                     aria-label={`Enable ${field.label}`}
                   />
@@ -91,21 +119,14 @@ export function ReceptionistCollectFieldsOpus({
                 <TableCell>
                   <Checkbox
                     checked={Boolean(field.required)}
-                    onCheckedChange={() => {
-                      const next = state.collectFields.map((f, i) =>
-                        i === index ? { ...f, required: !f.required } : f,
+                    onCheckedChange={(checked) => {
+                      const next = patchCollectFieldRequired(
+                        state.collectFields,
+                        index,
+                        checked === true,
                       );
                       patch({ collectFields: next });
-                      if (selected) {
-                        const ids = next
-                          .filter((f) => f.enabled !== false && f.required)
-                          .map((f) => f.id);
-                        patch({
-                          appointmentTypes: state.appointmentTypes.map((t) =>
-                            t.id === selected.id ? { ...t, requiredFields: ids } : t,
-                          ),
-                        });
-                      }
+                      syncRequiredFieldsOnType(next);
                     }}
                     aria-label={`Required ${field.label}`}
                   />

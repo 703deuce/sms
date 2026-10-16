@@ -4,8 +4,39 @@ import type {
 } from "./types";
 import {
   bookingPermissionForStrategy,
+  deriveBookingStrategyFromWizard,
+  syncAppointmentTypesWithBookingStrategy,
   type VoiceV2BookingStrategy,
 } from "@/lib/voice-receptionist-wizard/booking-strategy";
+
+const UI_BOOKING_STRATEGIES: VoiceV2BookingStrategy[] = [
+  "MICROSOFT_365",
+  "REQUEST_ONLY",
+  "SEND_LINK",
+  "NONE",
+];
+
+/** Map stored / legacy values to a radio the Appointments step can show and save. */
+export function normalizeWizardBookingStrategy(
+  state: AppointmentReceptionistWizardState,
+): AppointmentReceptionistWizardState {
+  let strategy = state.bookingStrategy;
+  if (strategy === "CALENDLY") strategy = "MICROSOFT_365";
+  if (!strategy || !UI_BOOKING_STRATEGIES.includes(strategy)) {
+    strategy = deriveBookingStrategyFromWizard(state);
+    if (strategy === "CALENDLY") strategy = "MICROSOFT_365";
+  }
+  return syncAppointmentTypesWithBookingStrategy({
+    ...state,
+    bookingStrategy: strategy,
+  });
+}
+
+export function effectiveBookingStrategyForUi(
+  state: AppointmentReceptionistWizardState,
+): VoiceWizardBookingStrategy {
+  return normalizeWizardBookingStrategy(state).bookingStrategy ?? "MICROSOFT_365";
+}
 
 export function patchWizardBookingStrategy(
   state: AppointmentReceptionistWizardState,
