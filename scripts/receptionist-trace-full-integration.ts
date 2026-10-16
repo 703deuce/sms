@@ -8,7 +8,8 @@
  * Env:
  *   RECEPTIONIST_TRACE_AGENT_ID — optional; default newest appointment_receptionist agent in workspace
  *   RECEPTIONIST_TRACE_ALLOW_PUBLISH=1 — publish after saves (only if agent status is DRAFT)
- *   RECEPTIONIST_TRACE_RESTORE_BOOKING — if set, restore bookingStrategy after run
+ *   RECEPTIONIST_TRACE_RESTORE_BOOKING — after run: `1` = restore initial snapshot;
+ *     or explicit strategy (MICROSOFT_365 | SEND_LINK | …)
  */
 import Module from "node:module";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -387,7 +388,13 @@ async function main() {
     };
   }
 
-  if (restoreBooking && restoreBooking !== "SEND_LINK") {
+  const restoreStrategy =
+    restoreBooking === "1" && bookingBefore
+      ? bookingBefore
+      : restoreBooking && restoreBooking !== "1"
+        ? restoreBooking
+        : null;
+  if (restoreStrategy) {
     const traceId = createReceptionistTraceId();
     const req = new Request("http://trace.local/api/solutions/appointment-receptionist", {
       method: "POST",
@@ -396,20 +403,7 @@ async function main() {
         action: "save_draft",
         wizardStepId: "appointments",
         receptionistTraceId: traceId,
-        state: { ...state, bookingStrategy: restoreBooking },
-      }),
-    });
-    await POST(req);
-  } else if (restoreBooking === "1" && bookingBefore) {
-    const traceId = createReceptionistTraceId();
-    const req = new Request("http://trace.local/api/solutions/appointment-receptionist", {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-receptionist-trace-id": traceId },
-      body: JSON.stringify({
-        action: "save_draft",
-        wizardStepId: "appointments",
-        receptionistTraceId: traceId,
-        state: { ...state, bookingStrategy: bookingBefore },
+        state: { ...state, bookingStrategy: restoreStrategy },
       }),
     });
     await POST(req);

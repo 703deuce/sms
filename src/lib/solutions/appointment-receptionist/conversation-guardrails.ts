@@ -1,3 +1,4 @@
+import { normalizeWizardBookingStrategy } from "./booking-strategy-ui";
 import type { AppointmentReceptionistWizardState } from "./types";
 
 /** Non-optional receptionist conversation rules — always enforced in prompts and saves. */
@@ -13,8 +14,9 @@ export const MANDATORY_CONVERSATION_BEHAVIORS: AppointmentReceptionistWizardStat
 export function applyMandatoryConversationGuardrails(
   state: AppointmentReceptionistWizardState,
 ): AppointmentReceptionistWizardState {
+  const withBooking = normalizeWizardBookingStrategy(state);
   return {
-    ...state,
+    ...withBooking,
     conversationBehaviors: { ...MANDATORY_CONVERSATION_BEHAVIORS },
   };
 }
