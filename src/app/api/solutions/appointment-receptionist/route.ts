@@ -15,7 +15,6 @@ import type {
 } from "@/lib/solutions/appointment-receptionist/types";
 import { applyMandatoryConversationGuardrails } from "@/lib/solutions/appointment-receptionist/conversation-guardrails";
 import { mergeWizardStateForSave } from "@/lib/solutions/appointment-receptionist/merge-wizard-state-on-save";
-import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import {
   loadAppointmentReceptionistSetup,
   outcomeSlugFromWizard,
