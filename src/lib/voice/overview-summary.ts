@@ -15,7 +15,11 @@ import { getWizardActivationIssues } from "@/lib/solutions/appointment-reception
 import { resolveLiveCalendar } from "@/lib/solutions/appointment-receptionist/live-calendar";
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
 import { wizardBookingRequiresCalendarConnection } from "@/lib/solutions/appointment-receptionist/wizard-readiness";
-import { CAPABILITY_OPTIONS } from "@/lib/solutions/appointment-receptionist/defaults";
+import {
+  ANSWER_WHEN_OPTIONS,
+  CAPABILITY_OPTIONS,
+} from "@/lib/solutions/appointment-receptionist/defaults";
+import { readTelephonyProvisionFromSettings } from "@/lib/voice-v3/receptionist-livekit-policy";
 import { buildCallHandlingBehaviorSummary } from "@/lib/voice/call-handling/behavior-summary";
 import { loadReceptionistAnalyticsSnapshot } from "@/lib/voice/analytics/receptionist-analytics-snapshot";
 import { resolveCanonicalVoiceV3WorkspaceAgent } from "@/lib/voice-v3/canonical-workspace-agent";
@@ -63,7 +67,16 @@ export type VoiceOverviewOperational = {
   receptionistName: string | null;
   voiceLabel: string | null;
   openingGreeting: string | null;
+  assignedPhoneE164: string | null;
+  answerWhenLabel: string | null;
   capabilities: VoiceOverviewCapabilityRow[];
+  transferSummary: string | null;
+  callbackSummary: string | null;
+  livekitStatus: {
+    label: string;
+    tone: "ok" | "warn" | "muted";
+  } | null;
+  setupProblems: string[];
   phone: {
     label: string;
     tone: "ok" | "warn" | "muted";
@@ -288,6 +301,42 @@ async function buildOperationalState(input: {
     enabled: enabledCaps.has(opt.id),
   }));
 
+  const answerWhenLabel =
+    ANSWER_WHEN_OPTIONS.find((o) => o.id === input.wizard?.answerWhen)?.label ?? null;
+
+  const assignedPhoneE164 = input.wizard?.phoneNumberE164?.trim() || null;
+
+  const callHandlingSummary = input.wizard
+    ? buildCallHandlingBehaviorSummary(input.wizard)
+    : null;
+  const transferSummary =
+    callHandlingSummary?.transfersEnabled && callHandlingSummary.primaryDestinationLabel
+      ? `Transfers to ${callHandlingSummary.primaryDestinationLabel}`
+      : callHandlingSummary
+        ? "Transfers off"
+        : null;
+  const callbackSummary = input.wizard?.callbackRequestsEnabled
+    ? "Callback requests enabled"
+    : null;
+
+  const livekitStatus = await resolveLiveKitStatusForAgent({
+    workspaceId: input.workspaceId,
+    agentId,
+    phoneNumberId: input.agent?.primaryPhoneNumberId ?? null,
+    wizardPhoneNumberId: input.wizard?.phoneNumberId ?? null,
+  });
+
+  const setupProblems: string[] = [];
+  if (livekitStatus.tone !== "ok") {
+    setupProblems.push(livekitStatus.label);
+  }
+  if (phone?.tone === "warn") {
+    setupProblems.push(phone.label);
+  }
+  if (input.publicationStatus !== "active") {
+    setupProblems.push(publicationStatusLabel(input.publicationStatus));
+  }
+
   return {
     agentId,
     publicationStatus: input.publicationStatus,
@@ -295,13 +344,62 @@ async function buildOperationalState(input: {
     receptionistName: input.receptionistName,
     voiceLabel: input.voiceLabel,
     openingGreeting: input.wizard?.openingGreeting?.trim() || null,
+    assignedPhoneE164,
+    answerWhenLabel,
     capabilities,
+    transferSummary,
+    callbackSummary,
+    livekitStatus,
+    setupProblems,
     phone,
     calendar,
     businessKnowledge,
     businessHours,
     manageReceptionistHref: editBase,
   };
+}
+
+async function resolveLiveKitStatusForAgent(input: {
+  workspaceId: string;
+  agentId: string | null;
+  phoneNumberId: string | null;
+  wizardPhoneNumberId: string | null;
+}): Promise<{ label: string; tone: "ok" | "warn" | "muted" }> {
+  const prisma = getPrisma();
+  const phoneId = input.wizardPhoneNumberId || input.phoneNumberId;
+  if (!phoneId) {
+    return { label: "No phone number assigned", tone: "warn" };
+  }
+  const phone = await prisma.phoneNumber.findFirst({
+    where: { id: phoneId, workspaceId: input.workspaceId },
+    select: { settingsJson: true, e164: true },
+  });
+  if (!phone?.e164) {
+    return { label: "Assigned phone not found", tone: "warn" };
+  }
+  const stored = readTelephonyProvisionFromSettings(phone.settingsJson);
+  if (stored.lastError) {
+    return { label: `LiveKit: ${stored.lastError}`, tone: "warn" };
+  }
+  try {
+    const { verifyNumberRouting } = await import("@/lib/telephony/provisioning");
+    const verify = await verifyNumberRouting({
+      workspaceId: input.workspaceId,
+      phoneNumberId: phoneId,
+    });
+    if (verify.ok && stored.routingMode === "livekit_sip" && stored.state === "active") {
+      return { label: "LiveKit SIP ingress verified", tone: "ok" };
+    }
+    if (verify.issues.length) {
+      return {
+        label: `LiveKit needs attention (${verify.issues.slice(0, 2).join(", ")})`,
+        tone: "warn",
+      };
+    }
+    return { label: "LiveKit provisioning incomplete", tone: "warn" };
+  } catch {
+    return { label: "Could not verify LiveKit routing", tone: "muted" };
+  }
 }
 
 async function resolvePhoneStatus(

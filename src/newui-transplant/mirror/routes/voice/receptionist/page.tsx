@@ -15,6 +15,14 @@ export type VoiceReceptionistWired = {
   agentName?: string
   voiceLabel?: string
   greeting?: string
+  assignedPhoneE164?: string
+  answerWhenLabel?: string
+  businessHoursLabel?: string
+  calendarLabel?: string
+  transferSummary?: string
+  callbackSummary?: string
+  livekitStatus?: { label: string; tone: 'ok' | 'warn' | 'muted' }
+  setupProblems?: string[]
   published?: boolean
   versionLabel?: string
   capabilities?: VoiceReceptionistCapabilityWired[]
@@ -73,8 +81,47 @@ export function TransplantVoiceReceptionistPage({ wired }: { wired?: VoiceRecept
             items={[
               { label: 'Publish status', value: <Pill tone={published ? 'success' : 'warning'}>{published ? 'Published' : 'Draft'}</Pill> },
               { label: 'Version', value: versionLabel },
+              ...(wired?.assignedPhoneE164
+                ? [{ label: 'Phone', value: wired.assignedPhoneE164 }]
+                : []),
+              ...(wired?.answerWhenLabel
+                ? [{ label: 'Answering', value: wired.answerWhenLabel }]
+                : []),
+              ...(wired?.livekitStatus
+                ? [
+                    {
+                      label: 'LiveKit ingress',
+                      value: (
+                        <Pill
+                          tone={
+                            wired.livekitStatus.tone === 'ok'
+                              ? 'success'
+                              : wired.livekitStatus.tone === 'warn'
+                                ? 'warning'
+                                : 'muted'
+                          }
+                        >
+                          {wired.livekitStatus.label}
+                        </Pill>
+                      ),
+                    },
+                  ]
+                : []),
+              ...(wired?.businessHoursLabel
+                ? [{ label: 'Hours', value: wired.businessHoursLabel }]
+                : []),
+              ...(wired?.calendarLabel
+                ? [{ label: 'Calendar', value: wired.calendarLabel }]
+                : []),
             ]}
           />
+          {wired?.setupProblems && wired.setupProblems.length > 0 ? (
+            <ul className="mt-4 space-y-1 text-xs text-muted-foreground">
+              {wired.setupProblems.map((p) => (
+                <li key={p}>• {p}</li>
+              ))}
+            </ul>
+          ) : null}
         </Panel>
 
         <div className="flex flex-col gap-4 lg:col-span-2">
@@ -115,9 +162,9 @@ export function TransplantVoiceReceptionistPage({ wired }: { wired?: VoiceRecept
                 })}
               </ul>
             )}
-            {capabilities.some((c) => c.id === 'transfer_calls') ? (
+            {wired?.transferSummary || wired?.callbackSummary ? (
               <p className="mt-3 text-xs text-muted-foreground">
-                Transfer and voicemail behavior follow your call-handling settings in setup.
+                {[wired.transferSummary, wired.callbackSummary].filter(Boolean).join(' · ')}
               </p>
             ) : null}
           </Panel>

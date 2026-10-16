@@ -177,6 +177,16 @@ export function AppointmentReceptionistWizard({
                   : null;
               setStepIndex(fromUrl ?? 0);
               setHydrated(true);
+              if (isOpus && merged.agentId && !searchParams?.get("agentId")) {
+                const params = new URLSearchParams(searchParams?.toString() || "");
+                params.set("agentId", merged.agentId);
+                if (merged.setupId) params.set("setupId", merged.setupId);
+                const stepQ = searchParams?.get("step");
+                if (stepQ) params.set("step", stepQ);
+                router.replace(`${RECEPTIONIST_WIZARD_EDIT_PATH}?${params.toString()}`, {
+                  scroll: false,
+                });
+              }
               return;
             }
           }
@@ -378,6 +388,12 @@ export function AppointmentReceptionistWizard({
       params.set("agentId", agentId);
       return `${MCTB_ROUTES.voiceAgent}?${params.toString()}`;
     }
+    if (isOpus) {
+      const params = new URLSearchParams();
+      params.set("agentId", agentId);
+      if (step) params.set("step", step);
+      return `${RECEPTIONIST_WIZARD_EDIT_PATH}?${params.toString()}`;
+    }
     return hireMode ? `/agents/${agentId}` : `/voice/agents/${agentId}`;
   }
 
@@ -419,14 +435,32 @@ export function AppointmentReceptionistWizard({
       const warnings = Array.isArray(json.data.warnings)
         ? (json.data.warnings as string[]).filter(Boolean)
         : [];
-      patch({
-        agentId,
-        setupId,
-        outcomeSlug,
-        telnyxAssistantId,
-        preset: isMctb ? payload.preset || "after_hours" : preset || payload.preset || null,
-        ...(stateOverride || {}),
-      });
+      const authoritativeState = json.data?.state as
+        | AppointmentReceptionistWizardState
+        | undefined;
+      if (authoritativeState && typeof authoritativeState === "object") {
+        setState((prev) => ({
+          ...prev,
+          ...authoritativeState,
+          agentId,
+          setupId,
+          outcomeSlug,
+          telnyxAssistantId,
+        }));
+      } else {
+        patch({
+          agentId,
+          setupId,
+          outcomeSlug,
+          telnyxAssistantId,
+          preset: isMctb ? payload.preset || "after_hours" : preset || payload.preset || null,
+          ...(stateOverride || {}),
+        });
+      }
+      if (json.data?.liveSyncError) {
+        setError(String(json.data.liveSyncError));
+        return null;
+      }
       if (warnings.length) {
         setError(warnings.join(" "));
       }
@@ -447,7 +481,7 @@ export function AppointmentReceptionistWizard({
           return { agentId, telnyxAssistantId, clonedAgentId };
         }
         localStorage.removeItem(storageKey);
-        router.push(postSavePath(agentId));
+        router.push(isOpus ? "/voice/receptionist" : postSavePath(agentId));
         return { agentId, telnyxAssistantId, clonedAgentId };
       }
       return { agentId, telnyxAssistantId, clonedAgentId };
@@ -489,6 +523,18 @@ export function AppointmentReceptionistWizard({
       }
     },
     [isMctb, isOpus, router, searchParams, state.agentId, state.setupId, steps],
+  );
+
+  const navigateToStep = useCallback(
+    async (index: number, opts?: { skipSave?: boolean }) => {
+      const next = Math.min(Math.max(index, 0), steps.length - 1);
+      if (!opts?.skipSave && state.agentId && next !== stepIndex) {
+        const saved = await persist("save_draft");
+        if (!saved?.agentId) return;
+      }
+      goToStep(next);
+    },
+    [goToStep, persist, state.agentId, stepIndex, steps.length],
   );
 
   async function onContinue() {
@@ -556,7 +602,7 @@ export function AppointmentReceptionistWizard({
           currentIndex={stepIndex}
           presentation={presentation}
           stepStatuses={stepStatuses}
-          onStepSelect={isMctb || isOpus ? goToStep : undefined}
+          onStepSelect={isMctb || isOpus ? (i) => void navigateToStep(i) : undefined}
         />
       </div>
 
@@ -606,7 +652,7 @@ export function AppointmentReceptionistWizard({
             onActivate={() => void persist("activate", { activationMode: "activate_now" })}
             onGoToTest={() => {
               const testIdx = steps.findIndex((s) => s.id === "test");
-              if (testIdx >= 0) goToStep(testIdx);
+              if (testIdx >= 0) void navigateToStep(testIdx);
             }}
           />
         ) : null}
@@ -631,7 +677,7 @@ export function AppointmentReceptionistWizard({
           <FooterButton
             variant="outline"
             disabled={stepIndex === 0 || busy}
-            onClick={() => goToStep(stepIndex - 1)}
+            onClick={() => void navigateToStep(stepIndex - 1)}
           >
             Back
           </FooterButton>
