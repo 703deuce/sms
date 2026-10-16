@@ -105,6 +105,12 @@ export function attachPythonRuntimeBootstrapSnapshot(
 ): VoiceAgentConfig {
   const snapshot = buildPythonRuntimeBootstrapSnapshot(config, ctx);
   if (!snapshot) return config;
+  receptionistLog("RUNTIME_COMPILE", "BOOTSTRAP_SNAPSHOT", {
+    agent: ctx.agentId,
+    runtime_profile: snapshot.runtimeProfile,
+    agent_template: snapshot.agentTemplate,
+    mode: "publish",
+  });
   const advanced = (config.advanced || {}) as Record<string, unknown>;
   return {
     ...config,
