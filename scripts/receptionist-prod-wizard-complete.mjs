@@ -219,8 +219,14 @@ async function main() {
 
   if (ALLOW_ACTIVATE && !disabled) {
     await activateBtn.click();
-    await page.waitForTimeout(45_000);
-    const activatePost = report.apiPosts.find((p) => p.postAction === "activate");
+    await page.waitForTimeout(2500);
+    const switchBtn = page.getByRole("button", { name: /switch to ai receptionist/i });
+    if (await switchBtn.isVisible().catch(() => false)) {
+      await switchBtn.click();
+      report.activate.switchDialogConfirmed = true;
+    }
+    await page.waitForTimeout(75_000);
+    const activatePost = report.apiPosts.filter((p) => p.postAction === "activate").pop();
     report.activate.result = activatePost;
     const afterPub = await loadAgent(ctx);
     report.afterActivate = {

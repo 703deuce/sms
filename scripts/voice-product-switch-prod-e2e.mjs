@@ -68,10 +68,20 @@ async function main() {
 
   // Probe: activate without confirm should 409 when number is on MCTB
   if (phone.voiceIngressProduct === "mctb" || phone.mctbTexmlLocked) {
+    const setupRes = await ctx.request.get(
+      `/api/solutions/appointment-receptionist?agentId=${AGENT}`,
+    );
+    const setupJson = await setupRes.json();
+    const state = setupJson?.data?.state;
+    if (state) {
+      state.phoneNumberId = phone.id;
+      state.phoneNumberE164 = phone.e164;
+    }
     const probe = await ctx.request.post("/api/solutions/appointment-receptionist", {
       data: {
         action: "activate",
         agentId: AGENT,
+        state,
         confirmVoiceProductSwitch: false,
       },
     });
