@@ -11,6 +11,7 @@ import {
   slimReceptionistCompiledForBootstrap,
 } from "@/lib/voice/python-runtime-bridge/bootstrap-payload";
 import type { PythonRuntimeBootstrapResult } from "./types";
+import { receptionistLog } from "@/lib/solutions/appointment-receptionist/config-tracing/log";
 
 export const PYTHON_RUNTIME_BOOTSTRAP_SNAPSHOT_KEY = "pythonRuntimeBootstrapSnapshot";
 

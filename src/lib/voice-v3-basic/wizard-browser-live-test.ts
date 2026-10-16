@@ -18,6 +18,9 @@ import {
   VOICE_V3_BASIC_LIVE_MODEL,
 } from "./live-session-config";
 import { resolveMicrosoftConnectionForWizard } from "@/lib/voice-v3/config/resolve-microsoft-connection";
+import { createReceptionistTraceId } from "@/lib/solutions/appointment-receptionist/config-tracing/trace-id";
+import { receptionistLog } from "@/lib/solutions/appointment-receptionist/config-tracing/log";
+import { summarizeWizardRuntime } from "@/lib/solutions/appointment-receptionist/config-tracing/runtime-summary";
 
 export type WizardV3BrowserLiveTestResult =
   | {
@@ -80,7 +83,11 @@ export async function createWizardV3BrowserLiveTest(input: {
   userId: string;
   agentId: string;
   offerSdp: string;
+  receptionistTraceId?: string | null;
 }): Promise<WizardV3BrowserLiveTestResult> {
+  const receptionistTraceId =
+    input.receptionistTraceId?.trim() || createReceptionistTraceId();
+  const testStartedAt = Date.now();
   const offerSdp = input.offerSdp?.trim();
   if (!offerSdp) {
     return { ok: false, code: "invalid_sdp", error: "WebRTC offer SDP is required", status: 400 };
@@ -125,6 +132,19 @@ export async function createWizardV3BrowserLiveTest(input: {
     source: "wizard_draft_test",
   });
 
+  const runtimeSummary = summarizeWizardRuntime(wizard, "isolated_test");
+  receptionistLog("TEST", "COMPILE", {
+    trace: receptionistTraceId,
+    agent: input.agentId,
+    mode: "isolated_test",
+    booking: runtimeSummary.bookingMode,
+    transfer: runtimeSummary.transferEnabled,
+    voice: runtimeSummary.voiceId,
+    tools_expected: runtimeSummary.bookingToolsExpected,
+    config_fingerprint: runtimeSummary.configFingerprint,
+    config_version: compiled.configVersion,
+  });
+
   const client = getVoiceV3BasicOpenAiClient();
   const mediaSession = buildBasicLiveMediaSession(new Date(), compiled);
 
@@ -164,6 +184,18 @@ export async function createWizardV3BrowserLiveTest(input: {
     configVersion: compiled.configVersion,
     liveVoiceId: compiled.telephony?.liveVoiceId,
     agentName: compiled.identity?.agentName,
+    receptionistTraceId,
+  });
+
+  receptionistLog("TEST", "SUCCESS", {
+    trace: receptionistTraceId,
+    agent: input.agentId,
+    session: sessionId,
+    runtime_bootstrap: "GENERATED",
+    duration_ms: Date.now() - testStartedAt,
+    booking: runtimeSummary.bookingMode,
+    transfer: runtimeSummary.transferEnabled,
+    voice: compiled.telephony?.liveVoiceId ?? runtimeSummary.voiceId,
   });
 
   return {

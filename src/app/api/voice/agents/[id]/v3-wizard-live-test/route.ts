@@ -4,6 +4,7 @@ import {
   createWizardV3BrowserLiveTest,
   endWizardV3BrowserLiveTest,
 } from "@/lib/voice-v3-basic/wizard-browser-live-test";
+import { resolveReceptionistTraceId } from "@/lib/solutions/appointment-receptionist/config-tracing/trace-id";
 
 /**
  * POST — establish OpenAI Live WebRTC for wizard Step 7 (draft Voice V3 config).
@@ -17,14 +18,20 @@ export async function POST(
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
     const { id: agentId } = await params;
-    const body = (await request.json()) as { sdp?: string; offerSdp?: string };
+    const body = (await request.json()) as {
+      sdp?: string;
+      offerSdp?: string;
+      receptionistTraceId?: string | null;
+    };
     const offerSdp = body.offerSdp || body.sdp || "";
+    const receptionistTraceId = resolveReceptionistTraceId(request, body);
 
     const result = await createWizardV3BrowserLiveTest({
       workspaceId: auth.workspaceId,
       userId: auth.session.userId,
       agentId,
       offerSdp,
+      receptionistTraceId,
     });
 
     if (!result.ok) {

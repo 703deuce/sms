@@ -27,7 +27,9 @@ import {
 } from "@/lib/voice/receptionist/wizard-step-url";
 import { computeMctbWizardStepReadiness } from "@/lib/mctb/voice-agent/step-readiness";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createReceptionistTraceId } from "@/lib/solutions/appointment-receptionist/config-tracing/trace-id";
+import { logReceptionistUiChanges } from "@/lib/solutions/appointment-receptionist/config-tracing/client-ui-trace";
 import { WizardStepper } from "./wizard-stepper";
 import { GoalsStep } from "./steps/goals-step";
 import { PhoneStep } from "./steps/phone-step";
@@ -323,9 +325,7 @@ export function AppointmentReceptionistWizard({
 
   const fingerprintState = useCallback((s: AppointmentReceptionistWizardState) => JSON.stringify(s), []);
 
-  const patch = useCallback((p: Partial<AppointmentReceptionistWizardState>) => {
-    setState((prev) => ({ ...prev, ...p }));
-  }, []);
+  const receptionistTraceIdRef = useRef(createReceptionistTraceId());
 
   const isDirty = hydrated && fingerprintState(state) !== savedFingerprint;
 
@@ -338,6 +338,21 @@ export function AppointmentReceptionistWizard({
             brainAlreadyDone: hireMode,
           }),
     [state, hireMode, isMctb],
+  );
+
+  const patch = useCallback(
+    (p: Partial<AppointmentReceptionistWizardState>) => {
+      setState((prev) => {
+        logReceptionistUiChanges({
+          stepId: steps[stepIndex]?.id,
+          previous: prev,
+          patch: p,
+          traceId: receptionistTraceIdRef.current,
+        });
+        return { ...prev, ...p };
+      });
+    },
+    [steps, stepIndex],
   );
 
   const stepStatuses = useMemo(
@@ -420,6 +435,8 @@ export function AppointmentReceptionistWizard({
     setError("");
     setSaveNotice("");
     const payload = stateOverride ? { ...state, ...stateOverride } : state;
+    const receptionistTraceId = createReceptionistTraceId();
+    receptionistTraceIdRef.current = receptionistTraceId;
     try {
       const controller = new AbortController();
       const timeout = window.setTimeout(() => controller.abort(), 120_000);
@@ -427,11 +444,15 @@ export function AppointmentReceptionistWizard({
       try {
         res = await fetch("/api/solutions/appointment-receptionist", {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: {
+            "content-type": "application/json",
+            "x-receptionist-trace-id": receptionistTraceId,
+          },
           body: JSON.stringify({
             action,
             state: payload,
             wizardStepId: steps[stepIndex]?.id,
+            receptionistTraceId,
           }),
           signal: controller.signal,
         });

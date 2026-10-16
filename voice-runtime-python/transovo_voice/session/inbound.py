@@ -19,6 +19,7 @@ from transovo_voice.templates.registry import DEFAULT_ACTIVE_TEMPLATE, resolve_t
 from transovo_voice.templates.router import run_template
 from transovo_voice.session.startup_audio import DEFAULT_IMMEDIATE_ANSWER, play_immediate_answer
 from transovo_voice.telemetry import log_event
+from transovo_voice.observability.receptionist_config_trace import log_receptionist_runtime_config_load
 from transovo_voice.userdata import ManifestField, ReceptionistCompiled, SessionUserData, TransferPolicy
 
 logger = logging.getLogger("transovo-voice.inbound")
@@ -391,6 +392,12 @@ async def run_inbound_session(ctx: JobContext) -> None:
         return
 
     ud = _userdata_from_bootstrap(bootstrap)
+    log_receptionist_runtime_config_load(
+        ud,
+        bootstrap,
+        bootstrap_path=bootstrap_path or "unknown",
+        published_mode="production",
+    )
     template_id = resolve_template_id(
         str(bootstrap.get("agentTemplate") or ud.agent_template),
     )

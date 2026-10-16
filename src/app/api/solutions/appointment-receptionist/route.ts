@@ -24,6 +24,17 @@ import {
 import { agentTypeFromOutcomeSlug } from "@/lib/agents/types";
 import { uniqueAgentDisplayName } from "@/lib/solutions/appointment-receptionist/wizard-presets";
 import { validateReceptionistPhoneSelection } from "@/lib/solutions/appointment-receptionist/validate-phone-selection";
+import { resolveReceptionistTraceId } from "@/lib/solutions/appointment-receptionist/config-tracing/trace-id";
+import {
+  beginRouteTrace,
+  finalizeActivateTrace,
+  finalizeDraftSaveTrace,
+  loadAgentLiveSnapshot,
+  loadPublishedConfig,
+  traceCompileAndRuntime,
+  traceIncomingPayload,
+  tracePublishDiff,
+} from "@/lib/solutions/appointment-receptionist/config-tracing/route-tracing";
 
 export async function GET(request: Request) {
   try {
@@ -60,8 +71,10 @@ export async function POST(request: Request) {
       action?: WizardPersistAction;
       state?: AppointmentReceptionistWizardState;
       wizardStepId?: WizardStepId;
+      receptionistTraceId?: string | null;
     };
 
+    const receptionistTraceId = resolveReceptionistTraceId(request, body);
     const action = body.action || "save_draft";
     const wizardStepId = body.wizardStepId;
     const lightweightDraftSave =
@@ -72,6 +85,9 @@ export async function POST(request: Request) {
     if (!state || typeof state !== "object") {
       return NextResponse.json({ error: "state is required" }, { status: 400 });
     }
+    const incomingClientState = state;
+
+    let serverWizardState: AppointmentReceptionistWizardState | null = null;
 
     // Activate must publish the full wizard form in the request body — not a stale per-step
     // server merge (activate step only owns activationMode/scheduledAt).
@@ -85,15 +101,36 @@ export async function POST(request: Request) {
         agentId: state.agentId,
       });
       if (existing?.state) {
+        serverWizardState = existing.state as AppointmentReceptionistWizardState;
         state = mergeWizardStateForSave(
-          existing.state as AppointmentReceptionistWizardState,
+          serverWizardState,
           state,
           body.wizardStepId,
         );
       }
     }
 
+    const beforeGuardrailsState = state;
     state = applyMandatoryConversationGuardrails(state);
+
+    const agentSnapshotBefore = await loadAgentLiveSnapshot(
+      auth.workspaceId,
+      state.agentId,
+    );
+    const routeTrace = beginRouteTrace({
+      traceId: receptionistTraceId,
+      action,
+      wizardStepId: body.wizardStepId,
+      agentId: state.agentId,
+      agentSnapshotBefore,
+    });
+    traceIncomingPayload(routeTrace, {
+      serverState: serverWizardState,
+      clientState: incomingClientState,
+      mergedState: beforeGuardrailsState,
+      beforeGuardrails: beforeGuardrailsState,
+      afterGuardrails: state,
+    });
 
     let activationMode = state.activationMode || "activate_now";
     const warnings: string[] = [];
@@ -125,6 +162,11 @@ export async function POST(request: Request) {
       state.solutionName = name;
     }
     const draftConfig = buildWizardAgentConfig(state);
+    traceCompileAndRuntime(routeTrace, {
+      state,
+      compiled: draftConfig,
+      mode: effectiveAction === "activate" ? "publish" : "draft_compile",
+    });
     const outcomeSlug = outcomeSlugFromWizard(state);
     const productAgentType = agentTypeFromOutcomeSlug(outcomeSlug);
 
@@ -149,6 +191,10 @@ export async function POST(request: Request) {
         processKnowledgeSources: !lightweightDraftSave,
       },
     });
+    routeTrace.ledger.record("activate_hooks", {
+      mode: effectiveAction === "activate" ? "activate" : "save_draft",
+      lightweight: lightweightDraftSave,
+    });
 
     // Company-scoped answers → Company Brain (canonical). Amy retrieves; does not own a second copy.
     if (!lightweightDraftSave) {
@@ -167,6 +213,11 @@ export async function POST(request: Request) {
     const shouldPublish = effectiveAction === "activate";
 
     if (shouldPublish && hasBlockingActivationIssues(hooks.issues)) {
+      if (routeTrace.publishStages) {
+        routeTrace.publishStages.fail("activation_readiness", Date.now(), {
+          blocking_issues: hooks.issues.length,
+        });
+      }
       return NextResponse.json(
         {
           error: "Activation checklist incomplete",
@@ -192,6 +243,34 @@ export async function POST(request: Request) {
       where: { id: agentId, workspaceId: auth.workspaceId },
       select: { status: true, publishedVersionId: true, phoneNumberId: true },
     });
+    const publishedConfigBefore =
+      effectiveAction === "activate" && existingAgent?.publishedVersionId
+        ? await loadPublishedConfig(auth.workspaceId, existingAgent.publishedVersionId)
+        : null;
+    if (routeTrace.publishStages) {
+      const t0 = Date.now();
+      routeTrace.publishStages.start("requested_draft_revision", {
+        draft_revision: agentSnapshotBefore?.draftRevision,
+      });
+      routeTrace.publishStages.succeed("requested_draft_revision", t0);
+      const readinessStart = Date.now();
+      routeTrace.publishStages.start("activation_readiness");
+      routeTrace.publishStages.succeed("activation_readiness", readinessStart, {
+        blocking_issues: hooks.issues.length,
+      });
+      routeTrace.publishStages.start("configuration_compilation");
+      routeTrace.publishStages.succeed("configuration_compilation", readinessStart);
+      routeTrace.publishStages.start("knowledge_calendar_readiness");
+      routeTrace.publishStages.succeed("knowledge_calendar_readiness", readinessStart, {
+        knowledgeBaseId: hooks.knowledgeBaseId,
+        calendarConnectionId: hooks.calendarConnectionId,
+      });
+      routeTrace.publishStages.start("transfer_routing_prep");
+      routeTrace.publishStages.succeed("transfer_routing_prep", readinessStart, {
+        transferSynced: hooks.transferSynced,
+        routingSynced: hooks.routingSynced,
+      });
+    }
     const preserveActiveOnDraftSave =
       effectiveAction === "save_draft" && existingAgent?.status === "ACTIVE";
 
@@ -275,6 +354,7 @@ export async function POST(request: Request) {
 
     if (preserveActiveOnDraftSave && state.phoneNumberId && !lightweightDraftSave) {
       const { syncLiveWizardDraftToProvider } = await import("@/lib/voice/agent-service");
+      routeTrace.ledger.record("telnyx_sync", { trigger: "active_draft_save" });
       const liveSync = await syncLiveWizardDraftToProvider(auth.workspaceId, agentId);
       if (!liveSync.synced && liveSync.error && liveSync.error !== "not_live") {
         liveSyncError = liveSync.error;
@@ -353,6 +433,12 @@ export async function POST(request: Request) {
     workflowCompileError = setup.workflowCompileError || null;
     if (workflowCompileError) {
       warnings.push(`Workflow compile: ${workflowCompileError}`);
+    }
+    if (!lightweightDraftSave) {
+      routeTrace.ledger.record("workflow_compile", {
+        primaryFlowId,
+        error: workflowCompileError,
+      });
     }
 
     if (shouldPublish) {
@@ -620,10 +706,43 @@ export async function POST(request: Request) {
       agentId,
       setupId: setup.setupId,
     });
+    const agentSnapshotAfter = await loadAgentLiveSnapshot(auth.workspaceId, agentId);
+    if (action === "save_draft" || action === "create_draft") {
+      await finalizeDraftSaveTrace(routeTrace, {
+        workspaceId: auth.workspaceId,
+        agentId,
+        savedState: (authoritative?.state ?? state) as AppointmentReceptionistWizardState,
+        agentSnapshotAfter,
+      });
+    }
+    if (shouldPublish) {
+      const refreshedAgent = await getPrisma().voiceAgent.findFirst({
+        where: { id: agentId, workspaceId: auth.workspaceId },
+        select: { publishedVersionId: true },
+      });
+      const publishedConfigAfter = published && refreshedAgent?.publishedVersionId
+        ? await loadPublishedConfig(auth.workspaceId, refreshedAgent.publishedVersionId)
+        : null;
+      await tracePublishDiff(routeTrace, {
+        draftState: state,
+        publishedConfigBefore,
+        publishedConfigAfter,
+        publishedVersionId: refreshedAgent?.publishedVersionId ?? null,
+      });
+      finalizeActivateTrace(routeTrace, {
+        published,
+        publishError,
+        draftRevision: agentSnapshotAfter?.draftRevision ?? null,
+        publishedVersionId: refreshedAgent?.publishedVersionId ?? null,
+        runtimeBootstrapGenerated: published,
+        providerPublishVerified: published && Boolean(triggerDeployments?.length),
+      });
+    }
     const { isLiveSyncPendingHealthStatus } = await import("@/lib/voice/agent-health-status");
 
     return NextResponse.json({
       data: {
+        receptionistTraceId,
         agentId,
         setupId: setup.setupId,
         outcomeSlug: setup.outcomeSlug,
