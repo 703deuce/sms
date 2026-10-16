@@ -621,11 +621,12 @@ export async function publishVoiceAgent(
     const { shouldSkipLiveKitProvisionForMctbPhone } = await import(
       "@/lib/mctb/sip-ingress/sync"
     );
+    // LiveKit appointment receptionist must provision ingress — only honor real MCTB/TeXML locks on the DID.
+    const mctbSkipOpts = mustProvisionLiveKitForReceptionist
+      ? undefined
+      : { appointmentWizard };
     skipLiveKitForMctb = Boolean(
-      phone &&
-        shouldSkipLiveKitProvisionForMctbPhone(phone.settingsJson, {
-          appointmentWizard,
-        }),
+      phone && shouldSkipLiveKitProvisionForMctbPhone(phone.settingsJson, mctbSkipOpts),
     );
     if (skipLiveKitForMctb && !mustProvisionLiveKitForReceptionist) {
       console.warn(
