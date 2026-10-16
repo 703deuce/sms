@@ -88,13 +88,6 @@ export function PhoneStep({
       .then((j) => {
         const rows = (j.data || []) as PhoneRow[];
         setNumbers(rows);
-        if (!state.phoneNumberId && rows[0]) {
-          patch({
-            phoneNumberId: rows[0].id,
-            phoneNumberE164: rows[0].e164,
-            numberSource: "existing",
-          });
-        }
       })
       .catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps

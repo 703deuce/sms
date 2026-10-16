@@ -2,6 +2,63 @@ import type { ActivationIssue } from "@/lib/solutions/appointment-receptionist/c
 
 export type OverviewPublicationStatus = "setup_required" | "draft" | "active" | "needs_attention";
 
+/** Finer-grained live vs draft vs sync state for receptionist overview. */
+import { isLiveSyncPendingHealthStatus } from "./agent-health-status";
+
+export type OverviewLiveSyncStatus =
+  | "no_phone"
+  | "draft_saved"
+  | "live"
+  | "pending_live_sync"
+  | "activation_incomplete"
+  | "provision_attention";
+
+export function liveSyncStatusLabel(status: OverviewLiveSyncStatus): string {
+  switch (status) {
+    case "no_phone":
+      return "No phone number assigned";
+    case "draft_saved":
+      return "Draft saved — not live";
+    case "live":
+      return "Published and live";
+    case "pending_live_sync":
+      return "Saved — pending live sync";
+    case "activation_incomplete":
+      return "Activation incomplete";
+    case "provision_attention":
+      return "LiveKit routing needs attention";
+    default:
+      return "Unknown";
+  }
+}
+
+export function deriveOverviewLiveSyncStatus(input: {
+  publicationStatus: OverviewPublicationStatus;
+  agentStatus: string | null;
+  hasPhone: boolean;
+  healthStatus: string | null;
+  healthMessage: string | null;
+  livekitTone: "ok" | "warn" | "muted";
+}): OverviewLiveSyncStatus {
+  if (!input.hasPhone) return "no_phone";
+  if (input.publicationStatus === "draft" || input.publicationStatus === "setup_required") {
+    return "draft_saved";
+  }
+  if (input.agentStatus && input.agentStatus !== "ACTIVE") {
+    return "activation_incomplete";
+  }
+  if (isLiveSyncPendingHealthStatus(input.healthStatus)) {
+    return "pending_live_sync";
+  }
+  if (input.livekitTone === "warn") {
+    return "provision_attention";
+  }
+  if (input.publicationStatus === "active") {
+    return "live";
+  }
+  return "activation_incomplete";
+}
+
 export function deriveOverviewPublicationStatus(input: {
   hasCanonicalAgent: boolean;
   published: boolean;

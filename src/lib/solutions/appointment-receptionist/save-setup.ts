@@ -370,6 +370,8 @@ export async function loadAppointmentReceptionistSetup(
   agentId: string | null;
   outcomeSlug: string;
   status: string;
+  healthStatus: string | null;
+  healthMessage: string | null;
   state: Partial<AppointmentReceptionistWizardState> | null;
 } | null> {
   const prisma = getPrisma();
@@ -418,6 +420,8 @@ export async function loadAppointmentReceptionistSetup(
       agentId: null,
       outcomeSlug: "appointment-booking",
       status: "DRAFT",
+      healthStatus: null,
+      healthMessage: null,
       state: null,
     };
   }
@@ -441,6 +445,29 @@ export async function loadAppointmentReceptionistSetup(
         []) as AppointmentReceptionistWizardState["capabilities"],
     });
 
+  const wizardPhoneId =
+    typeof wizardSnap.phoneNumberId === "string"
+      ? wizardSnap.phoneNumberId
+      : typeof storedWizard.phoneNumberId === "string"
+        ? storedWizard.phoneNumberId
+        : null;
+  const resolvedPhoneNumberId =
+    agent?.status === "ACTIVE"
+      ? (agent.phoneNumberId || wizardPhoneId)
+      : wizardPhoneId || agent?.phoneNumberId || null;
+
+  let phoneNumberE164 =
+    (typeof wizardSnap.phoneNumberE164 === "string" && wizardSnap.phoneNumberE164) ||
+    (typeof storedWizard.phoneNumberE164 === "string" && storedWizard.phoneNumberE164) ||
+    null;
+  if (resolvedPhoneNumberId && !phoneNumberE164) {
+    const pn = await prisma.phoneNumber.findFirst({
+      where: { id: resolvedPhoneNumberId, workspaceId },
+      select: { e164: true },
+    });
+    phoneNumberE164 = pn?.e164 ?? null;
+  }
+
   const state: Partial<AppointmentReceptionistWizardState> = {
     agentId: agent?.id,
     solutionName:
@@ -451,13 +478,6 @@ export async function loadAppointmentReceptionistSetup(
     agentName:
       String(wizardSnap.agentName || storedWizard.agentName || agent?.displayName || "") ||
       undefined,
-    phoneNumberId:
-      (agent?.phoneNumberId as string | null) ||
-      (typeof wizardSnap.phoneNumberId === "string"
-        ? wizardSnap.phoneNumberId
-        : typeof storedWizard.phoneNumberId === "string"
-          ? storedWizard.phoneNumberId
-          : null),
     answerWhen: (wizardSnap.answerWhen ||
       storedWizard.answerWhen ||
       "every_call") as AppointmentReceptionistWizardState["answerWhen"],
@@ -472,6 +492,9 @@ export async function loadAppointmentReceptionistSetup(
     // Prefer draftConfig snapshot; fall back to durable setup.wizard (full form).
     ...storedWizard,
     ...wizardSnap,
+    // Authoritative phone after merges — ACTIVE uses agent row; drafts prefer wizard snapshot.
+    phoneNumberId: resolvedPhoneNumberId,
+    phoneNumberE164,
   };
 
   return {
@@ -479,6 +502,8 @@ export async function loadAppointmentReceptionistSetup(
     agentId: agent?.id || null,
     outcomeSlug,
     status: agent?.status || setup?.status || "DRAFT",
+    healthStatus: agent?.healthStatus ?? null,
+    healthMessage: agent?.healthMessage ?? null,
     state,
   };
 }

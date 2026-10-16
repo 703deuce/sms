@@ -40,6 +40,8 @@ export type EnsureNumberProvisionedInput = {
   publishedConfig?: import("@/lib/voice/types").VoiceAgentConfig;
   /** Force LiveKit even when global provider is telnyx */
   routingMode?: VoiceRoutingMode;
+  /** Skip Telnyx FQDN reroute; refresh LiveKit dispatch snapshot only */
+  dispatchMetadataOnly?: boolean;
 };
 
 export type EnsureNumberProvisionedResult = {

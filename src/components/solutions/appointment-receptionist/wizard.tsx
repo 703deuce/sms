@@ -38,6 +38,7 @@ import { VoiceStep } from "./steps/voice-step";
 import { TestStep } from "./steps/test-step";
 import { ActivateStep } from "./steps/activate-step";
 import { wizardPatchFromCompanyBrain } from "@/lib/solutions/appointment-receptionist/hydrate-from-brain";
+import { isLiveSyncPendingHealthStatus } from "@/lib/voice/agent-health-status";
 
 const STORAGE_KEY_LEGACY = "transovo.appointment-receptionist.wizard.v1";
 const STORAGE_KEY_MCTB = "transovo.mctb.voice-agent.wizard.v1";
@@ -111,64 +112,65 @@ export function AppointmentReceptionistWizard({
     async function hydrate() {
       try {
         const setupId = searchParams?.get("setupId");
-        let agentId = searchParams?.get("agentId");
-        if (isOpus && !setupId && !agentId) {
-          try {
-            const agentsRes = await fetch("/api/voice/agents");
-            if (agentsRes.ok) {
-              const agentsJson = await agentsRes.json();
-              const list = (agentsJson.data || []) as Array<{ id: string }>;
-              agentId = list[0]?.id ?? null;
-            }
-          } catch {
-            /* optional */
-          }
-        }
-        if (setupId || agentId) {
+        const agentId = searchParams?.get("agentId");
+        const shouldLoadServer =
+          Boolean(setupId || agentId) || isOpus;
+        if (shouldLoadServer) {
           const qs = new URLSearchParams();
           if (setupId) qs.set("setupId", setupId);
           if (agentId) qs.set("agentId", agentId);
           const res = await fetch(
-            `/api/solutions/appointment-receptionist?${qs.toString()}`,
+            `/api/solutions/appointment-receptionist${qs.toString() ? `?${qs.toString()}` : ""}`,
           );
           if (res.ok) {
             const json = await res.json();
             const loaded = json?.data;
-            if (loaded?.state && !cancelled) {
+            if ((loaded?.state || loaded?.agentId) && !cancelled) {
               const base = isMctb
                 ? mctbDefaultState()
                 : applyWizardPreset(
                     createDefaultWizardState(),
                     preset || loaded.state.preset || null,
                   );
+              const serverState =
+                loaded.state && typeof loaded.state === "object" ? loaded.state : {};
               const merged = {
                 ...base,
-                ...loaded.state,
+                ...serverState,
                 setupId: loaded.setupId || undefined,
-                agentId: loaded.agentId || loaded.state.agentId,
-                outcomeSlug: loaded.outcomeSlug || loaded.state.outcomeSlug,
+                agentId: loaded.agentId || serverState.agentId,
+                outcomeSlug: loaded.outcomeSlug || serverState.outcomeSlug,
                 preset: isMctb
-                  ? loaded.state.preset || "after_hours"
-                  : preset || loaded.state.preset || null,
+                  ? serverState.preset || "after_hours"
+                  : preset || serverState.preset || null,
               };
               if (isMctb && loaded.agentId) {
                 merged.solutionName =
-                  loaded.state.solutionName?.trim() || merged.solutionName;
+                  serverState.solutionName?.trim() || merged.solutionName;
               }
               setState(merged);
               const statusRaw = String(loaded.status || loaded.agentStatus || "").toUpperCase();
+              const healthStatus = String(loaded.healthStatus || "");
               const life =
                 statusRaw === "ACTIVE" ? "active" : statusRaw === "DRAFT" ? "draft" : null;
               setAgentLifecycle(life);
               onAgentStatusChange?.(
-                life === "active"
-                  ? "active"
-                  : life === "draft"
-                    ? "draft"
-                    : "needs_attention",
+                isLiveSyncPendingHealthStatus(healthStatus)
+                  ? "needs_attention"
+                  : life === "active"
+                    ? "active"
+                    : life === "draft"
+                      ? "draft"
+                      : "needs_attention",
               );
+              if (isLiveSyncPendingHealthStatus(healthStatus)) {
+                setError(
+                  loaded.healthMessage?.trim() ||
+                    "Saved changes are not yet applied to live calls. Save again to retry sync.",
+                );
+              }
               const visibleSteps = isMctb
-                ? mctbVisibleWizardSteps(loaded.state)
+                ? mctbVisibleWizardSteps(merged)
                 : visibleWizardSteps(merged, { hireMode, brainAlreadyDone: hireMode });
               const fromUrl = isMctb
                 ? stepIndexFromQuery(searchParams?.get("step"), visibleSteps)
@@ -177,6 +179,16 @@ export function AppointmentReceptionistWizard({
                   : null;
               setStepIndex(fromUrl ?? 0);
               setHydrated(true);
+              if (isOpus && merged.agentId && !searchParams?.get("agentId")) {
+                const params = new URLSearchParams(searchParams?.toString() || "");
+                params.set("agentId", merged.agentId);
+                if (merged.setupId) params.set("setupId", merged.setupId);
+                const stepQ = searchParams?.get("step");
+                if (stepQ) params.set("step", stepQ);
+                router.replace(`${RECEPTIONIST_WIZARD_EDIT_PATH}?${params.toString()}`, {
+                  scroll: false,
+                });
+              }
               return;
             }
           }
@@ -378,6 +390,12 @@ export function AppointmentReceptionistWizard({
       params.set("agentId", agentId);
       return `${MCTB_ROUTES.voiceAgent}?${params.toString()}`;
     }
+    if (isOpus) {
+      const params = new URLSearchParams();
+      params.set("agentId", agentId);
+      if (step) params.set("step", step);
+      return `${RECEPTIONIST_WIZARD_EDIT_PATH}?${params.toString()}`;
+    }
     return hireMode ? `/agents/${agentId}` : `/voice/agents/${agentId}`;
   }
 
@@ -399,7 +417,9 @@ export function AppointmentReceptionistWizard({
         }),
       });
       const json = await res.json();
-      if (!res.ok) {
+      const liveSyncPending422 =
+        res.status === 422 && json?.data?.liveSyncPending === true;
+      if (!res.ok && !liveSyncPending422) {
         const issueMsgs = Array.isArray(json?.data?.issues)
           ? (json.data.issues as Array<{ message?: string }>)
               .map((i) => i.message)
@@ -419,15 +439,52 @@ export function AppointmentReceptionistWizard({
       const warnings = Array.isArray(json.data.warnings)
         ? (json.data.warnings as string[]).filter(Boolean)
         : [];
-      patch({
-        agentId,
-        setupId,
-        outcomeSlug,
-        telnyxAssistantId,
-        preset: isMctb ? payload.preset || "after_hours" : preset || payload.preset || null,
-        ...(stateOverride || {}),
-      });
-      if (warnings.length) {
+      const authoritativeState = json.data?.state as
+        | AppointmentReceptionistWizardState
+        | undefined;
+      if (authoritativeState && typeof authoritativeState === "object") {
+        setState((prev) => ({
+          ...prev,
+          ...authoritativeState,
+          agentId,
+          setupId,
+          outcomeSlug,
+          telnyxAssistantId,
+        }));
+      } else {
+        patch({
+          agentId,
+          setupId,
+          outcomeSlug,
+          telnyxAssistantId,
+          preset: isMctb ? payload.preset || "after_hours" : preset || payload.preset || null,
+          ...(stateOverride || {}),
+        });
+      }
+      if (json.data?.liveSyncError || liveSyncPending422) {
+        const syncMsg =
+          json.data?.liveSyncError ||
+          json.error ||
+          "Saved, but live calls could not be updated yet.";
+        const hint = Array.isArray(json.data?.warnings)
+          ? (json.data.warnings as string[]).filter(Boolean).join(" ")
+          : "";
+        setError([syncMsg, hint].filter(Boolean).join(" "));
+        if (liveSyncPending422 && json.data?.agentId) {
+          return {
+            agentId: json.data.agentId as string,
+            telnyxAssistantId:
+              (json.data.telnyxAssistantId as string | null | undefined) ??
+              payload.telnyxAssistantId,
+            clonedAgentId: null,
+            liveSyncPending: true,
+          };
+        }
+        if (json.data?.liveSyncError && !liveSyncPending422) {
+          return null;
+        }
+      }
+      if (warnings.length && !liveSyncPending422 && !json.data?.liveSyncError) {
         setError(warnings.join(" "));
       }
       if (action === "activate") {
@@ -447,7 +504,7 @@ export function AppointmentReceptionistWizard({
           return { agentId, telnyxAssistantId, clonedAgentId };
         }
         localStorage.removeItem(storageKey);
-        router.push(postSavePath(agentId));
+        router.push(isOpus ? "/voice/receptionist" : postSavePath(agentId));
         return { agentId, telnyxAssistantId, clonedAgentId };
       }
       return { agentId, telnyxAssistantId, clonedAgentId };
@@ -491,13 +548,24 @@ export function AppointmentReceptionistWizard({
     [isMctb, isOpus, router, searchParams, state.agentId, state.setupId, steps],
   );
 
+  const navigateToStep = useCallback(
+    async (index: number, opts?: { skipSave?: boolean }) => {
+      const next = Math.min(Math.max(index, 0), steps.length - 1);
+      if (!opts?.skipSave && state.agentId && next !== stepIndex) {
+        const saved = await persist("save_draft");
+        if (!saved?.agentId) return;
+      }
+      goToStep(next);
+    },
+    [goToStep, persist, state.agentId, stepIndex, steps.length],
+  );
+
   async function onContinue() {
     if (stepIndex < steps.length - 1) {
       if (stepIndex === 0 && !state.agentId) {
         const created = await persist("create_draft");
         if (!created?.agentId) return;
-      }
-      if (steps[stepIndex + 1]?.id === "test") {
+      } else if (state.agentId) {
         const saved = await persist("save_draft");
         if (!saved?.agentId) return;
       }
@@ -557,7 +625,7 @@ export function AppointmentReceptionistWizard({
           currentIndex={stepIndex}
           presentation={presentation}
           stepStatuses={stepStatuses}
-          onStepSelect={isMctb || isOpus ? goToStep : undefined}
+          onStepSelect={isMctb || isOpus ? (i) => void navigateToStep(i) : undefined}
         />
       </div>
 
@@ -607,7 +675,7 @@ export function AppointmentReceptionistWizard({
             onActivate={() => void persist("activate", { activationMode: "activate_now" })}
             onGoToTest={() => {
               const testIdx = steps.findIndex((s) => s.id === "test");
-              if (testIdx >= 0) goToStep(testIdx);
+              if (testIdx >= 0) void navigateToStep(testIdx);
             }}
           />
         ) : null}
@@ -632,7 +700,7 @@ export function AppointmentReceptionistWizard({
           <FooterButton
             variant="outline"
             disabled={stepIndex === 0 || busy}
-            onClick={() => goToStep(stepIndex - 1)}
+            onClick={() => void navigateToStep(stepIndex - 1)}
           >
             Back
           </FooterButton>

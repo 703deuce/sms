@@ -86,8 +86,12 @@ const switcherSource = fs.readFileSync(
   "utf8",
 );
 assert.ok(
-  switcherSource.includes("routePhoneToVoiceV3BasicCallControl"),
-  "AI switch must use Voice V3 Basic Call Control",
+  switcherSource.includes("provisionAppointmentReceptionistLiveKit"),
+  "AI switch must provision LiveKit SIP for AI Receptionist",
+);
+assert.ok(
+  !switcherSource.includes("routePhoneToVoiceV3BasicCallControl"),
+  "AI switch must NOT route to Voice V3 Basic",
 );
 assert.ok(
   !switcherSource.includes("routePhoneToTexmlAssistant"),
