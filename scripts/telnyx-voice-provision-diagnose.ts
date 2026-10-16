@@ -5,6 +5,7 @@
 import {
   hydrateProdDatabaseUrlFromCoolify,
   hydrateProdSupabaseFromCoolify,
+  hydrateProdTestEnvFromCoolify,
 } from "./cloud-agent/hydrate-prod-test-env";
 import { getPrisma } from "@/lib/db";
 import { isTelnyxResourceNotFound, telnyxRequest } from "@/lib/messaging/telnyx/client";
@@ -39,6 +40,8 @@ async function probeId(label: string, id: string) {
 async function main() {
   hydrateProdDatabaseUrlFromCoolify();
   hydrateProdSupabaseFromCoolify();
+  const { hydrateTelnyxApiKeyFromCoolify } = await import("./cloud-agent/hydrate-prod-test-env");
+  hydrateTelnyxApiKeyFromCoolify();
   if (!process.env.TELNYX_API_KEY?.trim()) {
     console.error("TELNYX_API_KEY missing — hydrate from prod web container");
     process.exit(1);
@@ -47,7 +50,7 @@ async function main() {
   const prisma = getPrisma();
   const phones = await prisma.phoneNumber.findMany({
     where: { workspaceId: "ws_1" },
-    select: { id: true, e164: true, providerNumberId: true },
+    select: { id: true, e164: true, provider: true, providerNumberId: true },
   });
 
   const report: unknown[] = [];
@@ -69,6 +72,7 @@ async function main() {
       last4,
       phoneNumberId: phone.id,
       e164: phone.e164,
+      provider: phone.provider,
       dbProviderNumberId: dbId,
       dbGet,
       lookupByE164: lookup,

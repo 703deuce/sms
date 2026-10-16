@@ -35,13 +35,26 @@ export function fromTelnyxOrderRef(id: string) {
 }
 
 export async function lookupTelnyxPhoneNumberId(phoneNumber: string): Promise<string | null> {
-  const res = await telnyxRequest<TelnyxListResponse<{ id: string; phone_number?: string }>>(
+  const exact = await telnyxRequest<TelnyxListResponse<{ id: string; phone_number?: string }>>(
     "/phone_numbers",
     { query: { "filter[phone_number]": phoneNumber, "page[size]": 5 } },
   );
-  const match =
-    (res.data || []).find((n) => n.phone_number === phoneNumber) || (res.data || [])[0];
-  return match?.id || null;
+  const exactMatch =
+    (exact.data || []).find((n) => n.phone_number === phoneNumber) || (exact.data || [])[0];
+  if (exactMatch?.id) return exactMatch.id;
+
+  const digits = phoneNumber.replace(/\D/g, "");
+  const suffix = digits.length >= 4 ? digits.slice(-10) : digits;
+  if (!suffix) return null;
+  const fuzzy = await telnyxRequest<TelnyxListResponse<{ id: string; phone_number?: string }>>(
+    "/phone_numbers",
+    { query: { "filter[phone_number][contains]": suffix, "page[size]": 10 } },
+  );
+  const fuzzyMatch = (fuzzy.data || []).find((n) => {
+    const d = String(n.phone_number || "").replace(/\D/g, "");
+    return d.endsWith(suffix) || d === digits;
+  });
+  return fuzzyMatch?.id || null;
 }
 
 export async function fetchTelnyxNumberOrder(orderId: string): Promise<NumberOrder> {

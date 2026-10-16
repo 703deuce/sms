@@ -56,6 +56,11 @@ export async function routePhoneToMctbCallHandlingIngress(input: {
   if (!phone?.e164 || !phone.providerNumberId) {
     throw new Error("Phone number not found or missing providerNumberId");
   }
+  if (String(phone.provider || "").toLowerCase() !== "telnyx") {
+    throw new Error(
+      `MCTB TeXML voice routing requires a Telnyx-owned number (provider=${phone.provider})`,
+    );
+  }
 
   const settings = mergePhoneCapabilitySettings(phone.settingsJson, {
     mctbEnabled: true,
@@ -139,6 +144,11 @@ export async function switchDidToMctbTexmlIngress(input: {
   });
   if (!phone?.e164 || !phone.providerNumberId) {
     throw new Error("Phone number not found or missing providerNumberId");
+  }
+  if (String(phone.provider || "").toLowerCase() !== "telnyx") {
+    throw new Error(
+      `MCTB TeXML voice routing requires a Telnyx-owned number (provider=${phone.provider})`,
+    );
   }
 
   let amyUnassigned = false;

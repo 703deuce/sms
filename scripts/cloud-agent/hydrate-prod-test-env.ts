@@ -103,6 +103,15 @@ export function hydrateProdDatabaseUrlFromCoolify(): boolean {
   return Boolean(process.env.DATABASE_URL?.trim());
 }
 
+export function hydrateTelnyxApiKeyFromCoolify(): boolean {
+  if (process.env.TELNYX_API_KEY?.trim()) return true;
+  const applied = hydrateFromCoolify(["TELNYX_API_KEY"]);
+  if (applied > 0) {
+    console.info("[hydrate-prod-test-env] Loaded TELNYX_API_KEY from production web.");
+  }
+  return Boolean(process.env.TELNYX_API_KEY?.trim());
+}
+
 export function hydrateProdSupabaseFromCoolify(): boolean {
   if (isSupabaseConfigured()) return true;
   const applied = hydrateFromCoolify([

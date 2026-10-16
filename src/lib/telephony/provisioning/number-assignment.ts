@@ -178,6 +178,19 @@ export async function ensureNumberProvisioned(
     };
   }
 
+  const provider = String(phone.provider || "telnyx").toLowerCase();
+  if (provider !== "telnyx") {
+    return {
+      ok: false,
+      phoneNumberId: phone.id,
+      e164: phone.e164,
+      routingMode: resolveRoutingMode(input.routingMode),
+      provision: readProvision(phone.settingsJson),
+      actions: ["skipped_non_telnyx_provider"],
+      error: `Voice ingress reprovision requires a Telnyx-owned number (provider=${provider})`,
+    };
+  }
+
   const { isMctbTexmlIngressLocked } = await import("@/lib/mctb/sip-ingress/sync");
   if (isMctbTexmlIngressLocked(phone.settingsJson)) {
     return {
