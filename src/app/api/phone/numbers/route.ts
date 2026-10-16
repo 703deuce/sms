@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { isMctbTexmlIngressLocked } from "@/lib/mctb/sip-ingress/sync";
-
 type AiOwnerInfo = {
   id: string;
   name: string;
@@ -107,6 +106,17 @@ export async function GET() {
       humanAssignments.map((h) => h.phoneNumberId),
     );
 
+    const { resolvePhoneVoiceIngressProduct } = await import(
+      "@/lib/phone/voice-product-switch"
+    );
+    const ingressByPhone = await Promise.all(
+      rows.map(async (row) => ({
+        id: row.id,
+        ingress: await resolvePhoneVoiceIngressProduct(auth.workspaceId, row.id),
+      })),
+    );
+    const ingressMap = new Map(ingressByPhone.map((e) => [e.id, e.ingress]));
+
     const data = rows.map((row) => {
       const joinAgentId = joinByPhone.get(row.id);
       const joinAgent = joinAgentId ? agentById.get(joinAgentId) ?? null : null;
@@ -123,17 +133,28 @@ export async function GET() {
       }
       const owner =
         candidates.find((a) => a.status === "ACTIVE") || candidates[0] || null;
+      const ingress = ingressMap.get(row.id);
+      const voiceIngressProduct = ingress?.product ?? "none";
+      const displayOwner =
+        voiceIngressProduct === "ai_receptionist" && ingress?.agentId
+          ? {
+              id: ingress.agentId,
+              name: ingress.agentName || owner?.displayName || owner?.name || "AI Receptionist",
+              status: owner?.status ?? "ACTIVE",
+            }
+          : owner
+            ? {
+                id: owner.id,
+                name: owner.displayName || owner.name,
+                status: owner.status,
+              }
+            : null;
       return {
         ...row,
-        aiOwner: owner
-          ? {
-              id: owner.id,
-              name: owner.displayName || owner.name,
-              status: owner.status,
-            }
-          : null,
+        aiOwner: displayOwner,
         hasSoftphoneAssignment: softphonePhones.has(row.id),
         mctbTexmlLocked: isMctbTexmlIngressLocked(row.settingsJson),
+        voiceIngressProduct,
       };
     });
 

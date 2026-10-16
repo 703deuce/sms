@@ -266,7 +266,7 @@ export async function activateFlowTriggers(
   workspaceId: string,
   flowId: string,
   definition: unknown,
-  opts?: { forceTakeover?: boolean },
+  opts?: { forceTakeover?: boolean; forceVoiceProductSwitch?: boolean },
 ): Promise<ActivateTriggersResult> {
   const prisma = getPrisma();
   const def = parseAutomationDefinition(definition);
@@ -344,6 +344,9 @@ export async function activateFlowTriggers(
         workspaceId,
         voiceAgentId,
         "trigger-activate",
+        {
+          forceVoiceProductSwitch: opts?.forceVoiceProductSwitch,
+        },
       )) as Record<string, unknown>;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

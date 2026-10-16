@@ -19,6 +19,7 @@ import {
   useMctbNumberDrawerController,
   type MctbNumberDrawerMode,
 } from "@/lib/mctb/numbers/mctb-number-drawer-controller";
+import { VoiceProductSwitchDialog } from "@/components/solutions/appointment-receptionist/voice-product-switch-dialog";
 
 export type { MctbNumberDrawerMode };
 
@@ -268,6 +269,13 @@ export function MctbNumberDrawerOpus(props: Props) {
           </SheetFooter>
         ) : null}
       </SheetContent>
+      <VoiceProductSwitchDialog
+        open={Boolean(c.voiceSwitchConflict)}
+        conflict={c.voiceSwitchConflict}
+        onCancel={c.cancelVoiceProductSwitch}
+        onConfirm={() => void c.confirmVoiceProductSwitch()}
+        busy={c.busy}
+      />
     </Sheet>
   );
 }

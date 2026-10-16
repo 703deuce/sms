@@ -44,6 +44,8 @@ import { isLiveSyncPendingHealthStatus } from "@/lib/voice/agent-health-status";
 import { normalizeWizardBookingStrategy } from "@/lib/solutions/appointment-receptionist/booking-strategy-ui";
 import { applyMandatoryConversationGuardrails } from "@/lib/solutions/appointment-receptionist/conversation-guardrails";
 import { cn } from "@/lib/utils";
+import type { VoiceProductSwitchConflict } from "@/lib/phone/voice-product-switch-types";
+import { VoiceProductSwitchDialog } from "./voice-product-switch-dialog";
 
 const STORAGE_KEY_LEGACY = "transovo.appointment-receptionist.wizard.v1";
 const STORAGE_KEY_MCTB = "transovo.mctb.voice-agent.wizard.v1";
@@ -103,6 +105,9 @@ export function AppointmentReceptionistWizard({
   const [saveNotice, setSaveNotice] = useState("");
   const [hydrated, setHydrated] = useState(false);
   const [savedFingerprint, setSavedFingerprint] = useState("");
+  const [voiceSwitchConflict, setVoiceSwitchConflict] =
+    useState<VoiceProductSwitchConflict | null>(null);
+  const [voiceSwitchDialogOpen, setVoiceSwitchDialogOpen] = useState(false);
 
   useEffect(() => {
     onAgentIdChange?.(state.agentId || null);
@@ -430,6 +435,7 @@ export function AppointmentReceptionistWizard({
   async function persist(
     action: "save_draft" | "activate" | "create_draft",
     stateOverride?: Partial<AppointmentReceptionistWizardState>,
+    persistOpts?: { confirmVoiceProductSwitch?: boolean },
   ) {
     setBusy(true);
     setError("");
@@ -453,6 +459,7 @@ export function AppointmentReceptionistWizard({
             state: payload,
             wizardStepId: steps[stepIndex]?.id,
             receptionistTraceId,
+            confirmVoiceProductSwitch: persistOpts?.confirmVoiceProductSwitch === true,
           }),
           signal: controller.signal,
         });
@@ -468,6 +475,7 @@ export function AppointmentReceptionistWizard({
       }
       let json: {
         error?: string;
+        code?: string;
         data?: {
           agentId?: string;
           setupId?: string;
@@ -481,6 +489,7 @@ export function AppointmentReceptionistWizard({
           issues?: Array<{ message?: string }>;
           published?: boolean;
           publishError?: string | null;
+          voiceProductSwitch?: VoiceProductSwitchConflict;
         };
       };
       try {
@@ -495,6 +504,23 @@ export function AppointmentReceptionistWizard({
       }
       const liveSyncPending422 =
         res.status === 422 && json?.data?.liveSyncPending === true;
+      if (
+        res.status === 409 &&
+        action === "activate" &&
+        (json?.code === "PHONE_VOICE_PRODUCT_SWITCH_REQUIRED" ||
+          json?.data?.voiceProductSwitch?.code ===
+            "PHONE_VOICE_PRODUCT_SWITCH_REQUIRED")
+      ) {
+        const conflict =
+          json.data?.voiceProductSwitch ??
+          (json as { voiceProductSwitch?: VoiceProductSwitchConflict })
+            .voiceProductSwitch;
+        if (conflict) {
+          setVoiceSwitchConflict(conflict);
+          setVoiceSwitchDialogOpen(true);
+          return null;
+        }
+      }
       if (!res.ok && !liveSyncPending422) {
         const issueMsgs = Array.isArray(json?.data?.issues)
           ? (json.data.issues as Array<{ message?: string }>)
@@ -859,6 +885,23 @@ export function AppointmentReceptionistWizard({
           </div>
         </div>
       </div>
+      <VoiceProductSwitchDialog
+        open={voiceSwitchDialogOpen}
+        conflict={voiceSwitchConflict}
+        busy={busy}
+        onCancel={() => {
+          setVoiceSwitchDialogOpen(false);
+          setVoiceSwitchConflict(null);
+        }}
+        onConfirm={() => {
+          setVoiceSwitchDialogOpen(false);
+          void persist(
+            "activate",
+            { activationMode: "activate_now", scheduledAt: null },
+            { confirmVoiceProductSwitch: true },
+          );
+        }}
+      />
     </div>
   );
 }

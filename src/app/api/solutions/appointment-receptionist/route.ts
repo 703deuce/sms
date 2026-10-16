@@ -520,6 +520,36 @@ export async function POST(request: Request) {
         }
       }
 
+      const confirmVoiceProductSwitch = body.confirmVoiceProductSwitch === true;
+      if (state.phoneNumberId) {
+        const { getVoiceProductSwitchConflict } = await import(
+          "@/lib/phone/voice-product-switch"
+        );
+        const switchConflict = await getVoiceProductSwitchConflict({
+          workspaceId: auth.workspaceId,
+          phoneNumberId: state.phoneNumberId,
+          targetProduct: "ai_receptionist",
+          targetAgentId: agentId,
+        });
+        if (switchConflict && !confirmVoiceProductSwitch) {
+          return NextResponse.json(
+            {
+              error: switchConflict.message,
+              code: switchConflict.code,
+              data: {
+                receptionistTraceId,
+                agentId,
+                setupId: setup.setupId,
+                published: false,
+                voiceProductSwitch: switchConflict,
+                warnings,
+              },
+            },
+            { status: 409 },
+          );
+        }
+      }
+
       const { recoverIncompleteReceptionistActivation } = await import(
         "@/lib/solutions/appointment-receptionist/activation-recovery"
       );
@@ -572,7 +602,10 @@ export async function POST(request: Request) {
           def,
           // Always claim the DID on Activate so the new agent replaces any
           // prior live TriggerDeployment / AI owner for this number.
-          { forceTakeover: true },
+          {
+            forceTakeover: true,
+            forceVoiceProductSwitch: confirmVoiceProductSwitch,
+          },
         );
         if (triggerResult.conflicts.length) {
           return NextResponse.json(
