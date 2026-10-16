@@ -6,6 +6,10 @@ import {
 } from "./live-prompt-controls";
 import { buildAmyEndCallInstructions } from "./amy-end-call-instructions";
 import { buildAmyTransferInstructions } from "./amy-transfer-instructions";
+import {
+  connectionGreetingWillPlay,
+  runtimeHasTool,
+} from "./effective-prompt-capabilities";
 
 export type LiveFrontendPromptContext = {
   agentName?: string;
@@ -17,15 +21,29 @@ function buildAmyCapabilitySummary(config: VoiceV3AgentConfig): string {
   const c = config.capabilities;
   const lines: string[] = ["You can help callers with:"];
   if (c.answerQuestions) lines.push("- Answering common business questions from configured facts below.");
-  if (c.bookAppointments) lines.push("- Booking new appointments when calendar booking is enabled.");
-  if (c.rescheduleAppointments) lines.push("- Rescheduling existing appointments.");
-  if (c.cancelAppointments) lines.push("- Cancelling appointments when allowed.");
-  if (c.transferCalls) lines.push("- Transferring to a human when appropriate.");
-  if (config.callHandling.callbackRequestsEnabled === true) {
+  if (runtimeHasTool(config, "book_appointment")) {
+    lines.push("- Booking new appointments on the live calendar when availability is confirmed.");
+  } else if (runtimeHasTool(config, "submit_appointment_request")) {
+    lines.push("- Collecting appointment requests for staff review (not live calendar confirmation).");
+  } else if (runtimeHasTool(config, "send_booking_link")) {
+    lines.push("- Sending a booking link by text when the caller agrees.");
+  }
+  if (runtimeHasTool(config, "reschedule_appointment")) {
+    lines.push("- Rescheduling existing appointments.");
+  }
+  if (runtimeHasTool(config, "cancel_appointment")) {
+    lines.push("- Cancelling appointments when allowed.");
+  }
+  if (runtimeHasTool(config, "transfer_call")) {
+    lines.push("- Transferring to a human when appropriate.");
+  }
+  if (runtimeHasTool(config, "request_callback")) {
     lines.push("- Arranging a callback when the caller wants the business to call them back.");
   }
-  if (c.takeMessages) lines.push("- Taking a message when needed.");
-  if (!c.bookAppointments) {
+  if (runtimeHasTool(config, "take_message")) {
+    lines.push("- Taking a message when needed.");
+  }
+  if (!runtimeHasTool(config, "book_appointment") && !runtimeHasTool(config, "submit_appointment_request")) {
     lines.push("- You must not promise live calendar booking if it is disabled for this business.");
   }
   return lines.join("\n");
@@ -116,7 +134,10 @@ export function buildLiveFrontendInstructions(
   const liveTuning = config
     ? buildLivePromptControlsInstructionBlock(livePromptControlsFromAgentConfig(config))
     : "";
-  const transferBehavior = config ? buildAmyTransferInstructions(config) : "";
+  const transferBehavior =
+    config && runtimeHasTool(config, "transfer_call")
+      ? buildAmyTransferInstructions(config)
+      : "";
   const endCallBehavior = buildAmyEndCallInstructions();
 
   const greetingHint =
@@ -386,7 +407,14 @@ If the caller sounds frustrated or confused:
 # GREETING
 ${
   speaksFirst === "ai"
-    ? `At the beginning of the call, greet the caller proactively.
+    ? config && connectionGreetingWillPlay(config)
+      ? `The caller may have just heard a brief connection message before you joined (for example, "one moment while I connect you").
+Do not repeat a full welcome introduction.
+Use one short bridge only, then listen — for example: "Thanks for holding — how can I help you today?"
+After that bridge, continue the conversation normally.
+Do not say the long scripted greeting below verbatim; it is for calls without a connection message:
+"${greetingHint}"`
+      : `At the beginning of the call, greet the caller proactively.
 Use this greeting (or very close natural wording):
 "${greetingHint}"
 Say it once.

@@ -97,8 +97,29 @@ function hotContextFromWizard(wizard: AppointmentReceptionistWizardState): Voice
     hoursKnowledgeProse: hoursItem,
   });
 
+  const authoritativeKnowledgeStatuses = new Set([
+    "complete",
+    "owner_approved",
+    "extracted",
+    "warning",
+  ]);
+  const isPlaceholderKnowledgeSummary = (summary: string): boolean => {
+    const t = summary.trim().toLowerCase();
+    return (
+      t.includes("add your business") ||
+      t.includes("not configured") ||
+      t.startsWith("add ") ||
+      t.includes("setup instructions")
+    );
+  };
   const knowledgeSummaries = (wizard.knowledgeItems || [])
-    .filter((k) => k.status !== "rejected" && k.summary?.trim())
+    .filter(
+      (k) =>
+        k.status !== "rejected" &&
+        authoritativeKnowledgeStatuses.has(k.status) &&
+        k.summary?.trim() &&
+        !isPlaceholderKnowledgeSummary(k.summary),
+    )
     .map((k) => ({ id: k.id, label: k.label, summary: k.summary }));
 
   const businessItem = knowledgeSummaries.find((k) => k.id === "business")?.summary;

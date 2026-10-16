@@ -61,6 +61,8 @@ function main() {
     businessName: "Acme",
     timezone: "America/New_York",
     currentLocalDateTime: "Friday, September 18, 2026 at 1:00:00 PM EDT",
+    bookingStrategy: "MICROSOFT_365",
+    agentConfig: resolveVoiceV3AgentConfig(),
   });
   includesAll(astra, [
     "reasoning and tool-use backend",
