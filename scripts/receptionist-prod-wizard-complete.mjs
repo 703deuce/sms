@@ -96,13 +96,18 @@ async function main() {
     timeout: 180_000,
   });
   await page.waitForTimeout(2500);
-  const transferToggle = page.getByRole("button", { name: /transfer calls/i }).first();
-  if (await transferToggle.isVisible().catch(() => false)) {
-    const cls = await transferToggle.getAttribute("class");
-    if (cls?.includes("default") || (await transferToggle.getAttribute("data-state")) === "on") {
-      await transferToggle.click();
-      await page.waitForTimeout(400);
+  const transferSwitch = page
+    .getByRole("switch", { name: /transfer/i })
+    .or(page.getByRole("button", { name: /transfer calls/i }))
+    .first();
+  if (await transferSwitch.isVisible().catch(() => false)) {
+    const role = await transferSwitch.getAttribute("role");
+    if (role === "switch" && (await transferSwitch.isChecked())) {
+      await transferSwitch.click();
+    } else if (role !== "switch") {
+      await transferSwitch.click();
     }
+    await page.waitForTimeout(400);
   }
   await saveDraft(page, "goals");
   report.steps.goals = { transferToggled: true };
@@ -173,7 +178,15 @@ async function main() {
     waitUntil: "domcontentloaded",
     timeout: 180_000,
   });
-  await page.waitForTimeout(2000);
+  await page.waitForTimeout(2500);
+  const addContact = page.getByRole("button", { name: /add contact/i }).first();
+  if (await addContact.isVisible().catch(() => false)) {
+    await addContact.click();
+    await page.waitForTimeout(500);
+    await page.getByPlaceholder("Display name").first().fill("E2E On-call");
+    await page.getByPlaceholder("+1 (555) 000-0000").first().fill("+15715550198");
+    await page.waitForTimeout(400);
+  }
   await saveDraft(page, "call-handling");
 
   report._currentStep = "voice";
