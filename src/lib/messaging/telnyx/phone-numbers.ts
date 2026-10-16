@@ -3,7 +3,7 @@
  * Number-order IDs are NOT valid for PATCH/DELETE /phone_numbers/{id}.
  */
 
-import { telnyxRequest } from "./client";
+import { isTelnyxResourceNotFound, telnyxRequest } from "./client";
 
 type TelnyxListResponse<T> = { data: T[] };
 type TelnyxDataResponse<T> = { data: T };
@@ -60,7 +60,14 @@ export async function resolveTelnyxPhoneNumberId(input: {
 }): Promise<string | null> {
   const existing = input.existingId || "";
   if (existing && !isTelnyxOrderId(existing) && !existing.startsWith("PENDING:")) {
-    return existing;
+    try {
+      await telnyxRequest<{ data?: { id?: string } }>(
+        `/phone_numbers/${encodeURIComponent(existing)}`,
+      );
+      return existing;
+    } catch (err) {
+      if (!isTelnyxResourceNotFound(err)) throw err;
+    }
   }
 
   const orderId =

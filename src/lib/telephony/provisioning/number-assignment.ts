@@ -278,6 +278,13 @@ export async function ensureNumberProvisioned(
       providerNumberId: phone.providerNumberId,
       connectionId,
     });
+    if (route.providerNumberId !== phone.providerNumberId) {
+      await prisma.phoneNumber.update({
+        where: { id: phone.id },
+        data: { providerNumberId: route.providerNumberId },
+      });
+      actions.push("telnyx_provider_number_id_refreshed");
+    }
     if (route.previousConnectionId && route.previousConnectionId !== connectionId) {
       actions.push(`telnyx_rerouted:${route.previousConnectionId}->${connectionId}`);
     } else {

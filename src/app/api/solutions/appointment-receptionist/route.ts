@@ -791,7 +791,11 @@ export async function POST(request: Request) {
     }
     const { isLiveSyncPendingHealthStatus } = await import("@/lib/voice/agent-health-status");
 
-    return NextResponse.json({
+    const activatePublishFailed =
+      action === "activate" && shouldPublish && !published && Boolean(publishError);
+
+    return NextResponse.json(
+      {
       data: {
         receptionistTraceId,
         agentId,
@@ -832,7 +836,9 @@ export async function POST(request: Request) {
         telnyxAssistantId: (updated as { telnyxAssistantId?: string | null })
           .telnyxAssistantId,
       },
-    });
+    },
+      activatePublishFailed ? { status: 422 } : undefined,
+    );
   } catch (err) {
     return jsonError(err, 400);
   }

@@ -18,6 +18,21 @@ export class TelnyxApiError extends Error {
   }
 }
 
+/** Telnyx code 10005 — requested phone number / connection resource does not exist. */
+export function isTelnyxResourceNotFound(err: unknown): boolean {
+  if (!(err instanceof TelnyxApiError)) return false;
+  if (err.status === 404) return true;
+  const body = err.body;
+  if (!body || typeof body !== "object" || !("errors" in body)) return false;
+  const errors = (body as { errors: unknown }).errors;
+  if (!Array.isArray(errors)) return false;
+  return errors.some((row) => {
+    if (!row || typeof row !== "object") return false;
+    const code = String((row as { code?: string }).code || "");
+    return code === "10005";
+  });
+}
+
 type RequestOptions = {
   method?: string;
   body?: unknown;

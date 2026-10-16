@@ -1,4 +1,5 @@
 import { telnyxRequest } from "@/lib/messaging/telnyx/client";
+import { resolveTelnyxPhoneNumberId } from "@/lib/messaging/telnyx/phone-numbers";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import {
   getStoredTelnyxFqdnConnectionId,
@@ -212,14 +213,11 @@ export async function routeTelnyxNumberToConnection(input: {
   connectionId: string;
 }): Promise<{ providerNumberId: string; previousConnectionId?: string }> {
   const e164 = normalizeE164(input.e164);
-  let providerNumberId = input.providerNumberId?.trim() || "";
-
-  if (!providerNumberId) {
-    const listed = await telnyxRequest<{ data?: TelnyxRecord[] }>("/phone_numbers", {
-      query: { "filter[phone_number]": e164 },
-    });
-    providerNumberId = String(listed.data?.[0]?.id || "");
-  }
+  const resolved = await resolveTelnyxPhoneNumberId({
+    phoneNumber: e164,
+    existingId: input.providerNumberId,
+  });
+  const providerNumberId = resolved || "";
   if (!providerNumberId) {
     throw new Error(`Telnyx number ${e164} not found`);
   }

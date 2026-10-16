@@ -1,6 +1,7 @@
 import "server-only";
 
 import { telnyxRequest } from "@/lib/messaging/telnyx/client";
+import { resolveTelnyxPhoneNumberId } from "@/lib/messaging/telnyx/phone-numbers";
 import { getTelnyxWebhookUrls } from "@/lib/messaging/telnyx/config";
 import {
   MCTB_TEXML_ROUTING_MODE,
@@ -133,6 +134,7 @@ export async function routePhoneToMctbTexmlIngress(input: {
   preferredTexmlAppId?: string | null;
 }): Promise<{
   e164: string;
+  providerNumberId: string;
   texmlAppId: string;
   voiceUrl: string;
   liveConnectionId: string | null;
@@ -140,6 +142,15 @@ export async function routePhoneToMctbTexmlIngress(input: {
   matched: boolean;
   path: string;
 }> {
+  const providerNumberId =
+    (await resolveTelnyxPhoneNumberId({
+      phoneNumber: input.e164,
+      existingId: input.providerNumberId,
+    })) || "";
+  if (!providerNumberId) {
+    throw new Error(`Telnyx number ${input.e164} not found`);
+  }
+
   const texmlAppId = await ensureMctbTexmlApplication({
     friendlyName: input.friendlyName,
     preferredAppId: input.preferredTexmlAppId,
@@ -147,19 +158,19 @@ export async function routePhoneToMctbTexmlIngress(input: {
   const voiceUrl = mctbTexmlEntryVoiceUrl();
 
   const before = await telnyxRequest<{ data?: Record<string, unknown> }>(
-    `/phone_numbers/${encodeURIComponent(input.providerNumberId)}`,
+    `/phone_numbers/${encodeURIComponent(providerNumberId)}`,
   );
   const previousConnectionId = String(
     (asRecord(before.data) || asRecord(before) || {}).connection_id || "",
   );
 
-  await telnyxRequest(`/phone_numbers/${encodeURIComponent(input.providerNumberId)}`, {
+  await telnyxRequest(`/phone_numbers/${encodeURIComponent(providerNumberId)}`, {
     method: "PATCH",
     body: { connection_id: texmlAppId },
   });
 
   const verify = await telnyxRequest<{ data?: Record<string, unknown> }>(
-    `/phone_numbers/${encodeURIComponent(input.providerNumberId)}`,
+    `/phone_numbers/${encodeURIComponent(providerNumberId)}`,
   );
   const liveConnectionId = String((asRecord(verify.data) || asRecord(verify) || {}).connection_id || "");
   const matched = liveConnectionId === texmlAppId;
@@ -168,6 +179,7 @@ export async function routePhoneToMctbTexmlIngress(input: {
 
   return {
     e164: input.e164,
+    providerNumberId,
     texmlAppId,
     voiceUrl,
     liveConnectionId: liveConnectionId || null,

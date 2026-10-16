@@ -12,6 +12,23 @@ import {
   verifyMctbTexmlIngressRoute,
 } from "./texml-route";
 
+async function syncProviderNumberIdFromTexmlRoute(
+  phone: { id: string; providerNumberId: string | null },
+  texmlRoute: { providerNumberId?: string },
+): Promise<void> {
+  if (
+    !texmlRoute.providerNumberId ||
+    texmlRoute.providerNumberId === phone.providerNumberId
+  ) {
+    return;
+  }
+  await getPrisma().phoneNumber.update({
+    where: { id: phone.id },
+    data: { providerNumberId: texmlRoute.providerNumberId },
+  });
+  phone.providerNumberId = texmlRoute.providerNumberId;
+}
+
 export type SwitchDidToMctbTexmlResult = {
   ok: boolean;
   e164: string;
@@ -70,6 +87,8 @@ export async function routePhoneToMctbCallHandlingIngress(input: {
       String(telephony.telnyxTexmlAppId || "") ||
       null,
   });
+
+  await syncProviderNumberIdFromTexmlRoute(phone, texmlRoute);
 
   telephony.telnyxTexmlAppId = texmlRoute.texmlAppId;
   if (texmlRoute.previousConnectionId) {
@@ -199,6 +218,8 @@ export async function switchDidToMctbTexmlIngress(input: {
       String(telephony.telnyxTexmlAppId || "") ||
       null,
   });
+
+  await syncProviderNumberIdFromTexmlRoute(phone, texmlRoute);
 
   telephony.telnyxTexmlAppId = texmlRoute.texmlAppId;
   if (texmlRoute.previousConnectionId) {
