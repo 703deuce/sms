@@ -14,7 +14,16 @@ export async function POST(request: Request) {
     templateId?: string;
   };
 
-  const templateId = body.templateId?.trim() || "livekit_basic_voice";
+  const templateId = body.templateId?.trim() || "";
+  if (!templateId || templateId === "livekit_basic_voice") {
+    return NextResponse.json(
+      {
+        error:
+          "livekit_basic_voice was removed — inbound/browser voice uses Voice V3 (GPT-Live) only",
+      },
+      { status: 400 },
+    );
+  }
   const template = getAgentTemplate(templateId);
   if (!template) {
     return NextResponse.json({ error: "Unknown template" }, { status: 400 });

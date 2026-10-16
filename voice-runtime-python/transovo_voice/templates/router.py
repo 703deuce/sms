@@ -40,15 +40,9 @@ async def run_template(
     status = template_runtime_status(resolved)
 
     if resolved == COMPOSED_RECEPTIONIST_TEMPLATE and not composed_receptionist_allowed():
-        log_event(
-            "composed_receptionist_blocked",
-            call_id=ud.call_id,
-            workspace_id=ud.workspace_id,
-            agent_id=ud.agent_id,
-            room=ctx.room.name,
-            extra={"requested": template_id, "fallback": "livekit_basic_voice"},
+        raise RuntimeError(
+            "transovo_receptionist_v1 is not enabled — inbound PSTN uses Voice V3 (GPT-Live) only",
         )
-        resolved = "livekit_basic_voice"
 
     log_event(
         "agent_template_started",
@@ -68,8 +62,9 @@ async def run_template(
     )
 
     if resolved == "livekit_basic_voice":
-        await run_basic_voice_template(ctx, ud, observability=observability)
-        return
+        raise RuntimeError(
+            "livekit_basic_voice was removed — use transovo-voice-v3 (GPT-Live Amy/Astra) for all inbound calls",
+        )
     if resolved == "livekit_frontdesk_booking":
         await run_frontdesk_booking_template(ctx, ud, observability=observability)
         return

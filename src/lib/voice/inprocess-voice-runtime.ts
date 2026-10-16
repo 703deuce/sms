@@ -98,7 +98,9 @@ function spawnVoiceRuntimeChild(command: string, args: string[]): ChildProcess {
   return spawn(command, args, {
     env: {
       ...process.env,
+      VOICE_WORKER_PROFILE: "v3",
       LIVEKIT_AGENT_NAME: TRANSOVO_LIVEKIT_AGENT_NAME,
+      VOICE_V3_LIVEKIT_AGENT_NAME: TRANSOVO_LIVEKIT_AGENT_NAME,
       TRANSOVO_BACKEND_URL: voiceRuntimeInternalUrl(),
       ...(internalKey ? { TRANSOVO_INTERNAL_API_KEY: internalKey } : {}),
       PYTHONPATH: path.join(/* turbopackIgnore: true */ process.cwd(), "voice-runtime-python"),

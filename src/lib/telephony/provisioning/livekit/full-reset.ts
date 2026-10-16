@@ -1,9 +1,9 @@
 import { RoomAgentDispatch, RoomConfiguration } from "@livekit/protocol";
 import {
-  TRANSOVO_LIVEKIT_AGENT_NAME,
   TRANSOVO_LIVEKIT_DISPATCH_RULE_NAME,
   TRANSOVO_LIVEKIT_ROOM_PREFIX,
   TRANSOVO_LIVEKIT_TRUNK_NAME,
+  VOICE_V3_LIVEKIT_AGENT_NAME,
 } from "../config";
 import { toLiveKitInboundDid } from "./did";
 import { getLiveKitSipClient } from "./client";
@@ -65,7 +65,11 @@ export async function fullResetLiveKitSipIngress(e164: string): Promise<{
       roomConfig: new RoomConfiguration({
         agents: [
           new RoomAgentDispatch({
-            agentName: TRANSOVO_LIVEKIT_AGENT_NAME,
+            agentName: VOICE_V3_LIVEKIT_AGENT_NAME,
+            metadata: JSON.stringify({
+              runtime: "voice_v3_gpt_live",
+              resolve: "http_backend_on_sip",
+            }),
           }),
         ],
       }),

@@ -1,9 +1,10 @@
 import type { VoiceAgentConfig } from "@/lib/voice/types";
-import { TRANSOVO_LIVEKIT_AGENT_NAME } from "@/lib/telephony/provisioning/config";
+import {
+  TRANSOVO_LIVEKIT_AGENT_NAME,
+  VOICE_V3_LIVEKIT_AGENT_NAME,
+} from "@/lib/telephony/provisioning/config";
 
-/** LiveKit worker that runs GPT-Live Amy + Astra delegation (not legacy template router). */
-export const VOICE_V3_LIVEKIT_AGENT_NAME =
-  process.env.VOICE_V3_LIVEKIT_AGENT_NAME?.trim() || "transovo-voice-v3";
+export { VOICE_V3_LIVEKIT_AGENT_NAME, TRANSOVO_LIVEKIT_AGENT_NAME };
 
 export function isVoiceV3AppointmentReceptionistConfig(
   config: VoiceAgentConfig | undefined | null,
@@ -13,14 +14,11 @@ export function isVoiceV3AppointmentReceptionistConfig(
   return advanced.capabilityPack === "appointment_receptionist";
 }
 
-/** Which LiveKit agent worker should receive SIP jobs for this published config. */
+/** All inbound LiveKit SIP jobs use the Voice V3 worker — no legacy template router. */
 export function resolveLiveKitInboundDispatchAgentName(
-  config: VoiceAgentConfig | undefined | null,
+  _config?: VoiceAgentConfig | undefined | null,
 ): string {
-  if (isVoiceV3AppointmentReceptionistConfig(config)) {
-    return VOICE_V3_LIVEKIT_AGENT_NAME;
-  }
-  return TRANSOVO_LIVEKIT_AGENT_NAME;
+  return VOICE_V3_LIVEKIT_AGENT_NAME;
 }
 
 export type VoiceV3LiveKitJobMetadata = {

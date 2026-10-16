@@ -2,9 +2,9 @@ import { ListUpdate, RoomAgentDispatch, RoomConfiguration } from "@livekit/proto
 import type { SIPDispatchRuleInfo } from "livekit-server-sdk";
 import {
   getStoredLiveKitDispatchRuleId,
-  TRANSOVO_LIVEKIT_AGENT_NAME,
   TRANSOVO_LIVEKIT_DISPATCH_RULE_NAME,
   TRANSOVO_LIVEKIT_ROOM_PREFIX,
+  VOICE_V3_LIVEKIT_AGENT_NAME,
 } from "../config";
 import { isTransovoDidDispatchRuleName } from "./dispatch-snapshot-sync";
 import { getLiveKitSipClient } from "./client";
@@ -85,10 +85,10 @@ export async function ensureSharedDispatchRule(input: {
       roomConfig: new RoomConfiguration({
         agents: [
           new RoomAgentDispatch({
-            agentName: TRANSOVO_LIVEKIT_AGENT_NAME,
+            agentName: VOICE_V3_LIVEKIT_AGENT_NAME,
             metadata: JSON.stringify({
-              runtime: "transovo-voice-runtime",
-              resolve: "explicit_dispatch_metadata",
+              runtime: "voice_v3_gpt_live",
+              resolve: "http_backend_on_sip",
             }),
           }),
         ],

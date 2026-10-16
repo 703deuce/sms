@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
@@ -10,15 +11,20 @@ from livekit.agents import AgentServer, JobContext, cli
 
 from transovo_voice.media_backend import apply_media_backend_env
 from transovo_voice.constants import VOICE_RUNTIME_API_VERSION
-from transovo_voice.session.inbound import run_inbound_session
 from transovo_voice.telemetry import log_boot_versions, log_event
 
 load_dotenv()
 
 logger = logging.getLogger("transovo-voice")
-AGENT_NAME = os.getenv("LIVEKIT_AGENT_NAME", "[REDACTED]")
 VOICE_V3_AGENT_NAME = os.getenv("VOICE_V3_LIVEKIT_AGENT_NAME", "").strip() or "transovo-voice-v3"
-WORKER_PROFILE = os.getenv("VOICE_WORKER_PROFILE", "legacy").strip().lower()
+WORKER_PROFILE = os.getenv("VOICE_WORKER_PROFILE", "v3").strip().lower()
+
+if WORKER_PROFILE != "v3":
+    logger.error(
+        "VOICE_WORKER_PROFILE=%s is not supported — only voice_v3 (GPT-Live) runs inbound calls",
+        WORKER_PROFILE,
+    )
+    sys.exit(1)
 
 
 def _worker_http_port() -> int:
@@ -50,45 +56,6 @@ def _ensure_worker_registered(agent_name: str) -> None:
     )
 
 
-async def legacy_entrypoint(ctx: JobContext) -> None:
-    _ensure_worker_registered(AGENT_NAME)
-    job_id = getattr(getattr(ctx, "job", None), "id", None) or ctx.room.name
-    log_event(
-        "worker_job_entry_entered",
-        room=ctx.room.name,
-        extra={
-            "source": "mctb-sip-e2e",
-            "jobId": str(job_id),
-            "roomName": ctx.room.name,
-        },
-    )
-    log_event(
-        "worker_job_received",
-        room=ctx.room.name,
-        extra={
-            "source": "mctb-sip-e2e",
-            "event": "worker_job_received",
-            "jobId": str(job_id),
-            "roomName": ctx.room.name,
-        },
-    )
-    ctx.log_context_fields = {
-        "service": "transovo-voice",
-        "room": ctx.room.name,
-        "impl": "python",
-    }
-    metadata = ctx.job.metadata or ""
-    if metadata and "outbound" in metadata.lower():
-        log_event(
-            "python_voice_outbound_skipped",
-            room=ctx.room.name,
-            extra={"note": "Outbound AI voice disabled during clean-room rebuild"},
-        )
-        logger.warning("Outbound jobs are disabled — inbound template testing only")
-        return
-    await run_inbound_session(ctx)
-
-
 async def voice_v3_entrypoint(ctx: JobContext) -> None:
     _ensure_worker_registered(VOICE_V3_AGENT_NAME)
     ctx.log_context_fields = {
@@ -102,16 +69,10 @@ async def voice_v3_entrypoint(ctx: JobContext) -> None:
     await run_voice_v3_livekit_session(ctx)
 
 
-if WORKER_PROFILE == "v3":
-    server.rtc_session(agent_name=VOICE_V3_AGENT_NAME)(voice_v3_entrypoint)
-else:
-    server.rtc_session(agent_name=AGENT_NAME)(legacy_entrypoint)
+server.rtc_session(agent_name=VOICE_V3_AGENT_NAME)(voice_v3_entrypoint)
 
 
 def _prewarm_voice_v3_observability_modules() -> None:
-    """Import heavy Voice V3 observability modules at worker boot (not on first call)."""
-    if WORKER_PROFILE != "v3":
-        return
     import anyio  # noqa: F401
     import transovo_voice.voice_v3.forensics  # noqa: F401
     import transovo_voice.voice_v3.gpt_live_delegation_telemetry  # noqa: F401
@@ -123,11 +84,10 @@ def main() -> None:
 
     _prewarm_voice_v3_observability_modules()
 
-    active_agent = VOICE_V3_AGENT_NAME if WORKER_PROFILE == "v3" else AGENT_NAME
     log_event(
         "python_voice_boot_started",
         extra={
-            "agentName": active_agent,
+            "agentName": VOICE_V3_AGENT_NAME,
             "workerProfile": WORKER_PROFILE,
             "apiVersion": VOICE_RUNTIME_API_VERSION,
             "mediaBackend": active_backend,

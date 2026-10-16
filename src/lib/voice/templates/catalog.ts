@@ -21,17 +21,6 @@ export type AgentTemplateRecord = {
 
 export const AGENT_TEMPLATE_CATALOG: AgentTemplateRecord[] = [
   {
-    id: "livekit_basic_voice",
-    name: "Basic Voice Assistant",
-    purpose: "Phase A — official basic_agent, gpt-realtime, no Transovo tools",
-    officialExample: "livekit/agents/examples/voice_agents/basic_agent.py",
-    livekitSdk: "livekit-agents[openai]>=1.2,<2",
-    capabilities: ["realtime_conversation", "interruption"],
-    requiredEnv: ["OPENAI_API_KEY", "LIVEKIT_URL"],
-    importedVerified: "2026-08-21",
-    status: "IMPLEMENTED",
-  },
-  {
     id: "livekit_frontdesk_booking",
     name: "Front Desk Booking",
     purpose: "Phase B — official frontdesk + FakeCalendar",
@@ -106,8 +95,10 @@ export const AGENT_TEMPLATE_CATALOG: AgentTemplateRecord[] = [
   },
 ];
 
-/** All PSTN traffic defaults here until templates are individually VERIFIED. */
-export const DEFAULT_ACTIVE_TEMPLATE = "livekit_basic_voice";
+/** Inbound PSTN uses Voice V3 (GPT-Live) — legacy lab templates are not active defaults. */
+export const DEFAULT_ACTIVE_TEMPLATE = "voice_v3_gpt_live";
+
+export const REMOVED_LIVEKIT_TEMPLATE_IDS = new Set(["livekit_basic_voice"]);
 
 export function getAgentTemplate(id: string): AgentTemplateRecord | undefined {
   return AGENT_TEMPLATE_CATALOG.find((t) => t.id === id);

@@ -118,8 +118,8 @@ AGENT_TEMPLATES: dict[str, AgentTemplateRecord] = {
     ),
 }
 
-# Phase A default — all production PSTN traffic uses this until templates are VERIFIED.
-DEFAULT_ACTIVE_TEMPLATE = "livekit_basic_voice"
+# Legacy template lab default removed — inbound uses Voice V3 worker only.
+DEFAULT_ACTIVE_TEMPLATE = "voice_v3_gpt_live"
 
 COMPOSED_RECEPTIONIST_TEMPLATE = "transovo_receptionist_v1"
 
@@ -143,10 +143,19 @@ def composed_receptionist_allowed() -> bool:
     return os.getenv("ALLOW_COMPOSED_RECEPTIONIST", "").strip() == "1"
 
 
+_REMOVED_TEMPLATE_IDS = frozenset({"livekit_basic_voice"})
+
+
 def resolve_template_id(raw: str | None) -> str:
     candidate = (raw or "").strip()
+    if candidate in _REMOVED_TEMPLATE_IDS:
+        raise ValueError(
+            f"{candidate} was removed — inbound PSTN must use transovo-voice-v3 (GPT-Live)",
+        )
     if candidate == COMPOSED_RECEPTIONIST_TEMPLATE and not composed_receptionist_allowed():
-        return DEFAULT_ACTIVE_TEMPLATE
+        raise ValueError(
+            "transovo_receptionist_v1 is disabled — use Voice V3 worker for production inbound",
+        )
     if candidate in AGENT_TEMPLATES and candidate != COMPOSED_RECEPTIONIST_TEMPLATE:
         return candidate
     if candidate == COMPOSED_RECEPTIONIST_TEMPLATE and composed_receptionist_allowed():

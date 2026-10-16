@@ -1,7 +1,11 @@
 import { requireLiveKitEnv } from "@/lib/voice/runtime-provider/config";
 
-export const TRANSOVO_LIVEKIT_AGENT_NAME =
-  process.env.LIVEKIT_AGENT_NAME?.trim() || "transovo-voice-runtime";
+/** Inbound PSTN LiveKit worker — GPT-Live Voice V3 only (legacy template runtime removed). */
+export const VOICE_V3_LIVEKIT_AGENT_NAME =
+  process.env.VOICE_V3_LIVEKIT_AGENT_NAME?.trim() || "transovo-voice-v3";
+
+/** Alias used across provisioning/dispatch; always the Voice V3 worker name. */
+export const TRANSOVO_LIVEKIT_AGENT_NAME = VOICE_V3_LIVEKIT_AGENT_NAME;
 
 export const TRANSOVO_LIVEKIT_TRUNK_NAME =
   process.env.LIVEKIT_INBOUND_TRUNK_NAME?.trim() || "transovo-telnyx-inbound";

@@ -7,39 +7,22 @@ import {
 } from "@livekit/protocol";
 import type { SIPDispatchRuleInfo as SdkDispatchRuleInfo } from "livekit-server-sdk";
 import {
-  TRANSOVO_LIVEKIT_AGENT_NAME,
   TRANSOVO_LIVEKIT_DISPATCH_RULE_NAME,
   TRANSOVO_LIVEKIT_ROOM_PREFIX,
+  VOICE_V3_LIVEKIT_AGENT_NAME,
 } from "../config";
 import type { ExplicitDispatchMetadata } from "../dispatch-metadata";
-import { PYTHON_RUNTIME_BOOTSTRAP_SNAPSHOT_KEY } from "@/lib/voice/python-runtime-bridge/build-bootstrap-snapshot";
 import { liveKitDidLookupVariants, toLiveKitInboundDid } from "./did";
 import { getLiveKitSipClient } from "./client";
 import type { MediaBackend } from "@/lib/voice/media-backend/types";
 import { getActiveMediaBackend } from "@/lib/voice/media-backend/resolver";
-import {
-  VOICE_V3_LIVEKIT_AGENT_NAME,
-  buildVoiceV3LiveKitJobMetadataJson,
-} from "@/lib/voice-v3/livekit-inbound-dispatch";
+import { buildVoiceV3LiveKitJobMetadataJson } from "@/lib/voice-v3/livekit-inbound-dispatch";
 
-/** Per-DID dispatch rules carry the runtime snapshot in agent job metadata. */
+/** Per-DID dispatch rules carry Voice V3 runtime hints in agent job metadata. */
 export const TRANSOVO_DID_DISPATCH_RULE_PREFIX = "transovo-did-dispatch-";
 
 const SIP_SVC = "SIP";
 const METADATA_SIZE_WARN_BYTES = 450_000;
-
-export type LiveKitAgentJobMetadata = {
-  runtime: "transovo-voice-runtime";
-  resolve: "embedded_dispatch_snapshot";
-  workspaceId: string;
-  agentId: string;
-  publishedVersionId?: string;
-  livekitProfile?: string;
-  agentTemplate?: string;
-  toE164?: string;
-  dispatchSource: "livekit_job_metadata";
-  [PYTHON_RUNTIME_BOOTSTRAP_SNAPSHOT_KEY]?: ExplicitDispatchMetadata["pythonRuntimeBootstrapSnapshot"];
-};
 
 export function dispatchRuleNameForDid(e164: string): string {
   const digits = e164.replace(/\D/g, "");
@@ -47,69 +30,24 @@ export function dispatchRuleNameForDid(e164: string): string {
 }
 
 export function resolveLiveKitDispatchAgentNameFromMetadata(
-  metadata: ExplicitDispatchMetadata,
+  _metadata: ExplicitDispatchMetadata,
 ): string {
-  if (metadata.livekitDispatchAgentName?.trim()) {
-    return metadata.livekitDispatchAgentName.trim();
-  }
-  return TRANSOVO_LIVEKIT_AGENT_NAME;
-}
-
-export function buildLiveKitAgentJobMetadata(
-  metadata: ExplicitDispatchMetadata,
-): LiveKitAgentJobMetadata {
-  const agentName = resolveLiveKitDispatchAgentNameFromMetadata(metadata);
-  if (agentName === VOICE_V3_LIVEKIT_AGENT_NAME) {
-    throw new Error(
-      "buildLiveKitAgentJobMetadata is for legacy runtime snapshots — use buildLiveKitAgentJobMetadataJson for Voice V3",
-    );
-  }
-  const snapshot = metadata.pythonRuntimeBootstrapSnapshot;
-  if (!snapshot) {
-    throw new Error("Cannot build LiveKit job metadata without pythonRuntimeBootstrapSnapshot");
-  }
-  return {
-    runtime: "transovo-voice-runtime",
-    resolve: "embedded_dispatch_snapshot",
-    workspaceId: metadata.workspaceId!,
-    agentId: metadata.agentId!,
-    publishedVersionId: metadata.publishedVersionId,
-    livekitProfile: metadata.livekitProfile,
-    agentTemplate: metadata.agentTemplate,
-    toE164: metadata.toE164,
-    dispatchSource: "livekit_job_metadata",
-    [PYTHON_RUNTIME_BOOTSTRAP_SNAPSHOT_KEY]: {
-      ...snapshot,
-      agentVersionId: metadata.publishedVersionId || snapshot.agentVersionId,
-    },
-  };
+  return VOICE_V3_LIVEKIT_AGENT_NAME;
 }
 
 export function buildLiveKitAgentJobMetadataJson(metadata: ExplicitDispatchMetadata): string {
-  const agentName = resolveLiveKitDispatchAgentNameFromMetadata(metadata);
-  if (agentName === VOICE_V3_LIVEKIT_AGENT_NAME) {
-    return buildVoiceV3LiveKitJobMetadataJson({
-      workspaceId: metadata.workspaceId!,
-      agentId: metadata.agentId!,
-      publishedVersionId: metadata.publishedVersionId,
-      toE164: metadata.toE164,
-      dispatchSource: metadata.dispatchSource || "livekit_job_metadata",
-    });
-  }
-  return JSON.stringify(buildLiveKitAgentJobMetadata(metadata));
+  return buildVoiceV3LiveKitJobMetadataJson({
+    workspaceId: metadata.workspaceId!,
+    agentId: metadata.agentId!,
+    publishedVersionId: metadata.publishedVersionId,
+    toE164: metadata.toE164,
+    dispatchSource: metadata.dispatchSource || "livekit_job_metadata",
+  });
 }
 
-function assertDispatchAgentMetadataValid(agentName: string, agentMeta: string): void {
-  if (agentName === VOICE_V3_LIVEKIT_AGENT_NAME) {
-    if (!agentMeta.includes('"runtime":"voice_v3_gpt_live"')) {
-      throw new Error("LiveKit Voice V3 dispatch metadata missing voice_v3_gpt_live runtime marker");
-    }
-    return;
-  }
-  if (!agentMeta.includes(PYTHON_RUNTIME_BOOTSTRAP_SNAPSHOT_KEY)) {
-    throw new Error(
-      `LiveKit dispatch agent metadata missing ${PYTHON_RUNTIME_BOOTSTRAP_SNAPSHOT_KEY}`,
-    );
+function assertDispatchAgentMetadataValid(agentMeta: string): void {
+  if (!agentMeta.includes('"runtime":"voice_v3_gpt_live"')) {
+    throw new Error("LiveKit dispatch metadata missing voice_v3_gpt_live runtime marker");
   }
 }
 
@@ -119,7 +57,7 @@ function buildDispatchRuleInfo(input: {
   dispatchMetadata: ExplicitDispatchMetadata;
   existingRuleId?: string;
 }): SIPDispatchRuleInfo {
-  const agentName = resolveLiveKitDispatchAgentNameFromMetadata(input.dispatchMetadata);
+  const agentName = VOICE_V3_LIVEKIT_AGENT_NAME;
   const jobMetadataJson = buildLiveKitAgentJobMetadataJson(input.dispatchMetadata);
   const ruleName = dispatchRuleNameForDid(input.e164);
   const metadataBytes = Buffer.byteLength(jobMetadataJson, "utf8");
@@ -226,7 +164,7 @@ export async function findDidDispatchRuleByName(
 
 /**
  * When a shared trunk dispatch rule already owns the DID, LiveKit rejects a second
- * per-DID rule with the same trunk+number. Stamp the runtime snapshot on the shared rule instead.
+ * per-DID rule with the same trunk+number. Stamp Voice V3 metadata on the shared rule instead.
  */
 export async function syncSharedDispatchRuleSnapshot(input: {
   trunkId: string;
@@ -235,7 +173,7 @@ export async function syncSharedDispatchRuleSnapshot(input: {
 }): Promise<{ ruleId: string; actions: string[] }> {
   const backend = input.backend ?? getActiveMediaBackend();
   const client = getLiveKitSipClient(backend);
-  const agentName = resolveLiveKitDispatchAgentNameFromMetadata(input.dispatchMetadata);
+  const agentName = VOICE_V3_LIVEKIT_AGENT_NAME;
   const jobMetadataJson = buildLiveKitAgentJobMetadataJson(input.dispatchMetadata);
 
   const rules = await client.listSipDispatchRule();
@@ -273,7 +211,7 @@ export async function syncSharedDispatchRuleSnapshot(input: {
   const updated = await client.updateSipDispatchRule(shared.sipDispatchRuleId, dispatchRule);
 
   const agentMeta = updated.roomConfig?.agents?.[0]?.metadata || "";
-  assertDispatchAgentMetadataValid(agentName, agentMeta);
+  assertDispatchAgentMetadataValid(agentMeta);
 
   return {
     ruleId: shared.sipDispatchRuleId,
@@ -282,8 +220,7 @@ export async function syncSharedDispatchRuleSnapshot(input: {
 }
 
 /**
- * Stamp immutable runtime snapshot into LiveKit per-DID dispatch rule agent metadata.
- * Enables zero-HTTP bootstrap (`bootstrapPath: dispatch_local`) at call time.
+ * Stamp Voice V3 runtime metadata into LiveKit per-DID dispatch rule agent metadata.
  */
 export async function syncDidDispatchRuleSnapshot(input: {
   e164: string;
@@ -292,7 +229,6 @@ export async function syncDidDispatchRuleSnapshot(input: {
   backend?: MediaBackend;
 }): Promise<{ ruleId: string; created: boolean; actions: string[] }> {
   const backend = input.backend ?? getActiveMediaBackend();
-  const agentName = resolveLiveKitDispatchAgentNameFromMetadata(input.dispatchMetadata);
   const existing = await findDidDispatchRuleByName(input.e164, backend);
   const ruleInfo = buildDispatchRuleInfo({
     e164: input.e164,
@@ -330,7 +266,7 @@ export async function syncDidDispatchRuleSnapshot(input: {
   }
 
   const agentMeta = rule.roomConfig?.agents?.[0]?.metadata || "";
-  assertDispatchAgentMetadataValid(agentName, agentMeta);
+  assertDispatchAgentMetadataValid(agentMeta);
 
   return { ruleId, created: !existing?.sipDispatchRuleId, actions };
 }

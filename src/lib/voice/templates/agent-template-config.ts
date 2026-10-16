@@ -1,6 +1,7 @@
 import {
   AGENT_TEMPLATE_CATALOG,
   DEFAULT_ACTIVE_TEMPLATE,
+  REMOVED_LIVEKIT_TEMPLATE_IDS,
   getAgentTemplate,
   type AgentTemplateRecord,
 } from "./catalog";
@@ -38,6 +39,11 @@ export function listSelectableAgentTemplates(): AgentTemplateRecord[] {
 
 export function normalizeAgentTemplateId(raw: string | undefined | null): string {
   const trimmed = raw?.trim();
+  if (trimmed && REMOVED_LIVEKIT_TEMPLATE_IDS.has(trimmed)) {
+    throw new Error(
+      `${trimmed} was removed — inbound LiveKit uses Voice V3 (GPT-Live Amy/Astra) only`,
+    );
+  }
   if (!trimmed) return DEFAULT_ACTIVE_TEMPLATE;
   if (getAgentTemplate(trimmed)) return trimmed;
   return DEFAULT_ACTIVE_TEMPLATE;

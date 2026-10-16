@@ -106,11 +106,9 @@ export async function loadExplicitDispatchForDid(
   if (!assignment) return null;
 
   const config = parseVoiceAgentConfig(assignment.draftConfig);
-  const snapshot = buildPythonRuntimeBootstrapSnapshot(config, {
-    workspaceId: phone.workspaceId,
-    agentId: assignment.id,
-    agentName: undefined,
-  });
+  const { resolveLiveKitInboundDispatchAgentName } = await import(
+    "@/lib/voice-v3/livekit-inbound-dispatch"
+  );
   return buildExplicitDispatchMetadata({
     workspaceId: phone.workspaceId,
     agentId: assignment.id,
@@ -119,9 +117,9 @@ export async function loadExplicitDispatchForDid(
     agentTemplate: getLiveKitAgentTemplateFromAdvanced(
       config.advanced as Record<string, unknown>,
     ),
+    livekitDispatchAgentName: resolveLiveKitInboundDispatchAgentName(config),
     toE164: phone.e164,
     dispatchSource: "did_lookup",
-    pythonRuntimeBootstrapSnapshot: snapshot,
   });
 }
 

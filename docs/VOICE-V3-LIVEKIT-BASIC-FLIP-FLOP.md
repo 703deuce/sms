@@ -29,8 +29,10 @@ Phase 54 cutover for `+15717491060` pointed **one** shared dispatch rule at `tra
 
 ## Fix (code)
 
-1. **Appointment receptionist** publish/provision sets `livekitDispatchAgentName` to `transovo-voice-v3` and writes Voice V3 job metadata (no Basic bootstrap snapshot on the dispatch job).
-2. **`resolveAgentByCalledNumber`** uses **per-DID** `resolveInboundAiAgent`; canonical override applies **only** when the called number is the cert E.164 (`VOICE_V3_CANONICAL_E164`, default `+15717491060`).
+1. **Single worker** — `TRANSOVO_LIVEKIT_AGENT_NAME` is always `transovo-voice-v3`; the voice container runs **V3 only** (no dual legacy+V3 processes).
+2. **Dispatch** — all SIP rules target Voice V3 job metadata (`voice_v3_gpt_live`); no `pythonRuntimeBootstrapSnapshot` / `livekit_basic_voice` on jobs.
+3. **`livekit_basic_voice`** — removed from active template defaults; Python router raises if something requests it.
+4. **`resolveAgentByCalledNumber`** — per-DID inbound owners; canonical cert agent only on cert E.164.
 
 After deploy, re-publish or run dispatch sync for wizard DIDs so LiveKit rules update.
 
@@ -42,5 +44,6 @@ After deploy, re-publish or run dispatch sync for wizard DIDs so LiveKit rules u
 
 ## What we are not doing
 
-- Removing the legacy worker entirely (still used for lab templates / non-receptionist paths).
-- Changing cert `+15717491060` behavior without explicit cutover — cert canonical rules remain on the cert DID only.
+- Changing cert `+15717491060` product config without explicit cutover — cert canonical rules remain on the cert DID only.
+
+Legacy LiveKit lab templates remain in the repo for reference but **cannot** answer PSTN calls; misconfiguration should **fail loudly** instead of falling back to Basic.

@@ -12,6 +12,7 @@ export type {
 
 export {
   TRANSOVO_LIVEKIT_AGENT_NAME,
+  VOICE_V3_LIVEKIT_AGENT_NAME,
   TRANSOVO_LIVEKIT_DISPATCH_RULE_NAME,
   TRANSOVO_LIVEKIT_ROOM_PREFIX,
   TRANSOVO_LIVEKIT_TRUNK_NAME,
@@ -56,7 +57,7 @@ export { inspectLiveKitSipRouting, diagnoseLiveKitSipIssues } from "./livekit/in
 
 export { ensureSharedDispatchRule } from "./livekit/dispatch";
 export {
-  buildLiveKitAgentJobMetadata,
+  buildLiveKitAgentJobMetadataJson,
   findDidDispatchRuleByName,
   syncDidDispatchRuleSnapshot,
 } from "./livekit/dispatch-snapshot-sync";
