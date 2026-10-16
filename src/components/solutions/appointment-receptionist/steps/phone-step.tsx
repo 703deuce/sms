@@ -32,6 +32,9 @@ type PhoneRow = {
   hasSoftphoneAssignment?: boolean;
   mctbTexmlLocked?: boolean;
   voiceIngressProduct?: VoiceIngressProductId | "mctb" | "ai_receptionist" | "none";
+  telnyxVoiceConfigurable?: boolean;
+  voiceInventoryBlockReason?: "non_telnyx_provider" | "released" | "inactive" | null;
+  provider?: string;
 };
 
 function connectionGreetingTextForMode(mode: ConnectionGreetingMode): string {
@@ -116,6 +119,32 @@ export function PhoneStep({
     };
     return [...numbers].sort((a, b) => rank(a) - rank(b));
   }, [numbers, state.agentId]);
+
+  /** Telnyx-owned, active workspace numbers — not "pre-voice-provisioned". */
+  const voiceSelectableNumbers = useMemo(
+    () => sortedNumbers.filter((n) => n.telnyxVoiceConfigurable !== false),
+    [sortedNumbers],
+  );
+
+  const voiceBlockedNumbers = useMemo(
+    () => sortedNumbers.filter((n) => n.telnyxVoiceConfigurable === false),
+    [sortedNumbers],
+  );
+
+  function voiceBlockReasonLabel(
+    reason: PhoneRow["voiceInventoryBlockReason"],
+  ): string {
+    if (reason === "non_telnyx_provider") {
+      return "Messaging-only (not a Telnyx voice number in Transovo)";
+    }
+    if (reason === "released") {
+      return "Released — no longer in your Telnyx account";
+    }
+    if (reason === "inactive") {
+      return "Not active for voice provisioning";
+    }
+    return "Not available for Telnyx voice";
+  }
 
   function ingressProductLabel(n: PhoneRow): string | null {
     const p = n.voiceIngressProduct;
@@ -325,7 +354,7 @@ export function PhoneStep({
             </ol>
             {numbers.length ? (
               <div className="mt-2 space-y-1">
-                {sortedNumbers.map((n) => (
+                {voiceSelectableNumbers.map((n) => (
                   <RadioRow
                     key={n.id}
                     variant={uiVariant}
@@ -364,7 +393,7 @@ export function PhoneStep({
               </ol>
               {numbers.length ? (
                 <div className="mt-2 space-y-1">
-                  {sortedNumbers.map((n) => (
+                  {voiceSelectableNumbers.map((n) => (
                     <RadioRow
                       key={n.id}
                       variant={uiVariant}
@@ -391,9 +420,9 @@ export function PhoneStep({
             </div>
           )
         ) : null}
-        {state.numberSource === "existing" && sortedNumbers.length ? (
+        {state.numberSource === "existing" && voiceSelectableNumbers.length ? (
           <div className="mt-3 space-y-1.5">
-            {sortedNumbers.map((n) => {
+            {voiceSelectableNumbers.map((n) => {
               const ownedByOther =
                 n.aiOwner && n.aiOwner.id !== state.agentId ? n.aiOwner : null;
               const productLabel = ingressProductLabel(n);
@@ -442,6 +471,20 @@ export function PhoneStep({
                 in Numbers if you want humans to answer this DID instead.
               </InfoCallout>
             ) : null}
+          </div>
+        ) : null}
+        {state.numberSource === "existing" && voiceBlockedNumbers.length ? (
+          <div className="mt-4 space-y-1.5 rounded-lg border border-border/60 bg-muted/30 p-3">
+            <p className="text-xs font-medium text-muted-foreground">
+              Not available for Telnyx voice provisioning
+            </p>
+            {voiceBlockedNumbers.map((n) => (
+              <p key={n.id} className="text-xs text-muted-foreground">
+                {formatPhone(n.e164)}
+                {n.friendlyName ? ` · ${n.friendlyName}` : ""} —{" "}
+                {voiceBlockReasonLabel(n.voiceInventoryBlockReason)}
+              </p>
+            ))}
           </div>
         ) : null}
 

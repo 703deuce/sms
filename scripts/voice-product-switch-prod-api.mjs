@@ -6,7 +6,7 @@ import { writeFileSync } from "node:fs";
 
 const BASE = process.env.UI_AGENT_BASE_URL || "https://transovo.ai";
 const AGENT = process.env.RECEPTIONIST_E2E_AGENT_ID || "cmu42zyel1c4x01090c6s335z";
-const PHONE_LAST4 = process.env.RECEPTIONIST_TEST_PHONE_LAST4 || "8077";
+const PHONE_LAST4 = process.env.RECEPTIONIST_TEST_PHONE_LAST4 || "3615";
 const OUT = "/opt/cursor/artifacts/voice-product-switch-prod-api.json";
 
 async function loginWs1(ctx) {

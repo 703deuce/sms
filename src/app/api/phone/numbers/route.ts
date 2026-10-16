@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { isMctbTexmlIngressLocked } from "@/lib/mctb/sip-ingress/sync";
+import { describeTelnyxVoiceInventory } from "@/lib/phone/telnyx-voice-inventory";
 type AiOwnerInfo = {
   id: string;
   name: string;
@@ -19,6 +20,7 @@ export async function GET() {
       e164: string;
       friendlyName: string | null;
       status: string;
+      provider: string;
       settingsJson: unknown;
     }> = await prisma.phoneNumber.findMany({
       where: { workspaceId: auth.workspaceId },
@@ -28,6 +30,7 @@ export async function GET() {
         e164: true,
         friendlyName: true,
         status: true,
+        provider: true,
         settingsJson: true,
       },
     });
@@ -149,12 +152,18 @@ export async function GET() {
                 status: owner.status,
               }
             : null;
+      const inventory = describeTelnyxVoiceInventory({
+        provider: row.provider,
+        status: row.status,
+      });
       return {
         ...row,
         aiOwner: displayOwner,
         hasSoftphoneAssignment: softphonePhones.has(row.id),
         mctbTexmlLocked: isMctbTexmlIngressLocked(row.settingsJson),
         voiceIngressProduct,
+        telnyxVoiceConfigurable: inventory.telnyxVoiceConfigurable,
+        voiceInventoryBlockReason: inventory.voiceInventoryBlockReason,
       };
     });
 

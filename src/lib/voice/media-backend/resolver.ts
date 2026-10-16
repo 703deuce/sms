@@ -9,7 +9,8 @@ function asRecord(value: unknown): Record<string, unknown> {
 }
 
 export function parseMediaBackend(value: unknown): MediaBackend | null {
-  if (value === "self_hosted" || value === "livekit_cloud") return value;
+  if (value === "livekit_cloud") return value;
+  if (value === "self_hosted") return "livekit_cloud";
   return null;
 }
 
@@ -42,8 +43,12 @@ export async function resolveMediaBackend(
     if (pinned) return pinned;
   }
 
-  if (context.forceBackend) return context.forceBackend;
-  if (context.mediaBackend) return context.mediaBackend;
+  if (context.forceBackend) {
+    return context.forceBackend === "self_hosted" ? "livekit_cloud" : context.forceBackend;
+  }
+  if (context.mediaBackend) {
+    return context.mediaBackend === "self_hosted" ? "livekit_cloud" : context.mediaBackend;
+  }
 
   return getActiveMediaBackend();
 }
