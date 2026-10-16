@@ -9,7 +9,7 @@ import path from "node:path";
 const BASE = process.env.UI_AGENT_BASE_URL || "https://transovo.ai";
 const AGENT = process.env.RECEPTIONIST_E2E_AGENT_ID || "cmu42zyel1c4x01090c6s335z";
 const CERT = "cmshz2lc25c622c4i58303501";
-const PHONE_LAST4 = process.env.RECEPTIONIST_TEST_PHONE_LAST4 || "3615";
+const PHONE_LAST4 = process.env.RECEPTIONIST_TEST_PHONE_LAST4 || "8077";
 const ALLOW_ACTIVATE = process.env.RECEPTIONIST_E2E_ALLOW_PUBLISH === "1";
 const OUT = "/opt/cursor/artifacts/receptionist-prod-wizard-complete.json";
 const SCREEN = "/opt/cursor/artifacts/receptionist-prod-e2e-screens";
