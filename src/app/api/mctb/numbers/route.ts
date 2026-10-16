@@ -62,6 +62,7 @@ export async function POST(req: Request) {
     const body = (await req.json()) as {
       action?: "select" | "provision_auto";
       phoneNumberId?: string;
+      confirmVoiceProductSwitch?: boolean;
     };
 
     if (body.action === "provision_auto") {
@@ -77,6 +78,25 @@ export async function POST(req: Request) {
     }
 
     if (body.action === "select" && body.phoneNumberId) {
+      const confirmSwitch = body.confirmVoiceProductSwitch === true;
+      const { getVoiceProductSwitchConflict } = await import(
+        "@/lib/phone/voice-product-switch"
+      );
+      const switchConflict = await getVoiceProductSwitchConflict({
+        workspaceId: auth.workspaceId,
+        phoneNumberId: body.phoneNumberId,
+        targetProduct: "mctb",
+      });
+      if (switchConflict && !confirmSwitch) {
+        return NextResponse.json(
+          {
+            error: switchConflict.message,
+            code: switchConflict.code,
+            voiceProductSwitch: switchConflict,
+          },
+          { status: 409 },
+        );
+      }
       const wired = await wireMctbWorkspaceIngressPhone(auth.workspaceId, body.phoneNumberId);
       if (!wired.ok) {
         return NextResponse.json({ error: wired.error || "Could not wire ingress" }, { status: 400 });

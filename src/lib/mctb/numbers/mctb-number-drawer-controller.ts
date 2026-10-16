@@ -10,6 +10,8 @@ import {
   voiceUiLabel,
 } from "@/lib/mctb/number-management-model";
 import { formatMctbPhoneLabel } from "@/lib/mctb/phone-display";
+import { postMctbSelectPhone } from "@/lib/mctb/numbers/post-select-phone";
+import type { VoiceProductSwitchConflict } from "@/lib/phone/voice-product-switch-types";
 import { useCallback, useEffect, useState } from "react";
 
 export type MctbNumberDrawerMode = "manage" | "add" | "verify" | null;
@@ -56,6 +58,10 @@ export function useMctbNumberDrawerController(options: {
     messagingReady?: boolean;
   } | null>(null);
 
+  const [voiceSwitchConflict, setVoiceSwitchConflict] =
+    useState<VoiceProductSwitchConflict | null>(null);
+  const [pendingSelectPhoneId, setPendingSelectPhoneId] = useState<string | null>(null);
+
   const loadNumbers = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -91,17 +97,23 @@ export function useMctbNumberDrawerController(options: {
     if (open === "add") setAddStep("choose");
   }, [open, loadNumbers, loadCompliance]);
 
-  async function selectNumber(id: string) {
+  async function selectNumber(id: string, opts?: { confirmVoiceProductSwitch?: boolean }) {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/mctb/numbers", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "select", phoneNumberId: id }),
+      const result = await postMctbSelectPhone(id, {
+        confirmVoiceProductSwitch: opts?.confirmVoiceProductSwitch,
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Could not select number");
+      if (!result.ok && "needSwitch" in result && result.needSwitch) {
+        setPendingSelectPhoneId(id);
+        setVoiceSwitchConflict(result.conflict);
+        return;
+      }
+      if (!result.ok) {
+        throw new Error(result.error);
+      }
+      setVoiceSwitchConflict(null);
+      setPendingSelectPhoneId(null);
       await loadNumbers();
       onNumbersChanged?.();
     } catch (err) {
@@ -109,6 +121,16 @@ export function useMctbNumberDrawerController(options: {
     } finally {
       setBusy(false);
     }
+  }
+
+  function cancelVoiceProductSwitch() {
+    setVoiceSwitchConflict(null);
+    setPendingSelectPhoneId(null);
+  }
+
+  async function confirmVoiceProductSwitch() {
+    if (!pendingSelectPhoneId) return;
+    await selectNumber(pendingSelectPhoneId, { confirmVoiceProductSwitch: true });
   }
 
   async function provisionAuto() {
@@ -274,6 +296,9 @@ export function useMctbNumberDrawerController(options: {
     subtitle,
     loadNumbers,
     selectNumber,
+    voiceSwitchConflict,
+    cancelVoiceProductSwitch,
+    confirmVoiceProductSwitch,
     provisionAuto,
     runSearch,
     purchaseResult,

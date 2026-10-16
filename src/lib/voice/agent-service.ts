@@ -389,10 +389,16 @@ export async function buildVoiceAgentForTest(
 /**
  * Deploy agent to production (ACTIVE) and assign DID for inbound.
  */
+export type PublishVoiceAgentOptions = {
+  /** Customer confirmed replacing another voice product on this DID. */
+  forceVoiceProductSwitch?: boolean;
+};
+
 export async function publishVoiceAgent(
   workspaceId: string,
   agentId: string,
   publishedBy?: string,
+  opts?: PublishVoiceAgentOptions,
 ) {
   const prisma = getPrisma();
   const agent = await prisma.voiceAgent.findFirst({
@@ -621,23 +627,37 @@ export async function publishVoiceAgent(
     const { shouldSkipLiveKitProvisionForMctbPhone } = await import(
       "@/lib/mctb/sip-ingress/sync"
     );
-    // LiveKit appointment receptionist must provision ingress — only honor real MCTB/TeXML locks on the DID.
-    const mctbSkipOpts = mustProvisionLiveKitForReceptionist
-      ? undefined
-      : { appointmentWizard };
     skipLiveKitForMctb = Boolean(
-      phone && shouldSkipLiveKitProvisionForMctbPhone(phone.settingsJson, mctbSkipOpts),
+      phone &&
+        shouldSkipLiveKitProvisionForMctbPhone(phone.settingsJson, {
+          appointmentWizard: mustProvisionLiveKitForReceptionist
+            ? false
+            : appointmentWizard,
+        }),
     );
+    if (skipLiveKitForMctb && mustProvisionLiveKitForReceptionist) {
+      if (!opts?.forceVoiceProductSwitch) {
+        await rollbackPublish(
+          "This number is already used for another voice product. Confirm the switch to AI Receptionist and activate again.",
+        );
+      } else {
+        const { preparePhoneForAiReceptionistVoiceIngress } = await import(
+          "./mctb-voice-agent-phone-takeover"
+        );
+        await preparePhoneForAiReceptionistVoiceIngress({
+          workspaceId,
+          phoneNumberId: updated.phoneNumberId,
+        });
+        skipLiveKitForMctb = false;
+      }
+    }
     if (skipLiveKitForMctb && !mustProvisionLiveKitForReceptionist) {
       console.warn(
-        "[voice] Skipping LiveKit provision on publish — MCTB TeXML / wizard voice line",
+        "[voice] Skipping LiveKit provision on publish — legacy non-receptionist voice line",
         updated.phoneNumberId,
       );
-    } else if (skipLiveKitForMctb && mustProvisionLiveKitForReceptionist) {
-      await rollbackPublish(
-        "AI Receptionist cannot publish on an MCTB TeXML-locked line — assign a dedicated receptionist number or use LiveKit ingress",
-      );
-    } else {
+    }
+    if (!skipLiveKitForMctb || mustProvisionLiveKitForReceptionist) {
       const { provisionAppointmentReceptionistLiveKit } = await import(
         "@/lib/voice-v3/receptionist-livekit-provisioning"
       );

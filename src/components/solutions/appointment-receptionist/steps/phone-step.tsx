@@ -18,6 +18,10 @@ import { Panel, Stat } from "@/newui-transplant/components/app/kit";
 import { pickWizardFieldComponents, WizardSelectField } from "../wizard-field-kit";
 import { OpusCalloutPanel, OpusDensePanel, WizardSection } from "../wizard-opus-ui";
 import { InfoCallout, RadioRow, SelectableCard, SidePanel, StatusPill } from "../ui";
+import {
+  VOICE_INGRESS_PRODUCT_LABEL,
+  type VoiceIngressProductId,
+} from "@/lib/phone/voice-product-switch-types";
 
 type PhoneRow = {
   id: string;
@@ -27,6 +31,7 @@ type PhoneRow = {
   aiOwner?: { id: string; name: string; status: string } | null;
   hasSoftphoneAssignment?: boolean;
   mctbTexmlLocked?: boolean;
+  voiceIngressProduct?: VoiceIngressProductId | "mctb" | "ai_receptionist" | "none";
 };
 
 function connectionGreetingTextForMode(mode: ConnectionGreetingMode): string {
@@ -106,13 +111,17 @@ export function PhoneStep({
   const sortedNumbers = useMemo(() => {
     const rank = (n: PhoneRow) => {
       if (n.aiOwner?.id === state.agentId) return 0;
-      if (!n.aiOwner && !n.mctbTexmlLocked) return 1;
-      if (n.aiOwner && n.aiOwner.id !== state.agentId) return 2;
-      if (n.mctbTexmlLocked) return 3;
-      return 4;
+      if (!n.aiOwner && (n.voiceIngressProduct === "none" || !n.voiceIngressProduct)) return 1;
+      return 2;
     };
     return [...numbers].sort((a, b) => rank(a) - rank(b));
   }, [numbers, state.agentId]);
+
+  function ingressProductLabel(n: PhoneRow): string | null {
+    const p = n.voiceIngressProduct;
+    if (!p || p === "none") return null;
+    return VOICE_INGRESS_PRODUCT_LABEL[p as VoiceIngressProductId] ?? null;
+  }
 
   const selected = numbers.find((n) => n.id === state.phoneNumberId);
   const booking = hasBookingCapability(state.capabilities);
@@ -387,8 +396,9 @@ export function PhoneStep({
             {sortedNumbers.map((n) => {
               const ownedByOther =
                 n.aiOwner && n.aiOwner.id !== state.agentId ? n.aiOwner : null;
-              const subline = n.mctbTexmlLocked
-                ? "MCTB TeXML ingress — activate here to route this number to this receptionist"
+              const productLabel = ingressProductLabel(n);
+              const subline = productLabel
+                ? `Currently used by ${productLabel} — you can switch on activate`
                 : ownedByOther
                   ? `Currently answered by ${ownedByOther.name}${ownedByOther.status === "ACTIVE" ? " (live)" : ""} — activate to switch`
                   : n.aiOwner?.id === state.agentId
@@ -418,11 +428,11 @@ export function PhoneStep({
                 activate. Only one AI agent answers a number at a time.
               </InfoCallout>
             ) : null}
-            {selected?.mctbTexmlLocked ? (
+            {selected && ingressProductLabel(selected) ? (
               <InfoCallout variant={uiVariant}>
-                This number is currently marked for MCTB TeXML missed-call recovery. When you
-                save or activate this receptionist, Transovo will switch inbound routing to this
-                Voice Agent for this DID only. Other MCTB numbers are unchanged.
+                This number is currently used by {ingressProductLabel(selected)}. Save draft only
+                stores your choice. When you activate, we will ask you to confirm before switching
+                inbound voice routing to this receptionist.
               </InfoCallout>
             ) : null}
             {selected?.hasSoftphoneAssignment ? (
