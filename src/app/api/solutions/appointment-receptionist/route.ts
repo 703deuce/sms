@@ -384,8 +384,33 @@ export async function POST(request: Request) {
         }
       }
 
+      const { recoverIncompleteReceptionistActivation } = await import(
+        "@/lib/solutions/appointment-receptionist/activation-recovery"
+      );
+      const recoveryInput = {
+        workspaceId: auth.workspaceId,
+        agentId,
+        primaryFlowId,
+        phoneNumberId: state.phoneNumberId!,
+        userId: auth.session.userId,
+      };
+
+      const preRecovery = await recoverIncompleteReceptionistActivation(recoveryInput);
+      if (preRecovery.recovered) {
+        published = true;
+        triggerDeployments = preRecovery.triggerDeployments || [];
+        await upsertAppointmentReceptionistSetup({
+          workspaceId: auth.workspaceId,
+          agentId,
+          state: { ...state, agentId },
+          published: true,
+          links: { calendarConnectionId: hooks.calendarConnectionId },
+        });
+      }
+
       // Activation transaction: validate → TriggerDeployment → Telnyx → ACTIVE.
       // Do NOT mark workflow active if Telnyx publish fails.
+      if (!published) {
       try {
         const prisma = getPrisma();
         const flow = await prisma.automationFlow.findFirst({
@@ -526,7 +551,21 @@ export async function POST(request: Request) {
         publishError =
           err instanceof Error ? err.message : "Activation / Telnyx publish failed";
         published = false;
-        if (primaryFlowId) {
+
+        const postFailureRecovery =
+          await recoverIncompleteReceptionistActivation(recoveryInput);
+        if (postFailureRecovery.recovered) {
+          published = true;
+          publishError = null;
+          triggerDeployments = postFailureRecovery.triggerDeployments || [];
+          await upsertAppointmentReceptionistSetup({
+            workspaceId: auth.workspaceId,
+            agentId,
+            state: { ...state, agentId },
+            published: true,
+            links: { calendarConnectionId: hooks.calendarConnectionId },
+          });
+        } else if (primaryFlowId) {
           await getPrisma()
             .automationFlow.update({
               where: { id: primaryFlowId, workspaceId: auth.workspaceId },
@@ -534,6 +573,7 @@ export async function POST(request: Request) {
             })
             .catch(() => undefined);
         }
+      }
       }
 
     }

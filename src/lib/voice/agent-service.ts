@@ -882,10 +882,13 @@ export async function syncLiveWizardDraftToProvider(
                   data: { config: previousPublishedConfig as object },
                 });
               }
+              const { VOICE_AGENT_HEALTH_LIVE_SYNC_PENDING } = await import(
+                "./agent-health-status"
+              );
               await prisma.voiceAgent.update({
                 where: { id: agentId },
                 data: {
-                  healthStatus: "warning",
+                  healthStatus: VOICE_AGENT_HEALTH_LIVE_SYNC_PENDING,
                   healthMessage: (
                     lk.error || "Live configuration sync failed — draft saved"
                   ).slice(0, 500),
@@ -926,9 +929,10 @@ export async function syncLiveWizardDraftToProvider(
       }
     }
 
+    const { VOICE_AGENT_HEALTH_OK } = await import("./agent-health-status");
     await prisma.voiceAgent.update({
       where: { id: agentId },
-      data: { healthStatus: "ok", healthMessage: null },
+      data: { healthStatus: VOICE_AGENT_HEALTH_OK, healthMessage: null },
     });
 
     return { synced: true };
@@ -942,11 +946,12 @@ export async function syncLiveWizardDraftToProvider(
         })
         .catch(() => undefined);
     }
+    const { VOICE_AGENT_HEALTH_LIVE_SYNC_PENDING } = await import("./agent-health-status");
     await prisma.voiceAgent
       .update({
         where: { id: agentId },
         data: {
-          healthStatus: "warning",
+          healthStatus: VOICE_AGENT_HEALTH_LIVE_SYNC_PENDING,
           healthMessage: `Live sync failed: ${message.slice(0, 450)}`,
         },
       })

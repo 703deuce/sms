@@ -45,11 +45,7 @@ export function deriveOverviewLiveSyncStatus(input: {
   if (input.agentStatus && input.agentStatus !== "ACTIVE") {
     return "activation_incomplete";
   }
-  if (
-    input.healthStatus === "warning" &&
-    input.healthMessage &&
-    /live sync|live configuration|LiveKit configuration/i.test(input.healthMessage)
-  ) {
+  if (input.healthStatus === "live_sync_pending") {
     return "pending_live_sync";
   }
   if (input.livekitTone === "warn") {
