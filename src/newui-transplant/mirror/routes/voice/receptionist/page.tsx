@@ -81,8 +81,22 @@ export function TransplantVoiceReceptionistPage({ wired }: { wired?: VoiceRecept
           </div>
           <Rows
             items={[
-              { label: 'Publish status', value: <Pill tone={published ? 'success' : 'warning'}>{published ? 'Published' : 'Draft'}</Pill> },
-              { label: 'Version', value: versionLabel },
+              {
+                label: 'Live status',
+                value: (
+                  <Pill
+                    tone={
+                      published
+                        ? 'success'
+                        : wired?.liveSyncStatus === 'pending_live_sync'
+                          ? 'warning'
+                          : 'warning'
+                    }
+                  >
+                    {versionLabel}
+                  </Pill>
+                ),
+              },
               ...(wired?.assignedPhoneE164
                 ? [{ label: 'Phone', value: wired.assignedPhoneE164 }]
                 : []),

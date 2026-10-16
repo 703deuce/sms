@@ -3,6 +3,8 @@ import type { ActivationIssue } from "@/lib/solutions/appointment-receptionist/c
 export type OverviewPublicationStatus = "setup_required" | "draft" | "active" | "needs_attention";
 
 /** Finer-grained live vs draft vs sync state for receptionist overview. */
+import { isLiveSyncPendingHealthStatus } from "./agent-health-status";
+
 export type OverviewLiveSyncStatus =
   | "no_phone"
   | "draft_saved"
@@ -45,7 +47,7 @@ export function deriveOverviewLiveSyncStatus(input: {
   if (input.agentStatus && input.agentStatus !== "ACTIVE") {
     return "activation_incomplete";
   }
-  if (input.healthStatus === "live_sync_pending") {
+  if (isLiveSyncPendingHealthStatus(input.healthStatus)) {
     return "pending_live_sync";
   }
   if (input.livekitTone === "warn") {

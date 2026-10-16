@@ -38,6 +38,7 @@ import { VoiceStep } from "./steps/voice-step";
 import { TestStep } from "./steps/test-step";
 import { ActivateStep } from "./steps/activate-step";
 import { wizardPatchFromCompanyBrain } from "@/lib/solutions/appointment-receptionist/hydrate-from-brain";
+import { isLiveSyncPendingHealthStatus } from "@/lib/voice/agent-health-status";
 
 const STORAGE_KEY_LEGACY = "transovo.appointment-receptionist.wizard.v1";
 const STORAGE_KEY_MCTB = "transovo.mctb.voice-agent.wizard.v1";
@@ -111,25 +112,15 @@ export function AppointmentReceptionistWizard({
     async function hydrate() {
       try {
         const setupId = searchParams?.get("setupId");
-        let agentId = searchParams?.get("agentId");
-        if (isOpus && !setupId && !agentId) {
-          try {
-            const agentsRes = await fetch("/api/voice/agents");
-            if (agentsRes.ok) {
-              const agentsJson = await agentsRes.json();
-              const list = (agentsJson.data || []) as Array<{ id: string }>;
-              agentId = list[0]?.id ?? null;
-            }
-          } catch {
-            /* optional */
-          }
-        }
-        if (setupId || agentId) {
+        const agentId = searchParams?.get("agentId");
+        const shouldLoadServer =
+          Boolean(setupId || agentId) || isOpus;
+        if (shouldLoadServer) {
           const qs = new URLSearchParams();
           if (setupId) qs.set("setupId", setupId);
           if (agentId) qs.set("agentId", agentId);
           const res = await fetch(
-            `/api/solutions/appointment-receptionist?${qs.toString()}`,
+            `/api/solutions/appointment-receptionist${qs.toString() ? `?${qs.toString()}` : ""}`,
           );
           if (res.ok) {
             const json = await res.json();
@@ -157,16 +148,22 @@ export function AppointmentReceptionistWizard({
               }
               setState(merged);
               const statusRaw = String(loaded.status || loaded.agentStatus || "").toUpperCase();
+              const healthStatus = String(loaded.healthStatus || "");
               const life =
                 statusRaw === "ACTIVE" ? "active" : statusRaw === "DRAFT" ? "draft" : null;
               setAgentLifecycle(life);
               onAgentStatusChange?.(
-                life === "active"
-                  ? "active"
-                  : life === "draft"
-                    ? "draft"
-                    : "needs_attention",
+                isLiveSyncPendingHealthStatus(healthStatus)
+                  ? "needs_attention"
+                  : life === "active"
+                    ? "active"
+                    : life === "draft"
+                      ? "draft"
+                      : "needs_attention",
               );
+              if (isLiveSyncPendingHealthStatus(healthStatus) && loaded.healthMessage) {
+                setError(String(loaded.healthMessage));
+              }
               const visibleSteps = isMctb
                 ? mctbVisibleWizardSteps(loaded.state)
                 : visibleWizardSteps(merged, { hireMode, brainAlreadyDone: hireMode });

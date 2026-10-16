@@ -65,12 +65,18 @@ export async function recoverIncompleteReceptionistActivation(input: {
 
   const def = parseAutomationDefinition(flow.definition);
   const triggers = extractTriggersFromDefinition(def);
-  const inbound = triggers.find(
-    (t) => t.blockType === "inbound_call" && t.phoneNumberId === input.phoneNumberId,
-  );
+  const inbound =
+    triggers.find(
+      (t) =>
+        t.blockType === "inbound_call" &&
+        t.phoneNumberId &&
+        t.phoneNumberId === input.phoneNumberId,
+    ) ||
+    triggers.find((t) => t.blockType === "inbound_call" && t.phoneNumberId);
   if (!inbound?.phoneNumberId) {
     return { recovered: false, steps, error: "inbound_trigger_missing" };
   }
+  const routingPhoneNumberId = input.phoneNumberId || inbound.phoneNumberId;
 
   const deployment = await prisma.triggerDeployment.findFirst({
     where: { flowId: input.primaryFlowId, triggerNodeId: inbound.nodeId },
@@ -81,7 +87,7 @@ export async function recoverIncompleteReceptionistActivation(input: {
   const publishProof =
     deployment?.status === "live" ||
     providerConfig.telnyxPublished === true ||
-    Boolean(agent.publishedVersionId);
+    (agent.status === "ACTIVE" && Boolean(agent.publishedVersionId));
 
   if (!publishProof) {
     return { recovered: false, steps, error: "publish_not_proven" };
@@ -90,7 +96,7 @@ export async function recoverIncompleteReceptionistActivation(input: {
   steps.push("reconcile_livekit");
   const lk = await reconcileAppointmentReceptionistLiveKit({
     workspaceId: input.workspaceId,
-    phoneNumberId: input.phoneNumberId,
+    phoneNumberId: routingPhoneNumberId,
     agentId: input.agentId,
     publishedVersionId: agent.publishedVersionId,
     publishedConfig,
@@ -108,12 +114,12 @@ export async function recoverIncompleteReceptionistActivation(input: {
   const { setActiveCallHandler } = await import("@/lib/call-handling/set-active-call-handler");
   await setActiveCallHandler({
     workspaceId: input.workspaceId,
-    voiceIngressPhoneNumberId: input.phoneNumberId,
+    voiceIngressPhoneNumberId: routingPhoneNumberId,
     handler: "ai_receptionist",
     userId: input.userId ?? null,
   });
 
-  if (deployment) {
+  if (deployment && deployment.status !== "live") {
     steps.push("repair_trigger_deployment");
     const livekitProvision = { ok: true, provision: lk.provision };
     const publishedConfigHash = [

@@ -29,8 +29,17 @@ export async function GET(request: Request) {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
     const url = new URL(request.url);
-    const setupId = url.searchParams.get("setupId") || undefined;
-    const agentId = url.searchParams.get("agentId") || undefined;
+    let setupId = url.searchParams.get("setupId") || undefined;
+    let agentId = url.searchParams.get("agentId") || undefined;
+    if (!setupId && !agentId) {
+      const { resolveCanonicalVoiceV3WorkspaceAgent } = await import(
+        "@/lib/voice-v3/canonical-workspace-agent"
+      );
+      const canonical = await resolveCanonicalVoiceV3WorkspaceAgent(auth.workspaceId);
+      if (canonical?.agentId) {
+        agentId = canonical.agentId;
+      }
+    }
     const data = await loadAppointmentReceptionistSetup(auth.workspaceId, {
       setupId,
       agentId,
@@ -399,6 +408,11 @@ export async function POST(request: Request) {
       if (preRecovery.recovered) {
         published = true;
         triggerDeployments = preRecovery.triggerDeployments || [];
+        const { VOICE_AGENT_HEALTH_OK } = await import("@/lib/voice/agent-health-status");
+        await getPrisma().voiceAgent.update({
+          where: { id: agentId, workspaceId: auth.workspaceId },
+          data: { healthStatus: VOICE_AGENT_HEALTH_OK, healthMessage: null },
+        });
         await upsertAppointmentReceptionistSetup({
           workspaceId: auth.workspaceId,
           agentId,
@@ -566,12 +580,18 @@ export async function POST(request: Request) {
             links: { calendarConnectionId: hooks.calendarConnectionId },
           });
         } else if (primaryFlowId) {
-          await getPrisma()
-            .automationFlow.update({
-              where: { id: primaryFlowId, workspaceId: auth.workspaceId },
-              data: { status: "DRAFT", updatedAt: new Date() },
-            })
-            .catch(() => undefined);
+          const agentRow = await getPrisma().voiceAgent.findFirst({
+            where: { id: agentId, workspaceId: auth.workspaceId },
+            select: { status: true },
+          });
+          if (agentRow?.status !== "ACTIVE") {
+            await getPrisma()
+              .automationFlow.update({
+                where: { id: primaryFlowId, workspaceId: auth.workspaceId },
+                data: { status: "DRAFT", updatedAt: new Date() },
+              })
+              .catch(() => undefined);
+          }
         }
       }
       }
@@ -582,6 +602,7 @@ export async function POST(request: Request) {
       agentId,
       setupId: setup.setupId,
     });
+    const { isLiveSyncPendingHealthStatus } = await import("@/lib/voice/agent-health-status");
 
     return NextResponse.json({
       data: {
@@ -600,7 +621,11 @@ export async function POST(request: Request) {
         previousAiOwner,
         liveSyncApplied,
         liveSyncError,
-        liveSyncPending: Boolean(liveSyncError),
+        liveSyncPending:
+          Boolean(liveSyncError) ||
+          isLiveSyncPendingHealthStatus(authoritative?.healthStatus),
+        healthStatus: authoritative?.healthStatus ?? null,
+        healthMessage: authoritative?.healthMessage ?? null,
         state: authoritative?.state ?? state,
         issues: hooks.issues,
         warnings,
