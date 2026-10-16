@@ -75,3 +75,4 @@ public/voicemail/
 /test-results/
 /playwright-report/
 .tmp-verify/
+dump.rdb
