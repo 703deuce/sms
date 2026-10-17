@@ -141,6 +141,10 @@ export function VisualizerMaterialFormPage({ materialId }: { materialId?: string
           Show on public visualizer widget
         </label>
         <label className="block text-sm font-medium">Reference photo</label>
+        <p className="text-xs text-muted-foreground">
+          Upload the full product sample photo (for example a Long Baths wall-panel sample). Printed labels on the card are
+          ignored during generation — only color, veining, and texture are used on shower walls or tub surfaces.
+        </p>
         <input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
         {preview ? (
           // eslint-disable-next-line @next/next/no-img-element

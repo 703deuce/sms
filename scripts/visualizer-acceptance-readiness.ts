@@ -54,3 +54,6 @@ if (blockers.length) {
   process.exit(1);
 }
 console.log("visualizer-acceptance-readiness: READY for authorized live test (still requires migration + bucket verification)");
+console.log(
+  "Fixture materials: fixtures/visualizer/long-baths-wall-panels/ — seed with WORKSPACE_ID=... npx tsx scripts/seed-visualizer-long-baths-materials.ts",
+);

@@ -26,7 +26,7 @@ export type BuildVisualizerPromptInput = {
 };
 
 const SHARED_BASE_PROMPT = `You are generating a photorealistic bathroom remodel mockup from a real bathroom photo.
-The first reference image is the original bathroom. The second reference image is the selected wall-panel/material sample.
+The first reference image is the original bathroom. The second reference image is the selected wall-panel/material sample photograph (often a physical sample card or swatch photo from the manufacturer).
 Preserve the original room's blueprint, dimensions, perspective, camera angle, window placement, door placement, ceiling, ventilation location, and overall layout. Keep the bathroom recognizable as the same room.
 Perform only the requested remodel transformation.
 Match the selected material's color, veining, tone, and texture as closely as possible, but interpret it as professionally installed bathroom wall panels / finished bathroom surfaces.
