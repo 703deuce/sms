@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, Upload } from "lucide-react";
+import { parseJsonResponse } from "@/lib/api/parse-json-response";
 import { VISUALIZER_ROUTES } from "@/lib/visualizer/routes";
 import { TRANSFORMATION_LABELS, VISUALIZER_LAUNCH_TRANSFORMATIONS } from "@/lib/visualizer/constants";
 import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
@@ -78,7 +79,7 @@ export function VisualizerNewDesignPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: projectName }),
     });
-    const d = await r.json();
+    const d = await parseJsonResponse<{ error?: string; project: { id: string } }>(r);
     if (!r.ok) throw new Error(d.error || "Could not create project");
     setProjectId(d.project.id);
     return d.project.id as string;
@@ -94,7 +95,7 @@ export function VisualizerNewDesignPage() {
       fd.set("projectId", pid);
       fd.set("assetType", "ORIGINAL_ROOM");
       const r = await fetch("/api/visualizer/upload", { method: "POST", body: fd });
-      const d = await r.json();
+      const d = await parseJsonResponse<{ error?: string; asset: { id: string; url: string } }>(r);
       if (!r.ok) throw new Error(d.error || "Upload failed");
       setRoomAssetId(d.asset.id);
       setRoomPreviewUrl(d.asset.url);

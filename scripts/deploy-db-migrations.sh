@@ -70,3 +70,13 @@ if [[ "$deploy_code" -ne 0 ]]; then
 fi
 
 echo "[db-deploy] Database schema is up to date."
+
+if [[ -n "${NEXT_PUBLIC_SUPABASE_URL:-}" && -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ]]; then
+  echo "[db-deploy] Ensuring Visualizer Supabase storage bucket..."
+  NODE_OPTIONS="${NODE_OPTIONS:-} --import ./scripts/preload-server-only.mjs" \
+    npx tsx scripts/ensure-visualizer-supabase-bucket.ts || {
+    echo "[db-deploy] Warning: Visualizer bucket ensure failed (uploads may fail until fixed)."
+  }
+else
+  echo "[db-deploy] Skipping Visualizer bucket ensure (Supabase env not set)."
+fi

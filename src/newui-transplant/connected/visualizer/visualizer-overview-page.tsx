@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ImageIcon, Share2, Sparkles, CalendarCheck } from "lucide-react";
+import { parseJsonResponse } from "@/lib/api/parse-json-response";
 import { VISUALIZER_ROUTES } from "@/lib/visualizer/routes";
 import { ArStatGrid } from "@/newui-transplant/components/appointment-reminders/ar-opus-layout";
 import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
@@ -54,8 +55,11 @@ export function VisualizerOverviewPage() {
   useEffect(() => {
     fetch("/api/visualizer/overview")
       .then(async (r) => {
-        if (!r.ok) throw new Error("Could not load overview");
-        return r.json();
+        const body = await parseJsonResponse<{ error?: string }>(r);
+        if (!r.ok) {
+          throw new Error(body.error || "Could not load overview");
+        }
+        return body as OverviewData;
       })
       .then(setData)
       .catch((e) => setError(e instanceof Error ? e.message : "Error"));

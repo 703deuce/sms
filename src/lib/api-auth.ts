@@ -10,7 +10,18 @@ export async function requireSession() {
   if (!session) {
     return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
   }
-  const workspaceId = await getActiveWorkspaceId();
+  let workspaceId = await getActiveWorkspaceId();
+  if (!workspaceId?.trim()) {
+    try {
+      const membership = await getPrisma().membership.findFirst({
+        where: { userId: session.userId },
+        select: { workspaceId: true },
+      });
+      workspaceId = membership?.workspaceId || "";
+    } catch {
+      workspaceId = "";
+    }
+  }
   return { session, workspaceId };
 }
 
@@ -52,7 +63,18 @@ export async function resolveWorkspaceId(
   requestedWorkspaceId?: string | null,
 ) {
   const active = await getActiveWorkspaceId();
-  const workspaceId = (requestedWorkspaceId || active || "").trim();
+  let workspaceId = (requestedWorkspaceId || active || "").trim();
+  if (!workspaceId) {
+    try {
+      const membership = await getPrisma().membership.findFirst({
+        where: { userId: session.userId },
+        select: { workspaceId: true },
+      });
+      workspaceId = membership?.workspaceId?.trim() || "";
+    } catch {
+      workspaceId = "";
+    }
+  }
   if (!workspaceId) {
     throw new Error("workspaceId required");
   }

@@ -85,36 +85,41 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const auth = await requireSession();
-  if ("error" in auth) return auth.error;
-
-  const body = (await req.json()) as {
-    workspaceId?: string;
-    name?: string;
-    contactId?: string | null;
-    transformation?: string;
-    notes?: string;
-  };
-
-  let workspaceId: string;
   try {
-    workspaceId = await resolveWorkspaceId(auth.session, body.workspaceId);
+    const auth = await requireSession();
+    if ("error" in auth) return auth.error;
+
+    const body = (await req.json()) as {
+      workspaceId?: string;
+      name?: string;
+      contactId?: string | null;
+      transformation?: string;
+      notes?: string;
+    };
+
+    let workspaceId: string;
+    try {
+      workspaceId = await resolveWorkspaceId(auth.session, body.workspaceId);
+    } catch (e) {
+      return jsonError(e instanceof Error ? e.message : "Forbidden", 403);
+    }
+
+    const name = body.name?.trim() || "Bathroom remodel";
+    const prisma = getPrisma();
+    const project = await prisma.visualizerProject.create({
+      data: {
+        workspaceId,
+        name,
+        contactId: body.contactId || null,
+        transformation: (body.transformation || "TUB_TO_SHOWER") as never,
+        notes: body.notes?.trim() || null,
+        source: body.contactId ? "EXISTING_CONTACT" : "INTERNAL",
+      },
+    });
+
+    return Response.json({ project });
   } catch (e) {
-    return jsonError(e instanceof Error ? e.message : "Forbidden", 403);
+    console.error("[visualizer/projects POST]", e);
+    return jsonError(e instanceof Error ? e.message : "Could not create project", 500);
   }
-
-  const name = body.name?.trim() || "Bathroom remodel";
-  const prisma = getPrisma();
-  const project = await prisma.visualizerProject.create({
-    data: {
-      workspaceId,
-      name,
-      contactId: body.contactId || null,
-      transformation: (body.transformation || "TUB_TO_SHOWER") as never,
-      notes: body.notes?.trim() || null,
-      source: body.contactId ? "EXISTING_CONTACT" : "INTERNAL",
-    },
-  });
-
-  return Response.json({ project });
 }

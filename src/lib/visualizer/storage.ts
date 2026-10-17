@@ -9,6 +9,19 @@ import {
 
 let ensuredBucket: string | null = null;
 
+/** Mobile browsers often send empty or generic MIME types for camera/gallery picks. */
+export function normalizeVisualizerUploadMime(mimeType: string, filename?: string): string {
+  const mime = (mimeType || "").trim().toLowerCase();
+  if (VISUALIZER_ALLOWED_MIME.has(mime)) return mime;
+  const ext = filename?.split(".").pop()?.toLowerCase();
+  if (ext === "heic" || ext === "heif") return "image/heic";
+  if (ext === "png") return "image/png";
+  if (ext === "webp") return "image/webp";
+  if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+  if (!mime || mime === "application/octet-stream") return "image/jpeg";
+  return mime;
+}
+
 function extensionForMime(mimeType: string, filename?: string) {
   const fromName = filename?.split(".").pop()?.toLowerCase();
   if (fromName && ["jpg", "jpeg", "png", "webp", "heic", "heif"].includes(fromName)) {
@@ -50,7 +63,7 @@ export async function uploadVisualizerBytes(input: {
   if (!isSupabaseConfigured()) {
     throw new Error("Image storage is not configured. Set Supabase storage for Visualizer uploads.");
   }
-  const mime = input.mimeType.toLowerCase();
+  const mime = normalizeVisualizerUploadMime(input.mimeType, input.filename);
   if (!VISUALIZER_ALLOWED_MIME.has(mime)) {
     throw new Error("Use a JPG, PNG, WebP, or HEIC image.");
   }
