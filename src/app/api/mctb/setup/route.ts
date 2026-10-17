@@ -711,6 +711,23 @@ export async function POST(req: Request) {
       toPhoneNumberId: body.phoneNumberId ?? null,
       activate: body.activate ?? null,
     });
+    if (body.phoneNumberId) {
+      const { wireMctbWorkspaceIngressPhone } = await import(
+        "@/lib/mctb/provisioning/wire-workspace-ingress-phone"
+      );
+      const wired = await wireMctbWorkspaceIngressPhone(workspaceId, body.phoneNumberId);
+      if (!wired.ok) {
+        return NextResponse.json(
+          {
+            error:
+              wired.error === "phone_not_in_workspace"
+                ? "Selected number is not available for this workspace."
+                : wired.error || "Could not activate this number for missed-call handling.",
+          },
+          { status: 400 },
+        );
+      }
+    }
   }
   const { smsPatchWhenIngressChanges } = await import("@/lib/mctb/runtime-sms-phone-id");
   const smsPhoneNumberIdForPatch = await smsPatchWhenIngressChanges({
@@ -905,11 +922,10 @@ export async function POST(req: Request) {
     }
 
     if (body.businessLineE164?.trim()) {
-      const { saveMctbOnboardingState } = await import("@/lib/mctb/onboarding/state");
-      await saveMctbOnboardingState(workspaceId, {
-        businessNumberE164: body.businessLineE164.trim(),
-        forwardingConnectedAt: new Date().toISOString(),
-      });
+      const { persistMctbWorkspaceBusinessLineE164 } = await import(
+        "@/lib/mctb/tenant-production-binding"
+      );
+      await persistMctbWorkspaceBusinessLineE164(workspaceId, body.businessLineE164.trim());
     }
 
     const wsFresh = await prisma.workspace.findUnique({

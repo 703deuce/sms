@@ -282,7 +282,26 @@ export function MctbSetupPhoneForwardingView() {
         }),
       });
       const onboardJson = await onboardRes.json();
-      if (!onboardRes.ok) throw new Error(onboardJson.error || "Failed to save forwarding settings");
+      if (!onboardRes.ok) {
+        throw new Error(
+          onboardJson.error ||
+            "Forwarding settings could not be saved. Your business line may have been updated — try again or refresh the page.",
+        );
+      }
+
+      const lineOrNumberChanged =
+        baseline &&
+        (normalizeBusinessLineInput(baseline.businessLineE164) !== normalized ||
+          baseline.phoneNumberId !== phoneNumberId);
+      if (lineOrNumberChanged && verification?.verified) {
+        setVerification({
+          testStarted: false,
+          callDetected: false,
+          verified: false,
+          detectedAt: null,
+          path: null,
+        });
+      }
 
       if (onboardJson.forwardingVerification) {
         setVerification({

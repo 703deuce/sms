@@ -570,10 +570,15 @@ export async function POST(req: Request) {
       state = await loadMctbOnboardingState(auth.workspaceId);
     }
 
-    if (
-      (body.forwardingCarrier || body.businessNumberE164 || body.forwardingRingSeconds != null) &&
-      (state.completedSteps.includes("consent") || state.completedSteps.includes("business_line"))
-    ) {
+    if (body.forwardingCarrier || body.businessNumberE164 || body.forwardingRingSeconds != null) {
+      const nextBusinessLine = body.businessNumberE164?.trim() || state.businessNumberE164?.trim();
+      if (nextBusinessLine) {
+        const { persistMctbWorkspaceBusinessLineE164 } = await import(
+          "@/lib/mctb/tenant-production-binding"
+        );
+        await persistMctbWorkspaceBusinessLineE164(auth.workspaceId, nextBusinessLine);
+        state = await loadMctbOnboardingState(auth.workspaceId);
+      }
       const isStarting = Boolean(body.businessNumberE164 && !state.forwardingTestStartedAt);
       state = await saveMctbOnboardingState(auth.workspaceId, {
         forwardingCarrier: body.forwardingCarrier || state.forwardingCarrier,
