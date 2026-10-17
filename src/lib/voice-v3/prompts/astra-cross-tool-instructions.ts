@@ -50,6 +50,7 @@ function buildSchedulingPreferenceSubsection(config?: VoiceV3AgentConfig): strin
   return `
 Scheduling preference (when set_scheduling_preference is available):
 - When the caller requests appointment availability and provides scheduling information, establish or update preference with set_scheduling_preference. Transovo resolves semantics deterministically against business date, timezone, and configuration.
+- Bare weekday names (for example "Monday" on a Friday) → THIS_WEEKDAY for the nearest upcoming that day. Use NEXT_WEEKDAY only when the caller clearly means the following calendar week.
 - After set_scheduling_preference succeeds, call find_availability for real calendar availability. Do not invent availability.
 - Do not calculate UTC timestamps, timezone offsets, or provider search windows yourself.
 - If the caller corrects scheduling, call set_scheduling_preference again before find_availability.

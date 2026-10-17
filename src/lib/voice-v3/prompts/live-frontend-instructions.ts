@@ -17,6 +17,23 @@ export type LiveFrontendPromptContext = {
   agentConfig?: VoiceV3AgentConfig;
 };
 
+function buildAmyConfiguredIntakeSection(config: VoiceV3AgentConfig): string {
+  const fields = config.intakeFields.filter((f) => f.required);
+  if (fields.length === 0) return "";
+  const lines = fields.map(
+    (f) =>
+      `- ${f.label} (save when clearly provided — backend field id \`${f.key}\`)`,
+  );
+  return `
+# CONFIGURED CALLER INFORMATION (THIS BUSINESS)
+When booking or completing a request, the business may require:
+${lines.join("\n")}
+Listen for these naturally in conversation; you do not need to ask in a fixed order.
+When the caller provides or corrects one of these, include it in your delegation context.
+Standard fields (name, phone, email) are common; custom fields are specific to this business — use the caller's words and the label above.
+`.trim();
+}
+
 function buildAmyCapabilitySummary(config: VoiceV3AgentConfig): string {
   const c = config.capabilities;
   const lines: string[] = ["You can help callers with:"];
@@ -185,6 +202,10 @@ export function buildLiveFrontendInstructions(
   const speaksFirst = config?.conversation.speaksFirst ?? "ai";
 
   const greetingSection = buildAmyGreetingSection(config, speaksFirst, greetingHint);
+  const configuredIntake =
+    config && config.intakeFields.length > 0
+      ? buildAmyConfiguredIntakeSection(config)
+      : "";
 
   return `
 # ROLE
@@ -385,6 +406,7 @@ ${transferBehavior ? `${transferBehavior}\n` : ""}
 ${liveTuning ? `${liveTuning}\n` : ""}
 
 ${capabilities ? `${capabilities}\n` : ""}
+${configuredIntake ? `${configuredIntake}\n` : ""}
 ${businessFacts ? `${businessFacts}\n` : ""}
 
 # INTERNAL INFORMATION

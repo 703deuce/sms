@@ -85,6 +85,41 @@ function main() {
   );
   assert.equal(thisFriday.localDate, "2026-09-18");
 
+  const fridayClock = buildVoiceV3CallClock("America/New_York", new Date("2026-09-18T14:00:00.000Z"));
+  assert.equal(fridayClock.localWeekday, "Friday");
+  const mondayThisWeek = normalizeSchedulingMeaning(
+    meaning({
+      date_relation: "THIS_WEEKDAY",
+      date_expression: "Monday",
+      weekday: "MONDAY",
+      explicit_date: null,
+      time_expression: null,
+      time_kind: "UNSPECIFIED",
+      exact_time: null,
+      start_time: null,
+      end_time: null,
+      daypart: null,
+    }),
+    fridayClock,
+  );
+  assert.equal(mondayThisWeek.localDate, "2026-09-21", "bare Monday on Friday → upcoming Monday");
+  const mondayNextWeek = normalizeSchedulingMeaning(
+    meaning({
+      date_relation: "NEXT_WEEKDAY",
+      date_expression: "next Monday",
+      weekday: "MONDAY",
+      explicit_date: null,
+      time_expression: null,
+      time_kind: "UNSPECIFIED",
+      exact_time: null,
+      start_time: null,
+      end_time: null,
+      daypart: null,
+    }),
+    fridayClock,
+  );
+  assert.equal(mondayNextWeek.localDate, "2026-09-28", "next Monday on Friday → following week");
+
   const nextFriday = norm(
     meaning({
       date_relation: "NEXT_WEEKDAY",
