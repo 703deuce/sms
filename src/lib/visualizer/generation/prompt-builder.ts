@@ -11,6 +11,8 @@ export type VisualizerTransformation =
   | "SHOWER_TO_TUB"
   | "SHOWER_AND_TUB_DECK_WRAP";
 
+export type ShowerWallHeight = "FULL_CEILING" | "EIGHT_FT";
+
 export type BuildVisualizerPromptInput = {
   transformation: VisualizerTransformation | string;
   materialName?: string | null;
@@ -22,6 +24,8 @@ export type BuildVisualizerPromptInput = {
   preserveVanity?: boolean;
   preserveWindow?: boolean;
   preserveDoor?: boolean;
+  /** Shower / tub-surround panel height in the wet area (launch wizard). */
+  showerWallHeight?: ShowerWallHeight | null;
   /** When true, prepends revision guidance (same room / viewpoint). */
   isRevision?: boolean;
 };
@@ -137,6 +141,31 @@ function transformationBlock(transformation: VisualizerTransformation): string {
   }
 }
 
+function showerWallHeightBlock(
+  transformation: VisualizerTransformation,
+  height: ShowerWallHeight,
+): string {
+  const fullCeiling =
+    "Install the selected wall panels from the shower pan, tub deck, or base upward through the full shower/tub-surround wet area all the way to the ceiling line. The paneling should meet the ceiling realistically with clean trim or a finished transition — not stop short with a large painted gap below the ceiling.";
+  const eightFt =
+    "Install the selected wall panels from the shower pan, tub deck, or base upward only to approximately 8 feet (96 inches) height in the wet area. Above that 8-foot line, keep the existing wall finish (paint, drywall, or prior surface) visible at the top of the shower or tub surround. Do not panel all the way to the ceiling unless the room ceiling is below 8 feet.";
+
+  const scope =
+    transformation === "SHOWER_AND_TUB_DECK_WRAP"
+      ? "Apply this panel height rule to the shower walls in the shower area only. The tub deck/apron wrap rules elsewhere still apply — do not extend shower-height paneling onto the large wall area above the tub deck."
+      : transformation === "TUB_TO_TUB"
+        ? "Apply this panel height rule to the tub surround / wet walls around the bathtub only."
+        : "Apply this panel height rule to the shower wall surfaces inside the shower wet area (and tub surround walls if this remodel includes a tub wet wall).";
+
+  const body = height === "EIGHT_FT" ? eightFt : fullCeiling;
+  return `\n\nShower / surround wall panel height:\n${scope}\n${body}`;
+}
+
+export function normalizeShowerWallHeight(value: unknown): ShowerWallHeight {
+  if (value === "EIGHT_FT" || value === "FULL_CEILING") return value;
+  return "FULL_CEILING";
+}
+
 function appendOptionalStyleBlocks(input: BuildVisualizerPromptInput): string {
   const parts: string[] = [];
 
@@ -174,6 +203,13 @@ function appendOptionalStyleBlocks(input: BuildVisualizerPromptInput): string {
     parts.push(`Especially preserve ${preserve.join(", ")} from the original bathroom photo.`);
   }
 
+  if (input.showerWallHeight) {
+    const transformation = normalizeVisualizerTransformation(String(input.transformation));
+    parts.push(
+      showerWallHeightBlock(transformation, normalizeShowerWallHeight(input.showerWallHeight)).trim(),
+    );
+  }
+
   return parts.length ? `\n\n${parts.join("\n")}` : "";
 }
 
@@ -200,6 +236,7 @@ export function buildVisualizerEditPrompt(input: {
   selectedMaterials: SelectedMaterialRef[];
   additionalInstructions?: string | null;
   preserve?: GenerationPreserveFlags;
+  showerWallHeight?: ShowerWallHeight | null;
   isRevision?: boolean;
   materialRows?: Array<{
     id: string;
@@ -227,6 +264,7 @@ export function buildVisualizerEditPrompt(input: {
     preserveVanity: input.preserve?.untargeted_vanity ?? true,
     preserveWindow: input.preserve?.window ?? true,
     preserveDoor: input.preserve?.door_positions ?? true,
+    showerWallHeight: input.showerWallHeight as ShowerWallHeight | undefined,
     isRevision: input.isRevision,
   });
 }

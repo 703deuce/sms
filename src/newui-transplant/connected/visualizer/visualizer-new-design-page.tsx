@@ -5,7 +5,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, Upload } from "lucide-react";
 import { vizClientError, vizClientLog, vizFetchJson, vizUploadForm } from "@/lib/visualizer/client-api";
 import { VISUALIZER_ROUTES } from "@/lib/visualizer/routes";
-import { TRANSFORMATION_LABELS, VISUALIZER_LAUNCH_TRANSFORMATIONS } from "@/lib/visualizer/constants";
+import {
+  SHOWER_WALL_HEIGHT_LABELS,
+  TRANSFORMATION_LABELS,
+  VISUALIZER_DEFAULT_SHOWER_WALL_HEIGHT,
+  VISUALIZER_LAUNCH_TRANSFORMATIONS,
+  type VisualizerShowerWallHeight,
+  transformationSupportsShowerWallHeight,
+} from "@/lib/visualizer/constants";
 import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
 import { Button } from "@/newui-transplant/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -36,6 +43,9 @@ export function VisualizerNewDesignPage() {
   const [roomAssetId, setRoomAssetId] = useState<string | null>(null);
   const [roomPreviewUrl, setRoomPreviewUrl] = useState<string | null>(null);
   const [transformation, setTransformation] = useState("TUB_TO_SHOWER");
+  const [showerWallHeight, setShowerWallHeight] = useState<VisualizerShowerWallHeight>(
+    VISUALIZER_DEFAULT_SHOWER_WALL_HEIGHT,
+  );
   const [materials, setMaterials] = useState<MaterialRow[]>([]);
   const [selectedMaterialId, setSelectedMaterialId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -156,6 +166,7 @@ export function VisualizerNewDesignPage() {
             selectedMaterials: selectedMaterialId
               ? [{ materialId: selectedMaterialId, category: "WALL_PANEL" }]
               : [],
+            showerWallHeight,
           }),
         },
       );
@@ -236,22 +247,44 @@ export function VisualizerNewDesignPage() {
       ) : null}
 
       {step === 1 ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {TRANSFORMATIONS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className={cn(
-                OPUS_CARD,
-                "p-4 text-left transition",
-                transformation === t.id && "border-primary ring-1 ring-primary",
-              )}
-              onClick={() => setTransformation(t.id)}
-            >
-              <p className="font-medium">{t.title}</p>
-              <p className="mt-1 text-sm text-muted-foreground">{t.desc}</p>
-            </button>
-          ))}
+        <div className="flex flex-col gap-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            {TRANSFORMATIONS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                className={cn(
+                  OPUS_CARD,
+                  "p-4 text-left transition",
+                  transformation === t.id && "border-primary ring-1 ring-primary",
+                )}
+                onClick={() => setTransformation(t.id)}
+              >
+                <p className="font-medium">{t.title}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{t.desc}</p>
+              </button>
+            ))}
+          </div>
+          {transformationSupportsShowerWallHeight(transformation) ? (
+            <fieldset className={cn(OPUS_CARD, "space-y-3 p-4")}>
+              <legend className="text-sm font-medium">Shower / surround wall height</legend>
+              <p className="text-xs text-muted-foreground">
+                How high should the wall panels run in the wet area?
+              </p>
+              {(Object.keys(SHOWER_WALL_HEIGHT_LABELS) as VisualizerShowerWallHeight[]).map((value) => (
+                <label key={value} className="flex cursor-pointer items-start gap-3 text-sm">
+                  <input
+                    type="radio"
+                    name="shower-wall-height"
+                    className="mt-1"
+                    checked={showerWallHeight === value}
+                    onChange={() => setShowerWallHeight(value)}
+                  />
+                  <span>{SHOWER_WALL_HEIGHT_LABELS[value]}</span>
+                </label>
+              ))}
+            </fieldset>
+          ) : null}
         </div>
       ) : null}
 
@@ -293,6 +326,11 @@ export function VisualizerNewDesignPage() {
           <p className="text-sm text-muted-foreground">
             Review your photo, remodel type, and material. Generation uses fixed backend prompts — no custom text required.
           </p>
+          {transformationSupportsShowerWallHeight(transformation) ? (
+            <p className="text-sm text-muted-foreground">
+              Wall panels: <strong>{SHOWER_WALL_HEIGHT_LABELS[showerWallHeight]}</strong>
+            </p>
+          ) : null}
           {busy ? (
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" aria-hidden />

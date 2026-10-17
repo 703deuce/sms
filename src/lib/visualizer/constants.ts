@@ -35,6 +35,21 @@ export const VISUALIZER_LAUNCH_TRANSFORMATIONS = [
   "SHOWER_AND_TUB_DECK_WRAP",
 ] as const;
 
+/** How high shower / tub-surround wall panels run in the wet area. */
+export type VisualizerShowerWallHeight = "FULL_CEILING" | "EIGHT_FT";
+
+export const VISUALIZER_DEFAULT_SHOWER_WALL_HEIGHT: VisualizerShowerWallHeight = "FULL_CEILING";
+
+export const SHOWER_WALL_HEIGHT_LABELS: Record<VisualizerShowerWallHeight, string> = {
+  FULL_CEILING: "Panels to the ceiling",
+  EIGHT_FT: "Panels up to 8 ft (top wall painted above)",
+};
+
+/** Remodel types where shower/tub-surround panel height applies. */
+export function transformationSupportsShowerWallHeight(transformation: string): boolean {
+  return (VISUALIZER_LAUNCH_TRANSFORMATIONS as readonly string[]).includes(transformation);
+}
+
 export const PROJECT_STATUS_LABELS: Record<string, string> = {
   DRAFT: "Draft",
   DESIGN_READY: "Design ready",

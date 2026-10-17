@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Share2, Sparkles, Star } from "lucide-react";
+import { Download, Loader2, Share2, Sparkles, Star } from "lucide-react";
 import { vizClientError, vizFetchJson } from "@/lib/visualizer/client-api";
 import { VISUALIZER_ROUTES } from "@/lib/visualizer/routes";
 import { BeforeAfterSlider } from "@/components/visualizer/before-after-slider";
@@ -130,6 +130,31 @@ export function VisualizerDesignPage({ projectId, designId }: { projectId: strin
     }
   }
 
+  async function onDownloadImage() {
+    if (!design?.afterUrl) return;
+    setError(null);
+    try {
+      const res = await fetch(`/api/visualizer/designs/${designId}/download`, { credentials: "include" });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error || "Download failed");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `bathroom-remodel-preview-v${design.versionNumber}.png`;
+      anchor.rel = "noopener";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      vizClientError("design-download:failed", e);
+      setError(e instanceof Error ? e.message : "Download failed");
+    }
+  }
+
   async function onFavorite() {
     await vizFetchJson("design-favorite", `/api/visualizer/designs/${designId}`, {
       method: "PATCH",
@@ -206,6 +231,10 @@ export function VisualizerDesignPage({ projectId, designId }: { projectId: strin
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => void onDownloadImage()} disabled={!design?.afterUrl}>
+            <Download className="size-4" aria-hidden />
+            Download image
+          </Button>
           <Button variant="outline" onClick={onFavorite} disabled={!design?.afterUrl}>
             <Star className="size-4" aria-hidden />
             Mark favorite

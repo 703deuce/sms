@@ -2,7 +2,11 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { enqueueJob } from "@/lib/messaging/enqueue-advance";
-import { buildVisualizerEditPrompt, type SelectedMaterialRef } from "@/lib/visualizer/generation/prompt-builder";
+import {
+  buildVisualizerEditPrompt,
+  normalizeShowerWallHeight,
+  type SelectedMaterialRef,
+} from "@/lib/visualizer/generation/prompt-builder";
 import { runKieBathroomGeneration } from "@/lib/visualizer/generation/provider-kie";
 import { VISUALIZER_BUCKET } from "@/lib/visualizer/constants";
 import { isCatalogMaterialId } from "@/lib/visualizer/catalog-materials";
@@ -109,6 +113,7 @@ export async function executeVisualizerGenerationJob(generationJobId: string) {
     materialRows: promptMaterialRows,
     isRevision: Boolean(design.parentDesignId),
     preserve: (request.preserve as Record<string, boolean>) || undefined,
+    showerWallHeight: normalizeShowerWallHeight(request.showerWallHeight),
   });
 
   await prisma.visualizerGenerationJob.update({

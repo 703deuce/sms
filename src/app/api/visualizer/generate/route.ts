@@ -19,6 +19,7 @@ export async function POST(req: Request) {
     parentDesignId?: string;
     referenceAssetIds?: string[];
     idempotencyKey?: string;
+    showerWallHeight?: "FULL_CEILING" | "EIGHT_FT";
   };
 
   let workspaceId: string;
@@ -46,6 +47,7 @@ export async function POST(req: Request) {
       instructions: body.instructions,
       parentDesignId: body.parentDesignId,
       referenceAssetIds: body.referenceAssetIds,
+      showerWallHeight: body.showerWallHeight,
       idempotencyKey,
     });
     log("success", { designId: result.designId, generationJobId: result.generationJobId });

@@ -2,7 +2,12 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { enqueueVisualizerGeneration } from "@/lib/visualizer/generation/run-generation-job";
-import type { SelectedMaterialRef } from "@/lib/visualizer/generation/prompt-builder";
+import {
+  normalizeShowerWallHeight,
+  type SelectedMaterialRef,
+  type ShowerWallHeight,
+} from "@/lib/visualizer/generation/prompt-builder";
+import { VISUALIZER_DEFAULT_SHOWER_WALL_HEIGHT } from "@/lib/visualizer/constants";
 
 export async function startProjectGeneration(input: {
   workspaceId: string;
@@ -14,6 +19,7 @@ export async function startProjectGeneration(input: {
   parentDesignId?: string;
   referenceAssetIds?: string[];
   preserve?: Record<string, boolean>;
+  showerWallHeight?: ShowerWallHeight | string | null;
   idempotencyKey: string;
 }) {
   const prisma = getPrisma();
@@ -21,6 +27,27 @@ export async function startProjectGeneration(input: {
     where: { id: input.projectId, workspaceId: input.workspaceId },
   });
   if (!project) throw new Error("Project not found");
+
+  let showerWallHeight = input.showerWallHeight
+    ? normalizeShowerWallHeight(input.showerWallHeight)
+    : null;
+  if (!showerWallHeight && input.parentDesignId) {
+    const parent = await prisma.visualizerDesign.findFirst({
+      where: { id: input.parentDesignId, workspaceId: input.workspaceId },
+      select: { generationJobId: true },
+    });
+    if (parent?.generationJobId) {
+      const parentJob = await prisma.visualizerGenerationJob.findUnique({
+        where: { id: parent.generationJobId },
+        select: { requestJson: true },
+      });
+      const raw = (parentJob?.requestJson as { showerWallHeight?: unknown } | null)?.showerWallHeight;
+      if (raw) showerWallHeight = normalizeShowerWallHeight(raw);
+    }
+  }
+  if (!showerWallHeight) {
+    showerWallHeight = VISUALIZER_DEFAULT_SHOWER_WALL_HEIGHT;
+  }
 
   const priorCount = await prisma.visualizerDesign.count({
     where: { projectId: input.projectId },
@@ -51,6 +78,7 @@ export async function startProjectGeneration(input: {
         referenceAssetIds: input.referenceAssetIds || [],
         preserve: input.preserve || {},
         instructions: input.instructions || null,
+        showerWallHeight,
       },
     },
   });

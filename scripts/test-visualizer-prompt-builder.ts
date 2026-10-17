@@ -54,4 +54,19 @@ assert.equal(normalizeVisualizerTransformation("SHOWER_AND_TUB_DECK_WRAP"), "SHO
 const revision = buildVisualizerPrompt({ transformation: "TUB_TO_SHOWER", isRevision: true, ...SAMPLE });
 assert.ok(revision.startsWith("Revise the previous remodel concept"));
 
+const fullCeiling = buildVisualizerPrompt({
+  transformation: "TUB_TO_SHOWER",
+  showerWallHeight: "FULL_CEILING",
+  ...SAMPLE,
+});
+assert.ok(fullCeiling.includes("all the way to the ceiling line"));
+
+const eightFt = buildVisualizerPrompt({
+  transformation: "SHOWER_TO_SHOWER",
+  showerWallHeight: "EIGHT_FT",
+  ...SAMPLE,
+});
+assert.ok(eightFt.includes("approximately 8 feet (96 inches)"));
+assert.ok(eightFt.includes("Do not panel all the way to the ceiling"));
+
 console.log("test-visualizer-prompt-builder: PASS");
