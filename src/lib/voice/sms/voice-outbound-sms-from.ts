@@ -20,6 +20,8 @@ import {
   parseVoiceOutboundSmsSettings,
   pickExplicitSmsNumber,
 } from "./voice-outbound-sms-config";
+import { isPlatformOutboundSmsMode } from "./voice-outbound-sms-constants";
+import { resolveSharedPlatformOutboundSender } from "@/lib/messaging/platform-outbound-sender";
 
 /** Production voice SMS sender — 5714073615 (A2P-certified). */
 export const VOICE_OUTBOUND_SMS_E164 = HP_CERTIFIED_SMS_E164;
@@ -88,6 +90,11 @@ export async function resolveVoiceOutboundSmsFrom(input: {
   const mode = effectiveOutboundSmsMode(settings);
   const numbers = await loadWorkspaceActiveNumbers(input.workspaceId);
   const called = normalizePhoneE164(input.calledE164);
+
+  if (isPlatformOutboundSmsMode(mode)) {
+    const platform = await resolveSharedPlatformOutboundSender();
+    if (platform?.fromE164) return platform.fromE164;
+  }
 
   if (mode === "explicit_number") {
     const explicit = pickExplicitSmsNumber(numbers, settings);

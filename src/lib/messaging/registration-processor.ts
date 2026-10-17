@@ -468,13 +468,22 @@ export async function ensureSubaccount(workspaceId: string, friendlyName: string
   }
 }
 
+export type SendViaRegistrationOptions = {
+  authorizedPhoneNumberId?: string;
+  /**
+   * Voice agent outbound SMS (booking link, AI recovery): sender was already
+   * released via inventory. Skip isPhoneAuthorizedForOutboundSms at send time.
+   */
+  trustInventoryReleasedSender?: boolean;
+};
+
 export async function sendViaRegistration(
   workspaceId: string,
   to: string,
   body: string,
   mediaUrls?: string[],
   fromOverride?: string,
-  options?: { authorizedPhoneNumberId?: string },
+  options?: SendViaRegistrationOptions,
 ) {
   if (options?.authorizedPhoneNumberId) {
     const { trySendMctbPlatformParentTwilio } = await import(
@@ -486,6 +495,7 @@ export async function sendViaRegistration(
       body,
       mediaUrls,
       fromOverride,
+      trustInventoryReleasedSender: options.trustInventoryReleasedSender,
     });
     if (platformSend) {
       return platformSend;
@@ -502,25 +512,72 @@ export async function sendViaRegistration(
 
   const phoneId = options?.authorizedPhoneNumberId;
   if (phoneId) {
-    const { isPhoneAuthorizedForOutboundSms } = await import(
-      "@/lib/mctb/messaging/outbound-sms-route"
-    );
-    const phoneAuth = await isPhoneAuthorizedForOutboundSms(phoneId);
     const prisma = getPrisma();
     const pn = await prisma.phoneNumber.findFirst({
-      where: { id: phoneId, workspaceId },
-      select: { e164: true, messagingService: true, provider: true },
+      where: { id: phoneId },
+      select: {
+        e164: true,
+        messagingService: true,
+        provider: true,
+        workspaceId: true,
+        settingsJson: true,
+        status: true,
+      },
     });
-    if (phoneAuth.allowed && pn?.e164) {
+
+    let useReleasedSender = false;
+    if (options?.trustInventoryReleasedSender && pn?.e164) {
+      const { resolveCanonicalMctbPlatformSender } = await import(
+        "@/lib/mctb/messaging/platform-sender-config"
+      );
+      const { isCanonicalPlatformMctbSenderPhone } = await import(
+        "@/lib/messaging/compliance/phone-number-class"
+      );
+      const { normalizePhoneE164 } = await import("@/lib/messaging/preferred-sending-number");
+      const canonical = await resolveCanonicalMctbPlatformSender();
+      const isPlatform = isCanonicalPlatformMctbSenderPhone({
+        phoneNumberId: phoneId,
+        settingsJson: pn.settingsJson,
+        canonical: canonical ? { phoneNumberId: canonical.phoneNumberId } : null,
+      });
+      const fromOk =
+        !fromOverride || normalizePhoneE164(fromOverride) === normalizePhoneE164(pn.e164);
+      const tenantOk = isPlatform || pn.workspaceId === workspaceId;
+      useReleasedSender =
+        tenantOk && String(pn.status || "") === "Active" && fromOk;
+    }
+
+    if (useReleasedSender) {
       reg = {
         ...reg,
-        phoneE164: fromOverride || pn.e164,
-        messagingProvider: pn.provider || reg.messagingProvider || "twilio",
-        messagingProfileId: pn.messagingService || reg.messagingProfileId,
-        messagingServiceSid: pn.messagingService || reg.messagingServiceSid,
+        phoneE164: fromOverride || pn!.e164,
+        messagingProvider: pn!.provider || reg.messagingProvider || "twilio",
+        messagingProfileId: pn!.messagingService || reg.messagingProfileId,
+        messagingServiceSid: pn!.messagingService || reg.messagingServiceSid,
       };
-    } else if (!isMessagingSendAuthorized(reg)) {
-      throw new Error("Messaging is not ready for this workspace. Complete A2P registration first.");
+    } else {
+      const { isPhoneAuthorizedForOutboundSms } = await import(
+        "@/lib/mctb/messaging/outbound-sms-route"
+      );
+      const phoneAuth = await isPhoneAuthorizedForOutboundSms(phoneId);
+      const pnInWorkspace =
+        pn?.workspaceId === workspaceId
+          ? pn
+          : await prisma.phoneNumber.findFirst({
+              where: { id: phoneId, workspaceId },
+              select: { e164: true, messagingService: true, provider: true },
+            });
+      if (phoneAuth.allowed && pnInWorkspace?.e164) {
+        reg = {
+          ...reg,
+          phoneE164: fromOverride || pnInWorkspace.e164,
+          messagingProvider: pnInWorkspace.provider || reg.messagingProvider || "twilio",
+          messagingProfileId: pnInWorkspace.messagingService || reg.messagingProfileId,
+          messagingServiceSid: pnInWorkspace.messagingService || reg.messagingServiceSid,
+        };
+      } else if (!isMessagingSendAuthorized(reg)) {
+        throw new Error("Messaging is not ready for this workspace. Complete A2P registration first.");
+      }
     }
   } else if (!isMessagingSendAuthorized(reg)) {
     throw new Error("Messaging is not ready for this workspace. Complete A2P registration first.");

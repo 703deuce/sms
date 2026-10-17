@@ -153,6 +153,7 @@ export function getWizardActivationIssues(
 
   if (wizardRequiresOutboundSms(state)) {
     const sender =
+      state.outboundSmsMode === "platform" ||
       state.outboundSmsPhoneNumberId ||
       state.aiCallRecoverySendingPhoneNumberId ||
       state.outboundSmsE164?.trim();

@@ -219,6 +219,7 @@ export function buildWizardReadinessRows(
 
   if (wizardRequiresOutboundSms(state)) {
     const sender =
+      state.outboundSmsMode === "platform" ||
       state.outboundSmsPhoneNumberId ||
       state.aiCallRecoverySendingPhoneNumberId ||
       state.outboundSmsE164?.trim();
@@ -226,7 +227,11 @@ export function buildWizardReadinessRows(
       id: "sms_sender",
       label: "Outbound SMS sender",
       status: sender ? "ready" : "needs_setup",
-      detail: sender ? "Ready" : "Assign a text-back / SMS number",
+      detail: sender
+        ? state.outboundSmsMode === "platform"
+          ? "Platform number"
+          : "Ready"
+        : "Choose platform or an A2P-approved number",
       blocksActivation: !sender,
     });
   }
