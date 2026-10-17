@@ -4,18 +4,26 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, Upload } from "lucide-react";
 import { VISUALIZER_ROUTES } from "@/lib/visualizer/routes";
+import { TRANSFORMATION_LABELS, VISUALIZER_LAUNCH_TRANSFORMATIONS } from "@/lib/visualizer/constants";
 import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
 import { Button } from "@/newui-transplant/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const STEPS = ["Photo", "Scope", "Materials", "Generate"] as const;
 
-const TRANSFORMATIONS = [
-  { id: "TUB_TO_SHOWER", title: "Tub-to-Shower", desc: "Replace the tub with a walk-in shower" },
-  { id: "SHOWER_REPLACEMENT", title: "Shower replacement", desc: "New enclosure, walls, and base" },
-  { id: "WALL_PANEL_UPGRADE", title: "Wall panels", desc: "Upgrade shower wall surfaces" },
-  { id: "BATHROOM_REFRESH", title: "Bathroom refresh", desc: "Vanity, fixtures, and finishes" },
-] as const;
+const TRANSFORMATION_DESCRIPTIONS: Record<string, string> = {
+  TUB_TO_SHOWER: "Replace the tub with a walk-in shower in the same footprint",
+  TUB_TO_TUB: "Keep a tub layout; refresh the tub surround with your panel",
+  SHOWER_TO_TUB: "Convert an existing shower into a tub installation",
+  SHOWER_AND_TUB_DECK_WRAP:
+    "Panel the shower walls and wrap the tub deck/apron only — not the wall above the tub",
+};
+
+const TRANSFORMATIONS = VISUALIZER_LAUNCH_TRANSFORMATIONS.map((id) => ({
+  id,
+  title: TRANSFORMATION_LABELS[id] || id,
+  desc: TRANSFORMATION_DESCRIPTIONS[id] || "",
+}));
 
 type MaterialRow = { id: string; name: string; category: string; imageUrl: string };
 
@@ -28,7 +36,6 @@ export function VisualizerNewDesignPage() {
   const [transformation, setTransformation] = useState("TUB_TO_SHOWER");
   const [materials, setMaterials] = useState<MaterialRow[]>([]);
   const [selectedMaterialId, setSelectedMaterialId] = useState<string | null>(null);
-  const [instructions, setInstructions] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -112,7 +119,6 @@ export function VisualizerNewDesignPage() {
           selectedMaterials: selectedMaterialId
             ? [{ materialId: selectedMaterialId, category: "WALL_PANEL" }]
             : [],
-          instructions,
         }),
       });
       const d = await r.json();
@@ -244,17 +250,9 @@ export function VisualizerNewDesignPage() {
 
       {step === 3 ? (
         <section className={cn(OPUS_CARD, "space-y-4 p-6")}>
-          <p className="text-sm text-muted-foreground">Review and generate your remodel preview.</p>
-          <label className="block text-sm font-medium" htmlFor="extra-instructions">
-            Additional instructions (optional)
-          </label>
-          <textarea
-            id="extra-instructions"
-            className="min-h-[80px] w-full rounded-lg border px-3 py-2 text-sm"
-            value={instructions}
-            onChange={(e) => setInstructions(e.target.value)}
-            placeholder="Example: low-threshold shower base and brushed nickel fixtures"
-          />
+          <p className="text-sm text-muted-foreground">
+            Review your photo, remodel type, and material. Generation uses fixed backend prompts — no custom text required.
+          </p>
           {busy ? (
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" aria-hidden />

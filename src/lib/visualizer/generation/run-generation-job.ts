@@ -83,11 +83,14 @@ export async function executeVisualizerGenerationJob(generationJobId: string) {
 
   const prompt = buildVisualizerEditPrompt({
     transformation: design.transformation,
-    selectedMaterials: selectedMaterials.map((m) => ({
-      ...m,
-      name: materialRows.find((r) => r.id === m.materialId)?.name || m.name,
+    selectedMaterials,
+    materialRows: materialRows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      category: r.category,
+      description: r.description,
+      finish: r.finish,
     })),
-    additionalInstructions: design.instructions,
     isRevision: Boolean(design.parentDesignId),
     preserve: (request.preserve as Record<string, boolean>) || undefined,
   });

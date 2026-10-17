@@ -7517,6 +7517,9 @@ enum VisualizerProjectStatus {
 
 enum VisualizerTransformationType {
   TUB_TO_SHOWER
+  TUB_TO_TUB
+  SHOWER_TO_TUB
+  SHOWER_AND_TUB_DECK_WRAP
   SHOWER_REPLACEMENT
   WALL_PANEL_UPGRADE
   BATHROOM_REFRESH

@@ -160,7 +160,6 @@ export function VisualizerDesignPage({ projectId, designId }: { projectId: strin
           originalRoomAssetId: design.originalRoomAssetId,
           transformation: design.transformation,
           selectedMaterials,
-          instructions: design.instructions,
           parentDesignId: designId,
         }),
       });

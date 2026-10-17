@@ -16,11 +16,22 @@ export const VISUALIZER_DEFAULT_MONTHLY_CREDITS = 100;
 
 export const TRANSFORMATION_LABELS: Record<string, string> = {
   TUB_TO_SHOWER: "Tub-to-Shower",
+  TUB_TO_TUB: "Tub-to-Tub",
+  SHOWER_TO_TUB: "Shower-to-Tub",
+  SHOWER_AND_TUB_DECK_WRAP: "Shower + tub deck wrap",
   SHOWER_REPLACEMENT: "Shower Replacement",
   WALL_PANEL_UPGRADE: "Wall Panel Upgrade",
   BATHROOM_REFRESH: "Bathroom Refresh",
   CUSTOM: "Custom",
 };
+
+/** Launch remodel types shown in the wizard (backend prompt templates are 1:1). */
+export const VISUALIZER_LAUNCH_TRANSFORMATIONS = [
+  "TUB_TO_SHOWER",
+  "TUB_TO_TUB",
+  "SHOWER_TO_TUB",
+  "SHOWER_AND_TUB_DECK_WRAP",
+] as const;
 
 export const PROJECT_STATUS_LABELS: Record<string, string> = {
   DRAFT: "Draft",
