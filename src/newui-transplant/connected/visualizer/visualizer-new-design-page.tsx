@@ -13,6 +13,7 @@ const STEPS = ["Photo", "Scope", "Materials", "Generate"] as const;
 
 const TRANSFORMATION_DESCRIPTIONS: Record<string, string> = {
   TUB_TO_SHOWER: "Replace the tub with a walk-in shower in the same footprint",
+  SHOWER_TO_SHOWER: "Keep the shower — replace shower wall panels only (no wall tile)",
   TUB_TO_TUB: "Keep a tub layout; refresh the tub surround with your panel",
   SHOWER_TO_TUB: "Convert an existing shower into a tub installation",
   SHOWER_AND_TUB_DECK_WRAP:

@@ -6,6 +6,7 @@ export type SelectedMaterialRef = {
 
 export type VisualizerTransformation =
   | "TUB_TO_SHOWER"
+  | "SHOWER_TO_SHOWER"
   | "TUB_TO_TUB"
   | "SHOWER_TO_TUB"
   | "SHOWER_AND_TUB_DECK_WRAP";
@@ -58,6 +59,16 @@ Do not extend the selected wall material across unrelated bathroom walls unless 
 Keep the rest of the room as unchanged as possible, especially the vanity, mirror, window, door, and room proportions.
 The final result should look like the same bathroom after a professional tub remodel, not a full-room redesign.`;
 
+const SHOWER_TO_SHOWER_BLOCK = `This bathroom already has a shower. Keep it a shower — do not convert it to a tub and do not remove the shower.
+Preserve the existing shower footprint, plumbing wall, and overall shower location.
+Replace the shower wall surfaces inside the wet area with the selected wall-panel material only (finished acrylic/composite wall panels — not ceramic tile on the walls).
+Keep or update the shower base/pan and enclosure realistically for the same shower opening; do not relocate the shower.
+Do not apply the selected wall material to the entire bathroom — restrict it to the shower surround walls inside the shower area.
+Do not add ceramic wall tile, subway tile, or decorative tile patterns on shower walls unless the selected material itself is tile-look paneling.
+The bathroom floor may keep existing flooring or simple floor tile if already present; do not redesign the whole floor unless required for a believable shower threshold.
+Keep the vanity, window, door, mirror, and room architecture as unchanged as possible outside the shower.
+The final result should look like the same bathroom after a professional shower wall-panel replacement, not a new room.`;
+
 const SHOWER_TO_TUB_BLOCK = `Convert the existing shower area into a bathtub installation in the same general footprint and location.
 Remove the shower-only setup and install a finished bathtub that fits the space realistically.
 Use the selected wall material for the new tub surround / surrounding wet walls.
@@ -93,13 +104,14 @@ const HARD_CONSTRAINTS_BLOCK = `Additional constraints:
 export function normalizeVisualizerTransformation(value: string): VisualizerTransformation {
   switch (value) {
     case "TUB_TO_SHOWER":
+    case "SHOWER_TO_SHOWER":
     case "TUB_TO_TUB":
     case "SHOWER_TO_TUB":
     case "SHOWER_AND_TUB_DECK_WRAP":
       return value;
     case "SHOWER_REPLACEMENT":
     case "WALL_PANEL_UPGRADE":
-      return "TUB_TO_SHOWER";
+      return "SHOWER_TO_SHOWER";
     case "BATHROOM_REFRESH":
       return "TUB_TO_TUB";
     case "CUSTOM":
@@ -112,6 +124,8 @@ function transformationBlock(transformation: VisualizerTransformation): string {
   switch (transformation) {
     case "TUB_TO_SHOWER":
       return TUB_TO_SHOWER_BLOCK;
+    case "SHOWER_TO_SHOWER":
+      return SHOWER_TO_SHOWER_BLOCK;
     case "TUB_TO_TUB":
       return TUB_TO_TUB_BLOCK;
     case "SHOWER_TO_TUB":

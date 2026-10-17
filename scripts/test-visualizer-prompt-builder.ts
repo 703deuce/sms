@@ -15,6 +15,7 @@ const SAMPLE = {
 
 const ALL: VisualizerTransformation[] = [
   "TUB_TO_SHOWER",
+  "SHOWER_TO_SHOWER",
   "TUB_TO_TUB",
   "SHOWER_TO_TUB",
   "SHOWER_AND_TUB_DECK_WRAP",
@@ -31,6 +32,10 @@ const tubToShower = buildVisualizerPrompt({ transformation: "TUB_TO_SHOWER", ...
 assert.ok(tubToShower.includes("Convert the existing bathtub area into a shower"));
 assert.ok(tubToShower.includes("shower walls only"));
 
+const showerToShower = buildVisualizerPrompt({ transformation: "SHOWER_TO_SHOWER", ...SAMPLE });
+assert.ok(showerToShower.includes("already has a shower"));
+assert.ok(showerToShower.includes("not ceramic tile on the walls"));
+
 const tubToTub = buildVisualizerPrompt({ transformation: "TUB_TO_TUB", ...SAMPLE });
 assert.ok(tubToTub.includes("Keep this as a bathtub layout"));
 assert.ok(tubToTub.includes("around the tub area only"));
@@ -43,7 +48,7 @@ assert.ok(deckWrap.includes("both a shower and a separate bathtub"));
 assert.ok(deckWrap.includes("Very important: do not continue that material upward"));
 assert.ok(deckWrap.includes("not climb the entire wall around the tub"));
 
-assert.equal(normalizeVisualizerTransformation("SHOWER_REPLACEMENT"), "TUB_TO_SHOWER");
+assert.equal(normalizeVisualizerTransformation("SHOWER_REPLACEMENT"), "SHOWER_TO_SHOWER");
 assert.equal(normalizeVisualizerTransformation("SHOWER_AND_TUB_DECK_WRAP"), "SHOWER_AND_TUB_DECK_WRAP");
 
 const revision = buildVisualizerPrompt({ transformation: "TUB_TO_SHOWER", isRevision: true, ...SAMPLE });

@@ -15,6 +15,7 @@ const SAMPLE = {
 
 const types = [
   "TUB_TO_SHOWER",
+  "SHOWER_TO_SHOWER",
   "TUB_TO_TUB",
   "SHOWER_TO_TUB",
   "SHOWER_AND_TUB_DECK_WRAP",
