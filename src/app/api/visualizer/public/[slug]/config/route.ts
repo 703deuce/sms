@@ -23,8 +23,7 @@ export async function GET(_req: Request, { params }: Params) {
     where: {
       workspaceId: widget.workspaceId,
       active: true,
-      id: widget.publicMaterialIds.length ? { in: widget.publicMaterialIds } : undefined,
-      publicVisible: true,
+      ...(widget.publicMaterialIds.length ? { id: { in: widget.publicMaterialIds } } : {}),
     },
     take: 24,
   });

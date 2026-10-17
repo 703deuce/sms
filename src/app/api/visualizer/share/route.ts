@@ -1,4 +1,8 @@
 import { jsonError, requireSession } from "@/lib/api-auth";
+import {
+  resolveTransactionalEmailSenderConfig,
+  sendTransactionalEmail,
+} from "@/lib/email/brevo";
 import { createVisualizerShare } from "@/lib/visualizer/share";
 import { sendQuickSms } from "@/lib/sms/send-quick";
 
@@ -12,6 +16,9 @@ export async function POST(req: Request) {
     designId?: string;
     sendSms?: boolean;
     phone?: string;
+    sendEmail?: boolean;
+    email?: string;
+    emailSubject?: string;
     expiresInDays?: number;
   };
 
@@ -51,5 +58,37 @@ export async function POST(req: Request) {
     }
   }
 
-  return Response.json({ shareId, url, smsResult });
+  let emailResult: unknown = null;
+  if (body.sendEmail && body.email?.trim()) {
+    const sender = resolveTransactionalEmailSenderConfig();
+    if (!sender.productionReady) {
+      return jsonError(
+        "Email delivery is not configured. Set Brevo API key and a verified from address.",
+        503,
+      );
+    }
+    const subject = body.emailSubject?.trim() || "Your bathroom remodel preview";
+    const html = `<p>Your bathroom remodel preview is ready.</p><p><a href="${url}">View your design</a></p>`;
+    emailResult = await sendTransactionalEmail({
+      to: body.email.trim(),
+      subject,
+      htmlContent: html,
+      textContent: `Your bathroom remodel preview is ready: ${url}`,
+      workspaceId: auth.workspaceId,
+    });
+    if (
+      emailResult &&
+      typeof emailResult === "object" &&
+      "status" in emailResult &&
+      (emailResult as { status: string }).status === "failed"
+    ) {
+      return Response.json({
+        shareId,
+        url,
+        emailError: (emailResult as { error?: string }).error || "Email send failed",
+      });
+    }
+  }
+
+  return Response.json({ shareId, url, smsResult, emailResult });
 }

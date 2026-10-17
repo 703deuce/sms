@@ -3,7 +3,7 @@ import "server-only";
 import { getPrisma } from "@/lib/db";
 import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 import { buildVisualizerEditPrompt, type SelectedMaterialRef } from "@/lib/visualizer/generation/prompt-builder";
-import { runOpenAiBathroomEdit } from "@/lib/visualizer/generation/provider-openai";
+import { runKieBathroomGeneration } from "@/lib/visualizer/generation/provider-kie";
 import { VISUALIZER_BUCKET } from "@/lib/visualizer/constants";
 import { downloadVisualizerObject, uploadVisualizerBytes } from "@/lib/visualizer/storage";
 
@@ -49,7 +49,7 @@ export async function executeVisualizerGenerationJob(generationJobId: string) {
 
   await prisma.visualizerGenerationJob.update({
     where: { id: job.id },
-    data: { status: "PREPARING", startedAt: new Date() },
+    data: { status: "PREPARING", startedAt: new Date(), provider: "kie" },
   });
 
   const selectedMaterials = (design.selectedMaterialsJson as SelectedMaterialRef[]) || [];
@@ -62,10 +62,10 @@ export async function executeVisualizerGenerationJob(generationJobId: string) {
     },
   });
 
-  const referenceImages: Array<{ bytes: Buffer; mime: string }> = [];
+  const referenceImages: Array<{ bytes: Buffer; mime: string; label?: string }> = [];
   for (const row of materialRows) {
     const bytes = await downloadVisualizerObject(VISUALIZER_BUCKET, row.imageStoragePath);
-    referenceImages.push({ bytes, mime: row.imageMimeType });
+    referenceImages.push({ bytes, mime: row.imageMimeType, label: row.sku || row.name });
   }
 
   const refAssetIds = (request.referenceAssetIds as string[]) || [];
@@ -75,7 +75,7 @@ export async function executeVisualizerGenerationJob(generationJobId: string) {
     });
     for (const asset of refAssets) {
       const bytes = await downloadVisualizerObject(asset.bucket, asset.storagePath);
-      referenceImages.push({ bytes, mime: asset.mimeType });
+      referenceImages.push({ bytes, mime: asset.mimeType, label: "custom-ref" });
     }
   }
 
@@ -97,23 +97,30 @@ export async function executeVisualizerGenerationJob(generationJobId: string) {
     data: { status: "GENERATING" },
   });
 
-  const provider = job.provider || "openai";
-  let resultBytes: Buffer;
-  let resultMime: string;
-  let modelUsed: string;
+  const existingTaskId =
+    typeof request.kieTaskId === "string" && request.kieTaskId.trim()
+      ? request.kieTaskId.trim()
+      : undefined;
 
-  if (provider === "openai") {
-    const result = await runOpenAiBathroomEdit({
-      roomImage: roomBytes,
-      roomMime: roomAsset.mimeType,
-      referenceImages,
-      prompt,
+  const result = await runKieBathroomGeneration({
+    workspaceId: job.workspaceId,
+    prompt,
+    roomImage: roomBytes,
+    roomMime: roomAsset.mimeType,
+    referenceImages,
+    existingTaskId,
+  });
+
+  if (!existingTaskId && result.taskId) {
+    await prisma.visualizerGenerationJob.update({
+      where: { id: job.id },
+      data: {
+        requestJson: {
+          ...(request as object),
+          kieTaskId: result.taskId,
+        },
+      },
     });
-    resultBytes = result.imageBytes;
-    resultMime = result.mimeType;
-    modelUsed = result.model;
-  } else {
-    throw new Error(`Unsupported visualizer provider: ${provider}`);
   }
 
   await prisma.visualizerGenerationJob.update({
@@ -123,8 +130,8 @@ export async function executeVisualizerGenerationJob(generationJobId: string) {
 
   const uploaded = await uploadVisualizerBytes({
     workspaceId: job.workspaceId,
-    bytes: resultBytes,
-    mimeType: resultMime,
+    bytes: result.imageBytes,
+    mimeType: result.mimeType,
     folder: "generated",
   });
 
@@ -135,8 +142,8 @@ export async function executeVisualizerGenerationJob(generationJobId: string) {
       assetType: "GENERATED_DESIGN",
       storagePath: uploaded.path,
       bucket: uploaded.bucket,
-      mimeType: resultMime,
-      byteSize: resultBytes.length,
+      mimeType: result.mimeType,
+      byteSize: result.imageBytes.length,
       originalFilename: "remodel-preview.png",
     },
   });
@@ -166,7 +173,7 @@ export async function executeVisualizerGenerationJob(generationJobId: string) {
       projectId: job.projectId,
       eventType: "design_generated",
       actorType: "system",
-      metadata: { designId: design.id, jobId: job.id },
+      metadata: { designId: design.id, jobId: job.id, kieTaskId: result.taskId },
     },
   });
 
@@ -174,10 +181,10 @@ export async function executeVisualizerGenerationJob(generationJobId: string) {
     where: { id: job.id },
     data: {
       status: "COMPLETED",
-      model: modelUsed,
+      model: result.model,
       completedAt: new Date(),
     },
   });
 
-  return { ok: true, designId: design.id, assetId: generatedAsset.id };
+  return { ok: true, designId: design.id, assetId: generatedAsset.id, kieTaskId: result.taskId };
 }

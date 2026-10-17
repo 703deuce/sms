@@ -54,15 +54,22 @@ export async function GET(_req: Request, { params }: Params) {
     ? await prisma.visualizerGenerationJob.findUnique({ where: { id: design.generationJobId } })
     : null;
 
+  const selectedMaterialsJson =
+    (design.selectedMaterialsJson as Array<{ materialId?: string; category: string; name?: string }>) ||
+    [];
+
   return Response.json({
     design: {
       id: design.id,
       projectId: design.projectId,
       projectName: project?.name,
       versionNumber: design.versionNumber,
+      parentDesignId: design.parentDesignId,
+      originalRoomAssetId: design.originalRoomAssetId,
       isFavorite: design.isFavorite,
       instructions: design.instructions,
       transformation: design.transformation,
+      selectedMaterials: selectedMaterialsJson,
       beforeUrl,
       afterUrl,
       materials: materialRows,

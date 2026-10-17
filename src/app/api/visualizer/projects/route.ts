@@ -44,6 +44,21 @@ export async function GET(req: Request) {
         if (asset) thumbUrl = await signedAssetUrl(asset);
       }
       const designCount = await prisma.visualizerDesign.count({ where: { projectId: p.id } });
+      let previewUrl: string | null = null;
+      const favorite = await prisma.visualizerDesign.findFirst({
+        where: { projectId: p.id, isFavorite: true, generatedAssetId: { not: null } },
+        orderBy: { versionNumber: "desc" },
+      });
+      const latest =
+        favorite ||
+        (await prisma.visualizerDesign.findFirst({
+          where: { projectId: p.id, generatedAssetId: { not: null } },
+          orderBy: { versionNumber: "desc" },
+        }));
+      if (latest?.generatedAssetId) {
+        const gen = await prisma.visualizerAsset.findUnique({ where: { id: latest.generatedAssetId } });
+        if (gen) previewUrl = await signedAssetUrl(gen);
+      }
       return {
         id: p.id,
         name: p.name,
@@ -58,6 +73,8 @@ export async function GET(req: Request) {
             }
           : null,
         designCount,
+        favoriteDesignId: favorite?.id || latest?.id || null,
+        previewUrl,
         updatedAt: p.updatedAt.toISOString(),
         thumbUrl,
       };

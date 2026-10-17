@@ -6,6 +6,7 @@ import type { Conversation, Tag, Teammate } from "@/lib/inbox/conversation-types
 import { ConversationsComposer } from "@/components/inbox/conversations-composer";
 import { AppointmentsInboxContextBanner } from "@/components/inbox/appointments-inbox-context-banner";
 import { MctbConversationContextBanner } from "@/components/inbox/mctb-conversation-context";
+import { VisualizerConversationContextBanner } from "@/components/inbox/visualizer-conversation-context";
 import { isAppointmentsV1Primary } from "@/lib/workspace/platform-launch";
 import {
   InboxAiAssistPanel,
@@ -187,6 +188,12 @@ export function ConversationsThreadArea({
           <AppointmentsInboxContextBanner
             contactId={convo.contactId}
             appointmentContext={convo.appointmentContext}
+          />
+        ) : null}
+        {convo.contactId ? (
+          <VisualizerConversationContextBanner
+            contactId={convo.contactId}
+            contactPhone={convo.phone}
           />
         ) : null}
         <ThreadView

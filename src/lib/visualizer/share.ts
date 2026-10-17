@@ -74,11 +74,12 @@ export async function createVisualizerShare(input: {
 export async function resolveShareByToken(slug: string, token: string) {
   const prisma = getPrisma();
   const widget = await prisma.visualizerWidgetConfig.findFirst({
-    where: { publicSlug: slug, published: true },
+    where: { OR: [{ publicSlug: slug }, { workspace: { slug } }] },
   });
-  const workspace = widget
-    ? await prisma.workspace.findUnique({ where: { id: widget.workspaceId } })
-    : await prisma.workspace.findFirst({ where: { slug } });
+  const workspace =
+    widget
+      ? await prisma.workspace.findUnique({ where: { id: widget.workspaceId } })
+      : await prisma.workspace.findFirst({ where: { slug } });
 
   if (!workspace) return null;
 

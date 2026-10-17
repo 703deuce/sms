@@ -7,6 +7,7 @@ import { ContactProfileCard } from "@/components/contacts/kimi-ui/contact-detail
 import { ContactAppointmentsPanel } from "@/components/contacts/kimi-ui/contact-detail/components/ContactAppointmentsPanel";
 import { ContactActivityTimeline } from "@/components/contacts/kimi-ui/contact-detail/components/ContactActivityTimeline";
 import { ConnectedRecordsPanel } from "@/components/contacts/kimi-ui/contact-detail/components/ConnectedRecordsPanel";
+import { ContactVisualizerProjectsPanel } from "@/components/visualizer/contact-visualizer-projects-panel";
 import { ContactProfileEdit } from "@/components/contacts/kimi-ui/contact-detail/components/ContactProfileEdit";
 import type { Contact as KimiContact } from "@/components/contacts/kimi-ui/contact-detail/types";
 import type { Contact } from "@/lib/types";
@@ -59,6 +60,7 @@ export function ContactDetailConnected({ contact }: { contact: Contact }) {
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-6">
           <ContactAppointmentsPanel contactId={contact.id} />
+          <ContactVisualizerProjectsPanel contactId={contact.id} />
           <ContactActivityTimeline contactId={contact.id} />
           <ConnectedRecordsPanel contactId={contact.id} />
         </div>
