@@ -5,14 +5,14 @@ import { checkCreditBalance } from "@/lib/billing/entitlements";
 import { assertWithinWorkspaceLimits } from "@/lib/settings/limits";
 import { deductCreditsForSend } from "@/lib/settings/billing";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
-import { isPhoneAuthorizedForOutboundSms } from "@/lib/mctb/messaging/outbound-sms-route";
 import { resolveCanonicalMctbPlatformSender } from "@/lib/mctb/messaging/platform-sender-config";
 import { isCanonicalPlatformMctbSenderPhone } from "@/lib/messaging/compliance/phone-number-class";
 import { sendViaRegistration } from "@/lib/messaging/registration-processor";
 
 /**
  * Voice V3 SEND_LINK only — not sendQuickSms, not appointment HP route, not campaigns/CRM.
- * Provider send: Telnyx via workspace registration + authorized wizard sender number.
+ * Provider send: Telnyx via workspace registration + wizard sender number.
+ * Sender eligibility is gated at inventory/release (wizard picker), not re-checked here.
  */
 export type VoiceV3BookingLinkSmsInput = {
   workspaceId: string;
@@ -75,14 +75,9 @@ export async function sendVoiceV3BookingLinkSms(
     throw new Error(`Recipient contact status is ${contact.status}`);
   }
 
-  const phoneAuth = await isPhoneAuthorizedForOutboundSms(phoneNumberId);
-  if (!phoneAuth.allowed) {
-    throw new Error("Outbound SMS sender is not authorized for this number.");
-  }
-
   const pn = await prisma.phoneNumber.findFirst({
     where: { id: phoneNumberId },
-    select: { e164: true, workspaceId: true, settingsJson: true },
+    select: { e164: true, workspaceId: true, settingsJson: true, status: true },
   });
   if (!pn?.e164 || normalizeE164(pn.e164) !== from) {
     throw new Error("Published SMS sender does not match phone record.");
@@ -95,6 +90,9 @@ export async function sendVoiceV3BookingLinkSms(
       ? { phoneNumberId: canonicalPlatform.phoneNumberId }
       : null,
   });
+  if (String(pn.status || "") !== "Active") {
+    throw new Error("Published SMS sender is not active.");
+  }
   if (!isPlatformSender && pn.workspaceId !== workspaceId) {
     throw new Error("Published SMS sender does not belong to this workspace.");
   }
@@ -163,6 +161,7 @@ export async function sendVoiceV3BookingLinkSms(
   try {
     const result = await sendViaRegistration(workspaceId, to, body, undefined, from, {
       authorizedPhoneNumberId: phoneNumberId,
+      trustInventoryReleasedSender: true,
     });
 
     await prisma.message.update({
