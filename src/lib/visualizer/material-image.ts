@@ -8,6 +8,10 @@ import {
   readCatalogMaterialBytes,
 } from "@/lib/visualizer/catalog-materials";
 import { buildCatalogMaterialPromptDescription } from "@/lib/visualizer/catalog-prompt-notes";
+import {
+  catalogMaterialNeedsSurfacePatternReference,
+  readCatalogSurfacePatternReference,
+} from "@/lib/visualizer/catalog-pattern-reference";
 import { downloadVisualizerObject } from "@/lib/visualizer/storage";
 
 /** Workspace-uploaded material row (Supabase path). */
@@ -24,20 +28,47 @@ export type WorkspaceMaterialRow = {
 export async function loadMaterialReferenceImage(input: {
   materialId: string;
   workspaceMaterials: WorkspaceMaterialRow[];
-}): Promise<{ bytes: Buffer; mime: string; label: string; name: string; category: string; description?: string | null; finish?: string | null }> {
+}): Promise<{
+  bytes: Buffer;
+  mime: string;
+  label: string;
+  name: string;
+  category: string;
+  description?: string | null;
+  finish?: string | null;
+  surfacePatternReference?: { bytes: Buffer; mime: string; label: string } | null;
+}> {
   if (isCatalogMaterialId(input.materialId)) {
     const slug = parseCatalogMaterialSlug(input.materialId);
     if (!slug) throw new Error("Invalid catalog material id");
     const meta = getCatalogMaterialById(input.materialId);
     const { bytes, mimeType } = await readCatalogMaterialBytes(slug);
+    const needsPattern =
+      meta &&
+      catalogMaterialNeedsSurfacePatternReference({
+        panelLine: meta.panelLine,
+        surfaceStyle: meta.surfaceStyle,
+      });
+    const surfacePatternReference =
+      needsPattern && meta
+        ? await readCatalogSurfacePatternReference({
+            panelLine: meta.panelLine,
+            surfaceStyle: meta.surfaceStyle,
+          })
+        : null;
     return {
       bytes,
       mime: mimeType,
       label: meta?.sku || slug,
       name: meta?.name || slug,
       category: meta?.category || "WALL_PANEL",
-      description: meta ? buildCatalogMaterialPromptDescription(meta) : null,
+      description: meta
+        ? buildCatalogMaterialPromptDescription(meta, {
+            hasSurfacePatternReference: Boolean(surfacePatternReference),
+          })
+        : null,
       finish: null,
+      surfacePatternReference,
     };
   }
 
@@ -52,5 +83,6 @@ export async function loadMaterialReferenceImage(input: {
     category: row.category,
     description: row.description,
     finish: row.finish,
+    surfacePatternReference: null,
   };
 }

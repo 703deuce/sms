@@ -28,10 +28,22 @@ export type BuildVisualizerPromptInput = {
   showerWallHeight?: ShowerWallHeight | null;
   /** When true, prepends revision guidance (same room / viewpoint). */
   isRevision?: boolean;
+  /** Third reference image: etched tile/block geometry (Pioneer Plus, Monterey tile). */
+  hasSurfacePatternReference?: boolean;
 };
 
-const SHARED_BASE_PROMPT = `You are generating a photorealistic bathroom remodel mockup from a real bathroom photo.
-The first reference image is the original bathroom. The second reference image is the selected wall-panel/material sample photograph (often a physical sample card or swatch photo from the manufacturer).
+function referenceImageGuideBlock(hasSurfacePatternReference: boolean): string {
+  if (hasSurfacePatternReference) {
+    return `The first reference image is the original bathroom photograph.
+The second reference image is the selected product color swatch — match this material's color, veining, speckle, and tonal warmth on the installed wall panels in the bathroom.
+The third reference image defines surface geometry only (etched grout lines, tile running-bond layout, or large stone-block layout). Reproduce that etched pattern scale and layout on the shower walls, but recolor it using the second reference image. Do not copy the third image's colors; treat it as a layout template only.`;
+  }
+  return `The first reference image is the original bathroom. The second reference image is the selected wall-panel/material sample photograph (often a physical sample card or swatch photo from the manufacturer).`;
+}
+
+function sharedBasePrompt(hasSurfacePatternReference: boolean): string {
+  return `You are generating a photorealistic bathroom remodel mockup from a real bathroom photo.
+${referenceImageGuideBlock(hasSurfacePatternReference)}
 Preserve the original room's blueprint, dimensions, perspective, camera angle, window placement, door placement, ceiling, ventilation location, and overall layout. Keep the bathroom recognizable as the same room.
 Perform only the requested remodel transformation.
 Match the selected material's color, veining, tone, and texture as closely as possible, but interpret it as professionally installed bathroom wall panels / finished bathroom surfaces.
@@ -41,6 +53,7 @@ Do not create a collage, split-screen, before/after comparison, text overlay, wa
 Do not redesign unrelated parts of the room unless necessary for a coherent finished remodel.
 Preserve existing permanent room elements as much as possible, especially the vanity, mirror, lighting, window, trim, and door, unless the requested remodel absolutely requires small adjustments.
 Do not change the room into a different bathroom. Keep the same footprint and architectural structure.`;
+}
 
 const TUB_TO_SHOWER_BLOCK = `Convert the existing bathtub area into a shower in the same exact footprint and location.
 Remove the tub and replace it with a finished shower base / shower pan that fits the same alcove or placement.
@@ -221,7 +234,7 @@ export function buildVisualizerPrompt(input: BuildVisualizerPromptInput): string
 
   return (
     revisionPrefix +
-    SHARED_BASE_PROMPT +
+    sharedBasePrompt(Boolean(input.hasSurfacePatternReference)) +
     "\n\n" +
     transformationBlock(transformation) +
     appendOptionalStyleBlocks(input) +
@@ -238,6 +251,7 @@ export function buildVisualizerEditPrompt(input: {
   preserve?: GenerationPreserveFlags;
   showerWallHeight?: ShowerWallHeight | null;
   isRevision?: boolean;
+  hasSurfacePatternReference?: boolean;
   materialRows?: Array<{
     id: string;
     name: string;
@@ -266,6 +280,7 @@ export function buildVisualizerEditPrompt(input: {
     preserveDoor: input.preserve?.door_positions ?? true,
     showerWallHeight: input.showerWallHeight as ShowerWallHeight | undefined,
     isRevision: input.isRevision,
+    hasSurfacePatternReference: input.hasSurfacePatternReference,
   });
 }
 

@@ -75,7 +75,7 @@ const pioneerNotes = buildCatalogMaterialPromptDescription({
   panelLine: "PIONEER_PLUS",
   description: "Pioneer Plus sample",
 });
-assert.ok(pioneerNotes.includes("24 inches wide by 48 inches"));
+assert.ok(pioneerNotes.includes("24 inches wide by 8 inches"));
 assert.ok(pioneerNotes.includes("grout joints"));
 
 const montereyNotes = buildCatalogMaterialPromptDescription({
@@ -83,7 +83,7 @@ const montereyNotes = buildCatalogMaterialPromptDescription({
   surfaceStyle: "tile_etch",
   description: "Monterey tile",
 });
-assert.ok(montereyNotes.includes("4 inches wide by 8 inches"));
+assert.ok(montereyNotes.includes("running-bond"));
 assert.ok(montereyNotes.includes("laser-etched"));
 
 const pioneerPrompt = buildVisualizerPrompt({
@@ -92,7 +92,16 @@ const pioneerPrompt = buildVisualizerPrompt({
   materialName: "Tundra Grey",
   materialDescription: pioneerNotes,
 });
-assert.ok(pioneerPrompt.includes("24 inches wide by 48 inches"));
+assert.ok(pioneerPrompt.includes("24 inches wide by 8 inches"));
 assert.ok(pioneerPrompt.includes("wallpaper"));
+
+const threeRef = buildVisualizerPrompt({
+  transformation: "TUB_TO_SHOWER",
+  hasSurfacePatternReference: true,
+  materialName: "Grey Stone",
+  materialDescription: montereyNotes,
+});
+assert.ok(threeRef.includes("third reference image"));
+assert.ok(threeRef.includes("second reference image is the selected product color swatch"));
 
 console.log("test-visualizer-prompt-builder: PASS");

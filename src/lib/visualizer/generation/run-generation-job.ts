@@ -70,6 +70,7 @@ export async function executeVisualizerGenerationJob(generationJobId: string) {
   });
 
   const referenceImages: Array<{ bytes: Buffer; mime: string; label?: string }> = [];
+  let hasSurfacePatternReference = false;
   const promptMaterialRows: Array<{
     id: string;
     name: string;
@@ -85,6 +86,14 @@ export async function executeVisualizerGenerationJob(generationJobId: string) {
       workspaceMaterials: materialRows,
     });
     referenceImages.push({ bytes: loaded.bytes, mime: loaded.mime, label: loaded.label });
+    if (loaded.surfacePatternReference) {
+      referenceImages.push({
+        bytes: loaded.surfacePatternReference.bytes,
+        mime: loaded.surfacePatternReference.mime,
+        label: loaded.surfacePatternReference.label,
+      });
+      hasSurfacePatternReference = true;
+    }
     promptMaterialRows.push({
       id: sel.materialId,
       name: loaded.name,
@@ -114,6 +123,7 @@ export async function executeVisualizerGenerationJob(generationJobId: string) {
     isRevision: Boolean(design.parentDesignId),
     preserve: (request.preserve as Record<string, boolean>) || undefined,
     showerWallHeight: normalizeShowerWallHeight(request.showerWallHeight),
+    hasSurfacePatternReference,
   });
 
   await prisma.visualizerGenerationJob.update({
