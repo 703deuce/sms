@@ -490,6 +490,7 @@ export function buildWizardAgentConfig(
         voiceInboundE164: state.phoneNumberE164,
         dedicatedPhoneNumberId: state.outboundSmsPhoneNumberId ?? null,
         dedicatedE164: state.outboundSmsE164 ?? null,
+        outboundSmsMode: state.outboundSmsMode ?? null,
       }),
     },
     conversationFlow: {

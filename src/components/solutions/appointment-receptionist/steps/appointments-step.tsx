@@ -11,6 +11,11 @@ import {
   resolveLiveCalendar,
 } from "@/lib/solutions/appointment-receptionist/live-calendar";
 import {
+  isPlatformOutboundSmsMode,
+  VOICE_OUTBOUND_SMS_PLATFORM_SELECT_VALUE,
+} from "@/lib/voice/sms/voice-outbound-sms-constants";
+import { isTollFreeE164 } from "@/lib/voice/sms/voice-outbound-sms-config";
+import {
   pickWizardFieldComponents,
   WizardCheckboxInline,
   WizardSelectField,
@@ -161,12 +166,16 @@ export function AppointmentsStep({
           friendlyName: string | null;
           status: string;
         }>;
-        setSmsNumbers(rows.filter((n) => n.status === "Active"));
-        if (!state.outboundSmsPhoneNumberId && rows[0]) {
+        const active = rows.filter((n) => n.status === "Active");
+        setSmsNumbers(active.filter((n) => !isTollFreeE164(n.e164)));
+        const hasSender =
+          isPlatformOutboundSmsMode(state.outboundSmsMode) ||
+          Boolean(state.outboundSmsPhoneNumberId?.trim());
+        if (!hasSender) {
           patch({
-            outboundSmsPhoneNumberId: rows[0].id,
-            outboundSmsE164: rows[0].e164,
-            outboundSmsMode: "explicit_number",
+            outboundSmsMode: "platform",
+            outboundSmsPhoneNumberId: null,
+            outboundSmsE164: null,
           });
         }
       })
@@ -458,8 +467,20 @@ export function AppointmentsStep({
                 presentation={presentation}
                 id="booking-link-sms-sender"
                 label="Text message sender *"
-                value={state.outboundSmsPhoneNumberId || ""}
+                value={
+                  isPlatformOutboundSmsMode(state.outboundSmsMode)
+                    ? VOICE_OUTBOUND_SMS_PLATFORM_SELECT_VALUE
+                    : state.outboundSmsPhoneNumberId || ""
+                }
                 onChange={(v) => {
+                  if (v === VOICE_OUTBOUND_SMS_PLATFORM_SELECT_VALUE) {
+                    patch({
+                      outboundSmsMode: "platform",
+                      outboundSmsPhoneNumberId: null,
+                      outboundSmsE164: null,
+                    });
+                    return;
+                  }
                   const row = smsNumbers.find((n) => n.id === v);
                   patch({
                     outboundSmsPhoneNumberId: row?.id ?? null,
@@ -468,7 +489,11 @@ export function AppointmentsStep({
                   });
                 }}
                 options={[
-                  { value: "", label: "Select SMS-enabled number…" },
+                  { value: "", label: "Select text sender…" },
+                  {
+                    value: VOICE_OUTBOUND_SMS_PLATFORM_SELECT_VALUE,
+                    label: "Platform number (toll-free — recommended)",
+                  },
                   ...smsNumbers.map((n) => ({
                     value: n.id,
                     label: `${n.e164}${n.friendlyName ? ` — ${n.friendlyName}` : ""}`,
@@ -476,7 +501,8 @@ export function AppointmentsStep({
                 ]}
               />
               <p className="text-[12px] text-muted-foreground">
-                The booking link will be sent from this SMS-enabled number.
+                Platform number uses the same toll-free sender as missed-call text back. Choose your
+                own number only if it is A2P-approved for outbound SMS.
               </p>
               <WizardToggleField
                 presentation={presentation}
