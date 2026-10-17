@@ -1,7 +1,6 @@
 "use client";
 
 import { Header } from "@/components/layout/header";
-import { MobileNav } from "@/components/layout/mobile-nav";
 import { RealtorHeader } from "@/components/realtor/realtor-header";
 import { Sidebar } from "@/components/layout/sidebar";
 import { ProductActivityTracker } from "@/components/products/product-activity-tracker";
@@ -300,7 +299,7 @@ export function AppShell({
   /** Opus shell: full-bleed main column — no legacy px-4/pt-5 frame or mctb-page-canvas inset. */
   const newUiMainClassName = fixedViewport
     ? FIXED_VIEWPORT_MAIN_CLASS
-    : "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain touch-pan-y px-0 pb-28 pt-0 [-webkit-overflow-scrolling:touch] lg:pb-8";
+    : "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain touch-pan-y px-0 pb-[max(1rem,env(safe-area-inset-bottom))] pt-0 [-webkit-overflow-scrolling:touch] lg:pb-8";
 
   const mainClassName = newUiShell
     ? newUiMainClassName
@@ -309,12 +308,12 @@ export function AppShell({
       : fixedViewport
         ? FIXED_VIEWPORT_MAIN_CLASS
         : mctbWorkspaceFullWidth
-          ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-0 pb-28 pt-0 lg:pb-8"
+          ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-0 pb-[max(1rem,env(safe-area-inset-bottom))] pt-0 lg:pb-8"
           : isFullBleed
             ? isKimiFullBleed
               ? "flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto"
-              : "flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-4 pb-28 pt-5 lg:px-6 lg:pb-8"
-            : "flex min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 pb-28 pt-5 lg:px-6 lg:pb-8";
+              : "flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-5 lg:px-6 lg:pb-8"
+            : "flex min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-5 lg:px-6 lg:pb-8";
 
   const mainContent =
     newUiShell || !isMctbNeutralShell
@@ -376,19 +375,6 @@ export function AppShell({
             {mainContent}
           </NewUiTransplantShellLayout>
         </Suspense>
-        <MobileNav
-          realtorMode={realtorMode}
-          currentProduct={currentProduct}
-          showTryIt={showTryIt}
-          productFeatures={productFeatures}
-          hasMctb={hasMctb}
-          hasMassSms={hasSms}
-          hasVoice={hasVoice}
-          hasAiAfterHours={hasAiAfterHours}
-          hasAppointmentReminders={hasAppointmentReminders}
-          primaryVoiceAgentId={primaryVoiceAgentId}
-          onMore={() => setMenuOpen(true)}
-        />
       </div>,
     );
   }
@@ -493,18 +479,6 @@ export function AppShell({
         )}
         <main className={mainClassName}>{mainContent}</main>
       </div>
-      <MobileNav
-        realtorMode={realtorMode}
-        currentProduct={currentProduct}
-        showTryIt={showTryIt}
-        productFeatures={productFeatures}
-        hasMctb={hasMctb}
-        hasMassSms={hasSms}
-        hasVoice={hasVoice}
-        hasAiAfterHours={hasAiAfterHours}
-        primaryVoiceAgentId={primaryVoiceAgentId}
-        onMore={() => setMenuOpen(true)}
-      />
     </div>
   );
 
