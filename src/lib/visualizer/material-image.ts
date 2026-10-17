@@ -7,6 +7,7 @@ import {
   parseCatalogMaterialSlug,
   readCatalogMaterialBytes,
 } from "@/lib/visualizer/catalog-materials";
+import { buildCatalogMaterialPromptDescription } from "@/lib/visualizer/catalog-prompt-notes";
 import { downloadVisualizerObject } from "@/lib/visualizer/storage";
 
 /** Workspace-uploaded material row (Supabase path). */
@@ -35,7 +36,7 @@ export async function loadMaterialReferenceImage(input: {
       label: meta?.sku || slug,
       name: meta?.name || slug,
       category: meta?.category || "WALL_PANEL",
-      description: meta?.description ?? null,
+      description: meta ? buildCatalogMaterialPromptDescription(meta) : null,
       finish: null,
     };
   }

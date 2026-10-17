@@ -146,7 +146,7 @@ function showerWallHeightBlock(
   height: ShowerWallHeight,
 ): string {
   const fullCeiling =
-    "Install the selected wall panels from the shower pan, tub deck, or base upward through the full shower/tub-surround wet area all the way to the ceiling line. The paneling should meet the ceiling realistically with clean trim or a finished transition — not stop short with a large painted gap below the ceiling.";
+    "Install the selected wall panels from the shower pan, tub deck, or base upward through the full shower/tub-surround wet area all the way to the ceiling line. The paneling must meet the ceiling realistically with clean trim or a finished transition — never stop short with a painted gap, wallpaper strip, or exposed prior wall finish between the panel top edge and the ceiling. Within the wet zone, replace all wallpaper, borders, and old paint on shower/tub-surround walls with the selected panel material.";
   const eightFt =
     "Install the selected wall panels from the shower pan, tub deck, or base upward only to approximately 8 feet (96 inches) height in the wet area. Above that 8-foot line, keep the existing wall finish (paint, drywall, or prior surface) visible at the top of the shower or tub surround. Do not panel all the way to the ceiling unless the room ceiling is below 8 feet.";
 

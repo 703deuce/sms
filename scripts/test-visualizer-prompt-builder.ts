@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { buildCatalogMaterialPromptDescription } from "../src/lib/visualizer/catalog-prompt-notes";
 import {
   buildVisualizerPrompt,
   normalizeVisualizerTransformation,
@@ -68,5 +69,30 @@ const eightFt = buildVisualizerPrompt({
 });
 assert.ok(eightFt.includes("approximately 8 feet (96 inches)"));
 assert.ok(eightFt.includes("Do not panel all the way to the ceiling"));
+assert.ok(fullCeiling.includes("wallpaper strip"));
+
+const pioneerNotes = buildCatalogMaterialPromptDescription({
+  panelLine: "PIONEER_PLUS",
+  description: "Pioneer Plus sample",
+});
+assert.ok(pioneerNotes.includes("24 inches wide by 48 inches"));
+assert.ok(pioneerNotes.includes("grout joints"));
+
+const montereyNotes = buildCatalogMaterialPromptDescription({
+  panelLine: "MONTEREY",
+  surfaceStyle: "tile_etch",
+  description: "Monterey tile",
+});
+assert.ok(montereyNotes.includes("4 inches wide by 8 inches"));
+assert.ok(montereyNotes.includes("laser-etched"));
+
+const pioneerPrompt = buildVisualizerPrompt({
+  transformation: "TUB_TO_SHOWER",
+  showerWallHeight: "FULL_CEILING",
+  materialName: "Tundra Grey",
+  materialDescription: pioneerNotes,
+});
+assert.ok(pioneerPrompt.includes("24 inches wide by 48 inches"));
+assert.ok(pioneerPrompt.includes("wallpaper"));
 
 console.log("test-visualizer-prompt-builder: PASS");
