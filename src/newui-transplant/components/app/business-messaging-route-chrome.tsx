@@ -14,7 +14,10 @@ import {
   shouldShowMctbServiceTabs,
   shouldShowReviewsServiceTabs,
   REVIEWS_SERVICE_TABS,
+  shouldShowVisualizerServiceTabs,
+  VISUALIZER_SERVICE_TABS,
 } from "@/lib/products/business-messaging-nav";
+import { VISUALIZER_ROUTES } from "@/lib/visualizer/routes";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import { AR_ROUTES } from "@/lib/appointment-reminders/routes";
 import { REVIEW_ROUTES } from "@/lib/reviews/routes";
@@ -63,6 +66,22 @@ export function BusinessMessagingRouteChrome() {
         description="Synced calendar reminders, confirmations, and SMS rescheduling."
         tabs={AR_SERVICE_TABS}
         actions={<ArServiceActions />}
+      />
+    );
+  }
+
+  if (shouldShowVisualizerServiceTabs(pathname)) {
+    return (
+      <ServiceWorkspaceTabs
+        title="Visualizer"
+        description="AI bathroom remodel previews, materials, sharing, and estimate leads."
+        tabs={VISUALIZER_SERVICE_TABS}
+        actions={
+          <Button variant="default" size="sm" render={<Link href={VISUALIZER_ROUTES.newDesign} />}>
+            Create design
+          </Button>
+        }
+        compact={pathname === VISUALIZER_ROUTES.home}
       />
     );
   }

@@ -1313,6 +1313,23 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       );
       return executeVoiceV2CallbackSlaOverdueScan();
     }
+    case "visualizer_generation": {
+      const generationJobId = String(payload.generationJobId || "");
+      if (!generationJobId) throw new Error("generationJobId required");
+      const { executeVisualizerGenerationJob } = await import(
+        "@/lib/visualizer/generation/run-generation-job"
+      );
+      try {
+        return await executeVisualizerGenerationJob(generationJobId);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        await getPrisma().visualizerGenerationJob.updateMany({
+          where: { id: generationJobId, status: { not: "COMPLETED" } },
+          data: { status: "FAILED", errorMessage: message, completedAt: new Date() },
+        });
+        throw err;
+      }
+    }
     case "job_queue_terminal_prune": {
       const { runJobQueueTerminalPruneMaintenance } = await import("@/lib/jobs/job-queue-lifecycle");
       return runJobQueueTerminalPruneMaintenance();

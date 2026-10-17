@@ -62,7 +62,14 @@ export function isMassSmsInBusinessMessagingSidebar(): boolean {
   );
 }
 
+export function isVisualizerInBusinessMessagingSidebar(): boolean {
+  return businessMessagingSidebarEnvFlag("BUSINESS_MESSAGING_SIDEBAR_VISUALIZER") ?? true;
+}
+
 export function isReviewsInBusinessMessagingSidebar(): boolean {
+  if (isVisualizerInBusinessMessagingSidebar()) {
+    return businessMessagingSidebarEnvFlag("BUSINESS_MESSAGING_SIDEBAR_REVIEWS") ?? false;
+  }
   return businessMessagingSidebarEnvFlag("BUSINESS_MESSAGING_SIDEBAR_REVIEWS") ?? true;
 }
 

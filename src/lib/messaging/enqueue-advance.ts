@@ -29,6 +29,7 @@ const WORKSPACE_COLUMN_FROM_PAYLOAD_TYPES = new Set([
   "integration_webhook_process",
   "voice_post_call",
   "voice_v3_call_history",
+  "visualizer_generation",
 ]);
 
 export async function enqueueJob(input: EnqueueJobInput) {
