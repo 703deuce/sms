@@ -1,0 +1,13 @@
+{
+  "manufacturer": "Samuel Mueller",
+  "category": "WALL_PANEL",
+  "panelLine": "MONTEREY",
+  "description": "Each color has two catalog entries: tile_etch (standard etched tile grout) and smooth (no grout lines).",
+  "materials": [
+    { "colorGroupKey": "grey-stone-27", "name": "Grey Stone", "variants": ["grey-stone-27-tile.jpg", "grey-stone-27-smooth.jpg"] },
+    { "colorGroupKey": "white-21v", "name": "White", "variants": ["white-21v-tile.jpg", "white-21v-smooth.jpg"] },
+    { "colorGroupKey": "butternut-28", "name": "Butternut", "variants": ["butternut-28-tile.jpg", "butternut-28-smooth.jpg"] },
+    { "colorGroupKey": "moonstone-50v", "name": "Moonstone", "variants": ["moonstone-50v-tile.jpg", "moonstone-50v-smooth.jpg"] },
+    { "colorGroupKey": "butterscotch-48", "name": "Butterscotch", "variants": ["butterscotch-48-tile.jpg", "butterscotch-48-smooth.jpg"] }
+  ]
+}

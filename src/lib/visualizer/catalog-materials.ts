@@ -2,7 +2,7 @@ import "server-only";
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import type { VisualizerPanelLine } from "@/lib/visualizer/constants";
+import type { VisualizerMontereySurfaceStyle, VisualizerPanelLine } from "@/lib/visualizer/constants";
 
 /** Stable id prefix for built-in wall panels (not stored per workspace in Supabase). */
 export const VISUALIZER_CATALOG_MATERIAL_PREFIX = "catalog:";
@@ -12,6 +12,12 @@ const PIONEER_PLUS_STONE_BLOCK_NOTES =
 
 const LUXURA_SLAB_NOTES =
   "Samuel Mueller Luxura engineered stone wall panels; smooth continuous slab look with natural veining or speckle — not large block grout layout.";
+
+const MONTEREY_TILE_NOTES =
+  "Samuel Mueller Monterey wall panels with etched standard-size tile grout lines; continue the tile pattern across all shower walls at full scale.";
+
+const MONTEREY_SMOOTH_NOTES =
+  "Samuel Mueller Monterey smooth wall panels without etched grout lines; continuous color and texture across shower walls.";
 
 export type CatalogMaterial = {
   slug: string;
@@ -25,7 +31,45 @@ export type CatalogMaterial = {
   /** Folder under public/visualizer/materials/ */
   publicDir: string;
   description?: string;
+  /** Monterey: groups smooth + tile variants of the same color. */
+  colorGroupKey?: string;
+  surfaceStyle?: VisualizerMontereySurfaceStyle;
 };
+
+function montereyColor(
+  colorGroupKey: string,
+  colorName: string,
+  skuBase: string,
+  surfaceStyle: VisualizerMontereySurfaceStyle,
+  slugSuffix: string,
+): CatalogMaterial {
+  const tile = surfaceStyle === "tile_etch";
+  return {
+    slug: `${colorGroupKey}-${slugSuffix}`,
+    name: colorName,
+    sku: tile ? `${skuBase}-T` : `${skuBase}-S`,
+    category: "WALL_PANEL",
+    manufacturer: "Samuel Mueller",
+    panelLine: "MONTEREY",
+    publicDir: "sam-mueller-monterey",
+    colorGroupKey,
+    surfaceStyle,
+    description: tile ? MONTEREY_TILE_NOTES : MONTEREY_SMOOTH_NOTES,
+  };
+}
+
+const SAM_MUELLER_MONTEREY: CatalogMaterial[] = [
+  montereyColor("grey-stone-27", "Grey Stone", "SM-MY-27", "tile_etch", "tile"),
+  montereyColor("grey-stone-27", "Grey Stone", "SM-MY-27", "smooth", "smooth"),
+  montereyColor("white-21v", "White", "SM-MY-21V", "tile_etch", "tile"),
+  montereyColor("white-21v", "White", "SM-MY-21V", "smooth", "smooth"),
+  montereyColor("butternut-28", "Butternut", "SM-MY-28", "tile_etch", "tile"),
+  montereyColor("butternut-28", "Butternut", "SM-MY-28", "smooth", "smooth"),
+  montereyColor("moonstone-50v", "Moonstone", "SM-MY-50V", "tile_etch", "tile"),
+  montereyColor("moonstone-50v", "Moonstone", "SM-MY-50V", "smooth", "smooth"),
+  montereyColor("butterscotch-48", "Butterscotch", "SM-MY-48", "tile_etch", "tile"),
+  montereyColor("butterscotch-48", "Butterscotch", "SM-MY-48", "smooth", "smooth"),
+];
 
 const LONG_BATHS_BCI: CatalogMaterial[] = [
   { slug: "glacier-ice", name: "Glacier Ice", sku: "LB-GLACIER-ICE", category: "WALL_PANEL", manufacturer: "Long Baths", panelLine: "BCI", publicDir: "long-baths" },
@@ -136,6 +180,7 @@ export const VISUALIZER_WALL_PANEL_CATALOG: CatalogMaterial[] = [
   ...LONG_BATHS_BCI,
   ...SAM_MUELLER_PIONEER_PLUS,
   ...SAM_MUELLER_LUXURA,
+  ...SAM_MUELLER_MONTEREY,
 ];
 
 export function isCatalogMaterialId(materialId: string | undefined | null): boolean {
@@ -174,6 +219,8 @@ export function listCatalogMaterialsForApi(category?: string, panelLine?: Visual
       panelLine: m.panelLine,
       manufacturer: m.manufacturer,
       sku: m.sku,
+      colorGroupKey: m.colorGroupKey ?? null,
+      surfaceStyle: m.surfaceStyle ?? null,
       finish: null as string | null,
       active: true,
       publicVisible: true,

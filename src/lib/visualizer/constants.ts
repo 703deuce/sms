@@ -15,20 +15,34 @@ export const VISUALIZER_ALLOWED_MIME = new Set([
 export const VISUALIZER_DEFAULT_MONTHLY_CREDITS = 100;
 
 /** Wall-panel product lines (catalog grouping). More lines added per manufacturer rollout. */
-export type VisualizerPanelLine = "BCI" | "PIONEER_PLUS" | "LUXURA";
+export type VisualizerPanelLine = "BCI" | "PIONEER_PLUS" | "LUXURA" | "MONTEREY";
 
 export const VISUALIZER_PANEL_LINE_LABELS: Record<VisualizerPanelLine, string> = {
   BCI: "BCI",
   PIONEER_PLUS: "Sam Mueller · Pioneer Plus",
   LUXURA: "Sam Mueller · Luxura",
+  MONTEREY: "Sam Mueller · Monterey",
 };
 
 /** Display order in material pickers. */
-export const VISUALIZER_PANEL_LINE_ORDER: VisualizerPanelLine[] = ["BCI", "PIONEER_PLUS", "LUXURA"];
+export const VISUALIZER_PANEL_LINE_ORDER: VisualizerPanelLine[] = [
+  "BCI",
+  "PIONEER_PLUS",
+  "LUXURA",
+  "MONTEREY",
+];
+
+/** Monterey 4mm: smooth slab vs etched standard tile grout lines (same color). */
+export type VisualizerMontereySurfaceStyle = "smooth" | "tile_etch";
+
+export const MONTEREY_SURFACE_STYLE_LABELS: Record<VisualizerMontereySurfaceStyle, string> = {
+  smooth: "Smooth (no tile lines)",
+  tile_etch: "Tile look (etched grout)",
+};
 
 export function parseVisualizerPanelLineParam(value: string | null | undefined): VisualizerPanelLine | undefined {
   const v = value?.trim();
-  if (v === "BCI" || v === "PIONEER_PLUS" || v === "LUXURA") return v;
+  if (v === "BCI" || v === "PIONEER_PLUS" || v === "LUXURA" || v === "MONTEREY") return v;
   return undefined;
 }
 

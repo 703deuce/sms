@@ -10,8 +10,10 @@ import {
   TRANSFORMATION_LABELS,
   VISUALIZER_DEFAULT_SHOWER_WALL_HEIGHT,
   VISUALIZER_LAUNCH_TRANSFORMATIONS,
+  MONTEREY_SURFACE_STYLE_LABELS,
   VISUALIZER_PANEL_LINE_LABELS,
   VISUALIZER_PANEL_LINE_ORDER,
+  type VisualizerMontereySurfaceStyle,
   type VisualizerPanelLine,
   type VisualizerShowerWallHeight,
   transformationSupportsShowerWallHeight,
@@ -44,6 +46,8 @@ type MaterialRow = {
   category: string;
   manufacturer?: string | null;
   panelLine?: string | null;
+  colorGroupKey?: string | null;
+  surfaceStyle?: VisualizerMontereySurfaceStyle | null;
   imageUrl: string;
 };
 
@@ -70,6 +74,9 @@ export function VisualizerNewDesignPage() {
   );
   const [materials, setMaterials] = useState<MaterialRow[]>([]);
   const [selectedMaterialId, setSelectedMaterialId] = useState<string | null>(null);
+  const [montereyFinishByColor, setMontereyFinishByColor] = useState<
+    Record<string, VisualizerMontereySurfaceStyle>
+  >({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -328,6 +335,18 @@ export function VisualizerNewDesignPage() {
       }));
   }, [materials]);
 
+  function montereyFinishFor(colorKey: string): VisualizerMontereySurfaceStyle {
+    return montereyFinishByColor[colorKey] ?? "tile_etch";
+  }
+
+  function selectMontereyVariant(colorKey: string, style: VisualizerMontereySurfaceStyle) {
+    setMontereyFinishByColor((prev) => ({ ...prev, [colorKey]: style }));
+    const variant = materials.find(
+      (m) => m.colorGroupKey === colorKey && m.surfaceStyle === style,
+    );
+    if (variant) setSelectedMaterialId(variant.id);
+  }
+
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6">
       <header>
@@ -425,27 +444,90 @@ export function VisualizerNewDesignPage() {
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 {group.label}
               </p>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {group.items.map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    className={cn(
-                      OPUS_CARD,
-                      "overflow-hidden p-0 text-left",
-                      selectedMaterialId === m.id && "border-primary ring-1 ring-primary",
-                    )}
-                    onClick={() => setSelectedMaterialId(m.id)}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={m.imageUrl} alt="" className="aspect-square w-full object-cover" />
-                    <div className="p-3">
-                      <p className="text-sm font-medium">{m.name}</p>
-                      <p className="text-xs text-muted-foreground">{m.manufacturer || group.label}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
+              {group.line === "MONTEREY" ? (
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {Array.from(
+                    new Set(group.items.map((m) => m.colorGroupKey).filter(Boolean)),
+                  ).map((colorKey) => {
+                    const variants = group.items.filter((m) => m.colorGroupKey === colorKey);
+                    const colorName = variants[0]?.name ?? colorKey;
+                    const finish = montereyFinishFor(colorKey as string);
+                    const preview =
+                      variants.find((m) => m.surfaceStyle === finish) ?? variants[0];
+                    const selected = variants.some((m) => m.id === selectedMaterialId);
+                    return (
+                      <div
+                        key={colorKey}
+                        className={cn(
+                          OPUS_CARD,
+                          "overflow-hidden p-0",
+                          selected && "border-primary ring-1 ring-primary",
+                        )}
+                      >
+                        <button
+                          type="button"
+                          className="w-full text-left"
+                          onClick={() => selectMontereyVariant(colorKey as string, finish)}
+                        >
+                          {preview ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={preview.imageUrl}
+                              alt=""
+                              className="aspect-square w-full object-cover"
+                            />
+                          ) : null}
+                          <div className="p-3">
+                            <p className="text-sm font-medium">{colorName}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {MONTEREY_SURFACE_STYLE_LABELS[finish]}
+                            </p>
+                          </div>
+                        </button>
+                        <div
+                          className="flex flex-col gap-2 border-t px-3 py-2 text-xs"
+                          role="group"
+                          aria-label={`Surface style for ${colorName}`}
+                        >
+                          {(["tile_etch", "smooth"] as const).map((style) => (
+                            <label key={style} className="flex cursor-pointer items-center gap-2">
+                              <input
+                                type="radio"
+                                name={`monterey-${colorKey}`}
+                                checked={finish === style}
+                                onChange={() => selectMontereyVariant(colorKey as string, style)}
+                              />
+                              {MONTEREY_SURFACE_STYLE_LABELS[style]}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {group.items.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      className={cn(
+                        OPUS_CARD,
+                        "overflow-hidden p-0 text-left",
+                        selectedMaterialId === m.id && "border-primary ring-1 ring-primary",
+                      )}
+                      onClick={() => setSelectedMaterialId(m.id)}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={m.imageUrl} alt="" className="aspect-square w-full object-cover" />
+                      <div className="p-3">
+                        <p className="text-sm font-medium">{m.name}</p>
+                        <p className="text-xs text-muted-foreground">{m.manufacturer || group.label}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </section>
