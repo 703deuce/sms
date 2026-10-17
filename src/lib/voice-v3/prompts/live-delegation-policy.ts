@@ -1,5 +1,4 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
-import { runtimeHasTool } from "./effective-prompt-capabilities";
 
 /**
  * Canonical GPT-Live (Amy) delegation policy — backend capabilities and when to delegate.
@@ -9,83 +8,40 @@ import { runtimeHasTool } from "./effective-prompt-capabilities";
 export function buildLiveDelegationPolicySection(
   config?: VoiceV3AgentConfig,
 ): string {
+  const caps = config?.capabilities;
   const backendCaps: string[] = [];
-  if (!config || runtimeHasTool(config, "update_intake")) {
+  if (!caps || caps.collectIntake) {
     backendCaps.push("- Save or correct caller information required by the business.");
   }
-  if (config && runtimeHasTool(config, "find_availability")) {
+  if (!caps || caps.checkAvailability) {
     backendCaps.push("- Check real appointment availability.");
   }
-  if (config && runtimeHasTool(config, "book_appointment")) {
+  if (!caps || caps.bookAppointments) {
     backendCaps.push("- Create new appointments.");
   }
-  if (config && runtimeHasTool(config, "submit_appointment_request")) {
-    backendCaps.push("- Submit appointment requests for staff review.");
-  }
-  if (config && runtimeHasTool(config, "send_booking_link")) {
-    backendCaps.push("- Send a booking link by SMS when permitted.");
-  }
-  if (config && runtimeHasTool(config, "find_appointment")) {
+  if (!caps || caps.findAppointments) {
     backendCaps.push("- Find existing appointments.");
   }
-  if (config && runtimeHasTool(config, "reschedule_appointment")) {
+  if (!caps || caps.rescheduleAppointments) {
     backendCaps.push("- Reschedule existing appointments.");
   }
-  if (config && runtimeHasTool(config, "cancel_appointment")) {
+  if (!caps || caps.cancelAppointments) {
     backendCaps.push("- Cancel existing appointments.");
   }
-  if (config && runtimeHasTool(config, "transfer_call")) {
+  if (!caps || caps.transferCalls) {
     backendCaps.push("- Transfer the live call to an authorized human or destination.");
   }
-  if (config && runtimeHasTool(config, "request_callback")) {
+  if (config?.callHandling.callbackRequestsEnabled === true) {
     backendCaps.push(
       "- Record a request for the business to call the caller back.",
     );
-  }
-  if (config && runtimeHasTool(config, "take_message")) {
-    backendCaps.push("- Take a message for the business.");
   }
   backendCaps.push(
     "- End the telephone call through the telephony/application layer when appropriate.",
   );
 
-  const delegateWhen: string[] = [];
-  if (config && runtimeHasTool(config, "find_availability")) {
-    delegateWhen.push("- The caller asks what appointment dates or times are available.");
-    delegateWhen.push("- The caller asks whether a specific appointment time is available.");
-  }
-  if (config && runtimeHasTool(config, "book_appointment")) {
-    delegateWhen.push("- The caller wants to create an appointment on the live calendar.");
-  }
-  if (config && runtimeHasTool(config, "submit_appointment_request")) {
-    delegateWhen.push("- The caller wants to request an appointment for staff review.");
-  }
-  if (config && runtimeHasTool(config, "send_booking_link")) {
-    delegateWhen.push("- The caller wants a booking link sent by text.");
-  }
-  if (config && runtimeHasTool(config, "find_appointment")) {
-    delegateWhen.push("- The caller wants information about an appointment that already exists.");
-  }
-  if (config && runtimeHasTool(config, "reschedule_appointment")) {
-    delegateWhen.push("- The caller wants to reschedule an existing appointment.");
-  }
-  if (config && runtimeHasTool(config, "cancel_appointment")) {
-    delegateWhen.push("- The caller wants to cancel an existing appointment.");
-  }
-  delegateWhen.push(
-    "- The caller provides or corrects information that must be stored in authoritative business state.",
-  );
-  if (config && runtimeHasTool(config, "transfer_call")) {
-    delegateWhen.push("- The caller asks for a real call transfer or accepts a transfer.");
-  }
-  delegateWhen.push(
-    "- A correction changes backend work that has already been requested or is currently in progress.",
-    "- The answer depends on authoritative application state, provider state, or an external action.",
-    "- Careful backend reasoning is required beyond a simple conversational response.",
-  );
-
   const callbackDelegateWhen =
-    config && runtimeHasTool(config, "request_callback")
+    config?.callHandling.callbackRequestsEnabled === true
       ? `
 - The caller asks the business or a person from the business to call them back.
 - The caller changes from another operation, including appointment booking, to requesting a callback.
@@ -93,7 +49,7 @@ export function buildLiveDelegationPolicySection(
       : "";
 
   const callbackCompletion =
-    config && runtimeHasTool(config, "request_callback")
+    config?.callHandling.callbackRequestsEnabled === true
       ? `
 Callback requests:
 - Do not tell the caller the callback has been arranged, recorded, requested, or confirmed until backend success confirms it.
@@ -127,7 +83,17 @@ Backend capabilities:
 ${backendCaps.join("\n")}
 
 Delegate to the backend when:
-${delegateWhen.join("\n")}${callbackDelegateWhen}
+- The caller asks what appointment dates or times are available.
+- The caller asks whether a specific appointment time is available.
+- The caller wants to create an appointment.
+- The caller wants information about an appointment that already exists.
+- The caller wants to reschedule an existing appointment.
+- The caller wants to cancel an existing appointment.
+- The caller provides or corrects information that must be stored in authoritative business state.
+- The caller asks for a real call transfer or accepts a transfer.
+- A correction changes backend work that has already been requested or is currently in progress.
+- The answer depends on authoritative application state, provider state, or an external action.
+- Careful backend reasoning is required beyond a simple conversational response.${callbackDelegateWhen}
 
 Do not delegate to the backend when:
 - The caller is greeting you or making ordinary conversation.
