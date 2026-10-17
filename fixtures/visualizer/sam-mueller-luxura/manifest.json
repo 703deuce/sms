@@ -1,0 +1,12 @@
+{
+  "manufacturer": "Samuel Mueller",
+  "category": "WALL_PANEL",
+  "panelLine": "LUXURA",
+  "description": "Luxura engineered stone wall panels. Display names are placeholders until official color names are supplied.",
+  "materials": [
+    { "slug": "sparkling-quartz", "name": "Sparkling Quartz", "file": "sparkling-quartz.jpg", "sku": "SM-LX-01", "panelLine": "LUXURA" },
+    { "slug": "warm-crystal", "name": "Warm Crystal", "file": "warm-crystal.jpg", "sku": "SM-LX-02", "panelLine": "LUXURA" },
+    { "slug": "ribbon-onyx", "name": "Ribbon Onyx", "file": "ribbon-onyx.jpg", "sku": "SM-LX-03", "panelLine": "LUXURA" },
+    { "slug": "veined-marble", "name": "Veined Marble", "file": "veined-marble.jpg", "sku": "SM-LX-04", "panelLine": "LUXURA" }
+  ]
+}

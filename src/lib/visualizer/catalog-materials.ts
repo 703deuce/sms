@@ -10,6 +10,9 @@ export const VISUALIZER_CATALOG_MATERIAL_PREFIX = "catalog:";
 const PIONEER_PLUS_STONE_BLOCK_NOTES =
   "Samuel Mueller Pioneer Plus large stone-block wall panels with realistic grout joints; extend the block pattern at full wall scale (reference may be a small sample cutout).";
 
+const LUXURA_SLAB_NOTES =
+  "Samuel Mueller Luxura engineered stone wall panels; smooth continuous slab look with natural veining or speckle — not large block grout layout.";
+
 export type CatalogMaterial = {
   slug: string;
   name: string;
@@ -82,12 +85,57 @@ const SAM_MUELLER_PIONEER_PLUS: CatalogMaterial[] = [
   },
 ];
 
+/** Placeholder display names until official Luxura color names are confirmed. */
+const SAM_MUELLER_LUXURA: CatalogMaterial[] = [
+  {
+    slug: "sparkling-quartz",
+    name: "Sparkling Quartz",
+    sku: "SM-LX-01",
+    category: "WALL_PANEL",
+    manufacturer: "Samuel Mueller",
+    panelLine: "LUXURA",
+    publicDir: "sam-mueller-luxura",
+    description: LUXURA_SLAB_NOTES,
+  },
+  {
+    slug: "warm-crystal",
+    name: "Warm Crystal",
+    sku: "SM-LX-02",
+    category: "WALL_PANEL",
+    manufacturer: "Samuel Mueller",
+    panelLine: "LUXURA",
+    publicDir: "sam-mueller-luxura",
+    description: LUXURA_SLAB_NOTES,
+  },
+  {
+    slug: "ribbon-onyx",
+    name: "Ribbon Onyx",
+    sku: "SM-LX-03",
+    category: "WALL_PANEL",
+    manufacturer: "Samuel Mueller",
+    panelLine: "LUXURA",
+    publicDir: "sam-mueller-luxura",
+    description: LUXURA_SLAB_NOTES,
+  },
+  {
+    slug: "veined-marble",
+    name: "Veined Marble",
+    sku: "SM-LX-04",
+    category: "WALL_PANEL",
+    manufacturer: "Samuel Mueller",
+    panelLine: "LUXURA",
+    publicDir: "sam-mueller-luxura",
+    description: LUXURA_SLAB_NOTES,
+  },
+];
+
 /** Long Baths wall panels — served from /public/visualizer/materials/long-baths/ */
 export const LONG_BATHS_WALL_PANEL_CATALOG: CatalogMaterial[] = LONG_BATHS_BCI;
 
 export const VISUALIZER_WALL_PANEL_CATALOG: CatalogMaterial[] = [
   ...LONG_BATHS_BCI,
   ...SAM_MUELLER_PIONEER_PLUS,
+  ...SAM_MUELLER_LUXURA,
 ];
 
 export function isCatalogMaterialId(materialId: string | undefined | null): boolean {

@@ -1,7 +1,7 @@
 import { jsonError, requireSession, resolveWorkspaceId } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { listCatalogMaterialsForApi } from "@/lib/visualizer/catalog-materials";
-import { VISUALIZER_BUCKET, type VisualizerPanelLine } from "@/lib/visualizer/constants";
+import { VISUALIZER_BUCKET, parseVisualizerPanelLineParam } from "@/lib/visualizer/constants";
 import { getVisualizerSignedUrl } from "@/lib/visualizer/storage";
 import { createVisualizerRequestLog, logVisualizerError } from "@/lib/visualizer/server-request-log";
 
@@ -14,11 +14,7 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const category = url.searchParams.get("category")?.trim();
-  const panelLineParam = url.searchParams.get("panelLine")?.trim();
-  const panelLine: VisualizerPanelLine | undefined =
-    panelLineParam === "BCI" || panelLineParam === "PIONEER_PLUS"
-      ? (panelLineParam as VisualizerPanelLine)
-      : undefined;
+  const panelLine = parseVisualizerPanelLineParam(url.searchParams.get("panelLine"));
   const activeOnly = url.searchParams.get("active") !== "0";
 
   const prisma = getPrisma();
