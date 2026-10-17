@@ -14,7 +14,7 @@ import {
   isPlatformOutboundSmsMode,
   VOICE_OUTBOUND_SMS_PLATFORM_SELECT_VALUE,
 } from "@/lib/voice/sms/voice-outbound-sms-constants";
-import { isTollFreeE164 } from "@/lib/voice/sms/voice-outbound-sms-config";
+import { VOICE_AGENT_OUTBOUND_SMS_NUMBERS_QUERY } from "@/lib/voice/sms/voice-agent-outbound-sms-inventory";
 import {
   pickWizardFieldComponents,
   WizardCheckboxInline,
@@ -157,7 +157,9 @@ export function AppointmentsStep({
 
   useEffect(() => {
     if ((state.bookingStrategy || "MICROSOFT_365") !== "SEND_LINK") return;
-    void fetch("/api/phone/numbers")
+    void fetch(
+      `/api/phone/numbers?eligibleFor=${encodeURIComponent(VOICE_AGENT_OUTBOUND_SMS_NUMBERS_QUERY)}`,
+    )
       .then((r) => r.json())
       .then((j) => {
         const rows = (j.data || []) as Array<{
@@ -166,8 +168,7 @@ export function AppointmentsStep({
           friendlyName: string | null;
           status: string;
         }>;
-        const active = rows.filter((n) => n.status === "Active");
-        setSmsNumbers(active.filter((n) => !isTollFreeE164(n.e164)));
+        setSmsNumbers(rows);
         const hasSender =
           isPlatformOutboundSmsMode(state.outboundSmsMode) ||
           Boolean(state.outboundSmsPhoneNumberId?.trim());
