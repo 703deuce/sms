@@ -46,6 +46,8 @@ export async function trySendMctbPlatformParentTwilio(input: {
   body: string;
   mediaUrls?: string[];
   fromOverride?: string;
+  /** Voice agent / released inventory — skip isPhoneAuthorizedForOutboundSms re-check. */
+  trustInventoryReleasedSender?: boolean;
 }): Promise<{
   sid: string;
   status: string;
@@ -61,7 +63,9 @@ export async function trySendMctbPlatformParentTwilio(input: {
   const hasRole = Boolean(
     phoneRow && isPlatformMctbSenderPhoneRecord({ settingsJson: phoneRow.settingsJson }),
   );
-  const auth = await isPhoneAuthorizedForOutboundSms(input.authorizedPhoneNumberId);
+  const auth = input.trustInventoryReleasedSender
+    ? { allowed: true }
+    : await isPhoneAuthorizedForOutboundSms(input.authorizedPhoneNumberId);
 
   if (
     !isMctbPlatformParentTwilioSendEligible({
@@ -71,7 +75,11 @@ export async function trySendMctbPlatformParentTwilio(input: {
       outboundSmsAuthorized: auth.allowed,
     })
   ) {
-    if (platform?.phoneNumberId === input.authorizedPhoneNumberId && !auth.allowed) {
+    if (
+      !input.trustInventoryReleasedSender &&
+      platform?.phoneNumberId === input.authorizedPhoneNumberId &&
+      !auth.allowed
+    ) {
       throw new Error("mctb_platform_sender_not_authorized");
     }
     return null;

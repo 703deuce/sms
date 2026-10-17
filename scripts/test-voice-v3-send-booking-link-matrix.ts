@@ -44,6 +44,15 @@ const compiled = compileVoiceV3AgentConfig({ wizard: wizardSendLink() });
 assert.equal(compiled.scheduling.bookingStrategy, "SEND_LINK");
 pass("01_SEND_LINK_strategy_compiles");
 
+const platformWizard = wizardSendLink();
+platformWizard.outboundSmsMode = "platform";
+platformWizard.outboundSmsPhoneNumberId = null;
+platformWizard.outboundSmsE164 = null;
+const platformCompiled = compileVoiceV3AgentConfig({ wizard: platformWizard });
+assert.equal(platformCompiled.telephony.outboundSmsMode, "platform");
+assert.equal(platformCompiled.telephony.outboundSmsPhoneNumberId, null);
+pass("02_platform_sender_mode_compiles");
+
 // 06 URL round-trip
 assert.equal(compiled.bookingStrategyDetail.bookingLinkUrl, VOICE_V3_SEND_LINK_TEST_URL);
 pass("06_published_URL_exact_round-trip");
@@ -98,7 +107,10 @@ const exec = async (confirmed: boolean) =>
     context: ctx,
     args: { confirmed },
     deps: {
-      resolveFromE164: async () => "+15717491060",
+      resolveSmsSender: async () => ({
+        fromE164: "+15717491060",
+        phoneNumberId: "pn_test",
+      }),
       sendSms: async () => {
         smsCount += 1;
         return { providerMessageId: "msg_test_1", status: "queued" };

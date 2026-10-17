@@ -3,6 +3,10 @@ import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { isMctbTexmlIngressLocked } from "@/lib/mctb/sip-ingress/sync";
 import { describeTelnyxVoiceInventory } from "@/lib/phone/telnyx-voice-inventory";
+import {
+  isVoiceAgentOutboundSmsSelectablePhone,
+  VOICE_AGENT_OUTBOUND_SMS_NUMBERS_QUERY,
+} from "@/lib/voice/sms/voice-agent-outbound-sms-inventory";
 type AiOwnerInfo = {
   id: string;
   name: string;
@@ -10,10 +14,13 @@ type AiOwnerInfo = {
   status: string;
 };
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
+    const eligibleFor = new URL(req.url).searchParams.get("eligibleFor");
+    const voiceAgentOutboundSmsOnly =
+      eligibleFor === VOICE_AGENT_OUTBOUND_SMS_NUMBERS_QUERY;
     const prisma = getPrisma();
     const rows: Array<{
       id: string;
@@ -21,6 +28,8 @@ export async function GET() {
       friendlyName: string | null;
       status: string;
       provider: string;
+      type: string | null;
+      a2pStatus: string | null;
       settingsJson: unknown;
     }> = await prisma.phoneNumber.findMany({
       where: { workspaceId: auth.workspaceId },
@@ -31,15 +40,21 @@ export async function GET() {
         friendlyName: true,
         status: true,
         provider: true,
+        type: true,
+        a2pStatus: true,
         settingsJson: true,
       },
     });
 
-    if (rows.length === 0) {
+    const inventoryRows = voiceAgentOutboundSmsOnly
+      ? rows.filter((row) => isVoiceAgentOutboundSmsSelectablePhone(row))
+      : rows;
+
+    if (inventoryRows.length === 0) {
       return NextResponse.json({ data: [] });
     }
 
-    const ids = rows.map((r) => r.id);
+    const ids = inventoryRows.map((r) => r.id);
 
     const joinOwners: Array<{ phoneNumberId: string; agentId: string }> =
       await prisma.voiceAgentPhoneNumber.findMany({
@@ -113,14 +128,14 @@ export async function GET() {
       "@/lib/phone/voice-product-switch"
     );
     const ingressByPhone = await Promise.all(
-      rows.map(async (row) => ({
+      inventoryRows.map(async (row) => ({
         id: row.id,
         ingress: await resolvePhoneVoiceIngressProduct(auth.workspaceId, row.id),
       })),
     );
     const ingressMap = new Map(ingressByPhone.map((e) => [e.id, e.ingress]));
 
-    const data = rows.map((row) => {
+    const data = inventoryRows.map((row) => {
       const joinAgentId = joinByPhone.get(row.id);
       const joinAgent = joinAgentId ? agentById.get(joinAgentId) ?? null : null;
       const columnAgent = columnByPhone.get(row.id) ?? null;

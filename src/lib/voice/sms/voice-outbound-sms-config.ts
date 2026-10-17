@@ -19,7 +19,9 @@ export type VoiceOutboundSmsMode =
   /** Fixed workspace number by id or E.164 from agent config. */
   | "explicit_number"
   /** Infer: toll-free voice → workspace_preferred; else same_as_voice_line. */
-  | "auto";
+  | "auto"
+  /** Transovo toll-free platform sender (same pool as MCTB). */
+  | "platform";
 
 export type VoiceOutboundSmsSettings = {
   mode: VoiceOutboundSmsMode;
@@ -67,6 +69,7 @@ export function parseVoiceOutboundSmsSettings(
     modeRaw === "workspace_preferred" ||
     modeRaw === "same_as_voice_line" ||
     modeRaw === "explicit_number" ||
+    modeRaw === "platform" ||
     modeRaw === "auto"
       ? modeRaw
       : "auto";
@@ -92,10 +95,9 @@ export function parseVoiceOutboundSmsSettings(
   };
 }
 
-export function effectiveOutboundSmsMode(settings: VoiceOutboundSmsSettings): Exclude<
-  VoiceOutboundSmsMode,
-  "auto"
-> {
+export function effectiveOutboundSmsMode(
+  settings: VoiceOutboundSmsSettings,
+): Exclude<VoiceOutboundSmsMode, "auto"> {
   if (settings.mode !== "auto") {
     return settings.mode;
   }
@@ -112,6 +114,8 @@ export function describeVoiceOutboundSmsPolicy(settings: VoiceOutboundSmsSetting
       return `Outbound SMS uses the voice line (${settings.voiceInboundE164 || "inbound DID"}) when SMS-capable.`;
     case "explicit_number":
       return `Outbound SMS uses configured sender ${settings.e164 || settings.phoneNumberId || "(unset)"}.`;
+    case "platform":
+      return "Outbound SMS uses the Transovo platform number (toll-free), same as missed-call text back.";
     default:
       return "Outbound SMS uses the workspace preferred texting number (not the toll-free voice DID).";
   }
@@ -121,15 +125,18 @@ export function buildDefaultOutboundSmsMessaging(input: {
   voiceInboundE164: string | null;
   dedicatedPhoneNumberId?: string | null;
   dedicatedE164?: string | null;
+  outboundSmsMode?: VoiceOutboundSmsMode | null;
 }): VoiceAgentConfig["messaging"] {
   const voice = normalizePhoneE164(input.voiceInboundE164);
   const tollFree = isTollFreeE164(voice);
   const mode: VoiceOutboundSmsMode =
-    input.dedicatedPhoneNumberId || input.dedicatedE164
-      ? "explicit_number"
-      : tollFree
-        ? "workspace_preferred"
-        : "auto";
+    input.outboundSmsMode === "platform"
+      ? "platform"
+      : input.dedicatedPhoneNumberId || input.dedicatedE164
+        ? "explicit_number"
+        : tollFree
+          ? "workspace_preferred"
+          : "auto";
 
   return {
     outboundSms: {

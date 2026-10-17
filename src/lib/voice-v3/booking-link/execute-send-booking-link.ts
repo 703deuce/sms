@@ -3,7 +3,7 @@ import "server-only";
 import { normalizePhoneE164 } from "@/lib/messaging/preferred-sending-number";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import { sendVoiceV3BookingLinkSms } from "./send-voice-v3-booking-link-sms";
-import { resolveVoiceOutboundSmsFrom } from "@/lib/voice/sms/voice-outbound-sms-from";
+import { resolveSendLinkSmsSender } from "./resolve-send-link-sms-sender";
 import type { VoiceV3CallContext } from "../state/call-context";
 import { voiceToolError, toolOk, type VoiceToolResult } from "../tools/types";
 import { buildSendBookingLinkSmsBody } from "./sms-body";
@@ -24,12 +24,13 @@ export type SendBookingLinkDeps = {
     from: string;
     body: string;
     idempotencyKey: string;
+    phoneNumberId: string;
   }) => Promise<{ providerMessageId: string; status: string }>;
-  resolveFromE164?: (input: {
+  resolveSmsSender?: (input: {
     workspaceId: string;
+    agentId?: string | null;
     config: VoiceV3AgentConfig;
-    calledE164: string | null;
-  }) => Promise<string>;
+  }) => Promise<{ fromE164: string; phoneNumberId: string } | null>;
 };
 
 function initialBookingLinkState(): VoiceV3BookingLinkCallState {
@@ -42,29 +43,6 @@ function initialBookingLinkState(): VoiceV3BookingLinkCallState {
 
 function bookingLinkFromContext(ctx: VoiceV3CallContext): VoiceV3BookingLinkCallState {
   return ctx.bookingLink ?? initialBookingLinkState();
-}
-
-/** Published wizard telephony wins for SEND_LINK — not LLM, not env default HP sender. */
-async function resolveSendLinkSenderE164(input: {
-  workspaceId: string;
-  agentId?: string | null;
-  config: VoiceV3AgentConfig;
-}): Promise<string> {
-  const tel = input.config.telephony;
-  const explicit = normalizePhoneE164(tel?.outboundSmsE164);
-  if (explicit) return explicit;
-
-  if (tel?.outboundSmsMode === "same_as_voice_line") {
-    const voiceDid = normalizePhoneE164(tel.phoneNumberE164);
-    if (voiceDid) return voiceDid;
-  }
-
-  return resolveVoiceOutboundSmsFrom({
-    workspaceId: input.workspaceId,
-    calledE164: tel?.phoneNumberE164 ?? null,
-    agentId: input.agentId,
-    config: null,
-  });
 }
 
 function buildAttemptId(input: {
@@ -221,37 +199,39 @@ export async function executeSendBookingLink(input: {
   console.log("SEND_BOOKING_LINK_ATTEMPT_STARTED", { call_id: ctx.callId, attempt_id: attemptId });
 
   let fromE164: string;
+  let phoneNumberId: string;
   try {
-    const resolveFrom =
-      input.deps?.resolveFromE164 ??
+    const resolveSender =
+      input.deps?.resolveSmsSender ??
       (async (r) =>
-        resolveSendLinkSenderE164({
+        resolveSendLinkSmsSender({
           workspaceId: r.workspaceId,
-          agentId: input.agentId,
+          agentId: r.agentId,
           config: r.config,
         }));
-    fromE164 = await resolveFrom({
+    const sender = await resolveSender({
       workspaceId: input.workspaceId,
+      agentId: input.agentId,
       config,
-      calledE164: config.telephony?.phoneNumberE164 ?? null,
     });
+    if (!sender?.fromE164 || !sender.phoneNumberId) {
+      return {
+        result: voiceToolError(
+          "SMS_SENDER_NOT_AUTHORIZED",
+          "Outbound SMS sender is not configured for this agent.",
+          {},
+          "not_configured",
+        ),
+        nextContext: ctx,
+      };
+    }
+    fromE164 = sender.fromE164;
+    phoneNumberId = sender.phoneNumberId;
   } catch {
     return {
       result: voiceToolError(
         "SMS_SENDER_NOT_AUTHORIZED",
         "Outbound SMS sender is not configured for this agent.",
-        {},
-        "not_configured",
-      ),
-      nextContext: ctx,
-    };
-  }
-
-  if (!fromE164) {
-    return {
-      result: voiceToolError(
-        "SMS_SENDER_NOT_AUTHORIZED",
-        "Outbound SMS sender is not authorized.",
         {},
         "not_configured",
       ),
@@ -288,19 +268,6 @@ export async function executeSendBookingLink(input: {
     });
   }
 
-  const phoneNumberId = config.telephony?.outboundSmsPhoneNumberId?.trim() || null;
-  if (!phoneNumberId && !input.deps?.sendSms) {
-    return {
-      result: voiceToolError(
-        "SMS_SENDER_NOT_AUTHORIZED",
-        "Outbound SMS sender phone is not configured for this agent.",
-        {},
-        "not_configured",
-      ),
-      nextContext: ctx,
-    };
-  }
-
   const sendFn =
     input.deps?.sendSms ??
     (async (sms) => {
@@ -310,7 +277,7 @@ export async function executeSendBookingLink(input: {
         callId: ctx.callId,
         toE164: sms.to,
         fromE164: sms.from,
-        phoneNumberId: phoneNumberId!,
+        phoneNumberId: sms.phoneNumberId,
         body: sms.body,
         idempotencyKey: sms.idempotencyKey,
       });
@@ -327,6 +294,7 @@ export async function executeSendBookingLink(input: {
       from: fromE164,
       body,
       idempotencyKey,
+      phoneNumberId,
     });
     console.log("SEND_BOOKING_LINK_PROVIDER_ACCEPTED", {
       call_id: ctx.callId,
