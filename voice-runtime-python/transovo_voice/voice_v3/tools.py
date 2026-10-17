@@ -17,6 +17,7 @@ from transovo_voice.voice_v3.telephony_bridge import LiveKitTelephonyBridge
 from transovo_voice.voice_v3.forensics import VoiceV3CallForensics
 from transovo_voice.voice_v3.transfer_executor import execute_authorized_transfer_plan
 from transovo_voice.voice_v3.tool_idle_filler import execute_with_idle_filler
+from transovo_voice.voice_v3.live_context_hydration import apply_live_context_from_tool_result
 
 COLLECT_INTAKE_FIELD_TOOL = "collect_intake_field"
 _SET_INTAKE_PREFIX = "set_intake_"
@@ -69,6 +70,8 @@ async def _execute_transovo_tool(
         arguments=raw_arguments,
         function_call_id=fc_id_str,
     )
+    if isinstance(result, dict):
+        result = apply_live_context_from_tool_result(result, context=context)
 
     if forensics:
         elapsed_ms = int((time.perf_counter() - started) * 1000)
@@ -113,13 +116,19 @@ async def _dispatch_intake_tool(
             field_key=field_key,
             intake_fields=intake_fields,
         )
-        return await client.execute(tool_name="update_intake", arguments=collected)
+        result = await client.execute(tool_name="update_intake", arguments=collected)
+        if isinstance(result, dict):
+            return apply_live_context_from_tool_result(result, context=context)
+        return result
 
     field_key = _intake_field_key_from_set_tool(tool_name, intake_fields)
     if field_key:
         value = args.get("value")
         payload: dict[str, Any] = {field_key: value}
-        return await client.execute(tool_name="update_intake", arguments=payload)
+        result = await client.execute(tool_name="update_intake", arguments=payload)
+        if isinstance(result, dict):
+            return apply_live_context_from_tool_result(result, context=context)
+        return result
 
     raise ToolError(f"Unknown intake tool: {tool_name}")
 

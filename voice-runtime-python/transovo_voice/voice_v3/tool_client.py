@@ -63,6 +63,17 @@ class TransovoV3ToolClient:
             return result
         return {"ok": False, "status": "error", "code": "INVALID_RESULT", "message": "bad backend shape"}
 
+    async def fetch_delegation_runtime_context(
+        self,
+        delegation_id: str | None,
+    ) -> dict[str, Any]:
+        payload = {
+            "liveSessionId": self._ctx.live_session_id,
+            "delegationId": delegation_id,
+        }
+        result = await self._backend.call("resolve_voice_v3_delegated_runtime_context", payload)
+        return result if isinstance(result, dict) else {"liveContextEvents": []}
+
     async def commit_caller_utterance(self, utterance: str) -> dict[str, Any]:
         payload = {
             "liveSessionId": self._ctx.live_session_id,

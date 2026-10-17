@@ -30,6 +30,11 @@ import {
   mergeCanonicalConversationTurn,
 } from "@/lib/voice-v3/telemetry/call-forensics";
 import { ensureVoiceV3LiveKitVoiceCall } from "@/lib/voice/python-runtime-bridge/ensure-voice-v3-livekit-voice-call";
+import {
+  attachLiveContextEventsToToolResult,
+  createVoiceV3LiveKitLiveContextCollector,
+  resolveVoiceV3DelegatedRuntimeContextForLiveKit,
+} from "@/lib/voice/python-runtime-bridge/voice-v3-livekit-live-context";
 import type { FunctionTool } from "openai/resources/live/live";
 import type { VoiceV3AgentConfig } from "@/lib/voice-v3/config/agent-config";
 
@@ -300,6 +305,7 @@ export async function executeVoiceV3ToolForLiveKit(
 
   const currentRevision = getCurrentConversationRevision(liveSessionId);
   const toolStarted = Date.now();
+  const liveContext = createVoiceV3LiveKitLiveContextCollector();
   appendVoiceV3ForensicEvent(liveSessionId, "NODE_TOOL_EXECUTION_STARTED", {
     tool_name: payload.toolName,
     function_call_id: payload.functionCallId,
@@ -313,9 +319,7 @@ export async function executeVoiceV3ToolForLiveKit(
       functionCallId: payload.functionCallId,
       runtime,
       tenantId: runtime.config.workspaceId ?? "unknown",
-      sendContext: () => {
-        /* LiveKit path: no OpenAI sideband context injection */
-      },
+      sendContext: liveContext.sendContext,
       currentConversationRevision: currentRevision,
       delegationBasedOnConversationRevision: currentRevision,
       delegationSemanticallyFresh: true,
@@ -330,9 +334,20 @@ export async function executeVoiceV3ToolForLiveKit(
     elapsed_ms: Date.now() - toolStarted,
     ok: (result as { ok?: boolean }).ok ?? null,
     status: (result as { status?: string }).status ?? null,
+    live_context_event_count: liveContext.events.length,
   });
 
-  return result as Record<string, unknown>;
+  const withLiveContext = attachLiveContextEventsToToolResult(
+    result as Record<string, unknown>,
+    liveContext.events,
+  );
+  return withLiveContext;
+}
+
+export async function resolveVoiceV3DelegatedRuntimeContextForLiveKitBridge(
+  payload: { liveSessionId: string; delegationId?: string | null },
+): Promise<Record<string, unknown>> {
+  return resolveVoiceV3DelegatedRuntimeContextForLiveKit(payload);
 }
 
 export function commitVoiceV3CallerUtteranceForLiveKit(input: {

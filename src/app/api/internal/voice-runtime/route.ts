@@ -23,6 +23,7 @@ type VoiceRuntimeAction =
   | "record_call_telemetry"
   | "resolve_voice_v3_livekit_session"
   | "execute_voice_v3_livekit_tool"
+  | "resolve_voice_v3_delegated_runtime_context"
   | "commit_voice_v3_livekit_caller_utterance"
   | "record_voice_v3_transfer_outcome"
   | "append_voice_v3_forensic_events"
@@ -244,6 +245,14 @@ export async function POST(request: Request) {
           "@/lib/voice/python-runtime-bridge/voice-v3-livekit"
         );
         result = await executeVoiceV3ToolForLiveKit(payload as never);
+        break;
+      }
+
+      case "resolve_voice_v3_delegated_runtime_context": {
+        const { resolveVoiceV3DelegatedRuntimeContextForLiveKitBridge } = await import(
+          "@/lib/voice/python-runtime-bridge/voice-v3-livekit"
+        );
+        result = await resolveVoiceV3DelegatedRuntimeContextForLiveKitBridge(payload as never);
         break;
       }
 
