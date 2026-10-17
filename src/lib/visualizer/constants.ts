@@ -14,6 +14,13 @@ export const VISUALIZER_ALLOWED_MIME = new Set([
 
 export const VISUALIZER_DEFAULT_MONTHLY_CREDITS = 100;
 
+/** Wall-panel product lines (catalog grouping). More lines added per manufacturer rollout. */
+export type VisualizerPanelLine = "BCI";
+
+export const VISUALIZER_PANEL_LINE_LABELS: Record<VisualizerPanelLine, string> = {
+  BCI: "BCI",
+};
+
 export const TRANSFORMATION_LABELS: Record<string, string> = {
   TUB_TO_SHOWER: "Tub-to-Shower",
   SHOWER_TO_SHOWER: "Shower-to-Shower",

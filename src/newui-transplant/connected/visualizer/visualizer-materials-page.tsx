@@ -8,7 +8,14 @@ import { VISUALIZER_ROUTES } from "@/lib/visualizer/routes";
 import { Button } from "@/newui-transplant/components/ui/button";
 import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
 
-type Material = { id: string; name: string; category: string; sku: string | null; imageUrl: string };
+type Material = {
+  id: string;
+  name: string;
+  category: string;
+  panelLine?: string | null;
+  sku: string | null;
+  imageUrl: string;
+};
 
 export function VisualizerMaterialsPage() {
   const [materials, setMaterials] = useState<Material[]>([]);
@@ -38,7 +45,9 @@ export function VisualizerMaterialsPage() {
             <img src={m.imageUrl} alt="" className="aspect-square w-full object-cover" />
             <div className="p-3">
               <p className="font-medium text-sm">{m.name}</p>
-              <p className="text-xs text-muted-foreground">{m.category}{m.sku ? ` · ${m.sku}` : ""}</p>
+              <p className="text-xs text-muted-foreground">
+                {m.panelLine || m.category}{m.sku ? ` · ${m.sku}` : ""}
+              </p>
             </div>
           </Link>
         ))}

@@ -40,7 +40,7 @@ Client must have `projectId` + `roomAssetId` before Generate. Draft is restored 
 
 | Source | API | IDs |
 |--------|-----|-----|
-| Long Baths catalog | `GET /api/visualizer/materials` | `catalog:<slug>` (static files under `/public/visualizer/materials/long-baths/`) |
+| Long Baths catalog | `GET /api/visualizer/materials` | `catalog:<slug>` (static files under `/public/visualizer/materials/long-baths/`). Each catalog row includes `panelLine` (e.g. **BCI**). Optional filter: `?panelLine=BCI`. |
 | Workspace uploads | `POST /api/visualizer/materials` | UUID rows in `visualizer_material` |
 
 Generation resolves materials in `loadMaterialReferenceImage()` (catalog vs workspace).

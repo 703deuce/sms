@@ -35,7 +35,7 @@ const TRANSFORMATIONS = VISUALIZER_LAUNCH_TRANSFORMATIONS.map((id) => ({
   desc: TRANSFORMATION_DESCRIPTIONS[id] || "",
 }));
 
-type MaterialRow = { id: string; name: string; category: string; imageUrl: string };
+type MaterialRow = { id: string; name: string; category: string; panelLine?: string | null; imageUrl: string };
 
 type WizardDraft = {
   step: number;
@@ -377,7 +377,13 @@ export function VisualizerNewDesignPage() {
       ) : null}
 
       {step === 2 ? (
-        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <section className="flex flex-col gap-4">
+          {materials.some((m) => m.panelLine) ? (
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              BCI wall panels
+            </p>
+          ) : null}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {materials.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No wall panels yet.{" "}
@@ -406,6 +412,7 @@ export function VisualizerNewDesignPage() {
               </div>
             </button>
           ))}
+          </div>
         </section>
       ) : null}
 
