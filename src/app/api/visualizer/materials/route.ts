@@ -15,7 +15,10 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const category = url.searchParams.get("category")?.trim();
   const panelLineParam = url.searchParams.get("panelLine")?.trim();
-  const panelLine = panelLineParam === "BCI" ? ("BCI" as VisualizerPanelLine) : undefined;
+  const panelLine: VisualizerPanelLine | undefined =
+    panelLineParam === "BCI" || panelLineParam === "PIONEER_PLUS"
+      ? (panelLineParam as VisualizerPanelLine)
+      : undefined;
   const activeOnly = url.searchParams.get("active") !== "0";
 
   const prisma = getPrisma();

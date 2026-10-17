@@ -15,11 +15,15 @@ export const VISUALIZER_ALLOWED_MIME = new Set([
 export const VISUALIZER_DEFAULT_MONTHLY_CREDITS = 100;
 
 /** Wall-panel product lines (catalog grouping). More lines added per manufacturer rollout. */
-export type VisualizerPanelLine = "BCI";
+export type VisualizerPanelLine = "BCI" | "PIONEER_PLUS";
 
 export const VISUALIZER_PANEL_LINE_LABELS: Record<VisualizerPanelLine, string> = {
   BCI: "BCI",
+  PIONEER_PLUS: "Sam Mueller · Pioneer Plus",
 };
+
+/** Display order in material pickers. */
+export const VISUALIZER_PANEL_LINE_ORDER: VisualizerPanelLine[] = ["BCI", "PIONEER_PLUS"];
 
 export const TRANSFORMATION_LABELS: Record<string, string> = {
   TUB_TO_SHOWER: "Tub-to-Shower",

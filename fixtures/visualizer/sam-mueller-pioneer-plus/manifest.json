@@ -1,0 +1,12 @@
+{
+  "manufacturer": "Samuel Mueller",
+  "category": "WALL_PANEL",
+  "panelLine": "PIONEER_PLUS",
+  "description": "Pioneer Plus stone-block wall panels. Reference photos may be sample cutouts; generation should continue full-scale block grout layout on shower walls.",
+  "materials": [
+    { "slug": "frost-white", "name": "Frost White", "file": "frost-white.jpg", "sku": "SM-PP-57", "panelLine": "PIONEER_PLUS" },
+    { "slug": "travertine", "name": "Travertine", "file": "travertine.jpg", "sku": "SM-PP-58", "panelLine": "PIONEER_PLUS" },
+    { "slug": "tundra-grey", "name": "Tundra Grey", "file": "tundra-grey.jpg", "sku": "SM-PP-59", "panelLine": "PIONEER_PLUS" },
+    { "slug": "awaken-gold", "name": "Awaken Gold", "file": "awaken-gold.jpg", "sku": "SM-PP-63", "panelLine": "PIONEER_PLUS" }
+  ]
+}

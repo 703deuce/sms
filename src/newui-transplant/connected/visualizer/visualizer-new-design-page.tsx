@@ -10,6 +10,9 @@ import {
   TRANSFORMATION_LABELS,
   VISUALIZER_DEFAULT_SHOWER_WALL_HEIGHT,
   VISUALIZER_LAUNCH_TRANSFORMATIONS,
+  VISUALIZER_PANEL_LINE_LABELS,
+  VISUALIZER_PANEL_LINE_ORDER,
+  type VisualizerPanelLine,
   type VisualizerShowerWallHeight,
   transformationSupportsShowerWallHeight,
 } from "@/lib/visualizer/constants";
@@ -35,7 +38,14 @@ const TRANSFORMATIONS = VISUALIZER_LAUNCH_TRANSFORMATIONS.map((id) => ({
   desc: TRANSFORMATION_DESCRIPTIONS[id] || "",
 }));
 
-type MaterialRow = { id: string; name: string; category: string; panelLine?: string | null; imageUrl: string };
+type MaterialRow = {
+  id: string;
+  name: string;
+  category: string;
+  manufacturer?: string | null;
+  panelLine?: string | null;
+  imageUrl: string;
+};
 
 type WizardDraft = {
   step: number;
@@ -295,6 +305,29 @@ export function VisualizerNewDesignPage() {
     return true;
   }, [step, roomAssetId, transformation, selectedMaterialId]);
 
+  const materialsByLine = useMemo(() => {
+    const buckets = new Map<string, MaterialRow[]>();
+    for (const m of materials) {
+      const line = m.panelLine || "OTHER";
+      if (!buckets.has(line)) buckets.set(line, []);
+      buckets.get(line)!.push(m);
+    }
+    const order: string[] = [...VISUALIZER_PANEL_LINE_ORDER];
+    for (const key of buckets.keys()) {
+      if (!order.includes(key)) order.push(key);
+    }
+    return order
+      .filter((line) => buckets.has(line))
+      .map((line) => ({
+        line,
+        label:
+          line in VISUALIZER_PANEL_LINE_LABELS
+            ? VISUALIZER_PANEL_LINE_LABELS[line as VisualizerPanelLine]
+            : line,
+        items: buckets.get(line)!,
+      }));
+  }, [materials]);
+
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6">
       <header>
@@ -377,13 +410,7 @@ export function VisualizerNewDesignPage() {
       ) : null}
 
       {step === 2 ? (
-        <section className="flex flex-col gap-4">
-          {materials.some((m) => m.panelLine) ? (
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              BCI wall panels
-            </p>
-          ) : null}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <section className="flex flex-col gap-6">
           {materials.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No wall panels yet.{" "}
@@ -393,26 +420,34 @@ export function VisualizerNewDesignPage() {
               or upload a custom reference on the next step.
             </p>
           ) : null}
-          {materials.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              className={cn(
-                OPUS_CARD,
-                "overflow-hidden p-0 text-left",
-                selectedMaterialId === m.id && "border-primary ring-1 ring-primary",
-              )}
-              onClick={() => setSelectedMaterialId(m.id)}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={m.imageUrl} alt="" className="aspect-square w-full object-cover" />
-              <div className="p-3">
-                <p className="text-sm font-medium">{m.name}</p>
-                <p className="text-xs text-muted-foreground">{m.category}</p>
+          {materialsByLine.map((group) => (
+            <div key={group.line} className="flex flex-col gap-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {group.label}
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {group.items.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    className={cn(
+                      OPUS_CARD,
+                      "overflow-hidden p-0 text-left",
+                      selectedMaterialId === m.id && "border-primary ring-1 ring-primary",
+                    )}
+                    onClick={() => setSelectedMaterialId(m.id)}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={m.imageUrl} alt="" className="aspect-square w-full object-cover" />
+                    <div className="p-3">
+                      <p className="text-sm font-medium">{m.name}</p>
+                      <p className="text-xs text-muted-foreground">{m.manufacturer || group.label}</p>
+                    </div>
+                  </button>
+                ))}
               </div>
-            </button>
+            </div>
           ))}
-          </div>
         </section>
       ) : null}
 

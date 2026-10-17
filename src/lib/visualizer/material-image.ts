@@ -35,7 +35,7 @@ export async function loadMaterialReferenceImage(input: {
       label: meta?.sku || slug,
       name: meta?.name || slug,
       category: meta?.category || "WALL_PANEL",
-      description: null,
+      description: meta?.description ?? null,
       finish: null,
     };
   }
