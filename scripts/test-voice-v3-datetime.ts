@@ -9,6 +9,8 @@ import type { SchedulingMeaning } from "../src/lib/voice-v3/time/scheduling-type
 import { VOICE_V3_BOOKING_TEST_CONFIG } from "./voice-v3-booking-test-config";
 import { evaluateVoiceV3Rules } from "../src/lib/voice-v3/state/call-rules";
 import { deriveSchedulingClarification } from "../src/lib/voice-v3/time/scheduling-clarification";
+import { DEFAULT_SCHEDULING_LOOKAHEAD_DAYS } from "../src/lib/voice-v3/calendar/find-existing-appointment-window";
+import { resolveSearchWindowFromNormalized } from "../src/lib/voice-v3/calendar/find-availability";
 
 const FROZEN = new Date("2026-09-17T14:00:00.000Z"); // Thu 10:00 America/New_York (EDT)
 
@@ -447,6 +449,30 @@ function main() {
     clock: clockTz("America/Los_Angeles"),
   });
   assert.notEqual(chicago.clock.nowLocalDateTime, la.clock.nowLocalDateTime);
+
+  const earliest = norm(
+    meaning({
+      date_relation: "EARLIEST_AVAILABLE",
+      date_expression: "earliest appointment",
+      weekday: null,
+      explicit_date: null,
+      time_expression: null,
+      time_kind: "UNSPECIFIED",
+      exact_time: null,
+      start_time: null,
+      end_time: null,
+      daypart: null,
+    }),
+  );
+  assert.equal(earliest.precision, "OPEN_RANGE");
+  assert.ok(earliest.utcStart && earliest.utcEnd);
+  const earliestWindow = resolveSearchWindowFromNormalized(earliest, "America/New_York", 30);
+  assert.ok(earliestWindow);
+  const spanDays =
+    (new Date(earliestWindow!.rangeEndUtc).getTime() -
+      new Date(earliestWindow!.rangeStartUtc).getTime()) /
+    (24 * 60 * 60_000);
+  assert.ok(spanDays >= DEFAULT_SCHEDULING_LOOKAHEAD_DAYS - 1);
 
   console.log("PASS voice-v3 datetime normalization");
 }

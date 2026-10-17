@@ -4,7 +4,8 @@ import { resolveSearchWindowFromNormalized } from "./find-availability";
 import { parseYmd, wallTimeInZoneToUtc } from "../time/timezone";
 
 const DEFAULT_LOOKBACK_DAYS = 1;
-const DEFAULT_LOOKAHEAD_DAYS = 60;
+export const DEFAULT_SCHEDULING_LOOKAHEAD_DAYS = 60;
+const DEFAULT_LOOKAHEAD_DAYS = DEFAULT_SCHEDULING_LOOKAHEAD_DAYS;
 
 /** Bounded calendarView window for locating existing appointments. */
 export function buildFindExistingAppointmentWindow(input: {
