@@ -345,6 +345,16 @@ const MODEL_TO_TABLE: Record<string, string> = {
   smartRoutingAiRecommendation: "smart_routing_ai_recommendations",
   productEntitlement: "ProductEntitlement",
   workspaceProductFeature: "workspace_product_features",
+  visualizerMaterial: "visualizer_material",
+  visualizerProject: "visualizer_project",
+  visualizerAsset: "visualizer_asset",
+  visualizerDesign: "visualizer_design",
+  visualizerGenerationJob: "visualizer_generation_job",
+  visualizerShare: "visualizer_share",
+  visualizerEstimateRequest: "visualizer_estimate_request",
+  visualizerEvent: "visualizer_event",
+  visualizerWidgetConfig: "visualizer_widget_config",
+  visualizerUsageLedger: "visualizer_usage_ledger",
 };
 
 /** Relation name on a model → { table, fk on this model, pk on related }. */
@@ -848,6 +858,42 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
     workspace: { table: "Workspace", fk: "workspaceId" },
   },
   workspaceProductFeature: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  visualizerMaterial: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  visualizerProject: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    contact: { table: "Contact", fk: "contactId" },
+  },
+  visualizerAsset: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    project: { table: "visualizer_project", fk: "projectId" },
+  },
+  visualizerDesign: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    project: { table: "visualizer_project", fk: "projectId" },
+  },
+  visualizerGenerationJob: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    project: { table: "visualizer_project", fk: "projectId" },
+  },
+  visualizerShare: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    project: { table: "visualizer_project", fk: "projectId" },
+  },
+  visualizerEstimateRequest: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    project: { table: "visualizer_project", fk: "projectId" },
+  },
+  visualizerEvent: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  visualizerWidgetConfig: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  visualizerUsageLedger: {
     workspace: { table: "Workspace", fk: "workspaceId" },
   },
   workspace: {

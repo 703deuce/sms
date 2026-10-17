@@ -148,6 +148,28 @@ export async function persistAppointmentReceptionistWizardDraft(input: {
 
   const savedState = (authoritative?.state ?? state) as AppointmentReceptionistWizardState;
 
+  const { VOICE_AGENT_HEALTH_OK, VOICE_AGENT_HEALTH_LIVE_SYNC_PENDING } = await import(
+    "@/lib/voice/agent-health-status"
+  );
+  let healthStatus = authoritative?.healthStatus ?? null;
+  let healthMessage = authoritative?.healthMessage ?? null;
+
+  // Draft save does not touch LiveKit/Telnyx — clear stale live-sync errors so the wizard
+  // does not block Save & Continue with infrastructure messages from a prior failed sync.
+  if (healthStatus === VOICE_AGENT_HEALTH_LIVE_SYNC_PENDING) {
+    await prisma.voiceAgent.update({
+      where: { id: agentId, workspaceId: input.workspaceId },
+      data: { healthStatus: VOICE_AGENT_HEALTH_OK, healthMessage: null },
+    });
+    healthStatus = VOICE_AGENT_HEALTH_OK;
+    healthMessage = null;
+    if (preserveActiveOnDraftSave) {
+      warnings.push(
+        "Draft saved. Live callers still use your last activated version until you activate again.",
+      );
+    }
+  }
+
   return {
     agentId,
     setupId: setup.setupId,
@@ -156,8 +178,8 @@ export async function persistAppointmentReceptionistWizardDraft(input: {
     state: savedState,
     warnings,
     issues: [],
-    healthStatus: authoritative?.healthStatus ?? null,
-    healthMessage: authoritative?.healthMessage ?? null,
+    healthStatus,
+    healthMessage,
   };
 }
 
