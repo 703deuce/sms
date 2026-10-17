@@ -6,6 +6,8 @@ import { assertWithinWorkspaceLimits } from "@/lib/settings/limits";
 import { deductCreditsForSend } from "@/lib/settings/billing";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { isPhoneAuthorizedForOutboundSms } from "@/lib/mctb/messaging/outbound-sms-route";
+import { resolveCanonicalMctbPlatformSender } from "@/lib/mctb/messaging/platform-sender-config";
+import { isCanonicalPlatformMctbSenderPhone } from "@/lib/messaging/compliance/phone-number-class";
 import { sendViaRegistration } from "@/lib/messaging/registration-processor";
 
 /**
@@ -79,11 +81,22 @@ export async function sendVoiceV3BookingLinkSms(
   }
 
   const pn = await prisma.phoneNumber.findFirst({
-    where: { id: phoneNumberId, workspaceId },
-    select: { e164: true },
+    where: { id: phoneNumberId },
+    select: { e164: true, workspaceId: true, settingsJson: true },
   });
   if (!pn?.e164 || normalizeE164(pn.e164) !== from) {
-    throw new Error("Published SMS sender does not match workspace phone record.");
+    throw new Error("Published SMS sender does not match phone record.");
+  }
+  const canonicalPlatform = await resolveCanonicalMctbPlatformSender();
+  const isPlatformSender = isCanonicalPlatformMctbSenderPhone({
+    phoneNumberId,
+    settingsJson: pn.settingsJson,
+    canonical: canonicalPlatform
+      ? { phoneNumberId: canonicalPlatform.phoneNumberId }
+      : null,
+  });
+  if (!isPlatformSender && pn.workspaceId !== workspaceId) {
+    throw new Error("Published SMS sender does not belong to this workspace.");
   }
 
   if (input.idempotencyKey) {
