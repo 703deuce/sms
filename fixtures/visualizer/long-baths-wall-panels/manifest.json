@@ -1,0 +1,16 @@
+{
+  "manufacturer": "Long Baths",
+  "category": "WALL_PANEL",
+  "description": "Canonical material reference photos for Visualizer acceptance tests. Use the full sample-card photograph as the material image (image 2 to KIE). Prompts ignore printed labels on the card.",
+  "materials": [
+    { "slug": "glacier-ice", "name": "Glacier Ice", "file": "glacier-ice.jpg", "sku": "LB-GLACIER-ICE" },
+    { "slug": "santorini-white-marble", "name": "Santorini White Marble", "file": "santorini-white-marble.jpg", "sku": "LB-SANTORINI" },
+    { "slug": "metapeake", "name": "Metapeake", "file": "metapeake.jpg", "sku": "LB-METAPEAKE" },
+    { "slug": "arctic-ice", "name": "Arctic Ice", "file": "arctic-ice.jpg", "sku": "LB-ARCTIC-ICE" },
+    { "slug": "evo", "name": "Evo", "file": "evo.jpg", "sku": "LB-EVO" },
+    { "slug": "linen", "name": "Linen", "file": "linen.jpg", "sku": "LB-LINEN" },
+    { "slug": "napoli-marble", "name": "Napoli Marble", "file": "napoli-marble.jpg", "sku": "LB-NAPOLI" },
+    { "slug": "carbon-ash", "name": "Carbon Ash", "file": "carbon-ash.jpg", "sku": "LB-CARBON-ASH" },
+    { "slug": "tuscany", "name": "Tuscany", "file": "tuscany.jpg", "sku": "LB-TUSCANY" }
+  ]
+}

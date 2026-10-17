@@ -545,6 +545,16 @@ model Workspace {
   arSmsInboundHeldMessages          ArSmsInboundHeldMessage[]
   mctbNotificationDeliveries        MctbNotificationDelivery[]
   faxAccount                        FaxAccount?
+  visualizerProjects                VisualizerProject[]
+  visualizerMaterials               VisualizerMaterial[]
+  visualizerAssets                  VisualizerAsset[]
+  visualizerDesigns                 VisualizerDesign[]
+  visualizerGenerationJobs          VisualizerGenerationJob[]
+  visualizerShares                  VisualizerShare[]
+  visualizerEstimateRequests        VisualizerEstimateRequest[]
+  visualizerEvents                  VisualizerEvent[]
+  visualizerWidgetConfigs           VisualizerWidgetConfig[]
+  visualizerUsageLedger             VisualizerUsageLedger[]
   owner                             User?                              @relation("WorkspaceOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
 
   @@index([ownerUserId])
@@ -1180,6 +1190,7 @@ model Contact {
   conversations        Conversation[]
   automationExecutions AutomationExecution[]
   formSubmissions      FormSubmission[]
+  visualizerProjects   VisualizerProject[]
 
   @@unique([workspaceId, phone])
 }
@@ -7490,4 +7501,250 @@ model ClassAdmissionTicket {
   @@index([workspaceId, occurrenceId])
   @@index([workspaceId, contactId])
   @@map("class_admission_tickets")
+}
+
+enum VisualizerProjectStatus {
+  DRAFT
+  DESIGN_READY
+  SHARED
+  INTERESTED
+  ESTIMATE_REQUESTED
+  APPOINTMENT_SCHEDULED
+  WON
+  LOST
+  ARCHIVED
+}
+
+enum VisualizerTransformationType {
+  TUB_TO_SHOWER
+  SHOWER_TO_SHOWER
+  TUB_TO_TUB
+  SHOWER_TO_TUB
+  SHOWER_AND_TUB_DECK_WRAP
+  SHOWER_REPLACEMENT
+  WALL_PANEL_UPGRADE
+  BATHROOM_REFRESH
+  CUSTOM
+}
+
+enum VisualizerAssetType {
+  ORIGINAL_ROOM
+  SECONDARY_ROOM_REFERENCE
+  MATERIAL_REFERENCE
+  GENERATED_DESIGN
+  THUMBNAIL
+}
+
+enum VisualizerGenerationJobStatus {
+  QUEUED
+  UPLOADING
+  PREPARING
+  GENERATING
+  SAVING
+  COMPLETED
+  FAILED
+}
+
+enum VisualizerProjectSource {
+  SALES_REP
+  EXISTING_CONTACT
+  WEBSITE_WIDGET
+  HOSTED_PAGE
+  INTERNAL
+}
+
+model VisualizerMaterial {
+  id               String    @id @default(cuid())
+  workspaceId      String
+  name             String
+  category         String
+  manufacturer     String?
+  sku              String?
+  finish           String?
+  description      String?
+  imageStoragePath String
+  imageMimeType    String
+  active           Boolean   @default(true)
+  publicVisible    Boolean   @default(false)
+  internalNotes    String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, category])
+  @@map("visualizer_material")
+}
+
+model VisualizerProject {
+  id                 String                       @id @default(cuid())
+  workspaceId        String
+  contactId          String?
+  name               String
+  transformation     VisualizerTransformationType @default(TUB_TO_SHOWER)
+  status             VisualizerProjectStatus      @default(DRAFT)
+  source             VisualizerProjectSource      @default(INTERNAL)
+  notes              String?
+  assignedUserId     String?
+  primaryRoomAssetId String?
+  wizardDraftJson    Json?
+  archivedAt         DateTime?
+  createdAt          DateTime                     @default(now())
+  updatedAt          DateTime                     @updatedAt
+  workspace          Workspace                    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact            Contact?                     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  assets             VisualizerAsset[]
+  designs            VisualizerDesign[]
+  generationJobs     VisualizerGenerationJob[]
+  shares             VisualizerShare[]
+  estimateRequests   VisualizerEstimateRequest[]
+
+  @@index([workspaceId, updatedAt(sort: Desc)])
+  @@map("visualizer_project")
+}
+
+model VisualizerAsset {
+  id               String              @id @default(cuid())
+  workspaceId      String
+  projectId        String?
+  assetType        VisualizerAssetType
+  storagePath      String
+  bucket           String
+  mimeType         String
+  width            Int?
+  height           Int?
+  byteSize         Int
+  originalFilename String?
+  createdAt        DateTime            @default(now())
+  workspace        Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project          VisualizerProject?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@map("visualizer_asset")
+}
+
+model VisualizerDesign {
+  id                   String                       @id @default(cuid())
+  workspaceId          String
+  projectId            String
+  parentDesignId       String?
+  versionNumber        Int                          @default(1)
+  generatedAssetId     String?
+  originalRoomAssetId  String
+  transformation       VisualizerTransformationType
+  selectedMaterialsJson Json                        @default("[]")
+  instructions         String?
+  isFavorite           Boolean                      @default(false)
+  generationJobId      String?
+  createdAt            DateTime                     @default(now())
+  workspace            Workspace                    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project              VisualizerProject            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("visualizer_design")
+}
+
+model VisualizerGenerationJob {
+  id              String                        @id @default(cuid())
+  workspaceId     String
+  projectId       String
+  designId        String?
+  status          VisualizerGenerationJobStatus @default(QUEUED)
+  idempotencyKey  String                        @unique
+  provider        String                        @default("openai")
+  model           String?
+  requestJson     Json
+  errorMessage    String?
+  usageCredits    Int                           @default(1)
+  providerCostCents Int?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime                      @default(now())
+  updatedAt       DateTime                      @updatedAt
+  workspace       Workspace                     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project         VisualizerProject             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("visualizer_generation_job")
+}
+
+model VisualizerShare {
+  id                   String            @id @default(cuid())
+  workspaceId          String
+  projectId            String
+  designId             String
+  tokenHash            String            @unique
+  expiresAt            DateTime?
+  revokedAt            DateTime?
+  allowEstimateRequest Boolean           @default(true)
+  showMaterials        Boolean           @default(true)
+  createdByUserId      String?
+  createdAt            DateTime          @default(now())
+  workspace            Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project              VisualizerProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("visualizer_share")
+}
+
+model VisualizerEstimateRequest {
+  id          String            @id @default(cuid())
+  workspaceId String
+  projectId   String
+  designId    String?
+  contactId   String?
+  fullName    String
+  phone       String
+  email       String?
+  serviceZip  String?
+  notes       String?
+  status      String            @default("NEW")
+  source      String            @default("share")
+  createdAt   DateTime          @default(now())
+  workspace   Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     VisualizerProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("visualizer_estimate_request")
+}
+
+model VisualizerEvent {
+  id          String    @id @default(cuid())
+  workspaceId String
+  projectId   String?
+  eventType   String
+  actorType   String?
+  actorId     String?
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("visualizer_event")
+}
+
+model VisualizerWidgetConfig {
+  id                     String    @id @default(cuid())
+  workspaceId            String    @unique
+  publicSlug             String    @unique
+  publicKey              String    @unique
+  published              Boolean   @default(false)
+  brandingJson           Json      @default("{}")
+  limitsJson             Json      @default("{}")
+  leadCaptureJson        Json      @default("{}")
+  enabledTransformations String[]  @default(["TUB_TO_SHOWER", "SHOWER_REPLACEMENT"])
+  publicMaterialIds      String[]  @default([])
+  allowedEmbedDomains    String[]  @default([])
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  workspace              Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("visualizer_widget_config")
+}
+
+model VisualizerUsageLedger {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  generationJobId String?
+  credits         Int       @default(1)
+  kind            String    @default("generation")
+  createdAt       DateTime  @default(now())
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("visualizer_usage_ledger")
 }

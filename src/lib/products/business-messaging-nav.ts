@@ -9,6 +9,7 @@ import {
   Puzzle,
   Settings,
   Star,
+  Sparkles,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
@@ -18,7 +19,9 @@ import {
   isAppointmentRemindersInBusinessMessagingSidebar,
   isMassSmsInBusinessMessagingSidebar,
   isReviewsInBusinessMessagingSidebar,
+  isVisualizerInBusinessMessagingSidebar,
 } from "@/lib/workspace/platform-launch";
+import { VISUALIZER_ROUTES } from "@/lib/visualizer/routes";
 
 export type BusinessMessagingNavEntitlements = {
   inboxBadge?: number;
@@ -26,6 +29,7 @@ export type BusinessMessagingNavEntitlements = {
   hasAppointmentReminders: boolean;
   hasMassSms: boolean;
   hasReviews?: boolean;
+  hasVisualizer?: boolean;
 };
 
 export type ServiceTab = {
@@ -80,6 +84,20 @@ export const REVIEWS_SERVICE_TABS: ServiceTab[] = [
 ];
 
 /** Expandable sidebar links under Reviews (not top tabs). */
+export const VISUALIZER_SERVICE_TABS: ServiceTab[] = [
+  { label: "Overview", href: VISUALIZER_ROUTES.home, matchExact: true },
+  { label: "Projects", href: VISUALIZER_ROUTES.projects, matchPrefix: VISUALIZER_ROUTES.projects },
+  { label: "Materials", href: VISUALIZER_ROUTES.materials, matchPrefix: VISUALIZER_ROUTES.materials },
+  { label: "Leads", href: VISUALIZER_ROUTES.leads, matchPrefix: VISUALIZER_ROUTES.leads },
+  { label: "Website", href: VISUALIZER_ROUTES.widget, matchPrefix: VISUALIZER_ROUTES.widget },
+  { label: "Analytics", href: VISUALIZER_ROUTES.analytics, matchPrefix: VISUALIZER_ROUTES.analytics },
+];
+
+export const VISUALIZER_SIDEBAR_CHILDREN = [
+  { label: "New design", href: VISUALIZER_ROUTES.newDesign },
+  { label: "Settings", href: VISUALIZER_ROUTES.settings },
+] as const;
+
 export const REVIEWS_SIDEBAR_CHILDREN = [
   { label: "QR campaigns", href: REVIEW_ROUTES.qr },
   { label: "Review feed", href: REVIEW_ROUTES.feed },
@@ -218,6 +236,16 @@ export function buildBusinessMessagingNav(input: BusinessMessagingNavEntitlement
     });
   }
 
+  if (isVisualizerInBusinessMessagingSidebar()) {
+    serviceItems.push({
+      label: "Visualizer",
+      href: VISUALIZER_ROUTES.home,
+      icon: Sparkles,
+      badge: input.hasVisualizer === false ? "Activate" : undefined,
+      children: [...VISUALIZER_SIDEBAR_CHILDREN],
+    });
+  }
+
   if (isReviewsInBusinessMessagingSidebar()) {
     serviceItems.push({
       label: "Reviews",
@@ -282,6 +310,9 @@ export function isBusinessMessagingNavItemActive(
       path.startsWith("/sms/analytics")
     );
   }
+  if (item.label === "Visualizer") {
+    return path === VISUALIZER_ROUTES.home || path.startsWith("/visualizer/");
+  }
   if (item.label === "Reviews") {
     return path === REVIEW_ROUTES.home || path.startsWith("/reviews/");
   }
@@ -309,12 +340,17 @@ export function isBusinessMessagingSharedShellPath(pathname: string): boolean {
   if (pathname === "/campaigns" || pathname.startsWith("/campaigns/")) return true;
   if (pathname === "/templates" || pathname.startsWith("/templates/")) return true;
   if (pathname === "/sms/analytics" || pathname.startsWith("/sms/analytics/")) return true;
+  if (pathname === VISUALIZER_ROUTES.home || pathname.startsWith("/visualizer/")) return true;
   if (pathname === REVIEW_ROUTES.home || pathname.startsWith("/reviews/")) return true;
   if (pathname === MCTB_ROUTES.voiceAgent || pathname.startsWith(`${MCTB_ROUTES.voiceAgent}/`)) {
     return true;
   }
   if (pathname === "/voice" || pathname.startsWith("/voice/")) return true;
   return false;
+}
+
+export function shouldShowVisualizerServiceTabs(pathname: string): boolean {
+  return pathname === VISUALIZER_ROUTES.home || pathname.startsWith("/visualizer/");
 }
 
 export function shouldShowReviewsServiceTabs(pathname: string): boolean {
