@@ -155,7 +155,9 @@ export function VisualizerMaterialFormPage({ materialId }: { materialId?: string
           // eslint-disable-next-line @next/next/no-img-element
           <img src={preview} alt="" className="max-h-48 rounded-lg object-contain" />
         ) : null}
-        <Button onClick={onSave} disabled={busy}>{isEdit ? "Save changes" : "Save material"}</Button>
+        <Button type="button" onClick={() => void onSave()} disabled={busy}>
+          {busy ? "Saving…" : isEdit ? "Save changes" : "Save material"}
+        </Button>
       </section>
     </div>
   );

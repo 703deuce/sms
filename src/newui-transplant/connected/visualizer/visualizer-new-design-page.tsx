@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Upload } from "lucide-react";
 import { vizClientError, vizClientLog, vizFetchJson, vizUploadForm } from "@/lib/visualizer/client-api";
 import { VISUALIZER_ROUTES } from "@/lib/visualizer/routes";
@@ -36,7 +37,18 @@ const TRANSFORMATIONS = VISUALIZER_LAUNCH_TRANSFORMATIONS.map((id) => ({
 
 type MaterialRow = { id: string; name: string; category: string; imageUrl: string };
 
+type WizardDraft = {
+  step: number;
+  transformation: string;
+  showerWallHeight: VisualizerShowerWallHeight;
+  selectedMaterialId: string | null;
+  roomAssetId: string | null;
+  roomPreviewUrl: string | null;
+};
+
 export function VisualizerNewDesignPage() {
+  const searchParams = useSearchParams();
+  const resumeProjectId = searchParams.get("projectId")?.trim() || null;
   const [step, setStep] = useState(0);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projectName, setProjectName] = useState("Bathroom remodel");
@@ -52,13 +64,88 @@ export function VisualizerNewDesignPage() {
   const [error, setError] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [designId, setDesignId] = useState<string | null>(null);
+  const [draftLoaded, setDraftLoaded] = useState(!resumeProjectId);
+  const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const persistDraft = useCallback(
+    (pid: string) => {
+      if (persistTimer.current) clearTimeout(persistTimer.current);
+      persistTimer.current = setTimeout(() => {
+        const draft: WizardDraft = {
+          step,
+          transformation,
+          showerWallHeight,
+          selectedMaterialId,
+          roomAssetId,
+          roomPreviewUrl,
+        };
+        void vizFetchJson("project-draft", `/api/visualizer/projects/${pid}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: projectName.trim() || "Bathroom remodel",
+            transformation,
+            wizardDraftJson: draft,
+            ...(roomAssetId ? { primaryRoomAssetId: roomAssetId } : {}),
+          }),
+        }).catch((e) => vizClientError("project-draft:failed", e));
+      }, 400);
+    },
+    [step, transformation, showerWallHeight, selectedMaterialId, roomAssetId, roomPreviewUrl, projectName],
+  );
+
+  useEffect(() => {
+    if (!resumeProjectId || draftLoaded) return;
+    vizClientLog("project:resume-start", { projectId: resumeProjectId });
+    vizFetchJson<{
+      project?: {
+        id: string;
+        name: string;
+        transformation?: string;
+        wizardDraftJson?: WizardDraft | null;
+        beforeUrl?: string | null;
+      };
+    }>("project-resume", `/api/visualizer/projects/${resumeProjectId}`)
+      .then((d) => {
+        const p = d.project;
+        if (!p?.id) throw new Error("Project not found");
+        setProjectId(p.id);
+        setProjectName(p.name || "Bathroom remodel");
+        if (p.transformation) setTransformation(p.transformation);
+        const draft = p.wizardDraftJson;
+        if (draft && typeof draft === "object") {
+          if (typeof draft.step === "number") setStep(Math.min(3, Math.max(0, draft.step)));
+          if (draft.transformation) setTransformation(draft.transformation);
+          if (draft.showerWallHeight) setShowerWallHeight(draft.showerWallHeight);
+          if (draft.selectedMaterialId) setSelectedMaterialId(draft.selectedMaterialId);
+          if (draft.roomAssetId) setRoomAssetId(draft.roomAssetId);
+          if (draft.roomPreviewUrl) setRoomPreviewUrl(draft.roomPreviewUrl);
+          else if (p.beforeUrl) setRoomPreviewUrl(p.beforeUrl);
+        } else if (p.beforeUrl) {
+          setRoomPreviewUrl(p.beforeUrl);
+        }
+        vizClientLog("project:resume-ok", { projectId: p.id });
+      })
+      .catch((e) => {
+        vizClientError("project:resume-failed", e);
+        setError(e instanceof Error ? e.message : "Could not resume project");
+      })
+      .finally(() => setDraftLoaded(true));
+  }, [resumeProjectId, draftLoaded]);
+
+  useEffect(() => {
+    if (!projectId) return;
+    persistDraft(projectId);
+  }, [projectId, persistDraft]);
 
   useEffect(() => {
     vizClientLog("materials:load-start");
     vizFetchJson<{ materials?: MaterialRow[] }>("materials", "/api/visualizer/materials?category=WALL_PANEL")
       .then((d) => {
-        setMaterials(d.materials || []);
-        vizClientLog("materials:load-ok", { count: d.materials?.length ?? 0 });
+        const rows = d.materials || [];
+        setMaterials(rows);
+        setSelectedMaterialId((prev) => prev ?? rows[0]?.id ?? null);
+        vizClientLog("materials:load-ok", { count: rows.length });
       })
       .catch((e) => {
         vizClientError("materials:load-failed", e);
@@ -149,7 +236,25 @@ export function VisualizerNewDesignPage() {
   }
 
   async function onGenerate() {
-    if (!projectId || !roomAssetId) return;
+    if (!roomAssetId) {
+      setError("Upload a bathroom photo before generating.");
+      setStep(0);
+      return;
+    }
+    let pid = projectId;
+    if (!pid) {
+      try {
+        pid = await ensureProject();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not create project");
+        return;
+      }
+    }
+    if (!selectedMaterialId) {
+      setError("Choose a wall panel material before generating.");
+      setStep(2);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -160,7 +265,7 @@ export function VisualizerNewDesignPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            projectId,
+            projectId: pid,
             originalRoomAssetId: roomAssetId,
             transformation,
             selectedMaterials: selectedMaterialId
@@ -175,7 +280,7 @@ export function VisualizerNewDesignPage() {
       }
       setJobId(d.generationJobId);
       setDesignId(d.designId);
-      pollJob(d.generationJobId, projectId, d.designId);
+      pollJob(d.generationJobId, pid, d.designId);
     } catch (e) {
       vizClientError("generate:failed", e);
       setError(e instanceof Error ? e.message : "Generation failed");
@@ -332,7 +437,22 @@ export function VisualizerNewDesignPage() {
         </Button>
         <div className="flex gap-2">
           {step < 3 ? (
-            <Button disabled={!canContinue || busy} onClick={() => setStep((s) => s + 1)}>
+            <Button
+              disabled={!canContinue || busy || (!draftLoaded && Boolean(resumeProjectId))}
+              onClick={() => {
+                void (async () => {
+                  if (step === 0 && roomAssetId && !projectId) {
+                    try {
+                      await ensureProject();
+                    } catch (e) {
+                      setError(e instanceof Error ? e.message : "Could not save project");
+                      return;
+                    }
+                  }
+                  setStep((s) => s + 1);
+                })();
+              }}
+            >
               Continue
             </Button>
           ) : (
