@@ -55,7 +55,6 @@ function main() {
     "CORRECTIONS",
     "WAITING FOR BACKEND",
     "one question at a time",
-    "COLLECTING CALLER INFORMATION",
     "GREETING",
     "Never invent",
   ], "live frontend");
