@@ -2,6 +2,7 @@ import type { VoiceV3CallContext } from "../state/call-context";
 import type { VoiceV3CallRuntime } from "../state/call-runtime";
 import type { AgentStateSnapshot } from "./agent-state-snapshot";
 import type { ConversationAction } from "./conversation-action";
+import { buildSharedCallerFactsLiveSummary } from "../intake-objective/build-shared-caller-facts";
 
 function formatConversationAction(action: ConversationAction): string {
   switch (action.type) {
@@ -31,6 +32,7 @@ export function buildAgentSnapshotLiveAppend(
   delegation_id: null;
 } {
   const ctx = runtime.getSnapshot();
+  const sharedFacts = buildSharedCallerFactsLiveSummary(runtime.config, ctx);
   const known = snapshot.knownFieldKeys.map((k) => `${k} known`).join(", ") || "(none)";
   const missing = snapshot.missingRequiredFieldKeys.join(", ") || "(none)";
   const ops =
@@ -45,6 +47,7 @@ export function buildAgentSnapshotLiveAppend(
     `goal=${snapshot.activeGoal}`,
     `goal_status=${snapshot.goalStatus}`,
     `captured: ${known}`,
+    sharedFacts,
     `missing_required: ${missing}`,
     `scheduling_status=${snapshot.schedulingStatus}`,
     `availability_status=${snapshot.availabilityStatus}`,

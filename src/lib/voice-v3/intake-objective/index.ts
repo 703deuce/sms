@@ -1,6 +1,12 @@
 export * from "./types";
 export { deriveIntakeObjective } from "./derive-intake-objective";
 export { mergeIntakeUpdate } from "./merge-intake-update";
+export { buildSharedCallerFactsLiveSummary } from "./build-shared-caller-facts";
+export {
+  resolveStoredIntakeField,
+  resolveStoredIntakeString,
+  STORED_INTAKE_KEY_ALIASES,
+} from "./resolve-stored-intake";
 export { buildIntakeObjectiveContext } from "./build-intake-context";
 export {
   buildUpdateIntakeZodSchema,

@@ -6,6 +6,7 @@ import {
   resolveConfiguredCallbackRequiredKeys,
 } from "../callback/callback-requirements";
 import { resolveBookingServiceForRuntime } from "../config/resolve-booking-service";
+import { resolveStoredIntakeField } from "./resolve-stored-intake";
 import { fieldSatisfiesObjectiveRequirement } from "./validate-intake-value";
 import { mapServiceRequiredFieldToV3IntakeKey } from "@/lib/solutions/appointment-receptionist/required-fields";
 import type { IntakeFieldDefinition } from "../config/agent-config";
@@ -133,7 +134,8 @@ export function getMissingFieldsForOperation(
   return requiredKeys.filter((key) => {
     const field = intakeFieldForRequirementKey(config, key);
     if (!field) return false;
-    const stored = values[field.key] ?? values[key];
+    const stored =
+      resolveStoredIntakeField(values, field.key) ?? resolveStoredIntakeField(values, key);
     return !fieldSatisfiesObjectiveRequirement(field, stored);
   });
 }

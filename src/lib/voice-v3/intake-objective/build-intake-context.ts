@@ -7,6 +7,8 @@ import {
   resolveActiveIntakeOperation,
   UNRESOLVED_INTAKE_OPERATION,
 } from "./operation-requirements";
+import { buildSharedCallerFactsLiveSummary } from "./build-shared-caller-facts";
+import { resolveStoredIntakeField } from "./resolve-stored-intake";
 
 /** Compact objective projection for Astra/Live thinking context — not conversational commands. */
 export function buildIntakeObjectiveContext(
@@ -29,21 +31,30 @@ export function buildIntakeObjectiveContext(
     .filter((f) => requiredKeySet.has(f.key))
     .map((f) => {
       const def = fieldDefinitionByKey(config, f.key)!;
-      return `- ${f.label}: ${intakeFieldObjectiveLabel(def, context.intake.values[f.key])}`;
+      return `- ${f.label}: ${intakeFieldObjectiveLabel(
+        def,
+        resolveStoredIntakeField(context.intake.values, f.key),
+      )}`;
     });
 
   const optionalLines = config.intakeFields
     .filter((f) => !requiredKeySet.has(f.key))
     .map((f) => {
       const def = fieldDefinitionByKey(config, f.key)!;
-      return `- ${f.label}: ${intakeFieldObjectiveLabel(def, context.intake.values[f.key])}`;
+      return `- ${f.label}: ${intakeFieldObjectiveLabel(
+        def,
+        resolveStoredIntakeField(context.intake.values, f.key),
+      )}`;
     });
+
+  const sharedFacts = buildSharedCallerFactsLiveSummary(config, context);
 
   return `
 INTAKE OBJECTIVE
 Purpose: ${objectiveDescription}
 Active operation: ${activeOperationLabel}
 Status: ${objective.status}
+${sharedFacts}
 Required information (for this operation only):
 ${unresolved ? "(none — wait for the caller's intent and appropriate tool selection)" : requiredLines.join("\n") || "(none configured)"}
 Optional information:

@@ -6,6 +6,9 @@ import type { VoiceToolDefinition } from "./types";
 import { mergeDialogActiveGoalFromTool } from "../intake/merge-intake-state";
 import { authorizeRequestCallbackOrError } from "./authorize-tool-for-config";
 import { REQUEST_CALLBACK_TOOL_DESCRIPTION } from "./astra-tool-contracts";
+import { buildIntakeObjectiveContext } from "../intake-objective";
+import { buildSharedCallerFactsLiveSummary } from "../intake-objective/build-shared-caller-facts";
+import { LiveContextPublisher } from "../live/live-context-publisher";
 
 const requestCallbackArgsSchema = z.object({
   callback_phone: z
@@ -73,6 +76,17 @@ export const requestCallbackTool: VoiceToolDefinition<RequestCallbackArgs> = {
       args,
     });
     ctx.runtime.replaceContext(nextContext);
+
+    const publisher = new LiveContextPublisher(ctx.sendContext);
+    publisher.appendThinking(
+      buildIntakeObjectiveContext(config, nextContext),
+      ctx.delegationId,
+    );
+    publisher.appendCommentary(
+      buildSharedCallerFactsLiveSummary(config, nextContext),
+      ctx.delegationId,
+    );
+
     return result;
   },
 };

@@ -8,6 +8,7 @@ import { createInitialVoiceV3CallContext } from "../src/lib/voice-v3/state/call-
 import { buildVoiceV3CallClock } from "../src/lib/voice-v3/time/call-clock";
 import { mergeIntakeUpdate, deriveIntakeObjective } from "../src/lib/voice-v3/intake-objective";
 import { getMissingFieldsForOperation } from "../src/lib/voice-v3/intake-objective/operation-requirements";
+import { getMissingCallbackRequirementKeys } from "../src/lib/voice-v3/callback/callback-requirements";
 
 const TZ = "America/New_York";
 
@@ -170,7 +171,10 @@ function ctxWithIntake(
   );
   assert.deepEqual(getMissingFieldsForOperation("request_callback", sharedConfig, ctx), []);
   const bookCtx = { ...ctx, dialog: { activeGoal: "BOOK_APPOINTMENT" as const } };
-  assert.deepEqual(getMissingFieldsForOperation("book_appointment", sharedConfig, bookCtx), ["phone"]);
+  assert.deepEqual(
+    getMissingFieldsForOperation("book_appointment", sharedConfig, bookCtx).sort(),
+    ["mother_s_name", "phone"].sort(),
+  );
 }
 
 // F. field required only by original operation — not required after switch
@@ -234,5 +238,38 @@ ctx = { ...ctx, intake: { values: withPhone.values } };
 missingBook = getMissingFieldsForOperation("book_appointment", config, ctx);
 assert.deepEqual(missingBook, ["mother_s_name"]);
 assert.deepEqual(getMissingFieldsForOperation("request_callback", config, ctx), []);
+
+// G. legacy alias key full_name satisfies callback name requirement
+{
+  let ctx = createInitialVoiceV3CallContext({
+    callId: "transition_g",
+    liveSessionId: "live_transition_g",
+    timezone: TZ,
+    clock,
+    inboundCallerE164: "+15715550100",
+  });
+  const at = new Date().toISOString();
+  ctx = {
+    ...ctx,
+    intake: {
+      values: {
+        full_name: {
+          value: "Legacy Name",
+          source: "caller",
+          confidence: 1,
+          updatedAt: at,
+        },
+        service_reason: {
+          value: "Callback please",
+          source: "caller",
+          confidence: 1,
+          updatedAt: at,
+        },
+      },
+    },
+    dialog: { activeGoal: "REQUEST_CALLBACK" },
+  };
+  assert.deepEqual(getMissingCallbackRequirementKeys(config, ctx), []);
+}
 
 console.log("PASS voice-v3 callback shared-facts transitions");
