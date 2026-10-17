@@ -40,7 +40,7 @@ Client must have `projectId` + `roomAssetId` before Generate. Draft is restored 
 
 | Source | API | IDs |
 |--------|-----|-----|
-| Built-in catalog | `GET /api/visualizer/materials` | `catalog:<slug>` (static JPGs under `/public/visualizer/materials/<line-folder>/`). Each row includes `panelLine` (**BCI** = Long Baths; **PIONEER_PLUS** = Samuel Mueller Pioneer Plus stone-block). Optional filter: `?panelLine=BCI` or `?panelLine=PIONEER_PLUS`. |
+| Built-in catalog | `GET /api/visualizer/materials` | `catalog:<slug>` (static JPGs under `/public/visualizer/materials/<line-folder>/`). Each row includes `panelLine` (**BCI**, **PIONEER_PLUS**, **LUXURA**). Optional filter: `?panelLine=BCI` (etc.). |
 | Workspace uploads | `POST /api/visualizer/materials` | UUID rows in `visualizer_material` |
 
 Generation resolves materials in `loadMaterialReferenceImage()` (catalog vs workspace).
