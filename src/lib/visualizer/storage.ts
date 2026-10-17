@@ -9,6 +9,14 @@ import {
 
 let ensuredBucket: string | null = null;
 
+function storageLog(step: string, data?: Record<string, unknown>) {
+  if (data && Object.keys(data).length > 0) {
+    console.log("[visualizer:storage]", step, JSON.stringify(data));
+  } else {
+    console.log("[visualizer:storage]", step);
+  }
+}
+
 /** Mobile browsers often send empty or generic MIME types for camera/gallery picks. */
 export function normalizeVisualizerUploadMime(mimeType: string, filename?: string): string {
   const mime = (mimeType || "").trim().toLowerCase();
@@ -34,20 +42,40 @@ function extensionForMime(mimeType: string, filename?: string) {
 }
 
 export async function ensureVisualizerBucket(bucket = VISUALIZER_BUCKET) {
-  if (ensuredBucket === bucket) return bucket;
+  if (ensuredBucket === bucket) {
+    storageLog("ensureBucket:cache-hit", { bucket });
+    return bucket;
+  }
   const supabase = getSupabaseAdmin();
+  storageLog("ensureBucket:list-start", { bucket });
   const { data: buckets, error: listError } = await supabase.storage.listBuckets();
-  if (listError) throw new Error(`Storage bucket list failed: ${listError.message}`);
+  if (listError) {
+    storageLog("ensureBucket:list-failed", { message: listError.message });
+    throw new Error(`Storage bucket list failed: ${listError.message}`);
+  }
   if (buckets?.some((row) => row.name === bucket)) {
+    storageLog("ensureBucket:exists", { bucket });
     ensuredBucket = bucket;
     return bucket;
   }
+  storageLog("ensureBucket:creating", { bucket });
   const { error: createError } = await supabase.storage.createBucket(bucket, {
     public: false,
     fileSizeLimit: VISUALIZER_MAX_UPLOAD_BYTES,
   });
   if (createError && !/already exists/i.test(createError.message)) {
+    storageLog("ensureBucket:create-failed", { message: createError.message });
     throw new Error(`Storage bucket create failed for ${bucket}: ${createError.message}`);
+  }
+  storageLog("ensureBucket:created-or-exists", { bucket, createMessage: createError?.message });
+  // Brief pause so Supabase can finish provisioning before first object upload.
+  await new Promise((r) => setTimeout(r, 400));
+  const { data: bucketsAfter } = await supabase.storage.listBuckets();
+  if (!bucketsAfter?.some((row) => row.name === bucket)) {
+    storageLog("ensureBucket:not-visible-yet", { bucket });
+    throw new Error(
+      "Storage bucket is still being created. Wait a moment and try uploading again.",
+    );
   }
   ensuredBucket = bucket;
   return bucket;
@@ -60,11 +88,19 @@ export async function uploadVisualizerBytes(input: {
   filename?: string;
   folder: "rooms" | "materials" | "generated" | "thumbnails";
 }): Promise<{ path: string; bucket: string }> {
+  storageLog("upload:start", {
+    workspaceId: input.workspaceId,
+    folder: input.folder,
+    byteSize: input.bytes.length,
+    mimeType: input.mimeType,
+    filename: input.filename,
+  });
   if (!isSupabaseConfigured()) {
     throw new Error("Image storage is not configured. Set Supabase storage for Visualizer uploads.");
   }
   const mime = normalizeVisualizerUploadMime(input.mimeType, input.filename);
   if (!VISUALIZER_ALLOWED_MIME.has(mime)) {
+    storageLog("upload:rejected-mime", { mime, filename: input.filename });
     throw new Error("Use a JPG, PNG, WebP, or HEIC image.");
   }
   if (input.bytes.length > VISUALIZER_MAX_UPLOAD_BYTES) {
@@ -75,12 +111,26 @@ export async function uploadVisualizerBytes(input: {
   const now = new Date();
   const path = `${input.workspaceId}/${input.folder}/${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
   const supabase = getSupabaseAdmin();
-  const { error } = await supabase.storage.from(bucket).upload(path, input.bytes, {
-    contentType: mime,
-    upsert: false,
-  });
-  if (error) throw new Error(`Image upload failed: ${error.message}`);
-  return { path, bucket };
+  storageLog("upload:supabase-object", { bucket, path, mime });
+  let lastError: string | null = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const { error } = await supabase.storage.from(bucket).upload(path, input.bytes, {
+      contentType: mime,
+      upsert: false,
+    });
+    if (!error) {
+      storageLog("upload:ok", { bucket, path, attempt });
+      return { path, bucket };
+    }
+    lastError = error.message;
+    storageLog("upload:attempt-failed", { attempt, message: error.message });
+    if (attempt === 1 && /bucket/i.test(error.message)) {
+      ensuredBucket = null;
+      await ensureVisualizerBucket(bucket);
+      await new Promise((r) => setTimeout(r, 600));
+    }
+  }
+  throw new Error(`Image upload failed: ${lastError || "unknown"}`);
 }
 
 export async function downloadVisualizerObject(bucket: string, path: string): Promise<Buffer> {

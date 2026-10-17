@@ -3,14 +3,21 @@ import { getPrisma } from "@/lib/db";
 import { getVisualizerOverviewMetrics } from "@/lib/visualizer/service";
 import { signedAssetUrl } from "@/lib/visualizer/serialize";
 import { TRANSFORMATION_LABELS, PROJECT_STATUS_LABELS } from "@/lib/visualizer/constants";
+import { createVisualizerRequestLog, logVisualizerError } from "@/lib/visualizer/server-request-log";
 
 export async function GET() {
+  const { log, requestId } = createVisualizerRequestLog("overview");
+  log("start", { method: "GET" });
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
-    if (!auth.workspaceId) return jsonError("workspaceId required", 400);
+    if (!auth.workspaceId) {
+      log("workspace-missing");
+      return Response.json({ error: "workspaceId required", requestId }, { status: 400 });
+    }
 
     const workspaceId = auth.workspaceId;
+    log("workspace-ok", { workspaceId });
     const metrics = await getVisualizerOverviewMetrics(workspaceId);
     const prisma = getPrisma();
 
@@ -72,7 +79,9 @@ export async function GET() {
       }),
     );
 
+    log("success", { projectCount: recentProjects.length });
     return Response.json({
+      requestId,
       metrics,
       recentProjects,
       estimateOpportunities: opportunities.map((o) => ({
@@ -85,7 +94,10 @@ export async function GET() {
       })),
     });
   } catch (e) {
-    console.error("[visualizer/overview]", e);
-    return jsonError(e instanceof Error ? e.message : "Could not load overview", 500);
+    logVisualizerError("overview", requestId, "failed", e);
+    return Response.json(
+      { error: e instanceof Error ? e.message : "Could not load overview", requestId },
+      { status: 500 },
+    );
   }
 }

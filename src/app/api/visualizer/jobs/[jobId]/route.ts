@@ -1,15 +1,18 @@
 import { jsonError, requireSession } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { signedAssetUrl } from "@/lib/visualizer/serialize";
+import { createVisualizerRequestLog, logVisualizerError } from "@/lib/visualizer/server-request-log";
 
 type Params = { params: Promise<{ jobId: string }> };
 
 export async function GET(_req: Request, { params }: Params) {
+  const { log, requestId } = createVisualizerRequestLog("jobs");
+  const { jobId } = await params;
+  log("start", { method: "GET", jobId });
   const auth = await requireSession();
   if ("error" in auth) return auth.error;
   if (!auth.workspaceId) return jsonError("workspaceId required", 400);
 
-  const { jobId } = await params;
   const prisma = getPrisma();
   const job = await prisma.visualizerGenerationJob.findFirst({
     where: { id: jobId, workspaceId: auth.workspaceId },
@@ -25,7 +28,9 @@ export async function GET(_req: Request, { params }: Params) {
     }
   }
 
+  log("success", { status: job.status });
   return Response.json({
+    requestId,
     job: {
       id: job.id,
       status: job.status,

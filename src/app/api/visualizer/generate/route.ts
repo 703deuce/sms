@@ -1,8 +1,11 @@
 import { jsonError, requireSession, resolveWorkspaceId } from "@/lib/api-auth";
 import { startProjectGeneration } from "@/lib/visualizer/service";
 import type { SelectedMaterialRef } from "@/lib/visualizer/generation/prompt-builder";
+import { createVisualizerRequestLog, logVisualizerError } from "@/lib/visualizer/server-request-log";
 
 export async function POST(req: Request) {
+  const { log, requestId } = createVisualizerRequestLog("generate");
+  log("start", { method: "POST" });
   const auth = await requireSession();
   if ("error" in auth) return auth.error;
 
@@ -45,8 +48,13 @@ export async function POST(req: Request) {
       referenceAssetIds: body.referenceAssetIds,
       idempotencyKey,
     });
-    return Response.json(result);
+    log("success", { designId: result.designId, generationJobId: result.generationJobId });
+    return Response.json({ requestId, ...result });
   } catch (e) {
-    return jsonError(e instanceof Error ? e.message : "Generation failed", 400);
+    logVisualizerError("generate", requestId, "failed", e);
+    return Response.json(
+      { error: e instanceof Error ? e.message : "Generation failed", requestId },
+      { status: 400 },
+    );
   }
 }

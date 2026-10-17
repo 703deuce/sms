@@ -3,8 +3,11 @@ import { getPrisma } from "@/lib/db";
 import { listCatalogMaterialsForApi } from "@/lib/visualizer/catalog-materials";
 import { VISUALIZER_BUCKET } from "@/lib/visualizer/constants";
 import { getVisualizerSignedUrl } from "@/lib/visualizer/storage";
+import { createVisualizerRequestLog, logVisualizerError } from "@/lib/visualizer/server-request-log";
 
 export async function GET(req: Request) {
+  const { log, requestId } = createVisualizerRequestLog("materials");
+  log("start", { method: "GET" });
   const auth = await requireSession();
   if ("error" in auth) return auth.error;
   if (!auth.workspaceId) return jsonError("workspaceId required", 400);
@@ -44,7 +47,8 @@ export async function GET(req: Request) {
   const catalogSkus = new Set(catalogRows.map((c) => c.sku));
   const customOnly = workspaceRows.filter((m) => !m.sku || !catalogSkus.has(m.sku));
 
-  return Response.json({ materials: [...catalogRows, ...customOnly] });
+  log("success", { catalog: catalogRows.length, custom: customOnly.length });
+  return Response.json({ requestId, materials: [...catalogRows, ...customOnly] });
 }
 
 export async function POST(req: Request) {

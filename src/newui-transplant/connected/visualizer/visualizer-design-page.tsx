@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, Share2, Sparkles, Star } from "lucide-react";
+import { vizClientError, vizFetchJson } from "@/lib/visualizer/client-api";
 import { VISUALIZER_ROUTES } from "@/lib/visualizer/routes";
 import { BeforeAfterSlider } from "@/components/visualizer/before-after-slider";
 import { Button } from "@/newui-transplant/components/ui/button";
@@ -51,12 +52,8 @@ export function VisualizerDesignPage({ projectId, designId }: { projectId: strin
   const [refineBusy, setRefineBusy] = useState(false);
 
   useEffect(() => {
-    fetch(`/api/visualizer/designs/${designId}`)
-      .then(async (r) => {
-        if (!r.ok) throw new Error("Design not found");
-        return r.json();
-      })
-      .then((payload: DesignPayload) => {
+    vizFetchJson<DesignPayload>("design-get", `/api/visualizer/designs/${designId}`)
+      .then((payload) => {
         setData(payload);
         const initial: Record<string, string | null> = {};
         for (const row of payload.design.selectedMaterials) {
@@ -64,27 +61,30 @@ export function VisualizerDesignPage({ projectId, designId }: { projectId: strin
         }
         setPicks(initial);
       })
-      .catch((e) => setError(e instanceof Error ? e.message : "Error"));
+      .catch((e) => {
+        vizClientError("design-get:failed", e);
+        setError(e instanceof Error ? e.message : "Error");
+      });
   }, [designId]);
 
   useEffect(() => {
-    fetch("/api/visualizer/materials")
-      .then((r) => r.json())
+    vizFetchJson<{ materials?: MaterialOption[] }>("materials", "/api/visualizer/materials")
       .then((d) => setMaterialCatalog(d.materials || []))
-      .catch(() => {});
+      .catch((e) => vizClientError("materials:failed", e));
   }, []);
 
   useEffect(() => {
-    fetch("/api/visualizer/share/capabilities")
-      .then((r) => (r.ok ? r.json() : null))
+    vizFetchJson<{ email?: boolean }>("share-capabilities", "/api/visualizer/share/capabilities")
       .then((d) => setEmailEnabled(Boolean(d?.email)))
       .catch(() => setEmailEnabled(false));
   }, []);
 
   const pollJob = useCallback((jobId: string, desId: string) => {
     const tick = async () => {
-      const r = await fetch(`/api/visualizer/jobs/${jobId}`);
-      const j = await r.json();
+      const j = await vizFetchJson<{ job?: { status?: string; errorMessage?: string } }>(
+        "job-poll",
+        `/api/visualizer/jobs/${jobId}`,
+      );
       const status = j.job?.status;
       if (status === "COMPLETED") {
         window.location.href = VISUALIZER_ROUTES.design(projectId, desId);
@@ -97,35 +97,41 @@ export function VisualizerDesignPage({ projectId, designId }: { projectId: strin
       }
       setTimeout(tick, 2500);
     };
-    tick();
+    tick().catch((e) => {
+      vizClientError("job-poll:failed", e);
+      setError(e instanceof Error ? e.message : "Could not check generation status");
+      setRefineBusy(false);
+    });
   }, [projectId]);
 
   async function onShare(opts?: { sendSms?: boolean; sendEmail?: boolean }) {
-    const r = await fetch("/api/visualizer/share", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        projectId,
-        designId,
-        sendSms: opts?.sendSms && sharePhone.trim(),
-        phone: sharePhone.trim(),
-        sendEmail: opts?.sendEmail && shareEmail.trim(),
-        email: shareEmail.trim(),
-      }),
-    });
-    const d = await r.json();
-    if (!r.ok) {
-      setError(d.error || d.smsError || d.emailError || "Share failed");
+    let d: { url?: string; error?: string; smsError?: string; emailError?: string };
+    try {
+      d = await vizFetchJson("share", "/api/visualizer/share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId,
+          designId,
+          sendSms: opts?.sendSms && sharePhone.trim(),
+          phone: sharePhone.trim(),
+          sendEmail: opts?.sendEmail && shareEmail.trim(),
+          email: shareEmail.trim(),
+        }),
+      });
+    } catch (e) {
+      vizClientError("share:failed", e);
+      setError(e instanceof Error ? e.message : "Share failed");
       return;
     }
-    setShareUrl(d.url);
-    if (!opts?.sendSms && !opts?.sendEmail) {
+    setShareUrl(d.url || null);
+    if (d.url && !opts?.sendSms && !opts?.sendEmail) {
       await navigator.clipboard.writeText(d.url);
     }
   }
 
   async function onFavorite() {
-    await fetch(`/api/visualizer/designs/${designId}`, {
+    await vizFetchJson("design-favorite", `/api/visualizer/designs/${designId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ isFavorite: true }),
@@ -152,19 +158,21 @@ export function VisualizerDesignPage({ projectId, designId }: { projectId: strin
     setRefineBusy(true);
     setError(null);
     try {
-      const r = await fetch("/api/visualizer/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectId,
-          originalRoomAssetId: design.originalRoomAssetId,
-          transformation: design.transformation,
-          selectedMaterials,
-          parentDesignId: designId,
-        }),
-      });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Could not start revision");
+      const d = await vizFetchJson<{ generationJobId: string; designId: string }>(
+        "refine-generate",
+        "/api/visualizer/generate",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            projectId,
+            originalRoomAssetId: design.originalRoomAssetId,
+            transformation: design.transformation,
+            selectedMaterials,
+            parentDesignId: designId,
+          }),
+        },
+      );
       pollJob(d.generationJobId, d.designId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Revision failed");

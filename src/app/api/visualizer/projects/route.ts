@@ -2,8 +2,11 @@ import { jsonError, requireSession, resolveWorkspaceId } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { signedAssetUrl } from "@/lib/visualizer/serialize";
 import { PROJECT_STATUS_LABELS, TRANSFORMATION_LABELS } from "@/lib/visualizer/constants";
+import { createVisualizerRequestLog, logVisualizerError } from "@/lib/visualizer/server-request-log";
 
 export async function GET(req: Request) {
+  const { log, requestId } = createVisualizerRequestLog("projects");
+  log("start", { method: "GET" });
   const auth = await requireSession();
   if ("error" in auth) return auth.error;
   if (!auth.workspaceId) return jsonError("workspaceId required", 400);
@@ -81,10 +84,13 @@ export async function GET(req: Request) {
     }),
   );
 
-  return Response.json({ projects: rows });
+  log("success", { count: rows.length });
+  return Response.json({ requestId, projects: rows });
 }
 
 export async function POST(req: Request) {
+  const { log, requestId } = createVisualizerRequestLog("projects");
+  log("start", { method: "POST" });
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
@@ -117,9 +123,13 @@ export async function POST(req: Request) {
       },
     });
 
-    return Response.json({ project });
+    log("success", { projectId: project.id, workspaceId });
+    return Response.json({ requestId, project });
   } catch (e) {
-    console.error("[visualizer/projects POST]", e);
-    return jsonError(e instanceof Error ? e.message : "Could not create project", 500);
+    logVisualizerError("projects", requestId, "POST-failed", e);
+    return Response.json(
+      { error: e instanceof Error ? e.message : "Could not create project", requestId },
+      { status: 500 },
+    );
   }
 }

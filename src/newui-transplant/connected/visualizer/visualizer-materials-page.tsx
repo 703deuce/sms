@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
+import { vizClientError, vizFetchJson } from "@/lib/visualizer/client-api";
 import { VISUALIZER_ROUTES } from "@/lib/visualizer/routes";
 import { Button } from "@/newui-transplant/components/ui/button";
 import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
@@ -13,10 +14,9 @@ export function VisualizerMaterialsPage() {
   const [materials, setMaterials] = useState<Material[]>([]);
 
   useEffect(() => {
-    fetch("/api/visualizer/materials")
-      .then((r) => r.json())
+    vizFetchJson<{ materials?: Material[] }>("materials-list", "/api/visualizer/materials")
       .then((d) => setMaterials(d.materials || []))
-      .catch(() => {});
+      .catch((e) => vizClientError("materials-list:failed", e));
   }, []);
 
   return (

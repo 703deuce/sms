@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ImageIcon, Share2, Sparkles, CalendarCheck } from "lucide-react";
-import { parseJsonResponse } from "@/lib/api/parse-json-response";
+import { vizClientError, vizClientLog, vizFetchJson } from "@/lib/visualizer/client-api";
 import { VISUALIZER_ROUTES } from "@/lib/visualizer/routes";
 import { ArStatGrid } from "@/newui-transplant/components/appointment-reminders/ar-opus-layout";
 import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
@@ -53,16 +53,16 @@ export function VisualizerOverviewPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/visualizer/overview")
-      .then(async (r) => {
-        const body = await parseJsonResponse<{ error?: string }>(r);
-        if (!r.ok) {
-          throw new Error(body.error || "Could not load overview");
-        }
-        return body as OverviewData;
+    vizClientLog("overview:load-start");
+    vizFetchJson<OverviewData & { error?: string }>("overview", "/api/visualizer/overview")
+      .then((body) => {
+        setData(body);
+        vizClientLog("overview:load-ok");
       })
-      .then(setData)
-      .catch((e) => setError(e instanceof Error ? e.message : "Error"));
+      .catch((e) => {
+        vizClientError("overview:load-failed", e);
+        setError(e instanceof Error ? e.message : "Error");
+      });
   }, []);
 
   const metrics = data?.metrics;

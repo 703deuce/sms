@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
+import { vizClientError, vizFetchJson } from "@/lib/visualizer/client-api";
 import { VISUALIZER_ROUTES } from "@/lib/visualizer/routes";
 import { OpusDataSurface } from "@/newui-transplant/components/appointment-reminders/ar-opus-layout";
 import { Button } from "@/newui-transplant/components/ui/button";
@@ -25,10 +26,12 @@ export function VisualizerProjectsPage() {
 
   useEffect(() => {
     const url = q ? `/api/visualizer/projects?q=${encodeURIComponent(q)}` : "/api/visualizer/projects";
-    fetch(url)
-      .then((r) => r.json())
+    vizFetchJson<{ projects?: ProjectRow[] }>("projects-list", url)
       .then((d) => setProjects(d.projects || []))
-      .catch(() => setProjects([]));
+      .catch((e) => {
+        vizClientError("projects-list:failed", e);
+        setProjects([]);
+      });
   }, [q]);
 
   return (

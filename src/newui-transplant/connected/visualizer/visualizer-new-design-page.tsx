@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, Upload } from "lucide-react";
-import { parseJsonResponse } from "@/lib/api/parse-json-response";
+import { vizClientError, vizClientLog, vizFetchJson, vizUploadForm } from "@/lib/visualizer/client-api";
 import { VISUALIZER_ROUTES } from "@/lib/visualizer/routes";
 import { TRANSFORMATION_LABELS, VISUALIZER_LAUNCH_TRANSFORMATIONS } from "@/lib/visualizer/constants";
 import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
@@ -44,28 +44,42 @@ export function VisualizerNewDesignPage() {
   const [designId, setDesignId] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/visualizer/materials?category=WALL_PANEL")
-      .then((r) => r.json())
-      .then((d) => setMaterials(d.materials || []))
-      .catch(() => {});
+    vizClientLog("materials:load-start");
+    vizFetchJson<{ materials?: MaterialRow[] }>("materials", "/api/visualizer/materials?category=WALL_PANEL")
+      .then((d) => {
+        setMaterials(d.materials || []);
+        vizClientLog("materials:load-ok", { count: d.materials?.length ?? 0 });
+      })
+      .catch((e) => {
+        vizClientError("materials:load-failed", e);
+      });
   }, []);
 
   const pollJob = useCallback(
     (id: string, proj: string, des: string) => {
       const tick = async () => {
-        const r = await fetch(`/api/visualizer/jobs/${id}`);
-        const j = await r.json();
-        const status = j.job?.status;
-        if (status === "COMPLETED") {
-          window.location.href = VISUALIZER_ROUTES.design(proj, des);
-          return;
-        }
-        if (status === "FAILED") {
-          setError(j.job?.errorMessage || "Generation failed");
+        try {
+          const j = await vizFetchJson<{ job?: { status?: string; errorMessage?: string } }>(
+            "job-poll",
+            `/api/visualizer/jobs/${id}`,
+          );
+          const status = j.job?.status;
+          vizClientLog("job-poll:status", { jobId: id, status });
+          if (status === "COMPLETED") {
+            window.location.href = VISUALIZER_ROUTES.design(proj, des);
+            return;
+          }
+          if (status === "FAILED") {
+            setError(j.job?.errorMessage || "Generation failed");
+            setBusy(false);
+            return;
+          }
+          setTimeout(tick, 2500);
+        } catch (e) {
+          vizClientError("job-poll:failed", e, { jobId: id });
+          setError(e instanceof Error ? e.message : "Could not check generation status");
           setBusy(false);
-          return;
         }
-        setTimeout(tick, 2500);
       };
       tick();
     },
@@ -73,33 +87,51 @@ export function VisualizerNewDesignPage() {
   );
 
   async function ensureProject() {
-    if (projectId) return projectId;
-    const r = await fetch("/api/visualizer/projects", {
+    if (projectId) {
+      vizClientLog("project:reuse", { projectId });
+      return projectId;
+    }
+    const d = await vizFetchJson<{ project?: { id: string }; requestId?: string }>("project-create", "/api/visualizer/projects", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: projectName }),
     });
-    const d = await parseJsonResponse<{ error?: string; project: { id: string } }>(r);
-    if (!r.ok) throw new Error(d.error || "Could not create project");
-    setProjectId(d.project.id);
-    return d.project.id as string;
+    const id = d.project?.id;
+    if (!id) {
+      throw new Error(
+        `(project-create) Server did not return a project id${d.requestId ? ` (ref ${d.requestId})` : ""}`,
+      );
+    }
+    setProjectId(id);
+    return id;
   }
 
   async function onUpload(file: File) {
     setBusy(true);
     setError(null);
+    vizClientLog("upload:begin", { name: file.name, size: file.size, type: file.type || "(empty)" });
     try {
       const pid = await ensureProject();
       const fd = new FormData();
       fd.set("file", file);
       fd.set("projectId", pid);
       fd.set("assetType", "ORIGINAL_ROOM");
-      const r = await fetch("/api/visualizer/upload", { method: "POST", body: fd });
-      const d = await parseJsonResponse<{ error?: string; asset: { id: string; url: string } }>(r);
-      if (!r.ok) throw new Error(d.error || "Upload failed");
+      const d = await vizUploadForm<{ asset?: { id: string; url: string }; requestId?: string }>(
+        "room-upload",
+        "/api/visualizer/upload",
+        fd,
+        { projectId: pid },
+      );
+      if (!d.asset?.id || !d.asset?.url) {
+        throw new Error(
+          `(room-upload) Missing asset in response${d.requestId ? ` (ref ${d.requestId})` : ""}`,
+        );
+      }
       setRoomAssetId(d.asset.id);
       setRoomPreviewUrl(d.asset.url);
+      vizClientLog("upload:success", { assetId: d.asset.id });
     } catch (e) {
+      vizClientError("upload:failed", e);
       setError(e instanceof Error ? e.message : "Upload failed");
     } finally {
       setBusy(false);
@@ -111,24 +143,30 @@ export function VisualizerNewDesignPage() {
     setBusy(true);
     setError(null);
     try {
-      const r = await fetch("/api/visualizer/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectId,
-          originalRoomAssetId: roomAssetId,
-          transformation,
-          selectedMaterials: selectedMaterialId
-            ? [{ materialId: selectedMaterialId, category: "WALL_PANEL" }]
-            : [],
-        }),
-      });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Could not start generation");
+      const d = await vizFetchJson<{ error?: string; generationJobId?: string; designId?: string }>(
+        "generate",
+        "/api/visualizer/generate",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            projectId,
+            originalRoomAssetId: roomAssetId,
+            transformation,
+            selectedMaterials: selectedMaterialId
+              ? [{ materialId: selectedMaterialId, category: "WALL_PANEL" }]
+              : [],
+          }),
+        },
+      );
+      if (!d.generationJobId || !d.designId) {
+        throw new Error("(generate) Missing job or design id in response");
+      }
       setJobId(d.generationJobId);
       setDesignId(d.designId);
       pollJob(d.generationJobId, projectId, d.designId);
     } catch (e) {
+      vizClientError("generate:failed", e);
       setError(e instanceof Error ? e.message : "Generation failed");
       setBusy(false);
     }

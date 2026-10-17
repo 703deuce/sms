@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { vizClientError, vizFetchJson, vizUploadForm } from "@/lib/visualizer/client-api";
 import { VISUALIZER_ROUTES } from "@/lib/visualizer/routes";
 import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
 import { Button } from "@/newui-transplant/components/ui/button";
@@ -38,11 +39,7 @@ export function VisualizerMaterialFormPage({ materialId }: { materialId?: string
   useEffect(() => {
     if (!materialId) return;
     setLoading(true);
-    fetch(`/api/visualizer/materials/${materialId}`)
-      .then(async (r) => {
-        if (!r.ok) throw new Error("Material not found");
-        return r.json();
-      })
+    vizFetchJson<{ material: MaterialPayload }>("material-get", `/api/visualizer/materials/${materialId}`)
       .then((d) => {
         const m = d.material as MaterialPayload;
         setName(m.name);
@@ -55,25 +52,34 @@ export function VisualizerMaterialFormPage({ materialId }: { materialId?: string
         setMime(m.imageMimeType || "image/jpeg");
         setPreview(m.imageUrl);
       })
-      .catch((e) => setError(e instanceof Error ? e.message : "Error"))
+      .catch((e) => {
+        vizClientError("material-get:failed", e);
+        setError(e instanceof Error ? e.message : "Error");
+      })
       .finally(() => setLoading(false));
   }, [materialId]);
 
   async function onFile(file: File) {
     setBusy(true);
-    const fd = new FormData();
-    fd.set("file", file);
-    fd.set("assetType", "MATERIAL_REFERENCE");
-    const r = await fetch("/api/visualizer/upload", { method: "POST", body: fd });
-    const d = await r.json();
-    setBusy(false);
-    if (!r.ok) {
-      setError(d.error || "Upload failed");
-      return;
+    setError(null);
+    try {
+      const fd = new FormData();
+      fd.set("file", file);
+      fd.set("assetType", "MATERIAL_REFERENCE");
+      const d = await vizUploadForm<{ asset: { storagePath: string; url: string } }>(
+        "material-image-upload",
+        "/api/visualizer/upload",
+        fd,
+      );
+      setImageStoragePath(d.asset.storagePath);
+      setPreview(d.asset.url);
+      setMime(file.type || "image/jpeg");
+    } catch (e) {
+      vizClientError("material-image-upload:failed", e);
+      setError(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setBusy(false);
     }
-    setImageStoragePath(d.asset.storagePath);
-    setPreview(d.asset.url);
-    setMime(file.type || "image/jpeg");
   }
 
   async function onSave() {
@@ -92,24 +98,23 @@ export function VisualizerMaterialFormPage({ materialId }: { materialId?: string
       imageMimeType: mime,
       publicVisible,
     };
-    const r = isEdit
-      ? await fetch(`/api/visualizer/materials/${materialId}`, {
-          method: "PATCH",
+    try {
+      await vizFetchJson(
+        isEdit ? "material-patch" : "material-create",
+        isEdit ? `/api/visualizer/materials/${materialId}` : "/api/visualizer/materials",
+        {
+          method: isEdit ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
-        })
-      : await fetch("/api/visualizer/materials", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-    const d = await r.json();
-    setBusy(false);
-    if (!r.ok) {
-      setError(d.error || "Save failed");
-      return;
+        },
+      );
+      router.push(VISUALIZER_ROUTES.materials);
+    } catch (e) {
+      vizClientError("material-save:failed", e);
+      setError(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setBusy(false);
     }
-    router.push(VISUALIZER_ROUTES.materials);
   }
 
   if (loading) {
