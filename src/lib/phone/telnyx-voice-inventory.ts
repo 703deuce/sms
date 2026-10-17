@@ -17,7 +17,21 @@ export function isActiveAssignablePhoneStatus(status: string | null | undefined)
   const s = String(status || "").trim().toLowerCase();
   if (!s) return true;
   if (isReleasedPhoneStatus(s)) return false;
-  return s === "active" || s === "verified" || s === "ready" || s === "in_use";
+  if (s === "active" || s === "verified" || s === "ready" || s === "in_use") {
+    return true;
+  }
+  // Workspace / provider labels that still map to assignable Telnyx DIDs in production.
+  if (
+    s === "purchased" ||
+    s === "in_service" ||
+    s === "assigned" ||
+    s === "enabled" ||
+    s === "provisioned"
+  ) {
+    return true;
+  }
+  // Default permissive: only block explicit released states (above).
+  return true;
 }
 
 export function describeTelnyxVoiceInventory(input: {

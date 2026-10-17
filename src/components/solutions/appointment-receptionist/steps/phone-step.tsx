@@ -69,6 +69,7 @@ export function PhoneStep({
   const uiVariant = isOpus ? "opus" : "legacy";
   const { Input, Label, Textarea, Button } = pickWizardFieldComponents(presentation);
   const [numbers, setNumbers] = useState<PhoneRow[]>([]);
+  const [numbersLoadError, setNumbersLoadError] = useState<string | null>(null);
   const [mctbLineReuse, setMctbLineReuse] = useState<{
     ingressE164: string;
     forwardingStatus: string;
@@ -101,13 +102,52 @@ export function PhoneStep({
   }, [isMctb]);
 
   useEffect(() => {
-    fetch("/api/phone/numbers")
-      .then((r) => r.json())
-      .then((j) => {
-        const rows = (j.data || []) as PhoneRow[];
+    setNumbersLoadError(null);
+    fetch("/api/phone/numbers", { cache: "no-store" })
+      .then(async (r) => {
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          throw new Error(
+            typeof j?.error === "string" ? j.error : `Could not load numbers (${r.status})`,
+          );
+        }
+        let rows = (j.data || []) as PhoneRow[];
+        if (rows.length === 0) {
+          const mctbRes = await fetch("/api/mctb/numbers", { cache: "no-store" });
+          const mctbJson = await mctbRes.json().catch(() => ({}));
+          const mctbRows = (mctbJson.data?.numbers || []) as Array<{
+            id: string;
+            e164: string;
+            friendlyName: string | null;
+            status: string;
+            provider?: string;
+          }>;
+          if (mctbRows.length) {
+            rows = mctbRows.map((n) => ({
+              id: n.id,
+              e164: n.e164,
+              friendlyName: n.friendlyName,
+              status: n.status || "Active",
+              provider: n.provider || "telnyx",
+              telnyxVoiceConfigurable: true,
+              voiceIngressProduct: "none",
+            }));
+          }
+        }
         setNumbers(rows);
+        if (
+          rows.length > 0 &&
+          (state.numberSource === "forward_existing" ||
+            state.numberSource === "connect_existing") &&
+          !state.phoneNumberId
+        ) {
+          patch({ numberSource: "existing" });
+        }
       })
-      .catch(() => undefined);
+      .catch((e) => {
+        setNumbers([]);
+        setNumbersLoadError(e instanceof Error ? e.message : "Could not load numbers");
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -419,6 +459,47 @@ export function PhoneStep({
               )}
             </div>
           )
+        ) : null}
+        {numbersLoadError ? (
+          <InfoCallout variant={uiVariant}>
+            <p className="font-medium">Could not load your numbers</p>
+            <p className="mt-1 text-sm text-muted-foreground">{numbersLoadError}</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Try refreshing the page. Your numbers may still appear under{" "}
+              <a href="/voice/numbers" className="text-primary underline">Numbers</a>.
+            </p>
+          </InfoCallout>
+        ) : null}
+        {state.numberSource === "existing" && !voiceSelectableNumbers.length && numbers.length > 0 ? (
+          <InfoCallout variant={uiVariant}>
+            <p className="font-medium">No Telnyx voice numbers available in this list</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Add or activate a Telnyx number under{" "}
+              <a href="/voice/numbers" className="text-primary underline">Numbers</a>, or see
+              blocked numbers below.
+            </p>
+          </InfoCallout>
+        ) : null}
+        {state.numberSource === "existing" && !numbers.length && !numbersLoadError ? (
+          <InfoCallout variant={uiVariant}>
+            <p className="font-medium">No numbers in this workspace yet</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Purchase a number in{" "}
+              <a href="/voice/numbers" className="text-primary underline">Numbers</a>, then return
+              here and choose &quot;Use existing Transovo number.&quot;
+            </p>
+          </InfoCallout>
+        ) : null}
+        {state.phoneNumberId &&
+        state.phoneNumberE164 &&
+        !numbers.find((n) => n.id === state.phoneNumberId) ? (
+          <InfoCallout variant={uiVariant}>
+            <p className="font-medium">Saved number</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {formatPhone(state.phoneNumberE164)} — still assigned to this agent. If it does not
+              appear in the list, refresh or open Numbers to confirm it is in this workspace.
+            </p>
+          </InfoCallout>
         ) : null}
         {state.numberSource === "existing" && voiceSelectableNumbers.length ? (
           <div className="mt-3 space-y-1.5">
