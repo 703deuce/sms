@@ -7,6 +7,8 @@ import {
 } from "../callback/callback-requirements";
 import { resolveBookingServiceForRuntime } from "../config/resolve-booking-service";
 import { fieldSatisfiesObjectiveRequirement } from "./validate-intake-value";
+import { mapServiceRequiredFieldToV3IntakeKey } from "@/lib/solutions/appointment-receptionist/required-fields";
+import type { IntakeFieldDefinition } from "../config/agent-config";
 
 export type VoiceOperationName =
   | "unresolved"
@@ -51,6 +53,19 @@ function configuredRequiredForOperation(
     return defaultRequiredIntakeKeys(config);
   }
   return [];
+}
+
+function intakeFieldForRequirementKey(
+  config: VoiceV3AgentConfig,
+  key: string,
+): IntakeFieldDefinition | undefined {
+  const direct = config.intakeFields.find((f) => f.key === key);
+  if (direct) return direct;
+  const normalized = mapServiceRequiredFieldToV3IntakeKey(key);
+  if (normalized !== key) {
+    return config.intakeFields.find((f) => f.key === normalized);
+  }
+  return undefined;
 }
 
 function requiredKeysForBookAppointment(
@@ -116,8 +131,9 @@ export function getMissingFieldsForOperation(
       : configuredRequiredForOperation(config, operation);
   const values = context.intake.values;
   return requiredKeys.filter((key) => {
-    const field = config.intakeFields.find((f) => f.key === key);
-    if (!field) return true;
-    return !fieldSatisfiesObjectiveRequirement(field, values[key]);
+    const field = intakeFieldForRequirementKey(config, key);
+    if (!field) return false;
+    const stored = values[field.key] ?? values[key];
+    return !fieldSatisfiesObjectiveRequirement(field, stored);
   });
 }

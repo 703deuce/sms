@@ -51,7 +51,7 @@ function wizardServices(
 ): VoiceV3ServiceConfig[] {
   return (wizard.appointmentTypes || [])
     .filter((t) => t.enabled)
-    .map((t) => servicePolicyFromWizardType(t, slotStepMinutes));
+    .map((t) => servicePolicyFromWizardType(t, slotStepMinutes, wizard.collectFields));
 }
 
 function resolvePrimaryService(

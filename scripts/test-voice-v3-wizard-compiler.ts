@@ -66,7 +66,7 @@ function fixtureWizard(): AppointmentReceptionistWizardState {
         calendar: "primary",
         status: "ready",
         enabled: true,
-        requiredFields: [],
+        requiredFields: ["full_name", "phone", "email", "service"],
         bookingPermission: "book_directly",
       },
     ],
@@ -85,6 +85,7 @@ function fixtureWizard(): AppointmentReceptionistWizardState {
       { id: "phone", label: "Phone", required: true, enabled: true },
       { id: "custom_project_type", label: "Project type", required: true, enabled: true },
       { id: "email", label: "Email", required: false, enabled: true },
+      { id: "service", label: "Service", required: true, enabled: true },
     ],
     transferTriggers: [],
     transferDestinationName: "Sales",
@@ -141,6 +142,12 @@ function run(): void {
   assert.equal(config.businessName, "Johnson Home Remodeling");
   assert.equal(config.service.id, "consult");
   assert.equal(config.service.durationMinutes, 30);
+  assert.deepEqual(config.service.requiredIntakeKeys, [
+    "name",
+    "phone",
+    "email",
+    "service_reason",
+  ]);
   assert.equal(config.services.length, 2);
   assert.ok(config.intakeFields.some((f) => f.key === "project_type" && f.required));
   assert.ok(!config.intakeFields.find((f) => f.key === "email")?.required);
