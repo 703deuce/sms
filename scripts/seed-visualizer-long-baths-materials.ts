@@ -1,12 +1,11 @@
 /**
- * Upload Long Baths wall-panel fixture photos into permanent Visualizer storage
- * and create/update VisualizerMaterial rows for a workspace.
+ * OPTIONAL legacy seed — copies Long Baths panels into Supabase per workspace.
+ *
+ * Preferred: built-in catalog at public/visualizer/materials/long-baths/ (no Supabase copies).
+ * Only run this if you need duplicate DB rows for an old integration test.
  *
  * Usage:
  *   WORKSPACE_ID=<id> NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/seed-visualizer-long-baths-materials.ts
- *
- * Requires DATABASE_URL and Supabase credentials (same as app uploads).
- * Does not call KIE.
  */
 import { readFile } from "node:fs/promises";
 import path from "node:path";

@@ -1,5 +1,6 @@
 import { jsonError, requireSession, resolveWorkspaceId } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
+import { listCatalogMaterialsForApi } from "@/lib/visualizer/catalog-materials";
 import { VISUALIZER_BUCKET } from "@/lib/visualizer/constants";
 import { getVisualizerSignedUrl } from "@/lib/visualizer/storage";
 
@@ -22,7 +23,9 @@ export async function GET(req: Request) {
     orderBy: { updatedAt: "desc" },
   });
 
-  const rows = await Promise.all(
+  const catalogRows = listCatalogMaterialsForApi(category || undefined);
+
+  const workspaceRows = await Promise.all(
     materials.map(async (m) => ({
       id: m.id,
       name: m.name,
@@ -32,12 +35,16 @@ export async function GET(req: Request) {
       finish: m.finish,
       active: m.active,
       publicVisible: m.publicVisible,
+      source: "workspace" as const,
       imageUrl: await getVisualizerSignedUrl(VISUALIZER_BUCKET, m.imageStoragePath, 7200),
       updatedAt: m.updatedAt.toISOString(),
     })),
   );
 
-  return Response.json({ materials: rows });
+  const catalogSkus = new Set(catalogRows.map((c) => c.sku));
+  const customOnly = workspaceRows.filter((m) => !m.sku || !catalogSkus.has(m.sku));
+
+  return Response.json({ materials: [...catalogRows, ...customOnly] });
 }
 
 export async function POST(req: Request) {

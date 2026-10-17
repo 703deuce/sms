@@ -1,6 +1,11 @@
 import { jsonError, requireSession } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { signedAssetUrl } from "@/lib/visualizer/serialize";
+import {
+  catalogMaterialPublicUrl,
+  getCatalogMaterialById,
+  isCatalogMaterialId,
+} from "@/lib/visualizer/catalog-materials";
 import { VISUALIZER_BUCKET } from "@/lib/visualizer/constants";
 import { getVisualizerSignedUrl } from "@/lib/visualizer/storage";
 
@@ -32,23 +37,47 @@ export async function GET(_req: Request, { params }: Params) {
   }
 
   const selected = (design.selectedMaterialsJson as Array<{ materialId?: string; category: string }>) || [];
+  const workspaceIds = selected.map((s) => s.materialId).filter((id): id is string => Boolean(id) && !isCatalogMaterialId(id));
   const materials = await prisma.visualizerMaterial.findMany({
     where: {
       workspaceId: auth.workspaceId,
-      id: { in: selected.map((s) => s.materialId).filter(Boolean) as string[] },
+      id: { in: workspaceIds },
     },
   });
 
   const materialRows = await Promise.all(
-    materials.map(async (m) => ({
-      id: m.id,
-      name: m.name,
-      category: m.category,
-      sku: m.sku,
-      finish: m.finish,
-      imageUrl: await getVisualizerSignedUrl(VISUALIZER_BUCKET, m.imageStoragePath, 7200),
-    })),
-  );
+    selected.map(async (sel) => {
+      if (sel.materialId && isCatalogMaterialId(sel.materialId)) {
+        const cat = getCatalogMaterialById(sel.materialId);
+        if (!cat) return null;
+        return {
+          id: sel.materialId,
+          name: cat.name,
+          category: cat.category,
+          sku: cat.sku,
+          finish: null,
+          imageUrl: catalogMaterialPublicUrl(cat.slug),
+        };
+      }
+      const m = materials.find((row) => row.id === sel.materialId);
+      if (!m) return null;
+      return {
+        id: m.id,
+        name: m.name,
+        category: m.category,
+        sku: m.sku,
+        finish: m.finish,
+        imageUrl: await getVisualizerSignedUrl(VISUALIZER_BUCKET, m.imageStoragePath, 7200),
+      };
+    }),
+  ).then((rows) => rows.filter(Boolean) as Array<{
+    id: string;
+    name: string;
+    category: string;
+    sku: string | null;
+    finish: string | null;
+    imageUrl: string;
+  }>);
 
   const job = design.generationJobId
     ? await prisma.visualizerGenerationJob.findUnique({ where: { id: design.generationJobId } })

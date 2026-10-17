@@ -5,6 +5,8 @@ import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 import { buildVisualizerEditPrompt, type SelectedMaterialRef } from "@/lib/visualizer/generation/prompt-builder";
 import { runKieBathroomGeneration } from "@/lib/visualizer/generation/provider-kie";
 import { VISUALIZER_BUCKET } from "@/lib/visualizer/constants";
+import { isCatalogMaterialId } from "@/lib/visualizer/catalog-materials";
+import { loadMaterialReferenceImage } from "@/lib/visualizer/material-image";
 import { downloadVisualizerObject, uploadVisualizerBytes } from "@/lib/visualizer/storage";
 
 export async function enqueueVisualizerGeneration(input: {
@@ -53,19 +55,39 @@ export async function executeVisualizerGenerationJob(generationJobId: string) {
   });
 
   const selectedMaterials = (design.selectedMaterialsJson as SelectedMaterialRef[]) || [];
+  const workspaceMaterialIds = selectedMaterials
+    .map((m) => m.materialId)
+    .filter((id): id is string => Boolean(id) && !isCatalogMaterialId(id));
   const materialRows = await prisma.visualizerMaterial.findMany({
     where: {
       workspaceId: job.workspaceId,
-      id: {
-        in: selectedMaterials.map((m) => m.materialId).filter(Boolean) as string[],
-      },
+      id: { in: workspaceMaterialIds },
     },
   });
 
   const referenceImages: Array<{ bytes: Buffer; mime: string; label?: string }> = [];
-  for (const row of materialRows) {
-    const bytes = await downloadVisualizerObject(VISUALIZER_BUCKET, row.imageStoragePath);
-    referenceImages.push({ bytes, mime: row.imageMimeType, label: row.sku || row.name });
+  const promptMaterialRows: Array<{
+    id: string;
+    name: string;
+    category: string;
+    description?: string | null;
+    finish?: string | null;
+  }> = [];
+
+  for (const sel of selectedMaterials) {
+    if (!sel.materialId) continue;
+    const loaded = await loadMaterialReferenceImage({
+      materialId: sel.materialId,
+      workspaceMaterials: materialRows,
+    });
+    referenceImages.push({ bytes: loaded.bytes, mime: loaded.mime, label: loaded.label });
+    promptMaterialRows.push({
+      id: sel.materialId,
+      name: loaded.name,
+      category: loaded.category,
+      description: loaded.description,
+      finish: loaded.finish,
+    });
   }
 
   const refAssetIds = (request.referenceAssetIds as string[]) || [];
@@ -84,13 +106,7 @@ export async function executeVisualizerGenerationJob(generationJobId: string) {
   const prompt = buildVisualizerEditPrompt({
     transformation: design.transformation,
     selectedMaterials,
-    materialRows: materialRows.map((r) => ({
-      id: r.id,
-      name: r.name,
-      category: r.category,
-      description: r.description,
-      finish: r.finish,
-    })),
+    materialRows: promptMaterialRows,
     isRevision: Boolean(design.parentDesignId),
     preserve: (request.preserve as Record<string, boolean>) || undefined,
   });
