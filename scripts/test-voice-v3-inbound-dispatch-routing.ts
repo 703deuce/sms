@@ -45,6 +45,6 @@ assert.ok(json.includes("voice_v3_gpt_live"));
 assert.ok(json.includes("+15714073615"));
 assert.ok(!json.includes("pythonRuntimeBootstrapSnapshot"));
 
-assert.throws(() => normalizeAgentTemplateId("livekit_basic_voice"));
+assert.equal(normalizeAgentTemplateId("livekit_basic_voice"), "voice_v3_gpt_live");
 
 console.log("test-voice-v3-inbound-dispatch-routing: PASS");

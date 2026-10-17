@@ -132,11 +132,18 @@ export async function POST(request: Request) {
 
     if (action === "save_draft" || action === "create_draft") {
       try {
-        traceCompileAndRuntime(routeTrace, {
-          state,
-          compiled: buildWizardAgentConfig(state),
-          mode: "draft_compile",
-        });
+        try {
+          traceCompileAndRuntime(routeTrace, {
+            state,
+            compiled: buildWizardAgentConfig(state),
+            mode: "draft_compile",
+          });
+        } catch (compileErr) {
+          console.warn(
+            "[appointment-receptionist] draft compile trace skipped",
+            compileErr instanceof Error ? compileErr.message : compileErr,
+          );
+        }
         const draft = await persistAppointmentReceptionistWizardDraft({
           workspaceId: auth.workspaceId,
           state,

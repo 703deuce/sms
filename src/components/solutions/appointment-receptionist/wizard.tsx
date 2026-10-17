@@ -57,6 +57,14 @@ export type AppointmentReceptionistWizardProps = {
   onSolutionNameChange?: (solutionName: string) => void;
 };
 
+function liveSyncHealthNotice(message: string | null | undefined): string {
+  const detail = message?.trim();
+  if (detail) {
+    return `Draft saves still work. Live calls may be out of date until you activate again: ${detail}`;
+  }
+  return "Draft saves still work. Live calls may be out of date until you activate again.";
+}
+
 function mctbDefaultState(): AppointmentReceptionistWizardState {
   const base = applyWizardPreset(createDefaultWizardState(), "after_hours");
   return {
@@ -180,10 +188,7 @@ export function AppointmentReceptionistWizard({
                       : "needs_attention",
               );
               if (isLiveSyncPendingHealthStatus(healthStatus)) {
-                setError(
-                  loaded.healthMessage?.trim() ||
-                    "Saved changes are not yet applied to live calls. Save again to retry sync.",
-                );
+                setSaveNotice(liveSyncHealthNotice(loaded.healthMessage));
               }
               const visibleSteps = isMctb
                 ? mctbVisibleWizardSteps(merged)
@@ -568,6 +573,13 @@ export function AppointmentReceptionistWizard({
         setState(savedState);
       }
       setSavedFingerprint(fingerprintState(savedState));
+      if (action === "save_draft" || action === "create_draft") {
+        if (isLiveSyncPendingHealthStatus(json.data?.healthStatus)) {
+          setSaveNotice(liveSyncHealthNotice(json.data?.healthMessage));
+        } else if (!json.data?.liveSyncError) {
+          setSaveNotice("");
+        }
+      }
       if (json.data?.liveSyncError || liveSyncPending422) {
         const syncMsg =
           json.data?.liveSyncError ||

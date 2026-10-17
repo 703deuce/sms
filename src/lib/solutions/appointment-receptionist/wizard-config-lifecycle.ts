@@ -4,6 +4,7 @@ import type { VoiceAgentConfig } from "@/lib/voice/types";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import type { AppointmentReceptionistWizardState } from "./types";
 import { buildWizardAgentConfig } from "./build-agent-config";
+import { sanitizeLiveKitTemplateOnAdvanced } from "@/lib/voice/templates/agent-template-config";
 
 /** Authoritative editable wizard JSON lives under VoiceAgent.draftConfig.advanced. */
 export const WIZARD_SNAPSHOT_KEY = "appointmentReceptionistWizard";
@@ -24,7 +25,9 @@ export function patchAuthoritativeWizardOntoDraftConfig(
   state: AppointmentReceptionistWizardState,
   revision: number,
 ): VoiceAgentConfig {
-  const prevAdvanced = (prev.advanced || {}) as Record<string, unknown>;
+  const prevAdvanced = sanitizeLiveKitTemplateOnAdvanced(
+    (prev.advanced || {}) as Record<string, unknown>,
+  );
   return {
     ...prev,
     advanced: {
