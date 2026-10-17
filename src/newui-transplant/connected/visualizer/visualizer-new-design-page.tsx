@@ -6,13 +6,13 @@ import { Loader2, Upload } from "lucide-react";
 import { vizClientError, vizClientLog, vizFetchJson, vizUploadForm } from "@/lib/visualizer/client-api";
 import { VISUALIZER_ROUTES } from "@/lib/visualizer/routes";
 import {
-  SHOWER_WALL_HEIGHT_LABELS,
   TRANSFORMATION_LABELS,
   VISUALIZER_DEFAULT_SHOWER_WALL_HEIGHT,
   VISUALIZER_LAUNCH_TRANSFORMATIONS,
   type VisualizerShowerWallHeight,
   transformationSupportsShowerWallHeight,
 } from "@/lib/visualizer/constants";
+import { ShowerWallHeightField } from "@/newui-transplant/connected/visualizer/shower-wall-height-field";
 import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
 import { Button } from "@/newui-transplant/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -266,24 +266,7 @@ export function VisualizerNewDesignPage() {
             ))}
           </div>
           {transformationSupportsShowerWallHeight(transformation) ? (
-            <fieldset className={cn(OPUS_CARD, "space-y-3 p-4")}>
-              <legend className="text-sm font-medium">Shower / surround wall height</legend>
-              <p className="text-xs text-muted-foreground">
-                How high should the wall panels run in the wet area?
-              </p>
-              {(Object.keys(SHOWER_WALL_HEIGHT_LABELS) as VisualizerShowerWallHeight[]).map((value) => (
-                <label key={value} className="flex cursor-pointer items-start gap-3 text-sm">
-                  <input
-                    type="radio"
-                    name="shower-wall-height"
-                    className="mt-1"
-                    checked={showerWallHeight === value}
-                    onChange={() => setShowerWallHeight(value)}
-                  />
-                  <span>{SHOWER_WALL_HEIGHT_LABELS[value]}</span>
-                </label>
-              ))}
-            </fieldset>
+            <ShowerWallHeightField value={showerWallHeight} onChange={setShowerWallHeight} />
           ) : null}
         </div>
       ) : null}
@@ -327,9 +310,7 @@ export function VisualizerNewDesignPage() {
             Review your photo, remodel type, and material. Generation uses fixed backend prompts — no custom text required.
           </p>
           {transformationSupportsShowerWallHeight(transformation) ? (
-            <p className="text-sm text-muted-foreground">
-              Wall panels: <strong>{SHOWER_WALL_HEIGHT_LABELS[showerWallHeight]}</strong>
-            </p>
+            <ShowerWallHeightField value={showerWallHeight} onChange={setShowerWallHeight} />
           ) : null}
           {busy ? (
             <p className="flex items-center gap-2 text-sm text-muted-foreground">

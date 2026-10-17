@@ -27,7 +27,6 @@ export async function GET() {
       take: 6,
       include: {
         contact: { select: { id: true, firstName: true, lastName: true, phone: true } },
-        designs: { orderBy: { createdAt: "desc" }, take: 1 },
       },
     });
 
@@ -43,11 +42,15 @@ export async function GET() {
     const recentProjects = await Promise.all(
       projects.map(async (p) => {
       let thumbUrl: string | null = null;
-      const design = p.designs[0];
+      const latestDesign = await prisma.visualizerDesign.findFirst({
+        where: { projectId: p.id, generatedAssetId: { not: null } },
+        orderBy: { versionNumber: "desc" },
+        select: { generatedAssetId: true },
+      });
       try {
-        if (design?.generatedAssetId) {
+        if (latestDesign?.generatedAssetId) {
           const asset = await prisma.visualizerAsset.findUnique({
-            where: { id: design.generatedAssetId },
+            where: { id: latestDesign.generatedAssetId },
           });
           if (asset) thumbUrl = await signedAssetUrl(asset);
         } else if (p.primaryRoomAssetId) {
@@ -87,7 +90,7 @@ export async function GET() {
       estimateOpportunities: opportunities.map((o) => ({
         id: o.id,
         projectId: o.projectId,
-        projectName: o.project.name,
+        projectName: o.project?.name ?? "Project",
         fullName: o.fullName,
         status: o.status,
         createdAt: o.createdAt.toISOString(),

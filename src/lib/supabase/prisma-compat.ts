@@ -866,6 +866,8 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
   visualizerProject: {
     workspace: { table: "Workspace", fk: "workspaceId" },
     contact: { table: "Contact", fk: "contactId" },
+    designs: { table: "visualizer_design", fk: "projectId", pk: "id" },
+    assets: { table: "visualizer_asset", fk: "projectId", pk: "id" },
   },
   visualizerAsset: {
     workspace: { table: "Workspace", fk: "workspaceId" },

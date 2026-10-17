@@ -230,8 +230,13 @@ export function VisualizerDesignPage({ projectId, designId }: { projectId: strin
             Version {design?.versionNumber ?? "—"} · Concept visualization — not an installation guarantee.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => void onDownloadImage()} disabled={!design?.afterUrl}>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
+          <Button
+            className="w-full sm:w-auto"
+            variant="default"
+            onClick={() => void onDownloadImage()}
+            disabled={!design?.afterUrl}
+          >
             <Download className="size-4" aria-hidden />
             Download image
           </Button>
@@ -329,7 +334,13 @@ export function VisualizerDesignPage({ projectId, designId }: { projectId: strin
       ) : null}
 
       {design?.beforeUrl && design.afterUrl ? (
-        <BeforeAfterSlider beforeSrc={design.beforeUrl} afterSrc={design.afterUrl} />
+        <div className="flex flex-col gap-3">
+          <BeforeAfterSlider beforeSrc={design.beforeUrl} afterSrc={design.afterUrl} />
+          <Button className="w-full" onClick={() => void onDownloadImage()}>
+            <Download className="size-4" aria-hidden />
+            Download finished image
+          </Button>
+        </div>
       ) : (
         <div className={OPUS_CARD + " p-8 text-center text-sm text-muted-foreground"}>
           {design?.jobStatus === "FAILED"
