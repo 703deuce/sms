@@ -1,0 +1,16 @@
+import { Page, PageHeader } from '@/components/app/page-primitives'
+import { IntegrationsCatalog } from '@/components/integrations/integrations-catalog'
+
+export const metadata = { title: 'Integrations' }
+
+export default function IntegrationsPage() {
+  return (
+    <Page>
+      <PageHeader
+        title="Integrations"
+        description="Connect calendars, CRMs and notification channels. Credentials are stored encrypted and never shown here."
+      />
+      <IntegrationsCatalog />
+    </Page>
+  )
+}
