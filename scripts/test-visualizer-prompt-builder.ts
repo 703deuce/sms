@@ -1,18 +1,32 @@
 import assert from "node:assert/strict";
-import { buildCatalogMaterialPromptDescription } from "../src/lib/visualizer/catalog-prompt-notes";
 import {
   buildVisualizerPrompt,
   normalizeVisualizerTransformation,
+  visualizerTransformationPromptForTests,
   type VisualizerTransformation,
 } from "../src/lib/visualizer/generation/prompt-builder";
+import { buildCatalogMaterialPromptDescription } from "../src/lib/visualizer/catalog-prompt-notes";
 
-const SAMPLE = {
-  materialName: "Long Baths Versailles",
-  materialDescription: "Marble-look wall panel",
-  enclosureStyle: "frameless glass",
-  baseStyle: "low-threshold shower pan",
-  fixtureFinish: "brushed nickel",
-};
+const FORBIDDEN_APPEARANCE = [
+  "marble",
+  "veining",
+  "undertone",
+  "charcoal",
+  "travertine tone",
+  "Material color fidelity",
+  "24 inches",
+  "laser-etched",
+  "running-bond",
+];
+
+function assertNoAppearanceInference(prompt: string, label: string) {
+  const lower = prompt.toLowerCase();
+  for (const word of FORBIDDEN_APPEARANCE) {
+    assert.ok(!lower.includes(word.toLowerCase()), `${label} should not mention "${word}"`);
+  }
+  assert.ok(!prompt.includes("Material notes:"), label);
+  assert.ok(!prompt.includes("Napoli"), label);
+}
 
 const ALL: VisualizerTransformation[] = [
   "TUB_TO_SHOWER",
@@ -23,97 +37,75 @@ const ALL: VisualizerTransformation[] = [
 ];
 
 for (const transformation of ALL) {
-  const prompt = buildVisualizerPrompt({ transformation, ...SAMPLE });
-  assert.ok(prompt.includes("Image A (first reference) is the original bathroom"), transformation);
-  assert.ok(prompt.includes("Ignore any printed text, labels, logos"), transformation);
-  assert.ok(prompt.includes("Do not change the camera angle"), transformation);
+  const prompt = buildVisualizerPrompt({ transformation });
+  assert.ok(prompt.includes("Image 1"), transformation);
+  assert.ok(prompt.includes("Image 2"), transformation);
+  assert.ok(!prompt.includes("Image 3"), `${transformation} without pattern ref`);
+  assertNoAppearanceInference(prompt, transformation);
 }
 
-const tubToShower = buildVisualizerPrompt({ transformation: "TUB_TO_SHOWER", ...SAMPLE });
-assert.ok(tubToShower.includes("Convert the existing bathtub area into a shower"));
-assert.ok(tubToShower.includes("shower walls only"));
+const tubToShower = buildVisualizerPrompt({ transformation: "TUB_TO_SHOWER" });
+assert.ok(tubToShower.includes("Convert the bathtub in Image 1"));
+assert.ok(tubToShower.includes("shower walls"));
 
-const showerToShower = buildVisualizerPrompt({ transformation: "SHOWER_TO_SHOWER", ...SAMPLE });
-assert.ok(showerToShower.includes("already has a shower"));
-assert.ok(showerToShower.includes("not ceramic tile on the walls"));
+const showerToShower = buildVisualizerPrompt({ transformation: "SHOWER_TO_SHOWER" });
+assert.ok(showerToShower.includes("Keep the shower in Image 1"));
 
-const tubToTub = buildVisualizerPrompt({ transformation: "TUB_TO_TUB", ...SAMPLE });
-assert.ok(tubToTub.includes("Keep this as a bathtub layout"));
-assert.ok(tubToTub.includes("around the tub area only"));
+const tubToTub = buildVisualizerPrompt({ transformation: "TUB_TO_TUB" });
+assert.ok(tubToTub.includes("tub-surround walls"));
+assert.ok(tubToTub.includes("bathtub clearly visible"));
 
-const showerToTub = buildVisualizerPrompt({ transformation: "SHOWER_TO_TUB", ...SAMPLE });
-assert.ok(showerToTub.includes("Convert the existing shower area into a bathtub"));
+const showerToTub = buildVisualizerPrompt({ transformation: "SHOWER_TO_TUB" });
+assert.ok(showerToTub.includes("Convert the existing shower in Image 1"));
 
-const deckWrap = buildVisualizerPrompt({ transformation: "SHOWER_AND_TUB_DECK_WRAP", ...SAMPLE });
-assert.ok(deckWrap.includes("both a shower and a separate bathtub"));
-assert.ok(deckWrap.includes("Very important: do not continue that material upward"));
-assert.ok(deckWrap.includes("not climb the entire wall around the tub"));
+const deckWrap = buildVisualizerPrompt({ transformation: "SHOWER_AND_TUB_DECK_WRAP" });
+assert.ok(deckWrap.includes("separate shower and bathtub"));
+assert.ok(deckWrap.includes("Do not extend it up the walls above the bathtub deck"));
 
 assert.equal(normalizeVisualizerTransformation("SHOWER_REPLACEMENT"), "SHOWER_TO_SHOWER");
-assert.equal(normalizeVisualizerTransformation("SHOWER_AND_TUB_DECK_WRAP"), "SHOWER_AND_TUB_DECK_WRAP");
 
-const revision = buildVisualizerPrompt({ transformation: "TUB_TO_SHOWER", isRevision: true, ...SAMPLE });
-assert.ok(revision.startsWith("Revise the previous remodel concept"));
-
-const fullCeiling = buildVisualizerPrompt({
+const withOptions = buildVisualizerPrompt({
   transformation: "TUB_TO_SHOWER",
+  enclosureStyle: "framed glass",
+  baseStyle: "low-threshold shower pan",
+  fixtureFinish: "brushed nickel",
   showerWallHeight: "FULL_CEILING",
-  ...SAMPLE,
 });
-assert.ok(fullCeiling.includes("all the way to the ceiling line"));
+assert.ok(withOptions.includes("framed glass"));
+assert.ok(withOptions.includes("base to ceiling"));
 
 const eightFt = buildVisualizerPrompt({
   transformation: "SHOWER_TO_SHOWER",
   showerWallHeight: "EIGHT_FT",
-  ...SAMPLE,
 });
-assert.ok(eightFt.includes("approximately 8 feet (96 inches)"));
-assert.ok(eightFt.includes("Do not panel all the way to the ceiling"));
-assert.ok(fullCeiling.includes("wallpaper strip"));
+assert.ok(eightFt.includes("about 8 feet"));
 
-const pioneerNotes = buildCatalogMaterialPromptDescription({
-  panelLine: "PIONEER_PLUS",
-  description: "Pioneer Plus sample",
-});
-assert.ok(pioneerNotes.includes("24 inches wide by 8 inches"));
-assert.ok(pioneerNotes.includes("grout joints"));
-
-const montereyNotes = buildCatalogMaterialPromptDescription({
-  panelLine: "MONTEREY",
-  surfaceStyle: "tile_etch",
-  description: "Monterey tile",
-});
-assert.ok(montereyNotes.includes("running-bond"));
-assert.ok(montereyNotes.includes("laser-etched"));
-
-const pioneerPrompt = buildVisualizerPrompt({
-  transformation: "TUB_TO_SHOWER",
-  showerWallHeight: "FULL_CEILING",
-  materialName: "Tundra Grey",
-  materialDescription: pioneerNotes,
-});
-assert.ok(pioneerPrompt.includes("24 inches wide by 8 inches"));
-assert.ok(pioneerPrompt.includes("wallpaper"));
-
-const threeRef = buildVisualizerPrompt({
+const etched = buildVisualizerPrompt({
   transformation: "TUB_TO_SHOWER",
   hasSurfacePatternReference: true,
-  materialName: "Grey Stone",
-  materialDescription: montereyNotes,
 });
-assert.ok(threeRef.includes("Image C"));
-assert.ok(threeRef.includes("exact color and finish authority"));
+assert.ok(etched.includes("Image 3"));
+assert.ok(etched.includes("Image 2 as the color reference"));
+assertNoAppearanceInference(etched, "etched three-ref");
 
-const colorLock = buildVisualizerPrompt({
+assert.equal(
+  buildCatalogMaterialPromptDescription({ panelLine: "PIONEER_PLUS", slug: "travertine" }),
+  "",
+);
+
+const legacyDescIgnored = buildVisualizerPrompt({
   transformation: "TUB_TO_SHOWER",
-  materialName: "Travertine",
-  materialDescription: buildCatalogMaterialPromptDescription({
-    panelLine: "PIONEER_PLUS",
-    slug: "travertine",
-    name: "Travertine",
-  }),
+  materialName: "Tundra Grey",
+  materialDescription: "cool charcoal marble with white veining",
 });
-assert.ok(colorLock.includes("Material color fidelity"));
-assert.ok(colorLock.includes("medium-light"));
+assertNoAppearanceInference(legacyDescIgnored, "materialDescription ignored");
+
+const revision = buildVisualizerPrompt({ transformation: "TUB_TO_SHOWER", isRevision: true });
+assert.ok(revision.startsWith("Refine the previous remodel preview"));
+
+for (const t of ALL) {
+  const len = visualizerTransformationPromptForTests(t).length;
+  assert.ok(len < 1200, `${t} prompt should stay concise (got ${len} chars)`);
+}
 
 console.log("test-visualizer-prompt-builder: PASS");

@@ -7,7 +7,6 @@ import {
   parseCatalogMaterialSlug,
   readCatalogMaterialBytes,
 } from "@/lib/visualizer/catalog-materials";
-import { buildCatalogMaterialPromptDescription } from "@/lib/visualizer/catalog-prompt-notes";
 import {
   catalogMaterialNeedsSurfacePatternReference,
   readCatalogSurfacePatternReference,
@@ -65,18 +64,7 @@ export async function loadMaterialReferenceImage(input: {
       label: meta?.sku || slug,
       name: meta?.name || slug,
       category: meta?.category || "WALL_PANEL",
-      description: meta
-        ? buildCatalogMaterialPromptDescription(
-            {
-              panelLine: meta.panelLine,
-              surfaceStyle: meta.surfaceStyle,
-              description: meta.description,
-              name: meta.name,
-              slug: meta.slug,
-            },
-            { hasSurfacePatternReference: Boolean(surfacePatternReference) },
-          )
-        : null,
+      description: null,
       finish: null,
       surfacePatternReference,
     };
