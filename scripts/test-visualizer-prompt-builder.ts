@@ -58,6 +58,10 @@ const noMaterialProse = buildVisualizerPrompt({
 assert.ok(!noMaterialProse.includes("Sierra Sand"));
 assert.ok(!noMaterialProse.includes("veining"));
 assert.ok(!noMaterialProse.includes("Material notes"));
+assert.ok(
+  noMaterialProse.includes("without darkening the base color"),
+  "material fidelity anti-darkening line",
+);
 
 const etched = buildVisualizerPrompt({
   transformation: "TUB_TO_SHOWER",

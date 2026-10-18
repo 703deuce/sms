@@ -40,7 +40,7 @@ const PRESERVE =
   "Preserve the room layout, camera angle, window, vanity, lighting, and other unaffected features.";
 
 const MATERIAL_REF =
-  "Use Image 2 as the selected wall-panel material. Match its color and pattern closely.";
+  "Use Image 2 as the selected wall-panel material. Match Image 2's wall-panel color and pattern faithfully, without darkening the base color.";
 
 const PHOTO = "Photorealistic finished bathroom.";
 
