@@ -10,7 +10,14 @@ import { Button } from "@/newui-transplant/components/ui/button";
 import { OPUS_CARD } from "@/newui-transplant/components/app/opus-surfaces";
 import { cn } from "@/lib/utils";
 
-type MaterialOption = { id: string; name: string; category: string; imageUrl: string };
+type MaterialOption = {
+  id: string;
+  name: string;
+  category: string;
+  imageUrl: string;
+  panelLineLabel?: string | null;
+  sku?: string | null;
+};
 
 type DesignPayload = {
   design: {
@@ -351,12 +358,24 @@ export function VisualizerDesignPage({ projectId, designId }: { projectId: strin
 
       {design?.materials?.length ? (
         <section className={OPUS_CARD + " p-4"}>
-          <h2 className="text-sm font-semibold">Selected materials</h2>
-          <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+          <h2 className="text-sm font-semibold">Selected shower wall panel</h2>
+          <ul className="mt-3 space-y-3">
             {design.materials.map((m) => (
-              <li key={m.id}>
-                {m.name} · {m.category}
-                {m.finish ? ` · ${m.finish}` : ""}
+              <li key={m.id} className="flex items-center gap-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={m.imageUrl}
+                  alt=""
+                  className="size-12 shrink-0 rounded-md object-cover ring-1 ring-border"
+                />
+                <div className="text-sm">
+                  <p className="font-semibold">{m.name}</p>
+                  <p className="text-muted-foreground">
+                    {m.panelLineLabel || m.category}
+                    {m.sku ? ` · ${m.sku}` : ""}
+                    {m.finish ? ` · ${m.finish}` : ""}
+                  </p>
+                </div>
               </li>
             ))}
           </ul>

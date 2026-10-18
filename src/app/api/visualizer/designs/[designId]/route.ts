@@ -6,7 +6,11 @@ import {
   getCatalogMaterialById,
   isCatalogMaterialId,
 } from "@/lib/visualizer/catalog-materials";
-import { VISUALIZER_BUCKET } from "@/lib/visualizer/constants";
+import {
+  VISUALIZER_BUCKET,
+  VISUALIZER_PANEL_LINE_LABELS,
+  type VisualizerPanelLine,
+} from "@/lib/visualizer/constants";
 import { getVisualizerSignedUrl } from "@/lib/visualizer/storage";
 
 type Params = { params: Promise<{ designId: string }> };
@@ -56,7 +60,9 @@ export async function GET(_req: Request, { params }: Params) {
           category: cat.category,
           sku: cat.sku,
           finish: null,
-          imageUrl: catalogMaterialPublicUrl(cat.slug),
+          panelLine: cat.panelLine,
+          panelLineLabel: VISUALIZER_PANEL_LINE_LABELS[cat.panelLine as VisualizerPanelLine] ?? cat.panelLine,
+          imageUrl: catalogMaterialPublicUrl(cat),
         };
       }
       const m = materials.find((row) => row.id === sel.materialId);
@@ -76,6 +82,8 @@ export async function GET(_req: Request, { params }: Params) {
     category: string;
     sku: string | null;
     finish: string | null;
+    panelLine?: string | null;
+    panelLineLabel?: string | null;
     imageUrl: string;
   }>);
 

@@ -161,7 +161,6 @@ export function VisualizerNewDesignPage() {
       .then((d) => {
         const rows = d.materials || [];
         setMaterials(rows);
-        setSelectedMaterialId((prev) => prev ?? rows[0]?.id ?? null);
         vizClientLog("materials:load-ok", { count: rows.length });
       })
       .catch((e) => {
@@ -367,6 +366,20 @@ export function VisualizerNewDesignPage() {
     if (variant) setSelectedMaterialId(variant.id);
   }
 
+  const selectedMaterial = useMemo(
+    () => materials.find((m) => m.id === selectedMaterialId) ?? null,
+    [materials, selectedMaterialId],
+  );
+
+  const selectedPanelLineLabel = useMemo(() => {
+    if (!selectedMaterial?.panelLine) return null;
+    const line = selectedMaterial.panelLine as VisualizerPanelLine;
+    return line in VISUALIZER_PANEL_LINE_LABELS ? VISUALIZER_PANEL_LINE_LABELS[line] : selectedMaterial.panelLine;
+  }, [selectedMaterial]);
+
+  const transformationLabel =
+    TRANSFORMATION_LABELS[transformation as keyof typeof TRANSFORMATION_LABELS] || transformation;
+
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6">
       <header>
@@ -450,6 +463,41 @@ export function VisualizerNewDesignPage() {
 
       {step === 2 ? (
         <section className="flex flex-col gap-6">
+          <div
+            className={cn(
+              OPUS_CARD,
+              "sticky top-2 z-10 border-2 p-4",
+              selectedMaterial ? "border-primary bg-primary/5" : "border-dashed border-muted-foreground/40",
+            )}
+            aria-live="polite"
+          >
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Selected shower wall panel
+            </p>
+            {selectedMaterial ? (
+              <div className="mt-2 flex items-center gap-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={selectedMaterial.imageUrl}
+                  alt=""
+                  className="size-14 shrink-0 rounded-md object-cover ring-1 ring-border"
+                />
+                <div className="min-w-0">
+                  <p className="text-base font-semibold">{selectedMaterial.name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {selectedPanelLineLabel}
+                    {selectedMaterial.surfaceStyle
+                      ? ` · ${MONTEREY_SURFACE_STYLE_LABELS[selectedMaterial.surfaceStyle]}`
+                      : null}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-muted-foreground">
+                Tap a material below — nothing is selected yet.
+              </p>
+            )}
+          </div>
           {materials.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No wall panels yet.{" "}
@@ -554,10 +602,87 @@ export function VisualizerNewDesignPage() {
       ) : null}
 
       {step === 3 ? (
-        <section className={cn(OPUS_CARD, "space-y-4 p-6")}>
-          <p className="text-sm text-muted-foreground">
-            Review your photo, remodel type, and material. Generation uses fixed backend prompts — no custom text required.
-          </p>
+        <section className={cn(OPUS_CARD, "space-y-5 p-6")}>
+          <div>
+            <h2 className="text-lg font-semibold">Review before generating</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Confirm the shower wall panel below — this is exactly what we send to the remodel preview.
+            </p>
+          </div>
+
+          <dl className="grid gap-4 sm:grid-cols-2">
+            <div className="rounded-lg border bg-muted/20 p-3">
+              <dt className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Bathroom photo</dt>
+              <dd className="mt-2">
+                {roomPreviewUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={roomPreviewUrl}
+                    alt="Your uploaded bathroom"
+                    className="max-h-36 w-full rounded-md object-contain"
+                  />
+                ) : (
+                  <p className="text-sm text-destructive">No photo — go back to step 1.</p>
+                )}
+              </dd>
+            </div>
+            <div className="rounded-lg border bg-muted/20 p-3">
+              <dt className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Remodel type</dt>
+              <dd className="mt-2 text-sm font-medium">{transformationLabel}</dd>
+            </div>
+          </dl>
+
+          <div
+            className={cn(
+              "rounded-lg border-2 p-4",
+              selectedMaterial ? "border-primary bg-primary/5" : "border-destructive",
+            )}
+          >
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Shower wall panel (will be used)
+            </p>
+            {selectedMaterial ? (
+              <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-start">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={selectedMaterial.imageUrl}
+                  alt={`${selectedMaterial.name} swatch`}
+                  className="size-28 shrink-0 rounded-lg object-cover ring-1 ring-border"
+                />
+                <div>
+                  <p className="text-xl font-semibold">{selectedMaterial.name}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {selectedPanelLineLabel}
+                    {selectedMaterial.manufacturer ? ` · ${selectedMaterial.manufacturer}` : null}
+                  </p>
+                  {selectedMaterial.surfaceStyle ? (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Finish: {MONTEREY_SURFACE_STYLE_LABELS[selectedMaterial.surfaceStyle]}
+                    </p>
+                  ) : null}
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Not the right panel?{" "}
+                    <button
+                      type="button"
+                      className="font-medium text-primary underline"
+                      onClick={() => setStep(2)}
+                      disabled={busy}
+                    >
+                      Change material
+                    </button>
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-destructive">
+                No wall panel selected.{" "}
+                <button type="button" className="underline" onClick={() => setStep(2)} disabled={busy}>
+                  Choose a material
+                </button>
+              </p>
+            )}
+          </div>
+
           {transformationSupportsShowerWallHeight(transformation) ? (
             <ShowerWallHeightField value={showerWallHeight} onChange={setShowerWallHeight} />
           ) : null}
@@ -600,8 +725,12 @@ export function VisualizerNewDesignPage() {
               Continue
             </Button>
           ) : (
-            <Button disabled={busy || !roomAssetId} onClick={onGenerate}>
-              {busy ? "Generating…" : "Generate remodel preview"}
+            <Button disabled={busy || !roomAssetId || !selectedMaterialId} onClick={onGenerate}>
+              {busy
+                ? "Generating…"
+                : selectedMaterial
+                  ? `Generate with ${selectedMaterial.name}`
+                  : "Generate remodel preview"}
             </Button>
           )}
         </div>
