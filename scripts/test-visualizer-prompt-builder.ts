@@ -68,8 +68,10 @@ const etched = buildVisualizerPrompt({
   transformation: "TUB_TO_SHOWER",
   showerWallHeight: "FULL_CEILING",
   hasSurfacePatternReference: true,
+  surfacePatternKind: "pioneer_block",
 });
 assert.ok(etched.includes("Image 3"));
+assert.ok(etched.includes("stone-block"));
 assert.ok(!etched.includes("Image 4"));
 
 const twoRef = buildVisualizerPrompt({
@@ -77,6 +79,14 @@ const twoRef = buildVisualizerPrompt({
   hasSurfacePatternReference: false,
 });
 assert.ok(!twoRef.includes("Image 3"));
+assert.ok(twoRef.includes("no tile grout lines"));
+
+const travertineStyle = buildVisualizerPrompt({
+  transformation: "TUB_TO_SHOWER",
+  showerWallHeight: "FULL_CEILING",
+});
+assert.ok(!travertineStyle.includes("Image 3"));
+assert.ok(travertineStyle.includes("seamless shower wall panels"));
 
 assert.equal(coverageModeFromShowerWallHeight("FULL_CEILING"), "TO_CEILING");
 assert.equal(coverageModeFromShowerWallHeight("EIGHT_FT"), "SURROUND_HEIGHT");

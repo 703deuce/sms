@@ -10,6 +10,8 @@ import {
 import { runKieBathroomGeneration } from "@/lib/visualizer/generation/provider-kie";
 import { VISUALIZER_BUCKET } from "@/lib/visualizer/constants";
 import { isCatalogMaterialId } from "@/lib/visualizer/catalog-materials";
+import { surfacePatternKindForMaterial } from "@/lib/visualizer/catalog-pattern-reference-rules";
+import { getCatalogMaterialById } from "@/lib/visualizer/catalog-materials";
 import { loadMaterialReferenceImage } from "@/lib/visualizer/material-image";
 import { downloadVisualizerObject, uploadVisualizerBytes } from "@/lib/visualizer/storage";
 
@@ -71,6 +73,7 @@ export async function executeVisualizerGenerationJob(generationJobId: string) {
 
   const referenceImages: Array<{ bytes: Buffer; mime: string; label?: string }> = [];
   let hasSurfacePatternReference = false;
+  let surfacePatternKind: "pioneer_block" | "monterey_tile" | null = null;
   const promptMaterialRows: Array<{
     id: string;
     name: string;
@@ -93,6 +96,17 @@ export async function executeVisualizerGenerationJob(generationJobId: string) {
         label: loaded.surfacePatternReference.label,
       });
       hasSurfacePatternReference = true;
+      const catalogMeta = isCatalogMaterialId(sel.materialId)
+        ? getCatalogMaterialById(sel.materialId)
+        : undefined;
+      if (catalogMeta) {
+        surfacePatternKind =
+          surfacePatternKindForMaterial({
+            panelLine: catalogMeta.panelLine,
+            surfaceStyle: catalogMeta.surfaceStyle,
+            materialSlug: catalogMeta.slug,
+          }) ?? surfacePatternKind;
+      }
     }
     promptMaterialRows.push({
       id: sel.materialId,
@@ -124,6 +138,7 @@ export async function executeVisualizerGenerationJob(generationJobId: string) {
     preserve: (request.preserve as Record<string, boolean>) || undefined,
     showerWallHeight: normalizeShowerWallHeight(request.showerWallHeight),
     hasSurfacePatternReference,
+    surfacePatternKind,
   });
 
   await prisma.visualizerGenerationJob.update({

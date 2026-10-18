@@ -31,10 +31,18 @@ export type BuildVisualizerPromptInput = {
   showerWallHeight?: ShowerWallHeight | null;
   isRevision?: boolean;
   hasSurfacePatternReference?: boolean;
+  /** When Image 3 is present — drives pattern line wording. */
+  surfacePatternKind?: "pioneer_block" | "monterey_tile" | null;
 };
 
-const PATTERN_IMAGE_LINE =
-  "Use Image 3 for the etched block pattern and scale; keep Image 2 as the color reference.";
+const PATTERN_IMAGE_LINE_PIONEER =
+  "Use Image 3 for the etched stone-block divisions and scale; keep Image 2 as the color reference.";
+
+const PATTERN_IMAGE_LINE_MONTEREY =
+  "Use Image 3 for the etched tile divisions and scale; keep Image 2 as the color reference.";
+
+const SEAMLESS_PANEL =
+  "Use large seamless shower wall panels with no tile grout lines or square tile grid.";
 
 const PRESERVE =
   "Preserve the room layout, camera angle, window, vanity, lighting, and other unaffected features.";
@@ -131,23 +139,29 @@ function appendUserSelections(input: BuildVisualizerPromptInput): string {
 function buildCorePrompt(
   transformation: VisualizerTransformation,
   coverageMode: VisualizerCoverageMode,
-  hasSurfacePatternReference: boolean,
+  surfacePatternKind: BuildVisualizerPromptInput["surfacePatternKind"],
 ): string {
   const parts = [
     transformationOpening(transformation),
     buildCoverageInstruction(transformation, coverageMode),
     MATERIAL_REF,
-    PRESERVE,
   ];
+
+  if (surfacePatternKind === "pioneer_block") {
+    parts.push(PATTERN_IMAGE_LINE_PIONEER);
+  } else if (surfacePatternKind === "monterey_tile") {
+    parts.push(PATTERN_IMAGE_LINE_MONTEREY);
+  } else {
+    parts.push(SEAMLESS_PANEL);
+  }
+
+  parts.push(PRESERVE);
 
   if (transformation === "TUB_TO_SHOWER") {
     parts.push("Add a realistic shower base and enclosure.");
   }
 
   let prompt = `${parts.join(" ")}`;
-  if (hasSurfacePatternReference) {
-    prompt += ` ${PATTERN_IMAGE_LINE}`;
-  }
   prompt += ` ${PHOTO}`;
   return prompt;
 }
@@ -182,9 +196,9 @@ export function buildVisualizerPrompt(input: BuildVisualizerPromptInput): string
   const coverageMode = coverageModeFromShowerWallHeight(
     normalizeShowerWallHeight(input.showerWallHeight ?? "FULL_CEILING"),
   );
-  const hasPattern = Boolean(input.hasSurfacePatternReference);
+  const patternKind = input.surfacePatternKind ?? null;
 
-  let prompt = buildCorePrompt(transformation, coverageMode, hasPattern);
+  let prompt = buildCorePrompt(transformation, coverageMode, patternKind);
   prompt += appendUserSelections(input);
 
   if (input.isRevision) {
@@ -204,6 +218,7 @@ export function buildVisualizerEditPrompt(input: {
   showerWallHeight?: ShowerWallHeight | null;
   isRevision?: boolean;
   hasSurfacePatternReference?: boolean;
+  surfacePatternKind?: "pioneer_block" | "monterey_tile" | null;
   materialRows?: Array<{
     id: string;
     name: string;
@@ -229,6 +244,7 @@ export function buildVisualizerEditPrompt(input: {
     showerWallHeight: input.showerWallHeight ?? "FULL_CEILING",
     isRevision: input.isRevision,
     hasSurfacePatternReference: input.hasSurfacePatternReference,
+    surfacePatternKind: input.surfacePatternKind,
   });
 
   const extra = input.additionalInstructions?.trim();

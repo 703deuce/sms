@@ -47,12 +47,14 @@ export async function loadMaterialReferenceImage(input: {
       catalogMaterialNeedsSurfacePatternReference({
         panelLine: meta.panelLine,
         surfaceStyle: meta.surfaceStyle,
+        materialSlug: meta.slug,
       });
     const patternRaw =
       needsPattern && meta
         ? await readCatalogSurfacePatternReference({
             panelLine: meta.panelLine,
             surfaceStyle: meta.surfaceStyle,
+            materialSlug: meta.slug,
           })
         : null;
     const surfacePatternReference = patternRaw
