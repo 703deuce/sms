@@ -1,13 +1,13 @@
 # Optional: Coolify "Dockerfile" build with Base Directory = new-app
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@12.3.4 --activate
+RUN npm install -g pnpm@12.3.4
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
 FROM node:22-bookworm-slim AS builder
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@12.3.4 --activate
+RUN npm install -g pnpm@12.3.4
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV COOLIFY_RESOURCE_UUID=1

@@ -9,9 +9,9 @@ PORT = "3000"
 nixPkgs = ["nodejs_22"]
 
 [phases.install]
+# Nixpacks Node 22 ships an older Corepack that cannot verify current pnpm release signatures.
 cmds = [
-  "corepack enable",
-  "corepack prepare pnpm@12.3.4 --activate",
+  "npm install -g pnpm@12.3.4",
   "pnpm install --frozen-lockfile",
 ]
 
