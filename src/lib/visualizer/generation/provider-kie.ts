@@ -40,9 +40,10 @@ type KieTaskRecord = {
   resultJson?: string;
 };
 
-function mimeToExt(mime: string) {
-  if (mime.includes("png")) return "png";
-  if (mime.includes("webp")) return "webp";
+function mimeToExt(mime: string | undefined) {
+  const m = mime?.toLowerCase() ?? "";
+  if (m.includes("png")) return "png";
+  if (m.includes("webp")) return "webp";
   return "jpg";
 }
 
