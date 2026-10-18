@@ -9,7 +9,7 @@
 import { hash } from "bcryptjs";
 import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
-import { encodeSession, SESSION_COOKIE } from "@/lib/auth";
+import { applySessionCookie } from "@/lib/auth/session-cookie";
 import {
   devAuthBypass2Allowed,
   devAuthBypass2EmailHint,
@@ -124,11 +124,7 @@ export async function GET(request: Request) {
   const nextPath = safeDevBypassNextPath(url.searchParams.get("next") || defaultNext);
 
   const res = NextResponse.redirect(publicRedirectUrl(nextPath, request), 302);
-  res.cookies.set(SESSION_COOKIE, encodeSession(session), {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-  });
+  applySessionCookie(res, session);
 
   if (!sessionOnly) {
     let membership = allowedMemberships[0];

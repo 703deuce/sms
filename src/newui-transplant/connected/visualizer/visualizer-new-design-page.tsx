@@ -180,6 +180,11 @@ export function VisualizerNewDesignPage() {
           const status = j.job?.status;
           vizClientLog("job-poll:status", { jobId: id, status });
           if (status === "COMPLETED") {
+            try {
+              sessionStorage.removeItem(`viz:pending:${proj}`);
+            } catch {
+              /* ignore */
+            }
             window.location.href = VISUALIZER_ROUTES.design(proj, des);
             return;
           }
@@ -191,7 +196,14 @@ export function VisualizerNewDesignPage() {
           setTimeout(tick, 2500);
         } catch (e) {
           vizClientError("job-poll:failed", e, { jobId: id });
-          setError(e instanceof Error ? e.message : "Could not check generation status");
+          const msg = e instanceof Error ? e.message : "Could not check generation status";
+          if (msg.includes("Unauthorized") || msg.includes("(401)")) {
+            setError(
+              "Your session expired while the preview was generating. Sign in again and open Projects — the job may still finish in the background.",
+            );
+          } else {
+            setError(msg);
+          }
           setBusy(false);
         }
       };
@@ -297,6 +309,14 @@ export function VisualizerNewDesignPage() {
       }
       setJobId(d.generationJobId);
       setDesignId(d.designId);
+      try {
+        sessionStorage.setItem(
+          `viz:pending:${pid}`,
+          JSON.stringify({ designId: d.designId, jobId: d.generationJobId }),
+        );
+      } catch {
+        /* ignore */
+      }
       pollJob(d.generationJobId, pid, d.designId);
     } catch (e) {
       vizClientError("generate:failed", e);

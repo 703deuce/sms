@@ -14,7 +14,8 @@
  */
 import { hash } from "bcryptjs";
 import { NextResponse } from "next/server";
-import { encodeSession, SESSION_COOKIE, WORKSPACE_COOKIE } from "@/lib/auth";
+import { WORKSPACE_COOKIE } from "@/lib/auth";
+import { applySessionCookie } from "@/lib/auth/session-cookie";
 import { getPrisma } from "@/lib/db";
 import { isNumbersPlatformOnlyLaunch } from "@/lib/workspace/platform-launch";
 import type { WorkspaceType } from "@/lib/workspace/types";
@@ -228,11 +229,7 @@ export async function POST(request: Request) {
       calendlySourceWorkspaceId,
       phoneProvisioned,
     });
-    res.cookies.set(SESSION_COOKIE, encodeSession(session), {
-      httpOnly: true,
-      path: "/",
-      sameSite: "lax",
-    });
+    applySessionCookie(res, session);
     res.cookies.set(WORKSPACE_COOKIE, workspaceId!, {
       httpOnly: true,
       path: "/",

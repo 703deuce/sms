@@ -1,7 +1,7 @@
 import { compare } from "bcryptjs";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { encodeSession, SESSION_COOKIE } from "@/lib/auth";
+import { applySessionCookie } from "@/lib/auth/session-cookie";
 import { PHONE_VERIFIED_COOKIE, readVerifiedPhone } from "@/lib/auth/phone-otp";
 import { getPrisma } from "@/lib/db";
 import { consumeBackupCode, decryptSecret, verifyTotp } from "@/lib/auth/totp";
@@ -163,11 +163,7 @@ export async function POST(request: Request) {
       workspace: membership.workspace.name,
       redirectPath,
     });
-    res.cookies.set(SESSION_COOKIE, encodeSession(session), {
-      httpOnly: true,
-      path: "/",
-      sameSite: "lax",
-    });
+    applySessionCookie(res, session);
     applyWorkspaceCookies(res, membership.workspaceId, workspaceType);
     applyProductAccessCookie(res, access);
     return res;

@@ -9,7 +9,7 @@
  */
 import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
-import { encodeSession, SESSION_COOKIE } from "@/lib/auth";
+import { applySessionCookie } from "@/lib/auth/session-cookie";
 import {
   certBrowserRequestHost,
   isCertBrowserLoopbackHost,
@@ -110,11 +110,7 @@ export async function GET(request: Request) {
       publicRedirectUrl(safeNextPath(url.searchParams.get("next")), request),
       302,
     );
-    res.cookies.set(SESSION_COOKIE, encodeSession(session), {
-      httpOnly: true,
-      sameSite: "lax",
-      path: "/",
-    });
+    applySessionCookie(res, session);
     applyWorkspaceCookies(
       res,
       membership.workspaceId,
@@ -182,11 +178,7 @@ export async function GET(request: Request) {
   };
 
   const res = NextResponse.redirect(publicRedirectUrl(safeNextPath(url.searchParams.get("next")), request), 302);
-  res.cookies.set(SESSION_COOKIE, encodeSession(session), {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-  });
+  applySessionCookie(res, session);
   applyWorkspaceCookies(
     res,
     membership.workspaceId,

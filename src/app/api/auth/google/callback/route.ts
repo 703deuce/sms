@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { encodeSession, SESSION_COOKIE } from "@/lib/auth";
+import { applySessionCookie } from "@/lib/auth/session-cookie";
 import {
   exchangeGoogleAuthCode,
   findOrCreateUserFromGoogle,
@@ -138,12 +138,7 @@ export async function GET(request: Request) {
     };
 
     const res = NextResponse.redirect(new URL(redirectPath, appOrigin));
-    res.cookies.set(SESSION_COOKIE, encodeSession(session), {
-      httpOnly: true,
-      path: "/",
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-    });
+    applySessionCookie(res, session);
     applyWorkspaceCookies(res, workspaceId, workspaceType === "PERSONAL" ? "PERSONAL" : "BUSINESS");
     applyProductAccessCookie(res, refreshedAccess);
     return res;

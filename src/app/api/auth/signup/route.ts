@@ -1,7 +1,7 @@
 import { hash } from "bcryptjs";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { encodeSession, SESSION_COOKIE } from "@/lib/auth";
+import { applySessionCookie } from "@/lib/auth/session-cookie";
 import { applyWorkspaceCookies } from "@/lib/workspace/cookies";
 import {
   grantProductEntitlement,
@@ -261,11 +261,7 @@ export async function POST(request: Request) {
       workspaceId: workspace.id,
       workspaceType,
     });
-    res.cookies.set(SESSION_COOKIE, encodeSession(session), {
-      httpOnly: true,
-      path: "/",
-      sameSite: "lax",
-    });
+    applySessionCookie(res, session);
     applyWorkspaceCookies(res, workspace.id, workspaceType);
     applyProductAccessCookie(res, access);
     return res;

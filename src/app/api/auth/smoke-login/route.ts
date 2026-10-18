@@ -6,7 +6,7 @@
  * Body: { "email": "user@example.com", "workspaceId"?: "..." }
  */
 import { NextResponse } from "next/server";
-import { encodeSession, SESSION_COOKIE } from "@/lib/auth";
+import { applySessionCookie } from "@/lib/auth/session-cookie";
 import { applyWorkspaceCookies } from "@/lib/workspace/cookies";
 import { getPrisma } from "@/lib/db";
 
@@ -76,11 +76,7 @@ export async function POST(request: Request) {
       })),
     });
 
-    res.cookies.set(SESSION_COOKIE, encodeSession(session), {
-      httpOnly: true,
-      sameSite: "lax",
-      path: "/",
-    });
+    applySessionCookie(res, session);
     applyWorkspaceCookies(
       res,
       membership.workspaceId,

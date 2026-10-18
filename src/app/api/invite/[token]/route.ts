@@ -1,6 +1,7 @@
 import { compare, hash } from "bcryptjs";
 import { NextResponse } from "next/server";
-import { encodeSession, SESSION_COOKIE, WORKSPACE_COOKIE } from "@/lib/auth";
+import { WORKSPACE_COOKIE } from "@/lib/auth";
+import { applySessionCookie } from "@/lib/auth/session-cookie";
 import { getPrisma } from "@/lib/db";
 import { getInviteByToken } from "@/lib/team/invites";
 
@@ -125,11 +126,7 @@ export async function POST(
     };
 
     const res = NextResponse.json({ ok: true, workspaceId: invite.workspaceId });
-    res.cookies.set(SESSION_COOKIE, encodeSession(session), {
-      httpOnly: true,
-      path: "/",
-      sameSite: "lax",
-    });
+    applySessionCookie(res, session);
     res.cookies.set(WORKSPACE_COOKIE, invite.workspaceId, {
       httpOnly: true,
       path: "/",

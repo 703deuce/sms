@@ -7,7 +7,7 @@
  * Remove DEV_AUTH_BYPASS from env when re-enabling normal login.
  */
 import { NextResponse } from "next/server";
-import { encodeSession, SESSION_COOKIE } from "@/lib/auth";
+import { applySessionCookie } from "@/lib/auth/session-cookie";
 import {
   devAuthBypassAllowed,
   devAuthBypassEmailHint,
@@ -77,11 +77,7 @@ export async function GET(request: Request) {
     publicRedirectUrl(safeDevBypassNextPath(url.searchParams.get("next")), request),
     302,
   );
-  res.cookies.set(SESSION_COOKIE, encodeSession(session), {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-  });
+  applySessionCookie(res, session);
   applyWorkspaceCookies(
     res,
     membership.workspaceId,

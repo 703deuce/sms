@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { encodeSession, SESSION_COOKIE } from "@/lib/auth";
+import { applySessionCookie } from "@/lib/auth/session-cookie";
 import { extractSamlEmail, verifySamlResponse } from "@/lib/auth/saml-verify";
 import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
 import { applyWorkspaceCookies } from "@/lib/workspace/cookies";
@@ -62,11 +62,7 @@ export async function POST(request: Request) {
 
     const relayState = String(form.get("RelayState") || "/appointments/overview");
     const res = NextResponse.redirect(publicRedirectUrl(relayState, request), 302);
-    res.cookies.set(SESSION_COOKIE, encodeSession(session), {
-      httpOnly: true,
-      sameSite: "lax",
-      path: "/",
-    });
+    applySessionCookie(res, session);
     applyWorkspaceCookies(
       res,
       membership.workspaceId,
