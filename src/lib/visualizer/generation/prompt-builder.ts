@@ -13,9 +13,11 @@ export type VisualizerTransformation =
 
 export type ShowerWallHeight = "FULL_CEILING" | "EIGHT_FT";
 
+/** Maps UI `showerWallHeight` to installation coverage (reuse existing field — no new DB/UI). */
+export type VisualizerCoverageMode = "TO_CEILING" | "SURROUND_HEIGHT";
+
 export type BuildVisualizerPromptInput = {
   transformation: VisualizerTransformation | string;
-  /** Ignored for appearance — reference photographs are the visual authority. */
   materialName?: string | null;
   /** @deprecated Not injected into provider prompts. */
   materialDescription?: string | null;
@@ -28,23 +30,85 @@ export type BuildVisualizerPromptInput = {
   preserveDoor?: boolean;
   showerWallHeight?: ShowerWallHeight | null;
   isRevision?: boolean;
-  /** When true, append the single Image 3 pattern sentence (must match uploaded refs). */
   hasSurfacePatternReference?: boolean;
 };
 
 const PATTERN_IMAGE_LINE =
   "Use Image 3 for the etched block pattern and scale; keep Image 2 as the color reference.";
 
-const PRESERVE_DEFAULT =
-  "Preserve the room layout, camera angle, window, vanity, and other unaffected features.";
+const PRESERVE =
+  "Preserve the room layout, camera angle, window, vanity, lighting, and other unaffected features.";
 
-const MATCH_MATERIAL = "matching its color and pattern closely";
+const MATERIAL_REF =
+  "Use Image 2 as the selected wall-panel material. Match Image 2's wall-panel color, pattern, lightness, and hue faithfully; do not darken the base color.";
 
-function showerWallHeightSentence(height: ShowerWallHeight): string {
-  if (height === "EIGHT_FT") {
-    return "Run wall panels to about 8 feet in the wet area; keep the existing finish above.";
+const PHOTO = "Photorealistic finished bathroom.";
+
+export function coverageModeFromShowerWallHeight(height: ShowerWallHeight): VisualizerCoverageMode {
+  return height === "EIGHT_FT" ? "SURROUND_HEIGHT" : "TO_CEILING";
+}
+
+/** Installation rule — injected immediately after the transformation sentence. */
+export function buildCoverageInstruction(
+  transformation: VisualizerTransformation,
+  coverageMode: VisualizerCoverageMode,
+): string {
+  const toCeiling = "Extend the wall panels all the way to the ceiling.";
+  const partial =
+    "Stop the wall panels at the selected surround height (about 8 feet), leaving the existing wall finish above the panel line.";
+
+  switch (transformation) {
+    case "TUB_TO_SHOWER":
+      return coverageMode === "TO_CEILING"
+        ? `Apply the selected wall-panel material on the shower walls and ${toCeiling.charAt(0).toLowerCase()}${toCeiling.slice(1)}`
+        : `Apply the selected wall-panel material on the shower walls only up to the surround height, and keep painted wall above the panel line.`;
+
+    case "SHOWER_TO_SHOWER":
+      return coverageMode === "TO_CEILING"
+        ? `Apply the selected wall-panel material on the shower walls inside the wet area and ${toCeiling.charAt(0).toLowerCase()}${toCeiling.slice(1)}`
+        : `Apply the selected wall-panel material on the shower walls only up to the surround height, and keep painted wall above the panel line.`;
+
+    case "TUB_TO_TUB":
+      return coverageMode === "TO_CEILING"
+        ? `Apply the selected wall-panel material around the tub-surround walls and ${toCeiling.charAt(0).toLowerCase()}${toCeiling.slice(1)}`
+        : `Apply the selected wall-panel material around the tub-surround only up to the surround height, and keep painted wall above the panel line.`;
+
+    case "SHOWER_TO_TUB":
+      return coverageMode === "TO_CEILING"
+        ? `Apply the selected wall-panel material around the new tub-surround walls and ${toCeiling.charAt(0).toLowerCase()}${toCeiling.slice(1)}`
+        : `Apply the selected wall-panel material around the tub-surround only up to the surround height, and keep painted wall above the panel line.`;
+
+    case "SHOWER_AND_TUB_DECK_WRAP": {
+      const showerCoverage =
+        coverageMode === "TO_CEILING"
+          ? `Extend the selected shower wall panels all the way to the ceiling.`
+          : `Stop the shower wall panels at the selected surround height, leaving the existing wall finish above.`;
+      return (
+        `${showerCoverage} ` +
+        `Also apply the same material only on the bathtub horizontal deck and front apron. ` +
+        `Do not continue that material up the tub-side upper walls above the deck.`
+      );
+    }
+    default:
+      return buildCoverageInstruction("TUB_TO_SHOWER", coverageMode);
   }
-  return "Run wall panels from base to ceiling in the wet area.";
+}
+
+function transformationOpening(transformation: VisualizerTransformation): string {
+  switch (transformation) {
+    case "TUB_TO_SHOWER":
+      return "Convert the bathtub in Image 1 into a walk-in shower in the same location.";
+    case "TUB_TO_TUB":
+      return "Remodel the bathtub in Image 1 as a new bathtub installation in the same location. Keep the bathtub clearly visible.";
+    case "SHOWER_TO_TUB":
+      return "Convert the existing shower in Image 1 into a bathtub installation in the same area.";
+    case "SHOWER_TO_SHOWER":
+      return "Keep the shower in Image 1 in the same location.";
+    case "SHOWER_AND_TUB_DECK_WRAP":
+      return "Keep the separate shower and bathtub in Image 1 in their original locations.";
+    default:
+      return transformationOpening("TUB_TO_SHOWER");
+  }
 }
 
 function appendUserSelections(input: BuildVisualizerPromptInput): string {
@@ -58,72 +122,37 @@ function appendUserSelections(input: BuildVisualizerPromptInput): string {
   if (input.fixtureFinish?.trim()) {
     parts.push(`Use ${input.fixtureFinish.trim()} fixtures.`);
   }
-  if (input.showerWallHeight) {
-    parts.push(showerWallHeightSentence(normalizeShowerWallHeight(input.showerWallHeight)));
-  }
   if (input.bathroomPhotoDescription?.trim()) {
     parts.push(input.bathroomPhotoDescription.trim());
   }
   return parts.length ? ` ${parts.join(" ")}` : "";
 }
 
-function appendPatternLine(hasSurfacePatternReference: boolean): string {
-  return hasSurfacePatternReference ? ` ${PATTERN_IMAGE_LINE}` : "";
-}
-
-function transformationPrompt(
+function buildCorePrompt(
   transformation: VisualizerTransformation,
+  coverageMode: VisualizerCoverageMode,
   hasSurfacePatternReference: boolean,
 ): string {
-  const pattern = appendPatternLine(hasSurfacePatternReference);
+  const parts = [
+    transformationOpening(transformation),
+    buildCoverageInstruction(transformation, coverageMode),
+    MATERIAL_REF,
+    PRESERVE,
+  ];
 
-  switch (transformation) {
-    case "TUB_TO_SHOWER":
-      return (
-        `Convert the bathtub in Image 1 into a walk-in shower in the same location. ${PRESERVE_DEFAULT} ` +
-        `Use Image 2 as the reference for the selected shower wall material, ${MATCH_MATERIAL} ` +
-        `Apply it only to the shower walls. Add a realistic shower base and enclosure.` +
-        pattern +
-        ` Photorealistic finished bathroom.`
-      );
-    case "TUB_TO_TUB":
-      return (
-        `Remodel the bathtub in Image 1 as a new bathtub installation in the same location. ${PRESERVE_DEFAULT} ` +
-        `Use Image 2 as the reference for the selected tub-surround wall material, ${MATCH_MATERIAL} ` +
-        `Apply it only to the tub-surround walls. Keep the bathtub clearly visible.` +
-        pattern +
-        ` Photorealistic finished bathroom.`
-      );
-    case "SHOWER_TO_TUB":
-      return (
-        `Convert the existing shower in Image 1 into a bathtub installation in the same area. ${PRESERVE_DEFAULT} ` +
-        `Use Image 2 as the reference for the new tub-surround wall material, ${MATCH_MATERIAL} ` +
-        `Apply the material only to the tub-surround walls.` +
-        pattern +
-        ` Photorealistic finished bathroom.`
-      );
-    case "SHOWER_TO_SHOWER":
-      return (
-        `Keep the shower in Image 1 in the same location. ${PRESERVE_DEFAULT} ` +
-        `Use Image 2 as the reference for the shower wall material, ${MATCH_MATERIAL} ` +
-        `Apply it only to the shower walls inside the wet area.` +
-        pattern +
-        ` Photorealistic finished bathroom.`
-      );
-    case "SHOWER_AND_TUB_DECK_WRAP":
-      return (
-        `Keep the separate shower and bathtub in Image 1 in their original locations. ${PRESERVE_DEFAULT} ` +
-        `Apply the material from Image 2 to the shower walls and to the bathtub's horizontal deck and front apron. ${MATCH_MATERIAL} ` +
-        `Do not extend it up the walls above the bathtub deck.` +
-        pattern +
-        ` Photorealistic finished bathroom.`
-      );
-    default:
-      return transformationPrompt("TUB_TO_SHOWER", hasSurfacePatternReference);
+  if (transformation === "TUB_TO_SHOWER") {
+    parts.push("Add a realistic shower base and enclosure.");
   }
+
+  let prompt = `${parts.join(" ")}`;
+  if (hasSurfacePatternReference) {
+    prompt += ` ${PATTERN_IMAGE_LINE}`;
+  }
+  prompt += ` ${PHOTO}`;
+  return prompt;
 }
 
-/** Maps legacy DB/UI enum values to launch transformation prompts. */
+/** Maps legacy DB/UI enum values to the launch transformation prompts. */
 export function normalizeVisualizerTransformation(value: string): VisualizerTransformation {
   switch (value) {
     case "TUB_TO_SHOWER":
@@ -150,14 +179,17 @@ export function normalizeShowerWallHeight(value: unknown): ShowerWallHeight {
 
 export function buildVisualizerPrompt(input: BuildVisualizerPromptInput): string {
   const transformation = normalizeVisualizerTransformation(String(input.transformation));
+  const coverageMode = coverageModeFromShowerWallHeight(
+    normalizeShowerWallHeight(input.showerWallHeight ?? "FULL_CEILING"),
+  );
   const hasPattern = Boolean(input.hasSurfacePatternReference);
 
-  let prompt = transformationPrompt(transformation, hasPattern);
+  let prompt = buildCorePrompt(transformation, coverageMode, hasPattern);
   prompt += appendUserSelections(input);
 
   if (input.isRevision) {
     prompt =
-      "Refine the previous remodel preview while keeping the same room layout and camera angle. " +
+      "Refine the previous remodel preview while keeping the same room layout, camera angle, and wall-panel height setting. " +
       prompt;
   }
 
@@ -194,7 +226,7 @@ export function buildVisualizerEditPrompt(input: {
     preserveVanity: input.preserve?.untargeted_vanity ?? true,
     preserveWindow: input.preserve?.window ?? true,
     preserveDoor: input.preserve?.door_positions ?? true,
-    showerWallHeight: input.showerWallHeight as ShowerWallHeight | undefined,
+    showerWallHeight: input.showerWallHeight ?? "FULL_CEILING",
     isRevision: input.isRevision,
     hasSurfacePatternReference: input.hasSurfacePatternReference,
   });
@@ -216,10 +248,15 @@ export type GenerationPreserveFlags = {
   room_proportions?: boolean;
 };
 
-/** @internal — expose final templates for tests and audit reports. */
-export function visualizerTransformationPromptForTests(
+/** @internal — full prompt for tests (defaults: full ceiling, no Image 3). */
+export function buildVisualizerPromptForTests(
   transformation: VisualizerTransformation,
+  showerWallHeight: ShowerWallHeight = "FULL_CEILING",
   hasSurfacePatternReference = false,
 ): string {
-  return transformationPrompt(transformation, hasSurfacePatternReference);
+  return buildVisualizerPrompt({
+    transformation,
+    showerWallHeight,
+    hasSurfacePatternReference,
+  });
 }
