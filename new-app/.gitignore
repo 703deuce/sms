@@ -1,0 +1,13 @@
+# Local dependencies and build output (this package only)
+node_modules/
+.next/
+out/
+.turbo/
+
+# Environment (copy from .env.local.example)
+.env.local
+.env*.local
+
+# Debug
+npm-debug.log*
+.DS_Store
