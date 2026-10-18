@@ -79,7 +79,7 @@ const twoRef = buildVisualizerPrompt({
   hasSurfacePatternReference: false,
 });
 assert.ok(!twoRef.includes("Image 3"));
-assert.ok(twoRef.includes("no tile grout lines"));
+assert.ok(twoRef.includes("not bathroom tile"));
 
 const travertineStyle = buildVisualizerPrompt({
   transformation: "TUB_TO_SHOWER",
