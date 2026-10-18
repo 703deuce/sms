@@ -35,7 +35,7 @@ Remove or avoid legacy-only vars on this service (`DATABASE_URL` for monolith mi
 
 ### Domains
 
-Point **transovo.com** / **transovo.ai** Traefik routes to **this** application after smoke test. Scheduler, SMS worker, and voice worker remain **separate** Coolify apps (unchanged).
+Point **transovo.ai** (primary production domain) Traefik routes to **this** application after smoke test. Scheduler, SMS worker, and voice worker remain **separate** Coolify apps (can be stopped when not needed; do not delete).
 
 ## Verify after deploy
 
