@@ -1,0 +1,24 @@
+# Coolify/Nixpacks: transovo-new-app ONLY (set Base Directory = new-app on the web application).
+# Does not run legacy root package.json, Prisma, or voice-runtime bundles.
+
+[variables]
+HOSTNAME = "0.0.0.0"
+PORT = "3000"
+
+[phases.setup]
+nixPkgs = ["nodejs_22"]
+
+[phases.install]
+cmds = [
+  "corepack enable",
+  "corepack prepare pnpm@12.3.4 --activate",
+  "pnpm install --frozen-lockfile",
+]
+
+[phases.build]
+cmds = [
+  "bash scripts/coolify-build.sh",
+]
+
+[start]
+cmd = "node scripts/start-production.mjs"

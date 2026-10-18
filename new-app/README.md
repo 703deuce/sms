@@ -38,3 +38,7 @@ Do **not** import from `../../src` or root layouts/middleware. Reuse legacy beha
 UI routes and components live under `app/app/*` (authenticated shell), `components/*`, and mock data in `lib/data.ts`. Wire to real APIs in later passes.
 
 The reference copy at `transovo-ui-blueprint/` may remain in the repo until the team deletes it; **`new-app` is what ships in the new container.**
+
+## Coolify / transovo.com
+
+Production web must use **Base Directory = `new-app`** so Coolify does not build the legacy app. See `docs/COOLIFY-NEW-APP-WEB.md`.
