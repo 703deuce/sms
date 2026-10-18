@@ -24,7 +24,7 @@ const ALL: VisualizerTransformation[] = [
 
 for (const transformation of ALL) {
   const prompt = buildVisualizerPrompt({ transformation, ...SAMPLE });
-  assert.ok(prompt.includes("The first reference image is the original bathroom"), transformation);
+  assert.ok(prompt.includes("Image A (first reference) is the original bathroom"), transformation);
   assert.ok(prompt.includes("Ignore any printed text, labels, logos"), transformation);
   assert.ok(prompt.includes("Do not change the camera angle"), transformation);
 }
@@ -101,7 +101,19 @@ const threeRef = buildVisualizerPrompt({
   materialName: "Grey Stone",
   materialDescription: montereyNotes,
 });
-assert.ok(threeRef.includes("third reference image"));
-assert.ok(threeRef.includes("second reference image is the selected product color swatch"));
+assert.ok(threeRef.includes("Image C"));
+assert.ok(threeRef.includes("exact color and finish authority"));
+
+const colorLock = buildVisualizerPrompt({
+  transformation: "TUB_TO_SHOWER",
+  materialName: "Travertine",
+  materialDescription: buildCatalogMaterialPromptDescription({
+    panelLine: "PIONEER_PLUS",
+    slug: "travertine",
+    name: "Travertine",
+  }),
+});
+assert.ok(colorLock.includes("Material color fidelity"));
+assert.ok(colorLock.includes("medium-light"));
 
 console.log("test-visualizer-prompt-builder: PASS");

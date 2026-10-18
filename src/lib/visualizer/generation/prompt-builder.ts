@@ -34,19 +34,28 @@ export type BuildVisualizerPromptInput = {
 
 function referenceImageGuideBlock(hasSurfacePatternReference: boolean): string {
   if (hasSurfacePatternReference) {
-    return `The first reference image is the original bathroom photograph.
-The second reference image is the selected product color swatch — match this material's color, veining, speckle, and tonal warmth on the installed wall panels in the bathroom.
-The third reference image defines surface geometry only (etched grout lines, tile running-bond layout, or large stone-block layout). Reproduce that etched pattern scale and layout on the shower walls, but recolor it using the second reference image. Do not copy the third image's colors; treat it as a layout template only.`;
+    return `Image A (first reference) is the original bathroom photograph — preserve its layout, camera angle, and non-selected surfaces.
+Image B (second reference) is the exact color and finish authority for the selected wall panel — match hue, brightness, saturation, undertone, veining, and speckle from the panel face in this image as literally as possible.
+Image C (third reference) is the exact pattern / etching / block-layout authority only — copy grout line scale, running-bond layout, and large-block geometry from this image, then recolor using Image B. Do not copy Image C's gray, white, or outdoor color cast.`;
   }
-  return `The first reference image is the original bathroom. The second reference image is the selected wall-panel/material sample photograph (often a physical sample card or swatch photo from the manufacturer).`;
+  return `Image A (first reference) is the original bathroom photograph — preserve layout and perspective.
+Image B (second reference) is the exact color and finish authority for the selected wall panel — match the swatch literally, not an approximate or stylized interpretation.`;
 }
+
+const MATERIAL_COLOR_FIDELITY_BLOCK = `Material color fidelity (critical):
+Use the selected wall-panel reference as a literal product sample, not inspiration. Preserve the material's original hue, value (lightness), saturation, and undertone from the swatch.
+Do not significantly darken, lighten, cool, warm, or stylize the panel color to match bathroom shadows or mood lighting.
+If room lighting would normally deepen shadows, keep the installed panel color visually true to the reference while still looking naturally lit.
+Do not substitute generic marble, generic tile, generic travertine, or generic slate when a specific product swatch was provided.
+Preserve etched, scored, laser-etched, or large-block panel details from the references — do not smooth them into a flat painted wall.
+Output must remain a photorealistic remodeled bathroom photograph, not a 3D render or illustration.`;
 
 function sharedBasePrompt(hasSurfacePatternReference: boolean): string {
   return `You are generating a photorealistic bathroom remodel mockup from a real bathroom photo.
 ${referenceImageGuideBlock(hasSurfacePatternReference)}
 Preserve the original room's blueprint, dimensions, perspective, camera angle, window placement, door placement, ceiling, ventilation location, and overall layout. Keep the bathroom recognizable as the same room.
 Perform only the requested remodel transformation.
-Match the selected material's color, veining, tone, and texture as closely as possible, but interpret it as professionally installed bathroom wall panels / finished bathroom surfaces.
+Match the selected material's color, veining, tone, and texture as closely as possible from Image B, but interpret it as professionally installed bathroom wall panels / finished bathroom surfaces.
 Ignore any printed text, labels, logos, branding, or sample-card markings in the material image. Do not reproduce brand names or labels in the output.
 Keep the result realistic, clean, construction-complete, and visually believable.
 Do not create a collage, split-screen, before/after comparison, text overlay, watermark, or caption.
@@ -238,6 +247,8 @@ export function buildVisualizerPrompt(input: BuildVisualizerPromptInput): string
     "\n\n" +
     transformationBlock(transformation) +
     appendOptionalStyleBlocks(input) +
+    "\n\n" +
+    MATERIAL_COLOR_FIDELITY_BLOCK +
     "\n\n" +
     HARD_CONSTRAINTS_BLOCK
   );

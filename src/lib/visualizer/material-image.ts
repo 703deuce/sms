@@ -66,9 +66,16 @@ export async function loadMaterialReferenceImage(input: {
       name: meta?.name || slug,
       category: meta?.category || "WALL_PANEL",
       description: meta
-        ? buildCatalogMaterialPromptDescription(meta, {
-            hasSurfacePatternReference: Boolean(surfacePatternReference),
-          })
+        ? buildCatalogMaterialPromptDescription(
+            {
+              panelLine: meta.panelLine,
+              surfaceStyle: meta.surfaceStyle,
+              description: meta.description,
+              name: meta.name,
+              slug: meta.slug,
+            },
+            { hasSurfacePatternReference: Boolean(surfacePatternReference) },
+          )
         : null,
       finish: null,
       surfacePatternReference,

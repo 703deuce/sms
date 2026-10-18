@@ -4,7 +4,28 @@ export type CatalogPromptMaterialMeta = {
   panelLine: VisualizerPanelLine;
   surfaceStyle?: VisualizerMontereySurfaceStyle;
   description?: string;
+  name?: string;
+  slug?: string;
 };
+
+/** Per-SKU color anchors — reduces room relighting darkening the installed panels. */
+const CATALOG_COLOR_APPEARANCE_HINTS: Record<string, string> = {
+  travertine:
+    "Appearance anchor: warm light beige-gray travertine wall panel, soft cloudy stone variation, matte satin finish, medium-light overall value. Keep panels this light and warm — do not render charcoal, muddy brown, or significantly darker than the product swatch.",
+  "tundra-grey":
+    "Appearance anchor: cool medium blue-gray Pioneer Plus panel with soft white veining, matte finish, mid-tone value (not near-black). Match swatch brightness — do not dramatize to dark charcoal or black-gray.",
+  "frost-white":
+    "Appearance anchor: bright warm white panel with subtle stone movement, matte finish, high lightness. Do not gray-down or yellow-darken versus the swatch.",
+  "awaken-gold":
+    "Appearance anchor: warm golden-tan stone panel, medium-light value, soft veining. Do not cool to gray or darken below the swatch.",
+  "sparkling-quartz":
+    "Appearance anchor: light neutral quartz speckle, bright overall value, matte finish — preserve swatch lightness.",
+  "warm-crystal":
+    "Appearance anchor: warm light crystal tone with gentle sparkle, medium-light value — do not oversaturate or darken.",
+};
+
+const CATALOG_COLOR_FIDELITY =
+  "Strict color fidelity: the product swatch (second reference image) is the literal color authority. Match hue, brightness, saturation, and undertone from that swatch. Do not relight, darken, lighten, cool, or warm the panel color to harmonize with bathroom shadows. Ignore concrete, outdoor shade, or background cast in the swatch photo — use only the panel face color. Prioritize accurate product color over dramatic room mood.";
 
 /** Injected into KIE prompts whenever a built-in catalog wall panel is selected. */
 const WET_ZONE_COVERAGE =
@@ -54,6 +75,13 @@ export function buildCatalogMaterialPromptDescription(
       break;
     default:
       break;
+  }
+
+  parts.push(CATALOG_COLOR_FIDELITY);
+
+  const colorKey = meta.slug?.trim().toLowerCase();
+  if (colorKey && CATALOG_COLOR_APPEARANCE_HINTS[colorKey]) {
+    parts.push(CATALOG_COLOR_APPEARANCE_HINTS[colorKey]);
   }
 
   parts.push(WET_ZONE_COVERAGE);
