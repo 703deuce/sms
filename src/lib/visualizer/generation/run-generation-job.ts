@@ -8,7 +8,7 @@ import {
   type SelectedMaterialRef,
 } from "@/lib/visualizer/generation/prompt-builder";
 import { runKieBathroomGeneration } from "@/lib/visualizer/generation/provider-kie";
-import { VISUALIZER_BUCKET } from "@/lib/visualizer/constants";
+import { VISUALIZER_BUCKET, type VisualizerPanelLine } from "@/lib/visualizer/constants";
 import { isCatalogMaterialId } from "@/lib/visualizer/catalog-materials";
 import { surfacePatternKindForMaterial } from "@/lib/visualizer/catalog-pattern-reference-rules";
 import { getCatalogMaterialById } from "@/lib/visualizer/catalog-materials";
@@ -74,6 +74,7 @@ export async function executeVisualizerGenerationJob(generationJobId: string) {
   const referenceImages: Array<{ bytes: Buffer; mime: string; label?: string }> = [];
   let hasSurfacePatternReference = false;
   let surfacePatternKind: "pioneer_block" | "monterey_tile" | null = null;
+  let wallPanelLine: VisualizerPanelLine | null = null;
   const promptMaterialRows: Array<{
     id: string;
     name: string;
@@ -89,6 +90,12 @@ export async function executeVisualizerGenerationJob(generationJobId: string) {
       workspaceMaterials: materialRows,
     });
     referenceImages.push({ bytes: loaded.bytes, mime: loaded.mime, label: loaded.label });
+    const catalogMeta = isCatalogMaterialId(sel.materialId)
+      ? getCatalogMaterialById(sel.materialId)
+      : undefined;
+    if (catalogMeta && sel.category === "WALL_PANEL") {
+      wallPanelLine = catalogMeta.panelLine;
+    }
     if (loaded.surfacePatternReference) {
       referenceImages.push({
         bytes: loaded.surfacePatternReference.bytes,
@@ -96,9 +103,6 @@ export async function executeVisualizerGenerationJob(generationJobId: string) {
         label: loaded.surfacePatternReference.label,
       });
       hasSurfacePatternReference = true;
-      const catalogMeta = isCatalogMaterialId(sel.materialId)
-        ? getCatalogMaterialById(sel.materialId)
-        : undefined;
       if (catalogMeta) {
         surfacePatternKind =
           surfacePatternKindForMaterial({
@@ -139,6 +143,7 @@ export async function executeVisualizerGenerationJob(generationJobId: string) {
     showerWallHeight: normalizeShowerWallHeight(request.showerWallHeight),
     hasSurfacePatternReference,
     surfacePatternKind,
+    wallPanelLine,
   });
 
   await prisma.visualizerGenerationJob.update({

@@ -24,6 +24,7 @@ assert.equal(
     materialSlug: "sierra-sand",
   }),
   false,
+  "Sierra Sand BCI never uses Image 3",
 );
 
 assert.equal(

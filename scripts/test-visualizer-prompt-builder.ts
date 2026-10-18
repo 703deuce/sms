@@ -8,7 +8,7 @@ import {
   type VisualizerTransformation,
 } from "../src/lib/visualizer/generation/prompt-builder";
 
-const TO_CEILING = "extend the wall panels all the way to the ceiling";
+const TO_CEILING = "extend the shower wall panels all the way to the ceiling";
 const PARTIAL = "keep painted wall above the panel line";
 const DECK_UPPER =
   "do not continue that material up the tub-side upper walls above the deck";
@@ -86,7 +86,17 @@ const travertineStyle = buildVisualizerPrompt({
   showerWallHeight: "FULL_CEILING",
 });
 assert.ok(!travertineStyle.includes("Image 3"));
-assert.ok(travertineStyle.includes("seamless shower wall panels"));
+assert.ok(travertineStyle.includes("one solid seamless shower wall panel"));
+
+const bciSierra = buildVisualizerPrompt({
+  transformation: "TUB_TO_SHOWER",
+  showerWallHeight: "FULL_CEILING",
+  wallPanelLine: "BCI",
+});
+assert.ok(!bciSierra.includes("Image 3"));
+assert.ok(bciSierra.includes("BCI flat shower wall panels"));
+assert.ok(bciSierra.includes("shower wet-zone walls"));
+assert.ok(bciSierra.includes("Do not clad vanity walls"));
 
 assert.equal(coverageModeFromShowerWallHeight("FULL_CEILING"), "TO_CEILING");
 assert.equal(coverageModeFromShowerWallHeight("EIGHT_FT"), "SURROUND_HEIGHT");
