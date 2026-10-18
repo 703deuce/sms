@@ -169,7 +169,9 @@ function buildCorePrompt(
   parts.push(PRESERVE);
 
   if (transformation === "TUB_TO_SHOWER") {
-    parts.push("Add a realistic shower base and enclosure.");
+    parts.push(
+      "Remove the bathtub, tub spout, tub faucet, and tub diverter. Install a walk-in shower with a shower base, enclosure, and showerhead with valve only — no tub spout.",
+    );
   }
 
   let prompt = `${parts.join(" ")}`;

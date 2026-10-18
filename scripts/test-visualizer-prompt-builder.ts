@@ -88,6 +88,10 @@ const travertineStyle = buildVisualizerPrompt({
 assert.ok(!travertineStyle.includes("Image 3"));
 assert.ok(travertineStyle.includes("one solid seamless shower wall panel"));
 
+const tubToShower = buildVisualizerPromptForTests("TUB_TO_SHOWER", "FULL_CEILING");
+assert.ok(tubToShower.toLowerCase().includes("no tub spout"));
+assert.ok(tubToShower.toLowerCase().includes("remove the bathtub"));
+
 const bciSierra = buildVisualizerPrompt({
   transformation: "TUB_TO_SHOWER",
   showerWallHeight: "FULL_CEILING",
@@ -119,5 +123,5 @@ console.log("test-visualizer-prompt-builder: PASS");
 // Character counts for audit (stdout only in CI if needed)
 for (const t of [...WET_TRANSFORMATIONS, "SHOWER_AND_TUB_DECK_WRAP"] as VisualizerTransformation[]) {
   const len = buildVisualizerPromptForTests(t, "FULL_CEILING").length;
-  assert.ok(len < 900, `${t} prompt length ${len}`);
+  assert.ok(len < 960, `${t} prompt length ${len}`);
 }
