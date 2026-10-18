@@ -4,7 +4,9 @@ set -euo pipefail
 
 heartbeat_interval="${COOLIFY_BUILD_HEARTBEAT_SECS:-20}"
 
-echo "[new-app/coolify-build] starting next production build (pnpm)"
+PNPM="${PNPM:-npx --yes pnpm@12.3.4}"
+
+echo "[new-app/coolify-build] starting next production build ($PNPM)"
 echo "[new-app/coolify-build] node=$(node -v) cwd=$(pwd)"
 
 if [[ -n "${COOLIFY_RESOURCE_UUID:-}" ]]; then
@@ -12,7 +14,7 @@ if [[ -n "${COOLIFY_RESOURCE_UUID:-}" ]]; then
 fi
 
 set -o pipefail
-pnpm run build > >(stdbuf -oL -eL tee /tmp/new-app-next-build.log) 2>&1 &
+$PNPM run build > >(stdbuf -oL -eL tee /tmp/new-app-next-build.log) 2>&1 &
 build_pid=$!
 
 while kill -0 "$build_pid" 2>/dev/null; do
