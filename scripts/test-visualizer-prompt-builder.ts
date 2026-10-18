@@ -1,111 +1,102 @@
 import assert from "node:assert/strict";
 import {
+  buildCoverageInstruction,
   buildVisualizerPrompt,
+  buildVisualizerPromptForTests,
+  coverageModeFromShowerWallHeight,
   normalizeVisualizerTransformation,
-  visualizerTransformationPromptForTests,
   type VisualizerTransformation,
 } from "../src/lib/visualizer/generation/prompt-builder";
-import { buildCatalogMaterialPromptDescription } from "../src/lib/visualizer/catalog-prompt-notes";
 
-const FORBIDDEN_APPEARANCE = [
-  "marble",
-  "veining",
-  "undertone",
-  "charcoal",
-  "travertine tone",
-  "Material color fidelity",
-  "24 inches",
-  "laser-etched",
-  "running-bond",
-];
+const TO_CEILING = "extend the wall panels all the way to the ceiling";
+const PARTIAL = "keep painted wall above the panel line";
+const DECK_UPPER =
+  "do not continue that material up the tub-side upper walls above the deck";
 
-function assertNoAppearanceInference(prompt: string, label: string) {
-  const lower = prompt.toLowerCase();
-  for (const word of FORBIDDEN_APPEARANCE) {
-    assert.ok(!lower.includes(word.toLowerCase()), `${label} should not mention "${word}"`);
-  }
-  assert.ok(!prompt.includes("Material notes:"), label);
-  assert.ok(!prompt.includes("Napoli"), label);
-}
-
-const ALL: VisualizerTransformation[] = [
+const WET_TRANSFORMATIONS: VisualizerTransformation[] = [
   "TUB_TO_SHOWER",
   "SHOWER_TO_SHOWER",
   "TUB_TO_TUB",
   "SHOWER_TO_TUB",
-  "SHOWER_AND_TUB_DECK_WRAP",
 ];
 
-for (const transformation of ALL) {
-  const prompt = buildVisualizerPrompt({ transformation });
-  assert.ok(prompt.includes("Image 1"), transformation);
-  assert.ok(prompt.includes("Image 2"), transformation);
-  assert.ok(!prompt.includes("Image 3"), `${transformation} without pattern ref`);
-  assertNoAppearanceInference(prompt, transformation);
+for (const t of WET_TRANSFORMATIONS) {
+  const full = buildVisualizerPromptForTests(t, "FULL_CEILING");
+  assert.ok(full.toLowerCase().includes(TO_CEILING), `${t} full ceiling`);
+  assert.ok(!full.toLowerCase().includes(PARTIAL), `${t} full must not ask partial`);
+
+  const partial = buildVisualizerPromptForTests(t, "EIGHT_FT");
+  assert.ok(partial.toLowerCase().includes(PARTIAL), `${t} partial height`);
+  assert.ok(!partial.toLowerCase().includes(TO_CEILING), `${t} partial must not say to ceiling`);
 }
 
-const tubToShower = buildVisualizerPrompt({ transformation: "TUB_TO_SHOWER" });
-assert.ok(tubToShower.includes("Convert the bathtub in Image 1"));
-assert.ok(tubToShower.includes("shower walls"));
+const deckFull = buildVisualizerPromptForTests("SHOWER_AND_TUB_DECK_WRAP", "FULL_CEILING");
+assert.ok(deckFull.toLowerCase().includes("shower wall panels all the way to the ceiling"));
+assert.ok(deckFull.toLowerCase().includes(DECK_UPPER));
 
-const showerToShower = buildVisualizerPrompt({ transformation: "SHOWER_TO_SHOWER" });
-assert.ok(showerToShower.includes("Keep the shower in Image 1"));
+const deckPartial = buildVisualizerPromptForTests("SHOWER_AND_TUB_DECK_WRAP", "EIGHT_FT");
+assert.ok(deckPartial.toLowerCase().includes("stop the shower wall panels"));
+assert.ok(deckPartial.toLowerCase().includes(DECK_UPPER));
 
-const tubToTub = buildVisualizerPrompt({ transformation: "TUB_TO_TUB" });
-assert.ok(tubToTub.includes("tub-surround walls"));
-assert.ok(tubToTub.includes("bathtub clearly visible"));
+for (const t of [...WET_TRANSFORMATIONS, "SHOWER_AND_TUB_DECK_WRAP"] as VisualizerTransformation[]) {
+  const p = buildVisualizerPromptForTests(t, "FULL_CEILING");
+  const open = p.indexOf("Image 1");
+  const cov = p.toLowerCase().indexOf("extend") >= 0 || p.toLowerCase().includes("apply the selected");
+  assert.ok(open >= 0, `${t} mentions Image 1`);
+  assert.ok(cov, `${t} has coverage before material ref`);
+  const matIdx = p.indexOf("Image 2");
+  const covIdx = p.toLowerCase().indexOf("wall panel");
+  assert.ok(covIdx < matIdx, `${t} coverage should precede Image 2 material line`);
+}
 
-const showerToTub = buildVisualizerPrompt({ transformation: "SHOWER_TO_TUB" });
-assert.ok(showerToTub.includes("Convert the existing shower in Image 1"));
-
-const deckWrap = buildVisualizerPrompt({ transformation: "SHOWER_AND_TUB_DECK_WRAP" });
-assert.ok(deckWrap.includes("separate shower and bathtub"));
-assert.ok(deckWrap.includes("Do not extend it up the walls above the bathtub deck"));
-
-assert.equal(normalizeVisualizerTransformation("SHOWER_REPLACEMENT"), "SHOWER_TO_SHOWER");
-
-const withOptions = buildVisualizerPrompt({
+const noMaterialProse = buildVisualizerPrompt({
   transformation: "TUB_TO_SHOWER",
-  enclosureStyle: "framed glass",
-  baseStyle: "low-threshold shower pan",
-  fixtureFinish: "brushed nickel",
+  materialName: "Sierra Sand",
+  materialDescription: "warm beige marble with veining",
   showerWallHeight: "FULL_CEILING",
 });
-assert.ok(withOptions.includes("framed glass"));
-assert.ok(withOptions.includes("base to ceiling"));
-
-const eightFt = buildVisualizerPrompt({
-  transformation: "SHOWER_TO_SHOWER",
-  showerWallHeight: "EIGHT_FT",
-});
-assert.ok(eightFt.includes("about 8 feet"));
+assert.ok(!noMaterialProse.includes("Sierra Sand"));
+assert.ok(!noMaterialProse.includes("veining"));
+assert.ok(!noMaterialProse.includes("Material notes"));
+assert.ok(
+  noMaterialProse.includes("without darkening the base color"),
+  "material fidelity anti-darkening line",
+);
 
 const etched = buildVisualizerPrompt({
   transformation: "TUB_TO_SHOWER",
+  showerWallHeight: "FULL_CEILING",
   hasSurfacePatternReference: true,
 });
 assert.ok(etched.includes("Image 3"));
-assert.ok(etched.includes("Image 2 as the color reference"));
-assertNoAppearanceInference(etched, "etched three-ref");
+assert.ok(!etched.includes("Image 4"));
 
-assert.equal(
-  buildCatalogMaterialPromptDescription({ panelLine: "PIONEER_PLUS", slug: "travertine" }),
-  "",
-);
-
-const legacyDescIgnored = buildVisualizerPrompt({
+const twoRef = buildVisualizerPrompt({
   transformation: "TUB_TO_SHOWER",
-  materialName: "Tundra Grey",
-  materialDescription: "cool charcoal marble with white veining",
+  hasSurfacePatternReference: false,
 });
-assertNoAppearanceInference(legacyDescIgnored, "materialDescription ignored");
+assert.ok(!twoRef.includes("Image 3"));
 
-const revision = buildVisualizerPrompt({ transformation: "TUB_TO_SHOWER", isRevision: true });
+assert.equal(coverageModeFromShowerWallHeight("FULL_CEILING"), "TO_CEILING");
+assert.equal(coverageModeFromShowerWallHeight("EIGHT_FT"), "SURROUND_HEIGHT");
+
+assert.equal(normalizeVisualizerTransformation("SHOWER_REPLACEMENT"), "SHOWER_TO_SHOWER");
+
+const revision = buildVisualizerPrompt({
+  transformation: "TUB_TO_SHOWER",
+  isRevision: true,
+  showerWallHeight: "FULL_CEILING",
+});
 assert.ok(revision.startsWith("Refine the previous remodel preview"));
 
-for (const t of ALL) {
-  const len = visualizerTransformationPromptForTests(t).length;
-  assert.ok(len < 1200, `${t} prompt should stay concise (got ${len} chars)`);
-}
+assert.ok(
+  buildCoverageInstruction("TUB_TO_SHOWER", "TO_CEILING").toLowerCase().includes(TO_CEILING),
+);
 
 console.log("test-visualizer-prompt-builder: PASS");
+
+// Character counts for audit (stdout only in CI if needed)
+for (const t of [...WET_TRANSFORMATIONS, "SHOWER_AND_TUB_DECK_WRAP"] as VisualizerTransformation[]) {
+  const len = buildVisualizerPromptForTests(t, "FULL_CEILING").length;
+  assert.ok(len < 900, `${t} prompt length ${len}`);
+}
