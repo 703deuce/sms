@@ -63,7 +63,7 @@ When several apps need the same stable utility, extract a small shared package (
 
 ## Environment
 
-Copy `.env.example` to `.env.local`. Variables here are for **new-app** only and are not read by the legacy application unless you duplicate them at the repo root.
+Copy `env.example` to `.env.local`. Variables here are for **new-app** only and are not read by the legacy application unless you duplicate them at the repo root.
 
 ## Folder layout
 
@@ -74,7 +74,7 @@ new-app/
   next.config.ts
   tsconfig.json
   eslint.config.mjs
-  .env.example
+  env.example
   .gitignore
   README.md
   src/
