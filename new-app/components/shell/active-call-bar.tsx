@@ -17,7 +17,7 @@ const STATUS_LABEL = {
 }
 
 export function IncomingCallBar() {
-  const { incomingCall, answerIncoming, rejectIncoming } = useWorkspace()
+  const { incomingCall, incomingAnswering, answerIncoming, rejectIncoming } = useWorkspace()
   if (!incomingCall) return null
   return (
     <div
@@ -28,11 +28,17 @@ export function IncomingCallBar() {
       <span className="text-sm font-medium">Incoming call</span>
       <span className="font-mono text-sm">{formatPhone(incomingCall.from)}</span>
       <div className="ml-auto flex gap-2">
-        <Button size="sm" className="bg-success text-success-foreground" onClick={answerIncoming}>
+        <Button
+          size="sm"
+          className="bg-success text-success-foreground"
+          onClick={answerIncoming}
+          disabled={incomingAnswering}
+          aria-busy={incomingAnswering}
+        >
           <Phone />
-          Answer
+          {incomingAnswering ? 'Connecting…' : 'Answer'}
         </Button>
-        <Button size="sm" variant="destructive" onClick={rejectIncoming}>
+        <Button size="sm" variant="destructive" onClick={rejectIncoming} disabled={incomingAnswering}>
           <PhoneOff />
           Decline
         </Button>

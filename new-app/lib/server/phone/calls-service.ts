@@ -279,36 +279,12 @@ export async function registerInboundAnswer(input: {
       telnyxCallControlId: call.telnyxCallControlId,
     });
   } else {
-    const { completeWebRtcAgentLegAnswer } = await import("@/lib/server/phone/inbound-webrtc-bridge");
     const { phoneServerLog } = await import("@/lib/server/phone/phone-log");
-    const parentId =
-      typeof meta.callerCallControlId === "string"
-        ? meta.callerCallControlId
-        : typeof meta.parentCallControlId === "string"
-          ? meta.parentCallControlId
-          : call.telnyxCallControlId;
-    const agentLegId =
-      typeof meta.webrtcAgentLegId === "string" ? meta.webrtcAgentLegId : call.telnyxCallLegId;
-    if (parentId && agentLegId) {
-      phoneServerLog("inbound-webrtc-bridge", "client_reported_answer", {
-        humanCallId: call.id,
-        webrtcCallId: input.webrtcCallId || null,
-      });
-      for (let attempt = 0; attempt < 6; attempt += 1) {
-        await new Promise((r) => setTimeout(r, 350));
-        try {
-          await completeWebRtcAgentLegAnswer({
-            parentCallControlId: parentId,
-            agentCallControlId: agentLegId,
-            humanCallId: call.id,
-            workspaceId: input.workspaceId,
-          });
-          break;
-        } catch {
-          // WebRTC SIP answer may lag behind the UI tap — retry bridge.
-        }
-      }
-    }
+    phoneServerLog("inbound-webrtc-bridge", "client_reported_answer_ui_only", {
+      humanCallId: call.id,
+      webrtcCallId: input.webrtcCallId || null,
+      note: "bridge_waits_for_telnyx_call_answered_webhook",
+    });
   }
 
   return updated;

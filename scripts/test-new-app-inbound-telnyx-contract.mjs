@@ -57,6 +57,17 @@ const wpSrc = readFileSync(
 assert.match(wpSrc, /callUpdate/, "WebRTC must listen for callUpdate notifications");
 assert.match(wpSrc, /inbound_ringing_ui/, "Incoming ring must log for correlation");
 assert.match(wpSrc, /remoteElement/, "Answer must attach remote audio element");
+assert.match(
+  wpSrc,
+  /telnyxStateCall/,
+  "Must refresh Call handle via TelnyxRTC.telnyxStateCall (webrtc-demo-js)",
+);
+assert.match(
+  wpSrc,
+  /ensureTelnyxWebRtcClient/,
+  "Must use singleton Telnyx client per tab",
+);
+assert.match(wpSrc, /telnyx\.warning|subscribeTelnyxWarning/, "Must handle Telnyx SDK warnings");
 
 const tokenSrc = readFileSync(join(root, "new-app/lib/server/phone/webrtc-token.ts"), "utf8");
 assert.doesNotMatch(

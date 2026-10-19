@@ -16,6 +16,17 @@ import {
   saveRouting,
 } from '@/lib/phone-api'
 import { phoneClientLog } from '@/lib/phone-client-log'
+import { phoneClientTrace } from '@/lib/phone-client-trace'
+import {
+  ensureTelnyxWebRtcClient,
+  getSharedTelnyxClient,
+  lookupSdkCall,
+  subscribeTelnyxError,
+  subscribeTelnyxNotifications,
+  subscribeTelnyxReady,
+  subscribeTelnyxWarning,
+  type TelnyxSdkNotification,
+} from '@/lib/telnyx-webrtc-session'
 
 type CallStatus = 'idle' | 'connecting' | 'ringing' | 'live' | 'ended' | 'failed'
 
@@ -63,6 +74,7 @@ type WorkspaceState = {
   elapsed: number
   refreshRouting: () => Promise<void>
   incomingCall: IncomingCallOffer | null
+  incomingAnswering: boolean
   answerIncoming: () => void
   rejectIncoming: () => void
 }
@@ -86,6 +98,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const [webrtcStatus, setWebrtcStatus] = useState<WorkspaceState['webrtcStatus']>('offline')
   const [webrtcError, setWebrtcError] = useState<string | null>(null)
   const [incomingCall, setIncomingCall] = useState<IncomingCallOffer | null>(null)
+  const [incomingAnswering, setIncomingAnswering] = useState(false)
 
   const telnyxClientRef = useRef<unknown>(null)
   const telnyxCallRef = useRef<unknown>(null)
@@ -93,6 +106,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const activeWebrtcIdRef = useRef<string | null>(null)
   const activeCallRef = useRef<ActiveCall | null>(null)
   const incomingCallRef = useRef<IncomingCallOffer | null>(null)
+  const inboundSdkCallRef = useRef<IncomingCallOffer['webrtcCall'] | null>(null)
   useEffect(() => {
     activeCallRef.current = activeCall
   }, [activeCall])
@@ -126,6 +140,112 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let cancelled = false
+    let TelnyxRTCClass: Awaited<typeof import('@telnyx/webrtc')>['TelnyxRTC'] | null = null
+
+    const ensureRemoteAudio = () => {
+      if (remoteAudioRef.current) return remoteAudioRef.current
+      const audio = document.createElement('audio')
+      audio.autoplay = true
+      audio.setAttribute('playsinline', '')
+      audio.id = 'telnyx-remote-audio'
+      audio.style.display = 'none'
+      document.body.appendChild(audio)
+      remoteAudioRef.current = audio
+      return audio
+    }
+
+    const handleNotification = (notification: TelnyxSdkNotification) => {
+      if (cancelled || notification.type !== 'callUpdate' || !notification.call) return
+      if (!TelnyxRTCClass) return
+
+      const call = TelnyxRTCClass.telnyxStateCall(
+        notification.call as Parameters<typeof TelnyxRTCClass.telnyxStateCall>[0],
+      ) as TelnyxSdkNotification['call'] & IncomingCallOffer['webrtcCall']
+
+      phoneClientLog('webrtc', 'notification', {
+        type: notification.type,
+        callId: call?.id,
+        direction: call?.direction,
+        state: call?.state,
+      })
+      if (!call?.id) return
+
+      const pending = incomingCallRef.current
+      if (call.direction === 'inbound' && pending?.webrtcId === call.id) {
+        inboundSdkCallRef.current = call
+      }
+
+      if (
+        call.direction === 'inbound' &&
+        (call.state === 'ringing' || call.state === 'new' || call.state === 'trying')
+      ) {
+        const current = activeCallRef.current
+        const hasActive = current && current.status !== 'ended' && current.status !== 'failed'
+        if (hasActive) {
+          phoneClientLog('webrtc', 'inbound_ignored_busy')
+          return
+        }
+        const webrtcId = call.id
+        const from = call.remoteCallerNumber || 'Unknown'
+        const to = call.localCallerNumber || ''
+        inboundSdkCallRef.current = call
+        phoneClientLog('webrtc', 'inbound_ringing_ui', { webrtcId, from, to })
+        phoneClientTrace('inbound_ringing_ui', { webrtcCallId: webrtcId, callState: call.state })
+        setIncomingCall({ webrtcId, from, to, webrtcCall: call })
+        void fetchRingingInbound()
+          .then((row) => {
+            if (!row) return
+            const display = row.callerName || row.fromE164
+            phoneClientTrace('inbound_human_call_linked', {
+              humanCallId: row.humanCallId,
+              webrtcCallId: webrtcId,
+            })
+            setIncomingCall((prev) =>
+              prev && prev.webrtcId === webrtcId
+                ? { ...prev, humanCallId: row.humanCallId, from: display }
+                : prev,
+            )
+          })
+          .catch(() => undefined)
+        return
+      }
+
+      if (
+        call.direction === 'inbound' &&
+        pending?.webrtcId === call.id &&
+        call.state &&
+        /hangup|destroy|done|failed/i.test(call.state)
+      ) {
+        phoneClientLog('webrtc', 'inbound_ended_before_answer', { state: call.state })
+        phoneClientTrace('inbound_ended_before_answer', {
+          webrtcCallId: call.id,
+          callState: call.state,
+          humanCallId: pending.humanCallId,
+        })
+        inboundSdkCallRef.current = null
+        setIncomingCall(null)
+        setIncomingAnswering(false)
+        return
+      }
+
+      const tracked = activeWebrtcIdRef.current
+      if (!tracked || call.id !== tracked) return
+      const status = mapTelnyxState(call.state || '')
+      phoneClientTrace('active_call_state', {
+        webrtcCallId: call.id,
+        callState: call.state,
+        humanCallId: activeCallRef.current?.humanCallId,
+      })
+      setActiveCall((c) =>
+        c ? { ...c, status, startedAt: status === 'live' && !c.startedAt ? Date.now() : c.startedAt } : c,
+      )
+      if (status === 'ended' || status === 'failed') {
+        telnyxCallRef.current = null
+        activeWebrtcIdRef.current = null
+        inboundSdkCallRef.current = null
+      }
+    }
+
     async function boot() {
       setWebrtcStatus('connecting')
       phoneClientLog('webrtc', 'boot_start')
@@ -138,129 +258,66 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
           setWebrtcError(tokenRes.error || 'WebRTC credentials are not configured')
           return
         }
-        const { TelnyxRTC } = await import('@telnyx/webrtc')
+        const mod = await import('@telnyx/webrtc')
+        TelnyxRTCClass = mod.TelnyxRTC
         if (cancelled) return
-        const audio = document.createElement('audio')
-        audio.autoplay = true
-        audio.id = 'telnyx-remote-audio'
-        audio.style.display = 'none'
-        document.body.appendChild(audio)
-        remoteAudioRef.current = audio
 
-        const client = new TelnyxRTC({ login_token: tokenRes.loginToken })
+        const audio = ensureRemoteAudio()
+        phoneClientLog('webrtc', 'connecting')
+        const client = await ensureTelnyxWebRtcClient(tokenRes.loginToken)
+        if (cancelled) return
         telnyxClientRef.current = client
         const rtc = client as { remoteElement?: HTMLAudioElement }
         rtc.remoteElement = audio
 
-        client.on('telnyx.ready', () => {
-          phoneClientLog('webrtc', 'telnyx_ready')
-          void reportWebRtcPresence(true).catch(() => undefined)
-          if (!cancelled) {
-            setWebrtcStatus('ready')
-            setWebrtcError(null)
-          }
-        })
-        client.on('telnyx.error', (err: unknown) => {
-          const msg = err instanceof Error ? err.message : 'Telnyx client error'
-          phoneClientLog('webrtc', 'telnyx_error', { message: msg })
-          setWebrtcStatus('error')
-          setWebrtcError(msg)
-        })
-        client.on(
-          'telnyx.notification',
-          (notification: {
-            type?: string
-            call?: {
-              id?: string
-              state?: string
-              direction?: string
-              remoteCallerNumber?: string
-              localCallerNumber?: string
-              answer?: () => void
-              hangup?: () => void
-            }
-          }) => {
-            const call = notification.call
-            phoneClientLog('webrtc', 'notification', {
-              type: notification.type,
-              callId: call?.id,
-              direction: call?.direction,
-              state: call?.state,
-            })
-            if (!call?.id) return
-
-            if (
-              notification.type === 'callUpdate' &&
-              call.direction === 'inbound' &&
-              (call.state === 'ringing' || call.state === 'new')
-            ) {
-              const current = activeCallRef.current
-              const hasActive =
-                current && current.status !== 'ended' && current.status !== 'failed'
-              if (hasActive) {
-                phoneClientLog('webrtc', 'inbound_ignored_busy')
-                return
-              }
-              const webrtcId = call.id
-              const from = call.remoteCallerNumber || 'Unknown'
-              const to = call.localCallerNumber || ''
-              phoneClientLog('webrtc', 'inbound_ringing_ui', { webrtcId, from, to })
-              setIncomingCall({ webrtcId, from, to, webrtcCall: call })
-              void fetchRingingInbound().then((row) => {
-                if (!row) return
-                const display = row.callerName || row.fromE164
-                setIncomingCall((prev) =>
-                  prev && prev.webrtcId === webrtcId
-                    ? {
-                        ...prev,
-                        humanCallId: row.humanCallId,
-                        from: display,
-                      }
-                    : prev,
-                )
-              }).catch(() => undefined)
-              return
-            }
-
-            const pending = incomingCallRef.current
-            if (
-              notification.type === 'callUpdate' &&
-              call.direction === 'inbound' &&
-              pending?.webrtcId === call.id &&
-              call.state &&
-              /hangup|destroy|done|failed/i.test(call.state)
-            ) {
-              phoneClientLog('webrtc', 'inbound_ended_before_answer', { state: call.state })
-              setIncomingCall(null)
-              return
-            }
-
-            const tracked = activeWebrtcIdRef.current
-            if (!call || !tracked) return
-            if (notification.type === 'callUpdate' && call.id === tracked) {
-              const status = mapTelnyxState(call.state || '')
-              setActiveCall((c) =>
-                c ? { ...c, status, startedAt: status === 'live' && !c.startedAt ? Date.now() : c.startedAt } : c,
-              )
-              if (status === 'ended' || status === 'failed') {
-                telnyxCallRef.current = null
-                activeWebrtcIdRef.current = null
-              }
-            }
-          },
-        )
-
-        phoneClientLog('webrtc', 'connecting')
-        client.connect()
+        const registered = await (client as { getIsRegistered?: () => Promise<boolean> }).getIsRegistered?.()
+        if (registered && !cancelled) {
+          setWebrtcStatus('ready')
+          setWebrtcError(null)
+        }
       } catch (e) {
         phoneClientLog('webrtc', 'boot_failed', { error: e instanceof Error ? e.message : 'unknown' })
         setWebrtcStatus('error')
         setWebrtcError(e instanceof Error ? e.message : 'Failed to initialize WebRTC')
       }
     }
+
+    const unsubNotification = subscribeTelnyxNotifications(handleNotification)
+    const unsubReady = subscribeTelnyxReady(() => {
+      phoneClientLog('webrtc', 'telnyx_ready')
+      phoneClientTrace('telnyx_ready')
+      void reportWebRtcPresence(true).catch(() => undefined)
+      if (!cancelled) {
+        setWebrtcStatus('ready')
+        setWebrtcError(null)
+      }
+    })
+    const unsubError = subscribeTelnyxError((err: unknown) => {
+      const msg = err instanceof Error ? err.message : 'Telnyx client error'
+      phoneClientLog('webrtc', 'telnyx_error', { message: msg })
+      phoneClientTrace('telnyx_error', { detail: msg })
+      setWebrtcStatus('error')
+      setWebrtcError(msg)
+    })
+    const unsubWarning = subscribeTelnyxWarning((event: unknown) => {
+      const payload = event as { code?: number; message?: string; callId?: string }
+      phoneClientLog('webrtc', 'telnyx_warning', {
+        code: payload?.code,
+        message: payload?.message,
+      })
+      phoneClientTrace('telnyx_warning', {
+        detail: payload?.message,
+        webrtcCallId: payload?.callId,
+      })
+    })
+
     void boot()
     return () => {
       cancelled = true
+      unsubNotification()
+      unsubReady()
+      unsubError()
+      unsubWarning()
       void reportWebRtcPresence(false).catch(() => undefined)
     }
   }, [])
@@ -382,8 +439,9 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
   const answerIncoming = useCallback(() => {
     const inc = incomingCall
-    if (!inc) return
+    if (!inc || incomingAnswering) return
     void (async () => {
+      setIncomingAnswering(true)
       let humanCallId = inc.humanCallId
       let displayFrom = inc.from
       if (!humanCallId) {
@@ -398,30 +456,56 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         }
       }
       phoneClientLog('webrtc', 'inbound_answer_clicked', { humanCallId, webrtcId: inc.webrtcId })
+      phoneClientTrace('inbound_answer_clicked', { humanCallId, webrtcCallId: inc.webrtcId })
       try {
         await navigator.mediaDevices.getUserMedia({ audio: true })
       } catch (e) {
+        setIncomingAnswering(false)
         toast.error('Microphone access is required to answer calls', {
           description: e instanceof Error ? e.message : undefined,
         })
         return
       }
-      const answer = inc.webrtcCall.answer as
+
+      const client = telnyxClientRef.current as ReturnType<typeof getSharedTelnyxClient> | null
+      const liveCall =
+        inboundSdkCallRef.current ||
+        lookupSdkCall(client, inc.webrtcId) ||
+        inc.webrtcCall
+      const answer = liveCall?.answer as
         | ((opts?: { remoteElement?: HTMLAudioElement }) => void | Promise<void>)
         | undefined
+      if (!answer) {
+        setIncomingAnswering(false)
+        toast.error('Could not connect the call', { description: 'Call session is no longer available.' })
+        return
+      }
+      const audio = remoteAudioRef.current
+      if (audio) void audio.play().catch(() => undefined)
       try {
-        await answer?.({ remoteElement: remoteAudioRef.current || undefined })
+        await answer({ remoteElement: audio || undefined })
+        phoneClientTrace('inbound_answer_promise_resolved', {
+          humanCallId,
+          webrtcCallId: inc.webrtcId,
+        })
       } catch (e) {
         phoneClientLog('webrtc', 'inbound_answer_failed', {
           error: e instanceof Error ? e.message : 'unknown',
         })
+        phoneClientTrace('inbound_answer_failed', {
+          humanCallId,
+          webrtcCallId: inc.webrtcId,
+          detail: e instanceof Error ? e.message : 'unknown',
+        })
+        setIncomingAnswering(false)
         toast.error('Could not connect the call', {
           description: e instanceof Error ? e.message : undefined,
         })
         return
       }
-      telnyxCallRef.current = inc.webrtcCall
+      telnyxCallRef.current = liveCall
       activeWebrtcIdRef.current = inc.webrtcId
+      inboundSdkCallRef.current = liveCall
       setActiveCall({
         id: inc.webrtcId,
         humanCallId: humanCallId || inc.webrtcId,
@@ -436,22 +520,27 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         webrtcId: inc.webrtcId,
       })
       setIncomingCall(null)
+      setIncomingAnswering(false)
       if (humanCallId) {
         void registerInboundAnswer(humanCallId, inc.webrtcId).catch(() => undefined)
         void linkCallControl({ humanCallId, webrtcCallId: inc.webrtcId }).catch(() => undefined)
       }
     })()
-  }, [incomingCall])
+  }, [incomingCall, incomingAnswering])
 
   const rejectIncoming = useCallback(() => {
     const inc = incomingCall
     if (!inc) return
     phoneClientLog('webrtc', 'inbound_reject_clicked', { humanCallId: inc.humanCallId })
-    inc.webrtcCall.hangup?.()
+    const live =
+      inboundSdkCallRef.current || inc.webrtcCall
+    live.hangup?.()
+    inboundSdkCallRef.current = null
     if (inc.humanCallId) {
       void registerInboundReject(inc.humanCallId).catch(() => undefined)
     }
     setIncomingCall(null)
+    setIncomingAnswering(false)
   }, [incomingCall])
 
   const toggleHold = useCallback(() => {
@@ -486,6 +575,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       elapsed,
       refreshRouting,
       incomingCall,
+      incomingAnswering,
       answerIncoming,
       rejectIncoming,
     }),
@@ -502,6 +592,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       elapsed,
       refreshRouting,
       incomingCall,
+      incomingAnswering,
       answerIncoming,
       rejectIncoming,
     ],
