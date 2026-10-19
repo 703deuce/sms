@@ -733,7 +733,7 @@ export const ROUTE_POLICY_DEFAULT = {
   numberId: 'n1',
   duringHours: 'ring_group' as 'ring_group' | 'user' | 'external' | 'ai' | 'voicemail',
   ringStrategy: 'simultaneous' as 'simultaneous' | 'sequential',
-  ringTimeout: 20,
+  ringTimeout: 35,
   noAnswer: 'ai' as 'ai' | 'voicemail' | 'external',
   afterHours: 'ai' as 'ai' | 'voicemail' | 'external',
   aiCoverage: 'after_hours_overflow' as 'full_time' | 'after_hours' | 'overflow' | 'after_hours_overflow' | 'off',

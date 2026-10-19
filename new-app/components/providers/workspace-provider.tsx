@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { ROUTE_POLICY_DEFAULT, type RoutePolicy } from '@/lib/data'
 import {
   fetchCalls,
+  fetchRingingInbound,
   fetchRouting,
   fetchWebRtcToken,
   reportWebRtcPresence,
@@ -91,9 +92,13 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null)
   const activeWebrtcIdRef = useRef<string | null>(null)
   const activeCallRef = useRef<ActiveCall | null>(null)
+  const incomingCallRef = useRef<IncomingCallOffer | null>(null)
   useEffect(() => {
     activeCallRef.current = activeCall
   }, [activeCall])
+  useEffect(() => {
+    incomingCallRef.current = incomingCall
+  }, [incomingCall])
 
   const refreshRouting = useCallback(async () => {
     try {
@@ -201,19 +206,32 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
               const to = call.localCallerNumber || ''
               phoneClientLog('webrtc', 'inbound_ringing_ui', { webrtcId, from, to })
               setIncomingCall({ webrtcId, from, to, webrtcCall: call })
-              void fetchCalls({ direction: 'inbound', limit: 5, filter: undefined }).then((res) => {
-                const digits = from.replace(/\D/g, '').slice(-10)
-                const match = res.data.find(
-                  (r) =>
-                    r.callerNumber === from ||
-                    r.callerNumber.replace(/\D/g, '').endsWith(digits),
+              void fetchRingingInbound().then((row) => {
+                if (!row) return
+                const display = row.callerName || row.fromE164
+                setIncomingCall((prev) =>
+                  prev && prev.webrtcId === webrtcId
+                    ? {
+                        ...prev,
+                        humanCallId: row.humanCallId,
+                        from: display,
+                      }
+                    : prev,
                 )
-                if (match?.id) {
-                  setIncomingCall((prev) =>
-                    prev && prev.webrtcId === webrtcId ? { ...prev, humanCallId: match.id } : prev,
-                  )
-                }
               }).catch(() => undefined)
+              return
+            }
+
+            const pending = incomingCallRef.current
+            if (
+              notification.type === 'callUpdate' &&
+              call.direction === 'inbound' &&
+              pending?.webrtcId === call.id &&
+              call.state &&
+              /hangup|destroy|done|failed/i.test(call.state)
+            ) {
+              phoneClientLog('webrtc', 'inbound_ended_before_answer', { state: call.state })
+              setIncomingCall(null)
               return
             }
 
@@ -365,32 +383,64 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const answerIncoming = useCallback(() => {
     const inc = incomingCall
     if (!inc) return
-    phoneClientLog('webrtc', 'inbound_answer_clicked', { humanCallId: inc.humanCallId, webrtcId: inc.webrtcId })
-    const answer = inc.webrtcCall.answer as
-      | ((opts?: { remoteElement?: HTMLAudioElement }) => void)
-      | undefined
-    answer?.({ remoteElement: remoteAudioRef.current || undefined })
-    telnyxCallRef.current = inc.webrtcCall
-    activeWebrtcIdRef.current = inc.webrtcId
-    const humanCallId = inc.humanCallId || inc.webrtcId
-    setActiveCall({
-      id: inc.webrtcId,
-      humanCallId,
-      name: inc.from,
-      number: inc.from,
-      callerId: inc.to,
-      status: 'connecting',
-      muted: false,
-      onHold: false,
-      source: 'inbound',
-      direction: 'inbound',
-      webrtcId: inc.webrtcId,
-    })
-    setIncomingCall(null)
-    if (inc.humanCallId) {
-      void registerInboundAnswer(inc.humanCallId, inc.webrtcId).catch(() => undefined)
-      void linkCallControl({ humanCallId: inc.humanCallId, webrtcCallId: inc.webrtcId }).catch(() => undefined)
-    }
+    void (async () => {
+      let humanCallId = inc.humanCallId
+      let displayFrom = inc.from
+      if (!humanCallId) {
+        try {
+          const row = await fetchRingingInbound()
+          if (row) {
+            humanCallId = row.humanCallId
+            displayFrom = row.callerName || row.fromE164
+          }
+        } catch {
+          // continue — still attempt WebRTC answer
+        }
+      }
+      phoneClientLog('webrtc', 'inbound_answer_clicked', { humanCallId, webrtcId: inc.webrtcId })
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true })
+      } catch (e) {
+        toast.error('Microphone access is required to answer calls', {
+          description: e instanceof Error ? e.message : undefined,
+        })
+        return
+      }
+      const answer = inc.webrtcCall.answer as
+        | ((opts?: { remoteElement?: HTMLAudioElement }) => void | Promise<void>)
+        | undefined
+      try {
+        await answer?.({ remoteElement: remoteAudioRef.current || undefined })
+      } catch (e) {
+        phoneClientLog('webrtc', 'inbound_answer_failed', {
+          error: e instanceof Error ? e.message : 'unknown',
+        })
+        toast.error('Could not connect the call', {
+          description: e instanceof Error ? e.message : undefined,
+        })
+        return
+      }
+      telnyxCallRef.current = inc.webrtcCall
+      activeWebrtcIdRef.current = inc.webrtcId
+      setActiveCall({
+        id: inc.webrtcId,
+        humanCallId: humanCallId || inc.webrtcId,
+        name: displayFrom,
+        number: displayFrom,
+        callerId: inc.to,
+        status: 'connecting',
+        muted: false,
+        onHold: false,
+        source: 'inbound',
+        direction: 'inbound',
+        webrtcId: inc.webrtcId,
+      })
+      setIncomingCall(null)
+      if (humanCallId) {
+        void registerInboundAnswer(humanCallId, inc.webrtcId).catch(() => undefined)
+        void linkCallControl({ humanCallId, webrtcCallId: inc.webrtcId }).catch(() => undefined)
+      }
+    })()
   }, [incomingCall])
 
   const rejectIncoming = useCallback(() => {

@@ -48,6 +48,15 @@ export async function reportWebRtcPresence(registered: boolean) {
   });
 }
 
+export async function fetchRingingInbound() {
+  return parse<{
+    humanCallId: string;
+    fromE164: string;
+    callerName: string | null;
+    startedAt: string;
+  } | null>(await fetch("/api/phone/calls/ringing-inbound"));
+}
+
 export async function fetchCalls(params: Record<string, string | number | undefined>) {
   const q = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {

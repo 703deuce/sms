@@ -141,6 +141,7 @@ export async function processInboundCallInitiated(input: {
       const result = await bridgeInboundCallToWebRtc({
         telnyxCallControlId: input.telnyxCallControlId,
         businessLineE164: input.toE164,
+        callerE164: from,
         workspaceId: input.workspaceId,
         humanCallId: call.id,
         ringTimeoutSec: ringSec,

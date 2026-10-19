@@ -54,6 +54,7 @@ function resolveCallControlConnectionId(): string | null {
 export async function bridgeInboundCallToWebRtc(input: {
   telnyxCallControlId: string;
   businessLineE164: string;
+  callerE164: string;
   workspaceId: string;
   humanCallId: string;
   ringTimeoutSec?: number;
@@ -91,20 +92,42 @@ export async function bridgeInboundCallToWebRtc(input: {
   const to = buildWebRtcAgentSipUri(sipUsername);
 
   try {
-    const dialed = await telnyxRequest<{ data?: { call_control_id?: string } }>("/calls", {
-      method: "POST",
-      body: {
-        connection_id: callControlConnectionId,
-        to,
-        from: input.businessLineE164,
-        client_state: clientState,
-        timeout_secs: timeout,
-        link_to: input.telnyxCallControlId,
-        bridge_intent: true,
-        bridge_on_answer: true,
-        prevent_double_bridge: true,
-      },
-    });
+    const dialBody = {
+      connection_id: callControlConnectionId,
+      to,
+      from: input.callerE164 || input.businessLineE164,
+      client_state: clientState,
+      timeout_secs: timeout,
+      link_to: input.telnyxCallControlId,
+      bridge_intent: true,
+      bridge_on_answer: true,
+      prevent_double_bridge: true,
+      custom_headers: [
+        { name: "X-Transovo-Inbound-Caller", value: input.callerE164 },
+        { name: "X-Transovo-Business-Line", value: input.businessLineE164 },
+      ],
+    };
+
+    let dialed: { data?: { call_control_id?: string } };
+    try {
+      dialed = await telnyxRequest<{ data?: { call_control_id?: string } }>("/calls", {
+        method: "POST",
+        body: dialBody,
+      });
+    } catch (firstErr) {
+      if (input.callerE164 && input.callerE164 !== input.businessLineE164) {
+        phoneServerLog("inbound-webrtc-bridge", "dial_retry_business_from", {
+          humanCallId: input.humanCallId,
+          error: firstErr instanceof Error ? firstErr.message : "dial_failed",
+        });
+        dialed = await telnyxRequest<{ data?: { call_control_id?: string } }>("/calls", {
+          method: "POST",
+          body: { ...dialBody, from: input.businessLineE164 },
+        });
+      } else {
+        throw firstErr;
+      }
+    }
     const agentLegId = dialed.data?.call_control_id?.trim();
     if (!agentLegId) {
       return { ok: false, reason: "dial_missing_agent_leg_id" };
