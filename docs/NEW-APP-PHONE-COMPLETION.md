@@ -47,11 +47,10 @@
 ## Verification commands
 
 ```bash
-node new-app/scripts/test-phone-runtime-logic.mjs
-node new-app/scripts/test-phone-recording-resolve.mjs
-PHONE_TEST_BASE_URL=http://localhost:3100 node new-app/scripts/test-phone-greenfield.mjs
-PHONE_TEST_BASE_URL=http://localhost:3100 node new-app/scripts/test-phone-complete.mjs
+cd new-app && pnpm test:phone
 node scripts/test-new-app-inbound-telnyx-contract.mjs
+PHONE_TEST_BASE_URL=https://transovo.ai pnpm test:phone:prod
+# Optional pinned call: PHONE_TEST_CALL_ID=cmvf8iljt002kl30kaxntx9hj
 ```
 
 ## Engineering status

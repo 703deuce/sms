@@ -21,12 +21,18 @@ async function streamRecording(request: Request, ctx: { params: Promise<{ id: st
     }
 
     const range = request.headers.get("range");
+    // Telnyx/S3 presigned URLs often reject HEAD (403) while GET works — probe with a tiny ranged GET.
     const upstream = await fetch(downloadUrl, {
       redirect: "follow",
-      method: probeOnly ? "HEAD" : "GET",
-      headers: range && !probeOnly ? { Range: range } : undefined,
+      method: "GET",
+      headers: probeOnly
+        ? { Range: "bytes=0-0" }
+        : range
+          ? { Range: range }
+          : undefined,
     });
-    if (!upstream.ok) {
+    const probeOk = probeOnly && (upstream.ok || upstream.status === 206);
+    if (!probeOk && !upstream.ok) {
       return NextResponse.json(
         { error: "Recording unavailable", upstreamStatus: upstream.status },
         { status: 502 },
@@ -46,6 +52,11 @@ async function streamRecording(request: Request, ctx: { params: Promise<{ id: st
     };
 
     if (probeOnly) {
+      try {
+        await upstream.arrayBuffer();
+      } catch {
+        /* body optional for probe */
+      }
       return new NextResponse(null, { status: 200, headers });
     }
 
