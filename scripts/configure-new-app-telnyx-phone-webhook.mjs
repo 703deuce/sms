@@ -6,6 +6,12 @@
  *   node scripts/configure-new-app-telnyx-phone-webhook.mjs --dry-run
  */
 const dryRun = process.argv.includes("--dry-run");
+/** Without this flag, only the Call Control webhook is updated — DIDs are not moved. */
+const attachAllNumbers = process.argv.includes("--attach-all-numbers");
+const attachOnly = (process.env.PHONE_ATTACH_ONLY_E164S || "")
+  .split(/[,\s]+/)
+  .map((s) => s.trim())
+  .filter(Boolean);
 const apiKey = process.env.TELNYX_API_KEY?.trim();
 const base = (process.env.TELNYX_API_BASE_URL || "https://api.telnyx.com/v2").replace(
   /\/$/,
@@ -158,17 +164,19 @@ async function ensureCallControlApp() {
   return targetId;
 }
 
-async function attachNumbersToConnection(callControlId) {
+async function attachNumbersToConnection(callControlId, onlyE164 = null) {
   const listed = await telnyx("/phone_numbers", {
     query: { "page[size]": 100 },
   });
   const numbers = listed.data || [];
+  const allow = onlyE164 ? new Set(onlyE164.map((n) => n.replace(/\s/g, ""))) : null;
   const attached = [];
   for (const pn of numbers) {
     const e164 = String(pn.phone_number || "");
     const conn = String(pn.connection_id || "");
     const id = String(pn.id || "");
     if (!id || !e164) continue;
+    if (allow && !allow.has(e164)) continue;
     if (conn === callControlId) {
       attached.push({ e164, action: "already_ok" });
       continue;
@@ -196,7 +204,19 @@ async function main() {
     console.error("Failed to resolve Call Control application id");
     process.exit(1);
   }
-  const numbers = await attachNumbersToConnection(callControlId);
+  let numbers = [];
+  if (attachAllNumbers) {
+    numbers = await attachNumbersToConnection(callControlId);
+  } else if (attachOnly.length > 0) {
+    numbers = await attachNumbersToConnection(callControlId, attachOnly);
+  } else {
+    console.log(
+      JSON.stringify({
+        step: "skip_number_attach",
+        hint: "Pass --attach-all-numbers or PHONE_ATTACH_ONLY_E164S=+1...",
+      }),
+    );
+  }
   console.log(JSON.stringify({ step: "done", callControlId, webhookUrl, numbers }));
 }
 
