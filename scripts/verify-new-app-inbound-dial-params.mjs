@@ -72,10 +72,20 @@ async function main() {
     );
     try {
       const sipConn = await telnyx(`/credential_connections/${encodeURIComponent(credConn)}`);
+      const pref = sipConn.sip_uri_calling_preference ?? "disabled";
+      console.log("  sip_uri_calling_preference:", pref);
+      if (pref === "disabled" || !pref) {
+        console.error(
+          "\nFAIL: SIP URI calling is disabled on the WebRTC credential connection.",
+          "Call Control cannot ring the browser until this is internal or unrestricted.",
+          "Run: node scripts/configure-new-app-telnyx-webrtc-sip-uri.mjs",
+        );
+        process.exit(1);
+      }
       const inbound = sipConn.inbound ?? sipConn.inbound_settings;
       console.log(
-        "  credential_connection inbound (SIP URI reachability):",
-        inbound ? JSON.stringify(inbound).slice(0, 280) : "(no inbound block in API response — verify in Mission Control)",
+        "  credential_connection inbound:",
+        inbound ? JSON.stringify(inbound).slice(0, 200) : "(see portal)",
       );
     } catch (e) {
       console.log(
