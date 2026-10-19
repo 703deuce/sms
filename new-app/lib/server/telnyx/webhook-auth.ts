@@ -2,6 +2,21 @@ import { NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { phoneServerLog } from "@/lib/server/phone/phone-log";
 
+/** Telnyx portal often supplies a raw base64 32-byte Ed25519 key, not PEM/SPKI. */
+function buildTelnyxPublicKey(publicKey: string): crypto.KeyObject {
+  const trimmed = publicKey.trim();
+  if (trimmed.includes("BEGIN PUBLIC KEY")) {
+    return crypto.createPublicKey(trimmed);
+  }
+  const raw = Buffer.from(trimmed, "base64");
+  if (raw.length === 32) {
+    const derPrefix = Buffer.from("302a300506032b6570032100", "hex");
+    const der = Buffer.concat([derPrefix, raw]);
+    return crypto.createPublicKey({ key: der, format: "der", type: "spki" });
+  }
+  return crypto.createPublicKey(trimmed);
+}
+
 export function telnyxEventType(payload: unknown): string {
   const root = (payload || {}) as Record<string, unknown>;
   const data = root.data as Record<string, unknown> | undefined;
@@ -50,13 +65,7 @@ export async function readTelnyxWebhook(request: Request): Promise<
 
   const signed = `${timestamp}|${rawBody}`;
   try {
-    const key = publicKey.includes("BEGIN PUBLIC KEY")
-      ? crypto.createPublicKey(publicKey)
-      : crypto.createPublicKey({
-          key: Buffer.from(publicKey, "base64"),
-          format: "der",
-          type: "spki",
-        });
+    const key = buildTelnyxPublicKey(publicKey);
     const ok = crypto.verify(
       null,
       Buffer.from(signed),
