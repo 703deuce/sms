@@ -4,8 +4,16 @@ import type { NumberProduct } from "@/lib/numbers";
 import { getPrisma } from "@/lib/server/db";
 import { ensureWorkspaceReceptionistAgent } from "@/lib/server/receptionist/agent-store";
 import { detectNumberProductBindings } from "@/lib/server/telephony/bindings";
+import { parkCurrentIngressIfNeeded } from "@/lib/server/telephony/ingress-park";
 import { routeNumberToMctbTexml, routeNumberToPhoneCallControl } from "@/lib/server/telephony/product-routes";
-import { provisionVoiceV3ReceptionistIngress } from "@/lib/server/telephony/v3-receptionist-provision";
+import { readLiveTelnyxConnectionId } from "@/lib/server/telephony/telnyx-number";
+import {
+  activateVoiceV3TelnyxIngress,
+  prepareVoiceV3LiveKitDestination,
+} from "@/lib/server/telephony/v3-receptionist-provision";
+
+/** Carrier ingress change vs logical product binding (Phone + Ava can share one DID). */
+export type IngressStrategy = "exclusive" | "shared_voice";
 
 export type SwitchNumberProductInput = {
   workspaceId: string;
@@ -13,21 +21,78 @@ export type SwitchNumberProductInput = {
   targetProduct: NumberProduct;
   confirmSwitch: boolean;
   agentId?: string | null;
+  /**
+   * `shared_voice` (default): assign AI Receptionist on the number but preserve Phone
+   * workspace routing fields (hours, ring group, overflow). Carrier ingress still moves
+   * to LiveKit for Voice V3 when that is the active voice path.
+   * `exclusive`: treat switch as single-product ingress ownership (MCTB TeXML, Call Control, etc.).
+   */
+  ingressStrategy?: IngressStrategy;
 };
 
 export type SwitchNumberProductResult = {
   ok: boolean;
   phoneNumberId: string;
   targetProduct: NumberProduct;
+  ingressStrategy: IngressStrategy;
   previousBindings: { product: NumberProduct; detail: string }[];
   actions: string[];
   error?: string;
   needsConfirmation?: boolean;
 };
 
+async function mergeWorkspacePolicyForSharedVoice(input: {
+  workspaceId: string;
+  phoneNumberId: string;
+  agentId: string;
+}): Promise<{ actions: string[] }> {
+  const prisma = getPrisma();
+  const routing = await prisma.workspaceCallRouting.findUnique({
+    where: { workspaceId: input.workspaceId },
+  });
+  const policy =
+    routing?.policyJson && typeof routing.policyJson === "object"
+      ? { ...(routing.policyJson as Record<string, unknown>) }
+      : {};
+
+  const merged = {
+    ...policy,
+    numberId: input.phoneNumberId,
+    receptionistAgentId: input.agentId,
+    aiCoverage: policy.aiCoverage ?? "overflow",
+    updatedAt: new Date().toISOString(),
+    updatedBy: "Numbers · shared voice assignment",
+  };
+
+  const policyJson = merged as object;
+  await prisma.workspaceCallRouting.upsert({
+    where: { workspaceId: input.workspaceId },
+    create: {
+      workspaceId: input.workspaceId,
+      policyJson,
+      providerSyncStatus: "synced",
+      revision: 1,
+    },
+    update: {
+      policyJson,
+      providerSyncStatus: "synced",
+      providerSyncError: null,
+      revision: (routing?.revision ?? 0) + 1,
+    },
+  });
+
+  return { actions: ["workspace_policy_merged_shared_voice"] };
+}
+
+/**
+ * Safe switch sequence:
+ * 1 read live Telnyx + bindings → 2 confirm → 3 park prior config → 4 prepare destination
+ * → 5 Telnyx assign + verify (rollback on fail) → 6 commit DB bindings
+ */
 export async function switchNumberToProduct(
   input: SwitchNumberProductInput,
 ): Promise<SwitchNumberProductResult> {
+  const ingressStrategy = input.ingressStrategy ?? "shared_voice";
   const previousBindings = await detectNumberProductBindings({
     workspaceId: input.workspaceId,
     phoneNumberId: input.phoneNumberId,
@@ -39,6 +104,7 @@ export async function switchNumberToProduct(
       ok: false,
       phoneNumberId: input.phoneNumberId,
       targetProduct: input.targetProduct,
+      ingressStrategy,
       previousBindings: conflicts,
       actions: [],
       needsConfirmation: true,
@@ -53,16 +119,54 @@ export async function switchNumberToProduct(
       ok: false,
       phoneNumberId: input.phoneNumberId,
       targetProduct: input.targetProduct,
+      ingressStrategy,
       previousBindings: conflicts,
       actions,
       error: "SMS-only assignment does not change voice ingress — use Numbers settings",
     };
   }
 
+  const prisma = getPrisma();
+  const phone = await prisma.phoneNumber.findFirst({
+    where: { id: input.phoneNumberId, workspaceId: input.workspaceId },
+  });
+  if (!phone?.e164) {
+    return {
+      ok: false,
+      phoneNumberId: input.phoneNumberId,
+      targetProduct: input.targetProduct,
+      ingressStrategy,
+      previousBindings: conflicts,
+      actions,
+      error: "Phone number not found",
+    };
+  }
+
+  const live = await readLiveTelnyxConnectionId({
+    e164: phone.e164,
+    providerNumberId: phone.providerNumberId,
+  });
+  actions.push("read_live_telnyx_connection");
+
+  const routing = await prisma.workspaceCallRouting.findUnique({
+    where: { workspaceId: input.workspaceId },
+  });
+  const policySnapshot =
+    routing?.policyJson && typeof routing.policyJson === "object"
+      ? { ...(routing.policyJson as Record<string, unknown>) }
+      : undefined;
+
+  const park = await parkCurrentIngressIfNeeded({
+    phoneNumberId: input.phoneNumberId,
+    telnyxConnectionId: live.connectionId,
+    workspacePolicySnapshot: policySnapshot,
+  });
+  actions.push(...park.actions);
+
   if (input.targetProduct === "receptionist") {
     const agent =
       input.agentId
-        ? await getPrisma().voiceAgent.findFirst({
+        ? await prisma.voiceAgent.findFirst({
             where: { id: input.agentId, workspaceId: input.workspaceId },
             select: { id: true, publishedVersionId: true },
           })
@@ -73,31 +177,44 @@ export async function switchNumberToProduct(
         ok: false,
         phoneNumberId: input.phoneNumberId,
         targetProduct: input.targetProduct,
+        ingressStrategy,
         previousBindings: conflicts,
         actions,
         error: "No AI Receptionist agent found for this workspace",
       };
     }
 
-    const provision = await provisionVoiceV3ReceptionistIngress({
+    const prepared = await prepareVoiceV3LiveKitDestination({
       workspaceId: input.workspaceId,
       phoneNumberId: input.phoneNumberId,
       agentId: agent.id,
       publishedVersionId: agent.publishedVersionId,
     });
-    actions.push(...provision.actions);
-    if (!provision.ok) {
+    actions.push(...prepared.actions);
+
+    const activated = await activateVoiceV3TelnyxIngress({
+      workspaceId: input.workspaceId,
+      phoneNumberId: input.phoneNumberId,
+      agentId: agent.id,
+      publishedVersionId: agent.publishedVersionId,
+      prepared,
+      e164: phone.e164,
+    });
+    actions.push(...activated.actions);
+
+    if (!activated.ok) {
       return {
         ok: false,
         phoneNumberId: input.phoneNumberId,
         targetProduct: input.targetProduct,
+        ingressStrategy,
         previousBindings: conflicts,
         actions,
-        error: provision.error || "receptionist_provision_failed",
+        error: activated.error || "receptionist_provision_failed",
       };
     }
 
-    await getPrisma().voiceAgentPhoneNumber.upsert({
+    await prisma.voiceAgentPhoneNumber.upsert({
       where: { agentId_phoneNumberId: { agentId: agent.id, phoneNumberId: input.phoneNumberId } },
       create: {
         workspaceId: input.workspaceId,
@@ -109,11 +226,22 @@ export async function switchNumberToProduct(
       },
       update: { inboundEnabled: true, isDefault: true },
     });
+    actions.push("voice_agent_phone_link_upserted");
+
+    if (ingressStrategy === "shared_voice") {
+      const merged = await mergeWorkspacePolicyForSharedVoice({
+        workspaceId: input.workspaceId,
+        phoneNumberId: input.phoneNumberId,
+        agentId: agent.id,
+      });
+      actions.push(...merged.actions);
+    }
 
     return {
       ok: true,
       phoneNumberId: input.phoneNumberId,
       targetProduct: input.targetProduct,
+      ingressStrategy,
       previousBindings: conflicts,
       actions,
     };
@@ -123,12 +251,14 @@ export async function switchNumberToProduct(
     const routed = await routeNumberToMctbTexml({
       workspaceId: input.workspaceId,
       phoneNumberId: input.phoneNumberId,
+      priorConnectionId: live.connectionId,
     });
     actions.push(...routed.actions);
     return {
       ok: routed.ok,
       phoneNumberId: input.phoneNumberId,
       targetProduct: input.targetProduct,
+      ingressStrategy,
       previousBindings: conflicts,
       actions,
       error: routed.error,
@@ -139,42 +269,42 @@ export async function switchNumberToProduct(
     const routed = await routeNumberToPhoneCallControl({
       workspaceId: input.workspaceId,
       phoneNumberId: input.phoneNumberId,
+      priorConnectionId: live.connectionId,
     });
     actions.push(...routed.actions);
 
-    const routing = await getPrisma().workspaceCallRouting.findUnique({
-      where: { workspaceId: input.workspaceId },
-    });
-    const policy =
-      routing?.policyJson && typeof routing.policyJson === "object"
-        ? { ...(routing.policyJson as Record<string, unknown>) }
-        : {};
-    policy.numberId = input.phoneNumberId;
-    policy.updatedAt = new Date().toISOString();
-    policy.updatedBy = "Numbers · product switch";
-
-    const policyJson = policy as object;
-    await getPrisma().workspaceCallRouting.upsert({
-      where: { workspaceId: input.workspaceId },
-      create: {
-        workspaceId: input.workspaceId,
-        policyJson,
-        providerSyncStatus: routed.ok ? "synced" : "error",
-        providerSyncError: routed.ok ? null : routed.error,
-        revision: 1,
-      },
-      update: {
-        policyJson,
-        providerSyncStatus: routed.ok ? "synced" : "error",
-        providerSyncError: routed.ok ? null : routed.error,
-        revision: (routing?.revision ?? 0) + 1,
-      },
-    });
+    if (routed.ok) {
+      const policy =
+        routing?.policyJson && typeof routing.policyJson === "object"
+          ? { ...(routing.policyJson as Record<string, unknown>) }
+          : {};
+      policy.numberId = input.phoneNumberId;
+      policy.updatedAt = new Date().toISOString();
+      policy.updatedBy = "Numbers · product switch";
+      const policyJson = policy as object;
+      await prisma.workspaceCallRouting.upsert({
+        where: { workspaceId: input.workspaceId },
+        create: {
+          workspaceId: input.workspaceId,
+          policyJson,
+          providerSyncStatus: "synced",
+          revision: 1,
+        },
+        update: {
+          policyJson,
+          providerSyncStatus: "synced",
+          providerSyncError: null,
+          revision: (routing?.revision ?? 0) + 1,
+        },
+      });
+      actions.push("workspace_phone_policy_updated");
+    }
 
     return {
       ok: routed.ok,
       phoneNumberId: input.phoneNumberId,
       targetProduct: input.targetProduct,
+      ingressStrategy,
       previousBindings: conflicts,
       actions,
       error: routed.error,
@@ -185,6 +315,7 @@ export async function switchNumberToProduct(
     ok: false,
     phoneNumberId: input.phoneNumberId,
     targetProduct: input.targetProduct,
+    ingressStrategy,
     previousBindings: conflicts,
     actions,
     error: "unsupported_product",

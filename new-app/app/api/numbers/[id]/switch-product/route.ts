@@ -8,6 +8,7 @@ const bodySchema = z.object({
   targetProduct: z.enum(["phone", "receptionist", "mctb", "sms"]),
   confirmSwitch: z.boolean().optional().default(false),
   agentId: z.string().optional().nullable(),
+  ingressStrategy: z.enum(["exclusive", "shared_voice"]).optional().default("shared_voice"),
 });
 
 export async function POST(
@@ -32,6 +33,7 @@ export async function POST(
       targetProduct: parsed.data.targetProduct,
       confirmSwitch: parsed.data.confirmSwitch,
       agentId: parsed.data.agentId,
+      ingressStrategy: parsed.data.ingressStrategy,
     });
 
     if (result.needsConfirmation) {

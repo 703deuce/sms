@@ -2,16 +2,14 @@ import "server-only";
 
 import { getPrisma } from "@/lib/server/db";
 import { getMctbTexmlAppId, getPhoneCallControlConnectionId } from "@/lib/server/telephony/config";
-import {
-  routeTelnyxNumberToConnection,
-  resolveTelnyxPhoneNumberId,
-} from "@/lib/server/telephony/telnyx-livekit-fqdn";
+import { applyTelnyxConnectionWithVerify } from "@/lib/server/telephony/telnyx-route-safe";
+import { readLiveTelnyxConnectionId } from "@/lib/server/telephony/telnyx-number";
 import { writeTelephonyProvision } from "@/lib/server/telephony/telephony-record";
-import { telnyxRequest } from "@/lib/server/telnyx/client";
 
 export async function routeNumberToMctbTexml(input: {
   workspaceId: string;
   phoneNumberId: string;
+  priorConnectionId?: string | null;
 }): Promise<{ ok: boolean; actions: string[]; error?: string }> {
   const texmlAppId = getMctbTexmlAppId();
   if (!texmlAppId) {
@@ -28,35 +26,55 @@ export async function routeNumberToMctbTexml(input: {
 
   const actions: string[] = [];
   try {
-    const providerNumberId = await resolveTelnyxPhoneNumberId({
+    const live = await readLiveTelnyxConnectionId({
       e164: phone.e164,
-      existingId: phone.providerNumberId,
+      providerNumberId: phone.providerNumberId,
     });
-    await telnyxRequest(`/phone_numbers/${encodeURIComponent(providerNumberId)}`, {
-      method: "PATCH",
-      body: { connection_id: texmlAppId },
+    actions.push("read_live_telnyx_connection");
+
+    await writeTelephonyProvision(phone.id, {
+      routingMode: "mctb_texml",
+      state: "provisioning",
+      telnyxTexmlAppId: texmlAppId,
+      lastError: null,
     });
-    actions.push("telnyx_routed_to_mctb_texml");
+
+    const routed = await applyTelnyxConnectionWithVerify({
+      e164: phone.e164,
+      providerNumberId: live.providerNumberId,
+      targetConnectionId: texmlAppId,
+      priorConnectionId: input.priorConnectionId ?? live.connectionId,
+    });
+    actions.push(...routed.actions);
+    if (!routed.ok) {
+      await writeTelephonyProvision(phone.id, {
+        routingMode: "mctb_texml",
+        state: "error",
+        lastError: routed.error || "telnyx_route_failed",
+      });
+      return { ok: false, actions, error: routed.error };
+    }
 
     await writeTelephonyProvision(phone.id, {
       routingMode: "mctb_texml",
       state: "active",
       telnyxTexmlAppId: texmlAppId,
       telnyxConnectionId: texmlAppId,
+      lastVerifiedAt: new Date().toISOString(),
       lastError: null,
     });
 
-    if (providerNumberId !== phone.providerNumberId) {
+    if (routed.providerNumberId !== phone.providerNumberId) {
       await prisma.phoneNumber.update({
         where: { id: phone.id },
-        data: { providerNumberId },
+        data: { providerNumberId: routed.providerNumberId },
       });
     }
 
     return { ok: true, actions };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await writeTelephonyProvision(phone.id, {
+    await writeTelephonyProvision(input.phoneNumberId, {
       routingMode: "mctb_texml",
       state: "error",
       lastError: message,
@@ -68,6 +86,7 @@ export async function routeNumberToMctbTexml(input: {
 export async function routeNumberToPhoneCallControl(input: {
   workspaceId: string;
   phoneNumberId: string;
+  priorConnectionId?: string | null;
 }): Promise<{ ok: boolean; actions: string[]; error?: string }> {
   const connectionId = getPhoneCallControlConnectionId();
   if (!connectionId) {
@@ -88,35 +107,54 @@ export async function routeNumberToPhoneCallControl(input: {
 
   const actions: string[] = [];
   try {
-    const route = await routeTelnyxNumberToConnection({
+    const live = await readLiveTelnyxConnectionId({
       e164: phone.e164,
       providerNumberId: phone.providerNumberId,
-      connectionId,
     });
-    if (route.previousConnectionId && route.previousConnectionId !== connectionId) {
-      actions.push(`telnyx_rerouted:${route.previousConnectionId}->${connectionId}`);
-    } else {
-      actions.push("telnyx_route_ok");
+    actions.push("read_live_telnyx_connection");
+
+    await writeTelephonyProvision(phone.id, {
+      routingMode: "telnyx_call_control",
+      state: "provisioning",
+      telnyxConnectionId: connectionId,
+      lastError: null,
+    });
+
+    const routed = await applyTelnyxConnectionWithVerify({
+      e164: phone.e164,
+      providerNumberId: live.providerNumberId,
+      targetConnectionId: connectionId,
+      priorConnectionId: input.priorConnectionId ?? live.connectionId,
+    });
+    actions.push(...routed.actions);
+    if (!routed.ok) {
+      await writeTelephonyProvision(phone.id, {
+        routingMode: "telnyx_call_control",
+        state: "error",
+        lastError: routed.error || "telnyx_route_failed",
+      });
+      return { ok: false, actions, error: routed.error };
     }
 
     await writeTelephonyProvision(phone.id, {
       routingMode: "telnyx_call_control",
       state: "active",
       telnyxConnectionId: connectionId,
+      lastVerifiedAt: new Date().toISOString(),
       lastError: null,
     });
 
-    if (route.providerNumberId !== phone.providerNumberId) {
+    if (routed.providerNumberId !== phone.providerNumberId) {
       await prisma.phoneNumber.update({
         where: { id: phone.id },
-        data: { providerNumberId: route.providerNumberId },
+        data: { providerNumberId: routed.providerNumberId },
       });
     }
 
     return { ok: true, actions };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await writeTelephonyProvision(phone.id, {
+    await writeTelephonyProvision(input.phoneNumberId, {
       routingMode: "telnyx_call_control",
       state: "error",
       lastError: message,

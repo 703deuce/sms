@@ -79,6 +79,7 @@ export async function switchNumberProduct(input: {
   targetProduct: NumberProduct;
   confirmSwitch?: boolean;
   agentId?: string | null;
+  ingressStrategy?: "exclusive" | "shared_voice";
 }): Promise<{ ok: boolean; needsConfirmation?: boolean; actions: string[]; error?: string }> {
   const res = await fetch(`/api/numbers/${input.phoneNumberId}/switch-product`, {
     method: "POST",
@@ -88,6 +89,7 @@ export async function switchNumberProduct(input: {
       targetProduct: input.targetProduct,
       confirmSwitch: input.confirmSwitch ?? false,
       agentId: input.agentId,
+      ingressStrategy: input.ingressStrategy ?? "shared_voice",
     }),
   });
   const body = (await res.json().catch(() => ({}))) as {

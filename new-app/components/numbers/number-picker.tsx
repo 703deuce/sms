@@ -120,8 +120,8 @@ export function NumberPicker({
         <DialogHeader>
           <DialogTitle>Switch voice routing?</DialogTitle>
           <DialogDescription>
-            This number is already set up for another product. Continuing will re-provision Telnyx and LiveKit routing for{' '}
-            {PRODUCT_LABEL[product]}.
+            This number is already set up for another product. Continuing will re-provision carrier routing for{' '}
+            {PRODUCT_LABEL[product]}. Phone hours and overflow settings are preserved when assigning AI Receptionist (shared voice).
           </DialogDescription>
         </DialogHeader>
         {pendingBindings.length > 0 && (
