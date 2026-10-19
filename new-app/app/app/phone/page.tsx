@@ -58,7 +58,7 @@ export default function PhoneOverview() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="flex flex-col gap-6 lg:col-span-2">
-          <RecentCalls calls={CALLS.slice(0, 7)} basePath="/app/calls" viewAllHref="/app/phone/calls" />
+          <RecentCalls calls={CALLS.slice(0, 7)} basePath="/app/phone/calls" viewAllHref="/app/phone/calls" />
         </div>
         <div className="flex flex-col gap-6">
           <RoutingSummary manageHref="/app/phone/call-handling" />
@@ -75,7 +75,7 @@ export default function PhoneOverview() {
             <ul className="divide-y">
               {pending.map((c) => (
                 <li key={c.id}>
-                  <Link href={`/app/calls/${c.id}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/60">
+                  <Link href={`/app/phone/calls/${c.id}`} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/60">
                     <Voicemail className="mt-0.5 size-4 shrink-0 text-warning-foreground" aria-hidden />
                     <span className="flex min-w-0 flex-col gap-0.5">
                       <span className="text-sm font-medium">{c.caller}</span>
