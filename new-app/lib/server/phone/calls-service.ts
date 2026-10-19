@@ -373,6 +373,23 @@ export async function processHumanCallWebhookEvent(input: {
   }
   if (!call) return { ok: false, reason: "human_call_not_found" };
 
+  if (
+    input.eventType === "call.answered" &&
+    clientState.kind === "webrtc_agent_leg" &&
+    clientState.parentCallControlId &&
+    clientState.humanCallId
+  ) {
+    const { completeWebRtcAgentLegAnswer } = await import(
+      "@/lib/server/phone/inbound-webrtc-bridge"
+    );
+    await completeWebRtcAgentLegAnswer({
+      parentCallControlId: String(clientState.parentCallControlId),
+      agentCallControlId: eventControlId,
+      humanCallId: String(clientState.humanCallId),
+      workspaceId: call.workspaceId,
+    }).catch(() => undefined);
+  }
+
   const statusMap: Record<string, string> = {
     "call.initiated": "initiated",
     "call.ringing": "ringing",
@@ -388,13 +405,27 @@ export async function processHumanCallWebhookEvent(input: {
     patch.status = nextStatus;
   }
   if (patch.status === "completed" && call.status !== "voicemail") patch.endedAt = new Date();
-  if (input.eventType === "call.answered" && !call.answeredAt) {
+  const meta = (call.metadata || {}) as { inboundBridge?: string };
+  const awaitingWebrtcBridge = meta.inboundBridge === "dial_agent";
+  if (
+    input.eventType === "call.answered" &&
+    !call.answeredAt &&
+    !(awaitingWebrtcBridge && clientState.kind !== "webrtc_agent_leg")
+  ) {
     patch.answeredAt = new Date();
     const { maybeStartCallRecordingOnAnswer } = await import("@/lib/server/phone/recording-runtime");
     await maybeStartCallRecordingOnAnswer({
       workspaceId: call.workspaceId,
       humanCallId: call.id,
       telnyxCallControlId: call.telnyxCallControlId || eventControlId,
+    });
+  }
+  if (input.eventType === "call.bridged" && awaitingWebrtcBridge) {
+    const { maybeStartCallRecordingOnAnswer } = await import("@/lib/server/phone/recording-runtime");
+    await maybeStartCallRecordingOnAnswer({
+      workspaceId: call.workspaceId,
+      humanCallId: call.id,
+      telnyxCallControlId: call.telnyxCallControlId,
     });
   }
   if (input.eventType === "call.recording.saved") {

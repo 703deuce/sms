@@ -7,6 +7,7 @@ import {
   fetchCalls,
   fetchRouting,
   fetchWebRtcToken,
+  reportWebRtcPresence,
   linkCallControl,
   registerInboundAnswer,
   registerInboundReject,
@@ -146,6 +147,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
         client.on('telnyx.ready', () => {
           phoneClientLog('webrtc', 'telnyx_ready')
+          void reportWebRtcPresence(true).catch(() => undefined)
           if (!cancelled) {
             setWebrtcStatus('ready')
             setWebrtcError(null)
@@ -242,8 +244,19 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     void boot()
     return () => {
       cancelled = true
+      void reportWebRtcPresence(false).catch(() => undefined)
     }
   }, [])
+
+  useEffect(() => {
+    if (webrtcStatus !== 'ready') return
+    const tick = () => {
+      void reportWebRtcPresence(true).catch(() => undefined)
+    }
+    tick()
+    const id = window.setInterval(tick, 45_000)
+    return () => window.clearInterval(id)
+  }, [webrtcStatus])
 
   const updateRoutePolicy = useCallback(async (patch: Partial<RoutePolicy>, origin: string) => {
     const next = {

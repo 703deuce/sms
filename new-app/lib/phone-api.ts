@@ -40,6 +40,14 @@ export async function fetchWebRtcToken() {
   );
 }
 
+export async function reportWebRtcPresence(registered: boolean) {
+  await fetch("/api/phone/webrtc/presence", {
+    method: "POST",
+    headers: mutatingHeaders(),
+    body: JSON.stringify({ registered }),
+  });
+}
+
 export async function fetchCalls(params: Record<string, string | number | undefined>) {
   const q = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
