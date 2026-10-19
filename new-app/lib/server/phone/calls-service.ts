@@ -301,17 +301,34 @@ export async function linkHumanCallControlId(
   const call = await prisma.humanCall.findFirst({ where: { id: callId, workspaceId } });
   if (!call) return null;
 
+  const controlId = telnyxCallControlId?.trim() || "";
+  const prevMeta = (call.metadata || {}) as Record<string, unknown>;
+  const patch: {
+    telnyxCallControlId?: string;
+    notes?: string;
+    metadata?: Record<string, unknown>;
+  } = {};
+  if (webrtcCallId) {
+    patch.notes = `${call.notes || ""} webrtc:${webrtcCallId}`.trim();
+  }
+  if (controlId) {
+    patch.telnyxCallControlId = call.telnyxCallControlId || controlId;
+    if (call.direction === "outbound") {
+      patch.metadata = {
+        ...prevMeta,
+        browserCallControlId: prevMeta.browserCallControlId || controlId,
+      };
+    }
+  }
+
   const updated = await prisma.humanCall.update({
     where: { id: callId },
-    data: {
-      telnyxCallControlId,
-      notes: webrtcCallId ? `${call.notes || ""} webrtc:${webrtcCallId}`.trim() : call.notes,
-    },
+    data: patch,
   });
 
-  if (isTelnyxPhoneConfigured()) {
+  if (controlId && isTelnyxPhoneConfigured()) {
     const { telnyxCallControlPath } = await import("@/lib/server/phone/telnyx-call-actions");
-    await telnyxRequest(telnyxCallControlPath(telnyxCallControlId, "/actions/update_client_state"), {
+    await telnyxRequest(telnyxCallControlPath(controlId, "/actions/update_client_state"), {
       method: "POST",
       body: {
         client_state: encodeClientState({

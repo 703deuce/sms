@@ -14,7 +14,7 @@ import {
   registerInboundReject,
   registerOutboundCall,
   saveRouting,
-  startCallRecording,
+  startCallRecordingWhenReady,
   transferCall as transferCallApi,
 } from '@/lib/phone-api'
 import { phoneClientLog } from '@/lib/phone-client-log'
@@ -251,7 +251,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
           ac && (ac.source === 'dialer' || ac.source === 'power_dialer' || ac.source === 'callback')
         if (outboundSource && ac.humanCallId && recordingRequestedRef.current !== ac.humanCallId) {
           recordingRequestedRef.current = ac.humanCallId
-          void startCallRecording(ac.humanCallId).catch(() => undefined)
+          void startCallRecordingWhenReady(ac.humanCallId).catch(() => undefined)
         }
       }
       if (status === 'ended' || status === 'failed') {

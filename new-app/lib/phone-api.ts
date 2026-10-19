@@ -66,6 +66,24 @@ export async function startCallRecording(humanCallId: string) {
   );
 }
 
+/** Outbound WebRTC: Telnyx call_control_id often arrives after the browser is live. */
+export async function startCallRecordingWhenReady(humanCallId: string) {
+  const delaysMs = [0, 1500, 4000, 8000];
+  for (let i = 0; i < delaysMs.length; i++) {
+    if (delaysMs[i] > 0) {
+      await new Promise((r) => setTimeout(r, delaysMs[i]));
+    }
+    try {
+      const result = await startCallRecording(humanCallId);
+      if (result.started) return result;
+      if (result.reason === "already_recording" || result.reason === "call_ended") return result;
+    } catch {
+      // retry until delays exhausted
+    }
+  }
+  return { started: false, reason: "no_control_id" };
+}
+
 export async function fetchCallRecordingUrl(callId: string): Promise<string> {
   const data = await parse<{ url: string }>(
     await fetch(`/api/phone/calls/${encodeURIComponent(callId)}/recording`),
