@@ -4,7 +4,7 @@ import { getPrisma } from "@/lib/server/db";
 import type { ReceptionistPublishedBundle } from "@/lib/server/receptionist/draft-types";
 import { readTelephonyProvision } from "@/lib/server/telephony/telephony-record";
 import { provisionVoiceV3ReceptionistIngress } from "@/lib/server/telephony/v3-receptionist-provision";
-import { syncReceptionistDidDispatchRule } from "./dispatch-sync";
+import { ensureCanonicalV3SharedDispatchRule } from "./canonical-dispatch";
 
 export type LiveKitProvisionResult = {
   ok: boolean;
@@ -54,14 +54,8 @@ export async function provisionReceptionistLiveKitOnPublish(input: {
   }
 
   try {
-    const synced = await syncReceptionistDidDispatchRule({
-      e164: phone.e164,
-      trunkId: trunkId!,
-      workspaceId: input.workspaceId,
-      agentId: input.agentId,
-      publishedVersionId: input.publishedVersionId,
-    });
-    return { ok: true, actions: synced.actions };
+    const dispatch = await ensureCanonicalV3SharedDispatchRule({ trunkId: trunkId! });
+    return { ok: true, actions: dispatch.actions };
   } catch (err) {
     return {
       ok: false,

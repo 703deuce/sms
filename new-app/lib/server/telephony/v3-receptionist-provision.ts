@@ -1,7 +1,10 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/server/db";
-import { syncReceptionistDidDispatchRule } from "@/lib/server/receptionist/livekit/dispatch-sync";
+import {
+  ensureCanonicalV3SharedDispatchRule,
+  pruneObsoleteDispatchRules,
+} from "@/lib/server/receptionist/livekit/canonical-dispatch";
 import { ensureInboundTrunkForNumber } from "@/lib/server/telephony/livekit-inbound";
 import { applyTelnyxConnectionWithVerify } from "@/lib/server/telephony/telnyx-route-safe";
 import {
@@ -87,14 +90,13 @@ export async function prepareVoiceV3LiveKitDestination(input: {
     const trunkId = trunk.sipTrunkId || "";
     if (!trunkId) throw new Error("LiveKit inbound trunk id missing");
 
-    const synced = await syncReceptionistDidDispatchRule({
-      e164: phone.e164,
-      trunkId,
-      workspaceId: input.workspaceId,
-      agentId: input.agentId,
-      publishedVersionId: input.publishedVersionId,
+    const dispatch = await ensureCanonicalV3SharedDispatchRule({ trunkId });
+    actions.push(...dispatch.actions);
+    const pruned = await pruneObsoleteDispatchRules({
+      keepRuleId: dispatch.ruleId,
+      dryRun: false,
     });
-    actions.push(...synced.actions);
+    actions.push(...pruned.actions);
 
     await writeTelephonyProvision(phone.id, {
       routingMode: "livekit_sip",
@@ -102,7 +104,7 @@ export async function prepareVoiceV3LiveKitDestination(input: {
       telnyxFqdnConnectionId: connectionId,
       telnyxFqdnId: fqdnId,
       livekitInboundTrunkId: trunkId,
-      livekitDidDispatchRuleId: synced.ruleId,
+      livekitDidDispatchRuleId: dispatch.ruleId,
       lastError: null,
     });
 
@@ -111,7 +113,7 @@ export async function prepareVoiceV3LiveKitDestination(input: {
       connectionId,
       fqdnId,
       trunkId,
-      dispatchRuleId: synced.ruleId,
+      dispatchRuleId: dispatch.ruleId,
       priorTelnyxConnectionId: live.connectionId,
       providerNumberId: live.providerNumberId,
       actions,
@@ -195,13 +197,6 @@ export async function activateVoiceV3TelnyxIngress(input: {
     livekitDidDispatchRuleId: input.prepared.dispatchRuleId,
     lastVerifiedAt: new Date().toISOString(),
     lastError: null,
-    explicitDispatch: {
-      workspaceId: input.workspaceId,
-      agentId: input.agentId,
-      publishedVersionId: input.publishedVersionId || undefined,
-      toE164: input.e164,
-      dispatchSource: "phone_provision",
-    },
   });
 
   return {

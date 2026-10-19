@@ -18,7 +18,7 @@
 1. Read live Telnyx `connection_id` and logical bindings (`GET …/bindings`).
 2. Require `confirmSwitch` when bindings conflict.
 3. **Park** prior telephony + optional workspace policy snapshot under `settingsJson.telephonyPark.snapshots[]` (for switch-back).
-4. **Prepare** destination (LiveKit trunk + dispatch before Telnyx move for Receptionist).
+4. **Prepare** destination (shared LiveKit trunk + **canonical** V3 dispatch rule — no per-DID LiveKit rules; see `docs/TRANSOVO-V3-CLEAN-LIVEKIT-ROUTING.md`).
 5. **Patch** Telnyx `connection_id`, **verify**, **rollback** to prior connection if verify fails.
 6. **Commit** active telephony record (`state: active`, `lastVerifiedAt`) and product links.
 

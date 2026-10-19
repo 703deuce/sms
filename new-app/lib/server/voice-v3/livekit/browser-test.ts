@@ -94,16 +94,25 @@ export async function verifyLiveKitProvisioningForPhone(input: {
   try {
     const client = getLiveKitSipClient();
     const rules = await client.listSipDispatchRule();
-    const digits = phone.e164.replace(/\D/g, "");
-    const match = rules.find(
-      (r) =>
-        r.name?.includes(digits) ||
-        (r.numbers || []).some((n) => n.replace(/\D/g, "").endsWith(digits.slice(-10))),
+    const { TRANSOVO_LIVEKIT_DISPATCH_RULE_NAME } = await import(
+      "@/lib/server/telephony/config"
     );
+    const { VOICE_V3_LIVEKIT_AGENT_NAME } = await import("@/lib/server/receptionist/livekit/client");
+    const match =
+      rules.find((r) => r.name === TRANSOVO_LIVEKIT_DISPATCH_RULE_NAME) ||
+      rules.find((r) => r.roomConfig?.agents?.[0]?.agentName === VOICE_V3_LIVEKIT_AGENT_NAME);
     if (!match?.sipDispatchRuleId) {
-      return { ok: false, actions: ["dispatch_rule_missing"], error: "dispatch_rule_not_found" };
+      return { ok: false, actions: ["canonical_dispatch_missing"], error: "dispatch_rule_not_found" };
     }
-    return { ok: true, actions: ["dispatch_rule_verified", match.sipDispatchRuleId] };
+    const agent = match.roomConfig?.agents?.[0]?.agentName;
+    if (agent !== VOICE_V3_LIVEKIT_AGENT_NAME) {
+      return {
+        ok: false,
+        actions: ["wrong_dispatch_agent", agent || "unknown"],
+        error: "dispatch_targets_wrong_worker",
+      };
+    }
+    return { ok: true, actions: ["canonical_dispatch_verified", match.sipDispatchRuleId] };
   } catch (err) {
     return {
       ok: false,

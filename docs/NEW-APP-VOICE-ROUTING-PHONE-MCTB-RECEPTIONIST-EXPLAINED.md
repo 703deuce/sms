@@ -115,28 +115,20 @@ That’s **LiveKit (layer 3)**, not MCTB UI and not a generic Telnyx failure.
 
 Production was set up with a **legacy shared** inbound rule `transovo-inbound-dispatch` — often a **trunk-wide** `dispatchRuleIndividual` rule (“everything on this trunk goes to one agent/worker”). Many numbers on the shared Telnyx→LiveKit trunk were effectively owned by that **one** rule.
 
-### What new-app does on “Use this number”
+### What new-app does on “Use this number” (canonical V3 — current)
 
-1. Put the DID on the LiveKit inbound trunk (if needed).
-2. Create **`transovo-did-dispatch-{digits}`** — a **per-number** rule with **your** workspace/agent in job metadata (Voice V3).
-3. Point Telnyx at LiveKit FQDN.
+1. Put the DID on the **shared** LiveKit inbound trunk (if needed).
+2. Ensure **one** canonical dispatch rule (`transovo-inbound-dispatch`) → worker **`transovo-voice-v3`** with **no** per-tenant ids in LiveKit metadata.
+3. Remove obsolete **`transovo-did-dispatch-*`** rules (greenfield cleanup).
+4. Point Telnyx at LiveKit FQDN.
+5. Persist DB assignment (`voiceAgentPhoneNumber`); **published** config is resolved at call time from **called DID**.
 
-### LiveKit’s constraint
-
-Only **one** dispatch rule may claim the same **trunk + inbound number** (and PIN combination for individual rules). Step 2 fails if `transovo-inbound-dispatch` still claims that E.164.
-
-### Why simple fixes failed
-
-- Updating only the `numbers` field on the shared rule **does not** release the DID on LiveKit Cloud when the rule is **trunk-wide individual** — the platform still treats the number as bound to that rule.
-- **Wrong approach:** stamping Voice V3 metadata onto the shared rule (would send traffic to the wrong agent for other numbers / blur products).
-- **Intended approach:** **split** — remove that DID from the shared rule by **delete + recreate** the shared rule scoped to **other** numbers only (keeping the **same** legacy agent config for them), then **create** the per-DID rule for receptionist.
-
-That’s infrastructure surgery; a mistake can affect **other numbers on the same trunk**.
+See **`docs/TRANSOVO-V3-CLEAN-LIVEKIT-ROUTING.md`**.
 
 ### Code direction (new-app)
 
-- `new-app/lib/server/receptionist/livekit/dispatch-sync.ts` — per-DID rule create/update; detach DID from conflicting rules.
-- Fixes landed on `master` (e.g. delete/rescope trunk-wide dispatch before per-DID create). Confirm production via `GET /api/health` → `commitSha`.
+- `new-app/lib/server/receptionist/livekit/canonical-dispatch.ts` — shared V3 dispatch only.
+- `new-app/lib/server/voice-v3/resolve-livekit-session.ts` — called-DID → workspace → published version.
 
 ---
 
@@ -212,7 +204,8 @@ Implementation: `new-app/lib/server/telephony/switch-product.ts`.
 |------|------|
 | Switch orchestration | `new-app/lib/server/telephony/switch-product.ts` |
 | V3 LiveKit prepare / Telnyx activate | `new-app/lib/server/telephony/v3-receptionist-provision.ts` |
-| LiveKit dispatch sync | `new-app/lib/server/receptionist/livekit/dispatch-sync.ts` |
+| LiveKit canonical dispatch | `new-app/lib/server/receptionist/livekit/canonical-dispatch.ts` |
+| Session resolver | `new-app/lib/server/voice-v3/resolve-livekit-session.ts` |
 | Product bindings detection | `new-app/lib/server/telephony/bindings.ts` |
 | Number switch doc | `docs/NEW-APP-VOICE-NUMBER-SWITCH.md` |
 | MCTB product / ingress (monolith) | `docs/MCTB_FINAL_PRODUCTION_PIPELINE.md`, `AGENTS.md` (MCTB sections) |
