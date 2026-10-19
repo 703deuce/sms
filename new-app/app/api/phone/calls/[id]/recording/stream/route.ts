@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { jsonError } from "@/lib/server/api-error";
 import { getPrisma } from "@/lib/server/db";
+import { resolveHumanCallRecordingDownloadUrl } from "@/lib/server/phone/resolve-recording-url";
 import { resolveWorkspaceId } from "@/lib/server/workspace";
 
-/** Stream recording through our origin so mobile Safari can play Telnyx S3 URLs reliably. */
+/** Stream recording through our origin (fresh Telnyx URL — stored presigns expire in ~10m). */
 export async function GET(_request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await ctx.params;
@@ -11,13 +12,22 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
     const prisma = getPrisma();
     const call = await prisma.humanCall.findFirst({
       where: { id, workspaceId },
-      select: { recordingUrl: true },
+      select: {
+        recordingUrl: true,
+        telnyxCallControlId: true,
+        metadata: true,
+      },
     });
     if (!call?.recordingUrl) {
       return NextResponse.json({ error: "No recording" }, { status: 404 });
     }
 
-    const upstream = await fetch(call.recordingUrl, { redirect: "follow" });
+    const downloadUrl = await resolveHumanCallRecordingDownloadUrl(call);
+    if (!downloadUrl) {
+      return NextResponse.json({ error: "Recording unavailable" }, { status: 502 });
+    }
+
+    const upstream = await fetch(downloadUrl, { redirect: "follow" });
     if (!upstream.ok || !upstream.body) {
       return NextResponse.json({ error: "Recording unavailable" }, { status: 502 });
     }
@@ -30,7 +40,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
       headers: {
         "Content-Type": contentType,
         ...(contentLength ? { "Content-Length": contentLength } : {}),
-        "Cache-Control": "private, max-age=3600",
+        "Cache-Control": "private, max-age=300",
       },
     });
   } catch (err) {

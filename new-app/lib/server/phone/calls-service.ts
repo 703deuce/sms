@@ -482,6 +482,13 @@ export async function processHumanCallWebhookEvent(input: {
     const urls = input.eventPayload.recording_urls as Record<string, string> | undefined;
     const recordingUrl = urls?.mp3 || urls?.wav || null;
     patch.recordingUrl = recordingUrl;
+    const recordingId = input.eventPayload.recording_id
+      ? String(input.eventPayload.recording_id)
+      : null;
+    if (recordingId) {
+      const prevMeta = (call.metadata || {}) as Record<string, unknown>;
+      patch.metadata = { ...prevMeta, ...(patch.metadata as object), telnyxRecordingId: recordingId };
+    }
     const isVoicemail =
       call.status === "voicemail" || String(call.disposition || "").startsWith("voicemail:");
     if (recordingUrl && isVoicemail) {
