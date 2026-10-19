@@ -7,14 +7,21 @@ import {
 import { processDueInboundRingTimeouts } from "@/lib/server/phone/inbound-runtime";
 import { resolveWorkspaceForPhoneEvent } from "@/lib/server/phone/workspace-resolve";
 import { readTelnyxWebhook, telnyxEventId, telnyxEventType } from "@/lib/server/telnyx/webhook-auth";
+import { maskE164, phoneServerLog } from "@/lib/server/phone/phone-log";
 
 export async function GET() {
   return NextResponse.json({ ok: true, service: "telnyx-phone-webhook" });
 }
 
 export async function POST(request: Request) {
+  phoneServerLog("telnyx-webhook", "post_received", {
+    path: "/api/telnyx/phone",
+  });
   const read = await readTelnyxWebhook(request);
-  if (!read.ok) return read.response;
+  if (!read.ok) {
+    phoneServerLog("telnyx-webhook", "post_rejected_auth");
+    return read.response;
+  }
 
   const eventType = telnyxEventType(read.payload);
   const eventId = telnyxEventId(read.payload);
@@ -30,31 +37,67 @@ export async function POST(request: Request) {
         : null;
 
   const workspaceId = await resolveWorkspaceForPhoneEvent(to);
+  const direction = String(eventPayload.direction || "");
+  const callControlId = eventPayload.call_control_id
+    ? String(eventPayload.call_control_id)
+    : null;
+
+  phoneServerLog("telnyx-webhook", "event_parsed", {
+    eventType,
+    eventId: eventId || null,
+    direction,
+    to: maskE164(to),
+    workspaceId,
+    callControlId: callControlId ? `${callControlId.slice(0, 8)}…` : null,
+  });
 
   if (eventId) {
     const prisma = getPrisma();
     const exists = await prisma.telnyxWebhookDedup.findUnique({ where: { eventId } });
-    if (exists) return NextResponse.json({ ok: true, deduped: true });
+    if (exists) {
+      phoneServerLog("telnyx-webhook", "deduped", { eventId });
+      return NextResponse.json({ ok: true, deduped: true });
+    }
     await prisma.telnyxWebhookDedup.create({
       data: { eventId, eventType, workspaceId },
     });
+    phoneServerLog("telnyx-webhook", "dedup_stored", { eventId, eventType });
+  } else {
+    phoneServerLog("telnyx-webhook", "no_event_id");
   }
 
-  await processDueInboundRingTimeouts(workspaceId).catch(() => undefined);
+  await processDueInboundRingTimeouts(workspaceId).catch((err) => {
+    phoneServerLog("telnyx-webhook", "ring_timeout_processor_error", {
+      error: err instanceof Error ? err.message : "unknown",
+    });
+  });
 
   if (eventType === "call.initiated" && eventPayload.direction === "incoming") {
     const from = String(eventPayload.from || "");
     const toNumber = String(eventPayload.to || to || "");
-    await handleInboundCall({
+    phoneServerLog("telnyx-webhook", "inbound_initiated", {
+      from: maskE164(from),
+      to: maskE164(toNumber),
+      workspaceId,
+      callControlId: callControlId ? `${callControlId.slice(0, 8)}…` : null,
+    });
+    const call = await handleInboundCall({
       workspaceId,
       fromE164: from,
       toE164: toNumber,
-      telnyxCallControlId: eventPayload.call_control_id
-        ? String(eventPayload.call_control_id)
-        : undefined,
+      telnyxCallControlId: callControlId || undefined,
+    });
+    phoneServerLog("telnyx-webhook", "inbound_handled", {
+      humanCallId: call.id,
+      status: call.status,
+      metadata: call.metadata,
     });
   }
 
   const result = await processHumanCallWebhookEvent({ eventType, eventPayload });
+  phoneServerLog("telnyx-webhook", "event_processed", {
+    eventType,
+    resultOk: (result as { ok?: boolean }).ok ?? true,
+  });
   return NextResponse.json({ ok: true, result });
 }

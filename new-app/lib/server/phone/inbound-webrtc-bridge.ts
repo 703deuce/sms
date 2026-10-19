@@ -1,6 +1,7 @@
 import { telnyxRequest } from "@/lib/server/telnyx/client";
 import { isTelnyxPhoneConfigured } from "@/lib/server/phone/calls-service";
 import { encodeTelnyxClientState, telnyxCallAction } from "@/lib/server/phone/telnyx-call-actions";
+import { maskE164, phoneServerLog } from "@/lib/server/phone/phone-log";
 
 /**
  * When inbound hits Call Control (webhook) but the browser uses WebRTC credentials,
@@ -14,6 +15,13 @@ export async function bridgeInboundCallToWebRtc(input: {
   humanCallId: string;
   ringTimeoutSec?: number;
 }): Promise<{ ok: boolean; reason?: string }> {
+  phoneServerLog("inbound-webrtc-bridge", "start", {
+    humanCallId: input.humanCallId,
+    workspaceId: input.workspaceId,
+    businessLine: maskE164(input.businessLineE164),
+    callControlPrefix: input.telnyxCallControlId.slice(0, 8),
+  });
+
   if (!isTelnyxPhoneConfigured()) return { ok: false, reason: "telnyx_not_configured" };
 
   const connectionId = process.env.TELNYX_CONNECTION_ID?.trim();
@@ -40,14 +48,33 @@ export async function bridgeInboundCallToWebRtc(input: {
     inboundBridge: true,
   });
 
-  await telnyxCallAction(input.telnyxCallControlId, "answer");
-  await telnyxCallAction(input.telnyxCallControlId, "dial", {
-    to: `sip:${sipUsername}@sip.telnyx.com`,
-    from: input.businessLineE164,
-    connection_id: connectionId,
-    client_state: clientState,
-    timeout_secs: timeout,
-  });
-
-  return { ok: true };
+  try {
+    await telnyxCallAction(input.telnyxCallControlId, "answer");
+    phoneServerLog("inbound-webrtc-bridge", "answered_pstn_leg", {
+      humanCallId: input.humanCallId,
+    });
+    await telnyxCallAction(input.telnyxCallControlId, "dial", {
+      to: `sip:${sipUsername}@sip.telnyx.com`,
+      from: input.businessLineE164,
+      connection_id: connectionId,
+      client_state: clientState,
+      timeout_secs: timeout,
+    });
+    phoneServerLog("inbound-webrtc-bridge", "dialed_sip_webrtc", {
+      humanCallId: input.humanCallId,
+      sipUser: `${sipUsername.slice(0, 4)}…`,
+      timeoutSecs: timeout,
+      connectionIdPrefix: connectionId.slice(0, 8),
+    });
+    return { ok: true };
+  } catch (err) {
+    phoneServerLog("inbound-webrtc-bridge", "bridge_failed", {
+      humanCallId: input.humanCallId,
+      error: err instanceof Error ? err.message : "unknown",
+    });
+    return {
+      ok: false,
+      reason: err instanceof Error ? err.message : "bridge_failed",
+    };
+  }
 }

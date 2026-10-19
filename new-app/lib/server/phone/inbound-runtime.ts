@@ -5,6 +5,7 @@ import { getCallRouting } from "@/lib/server/phone/routing";
 import { encodeTelnyxClientState, telnyxCallAction } from "@/lib/server/phone/telnyx-call-actions";
 import { leaveVoicemailOnCall } from "@/lib/server/phone/voicemail-runtime";
 import { isTelnyxPhoneConfigured } from "@/lib/server/phone/calls-service";
+import { maskE164, phoneServerLog } from "@/lib/server/phone/phone-log";
 
 async function resolveContactId(workspaceId: string, phone: string) {
   const prisma = getPrisma();
@@ -63,6 +64,15 @@ export async function processInboundCallInitiated(input: {
   const routing = await getCallRouting(input.workspaceId);
   const route = await decideInboundRoute(input.workspaceId);
   const timeoutAt = new Date(Date.now() + ringTimeoutMs(routing));
+
+  phoneServerLog("inbound-runtime", "route_decided", {
+    workspaceId: input.workspaceId,
+    mode: route.mode,
+    from: maskE164(input.fromE164),
+    to: maskE164(input.toE164),
+    hasCallControlId: Boolean(input.telnyxCallControlId),
+    ringTimeoutAt: route.mode === "ring_browser" ? timeoutAt.toISOString() : null,
+  });
 
   const call = await prisma.humanCall.create({
     data: {
@@ -136,6 +146,11 @@ export async function processInboundCallInitiated(input: {
         ok: false as const,
         reason: err instanceof Error ? err.message : "bridge_failed",
       }));
+      phoneServerLog("inbound-runtime", "webrtc_bridge_result", {
+        humanCallId: call.id,
+        ok: result.ok,
+        reason: result.ok ? undefined : result.reason,
+      });
       if (!result.ok) {
         await prisma.humanCall.update({
           where: { id: call.id },
@@ -147,6 +162,11 @@ export async function processInboundCallInitiated(input: {
           },
         });
       }
+    } else {
+      phoneServerLog("inbound-runtime", "webrtc_bridge_skipped", {
+        humanCallId: call.id,
+        reason: "PHONE_INBOUND_BRIDGE_WEBRTC=0",
+      });
     }
   }
 

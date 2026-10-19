@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import crypto from "node:crypto";
+import { phoneServerLog } from "@/lib/server/phone/phone-log";
 
 export function telnyxEventType(payload: unknown): string {
   const root = (payload || {}) as Record<string, unknown>;
@@ -23,11 +24,13 @@ export async function readTelnyxWebhook(request: Request): Promise<
   try {
     payload = JSON.parse(rawBody);
   } catch {
+    phoneServerLog("webhook-auth", "reject_invalid_json");
     return { ok: false, response: new NextResponse("Invalid JSON", { status: 400 }) };
   }
 
   const publicKey = process.env.TELNYX_PUBLIC_KEY?.trim();
   if (!publicKey) {
+    phoneServerLog("webhook-auth", "accept_unsigned", { bodyBytes: rawBody.length });
     return { ok: true, rawBody, payload };
   }
 
@@ -38,6 +41,10 @@ export async function readTelnyxWebhook(request: Request): Promise<
     request.headers.get("telnyx-timestamp") || request.headers.get("x-telnyx-timestamp");
 
   if (!signature || !timestamp) {
+    phoneServerLog("webhook-auth", "reject_missing_signature", {
+      hasSignature: Boolean(signature),
+      hasTimestamp: Boolean(timestamp),
+    });
     return { ok: false, response: new NextResponse("Missing signature", { status: 403 }) };
   }
 
@@ -57,11 +64,16 @@ export async function readTelnyxWebhook(request: Request): Promise<
       Buffer.from(signature, "base64"),
     );
     if (!ok) {
+      phoneServerLog("webhook-auth", "reject_invalid_signature");
       return { ok: false, response: new NextResponse("Invalid signature", { status: 403 }) };
     }
-  } catch {
+  } catch (err) {
+    phoneServerLog("webhook-auth", "reject_signature_verify_error", {
+      error: err instanceof Error ? err.message : "verify_failed",
+    });
     return { ok: false, response: new NextResponse("Invalid signature", { status: 403 }) };
   }
 
+  phoneServerLog("webhook-auth", "accept_signed", { bodyBytes: rawBody.length });
   return { ok: true, rawBody, payload };
 }

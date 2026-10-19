@@ -13,6 +13,7 @@ import {
   registerOutboundCall,
   saveRouting,
 } from '@/lib/phone-api'
+import { phoneClientLog } from '@/lib/phone-client-log'
 
 type CallStatus = 'idle' | 'connecting' | 'ringing' | 'live' | 'ended' | 'failed'
 
@@ -121,9 +122,12 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false
     async function boot() {
       setWebrtcStatus('connecting')
+      phoneClientLog('webrtc', 'boot_start')
       try {
         const tokenRes = await fetchWebRtcToken()
+        phoneClientLog('webrtc', 'token_fetched', { mode: tokenRes.mode, hasToken: Boolean(tokenRes.loginToken) })
         if (tokenRes.mode !== 'telnyx' || !tokenRes.loginToken) {
+          phoneClientLog('webrtc', 'token_failed', { error: tokenRes.error })
           setWebrtcStatus('error')
           setWebrtcError(tokenRes.error || 'WebRTC credentials are not configured')
           return
@@ -141,6 +145,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         telnyxClientRef.current = client
 
         client.on('telnyx.ready', () => {
+          phoneClientLog('webrtc', 'telnyx_ready')
           if (!cancelled) {
             setWebrtcStatus('ready')
             setWebrtcError(null)
@@ -148,6 +153,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         })
         client.on('telnyx.error', (err: unknown) => {
           const msg = err instanceof Error ? err.message : 'Telnyx client error'
+          phoneClientLog('webrtc', 'telnyx_error', { message: msg })
           setWebrtcStatus('error')
           setWebrtcError(msg)
         })
@@ -166,6 +172,12 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
             }
           }) => {
             const call = notification.call
+            phoneClientLog('webrtc', 'notification', {
+              type: notification.type,
+              callId: call?.id,
+              direction: call?.direction,
+              state: call?.state,
+            })
             if (!call?.id) return
 
             if (
@@ -176,10 +188,14 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
               const current = activeCallRef.current
               const hasActive =
                 current && current.status !== 'ended' && current.status !== 'failed'
-              if (hasActive) return
+              if (hasActive) {
+                phoneClientLog('webrtc', 'inbound_ignored_busy')
+                return
+              }
               const webrtcId = call.id
               const from = call.remoteCallerNumber || 'Unknown'
               const to = call.localCallerNumber || ''
+              phoneClientLog('webrtc', 'inbound_ringing_ui', { webrtcId, from, to })
               void fetchCalls({ direction: 'inbound', limit: 5, filter: undefined }).then((res) => {
                 const digits = from.replace(/\D/g, '').slice(-10)
                 const match = res.data.find(
@@ -215,8 +231,10 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
           },
         )
 
+        phoneClientLog('webrtc', 'connecting')
         client.connect()
       } catch (e) {
+        phoneClientLog('webrtc', 'boot_failed', { error: e instanceof Error ? e.message : 'unknown' })
         setWebrtcStatus('error')
         setWebrtcError(e instanceof Error ? e.message : 'Failed to initialize WebRTC')
       }
@@ -335,6 +353,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const answerIncoming = useCallback(() => {
     const inc = incomingCall
     if (!inc) return
+    phoneClientLog('webrtc', 'inbound_answer_clicked', { humanCallId: inc.humanCallId, webrtcId: inc.webrtcId })
     inc.webrtcCall.answer?.()
     telnyxCallRef.current = inc.webrtcCall
     activeWebrtcIdRef.current = inc.webrtcId
@@ -362,6 +381,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const rejectIncoming = useCallback(() => {
     const inc = incomingCall
     if (!inc) return
+    phoneClientLog('webrtc', 'inbound_reject_clicked', { humanCallId: inc.humanCallId })
     inc.webrtcCall.hangup?.()
     if (inc.humanCallId) {
       void registerInboundReject(inc.humanCallId).catch(() => undefined)
