@@ -16,6 +16,9 @@ import { resolveWorkspaceId } from '@/lib/server/workspace'
 
 export const metadata = { title: 'Phone' }
 
+/** Avoid static prerender at build time (DB pool + live metrics). */
+export const dynamic = 'force-dynamic'
+
 const NUMBER_STATUS = {
   active: { label: 'Active', tone: 'success' as const },
   pending: { label: 'Pending verification', tone: 'warning' as const },
