@@ -7,7 +7,7 @@ export function dispatchRuleNameForDid(e164: string): string {
   return `${DISPATCH_PREFIX}${digits || "unknown"}`;
 }
 
-function e164LookupVariants(e164: string): string[] {
+export function e164VariantsForDispatch(e164: string): string[] {
   const digits = e164.replace(/\D/g, "");
   const plus = digits ? `+${digits}` : e164;
   const e164Norm =
@@ -15,7 +15,7 @@ function e164LookupVariants(e164: string): string[] {
   return [...new Set([e164Norm, e164, digits, plus].filter(Boolean))];
 }
 
-function ruleCoversDidOnTrunk(
+export function ruleDispatchCoversDid(
   rule: SdkDispatchRuleInfo,
   e164: string,
   trunkId: string,
@@ -24,24 +24,23 @@ function ruleCoversDidOnTrunk(
   if (!trunks.includes(trunkId)) return false;
   const nums = rule.numbers || [];
   if (nums.length === 0) return true;
-  const variants = e164LookupVariants(e164);
+  const variants = e164VariantsForDispatch(e164);
   return variants.some((v) => nums.includes(v));
 }
 
-export function findDispatchRuleForDid(
+/** Canonical per-DID rule for Voice V3 receptionist — never the shared inbound rule. */
+export function findPerDidDispatchRule(
   rules: SdkDispatchRuleInfo[],
   e164: string,
-  trunkId: string,
 ): SdkDispatchRuleInfo | null {
-  const byName = rules.find((r) => r.name === dispatchRuleNameForDid(e164));
-  if (byName) return byName;
-  return rules.find((r) => ruleCoversDidOnTrunk(r, e164, trunkId)) || null;
+  return rules.find((r) => r.name === dispatchRuleNameForDid(e164)) || null;
 }
 
 export function isDuplicateDispatchRuleError(message: string): boolean {
   return /already exists in dispatch rule/i.test(message);
 }
 
-export function e164VariantsForDispatch(e164: string): string[] {
-  return e164LookupVariants(e164);
+export function numbersWithoutE164(numbers: string[], e164: string): string[] {
+  const variants = new Set(e164VariantsForDispatch(e164));
+  return numbers.filter((n) => !variants.has(n));
 }
