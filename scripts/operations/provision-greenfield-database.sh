@@ -34,8 +34,22 @@ if [[ -z "${GREENFIELD_ALLOW_LEGACY_HOST:-}" && -n "${LEGACY_DATABASE_URL:-}" ]]
   fi
 fi
 
-echo "[greenfield] Applying Prisma migrations to greenfield database..."
+echo "[greenfield] Applying schema to greenfield database..."
 export DATABASE_URL="$GREENFIELD_DATABASE_URL"
+
+# This repo's migration folder is incremental (post-baseline). Empty DBs need full
+# schema from schema.prisma, then migration history marked applied for future deploys.
+echo "[greenfield] prisma db push (materialize full schema)..."
+npx prisma db push --skip-generate --accept-data-loss
+
+echo "[greenfield] Baseline _prisma_migrations (mark committed migrations applied)..."
+for dir in prisma/migrations/*/; do
+  name="$(basename "$dir")"
+  [[ "$name" == "migration_lock.toml" ]] && continue
+  npx prisma migrate resolve --applied "$name" >/dev/null 2>&1 || true
+done
+
+echo "[greenfield] prisma migrate deploy (should be no-op)..."
 bash scripts/deploy-db-migrations.sh
 
 echo "[greenfield] Done. Run parity check:"

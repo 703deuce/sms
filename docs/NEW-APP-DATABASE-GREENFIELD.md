@@ -11,7 +11,7 @@ This is **not** `pg_dump` / `pg_restore` of rows. It is **`prisma migrate deploy
 | | Legacy | Greenfield |
 |---|--------|------------|
 | **Purpose** | Historical production data, old monolith if still needed | Clean slate for Transovo `new-app` + rewired workers |
-| **Env (suggested)** | `LEGACY_DATABASE_URL` (or leave production monolith on `DATABASE_URL` until cutover) | `GREENFIELD_DATABASE_URL` → becomes `DATABASE_URL` on `new-app` when wired |
+| **Env (suggested)** | `LEGACY_DATABASE_URL` on Coolify (saved from old `DATABASE_URL`) | `DATABASE_URL` → `.../transovo_greenfield` (default name `transovo_greenfield`) |
 | **Data** | Unchanged | Empty after provision (except `_prisma_migrations`) |
 | **Schema** | Current production | Same migration chain from `prisma/migrations/` in this repo |
 | **Supabase API** | Existing project keys | **New project** recommended (API + Storage isolated) |
@@ -35,24 +35,39 @@ Optional later: **selective** data migration (e.g. one platform sender row) is a
 
 ## Operator workflow
 
-### 1. Create empty Postgres
+### 1. Create empty Postgres (same Supabase project)
 
-**Supabase (recommended):** New project → Settings → Database → **Session pooler** URI (port 5432). URL-encode password special characters.
+**Preferred:** Second database on the **same** Supabase Postgres instance as legacy (legacy data stays in `postgres`, greenfield in `transovo_greenfield`).
 
-**Self-hosted:** `CREATE DATABASE transovo_greenfield;` with a dedicated role.
+```bash
+# From Cloud Agent (uses Coolify app .env for credentials; does not print secrets)
+bash scripts/operations/bootstrap-greenfield-on-coolify.sh
 
-Store the URI as `GREENFIELD_DATABASE_URL` in your secret manager (never commit).
+# Recreate from scratch after a failed attempt
+GREENFIELD_RECREATE=1 bash scripts/operations/bootstrap-greenfield-on-coolify.sh
+```
+
+Manual equivalent on any host with `psql` + repo:
+
+```bash
+export COOLIFY_ENV_FILE=/path/to/coolify/.env   # or LEGACY_DATABASE_URL=...
+bash scripts/operations/create-greenfield-database-same-instance.sh
+export GREENFIELD_DATABASE_URL="$(cat /tmp/transovo-greenfield-database.url)"
+GREENFIELD_ALLOW_LEGACY_HOST=1 npm run db:provision-greenfield
+```
+
+**Alternate:** New Supabase project → Session pooler URI → `GREENFIELD_DATABASE_URL` (only if `CREATE DATABASE` is not available on your plan).
 
 ### 2. Apply schema (no data)
 
 From repo root, against the **greenfield** URL only:
 
 ```bash
-export GREENFIELD_DATABASE_URL='postgresql://...'
-bash scripts/operations/provision-greenfield-database.sh
+export GREENFIELD_DATABASE_URL='postgresql://...same-host.../transovo_greenfield'
+GREENFIELD_ALLOW_LEGACY_HOST=1 npm run db:provision-greenfield
 ```
 
-This runs `prisma migrate deploy` (same script path as production: `scripts/deploy-db-migrations.sh`).
+Empty databases use **`prisma db push`** (full `schema.prisma`), then baseline `_prisma_migrations`, then `migrate deploy` — because migration files in this repo are incremental after the original baseline.
 
 **Do not** point this at legacy production unless you intend to mutate that database.
 
