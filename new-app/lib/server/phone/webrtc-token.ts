@@ -1,5 +1,23 @@
 import { telnyxRequest } from "@/lib/server/telnyx/client";
 
+function parseTelephonyCredentialToken(res: unknown): string | null {
+  if (typeof res === "string") {
+    const trimmed = res.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  if (!res || typeof res !== "object") return null;
+  const data = (res as { data?: unknown }).data;
+  if (typeof data === "string") {
+    const trimmed = data.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  if (data && typeof data === "object" && "token" in data) {
+    const t = (data as { token?: unknown }).token;
+    return typeof t === "string" && t.trim().length > 0 ? t.trim() : null;
+  }
+  return null;
+}
+
 export async function getWebRtcLoginToken() {
   const credentialId = process.env.TELNYX_TELEPHONY_CREDENTIAL_ID?.trim();
   if (!credentialId) {
@@ -7,14 +25,12 @@ export async function getWebRtcLoginToken() {
   }
 
   try {
-    const res = await telnyxRequest<{ data: string | { token?: string } }>(
+    // Telnyx returns HTTP 201 with a plain-text JWT body (not JSON). telnyxRequest keeps that as a string.
+    const res = await telnyxRequest<unknown>(
       `/telephony_credentials/${credentialId}/token`,
       { method: "POST", body: {} },
     );
-    const token =
-      typeof res.data === "string"
-        ? res.data
-        : (res as { data?: { token?: string } }).data?.token;
+    const token = parseTelephonyCredentialToken(res);
     if (!token) {
       return { mode: "error" as const, loginToken: null, error: "Telnyx returned no login token" };
     }

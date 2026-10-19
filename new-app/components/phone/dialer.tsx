@@ -63,8 +63,7 @@ export function Dialer({ initialTo }: { initialTo?: string }) {
   }, [value, e164])
 
   const call = (number: string, name: string) => {
-    const ok = startCall({ name, number, callerId, source: 'dialer' })
-    if (!ok) toast.error('You are already on a call')
+    startCall({ name, number, callerId, source: 'dialer' })
   }
 
   const busy = !!activeCall && activeCall.status !== 'ended' && activeCall.status !== 'failed'
