@@ -1,12 +1,16 @@
 import { telnyxRequest } from "@/lib/server/telnyx/client";
 import { isTelnyxPhoneConfigured } from "@/lib/server/phone/calls-service";
-import { encodeTelnyxClientState, telnyxCallAction } from "@/lib/server/phone/telnyx-call-actions";
+import {
+  encodeTelnyxClientState,
+  telnyxCallAction,
+  telnyxCallControlPath,
+} from "@/lib/server/phone/telnyx-call-actions";
 import { maskE164, phoneServerLog } from "@/lib/server/phone/phone-log";
+import { buildWebRtcAgentSipUri } from "@/lib/server/phone/telnyx-webrtc-sip";
 
 /**
- * When inbound hits Call Control (webhook) but the browser uses WebRTC credentials,
- * Telnyx does not always deliver a client invite unless we bridge the PSTN leg to the
- * credential SIP user. Numbers on the credential connection alone may not need this.
+ * Inbound on a Call Control application does not ring WebRTC clients by itself.
+ * Telnyx docs: answer the PSTN leg, then transfer to the agent's telephony-credential SIP URI.
  */
 export async function bridgeInboundCallToWebRtc(input: {
   telnyxCallControlId: string;
@@ -24,19 +28,25 @@ export async function bridgeInboundCallToWebRtc(input: {
 
   if (!isTelnyxPhoneConfigured()) return { ok: false, reason: "telnyx_not_configured" };
 
-  const connectionId = process.env.TELNYX_CONNECTION_ID?.trim();
   const credentialId = process.env.TELNYX_TELEPHONY_CREDENTIAL_ID?.trim();
-  if (!connectionId || !credentialId) {
-    return { ok: false, reason: "missing_connection_or_credential" };
+  if (!credentialId) {
+    return { ok: false, reason: "missing_telephony_credential_id" };
   }
 
   const sipOverride = process.env.TELNYX_WEBRTC_SIP_USERNAME?.trim();
   let sipUsername = sipOverride;
   if (!sipUsername) {
-    const cred = await telnyxRequest<{ data?: { sip_username?: string } }>(
-      `/telephony_credentials/${credentialId}`,
-    );
+    const cred = await telnyxRequest<{
+      data?: { sip_username?: string; resource_id?: string };
+    }>(`/telephony_credentials/${credentialId}`);
     sipUsername = cred.data?.sip_username?.trim() || "";
+    const credConn = cred.data?.resource_id;
+    if (credConn) {
+      phoneServerLog("inbound-webrtc-bridge", "credential_connection", {
+        resourceId: credConn,
+        callControlAppId: process.env.TELNYX_CONNECTION_ID?.trim() || null,
+      });
+    }
   }
   if (!sipUsername) return { ok: false, reason: "no_sip_username" };
 
@@ -48,23 +58,29 @@ export async function bridgeInboundCallToWebRtc(input: {
     inboundBridge: true,
   });
 
+  const to = buildWebRtcAgentSipUri(sipUsername);
+
   try {
     await telnyxCallAction(input.telnyxCallControlId, "answer");
     phoneServerLog("inbound-webrtc-bridge", "answered_pstn_leg", {
       humanCallId: input.humanCallId,
     });
-    await telnyxCallAction(input.telnyxCallControlId, "dial", {
-      to: `sip:${sipUsername}@sip.telnyx.com`,
-      from: input.businessLineE164,
-      connection_id: connectionId,
-      client_state: clientState,
-      timeout_secs: timeout,
+
+    await telnyxRequest(telnyxCallControlPath(input.telnyxCallControlId, "/actions/transfer"), {
+      method: "POST",
+      body: {
+        to,
+        from: input.businessLineE164,
+        timeout_secs: timeout,
+        client_state: clientState,
+        media_encryption: "SRTP",
+      },
     });
-    phoneServerLog("inbound-webrtc-bridge", "dialed_sip_webrtc", {
+    phoneServerLog("inbound-webrtc-bridge", "transferred_to_webrtc_sip", {
       humanCallId: input.humanCallId,
       sipUser: `${sipUsername.slice(0, 4)}…`,
       timeoutSecs: timeout,
-      connectionIdPrefix: connectionId.slice(0, 8),
+      toPattern: "sip:***@sip.telnyx.com;secure=srtp",
     });
     return { ok: true };
   } catch (err) {

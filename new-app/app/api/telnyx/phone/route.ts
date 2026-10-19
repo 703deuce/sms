@@ -81,17 +81,23 @@ export async function POST(request: Request) {
       workspaceId,
       callControlId: callControlId ? `${callControlId.slice(0, 8)}…` : null,
     });
-    const call = await handleInboundCall({
-      workspaceId,
-      fromE164: from,
-      toE164: toNumber,
-      telnyxCallControlId: callControlId || undefined,
-    });
-    phoneServerLog("telnyx-webhook", "inbound_handled", {
-      humanCallId: call.id,
-      status: call.status,
-      metadata: call.metadata,
-    });
+    try {
+      const call = await handleInboundCall({
+        workspaceId,
+        fromE164: from,
+        toE164: toNumber,
+        telnyxCallControlId: callControlId || undefined,
+      });
+      phoneServerLog("telnyx-webhook", "inbound_handled", {
+        humanCallId: call.id,
+        status: call.status,
+        metadata: call.metadata,
+      });
+    } catch (err) {
+      phoneServerLog("telnyx-webhook", "inbound_handler_error", {
+        error: err instanceof Error ? err.message : "unknown",
+      });
+    }
   }
 
   const result = await processHumanCallWebhookEvent({ eventType, eventPayload });
