@@ -66,6 +66,7 @@ From repo root (same as Coolify install/build phases):
 
 ```bash
 cd new-app && npx --yes pnpm@12.3.4 install --frozen-lockfile
+bash scripts/deploy-db-migrations.sh   # when DATABASE_URL is set (Coolify production)
 cd new-app && bash scripts/coolify-build.sh
 ```
 

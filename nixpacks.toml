@@ -16,6 +16,7 @@ cmds = [
 
 [phases.build]
 cmds = [
+  "bash scripts/deploy-db-migrations.sh",
   "cd new-app && bash scripts/coolify-build.sh",
 ]
 
