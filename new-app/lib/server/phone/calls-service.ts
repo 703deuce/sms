@@ -255,7 +255,15 @@ export async function registerInboundAnswer(input: {
   });
   if (!call) throw new Error("Call not found");
 
+  const { telnyxCallAction } = await import("@/lib/server/phone/telnyx-call-actions");
+  const { maybeStartCallRecordingOnAnswer } = await import("@/lib/server/phone/recording-runtime");
+
+  if (call.telnyxCallControlId) {
+    await telnyxCallAction(call.telnyxCallControlId, "answer").catch(() => undefined);
+  }
+
   const notes = `${(call.notes || "").replace(/webrtc:[^\s]+/g, "").trim()} ${input.webrtcCallId ? `webrtc:${input.webrtcCallId}` : ""}`.trim();
+  const meta = (call.metadata || {}) as Record<string, unknown>;
   const updated = await prisma.humanCall.update({
     where: { id: call.id },
     data: {
@@ -264,8 +272,16 @@ export async function registerInboundAnswer(input: {
       mediaMode: "webrtc",
       answeredAt: call.answeredAt || new Date(),
       notes,
+      metadata: { ...meta, ringTimeoutAt: null },
     },
   });
+
+  await maybeStartCallRecordingOnAnswer({
+    workspaceId: input.workspaceId,
+    humanCallId: call.id,
+    telnyxCallControlId: call.telnyxCallControlId,
+  });
+
   return updated;
 }
 
@@ -308,41 +324,8 @@ export async function handleInboundCall(input: {
   toE164: string;
   telnyxCallControlId?: string;
 }) {
-  const prisma = getPrisma();
-  const from = normalizeE164(input.fromE164);
-  const contactId = await resolveContactId(input.workspaceId, from);
-  const pn = await resolvePhoneNumberId(input.workspaceId, input.toE164);
-
-  const call = await prisma.humanCall.create({
-    data: {
-      workspaceId: input.workspaceId,
-      from,
-      to: input.toE164,
-      direction: "inbound",
-      status: "ringing",
-      telnyxCallControlId: input.telnyxCallControlId,
-      callerIdNumber: input.toE164,
-      phoneNumberId: pn?.id ?? null,
-      contactId,
-      source: "inbound",
-      callbackNeeded: true,
-    },
-  });
-
-  if (input.telnyxCallControlId && isTelnyxPhoneConfigured()) {
-    await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/update_client_state`, {
-      method: "POST",
-      body: {
-        client_state: encodeClientState({
-          workspaceId: input.workspaceId,
-          humanCallId: call.id,
-          kind: "human",
-        }),
-      },
-    }).catch(() => undefined);
-  }
-
-  return call;
+  const { processInboundCallInitiated } = await import("@/lib/server/phone/inbound-runtime");
+  return processInboundCallInitiated(input);
 }
 
 function decodeClientState(raw: unknown): Record<string, unknown> {
@@ -363,6 +346,19 @@ export async function processHumanCallWebhookEvent(input: {
   const eventControlId = input.eventPayload.call_control_id
     ? String(input.eventPayload.call_control_id)
     : "";
+
+  if (
+    input.eventType === "call.playback.ended" ||
+    input.eventType === "call.speak.ended"
+  ) {
+    const { handleVoicemailGreetingMediaEnded } = await import("@/lib/server/phone/voicemail-runtime");
+    const vm = await handleVoicemailGreetingMediaEnded({
+      eventType: input.eventType,
+      eventPayload: input.eventPayload,
+      clientState,
+    });
+    if (vm.handled) return { ok: true, voicemail: true };
+  }
 
   let call =
     clientState.humanCallId
@@ -386,25 +382,53 @@ export async function processHumanCallWebhookEvent(input: {
 
   const patch: Record<string, unknown> = {};
   const nextStatus = statusMap[input.eventType];
-  if (nextStatus) patch.status = nextStatus;
-  if (patch.status === "completed") patch.endedAt = new Date();
+  const wasAnswered = Boolean(call.answeredAt) || call.status === "in_progress";
+  if (nextStatus && !(input.eventType === "call.hangup" && call.status === "voicemail")) {
+    patch.status = nextStatus;
+  }
+  if (patch.status === "completed" && call.status !== "voicemail") patch.endedAt = new Date();
   if (input.eventType === "call.answered" && !call.answeredAt) {
     patch.answeredAt = new Date();
+    const { maybeStartCallRecordingOnAnswer } = await import("@/lib/server/phone/recording-runtime");
+    await maybeStartCallRecordingOnAnswer({
+      workspaceId: call.workspaceId,
+      humanCallId: call.id,
+      telnyxCallControlId: call.telnyxCallControlId || eventControlId,
+    });
   }
   if (input.eventType === "call.recording.saved") {
     const urls = input.eventPayload.recording_urls as Record<string, string> | undefined;
-    patch.recordingUrl = urls?.mp3 || urls?.wav || null;
+    const recordingUrl = urls?.mp3 || urls?.wav || null;
+    patch.recordingUrl = recordingUrl;
+    const isVoicemail =
+      call.status === "voicemail" || String(call.disposition || "").startsWith("voicemail:");
+    if (recordingUrl && isVoicemail) {
+      const durationMs =
+        Number(
+          (input.eventPayload as { recording_duration_ms?: number }).recording_duration_ms ||
+            (input.eventPayload as { duration_millis?: number }).duration_millis ||
+            0,
+        ) || null;
+      const { attachVoicemailRecording } = await import("@/lib/server/phone/voicemail-runtime");
+      await attachVoicemailRecording({
+        workspaceId: call.workspaceId,
+        humanCallId: call.id,
+        recordingUrl,
+        durationSeconds: durationMs ? Math.round(durationMs / 1000) : null,
+      });
+    }
   }
 
   const hangupCause = input.eventPayload.hangup_cause
     ? String(input.eventPayload.hangup_cause)
     : "";
-  if (input.eventType === "call.hangup" && hangupCause) {
+  if (input.eventType === "call.hangup") {
     if (hangupCause.includes("busy")) patch.status = "busy";
-    if (hangupCause.includes("no_answer")) {
-      patch.status = "completed";
-      patch.disposition = "no_answer";
-      patch.callbackNeeded = call.direction === "inbound";
+    if (!wasAnswered && call.direction === "inbound" && call.status !== "voicemail") {
+      patch.status = "missed";
+      patch.disposition = call.disposition || `missed:${hangupCause || "no_answer"}`;
+      patch.callbackNeeded = true;
+      patch.endedAt = new Date();
     }
   }
 

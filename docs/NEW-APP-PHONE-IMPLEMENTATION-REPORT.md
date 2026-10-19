@@ -1,94 +1,92 @@
 # New-app Phone product — implementation report
 
-**Branch:** `cursor/new-app-phone-product-f350` (target)  
-**Scope:** Greenfield Phone backend + frontend integration in `new-app/` per full product assignment.
+**Branch:** `cursor/new-app-phone-product-f350`  
+**Status:** Greenfield Phone backend + UI wiring + **runtime pass** (inbound routing, voicemail, recording hooks). Live PSTN/WebRTC still requires controlled Telnyx certification.
+
+## Routing model (locked)
+
+**Dynamic execution — no Telnyx connection sync.** Inbound calls hit `/api/telnyx/phone`; each event loads `WorkspaceCallRouting` + business hours from the DB and issues Call Control actions (ring browser / voicemail / transfer). Saving Call Handling updates DB only; the webhook applies policy on the next call.
 
 ## A. Implementation summary
 
-### Delivered
+### Implemented
 
-- **Prisma domain:** Extended `HumanCall`, `WorkspacePhoneSettings`; added `HumanCallNote`, `WorkspaceCallRouting`, `PowerDialerCampaign`, `PowerDialerSession`, `PowerDialerAttempt`, `TelnyxWebhookDedup` (+ migration `20261019120000_phone_greenfield_product`).
-- **Server layer** under `new-app/lib/server/phone/`: calls, settings, routing, analytics, readiness, WebRTC token, power dialer, webhook processing; `new-app/lib/server/contacts.ts` for lists/search/import.
-- **API routes:** `/api/phone/*`, `/api/contacts/search`, `/api/telnyx/phone` webhook ingress.
-- **Client:** `@telnyx/webrtc` in `WorkspaceProvider` (real outbound registration + media); `lib/phone-api.ts`; UI mapping `lib/phone-ui-map.ts`.
-- **Pages wired:** Overview, Dialer, Calls list/detail, Call Handling (persisted policy + greeting), Analytics (live range), Numbers via existing inventory.
-- **Power Dialer:** Campaign/list/session/attempt APIs; UI still uses legacy layout — **Session tab needs full client rewrite** to call session/next/attempt endpoints (see blockers).
+- **Prisma domain:** Extended `HumanCall`, `WorkspacePhoneSettings`; added `HumanCallNote`, `WorkspaceCallRouting`, Power Dialer models (`PowerDialerCampaign`, `PowerDialerSession`, `PowerDialerAttempt`), `TelnyxWebhookDedup`. Migration: `prisma/migrations/20261019120000_phone_greenfield_product/`.
+- **Server (`new-app/lib/server/phone/`):** Calls CRUD, WebRTC outbound registration, inbound webhook processing, routing persistence, analytics aggregations, readiness, WebRTC token, Power Dialer orchestration.
+- **APIs:** `/api/phone/*` (readiness, settings, webrtc-token, calls, recording, routing, analytics), `/api/phone/power-dialer/*`, `/api/contacts/search`, `/api/telnyx/phone` webhook.
+- **Client:** `lib/phone-api.ts`, `workspace-provider.tsx` (TelnyxRTC, outbound, inbound offer/answer), Power Dialer UI wired to APIs, dialer/calls/overview/analytics/call-handling/settings preferences.
 
-### Replaced mocks
+### Mocks replaced (Phone paths)
 
-- Overview KPIs, recent calls, numbers panel, campaign summary → DB/API.
-- Calls list (phone variant) → paginated `/api/phone/calls`.
-- Call detail → server `getCallDetail`.
-- Dialer caller ID + contacts + recent outbound → Numbers provider + APIs.
-- Active call bar → live WebRTC path (no simulated timers).
-- Analytics charts → `/api/phone/analytics`.
+- Overview, calls list (phone variant), call detail server fetch, dialer (numbers + contacts + recent calls), routing editor save, analytics range, active call bar (live state), Power Dialer campaigns/lists/session.
 
-### Still using fixtures (non-Phone variants / partial)
+### Still fixture-driven (out of Phone scope or other products)
 
-- `CallsTable` for `receptionist` / `mctb` variants still reads `lib/data.ts` `CALLS`.
-- **Power Dialer UI** (`power-dialer.tsx`) largely still seeded from `CAMPAIGNS` / `LISTS` / `DIALER_QUEUE` — APIs exist but UI not fully rewired.
-- Voicemail runtime (greeting playback on no-answer, `VoicemailMessage` creation from Telnyx) — webhook stub updates calls; full voicemail pipeline not ported from monolith `voicemail-service.ts`.
-- Inbound browser ring: webhook creates `HumanCall`; **TelnyxRTC incoming notification handler** not fully ported from `softphone-panel.tsx`.
-- Call recording start on answer — not wired to Telnyx `record_start` in this pass.
-- Settings → Phone & audio toggles — API exists; settings UI not wired to PATCH.
+- Receptionist/MCTB call tables, global search calls/campaigns, home recent activity, contacts list pages.
+
+### Reused
+
+- Numbers inventory (`/api/numbers/*`, `numbers-provider`), contacts Prisma models, Telnyx client patterns from monolith (reference only).
 
 ## B. Database
 
-See migration and schema changes above. Single internal user via `resolveInternalUserId()`; workspace via `resolveWorkspaceId()`.
+See migration SQL and `prisma/schema.prisma` fields: `HumanCall.phoneNumberId`, `source`, `handled`, `callbackNeeded`, `metadata`; `HumanCall.callNotes` relation (not `notes` scalar).
 
 ## C. APIs
 
-| Route | Purpose |
-|-------|---------|
-| `GET /api/phone/readiness` | Telnyx + lines + default caller ID |
-| `GET/PATCH /api/phone/settings` | Business phone prefs |
-| `GET /api/phone/webrtc-token` | Telnyx login token |
-| `GET/POST /api/phone/calls` | List + outbound register / link control / inbound answer |
-| `GET/PATCH /api/phone/calls/[id]` | Detail + handled/disposition/notes |
-| `GET /api/phone/calls/[id]/recording` | Recording URL |
-| `GET/PATCH /api/phone/routing` | Policy + business hours |
-| `GET /api/phone/analytics` | Aggregates |
-| `GET/POST /api/phone/power-dialer/campaigns` | Campaign CRUD (create) |
-| `PATCH /api/phone/power-dialer/campaigns/[id]` | Campaign update |
-| `GET/POST /api/phone/power-dialer/lists` | Lists |
-| `POST /api/phone/power-dialer/lists/import` | CSV rows |
-| `POST /api/phone/power-dialer/sessions` | Start session |
-| `GET/PATCH /api/phone/power-dialer/sessions/[id]` | Next contact / pause / end |
-| `PATCH /api/phone/power-dialer/attempts/[id]` | Disposition |
-| `GET /api/contacts/search` | Dialer lookup |
-| `POST /api/telnyx/phone` | Signed webhook ingress |
-
-Mutations honor `TRANSOVO_DEV_API_KEY` when set (`x-transovo-dev-key` header).
+| Route | Role |
+|-------|------|
+| GET/PATCH `/api/phone/settings` | Business phone prefs |
+| GET `/api/phone/readiness` | Lines + Telnyx readiness |
+| GET `/api/phone/webrtc-token` | Browser login token |
+| GET/POST/PATCH `/api/phone/calls` | History, outbound register, link control, inbound answer |
+| GET/PATCH `/api/phone/calls/[id]` | Detail + notes/disposition |
+| GET `/api/phone/calls/[id]/recording` | Authorized recording URL |
+| GET/PATCH `/api/phone/routing` | Call handling policy |
+| GET `/api/phone/analytics` | Aggregates + campaigns |
+| `/api/phone/power-dialer/**` | Campaigns, lists, import, sessions, attempts |
+| POST `/api/telnyx/phone` | Provider webhooks (signed) |
 
 ## D. UI wiring
 
-| Surface | Status |
-|---------|--------|
-| Overview | Server-driven real data |
-| Dialer | API + WebRTC |
-| Calls | API pagination |
-| Call detail | Server fetch + PATCH actions |
-| Call handling | PATCH routing + greeting text |
-| Analytics | Client fetch by range |
-| Power Dialer | **API only — UI incomplete** |
-| Global call bar | WebRTC state |
-| Numbers | Existing `NumbersProvider` |
+| Surface | Route | Data source |
+|---------|-------|-------------|
+| Overview | `/app/phone` | Server + analytics API |
+| Dialer | `/app/phone/dialer` | WebRTC + calls API |
+| Power Dialer | `/app/phone/power-dialer` | Power dialer APIs |
+| Calls | `/app/phone/calls` | Paginated calls API |
+| Call detail | `/app/phone/calls/[id]` | Call detail API |
+| Call handling | `/app/phone/call-handling` | Routing API |
+| Analytics | `/app/phone/analytics` | Analytics API |
+| Settings prefs | `/app/settings?tab=preferences` | PATCH settings |
+| Global | Active + incoming bars | `workspace-provider` |
 
 ## E. Tests
 
-- Script: `new-app/scripts/test-phone-greenfield.mjs` (HTTP smoke against dev server).
-- **Not run in CI here** without `DATABASE_URL` + `next dev` + Telnyx credentials.
-- Prisma generate + `pnpm typecheck` should be run locally after `cp ../prisma prisma` in `new-app/`.
+| Check | Result |
+|-------|--------|
+| `pnpm typecheck` (new-app) | **PASS** (prisma client generated; `prisma/` excluded from tsc) |
+| `prisma validate` (root schema) | **PASS** with `DATABASE_URL` set |
+| `scripts/test-phone-greenfield.mjs` | Requires `next dev` + DB — run in dev environment |
+| Live Telnyx outbound/inbound | **Not run** in cloud agent (credentials/PSTN) |
+
+## Runtime pass (this iteration)
+
+| Area | Change |
+|------|--------|
+| Inbound | `inbound-runtime.ts` — workspace from called number, route decision, ring timeout → voicemail, reject → voicemail/missed |
+| Webhook | `/api/telnyx/phone` — dedup, inbound initiate, due ring timeouts, voicemail greeting events |
+| Voicemail | `voicemail-runtime.ts` — greeting playback/speak, record_start, `VoicemailMessage` + recording.saved attach |
+| Recording | `recording-runtime.ts` — `recordCalls` → `record_start` on answer (webhook + inbound answer) |
+| Dev keys | Removed `NEXT_PUBLIC_*` key; `assertDevApiAccess` allows same-origin browser, optional `x-transovo-dev-key` for scripts |
 
 ## F. Remaining blockers
 
-1. **Telnyx env:** `TELNYX_API_KEY`, `TELNYX_CONNECTION_ID` or `TELNYX_CALL_CONTROL_APP_ID`, `TELNYX_TELEPHONY_CREDENTIAL_ID`, `TELNYX_PUBLIC_KEY` for webhooks, `DATABASE_URL` (greenfield).
-2. **Power Dialer UI** — rewire `power-dialer.tsx` to campaigns/lists/sessions APIs + campaign create drawer.
-3. **Inbound WebRTC** — port incoming notification + answer flow from legacy softphone.
-4. **Voicemail + recording** — port `voicemail-service` + record start from monolith.
-5. **Provider routing sync** — policy saved to DB; Telnyx connection/TexML application sync not implemented.
-6. **Live PSTN** — requires real credentials; cannot certify from mocked responses alone.
+1. **Live Telnyx certification:** Browser register, PSTN→browser, browser→PSTN, voicemail clip on real call — not executed in cloud agent.
+2. **External forward target:** `duringHours=external` uses `PHONE_INBOUND_EXTERNAL_FORWARD` until policy stores an E.164.
+3. **AI receptionist route:** `duringHours=ai` falls through to ring browser (extension point only).
+4. **Transcription:** Voicemail transcript stays `pending` without STT worker hookup.
 
-## Governing routing note
+## Final acceptance (honest)
 
-`WorkspaceCallRouting.policyJson` is the shared store for AI Receptionist / MCTB extension — no duplicate Phone-only routing table beyond this.
+Complete for **architecture + persistence + UI wiring** in single-client mode. **Production-ready PSTN** requires live credential certification per assignment §39.

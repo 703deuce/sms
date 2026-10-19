@@ -6,11 +6,9 @@ async function parse<T>(res: Response): Promise<T> {
   return json.data as T;
 }
 
+/** Browser-safe headers only — no privileged keys in client bundles. */
 function mutatingHeaders(): HeadersInit {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  const key = process.env.NEXT_PUBLIC_TRANSOVO_DEV_API_KEY?.trim();
-  if (key) headers["x-transovo-dev-key"] = key;
-  return headers;
+  return { "Content-Type": "application/json" };
 }
 
 export async function fetchPhoneReadiness() {
@@ -290,6 +288,17 @@ export async function registerInboundAnswer(humanCallId: string, webrtcCallId?: 
     method: "POST",
     headers: mutatingHeaders(),
     body: JSON.stringify({ action: "inbound_answer", humanCallId, webrtcCallId }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || res.statusText);
+  return json.data;
+}
+
+export async function registerInboundReject(humanCallId: string) {
+  const res = await fetch("/api/phone/calls", {
+    method: "POST",
+    headers: mutatingHeaders(),
+    body: JSON.stringify({ action: "inbound_reject", humanCallId }),
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || res.statusText);

@@ -77,6 +77,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ data: updated });
     }
 
+    if (action === "inbound_reject") {
+      const { rejectInboundCall } = await import("@/lib/server/phone/inbound-runtime");
+      const updated = await rejectInboundCall({
+        workspaceId,
+        humanCallId: String(body.humanCallId || ""),
+      });
+      return NextResponse.json({ data: updated });
+    }
+
     if (action === "simulate_inbound") {
       if (process.env.NODE_ENV === "production" && !process.env.ALLOW_PHONE_TEST_INBOUND) {
         return NextResponse.json({ error: "Not available" }, { status: 403 });

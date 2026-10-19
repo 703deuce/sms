@@ -9,6 +9,7 @@ import {
   fetchWebRtcToken,
   linkCallControl,
   registerInboundAnswer,
+  registerInboundReject,
   registerOutboundCall,
   saveRouting,
 } from '@/lib/phone-api'
@@ -360,7 +361,11 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
   const rejectIncoming = useCallback(() => {
     const inc = incomingCall
-    inc?.webrtcCall.hangup?.()
+    if (!inc) return
+    inc.webrtcCall.hangup?.()
+    if (inc.humanCallId) {
+      void registerInboundReject(inc.humanCallId).catch(() => undefined)
+    }
     setIncomingCall(null)
   }, [incomingCall])
 
