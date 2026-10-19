@@ -15,11 +15,11 @@ Three **distinct** answer/bridge steps:
 
 | Step | Actor | API / SDK |
 |------|--------|-----------|
-| Answer caller | Backend | `POST /v2/calls/{caller}/actions/answer` |
+| Ring browser (PSTN still ringing) | Backend | `POST /v2/calls` with `link_to` = caller leg, `bridge_on_answer: true` — **no early answer on PSTN** |
 | Ring + answer browser | Browser | `telnyx.notification` → `call.answer()` |
-| Connect media | Backend | `POST /v2/calls/{caller}/actions/bridge` body `{ "call_control_id": "<browser leg>" }` |
+| Connect media | Telnyx | `bridge_on_answer` bridges caller ↔ agent; fallback manual `bridge` in `completeWebRtcAgentLegAnswer` |
 
-Bridge **after** browser leg `call.answered`, not when Dial returns 200.
+Bridge when the browser leg is answered, not when Dial returns 200.
 
 Official refs: [Dial](https://developers.telnyx.com/api-reference/call-commands/dial), [Bridge](https://developers.telnyx.com/api-reference/call-commands/bridge-calls), [WebRTC quickstart](https://developers.telnyx.com/development/webrtc/js-sdk/quickstart/index), [SIP URI calling](https://support.telnyx.com/en/articles/2925713-sip-uri-calling).
 

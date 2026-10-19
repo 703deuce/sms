@@ -29,6 +29,21 @@ assert.match(
   /call_control_id:\s*input\.agentCallControlId/,
   "Bridge body must use call_control_id per Telnyx Bridge API",
 );
+assert.match(
+  bridgeSrc,
+  /bridge_on_answer:\s*true/,
+  "Dial must use bridge_on_answer so PSTN is not answered before the agent picks up",
+);
+assert.match(
+  bridgeSrc,
+  /link_to:\s*input\.telnyxCallControlId/,
+  "Dial must link outbound agent leg to inbound PSTN leg",
+);
+assert.doesNotMatch(
+  bridgeSrc,
+  /bridgeInboundCallToWebRtc[\s\S]*?telnyxCallAction\(input\.telnyxCallControlId,\s*"answer"\)[\s\S]*?\/calls/,
+  "Must not answer PSTN before dialing the browser leg",
+);
 const actionsSrc = readFileSync(
   join(root, "new-app/lib/server/phone/telnyx-call-actions.ts"),
   "utf8",

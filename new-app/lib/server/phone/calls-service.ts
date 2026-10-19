@@ -435,12 +435,41 @@ export async function processHumanCallWebhookEvent(input: {
     });
   }
   if (input.eventType === "call.bridged" && awaitingWebrtcBridge) {
+    const { markInboundCallBridged } = await import("@/lib/server/phone/inbound-webrtc-bridge");
+    await markInboundCallBridged({
+      humanCallId: call.id,
+      agentCallControlId: eventControlId || undefined,
+    });
     const { maybeStartCallRecordingOnAnswer } = await import("@/lib/server/phone/recording-runtime");
     await maybeStartCallRecordingOnAnswer({
       workspaceId: call.workspaceId,
       humanCallId: call.id,
       telnyxCallControlId: call.telnyxCallControlId,
     });
+  }
+
+  if (
+    input.eventType === "call.hangup" &&
+    clientState.kind === "webrtc_agent_leg" &&
+    clientState.parentCallControlId &&
+    clientState.humanCallId
+  ) {
+    const sessionMeta = metaBefore as { inboundBridge?: string };
+    if (sessionMeta.inboundBridge === "dial_agent") {
+      const { handleInboundAgentLegNoAnswer } = await import(
+        "@/lib/server/phone/inbound-agent-no-answer"
+      );
+      const hangupCause = input.eventPayload.hangup_cause
+        ? String(input.eventPayload.hangup_cause)
+        : undefined;
+      await handleInboundAgentLegNoAnswer({
+        workspaceId: call.workspaceId,
+        humanCallId: String(clientState.humanCallId),
+        pstnCallControlId: String(clientState.parentCallControlId),
+        phoneNumberId: call.phoneNumberId,
+        hangupCause,
+      }).catch(() => undefined);
+    }
   }
   if (input.eventType === "call.recording.saved") {
     const urls = input.eventPayload.recording_urls as Record<string, string> | undefined;

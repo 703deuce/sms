@@ -48,7 +48,8 @@ function resolveCallControlConnectionId(): string | null {
 /**
  * Telnyx WebRTC + Call Control: originate an agent leg via POST /v2/calls on the **Call Control app**
  * (connection_id must be a Call Control application with a webhook URL), dial the WebRTC SIP user,
- * then bridge to the inbound PSTN leg when the agent leg answers.
+ * then auto-bridge to the inbound PSTN leg when the agent leg answers (`bridge_on_answer`).
+ * The PSTN leg stays unanswered until then so the caller's phone keeps ringing normally.
  */
 export async function bridgeInboundCallToWebRtc(input: {
   telnyxCallControlId: string;
@@ -90,12 +91,6 @@ export async function bridgeInboundCallToWebRtc(input: {
   const to = buildWebRtcAgentSipUri(sipUsername);
 
   try {
-    // Satisfy Call Control first_command_timeout; caller stays connected while we ring the browser.
-    await telnyxCallAction(input.telnyxCallControlId, "answer");
-    phoneServerLog("inbound-webrtc-bridge", "answered_pstn_leg", {
-      humanCallId: input.humanCallId,
-    });
-
     const dialed = await telnyxRequest<{ data?: { call_control_id?: string } }>("/calls", {
       method: "POST",
       body: {
@@ -104,6 +99,10 @@ export async function bridgeInboundCallToWebRtc(input: {
         from: input.businessLineE164,
         client_state: clientState,
         timeout_secs: timeout,
+        link_to: input.telnyxCallControlId,
+        bridge_intent: true,
+        bridge_on_answer: true,
+        prevent_double_bridge: true,
       },
     });
     const agentLegId = dialed.data?.call_control_id?.trim();
@@ -122,6 +121,7 @@ export async function bridgeInboundCallToWebRtc(input: {
           webrtcAgentLegId: agentLegId,
           browserCallControlId: agentLegId,
           inboundBridge: "dial_agent",
+          inboundDialMode: "bridge_on_answer",
           inboundBridgeStatus: "dialing_browser",
           callerCallControlId: input.telnyxCallControlId,
           parentCallControlId: input.telnyxCallControlId,
@@ -160,6 +160,32 @@ export async function bridgeInboundCallToWebRtc(input: {
   }
 }
 
+export async function markInboundCallBridged(input: {
+  humanCallId: string;
+  agentCallControlId?: string;
+}) {
+  const prisma = getPrisma();
+  const existing = await prisma.humanCall.findUnique({ where: { id: input.humanCallId } });
+  if (!existing) return;
+  const meta = (existing.metadata || {}) as Record<string, unknown>;
+  if (meta.inboundBridge === "bridged") return;
+
+  await prisma.humanCall.update({
+    where: { id: input.humanCallId },
+    data: {
+      status: "in_progress",
+      answeredAt: existing.answeredAt || new Date(),
+      metadata: patchInboundSession(meta, {
+        inboundBridge: "bridged",
+        inboundBridgeStatus: "bridged",
+        ringTimeoutAt: null,
+        browserCallControlId: input.agentCallControlId || meta.browserCallControlId,
+      }),
+    },
+  });
+}
+
+/** Fallback if Telnyx `bridge_on_answer` did not connect legs (manual answer + bridge). */
 export async function completeWebRtcAgentLegAnswer(input: {
   parentCallControlId: string;
   agentCallControlId: string;
@@ -183,6 +209,7 @@ export async function completeWebRtcAgentLegAnswer(input: {
   });
 
   try {
+    await telnyxCallAction(input.parentCallControlId, "answer");
     await telnyxRequest(telnyxCallControlPath(input.parentCallControlId, "/actions/bridge"), {
       method: "POST",
       body: { call_control_id: input.agentCallControlId },
@@ -196,17 +223,8 @@ export async function completeWebRtcAgentLegAnswer(input: {
     throw err;
   }
 
-  await prisma.humanCall.update({
-    where: { id: input.humanCallId },
-    data: {
-      status: "in_progress",
-      answeredAt: new Date(),
-      metadata: patchInboundSession(meta, {
-        inboundBridge: "bridged",
-        inboundBridgeStatus: "bridged",
-        ringTimeoutAt: null,
-        browserCallControlId: input.agentCallControlId,
-      }),
-    },
+  await markInboundCallBridged({
+    humanCallId: input.humanCallId,
+    agentCallControlId: input.agentCallControlId,
   });
 }

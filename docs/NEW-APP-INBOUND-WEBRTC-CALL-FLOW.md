@@ -32,12 +32,12 @@ sequenceDiagram
   Caller->>Telnyx: Call DID (+1866…)
   Telnyx->>API: webhook call.initiated (incoming)
   API->>API: processInboundCallInitiated ring_browser
-  Bridge->>Telnyx: answer (PSTN leg)
-  Bridge->>Telnyx: POST /v2/calls connection_id=Call Control App to=sip:agent@sip.telnyx.com
+  Bridge->>Telnyx: POST /v2/calls (link_to=PSTN leg, bridge_on_answer) to=sip:agent@sip.telnyx.com
+  Note over Caller: Caller keeps hearing normal ring — PSTN leg not answered yet
   Telnyx->>Browser: inbound WebRTC ring
   Browser->>Browser: user answer() + remote audio element
-  Telnyx->>API: call.answered (agent leg, client_state webrtc_agent_leg)
-  API->>Telnyx: bridge PSTN leg ↔ agent leg
+  Telnyx->>Telnyx: bridge_on_answer connects PSTN ↔ agent
+  Telnyx->>API: call.bridged / call.answered (agent leg)
   Telnyx->>Caller: media bridged
 ```
 
@@ -48,8 +48,8 @@ sequenceDiagram
 | 1 | DID on Call Control app | Provisioning: `scripts/configure-new-app-telnyx-phone-webhook.mjs`, audit `scripts/audit-new-app-phone-voice-provisioning.mjs` |
 | 2 | `call.initiated` incoming | `new-app/app/api/telnyx/phone/route.ts` → `handleInboundCall` |
 | 3 | Route = ring browser | `inbound-runtime.ts` `decideInboundRoute` → `ring_browser` |
-| 4 | Answer PSTN (avoid first-command timeout) | `inbound-webrtc-bridge.ts` `telnyxCallAction(..., "answer")` |
-| 5 | Dial agent SIP URI | `POST /calls` with `connection_id: TELNYX_CONNECTION_ID`, `to: buildWebRtcAgentSipUri(sipUsername)` |
+| 4 | Dial agent SIP URI (linked to PSTN, bridge on answer) | `POST /calls` with `connection_id: TELNYX_CONNECTION_ID`, `link_to` = caller leg, `bridge_on_answer: true`, `to: buildWebRtcAgentSipUri(sipUsername)` — **do not answer PSTN first** |
+| 5 | Caller still ringing | PSTN leg unanswered until bridge |
 | 6 | Browser registered | `workspace-provider.tsx` → `fetchWebRtcToken` → `TelnyxRTC.connect` → `telnyx.ready` |
 | 7 | Inbound UI | `telnyx.notification` `callUpdate` inbound `ringing` → `inbound_ringing_ui` |
 | 8 | User answers | `answerIncoming` → `call.answer({ remoteElement })` |
