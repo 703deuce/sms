@@ -40,6 +40,23 @@ export function isDuplicateDispatchRuleError(message: string): boolean {
   return /already exists in dispatch rule/i.test(message);
 }
 
+/** e.g. `... exists in dispatch rule 'SDR_abc' 'transovo-inbound-dispatch'` */
+export function parseConflictingDispatchRuleId(message: string): string | null {
+  const match = message.match(/exists in dispatch rule '([^']+)'/i);
+  return match?.[1]?.trim() || null;
+}
+
+export function dispatchRuleNeedsDeleteRescope(
+  rule: SdkDispatchRuleInfo,
+  sharedDispatchRuleName: string,
+): boolean {
+  const nums = rule.numbers || [];
+  if (nums.length === 0) return true;
+  if (rule.name === sharedDispatchRuleName) return true;
+  const kind = rule.rule?.rule?.case;
+  return kind === "dispatchRuleIndividual";
+}
+
 export function numbersWithoutE164(numbers: string[], e164: string): string[] {
   const variants = new Set(e164VariantsForDispatch(e164));
   return numbers.filter((n) => !variants.has(n));

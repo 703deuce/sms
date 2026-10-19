@@ -7,13 +7,17 @@ import {
   SIPDispatchRuleCallee,
   SIPDispatchRuleInfo,
 } from "@livekit/protocol";
+import type { SIPDispatchRuleInfo as SdkDispatchRuleInfo } from "livekit-server-sdk";
 import { getLiveKitSipClient, TRANSOVO_LIVEKIT_ROOM_PREFIX, VOICE_V3_LIVEKIT_AGENT_NAME } from "./client";
+import { TRANSOVO_LIVEKIT_DISPATCH_RULE_NAME } from "@/lib/server/telephony/config";
 import {
   dispatchRuleNameForDid,
+  dispatchRuleNeedsDeleteRescope,
   e164VariantsForDispatch,
   findPerDidDispatchRule,
   isDuplicateDispatchRuleError,
   numbersWithoutE164,
+  parseConflictingDispatchRuleId,
   ruleDispatchCoversDid,
 } from "./dispatch-sync-helpers";
 
@@ -89,43 +93,144 @@ function buildPerDidDispatchRuleInfo(input: {
   });
 }
 
+function createPayloadFromTemplate(template: SdkDispatchRuleInfo) {
+  const roomPrefix = TRANSOVO_LIVEKIT_ROOM_PREFIX.replace(/-+$/, "") || "transovo-call";
+  const kind = template.rule?.rule?.case;
+  if (kind === "dispatchRuleIndividual") {
+    const value = template.rule?.rule?.value;
+    return {
+      type: "individual" as const,
+      roomPrefix: value?.roomPrefix || `${roomPrefix}-`,
+      pin: value?.pin ?? "",
+    };
+  }
+  if (kind === "dispatchRuleCallee") {
+    const value = template.rule?.rule?.value;
+    return {
+      type: "callee" as const,
+      roomPrefix: value?.roomPrefix || roomPrefix,
+      randomize: value?.randomize ?? true,
+    };
+  }
+  return { type: "callee" as const, roomPrefix, randomize: true };
+}
+
 /**
- * LiveKit allows only one dispatch rule per trunk+number. Remove this DID from any other
- * rule (e.g. legacy `transovo-inbound-dispatch`) without changing those rules' agent metadata.
+ * LiveKit Cloud keeps trunk-wide `dispatchRuleIndividual` rules owning DIDs even when
+ * `numbers` is patched. Delete + recreate scoped to remaining DIDs (agent config unchanged).
  */
+async function recreateDispatchRuleScoped(input: {
+  template: SdkDispatchRuleInfo;
+  trunkId: string;
+  numbers: string[];
+}): Promise<string> {
+  const client = getLiveKitSipClient();
+  const createPayload = createPayloadFromTemplate(input.template);
+  const created = await client.createSipDispatchRule(createPayload, {
+    name: input.template.name,
+    trunkIds: [input.trunkId],
+    hidePhoneNumber: input.template.hidePhoneNumber,
+    metadata: input.template.metadata,
+    roomConfig: input.template.roomConfig,
+  });
+  const ruleId = created.sipDispatchRuleId || "";
+  if (!ruleId) throw new Error("LiveKit dispatch rule id missing after scoped recreate");
+
+  const info = new SIPDispatchRuleInfo({
+    sipDispatchRuleId: ruleId,
+    rule: input.template.rule,
+    trunkIds: [input.trunkId],
+    numbers: input.numbers,
+    hidePhoneNumber: input.template.hidePhoneNumber,
+    name: input.template.name,
+    metadata: input.template.metadata,
+    roomConfig: input.template.roomConfig,
+  });
+  await client.updateSipDispatchRule(ruleId, info);
+  return ruleId;
+}
+
+async function detachDidFromDispatchRule(input: {
+  rule: SdkDispatchRuleInfo;
+  e164: string;
+  trunkId: string;
+}): Promise<string[]> {
+  const client = getLiveKitSipClient();
+  const actions: string[] = [];
+  const ruleId = input.rule.sipDispatchRuleId;
+  if (!ruleId) return actions;
+
+  const listed = await client.listSipDispatchRule({ dispatchRuleIds: [ruleId] });
+  const full = listed[0] || input.rule;
+
+  const trunkListed = await client.listSipInboundTrunk({ trunkIds: [input.trunkId] });
+  const trunkNums = trunkListed[0]?.numbers || [];
+  const scopedNums = full.numbers?.length ? full.numbers : trunkNums;
+  const remaining = numbersWithoutE164(scopedNums, input.e164);
+
+  if (dispatchRuleNeedsDeleteRescope(full, TRANSOVO_LIVEKIT_DISPATCH_RULE_NAME)) {
+    await client.deleteSipDispatchRule(ruleId);
+    actions.push(`livekit_deleted_dispatch_${full.name || ruleId}`);
+    if (remaining.length > 0) {
+      await recreateDispatchRuleScoped({
+        template: full,
+        trunkId: input.trunkId,
+        numbers: remaining,
+      });
+      actions.push(`livekit_recreated_dispatch_scoped_${full.name || ruleId}`);
+    }
+    return actions;
+  }
+
+  const nextNumbers = numbersWithoutE164(full.numbers || [], input.e164);
+  if (nextNumbers.length === (full.numbers || []).length) return actions;
+
+  await client.updateSipDispatchRuleFields(ruleId, {
+    numbers: new ListUpdate({ set: nextNumbers }),
+  });
+  actions.push(`livekit_removed_did_from_dispatch_${full.name || ruleId}`);
+  return actions;
+}
+
 async function releaseDidFromConflictingDispatchRules(input: {
   e164: string;
   trunkId: string;
   exceptRuleId?: string;
+  /** When LiveKit returns the blocking rule id, target it explicitly. */
+  forceRuleId?: string;
 }): Promise<string[]> {
   const client = getLiveKitSipClient();
   const actions: string[] = [];
   const perDidName = dispatchRuleNameForDid(input.e164);
   const rules = await client.listSipDispatchRule();
 
+  if (input.forceRuleId) {
+    const forced = rules.find((r) => r.sipDispatchRuleId === input.forceRuleId);
+    if (forced && forced.sipDispatchRuleId !== input.exceptRuleId) {
+      actions.push(
+        ...(await detachDidFromDispatchRule({
+          rule: forced,
+          e164: input.e164,
+          trunkId: input.trunkId,
+        })),
+      );
+    }
+  }
+
   for (const rule of rules) {
     const ruleId = rule.sipDispatchRuleId;
     if (!ruleId || ruleId === input.exceptRuleId) continue;
     if (rule.name === perDidName) continue;
+    if (input.forceRuleId && ruleId === input.forceRuleId) continue;
     if (!ruleDispatchCoversDid(rule, input.e164, input.trunkId)) continue;
 
-    const nums = rule.numbers || [];
-    let nextNumbers: string[];
-
-    if (nums.length === 0) {
-      const listed = await client.listSipInboundTrunk({ trunkIds: [input.trunkId] });
-      const trunkNums = listed[0]?.numbers || [];
-      nextNumbers = numbersWithoutE164(trunkNums, input.e164);
-      actions.push(`livekit_narrowed_wildcard_dispatch_${rule.name || ruleId}`);
-    } else {
-      nextNumbers = numbersWithoutE164(nums, input.e164);
-      if (nextNumbers.length === nums.length) continue;
-      actions.push(`livekit_removed_did_from_dispatch_${rule.name || ruleId}`);
-    }
-
-    await client.updateSipDispatchRuleFields(ruleId, {
-      numbers: new ListUpdate({ set: nextNumbers }),
-    });
+    actions.push(
+      ...(await detachDidFromDispatchRule({
+        rule,
+        e164: input.e164,
+        trunkId: input.trunkId,
+      })),
+    );
   }
 
   return actions;
@@ -185,11 +290,13 @@ export async function syncReceptionistDidDispatchRule(input: {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (!isDuplicateDispatchRuleError(msg)) throw err;
-      actions.push("livekit_retry_after_release_did");
+      const forceRuleId = parseConflictingDispatchRuleId(msg);
+      actions.push("livekit_retry_after_detach_did");
       actions.push(
         ...(await releaseDidFromConflictingDispatchRules({
           e164: input.e164,
           trunkId: input.trunkId,
+          forceRuleId: forceRuleId || undefined,
         })),
       );
       await createOnce();
