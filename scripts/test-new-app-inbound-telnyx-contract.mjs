@@ -68,6 +68,16 @@ assert.match(
   "Must use singleton Telnyx client per tab",
 );
 assert.match(wpSrc, /telnyx\.warning|subscribeTelnyxWarning/, "Must handle Telnyx SDK warnings");
+assert.doesNotMatch(
+  wpSrc,
+  /await answer\(\{/,
+  "Must not invoke detached call.answer — breaks SDK this.session binding",
+);
+assert.match(
+  wpSrc,
+  /liveCall\.answer\(/,
+  "Answer must be called on the Call instance (liveCall.answer)",
+);
 
 const tokenSrc = readFileSync(join(root, "new-app/lib/server/phone/webrtc-token.ts"), "utf8");
 assert.doesNotMatch(

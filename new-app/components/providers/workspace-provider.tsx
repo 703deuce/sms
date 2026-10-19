@@ -472,10 +472,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         inboundSdkCallRef.current ||
         lookupSdkCall(client, inc.webrtcId) ||
         inc.webrtcCall
-      const answer = liveCall?.answer as
-        | ((opts?: { remoteElement?: HTMLAudioElement }) => void | Promise<void>)
-        | undefined
-      if (!answer) {
+      if (typeof liveCall?.answer !== 'function') {
         setIncomingAnswering(false)
         toast.error('Could not connect the call', { description: 'Call session is no longer available.' })
         return
@@ -483,7 +480,8 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       const audio = remoteAudioRef.current
       if (audio) void audio.play().catch(() => undefined)
       try {
-        await answer({ remoteElement: audio || undefined })
+        // Must call answer on the Call instance — detached answer() loses `this` (SDK uses this.session).
+        await liveCall.answer({ remoteElement: audio || undefined })
         phoneClientTrace('inbound_answer_promise_resolved', {
           humanCallId,
           webrtcCallId: inc.webrtcId,
