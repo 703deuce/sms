@@ -9,6 +9,7 @@ const isCoolifyBuild = Boolean(process.env.COOLIFY_RESOURCE_UUID);
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
+  serverExternalPackages: ["@prisma/client", "prisma"],
   typescript: {
     ignoreBuildErrors: isCoolifyBuild || true,
   },

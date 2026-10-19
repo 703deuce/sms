@@ -11,7 +11,8 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Panel, KeyValue, IconTile } from '@/components/app/page-primitives'
 import { StatusBadge } from '@/components/app/status'
 import { useNumbers } from '@/components/providers/numbers-provider'
-import { demoSearch, PRODUCT_LABEL, PRODUCT_RETURN, type AvailableNumber, type NumberProduct } from '@/lib/numbers'
+import { PRODUCT_LABEL, PRODUCT_RETURN, type AvailableNumber, type NumberProduct } from '@/lib/numbers'
+import { searchNumbers } from '@/lib/numbers-api'
 import { formatPhone } from '@/lib/format'
 import { Callout, CapabilityChips, ChoiceCard, Field, StepIntro, WizardShell } from './number-ui'
 import { cn } from '@/lib/utils'
@@ -29,7 +30,7 @@ export function BuyWizard() {
   const params = useSearchParams()
   const product = params.get('product') as NumberProduct | null
   const returnTo = params.get('returnTo') ?? (product ? PRODUCT_RETURN[product]?.href : null)
-  const { addOwned, setAssignments } = useNumbers()
+  const { purchaseOwned, setAssignments } = useNumbers()
 
   const [step, setStep] = useState(0)
   const [numberType, setNumberType] = useState<'local' | 'toll_free'>('local')
@@ -49,43 +50,47 @@ export function BuyWizard() {
   async function search() {
     setSearching(true)
     setPicked(null)
-    await new Promise((r) => setTimeout(r, 650))
-    setResults(demoSearch({ numberType, areaCode, city, contains }))
-    setSearching(false)
+    setResults(null)
+    try {
+      const rows = await searchNumbers({ numberType, areaCode, city, contains })
+      const mapped: AvailableNumber[] = rows.map((r) => ({
+        number: r.e164,
+        numberType,
+        region: r.region,
+        monthly: r.monthly,
+        setupFee: r.setupFee,
+        capabilities: r.capabilities,
+      }))
+      setResults(mapped.length ? mapped : 'error')
+    } catch {
+      setResults('error')
+    } finally {
+      setSearching(false)
+    }
   }
 
   async function purchase(simulateFail = false) {
     if (!picked) return
     setPurchasing(true)
     setPurchaseError(false)
-    await new Promise((r) => setTimeout(r, 1100))
     if (simulateFail) {
       setPurchasing(false)
       setPurchaseError(true)
       return
     }
-    const id = `n_${Date.now()}`
-    addOwned({
-      id,
-      number: picked.number,
-      nickname: nickname.trim() || (picked.numberType === 'toll_free' ? 'Toll-free line' : `${picked.region.split(',')[0]} line`),
-      numberType: picked.numberType,
-      region: picked.region,
-      country: 'US',
-      status: 'active',
-      capabilities: picked.capabilities,
-      assignments: [],
-      destination: 'Not routed',
-      addedAt: new Date().toISOString(),
-      monthly: picked.monthly,
-      setupFee: picked.setupFee,
-      defaultCallerId: false,
-      demo: true,
-    })
-    setNewId(id)
-    setPurchasing(false)
-    setStep(3)
-    toast.success('Number purchased', { description: `${formatPhone(picked.number)} is now in your workspace.` })
+    try {
+      const defaultNick =
+        nickname.trim() ||
+        (picked.numberType === 'toll_free' ? 'Toll-free line' : `${picked.region.split(',')[0]} line`)
+      const row = await purchaseOwned(picked.number, defaultNick)
+      setNewId(row.id)
+      setStep(3)
+      toast.success('Number purchased', { description: `${formatPhone(picked.number)} is now in your workspace.` })
+    } catch {
+      setPurchaseError(true)
+    } finally {
+      setPurchasing(false)
+    }
   }
 
   const mctbBlocked = assignTo === 'mctb' && !!picked && !picked.capabilities.sms

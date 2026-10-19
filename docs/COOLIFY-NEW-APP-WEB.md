@@ -21,7 +21,7 @@ In Coolify → **sms:master** (application `ds8s3hjin60qs6g7s0iqkixs`) or a **ne
 3. **Build pack:** Nixpacks (uses `new-app/nixpacks.toml`) **or** Dockerfile with path `Dockerfile` (relative to base directory)
 4. **Start command:** `node scripts/start-production.mjs` (default from nixpacks `[start]`)
 5. **Port:** `3000`
-6. **Do not** set `DATABASE_URL` until the data layer is wired. When ready, point at a **greenfield** Postgres (see `docs/NEW-APP-DATABASE-GREENFIELD.md`) — not legacy production.
+6. **Database:** point `DATABASE_URL` at greenfield (`transovo_greenfield`). **Telnyx:** `TELNYX_API_KEY` required for search/purchase. Optional: `DEV_WORKSPACE_ID`, `MCTB_PLATFORM_SENDER_PHONE_NUMBER_ID`.
 
 ### Environment (minimum)
 

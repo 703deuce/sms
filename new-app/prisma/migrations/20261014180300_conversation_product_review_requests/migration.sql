@@ -1,0 +1,1 @@
+ALTER TYPE "ConversationProductSource" ADD VALUE IF NOT EXISTS 'REVIEW_REQUESTS';

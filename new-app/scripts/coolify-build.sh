@@ -9,6 +9,18 @@ PNPM="${PNPM:-npx --yes pnpm@12.3.4}"
 echo "[new-app/coolify-build] starting next production build ($PNPM)"
 echo "[new-app/coolify-build] node=$(node -v) cwd=$(pwd)"
 
+if [[ -f ../prisma/schema.prisma ]]; then
+  echo "[new-app/coolify-build] syncing Prisma schema from monorepo parent"
+  rm -rf prisma
+  cp -a ../prisma prisma
+elif [[ ! -f prisma/schema.prisma ]]; then
+  echo "[new-app/coolify-build] ERROR: missing prisma/schema.prisma (expected ../prisma in Coolify monorepo checkout)"
+  exit 1
+fi
+
+echo "[new-app/coolify-build] prisma generate"
+$PNPM exec prisma generate
+
 if [[ -n "${COOLIFY_RESOURCE_UUID:-}" ]]; then
   export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=4096}"
 fi
@@ -41,5 +53,12 @@ fi
 cp -a public .next/standalone/public 2>/dev/null || true
 mkdir -p .next/standalone/.next
 cp -a .next/static .next/standalone/.next/static 2>/dev/null || true
+mkdir -p .next/standalone/node_modules/.prisma .next/standalone/node_modules/@prisma
+cp -a node_modules/.prisma/client .next/standalone/node_modules/.prisma/ 2>/dev/null || true
+cp -a node_modules/@prisma/client .next/standalone/node_modules/@prisma/ 2>/dev/null || true
+if [[ -d prisma ]]; then
+  mkdir -p .next/standalone/prisma
+  cp -a prisma/schema.prisma .next/standalone/prisma/
+fi
 
 echo "[new-app/coolify-build] complete"

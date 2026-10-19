@@ -52,7 +52,7 @@ import { DisconnectDialog, ReleaseDialog, RenameDialog } from './number-dialogs'
 type Tab = 'owned' | 'connected' | 'porting'
 
 export function NumbersInventory() {
-  const { owned, connections, ports } = useNumbers()
+  const { owned, connections, ports, platform, loading, error, refresh } = useNumbers()
   const params = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
@@ -66,8 +66,26 @@ export function NumbersInventory() {
 
   return (
     <div className="flex flex-col gap-6">
+      {error ? (
+        <Panel className="border-destructive/40 bg-destructive/5 p-4 text-sm">
+          <p className="font-medium text-destructive">Numbers unavailable</p>
+          <p className="text-muted-foreground mt-1">{error}</p>
+          <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => void refresh()}>
+            Retry
+          </Button>
+        </Panel>
+      ) : null}
+      {platform ? (
+        <Panel className="flex flex-wrap items-center justify-between gap-3 p-4">
+          <div>
+            <p className="text-sm font-medium">{platform.label}</p>
+            <p className="text-muted-foreground text-sm tabular-nums">{formatPhone(platform.number)}</p>
+          </div>
+          <StatusBadge tone="success">Platform</StatusBadge>
+        </Panel>
+      ) : null}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Owned numbers" value={owned.length} hint={`${activeOwned} active`} icon={Hash} />
+        <Stat label="Owned numbers" value={loading ? '…' : owned.length} hint={loading ? 'Loading…' : `${activeOwned} active`} icon={Hash} />
         <Stat label="Connected lines" value={connections.length} hint="Forwarded from your carrier" icon={PhoneForwarded} />
         <Stat label="Port requests" value={ports.filter((p) => p.status !== 'completed').length} hint="In progress" icon={ArrowRightLeft} />
         <Stat

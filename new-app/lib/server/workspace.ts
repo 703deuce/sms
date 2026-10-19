@@ -1,0 +1,27 @@
+import { getPrisma } from "@/lib/server/db";
+
+/**
+ * Until product auth ships: pin workspace via env or bootstrap the first workspace row.
+ */
+export async function resolveWorkspaceId(): Promise<string> {
+  const pinned = process.env.DEV_WORKSPACE_ID?.trim() || process.env.TRANSOVO_WORKSPACE_ID?.trim();
+  if (pinned) return pinned;
+
+  const prisma = getPrisma();
+  const existing = await prisma.workspace.findFirst({
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  if (existing) return existing.id;
+
+  const slug = process.env.TRANSOVO_WORKSPACE_SLUG?.trim() || "main";
+  const created = await prisma.workspace.create({
+    data: {
+      name: process.env.TRANSOVO_WORKSPACE_NAME?.trim() || "Transovo",
+      slug,
+      type: "BUSINESS",
+    },
+    select: { id: true },
+  });
+  return created.id;
+}
