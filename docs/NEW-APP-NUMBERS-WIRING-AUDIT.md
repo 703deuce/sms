@@ -157,7 +157,7 @@ new-app/lib/api/
 | Forwarding verification | `src/lib/mctb/onboarding/forwarding-verification.ts` |
 | Porting | `src/lib/numbers/port-service.ts` |
 
-Add to `new-app` deploy when porting: `DATABASE_URL`, Telnyx keys, same Prisma schema (or a narrowed schema later—start shared DB for speed).
+Add to `new-app` deploy when porting: `DATABASE_URL` → **greenfield** Postgres (`docs/NEW-APP-DATABASE-GREENFIELD.md`), Telnyx keys, same Prisma schema from repo root (port server code into `new-app`, do not proxy legacy `/api`).
 
 ---
 
