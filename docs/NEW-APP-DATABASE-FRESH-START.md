@@ -1,6 +1,8 @@
 # Database fresh start (keep schema, wipe application data)
 
-**Goal:** Stop legacy rows from mis-wiring routes, numbers, and MCTB/AR config while you rebuild on `new-app`. **Keep** Postgres schema (`prisma migrate` history, tables, columns). **Remove** tenant and operational **row** data so the next wiring pass starts clean.
+> **Current plan:** Prefer a **separate greenfield database** (empty data, same Prisma migrations) and leave legacy Postgres untouched. See **`docs/NEW-APP-DATABASE-GREENFIELD.md`**. The wipe workflow below is **optional** and only if you explicitly choose in-place tenant reset after backup.
+
+**Goal (legacy doc):** Stop legacy rows from mis-wiring routes, numbers, and MCTB/AR config while you rebuild on `new-app`. **Keep** Postgres schema (`prisma migrate` history, tables, columns). **Remove** tenant and operational **row** data so the next wiring pass starts clean.
 
 This is **not** `prisma migrate reset` (that drops tables). This is **delete/truncate data** only.
 
@@ -14,7 +16,8 @@ This is **not** `prisma migrate reset` (that drops tables). This is **delete/tru
 | **User** accounts (login emails/passwords) unless you opt in to delete | **Memberships** (re-created when you make a new workspace) |
 | Coolify env, Telnyx account, Stripe account (outside DB) | **`job_queue`** backlog (global + per-workspace) |
 | Prisma schema in repo | Stale **SolutionSetup** / per-workspace JSON that pointed UI at old routes |
-| Optional: platform-admin users | Optional: **provider webhook** history tables (large; see script flags) |
+| **Telnyx platform MCTB sender** (`mctbRole: platform_mctb_sender`) — re-homed to `transovo-platform-infra` workspace | All other **phone numbers** and workspace data |
+| Optional: platform-admin **users** | Optional: **provider webhook** history (default **on** for execute) |
 
 **Not automatic:** Redis/BullMQ keys, Supabase Storage objects (recordings, voicemail files), Telnyx number inventory on the carrier. Those need separate steps or you will see “ghost” behavior after DB wipe.
 
@@ -44,7 +47,11 @@ This is **not** `prisma migrate reset` (that drops tables). This is **delete/tru
      NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' \
      npx tsx scripts/operations/fresh-start-wipe-tenant-data.ts
    ```
-5. **Redis** — flush BullMQ queues on the Transovo Redis instance (runbook: `docs/operations/MCTB-REDIS-BULLMQ-RUNBOOK.md`). Do not flush Coolify’s own Redis.
+5. **Redis (BullMQ)** — obliterate stale queue jobs (not the Redis volume):
+   ```bash
+   EXECUTE=1 REDIS_URL='...' node scripts/operations/fresh-start-flush-bullmq-redis.mjs
+   ```
+   Do **not** flush Coolify’s own `coolify-redis`.
 6. **Create one clean workspace** — new slug, your user as OWNER, then re-provision MCTB ingress / platform sender per runbooks (no copy-paste from old `ws_1` JSON).
 7. **Turn workers back on** only after smoke test on empty state.
 

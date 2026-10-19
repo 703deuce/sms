@@ -41,6 +41,8 @@
     "db:push:force": "prisma db push --accept-data-loss",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
+    "db:provision-greenfield": "bash scripts/operations/provision-greenfield-database.sh",
+    "db:verify-greenfield-parity": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/operations/verify-greenfield-schema-parity.ts",
     "db:status": "prisma migrate status",
     "db:studio": "prisma studio",
     "db:generate": "prisma generate",

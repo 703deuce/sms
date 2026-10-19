@@ -21,7 +21,7 @@ In Coolify → **sms:master** (application `ds8s3hjin60qs6g7s0iqkixs`) or a **ne
 3. **Build pack:** Nixpacks (uses `new-app/nixpacks.toml`) **or** Dockerfile with path `Dockerfile` (relative to base directory)
 4. **Start command:** `node scripts/start-production.mjs` (default from nixpacks `[start]`)
 5. **Port:** `3000`
-6. **Do not** run `scripts/deploy-db-migrations.sh` on this app until auth/data layer is wired (no Prisma in new-app yet)
+6. **Do not** set `DATABASE_URL` until the data layer is wired. When ready, point at a **greenfield** Postgres (see `docs/NEW-APP-DATABASE-GREENFIELD.md`) — not legacy production.
 
 ### Environment (minimum)
 
@@ -31,7 +31,7 @@ In Coolify → **sms:master** (application `ds8s3hjin60qs6g7s0iqkixs`) or a **ne
 | `PORT` | `3000` |
 | `SOURCE_COMMIT` | Set by Coolify — exposed in `/api/health` |
 
-Remove or avoid legacy-only vars on this service (`DATABASE_URL` for monolith migrations, `EMBEDDED_JOB_WORKER`, etc.) unless you intentionally add them later.
+Remove or avoid legacy-only vars on this service (`DATABASE_URL` for monolith migrations, `EMBEDDED_JOB_WORKER`, etc.) until you intentionally cut over to `GREENFIELD_DATABASE_URL` as `DATABASE_URL`.
 
 ### Domains
 
