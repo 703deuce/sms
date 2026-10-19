@@ -1,24 +1,23 @@
-# Coolify/Nixpacks: LEGACY transovo-web (monolith). Primary site should use Base Directory `new-app`
-# and new-app/nixpacks.toml instead — see docs/COOLIFY-NEW-APP-WEB.md.
-# Coolify/Nixpacks: transovo-web (Next.js + BullMQ). Voice worker is a separate image.
-# Web app: full next build. Scheduler (trransovo-smscheduler): set COOLIFY_SKIP_NEXT_BUILD=1
-# on that Coolify application (build-time env) — see scripts/coolify-configure-scheduler-build.sh.
-# NODE_OPTIONS heap is applied only during next build (see coolify-build script).
+# Coolify/Nixpacks: transovo-new-app with repository-root build context (shared prisma/).
+# Coolify web app (ds8s3hjin60qs6g7s0iqkixs): Base Directory = / (empty), Build pack = Nixpacks.
+# Legacy monolith: nixpacks.legacy-monolith.toml — see docs/COOLIFY-NEW-APP-WEB.md.
 
 [variables]
 HOSTNAME = "0.0.0.0"
 PORT = "3000"
 
 [phases.setup]
-aptPkgs = ["...", "libvips42"]
+nixPkgs = ["nodejs_22"]
 
 [phases.install]
 cmds = [
-  "bash scripts/coolify-install-with-heartbeat.sh",
+  "cd new-app && npx --yes pnpm@12.3.4 install --frozen-lockfile",
 ]
 
 [phases.build]
 cmds = [
-  "bash scripts/deploy-db-migrations.sh",
-  "bash scripts/coolify-build-with-heartbeat.sh",
+  "cd new-app && bash scripts/coolify-build.sh",
 ]
+
+[start]
+cmd = "bash -lc 'cd new-app && node scripts/start-production.mjs'"

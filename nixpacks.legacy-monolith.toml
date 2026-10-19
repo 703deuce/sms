@@ -1,0 +1,22 @@
+# Coolify/Nixpacks: LEGACY transovo-web (monolith). Do not use for primary transovo.ai.
+# Rollback only: set Coolify Base Directory to repository root and point Nixpacks at this file
+# (or temporarily replace root nixpacks.toml). See docs/COOLIFY-NEW-APP-WEB.md.
+# Scheduler (trransovo-smscheduler): set COOLIFY_SKIP_NEXT_BUILD=1 on that app — see scripts/coolify-configure-scheduler-build.sh.
+
+[variables]
+HOSTNAME = "0.0.0.0"
+PORT = "3000"
+
+[phases.setup]
+aptPkgs = ["...", "libvips42"]
+
+[phases.install]
+cmds = [
+  "bash scripts/coolify-install-with-heartbeat.sh",
+]
+
+[phases.build]
+cmds = [
+  "bash scripts/deploy-db-migrations.sh",
+  "bash scripts/coolify-build-with-heartbeat.sh",
+]

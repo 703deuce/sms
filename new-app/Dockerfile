@@ -1,4 +1,4 @@
-# Optional: Coolify "Dockerfile" build with Base Directory = new-app
+# Optional: Coolify Dockerfile with Base Directory = new-app (no root prisma — prefer Dockerfile.transovo-new-app at repo root).
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app
 RUN npm install -g pnpm@12.3.4

@@ -1,5 +1,6 @@
-# Coolify/Nixpacks: transovo-new-app ONLY (set Base Directory = new-app on the web application).
-# Does not run legacy root package.json, Prisma, or voice-runtime bundles.
+# Local / narrow-context Nixpacks only. Production Coolify web uses repository-root context:
+# root nixpacks.toml + Base Directory = / (see docs/COOLIFY-NEW-APP-WEB.md).
+# Base Directory = new-app alone cannot see ../prisma — do not use for production Phone/Prisma builds.
 
 [variables]
 HOSTNAME = "0.0.0.0"

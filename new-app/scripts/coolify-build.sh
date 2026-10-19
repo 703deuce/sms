@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Production build for transovo-new-app only (no legacy monolith, no Prisma).
+# Production build for transovo-new-app (no legacy monolith compile).
+# Expects cwd=new-app; Prisma schema from ../prisma when Coolify build context is repo root.
 set -euo pipefail
 
 heartbeat_interval="${COOLIFY_BUILD_HEARTBEAT_SECS:-20}"
