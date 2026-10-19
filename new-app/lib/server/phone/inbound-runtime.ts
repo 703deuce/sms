@@ -118,7 +118,38 @@ export async function processInboundCallInitiated(input: {
     return call;
   }
 
-  // ring_browser: leave PSTN leg ringing — WebRTC clients on the same Telnyx connection receive the invite.
+  if (route.mode === "ring_browser" && input.telnyxCallControlId) {
+    const bridge =
+      process.env.PHONE_INBOUND_BRIDGE_WEBRTC?.trim() !== "0";
+    if (bridge) {
+      const { bridgeInboundCallToWebRtc } = await import(
+        "@/lib/server/phone/inbound-webrtc-bridge"
+      );
+      const ringSec = Math.min(Math.max(routing.ringTimeout ?? 25, 10), 120);
+      const result = await bridgeInboundCallToWebRtc({
+        telnyxCallControlId: input.telnyxCallControlId,
+        businessLineE164: input.toE164,
+        workspaceId: input.workspaceId,
+        humanCallId: call.id,
+        ringTimeoutSec: ringSec,
+      }).catch((err) => ({
+        ok: false as const,
+        reason: err instanceof Error ? err.message : "bridge_failed",
+      }));
+      if (!result.ok) {
+        await prisma.humanCall.update({
+          where: { id: call.id },
+          data: {
+            metadata: {
+              ...(call.metadata as object),
+              inboundBridgeError: result.reason,
+            },
+          },
+        });
+      }
+    }
+  }
+
   return call;
 }
 

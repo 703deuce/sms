@@ -29,8 +29,15 @@ const toE164 = (raw: string) => {
   return null
 }
 
+const WEBRTC_HINT: Record<string, string> = {
+  ready: 'Softphone connected — inbound calls can ring this browser.',
+  connecting: 'Connecting softphone…',
+  offline: 'Softphone offline.',
+  error: 'Softphone not registered.',
+}
+
 export function Dialer({ initialTo }: { initialTo?: string }) {
-  const { startCall, activeCall } = useWorkspace()
+  const { startCall, activeCall, webrtcStatus, webrtcError } = useWorkspace()
   const { owned } = useNumbers()
   const callerIds = owned.filter((n) => n.status === 'active')
   const [value, setValue] = useState(initialTo ? formatPhone(initialTo) : '')
@@ -71,6 +78,10 @@ export function Dialer({ initialTo }: { initialTo?: string }) {
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[22rem_1fr]">
       <Panel>
+        <p className="text-xs text-muted-foreground" role="status" aria-live="polite">
+          {WEBRTC_HINT[webrtcStatus] || WEBRTC_HINT.offline}
+          {webrtcStatus === 'error' && webrtcError ? ` ${webrtcError}` : ''}
+        </p>
         <form
           className="flex flex-col gap-4"
           onSubmit={(e) => {
