@@ -456,6 +456,19 @@ export async function processHumanCallWebhookEvent(input: {
   };
 
   const patch: Record<string, unknown> = {};
+  if (eventControlId) {
+    if (!call.telnyxCallControlId) {
+      patch.telnyxCallControlId = eventControlId;
+    }
+    if (call.direction === "outbound") {
+      const prevMeta = metaBefore as Record<string, unknown>;
+      patch.metadata = {
+        ...prevMeta,
+        ...(patch.metadata as Record<string, unknown> | undefined),
+        browserCallControlId: prevMeta.browserCallControlId || eventControlId,
+      };
+    }
+  }
   const nextStatus = statusMap[input.eventType];
   const wasAnswered = Boolean(call.answeredAt) || call.status === "in_progress";
   if (nextStatus && !(input.eventType === "call.hangup" && call.status === "voicemail")) {
@@ -484,10 +497,15 @@ export async function processHumanCallWebhookEvent(input: {
       agentCallControlId: eventControlId || undefined,
     });
     const { maybeStartCallRecordingOnAnswer } = await import("@/lib/server/phone/recording-runtime");
+    const metaRecord = metaBefore as Record<string, unknown>;
+    const pstnControl =
+      typeof metaRecord.callerCallControlId === "string" && metaRecord.callerCallControlId
+        ? metaRecord.callerCallControlId
+        : call.telnyxCallControlId || eventControlId;
     await maybeStartCallRecordingOnAnswer({
       workspaceId: call.workspaceId,
       humanCallId: call.id,
-      telnyxCallControlId: call.telnyxCallControlId,
+      telnyxCallControlId: pstnControl,
     });
   }
 
@@ -554,6 +572,13 @@ export async function processHumanCallWebhookEvent(input: {
       patch.disposition = call.disposition || `missed:${hangupCause || "no_answer"}`;
       patch.callbackNeeded = true;
       patch.endedAt = new Date();
+    }
+    if (call.direction === "outbound" && patch.status === "completed") {
+      patch.endedAt = patch.endedAt || new Date();
+      if (!wasAnswered && !call.answeredAt) {
+        patch.status = "missed";
+        patch.disposition = call.disposition || `missed:${hangupCause || "no_answer"}`;
+      }
     }
   }
 

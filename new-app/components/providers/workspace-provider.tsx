@@ -14,6 +14,7 @@ import {
   registerInboundReject,
   registerOutboundCall,
   saveRouting,
+  startCallRecording,
   transferCall as transferCallApi,
 } from '@/lib/phone-api'
 import { phoneClientLog } from '@/lib/phone-client-log'
@@ -110,6 +111,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const activeCallRef = useRef<ActiveCall | null>(null)
   const incomingCallRef = useRef<IncomingCallOffer | null>(null)
   const inboundSdkCallRef = useRef<{ id?: string; answer?: () => void; hangup?: () => void } | null>(null)
+  const recordingRequestedRef = useRef<string | null>(null)
   useEffect(() => {
     activeCallRef.current = activeCall
   }, [activeCall])
@@ -243,7 +245,17 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       setActiveCall((c) =>
         c ? { ...c, status, startedAt: status === 'live' && !c.startedAt ? Date.now() : c.startedAt } : c,
       )
+      if (status === 'live') {
+        const ac = activeCallRef.current
+        const outboundSource =
+          ac && (ac.source === 'dialer' || ac.source === 'power_dialer' || ac.source === 'callback')
+        if (outboundSource && ac.humanCallId && recordingRequestedRef.current !== ac.humanCallId) {
+          recordingRequestedRef.current = ac.humanCallId
+          void startCallRecording(ac.humanCallId).catch(() => undefined)
+        }
+      }
       if (status === 'ended' || status === 'failed') {
+        recordingRequestedRef.current = null
         telnyxCallRef.current = null
         activeWebrtcIdRef.current = null
         inboundSdkCallRef.current = null
