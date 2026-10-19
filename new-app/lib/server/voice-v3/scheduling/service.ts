@@ -5,12 +5,21 @@ import { resolveSchedulingBackend } from "./connections";
 import * as calendly from "./calendly";
 import * as microsoft from "./microsoft-oauth";
 import * as google from "./google";
+import type { AppointmentCandidate } from "./appointment-types";
 
 export type SchedulingSessionState = {
   preference?: { serviceId?: string | null; timezone?: string };
   lastOfferedSlots?: { slotId: string; startTimeIso: string; durationMin: number }[];
   lastBookedEventId?: string;
+  candidateAppointments?: AppointmentCandidate[];
+  verifiedAppointment?: AppointmentCandidate;
 };
+
+export {
+  findAppointment,
+  rescheduleAppointment,
+  cancelAppointment,
+} from "./appointments";
 
 function generateSlotsFromBusy(input: {
   busy: { start: string; end: string }[];

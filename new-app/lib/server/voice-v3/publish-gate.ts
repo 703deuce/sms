@@ -4,6 +4,7 @@ import type { AgentConfig } from "@/lib/agent";
 import { validateEditorForPublish } from "@/lib/server/receptionist/compile-runtime";
 import { getPrisma } from "@/lib/server/db";
 import { resolveSchedulingBackend } from "@/lib/server/voice-v3/scheduling/connections";
+import { schedulingCapsForBackend } from "@/lib/server/voice-v3/scheduling/provider-capabilities";
 
 /**
  * Publish must fail when enabled capabilities lack a working backend adapter.
@@ -18,10 +19,29 @@ export async function validateReceptionistPublish(
   const errors: string[] = [];
   const prisma = getPrisma();
 
-  if (editor.capabilities.book && editor.appointments.strategy === "live") {
+  if (
+    (editor.capabilities.book || editor.capabilities.reschedule || editor.capabilities.cancel) &&
+    editor.appointments.strategy === "live"
+  ) {
     const backend = await resolveSchedulingBackend(workspaceId, editor);
     if (!backend.ok) {
       errors.push(backend.message);
+    } else {
+      const caps = schedulingCapsForBackend(backend);
+      if (editor.capabilities.reschedule && !caps.rescheduleAppointment) {
+        errors.push(
+          "Reschedule is enabled but the connected calendar (Calendly) does not support in-call reschedule — disable reschedule or switch to Microsoft/Google.",
+        );
+      }
+      if (editor.capabilities.cancel && !caps.cancelAppointment) {
+        errors.push("Cancel is enabled but the calendar provider does not support cancellation.");
+      }
+      if (
+        (editor.capabilities.reschedule || editor.capabilities.cancel) &&
+        !caps.findAppointment
+      ) {
+        errors.push("Appointment lookup is required for reschedule/cancel but is unavailable.");
+      }
     }
   }
 

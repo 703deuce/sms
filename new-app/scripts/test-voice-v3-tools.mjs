@@ -26,6 +26,10 @@ checks.push([
   "native resolve-session present",
   existsSync(path.join(root, "lib/server/voice-v3/resolve-livekit-session.ts")),
 ]);
+checks.push([
+  "native appointments module present",
+  existsSync(path.join(root, "lib/server/voice-v3/scheduling/appointments.ts")),
+]);
 
 const base = process.env.RECEPTIONIST_TEST_BASE_URL?.trim() || "http://127.0.0.1:3100";
 try {

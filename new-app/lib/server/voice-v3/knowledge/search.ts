@@ -12,13 +12,13 @@ export async function searchBusinessKnowledge(input: {
 
   const prisma = getPrisma();
   const kb = await prisma.voiceKnowledgeBase.findFirst({
-    where: { workspaceId, status: "active" },
+    where: { workspaceId: input.workspaceId, status: "active" },
   });
   if (!kb) return { matches: [] };
 
   const sources = await prisma.voiceKnowledgeSource.findMany({
     where: {
-      workspaceId,
+      workspaceId: input.workspaceId,
       knowledgeBaseId: kb.id,
       sourceType: "faq",
       status: { in: ["ready", "published"] },

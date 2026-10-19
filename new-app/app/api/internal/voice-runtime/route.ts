@@ -82,6 +82,7 @@ export async function POST(request: Request) {
             durationSeconds: payload.durationSeconds as number | null | undefined,
             outcome: payload.outcome as string | null | undefined,
             intent: payload.intent as string | null | undefined,
+            idempotencyKey: payload.idempotencyKey as string | null | undefined,
           }),
         });
       default:

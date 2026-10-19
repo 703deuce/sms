@@ -113,6 +113,7 @@ export async function resolveNativeVoiceV3LiveKitSession(payload: LiveKitBootstr
   const callId = liveSessionId;
   const rt = bundle.runtime;
 
+  const callerE164 = payload.callerE164?.trim();
   putLiveSession({
     liveSessionId,
     callId,
@@ -120,7 +121,7 @@ export async function resolveNativeVoiceV3LiveKitSession(payload: LiveKitBootstr
     agentId,
     phoneNumberId,
     bundle,
-    intake: {},
+    intake: callerE164 ? { inbound_caller_e164: callerE164 } : {},
     configSource,
     publishedVersionId,
     scheduling: {},

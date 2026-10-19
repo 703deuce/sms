@@ -98,19 +98,71 @@ export async function executeNativeVoiceV3Tool(input: {
         }
         break;
       }
-      case "find_appointment":
-        result = toolErr(
-          "not_implemented",
-          "find_appointment requires caller identity fields — use update_intake first, then retry.",
-        );
+      case "find_appointment": {
+        const tz =
+          session.scheduling.preference?.timezone ||
+          (args.timezone as string) ||
+          editor.identity.language ||
+          "America/Chicago";
+        const intake = session.intake || {};
+        const found = await scheduling.findAppointment({
+          workspaceId: session.workspaceId,
+          editor,
+          timezone: tz,
+          identity: {
+            name: String(args.name || intake.name || "").trim() || undefined,
+            phone: String(args.phone || intake.phone || "").trim() || undefined,
+            email: String(args.email || intake.email || "").trim() || undefined,
+            service: String(args.service || "").trim() || undefined,
+            inboundAni: String(intake.inbound_caller_e164 || intake.caller_e164 || "").trim() || undefined,
+          },
+          state: session.scheduling,
+          appointmentSelectionId: args.appointment_selection_id as string | null | undefined,
+          confirmSelection: Boolean(args.confirm_selection),
+        });
+        if (!found.ok) {
+          result = toolErr(found.code, found.message);
+        } else {
+          result = toolOk("success", found);
+        }
         break;
-      case "reschedule_appointment":
-      case "cancel_appointment":
-        result = toolErr(
-          "provider_limit",
-          `${toolName} is not yet supported for this calendar provider in new-app runtime.`,
-        );
+      }
+      case "reschedule_appointment": {
+        const moved = await scheduling.rescheduleAppointment({
+          workspaceId: session.workspaceId,
+          editor,
+          slotId: String(args.slot_id || args.selected_slot_id || ""),
+          state: session.scheduling,
+        });
+        if (!moved.ok) {
+          result = toolErr(moved.code, moved.message);
+        } else {
+          await prisma.voiceCall.update({
+            where: { id: session.callId },
+            data: { outcome: "rescheduled" },
+          });
+          result = toolOk("success", moved);
+        }
         break;
+      }
+      case "cancel_appointment": {
+        const cancelled = await scheduling.cancelAppointment({
+          workspaceId: session.workspaceId,
+          editor,
+          state: session.scheduling,
+          confirmed: Boolean(args.confirmed),
+        });
+        if (!cancelled.ok) {
+          result = toolErr(cancelled.code, cancelled.message);
+        } else {
+          await prisma.voiceCall.update({
+            where: { id: session.callId },
+            data: { outcome: "cancelled" },
+          });
+          result = toolOk("success", cancelled);
+        }
+        break;
+      }
       case "send_booking_link": {
         const link = editor.appointments.bookingLink?.trim();
         if (!link) {
@@ -131,8 +183,8 @@ export async function executeNativeVoiceV3Tool(input: {
           });
           result = toolOk("success", {
             transfer_to_e164: dest.number,
-            transfer_label: dest.label,
-            cold: dest.style !== "warm",
+            transfer_label: dest.name,
+            cold: editor.transferStyle !== "warm",
           });
         }
         break;

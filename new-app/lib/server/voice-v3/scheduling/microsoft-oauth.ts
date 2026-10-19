@@ -128,3 +128,91 @@ export async function microsoftCreateEvent(input: {
   if (!body.id) throw new Error("Microsoft create event missing id");
   return { id: body.id };
 }
+
+export type MicrosoftCalendarEvent = {
+  id: string;
+  subject: string;
+  startIso: string;
+  endIso: string;
+  attendeeEmail?: string;
+};
+
+export async function microsoftListEvents(input: {
+  workspaceId: string;
+  connectionId: string;
+  calendarId: string;
+  rangeStart: Date;
+  rangeEnd: Date;
+}): Promise<MicrosoftCalendarEvent[]> {
+  const token = await getMicrosoftAccessToken(input.workspaceId, input.connectionId);
+  const url = `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(
+    input.calendarId,
+  )}/calendarView?startDateTime=${encodeURIComponent(
+    input.rangeStart.toISOString(),
+  )}&endDateTime=${encodeURIComponent(input.rangeEnd.toISOString())}&$top=50`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}`, Prefer: 'outlook.timezone="UTC"' },
+  });
+  if (!res.ok) throw new Error(`Microsoft list events failed: ${res.status}`);
+  const body = (await res.json()) as {
+    value?: {
+      id?: string;
+      subject?: string;
+      start?: { dateTime?: string };
+      end?: { dateTime?: string };
+      attendees?: { emailAddress?: { address?: string } }[];
+    }[];
+  };
+  const out: MicrosoftCalendarEvent[] = [];
+  for (const ev of body.value || []) {
+    if (!ev.id) continue;
+    const startIso = ev.start?.dateTime;
+    const endIso = ev.end?.dateTime;
+    if (!startIso || !endIso) continue;
+    out.push({
+      id: ev.id,
+      subject: ev.subject || "Appointment",
+      startIso,
+      endIso,
+      attendeeEmail: ev.attendees?.[0]?.emailAddress?.address,
+    });
+  }
+  return out;
+}
+
+export async function microsoftPatchEventTimes(input: {
+  workspaceId: string;
+  connectionId: string;
+  calendarId: string;
+  eventId: string;
+  startIso: string;
+  endIso: string;
+}): Promise<void> {
+  const token = await getMicrosoftAccessToken(input.workspaceId, input.connectionId);
+  const url = `https://graph.microsoft.com/v1.0/me/events/${encodeURIComponent(input.eventId)}`;
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      start: { dateTime: input.startIso, timeZone: "UTC" },
+      end: { dateTime: input.endIso, timeZone: "UTC" },
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Microsoft patch event failed: ${res.status} ${text.slice(0, 200)}`);
+  }
+}
+
+export async function microsoftDeleteEvent(input: {
+  workspaceId: string;
+  connectionId: string;
+  eventId: string;
+}): Promise<void> {
+  const token = await getMicrosoftAccessToken(input.workspaceId, input.connectionId);
+  const url = `https://graph.microsoft.com/v1.0/me/events/${encodeURIComponent(input.eventId)}`;
+  const res = await fetch(url, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok && res.status !== 404) {
+    throw new Error(`Microsoft delete event failed: ${res.status}`);
+  }
+}

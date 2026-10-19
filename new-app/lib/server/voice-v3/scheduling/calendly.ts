@@ -118,3 +118,86 @@ export async function calendlyBookSlot(input: {
     eventUri: body.resource?.event || "",
   };
 }
+
+export type CalendlyScheduledEvent = {
+  uri: string;
+  startTimeIso: string;
+  endTimeIso: string;
+  name: string;
+  inviteeEmail?: string;
+};
+
+export async function calendlyListScheduledEvents(input: {
+  workspaceId: string;
+  connectionId: string;
+  rangeStart: Date;
+  rangeEnd: Date;
+}): Promise<CalendlyScheduledEvent[]> {
+  const token = await getCalendlyToken(input.connectionId, input.workspaceId);
+  const meRes = await fetch(`${API}/users/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!meRes.ok) throw new Error(`Calendly users/me failed: ${meRes.status}`);
+  const me = (await meRes.json()) as { resource?: { uri?: string } };
+  const userUri = me.resource?.uri;
+  if (!userUri) throw new Error("Calendly user uri missing");
+
+  const params = new URLSearchParams({
+    user: userUri,
+    status: "active",
+    min_start_time: input.rangeStart.toISOString(),
+    max_start_time: input.rangeEnd.toISOString(),
+    count: "50",
+  });
+  const res = await fetch(`${API}/scheduled_events?${params}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Calendly scheduled_events failed: ${res.status} ${text.slice(0, 200)}`);
+  }
+  const body = (await res.json()) as {
+    collection?: {
+      uri?: string;
+      start_time?: string;
+      end_time?: string;
+      name?: string;
+    }[];
+  };
+  const events: CalendlyScheduledEvent[] = [];
+  for (const row of body.collection || []) {
+    if (!row.uri || !row.start_time) continue;
+    events.push({
+      uri: row.uri,
+      startTimeIso: row.start_time,
+      endTimeIso: row.end_time || row.start_time,
+      name: row.name || "Calendly appointment",
+    });
+  }
+  return events;
+}
+
+export async function calendlyCancelScheduledEvent(input: {
+  workspaceId: string;
+  connectionId: string;
+  eventUri: string;
+  reason?: string;
+}): Promise<void> {
+  const token = await getCalendlyToken(input.connectionId, input.workspaceId);
+  const uuid = input.eventUri.split("/").pop();
+  if (!uuid) throw new Error("Invalid Calendly event uri");
+  const res = await fetch(`${API}/scheduled_events/${uuid}/cancellation`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      reason: input.reason || "Cancelled by caller via AI receptionist",
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Calendly cancel failed: ${res.status} ${text.slice(0, 200)}`);
+  }
+}

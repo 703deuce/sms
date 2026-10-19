@@ -21,7 +21,20 @@ export function mapVoiceCallToUiCall(
   },
 ): Call {
   const durationSec = call.durationSeconds ?? 0;
+  const meta = (call.metadata as Record<string, unknown>) || {};
+  const dyn = (call.dynamicVariables as Record<string, unknown>) || {};
   const aiOutcome = mapOutcome(call.outcome, call.transferred, call.appointmentBooked);
+  const intent =
+    (typeof meta.aiIntent === "string" && meta.aiIntent) ||
+    (typeof dyn.aiIntent === "string" && dyn.aiIntent) ||
+    call.outcome ||
+    "general";
+  const followUpMeta =
+    meta.followUp === "open" || dyn.followUp === "open"
+      ? "open"
+      : aiOutcome === "callback" || aiOutcome === "unresolved"
+        ? "open"
+        : "none";
   const transcriptLines =
     extras?.transcript?.fullText && typeof extras.transcript.fullText === "string"
       ? extras.transcript.fullText.split("\n").map((line, i) => ({
@@ -46,10 +59,14 @@ export function mapVoiceCallToUiCall(
     callbackNeeded: aiOutcome === "callback",
     handled: true,
     ai: {
-      intent: call.outcome || "general",
+      intent,
       outcome: aiOutcome,
-      summary: extras?.summary || call.errorMessage || "AI handled call",
-      followUp: aiOutcome === "callback" || aiOutcome === "unresolved" ? "open" : "none",
+      summary:
+        extras?.summary ||
+        (typeof meta.callSummary === "string" ? meta.callSummary : undefined) ||
+        call.errorMessage ||
+        "AI handled call",
+      followUp: followUpMeta,
       tools: (extras?.tools || []).map((t) => ({
         name:
           t.input && typeof t.input === "object" && "toolName" in (t.input as object)

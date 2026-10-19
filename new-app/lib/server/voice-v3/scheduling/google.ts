@@ -103,3 +103,103 @@ export async function googleCreateEvent(input: {
   if (!body.id) throw new Error("Google create event missing id");
   return { id: body.id };
 }
+
+export type GoogleCalendarEvent = {
+  id: string;
+  summary: string;
+  startIso: string;
+  endIso: string;
+  attendeeEmail?: string;
+  attendeePhone?: string;
+};
+
+export async function googleListEvents(input: {
+  workspaceId: string;
+  connectionId: string;
+  calendarId: string;
+  rangeStart: Date;
+  rangeEnd: Date;
+}): Promise<GoogleCalendarEvent[]> {
+  const token = await getGoogleAccessToken(input.workspaceId, input.connectionId);
+  const params = new URLSearchParams({
+    timeMin: input.rangeStart.toISOString(),
+    timeMax: input.rangeEnd.toISOString(),
+    singleEvents: "true",
+    orderBy: "startTime",
+    maxResults: "50",
+  });
+  const res = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(input.calendarId)}/events?${params}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!res.ok) throw new Error(`Google list events failed: ${res.status}`);
+  const body = (await res.json()) as {
+    items?: {
+      id?: string;
+      summary?: string;
+      start?: { dateTime?: string; date?: string };
+      end?: { dateTime?: string; date?: string };
+      attendees?: { email?: string; displayName?: string }[];
+      description?: string;
+    }[];
+  };
+  const out: GoogleCalendarEvent[] = [];
+  for (const ev of body.items || []) {
+    if (!ev.id) continue;
+    const startIso = ev.start?.dateTime || ev.start?.date;
+    const endIso = ev.end?.dateTime || ev.end?.date;
+    if (!startIso || !endIso) continue;
+    const attendee = ev.attendees?.[0];
+    out.push({
+      id: ev.id,
+      summary: ev.summary || "Appointment",
+      startIso,
+      endIso,
+      attendeeEmail: attendee?.email,
+      attendeePhone: ev.description?.match(/\+?1?\d{10,11}/)?.[0],
+    });
+  }
+  return out;
+}
+
+export async function googlePatchEventTimes(input: {
+  workspaceId: string;
+  connectionId: string;
+  calendarId: string;
+  eventId: string;
+  startIso: string;
+  endIso: string;
+}): Promise<void> {
+  const token = await getGoogleAccessToken(input.workspaceId, input.connectionId);
+  const res = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(input.calendarId)}/events/${encodeURIComponent(input.eventId)}`,
+    {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        start: { dateTime: input.startIso, timeZone: "UTC" },
+        end: { dateTime: input.endIso, timeZone: "UTC" },
+      }),
+    },
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Google patch event failed: ${res.status} ${text.slice(0, 200)}`);
+  }
+}
+
+export async function googleDeleteEvent(input: {
+  workspaceId: string;
+  connectionId: string;
+  calendarId: string;
+  eventId: string;
+}): Promise<void> {
+  const token = await getGoogleAccessToken(input.workspaceId, input.connectionId);
+  const res = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(input.calendarId)}/events/${encodeURIComponent(input.eventId)}`,
+    { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!res.ok && res.status !== 404) {
+    throw new Error(`Google delete event failed: ${res.status}`);
+  }
+}

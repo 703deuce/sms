@@ -14,7 +14,7 @@
     "test:phone": "node scripts/test-phone-runtime-logic.mjs && node scripts/test-phone-recording-resolve.mjs && node scripts/test-phone-complete.mjs",
     "test:phone:prod": "node scripts/test-phone-production-cert.mjs",
     "test:receptionist": "node scripts/test-receptionist-complete.mjs",
-    "test:voice-v3": "node scripts/test-voice-v3-tools.mjs",
+    "test:voice-v3": "node scripts/test-voice-v3-tools.mjs && node scripts/test-voice-v3-appointment-match.mjs",
     "postinstall": "test -f prisma/schema.prisma && prisma generate || true"
   },
   "dependencies": {

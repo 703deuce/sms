@@ -109,16 +109,15 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
   }, [variant, page, filter, numberId, q])
 
   const scoped = useMemo(() => {
-    const base =
-      (variant === 'phone' || variant === 'receptionist') && liveCalls
-        ? liveCalls
-        : CALLS.filter(BASE_FILTER[variant])
-    return base
+    if (variant === 'phone' || variant === 'receptionist') {
+      return liveCalls ?? []
+    }
+    return CALLS.filter(BASE_FILTER[variant])
   }, [variant, liveCalls])
   const filters = FILTERS[variant]
 
   const rows = useMemo(() => {
-    if ((variant === 'phone' || variant === 'receptionist') && liveCalls) return scoped
+    if ((variant === 'phone' || variant === 'receptionist') && liveCalls !== null) return scoped
     const test = filters.find((f) => f.value === filter)?.test ?? (() => true)
     const term = q.trim().toLowerCase()
     const digits = term.replace(/\D/g, '')
