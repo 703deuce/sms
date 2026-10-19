@@ -5,7 +5,9 @@
  * Telnyx model:
  * - Voice DID → Call Control application (webhook → /api/telnyx/phone)
  * - Browser → telephony credential + JWT (one credential per logged-in agent)
- * - Inbound: answer PSTN leg, transfer to sip:<credential_sip_username>@sip.telnyx.com;secure=srtp
+ * - Inbound: answer PSTN leg, POST /v2/calls (connection_id = Call Control app id) to
+ *   sip:<credential_sip_username>@sip.telnyx.com;secure=srtp, bridge on agent call.answered
+ *   See docs/NEW-APP-INBOUND-WEBRTC-CALL-FLOW.md
  *
  * Usage: TELNYX_API_KEY=... TELNYX_CONNECTION_ID=... TELNYX_TELEPHONY_CREDENTIAL_ID=... node scripts/audit-new-app-phone-voice-provisioning.mjs
  */
@@ -67,8 +69,11 @@ async function main() {
 
   if (credConn && credConn !== ccAppId) {
     console.log(
-      "\nNOTE: WebRTC credential is on a SIP Credential Connection, not the Call Control app id.",
-      "That is normal — inbound uses Call Control transfer to sip:username@sip.telnyx.com;secure=srtp.",
+      "\nNOTE: WebRTC credential lives on SIP Credential Connection",
+      credConn,
+      "≠ Call Control app",
+      ccAppId,
+      ". That is normal: POST /v2/calls must use the Call Control app id; `to` is the SIP URI only.",
     );
   }
 
@@ -99,9 +104,12 @@ async function main() {
 
   console.log("\nPASS: Voice DID on Call Control + WebRTC credential with SIP username.");
   console.log(
-    "Inbound path: webhook call.initiated → answer → transfer →",
-    `sip:${cred.sip_username.slice(0, 8)}…@sip.telnyx.com;secure=srtp`,
+    "Inbound path: call.initiated → answer PSTN → POST /v2/calls (connection_id=",
+    ccAppId,
+    ") →",
+    `sip:${cred.sip_username.slice(0, 8)}…@sip.telnyx.com;secure=srtp → bridge on call.answered`,
   );
+  console.log("Full map: docs/NEW-APP-INBOUND-WEBRTC-CALL-FLOW.md");
 }
 
 main().catch((e) => {

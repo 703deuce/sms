@@ -1,7 +1,11 @@
 /**
- * Telnyx WebRTC agent destinations — see:
- * - https://developers.telnyx.com/api-reference/call-commands/transfer-call
- * - https://developers.telnyx.com/docs/voice/webrtc/sdk-commonalities
+ * Telnyx WebRTC agent destinations.
+ *
+ * Inbound bridge: server `POST /v2/calls` uses Call Control app id (`TELNYX_CONNECTION_ID`) as
+ * `connection_id` and this SIP URI as `to` — see docs/NEW-APP-INBOUND-WEBRTC-CALL-FLOW.md.
+ *
+ * - https://developers.telnyx.com/api-reference/call-commands/dial
+ * - https://developers.telnyx.com/docs/voice/webrtc/use-cases/contact-center
  */
 export function buildWebRtcAgentSipUri(sipUsername: string): string {
   const user = sipUsername.trim();

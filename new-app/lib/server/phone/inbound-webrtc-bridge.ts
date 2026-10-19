@@ -1,5 +1,5 @@
 import { getPrisma } from "@/lib/server/db";
-import { telnyxRequest } from "@/lib/server/telnyx/client";
+import { TelnyxApiError, telnyxRequest } from "@/lib/server/telnyx/client";
 import { isTelnyxPhoneConfigured } from "@/lib/server/phone/calls-service";
 import {
   encodeTelnyxClientState,
@@ -11,6 +11,7 @@ import {
   buildWebRtcAgentSipUri,
   parseTelephonyCredentialConnectionId,
 } from "@/lib/server/phone/telnyx-webrtc-sip";
+import { patchInboundSession } from "@/lib/server/phone/inbound-session";
 async function resolveSipUsername(): Promise<{ sipUsername: string; credentialConnectionId: string | null }> {
   const credentialId = process.env.TELNYX_TELEPHONY_CREDENTIAL_ID?.trim();
   if (!credentialId) return { sipUsername: "", credentialConnectionId: null };
@@ -36,10 +37,18 @@ async function resolveSipUsername(): Promise<{ sipUsername: string; credentialCo
   return { sipUsername, credentialConnectionId };
 }
 
+function resolveCallControlConnectionId(): string | null {
+  return (
+    process.env.TELNYX_CONNECTION_ID?.trim() ||
+    process.env.TELNYX_CALL_CONTROL_APP_ID?.trim() ||
+    null
+  );
+}
+
 /**
- * Telnyx WebRTC + Call Control: dial the agent on the **credential SIP connection**
- * (POST /v2/calls), then bridge to the inbound PSTN leg when the agent leg answers.
- * Transfer-to-SIP on the Call Control app alone does not ring cross-connection credentials.
+ * Telnyx WebRTC + Call Control: originate an agent leg via POST /v2/calls on the **Call Control app**
+ * (connection_id must be a Call Control application with a webhook URL), dial the WebRTC SIP user,
+ * then bridge to the inbound PSTN leg when the agent leg answers.
  */
 export async function bridgeInboundCallToWebRtc(input: {
   telnyxCallControlId: string;
@@ -59,13 +68,15 @@ export async function bridgeInboundCallToWebRtc(input: {
 
   const { sipUsername, credentialConnectionId } = await resolveSipUsername();
   if (!sipUsername) return { ok: false, reason: "no_sip_username" };
-  if (!credentialConnectionId) {
-    return { ok: false, reason: "no_webrtc_credential_connection_id" };
+
+  const callControlConnectionId = resolveCallControlConnectionId();
+  if (!callControlConnectionId) {
+    return { ok: false, reason: "no_call_control_connection_id" };
   }
 
-  phoneServerLog("inbound-webrtc-bridge", "credential_connection", {
-    credentialConnectionId,
-    callControlAppId: process.env.TELNYX_CONNECTION_ID?.trim() || null,
+  phoneServerLog("inbound-webrtc-bridge", "dial_context", {
+    callControlConnectionId,
+    webrtcCredentialConnectionId: credentialConnectionId,
   });
 
   const timeout = Math.min(Math.max(input.ringTimeoutSec ?? 25, 10), 120);
@@ -88,7 +99,7 @@ export async function bridgeInboundCallToWebRtc(input: {
     const dialed = await telnyxRequest<{ data?: { call_control_id?: string } }>("/calls", {
       method: "POST",
       body: {
-        connection_id: credentialConnectionId,
+        connection_id: callControlConnectionId,
         to,
         from: input.businessLineE164,
         client_state: clientState,
@@ -107,12 +118,14 @@ export async function bridgeInboundCallToWebRtc(input: {
       where: { id: input.humanCallId },
       data: {
         telnyxCallLegId: agentLegId,
-        metadata: {
-          ...meta,
+        metadata: patchInboundSession(meta, {
           webrtcAgentLegId: agentLegId,
+          browserCallControlId: agentLegId,
           inboundBridge: "dial_agent",
+          inboundBridgeStatus: "dialing_browser",
+          callerCallControlId: input.telnyxCallControlId,
           parentCallControlId: input.telnyxCallControlId,
-        },
+        }),
       },
     });
 
@@ -124,14 +137,26 @@ export async function bridgeInboundCallToWebRtc(input: {
     });
     return { ok: true };
   } catch (err) {
+    const reason = err instanceof Error ? err.message : "bridge_failed";
     phoneServerLog("inbound-webrtc-bridge", "bridge_failed", {
       humanCallId: input.humanCallId,
-      error: err instanceof Error ? err.message : "unknown",
+      error: reason,
+      telnyxBody: err instanceof TelnyxApiError ? err.body : undefined,
     });
-    return {
-      ok: false,
-      reason: err instanceof Error ? err.message : "bridge_failed",
-    };
+    const prisma = getPrisma();
+    const call = await prisma.humanCall.findUnique({ where: { id: input.humanCallId } });
+    const meta = (call?.metadata || {}) as Record<string, unknown>;
+    await prisma.humanCall.update({
+      where: { id: input.humanCallId },
+      data: {
+        metadata: patchInboundSession(meta, {
+          inboundBridgeStatus: "failed",
+          inboundBridgeError: reason,
+        }),
+      },
+    });
+    await telnyxCallAction(input.telnyxCallControlId, "hangup").catch(() => undefined);
+    return { ok: false, reason };
   }
 }
 
@@ -141,26 +166,47 @@ export async function completeWebRtcAgentLegAnswer(input: {
   humanCallId: string;
   workspaceId: string;
 }) {
+  const prisma = getPrisma();
+  const existing = await prisma.humanCall.findUnique({ where: { id: input.humanCallId } });
+  const meta = (existing?.metadata || {}) as Record<string, unknown>;
+  if (meta.inboundBridge === "bridged") {
+    phoneServerLog("inbound-webrtc-bridge", "bridge_skipped_duplicate", {
+      humanCallId: input.humanCallId,
+    });
+    return;
+  }
+
   phoneServerLog("inbound-webrtc-bridge", "agent_leg_answered_bridge", {
     humanCallId: input.humanCallId,
     parentPrefix: input.parentCallControlId.slice(0, 8),
     agentPrefix: input.agentCallControlId.slice(0, 8),
   });
 
-  await telnyxRequest(telnyxCallControlPath(input.parentCallControlId, "/actions/bridge"), {
-    method: "POST",
-    body: { call_control_id: input.agentCallControlId },
-  });
+  try {
+    await telnyxRequest(telnyxCallControlPath(input.parentCallControlId, "/actions/bridge"), {
+      method: "POST",
+      body: { call_control_id: input.agentCallControlId },
+    });
+  } catch (err) {
+    phoneServerLog("inbound-webrtc-bridge", "bridge_action_failed", {
+      humanCallId: input.humanCallId,
+      error: err instanceof Error ? err.message : "unknown",
+      telnyxBody: err instanceof TelnyxApiError ? err.body : undefined,
+    });
+    throw err;
+  }
 
-  const prisma = getPrisma();
-  const existing = await prisma.humanCall.findUnique({ where: { id: input.humanCallId } });
-  const meta = (existing?.metadata || {}) as Record<string, unknown>;
   await prisma.humanCall.update({
     where: { id: input.humanCallId },
     data: {
       status: "in_progress",
       answeredAt: new Date(),
-      metadata: { ...meta, inboundBridge: "bridged", ringTimeoutAt: null },
+      metadata: patchInboundSession(meta, {
+        inboundBridge: "bridged",
+        inboundBridgeStatus: "bridged",
+        ringTimeoutAt: null,
+        browserCallControlId: input.agentCallControlId,
+      }),
     },
   });
 }

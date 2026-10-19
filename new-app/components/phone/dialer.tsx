@@ -30,10 +30,10 @@ const toE164 = (raw: string) => {
 }
 
 const WEBRTC_HINT: Record<string, string> = {
-  ready: 'Softphone connected — inbound calls can ring this browser.',
-  connecting: 'Connecting softphone…',
-  offline: 'Softphone offline.',
-  error: 'Softphone not registered.',
+  ready: 'Softphone connected — keep this tab open to receive inbound calls in the browser.',
+  connecting: 'Connecting softphone… (inbound will not ring the browser until this finishes)',
+  offline: 'Softphone offline — open Phone and wait for Connected before testing inbound.',
+  error: 'Softphone not registered — inbound calls will not ring this browser.',
 }
 
 export function Dialer({ initialTo }: { initialTo?: string }) {
