@@ -146,11 +146,7 @@ export function CallDetail({ call, from }: { call: Call; from: { label: string; 
           {!call.ai && !call.voicemail && !call.mctb && (
             <Panel title="Recording">
               {call.recording ? (
-                <CallRecordingPlayer
-                  callId={call.id}
-                  durationSec={call.durationSec}
-                  recordingUrl={call.recordingUrl}
-                />
+                <CallRecordingPlayer callId={call.id} durationSec={call.durationSec} />
               ) : (
                 <p className="text-sm leading-relaxed text-muted-foreground">Recording was not enabled for this call.</p>
               )}
