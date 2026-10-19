@@ -1,13 +1,15 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ArrowDownLeft, ArrowUpRight, ChevronLeft, ChevronRight, Mic, PhoneOff, Voicemail } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SearchInput, SegmentedFilter, SimpleSelect } from '@/components/app/filters'
 import { EmptyState } from '@/components/app/page-primitives'
 import { AI_OUTCOME, CALL_OUTCOME, MCTB_STATE, StatusBadge } from '@/components/app/status'
 import { CALLS, NUMBERS, getNumber, type Call } from '@/lib/data'
+import { fetchCalls } from '@/lib/phone-api'
+import { mapPhoneCallDtoToCall } from '@/lib/phone-ui-map'
 import { formatDuration, formatPhone, formatWhen } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
@@ -55,11 +57,43 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
   const [numberId, setNumberId] = useState('all')
   const [q, setQ] = useState('')
   const [page, setPage] = useState(0)
+  const [liveCalls, setLiveCalls] = useState<Call[] | null>(null)
+  const [total, setTotal] = useState(0)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
-  const scoped = useMemo(() => CALLS.filter(BASE_FILTER[variant]), [variant])
+  useEffect(() => {
+    if (variant !== 'phone') return
+    let cancelled = false
+    void (async () => {
+      try {
+        setLoadError(null)
+        const res = await fetchCalls({
+          page,
+          limit: PAGE,
+          filter: filter === 'all' ? undefined : filter,
+          numberId: numberId === 'all' ? undefined : numberId,
+          q: q.trim() || undefined,
+        })
+        if (cancelled) return
+        setLiveCalls(res.data.map(mapPhoneCallDtoToCall))
+        setTotal(res.total)
+      } catch (e) {
+        if (!cancelled) setLoadError(e instanceof Error ? e.message : 'Failed to load calls')
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [variant, page, filter, numberId, q])
+
+  const scoped = useMemo(() => {
+    const base = variant === 'phone' && liveCalls ? liveCalls : CALLS.filter(BASE_FILTER[variant])
+    return base
+  }, [variant, liveCalls])
   const filters = FILTERS[variant]
 
   const rows = useMemo(() => {
+    if (variant === 'phone' && liveCalls) return scoped
     const test = filters.find((f) => f.value === filter)?.test ?? (() => true)
     const term = q.trim().toLowerCase()
     const digits = term.replace(/\D/g, '')
@@ -73,10 +107,10 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
           (digits.length >= 3 && c.callerNumber.includes(digits)) ||
           c.ai?.intent.toLowerCase().includes(term),
       )
-  }, [scoped, filters, filter, numberId, q])
+  }, [scoped, filters, filter, numberId, q, variant, liveCalls])
 
-  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE))
-  const current = rows.slice(page * PAGE, page * PAGE + PAGE)
+  const pageCount = Math.max(1, Math.ceil((variant === 'phone' && liveCalls ? total : rows.length) / PAGE))
+  const current = variant === 'phone' && liveCalls ? rows : rows.slice(page * PAGE, page * PAGE + PAGE)
   const reset = () => setPage(0)
 
   return (

@@ -3,8 +3,16 @@
 import { useState } from 'react'
 import { SimpleSelect } from '@/components/app/filters'
 
-export function RangeSelect() {
-  const [range, setRange] = useState<'7d' | '30d' | '90d'>('7d')
+export function RangeSelect({
+  value,
+  onChange,
+}: {
+  value?: '7d' | '30d' | '90d'
+  onChange?: (v: '7d' | '30d' | '90d') => void
+}) {
+  const [internal, setInternal] = useState<'7d' | '30d' | '90d'>('7d')
+  const range = value ?? internal
+  const setRange = onChange ?? setInternal
   return (
     <SimpleSelect
       label="Date range"

@@ -25,11 +25,24 @@ export function PhoneRoutingEditor() {
   const set = <K extends keyof RoutePolicy>(k: K, v: RoutePolicy[K]) => setDraft((d) => ({ ...d, [k]: v }))
 
   const save = () => {
-    updateRoutePolicy(
-      { duringHours: draft.duringHours, ringStrategy: draft.ringStrategy, ringTimeout: draft.ringTimeout, noAnswer: draft.noAnswer, afterHours: draft.afterHours },
-      'Phone',
-    )
-    toast.success('Call handling saved', { description: 'AI Receptionist and Missed Call Text Back now reflect this routing.' })
+    void (async () => {
+      await updateRoutePolicy(
+        { duringHours: draft.duringHours, ringStrategy: draft.ringStrategy, ringTimeout: draft.ringTimeout, noAnswer: draft.noAnswer, afterHours: draft.afterHours },
+        'Phone',
+      )
+      const { saveRouting } = await import('@/lib/phone-api')
+      await saveRouting({
+        policy: {
+          duringHours: draft.duringHours,
+          ringStrategy: draft.ringStrategy,
+          ringTimeout: draft.ringTimeout,
+          noAnswer: draft.noAnswer,
+          afterHours: draft.afterHours,
+        },
+        greetingText: greeting,
+      })
+      toast.success('Call handling saved', { description: 'AI Receptionist and Missed Call Text Back now reflect this routing.' })
+    })()
   }
 
   const aiOff = routePolicy.aiCoverage === 'off'

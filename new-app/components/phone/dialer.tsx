@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Delete, Phone } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -9,7 +9,10 @@ import { Input } from '@/components/ui/input'
 import { Panel } from '@/components/app/page-primitives'
 import { SimpleSelect } from '@/components/app/filters'
 import { useWorkspace } from '@/components/providers/workspace-provider'
-import { CALLS, CONTACTS, NUMBERS, getContact } from '@/lib/data'
+import { useNumbers } from '@/components/providers/numbers-provider'
+import { fetchCalls, searchContactsApi } from '@/lib/phone-api'
+import { mapPhoneCallDtoToCall } from '@/lib/phone-ui-map'
+import type { Call } from '@/lib/data'
 import { formatPhone, formatWhen, initials } from '@/lib/format'
 
 const KEYS = [
@@ -28,25 +31,36 @@ const toE164 = (raw: string) => {
 
 export function Dialer({ initialTo }: { initialTo?: string }) {
   const { startCall, activeCall } = useWorkspace()
-  const callerIds = NUMBERS.filter((n) => n.status !== 'disconnected' && n.products.includes('phone'))
+  const { owned } = useNumbers()
+  const callerIds = owned.filter((n) => n.status === 'active')
   const [value, setValue] = useState(initialTo ? formatPhone(initialTo) : '')
   const [callerId, setCallerId] = useState(callerIds[0]?.number ?? '')
+  const [suggestions, setSuggestions] = useState<{ id: string; name: string; phone: string; status: string }[]>([])
+  const [recent, setRecent] = useState<Call[]>([])
+
+  useEffect(() => {
+    if (callerIds[0]?.number && !callerId) setCallerId(callerIds[0].number)
+  }, [callerIds, callerId])
+
+  useEffect(() => {
+    void fetchCalls({ direction: 'outbound', limit: 6, page: 0 }).then((r) => setRecent(r.data.map(mapPhoneCallDtoToCall)))
+  }, [])
 
   const e164 = toE164(value)
-  const match = e164 ? CONTACTS.find((c) => c.phone === e164) : undefined
-  const blocked = match?.status === 'blocked'
+  const match = e164 ? suggestions.find((c) => c.phone === e164) : undefined
+  const blocked = match?.status === 'BLOCKED'
 
-  const suggestions = useMemo(() => {
-    const q = value.trim().toLowerCase()
-    if (q.length < 2 || e164) return []
-    const digits = q.replace(/\D/g, '')
-    return CONTACTS.filter((c) => c.name.toLowerCase().includes(q) || (digits.length > 1 && c.phone.includes(digits))).slice(0, 5)
+  useEffect(() => {
+    const q = value.trim()
+    if (q.length < 2 || e164) {
+      setSuggestions([])
+      return
+    }
+    const t = setTimeout(() => {
+      void searchContactsApi(q).then(setSuggestions).catch(() => setSuggestions([]))
+    }, 200)
+    return () => clearTimeout(t)
   }, [value, e164])
-
-  const recent = useMemo(
-    () => CALLS.filter((c) => c.direction === 'outbound').slice(0, 6),
-    [],
-  )
 
   const call = (number: string, name: string) => {
     const ok = startCall({ name, number, callerId, source: 'dialer' })
@@ -117,7 +131,7 @@ export function Dialer({ initialTo }: { initialTo?: string }) {
             label="Call from"
             value={callerId}
             onChange={setCallerId}
-            options={callerIds.map((n) => ({ value: n.number, label: `${n.label} · ${formatPhone(n.number)}` }))}
+            options={callerIds.map((n) => ({ value: n.number, label: `${n.nickname} · ${formatPhone(n.number)}` }))}
           />
 
           <Button type="submit" size="lg" className="h-12 bg-success text-success-foreground hover:bg-success/90" disabled={!e164 || blocked || busy}>
@@ -130,8 +144,7 @@ export function Dialer({ initialTo }: { initialTo?: string }) {
       <Panel title="Recent outbound" bodyClassName="p-0">
         <ul className="divide-y">
           {recent.map((c) => {
-            const contact = c.contactId ? getContact(c.contactId) : undefined
-            const name = contact?.name ?? (c.caller || formatPhone(c.callerNumber))
+            const name = c.caller || formatPhone(c.callerNumber)
             return (
               <li key={c.id} className="flex items-center gap-3 px-5 py-3">
                 <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-medium">{initials(name)}</span>

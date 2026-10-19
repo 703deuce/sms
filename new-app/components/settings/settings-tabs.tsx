@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { UserPlus } from 'lucide-react'
@@ -14,6 +15,7 @@ import { Panel } from '@/components/app/page-primitives'
 import { StatusBadge } from '@/components/app/status'
 import { BusinessHours } from '@/components/routing/business-hours'
 import { BUSINESS, TEAM } from '@/lib/data'
+import { fetchPhoneSettings, patchPhoneSettings } from '@/lib/phone-api'
 
 const TABS = [
   { value: 'business', label: 'Business' },
@@ -40,15 +42,98 @@ function Field({ id, label, defaultValue, type = 'text' }: { id: string; label: 
   )
 }
 
-function ToggleRow({ id, label, hint, defaultChecked }: { id: string; label: string; hint: string; defaultChecked?: boolean }) {
+function ToggleRow({
+  id,
+  label,
+  hint,
+  defaultChecked,
+  checked,
+  onCheckedChange,
+}: {
+  id: string
+  label: string
+  hint: string
+  defaultChecked?: boolean
+  checked?: boolean
+  onCheckedChange?: (v: boolean) => void
+}) {
   return (
     <div className="flex items-start justify-between gap-4 py-3">
       <div className="flex flex-col gap-0.5">
         <Label htmlFor={id}>{label}</Label>
         <p className="text-sm text-muted-foreground">{hint}</p>
       </div>
-      <Switch id={id} defaultChecked={defaultChecked} />
+      <Switch
+        id={id}
+        defaultChecked={checked === undefined ? defaultChecked : undefined}
+        checked={checked}
+        onCheckedChange={onCheckedChange}
+      />
     </div>
+  )
+}
+
+function PhonePreferences() {
+  const [recordCalls, setRecordCalls] = useState(true)
+  const [transcribeVoicemail, setTranscribeVoicemail] = useState(true)
+  const [noiseSuppression, setNoiseSuppression] = useState(true)
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    void fetchPhoneSettings()
+      .then((s) => {
+        setRecordCalls(s.recordCalls)
+        setTranscribeVoicemail(s.transcribeVoicemail)
+        setNoiseSuppression(s.noiseSuppression)
+        setLoaded(true)
+      })
+      .catch(() => setLoaded(true))
+  }, [])
+
+  const save = async (patch: Record<string, boolean>) => {
+    try {
+      await patchPhoneSettings(patch)
+      toast.success('Phone preferences saved')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not save preferences')
+    }
+  }
+
+  if (!loaded) return <p className="px-5 py-4 text-sm text-muted-foreground">Loading phone preferences…</p>
+
+  return (
+    <>
+      <ToggleRow
+        id="pref-record"
+        label="Record calls"
+        hint="Plays a recording disclosure at the start of each call."
+        checked={recordCalls}
+        onCheckedChange={(v) => {
+          setRecordCalls(v)
+          void save({ recordCalls: v })
+        }}
+      />
+      <ToggleRow
+        id="pref-transcribe"
+        label="Transcribe voicemail"
+        hint="Voicemails are transcribed and attached to the call."
+        checked={transcribeVoicemail}
+        onCheckedChange={(v) => {
+          setTranscribeVoicemail(v)
+          void save({ transcribeVoicemail: v })
+        }}
+      />
+      <ToggleRow
+        id="pref-noise"
+        label="Noise suppression"
+        hint="Filters background noise in the browser dialer."
+        checked={noiseSuppression}
+        onCheckedChange={(v) => {
+          setNoiseSuppression(v)
+          void save({ noiseSuppression: v })
+        }}
+      />
+    </>
   )
 }
 
@@ -153,9 +238,7 @@ export function SettingsTabs() {
 
       <TabsContent value="preferences">
         <Panel title="Phone & audio" bodyClassName="divide-y py-0">
-          <ToggleRow id="pref-record" label="Record calls" hint="Plays a recording disclosure at the start of each call." defaultChecked />
-          <ToggleRow id="pref-transcribe" label="Transcribe voicemail" hint="Voicemails are transcribed and attached to the call." defaultChecked />
-          <ToggleRow id="pref-noise" label="Noise suppression" hint="Filters background noise in the browser dialer." defaultChecked />
+          <PhonePreferences />
         </Panel>
       </TabsContent>
 

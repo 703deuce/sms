@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Mic, MicOff, Pause, PhoneOff, Play } from 'lucide-react'
+import { Mic, MicOff, Pause, Phone, PhoneOff, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useWorkspace } from '@/components/providers/workspace-provider'
 import { formatDuration, formatPhone } from '@/lib/format'
@@ -14,6 +14,31 @@ const STATUS_LABEL = {
   live: 'Live',
   ended: 'Call ended',
   failed: 'Call failed',
+}
+
+export function IncomingCallBar() {
+  const { incomingCall, answerIncoming, rejectIncoming } = useWorkspace()
+  if (!incomingCall) return null
+  return (
+    <div
+      role="region"
+      aria-label="Incoming call"
+      className="sticky top-16 z-30 flex flex-wrap items-center gap-3 border-b border-warning/30 bg-warning/10 px-4 py-2"
+    >
+      <span className="text-sm font-medium">Incoming call</span>
+      <span className="font-mono text-sm">{formatPhone(incomingCall.from)}</span>
+      <div className="ml-auto flex gap-2">
+        <Button size="sm" className="bg-success text-success-foreground" onClick={answerIncoming}>
+          <Phone />
+          Answer
+        </Button>
+        <Button size="sm" variant="destructive" onClick={rejectIncoming}>
+          <PhoneOff />
+          Decline
+        </Button>
+      </div>
+    </div>
+  )
 }
 
 export function ActiveCallBar() {
@@ -41,7 +66,7 @@ export function ActiveCallBar() {
         {activeCall.onHold && ' · On hold'}
       </span>
       <span className="rounded-md surface px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
-        Simulated
+        Live
       </span>
       <div className="ml-auto flex items-center gap-1">
         <Button

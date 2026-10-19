@@ -7,7 +7,7 @@ import { NumbersProvider } from '@/components/providers/numbers-provider'
 import { AgentProvider } from '@/components/providers/agent-provider'
 import { AppHeader } from './app-header'
 import { SidebarNav } from './sidebar-nav'
-import { ActiveCallBar } from './active-call-bar'
+import { ActiveCallBar, IncomingCallBar } from './active-call-bar'
 import { cn } from '@/lib/utils'
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -20,6 +20,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
      <AgentProvider>
       <div className="flex min-h-dvh flex-col">
         <AppHeader onOpenMenu={() => setMobileOpen(true)} />
+        <IncomingCallBar />
         <ActiveCallBar />
         <div className="flex flex-1">
           <aside

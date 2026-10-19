@@ -7,19 +7,27 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Panel } from '@/components/app/page-primitives'
 import { useWorkspace } from '@/components/providers/workspace-provider'
-import { NUMBERS, type Call } from '@/lib/data'
+import { type Call } from '@/lib/data'
+import { patchCall } from '@/lib/phone-api'
+import { useNumbers } from '@/components/providers/numbers-provider'
 
 export function CallActions({ call }: { call: Call }) {
   const { startCall } = useWorkspace()
+  const { owned } = useNumbers()
   const [handled, setHandled] = useState(call.handled)
+  const callerId = owned[0]?.number || call.callerNumber
 
   return (
     <>
       <Button
         variant="outline"
         onClick={() => {
-          setHandled((h) => !h)
-          toast.success(handled ? 'Marked as needing follow-up' : 'Marked as handled')
+          void patchCall(call.id, { handled: !handled })
+            .then(() => {
+              setHandled((h) => !h)
+              toast.success(handled ? 'Marked as needing follow-up' : 'Marked as handled')
+            })
+            .catch((e) => toast.error(e instanceof Error ? e.message : 'Could not update'))
         }}
       >
         {handled ? <RotateCcw /> : <Check />}
@@ -27,7 +35,7 @@ export function CallActions({ call }: { call: Call }) {
       </Button>
       <Button
         onClick={() => {
-          const ok = startCall({ name: call.caller, number: call.callerNumber, callerId: NUMBERS[0].number })
+          const ok = startCall({ name: call.caller, number: call.callerNumber, callerId, source: 'callback' })
           if (ok) toast('Calling back', { description: `Using Main line as caller ID` })
         }}
       >
@@ -38,8 +46,8 @@ export function CallActions({ call }: { call: Call }) {
   )
 }
 
-export function CallNotes() {
-  const [notes, setNotes] = useState<string[]>([])
+export function CallNotes({ callId, initial = [] }: { callId: string; initial?: string[] }) {
+  const [notes, setNotes] = useState<string[]>(initial)
   const [draft, setDraft] = useState('')
 
   return (
@@ -57,8 +65,13 @@ export function CallNotes() {
           onSubmit={(e) => {
             e.preventDefault()
             if (!draft.trim()) return
-            setNotes((n) => [...n, draft.trim()])
-            setDraft('')
+            const text = draft.trim()
+            void patchCall(callId, { note: text })
+              .then(() => {
+                setNotes((n) => [...n, text])
+                setDraft('')
+              })
+              .catch((e) => toast.error(e instanceof Error ? e.message : 'Could not save note'))
           }}
         >
           <Textarea value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Add a note for the team…" aria-label="New note" rows={2} />

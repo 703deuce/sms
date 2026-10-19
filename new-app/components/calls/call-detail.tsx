@@ -154,7 +154,7 @@ export function CallDetail({ call, from }: { call: Call; from: { label: string; 
             </Panel>
           )}
 
-          <CallNotes />
+          <CallNotes callId={call.id} />
         </div>
 
         <div className="flex flex-col gap-6">

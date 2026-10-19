@@ -442,6 +442,11 @@ model Workspace {
   portOutRequests                   PortOutRequest[]
   humanCalls                        HumanCall[]
   humanCallEvents                   HumanCallEvent[]
+  humanCallNotes                    HumanCallNote[]
+  callRouting                       WorkspaceCallRouting?
+  powerDialerCampaigns              PowerDialerCampaign[]
+  powerDialerSessions               PowerDialerSession[]
+  powerDialerAttempts               PowerDialerAttempt[]
   pushSubscriptions                 PushSubscription[]
   notificationPrefs                 WorkspaceNotificationPrefs[]
   workspaceLimits                   WorkspaceLimits?
@@ -1184,6 +1189,7 @@ model Contact {
   customFields         Json?
   createdAt            DateTime              @default(now())
   workspace            Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  powerDialerAttempts  PowerDialerAttempt[]
   listMembers          ContactListMember[]
   tagMembers           ContactTag[]
   consentRecords       ConsentRecord[]
@@ -1200,8 +1206,9 @@ model ContactList {
   workspaceId String
   name        String
   description String?
-  workspace   Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  members     ContactListMember[]
+  workspace          Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  members            ContactListMember[]
+  powerDialerCampaigns PowerDialerCampaign[]
 
   @@index([workspaceId])
 }
@@ -4151,10 +4158,21 @@ model HumanCall {
   onHold              Boolean          @default(false)
   callerIdNumber      String?
   mediaMode           String           @default("call_control") // call_control | webrtc | call_my_phone
+  phoneNumberId       String?
+  /// dialer | power_dialer | callback | inbound
+  source              String?
+  handled             Boolean          @default(false)
+  callbackNeeded      Boolean          @default(false)
+  failureReason       String?
+  metadata            Json?
   workspace           Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   events              HumanCallEvent[]
+  callNotes           HumanCallNote[]
+  powerDialerAttempt  PowerDialerAttempt?
 
   @@index([workspaceId, startedAt])
+  @@index([workspaceId, handled])
+  @@index([phoneNumberId])
   @@index([telnyxCallControlId])
   @@index([queueId])
   @@map("human_calls")
@@ -4431,10 +4449,123 @@ model WorkspacePhoneSettings {
   id                    String    @id @default(cuid())
   workspaceId           String    @unique
   defaultCallerIdNumber String?
+  recordCalls           Boolean   @default(true)
+  transcribeVoicemail   Boolean   @default(true)
+  noiseSuppression      Boolean   @default(true)
+  prefsJson             Json?
+  createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
   workspace             Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@map("workspace_phone_settings")
+}
+
+model HumanCallNote {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  humanCallId     String
+  content         String
+  createdByUserId String?
+  createdAt       DateTime  @default(now())
+  humanCall       HumanCall @relation(fields: [humanCallId], references: [id], onDelete: Cascade)
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([humanCallId, createdAt])
+  @@map("human_call_notes")
+}
+
+model WorkspaceCallRouting {
+  id                 String    @id @default(cuid())
+  workspaceId        String    @unique
+  phoneNumberId      String?
+  policyJson         Json
+  greetingText       String?
+  greetingUrl        String?
+  providerSyncStatus String    @default("pending")
+  providerSyncError  String?
+  revision           Int       @default(1)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  workspace          Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("workspace_call_routing")
+}
+
+model PowerDialerCampaign {
+  id               String               @id @default(cuid())
+  workspaceId      String
+  name             String
+  description      String?
+  listId           String
+  callerIdE164     String
+  status           String               @default("draft")
+  timezone         String               @default("America/Chicago")
+  configJson       Json                 @default("{}")
+  totalContacts    Int                  @default(0)
+  attemptedCount   Int                  @default(0)
+  connectedCount   Int                  @default(0)
+  completedCount   Int                  @default(0)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  workspace        Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  list             ContactList          @relation(fields: [listId], references: [id], onDelete: Restrict)
+  sessions         PowerDialerSession[]
+
+  @@index([workspaceId, status])
+  @@map("power_dialer_campaigns")
+}
+
+model PowerDialerSession {
+  id          String               @id @default(cuid())
+  workspaceId String
+  campaignId  String
+  status      String               @default("active")
+  startedAt   DateTime             @default(now())
+  endedAt     DateTime?
+  pausedAt    DateTime?
+  configJson  Json?
+  workspace   Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaign    PowerDialerCampaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  attempts    PowerDialerAttempt[]
+
+  @@index([campaignId, status])
+  @@map("power_dialer_sessions")
+}
+
+model PowerDialerAttempt {
+  id              String              @id @default(cuid())
+  workspaceId     String
+  sessionId       String
+  contactId       String
+  humanCallId     String?             @unique
+  attemptNumber   Int                 @default(1)
+  disposition     String?
+  notes           String?
+  callbackAt      DateTime?
+  status          String              @default("pending")
+  startedAt       DateTime?
+  endedAt         DateTime?
+  failureReason   String?
+  createdAt       DateTime            @default(now())
+  session         PowerDialerSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  workspace       Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact         Contact             @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  humanCall       HumanCall?          @relation(fields: [humanCallId], references: [id], onDelete: SetNull)
+
+  @@index([sessionId, status])
+  @@index([contactId])
+  @@map("power_dialer_attempts")
+}
+
+model TelnyxWebhookDedup {
+  id          String   @id @default(cuid())
+  workspaceId String?
+  eventId     String   @unique
+  eventType   String?
+  processedAt DateTime @default(now())
+
+  @@index([processedAt])
+  @@map("telnyx_webhook_dedup")
 }
 
 model CreditLedgerEntry {
