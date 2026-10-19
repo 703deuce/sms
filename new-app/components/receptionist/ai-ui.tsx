@@ -64,7 +64,13 @@ export function DraftBar({ testHref = '/app/receptionist/test' }: { testHref?: s
         </div>
         <div className="flex items-center gap-2">
           {hasChanges && (
-            <Button variant="ghost" size="sm" onClick={() => { discardDraft(); toast('Draft restored to live version') }}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                void discardDraft().then(() => toast('Draft restored to live version'))
+              }}
+            >
               <Undo2 data-icon="inline-start" />
               Discard
             </Button>

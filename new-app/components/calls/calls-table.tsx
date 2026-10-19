@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/app/page-primitives'
 import { AI_OUTCOME, CALL_OUTCOME, MCTB_STATE, StatusBadge } from '@/components/app/status'
 import { CALLS, NUMBERS, getNumber, type Call } from '@/lib/data'
 import { fetchCalls } from '@/lib/phone-api'
+import { fetchReceptionistCalls } from '@/lib/receptionist-api'
 import { useNumbers } from '@/components/providers/numbers-provider'
 import { mapPhoneCallDtoToCall } from '@/lib/phone-ui-map'
 import { formatDuration, formatPhone, formatWhen } from '@/lib/format'
@@ -64,21 +65,40 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
   const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (variant !== 'phone') return
+    if (variant !== 'phone' && variant !== 'receptionist') return
     let cancelled = false
     void (async () => {
       try {
         setLoadError(null)
-        const res = await fetchCalls({
-          page,
-          limit: PAGE,
-          filter: filter === 'all' ? undefined : filter,
-          numberId: numberId === 'all' ? undefined : numberId,
-          q: q.trim() || undefined,
-        })
-        if (cancelled) return
-        setLiveCalls(res.data.map(mapPhoneCallDtoToCall))
-        setTotal(res.total)
+        const filterParam =
+          filter === 'all'
+            ? undefined
+            : filter === 'attention'
+              ? 'open'
+              : filter
+        if (variant === 'phone') {
+          const res = await fetchCalls({
+            page,
+            limit: PAGE,
+            filter: filterParam,
+            numberId: numberId === 'all' ? undefined : numberId,
+            q: q.trim() || undefined,
+          })
+          if (cancelled) return
+          setLiveCalls(res.data.map(mapPhoneCallDtoToCall))
+          setTotal(res.total)
+        } else {
+          const res = await fetchReceptionistCalls({
+            page,
+            limit: PAGE,
+            filter: filterParam,
+            numberId: numberId === 'all' ? undefined : numberId,
+            q: q.trim() || undefined,
+          })
+          if (cancelled) return
+          setLiveCalls(res.data)
+          setTotal(res.meta.total)
+        }
       } catch (e) {
         if (!cancelled) setLoadError(e instanceof Error ? e.message : 'Failed to load calls')
       }
@@ -89,13 +109,16 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
   }, [variant, page, filter, numberId, q])
 
   const scoped = useMemo(() => {
-    const base = variant === 'phone' && liveCalls ? liveCalls : CALLS.filter(BASE_FILTER[variant])
+    const base =
+      (variant === 'phone' || variant === 'receptionist') && liveCalls
+        ? liveCalls
+        : CALLS.filter(BASE_FILTER[variant])
     return base
   }, [variant, liveCalls])
   const filters = FILTERS[variant]
 
   const rows = useMemo(() => {
-    if (variant === 'phone' && liveCalls) return scoped
+    if ((variant === 'phone' || variant === 'receptionist') && liveCalls) return scoped
     const test = filters.find((f) => f.value === filter)?.test ?? (() => true)
     const term = q.trim().toLowerCase()
     const digits = term.replace(/\D/g, '')
@@ -111,8 +134,9 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
       )
   }, [scoped, filters, filter, numberId, q, variant, liveCalls])
 
-  const pageCount = Math.max(1, Math.ceil((variant === 'phone' && liveCalls ? total : rows.length) / PAGE))
-  const current = variant === 'phone' && liveCalls ? rows : rows.slice(page * PAGE, page * PAGE + PAGE)
+  const livePaged = (variant === 'phone' || variant === 'receptionist') && liveCalls
+  const pageCount = Math.max(1, Math.ceil((livePaged ? total : rows.length) / PAGE))
+  const current = livePaged ? rows : rows.slice(page * PAGE, page * PAGE + PAGE)
   const reset = () => setPage(0)
 
   return (

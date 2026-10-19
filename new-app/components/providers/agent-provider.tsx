@@ -1,41 +1,86 @@
 'use client'
 
-import { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { DEFAULT_AGENT, diffSections, type AgentConfig } from '@/lib/agent'
-import { ago } from '@/lib/numbers'
+import {
+  discardReceptionistDraft,
+  fetchReceptionistState,
+  patchReceptionistDraft,
+  pauseReceptionist,
+  publishReceptionist,
+  resumeReceptionist,
+  type ReceptionistStateDto,
+} from '@/lib/receptionist-api'
 
-export type AgentStatus = 'active' | 'paused' | 'draft' | 'publishing' | 'sync_failed'
+export type AgentStatus = ReceptionistStateDto['status'] | 'publishing'
 
 type AgentCtx = {
   live: AgentConfig
   draft: AgentConfig
   status: AgentStatus
+  draftRevision: number
   lastSaved: string
   lastPublished: string
   unsaved: boolean
+  loading: boolean
+  error: string | null
   changes: { key: keyof AgentConfig; label: string }[]
   update: <K extends keyof AgentConfig>(key: K, value: AgentConfig[K] | ((prev: AgentConfig[K]) => AgentConfig[K])) => void
   saveDraft: () => Promise<void>
-  discardDraft: () => void
+  discardDraft: () => Promise<void>
   publish: (opts?: { fail?: boolean }) => Promise<boolean>
-  setPaused: (paused: boolean) => void
+  setPaused: (paused: boolean) => Promise<void>
+  reload: () => Promise<void>
 }
 
 const Ctx = createContext<AgentCtx | null>(null)
 
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
-
-/** Demo draft/live state for the AI agent. Publishing never happens implicitly. */
 export function AgentProvider({ children }: { children: React.ReactNode }) {
   const [live, setLive] = useState<AgentConfig>(DEFAULT_AGENT)
   const [draft, setDraft] = useState<AgentConfig>(DEFAULT_AGENT)
-  const [status, setStatus] = useState<AgentStatus>('active')
-  const [lastSaved, setLastSaved] = useState(ago(26))
-  const [lastPublished, setLastPublished] = useState(ago(26))
+  const [status, setStatus] = useState<AgentStatus>('draft')
+  const [draftRevision, setDraftRevision] = useState(1)
+  const [lastSaved, setLastSaved] = useState('')
+  const [lastPublished, setLastPublished] = useState('')
   const [unsaved, setUnsaved] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const applyState = useCallback((s: ReceptionistStateDto) => {
+    setLive(s.live)
+    setDraft(s.draft)
+    setStatus(s.status)
+    setDraftRevision(s.draftRevision)
+    setLastSaved(s.lastSaved || '')
+    setLastPublished(s.lastPublished || '')
+    setUnsaved(s.unsaved)
+    setError(null)
+  }, [])
+
+  const reload = useCallback(async () => {
+    setLoading(true)
+    try {
+      const s = await fetchReceptionistState()
+      applyState(s)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load receptionist')
+    } finally {
+      setLoading(false)
+    }
+  }, [applyState])
+
+  useEffect(() => {
+    void reload()
+  }, [reload])
 
   const update = useCallback<AgentCtx['update']>((key, value) => {
-    setDraft((d) => ({ ...d, [key]: typeof value === 'function' ? (value as (p: unknown) => unknown)(d[key]) : value }))
+    setDraft((d) => {
+      if (!d) return d
+      return {
+        ...d,
+        [key]: typeof value === 'function' ? (value as (p: unknown) => unknown)(d[key]) : value,
+      } as AgentConfig
+    })
     setUnsaved(true)
   }, [])
 
@@ -45,39 +90,59 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
       live,
       draft,
       status,
+      draftRevision,
       lastSaved,
       lastPublished,
       unsaved,
+      loading,
+      error,
       changes,
       update,
+      reload,
       saveDraft: async () => {
-        await wait(500)
-        setUnsaved(false)
-        setLastSaved(new Date().toISOString())
+        const s = await patchReceptionistDraft(draft, draftRevision)
+        applyState(s)
       },
-      discardDraft: () => {
-        setDraft(live)
-        setUnsaved(false)
+      discardDraft: async () => {
+        const s = await discardReceptionistDraft()
+        applyState(s)
       },
-      publish: async (opts) => {
-        const prev = status
+      publish: async () => {
         setStatus('publishing')
-        await wait(1400)
-        if (opts?.fail) {
+        try {
+          const result = await publishReceptionist()
+          if (!result.ok) {
+            setStatus('sync_failed')
+            setError(result.errors?.join(' ') || 'Publish failed')
+            return false
+          }
+          if (result.state) applyState(result.state)
+          return true
+        } catch (e) {
           setStatus('sync_failed')
+          setError(e instanceof Error ? e.message : 'Publish failed')
           return false
         }
-        setLive(draft)
-        setUnsaved(false)
-        const now = new Date().toISOString()
-        setLastSaved(now)
-        setLastPublished(now)
-        setStatus(prev === 'paused' ? 'paused' : 'active')
-        return true
       },
-      setPaused: (paused) => setStatus(paused ? 'paused' : 'active'),
+      setPaused: async (paused) => {
+        const s = paused ? await pauseReceptionist() : await resumeReceptionist()
+        applyState(s)
+      },
     }
-  }, [live, draft, status, lastSaved, lastPublished, unsaved, update])
+  }, [
+    live,
+    draft,
+    status,
+    draftRevision,
+    lastSaved,
+    lastPublished,
+    unsaved,
+    loading,
+    error,
+    update,
+    reload,
+    applyState,
+  ])
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }
