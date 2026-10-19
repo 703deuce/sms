@@ -6,6 +6,7 @@ import { getContact, getNumber, type Call } from '@/lib/data'
 import { formatDuration, formatFull, formatPhone, formatWhen, initials } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { CallActions, CallNotes } from './call-actions'
+import { CallRecordingPlayer } from './call-recording-player'
 
 export function CallDetail({ call, from }: { call: Call; from: { label: string; href: string } }) {
   const contact = getContact(call.contactId)
@@ -145,9 +146,7 @@ export function CallDetail({ call, from }: { call: Call; from: { label: string; 
           {!call.ai && !call.voicemail && !call.mctb && (
             <Panel title="Recording">
               {call.recording ? (
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  A {formatDuration(call.durationSec)} recording is stored for this call. Playback becomes available once the telephony adapter is connected to this preview.
-                </p>
+                <CallRecordingPlayer callId={call.id} durationSec={call.durationSec} />
               ) : (
                 <p className="text-sm leading-relaxed text-muted-foreground">Recording was not enabled for this call.</p>
               )}
