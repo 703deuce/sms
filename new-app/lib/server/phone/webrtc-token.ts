@@ -41,7 +41,7 @@ export async function getWebRtcLoginToken() {
     try {
       const { markWebRtcRegistered } = await import("@/lib/server/phone/webrtc-presence");
       const { resolveWorkspaceId } = await import("@/lib/server/workspace");
-      await markWebRtcRegistered(resolveWorkspaceId(), true);
+      await markWebRtcRegistered(await resolveWorkspaceId(), true);
     } catch {
       // presence is best-effort; do not block token mint
     }

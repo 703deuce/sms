@@ -367,7 +367,10 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     const inc = incomingCall
     if (!inc) return
     phoneClientLog('webrtc', 'inbound_answer_clicked', { humanCallId: inc.humanCallId, webrtcId: inc.webrtcId })
-    inc.webrtcCall.answer?.()
+    const answer = inc.webrtcCall.answer as
+      | ((opts?: { remoteElement?: HTMLAudioElement }) => void)
+      | undefined
+    answer?.({ remoteElement: remoteAudioRef.current || undefined })
     telnyxCallRef.current = inc.webrtcCall
     activeWebrtcIdRef.current = inc.webrtcId
     const humanCallId = inc.humanCallId || inc.webrtcId

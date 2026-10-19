@@ -3,7 +3,7 @@ import { markWebRtcRegistered } from "@/lib/server/phone/webrtc-presence";
 import { resolveWorkspaceId } from "@/lib/server/workspace";
 
 export async function POST(request: Request) {
-  const workspaceId = resolveWorkspaceId();
+  const workspaceId = await resolveWorkspaceId();
   let body: { registered?: boolean } = {};
   try {
     body = (await request.json()) as { registered?: boolean };
