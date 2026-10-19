@@ -38,6 +38,13 @@ export async function getWebRtcLoginToken() {
       return { mode: "error" as const, loginToken: null, error: "Telnyx returned no login token" };
     }
     phoneServerLog("webrtc-token", "mint_ok", { tokenLength: token.length });
+    try {
+      const { markWebRtcRegistered } = await import("@/lib/server/phone/webrtc-presence");
+      const { resolveWorkspaceId } = await import("@/lib/server/workspace");
+      await markWebRtcRegistered(resolveWorkspaceId(), true);
+    } catch {
+      // presence is best-effort; do not block token mint
+    }
     return { mode: "telnyx" as const, loginToken: token };
   } catch (e) {
     phoneServerLog("webrtc-token", "mint_error", {

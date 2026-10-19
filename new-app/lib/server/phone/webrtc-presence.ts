@@ -36,9 +36,9 @@ export async function isWebRtcAgentReachable(workspaceId: string): Promise<boole
   const count = await prisma.softphonePresence.count({
     where: {
       workspaceId,
-      status: { in: ["available", "on_call"] },
+      status: { in: ["available", "on_call", "busy"] },
       queueAvailable: true,
-      updatedAt: { gte: since },
+      OR: [{ updatedAt: { gte: since } }, { lastRegisteredAt: { gte: since } }],
     },
   });
   return count > 0;

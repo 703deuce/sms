@@ -11,8 +11,6 @@ import {
   buildWebRtcAgentSipUri,
   parseTelephonyCredentialConnectionId,
 } from "@/lib/server/phone/telnyx-webrtc-sip";
-import { isWebRtcAgentReachable } from "@/lib/server/phone/webrtc-presence";
-
 async function resolveSipUsername(): Promise<{ sipUsername: string; credentialConnectionId: string | null }> {
   const credentialId = process.env.TELNYX_TELEPHONY_CREDENTIAL_ID?.trim();
   if (!credentialId) return { sipUsername: "", credentialConnectionId: null };
@@ -59,14 +57,6 @@ export async function bridgeInboundCallToWebRtc(input: {
 
   if (!isTelnyxPhoneConfigured()) return { ok: false, reason: "telnyx_not_configured" };
 
-  const reachable = await isWebRtcAgentReachable(input.workspaceId);
-  if (!reachable) {
-    phoneServerLog("inbound-webrtc-bridge", "no_registered_browser", {
-      humanCallId: input.humanCallId,
-    });
-    return { ok: false, reason: "no_browser_softphone_registered" };
-  }
-
   const { sipUsername, credentialConnectionId } = await resolveSipUsername();
   if (!sipUsername) return { ok: false, reason: "no_sip_username" };
   if (!credentialConnectionId) {
@@ -89,6 +79,12 @@ export async function bridgeInboundCallToWebRtc(input: {
   const to = buildWebRtcAgentSipUri(sipUsername);
 
   try {
+    // Satisfy Call Control first_command_timeout; caller stays connected while we ring the browser.
+    await telnyxCallAction(input.telnyxCallControlId, "answer");
+    phoneServerLog("inbound-webrtc-bridge", "answered_pstn_leg", {
+      humanCallId: input.humanCallId,
+    });
+
     const dialed = await telnyxRequest<{ data?: { call_control_id?: string } }>("/calls", {
       method: "POST",
       body: {
@@ -151,7 +147,6 @@ export async function completeWebRtcAgentLegAnswer(input: {
     agentPrefix: input.agentCallControlId.slice(0, 8),
   });
 
-  await telnyxCallAction(input.parentCallControlId, "answer").catch(() => undefined);
   await telnyxRequest(telnyxCallControlPath(input.parentCallControlId, "/actions/bridge"), {
     method: "POST",
     body: { call_control_id: input.agentCallControlId },
