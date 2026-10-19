@@ -3,6 +3,9 @@ import "server-only";
 export const TRANSOVO_LIVEKIT_TRUNK_NAME =
   process.env.LIVEKIT_INBOUND_TRUNK_NAME?.trim() || "transovo-telnyx-inbound";
 
+export const TRANSOVO_LIVEKIT_DISPATCH_RULE_NAME =
+  process.env.LIVEKIT_DISPATCH_RULE_NAME?.trim() || "transovo-inbound-dispatch";
+
 export const TRANSOVO_TELNYX_FQDN_CONNECTION_NAME =
   process.env.TELNYX_LIVEKIT_FQDN_CONNECTION_NAME?.trim() || "Transovo LiveKit Inbound";
 
