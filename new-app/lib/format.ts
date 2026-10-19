@@ -27,8 +27,15 @@ export function formatDuration(sec: number) {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
-export function formatWhen(iso: string) {
+function parseInstantMs(iso: string): number | null {
+  if (!iso?.trim()) return null
   const t = new Date(iso).getTime()
+  return Number.isFinite(t) ? t : null
+}
+
+export function formatWhen(iso: string) {
+  const t = parseInstantMs(iso)
+  if (t === null) return '—'
   const diffH = (NOW - t) / 3600_000
   if (diffH < 1) return `${Math.max(1, Math.round(diffH * 60))}m ago`
   if (diffH < 12) return `${timeFmt.format(t)}`
@@ -37,7 +44,9 @@ export function formatWhen(iso: string) {
 }
 
 export function formatFull(iso: string) {
-  return fullFmt.format(new Date(iso))
+  const t = parseInstantMs(iso)
+  if (t === null) return '—'
+  return fullFmt.format(t)
 }
 
 export function initials(name: string) {
