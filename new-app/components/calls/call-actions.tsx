@@ -46,18 +46,20 @@ export function CallActions({ call }: { call: Call }) {
   )
 }
 
-export function CallNotes({ callId, initial = [] }: { callId: string; initial?: string[] }) {
-  const [notes, setNotes] = useState<string[]>(initial)
+type NoteRow = { id: string; content: string; createdAt: string; author: string | null }
+
+export function CallNotes({ callId, initial = [] }: { callId: string; initial?: NoteRow[] }) {
+  const [notes, setNotes] = useState<NoteRow[]>(initial)
   const [draft, setDraft] = useState('')
 
   return (
     <Panel title="Internal notes" description="Visible to your team only">
       <div className="flex flex-col gap-3">
         {notes.length === 0 && <p className="text-sm text-muted-foreground">No notes yet.</p>}
-        {notes.map((n, i) => (
-          <p key={i} className="rounded-lg bg-muted px-3 py-2 text-sm leading-relaxed">
-            <span className="mr-2 text-xs font-medium text-muted-foreground">Maya O.</span>
-            {n}
+        {notes.map((n) => (
+          <p key={n.id} className="rounded-lg bg-muted px-3 py-2 text-sm leading-relaxed">
+            <span className="mr-2 text-xs font-medium text-muted-foreground">{n.author ?? 'Team'}</span>
+            {n.content}
           </p>
         ))}
         <form
@@ -67,8 +69,17 @@ export function CallNotes({ callId, initial = [] }: { callId: string; initial?: 
             if (!draft.trim()) return
             const text = draft.trim()
             void patchCall(callId, { note: text })
-              .then(() => {
-                setNotes((n) => [...n, text])
+              .then((updated) => {
+                const saved = updated.notes?.at(-1)
+                setNotes((n) => [
+                  ...n,
+                  saved ?? {
+                    id: `local-${Date.now()}`,
+                    content: text,
+                    createdAt: new Date().toISOString(),
+                    author: 'Team',
+                  },
+                ])
                 setDraft('')
               })
               .catch((e) => toast.error(e instanceof Error ? e.message : 'Could not save note'))

@@ -15,7 +15,7 @@ export function mapPhoneCallDtoToCall(dto: PhoneCallDto): Call {
     contactId: dto.contactId || undefined,
     caller: dto.caller,
     callerNumber: dto.callerNumber,
-    numberId: dto.numberId || 'unknown',
+    numberId: dto.numberId || dto.lineSummary?.id || 'unknown',
     direction: dto.direction,
     startedAt: dto.startedAt,
     durationSec: dto.durationSec,
@@ -30,5 +30,8 @@ export function mapPhoneCallDtoToCall(dto: PhoneCallDto): Call {
     voicemail: dto.voicemail
       ? { transcript: dto.voicemail.transcript || '', durationSec: dto.voicemail.durationSec }
       : undefined,
+    callNotes: dto.notes,
+    contactSummary: dto.contactSummary || undefined,
+    lineSummary: dto.lineSummary || undefined,
   }
 }

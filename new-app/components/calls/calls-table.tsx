@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/app/page-primitives'
 import { AI_OUTCOME, CALL_OUTCOME, MCTB_STATE, StatusBadge } from '@/components/app/status'
 import { CALLS, NUMBERS, getNumber, type Call } from '@/lib/data'
 import { fetchCalls } from '@/lib/phone-api'
+import { useNumbers } from '@/components/providers/numbers-provider'
 import { mapPhoneCallDtoToCall } from '@/lib/phone-ui-map'
 import { formatDuration, formatPhone, formatWhen } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -53,6 +54,7 @@ const BASE_FILTER: Record<Variant, (c: Call) => boolean> = {
 }
 
 export function CallsTable({ variant, basePath, initialFilter = 'all' }: { variant: Variant; basePath: string; initialFilter?: string }) {
+  const { owned } = useNumbers()
   const [filter, setFilter] = useState(initialFilter)
   const [numberId, setNumberId] = useState('all')
   const [q, setQ] = useState('')
@@ -133,7 +135,12 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
               setNumberId(v)
               reset()
             }}
-            options={[{ value: 'all', label: 'All numbers' }, ...NUMBERS.map((n) => ({ value: n.id, label: n.label }))]}
+            options={[
+              { value: 'all', label: 'All numbers' },
+              ...(variant === 'phone'
+                ? owned.map((n) => ({ value: n.id, label: n.nickname || n.number }))
+                : NUMBERS.map((n) => ({ value: n.id, label: n.label }))),
+            ]}
           />
           <SearchInput
             value={q}

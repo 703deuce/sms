@@ -37,6 +37,20 @@ export type PhoneCallDto = {
     isRead: boolean;
   } | null;
   notes: { id: string; content: string; createdAt: string; author: string | null }[];
+  contactSummary: {
+    id: string;
+    name: string;
+    phone: string;
+    company: string | null;
+    status: string;
+    owner: string | null;
+    lastInteraction: string | null;
+  } | null;
+  lineSummary: {
+    id: string;
+    label: string;
+    e164: string;
+  } | null;
   metadata: Record<string, unknown> | null;
 };
 

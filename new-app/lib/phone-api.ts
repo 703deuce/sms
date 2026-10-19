@@ -116,6 +116,10 @@ export async function fetchRouting() {
   return parse<RoutePolicyDto>(await fetch("/api/phone/routing"));
 }
 
+export async function fetchBusinessHours() {
+  return parse<{ timezone: string; hours: unknown }>(await fetch("/api/phone/routing?part=hours"));
+}
+
 export async function saveRouting(body: Record<string, unknown>) {
   return parse<RoutePolicyDto>(
     await fetch("/api/phone/routing", {

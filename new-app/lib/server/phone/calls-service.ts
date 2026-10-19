@@ -136,6 +136,7 @@ export async function getCallDetail(workspaceId: string, id: string): Promise<Ph
     callNotes: notes,
     voicemail: vm,
     numberLabel: pn?.friendlyName ?? null,
+    phoneNumber: pn,
   });
 }
 
@@ -165,7 +166,7 @@ export async function patchCall(
     });
   }
 
-  const updated = await prisma.humanCall.update({
+  await prisma.humanCall.update({
     where: { id },
     data: {
       ...(patch.handled !== undefined ? { handled: patch.handled } : {}),
@@ -173,7 +174,7 @@ export async function patchCall(
       ...(patch.callbackNeeded !== undefined ? { callbackNeeded: patch.callbackNeeded } : {}),
     },
   });
-  return mapHumanCallToDto(updated);
+  return getCallDetail(workspaceId, id);
 }
 
 export async function createWebRtcOutboundCall(input: {
@@ -338,6 +339,42 @@ function decodeClientState(raw: unknown): Record<string, unknown> {
   return decodeTelnyxClientState(raw);
 }
 
+async function findHumanCallForTelnyxEvent(
+  prisma: ReturnType<typeof getPrisma>,
+  clientState: Record<string, unknown>,
+  eventControlId: string,
+) {
+  if (clientState.humanCallId) {
+    const byId = await prisma.humanCall.findUnique({
+      where: { id: String(clientState.humanCallId) },
+    });
+    if (byId) return byId;
+  }
+
+  if (eventControlId) {
+    const byControl = await prisma.humanCall.findFirst({
+      where: {
+        OR: [{ telnyxCallControlId: eventControlId }, { telnyxCallLegId: eventControlId }],
+      },
+    });
+    if (byControl) return byControl;
+  }
+
+  if (!eventControlId) return null;
+
+  const metaMatch = await prisma.humanCall.findFirst({
+    where: {
+      OR: [
+        { metadata: { path: ["callerCallControlId"], equals: eventControlId } },
+        { metadata: { path: ["browserCallControlId"], equals: eventControlId } },
+        { metadata: { path: ["agentCallControlId"], equals: eventControlId } },
+      ],
+    },
+    orderBy: { startedAt: "desc" },
+  });
+  return metaMatch;
+}
+
 export async function processHumanCallWebhookEvent(input: {
   eventType: string;
   eventPayload: Record<string, unknown>;
@@ -361,17 +398,16 @@ export async function processHumanCallWebhookEvent(input: {
     if (vm.handled) return { ok: true, voicemail: true };
   }
 
-  let call =
-    clientState.humanCallId
-      ? await prisma.humanCall.findUnique({ where: { id: String(clientState.humanCallId) } })
-      : null;
-
-  if (!call && eventControlId) {
-    call = await prisma.humanCall.findFirst({
-      where: { OR: [{ telnyxCallControlId: eventControlId }, { telnyxCallLegId: eventControlId }] },
-    });
-  }
+  let call = await findHumanCallForTelnyxEvent(prisma, clientState, eventControlId);
   if (!call) return { ok: false, reason: "human_call_not_found" };
+
+  if (input.eventType === "call.recording.saved" && clientState.humanCallId) {
+    const canonicalId = String(clientState.humanCallId);
+    if (call.id !== canonicalId) {
+      const canonical = await prisma.humanCall.findUnique({ where: { id: canonicalId } });
+      if (canonical) call = canonical;
+    }
+  }
 
   const metaBefore = (call.metadata || {}) as Record<string, unknown>;
   if (clientState.kind === "webrtc_agent_leg" && clientState.humanCallId) {

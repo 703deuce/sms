@@ -2,22 +2,22 @@ import Link from 'next/link'
 import { ArrowDownLeft, ArrowUpRight, Bot, MessageSquareReply, PhoneIncoming, Voicemail, Wrench } from 'lucide-react'
 import { KeyValue, Page, PageHeader, Panel } from '@/components/app/page-primitives'
 import { AI_OUTCOME, CALL_OUTCOME, MCTB_STATE, StatusBadge } from '@/components/app/status'
-import { getContact, getNumber, type Call } from '@/lib/data'
+import { type Call } from '@/lib/data'
 import { formatDuration, formatFull, formatPhone, formatWhen, initials } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { CallActions, CallNotes } from './call-actions'
 import { CallRecordingPlayer } from './call-recording-player'
 
 export function CallDetail({ call, from }: { call: Call; from: { label: string; href: string } }) {
-  const contact = getContact(call.contactId)
-  const number = getNumber(call.numberId)
+  const contact = call.contactSummary
+  const line = call.lineSummary
   const outcome = CALL_OUTCOME[call.outcome]
 
   const timeline: { icon: React.ComponentType<{ className?: string }>; title: string; detail: string; tone?: string }[] = [
     {
       icon: call.direction === 'outbound' ? ArrowUpRight : PhoneIncoming,
-      title: call.direction === 'outbound' ? `Outbound call from ${number?.label}` : `Inbound call to ${number?.label}`,
-      detail: `${formatPhone(number?.number ?? '')} · ${number?.type === 'forwarded' ? 'Forwarded existing number' : 'Transovo number'}`,
+      title: call.direction === 'outbound' ? `Outbound call from ${line?.label ?? 'Business line'}` : `Inbound call to ${line?.label ?? 'Business line'}`,
+      detail: line?.e164 ? formatPhone(line.e164) : formatPhone(call.callerNumber),
     },
     { icon: ArrowDownLeft, title: `Routed: ${call.routedTo}`, detail: call.user ? `Answered by ${call.user}` : 'Routing policy applied' },
   ]
@@ -153,7 +153,7 @@ export function CallDetail({ call, from }: { call: Call; from: { label: string; 
             </Panel>
           )}
 
-          <CallNotes callId={call.id} />
+          <CallNotes callId={call.id} initial={call.callNotes ?? []} />
         </div>
 
         <div className="flex flex-col gap-6">
@@ -171,9 +171,12 @@ export function CallDetail({ call, from }: { call: Call; from: { label: string; 
               <div className="mt-4">
                 <KeyValue
                   items={[
-                    { label: 'Owner', value: contact.owner },
-                    { label: 'SMS consent', value: contact.consent.replace('_', ' ') },
-                    { label: 'Last interaction', value: formatWhen(contact.lastInteraction) },
+                    { label: 'Owner', value: contact.owner ?? '—' },
+                    { label: 'Status', value: contact.status.replace('_', ' ') },
+                    {
+                      label: 'Last interaction',
+                      value: contact.lastInteraction ? formatWhen(contact.lastInteraction) : '—',
+                    },
                     { label: 'Company', value: contact.company ?? '—' },
                   ]}
                 />
@@ -203,7 +206,7 @@ export function CallDetail({ call, from }: { call: Call; from: { label: string; 
               items={[
                 { label: 'Call ID', value: <span className="font-mono text-xs">{call.id}</span> },
                 { label: 'Direction', value: call.direction },
-                { label: 'Line', value: number?.label },
+                { label: 'Line', value: line?.label ?? '—' },
                 { label: 'Recording', value: call.recording ? 'Stored' : 'Off' },
               ]}
             />

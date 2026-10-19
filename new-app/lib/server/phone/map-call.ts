@@ -1,5 +1,6 @@
-import type { Contact, HumanCall, HumanCallNote, VoicemailMessage } from "@prisma/client";
+import type { Contact, HumanCall, HumanCallNote, PhoneNumber, VoicemailMessage } from "@prisma/client";
 import type { CallOutcome, PhoneCallDto } from "@/lib/phone/types";
+import { humanCallHasRecordingArtifact } from "@/lib/server/phone/resolve-recording-url";
 
 function mapStatusToOutcome(status: string, disposition: string | null): CallOutcome {
   const d = (disposition || "").toLowerCase();
@@ -22,6 +23,7 @@ export function mapHumanCallToDto(
     voicemail?: VoicemailMessage | null;
     callNotes?: HumanCallNote[];
     numberLabel?: string | null;
+    phoneNumber?: PhoneNumber | null;
   },
 ): PhoneCallDto {
   const contact = opts?.contact;
@@ -54,7 +56,7 @@ export function mapHumanCallToDto(
     user: call.agentUserId ? "Operator" : null,
     handled: call.handled,
     callbackNeeded: call.callbackNeeded,
-    recording: Boolean(call.recordingUrl),
+    recording: humanCallHasRecordingArtifact(call),
     recordingUrl: call.recordingUrl,
     disposition: call.disposition,
     source: call.source,
@@ -74,6 +76,36 @@ export function mapHumanCallToDto(
       createdAt: n.createdAt.toISOString(),
       author: n.createdByUserId ? "Team" : null,
     })),
+    contactSummary: contact
+      ? {
+          id: contact.id,
+          name:
+            [contact.firstName, contact.lastName].filter(Boolean).join(" ") ||
+            contact.company ||
+            contact.phone,
+          phone: contact.phone,
+          company: contact.company,
+          status: contact.status,
+          owner: contact.assignedUser,
+          lastInteraction:
+            contact.lastReply?.toISOString() ||
+            contact.lastMessaged?.toISOString() ||
+            null,
+        }
+      : null,
+    lineSummary: opts?.phoneNumber
+      ? {
+          id: opts.phoneNumber.id,
+          label: opts.phoneNumber.friendlyName || opts.phoneNumber.e164,
+          e164: opts.phoneNumber.e164,
+        }
+      : call.callerIdNumber
+        ? {
+            id: call.phoneNumberId || "line",
+            label: opts?.numberLabel || call.callerIdNumber,
+            e164: call.callerIdNumber,
+          }
+        : null,
     metadata: (call.metadata as Record<string, unknown> | null) ?? null,
   };
 }

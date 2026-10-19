@@ -82,6 +82,21 @@ export type Call = {
   }
   campaignId?: string
   disposition?: string
+  callNotes?: { id: string; content: string; createdAt: string; author: string | null }[]
+  contactSummary?: {
+    id: string
+    name: string
+    phone: string
+    company: string | null
+    status: string
+    owner: string | null
+    lastInteraction: string | null
+  }
+  lineSummary?: {
+    id: string
+    label: string
+    e164: string
+  }
 }
 
 export const BUSINESS = {
