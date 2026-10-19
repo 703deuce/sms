@@ -58,6 +58,8 @@ export type Call = {
   routedTo: string
   user?: string
   recording: boolean
+  /** Telnyx/S3 URL when stored on HumanCall (server-rendered on detail). */
+  recordingUrl?: string | null
   callbackNeeded: boolean
   handled: boolean
   voicemail?: { transcript: string; durationSec: number }

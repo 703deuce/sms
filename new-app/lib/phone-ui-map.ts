@@ -23,6 +23,7 @@ export function mapPhoneCallDtoToCall(dto: PhoneCallDto): Call {
     routedTo: dto.routedTo,
     user: dto.user || undefined,
     recording: dto.recording,
+    recordingUrl: dto.recordingUrl,
     callbackNeeded: dto.callbackNeeded,
     handled: dto.handled,
     disposition: dto.disposition || undefined,
