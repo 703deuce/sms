@@ -14,6 +14,7 @@ import {
 } from "@/lib/server/receptionist/agent-store";
 import type { ReceptionistPublishedBundle } from "@/lib/server/receptionist/draft-types";
 import { syncReceptionistPhoneAssignment } from "@/lib/server/receptionist/phone-assignment";
+import { buildVoiceAgentRuntimeConfigFromEditor } from "@/lib/server/receptionist/map-editor-to-runtime-config";
 
 export type ReceptionistStateDto = {
   agentId: string;
@@ -115,12 +116,17 @@ export async function publishReceptionist(workspaceId: string): Promise<{
   });
   const nextVersion = (lastVersion?.version ?? 0) + 1;
 
+  const runtimeVoiceConfig = buildVoiceAgentRuntimeConfigFromEditor(
+    draftEnvelope.editor,
+    bundle,
+  );
+
   const version = await prisma.voiceAgentVersion.create({
     data: {
       workspaceId,
       agentId: agent.id,
       version: nextVersion,
-      config: bundle as unknown as object,
+      config: runtimeVoiceConfig,
       changeLog: "Published from new-app receptionist",
       isMain: true,
       deploymentStatus: "published",
@@ -142,12 +148,25 @@ export async function publishReceptionist(workspaceId: string): Promise<{
     },
   });
 
-  await syncReceptionistPhoneAssignment(workspaceId, agent.id, draftEnvelope.editor, {
+  const lkResult = await syncReceptionistPhoneAssignment(workspaceId, agent.id, draftEnvelope.editor, {
     publish: true,
     publishedBundle: bundle,
   });
 
-  return { ok: true, state: await getReceptionistState(workspaceId) };
+  const state = await getReceptionistState(workspaceId);
+  if (lkResult && lkResult.ok === false) {
+    await prisma.voiceAgent.update({
+      where: { id: agent.id },
+      data: { status: "CONFIGURATION_ERROR", healthMessage: lkResult.error || "LiveKit provision failed" },
+    });
+    return {
+      ok: false,
+      errors: [lkResult.error || "LiveKit provisioning failed"],
+      state: await getReceptionistState(workspaceId),
+    };
+  }
+
+  return { ok: true, state };
 }
 
 export async function pauseReceptionist(workspaceId: string): Promise<ReceptionistStateDto> {

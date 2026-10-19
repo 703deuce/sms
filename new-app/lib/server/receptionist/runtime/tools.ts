@@ -7,6 +7,18 @@ export async function executeVoiceV3ToolForNewApp(payload: {
   arguments: Record<string, unknown>;
   functionCallId: string;
 }): Promise<Record<string, unknown>> {
+  try {
+    const { executeVoiceV3ToolMonolith } = await import(
+      "@/lib/server/receptionist/runtime/voice-v3-bridge"
+    );
+    return await executeVoiceV3ToolMonolith(payload);
+  } catch (monolithErr) {
+    console.warn("VOICE_V3_MONOLITH_TOOL_FALLBACK", {
+      tool: payload.toolName,
+      message: monolithErr instanceof Error ? monolithErr.message : String(monolithErr),
+    });
+  }
+
   const session = getLiveSession(payload.liveSessionId);
   if (!session) {
     return {
@@ -58,9 +70,8 @@ export async function executeVoiceV3ToolForNewApp(payload: {
         output = {
           ok: false,
           status: "error",
-          code: "TOOL_NOT_PORTED",
-          message:
-            "Scheduling and transfer tools require calendar/LiveKit adapters in new-app runtime (pending live provider wiring).",
+          code: "TOOL_UNAVAILABLE",
+          message: "Voice V3 monolith runtime unavailable for this tool in fallback mode.",
         };
     }
 
@@ -69,7 +80,11 @@ export async function executeVoiceV3ToolForNewApp(payload: {
         workspaceId: session.workspaceId,
         callId: session.callId,
         status: output.ok ? "success" : "failed",
-        input: { toolName: payload.toolName, arguments: payload.arguments, functionCallId: payload.functionCallId },
+        input: {
+          toolName: payload.toolName,
+          arguments: payload.arguments,
+          functionCallId: payload.functionCallId,
+        },
         output,
         latencyMs: Date.now() - started,
         completedAt: new Date(),

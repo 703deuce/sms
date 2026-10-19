@@ -12,6 +12,7 @@ import { useAgent } from '@/components/providers/agent-provider'
 import { renderGreeting } from '@/lib/agent'
 import { cn } from '@/lib/utils'
 import { Pills } from './ai-ui'
+import { fetchReceptionistTestStatus } from '@/lib/receptionist-api'
 
 type Line = { who: 'agent' | 'caller' | 'tool'; text: string; ok?: boolean }
 
@@ -60,8 +61,25 @@ export function TestConsole() {
   const [running, setRunning] = useState(false)
   const [phone, setPhone] = useState('')
   const [calling, setCalling] = useState(false)
+  const [testStatus, setTestStatus] = useState<{
+    workerReachable: boolean
+    ready: boolean
+    detail: string
+  } | null>(null)
   const end = useRef<HTMLDivElement>(null)
   const cfg = version === 'draft' ? draft : live
+
+  useEffect(() => {
+    void fetchReceptionistTestStatus()
+      .then((s) =>
+        setTestStatus({
+          workerReachable: s.worker.reachable,
+          ready: s.readiness.ready,
+          detail: s.worker.detail,
+        }),
+      )
+      .catch(() => setTestStatus({ workerReachable: false, ready: false, detail: 'status_unavailable' }))
+  }, [version])
 
   useEffect(() => {
     end.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
@@ -90,8 +108,8 @@ export function TestConsole() {
         <div className="flex flex-wrap items-center gap-3 border-b px-5 py-3">
           <span className="flex size-8 items-center justify-center rounded-full tile-primary"><Bot className="size-4" /></span>
           <div className="flex min-w-0 flex-1 flex-col">
-            <span className="text-sm font-semibold">{cfg.identity.name} · simulated call</span>
-            <span className="text-xs text-muted-foreground">Testing the {version} version · nothing is booked or sent</span>
+            <span className="text-sm font-semibold">{cfg.identity.name} · example conversation</span>
+            <span className="text-xs text-muted-foreground">Scripted example for the {version} config — not a live agent session</span>
           </div>
           {step >= 0 && <StatusBadge tone={done ? 'neutral' : 'success'}>{done ? 'Ended' : 'In call'}</StatusBadge>}
         </div>
@@ -137,7 +155,20 @@ export function TestConsole() {
       </section>
 
       <aside className="flex flex-col gap-4">
-        <Panel title="Test setup">
+        <Panel title="Runtime readiness">
+          <ul className="flex flex-col gap-2 text-sm">
+            <li className="flex justify-between gap-2">
+              <span>Configuration</span>
+              <StatusBadge tone={testStatus?.ready ? 'success' : 'warning'}>{testStatus?.ready ? 'Ready' : 'Needs setup'}</StatusBadge>
+            </li>
+            <li className="flex justify-between gap-2">
+              <span>Worker API</span>
+              <StatusBadge tone={testStatus?.workerReachable ? 'success' : 'danger'}>{testStatus?.workerReachable ? 'Reachable' : 'Unreachable'}</StatusBadge>
+            </li>
+            {testStatus?.detail && <li className="text-xs text-muted-foreground">{testStatus.detail}</li>}
+          </ul>
+        </Panel>
+        <Panel title="Example script">
           <div className="flex flex-col gap-4">
             <Pills label="Version" value={version} onChange={(v) => { setVersion(v); reset() }} options={[{ value: 'draft', label: 'Draft' }, { value: 'live', label: 'Live' }]} />
             <div className="flex flex-col gap-2">
@@ -158,8 +189,14 @@ export function TestConsole() {
             <Input id="test-phone" inputMode="tel" placeholder="+1 312 555 0100" value={phone} onChange={(e) => setPhone(e.target.value)} />
             <Button
               variant="outline"
-              disabled={calling || phone.replace(/\D/g, '').length < 10}
-              onClick={async () => { setCalling(true); await new Promise((r) => setTimeout(r, 1500)); setCalling(false); toast.success(`Calling ${phone} from your test line`) }}
+              disabled={calling || phone.replace(/\D/g, '').length < 10 || !testStatus?.ready}
+              onClick={async () => {
+                setCalling(true)
+                toast.message('PSTN test requires published config and LiveKit routing', {
+                  description: 'Call your assigned business line from another phone after publishing.',
+                })
+                setCalling(false)
+              }}
             >
               {calling ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <PhoneCall data-icon="inline-start" />}
               Call me
@@ -168,7 +205,7 @@ export function TestConsole() {
         </Panel>
         <div className="flex items-center gap-2 rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
           <CalendarCheck className="size-4 shrink-0" aria-hidden />
-          Test bookings use a sandbox calendar and are deleted automatically.
+          Live PSTN tests use your published line and real calendar integrations after publish.
         </div>
       </aside>
     </div>

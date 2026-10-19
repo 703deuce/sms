@@ -86,3 +86,65 @@ export async function fetchReceptionistAnalytics(from?: string, to?: string) {
 export async function fetchReceptionistReadiness() {
   return parse(await fetch("/api/receptionist/readiness"));
 }
+
+export async function fetchReceptionistKnowledgeFaqs() {
+  return parse<
+    { id: string; question: string; answer: string; status: string; updatedAt: string }[]
+  >(await fetch("/api/receptionist/knowledge/faqs"));
+}
+
+export async function fetchReceptionistKnowledgeGaps() {
+  return parse<
+    {
+      id: string;
+      question: string;
+      count: number;
+      impact: string;
+      lastCallId: string | null;
+    }[]
+  >(await fetch("/api/receptionist/knowledge/gaps"));
+}
+
+export async function fetchReceptionistKnowledgeSources() {
+  return parse<
+    { id: string; name: string; type: string; status: string; updatedAt: string }[]
+  >(await fetch("/api/receptionist/knowledge/sources"));
+}
+
+export async function saveReceptionistFaq(input: {
+  id?: string;
+  question: string;
+  answer: string;
+}) {
+  return parse(
+    await fetch("/api/receptionist/knowledge/faqs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+  );
+}
+
+export async function resolveReceptionistGap(gapId: string, answer: string) {
+  return parse(
+    await fetch("/api/receptionist/knowledge/gaps", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ gapId, answer }),
+    }),
+  );
+}
+
+export async function addReceptionistWebsiteSource(url: string) {
+  return parse(
+    await fetch("/api/receptionist/knowledge/sources", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "website", url }),
+    }),
+  );
+}
+
+export async function fetchReceptionistTestStatus() {
+  return parse(await fetch("/api/receptionist/test/status"));
+}

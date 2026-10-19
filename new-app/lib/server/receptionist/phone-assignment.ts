@@ -15,7 +15,7 @@ export async function syncReceptionistPhoneAssignment(
     paused?: boolean;
     publishedBundle?: ReceptionistPublishedBundle;
   },
-): Promise<void> {
+): Promise<{ ok: boolean; error?: string } | void> {
   const prisma = getPrisma();
   const phoneNumberId = editor.connection?.id?.trim();
   if (!phoneNumberId) return;
@@ -81,8 +81,33 @@ export async function syncReceptionistPhoneAssignment(
     },
   });
 
-  if (opts?.publish && opts.publishedBundle) {
-    void opts.publishedBundle;
-    // LiveKit dispatch + Telnyx inbound trunk reconciliation runs in deployment pipeline.
+  if (opts?.publish && opts.publishedBundle && agentId && phoneNumberId) {
+    const versionId = (
+      await getPrisma().voiceAgent.findUnique({
+        where: { id: agentId },
+        select: { publishedVersionId: true },
+      })
+    )?.publishedVersionId;
+    if (versionId) {
+      const { provisionReceptionistLiveKitOnPublish } = await import(
+        "@/lib/server/receptionist/livekit/provision"
+      );
+      const lk = await provisionReceptionistLiveKitOnPublish({
+        workspaceId,
+        phoneNumberId,
+        agentId,
+        publishedVersionId: versionId,
+        bundle: opts.publishedBundle,
+      });
+      await getPrisma().workspaceCallRouting.update({
+        where: { workspaceId },
+        data: {
+          providerSyncStatus: lk.ok ? "synced" : "error",
+          providerSyncError: lk.ok ? null : lk.error || "livekit_provision_failed",
+        },
+      });
+      return { ok: lk.ok, error: lk.error };
+    }
   }
+  return { ok: true };
 }

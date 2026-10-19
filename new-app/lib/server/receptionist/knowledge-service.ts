@@ -94,6 +94,37 @@ export async function deleteFaq(workspaceId: string, id: string) {
   await prisma.voiceKnowledgeSource.deleteMany({ where: { id, workspaceId } });
 }
 
+export async function addWebsiteSource(workspaceId: string, url: string) {
+  const prisma = getPrisma();
+  let kb = await prisma.voiceKnowledgeBase.findFirst({
+    where: { workspaceId, status: "active" },
+  });
+  if (!kb) {
+    kb = await prisma.voiceKnowledgeBase.create({
+      data: { workspaceId, name: "Receptionist knowledge", status: "active" },
+    });
+  }
+  const source = await prisma.voiceKnowledgeSource.create({
+    data: {
+      workspaceId,
+      knowledgeBaseId: kb.id,
+      sourceType: "website",
+      name: url,
+      crawlUrl: url,
+      status: "pending",
+    },
+  });
+  await prisma.voiceWebsiteCrawlJob.create({
+    data: {
+      workspaceId,
+      knowledgeBaseId: kb.id,
+      rootUrl: url,
+      status: "DISCOVERING",
+    },
+  });
+  return source;
+}
+
 export async function resolveKnowledgeGap(workspaceId: string, gapId: string, answer: string) {
   const prisma = getPrisma();
   const gap = await prisma.voiceKnowledgeGap.findFirst({ where: { id: gapId, workspaceId } });

@@ -12,7 +12,14 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const workspaceId = await resolveWorkspaceId();
-    const data = await listFaqsForWorkspace(workspaceId);
+    const rows = await listFaqsForWorkspace(workspaceId);
+    const data = rows.map((f) => ({
+      id: f.id,
+      q: f.question,
+      a: f.answer,
+      status: f.status === "ready" ? "published" : f.status,
+      source: "Knowledge base",
+    }));
     return NextResponse.json({ data });
   } catch (err) {
     return jsonError(err, 500);

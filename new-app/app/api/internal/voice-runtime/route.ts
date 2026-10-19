@@ -50,13 +50,26 @@ export async function POST(request: Request) {
           ok: true,
           result: await executeVoiceV3ToolForNewApp(payload as never),
         });
-      case "resolve_voice_v3_delegated_runtime_context":
-        return NextResponse.json({ ok: true, result: { liveContextEvents: [] } });
-      case "commit_voice_v3_livekit_caller_utterance":
-        return NextResponse.json({
-          ok: true,
-          result: { committed: true, sequence: 1, turnId: "turn_1" },
+      case "resolve_voice_v3_delegated_runtime_context": {
+        const { resolveDelegatedContextMonolith } = await import(
+          "@/lib/server/receptionist/runtime/voice-v3-bridge"
+        );
+        const result = await resolveDelegatedContextMonolith({
+          liveSessionId: String(payload.liveSessionId || ""),
+          delegationId: payload.delegationId as string | null | undefined,
         });
+        return NextResponse.json({ ok: true, result });
+      }
+      case "commit_voice_v3_livekit_caller_utterance": {
+        const { commitCallerUtteranceMonolith } = await import(
+          "@/lib/server/receptionist/runtime/voice-v3-bridge"
+        );
+        const result = await commitCallerUtteranceMonolith({
+          liveSessionId: String(payload.liveSessionId || ""),
+          utterance: String(payload.utterance || ""),
+        });
+        return NextResponse.json({ ok: true, result });
+      }
       default:
         return NextResponse.json({ ok: false, error: `Unknown action: ${action}` }, { status: 400 });
     }
