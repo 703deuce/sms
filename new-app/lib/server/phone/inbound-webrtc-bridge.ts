@@ -11,6 +11,7 @@ import {
   buildWebRtcAgentSipUri,
   parseTelephonyCredentialConnectionId,
 } from "@/lib/server/phone/telnyx-webrtc-sip";
+import { patchInboundSession } from "@/lib/server/phone/inbound-session";
 async function resolveSipUsername(): Promise<{ sipUsername: string; credentialConnectionId: string | null }> {
   const credentialId = process.env.TELNYX_TELEPHONY_CREDENTIAL_ID?.trim();
   if (!credentialId) return { sipUsername: "", credentialConnectionId: null };
@@ -117,12 +118,14 @@ export async function bridgeInboundCallToWebRtc(input: {
       where: { id: input.humanCallId },
       data: {
         telnyxCallLegId: agentLegId,
-        metadata: {
-          ...meta,
+        metadata: patchInboundSession(meta, {
           webrtcAgentLegId: agentLegId,
+          browserCallControlId: agentLegId,
           inboundBridge: "dial_agent",
+          inboundBridgeStatus: "dialing_browser",
+          callerCallControlId: input.telnyxCallControlId,
           parentCallControlId: input.telnyxCallControlId,
-        },
+        }),
       },
     });
 
@@ -134,15 +137,26 @@ export async function bridgeInboundCallToWebRtc(input: {
     });
     return { ok: true };
   } catch (err) {
+    const reason = err instanceof Error ? err.message : "bridge_failed";
     phoneServerLog("inbound-webrtc-bridge", "bridge_failed", {
       humanCallId: input.humanCallId,
-      error: err instanceof Error ? err.message : "unknown",
+      error: reason,
       telnyxBody: err instanceof TelnyxApiError ? err.body : undefined,
     });
-    return {
-      ok: false,
-      reason: err instanceof Error ? err.message : "bridge_failed",
-    };
+    const prisma = getPrisma();
+    const call = await prisma.humanCall.findUnique({ where: { id: input.humanCallId } });
+    const meta = (call?.metadata || {}) as Record<string, unknown>;
+    await prisma.humanCall.update({
+      where: { id: input.humanCallId },
+      data: {
+        metadata: patchInboundSession(meta, {
+          inboundBridgeStatus: "failed",
+          inboundBridgeError: reason,
+        }),
+      },
+    });
+    await telnyxCallAction(input.telnyxCallControlId, "hangup").catch(() => undefined);
+    return { ok: false, reason };
   }
 }
 
@@ -152,26 +166,47 @@ export async function completeWebRtcAgentLegAnswer(input: {
   humanCallId: string;
   workspaceId: string;
 }) {
+  const prisma = getPrisma();
+  const existing = await prisma.humanCall.findUnique({ where: { id: input.humanCallId } });
+  const meta = (existing?.metadata || {}) as Record<string, unknown>;
+  if (meta.inboundBridge === "bridged") {
+    phoneServerLog("inbound-webrtc-bridge", "bridge_skipped_duplicate", {
+      humanCallId: input.humanCallId,
+    });
+    return;
+  }
+
   phoneServerLog("inbound-webrtc-bridge", "agent_leg_answered_bridge", {
     humanCallId: input.humanCallId,
     parentPrefix: input.parentCallControlId.slice(0, 8),
     agentPrefix: input.agentCallControlId.slice(0, 8),
   });
 
-  await telnyxRequest(telnyxCallControlPath(input.parentCallControlId, "/actions/bridge"), {
-    method: "POST",
-    body: { call_control_id: input.agentCallControlId },
-  });
+  try {
+    await telnyxRequest(telnyxCallControlPath(input.parentCallControlId, "/actions/bridge"), {
+      method: "POST",
+      body: { call_control_id: input.agentCallControlId },
+    });
+  } catch (err) {
+    phoneServerLog("inbound-webrtc-bridge", "bridge_action_failed", {
+      humanCallId: input.humanCallId,
+      error: err instanceof Error ? err.message : "unknown",
+      telnyxBody: err instanceof TelnyxApiError ? err.body : undefined,
+    });
+    throw err;
+  }
 
-  const prisma = getPrisma();
-  const existing = await prisma.humanCall.findUnique({ where: { id: input.humanCallId } });
-  const meta = (existing?.metadata || {}) as Record<string, unknown>;
   await prisma.humanCall.update({
     where: { id: input.humanCallId },
     data: {
       status: "in_progress",
       answeredAt: new Date(),
-      metadata: { ...meta, inboundBridge: "bridged", ringTimeoutAt: null },
+      metadata: patchInboundSession(meta, {
+        inboundBridge: "bridged",
+        inboundBridgeStatus: "bridged",
+        ringTimeoutAt: null,
+        browserCallControlId: input.agentCallControlId,
+      }),
     },
   });
 }

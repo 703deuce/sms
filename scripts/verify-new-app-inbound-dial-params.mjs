@@ -70,6 +70,20 @@ async function main() {
       ccAppId,
       "— Dial must use Call Control app only (see docs/NEW-APP-INBOUND-WEBRTC-CALL-FLOW.md).",
     );
+    try {
+      const sipConn = await telnyx(`/credential_connections/${encodeURIComponent(credConn)}`);
+      const inbound = sipConn.inbound ?? sipConn.inbound_settings;
+      console.log(
+        "  credential_connection inbound (SIP URI reachability):",
+        inbound ? JSON.stringify(inbound).slice(0, 280) : "(no inbound block in API response — verify in Mission Control)",
+      );
+    } catch (e) {
+      console.log(
+        "  WARN: could not load credential_connections/",
+        credConn,
+        "— manually verify SIP URI calling to this connection per Telnyx support article 2925713",
+      );
+    }
   }
 
   const sampleTo = `sip:${cred.sip_username}@sip.telnyx.com;secure=srtp`;

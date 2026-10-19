@@ -144,6 +144,8 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
         const client = new TelnyxRTC({ login_token: tokenRes.loginToken })
         telnyxClientRef.current = client
+        const rtc = client as { remoteElement?: HTMLAudioElement }
+        rtc.remoteElement = audio
 
         client.on('telnyx.ready', () => {
           phoneClientLog('webrtc', 'telnyx_ready')
@@ -198,6 +200,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
               const from = call.remoteCallerNumber || 'Unknown'
               const to = call.localCallerNumber || ''
               phoneClientLog('webrtc', 'inbound_ringing_ui', { webrtcId, from, to })
+              setIncomingCall({ webrtcId, from, to, webrtcCall: call })
               void fetchCalls({ direction: 'inbound', limit: 5, filter: undefined }).then((res) => {
                 const digits = from.replace(/\D/g, '').slice(-10)
                 const match = res.data.find(
@@ -205,16 +208,12 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
                     r.callerNumber === from ||
                     r.callerNumber.replace(/\D/g, '').endsWith(digits),
                 )
-                setIncomingCall({
-                  webrtcId,
-                  from,
-                  to,
-                  humanCallId: match?.id,
-                  webrtcCall: call,
-                })
-              }).catch(() => {
-                setIncomingCall({ webrtcId, from, to, webrtcCall: call })
-              })
+                if (match?.id) {
+                  setIncomingCall((prev) =>
+                    prev && prev.webrtcId === webrtcId ? { ...prev, humanCallId: match.id } : prev,
+                  )
+                }
+              }).catch(() => undefined)
               return
             }
 

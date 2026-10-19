@@ -90,6 +90,8 @@ export async function processInboundCallInitiated(input: {
       metadata: {
         ringTimeoutAt: route.mode === "ring_browser" ? timeoutAt.toISOString() : null,
         inboundRoute: route.mode,
+        inboundBridgeStatus: route.mode === "ring_browser" ? "received" : undefined,
+        callerCallControlId: input.telnyxCallControlId ?? undefined,
       },
     },
   });

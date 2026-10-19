@@ -255,15 +255,9 @@ export async function registerInboundAnswer(input: {
   });
   if (!call) throw new Error("Call not found");
 
-  const { telnyxCallAction } = await import("@/lib/server/phone/telnyx-call-actions");
-  const { maybeStartCallRecordingOnAnswer } = await import("@/lib/server/phone/recording-runtime");
-
-  if (call.telnyxCallControlId) {
-    await telnyxCallAction(call.telnyxCallControlId, "answer").catch(() => undefined);
-  }
-
   const notes = `${(call.notes || "").replace(/webrtc:[^\s]+/g, "").trim()} ${input.webrtcCallId ? `webrtc:${input.webrtcCallId}` : ""}`.trim();
   const meta = (call.metadata || {}) as Record<string, unknown>;
+  const awaitingBridge = meta.inboundBridge === "dial_agent";
   const updated = await prisma.humanCall.update({
     where: { id: call.id },
     data: {
@@ -276,11 +270,14 @@ export async function registerInboundAnswer(input: {
     },
   });
 
-  await maybeStartCallRecordingOnAnswer({
-    workspaceId: input.workspaceId,
-    humanCallId: call.id,
-    telnyxCallControlId: call.telnyxCallControlId,
-  });
+  if (!awaitingBridge) {
+    const { maybeStartCallRecordingOnAnswer } = await import("@/lib/server/phone/recording-runtime");
+    await maybeStartCallRecordingOnAnswer({
+      workspaceId: input.workspaceId,
+      humanCallId: call.id,
+      telnyxCallControlId: call.telnyxCallControlId,
+    });
+  }
 
   return updated;
 }
@@ -372,6 +369,27 @@ export async function processHumanCallWebhookEvent(input: {
     });
   }
   if (!call) return { ok: false, reason: "human_call_not_found" };
+
+  const metaBefore = (call.metadata || {}) as Record<string, unknown>;
+  if (clientState.kind === "webrtc_agent_leg" && clientState.humanCallId) {
+    const { patchInboundSession } = await import("@/lib/server/phone/inbound-session");
+    if (input.eventType === "call.ringing") {
+      await prisma.humanCall.update({
+        where: { id: call.id },
+        data: {
+          metadata: patchInboundSession(metaBefore, { inboundBridgeStatus: "browser_ringing" }),
+        },
+      });
+    }
+    if (input.eventType === "call.answered") {
+      await prisma.humanCall.update({
+        where: { id: call.id },
+        data: {
+          metadata: patchInboundSession(metaBefore, { inboundBridgeStatus: "browser_answered" }),
+        },
+      });
+    }
+  }
 
   if (
     input.eventType === "call.answered" &&
