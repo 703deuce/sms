@@ -1,9 +1,7 @@
 import type { AgentConfig } from "@/lib/agent";
 import { getPrisma } from "@/lib/server/db";
-import {
-  compilePublishedBundle,
-  validateEditorForPublish,
-} from "@/lib/server/receptionist/compile-runtime";
+import { compilePublishedBundle } from "@/lib/server/receptionist/compile-runtime";
+import { validateReceptionistPublish } from "@/lib/server/voice-v3/publish-gate";
 import {
   ensureWorkspaceReceptionistAgent,
   findWorkspaceReceptionistAgent,
@@ -93,7 +91,7 @@ export async function publishReceptionist(workspaceId: string): Promise<{
   const agent = await ensureWorkspaceReceptionistAgent(workspaceId);
   const draftEnvelope = loadDraftFromAgent(agent);
 
-  const validation = validateEditorForPublish(draftEnvelope.editor);
+  const validation = await validateReceptionistPublish(workspaceId, draftEnvelope.editor);
   if (!validation.ok) {
     return { ok: false, errors: validation.errors };
   }

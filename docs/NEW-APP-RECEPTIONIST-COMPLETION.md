@@ -1,49 +1,49 @@
-# New-App AI Receptionist V3 — completion status
+# New-App AI Receptionist V3 — native runtime completion
 
-**Branch:** `cursor/ar-v3-greenfield-f350`  
-**Last verified:** `npm run test:receptionist` (new-app) — ALL PASS against local dev on port 3100.
+**Branch:** `cursor/ar-v3-greenfield-f350`
 
-## Delivered in this pass (all three tracks)
+## Architecture (final)
 
-### 1. UI glue (Knowledge, Analytics, Test)
+- **No monolith bundle** — removed `voice-v3-bridge.ts`, `bundle:voice-v3`, and `voice-v3-runtime.bundle.mjs`.
+- **No silent tool fallback** — `execute_voice_v3_livekit_tool` uses `new-app/lib/server/voice-v3/execute-tool.ts` only; missing session or disabled tools return explicit errors.
+- **Published config only for SIP** — inbound LiveKit bootstrap loads `VoiceAgentVersion` / `newAppReceptionist` snapshot; unpublishable without `publishedVersionId`.
+- **Browser test** — draft or live via `POST /api/receptionist/test/livekit` + `LiveKitBrowserTest` UI (real `livekit-client` connect).
 
-| Surface | Route | Backend |
-|--------|--------|---------|
-| Knowledge | `/app/receptionist/knowledge` | `/api/receptionist/knowledge/{faqs,gaps,sources}` |
-| Analytics | `/app/receptionist/analytics` | `/api/receptionist/analytics` |
-| Test | `/app/receptionist/test` | `/api/receptionist/test/status` + readiness |
+## Native modules
 
-Removed `lib/data` fixture usage on these screens. Test console shows real readiness + worker API reachability; scripted scenarios are labeled as examples (not live LiveKit).
+| Area | Path |
+|------|------|
+| Session resolve | `lib/server/voice-v3/resolve-livekit-session.ts` |
+| Tool execution | `lib/server/voice-v3/execute-tool.ts` |
+| Publish capability gate | `lib/server/voice-v3/publish-gate.ts` |
+| Scheduling | `lib/server/voice-v3/scheduling/*` (Calendly, Microsoft Graph, Google Calendar) |
+| Knowledge | `lib/server/voice-v3/knowledge/search.ts` |
+| Post-call | `lib/server/voice-v3/post-call/finalize.ts` + `finalize_voice_v3_call` action |
+| LiveKit test / verify | `lib/server/voice-v3/livekit/browser-test.ts` |
+| Dispatch sync | `lib/server/receptionist/livekit/dispatch-sync.ts` |
 
-### 2. Scheduling / Voice V3 tools
+## Tools implemented (native)
 
-- **Publish** stores monolith-compatible `VoiceAgentVersion.config` via `map-editor-to-runtime-config.ts` (`advanced.appointmentReceptionistWizard` + `newAppReceptionist` snapshot).
-- **Runtime:** `voice-v3-bridge.ts` loads optional `voice-v3-runtime.bundle.mjs` when present (esbuild from monolith `src/`). Without bundle, session/tools use new-app fallback (`update_intake`, `request_callback`, `end_call`) and log `VOICE_V3_MONOLITH_*_FALLBACK`.
-- **Build:** `pnpm run bundle:voice-v3` (alias plugin + Prisma shim). Prebuild runs bundle with `|| true` so Coolify builds are not blocked; run bundle manually on release hosts that need full scheduling tools in-process.
+`update_intake`, `set_scheduling_preference`, `find_availability`, `book_appointment`, `send_booking_link`, `transfer_call`, `request_callback`, `report_unwanted_solicitor`, `business_answer`, `end_call`.
 
-### 3. LiveKit provisioning
+`find_appointment`, `reschedule_appointment`, `cancel_appointment` return explicit `provider_limit` / `not_implemented` until provider-specific lookup/mutation is completed (no fake success).
 
-- **On publish:** `provisionReceptionistLiveKitOnPublish` syncs per-DID dispatch metadata when `phone.settingsJson.telephony.provision` is `livekit_sip` + active trunk (`livekit/dispatch-sync.ts`).
-- **Workspace routing:** `providerSyncStatus` / `providerSyncError` updated on `WorkspaceCallRouting`.
-- Publish fails closed when LiveKit metadata sync fails after trunk is provisioned.
-
-## Core stack (unchanged)
-
-- Draft / publish / pause / resume / discard — `new-app/lib/server/receptionist/*`
-- Python worker → `POST /api/internal/voice-runtime`
-- Overview + calls list/detail wired to Prisma
-
-## Follow-up (production hardening)
-
-1. Complete `bundle:voice-v3` graph (trim monolith imports or seal a smaller entry) and commit bundle artifact or run bundle in Coolify prebuild when env allows.
-2. Browser PSTN test flow (outbound test call) when Telnyx test credentials are configured.
-3. Post-call pipeline (recording, summary, gap extraction) on call completion webhooks.
-
-## Commands
+## Tests run
 
 ```bash
 cd new-app
-pnpm dev                    # port 3100
-pnpm run test:receptionist
-pnpm run bundle:voice-v3    # optional full Voice V3 runtime bundle
+pnpm run test:voice-v3
+RECEPTIONIST_TEST_BASE_URL=http://127.0.0.1:3100 pnpm run test:receptionist
 ```
+
+## Remaining live-only validation
+
+- End-to-end PSTN call with Python worker + real calendar OAuth tokens
+- LiveKit dispatch rule verification against production Telnyx trunk (requires env + provisioned number)
+- Full reschedule/cancel/find-appointment per provider
+
+## UI audit (fixtures removed)
+
+- Knowledge, Analytics, Test — API-backed
+- Publish review — no `lib/data` FAQ fixture
+- Example script on Test page labeled separately from LiveKit live test

@@ -12,7 +12,6 @@ import { useAgent } from '@/components/providers/agent-provider'
 import { useResolvedConnection } from '@/components/numbers/number-picker'
 import { Callout } from '@/components/numbers/number-ui'
 import type { AgentConfig } from '@/lib/agent'
-import { FAQS } from '@/lib/data'
 import { formatPhone, formatWhen } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { AgentStatusBadge } from './ai-ui'
@@ -53,7 +52,7 @@ export function PublishReview() {
     { label: 'Phone number', state: !conn ? 'fail' : conn.verified ? 'pass' : 'warn', detail: conn ? `${formatPhone(conn.number)} · ${conn.statusLabel}` : 'No number connected', href: '/app/receptionist/call-handling' },
     { label: 'Voice', state: draft.identity.customVoiceId && !/^voice_\w{6,}$/.test(draft.identity.customVoiceId) ? 'fail' : 'pass', detail: draft.identity.customVoiceId ? `Custom ${draft.identity.customVoiceId}` : 'Library voice', href: '/app/receptionist/agent#identity' },
     { label: 'Greeting', state: draft.identity.greeting.trim().length > 10 ? 'pass' : 'fail', detail: draft.identity.greeting.trim() ? 'Opening line set' : 'Opening line is empty', href: '/app/receptionist/agent#greeting' },
-    { label: 'Knowledge', state: caps.answer ? (FAQS.some((f) => f.status === 'published') ? 'pass' : 'warn') : 'pass', detail: caps.answer ? `${FAQS.filter((f) => f.status === 'published').length} published answers · 3 open gaps` : 'Answering questions is off', href: '/app/receptionist/knowledge' },
+    { label: 'Knowledge', state: caps.answer ? 'warn' : 'pass', detail: caps.answer ? 'Verify FAQs and sources on the Knowledge page before publish' : 'Answering questions is off', href: '/app/receptionist/knowledge' },
     { label: 'Booking', state: !caps.book ? 'pass' : draft.appointments.provider === 'none' && draft.appointments.strategy === 'live' ? 'fail' : draft.appointments.types.some((t) => t.enabled) ? 'pass' : 'warn', detail: !caps.book ? 'Booking is off' : `${draft.appointments.types.filter((t) => t.enabled).length} active types · ${draft.appointments.strategy === 'live' ? 'live calendar' : draft.appointments.strategy}`, href: '/app/receptionist/appointments' },
     { label: 'Transfers', state: !caps.transfer ? 'pass' : draft.transfers.some((t) => t.enabled) ? 'pass' : 'fail', detail: !caps.transfer ? 'Transfers are off' : `${draft.transfers.filter((t) => t.enabled).length} enabled destinations`, href: '/app/receptionist/call-handling#transfers' },
     { label: 'Recovery SMS consent', state: draft.recovery.enabled && draft.recovery.consentMode === 'disabled' ? 'fail' : 'pass', detail: draft.recovery.enabled ? `On · ${draft.recovery.consentMode === 'existing' ? 'existing consent' : 'asks on call'}` : 'Off', href: '/app/receptionist/call-handling#recovery' },

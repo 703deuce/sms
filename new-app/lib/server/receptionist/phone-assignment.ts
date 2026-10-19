@@ -106,7 +106,15 @@ export async function syncReceptionistPhoneAssignment(
           providerSyncError: lk.ok ? null : lk.error || "livekit_provision_failed",
         },
       });
-      return { ok: lk.ok, error: lk.error };
+      if (!lk.ok) return { ok: false, error: lk.error };
+      const { verifyLiveKitProvisioningForPhone } = await import(
+        "@/lib/server/voice-v3/livekit/browser-test"
+      );
+      const verify = await verifyLiveKitProvisioningForPhone({ workspaceId, phoneNumberId });
+      if (!verify.ok) {
+        return { ok: false, error: verify.error || "livekit_dispatch_not_verified" };
+      }
+      return { ok: true };
     }
   }
   return { ok: true };

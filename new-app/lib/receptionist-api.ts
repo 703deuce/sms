@@ -148,3 +148,19 @@ export async function addReceptionistWebsiteSource(url: string) {
 export async function fetchReceptionistTestStatus() {
   return parse(await fetch("/api/receptionist/test/status"));
 }
+
+export async function startReceptionistLiveKitTest(version: "draft" | "live") {
+  return parse<{
+    sessionId: string;
+    roomName: string;
+    livekit: { url: string; token: string };
+    agentId: string;
+    version: string;
+  }>(
+    await fetch("/api/receptionist/test/livekit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version }),
+    }),
+  );
+}

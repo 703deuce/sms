@@ -13,6 +13,7 @@ import { renderGreeting } from '@/lib/agent'
 import { cn } from '@/lib/utils'
 import { Pills } from './ai-ui'
 import { fetchReceptionistTestStatus } from '@/lib/receptionist-api'
+import { LiveKitBrowserTest } from './livekit-browser-test'
 
 type Line = { who: 'agent' | 'caller' | 'tool'; text: string; ok?: boolean }
 
@@ -168,6 +169,7 @@ export function TestConsole() {
             {testStatus?.detail && <li className="text-xs text-muted-foreground">{testStatus.detail}</li>}
           </ul>
         </Panel>
+        <LiveKitBrowserTest version={version} />
         <Panel title="Example script">
           <div className="flex flex-col gap-4">
             <Pills label="Version" value={version} onChange={(v) => { setVersion(v); reset() }} options={[{ value: 'draft', label: 'Draft' }, { value: 'live', label: 'Live' }]} />

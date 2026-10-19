@@ -1,4 +1,5 @@
 import type { ReceptionistPublishedBundle } from "@/lib/server/receptionist/draft-types";
+import type { SchedulingSessionState } from "@/lib/server/voice-v3/scheduling/service";
 
 export type LiveSessionRuntime = {
   liveSessionId: string;
@@ -8,6 +9,11 @@ export type LiveSessionRuntime = {
   phoneNumberId: string;
   bundle: ReceptionistPublishedBundle;
   intake: Record<string, unknown>;
+  /** Published snapshot only for production SIP; draft allowed for browser test rooms. */
+  configSource: "published" | "draft_test";
+  scheduling?: SchedulingSessionState;
+  publishedVersionId?: string | null;
+  processedToolCalls?: Set<string>;
 };
 
 const sessions = new Map<string, LiveSessionRuntime>();
