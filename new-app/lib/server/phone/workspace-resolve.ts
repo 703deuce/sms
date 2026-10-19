@@ -3,10 +3,22 @@ import { normalizeE164 } from "@/lib/server/phone/normalize";
 import { resolveWorkspaceId } from "@/lib/server/workspace";
 import { maskE164, phoneServerLog } from "@/lib/server/phone/phone-log";
 
-/** Resolve tenant from the called number (authoritative for inbound webhooks). */
+function isPhoneNumberRoutingCandidate(raw: string): boolean {
+  const t = raw.trim();
+  if (!t || /^sip:/i.test(t)) return false;
+  return /^\+?\d/.test(t);
+}
+
+/** Resolve tenant from the called number (authoritative for inbound PSTN webhooks). */
 export async function resolveWorkspaceByInboundNumber(toE164: string): Promise<string | null> {
+  if (!isPhoneNumberRoutingCandidate(toE164)) return null;
   const prisma = getPrisma();
-  const normalized = normalizeE164(toE164);
+  let normalized: string;
+  try {
+    normalized = normalizeE164(toE164);
+  } catch {
+    return null;
+  }
   const pn = await prisma.phoneNumber.findFirst({
     where: {
       OR: [{ e164: toE164 }, { e164: normalized }],
@@ -34,7 +46,7 @@ export async function resolveWorkspaceForPhoneEvent(toE164?: string | null): Pro
   } else {
     phoneServerLog("workspace-resolve", "no_to_on_event_fallback_default");
   }
-  const fallback = resolveWorkspaceId();
+  const fallback = await resolveWorkspaceId();
   phoneServerLog("workspace-resolve", "using_default_workspace", { workspaceId: fallback });
   return fallback;
 }

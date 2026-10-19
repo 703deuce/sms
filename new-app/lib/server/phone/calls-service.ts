@@ -4,6 +4,7 @@ import { telnyxRequest } from "@/lib/server/telnyx/client";
 import { normalizeE164 } from "@/lib/server/phone/normalize";
 import { resolveCallerIdNumber } from "@/lib/server/phone/settings";
 import { mapHumanCallToDto } from "@/lib/server/phone/map-call";
+import { decodeTelnyxClientState } from "@/lib/server/phone/telnyx-call-actions";
 import type { PhoneCallDto } from "@/lib/phone/types";
 
 function encodeClientState(data: Record<string, unknown>) {
@@ -327,12 +328,7 @@ export async function handleInboundCall(input: {
 }
 
 function decodeClientState(raw: unknown): Record<string, unknown> {
-  if (typeof raw !== "string") return {};
-  try {
-    return JSON.parse(Buffer.from(raw, "base64").toString("utf8"));
-  } catch {
-    return {};
-  }
+  return decodeTelnyxClientState(raw);
 }
 
 export async function processHumanCallWebhookEvent(input: {

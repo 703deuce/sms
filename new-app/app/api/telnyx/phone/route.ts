@@ -7,6 +7,7 @@ import {
 import { processDueInboundRingTimeouts } from "@/lib/server/phone/inbound-runtime";
 import { resolveWorkspaceForPhoneEvent } from "@/lib/server/phone/workspace-resolve";
 import { readTelnyxWebhook, telnyxEventId, telnyxEventType } from "@/lib/server/telnyx/webhook-auth";
+import { decodeTelnyxClientState } from "@/lib/server/phone/telnyx-call-actions";
 import { maskE164, phoneServerLog } from "@/lib/server/phone/phone-log";
 
 export async function GET() {
@@ -36,7 +37,11 @@ export async function POST(request: Request) {
         ? eventPayload.called_number
         : null;
 
-  const workspaceId = await resolveWorkspaceForPhoneEvent(to);
+  const clientState = decodeTelnyxClientState(eventPayload.client_state);
+  const workspaceId =
+    typeof clientState.workspaceId === "string" && clientState.workspaceId.trim()
+      ? clientState.workspaceId.trim()
+      : await resolveWorkspaceForPhoneEvent(to);
   const direction = String(eventPayload.direction || "");
   const callControlId = eventPayload.call_control_id
     ? String(eventPayload.call_control_id)
@@ -100,7 +105,16 @@ export async function POST(request: Request) {
     }
   }
 
-  const result = await processHumanCallWebhookEvent({ eventType, eventPayload });
+  let result: unknown = { ok: true };
+  try {
+    result = await processHumanCallWebhookEvent({ eventType, eventPayload });
+  } catch (err) {
+    phoneServerLog("telnyx-webhook", "event_processor_error", {
+      eventType,
+      error: err instanceof Error ? err.message : "unknown",
+    });
+    result = { ok: false, error: err instanceof Error ? err.message : "processor_error" };
+  }
   phoneServerLog("telnyx-webhook", "event_processed", {
     eventType,
     resultOk: (result as { ok?: boolean }).ok ?? true,

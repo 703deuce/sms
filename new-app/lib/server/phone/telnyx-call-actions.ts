@@ -35,3 +35,12 @@ export async function telnyxCallAction(
 export function encodeTelnyxClientState(data: Record<string, unknown>) {
   return Buffer.from(JSON.stringify(data)).toString("base64");
 }
+
+export function decodeTelnyxClientState(raw: unknown): Record<string, unknown> {
+  if (typeof raw !== "string" || !raw.trim()) return {};
+  try {
+    return JSON.parse(Buffer.from(raw, "base64").toString("utf8")) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
