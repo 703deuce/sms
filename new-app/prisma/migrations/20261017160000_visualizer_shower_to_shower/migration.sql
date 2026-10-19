@@ -1,1 +1,0 @@
-ALTER TYPE "VisualizerTransformationType" ADD VALUE IF NOT EXISTS 'SHOWER_TO_SHOWER';
