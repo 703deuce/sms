@@ -1,4 +1,4 @@
-import type { ExternalConnection, OwnedNumber, PortRequest } from "@/lib/numbers";
+import type { ExternalConnection, NumberProduct, OwnedNumber, PortRequest } from "@/lib/numbers";
 
 export type NumbersInventoryPayload = {
   owned: OwnedNumber[];
@@ -60,6 +60,55 @@ export async function purchaseNumber(phoneNumber: string, nickname?: string): Pr
   }
   const json = (await res.json()) as { data: OwnedNumber };
   return json.data;
+}
+
+export type NumberBinding = { product: NumberProduct; detail: string };
+
+export async function fetchNumberBindings(phoneNumberId: string): Promise<NumberBinding[]> {
+  const res = await fetch(`/api/numbers/${phoneNumberId}/bindings`, { credentials: "same-origin" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error || `Bindings failed (${res.status})`);
+  }
+  const json = (await res.json()) as { data: { bindings: NumberBinding[] } };
+  return json.data.bindings;
+}
+
+export async function switchNumberProduct(input: {
+  phoneNumberId: string;
+  targetProduct: NumberProduct;
+  confirmSwitch?: boolean;
+  agentId?: string | null;
+}): Promise<{ ok: boolean; needsConfirmation?: boolean; actions: string[]; error?: string }> {
+  const res = await fetch(`/api/numbers/${input.phoneNumberId}/switch-product`, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      targetProduct: input.targetProduct,
+      confirmSwitch: input.confirmSwitch ?? false,
+      agentId: input.agentId,
+    }),
+  });
+  const body = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    data?: { ok: boolean; needsConfirmation?: boolean; actions: string[]; previousBindings?: NumberBinding[] };
+  };
+  if (res.status === 409 && body.error === "confirm_switch_required") {
+    return {
+      ok: false,
+      needsConfirmation: true,
+      actions: body.data?.actions || [],
+      error: body.error,
+    };
+  }
+  if (!res.ok) {
+    throw new Error(body.error || `Switch failed (${res.status})`);
+  }
+  return {
+    ok: Boolean(body.data?.ok),
+    actions: body.data?.actions || [],
+  };
 }
 
 export async function patchNumber(id: string, patch: { nickname?: string }): Promise<OwnedNumber> {

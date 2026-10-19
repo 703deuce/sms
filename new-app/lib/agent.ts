@@ -4,6 +4,8 @@
  * Mandatory guardrails are enforced by runtime and intentionally absent here.
  */
 
+import { RECEPTIONIST_VOICE_OPTIONS } from '@/lib/voice/realtime-voices'
+
 export type Capability = 'answer' | 'book' | 'reschedule' | 'cancel' | 'message' | 'qualify' | 'transfer' | 'smsConfirm'
 
 export type IntakeField = {
@@ -122,13 +124,12 @@ export type AgentConfig = {
   }
 }
 
-export const VOICES = [
-  { id: 'aria', name: 'Aria', note: 'Warm, mid-range · US English', recommended: true },
-  { id: 'theo', name: 'Theo', note: 'Calm, low · US English' },
-  { id: 'june', name: 'June', note: 'Bright, upbeat · US English' },
-  { id: 'malik', name: 'Malik', note: 'Steady, professional · US English' },
-  { id: 'sofia', name: 'Sofía', note: 'Bilingual · English / Spanish' },
-]
+export const VOICES = RECEPTIONIST_VOICE_OPTIONS.map((v) => ({
+  id: v.id,
+  name: v.name,
+  note: v.note,
+  recommended: v.recommended,
+}))
 
 export const GREETING_VARIABLES = ['{business_name}', '{agent_name}', '{time_of_day}']
 
@@ -148,7 +149,7 @@ export const DEFAULT_AGENT: AgentConfig = {
     name: 'Ava',
     role: 'Front desk receptionist',
     language: 'en-US',
-    voice: 'aria',
+    voice: 'marin',
     customVoiceId: '',
     greeting: 'Thanks for calling {business_name}, this is {agent_name}. How can I help you {time_of_day}?',
   },

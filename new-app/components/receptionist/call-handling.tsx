@@ -276,7 +276,21 @@ export function CallHandlingEditor() {
 
       <DemoNote />
 
-      <NumberPicker open={pickerOpen} onOpenChange={setPickerOpen} product="receptionist" current={draft.connection} onSelect={(ref) => { update('connection', ref); toast.success('Number changed in draft — publish to go live') }} />
+      <NumberPicker
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        product="receptionist"
+        current={draft.connection}
+        provisionOnSelect
+        onSelect={(ref) => {
+          update('connection', ref)
+          toast.success(
+            ref.kind === 'owned'
+              ? 'Number provisioned for AI Receptionist — publish to update the agent'
+              : 'Number changed in draft — publish to go live',
+          )
+        }}
+      />
       <DestinationSheet value={editDest} onClose={() => setEditDest(null)} />
 
       <Dialog open={!!confirmRecording} onOpenChange={(o) => !o && setConfirmRecording(null)}>

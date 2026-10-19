@@ -84,10 +84,9 @@ export async function verifyLiveKitProvisioningForPhone(input: {
   });
   if (!phone?.e164) return { ok: false, actions: [], error: "phone_not_found" };
 
-  const settings = (phone.settingsJson || {}) as Record<string, unknown>;
-  const telephony = (settings.telephony || {}) as Record<string, unknown>;
-  const provision = (telephony.provision || {}) as Record<string, unknown>;
-  const trunkId = provision.livekitInboundTrunkId as string | undefined;
+  const { readTelephonyProvision } = await import("@/lib/server/telephony/telephony-record");
+  const provision = readTelephonyProvision(phone.settingsJson);
+  const trunkId = provision.livekitInboundTrunkId;
   if (!trunkId) {
     return { ok: false, actions: ["missing_trunk"], error: "not_livekit_provisioned" };
   }

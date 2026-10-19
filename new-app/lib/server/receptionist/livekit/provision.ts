@@ -2,6 +2,8 @@ import "server-only";
 
 import { getPrisma } from "@/lib/server/db";
 import type { ReceptionistPublishedBundle } from "@/lib/server/receptionist/draft-types";
+import { readTelephonyProvision } from "@/lib/server/telephony/telephony-record";
+import { provisionVoiceV3ReceptionistIngress } from "@/lib/server/telephony/v3-receptionist-provision";
 import { syncReceptionistDidDispatchRule } from "./dispatch-sync";
 
 export type LiveKitProvisionResult = {
@@ -10,28 +12,8 @@ export type LiveKitProvisionResult = {
   error?: string;
 };
 
-type TelephonyProvision = {
-  routingMode?: string;
-  state?: string;
-  livekitInboundTrunkId?: string;
-};
-
-function readTelephonyProvision(settingsJson: unknown): TelephonyProvision {
-  if (!settingsJson || typeof settingsJson !== "object") return {};
-  const settings = settingsJson as Record<string, unknown>;
-  const telephony =
-    settings.telephony && typeof settings.telephony === "object"
-      ? (settings.telephony as Record<string, unknown>)
-      : {};
-  const provision =
-    telephony.provision && typeof telephony.provision === "object"
-      ? (telephony.provision as TelephonyProvision)
-      : {};
-  return provision;
-}
-
 /**
- * Sync LiveKit per-DID dispatch metadata when trunk is already provisioned.
+ * Full golden-era V3 provision on publish, or dispatch-only refresh when already on LiveKit.
  */
 export async function provisionReceptionistLiveKitOnPublish(input: {
   workspaceId: string;
@@ -52,51 +34,33 @@ export async function provisionReceptionistLiveKitOnPublish(input: {
 
   const provision = readTelephonyProvision(phone.settingsJson);
   const trunkId = provision.livekitInboundTrunkId;
-  if (provision.routingMode !== "livekit_sip" || provision.state !== "active" || !trunkId) {
+  const livekitReady =
+    provision.routingMode === "livekit_sip" &&
+    provision.state === "active" &&
+    Boolean(trunkId);
+
+  if (!livekitReady) {
+    const full = await provisionVoiceV3ReceptionistIngress({
+      workspaceId: input.workspaceId,
+      phoneNumberId: input.phoneNumberId,
+      agentId: input.agentId,
+      publishedVersionId: input.publishedVersionId,
+    });
     return {
-      ok: false,
-      actions: ["skipped_not_livekit_provisioned"],
-      error: "not_livekit_provisioned",
+      ok: full.ok,
+      actions: full.actions,
+      error: full.error,
     };
   }
 
   try {
     const synced = await syncReceptionistDidDispatchRule({
       e164: phone.e164,
-      trunkId,
+      trunkId: trunkId!,
       workspaceId: input.workspaceId,
       agentId: input.agentId,
       publishedVersionId: input.publishedVersionId,
     });
-
-    const settings =
-      phone.settingsJson && typeof phone.settingsJson === "object"
-        ? { ...(phone.settingsJson as object) }
-        : {};
-    const telephony =
-      (settings as Record<string, unknown>).telephony &&
-      typeof (settings as Record<string, unknown>).telephony === "object"
-        ? { ...((settings as Record<string, unknown>).telephony as object) }
-        : {};
-    await prisma.phoneNumber.update({
-      where: { id: input.phoneNumberId },
-      data: {
-        settingsJson: {
-          ...settings,
-          telephony: {
-            ...telephony,
-            explicitDispatch: {
-              workspaceId: input.workspaceId,
-              agentId: input.agentId,
-              publishedVersionId: input.publishedVersionId,
-              toE164: phone.e164,
-              dispatchSource: "phone_provision",
-            },
-          },
-        },
-      },
-    });
-
     return { ok: true, actions: synced.actions };
   } catch (err) {
     return {

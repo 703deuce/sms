@@ -2,12 +2,22 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { ArrowRightLeft, Check, Hash, PhoneForwarded, Plus, TriangleAlert } from 'lucide-react'
+import { toast } from 'sonner'
+import { ArrowRightLeft, Check, Hash, Loader2, PhoneForwarded, Plus, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { StatusBadge } from '@/components/app/status'
 import { useNumbers } from '@/components/providers/numbers-provider'
 import { CONNECTION_STATUS, PRODUCT_LABEL, type NumberProduct } from '@/lib/numbers'
+import { fetchNumberBindings, switchNumberProduct, type NumberBinding } from '@/lib/numbers-api'
 import { formatPhone } from '@/lib/format'
 import { Callout } from './number-ui'
 import { cn } from '@/lib/utils'
@@ -33,17 +43,24 @@ export function NumberPicker({
   product,
   current,
   onSelect,
+  provisionOnSelect = true,
 }: {
   open: boolean
   onOpenChange: (o: boolean) => void
   product: NumberProduct
   current: ConnectionRef
   onSelect: (ref: ConnectionRef) => void
+  /** When true, owned Telnyx numbers are re-provisioned for this product before onSelect. */
+  provisionOnSelect?: boolean
 }) {
-  const { owned, connections } = useNumbers()
+  const { owned, connections, refresh } = useNumbers()
   const [picked, setPicked] = useState<ConnectionRef | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [pendingBindings, setPendingBindings] = useState<NumberBinding[]>([])
   const sel = picked ?? current
   const changed = sel.kind !== current.kind || sel.id !== current.id
+  const voiceProduct = product === 'phone' || product === 'receptionist' || product === 'mctb'
 
   const others = (products: NumberProduct[]) => products.filter((p) => p !== product)
   const currentOwned = current.kind === 'owned' ? owned.find((n) => n.id === current.id) : null
@@ -54,7 +71,82 @@ export function NumberPicker({
   const joining = others(pickedOwned ? pickedOwned.assignments.map((a) => a.product) : (pickedExt?.products ?? []))
   const ret = `?product=${product}`
 
+  async function runProvision(confirmSwitch: boolean) {
+    if (sel.kind !== 'owned' || !provisionOnSelect || !voiceProduct) return true
+    setSaving(true)
+    try {
+      const result = await switchNumberProduct({
+        phoneNumberId: sel.id,
+        targetProduct: product,
+        confirmSwitch,
+      })
+      if (result.needsConfirmation) {
+        const bindings = await fetchNumberBindings(sel.id)
+        const conflicts = bindings.filter((b) => b.product !== product)
+        setPendingBindings(conflicts)
+        setConfirmOpen(true)
+        return false
+      }
+      if (!result.ok) {
+        toast.error('Could not provision this number for carrier routing')
+        return false
+      }
+      await refresh()
+      return true
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Provisioning failed')
+      return false
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function applySelection(confirmSwitch = false) {
+    if (sel.kind === 'owned' && provisionOnSelect && voiceProduct) {
+      const ok = await runProvision(confirmSwitch)
+      if (!ok) return
+    }
+    onSelect(sel)
+    onOpenChange(false)
+    setPicked(null)
+    setConfirmOpen(false)
+    setPendingBindings([])
+  }
+
   return (
+    <>
+    <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Switch voice routing?</DialogTitle>
+          <DialogDescription>
+            This number is already set up for another product. Continuing will re-provision Telnyx and LiveKit routing for{' '}
+            {PRODUCT_LABEL[product]}.
+          </DialogDescription>
+        </DialogHeader>
+        {pendingBindings.length > 0 && (
+          <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-muted-foreground">
+            {pendingBindings.map((b) => (
+              <li key={`${b.product}-${b.detail}`}>
+                {PRODUCT_LABEL[b.product]} — {b.detail}
+              </li>
+            ))}
+          </ul>
+        )}
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="outline" onClick={() => setConfirmOpen(false)}>Cancel</Button>
+          <Button
+            onClick={() => {
+              void applySelection(true)
+            }}
+            disabled={saving}
+          >
+            {saving ? <Loader2 className="animate-spin" data-icon="inline-start" /> : null}
+            Yes, switch and provision
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     <Sheet open={open} onOpenChange={(o) => { onOpenChange(o); if (!o) setPicked(null) }}>
       <SheetContent className="w-full gap-0 p-0 sm:max-w-lg">
         <SheetHeader className="border-b p-5">
@@ -106,11 +198,20 @@ export function NumberPicker({
           )}
         </div>
         <SheetFooter className="flex-row justify-end border-t p-4">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button disabled={!changed} onClick={() => { onSelect(sel); onOpenChange(false); setPicked(null) }}>Use this number</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
+          <Button
+            disabled={!changed || saving}
+            onClick={() => {
+              void applySelection(false)
+            }}
+          >
+            {saving ? <Loader2 className="animate-spin" data-icon="inline-start" /> : null}
+            Use this number
+          </Button>
         </SheetFooter>
       </SheetContent>
     </Sheet>
+    </>
   )
 }
 

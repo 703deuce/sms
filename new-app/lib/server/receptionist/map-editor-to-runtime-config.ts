@@ -1,4 +1,5 @@
 import type { AgentConfig } from "@/lib/agent";
+import { normalizeReceptionistVoiceId } from "@/lib/voice/realtime-voices";
 import type { ReceptionistPublishedBundle } from "@/lib/server/receptionist/draft-types";
 
 const COVERAGE_TO_ANSWER_WHEN: Record<AgentConfig["coverage"]["mode"], string> = {
@@ -77,7 +78,9 @@ export function buildVoiceAgentRuntimeConfigFromEditor(
     agentDisplayName: editor.identity.name,
     greeting: editor.identity.greeting,
     customInstructions: editor.instructions,
-    voiceId: editor.identity.voice,
+    voiceId: normalizeReceptionistVoiceId(
+      editor.identity.customVoiceId?.trim() || editor.identity.voice,
+    ),
     transfers: editor.transfers,
     intakeFields: editor.intake,
   };
@@ -86,7 +89,9 @@ export function buildVoiceAgentRuntimeConfigFromEditor(
     name: editor.identity.name,
     displayName: editor.identity.name,
     greeting: editor.identity.greeting,
-    voice: editor.identity.voice,
+    voice: normalizeReceptionistVoiceId(
+      editor.identity.customVoiceId?.trim() || editor.identity.voice,
+    ),
     advanced: {
       capabilityPack: "appointment_receptionist",
       appointmentReceptionistWizard: wizard,

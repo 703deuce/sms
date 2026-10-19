@@ -63,8 +63,8 @@ export function AgentEditor() {
           <details className="text-xs text-muted-foreground">
             <summary className="cursor-pointer font-medium text-foreground">Custom voice ID</summary>
             <div className="flex flex-col gap-1 pt-2">
-              <Input aria-label="Custom voice ID" placeholder="voice_XXXXXXXX" value={id.customVoiceId} onChange={(e) => update('identity', (i) => ({ ...i, customVoiceId: e.target.value }))} />
-              <span>Validated before publish. Leave blank to use the voice above.</span>
+              <Input aria-label="Custom OpenAI Live voice" placeholder="marin" value={id.customVoiceId} onChange={(e) => update('identity', (i) => ({ ...i, customVoiceId: e.target.value }))} />
+              <span>OpenAI Realtime voice id (marin, coral, shimmer, cedar, …). Leave blank to use the voice above.</span>
             </div>
           </details>
         </div>
