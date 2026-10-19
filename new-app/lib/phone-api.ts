@@ -57,6 +57,14 @@ export async function fetchRingingInbound() {
   } | null>(await fetch("/api/phone/calls/ringing-inbound"));
 }
 
+export async function fetchCallRecordingUrl(callId: string): Promise<string> {
+  const data = await parse<{ url: string }>(
+    await fetch(`/api/phone/calls/${encodeURIComponent(callId)}/recording`),
+  );
+  if (!data.url) throw new Error("No recording");
+  return data.url;
+}
+
 export async function fetchCalls(params: Record<string, string | number | undefined>) {
   const q = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
