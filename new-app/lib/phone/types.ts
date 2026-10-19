@@ -69,6 +69,7 @@ export type RoutePolicyDto = {
   greetingUrl: string | null;
   providerSyncStatus: string;
   providerSyncError: string | null;
+  externalForwardE164: string | null;
 };
 
 export type PhoneReadinessDto = {

@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { Mic, MicOff, Pause, Phone, PhoneOff, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ActiveCallTransferButton } from '@/components/phone/active-call-transfer'
 import { useWorkspace } from '@/components/providers/workspace-provider'
 import { formatDuration, formatPhone } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -86,6 +87,7 @@ export function ActiveCallBar() {
           {activeCall.muted ? <MicOff /> : <Mic />}
           <span className="hidden sm:inline">{activeCall.muted ? 'Unmute' : 'Mute'}</span>
         </Button>
+        <ActiveCallTransferButton disabled={!live} />
         <Button
           size="sm"
           variant="ghost"

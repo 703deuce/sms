@@ -202,7 +202,9 @@ export async function markInboundCallBridged(input: {
         inboundBridge: "bridged",
         inboundBridgeStatus: "bridged",
         ringTimeoutAt: null,
-        browserCallControlId: input.agentCallControlId || meta.browserCallControlId,
+        browserCallControlId:
+          input.agentCallControlId ||
+          (typeof meta.browserCallControlId === "string" ? meta.browserCallControlId : null),
       }),
     },
   });

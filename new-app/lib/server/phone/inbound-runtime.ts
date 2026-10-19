@@ -3,6 +3,7 @@ import { isBusinessOpenNow } from "@/lib/server/phone/business-hours";
 import { normalizeE164 } from "@/lib/server/phone/normalize";
 import { getCallRouting } from "@/lib/server/phone/routing";
 import { encodeTelnyxClientState, telnyxCallAction } from "@/lib/server/phone/telnyx-call-actions";
+import { resolveExternalForwardTarget } from "@/lib/server/phone/routing-external";
 import { leaveVoicemailOnCall } from "@/lib/server/phone/voicemail-runtime";
 import { isTelnyxPhoneConfigured } from "@/lib/server/phone/calls-service";
 import { maskE164, phoneServerLog } from "@/lib/server/phone/phone-log";
@@ -44,7 +45,7 @@ export async function decideInboundRoute(
 
   if (bucket === "voicemail") return { mode: "voicemail" };
   if (bucket === "external") {
-    const target = process.env.PHONE_INBOUND_EXTERNAL_FORWARD?.trim();
+    const target = resolveExternalForwardTarget(routing);
     if (target) return { mode: "external", target };
   }
   if (!open && routing.afterHours === "voicemail") return { mode: "voicemail" };
@@ -216,6 +217,32 @@ export async function processDueInboundRingTimeouts(workspaceId: string) {
         telnyxCallControlId: call.telnyxCallControlId,
         phoneNumberId: call.phoneNumberId,
       });
+    } else if (noAnswer === "external") {
+      const target = resolveExternalForwardTarget(routing);
+      if (target) {
+        await telnyxCallAction(call.telnyxCallControlId, "answer");
+        await telnyxCallAction(call.telnyxCallControlId, "transfer", { to: target });
+        await prisma.humanCall.update({
+          where: { id: call.id },
+          data: {
+            status: "transferred",
+            disposition: `forward:${target}`,
+            endedAt: new Date(),
+            metadata: { ...meta, ringTimeoutAt: null },
+          },
+        });
+      } else {
+        await telnyxCallAction(call.telnyxCallControlId, "hangup");
+        await prisma.humanCall.update({
+          where: { id: call.id },
+          data: {
+            status: "missed",
+            disposition: "missed:no_external_target",
+            endedAt: new Date(),
+            metadata: { ...meta, ringTimeoutAt: null },
+          },
+        });
+      }
     } else {
       await telnyxCallAction(call.telnyxCallControlId, "hangup");
       await prisma.humanCall.update({

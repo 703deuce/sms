@@ -8,6 +8,7 @@
     "build": "prisma generate && next build",
     "start": "node scripts/start-production.mjs",
     "typecheck": "tsc --noEmit",
+    "test:phone": "node scripts/test-phone-runtime-logic.mjs && node scripts/test-phone-recording-resolve.mjs && node scripts/test-phone-complete.mjs",
     "postinstall": "test -f prisma/schema.prisma && prisma generate || true"
   },
   "dependencies": {

@@ -130,6 +130,11 @@ export async function saveRouting(body: Record<string, unknown>) {
   );
 }
 
+/** Save routing policy and/or workspace business hours (same API). */
+export async function savePhoneRoutingAndHours(body: Record<string, unknown>) {
+  return saveRouting(body);
+}
+
 export type PhoneAnalyticsDto = {
   totals: {
     calls: number;
@@ -321,6 +326,33 @@ export async function registerInboundAnswer(humanCallId: string, webrtcCallId?: 
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || res.statusText);
   return json.data;
+}
+
+export async function transferCall(humanCallId: string, toE164: string) {
+  const res = await fetch(`/api/phone/calls/${encodeURIComponent(humanCallId)}/transfer`, {
+    method: "POST",
+    headers: mutatingHeaders(),
+    body: JSON.stringify({ to: toE164 }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || res.statusText);
+  return json.data as { id: string; status: string; disposition: string | null };
+}
+
+export type TransferTargetDto = { id: string; name: string; number: string };
+
+export async function fetchTransferTargets() {
+  return parse<TransferTargetDto[]>(await fetch("/api/phone/transfer-targets"));
+}
+
+export async function saveTransferTargets(targets: TransferTargetDto[]) {
+  return parse<TransferTargetDto[]>(
+    await fetch("/api/phone/transfer-targets", {
+      method: "PUT",
+      headers: mutatingHeaders(),
+      body: JSON.stringify({ targets }),
+    }),
+  );
 }
 
 export async function registerInboundReject(humanCallId: string) {

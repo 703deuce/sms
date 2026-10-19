@@ -8,7 +8,9 @@ export const DEFAULT_POLICY = ROUTE_POLICY_DEFAULT;
 export async function getCallRouting(workspaceId: string): Promise<RoutePolicyDto> {
   const prisma = getPrisma();
   const row = await prisma.workspaceCallRouting.findUnique({ where: { workspaceId } });
-  const policy = (row?.policyJson || DEFAULT_POLICY) as typeof DEFAULT_POLICY;
+  const policy = (row?.policyJson || DEFAULT_POLICY) as typeof DEFAULT_POLICY & {
+    externalForwardE164?: string | null;
+  };
   return {
     numberId: policy.numberId ?? null,
     duringHours: policy.duringHours,
@@ -24,6 +26,7 @@ export async function getCallRouting(workspaceId: string): Promise<RoutePolicyDt
     greetingUrl: row?.greetingUrl ?? null,
     providerSyncStatus: row?.providerSyncStatus ?? "pending",
     providerSyncError: row?.providerSyncError ?? null,
+    externalForwardE164: policy.externalForwardE164 ?? null,
   };
 }
 

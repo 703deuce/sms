@@ -14,6 +14,7 @@ import {
   registerInboundReject,
   registerOutboundCall,
   saveRouting,
+  transferCall as transferCallApi,
 } from '@/lib/phone-api'
 import { phoneClientLog } from '@/lib/phone-client-log'
 import { phoneClientTrace } from '@/lib/phone-client-trace'
@@ -78,6 +79,7 @@ type WorkspaceState = {
   incomingAnswering: boolean
   answerIncoming: () => void
   rejectIncoming: () => void
+  transferActiveCall: (toE164: string) => Promise<void>
 }
 
 const WorkspaceContext = createContext<WorkspaceState | null>(null)
@@ -127,6 +129,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         afterHours: data.afterHours as RoutePolicy['afterHours'],
         aiCoverage: data.aiCoverage as RoutePolicy['aiCoverage'],
         mctbEnabled: data.mctbEnabled,
+        externalForwardE164: data.externalForwardE164 || '',
         updatedAt: data.updatedAt,
         updatedBy: data.updatedBy,
       })
@@ -535,6 +538,22 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     setIncomingAnswering(false)
   }, [incomingCall])
 
+  const transferActiveCall = useCallback(
+    async (toE164: string) => {
+      const c = activeCall
+      if (!c?.humanCallId) throw new Error('No active call')
+      if (c.status !== 'live' && c.status !== 'ringing') throw new Error('Call is not connected')
+      await transferCallApi(c.humanCallId, toE164)
+      const call = telnyxCallRef.current as { hangup?: () => void } | null
+      call?.hangup?.()
+      telnyxCallRef.current = null
+      setActiveCall((prev) => (prev ? { ...prev, status: 'ended' } : prev))
+      window.setTimeout(() => setActiveCall(null), 800)
+      toast.success('Call transferred')
+    },
+    [activeCall],
+  )
+
   const toggleHold = useCallback(() => {
     const call = telnyxCallRef.current as { hold?: () => void; unhold?: () => void } | null
     setActiveCall((c) => {
@@ -570,6 +589,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       incomingAnswering,
       answerIncoming,
       rejectIncoming,
+      transferActiveCall,
     }),
     [
       routePolicy,
@@ -587,6 +607,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       incomingAnswering,
       answerIncoming,
       rejectIncoming,
+      transferActiveCall,
     ],
   )
 

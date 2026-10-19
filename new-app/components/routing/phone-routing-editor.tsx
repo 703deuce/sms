@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,43 +9,61 @@ import { Textarea } from '@/components/ui/textarea'
 import { Panel } from '@/components/app/page-primitives'
 import { OptionGroup } from '@/components/app/option-group'
 import { useWorkspace } from '@/components/providers/workspace-provider'
+import { fetchRouting } from '@/lib/phone-api'
 import type { RoutePolicy } from '@/lib/data'
 
 export function PhoneRoutingEditor() {
   const { routePolicy, updateRoutePolicy } = useWorkspace()
   const [draft, setDraft] = useState<RoutePolicy>(routePolicy)
-  const [greeting, setGreeting] = useState("You've reached Harbor & Pine Dental. Please leave your name, number and reason for calling.")
+  const [greeting, setGreeting] = useState('')
+  const [greetingLoaded, setGreetingLoaded] = useState(false)
+
+  useEffect(() => {
+    setDraft(routePolicy)
+  }, [routePolicy])
+
+  useEffect(() => {
+    void fetchRouting()
+      .then((data) => {
+        if (data.greetingText) setGreeting(data.greetingText)
+        else setGreeting('Please leave your name, number, and reason for calling after the tone.')
+        setGreetingLoaded(true)
+      })
+      .catch(() => setGreetingLoaded(true))
+  }, [])
+
   const dirty =
     draft.duringHours !== routePolicy.duringHours ||
     draft.ringStrategy !== routePolicy.ringStrategy ||
     draft.ringTimeout !== routePolicy.ringTimeout ||
     draft.noAnswer !== routePolicy.noAnswer ||
-    draft.afterHours !== routePolicy.afterHours
+    draft.afterHours !== routePolicy.afterHours ||
+    draft.externalForwardE164 !== routePolicy.externalForwardE164
 
   const set = <K extends keyof RoutePolicy>(k: K, v: RoutePolicy[K]) => setDraft((d) => ({ ...d, [k]: v }))
 
   const save = () => {
     void (async () => {
-      await updateRoutePolicy(
-        { duringHours: draft.duringHours, ringStrategy: draft.ringStrategy, ringTimeout: draft.ringTimeout, noAnswer: draft.noAnswer, afterHours: draft.afterHours },
-        'Phone',
-      )
+      const patch = {
+        duringHours: draft.duringHours,
+        ringStrategy: draft.ringStrategy,
+        ringTimeout: draft.ringTimeout,
+        noAnswer: draft.noAnswer,
+        afterHours: draft.afterHours,
+        externalForwardE164: draft.externalForwardE164,
+      }
+      await updateRoutePolicy(patch, 'Phone')
       const { saveRouting } = await import('@/lib/phone-api')
       await saveRouting({
-        policy: {
-          duringHours: draft.duringHours,
-          ringStrategy: draft.ringStrategy,
-          ringTimeout: draft.ringTimeout,
-          noAnswer: draft.noAnswer,
-          afterHours: draft.afterHours,
-        },
+        policy: patch,
         greetingText: greeting,
       })
-      toast.success('Call handling saved', { description: 'AI Receptionist and Missed Call Text Back now reflect this routing.' })
-    })()
+      toast.success('Call handling saved', { description: 'Routing, voicemail greeting, and external forward are live.' })
+    })().catch((e) => toast.error(e instanceof Error ? e.message : 'Could not save'))
   }
 
   const aiOff = routePolicy.aiCoverage === 'off'
+  const needsExternal = draft.noAnswer === 'external' || draft.afterHours === 'external'
 
   return (
     <div className="flex flex-col gap-6">
@@ -56,13 +74,14 @@ export function PhoneRoutingEditor() {
             value={draft.duringHours}
             onChange={(v) => set('duringHours', v)}
             options={[
-              { value: 'ring_group', label: 'Front desk ring group', description: 'Maya, Daniel, Priya' },
-              { value: 'user', label: 'Specific teammate', description: 'Priya Natarajan' },
+              { value: 'ring_group', label: 'Browser softphone', description: 'Ring signed-in agents in the browser' },
+              { value: 'user', label: 'Specific teammate', description: 'Single assigned user' },
               { value: 'ai', label: 'AI Receptionist first', description: 'Ava answers every call', disabled: aiOff },
               { value: 'voicemail', label: 'Straight to voicemail' },
+              { value: 'external', label: 'Forward externally', description: 'Send to another number immediately' },
             ]}
           />
-          {draft.duringHours === 'ring_group' && (
+          {(draft.duringHours === 'ring_group' || draft.duringHours === 'user') && (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <OptionGroup
                 label="Ring strategy"
@@ -80,7 +99,7 @@ export function PhoneRoutingEditor() {
                   id="timeout"
                   type="number"
                   min={10}
-                  max={60}
+                  max={120}
                   value={draft.ringTimeout}
                   onChange={(e) => set('ringTimeout', Number(e.target.value))}
                   className="w-28 tabular"
@@ -116,6 +135,19 @@ export function PhoneRoutingEditor() {
               { value: 'external', label: 'Forward to external' },
             ]}
           />
+          {needsExternal && (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="external-forward">External forward number (E.164)</Label>
+              <Input
+                id="external-forward"
+                value={draft.externalForwardE164}
+                onChange={(e) => set('externalForwardE164', e.target.value)}
+                placeholder="+13125550100"
+                className="font-mono"
+              />
+              <p className="text-xs text-muted-foreground">Used when routing selects forward externally or no-answer fallback is external.</p>
+            </div>
+          )}
           {aiOff && <p className="text-xs text-muted-foreground">AI coverage is off. Turn it on in AI Receptionist → Call Handling to route calls to Ava.</p>}
         </div>
       </Panel>
@@ -123,8 +155,14 @@ export function PhoneRoutingEditor() {
       <Panel title="Voicemail greeting">
         <div className="flex flex-col gap-2">
           <Label htmlFor="greeting" className="sr-only">Greeting text</Label>
-          <Textarea id="greeting" value={greeting} onChange={(e) => setGreeting(e.target.value)} rows={3} />
-          <p className="text-xs text-muted-foreground">Read by text-to-speech. Upload a recording in Settings → Phone.</p>
+          <Textarea
+            id="greeting"
+            value={greeting}
+            onChange={(e) => setGreeting(e.target.value)}
+            rows={3}
+            disabled={!greetingLoaded}
+          />
+          <p className="text-xs text-muted-foreground">Read by text-to-speech when callers are sent to voicemail.</p>
         </div>
       </Panel>
 

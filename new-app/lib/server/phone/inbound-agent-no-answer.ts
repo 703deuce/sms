@@ -1,6 +1,7 @@
 import { getPrisma } from "@/lib/server/db";
 import { getCallRouting } from "@/lib/server/phone/routing";
 import { telnyxCallAction } from "@/lib/server/phone/telnyx-call-actions";
+import { resolveExternalForwardTarget } from "@/lib/server/phone/routing-external";
 import { leaveVoicemailOnCall } from "@/lib/server/phone/voicemail-runtime";
 import { patchInboundSession } from "@/lib/server/phone/inbound-session";
 import { phoneServerLog } from "@/lib/server/phone/phone-log";
@@ -36,6 +37,27 @@ export async function handleInboundAgentLegNoAnswer(input: {
       phoneNumberId: input.phoneNumberId,
     });
     return;
+  }
+
+  if (routing.noAnswer === "external") {
+    const target = resolveExternalForwardTarget(routing);
+    if (target) {
+      await telnyxCallAction(input.pstnCallControlId, "answer").catch(() => undefined);
+      await telnyxCallAction(input.pstnCallControlId, "transfer", { to: target });
+      await prisma.humanCall.update({
+        where: { id: call.id },
+        data: {
+          status: "transferred",
+          disposition: `forward:${target}`,
+          endedAt: new Date(),
+          metadata: patchInboundSession(meta, {
+            inboundBridgeStatus: "forwarded",
+            ringTimeoutAt: null,
+          }),
+        },
+      });
+      return;
+    }
   }
 
   await telnyxCallAction(input.pstnCallControlId, "hangup").catch(() => undefined);

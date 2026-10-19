@@ -153,6 +153,23 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
         </div>
       </div>
 
+      {variant === 'phone' && loadError && (
+        <div className="border-b border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive" role="alert">
+          {loadError}
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-3"
+            onClick={() => {
+              setLiveCalls(null)
+              setLoadError(null)
+            }}
+          >
+            Retry
+          </Button>
+        </div>
+      )}
+
       {current.length === 0 ? (
         <EmptyState
           icon={PhoneOff}
@@ -228,7 +245,9 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
                           <span className="block truncate">{c.routedTo}</span>
                           {c.user && <span className="text-xs text-muted-foreground">{c.user}</span>}
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground">{getNumber(c.numberId)?.label}</td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {variant === 'phone' ? c.routedTo || c.lineSummary?.label || '—' : getNumber(c.numberId)?.label}
+                        </td>
                       </>
                     )}
                     {variant === 'receptionist' && c.ai && (

@@ -755,6 +755,7 @@ export const ROUTE_POLICY_DEFAULT = {
   afterHours: 'ai' as 'ai' | 'voicemail' | 'external',
   aiCoverage: 'after_hours_overflow' as 'full_time' | 'after_hours' | 'overflow' | 'after_hours_overflow' | 'off',
   mctbEnabled: true,
+  externalForwardE164: '' as string,
   updatedAt: at(48),
   updatedBy: 'Maya Okafor',
 }

@@ -16,7 +16,6 @@ export async function GET() {
       },
       orderBy: { startedAt: "desc" },
       take: 5,
-      include: { contact: true },
     });
 
     const call = recent.find((row) => {
@@ -28,7 +27,11 @@ export async function GET() {
       return NextResponse.json({ data: null });
     }
 
-    const contact = call.contact;
+    const contact = call.contactId
+      ? await prisma.contact.findFirst({
+          where: { id: call.contactId, workspaceId },
+        })
+      : null;
     const callerName = contact
       ? [contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.company
       : null;
