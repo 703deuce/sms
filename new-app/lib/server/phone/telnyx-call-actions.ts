@@ -2,6 +2,11 @@ import { telnyxRequest } from "@/lib/server/telnyx/client";
 import { isTelnyxPhoneConfigured } from "@/lib/server/phone/calls-service";
 import { phoneServerLog } from "@/lib/server/phone/phone-log";
 
+/** Telnyx call_control_id values are `v3:…` and must be encoded in URL paths. */
+export function telnyxCallControlPath(controlId: string, suffix: string) {
+  return `/calls/${encodeURIComponent(controlId)}${suffix}`;
+}
+
 export async function telnyxCallAction(
   controlId: string,
   action: string,
@@ -9,7 +14,7 @@ export async function telnyxCallAction(
 ) {
   if (!controlId || controlId.startsWith("mock_") || !isTelnyxPhoneConfigured()) return;
   try {
-    await telnyxRequest(`/calls/${controlId}/actions/${action}`, {
+    await telnyxRequest(telnyxCallControlPath(controlId, `/actions/${action}`), {
       method: "POST",
       body: body ?? {},
     });

@@ -1,7 +1,11 @@
 import { getPrisma } from "@/lib/server/db";
 import { isTelnyxPhoneConfigured } from "@/lib/server/phone/calls-service";
 import { getCallRouting } from "@/lib/server/phone/routing";
-import { encodeTelnyxClientState, telnyxCallAction } from "@/lib/server/phone/telnyx-call-actions";
+import {
+  encodeTelnyxClientState,
+  telnyxCallAction,
+  telnyxCallControlPath,
+} from "@/lib/server/phone/telnyx-call-actions";
 import { telnyxRequest } from "@/lib/server/telnyx/client";
 
 export async function startVoicemailRecordingOnCall(input: {
@@ -91,12 +95,12 @@ export async function leaveVoicemailOnCall(input: {
   if (isTelnyxPhoneConfigured()) {
     await telnyxCallAction(input.telnyxCallControlId, "answer").catch(() => undefined);
     if (playUrl) {
-      await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/playback_start`, {
+      await telnyxRequest(telnyxCallControlPath(input.telnyxCallControlId, "/actions/playback_start"), {
         method: "POST",
         body: { audio_url: playUrl, client_state: greetingState },
       }).catch(async () => {
         if (sayText) {
-          await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/speak`, {
+          await telnyxRequest(telnyxCallControlPath(input.telnyxCallControlId, "/actions/speak"), {
             method: "POST",
             body: {
               payload: sayText,
@@ -110,7 +114,7 @@ export async function leaveVoicemailOnCall(input: {
         }
       });
     } else if (sayText) {
-      await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/speak`, {
+      await telnyxRequest(telnyxCallControlPath(input.telnyxCallControlId, "/actions/speak"), {
         method: "POST",
         body: {
           payload: sayText,

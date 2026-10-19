@@ -304,7 +304,8 @@ export async function linkHumanCallControlId(
   });
 
   if (isTelnyxPhoneConfigured()) {
-    await telnyxRequest(`/calls/${telnyxCallControlId}/actions/update_client_state`, {
+    const { telnyxCallControlPath } = await import("@/lib/server/phone/telnyx-call-actions");
+    await telnyxRequest(telnyxCallControlPath(telnyxCallControlId, "/actions/update_client_state"), {
       method: "POST",
       body: {
         client_state: encodeClientState({

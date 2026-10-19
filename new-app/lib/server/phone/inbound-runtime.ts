@@ -101,7 +101,7 @@ export async function processInboundCallInitiated(input: {
         humanCallId: call.id,
         kind: "human",
       }),
-    });
+    }).catch(() => undefined);
   }
 
   if (route.mode === "voicemail" && input.telnyxCallControlId) {
