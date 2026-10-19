@@ -75,8 +75,8 @@ assert.doesNotMatch(
 );
 assert.match(
   wpSrc,
-  /liveCall\.answer\(/,
-  "Answer must be called on the Call instance (liveCall.answer)",
+  /answerInboundSdkCall/,
+  "Answer must use answerInboundSdkCall (bound .call on SDK instance)",
 );
 
 const tokenSrc = readFileSync(join(root, "new-app/lib/server/phone/webrtc-token.ts"), "utf8");

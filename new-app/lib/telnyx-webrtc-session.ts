@@ -125,3 +125,46 @@ export function lookupSdkCall(
   if (fromMap) return fromMap;
   return null;
 }
+
+type SdkCallWithAnswer = TelnyxSdkNotification["call"] & {
+  answer?: (opts?: { remoteElement?: HTMLMediaElement }) => void | Promise<void>;
+  hangup?: () => void;
+};
+
+/** Authoritative inbound Call handle — never use React state copies for SDK methods. */
+export async function resolveInboundSdkCall(
+  client: Client | null,
+  callId: string,
+  inboundRef?: SdkCallWithAnswer | null,
+): Promise<SdkCallWithAnswer> {
+  const { TelnyxRTC } = await import("@telnyx/webrtc");
+  let call: SdkCallWithAnswer | null =
+    inboundRef || lookupSdkCall(client, callId) || null;
+  if (!call) {
+    throw new Error("Call session is no longer available");
+  }
+  call = TelnyxRTC.telnyxStateCall(
+    call as Parameters<typeof TelnyxRTC.telnyxStateCall>[0],
+  ) as SdkCallWithAnswer;
+  if (typeof call.answer !== "function") {
+    throw new Error("Call session is no longer available");
+  }
+  return call;
+}
+
+/** Telnyx Call.answer uses `this.session` — must not be detached from the instance. */
+export async function answerInboundSdkCall(
+  call: SdkCallWithAnswer,
+  options?: { remoteElement?: HTMLMediaElement },
+): Promise<void> {
+  const answer = call.answer;
+  if (typeof answer !== "function") {
+    throw new Error("Call session is no longer available");
+  }
+  await answer.call(call, options);
+}
+
+export function hangupSdkCall(call: SdkCallWithAnswer | null | undefined) {
+  if (!call?.hangup) return;
+  call.hangup.call(call);
+}

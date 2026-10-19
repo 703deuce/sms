@@ -18,9 +18,11 @@ import {
 import { phoneClientLog } from '@/lib/phone-client-log'
 import { phoneClientTrace } from '@/lib/phone-client-trace'
 import {
+  answerInboundSdkCall,
   ensureTelnyxWebRtcClient,
   getSharedTelnyxClient,
-  lookupSdkCall,
+  hangupSdkCall,
+  resolveInboundSdkCall,
   subscribeTelnyxError,
   subscribeTelnyxNotifications,
   subscribeTelnyxReady,
@@ -51,7 +53,6 @@ export type IncomingCallOffer = {
   from: string
   to: string
   humanCallId?: string
-  webrtcCall: { answer?: () => void; hangup?: () => void }
 }
 
 type WorkspaceState = {
@@ -106,7 +107,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const activeWebrtcIdRef = useRef<string | null>(null)
   const activeCallRef = useRef<ActiveCall | null>(null)
   const incomingCallRef = useRef<IncomingCallOffer | null>(null)
-  const inboundSdkCallRef = useRef<IncomingCallOffer['webrtcCall'] | null>(null)
+  const inboundSdkCallRef = useRef<{ id?: string; answer?: () => void; hangup?: () => void } | null>(null)
   useEffect(() => {
     activeCallRef.current = activeCall
   }, [activeCall])
@@ -160,7 +161,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
       const call = TelnyxRTCClass.telnyxStateCall(
         notification.call as Parameters<typeof TelnyxRTCClass.telnyxStateCall>[0],
-      ) as TelnyxSdkNotification['call'] & IncomingCallOffer['webrtcCall']
+      ) as TelnyxSdkNotification['call']
 
       phoneClientLog('webrtc', 'notification', {
         type: notification.type,
@@ -191,7 +192,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         inboundSdkCallRef.current = call
         phoneClientLog('webrtc', 'inbound_ringing_ui', { webrtcId, from, to })
         phoneClientTrace('inbound_ringing_ui', { webrtcCallId: webrtcId, callState: call.state })
-        setIncomingCall({ webrtcId, from, to, webrtcCall: call })
+        setIncomingCall({ webrtcId, from, to })
         void fetchRingingInbound()
           .then((row) => {
             if (!row) return
@@ -467,21 +468,13 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         return
       }
 
-      const client = telnyxClientRef.current as ReturnType<typeof getSharedTelnyxClient> | null
-      const liveCall =
-        inboundSdkCallRef.current ||
-        lookupSdkCall(client, inc.webrtcId) ||
-        inc.webrtcCall
-      if (typeof liveCall?.answer !== 'function') {
-        setIncomingAnswering(false)
-        toast.error('Could not connect the call', { description: 'Call session is no longer available.' })
-        return
-      }
+      const client = getSharedTelnyxClient() || (telnyxClientRef.current as ReturnType<typeof getSharedTelnyxClient>)
       const audio = remoteAudioRef.current
       if (audio) void audio.play().catch(() => undefined)
+      let liveCall
       try {
-        // Must call answer on the Call instance — detached answer() loses `this` (SDK uses this.session).
-        await liveCall.answer({ remoteElement: audio || undefined })
+        liveCall = await resolveInboundSdkCall(client, inc.webrtcId, inboundSdkCallRef.current)
+        await answerInboundSdkCall(liveCall, { remoteElement: audio || undefined })
         phoneClientTrace('inbound_answer_promise_resolved', {
           humanCallId,
           webrtcCallId: inc.webrtcId,
@@ -530,9 +523,10 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     const inc = incomingCall
     if (!inc) return
     phoneClientLog('webrtc', 'inbound_reject_clicked', { humanCallId: inc.humanCallId })
-    const live =
-      inboundSdkCallRef.current || inc.webrtcCall
-    live.hangup?.()
+    const client = getSharedTelnyxClient() || (telnyxClientRef.current as ReturnType<typeof getSharedTelnyxClient>)
+    void resolveInboundSdkCall(client, inc.webrtcId, inboundSdkCallRef.current)
+      .then((live) => hangupSdkCall(live))
+      .catch(() => hangupSdkCall(inboundSdkCallRef.current))
     inboundSdkCallRef.current = null
     if (inc.humanCallId) {
       void registerInboundReject(inc.humanCallId).catch(() => undefined)
