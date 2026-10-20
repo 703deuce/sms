@@ -42,6 +42,13 @@ def resolve_internal_api_key() -> str:
     return secret
 
 
+def _unwrap_legacy_wrapped_result(parsed: dict[str, Any]) -> dict[str, Any]:
+    """new-app briefly returned `{ ok: true, result: {...} }`; monolith returns flat result."""
+    if parsed.get("ok") is True and isinstance(parsed.get("result"), dict):
+        return parsed["result"]
+    return parsed
+
+
 def _sanitize_for_log(value: str, max_len: int = 200) -> str:
     text = value.replace("\n", " ").strip()
     if len(text) > max_len:
@@ -144,6 +151,8 @@ class TransovoBackend:
                     f"Backend returned JSON {type(parsed).__name__}, expected object "
                     f"for action={action} (HTTP {resp.status_code})",
                 )
+
+            parsed = _unwrap_legacy_wrapped_result(parsed)
 
             if resp.status_code >= 400:
                 error_msg = str(parsed.get("error") or f"HTTP {resp.status_code}")

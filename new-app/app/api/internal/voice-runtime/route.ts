@@ -43,37 +43,32 @@ export async function POST(request: Request) {
   const payload = body.payload || {};
 
   try {
+    // Match monolith `src/app/api/internal/voice-runtime/route.ts`: success bodies are the
+    // action result object at the top level (Python worker reads fields directly).
     switch (action) {
       case "resolve_voice_v3_livekit_session":
-        return NextResponse.json({
-          ok: true,
-          result: await resolveVoiceV3LiveKitSessionForNewApp(payload as never),
-        });
+        return NextResponse.json(
+          await resolveVoiceV3LiveKitSessionForNewApp(payload as never),
+        );
       case "execute_voice_v3_livekit_tool":
-        return NextResponse.json({
-          ok: true,
-          result: await executeVoiceV3ToolForNewApp(payload as never),
-        });
+        return NextResponse.json(await executeVoiceV3ToolForNewApp(payload as never));
       case "resolve_voice_v3_delegated_runtime_context":
-        return NextResponse.json({
-          ok: true,
-          result: await resolveDelegatedRuntimeContext({
+        return NextResponse.json(
+          await resolveDelegatedRuntimeContext({
             liveSessionId: String(payload.liveSessionId || ""),
             delegationId: payload.delegationId as string | null | undefined,
           }),
-        });
+        );
       case "commit_voice_v3_livekit_caller_utterance":
-        return NextResponse.json({
-          ok: true,
-          result: await commitCallerUtterance({
+        return NextResponse.json(
+          await commitCallerUtterance({
             liveSessionId: String(payload.liveSessionId || ""),
             utterance: String(payload.utterance || ""),
           }),
-        });
+        );
       case "finalize_voice_v3_call":
-        return NextResponse.json({
-          ok: true,
-          result: await finalizeVoiceV3Call({
+        return NextResponse.json(
+          await finalizeVoiceV3Call({
             workspaceId: String(payload.workspaceId || ""),
             callId: String(payload.callId || ""),
             transcript: payload.transcript as string | null | undefined,
@@ -84,7 +79,7 @@ export async function POST(request: Request) {
             intent: payload.intent as string | null | undefined,
             idempotencyKey: payload.idempotencyKey as string | null | undefined,
           }),
-        });
+        );
       default:
         return NextResponse.json({ ok: false, error: `Unknown action: ${action}` }, { status: 400 });
     }
