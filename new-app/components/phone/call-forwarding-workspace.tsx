@@ -27,13 +27,16 @@ import {
 import { PageHeader, Panel, Stat } from '@/components/app/page-primitives'
 import {
   fetchCallForwarding,
+  fetchForwardingEntitlements,
   saveAnsweringPolicy,
   createForwardingDestination,
   deleteForwardingDestination,
   patchForwardingDestination,
   testForwardingDestination,
   type ForwardingConfigDto,
+  type ForwardingEntitlementsDto,
 } from '@/lib/phone-forwarding-api'
+import { ForwardingRingGroups } from '@/components/phone/forwarding-ring-groups'
 
 export function CallForwardingWorkspace() {
   const [loading, setLoading] = useState(true)
@@ -42,12 +45,17 @@ export function CallForwardingWorkspace() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [destName, setDestName] = useState('')
   const [destPhone, setDestPhone] = useState('')
+  const [entitlements, setEntitlements] = useState<ForwardingEntitlementsDto | null>(null)
 
   const reload = useCallback(() => {
     setLoading(true)
-    void fetchCallForwarding(phoneNumberId || undefined)
-      .then((data) => {
+    void Promise.all([
+      fetchCallForwarding(phoneNumberId || undefined),
+      fetchForwardingEntitlements(),
+    ])
+      .then(([data, ent]) => {
         setConfig(data)
+        setEntitlements(ent)
         if (!phoneNumberId && data.numbers[0]?.id) setPhoneNumberId(data.numbers[0].id)
       })
       .catch(() => toast.error('Could not load call forwarding'))
@@ -154,6 +162,13 @@ export function CallForwardingWorkspace() {
         <p className="text-sm text-muted-foreground">
           Active line: <span className="font-mono text-foreground">{selectedNumber.e164}</span>
         </p>
+      )}
+
+      {entitlements?.destinations.atLimit && (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+          You have reached the {entitlements.planLabel} limit of {entitlements.destinations.max} forwarding
+          destinations. Remove a destination or upgrade your plan to add more.
+        </div>
       )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
@@ -275,6 +290,10 @@ export function CallForwardingWorkspace() {
               </Table>
             )}
           </Panel>
+
+          {config && phoneNumberId && (
+            <ForwardingRingGroups config={config} phoneNumberId={phoneNumberId} onSaved={reload} />
+          )}
         </div>
 
         <aside className="flex flex-col gap-4 lg:col-span-4">

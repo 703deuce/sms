@@ -1,15 +1,22 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { PageHeader, Panel } from '@/components/app/page-primitives'
+import { AutoAttendantGreetingSection } from '@/components/phone/auto-attendant-greeting-section'
+import {
+  AutoAttendantOptionDrawer,
+  type MenuOptionDraft,
+} from '@/components/phone/auto-attendant-option-drawer'
 import {
   fetchAutoAttendantMenu,
+  fetchAutoAttendantMenus,
+  fetchCallForwarding,
   publishAutoAttendantMenu,
   saveAutoAttendantMenu,
 } from '@/lib/phone-forwarding-api'
@@ -17,7 +24,7 @@ import {
 const DEFAULT_GREETING =
   'Thank you for calling. Press 1 for scheduling, press 2 for service, or press 0 to speak with someone.'
 
-const DEFAULT_OPTIONS = [
+const DEFAULT_OPTIONS: MenuOptionDraft[] = [
   { digit: '1', label: 'Scheduling', actionType: 'forward_phone', actionConfigJson: { press1: true } },
   { digit: '2', label: 'Service', actionType: 'forward_phone', actionConfigJson: { press1: true } },
   { digit: '0', label: 'Operator', actionType: 'forward_phone', actionConfigJson: { press1: true } },
@@ -26,15 +33,27 @@ const DEFAULT_OPTIONS = [
 export function AutoAttendantEditor({ menuId }: { menuId: string }) {
   const [name, setName] = useState('')
   const [greeting, setGreeting] = useState(DEFAULT_GREETING)
-  const [options, setOptions] = useState(DEFAULT_OPTIONS)
+  const [greetingMode, setGreetingMode] = useState<'tts' | 'audio'>('tts')
+  const [audioUrl, setAudioUrl] = useState<string | null>(null)
+  const [options, setOptions] = useState<MenuOptionDraft[]>(DEFAULT_OPTIONS)
   const [status, setStatus] = useState('draft')
   const [loading, setLoading] = useState(true)
+  const [drawerIndex, setDrawerIndex] = useState<number | null>(null)
+  const [destinations, setDestinations] = useState<Array<{ id: string; name: string; phoneE164: string }>>([])
+  const [groups, setGroups] = useState<Array<{ id: string; name: string }>>([])
+  const [menus, setMenus] = useState<Array<{ id: string; name: string }>>([])
 
   useEffect(() => {
-    void fetchAutoAttendantMenu(menuId)
-      .then((m) => {
+    void Promise.all([
+      fetchAutoAttendantMenu(menuId),
+      fetchCallForwarding(),
+      fetchAutoAttendantMenus(),
+    ])
+      .then(([m, fwd, allMenus]) => {
         setName(m.name)
         setGreeting(m.greetingText || DEFAULT_GREETING)
+        setGreetingMode((m as { greetingMode?: string }).greetingMode === 'audio' ? 'audio' : 'tts')
+        setAudioUrl((m as { greetingAudioUrl?: string }).greetingAudioUrl || null)
         setStatus(m.status)
         if (m.options?.length) {
           setOptions(
@@ -46,30 +65,46 @@ export function AutoAttendantEditor({ menuId }: { menuId: string }) {
             })),
           )
         }
+        setDestinations(fwd.destinations)
+        setGroups(fwd.groups.map((g) => ({ id: g.id, name: g.name })))
+        setMenus(allMenus.map((x) => ({ id: x.id, name: x.name })))
       })
       .catch(() => toast.error('Could not load menu'))
       .finally(() => setLoading(false))
   }, [menuId])
 
-  const save = () => {
-    void saveAutoAttendantMenu(menuId, {
+  const payload = useMemo(
+    () => ({
       name,
-      greetingText: greeting,
-      greetingMode: 'tts',
+      greetingText: greetingMode === 'tts' ? greeting : null,
+      greetingMode,
+      greetingAudioUrl: greetingMode === 'audio' ? audioUrl : null,
       options,
-    })
+    }),
+    [name, greeting, greetingMode, audioUrl, options],
+  )
+
+  const save = () => {
+    void saveAutoAttendantMenu(menuId, payload)
       .then(() => toast.success('Draft saved'))
       .catch((e) => toast.error(e instanceof Error ? e.message : 'Save failed'))
   }
 
   const publish = () => {
-    void saveAutoAttendantMenu(menuId, { name, greetingText: greeting, options })
+    void saveAutoAttendantMenu(menuId, payload)
       .then(() => publishAutoAttendantMenu(menuId))
       .then(() => {
         setStatus('published')
         toast.success('Menu published')
       })
       .catch((e) => toast.error(e instanceof Error ? e.message : 'Publish failed'))
+  }
+
+  const addOption = () => {
+    const used = new Set(options.map((o) => o.digit))
+    const digit = '0123456789'.split('').find((d) => !used.has(d)) || '9'
+    setOptions([...options, { digit, label: 'New option', actionType: 'forward_phone', actionConfigJson: { press1: true } }])
+    setDrawerIndex(options.length)
   }
 
   if (loading) return <p className="text-sm text-muted-foreground">Loading menu…</p>
@@ -99,34 +134,45 @@ export function AutoAttendantEditor({ menuId }: { menuId: string }) {
           </div>
         </Panel>
 
-        <Panel title="Welcome greeting" description="This is what callers hear before choosing an option.">
-          <Textarea
-            value={greeting}
-            onChange={(e) => setGreeting(e.target.value)}
-            rows={5}
-            className="min-h-[120px]"
-          />
-        </Panel>
+        <AutoAttendantGreetingSection
+          menuId={menuId}
+          greeting={greeting}
+          greetingMode={greetingMode}
+          audioUrl={audioUrl}
+          onGreetingChange={(t) => {
+            setGreetingMode('tts')
+            setGreeting(t)
+          }}
+          onAudioUploaded={(url) => {
+            setGreetingMode('audio')
+            setAudioUrl(url)
+          }}
+        />
 
         <Panel title="Keypad options" description="Choose what happens when callers press a number.">
+          <Button type="button" size="sm" variant="outline" className="mb-3" onClick={addOption}>
+            <Plus className="size-4" />
+            Add option
+          </Button>
           <ul className="flex flex-col gap-3">
             {options.map((o, i) => (
-              <li key={o.digit} className="flex min-h-16 items-center gap-3 rounded-lg border p-3">
+              <li key={`${o.digit}-${i}`} className="flex min-h-16 items-center gap-3 rounded-lg border p-3">
                 <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted font-semibold">
                   {o.digit}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <Input
-                    value={o.label}
-                    onChange={(e) =>
-                      setOptions((rows) =>
-                        rows.map((r, j) => (j === i ? { ...r, label: e.target.value } : r)),
-                      )
-                    }
-                    aria-label={`Option ${o.digit} label`}
-                  />
-                  <p className="mt-1 text-xs text-muted-foreground">Forward to phone (configure destination after publish)</p>
+                  <p className="font-medium">{o.label}</p>
+                  <p className="text-xs text-muted-foreground">{o.actionType.replace(/_/g, ' ')}</p>
                 </div>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setDrawerIndex(i)}>Edit</Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setOptions(options.filter((_, j) => j !== i))}
+                >
+                  Remove
+                </Button>
               </li>
             ))}
           </ul>
@@ -150,6 +196,19 @@ export function AutoAttendantEditor({ menuId }: { menuId: string }) {
           </Button>
         </Panel>
       </aside>
+
+      <AutoAttendantOptionDrawer
+        open={drawerIndex !== null}
+        option={drawerIndex !== null ? options[drawerIndex] : null}
+        destinations={destinations}
+        groups={groups}
+        menus={menus.filter((m) => m.id !== menuId)}
+        onClose={() => setDrawerIndex(null)}
+        onSave={(opt) => {
+          if (drawerIndex === null) return
+          setOptions((rows) => rows.map((r, j) => (j === drawerIndex ? opt : r)))
+        }}
+      />
     </div>
   )
 }

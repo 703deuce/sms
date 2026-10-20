@@ -19,8 +19,16 @@ export type ForwardingDestinationDto = {
   lastTestedAt: string | null
 }
 
+export type ForwardingGroupDto = {
+  id: string
+  name: string
+  strategy: string
+  members: Array<{ destinationId: string; priority: number; destination: ForwardingDestinationDto }>
+}
+
 export type ForwardingConfigDto = {
   destinations: ForwardingDestinationDto[]
+  groups: ForwardingGroupDto[]
   policies: Array<{ phoneNumberId: string; answeringMode: string; paused: boolean; primaryDestinationId: string | null }>
   policy: { phoneNumberId: string; answeringMode: string; paused: boolean; primaryDestinationId: string | null } | null
   numbers: Array<{ id: string; e164: string; friendlyName: string | null }>
@@ -29,6 +37,44 @@ export type ForwardingConfigDto = {
     bridgedMinutes: number
     missedCalls: number
   } | null
+}
+
+export type ForwardingEntitlementsDto = {
+  destinations: { used: number; max: number; atLimit: boolean }
+  ringGroups: { used: number; max: number; atLimit: boolean }
+  ivrMenus: { used: number; max: number; atLimit: boolean }
+  nestedMenus: boolean
+  simultaneousRing: boolean
+  includedForwardedMinutes: number
+  planLabel: string
+}
+
+export async function fetchForwardingEntitlements() {
+  return parse<ForwardingEntitlementsDto>(await fetch('/api/phone/forwarding/entitlements'))
+}
+
+export async function saveForwardingGroup(body: {
+  id?: string
+  name: string
+  strategy: 'sequential' | 'simultaneous'
+  memberDestinationIds: string[]
+}) {
+  if (body.id) {
+    return parse(
+      await fetch(`/api/phone/forwarding/groups/${encodeURIComponent(body.id)}`, {
+        method: 'PATCH',
+        headers: headers(),
+        body: JSON.stringify(body),
+      }),
+    )
+  }
+  return parse(
+    await fetch('/api/phone/forwarding/groups', {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify(body),
+    }),
+  )
 }
 
 export async function fetchCallForwarding(phoneNumberId?: string) {

@@ -27,9 +27,24 @@ export async function resolveEffectiveAnswering(input: {
   if (!policy || policy.paused) return { kind: "browser" };
 
   const open = await isBusinessOpenNow(input.workspaceId);
-  const schedule = policy.scheduleJson as { afterHoursMode?: string } | null;
-  if (!open && schedule?.afterHoursMode === "voicemail") {
-    return { kind: "voicemail" };
+  const schedule = policy.scheduleJson as {
+    afterHoursMode?: string;
+    afterHoursDestinationE164?: string;
+    afterHoursMenuId?: string;
+  } | null;
+  if (!open) {
+    if (schedule?.afterHoursMode === "voicemail") return { kind: "voicemail" };
+    if (schedule?.afterHoursMode === "auto_attendant" && schedule.afterHoursMenuId) {
+      return { kind: "auto_attendant", menuId: schedule.afterHoursMenuId };
+    }
+    if (schedule?.afterHoursMode === "forward" && schedule.afterHoursDestinationE164) {
+      return {
+        kind: "forward",
+        destinationE164: schedule.afterHoursDestinationE164,
+        press1: true,
+        screeningText: null,
+      };
+    }
   }
 
   if (policy.answeringMode === "auto_attendant" && policy.autoAttendantMenuId) {

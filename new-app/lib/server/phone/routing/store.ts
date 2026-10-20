@@ -22,6 +22,13 @@ export async function createForwardingDestination(
     hostedE164?: string;
   },
 ) {
+  const { getForwardingEntitlements } = await import("./forwarding-entitlements");
+  const ent = await getForwardingEntitlements(workspaceId);
+  if (ent.destinations.atLimit) {
+    throw new Error(
+      `Destination limit reached (${ent.destinations.max}). Upgrade your plan to add more forwarding numbers.`,
+    );
+  }
   const phoneE164 = validateDestinationE164(input.phoneE164, input.hostedE164);
   return getPrisma().forwardingDestination.create({
     data: {
@@ -168,6 +175,11 @@ export async function getAutoAttendantMenu(workspaceId: string, id: string) {
 }
 
 export async function createAutoAttendantMenu(workspaceId: string, name: string) {
+  const { getForwardingEntitlements } = await import("./forwarding-entitlements");
+  const ent = await getForwardingEntitlements(workspaceId);
+  if (ent.ivrMenus.atLimit) {
+    throw new Error(`IVR menu limit reached (${ent.ivrMenus.max}). Upgrade to add more menus.`);
+  }
   return getPrisma().autoAttendantMenu.create({
     data: { workspaceId, name: name.trim() },
   });

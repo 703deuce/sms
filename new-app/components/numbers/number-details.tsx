@@ -31,6 +31,7 @@ import { CapabilityChips, Callout, FlowDiagram, ProductChips } from './number-ui
 import { AssignmentSheet } from './assignment-sheet'
 import { DisconnectDialog, ReleaseDialog, RenameDialog } from './number-dialogs'
 import { cn } from '@/lib/utils'
+import { NumberIncomingCallsPanel } from '@/components/phone/number-incoming-calls-panel'
 
 const crumbs = (label: string, tab?: string) => [
   { label: 'Numbers', href: tab ? `/app/numbers?tab=${tab}` : '/app/numbers' },
@@ -76,6 +77,7 @@ export function OwnedNumberDetail({ id }: { id: string }) {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="flex flex-col gap-4 lg:col-span-2">
+          <NumberIncomingCallsPanel phoneNumberId={n.id} />
           <Panel title="Inbound flow" icon={Workflow} description="What happens when someone calls this number." actions={<Button variant="ghost" size="sm" onClick={() => setAssign(true)} disabled={n.status !== 'active'}>Edit</Button>}>
             <FlowDiagram steps={inboundFlow(n.assignments)} />
           </Panel>

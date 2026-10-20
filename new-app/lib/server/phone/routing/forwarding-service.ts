@@ -132,6 +132,9 @@ export async function dialDestination(input: {
     parentCallControlId: input.inboundControlId,
     destinationE164: input.destinationE164,
     press1Required: Boolean(input.press1),
+    screeningText: input.screeningText || null,
+    businessLineE164: input.businessLineE164,
+    callerE164: input.callerE164,
     sequentialQueue: input.sequentialQueue || [],
     simultaneous: Boolean(input.simultaneous),
   };
@@ -178,9 +181,35 @@ export async function handleScreeningGather(input: {
   if (!parent) return;
   if (input.digit === "1") {
     const { bridgeCalls } = await import("./telnyx-call-control");
+    const sessionId = String(input.clientState.routingSessionId || "");
+    if (sessionId) {
+      const { claimSimultaneousWinner } = await import("./session-state");
+      await claimSimultaneousWinner(sessionId, input.outboundControlId);
+    }
     await bridgeCalls(parent, input.outboundControlId);
     return;
   }
   const { hangupCall } = await import("./telnyx-call-control");
   await hangupCall(input.outboundControlId);
+  if (input.digit === "2") {
+    const queue = (input.clientState.sequentialQueue || []) as Array<{
+      e164: string;
+      press1: boolean;
+      timeout: number;
+    }>;
+    if (queue.length) {
+      const next = queue[0];
+      await dialDestination({
+        sessionId: String(input.clientState.routingSessionId),
+        workspaceId: String(input.clientState.workspaceId),
+        humanCallId: String(input.clientState.humanCallId),
+        inboundControlId: parent,
+        businessLineE164: String(input.clientState.businessLineE164 || ""),
+        callerE164: String(input.clientState.callerE164 || ""),
+        destinationE164: next.e164,
+        press1: next.press1,
+        sequentialQueue: queue.slice(1),
+      });
+    }
+  }
 }
