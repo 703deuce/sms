@@ -17,15 +17,6 @@ function formatTranscriptFromCanonicalTurns(
   return lines.join("\n");
 }
 
-function deriveDurationSeconds(
-  startedAt: Date | null,
-  endedAt: Date,
-): number | null {
-  if (!startedAt) return null;
-  const sec = Math.round((endedAt.getTime() - startedAt.getTime()) / 1000);
-  return sec >= 0 ? sec : null;
-}
-
 /**
  * Synchronous post-call finalize when the Python worker flushes forensics (replaces monolith
  * voice_v3_call_history enqueueJob stub in new-app).
