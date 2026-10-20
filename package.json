@@ -272,6 +272,7 @@
     "test:amy-master-receptionist-variations": "tsx scripts/amy-master-receptionist-variations.ts",
     "test:amy-master-receptionist-variations-curated": "tsx scripts/amy-master-receptionist-variations.ts -- --curated-only",
     "audit:livekit-booking-steps": "tsx scripts/audit-livekit-booking-steps.ts",
+    "test:amy-agent-tool-discipline": "tsx scripts/test-amy-agent-tool-discipline.ts",
     "test:amy-livekit-readiness": "tsx scripts/amy-livekit-readiness.ts",
     "test:telephony-provisioning": "tsx scripts/test-telephony-provisioning.ts",
     "voice-runtime:dev": "echo 'REMOVED: use npm run voice-python:dev' && exit 1",

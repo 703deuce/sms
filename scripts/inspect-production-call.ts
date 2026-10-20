@@ -1,12 +1,26 @@
 #!/usr/bin/env npx tsx
 import { getPrisma } from "../src/lib/db";
 
-const CALL_ID = process.env.CALL_ID || "cmslc4zq2001o67294q570t11";
+const CALL_ID = process.env.CALL_ID || "";
 
 async function main() {
   const prisma = getPrisma();
+  let callId = CALL_ID;
+  if (!callId) {
+    const latest = await prisma.voiceCall.findFirst({
+      where: { agentId: process.env.AMY_AGENT_ID || "cmshz2lc25c622c4i58303501" },
+      orderBy: { startedAt: "desc" },
+      select: { id: true },
+    });
+    callId = latest?.id || "";
+  }
+  if (!callId) {
+    console.log("No call found");
+    return;
+  }
+
   const call = await prisma.voiceCall.findUnique({
-    where: { id: CALL_ID },
+    where: { id: callId },
     select: {
       id: true,
       status: true,
@@ -22,7 +36,6 @@ async function main() {
     },
   });
   if (!call) {
-    console.log("Call not found");
     return;
   }
 
@@ -65,7 +78,7 @@ async function main() {
   );
 
   const appt = await prisma.voiceAppointment.findFirst({
-    where: { callId: CALL_ID },
+    where: { callId },
     select: { id: true, status: true, startsAt: true, externalId: true },
   });
   console.log("\nappointment:", appt);
