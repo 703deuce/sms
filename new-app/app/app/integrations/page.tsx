@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { Page, PageHeader } from '@/components/app/page-primitives'
 import { IntegrationsCatalog } from '@/components/integrations/integrations-catalog'
 
@@ -8,9 +9,11 @@ export default function IntegrationsPage() {
     <Page>
       <PageHeader
         title="Integrations"
-        description="Connect calendars, CRMs and notification channels. Credentials are stored encrypted and never shown here."
+        description="Connect calendars, CRMs and payment providers. Credentials are stored encrypted and never shown here."
       />
-      <IntegrationsCatalog />
+      <Suspense fallback={<p className="text-sm text-muted-foreground">Loading integrations…</p>}>
+        <IntegrationsCatalog />
+      </Suspense>
     </Page>
   )
 }
