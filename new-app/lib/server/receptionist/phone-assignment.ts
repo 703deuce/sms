@@ -1,6 +1,7 @@
 import type { AgentConfig } from "@/lib/agent";
 import { getPrisma } from "@/lib/server/db";
 import type { ReceptionistPublishedBundle } from "@/lib/server/receptionist/draft-types";
+import { resolveWorkspaceOwnedPhoneNumberId } from "@/lib/server/receptionist/validate-phone-connection";
 
 /**
  * Keeps VoiceAgentPhoneNumber + workspace routing policy aligned with receptionist draft.
@@ -17,8 +18,15 @@ export async function syncReceptionistPhoneAssignment(
   },
 ): Promise<{ ok: boolean; error?: string } | void> {
   const prisma = getPrisma();
-  const phoneNumberId = editor.connection?.id?.trim();
+  const phoneNumberId = await resolveWorkspaceOwnedPhoneNumberId(workspaceId, editor.connection);
   if (!phoneNumberId) return;
+
+  await prisma.voiceAgentPhoneNumber.deleteMany({
+    where: {
+      agentId,
+      phoneNumberId: { not: phoneNumberId },
+    },
+  });
 
   await prisma.voiceAgentPhoneNumber.upsert({
     where: { agentId_phoneNumberId: { agentId, phoneNumberId } },

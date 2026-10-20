@@ -3,6 +3,7 @@ import "server-only";
 import type { AgentConfig } from "@/lib/agent";
 import { validateEditorForPublish } from "@/lib/server/receptionist/compile-runtime";
 import { getPrisma } from "@/lib/server/db";
+import { resolveWorkspaceOwnedPhoneNumberId } from "@/lib/server/receptionist/validate-phone-connection";
 import { resolveSchedulingBackend } from "@/lib/server/voice-v3/scheduling/connections";
 import { schedulingCapsForBackend } from "@/lib/server/voice-v3/scheduling/provider-capabilities";
 
@@ -18,6 +19,12 @@ export async function validateReceptionistPublish(
 
   const errors: string[] = [];
   const prisma = getPrisma();
+
+  try {
+    await resolveWorkspaceOwnedPhoneNumberId(workspaceId, editor.connection);
+  } catch (e) {
+    errors.push(e instanceof Error ? e.message : "Invalid phone number assignment.");
+  }
 
   if (
     (editor.capabilities.book || editor.capabilities.reschedule || editor.capabilities.cancel) &&

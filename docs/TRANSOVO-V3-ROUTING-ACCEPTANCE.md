@@ -14,14 +14,14 @@ Read-only collector: `new-app/scripts/v3-routing-acceptance-readonly.mjs` (no Li
 ```
 V3 routing acceptance
 
-3/7 verified (read-only) · 0/1 PSTN call · production NOT certified
+5/7 verified · 0/1 PSTN call · production NOT certified
 
 [x] LiveKit audit shows intended resources — see §LiveKit 2026-10-20
-[~] Canonical dispatch cleanup applied — live state already canonical; --apply would delete 0 rules (dry-run)
+[x] Canonical dispatch cleanup — not needed (0 obsolete rules; do NOT run --apply)
 [x] One individual rule dispatches transovo-voice-v3 — SDR_SbGq4QxWDGSx
-[ ] Test DID assigned + receptionist published — +15717491685 on trunk; Ava DRAFT/unpublished; assignment phoneId mismatch
-[ ] PSTN call → correct agent + two-way audio — blocked (worker down + config gaps)
-[x] Unassigned DID rejected — +15717491685 has no inbound assignment row for that phone id; resolve returns null
+[~] Test DID assigned + receptionist published — assignment repaired 2026-10-20; Ava still DRAFT (publish required)
+[ ] PSTN call → correct agent + two-way audio — pending publish + external call
+[x] Unassigned DID rejected — +19998887777 has no phone row; no default tenant
 [ ] Repeat provisioning idempotency — not re-run in this pass
 ```
 
@@ -50,9 +50,8 @@ V3 routing acceptance
 SIP API does not expose “agent online”. Container logs for Coolify app **`transovo-voice`** (`tgjridm6vrmrgljkfrr0rpjn`):
 
 - **2026-10-17:** `"registered worker"` · `agent_name": "transovo-voice-v3"` · `id": "AW_pzL5v5GinYNg"`
-- **2026-10-18:** `"shutting down worker"` — container **Exited** (not running at acceptance audit time)
-
-**Blocker for PSTN:** dispatch can target `transovo-voice-v3`, but **no worker process was running** on the host when acceptance was collected. Restart `transovo-voice` on Coolify before calling.
+- **2026-10-18:** `"shutting down worker"` — graceful drain (likely deploy stop), not a crash loop.
+- **2026-10-20 ~00:36 UTC:** Container restarted · `"registered worker"` · `agent_name": "transovo-voice-v3"` · `id": "AW_TMdGBUpB62By"` · status **Up (healthy)**.
 
 ---
 
@@ -60,19 +59,25 @@ SIP API does not expose “agent online”. Container logs for Coolify app **`tr
 
 | Check | Result |
 |--------|--------|
-| Deployed commit | `1f357d7b9` (`GET /api/health` in container) — **behind** `master` canonical/trust commits; merge/deploy still recommended after PSTN pass |
-| `appointment_receptionist` agent “Ava” | `cmvfjn4eb0001js0o4h14zexo` · status **DRAFT** · `publishedVersionId: null` |
-| Inbound assignment | `voiceAgentPhoneNumber` → `phoneNumberId: "n1"` (legacy/stub id) — **does not match** active phone row `cmvelb8d0000flm0lmsudc61b` for `+15717491685` |
-| Phone `+15717491685` | Active · on LiveKit trunk · **no** `voiceAgentPhoneNumber` row for that `phoneNumberId` |
-| `resolveReceptionistByCalledNumber(+15717491685)` | **Would return null** today → inbound bootstrap fails with “No active receptionist” (correct: no false default tenant) |
-| Unassigned probe `+19998887777` | No active phone row |
+| Deployed commit | `1f357d7b9` (`GET /api/health`) — **behind** `master` / PR #710; deploy after PSTN pass recommended |
+| `appointment_receptionist` “Ava” | `cmvfjn4eb0001js0o4h14zexo` · **DRAFT** · `publishedVersionId: null` |
+| Phone `+15717491685` | `cmvelb8d0000flm0lmsudc61b` · Active · on LiveKit trunk |
+| Inbound assignment (after repair) | `voiceAgentPhoneNumber` → `cmvelb8d0000flm0lmsudc61b` · `inboundEnabled: true` (replaced stale `n1` row) |
+| `resolveReceptionistByCalledNumber(+15717491685)` | **null until publish** — agent status DRAFT (runtime requires ACTIVE + `publishedVersionId` for PSTN) |
+| Unassigned probe `+19998887777` | No active phone row → null |
 
-**Actions before PSTN test (product ops, not architecture):**
+### Root cause: `n1` fixture ID (code fix in PR #710)
 
-1. Restart **`transovo-voice`** worker on Coolify; confirm log line `registered worker` · `agent_name": "transovo-voice-v3"`.
-2. Re-assign **`+15717491685`** to Ava so `voiceAgentPhoneNumber.phoneNumberId` matches the real `phoneNumber` row and Telnyx/LiveKit provision matches New-App.
-3. **Publish** Ava (`publishedVersionId` required for PSTN per `resolve-livekit-session.ts`).
-4. Optionally deploy `master` + PR #710 trust hardening after the call path works.
+- `DEFAULT_AGENT` in `lib/agent.ts` ships demo `connection.id: 'n1'`.
+- `ensureWorkspaceReceptionistAgent` cloned that default; `syncReceptionistPhoneAssignment` upserted `n1` **without** validating `phoneNumber` rows (no Prisma FK on `voice_agent_phone_numbers`).
+- **Prevention (code):** empty default connection in `defaultReceptionistEditorConfig`, `resolveWorkspaceOwnedPhoneNumberId` on sync/publish, `isDemoFixturePhoneId` guard.
+- **Production repair (ops):** `npx tsx scripts/repair-receptionist-phone-assignment.mjs --e164 +15717491685 --apply` (executed 2026-10-20).
+
+**Remaining before PSTN test:**
+
+1. **Publish** Ava in New-App (must set `publishedVersionId` and agent status ACTIVE).
+2. Place external PSTN call; fill §PSTN capture table.
+3. Deploy `master` + #710 when ready (validation + trust hardening).
 
 ---
 
