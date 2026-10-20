@@ -64,13 +64,45 @@ Requires `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`.
 
 ## Verification checklist
 
-- [ ] Only one shared V3 dispatch rule on the inbound trunk.
-- [ ] Dispatch agent name = `transovo-voice-v3`.
+### Infrastructure (LiveKit)
+
+- [ ] Only one shared V3 dispatch rule on the inbound trunk (`transovo-inbound-dispatch`).
+- [ ] Rule type = **individual** (separate room per call).
+- [ ] Dispatch agent name = **`transovo-voice-v3`** (matches Python worker registration).
 - [ ] No `transovo-did-dispatch-*` rules remain.
-- [ ] PSTN call to assigned DID → worker receives called number.
-- [ ] Resolver returns correct workspace + **published** bundle.
-- [ ] Unassigned DID → resolver error (no cross-tenant leak).
-- [ ] Re-provision does not create duplicate dispatch rules.
+- [ ] Re-provision is idempotent (no duplicate rules).
+
+Run audit (inspect first, then apply with ack):
+
+```bash
+cd new-app
+npx tsx scripts/livekit-v3-canonical-routing-audit.mjs
+LIVEKIT_V3_ROUTING_RESET_ACK=1 npx tsx scripts/livekit-v3-canonical-routing-audit.mjs --apply
+```
+
+Cleanup scope: **only** duplicate `transovo-inbound-dispatch` rules and `transovo-did-dispatch-*` names — never arbitrary trunks or unrelated rule names.
+
+### Called number trust (PSTN)
+
+- [ ] Python worker sets `dialedE164` from SIP participant attributes (`sip.trunkPhoneNumber` preferred).
+- [ ] Worker sends `dialedE164Source` to New-App `resolve_voice_v3_livekit_session`.
+- [ ] New-App **rejects** inbound bootstrap that includes `workspaceId` / `agentId` hints.
+- [ ] New-App resolves tenant via `resolveReceptionistByCalledNumber` + verifies phone row ownership.
+- [ ] **Published** version only for PSTN (draft never serves production inbound).
+
+Optional hard gate: set `VOICE_V3_REQUIRE_SIP_DIALED_SOURCE=1` on New-App after worker deploy.
+
+### Browser test
+
+- [ ] `POST /api/receptionist/test/livekit` requires authenticated workspace (`resolveWorkspaceId`).
+- [ ] Explicit `workspaceId` / `agentId` allowed only for `transovo-browser-test-*` rooms.
+
+### Product milestone (next proof)
+
+1. Audit LiveKit → apply cleanup → one dispatch rule.
+2. Assign test DID to Ava → publish.
+3. PSTN call → two-way audio → correct published config.
+4. Unassigned DID must not load another workspace’s agent.
 
 ## Related docs
 

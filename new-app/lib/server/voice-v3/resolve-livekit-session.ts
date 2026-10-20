@@ -6,8 +6,11 @@ import { loadLiveEditorFromPublished } from "@/lib/server/receptionist/agent-sto
 import type { ReceptionistPublishedBundle } from "@/lib/server/receptionist/draft-types";
 import { putLiveSession } from "@/lib/server/receptionist/runtime/session-store";
 import type { LiveKitBootstrapPayload } from "@/lib/server/receptionist/runtime/session";
-import { resolveReceptionistByCalledNumber } from "@/lib/server/receptionist/routing-resolve";
-import { mapEditorVoiceToLiveVoiceId } from "@/lib/server/receptionist/voice-map";
+import { isTrustedInboundDialedE164Source } from "@/lib/server/receptionist/livekit/canonical-dispatch-helpers";
+import {
+  normalizeE164,
+  resolveReceptionistByCalledNumber,
+} from "@/lib/server/receptionist/routing-resolve";
 
 const BROWSER_TEST_PREFIX =
   process.env.LIVEKIT_BROWSER_TEST_ROOM_PREFIX?.trim() || "transovo-browser-test-";
@@ -15,6 +18,29 @@ const BROWSER_TEST_PREFIX =
 function liveSessionIdForRoom(roomName: string): string {
   const room = roomName.trim();
   return room.startsWith("lk_") ? room : `lk_${room}`;
+}
+
+function assertInboundSipBootstrapTrust(payload: LiveKitBootstrapPayload, roomName: string): void {
+  const isBrowserTest = roomName.startsWith(BROWSER_TEST_PREFIX);
+  if (isBrowserTest) return;
+
+  if (payload.workspaceId || payload.agentId || payload.useDraft) {
+    throw new Error(
+      "Inbound SIP session resolve rejects workspace/agent hints — use called DID routing only",
+    );
+  }
+
+  const dialed = payload.dialedE164?.trim();
+  if (!dialed) throw new Error("dialedE164 is required for inbound SIP");
+
+  const source = payload.dialedE164Source?.trim();
+  const requireSource = process.env.VOICE_V3_REQUIRE_SIP_DIALED_SOURCE === "1";
+  if (requireSource && !source) {
+    throw new Error("dialedE164Source is required (SIP participant attributes)");
+  }
+  if (source && !isTrustedInboundDialedE164Source(source)) {
+    throw new Error(`Untrusted dialedE164Source: ${source}`);
+  }
 }
 
 async function loadPublishedBundle(
@@ -49,6 +75,7 @@ export async function resolveNativeVoiceV3LiveKitSession(payload: LiveKitBootstr
   if (!roomName) throw new Error("roomName is required");
 
   const isBrowserTest = roomName.startsWith(BROWSER_TEST_PREFIX);
+  assertInboundSipBootstrapTrust(payload, roomName);
   const prisma = getPrisma();
 
   let workspaceId: string;
@@ -95,6 +122,21 @@ export async function resolveNativeVoiceV3LiveKitSession(payload: LiveKitBootstr
     if (!dialed) throw new Error("dialedE164 is required for inbound SIP");
     const routing = await resolveReceptionistByCalledNumber(dialed);
     if (!routing || routing.paused) throw new Error(`No active receptionist for ${dialed}`);
+
+    const normalizedDialed = normalizeE164(dialed);
+    const ownedPhone = await prisma.phoneNumber.findFirst({
+      where: {
+        id: routing.phoneNumberId,
+        workspaceId: routing.workspaceId,
+        e164: normalizedDialed,
+        status: "Active",
+      },
+      select: { id: true },
+    });
+    if (!ownedPhone) {
+      throw new Error("Called number does not match workspace receptionist assignment");
+    }
+
     workspaceId = routing.workspaceId;
     agentId = routing.agentId;
     phoneNumberId = routing.phoneNumberId;

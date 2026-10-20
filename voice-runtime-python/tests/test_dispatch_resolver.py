@@ -7,6 +7,7 @@ from transovo_voice.session.dispatch_resolver import (
     PYTHON_RUNTIME_BOOTSTRAP_SNAPSHOT_KEY,
     build_bootstrap_from_snapshot,
     extract_call_numbers,
+    resolve_dialed_e164_source,
     try_local_dispatch_bootstrap,
 )
 
@@ -23,6 +24,13 @@ class DispatchResolverTests(unittest.TestCase):
         )
         self.assertEqual(from_e164, "+15551234567")
         self.assertEqual(to_e164, "+18663464256")
+
+    def test_resolve_dialed_e164_source_prefers_trunk(self) -> None:
+        source = resolve_dialed_e164_source(
+            {"sip.trunkPhoneNumber": "+15717491685"},
+            None,
+        )
+        self.assertEqual(source, "sip.trunkPhoneNumber")
 
     def test_local_dispatch_from_job_metadata_snapshot(self) -> None:
         snapshot = {

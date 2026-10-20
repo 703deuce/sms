@@ -14,6 +14,7 @@ class VoiceV3CallContext:
     sip_participant_identity: str
     caller_e164: str | None
     dialed_e164: str | None
+    dialed_e164_source: str | None = None
     sip_call_id: str | None
     provider_call_id: str | None
     trunk_id: str | None
@@ -36,6 +37,7 @@ class TransovoV3ToolClient:
             "sipParticipantIdentity": self._ctx.sip_participant_identity,
             "callerE164": self._ctx.caller_e164,
             "dialedE164": self._ctx.dialed_e164,
+            "dialedE164Source": self._ctx.dialed_e164_source,
             "sipCallId": self._ctx.sip_call_id,
             "providerCallId": self._ctx.provider_call_id,
             "trunkId": self._ctx.trunk_id,

@@ -156,6 +156,7 @@ export async function pruneObsoleteDispatchRules(input?: {
       actions.push(`livekit_deleted_obsolete_per_did_dispatch_${rule.name}`);
       continue;
     }
+    // Never delete unknown rule names — only duplicates + transovo-did-dispatch-* (see docs).
     keptRuleIds.push(ruleId);
   }
 

@@ -3,11 +3,14 @@ export type LiveKitBootstrapPayload = {
   sipParticipantIdentity: string;
   callerE164?: string | null;
   dialedE164?: string | null;
+  /** Set by Python worker from SIP participant attributes — not from LiveKit dispatch job metadata. */
+  dialedE164Source?: string | null;
   sipCallId?: string | null;
   providerCallId?: string | null;
   trunkId?: string | null;
   ruleId?: string | null;
   telnyxCallScreeningRaw?: string | null;
+  /** Browser test only (authenticated API creates room); ignored for inbound SIP. */
   workspaceId?: string;
   agentId?: string;
   useDraft?: boolean;

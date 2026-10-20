@@ -8,7 +8,7 @@ export type InboundAgentRouting = {
   paused: boolean;
 };
 
-function normalizeE164(phone: string): string {
+export function normalizeE164(phone: string): string {
   const digits = phone.replace(/\D/g, "");
   if (phone.startsWith("+")) return `+${digits}`;
   if (digits.length === 10) return `+1${digits}`;

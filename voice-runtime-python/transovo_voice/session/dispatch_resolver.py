@@ -56,6 +56,29 @@ def extract_call_numbers(
     return from_clean or None, to_clean or None
 
 
+def resolve_dialed_e164_source(
+    attrs: dict[str, str],
+    room_metadata: str | dict[str, Any] | None,
+) -> str | None:
+    """Report which SIP/room field supplied the called DID (for backend trust checks)."""
+    room_meta = _parse_json_object(room_metadata)
+    if room_meta and room_meta.get("toE164"):
+        return "room_metadata.toE164"
+    if attrs.get("sip.trunkPhoneNumber"):
+        return "sip.trunkPhoneNumber"
+    if attrs.get("sip.trunkNumber"):
+        return "sip.trunkNumber"
+    if attrs.get("trunkPhoneNumber"):
+        return "trunkPhoneNumber"
+    if attrs.get("sip.calledNumber"):
+        return "sip.calledNumber"
+    if attrs.get("calledNumber"):
+        return "calledNumber"
+    if attrs.get("toE164"):
+        return "toE164"
+    return None
+
+
 def _snapshot_from_value(raw: Any) -> dict[str, Any] | None:
     if isinstance(raw, str):
         try:

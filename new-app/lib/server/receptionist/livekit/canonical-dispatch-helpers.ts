@@ -13,3 +13,18 @@ export function buildCanonicalV3DispatchAgentMetadata(): string {
     dispatchSource: "canonical_shared_dispatch",
   });
 }
+
+/** Worker-reported sources we accept for PSTN called-DID resolution (SIP attrs, not job metadata). */
+export const TRUSTED_INBOUND_DIALED_E164_SOURCES = new Set([
+  "sip.trunkPhoneNumber",
+  "sip.trunkNumber",
+  "trunkPhoneNumber",
+  "sip.calledNumber",
+  "calledNumber",
+  "room_metadata.toE164",
+]);
+
+export function isTrustedInboundDialedE164Source(source: string | undefined | null): boolean {
+  if (!source?.trim()) return false;
+  return TRUSTED_INBOUND_DIALED_E164_SOURCES.has(source.trim());
+}
