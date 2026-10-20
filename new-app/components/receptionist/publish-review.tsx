@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -12,6 +12,7 @@ import { useAgent } from '@/components/providers/agent-provider'
 import { useResolvedConnection } from '@/components/numbers/number-picker'
 import { Callout } from '@/components/numbers/number-ui'
 import type { AgentConfig } from '@/lib/agent'
+import { fetchReceptionistReadiness } from '@/lib/receptionist-api'
 import { formatPhone, formatWhen } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { AgentStatusBadge } from './ai-ui'
@@ -41,11 +42,26 @@ const EDIT_HREF: Partial<Record<keyof AgentConfig, string>> = {
 type Check = { label: string; state: 'pass' | 'warn' | 'fail'; detail: string; href?: string }
 
 export function PublishReview() {
-  const { draft, live, changes, unsaved, status, publish, setPaused, lastPublished } = useAgent()
+  const { draft, live, changes, unsaved, status, publish, setPaused, lastPublished, error, draftRevision } = useAgent()
   const router = useRouter()
   const conn = useResolvedConnection(draft.connection)
   const [simulateFail, setSimulateFail] = useState(false)
   const [tested, setTested] = useState(false)
+  const [serverBlockers, setServerBlockers] = useState<string[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    void fetchReceptionistReadiness()
+      .then((r) => {
+        if (!cancelled) setServerBlockers(r.publishBlockers ?? [])
+      })
+      .catch(() => {
+        if (!cancelled) setServerBlockers([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [draft, draftRevision, unsaved])
 
   const caps = draft.capabilities
   const checks: Check[] = [
@@ -56,18 +72,30 @@ export function PublishReview() {
     { label: 'Booking', state: !caps.book ? 'pass' : draft.appointments.provider === 'none' && draft.appointments.strategy === 'live' ? 'fail' : draft.appointments.types.some((t) => t.enabled) ? 'pass' : 'warn', detail: !caps.book ? 'Booking is off' : `${draft.appointments.types.filter((t) => t.enabled).length} active types · ${draft.appointments.strategy === 'live' ? 'live calendar' : draft.appointments.strategy}`, href: '/app/receptionist/appointments' },
     { label: 'Transfers', state: !caps.transfer ? 'pass' : draft.transfers.some((t) => t.enabled) ? 'pass' : 'fail', detail: !caps.transfer ? 'Transfers are off' : `${draft.transfers.filter((t) => t.enabled).length} enabled destinations`, href: '/app/receptionist/call-handling#transfers' },
     { label: 'Recovery SMS consent', state: draft.recovery.enabled && draft.recovery.consentMode === 'disabled' ? 'fail' : 'pass', detail: draft.recovery.enabled ? `On · ${draft.recovery.consentMode === 'existing' ? 'existing consent' : 'asks on call'}` : 'Off', href: '/app/receptionist/call-handling#recovery' },
+    ...serverBlockers.map((msg, i) => ({
+      label: i === 0 ? 'Server publish requirements' : 'Also required',
+      state: 'fail' as const,
+      detail: msg,
+      href: msg.toLowerCase().includes('calendar') || msg.toLowerCase().includes('google') || msg.toLowerCase().includes('microsoft')
+        ? '/app/receptionist/appointments'
+        : msg.toLowerCase().includes('knowledge') || msg.toLowerCase().includes('faq')
+          ? '/app/receptionist/knowledge'
+          : '/app/receptionist/agent',
+    })),
   ]
   const blocking = checks.filter((c) => c.state === 'fail')
   const warnings = checks.filter((c) => c.state === 'warn')
-  const canPublish = changes.length > 0 && blocking.length === 0 && status !== 'publishing'
+  const canPublish =
+    changes.length > 0 && blocking.length === 0 && serverBlockers.length === 0 && status !== 'publishing'
 
   const run = async () => {
-    const ok = await publish({ fail: simulateFail })
-    if (ok) {
+    const result = await publish({ fail: simulateFail })
+    if (result.ok) {
       toast.success('Published — new calls use this version')
       router.push('/app/receptionist')
     } else {
-      toast.error('Publish failed to sync. Live calls still use the previous version.')
+      toast.error(result.errors?.join(' ') || 'Publish failed. Fix the blocking items above and try again.')
+      void fetchReceptionistReadiness().then((r) => setServerBlockers(r.publishBlockers ?? []))
     }
   }
 
@@ -76,7 +104,9 @@ export function PublishReview() {
       <div className="flex flex-col gap-4">
         {status === 'sync_failed' && (
           <Callout tone="warning" icon={AlertCircle} title="Last publish didn't sync">
-            Your previous live version is still answering calls. Retry, or discard the draft to stay on the current version.
+            {error
+              ? error
+              : 'Your previous live version is still answering calls. Retry, or discard the draft to stay on the current version.'}
           </Callout>
         )}
         <Panel title="What changes" description={changes.length ? `${changes.length} section${changes.length === 1 ? '' : 's'} differ from the live version` : 'Your draft matches what is live.'}>

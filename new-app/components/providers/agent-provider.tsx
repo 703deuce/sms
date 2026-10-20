@@ -28,7 +28,7 @@ type AgentCtx = {
   update: <K extends keyof AgentConfig>(key: K, value: AgentConfig[K] | ((prev: AgentConfig[K]) => AgentConfig[K])) => void
   saveDraft: () => Promise<void>
   discardDraft: () => Promise<void>
-  publish: (opts?: { fail?: boolean }) => Promise<boolean>
+  publish: (opts?: { fail?: boolean }) => Promise<{ ok: boolean; errors?: string[] }>
   setPaused: (paused: boolean) => Promise<void>
   reload: () => Promise<void>
 }
@@ -109,19 +109,27 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
       },
       publish: async () => {
         setStatus('publishing')
+        setError(null)
         try {
+          if (unsaved) {
+            const saved = await patchReceptionistDraft(draft, draftRevision)
+            applyState(saved)
+          }
           const result = await publishReceptionist()
           if (!result.ok) {
             setStatus('sync_failed')
-            setError(result.errors?.join(' ') || 'Publish failed')
-            return false
+            const errors = result.errors ?? []
+            setError(errors.join(' ') || 'Publish failed')
+            if (result.state) applyState(result.state)
+            return { ok: false, errors }
           }
           if (result.state) applyState(result.state)
-          return true
+          return { ok: true }
         } catch (e) {
           setStatus('sync_failed')
-          setError(e instanceof Error ? e.message : 'Publish failed')
-          return false
+          const message = e instanceof Error ? e.message : 'Publish failed'
+          setError(message)
+          return { ok: false, errors: [message] }
         }
       },
       setPaused: async (paused) => {

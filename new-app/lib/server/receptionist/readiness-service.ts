@@ -1,9 +1,11 @@
 import { getPrisma } from "@/lib/server/db";
 import { getReceptionistState } from "@/lib/server/receptionist/agent-service";
 import { voiceRuntimeInternalSecret } from "@/lib/server/receptionist/runtime/auth";
+import { validateReceptionistPublish } from "@/lib/server/voice-v3/publish-gate";
 
 export async function getReceptionistReadiness(workspaceId: string) {
   const state = await getReceptionistState(workspaceId);
+  const publishValidation = await validateReceptionistPublish(workspaceId, state.draft);
   const prisma = getPrisma();
   const agent = await prisma.voiceAgent.findUnique({ where: { id: state.agentId } });
 
@@ -30,5 +32,7 @@ export async function getReceptionistReadiness(workspaceId: string) {
     status: state.status,
     publishedVersion: state.publishedVersion,
     providerSyncStatus: routing?.providerSyncStatus ?? "unknown",
+    canPublish: publishValidation.ok,
+    publishBlockers: publishValidation.ok ? [] : publishValidation.errors,
   };
 }
