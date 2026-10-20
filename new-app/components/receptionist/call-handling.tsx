@@ -185,9 +185,7 @@ export function CallHandlingEditor() {
         </div>
       </Section>
 
-      <div id="operations">
-        <OperationsEditor draft={draft} update={update} />
-      </div>
+      <OperationsEditor draft={draft} update={update} />
 
       <Section id="messages" icon={BellRing} title="Messages, callbacks & notifications" description="What Ava collects and who hears about it.">
         <div className="divide-y">
