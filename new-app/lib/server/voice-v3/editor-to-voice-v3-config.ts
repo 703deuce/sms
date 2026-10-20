@@ -2,8 +2,8 @@ import type { AgentConfig } from "@/lib/agent";
 import type {
   IntakeFieldDefinition,
   VoiceV3AgentConfig,
-  VoiceWizardBookingStrategy,
-} from "@/lib/server/voice-v3/types/agent-config";
+} from "@/lib/server/voice-v3/config/agent-config";
+import type { VoiceWizardBookingStrategy } from "@/lib/server/voice-v3/config/booking-strategies";
 import { mapEditorVoiceToLiveVoiceId } from "@/lib/server/receptionist/voice-map";
 import { livePromptControlsFromAgentConfig } from "@/lib/server/voice-v3/prompts/live-prompt-controls";
 
@@ -46,7 +46,7 @@ function bookingStrategy(editor: AgentConfig): VoiceWizardBookingStrategy {
     return "REQUEST_ONLY";
   }
   if (editor.appointments.provider === "microsoft") return "MICROSOFT_365";
-  if (editor.appointments.provider === "google") return "GOOGLE";
+  if (editor.appointments.provider === "google") return "GOOGLE_CALENDAR";
   if (editor.appointments.provider === "calendly") return "CALENDLY";
   return "REQUEST_ONLY";
 }

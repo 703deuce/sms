@@ -30,6 +30,18 @@ checks.push([
   "native appointments module present",
   existsSync(path.join(root, "lib/server/voice-v3/scheduling/appointments.ts")),
 ]);
+checks.push([
+  "astra tool contracts present",
+  existsSync(path.join(root, "lib/server/voice-v3/tools/astra-tool-contracts.ts")),
+]);
+checks.push([
+  "voice tool catalog present",
+  existsSync(path.join(root, "lib/server/voice-v3/tools/voice-tool-catalog.ts")),
+]);
+checks.push([
+  "scheduling normalizer present",
+  existsSync(path.join(root, "lib/server/voice-v3/time/scheduling-normalizer.ts")),
+]);
 
 const base = process.env.RECEPTIONIST_TEST_BASE_URL?.trim() || "http://127.0.0.1:3100";
 try {

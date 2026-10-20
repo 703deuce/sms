@@ -1,4 +1,4 @@
-import type { VoiceV3AgentConfig } from "./types/agent-config";
+import type { VoiceV3AgentConfig } from "./config/agent-config";
 import { resolveVoiceV3IntakeTransport } from "./intake/intake-transport";
 import { resolveVoiceV3DelegationToolSurface } from "./intake/tool-surface";
 import { buildAstraBackendInstructions } from "./prompts/astra-backend-instructions";

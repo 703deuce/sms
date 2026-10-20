@@ -15,6 +15,11 @@ import {
   normalizeE164,
   resolveReceptionistByCalledNumber,
 } from "@/lib/server/receptionist/routing-resolve";
+import { voiceV3AgentConfigFromBundle } from "@/lib/server/voice-v3/bundle-voice-config";
+import { enrichVoiceV3AgentConfigForRuntime } from "@/lib/server/voice-v3/enrich-runtime-config";
+import { createVoiceV3CallRuntime } from "@/lib/server/voice-v3/state/call-runtime";
+import { buildVoiceV3AstraFunctionToolsFromCatalog } from "@/lib/server/voice-v3/tools/voice-tool-catalog";
+import type { FunctionTool } from "openai/resources/live/live";
 
 const BROWSER_TEST_PREFIX =
   process.env.LIVEKIT_BROWSER_TEST_ROOM_PREFIX?.trim() || "transovo-browser-test-";
@@ -173,6 +178,28 @@ export async function resolveNativeVoiceV3LiveKitSession(payload: LiveKitBootstr
   const rt = bundle.runtime;
 
   const callerE164 = payload.callerE164?.trim();
+
+  let voiceV3Config = voiceV3AgentConfigFromBundle(bundle, {
+    workspaceId,
+    agentId,
+  });
+  voiceV3Config = await enrichVoiceV3AgentConfigForRuntime({
+    config: voiceV3Config,
+    workspaceId,
+    editor: bundle.editor,
+  });
+
+  createVoiceV3CallRuntime({
+    liveSessionId,
+    callId,
+    inboundCallerE164: callerE164,
+    config: voiceV3Config,
+  });
+
+  const catalogTools = buildVoiceV3AstraFunctionToolsFromCatalog(voiceV3Config);
+  const allowed = new Set(rt.toolNames);
+  const toolSchemas: FunctionTool[] = catalogTools.filter((t) => allowed.has(String(t.name)));
+
   putLiveSession({
     liveSessionId,
     callId,
@@ -217,12 +244,7 @@ export async function resolveNativeVoiceV3LiveKitSession(payload: LiveKitBootstr
     astraInstructions: rt.astraInstructions,
     astraModel: rt.astraModel,
     liveVoiceId: rt.liveVoiceId,
-    toolSchemas: rt.toolNames.map((name) => ({
-      type: "function",
-      name,
-      description: name,
-      parameters: { type: "object", properties: {} },
-    })),
+    toolSchemas,
     toolNames: rt.toolNames,
     intakeFields: bundle.editor.intake.map((f) => ({
       key: f.id,

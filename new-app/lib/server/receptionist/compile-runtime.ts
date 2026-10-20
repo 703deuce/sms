@@ -26,7 +26,7 @@ function enabledTools(config: AgentConfig): string[] {
   if (on("cancel")) names.push("find_appointment", "cancel_appointment");
   if (on("transfer")) names.push("transfer_call");
   if (on("message")) names.push("request_callback");
-  if (on("answer")) names.push("business_answer");
+  if (on("answer")) names.push("search_business_knowledge");
   if (config.protection.some((r) => r.enabled && r.kind === "solicitor")) {
     names.push("report_unwanted_solicitor");
   }
