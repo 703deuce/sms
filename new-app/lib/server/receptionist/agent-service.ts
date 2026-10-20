@@ -23,6 +23,7 @@ import type { ReceptionistPublishedBundle } from "@/lib/server/receptionist/draf
 import { syncReceptionistPhoneAssignment } from "@/lib/server/receptionist/phone-assignment";
 import { alignEditorConnectionForPublish } from "@/lib/server/receptionist/resolve-publish-phone";
 import { buildVoiceAgentRuntimeConfigFromEditor } from "@/lib/server/receptionist/map-editor-to-runtime-config";
+import { hydrateConversationalRoutesFromPhone } from "@/lib/server/receptionist/hydrate-conversational-routes-from-phone";
 
 export type ReceptionistStateDto = {
   agentId: string;
@@ -148,6 +149,9 @@ export async function publishReceptionist(workspaceId: string): Promise<{
     );
     draftEnvelope.editor = alignedEditor;
   }
+
+  const hydratedEditor = await hydrateConversationalRoutesFromPhone(workspaceId, draftEnvelope.editor);
+  draftEnvelope.editor = hydratedEditor;
 
   const validation = await validateReceptionistPublish(workspaceId, draftEnvelope.editor);
   if (!validation.ok) {

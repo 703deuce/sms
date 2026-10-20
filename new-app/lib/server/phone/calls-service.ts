@@ -291,6 +291,82 @@ export async function registerInboundAnswer(input: {
   return updated;
 }
 
+export async function finalizeWebRtcClientHangup(input: {
+  workspaceId: string;
+  humanCallId: string;
+  wasAnswered?: boolean;
+  failed?: boolean;
+}) {
+  const prisma = getPrisma();
+  const call = await prisma.humanCall.findFirst({
+    where: { id: input.humanCallId, workspaceId: input.workspaceId },
+  });
+  if (!call) return { ok: false as const, reason: "not_found" };
+
+  const terminalStatuses = new Set([
+    "completed",
+    "missed",
+    "failed",
+    "busy",
+    "voicemail",
+    "transferred",
+  ]);
+  if (terminalStatuses.has(call.status) && call.endedAt) {
+    return { ok: true as const, call, skipped: true as const };
+  }
+
+  const wasAnswered = input.wasAnswered ?? Boolean(call.answeredAt);
+  const status = input.failed
+    ? "failed"
+    : wasAnswered
+      ? "completed"
+      : call.direction === "inbound"
+        ? "missed"
+        : "missed";
+
+  const updated = await prisma.humanCall.update({
+    where: { id: call.id },
+    data: {
+      status,
+      endedAt: call.endedAt || new Date(),
+      disposition:
+        call.disposition || (wasAnswered ? "webrtc_hangup" : "missed:webrtc_client_hangup"),
+      handled: wasAnswered,
+      callbackNeeded: call.direction === "inbound" && !wasAnswered,
+    },
+  });
+
+  await prisma.humanCallEvent.create({
+    data: {
+      workspaceId: input.workspaceId,
+      humanCallId: call.id,
+      eventType: "webrtc.client_hangup",
+      payload: {
+        wasAnswered,
+        failed: input.failed ?? false,
+      } as import("@prisma/client").Prisma.InputJsonValue,
+    },
+  });
+
+  const attemptId = (call.metadata as { powerDialerAttemptId?: string } | null)?.powerDialerAttemptId;
+  if (attemptId) {
+    await prisma.powerDialerAttempt.updateMany({
+      where: {
+        id: attemptId,
+        workspaceId: input.workspaceId,
+        status: { in: ["dialing", "pending", "ringing"] },
+      },
+      data: {
+        status: "completed",
+        endedAt: new Date(),
+        disposition: wasAnswered ? "Connected" : "No answer",
+      },
+    });
+  }
+
+  return { ok: true as const, call: updated };
+}
+
 export async function linkHumanCallControlId(
   workspaceId: string,
   callId: string,
