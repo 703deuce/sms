@@ -77,7 +77,8 @@ async function loadPublishedBundle(
   if (!version?.config) throw new Error("Published version config missing");
   const config = version.config as Record<string, unknown>;
   const nested = config.newAppReceptionist as ReceptionistPublishedBundle | undefined;
-  if (nested?.runtime?.toolNames?.length) return nested;
+  const amyLen = nested?.runtime?.amyInstructions?.length ?? 0;
+  if (nested?.runtime?.toolNames?.length && amyLen > 2000) return nested;
 
   const editor = loadLiveEditorFromPublished(version.config, nested?.editor || ({} as never));
   return compileReceptionistRuntimeBundle({

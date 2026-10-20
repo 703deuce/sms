@@ -56,16 +56,28 @@ export async function resolveReceptionistBusinessFacts(
   const tz = timezone || "America/Chicago";
   const enabledTypes = editor.appointments.types.filter((t) => t.enabled);
   const servicesSummary = enabledTypes.map((t) => t.name).filter(Boolean).join(", ");
+  const kp = editor.knowledgeProfile;
 
   const policyParts = [
+    kp?.policies?.trim(),
     editor.appointments.cancelPolicy?.trim(),
     editor.instructions?.trim(),
   ].filter(Boolean);
 
+  const hoursFromProfile = kp?.businessOverview?.trim();
+  const structuredHours = formatBusinessHoursDisplay(hours, tz);
+  const hoursDisplay =
+    hoursFromProfile && structuredHours
+      ? `${hoursFromProfile}\n\n${structuredHours}`
+      : hoursFromProfile || structuredHours;
+
   return {
-    companyDescription: editor.identity.role?.trim() || undefined,
-    hoursDisplay: formatBusinessHoursDisplay(hours, tz),
+    companyDescription:
+      kp?.businessOverview?.trim() || editor.identity.role?.trim() || undefined,
+    hoursDisplay,
     servicesSummary: servicesSummary || undefined,
+    pricingSummary: kp?.pricing?.trim() || undefined,
+    paymentMethods: kp?.paymentMethods?.trim() || undefined,
     policiesSummary: policyParts.length ? policyParts.join("\n\n") : undefined,
   };
 }

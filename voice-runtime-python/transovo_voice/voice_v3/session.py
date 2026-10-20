@@ -17,6 +17,18 @@ from transovo_voice.session.dispatch_resolver import (
     is_sip_participant_dialed_source,
     resolve_dialed_e164_source,
 )
+
+
+def _metadata_dict(raw: str | None) -> dict[str, Any]:
+    if not raw or not str(raw).strip():
+        return {}
+    try:
+        import json
+
+        parsed = json.loads(str(raw))
+        return parsed if isinstance(parsed, dict) else {}
+    except Exception:
+        return {}
 from transovo_voice.telemetry import log_event
 from transovo_voice.voice_v3.forensics import VoiceV3CallForensics
 from transovo_voice.voice_v3.gpt_live_delegation_telemetry import attach_gpt_live_delegation_telemetry
@@ -156,7 +168,14 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             workspace_id="",
             agent_id="",
         )
-        client = TransovoV3ToolClient(backend, provisional_ctx)
+        job_meta = _metadata_dict(ctx.job.metadata)
+        room_meta = _metadata_dict(ctx.room.metadata)
+        client = TransovoV3ToolClient(
+            backend,
+            provisional_ctx,
+            job_metadata=job_meta,
+            room_metadata=room_meta,
+        )
         forensics.append("AGENTSESSION_START_REQUESTED")
         config = await client.resolve_session_config()
 
@@ -177,7 +196,12 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             workspace_id=str(config.get("workspaceId") or ""),
             agent_id=str(config.get("agentId") or ""),
         )
-        client = TransovoV3ToolClient(backend, call_ctx)
+        client = TransovoV3ToolClient(
+            backend,
+            call_ctx,
+            job_metadata=job_meta,
+            room_metadata=room_meta,
+        )
         forensics.ctx = call_ctx
 
         raw_tools = config.get("toolSchemas") or []

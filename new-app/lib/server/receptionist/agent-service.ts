@@ -1,6 +1,7 @@
 import type { AgentConfig } from "@/lib/agent";
 import { getPrisma } from "@/lib/server/db";
 import { compilePublishedBundle } from "@/lib/server/receptionist/compile-runtime";
+import { normalizeReceptionistEditor } from "@/lib/server/receptionist/normalize-editor";
 import {
   resolveReceptionistBusinessFacts,
   resolveReceptionistBusinessTimezone,
@@ -101,8 +102,8 @@ export async function getReceptionistState(workspaceId: string): Promise<Recepti
 
   return {
     agentId: agent.id,
-    live,
-    draft: draftEnvelope.editor,
+    live: normalizeReceptionistEditor(live),
+    draft: normalizeReceptionistEditor(draftEnvelope.editor),
     status: mapAgentStatusToUi(agent.status, agent.emergencyDisabled),
     draftRevision: draftEnvelope.draftRevision,
     publishedVersion,

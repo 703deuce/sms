@@ -20,8 +20,9 @@ import {
   resolveReceptionistGap,
 } from '@/lib/receptionist-api'
 import { formatWhen } from '@/lib/format'
+import { KnowledgeProfileEditor } from '@/components/receptionist/knowledge-profile-editor'
 
-type Tab = 'faqs' | 'sources' | 'gaps'
+type Tab = 'profile' | 'faqs' | 'sources' | 'gaps'
 
 type FaqRow = { id: string; q: string; a: string; status: string; source: string }
 type GapRow = { id: string; question: string; count: number; impact: string; lastCallId: string | null }
@@ -30,7 +31,7 @@ type SourceRow = { id: string; name: string; type: string; status: string; updat
 const SOURCE_TONE = { synced: 'success', ready: 'success', stale: 'warning', failed: 'danger', pending: 'warning' } as const
 
 export function KnowledgeManager() {
-  const [tab, setTab] = useState<Tab>('gaps')
+  const [tab, setTab] = useState<Tab>('profile')
   const [faqs, setFaqs] = useState<FaqRow[]>([])
   const [gaps, setGaps] = useState<GapRow[]>([])
   const [sources, setSources] = useState<SourceRow[]>([])
@@ -48,7 +49,15 @@ export function KnowledgeManager() {
         fetchReceptionistKnowledgeGaps(),
         fetchReceptionistKnowledgeSources(),
       ])
-      setFaqs(f)
+      setFaqs(
+        f.map((row) => ({
+          id: row.id,
+          q: row.question,
+          a: row.answer,
+          status: row.status,
+          source: 'faq',
+        })),
+      )
       setGaps(g)
       setSources(s)
     } catch (e) {
@@ -111,13 +120,16 @@ export function KnowledgeManager() {
         value={tab}
         onChange={setTab}
         options={[
-          { value: 'gaps', label: 'Gaps', count: gaps.length },
+          { value: 'profile', label: 'Business & job' },
           { value: 'faqs', label: 'FAQs', count: faqs.length },
           { value: 'sources', label: 'Sources', count: sources.length },
+          { value: 'gaps', label: 'Gaps', count: gaps.length },
         ]}
       />
 
-      {loading && <p className="text-sm text-muted-foreground">Loading knowledge…</p>}
+      {tab === 'profile' && <KnowledgeProfileEditor />}
+
+      {loading && tab !== 'profile' && <p className="text-sm text-muted-foreground">Loading knowledge…</p>}
 
       {tab === 'gaps' && (
         <Panel title="Unanswered questions" description="Callers asked these and Ava had no approved answer" bodyClassName="p-0">

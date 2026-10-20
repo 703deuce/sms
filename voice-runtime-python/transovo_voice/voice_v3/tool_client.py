@@ -27,9 +27,18 @@ class VoiceV3CallContext:
 
 
 class TransovoV3ToolClient:
-    def __init__(self, backend: TransovoBackend, call_context: VoiceV3CallContext) -> None:
+    def __init__(
+        self,
+        backend: TransovoBackend,
+        call_context: VoiceV3CallContext,
+        *,
+        job_metadata: dict[str, Any] | None = None,
+        room_metadata: dict[str, Any] | None = None,
+    ) -> None:
         self._backend = backend
         self._ctx = call_context
+        self._job_metadata = job_metadata or {}
+        self._room_metadata = room_metadata or {}
 
     async def resolve_session_config(self) -> dict[str, Any]:
         payload = {
@@ -45,6 +54,17 @@ class TransovoV3ToolClient:
             "ruleId": self._ctx.rule_id,
             "telnyxCallScreeningRaw": self._ctx.telnyx_call_screening_raw,
         }
+        for source in (self._job_metadata, self._room_metadata):
+            if not source:
+                continue
+            ws = source.get("workspaceId")
+            ag = source.get("agentId")
+            if ws:
+                payload["workspaceId"] = str(ws)
+            if ag:
+                payload["agentId"] = str(ag)
+            if source.get("useDraft") is True:
+                payload["useDraft"] = True
         return await self._backend.call("resolve_voice_v3_livekit_session", payload)
 
     async def execute(

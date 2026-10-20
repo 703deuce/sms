@@ -154,7 +154,10 @@ export function editorToVoiceV3AgentConfig(input: {
       qualifyCallers: cap.qualify,
     },
     conversation: {
-      role: editor.identity.role,
+      role:
+        editor.knowledgeProfile?.agentJob?.trim() ||
+        editor.identity.role ||
+        "Front desk receptionist",
       tone: "Professional and warm",
       speakingStyle: "Natural telephone receptionist",
       language: editor.identity.language,

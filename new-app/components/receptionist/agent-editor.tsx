@@ -24,9 +24,51 @@ export function AgentEditor() {
   const [previewing, setPreviewing] = useState<string | null>(null)
   const id = draft.identity
 
-  const playVoice = (voice: string) => {
+  const playVoice = async (voice: string) => {
+    if (voice === 'greeting') {
+      setPreviewing(voice)
+      try {
+        const res = await fetch('/api/receptionist/voice-preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            voice: id.voice,
+            text: renderGreeting(id.greeting, id.name),
+          }),
+        })
+        const json = await res.json()
+        if (!res.ok) throw new Error(json.error || 'Preview failed')
+        const url = json.data?.audioUrl as string
+        if (url) {
+          const audio = new Audio(url)
+          await audio.play()
+        }
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Could not play preview')
+      } finally {
+        setPreviewing(null)
+      }
+      return
+    }
     setPreviewing(voice)
-    setTimeout(() => setPreviewing(null), 2200)
+    try {
+      const res = await fetch('/api/receptionist/voice-preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ voice }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Preview failed')
+      const url = json.data?.audioUrl as string
+      if (url) {
+        const audio = new Audio(url)
+        await audio.play()
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not play voice preview')
+    } finally {
+      setPreviewing(null)
+    }
   }
 
   return (
@@ -44,7 +86,7 @@ export function AgentEditor() {
         </div>
         <div className="flex flex-col gap-2">
           <span className="text-sm font-medium">Voice</span>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {VOICES.map((v) => {
               const sel = id.voice === v.id
               return (
@@ -64,7 +106,7 @@ export function AgentEditor() {
             <summary className="cursor-pointer font-medium text-foreground">Custom voice ID</summary>
             <div className="flex flex-col gap-1 pt-2">
               <Input aria-label="Custom OpenAI Live voice" placeholder="marin" value={id.customVoiceId} onChange={(e) => update('identity', (i) => ({ ...i, customVoiceId: e.target.value }))} />
-              <span>OpenAI Realtime voice id (marin, coral, shimmer, cedar, …). Leave blank to use the voice above.</span>
+              <span>GPT-Live-1 voice id (all 22 built-in voices). Leave blank to use the voice above.</span>
             </div>
           </details>
         </div>

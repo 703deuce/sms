@@ -1,14 +1,7 @@
-const VOICE_TO_LIVE: Record<string, string> = {
-  aria: "marin",
-  theo: "cedar",
-  june: "shimmer",
-  malik: "ash",
-  sofia: "marin",
-};
+import { normalizeGptLiveVoiceId } from "@/lib/voice/gpt-live-built-in-voices";
 
 export function mapEditorVoiceToLiveVoiceId(voice: string, customVoiceId: string): string {
   const custom = customVoiceId?.trim();
-  if (custom) return custom;
-  const key = voice?.trim().toLowerCase();
-  return VOICE_TO_LIVE[key] || "marin";
+  if (custom) return normalizeGptLiveVoiceId(custom);
+  return normalizeGptLiveVoiceId(voice);
 }

@@ -4,7 +4,7 @@
  * Mandatory guardrails are enforced by runtime and intentionally absent here.
  */
 
-import { RECEPTIONIST_VOICE_OPTIONS } from '@/lib/voice/realtime-voices'
+import { RECEPTIONIST_VOICE_OPTIONS } from '@/lib/voice/gpt-live-built-in-voices'
 
 export type Capability = 'answer' | 'book' | 'reschedule' | 'cancel' | 'message' | 'qualify' | 'transfer' | 'smsConfirm'
 
@@ -51,6 +51,24 @@ export type AppointmentType = {
 }
 
 export type SpamRule = { id: string; kind: 'spam_likely' | 'solicitor' | 'blocked'; action: 'screen' | 'message' | 'transfer' | 'end'; enabled: boolean; note: string }
+
+export type KnowledgeProfile = {
+  /** Company name, what you do, location, hours, service area — injected into prompts. */
+  businessOverview: string
+  /** What this agent is responsible for on calls (receptionist job). */
+  agentJob: string
+  pricing: string
+  policies: string
+  paymentMethods: string
+}
+
+export const DEFAULT_KNOWLEDGE_PROFILE: KnowledgeProfile = {
+  businessOverview: '',
+  agentJob: '',
+  pricing: '',
+  policies: '',
+  paymentMethods: '',
+}
 
 export type AgentConfig = {
   identity: {
@@ -122,6 +140,7 @@ export type AgentConfig = {
     connectionGreeting: 'none' | 'professional' | 'warm' | 'upload' | 'tts'
     connectionGreetingText: string
   }
+  knowledgeProfile: KnowledgeProfile
 }
 
 export const VOICES = RECEPTIONIST_VOICE_OPTIONS.map((v) => ({
@@ -220,6 +239,13 @@ export const DEFAULT_AGENT: AgentConfig = {
     { id: 'sp3', kind: 'blocked', action: 'end', enabled: true, note: '4 numbers on the block list' },
   ],
   audio: { recording: 'all', connectionGreeting: 'none', connectionGreetingText: 'This call may be recorded for quality.' },
+  knowledgeProfile: {
+    businessOverview: 'Harbor & Pine Dental — family dentistry on Chicago’s lakefront. Lakeshore office Mon–Fri 8am–5pm, Sat 9am–1pm.',
+    agentJob: 'Answer calls professionally, answer common questions from approved knowledge, book and reschedule hygiene and exam visits, and transfer urgent dental pain to the on-call dentist.',
+    pricing: 'New patient exam $189. Routine cleaning $165. Whitening consult complimentary.',
+    policies: '24-hour cancellation notice. We accept most PPO plans; verify at booking.',
+    paymentMethods: 'Card, HSA/FSA, CareCredit, in-office payment plans for treatment over $500.',
+  },
 }
 
 export function renderGreeting(greeting: string, name: string) {
@@ -251,6 +277,7 @@ export function diffSections(a: AgentConfig, b: AgentConfig) {
     recovery: 'AI Call Recovery SMS',
     protection: 'Call protection',
     audio: 'Recording & connection audio',
+    knowledgeProfile: 'Business knowledge & agent job',
   }
   return (Object.keys(labels) as (keyof AgentConfig)[])
     .filter((k) => JSON.stringify(a[k]) !== JSON.stringify(b[k]))

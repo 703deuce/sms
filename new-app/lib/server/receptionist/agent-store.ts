@@ -6,6 +6,7 @@ import {
   RECEPTIONIST_DRAFT_SCHEMA_VERSION,
 } from "@/lib/server/receptionist/constants";
 import { defaultReceptionistEditorConfig } from "@/lib/server/receptionist/defaults";
+import { normalizeReceptionistEditor } from "@/lib/server/receptionist/normalize-editor";
 import type { ReceptionistDraftEnvelope } from "@/lib/server/receptionist/draft-types";
 
 function parseDraft(raw: unknown): ReceptionistDraftEnvelope | null {
@@ -56,7 +57,9 @@ export async function ensureWorkspaceReceptionistAgent(workspaceId: string): Pro
 
 export function loadDraftFromAgent(agent: VoiceAgent): ReceptionistDraftEnvelope {
   const parsed = parseDraft(agent.draftConfig);
-  if (parsed) return parsed;
+  if (parsed) {
+    return { ...parsed, editor: normalizeReceptionistEditor(parsed.editor) };
+  }
   const editor = defaultReceptionistEditorConfig();
   return {
     schemaVersion: RECEPTIONIST_DRAFT_SCHEMA_VERSION,
