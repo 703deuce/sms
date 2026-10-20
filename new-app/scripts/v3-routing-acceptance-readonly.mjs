@@ -191,7 +191,7 @@ async function auditDatabase(e164) {
     for (const p of phones) {
       const telephony = p.settingsJson?.telephony || {};
       const agents = await prisma.voiceAgent.findMany({
-        where: { workspaceId: p.workspaceId, agentType: "RECEPTIONIST", archivedAt: null },
+        where: { workspaceId: p.workspaceId, agentType: "appointment_receptionist", archivedAt: null },
         select: {
           id: true,
           name: true,

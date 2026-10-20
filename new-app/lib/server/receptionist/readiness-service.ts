@@ -1,9 +1,13 @@
 import { getPrisma } from "@/lib/server/db";
 import { getReceptionistState } from "@/lib/server/receptionist/agent-service";
 import { voiceRuntimeInternalSecret } from "@/lib/server/receptionist/runtime/auth";
+import { alignEditorConnectionForPublish } from "@/lib/server/receptionist/resolve-publish-phone";
+import { validateReceptionistPublish } from "@/lib/server/voice-v3/publish-gate";
 
 export async function getReceptionistReadiness(workspaceId: string) {
   const state = await getReceptionistState(workspaceId);
+  const editorForPublish = await alignEditorConnectionForPublish(workspaceId, state.draft);
+  const publishValidation = await validateReceptionistPublish(workspaceId, editorForPublish);
   const prisma = getPrisma();
   const agent = await prisma.voiceAgent.findUnique({ where: { id: state.agentId } });
 
@@ -30,5 +34,9 @@ export async function getReceptionistReadiness(workspaceId: string) {
     status: state.status,
     publishedVersion: state.publishedVersion,
     providerSyncStatus: routing?.providerSyncStatus ?? "unknown",
+    canPublish: publishValidation.ok,
+    publishBlockers: publishValidation.ok ? [] : publishValidation.errors,
+    inboundPhoneNumberId:
+      editorForPublish.connection.kind === "owned" ? editorForPublish.connection.id : null,
   };
 }
