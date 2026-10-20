@@ -3,6 +3,7 @@ import { assertDevApiAccess } from "@/lib/server/dev-api-guard";
 import { jsonError } from "@/lib/server/api-error";
 import {
   createWebRtcOutboundCall,
+  finalizeWebRtcClientHangup,
   handleInboundCall,
   linkHumanCallControlId,
   listCalls,
@@ -84,6 +85,16 @@ export async function POST(request: Request) {
         humanCallId: String(body.humanCallId || ""),
       });
       return NextResponse.json({ data: updated });
+    }
+
+    if (action === "webrtc_finalize") {
+      const result = await finalizeWebRtcClientHangup({
+        workspaceId,
+        humanCallId: String(body.humanCallId || ""),
+        wasAnswered: body.wasAnswered === true,
+        failed: body.failed === true,
+      });
+      return NextResponse.json({ data: result });
     }
 
     if (action === "simulate_inbound") {

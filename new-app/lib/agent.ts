@@ -185,6 +185,19 @@ export type ConversationalRoute = {
   /** Cached dial target at configuration time (publish compile). */
   destinationPhoneE164?: string;
   destinationLabel?: string;
+  /**
+   * Filled during publish hydration from Phone forwarding config — not required in draft saves.
+   * Sequential ring groups compile to a LiveKit transfer waterfall; simultaneous groups are blocked at publish.
+   */
+  publishRingGroupPlan?: {
+    strategy: "sequential" | "simultaneous";
+    members: Array<{
+      destinationId: string;
+      phoneE164: string;
+      label: string;
+      timeoutSec: number;
+    }>;
+  };
   enabled: boolean;
   confirmBeforeTransfer: boolean;
 };

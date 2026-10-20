@@ -22,13 +22,14 @@ function newRouteId() {
 }
 
 type DestinationPick = {
-  kind: 'forwarding_destination'
+  kind: ConversationalRoute['destinationKind']
   id: string
   label: string
-  phoneE164: string
+  phoneE164?: string
+  hint?: string
 }
 
-/** Individual Phone forwarding destinations only — ring groups require LiveKit↔Phone bridge (not v1). */
+/** Phone forwarding destinations and sequential ring groups (hydrated at publish). */
 function buildDestinationOptions(config: ForwardingConfigDto | null): DestinationPick[] {
   if (!config) return []
   const out: DestinationPick[] = []
@@ -38,6 +39,15 @@ function buildDestinationOptions(config: ForwardingConfigDto | null): Destinatio
       id: d.id,
       label: d.name,
       phoneE164: d.phoneE164,
+    })
+  }
+  for (const g of config.groups) {
+    if (g.strategy === 'simultaneous') continue
+    out.push({
+      kind: 'ring_group',
+      id: g.id,
+      label: g.name,
+      hint: 'Sequential ring — IVR tries each member in order at transfer time',
     })
   }
   return out
@@ -104,7 +114,7 @@ export function ConversationalRoutingEditor() {
 
   const defaultOptions = destinationOptions.map((o) => ({
     value: `${o.kind}:${o.id}`,
-    label: o.label,
+    label: o.hint ? `${o.label} — ${o.hint}` : o.label,
   }))
 
   const pickDefault = (value: string) => {
@@ -298,6 +308,7 @@ function RouteDrawer({
       destinationRef: id,
       destinationPhoneE164: pick?.phoneE164,
       destinationLabel: pick?.label,
+      publishRingGroupPlan: undefined,
     })
   }
 
@@ -357,7 +368,10 @@ function RouteDrawer({
                 { value: '', label: 'Select Phone destination…' },
                 ...destinations.map((d) => ({
                   value: `${d.kind}:${d.id}`,
-                  label: `${d.label} · ${formatPhone(d.phoneE164)}`,
+                  label:
+                    d.kind === 'ring_group'
+                      ? d.hint ? `${d.label} — ${d.hint}` : d.label
+                      : `${d.label} · ${formatPhone(d.phoneE164 || '')}`,
                 })),
               ]}
             />

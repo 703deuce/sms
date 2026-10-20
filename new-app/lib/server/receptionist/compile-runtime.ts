@@ -128,17 +128,23 @@ export function validateEditorForPublish(config: AgentConfig): { ok: true } | { 
   }
   if (config.capabilities.transfer) {
     if (conversational) {
-      const ringGroupRoutes = (config.conversationalRoutes ?? []).filter(
-        (r) => r.enabled && r.destinationKind === "ring_group",
+      const simultaneousRingGroups = (config.conversationalRoutes ?? []).filter(
+        (r) =>
+          r.enabled &&
+          r.destinationKind === "ring_group" &&
+          r.publishRingGroupPlan?.strategy === "simultaneous",
       );
-      if (ringGroupRoutes.length) {
+      if (simultaneousRingGroups.length) {
         errors.push(
-          "Ring groups are not supported as Conversational IVR transfer targets yet. Use an individual Phone forwarding destination.",
+          "Simultaneous Phone ring groups cannot run on Conversational IVR (LiveKit transfer). Use a sequential ring group or an individual forwarding destination.",
         );
       }
-      const routes = (config.conversationalRoutes ?? []).filter(
-        (r) => r.enabled && r.destinationPhoneE164?.trim(),
-      );
+      const routes = (config.conversationalRoutes ?? []).filter((r) => {
+        if (!r.enabled) return false;
+        if (r.destinationPhoneE164?.trim()) return true;
+        if (r.publishRingGroupPlan?.members?.length) return true;
+        return false;
+      });
       const legacy = config.transfers.some((t) => t.enabled && t.number?.trim());
       if (!routes.length && !legacy) {
         errors.push("Add at least one enabled call route with a Phone destination.");
