@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/db";
+import { getPrisma } from "@/lib/server/db";
 import { loadVoiceAgentRuntimeConfig } from "@/lib/voice/load-agent-config";
 import { parseVoiceAgentConfig, type VoiceAgentConfig } from "@/lib/voice/types";
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";

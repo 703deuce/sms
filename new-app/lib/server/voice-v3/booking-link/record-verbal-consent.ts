@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/db";
+import { getPrisma } from "@/lib/server/db";
 import { createId } from "@/lib/supabase/id";
 import { normalizePhoneE164 } from "@/lib/messaging/preferred-sending-number";
 

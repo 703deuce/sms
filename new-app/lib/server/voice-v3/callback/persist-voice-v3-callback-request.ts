@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/db";
+import { getPrisma } from "@/lib/server/db";
 import type { VoiceV3CallbackPersistInput, VoiceV3CallbackPersistResult } from "./types";
 import { callbackSlaMetadataPatch } from "@/lib/voice-receptionist-wizard/operating-maturity/callback-sla";
 
