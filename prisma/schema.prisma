@@ -274,293 +274,300 @@ model User {
 }
 
 model Workspace {
-  id                                String                             @id @default(cuid())
-  name                              String
-  slug                              String                             @unique
-  type                              WorkspaceType                      @default(BUSINESS)
-  ownerUserId                       String?
-  displayName                       String?
-  logoUrl                           String?
-  primaryColor                      String?                            @default("#0f766e")
-  accentColor                       String?                            @default("#0ea5e9")
-  shortLinkDomain                   String?
-  formTheme                         String?                            @default("light")
-  reviewLinkUrl                     String?
-  stripeCustomerId                  String?
-  stripeSubscriptionId              String?
-  billingPlan                       String?                            @default("growth")
-  creditBalanceCents                Int                                @default(0)
-  customFieldsConfig                Json?
-  activeFromNumberId                String?
-  createdAt                         DateTime                           @default(now())
-  memberships                       Membership[]
-  phoneNumbers                      PhoneNumber[]
-  premiumNumberReservations         PremiumNumberReservation[]
-  premiumNumberSearchLogs           PremiumNumberSearchLog[]
-  numberServiceSubscriptions        NumberServiceSubscription[]
-  marketplaceStripeRefunds          MarketplaceStripeRefund[]
-  contacts                          Contact[]
-  lists                             ContactList[]
-  segments                          Segment[]
-  tags                              Tag[]
-  campaigns                         Campaign[]
-  conversations                     Conversation[]
-  templates                         Template[]
-  flows                             AutomationFlow[]
-  triggerDeployments                TriggerDeployment[]
-  solutionSetups                    SolutionSetup[]
-  platformEvents                    PlatformEvent[]
-  keywords                          Keyword[]
-  autoReplies                       AutoReply[]
-  dripCampaigns                     DripCampaign[]
-  aiReplies                         AiReply[]
-  forms                             OptInForm[]
-  consentRecords                    ConsentRecord[]
-  qrCodes                           QrCode[]
-  clickToTextLinks                  ClickToTextLink[]
-  brand                             ComplianceBrand?
-  complianceCampaign                ComplianceCampaign?
-  messagingRegistration             MessagingRegistration?
-  messagingRegistrationEvents       MessagingRegistrationEvent[]
-  messagingProductRegistrations     MessagingProductRegistration[]
-  listImportAttestations            ListImportAttestation[]
-  campaignLaunchAudits              CampaignLaunchAudit[]
-  massTextingBillingAccount         MassTextingBillingAccount?
-  massTextingCreditReservations     MassTextingCreditReservation[]
-  massTextingBillingEvents          MassTextingBillingEvent[]
-  campaignRecipients                CampaignRecipient[]
-  campaignMessages                  CampaignMessage[]
-  suppressions                      Suppression[]
-  jobQueue                          JobQueue[]
-  integrationWebhooks               IntegrationWebhookEndpoint[]
-  integrationWebhookEvents          IntegrationWebhookEvent[]
-  apiKeys                           ApiKey[]
-  webhooks                          Webhook[]
-  voiceWebhookDeliveries            VoiceWebhookDelivery[]
-  auditLogs                         AuditLog[]
-  usageRecords                      UsageRecord[]
-  automationExecutions              AutomationExecution[]
-  formSubmissions                   FormSubmission[]
-  voiceAgents                       VoiceAgent[]
-  voiceAgentVersions                VoiceAgentVersion[]
-  voiceAgentPhoneNumbers            VoiceAgentPhoneNumber[]
-  voiceKnowledgeBases               VoiceKnowledgeBase[]
-  voiceKnowledgeGaps                VoiceKnowledgeGap[]
-  voiceCallerBlocks                 VoiceCallerBlock[]
-  voiceKnowledgeSources             VoiceKnowledgeSource[]
-  voiceWebsiteCrawlJobs             VoiceWebsiteCrawlJob[]
-  voiceWebsiteCrawlPages            VoiceWebsiteCrawlPage[]
-  voiceAgentKnowledgeBases          VoiceAgentKnowledgeBase[]
-  voiceTools                        VoiceTool[]
-  voiceAgentTools                   VoiceAgentTool[]
-  voiceCalendarConnections          VoiceCalendarConnection[]
-  voiceServices                     VoiceService[]
-  voiceStaffMembers                 VoiceStaffMember[]
-  voiceRoutingRules                 VoiceRoutingRule[]
-  voiceCampaigns                    VoiceCampaign[]
-  voiceCampaignContacts             VoiceCampaignContact[]
-  voiceCampaignAttempts             VoiceCampaignAttempt[]
-  voiceCalls                        VoiceCall[]
-  voiceCallLegs                     VoiceCallLeg[]
-  voiceCallEvents                   VoiceCallEvent[]
-  voiceTransfers                    VoiceTransfer[]
-  voiceRecordings                   VoiceRecording[]
-  voiceTranscripts                  VoiceTranscript[]
-  voiceV2AiCallRecoverySessions     VoiceV2AiCallRecoverySession[]
-  voiceTranscriptSegments           VoiceTranscriptSegment[]
-  voiceConversationInsights         VoiceConversationInsight[]
-  voiceToolExecutions               VoiceToolExecution[]
-  voiceAppointments                 VoiceAppointment[]
-  voiceV2OfferSets                  VoiceV2OfferSet[]
-  voiceV2BookingIdempotencies       VoiceV2BookingIdempotency[]
-  appointmentSlotHolds              AppointmentSlotHold[]
-  appointmentAiMutationRecords      AppointmentAiMutationRecord[]
-  appointmentWorkflows              AppointmentWorkflow[]
-  appointmentWorkflowExecutions     AppointmentWorkflowExecution[]
-  appointmentWaitlistEntries        AppointmentWaitlistEntry[]
-  appointmentRecurringSeries        AppointmentRecurringSeries[]
-  merchantPaymentConnections        MerchantPaymentConnection[]
-  appointmentMerchantPayments       AppointmentMerchantPayment[]
-  bookingCategories                 BookingCategory[]
-  bookingAddOns                     BookingAddOn[]
-  schedulingResources               SchedulingResource[]
-  servicePhaseTemplates             ServicePhaseTemplate[]
-  manageAppointmentTokens           ManageAppointmentToken[]
-  clientBookingRestrictions         ClientBookingRestriction[]
-  householdAccounts                 HouseholdAccount[]
-  packageProducts                   PackageProduct[]
-  packageBalances                   PackageBalance[]
-  serviceBookingStoreFulfillments   ServiceBookingStoreFulfillment[]
-  classOccurrenceRegistrationHolds  ClassOccurrenceRegistrationHold[]
-  giftCertificateProducts           GiftCertificateProduct[]
-  giftCertificateBalances           GiftCertificateBalance[]
-  serviceMembershipProducts         ServiceMembershipProduct[]
-  serviceMembershipSubscriptions    ServiceMembershipSubscription[]
-  appointmentCoupons                AppointmentCoupon[]
-  classSeries                       ClassSeries[]
-  classOccurrences                  ClassOccurrence[]
-  classEnrollments                  ClassEnrollment[]
-  intakeForms                       IntakeForm[]
-  intakeFormResponses               IntakeFormResponse[]
-  appointmentServiceLines           AppointmentServiceLine[]
-  appointmentWebhookEndpoints       AppointmentWebhookEndpoint[]
-  clientPortalSessions              ClientPortalSession[]
-  appointmentImportBatches          AppointmentImportBatch[]
-  bookingContractTemplates          BookingContractTemplate[]
-  signedBookingContracts            SignedBookingContract[]
-  bookingInvoices                   BookingInvoice[]
-  bookingProducts                   BookingProduct[]
-  schedulingResourceGroups          SchedulingResourceGroup[]
-  classAdmissionTickets             ClassAdmissionTicket[]
-  contactMergeAudits                ContactMergeAudit[]
-  customerFieldDefinitions          CustomerFieldDefinition[]
-  clientWalletAccounts              ClientWalletAccount[]
-  loyaltyPrograms                   LoyaltyProgram[]
-  dynamicPricingRules               DynamicPricingRule[]
-  waitlistPriorityRules             WaitlistPriorityRule[]
-  appointmentTreatmentRecords       AppointmentTreatmentRecord[]
-  posSessions                       PosSession[]
-  classSeatMaps                     ClassSeatMap[]
-  classCheckIns                     ClassCheckIn[]
-  voiceTestRuns                     VoiceTestRun[]
-  voiceComplianceProfile            VoiceComplianceProfile?
-  voiceUsageRecords                 VoiceUsageRecord[]
-  voiceIntegrationSecrets           VoiceIntegrationSecret[]
-  providerWebhookEvents             ProviderWebhookEvent[]
-  linkClickEvents                   LinkClickEvent[]
-  mediaAssets                       MediaAsset[]
-  surveys                           Survey[]
-  surveyResponses                   SurveyResponse[]
-  growWidgets                       GrowWidget[]
-  contactCardProfile                ContactCardProfile?
-  messagingSettings                 WorkspaceMessagingSettings?
-  emailToSmsAddresses               EmailToSmsAddress[]
-  paymentLinks                      PaymentLink[]
-  paymentRequests                   PaymentRequest[]
-  paymentRequestRefunds             PaymentRequestRefund[]
-  portRequests                      PortRequest[]
-  portOutRequests                   PortOutRequest[]
-  humanCalls                        HumanCall[]
-  humanCallEvents                   HumanCallEvent[]
-  humanCallNotes                    HumanCallNote[]
-  callRouting                       WorkspaceCallRouting?
-  powerDialerCampaigns              PowerDialerCampaign[]
-  powerDialerSessions               PowerDialerSession[]
-  powerDialerAttempts               PowerDialerAttempt[]
-  pushSubscriptions                 PushSubscription[]
-  notificationPrefs                 WorkspaceNotificationPrefs[]
-  workspaceLimits                   WorkspaceLimits?
-  workspaceDataPrefs                WorkspaceDataPrefs?
-  workspacePhoneSettings            WorkspacePhoneSettings?
-  creditLedgerEntries               CreditLedgerEntry[]
-  senderPools                       SenderPool[]
-  invites                           WorkspaceInvite[]
-  inAppNotifications                InAppNotification[]
-  contests                          Contest[]
-  integrationConnections            IntegrationConnection[]
-  callQueues                        CallQueue[]
-  ivrMenus                          IvrMenu[]
-  callParkSlots                     CallParkSlot[]
-  conferenceCalls                   ConferenceCall[]
-  conferenceParticipants            ConferenceParticipant[]
-  voicemailBoxes                    VoicemailBox[]
-  voicemailMessages                 VoicemailMessage[]
-  callForwardingRules               CallForwardingRule[]
-  softphonePresence                 SoftphonePresence[]
-  softphoneDevices                  SoftphoneDevice[]
-  softphoneUserSettings             SoftphoneUserSettings[]
-  crmObjectMappings                 CrmObjectMapping[]
-  crmFieldMappings                  CrmFieldMapping[]
-  crmSyncRuns                       CrmSyncRun[]
-  crmSyncEvents                     CrmSyncEvent[]
-  crmAuditLogs                      CrmAuditLog[]
-  crmWebhookEvents                  CrmWebhookEvent[]
-  crmDeadLetters                    CrmDeadLetter[]
-  integrationActionLogs             IntegrationActionLog[]
-  aiActionApprovals                 AiActionApproval[]
-  integrationAlerts                 IntegrationAlert[]
-  integrationContextCaches          IntegrationContextCache[]
-  integrationTasks                  IntegrationTask[]
-  integrationOrders                 IntegrationOrder[]
-  workspaceAiIntegrationPolicy      WorkspaceAiIntegrationPolicy?
-  voiceAiConversations              VoiceAiConversation[]
-  voiceAiConversationMessages       VoiceAiConversationMessage[]
-  voiceMemoryConfigs                VoiceMemoryConfig[]
-  voiceInsightDefinitions           VoiceInsightDefinition[]
-  voiceInsightGroups                VoiceInsightGroup[]
-  voiceScheduledEvents              VoiceScheduledEvent[]
-  voiceMcpServers                   VoiceMcpServer[]
-  voiceCanaryDeploys                VoiceCanaryDeploy[]
-  voiceAssistantTests               VoiceAssistantTest[]
-  voiceTestSuites                   VoiceTestSuite[]
-  voiceAssistantTestRuns            VoiceAssistantTestRun[]
-  voiceAssistantTags                VoiceAssistantTag[]
-  voiceObservabilityConfigs         VoiceObservabilityConfig[]
-  voiceConcurrencyAllocations       VoiceConcurrencyAllocation[]
-  voiceFailureDiagnostics           VoiceFailureDiagnostic[]
-  voiceTransferDestinations         VoiceTransferDestination[]
-  voiceWidgetConfigs                VoiceWidgetConfig[]
-  voiceRemoteVersions               VoiceRemoteAssistantVersion[]
-  missedCallTextConfig              MissedCallTextConfig?
-  missedCallEvents                  MissedCallEvent[]
-  missedCallTextTraces              MissedCallTextTrace[]
-  mctbVoiceBridgeCallEvents         MctbVoiceBridgeCallEvent[]
-  agentConfigurationChanges         AgentConfigurationChange[]
-  smartRoutingFlows                 SmartRoutingFlow[]
-  smartRoutingDestinations          SmartRoutingDestination[]
-  smartRoutingAudioAssets           SmartRoutingAudioAsset[]
-  smartRoutingCallSessions          SmartRoutingCallSession[]
-  smartRoutingSmsConsentEvents      SmartRoutingSmsConsentEvent[]
-  smartRoutingWorkspaceSettings     SmartRoutingWorkspaceSettings?
-  callForwardingWorkspaceSettings   CallForwardingWorkspaceSettings?
-  callForwardingAuthorizedCallers   CallForwardingAuthorizedCaller[]
-  callForwardingOutboundCalls       CallForwardingOutboundCall[]
-  smartRoutingAuthorizedCallers     SmartRoutingAuthorizedCaller[]
-  smartRoutingOutboundCalls         SmartRoutingOutboundCall[]
-  smartRoutingAccessSessions        SmartRoutingAccessSession[]
-  smartRoutingAiProposals           SmartRoutingAiProposal[]
-  smartRoutingAiRecommendations     SmartRoutingAiRecommendation[]
-  smartRoutingEmployeeAccessTokens  SmartRoutingEmployeeAccessToken[]
-  smartRoutingCallRecordings        SmartRoutingCallRecording[]
-  meetingSessions                   MeetingSession[]
-  videoMeetings                     VideoMeeting[]
-  smartRoutingCallControlSessions   SmartRoutingCallControlSession[]
-  smartRoutingCallbackCodes         SmartRoutingCallbackCode[]
-  productEntitlements               ProductEntitlement[]
-  workspaceProductFeatures          WorkspaceProductFeature[]
-  platformProductSubscriptions      PlatformProductSubscription[]
-  platformTranscriptionUsageRecords PlatformTranscriptionUsageRecord[]
-  callbackRequests                  CallbackRequest[]
-  voiceOperationalOverrides         VoiceOperationalOverride[]
-  mctbRequestFormSubmissions        MctbRequestFormSubmission[]
-  mctbHandoffConfig                 MctbHandoffConfig?
-  mctbBookingLinks                  MctbBookingLink[]
-  mctbAiBookingSessions             MctbAiBookingSession[]
-  mctbDurableOperations             MctbDurableOperation[]
-  mctbConversationBookingActivities MctbConversationBookingActivity[]
-  mctbNotificationRecipients        MctbNotificationRecipient[]
-  mctbConversationAutomationStates  MctbConversationAutomationState[]
-  mctbLeadSnapshots                 MctbLeadSnapshot[]
-  mctbUrgencyAssessments            MctbUrgencyAssessment[]
-  mctbHandoffEvents                 MctbHandoffEvent[]
-  mctbPlatformSenderAssignments     MctbPlatformSenderAssignment[]
-  arSmsReplySessions                ArSmsReplySession[]
+  id                                     String                                  @id @default(cuid())
+  name                                   String
+  slug                                   String                                  @unique
+  type                                   WorkspaceType                           @default(BUSINESS)
+  ownerUserId                            String?
+  displayName                            String?
+  logoUrl                                String?
+  primaryColor                           String?                                 @default("#0f766e")
+  accentColor                            String?                                 @default("#0ea5e9")
+  shortLinkDomain                        String?
+  formTheme                              String?                                 @default("light")
+  reviewLinkUrl                          String?
+  stripeCustomerId                       String?
+  stripeSubscriptionId                   String?
+  billingPlan                            String?                                 @default("growth")
+  creditBalanceCents                     Int                                     @default(0)
+  customFieldsConfig                     Json?
+  activeFromNumberId                     String?
+  createdAt                              DateTime                                @default(now())
+  memberships                            Membership[]
+  phoneNumbers                           PhoneNumber[]
+  premiumNumberReservations              PremiumNumberReservation[]
+  premiumNumberSearchLogs                PremiumNumberSearchLog[]
+  numberServiceSubscriptions             NumberServiceSubscription[]
+  marketplaceStripeRefunds               MarketplaceStripeRefund[]
+  contacts                               Contact[]
+  lists                                  ContactList[]
+  segments                               Segment[]
+  tags                                   Tag[]
+  campaigns                              Campaign[]
+  conversations                          Conversation[]
+  templates                              Template[]
+  flows                                  AutomationFlow[]
+  triggerDeployments                     TriggerDeployment[]
+  solutionSetups                         SolutionSetup[]
+  platformEvents                         PlatformEvent[]
+  keywords                               Keyword[]
+  autoReplies                            AutoReply[]
+  dripCampaigns                          DripCampaign[]
+  aiReplies                              AiReply[]
+  forms                                  OptInForm[]
+  consentRecords                         ConsentRecord[]
+  qrCodes                                QrCode[]
+  clickToTextLinks                       ClickToTextLink[]
+  brand                                  ComplianceBrand?
+  complianceCampaign                     ComplianceCampaign?
+  messagingRegistration                  MessagingRegistration?
+  messagingRegistrationEvents            MessagingRegistrationEvent[]
+  messagingProductRegistrations          MessagingProductRegistration[]
+  listImportAttestations                 ListImportAttestation[]
+  campaignLaunchAudits                   CampaignLaunchAudit[]
+  massTextingBillingAccount              MassTextingBillingAccount?
+  massTextingCreditReservations          MassTextingCreditReservation[]
+  massTextingBillingEvents               MassTextingBillingEvent[]
+  campaignRecipients                     CampaignRecipient[]
+  campaignMessages                       CampaignMessage[]
+  suppressions                           Suppression[]
+  jobQueue                               JobQueue[]
+  integrationWebhooks                    IntegrationWebhookEndpoint[]
+  integrationWebhookEvents               IntegrationWebhookEvent[]
+  apiKeys                                ApiKey[]
+  webhooks                               Webhook[]
+  voiceWebhookDeliveries                 VoiceWebhookDelivery[]
+  auditLogs                              AuditLog[]
+  usageRecords                           UsageRecord[]
+  automationExecutions                   AutomationExecution[]
+  formSubmissions                        FormSubmission[]
+  voiceAgents                            VoiceAgent[]
+  voiceAgentVersions                     VoiceAgentVersion[]
+  voiceAgentPhoneNumbers                 VoiceAgentPhoneNumber[]
+  voiceKnowledgeBases                    VoiceKnowledgeBase[]
+  voiceKnowledgeGaps                     VoiceKnowledgeGap[]
+  voiceCallerBlocks                      VoiceCallerBlock[]
+  voiceKnowledgeSources                  VoiceKnowledgeSource[]
+  voiceWebsiteCrawlJobs                  VoiceWebsiteCrawlJob[]
+  voiceWebsiteCrawlPages                 VoiceWebsiteCrawlPage[]
+  voiceAgentKnowledgeBases               VoiceAgentKnowledgeBase[]
+  voiceTools                             VoiceTool[]
+  voiceAgentTools                        VoiceAgentTool[]
+  voiceCalendarConnections               VoiceCalendarConnection[]
+  voiceServices                          VoiceService[]
+  voiceStaffMembers                      VoiceStaffMember[]
+  voiceRoutingRules                      VoiceRoutingRule[]
+  voiceCampaigns                         VoiceCampaign[]
+  voiceCampaignContacts                  VoiceCampaignContact[]
+  voiceCampaignAttempts                  VoiceCampaignAttempt[]
+  voiceCalls                             VoiceCall[]
+  voiceCallLegs                          VoiceCallLeg[]
+  voiceCallEvents                        VoiceCallEvent[]
+  voiceTransfers                         VoiceTransfer[]
+  voiceRecordings                        VoiceRecording[]
+  voiceTranscripts                       VoiceTranscript[]
+  voiceV2AiCallRecoverySessions          VoiceV2AiCallRecoverySession[]
+  voiceTranscriptSegments                VoiceTranscriptSegment[]
+  voiceConversationInsights              VoiceConversationInsight[]
+  voiceToolExecutions                    VoiceToolExecution[]
+  voiceAppointments                      VoiceAppointment[]
+  voiceV2OfferSets                       VoiceV2OfferSet[]
+  voiceV2BookingIdempotencies            VoiceV2BookingIdempotency[]
+  appointmentSlotHolds                   AppointmentSlotHold[]
+  appointmentAiMutationRecords           AppointmentAiMutationRecord[]
+  appointmentWorkflows                   AppointmentWorkflow[]
+  appointmentWorkflowExecutions          AppointmentWorkflowExecution[]
+  appointmentWaitlistEntries             AppointmentWaitlistEntry[]
+  appointmentRecurringSeries             AppointmentRecurringSeries[]
+  merchantPaymentConnections             MerchantPaymentConnection[]
+  appointmentMerchantPayments            AppointmentMerchantPayment[]
+  bookingCategories                      BookingCategory[]
+  bookingAddOns                          BookingAddOn[]
+  schedulingResources                    SchedulingResource[]
+  servicePhaseTemplates                  ServicePhaseTemplate[]
+  manageAppointmentTokens                ManageAppointmentToken[]
+  clientBookingRestrictions              ClientBookingRestriction[]
+  householdAccounts                      HouseholdAccount[]
+  packageProducts                        PackageProduct[]
+  packageBalances                        PackageBalance[]
+  serviceBookingStoreFulfillments        ServiceBookingStoreFulfillment[]
+  classOccurrenceRegistrationHolds       ClassOccurrenceRegistrationHold[]
+  giftCertificateProducts                GiftCertificateProduct[]
+  giftCertificateBalances                GiftCertificateBalance[]
+  serviceMembershipProducts              ServiceMembershipProduct[]
+  serviceMembershipSubscriptions         ServiceMembershipSubscription[]
+  appointmentCoupons                     AppointmentCoupon[]
+  classSeries                            ClassSeries[]
+  classOccurrences                       ClassOccurrence[]
+  classEnrollments                       ClassEnrollment[]
+  intakeForms                            IntakeForm[]
+  intakeFormResponses                    IntakeFormResponse[]
+  appointmentServiceLines                AppointmentServiceLine[]
+  appointmentWebhookEndpoints            AppointmentWebhookEndpoint[]
+  clientPortalSessions                   ClientPortalSession[]
+  appointmentImportBatches               AppointmentImportBatch[]
+  bookingContractTemplates               BookingContractTemplate[]
+  signedBookingContracts                 SignedBookingContract[]
+  bookingInvoices                        BookingInvoice[]
+  bookingProducts                        BookingProduct[]
+  schedulingResourceGroups               SchedulingResourceGroup[]
+  classAdmissionTickets                  ClassAdmissionTicket[]
+  contactMergeAudits                     ContactMergeAudit[]
+  customerFieldDefinitions               CustomerFieldDefinition[]
+  clientWalletAccounts                   ClientWalletAccount[]
+  loyaltyPrograms                        LoyaltyProgram[]
+  dynamicPricingRules                    DynamicPricingRule[]
+  waitlistPriorityRules                  WaitlistPriorityRule[]
+  appointmentTreatmentRecords            AppointmentTreatmentRecord[]
+  posSessions                            PosSession[]
+  classSeatMaps                          ClassSeatMap[]
+  classCheckIns                          ClassCheckIn[]
+  voiceTestRuns                          VoiceTestRun[]
+  voiceComplianceProfile                 VoiceComplianceProfile?
+  voiceUsageRecords                      VoiceUsageRecord[]
+  voiceIntegrationSecrets                VoiceIntegrationSecret[]
+  providerWebhookEvents                  ProviderWebhookEvent[]
+  linkClickEvents                        LinkClickEvent[]
+  mediaAssets                            MediaAsset[]
+  surveys                                Survey[]
+  surveyResponses                        SurveyResponse[]
+  growWidgets                            GrowWidget[]
+  contactCardProfile                     ContactCardProfile?
+  messagingSettings                      WorkspaceMessagingSettings?
+  emailToSmsAddresses                    EmailToSmsAddress[]
+  paymentLinks                           PaymentLink[]
+  paymentRequests                        PaymentRequest[]
+  paymentRequestRefunds                  PaymentRequestRefund[]
+  portRequests                           PortRequest[]
+  portOutRequests                        PortOutRequest[]
+  humanCalls                             HumanCall[]
+  humanCallEvents                        HumanCallEvent[]
+  humanCallNotes                         HumanCallNote[]
+  callRouting                            WorkspaceCallRouting?
+  powerDialerCampaigns                   PowerDialerCampaign[]
+  powerDialerSessions                    PowerDialerSession[]
+  powerDialerAttempts                    PowerDialerAttempt[]
+  pushSubscriptions                      PushSubscription[]
+  notificationPrefs                      WorkspaceNotificationPrefs[]
+  workspaceLimits                        WorkspaceLimits?
+  workspaceDataPrefs                     WorkspaceDataPrefs?
+  workspacePhoneSettings                 WorkspacePhoneSettings?
+  creditLedgerEntries                    CreditLedgerEntry[]
+  senderPools                            SenderPool[]
+  invites                                WorkspaceInvite[]
+  inAppNotifications                     InAppNotification[]
+  contests                               Contest[]
+  integrationConnections                 IntegrationConnection[]
+  callQueues                             CallQueue[]
+  ivrMenus                               IvrMenu[]
+  callParkSlots                          CallParkSlot[]
+  conferenceCalls                        ConferenceCall[]
+  conferenceParticipants                 ConferenceParticipant[]
+  voicemailBoxes                         VoicemailBox[]
+  voicemailMessages                      VoicemailMessage[]
+  callForwardingRules                    CallForwardingRule[]
+  forwardingDestinations                 ForwardingDestination[]
+  forwardingGroups                       ForwardingGroup[]
+  autoAttendantMenus                     AutoAttendantMenu[]
+  phoneNumberAnsweringPolicies           PhoneNumberAnsweringPolicy[]
+  phoneCallRoutingSessions               PhoneCallRoutingSession[]
+  forwardingSetupDraft                   ForwardingSetupDraft?
+  forwardingUsageMonthly                 ForwardingUsageMonthly[]
+  softphonePresence                      SoftphonePresence[]
+  softphoneDevices                       SoftphoneDevice[]
+  softphoneUserSettings                  SoftphoneUserSettings[]
+  crmObjectMappings                      CrmObjectMapping[]
+  crmFieldMappings                       CrmFieldMapping[]
+  crmSyncRuns                            CrmSyncRun[]
+  crmSyncEvents                          CrmSyncEvent[]
+  crmAuditLogs                           CrmAuditLog[]
+  crmWebhookEvents                       CrmWebhookEvent[]
+  crmDeadLetters                         CrmDeadLetter[]
+  integrationActionLogs                  IntegrationActionLog[]
+  aiActionApprovals                      AiActionApproval[]
+  integrationAlerts                      IntegrationAlert[]
+  integrationContextCaches               IntegrationContextCache[]
+  integrationTasks                       IntegrationTask[]
+  integrationOrders                      IntegrationOrder[]
+  workspaceAiIntegrationPolicy           WorkspaceAiIntegrationPolicy?
+  voiceAiConversations                   VoiceAiConversation[]
+  voiceAiConversationMessages            VoiceAiConversationMessage[]
+  voiceMemoryConfigs                     VoiceMemoryConfig[]
+  voiceInsightDefinitions                VoiceInsightDefinition[]
+  voiceInsightGroups                     VoiceInsightGroup[]
+  voiceScheduledEvents                   VoiceScheduledEvent[]
+  voiceMcpServers                        VoiceMcpServer[]
+  voiceCanaryDeploys                     VoiceCanaryDeploy[]
+  voiceAssistantTests                    VoiceAssistantTest[]
+  voiceTestSuites                        VoiceTestSuite[]
+  voiceAssistantTestRuns                 VoiceAssistantTestRun[]
+  voiceAssistantTags                     VoiceAssistantTag[]
+  voiceObservabilityConfigs              VoiceObservabilityConfig[]
+  voiceConcurrencyAllocations            VoiceConcurrencyAllocation[]
+  voiceFailureDiagnostics                VoiceFailureDiagnostic[]
+  voiceTransferDestinations              VoiceTransferDestination[]
+  voiceWidgetConfigs                     VoiceWidgetConfig[]
+  voiceRemoteVersions                    VoiceRemoteAssistantVersion[]
+  missedCallTextConfig                   MissedCallTextConfig?
+  missedCallEvents                       MissedCallEvent[]
+  missedCallTextTraces                   MissedCallTextTrace[]
+  mctbVoiceBridgeCallEvents              MctbVoiceBridgeCallEvent[]
+  agentConfigurationChanges              AgentConfigurationChange[]
+  smartRoutingFlows                      SmartRoutingFlow[]
+  smartRoutingDestinations               SmartRoutingDestination[]
+  smartRoutingAudioAssets                SmartRoutingAudioAsset[]
+  smartRoutingCallSessions               SmartRoutingCallSession[]
+  smartRoutingSmsConsentEvents           SmartRoutingSmsConsentEvent[]
+  smartRoutingWorkspaceSettings          SmartRoutingWorkspaceSettings?
+  callForwardingWorkspaceSettings        CallForwardingWorkspaceSettings?
+  callForwardingAuthorizedCallers        CallForwardingAuthorizedCaller[]
+  callForwardingOutboundCalls            CallForwardingOutboundCall[]
+  smartRoutingAuthorizedCallers          SmartRoutingAuthorizedCaller[]
+  smartRoutingOutboundCalls              SmartRoutingOutboundCall[]
+  smartRoutingAccessSessions             SmartRoutingAccessSession[]
+  smartRoutingAiProposals                SmartRoutingAiProposal[]
+  smartRoutingAiRecommendations          SmartRoutingAiRecommendation[]
+  smartRoutingEmployeeAccessTokens       SmartRoutingEmployeeAccessToken[]
+  smartRoutingCallRecordings             SmartRoutingCallRecording[]
+  meetingSessions                        MeetingSession[]
+  videoMeetings                          VideoMeeting[]
+  smartRoutingCallControlSessions        SmartRoutingCallControlSession[]
+  smartRoutingCallbackCodes              SmartRoutingCallbackCode[]
+  productEntitlements                    ProductEntitlement[]
+  workspaceProductFeatures               WorkspaceProductFeature[]
+  platformProductSubscriptions           PlatformProductSubscription[]
+  platformTranscriptionUsageRecords      PlatformTranscriptionUsageRecord[]
+  callbackRequests                       CallbackRequest[]
+  voiceOperationalOverrides              VoiceOperationalOverride[]
+  mctbRequestFormSubmissions             MctbRequestFormSubmission[]
+  mctbHandoffConfig                      MctbHandoffConfig?
+  mctbBookingLinks                       MctbBookingLink[]
+  mctbAiBookingSessions                  MctbAiBookingSession[]
+  mctbDurableOperations                  MctbDurableOperation[]
+  mctbConversationBookingActivities      MctbConversationBookingActivity[]
+  mctbNotificationRecipients             MctbNotificationRecipient[]
+  mctbConversationAutomationStates       MctbConversationAutomationState[]
+  mctbLeadSnapshots                      MctbLeadSnapshot[]
+  mctbUrgencyAssessments                 MctbUrgencyAssessment[]
+  mctbHandoffEvents                      MctbHandoffEvent[]
+  mctbPlatformSenderAssignments          MctbPlatformSenderAssignment[]
+  arSmsReplySessions                     ArSmsReplySession[]
   arSmsConsumerPlatformSenderAssignments ArSmsConsumerPlatformSenderAssignment[]
-  platformProductConsumerAssignments PlatformProductConsumerAssignment[]
-  arSmsInboundHeldMessages          ArSmsInboundHeldMessage[]
-  mctbNotificationDeliveries        MctbNotificationDelivery[]
-  faxAccount                        FaxAccount?
-  visualizerProjects                VisualizerProject[]
-  visualizerMaterials               VisualizerMaterial[]
-  visualizerAssets                  VisualizerAsset[]
-  visualizerDesigns                 VisualizerDesign[]
-  visualizerGenerationJobs          VisualizerGenerationJob[]
-  visualizerShares                  VisualizerShare[]
-  visualizerEstimateRequests        VisualizerEstimateRequest[]
-  visualizerEvents                  VisualizerEvent[]
-  visualizerWidgetConfigs           VisualizerWidgetConfig[]
-  visualizerUsageLedger             VisualizerUsageLedger[]
-  owner                             User?                              @relation("WorkspaceOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  platformProductConsumerAssignments     PlatformProductConsumerAssignment[]
+  arSmsInboundHeldMessages               ArSmsInboundHeldMessage[]
+  mctbNotificationDeliveries             MctbNotificationDelivery[]
+  faxAccount                             FaxAccount?
+  visualizerProjects                     VisualizerProject[]
+  visualizerMaterials                    VisualizerMaterial[]
+  visualizerAssets                       VisualizerAsset[]
+  visualizerDesigns                      VisualizerDesign[]
+  visualizerGenerationJobs               VisualizerGenerationJob[]
+  visualizerShares                       VisualizerShare[]
+  visualizerEstimateRequests             VisualizerEstimateRequest[]
+  visualizerEvents                       VisualizerEvent[]
+  visualizerWidgetConfigs                VisualizerWidgetConfig[]
+  visualizerUsageLedger                  VisualizerUsageLedger[]
+  owner                                  User?                                   @relation("WorkspaceOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
 
   @@index([ownerUserId])
   @@index([type])
@@ -746,37 +753,37 @@ model Membership {
 }
 
 model PhoneNumber {
-  id                         String                      @id @default(cuid())
-  workspaceId                String
-  e164                       String
-  type                       String
-  areaCode                   String?
-  friendlyName               String?
+  id                                     String                                  @id @default(cuid())
+  workspaceId                            String
+  e164                                   String
+  type                                   String
+  areaCode                               String?
+  friendlyName                           String?
   /// Upstream telephony provider that owns this DID (telnyx | twilio).
-  provider                   String                      @default("telnyx")
-  twilioSid                  String?
-  providerNumberId           String?
-  providerOrderId            String?
-  a2pStatus                  ComplianceStatus            @default(PENDING)
-  messagingService           String?
-  monthlyCostCents           Int                         @default(115)
-  status                     String                      @default("Active")
-  purchasedAt                DateTime?
-  releasedAt                 DateTime?
-  voiceForwardTo             String?
-  webhookUrl                 String?
-  capabilitiesJson           Json?
-  settingsJson               Json?
-  createdAt                  DateTime                    @default(now())
-  updatedAt                  DateTime                    @updatedAt
-  workspace                  Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  assignments                PhoneNumberAssignment[]
-  triggerDeployments         TriggerDeployment[]
-  numberServiceSubscriptions NumberServiceSubscription[]
-  mctbPlatformSenderAssignments MctbPlatformSenderAssignment[]
-  arSmsReplySessions            ArSmsReplySession[]
+  provider                               String                                  @default("telnyx")
+  twilioSid                              String?
+  providerNumberId                       String?
+  providerOrderId                        String?
+  a2pStatus                              ComplianceStatus                        @default(PENDING)
+  messagingService                       String?
+  monthlyCostCents                       Int                                     @default(115)
+  status                                 String                                  @default("Active")
+  purchasedAt                            DateTime?
+  releasedAt                             DateTime?
+  voiceForwardTo                         String?
+  webhookUrl                             String?
+  capabilitiesJson                       Json?
+  settingsJson                           Json?
+  createdAt                              DateTime                                @default(now())
+  updatedAt                              DateTime                                @updatedAt
+  workspace                              Workspace                               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignments                            PhoneNumberAssignment[]
+  triggerDeployments                     TriggerDeployment[]
+  numberServiceSubscriptions             NumberServiceSubscription[]
+  mctbPlatformSenderAssignments          MctbPlatformSenderAssignment[]
+  arSmsReplySessions                     ArSmsReplySession[]
   arSmsConsumerPlatformSenderAssignments ArSmsConsumerPlatformSenderAssignment[]
-  platformProductConsumerAssignments PlatformProductConsumerAssignment[]
+  platformProductConsumerAssignments     PlatformProductConsumerAssignment[]
 
   @@unique([workspaceId, e164])
   @@index([twilioSid])
@@ -1202,12 +1209,12 @@ model Contact {
 }
 
 model ContactList {
-  id          String              @id @default(cuid())
-  workspaceId String
-  name        String
-  description String?
-  workspace          Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  members            ContactListMember[]
+  id                   String                @id @default(cuid())
+  workspaceId          String
+  name                 String
+  description          String?
+  workspace            Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  members              ContactListMember[]
   powerDialerCampaigns PowerDialerCampaign[]
 
   @@index([workspaceId])
@@ -1756,26 +1763,26 @@ model IntegrationWebhookEvent {
 }
 
 model Conversation {
-  id                String                     @id @default(cuid())
-  workspaceId       String
-  contactId         String
-  assigneeId        String?
-  status            ConversationStatus         @default(OPEN)
-  tags              String[]
-  unread            Boolean                    @default(true)
-  productSource     ConversationProductSource?
-  phoneNumberId     String?
-  fromE164          String?
-  campaignId        String?
-  missedCallEventId String?
-  updatedAt         DateTime                   @updatedAt
-  createdAt         DateTime                   @default(now())
-  workspace         Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  contact           Contact                    @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  assignee          User?                      @relation("Assignee", fields: [assigneeId], references: [id])
-  messages          ConversationMessage[]
-  platformSenderAssignments MctbPlatformSenderAssignment[]
-  arSmsReplySessions        ArSmsReplySession[]
+  id                                 String                              @id @default(cuid())
+  workspaceId                        String
+  contactId                          String
+  assigneeId                         String?
+  status                             ConversationStatus                  @default(OPEN)
+  tags                               String[]
+  unread                             Boolean                             @default(true)
+  productSource                      ConversationProductSource?
+  phoneNumberId                      String?
+  fromE164                           String?
+  campaignId                         String?
+  missedCallEventId                  String?
+  updatedAt                          DateTime                            @updatedAt
+  createdAt                          DateTime                            @default(now())
+  workspace                          Workspace                           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact                            Contact                             @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  assignee                           User?                               @relation("Assignee", fields: [assigneeId], references: [id])
+  messages                           ConversationMessage[]
+  platformSenderAssignments          MctbPlatformSenderAssignment[]
+  arSmsReplySessions                 ArSmsReplySession[]
   platformProductConsumerAssignments PlatformProductConsumerAssignment[]
 
   @@index([workspaceId, productSource, updatedAt])
@@ -2310,17 +2317,17 @@ model ApiKey {
 }
 
 model Webhook {
-  id                  String                 @id @default(cuid())
-  workspaceId         String
-  url                 String
-  events              String[]
-  active              Boolean                @default(true)
-  signingSecretPrefix String?
-  signingSecretHash   String?
-  metadata            Json?
-  createdAt           DateTime               @default(now())
-  updatedAt           DateTime               @updatedAt
-  workspace           Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id                     String                 @id @default(cuid())
+  workspaceId            String
+  url                    String
+  events                 String[]
+  active                 Boolean                @default(true)
+  signingSecretPrefix    String?
+  signingSecretHash      String?
+  metadata               Json?
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+  workspace              Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   voiceWebhookDeliveries VoiceWebhookDelivery[]
 
   @@index([workspaceId, active])
@@ -2558,24 +2565,24 @@ model VoiceKnowledgeGap {
 }
 
 model VoiceKnowledgeBase {
-  id                    String                    @id @default(cuid())
-  workspaceId           String
-  name                  String
-  description           String?
-  status                String                    @default("active")
+  id                      String                    @id @default(cuid())
+  workspaceId             String
+  name                    String
+  description             String?
+  status                  String                    @default("active")
   /// Telnyx Cloud Storage bucket used for RAG embeddings (bucket_ids on retrieval tool).
-  telnyxBucketName      String?
-  telnyxEmbeddingStatus String?
-  telnyxEmbeddingTaskId String?
-  lastEmbeddedAt        DateTime?
-  openaiVectorStoreId   String?
+  telnyxBucketName        String?
+  telnyxEmbeddingStatus   String?
+  telnyxEmbeddingTaskId   String?
+  lastEmbeddedAt          DateTime?
+  openaiVectorStoreId     String?
   openaiVectorStoreStatus String?
-  createdAt             DateTime                  @default(now())
-  updatedAt             DateTime                  @updatedAt
-  workspace             Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  sources               VoiceKnowledgeSource[]
-  agentLinks            VoiceAgentKnowledgeBase[]
-  websiteCrawlJobs      VoiceWebsiteCrawlJob[]
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+  workspace               Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sources                 VoiceKnowledgeSource[]
+  agentLinks              VoiceAgentKnowledgeBase[]
+  websiteCrawlJobs        VoiceWebsiteCrawlJob[]
 
   @@index([workspaceId])
   @@map("voice_knowledge_bases")
@@ -2610,20 +2617,20 @@ model VoiceKnowledgeSource {
 }
 
 model VoiceWebsiteCrawlJob {
-  id              String                 @id @default(cuid())
+  id              String                  @id @default(cuid())
   workspaceId     String
   knowledgeBaseId String
   rootUrl         String
-  status          String                 @default("DISCOVERING")
+  status          String                  @default("DISCOVERING")
   stats           Json?
   errorSummary    String?
   suggestions     Json?
-  startedAt       DateTime               @default(now())
+  startedAt       DateTime                @default(now())
   completedAt     DateTime?
-  createdAt       DateTime               @default(now())
-  updatedAt       DateTime               @updatedAt
-  workspace       Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  knowledgeBase   VoiceKnowledgeBase     @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  workspace       Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  knowledgeBase   VoiceKnowledgeBase      @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
   pages           VoiceWebsiteCrawlPage[]
 
   @@index([workspaceId, knowledgeBaseId])
@@ -2632,22 +2639,22 @@ model VoiceWebsiteCrawlJob {
 }
 
 model VoiceWebsiteCrawlPage {
-  id                String              @id @default(cuid())
+  id                String               @id @default(cuid())
   workspaceId       String
   crawlJobId        String
   knowledgeSourceId String?
   sourceUrl         String
   canonicalUrl      String?
   pageTitle         String?
-  status            String              @default("pending")
+  status            String               @default("pending")
   contentHash       String?
   skipReason        String?
   errorMessage      String?
   lastIndexedAt     DateTime?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
   crawlJob          VoiceWebsiteCrawlJob @relation(fields: [crawlJobId], references: [id], onDelete: Cascade)
-  workspace         Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace         Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([crawlJobId, sourceUrl])
   @@index([workspaceId, crawlJobId])
@@ -2705,22 +2712,22 @@ model VoiceAgentTool {
 }
 
 model VoiceCalendarConnection {
-  id                    String             @id @default(cuid())
-  workspaceId           String
-  name                  String
-  provider              String
-  status                String             @default("connected")
-  config                Json?
-  credentialsRef        String?
-  lastSyncAt            DateTime?
-  nextSyncDueAt         DateTime?
-  syncBackoffUntil      DateTime?
+  id                     String             @id @default(cuid())
+  workspaceId            String
+  name                   String
+  provider               String
+  status                 String             @default("connected")
+  config                 Json?
+  credentialsRef         String?
+  lastSyncAt             DateTime?
+  nextSyncDueAt          DateTime?
+  syncBackoffUntil       DateTime?
   subscriptionRenewDueAt DateTime?
-  createdAt             DateTime           @default(now())
-  updatedAt             DateTime           @updatedAt
-  workspace             Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  services              VoiceService[]
-  staff                 VoiceStaffMember[]
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  workspace              Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  services               VoiceService[]
+  staff                  VoiceStaffMember[]
 
   @@index([workspaceId])
   @@index([provider, status, nextSyncDueAt])
@@ -4131,12 +4138,12 @@ model PaymentRequestRefund {
 }
 
 model HumanCall {
-  id                  String           @id @default(cuid())
+  id                  String              @id @default(cuid())
   workspaceId         String
   from                String
   to                  String
-  direction           String           @default("outbound")
-  status              String           @default("initiated")
+  direction           String              @default("outbound")
+  status              String              @default("initiated")
   agentUserId         String?
   telnyxCallControlId String?
   /// Secondary leg for bridge / warm transfer / conference.
@@ -4148,24 +4155,24 @@ model HumanCall {
   recordingStartedAt  DateTime?
   transcriptText      String?
   aiSummary           String?
-  startedAt           DateTime         @default(now())
+  startedAt           DateTime            @default(now())
   answeredAt          DateTime?
   endedAt             DateTime?
   recordingUrl        String?
   notes               String?
   disposition         String?
-  muted               Boolean          @default(false)
-  onHold              Boolean          @default(false)
+  muted               Boolean             @default(false)
+  onHold              Boolean             @default(false)
   callerIdNumber      String?
-  mediaMode           String           @default("call_control") // call_control | webrtc | call_my_phone
+  mediaMode           String              @default("call_control") // call_control | webrtc | call_my_phone
   phoneNumberId       String?
   /// dialer | power_dialer | callback | inbound
   source              String?
-  handled             Boolean          @default(false)
-  callbackNeeded      Boolean          @default(false)
+  handled             Boolean             @default(false)
+  callbackNeeded      Boolean             @default(false)
   failureReason       String?
   metadata            Json?
-  workspace           Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace           Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   events              HumanCallEvent[]
   callNotes           HumanCallNote[]
   powerDialerAttempt  PowerDialerAttempt?
@@ -4492,24 +4499,24 @@ model WorkspaceCallRouting {
 }
 
 model PowerDialerCampaign {
-  id               String               @id @default(cuid())
-  workspaceId      String
-  name             String
-  description      String?
-  listId           String
-  callerIdE164     String
-  status           String               @default("draft")
-  timezone         String               @default("America/Chicago")
-  configJson       Json                 @default("{}")
-  totalContacts    Int                  @default(0)
-  attemptedCount   Int                  @default(0)
-  connectedCount   Int                  @default(0)
-  completedCount   Int                  @default(0)
-  createdAt        DateTime             @default(now())
-  updatedAt        DateTime             @updatedAt
-  workspace        Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  list             ContactList          @relation(fields: [listId], references: [id], onDelete: Restrict)
-  sessions         PowerDialerSession[]
+  id             String               @id @default(cuid())
+  workspaceId    String
+  name           String
+  description    String?
+  listId         String
+  callerIdE164   String
+  status         String               @default("draft")
+  timezone       String               @default("America/Chicago")
+  configJson     Json                 @default("{}")
+  totalContacts  Int                  @default(0)
+  attemptedCount Int                  @default(0)
+  connectedCount Int                  @default(0)
+  completedCount Int                  @default(0)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  workspace      Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  list           ContactList          @relation(fields: [listId], references: [id], onDelete: Restrict)
+  sessions       PowerDialerSession[]
 
   @@index([workspaceId, status])
   @@map("power_dialer_campaigns")
@@ -4533,24 +4540,24 @@ model PowerDialerSession {
 }
 
 model PowerDialerAttempt {
-  id              String              @id @default(cuid())
-  workspaceId     String
-  sessionId       String
-  contactId       String
-  humanCallId     String?             @unique
-  attemptNumber   Int                 @default(1)
-  disposition     String?
-  notes           String?
-  callbackAt      DateTime?
-  status          String              @default("pending")
-  startedAt       DateTime?
-  endedAt         DateTime?
-  failureReason   String?
-  createdAt       DateTime            @default(now())
-  session         PowerDialerSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  workspace       Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  contact         Contact             @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  humanCall       HumanCall?          @relation(fields: [humanCallId], references: [id], onDelete: SetNull)
+  id            String             @id @default(cuid())
+  workspaceId   String
+  sessionId     String
+  contactId     String
+  humanCallId   String?            @unique
+  attemptNumber Int                @default(1)
+  disposition   String?
+  notes         String?
+  callbackAt    DateTime?
+  status        String             @default("pending")
+  startedAt     DateTime?
+  endedAt       DateTime?
+  failureReason String?
+  createdAt     DateTime           @default(now())
+  session       PowerDialerSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  workspace     Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact       Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  humanCall     HumanCall?         @relation(fields: [humanCallId], references: [id], onDelete: SetNull)
 
   @@index([sessionId, status])
   @@index([contactId])
@@ -4939,33 +4946,33 @@ model WorkspaceAiIntegrationPolicy {
 
 /// Canonical Missed Call Text Back configuration (John runtime).
 model MissedCallTextConfig {
-  id                           String    @id @default(cuid())
-  workspaceId                  String    @unique
+  id                           String         @id @default(cuid())
+  workspaceId                  String         @unique
   agentId                      String?
-  enabled                      Boolean   @default(true)
-  delaySeconds                 Int       @default(0)
-  messageTemplate              String    @default("Hi, sorry we missed your call. How can we help?")
+  enabled                      Boolean        @default(true)
+  delaySeconds                 Int            @default(0)
+  messageTemplate              String         @default("Hi, sorry we missed your call. How can we help?")
   messageTemplateBusinessHours String?
   messageTemplateAfterHours    String?
-  requireCarrierForward        Boolean   @default(true)
-  sendAfterNoAnswer            Boolean   @default(true)
-  sendAfterBusy                Boolean   @default(true)
-  sendAfterRejected            Boolean   @default(true)
-  sendAfterTimeout             Boolean   @default(true)
-  sendAfterVoicemail           Boolean   @default(false)
-  businessHoursOnly            Boolean   @default(false)
+  requireCarrierForward        Boolean        @default(true)
+  sendAfterNoAnswer            Boolean        @default(true)
+  sendAfterBusy                Boolean        @default(true)
+  sendAfterRejected            Boolean        @default(true)
+  sendAfterTimeout             Boolean        @default(true)
+  sendAfterVoicemail           Boolean        @default(false)
+  businessHoursOnly            Boolean        @default(false)
   allowedStartTime             String?
   allowedEndTime               String?
-  timezone                     String    @default("America/New_York")
-  quietHoursEnabled            Boolean   @default(false)
+  timezone                     String         @default("America/New_York")
+  quietHoursEnabled            Boolean        @default(false)
   quietHoursStart              String?
   quietHoursEnd                String?
-  maxMessagesPerCaller         Int       @default(1)
-  cooldownMinutes              Int       @default(60)
-  suppressKnownSpam            Boolean   @default(true)
-  suppressBlockedNumbers       Boolean   @default(true)
-  suppressOptedOutNumbers      Boolean   @default(true)
-  conversationEnabled          Boolean   @default(true)
+  maxMessagesPerCaller         Int            @default(1)
+  cooldownMinutes              Int            @default(60)
+  suppressKnownSpam            Boolean        @default(true)
+  suppressBlockedNumbers       Boolean        @default(true)
+  suppressOptedOutNumbers      Boolean        @default(true)
+  conversationEnabled          Boolean        @default(true)
   phoneNumberId                String?
   /**
    * Outbound SMS sender DID (may differ from voice trigger DID).
@@ -4979,14 +4986,14 @@ model MissedCallTextConfig {
    * Optional PSTN forward target for direct-dial MCTB ingress (bypasses consent prompt).
    */
   directDialForwardE164        String?
-  requestFormEnabled           Boolean   @default(false)
-  requestFormToken             String?   @unique
+  requestFormEnabled           Boolean        @default(false)
+  requestFormToken             String?        @unique
   defaultLinkUrl               String?
-  leadCaptureEnabled           Boolean   @default(false)
+  leadCaptureEnabled           Boolean        @default(false)
   requestFormFieldsJson        Json?
-  createdAt                    DateTime  @default(now())
-  updatedAt                    DateTime  @updatedAt
-  workspace                    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt                    DateTime       @default(now())
+  updatedAt                    DateTime       @updatedAt
+  workspace                    Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@map("missed_call_text_configs")
 }
@@ -5055,7 +5062,7 @@ model PlatformProductConsumerAssignment {
 
 /// Appointment Reminders: outbound-initiated SMS reply context (product-scoped; not MCTB).
 model ArSmsReplySession {
-  id                            String                  @id @default(cuid())
+  id                            String                 @id @default(cuid())
   workspaceId                   String
   contactId                     String
   appointmentId                 String
@@ -5063,7 +5070,7 @@ model ArSmsReplySession {
   platformPhoneNumberId         String
   provider                      String
   consumerE164                  String
-  lifecycleState                ArSmsReplySessionState  @default(AWAITING_REPLY)
+  lifecycleState                ArSmsReplySessionState @default(AWAITING_REPLY)
   timelineType                  String?
   calendarConnectionId          String?
   providerCalendarId            String?
@@ -5073,14 +5080,14 @@ model ArSmsReplySession {
   lastOutboundProviderMessageId String?
   replyEligibleUntil            DateTime?
   pendingSendReason             String?
-  createdAt                     DateTime                @default(now())
-  lastUsedAt                    DateTime                @default(now())
+  createdAt                     DateTime               @default(now())
+  lastUsedAt                    DateTime               @default(now())
   completedAt                   DateTime?
   releasedAt                    DateTime?
   rescheduleWorkflowState       Json?
-  workspace                     Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  platformPhoneNumber           PhoneNumber             @relation(fields: [platformPhoneNumberId], references: [id], onDelete: Restrict)
-  conversation                  Conversation?           @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  workspace                     Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  platformPhoneNumber           PhoneNumber            @relation(fields: [platformPhoneNumberId], references: [id], onDelete: Restrict)
+  conversation                  Conversation?          @relation(fields: [conversationId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, appointmentId])
   @@index([consumerE164, platformPhoneNumberId, lifecycleState])
@@ -5090,27 +5097,27 @@ model ArSmsReplySession {
 
 /// Durable record when platform inbound SMS cannot be routed safely (AR/MCTB ambiguity).
 model ArSmsInboundHeldMessage {
-  id                    String                  @id @default(cuid())
-  workspaceId           String?
-  providerMessageId     String                  @unique
-  channel               String
-  fromE164              String
-  toE164                String
-  platformPhoneNumberId String?
-  bodyPreview           String
-  holdReason            String
-  state                 ArSmsInboundHeldState   @default(HELD)
-  candidateContexts     Json                    @default("[]")
-  resolvedWorkspaceId   String?
-  resolvedProduct       String?
+  id                     String                @id @default(cuid())
+  workspaceId            String?
+  providerMessageId      String                @unique
+  channel                String
+  fromE164               String
+  toE164                 String
+  platformPhoneNumberId  String?
+  bodyPreview            String
+  holdReason             String
+  state                  ArSmsInboundHeldState @default(HELD)
+  candidateContexts      Json                  @default("[]")
+  resolvedWorkspaceId    String?
+  resolvedProduct        String?
   resolvedReplySessionId String?
   resolvedConversationId String?
-  resolvedByUserId      String?
-  resolvedAt            DateTime?
-  resolutionNote        String?
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
-  workspace             Workspace?              @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  resolvedByUserId       String?
+  resolvedAt             DateTime?
+  resolutionNote         String?
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+  workspace              Workspace?            @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, state, createdAt])
   @@index([fromE164, createdAt])
@@ -5119,8 +5126,8 @@ model ArSmsInboundHeldMessage {
 
 /// Durable receipt for every platform SMS inbound webhook (before routing).
 model ArPlatformSmsInboundReceipt {
-  id                    String                            @id @default(cuid())
-  providerMessageId     String                            @unique
+  id                    String                           @id @default(cuid())
+  providerMessageId     String                           @unique
   channel               String
   fromE164              String
   toE164                String
@@ -5134,8 +5141,8 @@ model ArPlatformSmsInboundReceipt {
   outboundMessageId     String?
   holdReason            String?
   lastError             String?
-  receivedAt            DateTime                          @default(now())
-  updatedAt             DateTime                          @updatedAt
+  receivedAt            DateTime                         @default(now())
+  updatedAt             DateTime                         @updatedAt
 
   @@index([fromE164, receivedAt])
   @@index([state, receivedAt])
@@ -7070,19 +7077,19 @@ model ClassSeries {
 }
 
 model ClassOccurrence {
-  id          String            @id @default(cuid())
-  workspaceId String
-  seriesId    String
-  startsAt    DateTime
-  endsAt      DateTime
-  capacity    Int?
-  status      String            @default("scheduled")
-  metadata    Json?
-  createdAt   DateTime          @default(now())
-  workspace   Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  series      ClassSeries       @relation(fields: [seriesId], references: [id], onDelete: Cascade)
-  enrollments         ClassEnrollment[]
-  registrationHolds   ClassOccurrenceRegistrationHold[]
+  id                String                            @id @default(cuid())
+  workspaceId       String
+  seriesId          String
+  startsAt          DateTime
+  endsAt            DateTime
+  capacity          Int?
+  status            String                            @default("scheduled")
+  metadata          Json?
+  createdAt         DateTime                          @default(now())
+  workspace         Workspace                         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  series            ClassSeries                       @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  enrollments       ClassEnrollment[]
+  registrationHolds ClassOccurrenceRegistrationHold[]
 
   @@index([workspaceId, startsAt])
   @@index([seriesId, startsAt])
@@ -7753,45 +7760,45 @@ model VisualizerAsset {
 }
 
 model VisualizerDesign {
-  id                   String                       @id @default(cuid())
-  workspaceId          String
-  projectId            String
-  parentDesignId       String?
-  versionNumber        Int                          @default(1)
-  generatedAssetId     String?
-  originalRoomAssetId  String
-  transformation       VisualizerTransformationType
-  selectedMaterialsJson Json                        @default("[]")
-  instructions         String?
-  isFavorite           Boolean                      @default(false)
-  generationJobId      String?
-  createdAt            DateTime                     @default(now())
-  workspace            Workspace                    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project              VisualizerProject            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id                    String                       @id @default(cuid())
+  workspaceId           String
+  projectId             String
+  parentDesignId        String?
+  versionNumber         Int                          @default(1)
+  generatedAssetId      String?
+  originalRoomAssetId   String
+  transformation        VisualizerTransformationType
+  selectedMaterialsJson Json                         @default("[]")
+  instructions          String?
+  isFavorite            Boolean                      @default(false)
+  generationJobId       String?
+  createdAt             DateTime                     @default(now())
+  workspace             Workspace                    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project               VisualizerProject            @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
   @@map("visualizer_design")
 }
 
 model VisualizerGenerationJob {
-  id              String                        @id @default(cuid())
-  workspaceId     String
-  projectId       String
-  designId        String?
-  status          VisualizerGenerationJobStatus @default(QUEUED)
-  idempotencyKey  String                        @unique
-  provider        String                        @default("openai")
-  model           String?
-  requestJson     Json
-  errorMessage    String?
-  usageCredits    Int                           @default(1)
+  id                String                        @id @default(cuid())
+  workspaceId       String
+  projectId         String
+  designId          String?
+  status            VisualizerGenerationJobStatus @default(QUEUED)
+  idempotencyKey    String                        @unique
+  provider          String                        @default("openai")
+  model             String?
+  requestJson       Json
+  errorMessage      String?
+  usageCredits      Int                           @default(1)
   providerCostCents Int?
-  startedAt       DateTime?
-  completedAt     DateTime?
-  createdAt       DateTime                      @default(now())
-  updatedAt       DateTime                      @updatedAt
-  workspace       Workspace                     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project         VisualizerProject             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  startedAt         DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime                      @default(now())
+  updatedAt         DateTime                      @updatedAt
+  workspace         Workspace                     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project           VisualizerProject             @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
   @@map("visualizer_generation_job")
@@ -7878,4 +7885,203 @@ model VisualizerUsageLedger {
   workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@map("visualizer_usage_ledger")
+}
+
+// --- Phone Call Forwarding + Auto Attendant (new-app) ---
+
+model ForwardingDestination {
+  id                  String    @id @default(cuid())
+  workspaceId         String
+  name                String
+  phoneE164           String
+  enabled             Boolean   @default(true)
+  screeningEnabled    Boolean   @default(false)
+  press1Required      Boolean   @default(false)
+  privateAnnouncement String?
+  ringTimeoutSec      Int       @default(25)
+  callerIdPolicy      String    @default("original") // original | business_line
+  lastTestedAt        DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  workspace    Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  groupMembers ForwardingGroupMember[]
+
+  @@unique([workspaceId, phoneE164])
+  @@index([workspaceId, enabled])
+  @@map("forwarding_destinations")
+}
+
+model ForwardingGroup {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  name         String
+  strategy     String   @default("sequential") // sequential | simultaneous
+  enabled      Boolean  @default(true)
+  fallbackJson Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workspace         Workspace                    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  members           ForwardingGroupMember[]
+  answeringPolicies PhoneNumberAnsweringPolicy[]
+
+  @@index([workspaceId])
+  @@map("forwarding_groups")
+}
+
+model ForwardingGroupMember {
+  id            String  @id @default(cuid())
+  groupId       String
+  destinationId String
+  priority      Int     @default(0)
+  enabled       Boolean @default(true)
+
+  group       ForwardingGroup       @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  destination ForwardingDestination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, destinationId])
+  @@index([groupId, priority])
+  @@map("forwarding_group_members")
+}
+
+model AutoAttendantMenu {
+  id                     String   @id @default(cuid())
+  workspaceId            String
+  name                   String
+  description            String?
+  status                 String   @default("draft") // draft | published | disabled
+  publishedVersion       Int      @default(0)
+  greetingMode           String   @default("tts") // tts | audio
+  greetingText           String?
+  greetingAudioUrl       String?
+  voice                  String?  @default("Telnyx.KokoroTTS.af")
+  language               String?  @default("en-US")
+  inputTimeoutMs         Int      @default(5000)
+  maxRetries             Int      @default(2)
+  noInputActionJson      Json?
+  invalidInputActionJson Json?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  workspace         Workspace                    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  options           AutoAttendantMenuOption[]
+  answeringPolicies PhoneNumberAnsweringPolicy[]
+
+  @@index([workspaceId, status])
+  @@map("auto_attendant_menus")
+}
+
+model AutoAttendantMenuOption {
+  id               String @id @default(cuid())
+  menuId           String
+  digit            String
+  label            String
+  actionType       String
+  actionConfigJson Json   @default("{}")
+  sortOrder        Int    @default(0)
+
+  menu AutoAttendantMenu @relation(fields: [menuId], references: [id], onDelete: Cascade)
+
+  @@unique([menuId, digit])
+  @@index([menuId, sortOrder])
+  @@map("auto_attendant_menu_options")
+}
+
+model PhoneNumberAnsweringPolicy {
+  id                    String   @id @default(cuid())
+  workspaceId           String
+  phoneNumberId         String   @unique
+  answeringMode         String   @default("browser") // browser | forward | auto_attendant | voicemail | greeting_then_forward
+  forwardingGroupId     String?
+  primaryDestinationId  String?
+  autoAttendantMenuId   String?
+  paused                Boolean  @default(false)
+  greetingBeforeForward Boolean  @default(false)
+  greetingText          String?
+  scheduleJson          Json?
+  holidayExceptionsJson Json?
+  version               Int      @default(1)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  workspace         Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  forwardingGroup   ForwardingGroup?   @relation(fields: [forwardingGroupId], references: [id], onDelete: SetNull)
+  autoAttendantMenu AutoAttendantMenu? @relation(fields: [autoAttendantMenuId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@map("phone_number_answering_policies")
+}
+
+model PhoneCallRoutingSession {
+  id                   String   @id @default(cuid())
+  workspaceId          String
+  phoneNumberId        String?
+  humanCallId          String?
+  inboundCallControlId String
+  routingVersion       Int      @default(1)
+  stage                String   @default("init")
+  stateJson            Json     @default("{}")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  legs      PhoneCallLeg[]
+
+  @@index([inboundCallControlId])
+  @@index([workspaceId, createdAt])
+  @@map("phone_call_routing_sessions")
+}
+
+model PhoneCallLeg {
+  id               String    @id @default(cuid())
+  sessionId        String
+  workspaceId      String
+  humanCallId      String?
+  direction        String
+  callControlId    String
+  destinationE164  String?
+  status           String    @default("initiated")
+  answeredAt       DateTime?
+  endedAt          DateTime?
+  billableSeconds  Int?
+  terminationCause String?
+  metadata         Json?
+
+  session PhoneCallRoutingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([callControlId])
+  @@index([sessionId])
+  @@map("phone_call_legs")
+}
+
+model ForwardingSetupDraft {
+  id          String   @id @default(cuid())
+  workspaceId String   @unique
+  step        Int      @default(1)
+  draftJson   Json     @default("{}")
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("forwarding_setup_drafts")
+}
+
+model ForwardingUsageMonthly {
+  id               String @id @default(cuid())
+  workspaceId      String
+  yearMonth        String
+  forwardedCalls   Int    @default(0)
+  answeredCalls    Int    @default(0)
+  missedCalls      Int    @default(0)
+  forwardedMinutes Int    @default(0)
+  bridgedMinutes   Int    @default(0)
+  ivrMinutes       Int    @default(0)
+  metadata         Json?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, yearMonth])
+  @@map("forwarding_usage_monthly")
 }

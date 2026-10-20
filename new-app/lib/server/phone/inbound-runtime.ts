@@ -18,11 +18,11 @@ async function resolveContactId(workspaceId: string, phone: string) {
   return row?.id ?? null;
 }
 
-async function resolvePhoneNumberId(workspaceId: string, e164: string) {
+async function resolvePhoneNumberRow(workspaceId: string, e164: string) {
   const prisma = getPrisma();
   return prisma.phoneNumber.findFirst({
     where: { workspaceId, e164: normalizeE164(e164), status: "Active" },
-    select: { id: true },
+    select: { id: true, settingsJson: true, e164: true },
   });
 }
 
@@ -61,19 +61,45 @@ export async function processInboundCallInitiated(input: {
   const prisma = getPrisma();
   const from = normalizeE164(input.fromE164);
   const contactId = await resolveContactId(input.workspaceId, from);
-  const pn = await resolvePhoneNumberId(input.workspaceId, input.toE164);
+  const pn = await resolvePhoneNumberRow(input.workspaceId, input.toE164);
   const routing = await getCallRouting(input.workspaceId);
+
+  const { resolveEffectiveAnswering } = await import(
+    "@/lib/server/phone/routing/resolve-effective-policy"
+  );
+  const effective = await resolveEffectiveAnswering({
+    workspaceId: input.workspaceId,
+    phoneNumberId: pn?.id ?? null,
+    settingsJson: pn?.settingsJson,
+  });
+
   const route = await decideInboundRoute(input.workspaceId);
   const timeoutAt = new Date(Date.now() + ringTimeoutMs(routing));
+
+  const usesCallForwardingRuntime =
+    effective.kind === "forward" ||
+    effective.kind === "forward_group" ||
+    effective.kind === "greeting_then_forward" ||
+    effective.kind === "auto_attendant" ||
+    effective.kind === "voicemail";
+
+  const browserRing =
+    effective.kind === "browser" && route.mode === "ring_browser";
 
   phoneServerLog("inbound-runtime", "route_decided", {
     workspaceId: input.workspaceId,
     mode: route.mode,
+    effective: effective.kind,
     from: maskE164(input.fromE164),
     to: maskE164(input.toE164),
     hasCallControlId: Boolean(input.telnyxCallControlId),
-    ringTimeoutAt: route.mode === "ring_browser" ? timeoutAt.toISOString() : null,
+    ringTimeoutAt: browserRing ? timeoutAt.toISOString() : null,
   });
+
+  const initialStatus =
+    effective.kind === "voicemail" || (effective.kind === "browser" && route.mode === "voicemail")
+      ? "voicemail"
+      : "ringing";
 
   const call = await prisma.humanCall.create({
     data: {
@@ -81,7 +107,7 @@ export async function processInboundCallInitiated(input: {
       from,
       to: input.toE164,
       direction: "inbound",
-      status: route.mode === "voicemail" ? "voicemail" : "ringing",
+      status: initialStatus,
       telnyxCallControlId: input.telnyxCallControlId,
       callerIdNumber: input.toE164,
       phoneNumberId: pn?.id ?? null,
@@ -89,9 +115,9 @@ export async function processInboundCallInitiated(input: {
       source: "inbound",
       callbackNeeded: true,
       metadata: {
-        ringTimeoutAt: route.mode === "ring_browser" ? timeoutAt.toISOString() : null,
-        inboundRoute: route.mode,
-        inboundBridgeStatus: route.mode === "ring_browser" ? "received" : undefined,
+        ringTimeoutAt: browserRing ? timeoutAt.toISOString() : null,
+        inboundRoute: usesCallForwardingRuntime ? effective.kind : route.mode,
+        inboundBridgeStatus: browserRing ? "received" : undefined,
         callerCallControlId: input.telnyxCallControlId ?? undefined,
       },
     },
@@ -107,7 +133,11 @@ export async function processInboundCallInitiated(input: {
     }).catch(() => undefined);
   }
 
-  if (route.mode === "voicemail" && input.telnyxCallControlId) {
+  if (
+    input.telnyxCallControlId &&
+    (effective.kind === "voicemail" ||
+      (effective.kind === "browser" && route.mode === "voicemail"))
+  ) {
     await leaveVoicemailOnCall({
       workspaceId: input.workspaceId,
       humanCallId: call.id,
@@ -117,7 +147,62 @@ export async function processInboundCallInitiated(input: {
     return call;
   }
 
-  if (route.mode === "external" && input.telnyxCallControlId) {
+  if (
+    input.telnyxCallControlId &&
+    (effective.kind === "forward" ||
+      effective.kind === "forward_group" ||
+      effective.kind === "greeting_then_forward")
+  ) {
+    const { startForwardingFlow } = await import("@/lib/server/phone/routing/forwarding-service");
+    await startForwardingFlow({
+      workspaceId: input.workspaceId,
+      humanCallId: call.id,
+      phoneNumberId: pn?.id ?? null,
+      inboundControlId: input.telnyxCallControlId,
+      businessLineE164: input.toE164,
+      callerE164: from,
+      effective,
+    });
+    await prisma.humanCall.update({
+      where: { id: call.id },
+      data: {
+        status: "ringing",
+        metadata: {
+          ...(call.metadata as object),
+          inboundRoute: "call_forwarding",
+          forwardingEffective: effective.kind,
+        },
+      },
+    });
+    return call;
+  }
+
+  if (input.telnyxCallControlId && effective.kind === "auto_attendant") {
+    const { startAutoAttendantFlow } = await import("@/lib/server/phone/routing/menu-executor");
+    await startAutoAttendantFlow({
+      workspaceId: input.workspaceId,
+      humanCallId: call.id,
+      phoneNumberId: pn?.id ?? null,
+      inboundControlId: input.telnyxCallControlId,
+      businessLineE164: input.toE164,
+      callerE164: from,
+      menuId: effective.menuId,
+    });
+    await prisma.humanCall.update({
+      where: { id: call.id },
+      data: {
+        status: "ringing",
+        metadata: {
+          ...(call.metadata as object),
+          inboundRoute: "auto_attendant",
+          menuId: effective.menuId,
+        },
+      },
+    });
+    return call;
+  }
+
+  if (route.mode === "external" && input.telnyxCallControlId && effective.kind === "browser") {
     await telnyxCallAction(input.telnyxCallControlId, "answer");
     await telnyxCallAction(input.telnyxCallControlId, "transfer", { to: route.target });
     await prisma.humanCall.update({
@@ -131,7 +216,7 @@ export async function processInboundCallInitiated(input: {
     return call;
   }
 
-  if (route.mode === "ring_browser" && input.telnyxCallControlId) {
+  if (browserRing && input.telnyxCallControlId) {
     const bridge =
       process.env.PHONE_INBOUND_BRIDGE_WEBRTC?.trim() !== "0";
     if (bridge) {

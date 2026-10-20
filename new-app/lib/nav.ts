@@ -22,6 +22,10 @@ import {
   Signpost,
   SlidersHorizontal,
   Hash,
+  Clock3,
+  ListTree,
+  PhoneForwarded,
+  Voicemail,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -58,6 +62,11 @@ export const PRODUCTS: NavContext[] = [
       { title: 'Dialer', href: '/app/phone/dialer', icon: Grid3x3, group: 'Calling' },
       { title: 'Power Dialer', href: '/app/phone/power-dialer', icon: ListChecks, group: 'Calling' },
       { title: 'Calls', href: '/app/phone/calls', icon: PhoneCall, group: 'Calling' },
+      { title: 'Call Forwarding', href: '/app/phone/forwarding', icon: PhoneForwarded, group: 'Configure' },
+      { title: 'Auto Attendant', href: '/app/phone/auto-attendant', icon: ListTree, group: 'Configure' },
+      { title: 'Business Hours', href: '/app/phone/business-hours', icon: Clock3, group: 'Configure' },
+      { title: 'Voicemail', href: '/app/phone/voicemail', icon: Voicemail, group: 'Configure' },
+      { title: 'Phone Numbers', href: '/app/numbers', icon: Hash, group: 'Configure' },
       { title: 'Call Handling', href: '/app/phone/call-handling', icon: Signpost, group: 'Configure' },
       { title: 'Analytics', href: '/app/phone/analytics', icon: BarChart3, group: 'Insights' },
     ],

@@ -107,6 +107,13 @@ export async function POST(request: Request) {
 
   let result: unknown = { ok: true };
   try {
+    const { processCallForwardingWebhookEvent } = await import(
+      "@/lib/server/phone/routing/routing-webhook"
+    );
+    const cf = await processCallForwardingWebhookEvent({ eventType, eventPayload });
+    if (cf.handled) {
+      return NextResponse.json({ ok: true, forwarding: cf.result ?? true });
+    }
     result = await processHumanCallWebhookEvent({ eventType, eventPayload });
   } catch (err) {
     phoneServerLog("telnyx-webhook", "event_processor_error", {
