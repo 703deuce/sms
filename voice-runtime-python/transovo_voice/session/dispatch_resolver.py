@@ -61,9 +61,6 @@ def resolve_dialed_e164_source(
     room_metadata: str | dict[str, Any] | None,
 ) -> str | None:
     """Report which SIP/room field supplied the called DID (for backend trust checks)."""
-    room_meta = _parse_json_object(room_metadata)
-    if room_meta and room_meta.get("toE164"):
-        return "room_metadata.toE164"
     if attrs.get("sip.trunkPhoneNumber"):
         return "sip.trunkPhoneNumber"
     if attrs.get("sip.trunkNumber"):
@@ -76,7 +73,27 @@ def resolve_dialed_e164_source(
         return "calledNumber"
     if attrs.get("toE164"):
         return "toE164"
+    room_meta = _parse_json_object(room_metadata)
+    if room_meta and room_meta.get("toE164"):
+        return "room_metadata.toE164"
     return None
+
+
+SIP_PARTICIPANT_DIALED_E164_SOURCES = frozenset(
+    {
+        "sip.trunkPhoneNumber",
+        "sip.trunkNumber",
+        "trunkPhoneNumber",
+        "sip.calledNumber",
+        "calledNumber",
+    },
+)
+
+
+def is_sip_participant_dialed_source(source: str | None) -> bool:
+    if not source or not str(source).strip():
+        return False
+    return str(source).strip() in SIP_PARTICIPANT_DIALED_E164_SOURCES
 
 
 def _snapshot_from_value(raw: Any) -> dict[str, Any] | None:

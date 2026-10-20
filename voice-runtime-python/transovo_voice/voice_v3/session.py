@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from typing import Any
 
@@ -11,7 +12,11 @@ from livekit.plugins.openai.realtime import GPTLiveModel
 from livekit.plugins.openai.tools import FileSearch
 
 from transovo_voice.integrations.backend_client import TransovoBackend
-from transovo_voice.session.dispatch_resolver import extract_call_numbers, resolve_dialed_e164_source
+from transovo_voice.session.dispatch_resolver import (
+    extract_call_numbers,
+    is_sip_participant_dialed_source,
+    resolve_dialed_e164_source,
+)
 from transovo_voice.telemetry import log_event
 from transovo_voice.voice_v3.forensics import VoiceV3CallForensics
 from transovo_voice.voice_v3.gpt_live_delegation_telemetry import attach_gpt_live_delegation_telemetry
@@ -119,6 +124,20 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             sip_participant.identity,
         )
         dialed_e164_source = resolve_dialed_e164_source(attrs, ctx.room.metadata)
+
+        browser_test_prefix = (
+            os.environ.get("LIVEKIT_BROWSER_TEST_ROOM_PREFIX") or "transovo-browser-test-"
+        ).strip()
+        is_browser_test_room = ctx.room.name.startswith(browser_test_prefix)
+        if not is_browser_test_room:
+            if not dialed_e164 or not dialed_e164_source:
+                raise RuntimeError(
+                    "PSTN bootstrap requires dialed E.164 from LiveKit SIP participant attributes",
+                )
+            if not is_sip_participant_dialed_source(dialed_e164_source):
+                raise RuntimeError(
+                    f"PSTN bootstrap requires SIP-participant dialed source, got: {dialed_e164_source}",
+                )
 
         screening_raw = attrs.get(TELNYX_CALL_SCREENING_ATTR)
         provisional_ctx = VoiceV3CallContext(

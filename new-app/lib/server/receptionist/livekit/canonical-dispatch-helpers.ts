@@ -14,17 +14,38 @@ export function buildCanonicalV3DispatchAgentMetadata(): string {
   });
 }
 
-/** Worker-reported sources we accept for PSTN called-DID resolution (SIP attrs, not job metadata). */
-export const TRUSTED_INBOUND_DIALED_E164_SOURCES = new Set([
+/**
+ * SIP participant attribute sources — mandatory for production PSTN.
+ * `dialedE164Source` is defense-in-depth; tenant resolution still requires
+ * authenticated worker + DB assignment (internal API key).
+ */
+export const SIP_PARTICIPANT_DIALED_E164_SOURCES = new Set([
   "sip.trunkPhoneNumber",
   "sip.trunkNumber",
   "trunkPhoneNumber",
   "sip.calledNumber",
   "calledNumber",
+]);
+
+/** Includes browser-test room metadata fallback — not sufficient alone for PSTN. */
+export const TRUSTED_INBOUND_DIALED_E164_SOURCES = new Set([
+  ...SIP_PARTICIPANT_DIALED_E164_SOURCES,
   "room_metadata.toE164",
 ]);
+
+export function isSipParticipantDialedE164Source(source: string | undefined | null): boolean {
+  if (!source?.trim()) return false;
+  return SIP_PARTICIPANT_DIALED_E164_SOURCES.has(source.trim());
+}
 
 export function isTrustedInboundDialedE164Source(source: string | undefined | null): boolean {
   if (!source?.trim()) return false;
   return TRUSTED_INBOUND_DIALED_E164_SOURCES.has(source.trim());
+}
+
+/** Dev-only escape hatch — never set in production PSTN environments. */
+export function productionRequiresSipDialAttribution(): boolean {
+  if (process.env.VOICE_V3_ALLOW_UNATTRIBUTED_DIALED_SOURCE === "1") return false;
+  if (process.env.VOICE_V3_REQUIRE_SIP_DIALED_SOURCE === "0") return false;
+  return true;
 }

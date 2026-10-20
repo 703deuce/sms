@@ -10,6 +10,8 @@ export type LiveKitBootstrapPayload = {
   trunkId?: string | null;
   ruleId?: string | null;
   telnyxCallScreeningRaw?: string | null;
+  /** Set by transovo-voice-v3 worker — not accepted from clients; marks LiveKit SIP bootstrap path. */
+  bootstrapPath?: "livekit_sip" | null;
   /** Browser test only (authenticated API creates room); ignored for inbound SIP. */
   workspaceId?: string;
   agentId?: string;

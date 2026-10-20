@@ -5,8 +5,10 @@ import assert from "node:assert/strict";
 import {
   buildCanonicalV3DispatchAgentMetadata,
   isObsoletePerDidDispatchRuleName,
+  isSipParticipantDialedE164Source,
   isTrustedInboundDialedE164Source,
   OBSOLETE_PER_DID_DISPATCH_PREFIX,
+  productionRequiresSipDialAttribution,
 } from "../lib/server/receptionist/livekit/canonical-dispatch-helpers.ts";
 
 assert.equal(OBSOLETE_PER_DID_DISPATCH_PREFIX, "transovo-did-dispatch-");
@@ -21,5 +23,8 @@ assert.equal(meta.agentId, undefined);
 
 assert.ok(isTrustedInboundDialedE164Source("sip.trunkPhoneNumber"));
 assert.ok(!isTrustedInboundDialedE164Source("job_metadata.workspaceId"));
+assert.ok(isSipParticipantDialedE164Source("sip.trunkPhoneNumber"));
+assert.ok(!isSipParticipantDialedE164Source("room_metadata.toE164"));
+assert.equal(productionRequiresSipDialAttribution(), true);
 
 console.log("test-canonical-dispatch-logic: PASS");

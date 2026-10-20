@@ -1,6 +1,6 @@
 # Transovo V3 — clean LiveKit routing (canonical)
 
-**Status:** Target architecture for greenfield New-App SaaS (no legacy tenant dispatch to preserve).
+**Status:** **Locked design** for greenfield New-App SaaS. Production proof tracked in `docs/TRANSOVO-V3-ROUTING-ACCEPTANCE.md` (acceptance checklist — not yet certified).
 
 ## Intended path
 
@@ -90,19 +90,16 @@ Cleanup scope: **only** duplicate `transovo-inbound-dispatch` rules and `transov
 - [ ] New-App resolves tenant via `resolveReceptionistByCalledNumber` + verifies phone row ownership.
 - [ ] **Published** version only for PSTN (draft never serves production inbound).
 
-Optional hard gate: set `VOICE_V3_REQUIRE_SIP_DIALED_SOURCE=1` on New-App after worker deploy.
+**Production default:** SIP-participant `dialedE164Source` is **required** (e.g. `sip.trunkPhoneNumber`). Internal API auth binds the worker; hints cannot select tenant. Dev-only: `VOICE_V3_ALLOW_UNATTRIBUTED_DIALED_SOURCE=1`.
 
 ### Browser test
 
 - [ ] `POST /api/receptionist/test/livekit` requires authenticated workspace (`resolveWorkspaceId`).
 - [ ] Explicit `workspaceId` / `agentId` allowed only for `transovo-browser-test-*` rooms.
 
-### Product milestone (next proof)
+### Product milestone (acceptance — not architecture)
 
-1. Audit LiveKit → apply cleanup → one dispatch rule.
-2. Assign test DID to Ava → publish.
-3. PSTN call → two-way audio → correct published config.
-4. Unassigned DID must not load another workspace’s agent.
+See **`docs/TRANSOVO-V3-ROUTING-ACCEPTANCE.md`** for the 0/7 checklist and copy block. Next meaningful result: PSTN call → correct **published** agent (e.g. Ava on test DID).
 
 ## Related docs
 

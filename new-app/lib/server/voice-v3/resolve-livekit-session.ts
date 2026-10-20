@@ -6,7 +6,11 @@ import { loadLiveEditorFromPublished } from "@/lib/server/receptionist/agent-sto
 import type { ReceptionistPublishedBundle } from "@/lib/server/receptionist/draft-types";
 import { putLiveSession } from "@/lib/server/receptionist/runtime/session-store";
 import type { LiveKitBootstrapPayload } from "@/lib/server/receptionist/runtime/session";
-import { isTrustedInboundDialedE164Source } from "@/lib/server/receptionist/livekit/canonical-dispatch-helpers";
+import {
+  isSipParticipantDialedE164Source,
+  isTrustedInboundDialedE164Source,
+  productionRequiresSipDialAttribution,
+} from "@/lib/server/receptionist/livekit/canonical-dispatch-helpers";
 import {
   normalizeE164,
   resolveReceptionistByCalledNumber,
@@ -30,15 +34,33 @@ function assertInboundSipBootstrapTrust(payload: LiveKitBootstrapPayload, roomNa
     );
   }
 
+  if (payload.bootstrapPath !== "livekit_sip") {
+    throw new Error(
+      "Inbound SIP resolve requires bootstrapPath livekit_sip from authenticated transovo-voice-v3 worker",
+    );
+  }
+
   const dialed = payload.dialedE164?.trim();
   if (!dialed) throw new Error("dialedE164 is required for inbound SIP");
 
-  const source = payload.dialedE164Source?.trim();
-  const requireSource = process.env.VOICE_V3_REQUIRE_SIP_DIALED_SOURCE === "1";
-  if (requireSource && !source) {
-    throw new Error("dialedE164Source is required (SIP participant attributes)");
+  const sipIdentity = payload.sipParticipantIdentity?.trim();
+  if (!sipIdentity) {
+    throw new Error("sipParticipantIdentity is required for inbound SIP");
   }
-  if (source && !isTrustedInboundDialedE164Source(source)) {
+
+  const source = payload.dialedE164Source?.trim();
+  if (productionRequiresSipDialAttribution()) {
+    if (!source) {
+      throw new Error(
+        "dialedE164Source is required for production PSTN (SIP participant attributes from LiveKit)",
+      );
+    }
+    if (!isSipParticipantDialedE164Source(source)) {
+      throw new Error(
+        `Production PSTN requires SIP-participant dialed attribution (e.g. sip.trunkPhoneNumber), not: ${source}`,
+      );
+    }
+  } else if (source && !isTrustedInboundDialedE164Source(source)) {
     throw new Error(`Untrusted dialedE164Source: ${source}`);
   }
 }

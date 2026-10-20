@@ -34,6 +34,7 @@ class TransovoV3ToolClient:
     async def resolve_session_config(self) -> dict[str, Any]:
         payload = {
             "roomName": self._ctx.room_name,
+            "bootstrapPath": "livekit_sip",
             "sipParticipantIdentity": self._ctx.sip_participant_identity,
             "callerE164": self._ctx.caller_e164,
             "dialedE164": self._ctx.dialed_e164,
