@@ -18,6 +18,10 @@ import { urgencyRulesFromEditor } from "@/lib/server/receptionist/urgency-from-e
 import { mapEditorVoiceToLiveVoiceId } from "@/lib/server/receptionist/voice-map";
 import { businessHoursWindowFromWeeklySchedule } from "@/lib/server/voice-v3/config/business-hours-from-wizard";
 import { livePromptControlsFromAgentConfig } from "@/lib/server/voice-v3/prompts/live-prompt-controls";
+import {
+  isConversationalIvrEditor,
+  resolveRuntimeProfile,
+} from "@/lib/receptionist/runtime-profile";
 
 export type KnowledgeCompileSlice = {
   knowledgeBaseIds: string[];
@@ -312,8 +316,9 @@ export function editorToVoiceV3AgentConfig(input: {
     },
   });
 
-  const base: VoiceV3AgentConfig = {
+  let base: VoiceV3AgentConfig = {
     ...merged,
+    runtimeProfile: resolveRuntimeProfile(editor),
     transfer: transferPolicy,
     operatingPolicy,
     spamProtection: {
@@ -331,6 +336,72 @@ export function editorToVoiceV3AgentConfig(input: {
         : "ALLOW",
     },
   };
+
+  if (isConversationalIvrEditor(editor)) {
+    const mt = editor.messageTaking;
+    const extraGuards: string[] = [
+      "You are a conversational phone menu — not a full receptionist. Never claim an appointment was booked, check calendar availability, promise confirmed times, reschedule or cancel appointments, or send booking links.",
+      "If the caller wants an appointment, offer to transfer to the appropriate route or take a message. You may note their preferred time in conversation but must not represent it as confirmed.",
+      "Message-taking questions are conversational guidance only. Do not re-ask for information the caller already provided. Do not run a rigid form or require every question to be answered.",
+    ];
+    if (mt?.additionalInstructions?.trim()) {
+      extraGuards.push(mt.additionalInstructions.trim());
+    }
+    if (mt?.enabled && mt.questions?.length) {
+      extraGuards.push(
+        `When taking a message, you may naturally cover: ${mt.questions.map((q) => `"${q}"`).join("; ")}.`,
+      );
+    }
+    base = {
+      ...base,
+      intakeFields: [],
+      capabilities: {
+        ...base.capabilities,
+        collectIntake: false,
+        checkAvailability: false,
+        bookAppointments: false,
+        findAppointments: false,
+        rescheduleAppointments: false,
+        cancelAppointments: false,
+        qualifyCallers: false,
+        takeMessages: mt?.enabled ?? base.capabilities.takeMessages,
+        transferCalls: editor.capabilities.transfer,
+        answerQuestions: editor.capabilities.answer,
+        sendSms: false,
+      },
+      scheduling: {
+        ...base.scheduling,
+        bookingStrategy: "NONE",
+      },
+      bookingStrategyDetail: {
+        ...base.bookingStrategyDetail,
+        strategy: "NONE",
+        executionStatus: "CONFIGURED_NOT_IMPLEMENTED",
+      },
+      conversation: {
+        ...base.conversation,
+        conversationBehaviors: {
+          ...base.conversation.conversationBehaviors,
+          confirmDetails: false,
+          neverInventAvailability: true,
+        },
+        guardrails: [...(base.conversation.guardrails ?? []), ...extraGuards],
+      },
+      callHandling: {
+        ...base.callHandling,
+        callbackRequestsEnabled: false,
+      },
+      knowledge: {
+        ...base.knowledge,
+        retrieval: {
+          ...base.knowledge.retrieval,
+          enabled:
+            editor.capabilities.answer &&
+            (knowledge.openaiVectorStoreIds.length > 0 || knowledge.faqFacts.length > 0),
+        },
+      },
+    };
+  }
 
   void livePromptControlsFromAgentConfig(base);
   return base;

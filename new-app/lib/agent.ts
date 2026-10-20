@@ -171,6 +171,38 @@ export type AppointmentType = {
 
 export type SpamRule = { id: string; kind: 'spam_likely' | 'solicitor' | 'blocked'; action: 'screen' | 'message' | 'transfer' | 'end'; enabled: boolean; note: string }
 
+export type RuntimeProfile = "conversational_ivr" | "full_receptionist";
+
+export type ConversationalRoute = {
+  id: string;
+  name: string;
+  /** Natural-language guidance for when to use this route (not keyword matching). */
+  intentDescription: string;
+  examples: string[];
+  /** Phone forwarding destination id, ring group id, or legacy transfer destination id. */
+  destinationRef: string;
+  destinationKind: "forwarding_destination" | "ring_group" | "transfer_destination";
+  /** Cached dial target at configuration time (publish compile). */
+  destinationPhoneE164?: string;
+  destinationLabel?: string;
+  enabled: boolean;
+  confirmBeforeTransfer: boolean;
+};
+
+export type MessageTakingConfig = {
+  enabled: boolean;
+  /** Conversation prompts — not required form fields. */
+  questions: string[];
+  additionalInstructions: string;
+};
+
+export type ConversationalRoutingDefaults = {
+  defaultDestinationRef: string;
+  whenCallerWantsPerson: string;
+  whenNoRuleMatches: string;
+  whenTransferFails: string;
+};
+
 export type KnowledgeProfile = {
   /** Company name, what you do, location, hours, service area — injected into prompts. */
   businessOverview: string
@@ -264,6 +296,11 @@ export type AgentConfig = {
     connectionGreetingText: string
   }
   knowledgeProfile: KnowledgeProfile
+  /** Active runtime profile — conversational IVR is the default launch experience. */
+  runtimeProfile: RuntimeProfile
+  conversationalRoutes: ConversationalRoute[]
+  conversationalRouting: ConversationalRoutingDefaults
+  messageTaking: MessageTakingConfig
 }
 
 export const VOICES = RECEPTIONIST_VOICE_OPTIONS.map((v) => ({
@@ -289,14 +326,41 @@ export const CAPABILITY_META: Record<Capability, { title: string; description: s
 export const DEFAULT_AGENT: AgentConfig = {
   identity: {
     name: 'Ava',
-    role: 'Front desk receptionist',
+    role: 'Conversational phone menu',
     language: 'en-US',
     voice: 'marin',
     customVoiceId: '',
     greeting: 'Thanks for calling {business_name}, this is {agent_name}. How can I help you {time_of_day}?',
   },
   style: { pace: 'normal', backchannels: 'minimal', patience: 'normal', interruptions: 'natural' },
-  capabilities: { answer: true, book: true, reschedule: true, cancel: true, message: true, qualify: false, transfer: true, smsConfirm: true },
+  capabilities: {
+    answer: true,
+    book: false,
+    reschedule: false,
+    cancel: false,
+    message: true,
+    qualify: false,
+    transfer: true,
+    smsConfirm: false,
+  },
+  runtimeProfile: "conversational_ivr",
+  conversationalRoutes: [],
+  conversationalRouting: {
+    defaultDestinationRef: "",
+    whenCallerWantsPerson: "default",
+    whenNoRuleMatches: "message",
+    whenTransferFails: "message",
+  },
+  messageTaking: {
+    enabled: true,
+    questions: [
+      "What are you calling about?",
+      "What's the best number to reach you?",
+      "When would you prefer a callback?",
+    ],
+    additionalInstructions:
+      "If the caller already answered a question in the conversation, do not ask again. They may skip any question.",
+  },
   intake: [
     { id: 'i1', label: 'Full name', type: 'text', required: true, qualifies: false, stage: 'start', locked: true },
     { id: 'i2', label: 'Callback number', type: 'phone', required: true, qualifies: false, stage: 'start', locked: true },
@@ -381,7 +445,8 @@ export const DEFAULT_AGENT: AgentConfig = {
   audio: { recording: 'all', connectionGreeting: 'none', connectionGreetingText: 'This call may be recorded for quality.' },
   knowledgeProfile: {
     businessOverview: 'Harbor & Pine Dental — family dentistry on Chicago’s lakefront. Lakeshore office Mon–Fri 8am–5pm, Sat 9am–1pm.',
-    agentJob: 'Answer calls professionally, answer common questions from approved knowledge, book and reschedule hygiene and exam visits, and transfer urgent dental pain to the on-call dentist.',
+    agentJob:
+      'Answer common questions from approved business knowledge, route callers to the right destination when they need a person, and take messages naturally when appropriate. Do not book appointments or check calendar availability.',
     pricing: 'New patient exam $189. Routine cleaning $165. Whitening consult complimentary.',
     policies: '24-hour cancellation notice. We accept most PPO plans; verify at booking.',
     paymentMethods: 'Card, HSA/FSA, CareCredit, in-office payment plans for treatment over $500.',
@@ -421,6 +486,10 @@ export function diffSections(a: AgentConfig, b: AgentConfig) {
     protection: 'Call protection',
     audio: 'Recording & connection audio',
     knowledgeProfile: 'Business knowledge & agent job',
+    runtimeProfile: 'Runtime profile',
+    conversationalRoutes: 'Call routing rules',
+    conversationalRouting: 'Default routing',
+    messageTaking: 'Message taking',
   }
   return (Object.keys(labels) as (keyof AgentConfig)[])
     .filter((k) => JSON.stringify(a[k]) !== JSON.stringify(b[k]))

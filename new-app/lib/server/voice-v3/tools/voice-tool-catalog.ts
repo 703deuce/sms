@@ -41,6 +41,7 @@ import {
   isSendBookingLinkAuthorized,
 } from "./authorize-tool-for-config";
 import { isDirectCalendarBookingConfig } from "../calendar/direct-booking-strategy";
+import { isConversationalIvrRuntime } from "@/lib/receptionist/runtime-profile";
 
 export type VoiceToolCatalogEntry = {
   name: string;
@@ -163,6 +164,15 @@ function isDirectCalendarStrategy(config: VoiceV3AgentConfig): boolean {
 }
 
 function isToolEnabledForConfig(entry: VoiceToolCatalogEntry, config: VoiceV3AgentConfig): boolean {
+  if (isConversationalIvrRuntime(config)) {
+    const allow = new Set([
+      "end_call",
+      "search_business_knowledge",
+      "transfer_call",
+      "take_message",
+    ]);
+    return allow.has(entry.name);
+  }
   const caps = config.capabilities;
   if (!caps) {
     return entry.name === "update_intake" || entry.name === "end_call";

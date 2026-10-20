@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { AgentConfig } from "@/lib/agent";
+import { isConversationalIvrEditor } from "@/lib/receptionist/runtime-profile";
 import { validateEditorForPublish } from "@/lib/server/receptionist/compile-runtime";
 import { getPrisma } from "@/lib/server/db";
 import { resolveWorkspaceOwnedPhoneNumberId } from "@/lib/server/receptionist/validate-phone-connection";
@@ -27,6 +28,7 @@ export async function validateReceptionistPublish(
   }
 
   if (
+    !isConversationalIvrEditor(editor) &&
     (editor.capabilities.book || editor.capabilities.reschedule || editor.capabilities.cancel) &&
     editor.appointments.strategy === "live"
   ) {
@@ -52,7 +54,7 @@ export async function validateReceptionistPublish(
     }
   }
 
-  if (editor.capabilities.book && editor.appointments.strategy === "link") {
+  if (!isConversationalIvrEditor(editor) && editor.capabilities.book && editor.appointments.strategy === "link") {
     if (!editor.appointments.bookingLink?.trim()) {
       errors.push("Booking link URL is required when using link booking strategy.");
     }
@@ -73,9 +75,19 @@ export async function validateReceptionistPublish(
   }
 
   if (editor.capabilities.transfer) {
-    const enabled = editor.transfers.filter((t) => t.enabled && t.number?.trim());
-    if (!enabled.length) {
-      errors.push("Enable at least one transfer destination with a phone number.");
+    if (isConversationalIvrEditor(editor)) {
+      const routes = (editor.conversationalRoutes ?? []).filter(
+        (r) => r.enabled && r.destinationPhoneE164?.trim(),
+      );
+      const legacy = editor.transfers.filter((t) => t.enabled && t.number?.trim());
+      if (!routes.length && !legacy.length) {
+        errors.push("Configure at least one semantic route with a Phone destination.");
+      }
+    } else {
+      const enabled = editor.transfers.filter((t) => t.enabled && t.number?.trim());
+      if (!enabled.length) {
+        errors.push("Enable at least one transfer destination with a phone number.");
+      }
     }
   }
 

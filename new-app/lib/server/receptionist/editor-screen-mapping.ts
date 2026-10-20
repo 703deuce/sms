@@ -1,4 +1,8 @@
 import type { AgentConfig, Capability } from "@/lib/agent";
+import {
+  conversationalIvrToolAllowlist,
+  isConversationalIvrEditor,
+} from "@/lib/receptionist/runtime-profile";
 
 /** Documents how new-app UI screens map to runtime — single source for certification. */
 export const RECEPTIONIST_EDITOR_SCREEN_FIELDS = {
@@ -26,11 +30,16 @@ export const RECEPTIONIST_EDITOR_SCREEN_FIELDS = {
     "protection",
     "audio",
   ],
+  call_routing: ["conversationalRoutes", "conversationalRouting", "connection"],
+  message_taking: ["messageTaking", "messages"],
   appointments: ["appointments"],
   operations: ["operating", "transferAdvanced", "urgency", "coverage.customSchedule"],
 } as const;
 
 export function enabledVoiceToolNamesFromEditor(editor: AgentConfig): string[] {
+  if (isConversationalIvrEditor(editor)) {
+    return conversationalIvrToolAllowlist(editor);
+  }
   const names: string[] = ["update_intake", "end_call"];
   const on = (c: Capability) => editor.capabilities[c] === true;
   const bookLive =

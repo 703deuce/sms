@@ -1,6 +1,6 @@
 import { ReceptionistOverviewContent } from '@/components/receptionist/overview-page-content'
 
-export const metadata = { title: 'AI Receptionist' }
+export const metadata = { title: 'Conversational IVR' }
 
 export const dynamic = 'force-dynamic'
 

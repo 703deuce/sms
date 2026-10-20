@@ -3,6 +3,7 @@ import {
   formatAstraBusinessContextForThinking,
 } from "../agent/astra-business-context";
 import { buildIntakeObjectiveContext } from "../intake-objective";
+import { isConversationalIvrRuntime } from "@/lib/receptionist/runtime-profile";
 import { buildSharedCallerFactsLiveSummary } from "../intake-objective/build-shared-caller-facts";
 import { LiveContextPublisher } from "../live/live-context-publisher";
 import { logVoiceV3Pipeline } from "../telemetry/pipeline-log";
@@ -35,11 +36,14 @@ export function pushDelegatedRuntimeContextToLive(input: {
   const publisher = new LiveContextPublisher(input.send);
   const delegationId = input.delegationId;
 
-  const thinking = [
+  const thinkingParts = [
     buildAuthoritativeThinkingSnapshot(runtime),
     formatAstraBusinessContextForThinking(buildAstraBusinessContext(ctx, config)),
-    buildIntakeObjectiveContext(config, ctx),
-  ].join("\n\n");
+  ];
+  if (!isConversationalIvrRuntime(config)) {
+    thinkingParts.push(buildIntakeObjectiveContext(config, ctx));
+  }
+  const thinking = thinkingParts.join("\n\n");
 
   publisher.appendThinking(thinking, delegationId);
   publisher.appendCommentary(buildSharedCallerFactsLiveSummary(config, ctx), delegationId);

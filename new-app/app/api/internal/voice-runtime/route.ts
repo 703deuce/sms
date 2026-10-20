@@ -13,7 +13,10 @@ type VoiceRuntimeAction =
   | "execute_voice_v3_livekit_tool"
   | "resolve_voice_v3_delegated_runtime_context"
   | "commit_voice_v3_livekit_caller_utterance"
-  | "finalize_voice_v3_call";
+  | "finalize_voice_v3_call"
+  | "append_voice_v3_forensic_events"
+  | "flush_voice_v3_forensics"
+  | "record_voice_v3_transfer_outcome";
 
 export async function GET() {
   return NextResponse.json({
@@ -80,6 +83,24 @@ export async function POST(request: Request) {
             idempotencyKey: payload.idempotencyKey as string | null | undefined,
           }),
         );
+      case "append_voice_v3_forensic_events": {
+        const { appendVoiceV3ForensicEventsForPython } = await import(
+          "@/lib/server/voice-v3/python-runtime-bridge/voice-v3-forensics-bridge"
+        );
+        return NextResponse.json(await appendVoiceV3ForensicEventsForPython(payload as never));
+      }
+      case "flush_voice_v3_forensics": {
+        const { flushVoiceV3ForensicsForPython } = await import(
+          "@/lib/server/voice-v3/python-runtime-bridge/voice-v3-forensics-bridge"
+        );
+        return NextResponse.json(await flushVoiceV3ForensicsForPython(payload as never));
+      }
+      case "record_voice_v3_transfer_outcome": {
+        const { recordVoiceV3TransferOutcomeForNewApp } = await import(
+          "@/lib/server/voice-v3/transfer/record-transfer-outcome"
+        );
+        return NextResponse.json(await recordVoiceV3TransferOutcomeForNewApp(payload as never));
+      }
       default:
         return NextResponse.json({ ok: false, error: `Unknown action: ${action}` }, { status: 400 });
     }

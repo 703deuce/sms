@@ -11,12 +11,12 @@ export const DESTINATION_LABEL: Record<RoutePolicy['duringHours'], string> = {
   ring_group: 'Front desk ring group',
   user: 'Specific teammate',
   external: 'External number',
-  ai: 'AI Receptionist',
+  ai: 'Conversational IVR',
   voicemail: 'Voicemail',
 }
 
 export const FALLBACK_LABEL: Record<RoutePolicy['noAnswer'], string> = {
-  ai: 'AI Receptionist',
+  ai: 'Conversational IVR',
   voicemail: 'Voicemail',
   external: 'External number',
 }

@@ -1,4 +1,5 @@
 import type { AgentConfig } from "@/lib/agent";
+import { isConversationalIvrEditor } from "@/lib/receptionist/runtime-profile";
 import type { ReceptionistPublishedBundle } from "@/lib/server/receptionist/draft-types";
 import {
   RECEPTIONIST_PUBLISHED_SCHEMA_VERSION,
@@ -113,8 +114,11 @@ export function validateEditorForPublish(config: AgentConfig): { ok: true } | { 
   const errors: string[] = [];
   if (!config.identity.name?.trim()) errors.push("Agent name is required.");
   if (!config.identity.greeting?.trim()) errors.push("Greeting is required.");
-  if (!config.connection.id?.trim()) errors.push("Assign a phone number in Call Handling.");
-  if (config.capabilities.book && config.appointments.strategy === "live") {
+  if (!config.connection.id?.trim()) {
+    errors.push("Assign a phone number on Overview or Call Routing.");
+  }
+  const conversational = isConversationalIvrEditor(config);
+  if (!conversational && config.capabilities.book && config.appointments.strategy === "live") {
     if (config.appointments.provider === "none") {
       errors.push("Connect a calendar or change booking strategy.");
     }
@@ -122,8 +126,18 @@ export function validateEditorForPublish(config: AgentConfig): { ok: true } | { 
       errors.push("Enable at least one appointment type.");
     }
   }
-  if (config.capabilities.transfer && !config.transfers.some((t) => t.enabled && t.number?.trim())) {
-    errors.push("Enable at least one transfer destination.");
+  if (config.capabilities.transfer) {
+    if (conversational) {
+      const routes = (config.conversationalRoutes ?? []).filter(
+        (r) => r.enabled && r.destinationPhoneE164?.trim(),
+      );
+      const legacy = config.transfers.some((t) => t.enabled && t.number?.trim());
+      if (!routes.length && !legacy) {
+        errors.push("Add at least one enabled call route with a Phone destination.");
+      }
+    } else if (!config.transfers.some((t) => t.enabled && t.number?.trim())) {
+      errors.push("Enable at least one transfer destination.");
+    }
   }
   return errors.length ? { ok: false, errors } : { ok: true };
 }

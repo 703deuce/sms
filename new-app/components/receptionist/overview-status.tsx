@@ -38,8 +38,8 @@ export function OverviewStatus() {
         </div>
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" render={<Link href="/app/receptionist/agent" />}><Settings2 data-icon="inline-start" />Edit agent</Button>
-        <Button variant="outline" size="sm" render={<Link href="/app/receptionist/test" />}><FlaskConical data-icon="inline-start" />Test</Button>
+        <Button variant="outline" size="sm" render={<Link href="/app/receptionist/agent" />}><Settings2 data-icon="inline-start" />Voice & greeting</Button>
+        <Button variant="outline" size="sm" render={<Link href="/app/receptionist/test" />}><FlaskConical data-icon="inline-start" />Test agent</Button>
         {changes.length > 0 && <Button size="sm" render={<Link href="/app/receptionist/activate" />}><Rocket data-icon="inline-start" />Review & publish</Button>}
       </div>
     </section>

@@ -1,4 +1,5 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
+import { isConversationalIvrRuntime } from "@/lib/receptionist/runtime-profile";
 import type { VoiceV3CallContext } from "../state/call-context";
 import type { IntakeObjectiveState, IntakeFieldState } from "./types";
 import { defaultCollectionStrategy } from "./types";
@@ -18,6 +19,16 @@ export function deriveIntakeObjective(
   config: VoiceV3AgentConfig,
   context: VoiceV3CallContext,
 ): IntakeObjectiveState {
+  if (isConversationalIvrRuntime(config)) {
+    return {
+      status: "COMPLETE",
+      requiredFields: [],
+      optionalFields: [],
+      collectedFields: [],
+      missingRequiredFields: [],
+      fields: [],
+    };
+  }
   const values = context.intake?.values ?? {};
   const operation = resolveActiveIntakeOperation(config, context);
   const requiredKeys = configuredRequiredKeysForActiveOperation(config, context);

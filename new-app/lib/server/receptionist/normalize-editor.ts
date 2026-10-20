@@ -1,4 +1,8 @@
-import { DEFAULT_KNOWLEDGE_PROFILE, type AgentConfig } from "@/lib/agent";
+import {
+  DEFAULT_AGENT,
+  DEFAULT_KNOWLEDGE_PROFILE,
+  type AgentConfig,
+} from "@/lib/agent";
 import {
   DEFAULT_CUSTOM_COVERAGE,
   DEFAULT_OPERATING_MATURITY,
@@ -28,5 +32,10 @@ export function normalizeReceptionistEditor(editor: AgentConfig): AgentConfig {
       ...editor.identity,
       voice: normalizeGptLiveVoiceId(editor.identity.voice || "marin"),
     },
+    runtimeProfile: editor.runtimeProfile ?? "conversational_ivr",
+    conversationalRoutes: editor.conversationalRoutes ?? [],
+    conversationalRouting:
+      editor.conversationalRouting ?? DEFAULT_AGENT.conversationalRouting,
+    messageTaking: editor.messageTaking ?? DEFAULT_AGENT.messageTaking,
   };
 }

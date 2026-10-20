@@ -300,4 +300,7 @@ export interface VoiceV3AgentConfig {
   /** PSTN wizard binding — required for workspace-scoped tools (SMS, consent ledger). */
   workspaceId?: string;
   agentId?: string;
+
+  /** When `conversational_ivr`, booking/intake enforcement tools are disabled. */
+  runtimeProfile?: "conversational_ivr" | "full_receptionist";
 }

@@ -1,8 +1,10 @@
 import type { AgentConfig } from "@/lib/agent";
+import { isConversationalIvrEditor } from "@/lib/receptionist/runtime-profile";
 import { normalizeE164 } from "@/lib/server/phone/normalize";
 import { getStoredLiveKitOutboundTrunkId } from "@/lib/telephony/provisioning/livekit/outbound-trunk";
 import { mapWizardTransferFallback } from "@/lib/server/voice-v3/transfer/map-fallback";
 import { transferTriggerPhrasesFromEditor } from "@/lib/server/receptionist/transfer-triggers-from-editor";
+import type { VoiceV3TransferFallback } from "@/lib/server/voice-v3/transfer/types";
 import type {
   VoiceV3TransferDestinationCompiled,
   VoiceV3TransferPolicyCompiled,
@@ -65,7 +67,139 @@ function mapGlobalFallback(fb: AgentConfig["transferAdvanced"]["globalFallback"]
   }
 }
 
+function conversationalFallback(editor: AgentConfig): VoiceV3TransferFallback {
+  const fb = editor.conversationalRouting?.whenTransferFails ?? "message";
+  if (fb === "message") return "TAKE_MESSAGE";
+  if (fb === "end") return "END_CALL";
+  return mapWizardTransferFallback("return_to_ai");
+}
+
+function compileConversationalIvrTransferPolicy(
+  editor: AgentConfig,
+): VoiceV3TransferPolicyCompiled {
+  const adv = editor.transferAdvanced;
+  const defaultTimeout = Math.max(5, adv.ringSeconds ?? 30);
+  const defaultWarm = editor.transferStyle === "warm";
+  const mode: VoiceV3TransferMode = defaultWarm ? "WARM" : "DIRECT";
+  const fallback = conversationalFallback(editor);
+
+  const destinations: VoiceV3TransferDestinationCompiled[] = [];
+  const routes: VoiceV3TransferRouteCompiled[] = [];
+
+  const addDestination = (
+    id: string,
+    label: string,
+    phoneE164: string,
+    description?: string,
+  ): string => {
+    if (!phoneE164) return "";
+    const existing = destinations.find((d) => d.id === id);
+    if (existing) return existing.id;
+    destinations.push({
+      id,
+      label,
+      description,
+      phoneE164,
+      defaultMode: mode,
+      ringingTimeoutSeconds: defaultTimeout,
+      enabled: true,
+    });
+    return id;
+  };
+
+  for (const route of editor.conversationalRoutes ?? []) {
+    if (!route.enabled) continue;
+    let phone = route.destinationPhoneE164?.trim() ?? "";
+    let destId = `route_dest_${route.id}`;
+    const label = route.destinationLabel?.trim() || route.name?.trim() || "Route destination";
+
+    if (!phone && route.destinationKind === "transfer_destination") {
+      const legacy = editor.transfers.find((t) => t.id === route.destinationRef);
+      if (legacy?.number?.trim()) {
+        try {
+          phone = normalizeE164(legacy.number.trim());
+        } catch {
+          phone = "";
+        }
+        destId = legacy.id;
+      }
+    }
+
+    if (!phone) continue;
+
+    try {
+      phone = normalizeE164(phone);
+    } catch {
+      continue;
+    }
+
+    const resolvedDestId = addDestination(destId, label, phone, route.intentDescription);
+    if (!resolvedDestId) continue;
+
+    const examples = (route.examples ?? []).filter(Boolean);
+    const description = [route.intentDescription?.trim(), examples.length ? `Examples: ${examples.join("; ")}` : ""]
+      .filter(Boolean)
+      .join(" ");
+
+    routes.push({
+      id: route.id,
+      label: route.name?.trim() || "Route",
+      description:
+        description ||
+        "Use when the caller's intent matches this route based on natural conversation — not exact keywords.",
+      targets: [
+        {
+          destinationId: resolvedDestId,
+          mode,
+          ringingTimeoutSeconds: defaultTimeout,
+        },
+      ],
+      fallback,
+    });
+  }
+
+  const defaultRef = editor.conversationalRouting?.defaultDestinationRef?.trim();
+  if (defaultRef && routes.length === 0) {
+    const legacy = editor.transfers.find((t) => t.id === defaultRef);
+    const phoneRaw = legacy?.number?.trim();
+    if (phoneRaw) {
+      try {
+        const phone = normalizeE164(phoneRaw);
+        const destId = addDestination(legacy!.id, legacy!.name || "Default", phone);
+        routes.push({
+          id: "default_transfer_route",
+          label: "Default route",
+          description: "When caller intent is unclear or they ask for a person.",
+          targets: [{ destinationId: destId, mode, ringingTimeoutSeconds: defaultTimeout }],
+          fallback,
+        });
+      } catch {
+        // skip invalid default
+      }
+    }
+  }
+
+  const enabled =
+    editor.capabilities.transfer === true && destinations.length > 0 && routes.length > 0;
+
+  return {
+    enabled,
+    defaultRingingTimeoutSeconds: defaultTimeout,
+    defaultFallback: fallback,
+    routing: "single",
+    destinations,
+    routes,
+    telephony: {
+      outboundSipTrunkId: getStoredLiveKitOutboundTrunkId(),
+      outboundCallerIdE164: null,
+    },
+  };
+}
+
 export function compileVoiceV3TransferPolicyFromEditor(editor: AgentConfig): VoiceV3TransferPolicyCompiled {
+  if (isConversationalIvrEditor(editor)) {
+    return compileConversationalIvrTransferPolicy(editor);
+  }
   const adv = editor.transferAdvanced;
   const enabled =
     editor.capabilities.transfer === true && adv.humanTransferEnabled !== false;
