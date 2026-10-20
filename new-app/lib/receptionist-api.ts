@@ -1,9 +1,22 @@
 import type { AgentConfig } from "@/lib/agent";
 import type { Call } from "@/lib/data";
 
+export class ReceptionistDraftConflictError extends Error {
+  constructor(message = "Draft was updated elsewhere. Reload and try again.") {
+    super(message);
+    this.name = "ReceptionistDraftConflictError";
+  }
+}
+
 async function parse<T>(res: Response): Promise<T> {
   const json = await res.json();
-  if (!res.ok) throw new Error(json.error || res.statusText);
+  if (!res.ok) {
+    const message = json.error || res.statusText;
+    if (res.status === 409 && String(message).includes("updated elsewhere")) {
+      throw new ReceptionistDraftConflictError(message);
+    }
+    throw new Error(message);
+  }
   return (json.data ?? json) as T;
 }
 

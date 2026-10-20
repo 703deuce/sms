@@ -94,7 +94,12 @@ export function PublishReview() {
       toast.success('Published — new calls use this version')
       router.push('/app/receptionist')
     } else {
-      toast.error(result.errors?.join(' ') || 'Publish failed. Fix the blocking items above and try again.')
+      const msg = result.errors?.join(' ') || 'Publish failed. Fix the blocking items above and try again.'
+      toast.error(msg)
+      if (msg.includes('updated elsewhere')) {
+        toast.message('Reloading latest draft from the server…')
+        window.location.reload()
+      }
       void fetchReceptionistReadiness().then((r) => setServerBlockers(r.publishBlockers ?? []))
     }
   }

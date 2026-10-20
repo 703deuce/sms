@@ -44,6 +44,8 @@ export function NumberPicker({
   current,
   onSelect,
   provisionOnSelect = true,
+  receptionistAgentId,
+  onAfterServerSync,
 }: {
   open: boolean
   onOpenChange: (o: boolean) => void
@@ -52,6 +54,10 @@ export function NumberPicker({
   onSelect: (ref: ConnectionRef) => void
   /** When true, owned Telnyx numbers are re-provisioned for this product before onSelect. */
   provisionOnSelect?: boolean
+  /** Required for receptionist switch so server draft + assignment stay aligned. */
+  receptionistAgentId?: string
+  /** Called after carrier provision + server draft sync (e.g. reload agent state). */
+  onAfterServerSync?: () => Promise<void>
 }) {
   const { owned, connections, refresh } = useNumbers()
   const [picked, setPicked] = useState<ConnectionRef | null>(null)
@@ -79,6 +85,7 @@ export function NumberPicker({
         phoneNumberId: sel.id,
         targetProduct: product,
         confirmSwitch,
+        agentId: product === 'receptionist' ? receptionistAgentId : undefined,
       })
       if (result.needsConfirmation) {
         const bindings = await fetchNumberBindings(sel.id)
@@ -92,6 +99,7 @@ export function NumberPicker({
         return false
       }
       await refresh()
+      if (onAfterServerSync) await onAfterServerSync()
       return true
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Provisioning failed')

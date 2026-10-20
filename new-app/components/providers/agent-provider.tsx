@@ -8,6 +8,7 @@ import {
   patchReceptionistDraft,
   pauseReceptionist,
   publishReceptionist,
+  ReceptionistDraftConflictError,
   resumeReceptionist,
   type ReceptionistStateDto,
 } from '@/lib/receptionist-api'
@@ -87,6 +88,20 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
     setUnsaved(true)
   }, [])
 
+  const persistDraft = useCallback(
+    async (editor: AgentConfig, revision: number) => {
+      try {
+        return await patchReceptionistDraft(editor, revision)
+      } catch (e) {
+        if (!(e instanceof ReceptionistDraftConflictError)) throw e
+        const fresh = await fetchReceptionistState()
+        applyState(fresh)
+        return await patchReceptionistDraft(editor, fresh.draftRevision)
+      }
+    },
+    [applyState],
+  )
+
   const value = useMemo<AgentCtx>(() => {
     const changes = diffSections(live, draft)
     return {
@@ -104,7 +119,7 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
       update,
       reload,
       saveDraft: async () => {
-        const s = await patchReceptionistDraft(draft, draftRevision)
+        const s = await persistDraft(draft, draftRevision)
         applyState(s)
       },
       discardDraft: async () => {
@@ -116,7 +131,7 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
         setError(null)
         try {
           if (unsaved) {
-            const saved = await patchReceptionistDraft(draft, draftRevision)
+            const saved = await persistDraft(draft, draftRevision)
             applyState(saved)
           }
           const result = await publishReceptionist()
@@ -155,6 +170,7 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
     update,
     reload,
     applyState,
+    persistDraft,
   ])
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>

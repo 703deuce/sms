@@ -55,7 +55,7 @@ const SPAM_LABEL: Record<SpamRule['kind'], string> = { spam_likely: 'Spam likely
 const SPAM_ACTION: Record<SpamRule['action'], string> = { screen: 'Screen — ask purpose', message: 'Take a message', transfer: 'Transfer to staff', end: 'End the call' }
 
 export function CallHandlingEditor() {
-  const { draft, update } = useAgent()
+  const { draft, update, agentId, reload } = useAgent()
   const params = useSearchParams()
   const router = useRouter()
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -282,13 +282,15 @@ export function CallHandlingEditor() {
         product="receptionist"
         current={draft.connection}
         provisionOnSelect
+        receptionistAgentId={agentId}
+        onAfterServerSync={reload}
         onSelect={(ref) => {
-          update('connection', ref)
-          toast.success(
-            ref.kind === 'owned'
-              ? 'Number provisioned for AI Receptionist — publish to update the agent'
-              : 'Number changed in draft — publish to go live',
-          )
+          if (ref.kind === 'external') {
+            update('connection', ref)
+            toast.success('Number changed in draft — publish to go live')
+            return
+          }
+          toast.success('Number switched for AI Receptionist — save other edits or publish when ready')
         }}
       />
       <DestinationSheet value={editDest} onClose={() => setEditDest(null)} />

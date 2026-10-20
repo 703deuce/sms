@@ -81,9 +81,14 @@ export function DraftBar({ testHref = '/app/receptionist/test' }: { testHref?: s
             disabled={!unsaved || saving}
             onClick={async () => {
               setSaving(true)
-              await saveDraft()
-              setSaving(false)
-              toast.success('Draft saved — live calls are unchanged')
+              try {
+                await saveDraft()
+                toast.success('Draft saved — live calls are unchanged')
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : 'Could not save draft')
+              } finally {
+                setSaving(false)
+              }
             }}
           >
             {saving ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Save data-icon="inline-start" />}
