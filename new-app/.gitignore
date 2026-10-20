@@ -17,3 +17,14 @@ node_modules
 
 # Copied from ../prisma at build/dev — not committed
 /prisma/
+
+# Synced from ../src/lib via scripts/sync-voice-shared-lib.sh — not committed
+/lib/solutions/
+/lib/receptionist-wizard/
+/lib/voice-receptionist-wizard/
+/lib/voice/load-agent-config.ts
+/lib/voice/gpt-live-file-search-rag.ts
+/lib/voice/runtime-provider/
+/lib/voice-v3-basic/
+/lib/server/voice-v3/knowledge/resolve-agent-knowledge-retrieval.ts
+/lib/server/voice-v3/knowledge/resolve-document-source-ids.ts

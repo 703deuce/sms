@@ -19,7 +19,9 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@/lib/db": ["./lib/server/db"],
+      "@/lib/voice-v3/*": ["./lib/server/voice-v3/*"]
     }
   },
   "include": [

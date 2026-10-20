@@ -19,6 +19,9 @@ elif [[ ! -f prisma/schema.prisma ]]; then
   exit 1
 fi
 
+echo "[new-app/coolify-build] sync shared voice/receptionist libs"
+bash scripts/sync-voice-shared-lib.sh
+
 echo "[new-app/coolify-build] prisma generate"
 $PNPM exec prisma generate
 
