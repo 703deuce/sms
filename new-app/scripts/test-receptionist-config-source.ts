@@ -22,14 +22,31 @@ function emptyKnowledge() {
 
 const base = defaultReceptionistEditorConfig();
 
-const liveBook = { ...base, capabilities: { ...base.capabilities, book: true } };
+/** Full receptionist booking paths — require explicit profile (default draft is Conversational IVR). */
+function asFullReceptionist(editor: typeof base): typeof base {
+  return { ...editor, runtimeProfile: "full_receptionist" };
+}
+
+const ivrTools = enabledVoiceToolNamesFromEditor(base);
+assert.ok(ivrTools.includes("end_call"), "IVR default exposes end_call");
+assert.ok(ivrTools.includes("search_business_knowledge"), "IVR default exposes knowledge");
+assert.ok(!ivrTools.includes("book_appointment"), "IVR default must not expose book_appointment");
+assert.ok(!ivrTools.includes("update_intake"), "IVR default must not expose update_intake");
+
+const liveBook = asFullReceptionist({
+  ...base,
+  capabilities: { ...base.capabilities, book: true },
+});
 liveBook.appointments = { ...liveBook.appointments, strategy: "live", provider: "microsoft" };
 const liveTools = enabledVoiceToolNamesFromEditor(liveBook);
 assert.ok(liveTools.includes("book_appointment"), "live book exposes book_appointment");
 assert.ok(liveTools.includes("find_availability"), "live book exposes find_availability");
 assert.ok(!liveTools.includes("send_booking_link"), "live book must not expose send_booking_link");
 
-const linkBook = { ...base, capabilities: { ...base.capabilities, book: true } };
+const linkBook = asFullReceptionist({
+  ...base,
+  capabilities: { ...base.capabilities, book: true },
+});
 linkBook.appointments = {
   ...linkBook.appointments,
   strategy: "link",
@@ -39,7 +56,10 @@ const linkTools = enabledVoiceToolNamesFromEditor(linkBook);
 assert.ok(linkTools.includes("send_booking_link"), "link strategy exposes send_booking_link");
 assert.ok(!linkTools.includes("book_appointment"), "link strategy must not expose book_appointment");
 
-const noBook = { ...base, capabilities: { ...base.capabilities, book: false } };
+const noBook = asFullReceptionist({
+  ...base,
+  capabilities: { ...base.capabilities, book: false },
+});
 const noBookTools = enabledVoiceToolNamesFromEditor(noBook);
 assert.ok(!noBookTools.includes("book_appointment"), "book off removes book_appointment");
 assert.ok(!noBookTools.includes("send_booking_link"), "book off removes send_booking_link");
@@ -76,7 +96,10 @@ assert.deepEqual(
   "published toolNames match editor-screen-mapping",
 );
 
-const requestEditor = { ...base, capabilities: { ...base.capabilities, book: true } };
+const requestEditor = asFullReceptionist({
+  ...base,
+  capabilities: { ...base.capabilities, book: true },
+});
 requestEditor.appointments = { ...requestEditor.appointments, strategy: "request" };
 const requestV3 = editorToVoiceV3AgentConfig({
   editor: requestEditor,
