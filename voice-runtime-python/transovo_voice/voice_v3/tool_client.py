@@ -14,7 +14,6 @@ class VoiceV3CallContext:
     sip_participant_identity: str
     caller_e164: str | None
     dialed_e164: str | None
-    dialed_e164_source: str | None = None
     sip_call_id: str | None
     provider_call_id: str | None
     trunk_id: str | None
@@ -24,6 +23,7 @@ class VoiceV3CallContext:
     call_id: str
     workspace_id: str
     agent_id: str
+    dialed_e164_source: str | None = None
 
 
 class TransovoV3ToolClient:
