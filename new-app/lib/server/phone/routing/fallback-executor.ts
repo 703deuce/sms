@@ -39,18 +39,33 @@ export async function executeFallback(input: {
     });
     return;
   }
-  if (input.action.type === "forward_phone" && input.action.destinationE164 && input.routingSessionId) {
+  if (input.action.type === "forward_phone" && input.routingSessionId) {
     const ctx = await getCallContextFromSession(input.routingSessionId);
-    await dialDestination({
-      sessionId: input.routingSessionId,
-      workspaceId: input.workspaceId,
-      humanCallId: input.humanCallId,
-      inboundControlId: input.inboundControlId,
-      businessLineE164: ctx?.businessLineE164 || "",
-      callerE164: ctx?.callerE164 || "",
-      destinationE164: input.action.destinationE164,
-      press1: true,
-    });
+    let destinationE164 = input.action.destinationE164;
+    if (!destinationE164 && input.action.destinationId) {
+      const { resolveForwardingDestinationById, inboundCallContext } = await import(
+        "./resolve-destination"
+      );
+      const callCtx = await inboundCallContext(input.workspaceId, input.phoneNumberId);
+      const resolved = await resolveForwardingDestinationById(
+        input.workspaceId,
+        input.action.destinationId,
+        callCtx,
+      );
+      destinationE164 = resolved?.dialE164;
+    }
+    if (destinationE164) {
+      await dialDestination({
+        sessionId: input.routingSessionId,
+        workspaceId: input.workspaceId,
+        humanCallId: input.humanCallId,
+        inboundControlId: input.inboundControlId,
+        businessLineE164: ctx?.businessLineE164 || "",
+        callerE164: ctx?.callerE164 || "",
+        destinationE164,
+        press1: true,
+      });
+    }
     return;
   }
   if (input.action.type === "replay_menu" && input.action.menuId) {

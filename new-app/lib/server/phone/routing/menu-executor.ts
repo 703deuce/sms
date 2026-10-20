@@ -232,14 +232,10 @@ export async function handleMenuDigitSelection(input: {
   }
 
   if (option.actionType === "forward_phone") {
-    let dest = String(config.destinationE164 || config.phoneE164 || "");
-    if (!dest && config.destinationId) {
-      const row = await getPrisma().forwardingDestination.findFirst({
-        where: { id: String(config.destinationId), workspaceId: input.workspaceId, enabled: true },
-      });
-      dest = row?.phoneE164 || "";
-    }
-    if (!dest) return false;
+    const { resolveForwardActionConfig, inboundCallContext } = await import("./resolve-destination");
+    const callCtx = await inboundCallContext(input.workspaceId, input.phoneNumberId);
+    const resolved = await resolveForwardActionConfig(input.workspaceId, config, callCtx);
+    if (!resolved) return false;
     await startForwardingFlow({
       workspaceId: input.workspaceId,
       humanCallId: input.humanCallId,
@@ -249,9 +245,10 @@ export async function handleMenuDigitSelection(input: {
       callerE164: input.callerE164,
       effective: {
         kind: "forward",
-        destinationE164: dest,
-        press1: Boolean(config.press1 ?? true),
-        screeningText: typeof config.screeningText === "string" ? config.screeningText : null,
+        destinationE164: resolved.dialE164,
+        press1: Boolean(config.press1 ?? resolved.press1),
+        screeningText:
+          typeof config.screeningText === "string" ? config.screeningText : resolved.screeningText,
       },
     });
     return true;
@@ -267,13 +264,24 @@ export async function handleMenuDigitSelection(input: {
       },
     });
     if (!group) return false;
-    const destinations = group.members
-      .filter((m) => m.enabled && m.destination.enabled)
-      .map((m) => ({
-        e164: m.destination.phoneE164,
-        press1: m.destination.press1Required || m.destination.screeningEnabled,
-        timeout: m.destination.ringTimeoutSec,
-      }));
+    const { resolveForwardingDestinationRow, inboundCallContext } = await import(
+      "./resolve-destination"
+    );
+    const callCtx = await inboundCallContext(input.workspaceId, input.phoneNumberId);
+    const destinations: Array<{ e164: string; press1: boolean; timeout: number }> = [];
+    for (const m of group.members) {
+      if (!m.enabled || !m.destination.enabled) continue;
+      try {
+        const resolved = await resolveForwardingDestinationRow(m.destination, callCtx);
+        destinations.push({
+          e164: resolved.dialE164,
+          press1: resolved.press1,
+          timeout: resolved.ringTimeoutSec,
+        });
+      } catch {
+        // skip
+      }
+    }
     if (!destinations.length) return false;
     await startForwardingFlow({
       workspaceId: input.workspaceId,

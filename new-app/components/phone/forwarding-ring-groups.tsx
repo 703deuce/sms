@@ -124,7 +124,9 @@ export function ForwardingRingGroups({ config, phoneNumberId, onSaved }: Props) 
                     aria-label={`Include ${d.name}`}
                   />
                   <span className="flex-1 text-sm">{d.name}</span>
-                  <span className="font-mono text-xs text-muted-foreground">{d.phoneE164}</span>
+                  <span className="font-mono text-xs text-muted-foreground">
+                    {d.displayNumber || d.phoneE164}
+                  </span>
                   {checked && (
                     <span className="flex gap-1">
                       <Button type="button" size="icon" variant="ghost" aria-label="Move up" onClick={() => move(memberIds.indexOf(d.id), -1)}>

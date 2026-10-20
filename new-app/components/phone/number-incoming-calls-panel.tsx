@@ -23,7 +23,9 @@ const MODES = [
 
 export function NumberIncomingCallsPanel({ phoneNumberId }: { phoneNumberId: string }) {
   const [mode, setMode] = useState('browser')
-  const [destinations, setDestinations] = useState<Array<{ id: string; name: string }>>([])
+  const [destinations, setDestinations] = useState<
+    Array<{ id: string; name: string; displayNumber?: string; phoneE164?: string }>
+  >([])
   const [menus, setMenus] = useState<Array<{ id: string; name: string }>>([])
   const [primaryDestinationId, setPrimaryDestinationId] = useState('')
   const [menuId, setMenuId] = useState('')
@@ -91,7 +93,10 @@ export function NumberIncomingCallsPanel({ phoneNumberId }: { phoneNumberId: str
               </SelectTrigger>
               <SelectContent>
                 {destinations.map((d) => (
-                  <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                  <SelectItem key={d.id} value={d.id}>
+                    {d.name}
+                    {(d.displayNumber || d.phoneE164) ? ` · ${d.displayNumber || d.phoneE164}` : ''}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>

@@ -784,6 +784,7 @@ model PhoneNumber {
   arSmsReplySessions                     ArSmsReplySession[]
   arSmsConsumerPlatformSenderAssignments ArSmsConsumerPlatformSenderAssignment[]
   platformProductConsumerAssignments     PlatformProductConsumerAssignment[]
+  forwardingDestinationRefs              ForwardingDestination[]
 
   @@unique([workspaceId, e164])
   @@index([twilioSid])
@@ -7890,24 +7891,29 @@ model VisualizerUsageLedger {
 // --- Phone Call Forwarding + Auto Attendant (new-app) ---
 
 model ForwardingDestination {
-  id                  String    @id @default(cuid())
-  workspaceId         String
-  name                String
-  phoneE164           String
-  enabled             Boolean   @default(true)
-  screeningEnabled    Boolean   @default(false)
-  press1Required      Boolean   @default(false)
-  privateAnnouncement String?
-  ringTimeoutSec      Int       @default(25)
-  callerIdPolicy      String    @default("original") // original | business_line
-  lastTestedAt        DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  id                     String    @id @default(cuid())
+  workspaceId            String
+  name                   String
+  /// external_phone | workspace_number
+  destinationKind        String    @default("external_phone")
+  phoneE164              String?
+  workspacePhoneNumberId String?
+  enabled                Boolean   @default(true)
+  screeningEnabled       Boolean   @default(false)
+  press1Required         Boolean   @default(false)
+  privateAnnouncement    String?
+  ringTimeoutSec         Int       @default(25)
+  callerIdPolicy         String    @default("original") // original | business_line
+  lastTestedAt           DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
-  workspace    Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  groupMembers ForwardingGroupMember[]
+  workspace            Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspacePhoneNumber PhoneNumber?            @relation(fields: [workspacePhoneNumberId], references: [id], onDelete: SetNull)
+  groupMembers         ForwardingGroupMember[]
 
   @@unique([workspaceId, phoneE164])
+  @@unique([workspaceId, workspacePhoneNumberId])
   @@index([workspaceId, enabled])
   @@map("forwarding_destinations")
 }

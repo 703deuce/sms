@@ -11,7 +11,11 @@ function headers(): HeadersInit {
 export type ForwardingDestinationDto = {
   id: string
   name: string
+  destinationKind: 'external_phone' | 'workspace_number'
   phoneE164: string
+  displayNumber: string
+  workspacePhoneNumberId: string | null
+  workspaceNumberLabel: string | null
   enabled: boolean
   press1Required: boolean
   screeningEnabled: boolean

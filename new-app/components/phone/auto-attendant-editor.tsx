@@ -39,7 +39,12 @@ export function AutoAttendantEditor({ menuId }: { menuId: string }) {
   const [status, setStatus] = useState('draft')
   const [loading, setLoading] = useState(true)
   const [drawerIndex, setDrawerIndex] = useState<number | null>(null)
-  const [destinations, setDestinations] = useState<Array<{ id: string; name: string; phoneE164: string }>>([])
+  const [destinations, setDestinations] = useState<
+    Array<{ id: string; name: string; phoneE164: string; displayNumber?: string }>
+  >([])
+  const [workspaceNumbers, setWorkspaceNumbers] = useState<
+    Array<{ id: string; e164: string; friendlyName: string | null }>
+  >([])
   const [groups, setGroups] = useState<Array<{ id: string; name: string }>>([])
   const [menus, setMenus] = useState<Array<{ id: string; name: string }>>([])
 
@@ -66,6 +71,7 @@ export function AutoAttendantEditor({ menuId }: { menuId: string }) {
           )
         }
         setDestinations(fwd.destinations)
+        setWorkspaceNumbers(fwd.numbers)
         setGroups(fwd.groups.map((g) => ({ id: g.id, name: g.name })))
         setMenus(allMenus.map((x) => ({ id: x.id, name: x.name })))
       })
@@ -201,6 +207,7 @@ export function AutoAttendantEditor({ menuId }: { menuId: string }) {
         open={drawerIndex !== null}
         option={drawerIndex !== null ? options[drawerIndex] : null}
         destinations={destinations}
+        workspaceNumbers={workspaceNumbers}
         groups={groups}
         menus={menus.filter((m) => m.id !== menuId)}
         onClose={() => setDrawerIndex(null)}

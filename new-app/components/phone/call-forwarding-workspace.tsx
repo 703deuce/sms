@@ -5,8 +5,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { PhoneForwarded, Plus, RefreshCcw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  ForwardingDestinationSelector,
+  type ForwardingDestinationSelectorValue,
+} from '@/components/phone/forwarding-destination-selector'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -37,14 +40,18 @@ import {
   type ForwardingEntitlementsDto,
 } from '@/lib/phone-forwarding-api'
 import { ForwardingRingGroups } from '@/components/phone/forwarding-ring-groups'
+import { AfterHoursForwardPanel } from '@/components/phone/after-hours-forward-panel'
 
 export function CallForwardingWorkspace() {
   const [loading, setLoading] = useState(true)
   const [config, setConfig] = useState<ForwardingConfigDto | null>(null)
   const [phoneNumberId, setPhoneNumberId] = useState<string>('')
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [destName, setDestName] = useState('')
-  const [destPhone, setDestPhone] = useState('')
+  const [destDraft, setDestDraft] = useState<ForwardingDestinationSelectorValue>({
+    mode: 'external_phone',
+    label: '',
+    phoneE164: '',
+  })
   const [entitlements, setEntitlements] = useState<ForwardingEntitlementsDto | null>(null)
 
   const reload = useCallback(() => {
@@ -84,18 +91,29 @@ export function CallForwardingWorkspace() {
   }
 
   const addDestination = () => {
-    if (!destPhone.trim()) return
+    const name = destDraft.label.trim() || 'Forward'
+    if (destDraft.mode === 'external_phone' && !destDraft.phoneE164.trim()) {
+      toast.error('Enter a phone number')
+      return
+    }
+    if (destDraft.mode === 'workspace_number' && !destDraft.workspacePhoneNumberId) {
+      toast.error('Choose a Transovo number')
+      return
+    }
     void createForwardingDestination({
-      name: destName.trim() || 'Forward',
-      phoneE164: destPhone.trim(),
+      name,
+      destinationKind: destDraft.mode,
+      ...(destDraft.mode === 'external_phone'
+        ? { phoneE164: destDraft.phoneE164.trim() }
+        : { workspacePhoneNumberId: destDraft.workspacePhoneNumberId }),
       press1Required: true,
       hostedE164: selectedNumber?.e164,
+      hostedPhoneNumberId: phoneNumberId || undefined,
     })
       .then(async (row) => {
         toast.success('Destination added')
         setDrawerOpen(false)
-        setDestName('')
-        setDestPhone('')
+        setDestDraft({ mode: 'external_phone', label: '', phoneE164: '' })
         if (phoneNumberId && !policy?.primaryDestinationId) {
           await saveAnsweringPolicy(phoneNumberId, {
             answeringMode: 'forward',
@@ -229,7 +247,7 @@ export function CallForwardingWorkspace() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
-                    <TableHead>Number</TableHead>
+                    <TableHead>Destination</TableHead>
                     <TableHead>Press 1</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -239,7 +257,12 @@ export function CallForwardingWorkspace() {
                   {config?.destinations.map((d) => (
                     <TableRow key={d.id}>
                       <TableCell className="font-medium">{d.name}</TableCell>
-                      <TableCell className="font-mono text-sm">{d.phoneE164}</TableCell>
+                      <TableCell className="text-sm">
+                        <span className="font-mono">{d.displayNumber || d.phoneE164}</span>
+                        {d.destinationKind === 'workspace_number' && (
+                          <span className="ml-2 text-xs text-muted-foreground">Transovo number</span>
+                        )}
+                      </TableCell>
                       <TableCell>{d.press1Required ? 'On' : 'Off'}</TableCell>
                       <TableCell>{d.enabled ? 'Enabled' : 'Disabled'}</TableCell>
                       <TableCell className="text-right">
@@ -294,6 +317,19 @@ export function CallForwardingWorkspace() {
           {config && phoneNumberId && (
             <ForwardingRingGroups config={config} phoneNumberId={phoneNumberId} onSaved={reload} />
           )}
+
+          {phoneNumberId && config && (
+            <Panel
+              title="After-hours forwarding"
+              description="When business hours are closed, forward to an external line or another Transovo number."
+            >
+              <AfterHoursForwardPanel
+                phoneNumberId={phoneNumberId}
+                workspaceNumbers={config.numbers}
+                onSaved={reload}
+              />
+            </Panel>
+          )}
         </div>
 
         <aside className="flex flex-col gap-4 lg:col-span-4">
@@ -337,25 +373,11 @@ export function CallForwardingWorkspace() {
         >
           <div className="flex h-full w-full max-w-md flex-col gap-4 bg-background p-6 shadow-xl">
             <h2 id="cf-drawer-title" className="text-lg font-semibold">Add forwarding destination</h2>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="cf-dest-name">Name</Label>
-              <Input
-                id="cf-dest-name"
-                value={destName}
-                onChange={(e) => setDestName(e.target.value)}
-                placeholder="My cellphone"
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="cf-dest-phone">Phone number</Label>
-              <Input
-                id="cf-dest-phone"
-                value={destPhone}
-                onChange={(e) => setDestPhone(e.target.value)}
-                placeholder="+1…"
-                className="font-mono"
-              />
-            </div>
+            <ForwardingDestinationSelector
+              workspaceNumbers={config?.numbers ?? []}
+              value={destDraft}
+              onChange={setDestDraft}
+            />
             <p className="text-xs text-muted-foreground">
               Press 1 screening is enabled by default to help prevent personal voicemail from answering business calls.
             </p>

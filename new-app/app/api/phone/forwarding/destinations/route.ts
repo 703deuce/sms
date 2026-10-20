@@ -25,7 +25,16 @@ export async function POST(request: Request) {
     const body = (await request.json()) as Record<string, unknown>;
     const row = await createForwardingDestination(workspaceId, {
       name: String(body.name || "Destination"),
-      phoneE164: String(body.phoneE164 || body.phone || ""),
+      destinationKind:
+        typeof body.destinationKind === "string" ? body.destinationKind : undefined,
+      phoneE164:
+        typeof body.phoneE164 === "string"
+          ? body.phoneE164
+          : typeof body.phone === "string"
+            ? body.phone
+            : undefined,
+      workspacePhoneNumberId:
+        typeof body.workspacePhoneNumberId === "string" ? body.workspacePhoneNumberId : undefined,
       enabled: body.enabled !== false,
       screeningEnabled: Boolean(body.screeningEnabled),
       press1Required: Boolean(body.press1Required),
@@ -35,6 +44,8 @@ export async function POST(request: Request) {
         typeof body.ringTimeoutSec === "number" ? body.ringTimeoutSec : undefined,
       callerIdPolicy: typeof body.callerIdPolicy === "string" ? body.callerIdPolicy : undefined,
       hostedE164: typeof body.hostedE164 === "string" ? body.hostedE164 : undefined,
+      hostedPhoneNumberId:
+        typeof body.hostedPhoneNumberId === "string" ? body.hostedPhoneNumberId : undefined,
     });
     return NextResponse.json({ data: row });
   } catch (err) {

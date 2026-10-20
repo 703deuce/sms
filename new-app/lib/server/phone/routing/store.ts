@@ -1,18 +1,29 @@
 import { getPrisma } from "@/lib/server/db";
 import { validateDestinationE164, validateMenuDigit } from "./validation";
+import { assertDestinationKind, rejectDirectE164Loop, rejectDirectWorkspaceLoop } from "./destination-validation";
+import { loadWorkspacePhoneForDestination } from "./resolve-destination";
+import { toForwardingDestinationDto } from "./destination-dto";
+
+const destinationInclude = {
+  workspacePhoneNumber: { select: { e164: true, friendlyName: true } },
+};
 
 export async function listForwardingDestinations(workspaceId: string) {
-  return getPrisma().forwardingDestination.findMany({
+  const rows = await getPrisma().forwardingDestination.findMany({
     where: { workspaceId },
+    include: destinationInclude,
     orderBy: { name: "asc" },
   });
+  return rows.map(toForwardingDestinationDto);
 }
 
 export async function createForwardingDestination(
   workspaceId: string,
   input: {
     name: string;
-    phoneE164: string;
+    destinationKind?: string;
+    phoneE164?: string;
+    workspacePhoneNumberId?: string;
     enabled?: boolean;
     screeningEnabled?: boolean;
     press1Required?: boolean;
@@ -20,6 +31,7 @@ export async function createForwardingDestination(
     ringTimeoutSec?: number;
     callerIdPolicy?: string;
     hostedE164?: string;
+    hostedPhoneNumberId?: string;
   },
 ) {
   const { getForwardingEntitlements } = await import("./forwarding-entitlements");
@@ -29,12 +41,30 @@ export async function createForwardingDestination(
       `Destination limit reached (${ent.destinations.max}). Upgrade your plan to add more forwarding numbers.`,
     );
   }
-  const phoneE164 = validateDestinationE164(input.phoneE164, input.hostedE164);
-  return getPrisma().forwardingDestination.create({
+  const kind = assertDestinationKind(input.destinationKind || "external_phone");
+  let phoneE164: string | null = null;
+  let workspacePhoneNumberId: string | null = null;
+
+  if (kind === "workspace_number") {
+    const id = String(input.workspacePhoneNumberId || "").trim();
+    if (!id) throw new Error("Choose a Transovo number for this destination");
+    rejectDirectWorkspaceLoop(input.hostedPhoneNumberId, id);
+    const phone = await loadWorkspacePhoneForDestination(workspaceId, id);
+    rejectDirectE164Loop(input.hostedE164, phone.e164);
+    workspacePhoneNumberId = phone.id;
+    phoneE164 = phone.e164;
+  } else {
+    phoneE164 = validateDestinationE164(String(input.phoneE164 || ""), input.hostedE164);
+    workspacePhoneNumberId = null;
+  }
+
+  const row = await getPrisma().forwardingDestination.create({
     data: {
       workspaceId,
       name: input.name.trim(),
+      destinationKind: kind,
       phoneE164,
+      workspacePhoneNumberId,
       enabled: input.enabled ?? true,
       screeningEnabled: input.screeningEnabled ?? false,
       press1Required: input.press1Required ?? false,
@@ -42,7 +72,9 @@ export async function createForwardingDestination(
       ringTimeoutSec: input.ringTimeoutSec ?? 25,
       callerIdPolicy: input.callerIdPolicy ?? "original",
     },
+    include: destinationInclude,
   });
+  return toForwardingDestinationDto(row);
 }
 
 export async function updateForwardingDestination(
@@ -50,23 +82,52 @@ export async function updateForwardingDestination(
   id: string,
   patch: Partial<{
     name: string;
+    destinationKind: string;
     phoneE164: string;
+    workspacePhoneNumberId: string;
     enabled: boolean;
     screeningEnabled: boolean;
     press1Required: boolean;
     privateAnnouncement: string | null;
     ringTimeoutSec: number;
     callerIdPolicy: string;
+    hostedE164?: string;
+    hostedPhoneNumberId?: string;
   }>,
 ) {
   const existing = await getPrisma().forwardingDestination.findFirst({ where: { id, workspaceId } });
   if (!existing) throw new Error("Destination not found");
-  const phoneE164 = patch.phoneE164 ? validateDestinationE164(patch.phoneE164) : undefined;
-  return getPrisma().forwardingDestination.update({
+
+  const kind = patch.destinationKind
+    ? assertDestinationKind(patch.destinationKind)
+    : (existing.destinationKind as "external_phone" | "workspace_number");
+
+  let phoneE164: string | null | undefined;
+  let workspacePhoneNumberId: string | null | undefined;
+
+  if (kind === "workspace_number") {
+    const wsId = patch.workspacePhoneNumberId ?? existing.workspacePhoneNumberId;
+    if (!wsId) throw new Error("Choose a Transovo number for this destination");
+    rejectDirectWorkspaceLoop(patch.hostedPhoneNumberId, wsId);
+    const phone = await loadWorkspacePhoneForDestination(workspaceId, wsId);
+    if (patch.hostedE164) rejectDirectE164Loop(patch.hostedE164, phone.e164);
+    workspacePhoneNumberId = phone.id;
+    phoneE164 = phone.e164;
+  } else if (patch.phoneE164 !== undefined || patch.destinationKind === "external_phone") {
+    phoneE164 = validateDestinationE164(
+      patch.phoneE164 ?? existing.phoneE164 ?? "",
+      patch.hostedE164,
+    );
+    workspacePhoneNumberId = null;
+  }
+
+  const row = await getPrisma().forwardingDestination.update({
     where: { id },
     data: {
       ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
-      ...(phoneE164 ? { phoneE164 } : {}),
+      ...(patch.destinationKind !== undefined ? { destinationKind: kind } : {}),
+      ...(phoneE164 !== undefined ? { phoneE164 } : {}),
+      ...(workspacePhoneNumberId !== undefined ? { workspacePhoneNumberId } : {}),
       ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
       ...(patch.screeningEnabled !== undefined ? { screeningEnabled: patch.screeningEnabled } : {}),
       ...(patch.press1Required !== undefined ? { press1Required: patch.press1Required } : {}),
@@ -74,7 +135,9 @@ export async function updateForwardingDestination(
       ...(patch.ringTimeoutSec !== undefined ? { ringTimeoutSec: patch.ringTimeoutSec } : {}),
       ...(patch.callerIdPolicy !== undefined ? { callerIdPolicy: patch.callerIdPolicy } : {}),
     },
+    include: destinationInclude,
   });
+  return toForwardingDestinationDto(row);
 }
 
 export async function deleteForwardingDestination(workspaceId: string, id: string) {
@@ -86,13 +149,17 @@ export async function deleteForwardingDestination(workspaceId: string, id: strin
 
 export async function getForwardingConfig(workspaceId: string) {
   const prisma = getPrisma();
-  const [destinations, groups, policies, usage] = await Promise.all([
-    prisma.forwardingDestination.findMany({ where: { workspaceId }, orderBy: { name: "asc" } }),
+  const [destinationRows, groups, policies, usage] = await Promise.all([
+    prisma.forwardingDestination.findMany({
+      where: { workspaceId },
+      include: destinationInclude,
+      orderBy: { name: "asc" },
+    }),
     prisma.forwardingGroup.findMany({
       where: { workspaceId },
       include: {
         members: {
-          include: { destination: true },
+          include: { destination: { include: destinationInclude } },
           orderBy: { priority: "asc" },
         },
       },
@@ -102,7 +169,15 @@ export async function getForwardingConfig(workspaceId: string) {
       where: { workspaceId, yearMonth: currentYearMonth() },
     }),
   ]);
-  return { destinations, groups, policies, usage };
+  const destinations = destinationRows.map(toForwardingDestinationDto);
+  const groupsWithDto = groups.map((g) => ({
+    ...g,
+    members: g.members.map((m) => ({
+      ...m,
+      destination: toForwardingDestinationDto(m.destination),
+    })),
+  }));
+  return { destinations, groups: groupsWithDto, policies, usage };
 }
 
 function currentYearMonth() {
@@ -386,7 +461,14 @@ export async function validateAutoAttendantMenu(workspaceId: string, id: string)
     if (o.actionType === "forward_phone") {
       const cfg = (o.actionConfigJson || {}) as Record<string, unknown>;
       const dest = String(cfg.destinationE164 || cfg.phoneE164 || "");
-      if (!dest) issues.push(`option_${o.digit}_missing_destination`);
+      const destId = String(cfg.destinationId || "");
+      const refKind = String(cfg.destinationRefKind || "");
+      const hasRef =
+        destId ||
+        dest ||
+        (refKind === "external_phone" && cfg.destinationRefE164) ||
+        (refKind === "workspace_number" && cfg.destinationRefPhoneNumberId);
+      if (!hasRef) issues.push(`option_${o.digit}_missing_destination`);
     }
   }
   return { ok: issues.length === 0, issues };

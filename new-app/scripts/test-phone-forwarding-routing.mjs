@@ -52,5 +52,7 @@ assert.equal(
 
 const fb = parseFallbackJson({ type: 'forward_phone', destinationE164: '+15550001111' })
 assert.equal(fb?.type, 'forward_phone')
+const fbId = parseFallbackJson({ type: 'forward_phone', destinationId: 'd1' })
+assert.equal(fbId?.destinationId, 'd1')
 
 console.log('test-phone-forwarding-routing: PASS (validation + routing logic + fallback parse)')

@@ -12,6 +12,11 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+import {
+  ForwardingDestinationSelector,
+  type ForwardingDestinationSelectorValue,
+  type WorkspaceNumberOption,
+} from '@/components/phone/forwarding-destination-selector'
 
 export type MenuOptionDraft = {
   digit: string
@@ -32,17 +37,34 @@ const ACTION_TYPES = [
 type Props = {
   open: boolean
   option: MenuOptionDraft | null
-  destinations: Array<{ id: string; name: string; phoneE164: string }>
+  destinations: Array<{ id: string; name: string; phoneE164: string; displayNumber?: string }>
+  workspaceNumbers: WorkspaceNumberOption[]
   groups: Array<{ id: string; name: string }>
   menus: Array<{ id: string; name: string }>
   onClose: () => void
   onSave: (option: MenuOptionDraft) => void
 }
 
+function readSelectorValue(cfg: Record<string, unknown>): ForwardingDestinationSelectorValue {
+  if (cfg.destinationId) {
+    return { mode: 'external_phone', label: '', phoneE164: '' }
+  }
+  if (cfg.destinationRefKind === 'workspace_number' && cfg.destinationRefPhoneNumberId) {
+    return {
+      mode: 'workspace_number',
+      label: String(cfg.destinationRefLabel || ''),
+      workspacePhoneNumberId: String(cfg.destinationRefPhoneNumberId),
+    }
+  }
+  const e164 = String(cfg.destinationRefE164 || cfg.destinationE164 || cfg.phoneE164 || '')
+  return { mode: 'external_phone', label: String(cfg.destinationRefLabel || ''), phoneE164: e164 }
+}
+
 export function AutoAttendantOptionDrawer({
   open,
   option,
   destinations,
+  workspaceNumbers,
   groups,
   menus,
   onClose,
@@ -53,6 +75,26 @@ export function AutoAttendantOptionDrawer({
 
   const patchCfg = (patch: Record<string, unknown>) => {
     onSave({ ...option, actionConfigJson: { ...cfg, ...patch } })
+  }
+
+  const applySelector = (v: ForwardingDestinationSelectorValue) => {
+    if (v.mode === 'workspace_number') {
+      patchCfg({
+        destinationId: undefined,
+        destinationE164: undefined,
+        destinationRefKind: 'workspace_number',
+        destinationRefPhoneNumberId: v.workspacePhoneNumberId,
+        destinationRefLabel: v.label,
+      })
+      return
+    }
+    patchCfg({
+      destinationId: undefined,
+      destinationRefKind: 'external_phone',
+      destinationRefE164: v.phoneE164,
+      destinationRefLabel: v.label,
+      destinationE164: v.phoneE164,
+    })
   }
 
   return (
@@ -98,24 +140,39 @@ export function AutoAttendantOptionDrawer({
           {option.actionType === 'forward_phone' && (
             <>
               <div>
-                <Label>Saved destination</Label>
+                <Label>Saved destination (optional)</Label>
                 <Select
                   value={String(cfg.destinationId || '')}
                   onValueChange={(id) => {
                     const d = destinations.find((x) => x.id === id)
-                    patchCfg({ destinationId: id, destinationE164: d?.phoneE164 })
+                    patchCfg({
+                      destinationId: id,
+                      destinationE164: d?.displayNumber || d?.phoneE164,
+                      destinationRefKind: undefined,
+                      destinationRefE164: undefined,
+                      destinationRefPhoneNumberId: undefined,
+                    })
                   }}
                 >
                   <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Choose destination" />
+                    <SelectValue placeholder="Use a saved destination" />
                   </SelectTrigger>
                   <SelectContent>
                     {destinations.map((d) => (
-                      <SelectItem key={d.id} value={d.id}>{d.name} · {d.phoneE164}</SelectItem>
+                      <SelectItem key={d.id} value={d.id}>
+                        {d.name} · {d.displayNumber || d.phoneE164}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
+              {!cfg.destinationId && (
+                <ForwardingDestinationSelector
+                  workspaceNumbers={workspaceNumbers}
+                  value={readSelectorValue(cfg)}
+                  onChange={applySelector}
+                />
+              )}
               <div className="flex items-center gap-2">
                 <Switch
                   checked={cfg.press1 !== false}
@@ -161,17 +218,15 @@ export function AutoAttendantOptionDrawer({
           )}
 
           {option.actionType === 'announcement' && (
-            <>
-              <div>
-                <Label htmlFor="ann-text">Announcement</Label>
-                <Input
-                  id="ann-text"
-                  className="mt-1"
-                  value={String(cfg.text || '')}
-                  onChange={(e) => patchCfg({ text: e.target.value })}
-                />
-              </div>
-            </>
+            <div>
+              <Label htmlFor="ann-text">Announcement</Label>
+              <Input
+                id="ann-text"
+                className="mt-1"
+                value={String(cfg.text || '')}
+                onChange={(e) => patchCfg({ text: e.target.value })}
+              />
+            </div>
           )}
 
           <div className="flex justify-end gap-2 pt-4">

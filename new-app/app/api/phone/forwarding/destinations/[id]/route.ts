@@ -19,7 +19,15 @@ export async function PATCH(request: Request, { params }: Params) {
     const body = (await request.json()) as Record<string, unknown>;
     const row = await updateForwardingDestination(workspaceId, id, {
       ...(typeof body.name === "string" ? { name: body.name } : {}),
+      ...(typeof body.destinationKind === "string" ? { destinationKind: body.destinationKind } : {}),
       ...(typeof body.phoneE164 === "string" ? { phoneE164: body.phoneE164 } : {}),
+      ...(typeof body.workspacePhoneNumberId === "string"
+        ? { workspacePhoneNumberId: body.workspacePhoneNumberId }
+        : {}),
+      ...(typeof body.hostedE164 === "string" ? { hostedE164: body.hostedE164 } : {}),
+      ...(typeof body.hostedPhoneNumberId === "string"
+        ? { hostedPhoneNumberId: body.hostedPhoneNumberId }
+        : {}),
       ...(typeof body.enabled === "boolean" ? { enabled: body.enabled } : {}),
       ...(typeof body.screeningEnabled === "boolean"
         ? { screeningEnabled: body.screeningEnabled }

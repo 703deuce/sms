@@ -3,7 +3,7 @@ import { assertDevApiAccess } from "@/lib/server/dev-api-guard";
 import { jsonError } from "@/lib/server/api-error";
 import { resolveWorkspaceId } from "@/lib/server/workspace";
 import { getPrisma } from "@/lib/server/db";
-import { validateDestinationE164 } from "@/lib/server/phone/routing/validation";
+import { resolveForwardingDestinationRow } from "@/lib/server/phone/routing/resolve-destination";
 
 export async function POST(request: Request) {
   const denied = assertDevApiAccess(request);
@@ -18,14 +18,14 @@ export async function POST(request: Request) {
       where: { id: destinationId, workspaceId },
     });
     if (!dest) throw new Error("Destination not found");
-    validateDestinationE164(dest.phoneE164);
+    const resolved = await resolveForwardingDestinationRow(dest, {});
     if (!confirm) {
       return NextResponse.json({
         data: {
           ready: true,
           message:
             "Destination validated. Set confirm=true to mark as tested (live test calls are not auto-dialed from this endpoint).",
-          destination: { id: dest.id, name: dest.name, phoneE164: dest.phoneE164 },
+          destination: { id: dest.id, name: dest.name, phoneE164: resolved.dialE164 },
         },
       });
     }

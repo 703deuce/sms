@@ -1,10 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  ForwardingDestinationSelector,
+  type ForwardingDestinationSelectorValue,
+} from '@/components/phone/forwarding-destination-selector'
+import { fetchCallForwarding } from '@/lib/phone-forwarding-api'
 import { Progress } from '@/components/ui/progress'
 import { PageHeader, Panel } from '@/components/app/page-primitives'
 import Link from 'next/link'
@@ -22,7 +27,18 @@ export function ForwardingOnboarding() {
   const [step, setStep] = useState(1)
   const [phoneChoice, setPhoneChoice] = useState<'new' | 'port' | 'forward'>('forward')
   const [forwardPhone, setForwardPhone] = useState('')
-  const [destPhone, setDestPhone] = useState('')
+  const [destDraft, setDestDraft] = useState<ForwardingDestinationSelectorValue>({
+    mode: 'external_phone',
+    label: 'Primary',
+    phoneE164: '',
+  })
+  const [workspaceNumbers, setWorkspaceNumbers] = useState<
+    Array<{ id: string; e164: string; friendlyName: string | null }>
+  >([])
+
+  useEffect(() => {
+    void fetchCallForwarding().then((cfg) => setWorkspaceNumbers(cfg.numbers))
+  }, [])
   const [behavior, setBehavior] = useState<'forward' | 'greeting' | 'menu'>('forward')
   const [phoneNumberId, setPhoneNumberId] = useState('')
   const [done, setDone] = useState(false)
@@ -30,7 +46,7 @@ export function ForwardingOnboarding() {
   const progress = (step / 4) * 100
 
   const next = () => {
-    void saveDraft(step, { phoneChoice, forwardPhone, destPhone, behavior })
+    void saveDraft(step, { phoneChoice, forwardPhone, destDraft, behavior })
       .then(() => setStep((s) => Math.min(4, s + 1)))
       .catch(() => toast.error('Could not save draft'))
   }
@@ -45,7 +61,16 @@ export function ForwardingOnboarding() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         phoneNumberId,
-        destinations: [{ name: 'Primary', phoneE164: destPhone, press1Required: true }],
+        destinations: [
+          destDraft.mode === 'external_phone'
+            ? { name: destDraft.label || 'Primary', destinationKind: 'external_phone', phoneE164: destDraft.phoneE164, press1Required: true }
+            : {
+                name: destDraft.label || 'Primary',
+                destinationKind: 'workspace_number',
+                workspacePhoneNumberId: destDraft.workspacePhoneNumberId,
+                press1Required: true,
+              },
+        ],
         incomingBehavior: behavior,
       }),
     })
@@ -112,16 +137,11 @@ export function ForwardingOnboarding() {
 
       {step === 2 && (
         <Panel title="Where should your business calls ring?">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="dest">Forward to</Label>
-            <Input
-              id="dest"
-              value={destPhone}
-              onChange={(e) => setDestPhone(e.target.value)}
-              placeholder="+1…"
-              className="font-mono"
-            />
-          </div>
+          <ForwardingDestinationSelector
+            workspaceNumbers={workspaceNumbers}
+            value={destDraft}
+            onChange={setDestDraft}
+          />
         </Panel>
       )}
 

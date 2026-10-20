@@ -1,7 +1,11 @@
-import { getPrisma } from "@/lib/server/db";
-import { isBusinessOpenNow } from "@/lib/server/phone/business-hours";
 import { readTelephonyProvision } from "@/lib/server/telephony/telephony-record";
 import { getAnsweringPolicyForNumber } from "./store";
+import {
+  inboundCallContext,
+  resolveForwardActionConfig,
+  resolveForwardingDestinationById,
+  resolveForwardingDestinationRow,
+} from "./resolve-destination";
 
 export type EffectiveAnswering =
   | { kind: "browser" }
@@ -10,6 +14,18 @@ export type EffectiveAnswering =
   | { kind: "forward_group"; strategy: string; destinations: Array<{ e164: string; press1: boolean; timeout: number }> }
   | { kind: "auto_attendant"; menuId: string }
   | { kind: "greeting_then_forward"; greeting: string; destinationE164: string };
+
+type ScheduleJson = {
+  afterHoursMode?: string;
+  afterHoursDestinationE164?: string;
+  afterHoursDestinationId?: string;
+  afterHoursDestinationRef?: {
+    kind?: string;
+    e164PhoneNumber?: string;
+    phoneNumberId?: string;
+  };
+  afterHoursMenuId?: string;
+};
 
 export async function resolveEffectiveAnswering(input: {
   workspaceId: string;
@@ -26,24 +42,25 @@ export async function resolveEffectiveAnswering(input: {
   const policy = await getAnsweringPolicyForNumber(input.workspaceId, input.phoneNumberId);
   if (!policy || policy.paused) return { kind: "browser" };
 
+  const callCtx = await inboundCallContext(input.workspaceId, input.phoneNumberId);
+
   const open = await isBusinessOpenNow(input.workspaceId);
-  const schedule = policy.scheduleJson as {
-    afterHoursMode?: string;
-    afterHoursDestinationE164?: string;
-    afterHoursMenuId?: string;
-  } | null;
+  const schedule = policy.scheduleJson as ScheduleJson | null;
   if (!open) {
     if (schedule?.afterHoursMode === "voicemail") return { kind: "voicemail" };
     if (schedule?.afterHoursMode === "auto_attendant" && schedule.afterHoursMenuId) {
       return { kind: "auto_attendant", menuId: schedule.afterHoursMenuId };
     }
-    if (schedule?.afterHoursMode === "forward" && schedule.afterHoursDestinationE164) {
-      return {
-        kind: "forward",
-        destinationE164: schedule.afterHoursDestinationE164,
-        press1: true,
-        screeningText: null,
-      };
+    if (schedule?.afterHoursMode === "forward") {
+      const afterHours = await resolveScheduleForward(input.workspaceId, schedule, callCtx);
+      if (afterHours) {
+        return {
+          kind: "forward",
+          destinationE164: afterHours.dialE164,
+          press1: afterHours.press1,
+          screeningText: afterHours.screeningText,
+        };
+      }
     }
   }
 
@@ -55,12 +72,12 @@ export async function resolveEffectiveAnswering(input: {
   }
 
   if (policy.answeringMode === "greeting_then_forward" && policy.greetingText) {
-    const dest = await resolvePrimaryDestination(policy);
+    const dest = await resolvePrimaryDestination(policy, callCtx);
     if (dest) {
       return {
         kind: "greeting_then_forward",
         greeting: policy.greetingText,
-        destinationE164: dest.e164,
+        destinationE164: dest.dialE164,
       };
     }
   }
@@ -68,22 +85,29 @@ export async function resolveEffectiveAnswering(input: {
   if (policy.answeringMode === "forward") {
     const group = policy.forwardingGroup;
     if (group?.enabled && group.members.length) {
-      const destinations = group.members
-        .filter((m) => m.enabled && m.destination.enabled)
-        .map((m) => ({
-          e164: m.destination.phoneE164,
-          press1: m.destination.press1Required || m.destination.screeningEnabled,
-          timeout: m.destination.ringTimeoutSec,
-        }));
+      const destinations: Array<{ e164: string; press1: boolean; timeout: number }> = [];
+      for (const m of group.members) {
+        if (!m.enabled || !m.destination.enabled) continue;
+        try {
+          const resolved = await resolveForwardingDestinationRow(m.destination, callCtx);
+          destinations.push({
+            e164: resolved.dialE164,
+            press1: resolved.press1,
+            timeout: resolved.ringTimeoutSec,
+          });
+        } catch {
+          // skip invalid member
+        }
+      }
       if (destinations.length) {
         return { kind: "forward_group", strategy: group.strategy, destinations };
       }
     }
-    const dest = await resolvePrimaryDestination(policy);
+    const dest = await resolvePrimaryDestination(policy, callCtx);
     if (dest) {
       return {
         kind: "forward",
-        destinationE164: dest.e164,
+        destinationE164: dest.dialE164,
         press1: dest.press1,
         screeningText: dest.screeningText,
       };
@@ -95,18 +119,58 @@ export async function resolveEffectiveAnswering(input: {
   return { kind: "browser" };
 }
 
+async function resolveScheduleForward(
+  workspaceId: string,
+  schedule: ScheduleJson,
+  callCtx: { inboundPhoneNumberId: string | null; inboundE164: string | null },
+) {
+  if (schedule.afterHoursDestinationId) {
+    return resolveForwardingDestinationById(workspaceId, schedule.afterHoursDestinationId, callCtx);
+  }
+  if (schedule.afterHoursDestinationRef?.kind) {
+    const ref = schedule.afterHoursDestinationRef;
+    if (ref.kind === "workspace_number" && ref.phoneNumberId) {
+      return resolveForwardActionConfig(
+        workspaceId,
+        {
+          destinationRefKind: "workspace_number",
+          destinationRefPhoneNumberId: ref.phoneNumberId,
+        },
+        callCtx,
+      );
+    }
+    if (ref.kind === "external_phone" && ref.e164PhoneNumber) {
+      return resolveForwardActionConfig(
+        workspaceId,
+        { destinationRefKind: "external_phone", destinationRefE164: ref.e164PhoneNumber },
+        callCtx,
+      );
+    }
+  }
+  if (schedule.afterHoursDestinationE164) {
+    return resolveForwardActionConfig(
+      workspaceId,
+      { destinationE164: schedule.afterHoursDestinationE164 },
+      callCtx,
+    );
+  }
+  return null;
+}
+
 async function resolvePrimaryDestination(
   policy: Awaited<ReturnType<typeof getAnsweringPolicyForNumber>>,
+  callCtx: { inboundPhoneNumberId: string | null; inboundE164: string | null },
 ) {
   if (!policy?.primaryDestinationId) return null;
-  const prisma = getPrisma();
-  const dest = await prisma.forwardingDestination.findFirst({
-    where: { id: policy.primaryDestinationId, workspaceId: policy.workspaceId, enabled: true },
-  });
-  if (!dest) return null;
-  return {
-    e164: dest.phoneE164,
-    press1: dest.press1Required || dest.screeningEnabled,
-    screeningText: dest.privateAnnouncement,
-  };
+  return resolveForwardingDestinationById(
+    policy.workspaceId,
+    policy.primaryDestinationId,
+    callCtx,
+  );
+}
+
+// Lazy import avoids circular dependency with business-hours module.
+async function isBusinessOpenNow(workspaceId: string) {
+  const { isBusinessOpenNow: fn } = await import("@/lib/server/phone/business-hours");
+  return fn(workspaceId);
 }

@@ -49,10 +49,22 @@ export async function POST(request: Request) {
       const row = d as Record<string, unknown>;
       const created = await createForwardingDestination(workspaceId, {
         name: String(row.name || "Forward"),
-        phoneE164: String(row.phoneE164 || row.phone || ""),
+        destinationKind:
+          typeof row.destinationKind === "string" ? row.destinationKind : undefined,
+        phoneE164:
+          typeof row.phoneE164 === "string"
+            ? row.phoneE164
+            : typeof row.phone === "string"
+              ? row.phone
+              : undefined,
+        workspacePhoneNumberId:
+          typeof row.workspacePhoneNumberId === "string"
+            ? row.workspacePhoneNumberId
+            : undefined,
         press1Required: row.press1Required !== false,
         screeningEnabled: Boolean(row.screeningEnabled ?? row.press1Required !== false),
         hostedE164: typeof body.businessE164 === "string" ? body.businessE164 : undefined,
+        hostedPhoneNumberId: phoneNumberId,
       });
       if (!primaryDestinationId) primaryDestinationId = created.id;
     }
