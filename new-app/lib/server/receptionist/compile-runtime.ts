@@ -11,7 +11,8 @@ import {
 } from "@/lib/server/voice-v3/editor-to-voice-v3-config";
 import type { ReceptionistBusinessFacts } from "@/lib/server/receptionist/business-facts";
 
-const ASTRA_MODEL = process.env.VOICE_V3_ASTRA_MODEL?.trim() || "gpt-5.2";
+/** Matches monolith `VOICE_V3_ASTRA_MODEL_DEFAULT` (GPT-Live delegation backend). */
+const ASTRA_MODEL = process.env.VOICE_V3_ASTRA_MODEL?.trim() || "gpt-6-luna";
 
 function enabledTools(config: AgentConfig): string[] {
   const names: string[] = ["update_intake", "end_call"];

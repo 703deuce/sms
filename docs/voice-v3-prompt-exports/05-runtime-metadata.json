@@ -1,0 +1,21 @@
+{
+  "astraModel": "gpt-6-luna",
+  "liveVoiceId": "marin",
+  "amyChars": 19096,
+  "astraChars": 14215,
+  "toolNames": [
+    "update_intake",
+    "end_call",
+    "set_scheduling_preference",
+    "find_availability",
+    "book_appointment",
+    "send_booking_link",
+    "find_appointment",
+    "reschedule_appointment",
+    "cancel_appointment",
+    "transfer_call",
+    "request_callback",
+    "business_answer",
+    "report_unwanted_solicitor"
+  ]
+}
