@@ -10,9 +10,9 @@ import type {
 } from "./types";
 import { voiceToolError, toolOk } from "../tools/types";
 import type { VoiceToolResult } from "../tools/types";
-import { resolveActiveOnCallTarget } from "@/lib/voice-receptionist-wizard/operating-maturity/on-call";
-import { resolveVoiceV2OperatingState } from "@/lib/voice-receptionist-wizard/operating-maturity/operating-state";
-import { gateCapabilitiesForOperatingState } from "@/lib/voice-receptionist-wizard/operating-maturity/behavior-gating";
+import { resolveActiveOnCallTarget } from "@/lib/server/voice-v3/operating-maturity/on-call";
+import { resolveVoiceV2OperatingState } from "@/lib/server/voice-v3/operating-maturity/operating-state";
+import { gateCapabilitiesForOperatingState } from "@/lib/server/voice-v3/operating-maturity/behavior-gating";
 import { evaluateVoiceV3Urgency } from "../urgency/evaluate-urgency";
 import { isVoiceV3ToolAuthorizedBase } from "../tools/authorize-tool-for-config";
 

@@ -6,6 +6,8 @@ import {
 import { isQualificationBlockingCalendarActions } from "../qualification/evaluate-qualification";
 import { resolveActiveServicePolicy, serviceAllowsLiveBooking } from "./service-policy";
 import type { VoiceV3CallContext } from "../state/call-context";
+import { gateCapabilitiesForOperatingState } from "../operating-maturity/behavior-gating";
+import { resolveVoiceV2OperatingState } from "../operating-maturity/operating-state";
 
 /**
  * Deterministic tool authorization for new-app receptionist (AgentConfig → VoiceV3AgentConfig).
@@ -48,6 +50,34 @@ export function isVoiceV3ToolAuthorizedEffective(
     return false;
   }
 
-  // New-app editor does not populate legacy wizard operatingPolicy yet — no after-hours tool lockout.
+  const policy = config.operatingPolicy;
+  if (policy?.businessSchedule && policy.afterHoursBehavior) {
+    const operating = resolveVoiceV2OperatingState({
+      schedule: policy.businessSchedule,
+      overflowActive: callContext?.metadata?.overflowActive === true,
+    });
+    const gates = gateCapabilitiesForOperatingState({
+      ctx: {
+        capabilities: {
+          transferToolAvailable: isVoiceV3ToolAuthorizedBase(config, "transfer_call"),
+          callbackToolAvailable: isVoiceV3ToolAuthorizedBase(config, "request_callback"),
+          bookingEnabled: isVoiceV3ToolAuthorizedBase(config, "book_appointment"),
+          voiceV2PstnLiveBooking: isVoiceV3ToolAuthorizedBase(config, "book_appointment"),
+        },
+      },
+      operating,
+      behavior: policy.afterHoursBehavior,
+    });
+    if (toolName === "transfer_call" && !gates.transferToolAvailable) return false;
+    if (toolName === "request_callback" && !gates.callbackToolAvailable) return false;
+    if (
+      (toolName === "book_appointment" || toolName === "find_availability") &&
+      !gates.liveBookingAllowed
+    ) {
+      return false;
+    }
+    if (toolName === "take_message" && !gates.messageTakingAllowed) return false;
+  }
+
   return true;
 }

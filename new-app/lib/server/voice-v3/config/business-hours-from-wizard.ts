@@ -1,4 +1,4 @@
-import type { VoiceV2BusinessScheduleConfig } from "@/lib/voice-receptionist-wizard/operating-maturity/types";
+import type { BusinessScheduleConfig } from "@/lib/agent";
 import type { BusinessHoursWindow } from "../calendar/types";
 
 const DAY_ORDER = [
@@ -31,7 +31,7 @@ const JS_WEEKDAY: Record<string, number> = {
   saturday: 6,
 };
 
-export function formatWeeklyHoursForAmy(schedule: VoiceV2BusinessScheduleConfig | null | undefined): string {
+export function formatWeeklyHoursForAmy(schedule: BusinessScheduleConfig | null | undefined): string {
   if (!schedule?.weekly) return "";
   const lines: string[] = [];
   for (const day of DAY_ORDER) {
@@ -59,7 +59,7 @@ function formatHm(hhmm: string): string {
 
 /** Coarse scheduling window — first open range across enabled weekdays (deterministic enforcement baseline). */
 export function businessHoursWindowFromWeeklySchedule(
-  schedule: VoiceV2BusinessScheduleConfig | null | undefined,
+  schedule: BusinessScheduleConfig | null | undefined,
   fallback: BusinessHoursWindow,
 ): BusinessHoursWindow {
   if (!schedule?.weekly) return fallback;

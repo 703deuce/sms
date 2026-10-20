@@ -195,7 +195,7 @@ export interface VoiceV3CallHandlingConfig {
     timeoutSeconds?: number;
   }>;
   urgencyEnabled: boolean;
-  urgencyRules?: import("@/lib/voice-receptionist-wizard/after-hours-handling-types").VoiceV2UrgencyRuleRow[];
+  urgencyRules?: import("@/lib/receptionist/after-hours-types").VoiceV2UrgencyRuleRow[];
   callbackRequestsEnabled: boolean;
   callbackUseAniByDefault: boolean;
   callbackAskPreferredTime: boolean;
@@ -291,7 +291,7 @@ export interface VoiceV3AgentConfig {
   integrations: VoiceV3IntegrationsConfig;
   bookingStrategyDetail: VoiceV3BookingStrategyConfig;
   spamProtection?: import("../spam-protection/types").VoiceV3SpamProtectionConfig;
-  operatingPolicy?: import("@/lib/voice-receptionist-wizard/operating-maturity/types").VoiceV2OperatingMaturityPublishedConfig;
+  operatingPolicy?: import("@/lib/agent").OperatingMaturityConfig;
 
   /** Hash / version for observability at accept time. */
   configVersion?: string;

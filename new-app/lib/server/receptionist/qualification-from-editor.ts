@@ -18,6 +18,10 @@ function mapOperator(op: AgentConfig["qualification"]["rules"][number]["operator
       return "IN";
     case "not_in":
       return "NOT_IN";
+    case "contains":
+      return "CONTAINS";
+    case "exists":
+      return "EXISTS";
     case "equals":
     default:
       return "EQUALS";
@@ -46,9 +50,9 @@ export function qualificationConfigFromEditor(editor: AgentConfig): VoiceV3Quali
     fieldKey: resolveIntakeFieldKey(editor, r.field),
     operator: mapOperator(r.operator),
     value: r.values,
-    resultStatus: "NOT_QUALIFIED",
+    resultStatus: r.resultStatus ?? "NOT_QUALIFIED",
     reasonCode: "RULE_MATCH",
-    reasonLabel: "Did not meet qualification rules",
+    reasonLabel: r.reasonLabel?.trim() || "Did not meet qualification rules",
   }));
 
   const zipField = editor.intake.find((f) => f.type === "zip" || f.qualifies);

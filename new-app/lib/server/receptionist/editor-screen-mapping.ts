@@ -27,6 +27,7 @@ export const RECEPTIONIST_EDITOR_SCREEN_FIELDS = {
     "audio",
   ],
   appointments: ["appointments"],
+  operations: ["operating", "transferAdvanced", "urgency", "coverage.customSchedule"],
 } as const;
 
 export function enabledVoiceToolNamesFromEditor(editor: AgentConfig): string[] {
@@ -37,6 +38,7 @@ export function enabledVoiceToolNamesFromEditor(editor: AgentConfig): string[] {
     editor.appointments.strategy === "live" &&
     editor.appointments.provider !== "none";
   const bookLink = on("book") && editor.appointments.strategy === "link";
+  const bookRequest = on("book") && editor.appointments.strategy === "request";
 
   if (bookLive || (on("reschedule") && bookLive)) {
     names.push("set_scheduling_preference", "find_availability");
@@ -46,6 +48,12 @@ export function enabledVoiceToolNamesFromEditor(editor: AgentConfig): string[] {
   }
   if (bookLink) {
     names.push("send_booking_link");
+  }
+  if (bookRequest) {
+    names.push("submit_appointment_request");
+  }
+  if (on("message") || editor.messages.takeMessage) {
+    names.push("take_message");
   }
   if (on("reschedule") && bookLive) {
     names.push("find_appointment", "reschedule_appointment");

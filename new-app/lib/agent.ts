@@ -5,6 +5,11 @@
  */
 
 import { RECEPTIONIST_VOICE_OPTIONS } from '@/lib/voice/gpt-live-built-in-voices'
+import {
+  DEFAULT_CUSTOM_COVERAGE,
+  DEFAULT_OPERATING_MATURITY,
+  DEFAULT_TRANSFER_ADVANCED,
+} from '@/lib/receptionist/operating-defaults'
 
 export type Capability = 'answer' | 'book' | 'reschedule' | 'cancel' | 'message' | 'qualify' | 'transfer' | 'smsConfirm'
 
@@ -22,8 +27,122 @@ export type IntakeField = {
 export type QualificationRule = {
   id: string
   field: string
-  operator: 'in' | 'not_in' | 'equals'
+  operator: 'in' | 'not_in' | 'equals' | 'contains' | 'exists'
   values: string
+  resultStatus?: 'QUALIFIED' | 'NOT_QUALIFIED' | 'NEEDS_REVIEW'
+  reasonLabel?: string
+}
+
+export type DayOfWeek =
+  | 'monday'
+  | 'tuesday'
+  | 'wednesday'
+  | 'thursday'
+  | 'friday'
+  | 'saturday'
+  | 'sunday'
+
+export type TimeRange = { start: string; end: string }
+
+export type WeeklyDaySchedule = { closed: boolean; ranges: TimeRange[] }
+
+export type HolidayClosure = {
+  id: string
+  name: string
+  startDate: string
+  endDate: string
+  closedAllDay: boolean
+  ranges?: TimeRange[]
+}
+
+export type BusinessScheduleConfig = {
+  timezone: string
+  weekly: Partial<Record<DayOfWeek, WeeklyDaySchedule>>
+  holidays: HolidayClosure[]
+}
+
+export type CustomCoverageSchedule = BusinessScheduleConfig
+
+export type AfterHoursWhenClosed = {
+  allowLiveBooking: boolean
+  allowCallbackRequest: boolean
+  allowMessageTaking: boolean
+  allowOnCallEscalation: boolean
+  allowOfficeTransfer: boolean
+  allowNormalTransferDestinations: boolean
+}
+
+export type AfterHoursBehaviorConfig = {
+  useOperatingStateDuringCalls: boolean
+  whenClosed: AfterHoursWhenClosed
+}
+
+export type OnCallDestination = {
+  label: string
+  phoneE164?: string
+  transferDestinationId?: string
+  contactId?: string
+  transferPlanId?: string | null
+}
+
+export type OnCallScheduleEntry = {
+  id: string
+  name?: string
+  dayOfWeek?: number
+  date?: string
+  startTime: string
+  endTime: string
+  destination: OnCallDestination
+  priority: number
+  enabled: boolean
+}
+
+export type OnCallScheduleConfig = {
+  enabled: boolean
+  timezone: string
+  entries: OnCallScheduleEntry[]
+}
+
+export type CallbackSlaPolicy = {
+  normalTarget: '30m' | '1h' | 'next_business_day' | 'custom'
+  normalCustomMinutes?: number
+  urgentTarget: 'immediate' | '15m' | '30m' | 'custom'
+  urgentCustomMinutes?: number
+}
+
+export type OperatingMaturityConfig = {
+  revision: string
+  businessSchedule: BusinessScheduleConfig
+  afterHoursBehavior: AfterHoursBehaviorConfig
+  onCallSchedule: OnCallScheduleConfig
+  callbackSla: CallbackSlaPolicy
+}
+
+export type TransferPlanStep = {
+  order: number
+  destinationId: string
+  transferMode: 'BASIC' | 'WARM'
+  timeoutSeconds: number
+}
+
+export type TransferAdvancedConfig = {
+  ringSeconds: number
+  globalFallback: TransferDestination['fallback']
+  routing: 'single' | 'waterfall'
+  detectVoicemailOnTransfer: boolean
+  humanTransferEnabled: boolean
+  planSteps: TransferPlanStep[]
+}
+
+export type UrgencyRule = {
+  id: string
+  label?: string
+  field: string
+  operator: 'equals' | 'in' | 'contains' | 'exists'
+  value: string
+  severity: 'URGENT' | 'CRITICAL'
+  action: 'TRANSFER' | 'TAKE_MESSAGE' | 'CALLBACK' | 'CONTINUE'
+  destinationId?: string
 }
 
 export type TransferDestination = {
@@ -111,7 +230,11 @@ export type AgentConfig = {
   coverage: {
     mode: 'every_call' | 'after_hours' | 'overflow' | 'busy' | 'custom'
     staffFirstSec: number
+    customSchedule: CustomCoverageSchedule
   }
+  operating: OperatingMaturityConfig
+  transferAdvanced: TransferAdvancedConfig
+  urgency: { enabled: boolean; rules: UrgencyRule[] }
   transfers: TransferDestination[]
   triggers: Record<'asks_person' | 'emergency' | 'unsupported' | 'booking_staff' | 'custom', boolean>
   customTrigger: string
@@ -211,7 +334,24 @@ export const DEFAULT_AGENT: AgentConfig = {
     ],
   },
   connection: { kind: 'owned', id: 'n1' },
-  coverage: { mode: 'overflow', staffFirstSec: 20 },
+  coverage: { mode: 'overflow', staffFirstSec: 20, customSchedule: DEFAULT_CUSTOM_COVERAGE },
+  operating: DEFAULT_OPERATING_MATURITY,
+  transferAdvanced: DEFAULT_TRANSFER_ADVANCED,
+  urgency: {
+    enabled: true,
+    rules: [
+      {
+        id: 'urg1',
+        label: 'Dental emergency keywords',
+        field: 'Reason for call',
+        operator: 'contains',
+        value: 'swelling, trauma, bleeding, severe pain',
+        severity: 'CRITICAL',
+        action: 'TRANSFER',
+        destinationId: 'tr1',
+      },
+    ],
+  },
   transfers: [
     { id: 'tr1', name: 'On-call dentist', number: '+13125550177', enabled: true, reason: 'Urgent pain, swelling, trauma', fallback: 'callback' },
     { id: 'tr2', name: 'Billing desk', number: '+13125550150', enabled: true, reason: 'Insurance & payment questions', fallback: 'message' },
@@ -269,6 +409,9 @@ export function diffSections(a: AgentConfig, b: AgentConfig) {
     appointments: 'Appointments',
     connection: 'Number connection',
     coverage: 'Coverage & routing',
+    operating: 'Business hours & after-hours',
+    transferAdvanced: 'Transfer waterfall',
+    urgency: 'Urgency rules',
     transfers: 'Transfer destinations',
     triggers: 'Transfer triggers',
     customTrigger: 'Custom trigger',

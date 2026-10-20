@@ -76,4 +76,31 @@ assert.deepEqual(
   "published toolNames match editor-screen-mapping",
 );
 
+const requestEditor = { ...base, capabilities: { ...base.capabilities, book: true } };
+requestEditor.appointments = { ...requestEditor.appointments, strategy: "request" };
+const requestV3 = editorToVoiceV3AgentConfig({
+  editor: requestEditor,
+  workspaceId: "ws_test",
+  agentId: "ag_test",
+  businessName: "Test Co",
+  timezone: "America/Chicago",
+  knowledge: emptyKnowledge(),
+});
+assert.equal(requestV3.scheduling.bookingStrategy, "REQUEST_ONLY");
+assert.ok(
+  enabledVoiceToolNamesFromEditor(requestEditor).includes("submit_appointment_request"),
+);
+
+const wired = editorToVoiceV3AgentConfig({
+  editor: base,
+  workspaceId: "ws_test",
+  agentId: "ag_test",
+  businessName: "Test Co",
+  timezone: "America/Chicago",
+  knowledge: emptyKnowledge(),
+});
+assert.ok(wired.callHandling.transferTriggers.length > 0);
+assert.ok(wired.operatingPolicy?.businessSchedule?.weekly?.monday);
+assert.ok(wired.transfer?.enabled !== undefined);
+
 console.log("test-receptionist-config-source: ALL PASS");

@@ -9,8 +9,14 @@ import {
   defaultNestedFromFlat,
   mergeNestedConfig,
 } from "@/lib/server/voice-v3/config/default-nested-config";
+import { compileVoiceV3TransferPolicyFromEditor } from "@/lib/server/receptionist/compile-transfer-from-editor";
+import { operatingPolicyFromEditor, resolveBusinessScheduleForRuntime } from "@/lib/server/receptionist/operating-maturity-from-editor";
 import { qualificationConfigFromEditor } from "@/lib/server/receptionist/qualification-from-editor";
+import { voiceV3ServicesFromEditor } from "@/lib/server/receptionist/service-config-from-editor";
+import { transferTriggerPhrasesFromEditor } from "@/lib/server/receptionist/transfer-triggers-from-editor";
+import { urgencyRulesFromEditor } from "@/lib/server/receptionist/urgency-from-editor";
 import { mapEditorVoiceToLiveVoiceId } from "@/lib/server/receptionist/voice-map";
+import { businessHoursWindowFromWeeklySchedule } from "@/lib/server/voice-v3/config/business-hours-from-wizard";
 import { livePromptControlsFromAgentConfig } from "@/lib/server/voice-v3/prompts/live-prompt-controls";
 
 export type KnowledgeCompileSlice = {
@@ -98,36 +104,20 @@ export function editorToVoiceV3AgentConfig(input: {
     editor.appointments.strategy === "live" &&
     editor.appointments.provider !== "none";
 
-  const services = editor.appointments.types
-    .filter((t) => t.enabled)
-    .map((t) => ({
-      id: t.id,
-      name: t.name,
-      durationMinutes: t.duration,
-      description: t.location || undefined,
-      enabled: true,
-      requiredIntakeKeys: t.requiredFields,
-    }));
-
-  const service = primaryService(editor);
+  const v3Services = voiceV3ServicesFromEditor(editor);
+  const service = v3Services[0] ?? primaryService(editor);
   const strategy = bookingStrategy(editor);
-
-  const transferEnabled = cap.transfer && editor.transfers.some((t) => t.enabled);
-  const transfer = transferEnabled
-    ? {
-        enabled: true,
-        routes: editor.transfers
-          .filter((t) => t.enabled)
-          .map((t) => ({
-            id: t.id,
-            label: t.name,
-            description: t.reason || "Transfer when appropriate",
-          })),
-        destinations: editor.transfers
-          .filter((t) => t.enabled)
-          .map((t) => ({ id: t.id, label: t.name })),
-      }
-    : undefined;
+  const schedule = resolveBusinessScheduleForRuntime(editor);
+  const businessHours = businessHoursWindowFromWeeklySchedule(schedule, {
+    timezone: schedule.timezone || timezone,
+    weekdays: [1, 2, 3, 4, 5],
+    startLocal: "09:00",
+    endLocal: "17:00",
+  });
+  const transferPolicy = compileVoiceV3TransferPolicyFromEditor(editor);
+  const operatingPolicy = operatingPolicyFromEditor(editor);
+  const transferTriggers = transferTriggerPhrasesFromEditor(editor);
+  const adv = editor.transferAdvanced;
 
   const spamSolicitor = editor.protection.find((r) => r.kind === "solicitor" && r.enabled);
   const spamLikely = editor.protection.find((r) => r.kind === "spam_likely" && r.enabled);
@@ -145,7 +135,6 @@ export function editorToVoiceV3AgentConfig(input: {
     businessName,
     timezone,
     intakeFields: editor.intake.map(mapIntakeField),
-    transfer,
     transferDestinations: editor.transfers.map((t) => ({
       id: t.id,
       label: t.name,
@@ -154,8 +143,8 @@ export function editorToVoiceV3AgentConfig(input: {
       description: t.reason,
     })),
     service,
-    services: services.length ? services : [service],
-    businessHours: { timezone },
+    services: v3Services.length ? v3Services : [service],
+    businessHours: { ...businessHours, timezone: schedule.timezone || timezone },
     ...nested,
     source: "new_app_published",
   };
@@ -230,7 +219,7 @@ export function editorToVoiceV3AgentConfig(input: {
     scheduling: {
       bookingStrategy: strategy,
       primaryServiceId: service.id,
-      services: services.length ? services : [service],
+      services: v3Services.length ? v3Services : [service],
       bookingBehavior: {
         askPreferredDayFirst: editor.appointments.preferredDayFirst,
         offerEarliestThree: editor.appointments.offerCount === 3,
@@ -272,15 +261,24 @@ export function editorToVoiceV3AgentConfig(input: {
           : editor.audio.recording === "all"
             ? "all"
             : "off",
-      connectionGreetingMode: editor.audio.connectionGreeting ? "custom" : "none",
+      connectionGreetingMode: editor.audio.connectionGreeting,
+      connectionGreetingText: editor.audio.connectionGreetingText,
       liveVoiceId: mapEditorVoiceToLiveVoiceId(editor.identity.voice, editor.identity.customVoiceId),
       speaksFirst: "ai",
     },
     callHandling: {
-      transferTriggers: [],
-      transferRingSeconds: 30,
-      transferFallback: "message",
+      transferTriggers,
+      transferRingSeconds: adv.ringSeconds,
+      transferFallback: adv.globalFallback,
       warmTransfer: editor.transferStyle === "warm",
+      detectVoicemailOnTransfer: adv.detectVoicemailOnTransfer,
+      voiceV2HumanTransferEnabled: adv.humanTransferEnabled,
+      allowCallerRequestedTransfer: true,
+      transferRouting: adv.routing === "waterfall" ? "waterfall" : "single",
+      defaultTransferPlanId: "default_transfer_route",
+      transferPlanSteps: adv.planSteps,
+      urgencyEnabled: editor.urgency.enabled,
+      urgencyRules: urgencyRulesFromEditor(editor),
       callbackRequestsEnabled: editor.messages.callbacks,
       callbackUseAniByDefault: editor.messages.requiredFields.ani,
       callbackAskPreferredTime: editor.messages.requiredFields.time,
@@ -316,6 +314,8 @@ export function editorToVoiceV3AgentConfig(input: {
 
   const base: VoiceV3AgentConfig = {
     ...merged,
+    transfer: transferPolicy,
+    operatingPolicy,
     spamProtection: {
       spamLikelyPolicy: spamLikely
         ? spamLikely.action === "end"
