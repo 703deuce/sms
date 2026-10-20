@@ -9,12 +9,21 @@ import { StatusBadge } from '@/components/app/status'
 import { useWorkspace } from '@/components/providers/workspace-provider'
 import { TRANSFERS, type RoutePolicy } from '@/lib/data'
 import { formatPhone } from '@/lib/format'
+import {
+  isPhoneAiCoverageRuntimeMode,
+  phoneAiCoverageModeDescription,
+} from '@/lib/phone/ai-coverage-support'
 
 export function AiCoverageEditor() {
   const { routePolicy, updateRoutePolicy } = useWorkspace()
   const [transfers, setTransfers] = useState(TRANSFERS)
 
   const setCoverage = (v: RoutePolicy['aiCoverage']) => {
+    if (!isPhoneAiCoverageRuntimeMode(v)) {
+      toast.message('Preference saved', {
+        description: phoneAiCoverageModeDescription(v),
+      })
+    }
     const patch: Partial<RoutePolicy> = { aiCoverage: v }
     if (v === 'off') {
       if (routePolicy.noAnswer === 'ai') patch.noAnswer = 'voicemail'
@@ -26,22 +35,44 @@ export function AiCoverageEditor() {
     if (v === 'overflow' || v === 'after_hours_overflow') patch.noAnswer = 'ai'
     if (v !== 'full_time' && routePolicy.duringHours === 'ai') patch.duringHours = 'ring_group'
     updateRoutePolicy(patch, 'AI Receptionist')
-    toast.success('AI coverage updated', { description: 'Phone call handling was updated to match.' })
+    if (isPhoneAiCoverageRuntimeMode(v)) {
+      toast.success('AI coverage updated', { description: 'Phone call handling was updated to match.' })
+    }
   }
 
   return (
     <div className="flex flex-col gap-6">
-      <Panel title="When should Ava answer?" description="Applies to the Main line. Phone routing updates automatically.">
+      <Panel
+        title="When should Ava answer?"
+        description="Per-number Call Forwarding uses Telnyx Call Control. Conversational IVR answering modes below are stored as preferences until the line uses LiveKit ingress."
+      >
         <OptionGroup
           label="Coverage"
           value={routePolicy.aiCoverage}
           onChange={setCoverage}
           options={[
-            { value: 'after_hours_overflow', label: 'After hours + overflow', description: 'Recommended. Team first, Ava when nobody picks up or the office is closed.' },
-            { value: 'after_hours', label: 'After hours only', description: 'Ava answers only when the office is closed.' },
-            { value: 'overflow', label: 'Overflow only', description: 'Ava answers when the ring group times out or is busy.' },
-            { value: 'full_time', label: 'Full-time', description: 'Ava answers every call and transfers as needed.' },
-            { value: 'off', label: 'Off', description: 'Calls follow Phone routing to voicemail.' },
+            {
+              value: 'after_hours_overflow',
+              label: 'After hours + overflow',
+              description:
+                'Preference only today — does not switch Telnyx forwarding to IVR. Use Conversational IVR on the number for live AI answering.',
+            },
+            {
+              value: 'after_hours',
+              label: 'After hours only',
+              description: 'Preference only — after-hours Phone policy is set under Business Hours / per-number answering.',
+            },
+            {
+              value: 'overflow',
+              label: 'Overflow only',
+              description: 'Preference only — staff-first overflow to IVR is not wired on Call Control ingress yet.',
+            },
+            {
+              value: 'full_time',
+              label: 'Full-time',
+              description: 'Preference only — assign Conversational IVR to the number for all-call AI coverage.',
+            },
+            { value: 'off', label: 'Off', description: 'Calls follow Phone routing (forwarding, auto attendant, voicemail, browser).' },
           ]}
         />
       </Panel>

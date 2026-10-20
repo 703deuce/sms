@@ -88,9 +88,12 @@ export async function validateReceptionistPublish(
 
   if (editor.capabilities.transfer) {
     if (isConversationalIvrEditor(editor)) {
-      const routes = (editor.conversationalRoutes ?? []).filter(
-        (r) => r.enabled && r.destinationPhoneE164?.trim(),
-      );
+      const routes = (editor.conversationalRoutes ?? []).filter((r) => {
+        if (!r.enabled) return false;
+        if (r.destinationPhoneE164?.trim()) return true;
+        if (r.publishRingGroupPlan?.members?.length) return true;
+        return false;
+      });
       const legacy = editor.transfers.filter((t) => t.enabled && t.number?.trim());
       if (!routes.length && !legacy.length) {
         errors.push("Configure at least one semantic route with a Phone destination.");

@@ -109,9 +109,50 @@ function compileConversationalIvrTransferPolicy(
 
   for (const route of editor.conversationalRoutes ?? []) {
     if (!route.enabled) continue;
+    const label = route.destinationLabel?.trim() || route.name?.trim() || "Route destination";
+    const examples = (route.examples ?? []).filter(Boolean);
+    const description = [route.intentDescription?.trim(), examples.length ? `Examples: ${examples.join("; ")}` : ""]
+      .filter(Boolean)
+      .join(" ");
+
+    const ringPlan = route.publishRingGroupPlan;
+    if (ringPlan?.members?.length) {
+      const targets: VoiceV3TransferRouteCompiled["targets"] = [];
+      for (const member of ringPlan.members) {
+        let phone = member.phoneE164?.trim() ?? "";
+        try {
+          phone = normalizeE164(phone);
+        } catch {
+          continue;
+        }
+        const memberDestId = addDestination(
+          `rg_${route.id}_${member.destinationId}`,
+          member.label || label,
+          phone,
+          route.intentDescription,
+        );
+        if (!memberDestId) continue;
+        targets.push({
+          destinationId: memberDestId,
+          mode,
+          ringingTimeoutSeconds: Math.max(5, member.timeoutSec ?? defaultTimeout),
+        });
+      }
+      if (!targets.length) continue;
+      routes.push({
+        id: route.id,
+        label: route.name?.trim() || "Route",
+        description:
+          (description || "Use when the caller's intent matches this route.") +
+          " (Phone ring group — sequential transfer attempts.)",
+        targets,
+        fallback,
+      });
+      continue;
+    }
+
     let phone = route.destinationPhoneE164?.trim() ?? "";
     let destId = `route_dest_${route.id}`;
-    const label = route.destinationLabel?.trim() || route.name?.trim() || "Route destination";
 
     if (!phone && route.destinationKind === "transfer_destination") {
       const legacy = editor.transfers.find((t) => t.id === route.destinationRef);
@@ -135,11 +176,6 @@ function compileConversationalIvrTransferPolicy(
 
     const resolvedDestId = addDestination(destId, label, phone, route.intentDescription);
     if (!resolvedDestId) continue;
-
-    const examples = (route.examples ?? []).filter(Boolean);
-    const description = [route.intentDescription?.trim(), examples.length ? `Examples: ${examples.join("; ")}` : ""]
-      .filter(Boolean)
-      .join(" ");
 
     routes.push({
       id: route.id,
@@ -179,6 +215,7 @@ function compileConversationalIvrTransferPolicy(
     }
   }
 
+  const usesWaterfall = routes.some((r) => r.targets.length > 1);
   const enabled =
     editor.capabilities.transfer === true && destinations.length > 0 && routes.length > 0;
 
@@ -186,7 +223,7 @@ function compileConversationalIvrTransferPolicy(
     enabled,
     defaultRingingTimeoutSeconds: defaultTimeout,
     defaultFallback: fallback,
-    routing: "single",
+    routing: usesWaterfall ? "waterfall" : "single",
     destinations,
     routes,
     telephony: {

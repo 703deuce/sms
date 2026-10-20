@@ -139,6 +139,21 @@ export async function linkCallControl(body: Record<string, unknown>) {
   return json.data;
 }
 
+export async function finalizeWebRtcClientHangup(body: {
+  humanCallId: string;
+  wasAnswered?: boolean;
+  failed?: boolean;
+}) {
+  const res = await fetch("/api/phone/calls", {
+    method: "POST",
+    headers: mutatingHeaders(),
+    body: JSON.stringify({ action: "webrtc_finalize", ...body }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || res.statusText);
+  return json.data as { ok: boolean; skipped?: boolean };
+}
+
 export async function fetchRouting() {
   return parse<RoutePolicyDto>(await fetch("/api/phone/routing"));
 }

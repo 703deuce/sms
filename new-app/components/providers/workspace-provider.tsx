@@ -9,6 +9,7 @@ import {
   fetchRouting,
   fetchWebRtcToken,
   reportWebRtcPresence,
+  finalizeWebRtcClientHangup,
   linkCallControl,
   registerInboundAnswer,
   registerInboundReject,
@@ -256,6 +257,14 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       }
       if (status === 'ended' || status === 'failed') {
         recordingRequestedRef.current = null
+        const ac = activeCallRef.current
+        if (ac?.humanCallId) {
+          void finalizeWebRtcClientHangup({
+            humanCallId: ac.humanCallId,
+            wasAnswered: Boolean(ac.startedAt),
+            failed: status === 'failed',
+          }).catch(() => undefined)
+        }
         telnyxCallRef.current = null
         activeWebrtcIdRef.current = null
         inboundSdkCallRef.current = null
@@ -436,8 +445,15 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
   const endCall = useCallback(() => {
     const call = telnyxCallRef.current as { hangup?: () => void } | null
+    const snapshot = activeCallRef.current
     call?.hangup?.()
     telnyxCallRef.current = null
+    if (snapshot?.humanCallId) {
+      void finalizeWebRtcClientHangup({
+        humanCallId: snapshot.humanCallId,
+        wasAnswered: Boolean(snapshot.startedAt),
+      }).catch(() => undefined)
+    }
     setActiveCall((c) => (c ? { ...c, status: 'ended' } : c))
     window.setTimeout(() => setActiveCall(null), 1500)
   }, [])
