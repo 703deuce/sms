@@ -1,5 +1,7 @@
 import type { BusinessHoursWindow, VoiceV3CalendarConfig } from "../calendar/types";
 import type { VoiceWizardBookingStrategy } from "./booking-strategies";
+
+// Legacy wizard type names kept for copied audit scripts only — runtime uses new-app AgentConfig via editorToVoiceV3AgentConfig.
 import type { VoiceV3AfterHoursNotificationsConfig } from "../notifications/types";
 
 export type IntakeFieldType =

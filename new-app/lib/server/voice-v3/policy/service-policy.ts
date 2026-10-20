@@ -1,7 +1,5 @@
 import type { VoiceV3AgentConfig, VoiceV3ServiceConfig } from "../config/agent-config";
-import { parseDaysAhead, parseNoticeMinutes } from "@/lib/solutions/appointment-receptionist/notice-utils";
-import { resolveServiceRequiredFieldsForV3 } from "@/lib/solutions/appointment-receptionist/required-fields";
-import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
+import { parseDaysAhead, parseNoticeMinutes } from "./notice-utils";
 import { resolveBookingServiceForRuntime } from "../config/resolve-booking-service";
 import type { VoiceV3CallContext } from "../state/call-context";
 
@@ -106,11 +104,10 @@ export function servicePolicyFromWizardType(
     minNotice?: string;
     maxDaysAhead?: string;
     requiredFields?: string[];
-    bookingPermission?: import("@/lib/solutions/appointment-receptionist/types").BookingPermission;
+    bookingPermission?: VoiceV3ServiceConfig["bookingPermission"];
     enabled: boolean;
   },
   slotStepMinutes: number,
-  collectFields?: AppointmentReceptionistWizardState["collectFields"],
 ): VoiceV3ServiceConfig {
   return {
     id: t.id,
@@ -124,12 +121,9 @@ export function servicePolicyFromWizardType(
     location: t.location,
     modality: t.modality,
     bookingPermission: t.bookingPermission,
-    minimumBookingNoticeMinutes: parseNoticeMinutes(t.minNotice),
-    maximumBookingDaysAhead: parseDaysAhead(t.maxDaysAhead),
-    requiredIntakeKeys: resolveServiceRequiredFieldsForV3(
-      t.requiredFields,
-      collectFields ?? [],
-    ),
+    minimumBookingNoticeMinutes: parseNoticeMinutes(t.minNotice) ?? 0,
+    maximumBookingDaysAhead: parseDaysAhead(t.maxDaysAhead) ?? 0,
+    requiredIntakeKeys: (t.requiredFields ?? []).map((k) => k.trim()).filter(Boolean),
     bookingHoursProse: t.bookingHours?.trim() || undefined,
   };
 }
