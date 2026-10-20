@@ -128,6 +128,14 @@ export function validateEditorForPublish(config: AgentConfig): { ok: true } | { 
   }
   if (config.capabilities.transfer) {
     if (conversational) {
+      const ringGroupRoutes = (config.conversationalRoutes ?? []).filter(
+        (r) => r.enabled && r.destinationKind === "ring_group",
+      );
+      if (ringGroupRoutes.length) {
+        errors.push(
+          "Ring groups are not supported as Conversational IVR transfer targets yet. Use an individual Phone forwarding destination.",
+        );
+      }
       const routes = (config.conversationalRoutes ?? []).filter(
         (r) => r.enabled && r.destinationPhoneE164?.trim(),
       );

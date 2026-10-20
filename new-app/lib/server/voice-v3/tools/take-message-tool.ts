@@ -3,7 +3,6 @@ import { zodResponsesFunction } from "openai/helpers/zod";
 import type { FunctionTool } from "openai/resources/live/live";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { VoiceToolDefinition } from "./types";
-import { mergeDialogActiveGoalFromTool } from "../intake/merge-intake-state";
 import { authorizeTakeMessageOrError } from "./authorize-tool-for-config";
 
 const takeMessageArgsSchema = z.object({
@@ -58,26 +57,15 @@ export const takeMessageTool: VoiceToolDefinition<TakeMessageArgs> = {
     const denied = authorizeTakeMessageOrError(config);
     if (denied) return denied;
 
-    let snap = mergeDialogActiveGoalFromTool(ctx.runtime.getSnapshot(), "REQUEST_CALLBACK");
-    ctx.runtime.replaceContext(snap);
+    const snap = ctx.runtime.getSnapshot();
     const workspaceId = config.workspaceId?.trim() || ctx.tenantId;
-    const { executeRequestCallback } = await import("../callback/execute-request-callback");
-    const reasonParts = [args.message.trim()];
-    if (args.caller_name?.trim()) {
-      reasonParts.unshift(`From ${args.caller_name.trim()}:`);
-    }
-    const { result, nextContext } = await executeRequestCallback({
+    const { executeTakeMessage } = await import("../callback/execute-take-message");
+    const { result, nextContext } = await executeTakeMessage({
       workspaceId,
       agentId: config.agentId ?? null,
       config,
       context: snap,
-      args: {
-        callback_phone: args.callback_phone,
-        reason: reasonParts.join(" ").trim(),
-        preferred_time: null,
-        notes: args.message.trim(),
-        phone_confirmed: null,
-      },
+      args,
     });
     ctx.runtime.replaceContext(nextContext);
     return result;

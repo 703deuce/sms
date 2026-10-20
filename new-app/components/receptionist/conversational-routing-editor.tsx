@@ -21,10 +21,14 @@ function newRouteId() {
   return `cr_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`
 }
 
-type DestinationPick =
-  | { kind: 'forwarding_destination'; id: string; label: string; phoneE164: string }
-  | { kind: 'ring_group'; id: string; label: string; phoneE164: string }
+type DestinationPick = {
+  kind: 'forwarding_destination'
+  id: string
+  label: string
+  phoneE164: string
+}
 
+/** Individual Phone forwarding destinations only — ring groups require LiveKit↔Phone bridge (not v1). */
 function buildDestinationOptions(config: ForwardingConfigDto | null): DestinationPick[] {
   if (!config) return []
   const out: DestinationPick[] = []
@@ -34,16 +38,6 @@ function buildDestinationOptions(config: ForwardingConfigDto | null): Destinatio
       id: d.id,
       label: d.name,
       phoneE164: d.phoneE164,
-    })
-  }
-  for (const g of config.groups) {
-    const first = g.members[0]?.destination
-    if (!first?.phoneE164) continue
-    out.push({
-      kind: 'ring_group',
-      id: g.id,
-      label: `${g.name} (ring group)`,
-      phoneE164: first.phoneE164,
     })
   }
   return out
@@ -128,7 +122,7 @@ export function ConversationalRoutingEditor() {
         id="default-handling"
         icon={Route}
         title="Default handling"
-        description="Fallbacks use shared Phone destinations — the agent never invents phone numbers."
+        description="Individual Phone forwarding destinations only. Ring groups are not supported as IVR transfer targets until multi-leg routing is certified."
       >
         {loading ? (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">

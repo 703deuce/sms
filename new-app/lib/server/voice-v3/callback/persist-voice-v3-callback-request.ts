@@ -7,7 +7,7 @@ import { callbackSlaMetadataPatch } from "@/lib/voice-receptionist-wizard/operat
 const V3_METADATA_SOURCE = "VOICE_V3";
 
 export async function persistVoiceV3CallbackRequest(
-  input: VoiceV3CallbackPersistInput,
+  input: VoiceV3CallbackPersistInput & { sourceRoute?: string },
 ): Promise<VoiceV3CallbackPersistResult> {
   const prisma = getPrisma();
   const existing = await prisma.callbackRequest.findFirst({
@@ -49,7 +49,7 @@ export async function persistVoiceV3CallbackRequest(
         reason: input.reason,
         notes: input.notes,
         status: "new",
-        sourceRoute: "voice_v3_request_callback",
+        sourceRoute: input.sourceRoute?.trim() || "voice_v3_request_callback",
         metadata: {
           source: V3_METADATA_SOURCE,
           ...slaPatch,

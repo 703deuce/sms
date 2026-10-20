@@ -3,10 +3,13 @@ import "server-only";
 import type { AgentConfig } from "@/lib/agent";
 import { isConversationalIvrEditor } from "@/lib/receptionist/runtime-profile";
 import { validateEditorForPublish } from "@/lib/server/receptionist/compile-runtime";
-import { getPrisma } from "@/lib/server/db";
 import { resolveWorkspaceOwnedPhoneNumberId } from "@/lib/server/receptionist/validate-phone-connection";
 import { resolveSchedulingBackend } from "@/lib/server/voice-v3/scheduling/connections";
 import { schedulingCapsForBackend } from "@/lib/server/voice-v3/scheduling/provider-capabilities";
+import { findWorkspaceReceptionistAgent } from "@/lib/server/receptionist/agent-store";
+import { buildKnowledgeCompileSlice } from "@/lib/server/receptionist/knowledge-compile";
+
+const MAX_OPENAI_VECTOR_STORES_PER_PUBLISH = 2;
 
 /**
  * Publish must fail when enabled capabilities lack a working backend adapter.
@@ -19,7 +22,6 @@ export async function validateReceptionistPublish(
   if (!base.ok) return base;
 
   const errors: string[] = [];
-  const prisma = getPrisma();
 
   try {
     await resolveWorkspaceOwnedPhoneNumberId(workspaceId, editor.connection);
@@ -61,16 +63,26 @@ export async function validateReceptionistPublish(
   }
 
   if (editor.capabilities.answer) {
-    const kb = await prisma.voiceKnowledgeBase.findFirst({
-      where: { workspaceId, status: "active" },
-    });
-    const faqCount = kb
-      ? await prisma.voiceKnowledgeSource.count({
-          where: { workspaceId, knowledgeBaseId: kb.id, sourceType: "faq" },
-        })
-      : 0;
-    if (!kb && faqCount === 0) {
-      errors.push("Knowledge: add FAQs or a knowledge source before publishing answer capability.");
+    const agent = await findWorkspaceReceptionistAgent(workspaceId);
+    if (agent) {
+      const slice = await buildKnowledgeCompileSlice({
+        workspaceId,
+        agentId: agent.id,
+      });
+      const hasFaq = slice.faqFacts.length > 0;
+      const hasVector = slice.openaiVectorStoreIds.length > 0;
+      if (!hasFaq && !hasVector) {
+        errors.push(
+          "Knowledge: link a knowledge base and add FAQs (or indexed documents) before publishing answer capability.",
+        );
+      }
+      if (slice.openaiVectorStoreIds.length > MAX_OPENAI_VECTOR_STORES_PER_PUBLISH) {
+        errors.push(
+          `Knowledge: at most ${MAX_OPENAI_VECTOR_STORES_PER_PUBLISH} linked vector stores can be active on a published agent (OpenAI limit). Unlink extra knowledge bases or consolidate content before publishing.`,
+        );
+      }
+    } else {
+      errors.push("Knowledge: create and link a knowledge base before publishing answer capability.");
     }
   }
 
