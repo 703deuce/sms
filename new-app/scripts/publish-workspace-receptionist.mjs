@@ -1,7 +1,7 @@
 /**
  * Ops: publish canonical workspace receptionist (new-app runtime).
  *
- *   cd new-app && NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/publish-workspace-receptionist.mjs ws_1
+ *   cd new-app && NODE_OPTIONS='--import ../scripts/preload-server-only.mjs' npx tsx scripts/publish-workspace-receptionist.mjs ws_1
  *   Add --apply to mutate (default dry-run prints validation only).
  */
 import { PrismaClient } from "@prisma/client";

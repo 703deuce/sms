@@ -15,6 +15,7 @@ import {
 export type AgentStatus = ReceptionistStateDto['status'] | 'publishing'
 
 type AgentCtx = {
+  agentId: string
   live: AgentConfig
   draft: AgentConfig
   status: AgentStatus
@@ -45,8 +46,10 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
   const [unsaved, setUnsaved] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [agentId, setAgentId] = useState('')
 
   const applyState = useCallback((s: ReceptionistStateDto) => {
+    setAgentId(s.agentId)
     setLive(s.live)
     setDraft(s.draft)
     setStatus(s.status)
@@ -87,6 +90,7 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<AgentCtx>(() => {
     const changes = diffSections(live, draft)
     return {
+      agentId,
       live,
       draft,
       status,
@@ -138,6 +142,7 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
       },
     }
   }, [
+    agentId,
     live,
     draft,
     status,
