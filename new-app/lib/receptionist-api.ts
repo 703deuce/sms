@@ -37,9 +37,19 @@ export async function patchReceptionistDraft(
 }
 
 export async function publishReceptionist() {
-  return parse<{ ok: boolean; errors?: string[]; state?: ReceptionistStateDto }>(
-    await fetch("/api/receptionist/publish", { method: "POST" }),
-  );
+  const res = await fetch("/api/receptionist/publish", { method: "POST" });
+  const json = (await res.json()) as {
+    data?: { ok: boolean; errors?: string[]; state?: ReceptionistStateDto };
+    error?: string;
+  };
+  const data = json.data ?? (json as { ok: boolean; errors?: string[]; state?: ReceptionistStateDto });
+  if (res.status === 422 && data && typeof data === "object" && "ok" in data) {
+    return data;
+  }
+  if (!res.ok) {
+    throw new Error(json.error || res.statusText);
+  }
+  return data;
 }
 
 export async function pauseReceptionist() {

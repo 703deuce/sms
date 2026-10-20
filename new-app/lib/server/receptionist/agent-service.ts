@@ -12,6 +12,7 @@ import {
 } from "@/lib/server/receptionist/agent-store";
 import type { ReceptionistPublishedBundle } from "@/lib/server/receptionist/draft-types";
 import { syncReceptionistPhoneAssignment } from "@/lib/server/receptionist/phone-assignment";
+import { alignEditorConnectionForPublish } from "@/lib/server/receptionist/resolve-publish-phone";
 import { buildVoiceAgentRuntimeConfigFromEditor } from "@/lib/server/receptionist/map-editor-to-runtime-config";
 
 export type ReceptionistStateDto = {
@@ -90,6 +91,16 @@ export async function publishReceptionist(workspaceId: string): Promise<{
   const prisma = getPrisma();
   const agent = await ensureWorkspaceReceptionistAgent(workspaceId);
   const draftEnvelope = loadDraftFromAgent(agent);
+
+  const alignedEditor = await alignEditorConnectionForPublish(workspaceId, draftEnvelope.editor);
+  if (JSON.stringify(alignedEditor.connection) !== JSON.stringify(draftEnvelope.editor.connection)) {
+    await saveDraftEnvelope(
+      agent.id,
+      workspaceId,
+      { ...draftEnvelope, editor: alignedEditor },
+    );
+    draftEnvelope.editor = alignedEditor;
+  }
 
   const validation = await validateReceptionistPublish(workspaceId, draftEnvelope.editor);
   if (!validation.ok) {

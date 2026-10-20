@@ -11,6 +11,7 @@ import {
   activateVoiceV3TelnyxIngress,
   prepareVoiceV3LiveKitDestination,
 } from "@/lib/server/telephony/v3-receptionist-provision";
+import { syncReceptionistDraftConnectionOnNumberSwitch } from "@/lib/server/receptionist/sync-draft-connection";
 
 /** Carrier ingress change vs logical product binding (Phone + Ava can share one DID). */
 export type IngressStrategy = "exclusive" | "shared_voice";
@@ -39,6 +40,12 @@ export type SwitchNumberProductResult = {
   actions: string[];
   error?: string;
   needsConfirmation?: boolean;
+  /** Set when targetProduct is receptionist and server draft/assignment were synced. */
+  receptionist?: {
+    agentId: string;
+    phoneNumberId: string;
+    e164: string;
+  };
 };
 
 async function mergeWorkspacePolicyForSharedVoice(input: {
@@ -214,20 +221,6 @@ export async function switchNumberToProduct(
       };
     }
 
-    await prisma.voiceAgentPhoneNumber.upsert({
-      where: { agentId_phoneNumberId: { agentId: agent.id, phoneNumberId: input.phoneNumberId } },
-      create: {
-        workspaceId: input.workspaceId,
-        agentId: agent.id,
-        phoneNumberId: input.phoneNumberId,
-        inboundEnabled: true,
-        outboundEnabled: false,
-        isDefault: true,
-      },
-      update: { inboundEnabled: true, isDefault: true },
-    });
-    actions.push("voice_agent_phone_link_upserted");
-
     if (ingressStrategy === "shared_voice") {
       const merged = await mergeWorkspacePolicyForSharedVoice({
         workspaceId: input.workspaceId,
@@ -237,6 +230,13 @@ export async function switchNumberToProduct(
       actions.push(...merged.actions);
     }
 
+    await syncReceptionistDraftConnectionOnNumberSwitch(
+      input.workspaceId,
+      agent.id,
+      input.phoneNumberId,
+    );
+    actions.push("receptionist_draft_and_phone_assignment_synced");
+
     return {
       ok: true,
       phoneNumberId: input.phoneNumberId,
@@ -244,6 +244,11 @@ export async function switchNumberToProduct(
       ingressStrategy,
       previousBindings: conflicts,
       actions,
+      receptionist: {
+        agentId: agent.id,
+        phoneNumberId: input.phoneNumberId,
+        e164: phone.e164,
+      },
     };
   }
 
