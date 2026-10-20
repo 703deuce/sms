@@ -37,16 +37,19 @@ import {
   patchForwardingDestination,
   testForwardingDestination,
   type ForwardingConfigDto,
+  type ForwardingDestinationDto,
   type ForwardingEntitlementsDto,
 } from '@/lib/phone-forwarding-api'
 import { ForwardingRingGroups } from '@/components/phone/forwarding-ring-groups'
 import { AfterHoursForwardPanel } from '@/components/phone/after-hours-forward-panel'
+import { NoAnswerFallbackPanel } from '@/components/phone/no-answer-fallback-panel'
 
 export function CallForwardingWorkspace() {
   const [loading, setLoading] = useState(true)
   const [config, setConfig] = useState<ForwardingConfigDto | null>(null)
   const [phoneNumberId, setPhoneNumberId] = useState<string>('')
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [editingDestinationId, setEditingDestinationId] = useState<string | null>(null)
   const [destDraft, setDestDraft] = useState<ForwardingDestinationSelectorValue>({
     mode: 'external_phone',
     label: '',
@@ -90,7 +93,31 @@ export function CallForwardingWorkspace() {
       .catch((e) => toast.error(e instanceof Error ? e.message : 'Could not update'))
   }
 
-  const addDestination = () => {
+  const openAddDrawer = () => {
+    setEditingDestinationId(null)
+    setDestDraft({ mode: 'external_phone', label: '', phoneE164: '' })
+    setDrawerOpen(true)
+  }
+
+  const openEditDrawer = (d: ForwardingDestinationDto) => {
+    setEditingDestinationId(d.id)
+    if (d.destinationKind === 'workspace_number' && d.workspacePhoneNumberId) {
+      setDestDraft({
+        mode: 'workspace_number',
+        label: d.name,
+        workspacePhoneNumberId: d.workspacePhoneNumberId,
+      })
+    } else {
+      setDestDraft({
+        mode: 'external_phone',
+        label: d.name,
+        phoneE164: d.displayNumber || d.phoneE164,
+      })
+    }
+    setDrawerOpen(true)
+  }
+
+  const saveDestination = () => {
     const name = destDraft.label.trim() || 'Forward'
     if (destDraft.mode === 'external_phone' && !destDraft.phoneE164.trim()) {
       toast.error('Enter a phone number')
@@ -100,21 +127,25 @@ export function CallForwardingWorkspace() {
       toast.error('Choose a Transovo number')
       return
     }
-    void createForwardingDestination({
+    const body = {
       name,
       destinationKind: destDraft.mode,
       ...(destDraft.mode === 'external_phone'
         ? { phoneE164: destDraft.phoneE164.trim() }
         : { workspacePhoneNumberId: destDraft.workspacePhoneNumberId }),
-      press1Required: true,
       hostedE164: selectedNumber?.e164,
       hostedPhoneNumberId: phoneNumberId || undefined,
-    })
+    }
+    const op = editingDestinationId
+      ? patchForwardingDestination(editingDestinationId, body)
+      : createForwardingDestination({ ...body, press1Required: true })
+    void op
       .then(async (row) => {
-        toast.success('Destination added')
+        toast.success(editingDestinationId ? 'Destination updated' : 'Destination added')
         setDrawerOpen(false)
+        setEditingDestinationId(null)
         setDestDraft({ mode: 'external_phone', label: '', phoneE164: '' })
-        if (phoneNumberId && !policy?.primaryDestinationId) {
+        if (!editingDestinationId && phoneNumberId && !policy?.primaryDestinationId) {
           await saveAnsweringPolicy(phoneNumberId, {
             answeringMode: 'forward',
             primaryDestinationId: row.id,
@@ -122,7 +153,7 @@ export function CallForwardingWorkspace() {
         }
         reload()
       })
-      .catch((e) => toast.error(e instanceof Error ? e.message : 'Could not add destination'))
+      .catch((e) => toast.error(e instanceof Error ? e.message : 'Could not save destination'))
   }
 
   if (loading && !config) {
@@ -146,7 +177,7 @@ export function CallForwardingWorkspace() {
               <RefreshCcw className="size-4" />
               Refresh
             </Button>
-            <Button type="button" size="sm" onClick={() => setDrawerOpen(true)}>
+            <Button type="button" size="sm" onClick={openAddDrawer}>
               <Plus className="size-4" />
               Add forwarding destination
             </Button>
@@ -279,6 +310,9 @@ export function CallForwardingWorkspace() {
                         >
                           Test
                         </Button>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => openEditDrawer(d)}>
+                          Edit
+                        </Button>
                         <Button
                           type="button"
                           variant="ghost"
@@ -319,16 +353,29 @@ export function CallForwardingWorkspace() {
           )}
 
           {phoneNumberId && config && (
-            <Panel
-              title="After-hours forwarding"
-              description="When business hours are closed, forward to an external line or another Transovo number."
-            >
-              <AfterHoursForwardPanel
-                phoneNumberId={phoneNumberId}
-                workspaceNumbers={config.numbers}
-                onSaved={reload}
-              />
-            </Panel>
+            <>
+              <Panel
+                title="After-hours forwarding"
+                description="When business hours are closed, forward to an external line or another Transovo number."
+              >
+                <AfterHoursForwardPanel
+                  phoneNumberId={phoneNumberId}
+                  workspaceNumbers={config.numbers}
+                  onSaved={reload}
+                />
+              </Panel>
+              <Panel
+                title="No-answer fallback"
+                description="What happens when forwarding rings but nobody picks up."
+              >
+                <NoAnswerFallbackPanel
+                  phoneNumberId={phoneNumberId}
+                  workspaceNumbers={config.numbers}
+                  savedDestinations={config.destinations}
+                  onSaved={reload}
+                />
+              </Panel>
+            </>
           )}
         </div>
 
@@ -372,7 +419,9 @@ export function CallForwardingWorkspace() {
           aria-labelledby="cf-drawer-title"
         >
           <div className="flex h-full w-full max-w-md flex-col gap-4 bg-background p-6 shadow-xl">
-            <h2 id="cf-drawer-title" className="text-lg font-semibold">Add forwarding destination</h2>
+            <h2 id="cf-drawer-title" className="text-lg font-semibold">
+              {editingDestinationId ? 'Edit forwarding destination' : 'Add forwarding destination'}
+            </h2>
             <ForwardingDestinationSelector
               workspaceNumbers={config?.numbers ?? []}
               value={destDraft}
@@ -382,8 +431,17 @@ export function CallForwardingWorkspace() {
               Press 1 screening is enabled by default to help prevent personal voicemail from answering business calls.
             </p>
             <div className="mt-auto flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setDrawerOpen(false)}>Cancel</Button>
-              <Button type="button" onClick={addDestination}>Save destination</Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setDrawerOpen(false)
+                  setEditingDestinationId(null)
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="button" onClick={saveDestination}>Save destination</Button>
             </div>
           </div>
         </div>

@@ -44,6 +44,31 @@ export async function resolveEffectiveAnswering(input: {
 
   const callCtx = await inboundCallContext(input.workspaceId, input.phoneNumberId);
 
+  const { getBusinessHours } = await import("@/lib/server/phone/routing");
+  const { timezone } = await getBusinessHours(input.workspaceId);
+  const { parseHolidayExceptions, holidayActiveToday } = await import("./holiday-schedule");
+  const holiday = holidayActiveToday(
+    parseHolidayExceptions(policy.holidayExceptionsJson),
+    timezone,
+  );
+  if (holiday) {
+    if (holiday.mode === "voicemail") return { kind: "voicemail" };
+    if (holiday.mode === "auto_attendant" && holiday.menuId) {
+      return { kind: "auto_attendant", menuId: holiday.menuId };
+    }
+    if (holiday.mode === "forward") {
+      const resolved = await resolveHolidayForward(input.workspaceId, holiday, callCtx);
+      if (resolved) {
+        return {
+          kind: "forward",
+          destinationE164: resolved.dialE164,
+          press1: resolved.press1,
+          screeningText: resolved.screeningText,
+        };
+      }
+    }
+  }
+
   const open = await isBusinessOpenNow(input.workspaceId);
   const schedule = policy.scheduleJson as ScheduleJson | null;
   if (!open) {
@@ -117,6 +142,35 @@ export async function resolveEffectiveAnswering(input: {
   if (policy.answeringMode === "voicemail") return { kind: "voicemail" };
 
   return { kind: "browser" };
+}
+
+async function resolveHolidayForward(
+  workspaceId: string,
+  holiday: import("./holiday-schedule").HolidayException,
+  callCtx: { inboundPhoneNumberId: string | null; inboundE164: string | null },
+) {
+  if (holiday.destinationId) {
+    return resolveForwardingDestinationById(workspaceId, holiday.destinationId, callCtx);
+  }
+  const ref = holiday.destinationRef;
+  if (ref?.kind === "workspace_number" && ref.phoneNumberId) {
+    return resolveForwardActionConfig(
+      workspaceId,
+      {
+        destinationRefKind: "workspace_number",
+        destinationRefPhoneNumberId: ref.phoneNumberId,
+      },
+      callCtx,
+    );
+  }
+  if (ref?.kind === "external_phone" && ref.e164PhoneNumber) {
+    return resolveForwardActionConfig(
+      workspaceId,
+      { destinationRefKind: "external_phone", destinationRefE164: ref.e164PhoneNumber },
+      callCtx,
+    );
+  }
+  return null;
 }
 
 async function resolveScheduleForward(

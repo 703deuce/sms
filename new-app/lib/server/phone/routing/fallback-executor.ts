@@ -42,17 +42,28 @@ export async function executeFallback(input: {
   if (input.action.type === "forward_phone" && input.routingSessionId) {
     const ctx = await getCallContextFromSession(input.routingSessionId);
     let destinationE164 = input.action.destinationE164;
-    if (!destinationE164 && input.action.destinationId) {
-      const { resolveForwardingDestinationById, inboundCallContext } = await import(
-        "./resolve-destination"
-      );
+    if (!destinationE164) {
+      const { resolveForwardingDestinationById, resolveForwardingDestinationRef, inboundCallContext } =
+        await import("./resolve-destination");
       const callCtx = await inboundCallContext(input.workspaceId, input.phoneNumberId);
-      const resolved = await resolveForwardingDestinationById(
-        input.workspaceId,
-        input.action.destinationId,
-        callCtx,
-      );
-      destinationE164 = resolved?.dialE164;
+      if (input.action.destinationId) {
+        const resolved = await resolveForwardingDestinationById(
+          input.workspaceId,
+          input.action.destinationId,
+          callCtx,
+        );
+        destinationE164 = resolved?.dialE164;
+      } else if (input.action.destinationWorkspacePhoneId) {
+        const resolved = await resolveForwardingDestinationRef(
+          input.workspaceId,
+          {
+            kind: "workspace_number",
+            phoneNumberId: input.action.destinationWorkspacePhoneId,
+          },
+          callCtx,
+        );
+        destinationE164 = resolved.dialE164;
+      }
     }
     if (destinationE164) {
       await dialDestination({
@@ -94,8 +105,30 @@ export async function resolveNoAnswerFallback(
   const policy = await getPrisma().phoneNumberAnsweringPolicy.findUnique({
     where: { phoneNumberId },
   });
-  const fb = parseFallbackJson(
+  const parsed = parseFallbackJson(
     (policy?.scheduleJson as { noAnswerFallback?: unknown } | null)?.noAnswerFallback,
   );
-  return fb || { type: "voicemail" };
+  if (!parsed) return { type: "voicemail" };
+  if (parsed.type === "forward_phone" && !parsed.destinationE164) {
+    const { resolveForwardingDestinationById, resolveForwardingDestinationRef, inboundCallContext } =
+      await import("./resolve-destination");
+    const callCtx = await inboundCallContext(workspaceId, phoneNumberId);
+    if (parsed.destinationId) {
+      const resolved = await resolveForwardingDestinationById(
+        workspaceId,
+        parsed.destinationId,
+        callCtx,
+      );
+      if (resolved) return { type: "forward_phone", destinationE164: resolved.dialE164 };
+    }
+    if (parsed.destinationWorkspacePhoneId) {
+      const resolved = await resolveForwardingDestinationRef(
+        workspaceId,
+        { kind: "workspace_number", phoneNumberId: parsed.destinationWorkspacePhoneId },
+        callCtx,
+      );
+      return { type: "forward_phone", destinationE164: resolved.dialE164 };
+    }
+  }
+  return parsed;
 }

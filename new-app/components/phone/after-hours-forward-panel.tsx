@@ -65,22 +65,30 @@ export function AfterHoursForwardPanel({
   }, [phoneNumberId])
 
   const save = () => {
-    const scheduleJson: ScheduleJson = { afterHoursMode: mode }
-    if (mode === 'forward') {
-      if (dest.mode === 'workspace_number') {
-        scheduleJson.afterHoursDestinationRef = {
-          kind: 'workspace_number',
-          phoneNumberId: dest.workspacePhoneNumberId,
+    void fetch(`/api/phone/numbers/${encodeURIComponent(phoneNumberId)}/answering-policy`)
+      .then((r) => r.json())
+      .then((json) => {
+        const prev = (json.data?.policy?.scheduleJson || {}) as Record<string, unknown>
+        const scheduleJson: ScheduleJson = { ...prev, afterHoursMode: mode }
+        if (mode === 'forward') {
+          if (dest.mode === 'workspace_number') {
+            scheduleJson.afterHoursDestinationRef = {
+              kind: 'workspace_number',
+              phoneNumberId: dest.workspacePhoneNumberId,
+            }
+          } else {
+            scheduleJson.afterHoursDestinationRef = {
+              kind: 'external_phone',
+              e164PhoneNumber: dest.phoneE164,
+            }
+            scheduleJson.afterHoursDestinationE164 = dest.phoneE164
+          }
+        } else {
+          delete scheduleJson.afterHoursDestinationRef
+          delete scheduleJson.afterHoursDestinationE164
         }
-      } else {
-        scheduleJson.afterHoursDestinationRef = {
-          kind: 'external_phone',
-          e164PhoneNumber: dest.phoneE164,
-        }
-        scheduleJson.afterHoursDestinationE164 = dest.phoneE164
-      }
-    }
-    void saveAnsweringPolicy(phoneNumberId, { scheduleJson })
+        return saveAnsweringPolicy(phoneNumberId, { scheduleJson })
+      })
       .then(() => {
         toast.success('After-hours routing saved')
         onSaved()

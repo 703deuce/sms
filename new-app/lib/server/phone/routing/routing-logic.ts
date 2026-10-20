@@ -36,6 +36,7 @@ export type FallbackActionParsed = {
   type: "voicemail" | "forward_phone" | "announcement" | "hangup" | "replay_menu";
   destinationE164?: string;
   destinationId?: string;
+  destinationWorkspacePhoneId?: string;
   announcementText?: string;
   menuId?: string;
 };
@@ -53,6 +54,16 @@ export function parseFallbackJson(raw: unknown): FallbackActionParsed | null {
     }
     if (o.destinationE164) {
       return { type: "forward_phone", destinationE164: String(o.destinationE164) };
+    }
+    const refKind = String(o.destinationRefKind || "");
+    if (refKind === "external_phone" && o.destinationRefE164) {
+      return { type: "forward_phone", destinationE164: String(o.destinationRefE164) };
+    }
+    if (refKind === "workspace_number" && o.destinationRefPhoneNumberId) {
+      return {
+        type: "forward_phone",
+        destinationWorkspacePhoneId: String(o.destinationRefPhoneNumberId),
+      };
     }
   }
   if (type === "announcement" && o.announcementText) {

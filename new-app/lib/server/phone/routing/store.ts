@@ -2,6 +2,7 @@ import { getPrisma } from "@/lib/server/db";
 import { validateDestinationE164, validateMenuDigit } from "./validation";
 import { assertDestinationKind, rejectDirectE164Loop, rejectDirectWorkspaceLoop } from "./destination-validation";
 import { loadWorkspacePhoneForDestination } from "./resolve-destination";
+import { assertNoIndirectForwardingLoop } from "./forward-loop-guard";
 import { toForwardingDestinationDto } from "./destination-dto";
 
 const destinationInclude = {
@@ -53,9 +54,17 @@ export async function createForwardingDestination(
     rejectDirectE164Loop(input.hostedE164, phone.e164);
     workspacePhoneNumberId = phone.id;
     phoneE164 = phone.e164;
+    await assertNoIndirectForwardingLoop(workspaceId, input.hostedPhoneNumberId, {
+      kind: "workspace_number",
+      phoneNumberId: phone.id,
+    });
   } else {
     phoneE164 = validateDestinationE164(String(input.phoneE164 || ""), input.hostedE164);
     workspacePhoneNumberId = null;
+    await assertNoIndirectForwardingLoop(workspaceId, input.hostedPhoneNumberId, {
+      kind: "external_phone",
+      e164: phoneE164,
+    });
   }
 
   const row = await getPrisma().forwardingDestination.create({
@@ -113,12 +122,20 @@ export async function updateForwardingDestination(
     if (patch.hostedE164) rejectDirectE164Loop(patch.hostedE164, phone.e164);
     workspacePhoneNumberId = phone.id;
     phoneE164 = phone.e164;
+    await assertNoIndirectForwardingLoop(workspaceId, patch.hostedPhoneNumberId, {
+      kind: "workspace_number",
+      phoneNumberId: phone.id,
+    });
   } else if (patch.phoneE164 !== undefined || patch.destinationKind === "external_phone") {
     phoneE164 = validateDestinationE164(
       patch.phoneE164 ?? existing.phoneE164 ?? "",
       patch.hostedE164,
     );
     workspacePhoneNumberId = null;
+    await assertNoIndirectForwardingLoop(workspaceId, patch.hostedPhoneNumberId, {
+      kind: "external_phone",
+      e164: phoneE164,
+    });
   }
 
   const row = await getPrisma().forwardingDestination.update({
