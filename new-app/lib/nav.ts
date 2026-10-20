@@ -17,6 +17,7 @@ import {
   PhoneMissed,
   Plug,
   Route,
+  Signpost,
   Settings,
   Settings2,
   Hash,
